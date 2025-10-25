@@ -1,0 +1,10 @@
+name: beastiebot3
+services:
+  app:
+    image: beastiebot3:latest
+    build:
+      context: .
+      dockerfile: BeastieBot3/Dockerfile
+    volumes:
+      - D:/datasets/Catalogue_of_Life_2025-10-10_XR:/app/datasets/Catalogue_of_Life_2025-10-10_XR
+      - D:/datasets/beastiebot:/app/beastie_data

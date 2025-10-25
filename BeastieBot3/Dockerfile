@@ -5,6 +5,8 @@ FROM mcr.microsoft.com/dotnet/runtime:9.0 AS base
 USER $APP_UID
 WORKDIR /app
 
+# Ensure dataset directories exist inside the container so host volumes can be mounted cleanly
+RUN mkdir -p /app/datasets/Catalogue_of_Life_2025-10-10_XR
 
 # This stage is used to build the service project
 FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build
