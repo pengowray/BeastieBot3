@@ -35,6 +35,14 @@ namespace BeastieBot3 {
                         .WithDescription("Detect the mounted COL dataset inside the container.")
                         .WithExample(new[] { "col", "check" });
                 });
+
+                config.AddBranch("iucn", iucn => {
+                    iucn.SetDescription("IUCN Red List dataset commands");
+                    iucn.AddCommand<IucnImportCommand>("import")
+                        .WithDescription("Import IUCN CSV data from zip archives into the SQLite datastore.")
+                        .WithExample(new[] { "iucn", "import" })
+                        .WithExample(new[] { "iucn", "import", "--force" });
+                });
             });
 
             return app.Run(args);

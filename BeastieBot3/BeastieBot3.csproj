@@ -11,7 +11,9 @@
   <ItemGroup>
     <PackageReference Include="CXuesong.MW.WikiClientLibrary" Version="0.8.0" />
     <PackageReference Include="CXuesong.MW.WikiClientLibrary.Wikibase" Version="0.8.0" />
+    <PackageReference Include="CsvHelper" Version="32.0.2" />
     <PackageReference Include="Microsoft.Extensions.Configuration.Ini" Version="9.0.10" />
+    <PackageReference Include="Microsoft.Data.Sqlite" Version="9.0.0" />
     <PackageReference Include="Microsoft.VisualStudio.Azure.Containers.Tools.Targets" Version="1.22.1" />
     <PackageReference Include="SpeciesDatabaseApi" Version="1.2.2" />
     <PackageReference Include="Spectre.Console.Cli" Version="0.53.0" />
