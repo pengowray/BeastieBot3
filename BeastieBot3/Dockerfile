@@ -7,6 +7,7 @@ WORKDIR /app
 
 # Ensure dataset directories exist inside the container so host volumes can be mounted cleanly
 RUN mkdir -p /app/datasets/Catalogue_of_Life_2025-10-10_XR
+RUN mkdir -p /app/datasets/IUCN_CVS_2025-2
 
 # This stage is used to build the service project
 FROM mcr.microsoft.com/dotnet/sdk:9.0 AS build

@@ -7,4 +7,5 @@ services:
       dockerfile: BeastieBot3/Dockerfile
     volumes:
       - D:/datasets/Catalogue_of_Life_2025-10-10_XR:/app/datasets/Catalogue_of_Life_2025-10-10_XR
+      - D:/datasets/IUCN_CVS_2025-2:/app/datasets/IUCN_CVS_2025-2
       - D:/datasets/beastiebot:/app/beastie_data
