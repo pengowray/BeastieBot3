@@ -15,6 +15,6 @@ namespace BeastieBot3 {
         public IReadOnlyDictionary<string, string> GetAll() => _reader.GetAll();
 
         // Specific strongly-typed helpers
-        public string? GetColDir() => _reader.Get("Datasets:ColDir");
+        public string? GetColDir() => _reader.Get("Datasets:COL_dir");
     }
 }
