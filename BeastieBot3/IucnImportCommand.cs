@@ -35,16 +35,21 @@ public sealed class IucnImportCommand : Command<IucnImportCommand.Settings> {
             return -1;
         }
 
-        var databasePath = paths.GetMainDatabasePath();
+        var redlistVersionHint = IucnImporter.ExtractRedlistVersionFromPath(cvsDir);
+
+        var databasePath = paths.GetIucnDatabasePath();
+
         if (string.IsNullOrWhiteSpace(databasePath)) {
             var datastore = paths.GetDatastoreDir();
-            if (!string.IsNullOrWhiteSpace(datastore)) {
-                Directory.CreateDirectory(datastore);
-                databasePath = Path.Combine(datastore, "beastiebot.db");
-            } else {
-                databasePath = Path.Combine(baseDir, "beastiebot.db");
-            }
-            AnsiConsole.MarkupLine($"[yellow]No [bold]Datastore:MainDB[/] configured; defaulting to:[/] {databasePath}");
+            var targetDir = !string.IsNullOrWhiteSpace(datastore) ? datastore! : baseDir;
+            Directory.CreateDirectory(targetDir);
+
+            var fileStem = string.Equals(redlistVersionHint, "unknown", StringComparison.OrdinalIgnoreCase)
+                ? "IUCN"
+                : $"IUCN_{redlistVersionHint}";
+
+            databasePath = Path.Combine(targetDir, fileStem + ".sqlite");
+            AnsiConsole.MarkupLine($"[grey]Using default IUCN database path:[/] {databasePath}");
         }
 
         var fullDbPath = Path.GetFullPath(databasePath);
@@ -92,10 +97,23 @@ public sealed class IucnImportCommand : Command<IucnImportCommand.Settings> {
             }
         }
 
-        if (anyFailures) {
+        if (anyFailures)
+        {
             AnsiConsole.MarkupLine("[red]One or more zip files failed to import. Review the logs above.[/]");
             return -2;
         }
+
+        /*
+        // Vacuum the database to optimize it
+        // (takes a long time and doesn't make much difference)
+        AnsiConsole.MarkupLine("[grey]Running VACUUM...[/]");
+        using (var vacuum = connection.CreateCommand())
+        {
+            vacuum.CommandText = "VACUUM;";
+            vacuum.ExecuteNonQuery();
+        }
+        AnsiConsole.MarkupLine("[grey]VACUUM completed.[/]");
+        */
 
         AnsiConsole.MarkupLine("[green]Import complete.[/]");
         return 0;

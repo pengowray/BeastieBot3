@@ -5,6 +5,7 @@ using System.IO;
 using System.IO.Compression;
 using System.Linq;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading;
 using CsvHelper;
 using CsvHelper.Configuration;
@@ -14,6 +15,7 @@ using Spectre.Console;
 namespace BeastieBot3;
 
 public sealed class IucnImporter {
+    private static readonly Regex RedlistVersionRegex = new(@"(?<version>\d{4}-\d+)", RegexOptions.Compiled | RegexOptions.CultureInvariant);
     private readonly IAnsiConsole _console;
     private readonly SqliteConnection _connection;
     private readonly string _rootDir;
@@ -38,8 +40,8 @@ public sealed class IucnImporter {
         cancellationToken.ThrowIfCancellationRequested();
 
         var fullZipPath = Path.GetFullPath(zipPath);
-        var relativeName = ToRelative(fullZipPath);
-        var redlistVersion = ExtractRedlistVersion(relativeName);
+    var relativeName = ToRelative(fullZipPath);
+    var redlistVersion = ExtractRedlistVersionFromPath(relativeName);
 
         if (_force) {
             DeleteExistingImports(relativeName);
@@ -69,6 +71,8 @@ public sealed class IucnImporter {
                 ImportCsv(importId, redlistVersion, spec, entry!, transaction, cancellationToken);
             }
             transaction.Commit();
+
+            EnsureViews();
 
             UpdateImportCompleted(importId, DateTimeOffset.UtcNow);
         } catch {
@@ -213,7 +217,8 @@ VALUES (@filename, @version, @started);";
         var headerRecord = csv.HeaderRecord ?? Array.Empty<string>();
         var headers = headerRecord.ToList();
 
-        EnsureDataTable(spec.TableName, headers);
+        var tableColumns = EnsureDataTable(spec.TableName, headers);
+        EnsureIndexes(spec.TableName, tableColumns);
 
         using var insert = _connection.CreateCommand();
         insert.Transaction = transaction;
@@ -252,11 +257,11 @@ VALUES (@filename, @version, @started);";
         _console.MarkupLine($"    {spec.TableName}: inserted {rowCount:N0} rows.");
     }
 
-    private void EnsureDataTable(string tableName, IReadOnlyList<string> csvColumns) {
+    private HashSet<string> EnsureDataTable(string tableName, IReadOnlyList<string> csvColumns) {
         var existingColumns = GetTableColumns(tableName);
         if (existingColumns is null) {
             CreateNewDataTable(tableName, csvColumns);
-            return;
+            return GetTableColumns(tableName) ?? throw new InvalidOperationException($"Table {tableName} was not created as expected.");
         }
 
         if (!existingColumns.Contains("import_id") || !existingColumns.Contains("redlist_version")) {
@@ -268,7 +273,10 @@ VALUES (@filename, @version, @started);";
             using var cmd = _connection.CreateCommand();
             cmd.CommandText = $"ALTER TABLE {QuoteIdentifier(tableName)} ADD COLUMN {QuoteIdentifier(column)} TEXT;";
             cmd.ExecuteNonQuery();
+            existingColumns.Add(column);
         }
+
+        return existingColumns;
     }
 
     private HashSet<string>? GetTableColumns(string tableName) {
@@ -306,6 +314,94 @@ VALUES (@filename, @version, @started);";
         }
     }
 
+    private void EnsureIndexes(string tableName, HashSet<string> columns) {
+        bool HasColumn(string name) => columns.Contains(name);
+        switch (tableName.ToLowerInvariant()) {
+            case "assessments":
+            case "assessments_html":
+                if (HasColumn("internalTaxonId")) {
+                    CreateIndex(tableName, "internalTaxonId", "internalTaxonId");
+                }
+                if (HasColumn("assessmentId")) {
+                    CreateIndex(tableName, "assessmentId", "assessmentId");
+                }
+                if (HasColumn("scientificName")) {
+                    CreateIndex(tableName, "scientificName", "scientificName");
+                }
+                break;
+            case "taxonomy":
+            case "taxonomy_html":
+                if (HasColumn("internalTaxonId")) {
+                    CreateIndex(tableName, "internalTaxonId", "internalTaxonId");
+                }
+                if (HasColumn("scientificName")) {
+                    CreateIndex(tableName, "scientificName", "scientificName");
+                }
+
+                var hierarchyColumns = new[] { "kingdomName", "phylumName", "className", "orderName", "familyName", "genusName", "speciesName" };
+                if (hierarchyColumns.All(HasColumn)) {
+                    CreateIndex(tableName, "hierarchy", hierarchyColumns);
+                }
+                break;
+        }
+    }
+
+    private void CreateIndex(string tableName, string suffix, params string[] columnNames) {
+        if (columnNames.Length == 0) {
+            return;
+        }
+
+        var sanitizedSuffix = SanitizeIdentifierPart(suffix);
+        var indexName = $"idx_{SanitizeIdentifierPart(tableName)}_{sanitizedSuffix}";
+        using var cmd = _connection.CreateCommand();
+        cmd.CommandText = $"CREATE INDEX IF NOT EXISTS {QuoteIdentifier(indexName)} ON {QuoteIdentifier(tableName)}({string.Join(", ", columnNames.Select(QuoteIdentifier))});";
+        cmd.ExecuteNonQuery();
+    }
+
+    private static string SanitizeIdentifierPart(string value) {
+        var builder = new StringBuilder(value.Length);
+        foreach (var ch in value) {
+            builder.Append(char.IsLetterOrDigit(ch) ? ch : '_');
+        }
+        return builder.Length > 0 ? builder.ToString() : "part";
+    }
+
+    private void EnsureViews() {
+        if (GetTableColumns("assessments") is not null && GetTableColumns("taxonomy") is not null) {
+            var selectStatement = $"""
+SELECT a.*, t.*
+FROM {QuoteIdentifier("assessments")} AS a
+LEFT JOIN {QuoteIdentifier("taxonomy")} AS t
+  ON t.{QuoteIdentifier("internalTaxonId")} = a.{QuoteIdentifier("internalTaxonId")}
+ AND t.{QuoteIdentifier("redlist_version")} = a.{QuoteIdentifier("redlist_version")}
+""";
+            RecreateView("view_assessments_taxonomy", selectStatement);
+        }
+
+    if (GetTableColumns("assessments_html") is not null && GetTableColumns("taxonomy_html") is not null) {
+            var selectStatementHtml = $"""
+SELECT a.*, t.*
+FROM {QuoteIdentifier("assessments_html")} AS a
+LEFT JOIN {QuoteIdentifier("taxonomy_html")} AS t
+  ON t.{QuoteIdentifier("internalTaxonId")} = a.{QuoteIdentifier("internalTaxonId")}
+ AND t.{QuoteIdentifier("redlist_version")} = a.{QuoteIdentifier("redlist_version")}
+""";
+            RecreateView("view_assessments_html_taxonomy_html", selectStatementHtml);
+        }
+    }
+
+    private void RecreateView(string viewName, string selectStatement) {
+        using (var drop = _connection.CreateCommand()) {
+            drop.CommandText = $"DROP VIEW IF EXISTS {QuoteIdentifier(viewName)};";
+            drop.ExecuteNonQuery();
+        }
+
+        using (var create = _connection.CreateCommand()) {
+            create.CommandText = $"CREATE VIEW {QuoteIdentifier(viewName)} AS {selectStatement};";
+            create.ExecuteNonQuery();
+        }
+    }
+
     private static string BuildInsertSql(string tableName, IReadOnlyList<string> csvColumns) {
         var columns = new List<string> { "import_id", "redlist_version" };
         columns.AddRange(csvColumns);
@@ -332,27 +428,21 @@ VALUES (@filename, @version, @started);";
         }
     }
 
-    private static string ExtractRedlistVersion(string relativePath) {
-        if (string.IsNullOrWhiteSpace(relativePath)) {
+    internal static string ExtractRedlistVersionFromPath(string path) {
+        if (string.IsNullOrWhiteSpace(path)) {
             return "unknown";
         }
 
-        var cleaned = relativePath.Replace('\\', '/');
-        var firstSegment = cleaned.Split('/', StringSplitOptions.RemoveEmptyEntries).FirstOrDefault();
-        if (string.IsNullOrWhiteSpace(firstSegment)) {
-            firstSegment = cleaned;
+        var normalized = path.Replace('\\', '/');
+        var segments = normalized.Split('/', StringSplitOptions.RemoveEmptyEntries);
+        foreach (var segment in segments) {
+            var match = RedlistVersionRegex.Match(segment);
+            if (match.Success) {
+                return match.Groups["version"].Value;
+            }
         }
 
-        var trimmed = firstSegment.Trim();
-        if (trimmed.Length == 0) {
-            return "unknown";
-        }
-
-        var spaceIndex = trimmed.IndexOf(' ');
-        if (spaceIndex > 0) {
-            trimmed = trimmed[..spaceIndex];
-        }
-
-        return trimmed;
+        var fallback = RedlistVersionRegex.Match(normalized);
+        return fallback.Success ? fallback.Groups["version"].Value : "unknown";
     }
 }
