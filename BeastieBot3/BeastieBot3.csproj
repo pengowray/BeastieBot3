@@ -17,4 +17,10 @@
     <PackageReference Include="Spectre.Console.Cli" Version="0.53.0" />
   </ItemGroup>
 
+  <ItemGroup>
+    <None Update="paths.ini">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
+  </ItemGroup>
+
 </Project>
