@@ -40,8 +40,8 @@ public sealed class IucnImporter {
         cancellationToken.ThrowIfCancellationRequested();
 
         var fullZipPath = Path.GetFullPath(zipPath);
-    var relativeName = ToRelative(fullZipPath);
-    var redlistVersion = ExtractRedlistVersionFromPath(relativeName);
+        var relativeName = ToRelative(fullZipPath);
+        var redlistVersion = ExtractRedlistVersionFromPath(relativeName);
 
         if (_force) {
             DeleteExistingImports(relativeName);
@@ -242,7 +242,8 @@ VALUES (@filename, @version, @started);";
             parameterMap[headers[i]] = param;
         }
 
-        long rowCount = 0;
+        long insertedCount = 0;
+        long duplicateCount = 0;
         while (csv.Read()) {
             cancellationToken.ThrowIfCancellationRequested();
             foreach (var header in headers) {
@@ -250,11 +251,15 @@ VALUES (@filename, @version, @started);";
                 parameterMap[header].Value = string.IsNullOrEmpty(raw) ? DBNull.Value : raw;
             }
 
-            insert.ExecuteNonQuery();
-            rowCount++;
+            var affected = insert.ExecuteNonQuery();
+            if (affected > 0) {
+                insertedCount += affected;
+            } else {
+                duplicateCount++;
+            }
         }
 
-        _console.MarkupLine($"    {spec.TableName}: inserted {rowCount:N0} rows.");
+        _console.MarkupLine($"    {spec.TableName}: inserted {insertedCount:N0} rows (skipped {duplicateCount:N0} duplicates).");
     }
 
     private HashSet<string> EnsureDataTable(string tableName, IReadOnlyList<string> csvColumns) {
@@ -324,6 +329,9 @@ VALUES (@filename, @version, @started);";
                 }
                 if (HasColumn("assessmentId")) {
                     CreateIndex(tableName, "assessmentId", "assessmentId");
+                    if (HasColumn("redlist_version")) {
+                        CreateIndex(tableName, "uniq_assessmentId", true, "redlist_version", "assessmentId");
+                    }
                 }
                 if (HasColumn("scientificName")) {
                     CreateIndex(tableName, "scientificName", "scientificName");
@@ -333,6 +341,9 @@ VALUES (@filename, @version, @started);";
             case "taxonomy_html":
                 if (HasColumn("internalTaxonId")) {
                     CreateIndex(tableName, "internalTaxonId", "internalTaxonId");
+                    if (HasColumn("redlist_version")) {
+                        CreateIndex(tableName, "uniq_internalTaxonId", true, "redlist_version", "internalTaxonId");
+                    }
                 }
                 if (HasColumn("scientificName")) {
                     CreateIndex(tableName, "scientificName", "scientificName");
@@ -346,7 +357,10 @@ VALUES (@filename, @version, @started);";
         }
     }
 
-    private void CreateIndex(string tableName, string suffix, params string[] columnNames) {
+    private void CreateIndex(string tableName, string suffix, params string[] columnNames) =>
+        CreateIndex(tableName, suffix, unique: false, columnNames);
+
+    private void CreateIndex(string tableName, string suffix, bool unique, params string[] columnNames) {
         if (columnNames.Length == 0) {
             return;
         }
@@ -354,7 +368,8 @@ VALUES (@filename, @version, @started);";
         var sanitizedSuffix = SanitizeIdentifierPart(suffix);
         var indexName = $"idx_{SanitizeIdentifierPart(tableName)}_{sanitizedSuffix}";
         using var cmd = _connection.CreateCommand();
-        cmd.CommandText = $"CREATE INDEX IF NOT EXISTS {QuoteIdentifier(indexName)} ON {QuoteIdentifier(tableName)}({string.Join(", ", columnNames.Select(QuoteIdentifier))});";
+        var uniqueClause = unique ? "UNIQUE " : string.Empty;
+        cmd.CommandText = $"CREATE {uniqueClause}INDEX IF NOT EXISTS {QuoteIdentifier(indexName)} ON {QuoteIdentifier(tableName)}({string.Join(", ", columnNames.Select(QuoteIdentifier))});";
         cmd.ExecuteNonQuery();
     }
 
@@ -378,7 +393,7 @@ LEFT JOIN {QuoteIdentifier("taxonomy")} AS t
             RecreateView("view_assessments_taxonomy", selectStatement);
         }
 
-    if (GetTableColumns("assessments_html") is not null && GetTableColumns("taxonomy_html") is not null) {
+        if (GetTableColumns("assessments_html") is not null && GetTableColumns("taxonomy_html") is not null) {
             var selectStatementHtml = $"""
 SELECT a.*, t.*
 FROM {QuoteIdentifier("assessments_html")} AS a
@@ -412,7 +427,7 @@ LEFT JOIN {QuoteIdentifier("taxonomy_html")} AS t
             parameters.Add("@c" + i.ToString(CultureInfo.InvariantCulture));
         }
 
-        return $"INSERT INTO {QuoteIdentifier(tableName)} ({identifiers}) VALUES ({string.Join(", ", parameters)});";
+        return $"INSERT OR IGNORE INTO {QuoteIdentifier(tableName)} ({identifiers}) VALUES ({string.Join(", ", parameters)});";
     }
 
     private static string QuoteIdentifier(string identifier) {
