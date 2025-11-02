@@ -5,6 +5,9 @@ set -euo pipefail
 SCRIPT_DIR="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")" >/dev/null 2>&1 && pwd -P)"
 cd "$SCRIPT_DIR"
 
+echo "Building .NET project..."
+dotnet build BeastieBot3.sln
+
 # Pick Docker Compose command (v2 plugin preferred)
 if docker compose version >/dev/null 2>&1; then
  COMPOSE=(docker compose)

@@ -4,6 +4,13 @@ setlocal ENABLEDELAYEDEXPANSION
 rem Ensure we run from the repository root (this script's directory)
 pushd "%~dp0" >nul
 
+echo Building .NET project...
+dotnet build BeastieBot3.sln
+if errorlevel 1 (
+ popd >nul
+ exit /b 1
+)
+
 rem Pick Docker Compose command (v2 plugin preferred)
 set "COMPOSE=docker compose"
 docker compose version >nul2>&1
