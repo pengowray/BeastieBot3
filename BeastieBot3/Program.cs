@@ -34,6 +34,10 @@ namespace BeastieBot3 {
                     col.AddCommand<CheckColCommand>("check")
                         .WithDescription("Detect the mounted COL dataset inside the container.")
                         .WithExample(new[] { "col", "check" });
+                    col.AddCommand<ColImportCommand>("import")
+                        .WithDescription("Import Catalogue of Life ColDP zip archives into individual SQLite databases.")
+                        .WithExample(new[] { "col", "import" })
+                        .WithExample(new[] { "col", "import", "--force" });
                 });
 
                 config.AddBranch("iucn", iucn => {
