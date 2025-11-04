@@ -43,9 +43,10 @@ public sealed class ColImporter {
             throw new InvalidOperationException("metadata.yaml not found inside the ColDP archive.");
         }
 
-        var metadata = ReadDatasetMetadata(metadataEntry, cancellationToken);
-        var datasetLabel = DetermineDatasetLabel(metadata, Path.GetFileNameWithoutExtension(_zipPath));
-        var databaseFileName = $"col_coldp_{datasetLabel}.sqlite";
+    var metadata = ReadDatasetMetadata(metadataEntry, cancellationToken);
+    var datasetLabel = DetermineDatasetLabel(metadata, Path.GetFileNameWithoutExtension(_zipPath));
+    var sanitizedStem = SanitizeFileStem(datasetLabel);
+    var databaseFileName = $"col_coldp_{sanitizedStem}.sqlite";
         var databasePath = Path.Combine(_datastoreDir, databaseFileName);
 
         if (File.Exists(databasePath)) {
@@ -96,18 +97,18 @@ public sealed class ColImporter {
                 }
 
                 if (entry.FullName.Equals("reference.jsonl", StringComparison.OrdinalIgnoreCase)) {
-                    ProcessReferenceJsonl(connection, importId, datasetLabel, entry, cancellationToken);
+                    ProcessReferenceJsonl(connection, importId, entry, cancellationToken);
                     continue;
                 }
 
                 if (entry.FullName.EndsWith(".tsv", StringComparison.OrdinalIgnoreCase)) {
-                    ProcessTsv(connection, importId, datasetLabel, entry, cancellationToken);
+                    ProcessTsv(connection, importId, entry, cancellationToken);
                     continue;
                 }
 
                 if (entry.FullName.StartsWith("source/", StringComparison.OrdinalIgnoreCase) &&
                     entry.FullName.EndsWith(".yaml", StringComparison.OrdinalIgnoreCase)) {
-                    ProcessSourceYaml(connection, importId, datasetLabel, entry, cancellationToken);
+                    ProcessSourceYaml(connection, importId, entry, cancellationToken);
                     continue;
                 }
             }
@@ -177,7 +178,7 @@ public sealed class ColImporter {
     }
 
     private static string NormalizeLabel(string value) {
-    var replaced = string.Join("_", value.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
+        var replaced = string.Join("_", value.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
         var builder = new StringBuilder(replaced.Length);
         foreach (var ch in replaced) {
             if (char.IsLetterOrDigit(ch)) {
@@ -205,12 +206,12 @@ public sealed class ColImporter {
         _console.MarkupLine("[grey]datapackage.json missing; downloading from Catalogue of Life API...[/]");
 
         using var client = new HttpClient();
-    using var response = client.GetAsync(DatapackageUri, HttpCompletionOption.ResponseHeadersRead, cancellationToken).GetAwaiter().GetResult();
+        using var response = client.GetAsync(DatapackageUri, HttpCompletionOption.ResponseHeadersRead, cancellationToken).GetAwaiter().GetResult();
         response.EnsureSuccessStatusCode();
 
-    using var contentStream = response.Content.ReadAsStream(cancellationToken);
-    using var fileStream = new FileStream(datapackagePath, FileMode.Create, FileAccess.Write, FileShare.None);
-    contentStream.CopyToAsync(fileStream, cancellationToken).GetAwaiter().GetResult();
+        using var contentStream = response.Content.ReadAsStream(cancellationToken);
+        using var fileStream = new FileStream(datapackagePath, FileMode.Create, FileAccess.Write, FileShare.None);
+        contentStream.CopyToAsync(fileStream, cancellationToken).GetAwaiter().GetResult();
 
         _console.MarkupLine($"[green]Downloaded datapackage.json ->[/] {datapackagePath}");
     }
@@ -290,12 +291,13 @@ VALUES (@import_id, @label, @key, @title, @alias, @description, @issued, @versio
 );";
         cmd.ExecuteNonQuery();
 
-        using var idx = connection.CreateCommand();
-        idx.CommandText = "CREATE INDEX IF NOT EXISTS idx_dataset_metadata_import_id ON dataset_metadata(import_id);";
-        idx.ExecuteNonQuery();
+        var columns = GetTableColumns(connection, "dataset_metadata") ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase) {
+            "import_id", "dataset_label", "key", "title", "alias", "description", "issued", "version", "raw_yaml"
+        };
+        EnsureColumnIndexes(connection, "dataset_metadata", columns);
     }
 
-    private void ProcessTsv(SqliteConnection connection, long importId, string datasetLabel, ZipArchiveEntry entry, CancellationToken cancellationToken) {
+    private void ProcessTsv(SqliteConnection connection, long importId, ZipArchiveEntry entry, CancellationToken cancellationToken) {
         using var stream = entry.Open();
         using var reader = new StreamReader(stream, Encoding.UTF8, true);
 
@@ -323,9 +325,9 @@ VALUES (@import_id, @label, @key, @title, @alias, @description, @issued, @versio
         }
 
         var tableName = SanitizeTableName(Path.GetFileNameWithoutExtension(entry.Name));
-        var existingColumns = EnsureDataTable(connection, tableName, headers);
+    var existingColumns = EnsureDataTable(connection, tableName, headers);
 
-        using var transaction = connection.BeginTransaction();
+    using var transaction = connection.BeginTransaction();
         using var insert = connection.CreateCommand();
         insert.Transaction = transaction;
         insert.CommandText = BuildInsertSql(tableName, headers);
@@ -334,11 +336,6 @@ VALUES (@import_id, @label, @key, @title, @alias, @description, @issued, @versio
         importParam.ParameterName = "@import_id";
         importParam.Value = importId;
         insert.Parameters.Add(importParam);
-
-        var labelParam = insert.CreateParameter();
-        labelParam.ParameterName = "@dataset_label";
-        labelParam.Value = datasetLabel;
-        insert.Parameters.Add(labelParam);
 
         var parameters = new SqliteParameter[headers.Count];
         for (var i = 0; i < headers.Count; i++) {
@@ -361,7 +358,9 @@ VALUES (@import_id, @label, @key, @title, @alias, @description, @issued, @versio
             inserted += insert.ExecuteNonQuery();
         }
 
-        transaction.Commit();
+    transaction.Commit();
+    EnsureColumnIndexes(connection, tableName, existingColumns);
+        RebuildFtsIfNeeded(connection, tableName, existingColumns);
         _console.MarkupLine($"    {tableName}: inserted {inserted:N0} rows (columns: {existingColumns.Count}).");
     }
 
@@ -403,8 +402,7 @@ VALUES (@import_id, @label, @key, @title, @alias, @description, @issued, @versio
 
     private static void CreateNewDataTable(SqliteConnection connection, string tableName, IReadOnlyList<string> csvColumns) {
         var columns = new List<string> {
-            "\"import_id\" INTEGER NOT NULL",
-            "\"dataset_label\" TEXT NOT NULL"
+            "\"import_id\" INTEGER NOT NULL"
         };
 
         foreach (var column in csvColumns) {
@@ -417,17 +415,14 @@ VALUES (@import_id, @label, @key, @title, @alias, @description, @issued, @versio
         create.CommandText = $"CREATE TABLE IF NOT EXISTS {QuoteIdentifier(tableName)} (\n    {string.Join(",\n    ", columns)}\n);";
         create.ExecuteNonQuery();
 
-        using var idx = connection.CreateCommand();
-        idx.CommandText = $"CREATE INDEX IF NOT EXISTS idx_{SanitizeIdentifierPart(tableName)}_import_id ON {QuoteIdentifier(tableName)}(import_id);";
-        idx.ExecuteNonQuery();
     }
 
     private static string BuildInsertSql(string tableName, IReadOnlyList<string> csvColumns) {
-        var columns = new List<string> { "import_id", "dataset_label" };
+        var columns = new List<string> { "import_id" };
         columns.AddRange(csvColumns);
         var identifiers = string.Join(", ", columns.Select(QuoteIdentifier));
 
-        var parameters = new List<string> { "@import_id", "@dataset_label" };
+        var parameters = new List<string> { "@import_id" };
         for (var i = 0; i < csvColumns.Count; i++) {
             parameters.Add("@c" + i.ToString(CultureInfo.InvariantCulture));
         }
@@ -435,7 +430,7 @@ VALUES (@import_id, @label, @key, @title, @alias, @description, @issued, @versio
         return $"INSERT INTO {QuoteIdentifier(tableName)} ({identifiers}) VALUES ({string.Join(", ", parameters)});";
     }
 
-    private void ProcessReferenceJsonl(SqliteConnection connection, long importId, string datasetLabel, ZipArchiveEntry entry, CancellationToken cancellationToken) {
+    private void ProcessReferenceJsonl(SqliteConnection connection, long importId, ZipArchiveEntry entry, CancellationToken cancellationToken) {
         EnsureReferenceJsonTable(connection);
 
         using var transaction = connection.BeginTransaction();
@@ -443,18 +438,13 @@ VALUES (@import_id, @label, @key, @title, @alias, @description, @issued, @versio
         using var reader = new StreamReader(stream, Encoding.UTF8, true);
         using var insert = connection.CreateCommand();
         insert.Transaction = transaction;
-        insert.CommandText = @"INSERT INTO reference_json (import_id, dataset_label, reference_id, json)
-VALUES (@import_id, @label, @reference_id, @json);";
+        insert.CommandText = @"INSERT INTO reference_json (import_id, reference_id, json)
+VALUES (@import_id, @reference_id, @json);";
 
         var importParam = insert.CreateParameter();
         importParam.ParameterName = "@import_id";
         importParam.Value = importId;
         insert.Parameters.Add(importParam);
-
-        var labelParam = insert.CreateParameter();
-        labelParam.ParameterName = "@label";
-        labelParam.Value = datasetLabel;
-        insert.Parameters.Add(labelParam);
 
         var idParam = insert.CreateParameter();
         idParam.ParameterName = "@reference_id";
@@ -494,23 +484,21 @@ VALUES (@import_id, @label, @reference_id, @json);";
         _console.MarkupLine($"    reference_json: inserted {inserted:N0} rows.");
     }
 
-    private static void EnsureReferenceJsonTable(SqliteConnection connection) {
+    private void EnsureReferenceJsonTable(SqliteConnection connection) {
         using var cmd = connection.CreateCommand();
         cmd.CommandText = @"CREATE TABLE IF NOT EXISTS reference_json (
     import_id INTEGER NOT NULL,
-    dataset_label TEXT NOT NULL,
     reference_id TEXT,
     json TEXT NOT NULL,
     FOREIGN KEY(import_id) REFERENCES import_metadata(id) ON DELETE CASCADE
 );";
         cmd.ExecuteNonQuery();
 
-        using var idx = connection.CreateCommand();
-        idx.CommandText = "CREATE INDEX IF NOT EXISTS idx_reference_json_import_id ON reference_json(import_id);";
-        idx.ExecuteNonQuery();
+        var columns = GetTableColumns(connection, "reference_json") ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "import_id", "reference_id", "json" };
+        EnsureColumnIndexes(connection, "reference_json", columns);
     }
 
-    private void ProcessSourceYaml(SqliteConnection connection, long importId, string datasetLabel, ZipArchiveEntry entry, CancellationToken cancellationToken) {
+    private void ProcessSourceYaml(SqliteConnection connection, long importId, ZipArchiveEntry entry, CancellationToken cancellationToken) {
         EnsureSourceMetadataTable(connection);
 
         using var stream = entry.Open();
@@ -526,10 +514,9 @@ VALUES (@import_id, @label, @reference_id, @json);";
         var map = deserializer.Deserialize<Dictionary<string, object?>>(yamlText) ?? new Dictionary<string, object?>();
 
         using var cmd = connection.CreateCommand();
-        cmd.CommandText = @"INSERT INTO source_metadata (import_id, dataset_label, source_key, title, alias, description, issued, version, raw_yaml, filename)
-VALUES (@import_id, @label, @key, @title, @alias, @description, @issued, @version, @raw_yaml, @filename);";
+    cmd.CommandText = @"INSERT INTO source_metadata (import_id, source_key, title, alias, description, issued, version, raw_yaml, filename)
+VALUES (@import_id, @key, @title, @alias, @description, @issued, @version, @raw_yaml, @filename);";
         cmd.Parameters.AddWithValue("@import_id", importId);
-        cmd.Parameters.AddWithValue("@label", datasetLabel);
         cmd.Parameters.AddWithValue("@key", ExtractString(map, "key") ?? (object)DBNull.Value);
         cmd.Parameters.AddWithValue("@title", ExtractString(map, "title") ?? (object)DBNull.Value);
         cmd.Parameters.AddWithValue("@alias", ExtractString(map, "alias") ?? (object)DBNull.Value);
@@ -541,11 +528,10 @@ VALUES (@import_id, @label, @key, @title, @alias, @description, @issued, @versio
         cmd.ExecuteNonQuery();
     }
 
-    private static void EnsureSourceMetadataTable(SqliteConnection connection) {
+    private void EnsureSourceMetadataTable(SqliteConnection connection) {
         using var cmd = connection.CreateCommand();
         cmd.CommandText = @"CREATE TABLE IF NOT EXISTS source_metadata (
     import_id INTEGER NOT NULL,
-    dataset_label TEXT NOT NULL,
     source_key TEXT,
     title TEXT,
     alias TEXT,
@@ -558,9 +544,152 @@ VALUES (@import_id, @label, @key, @title, @alias, @description, @issued, @versio
 );";
         cmd.ExecuteNonQuery();
 
-        using var idx = connection.CreateCommand();
-        idx.CommandText = "CREATE INDEX IF NOT EXISTS idx_source_metadata_import_id ON source_metadata(import_id);";
-        idx.ExecuteNonQuery();
+        var columns = GetTableColumns(connection, "source_metadata") ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase) {
+            "import_id", "source_key", "title", "alias", "description", "issued", "version", "raw_yaml", "filename"
+        };
+        EnsureColumnIndexes(connection, "source_metadata", columns);
+    }
+
+    private static void EnsureColumnIndexes(SqliteConnection connection, string tableName, HashSet<string> columns) {
+        if (columns.Count == 0) {
+            return;
+        }
+
+        foreach (var column in columns) {
+            if (!ShouldIndexColumn(tableName, column)) {
+                continue;
+            }
+
+            CreateColumnIndex(connection, tableName, column);
+        }
+
+        if (string.Equals(tableName, "source_metadata", StringComparison.OrdinalIgnoreCase) && columns.Contains("alias")) {
+            CreateColumnIndex(connection, tableName, "alias");
+        }
+    }
+
+    private static bool ShouldIndexColumn(string tableName, string columnName) {
+        if (string.IsNullOrWhiteSpace(columnName)) {
+            return false;
+        }
+
+        var lower = columnName.ToLowerInvariant();
+        if (lower is "import_id") {
+            return false;
+        }
+
+        if (lower.EndsWith("id", StringComparison.Ordinal)) {
+            return true;
+        }
+
+        if (lower.EndsWith("key", StringComparison.Ordinal)) {
+            return true;
+        }
+
+        return false;
+    }
+
+    private static void CreateColumnIndex(SqliteConnection connection, string tableName, string columnName) {
+        using var cmd = connection.CreateCommand();
+        var indexName = $"idx_{SanitizeIdentifierPart(tableName)}_{SanitizeIdentifierPart(columnName)}";
+        cmd.CommandText = $"CREATE INDEX IF NOT EXISTS {QuoteIdentifier(indexName)} ON {QuoteIdentifier(tableName)}({QuoteIdentifier(columnName)});";
+        cmd.ExecuteNonQuery();
+    }
+
+    private void RebuildFtsIfNeeded(SqliteConnection connection, string tableName, HashSet<string> columns) {
+        if (columns.Count == 0) {
+            return;
+        }
+
+        if (string.Equals(tableName, "vernacularname", StringComparison.OrdinalIgnoreCase)) {
+            var hasName = columns.Contains("col:name");
+            var hasTrans = columns.Contains("col:transliteration");
+            if (hasName || hasTrans) {
+                RebuildVernacularFts(connection, hasName, hasTrans);
+            }
+            return;
+        }
+
+        if (string.Equals(tableName, "nameusage", StringComparison.OrdinalIgnoreCase) && columns.Contains("col:combinationAuthorship")) {
+            RebuildNameUsageCombinationAuthorshipFts(connection);
+            return;
+        }
+
+        if (string.Equals(tableName, "distribution", StringComparison.OrdinalIgnoreCase) && columns.Contains("col:area")) {
+            RebuildDistributionAreaFts(connection);
+        }
+    }
+
+    private void RebuildVernacularFts(SqliteConnection connection, bool hasName, bool hasTransliteration) {
+        using (var create = connection.CreateCommand()) {
+            create.CommandText = "CREATE VIRTUAL TABLE IF NOT EXISTS \"vernacularname_fts\" USING fts5(name, transliteration);";
+            create.ExecuteNonQuery();
+        }
+
+        using var transaction = connection.BeginTransaction();
+
+        using (var clear = connection.CreateCommand()) {
+            clear.Transaction = transaction;
+            clear.CommandText = "DELETE FROM \"vernacularname_fts\";";
+            clear.ExecuteNonQuery();
+        }
+
+        var nameSelect = hasName ? "\"col:name\"" : "NULL";
+        var transliterationSelect = hasTransliteration ? "\"col:transliteration\"" : "NULL";
+
+        using (var populate = connection.CreateCommand()) {
+            populate.Transaction = transaction;
+            populate.CommandText = $"INSERT INTO \"vernacularname_fts\"(rowid, name, transliteration) SELECT rowid, {nameSelect}, {transliterationSelect} FROM \"vernacularname\" WHERE {nameSelect} IS NOT NULL OR {transliterationSelect} IS NOT NULL;";
+            populate.ExecuteNonQuery();
+        }
+
+        transaction.Commit();
+    }
+
+    private void RebuildNameUsageCombinationAuthorshipFts(SqliteConnection connection) {
+        using (var create = connection.CreateCommand()) {
+            create.CommandText = "CREATE VIRTUAL TABLE IF NOT EXISTS \"nameusage_combinationauthorship_fts\" USING fts5(combinationauthorship);";
+            create.ExecuteNonQuery();
+        }
+
+        using var transaction = connection.BeginTransaction();
+
+        using (var clear = connection.CreateCommand()) {
+            clear.Transaction = transaction;
+            clear.CommandText = "DELETE FROM \"nameusage_combinationauthorship_fts\";";
+            clear.ExecuteNonQuery();
+        }
+
+        using (var populate = connection.CreateCommand()) {
+            populate.Transaction = transaction;
+            populate.CommandText = "INSERT INTO \"nameusage_combinationauthorship_fts\"(rowid, combinationauthorship) SELECT rowid, \"col:combinationAuthorship\" FROM \"nameusage\" WHERE \"col:combinationAuthorship\" IS NOT NULL;";
+            populate.ExecuteNonQuery();
+        }
+
+        transaction.Commit();
+    }
+
+    private void RebuildDistributionAreaFts(SqliteConnection connection) {
+        using (var create = connection.CreateCommand()) {
+            create.CommandText = "CREATE VIRTUAL TABLE IF NOT EXISTS \"distribution_area_fts\" USING fts5(area);";
+            create.ExecuteNonQuery();
+        }
+
+        using var transaction = connection.BeginTransaction();
+
+        using (var clear = connection.CreateCommand()) {
+            clear.Transaction = transaction;
+            clear.CommandText = "DELETE FROM \"distribution_area_fts\";";
+            clear.ExecuteNonQuery();
+        }
+
+        using (var populate = connection.CreateCommand()) {
+            populate.Transaction = transaction;
+            populate.CommandText = "INSERT INTO \"distribution_area_fts\"(rowid, area) SELECT rowid, \"col:area\" FROM \"distribution\" WHERE \"col:area\" IS NOT NULL;";
+            populate.ExecuteNonQuery();
+        }
+
+        transaction.Commit();
     }
 
     private static string QuoteIdentifier(string identifier) {
@@ -587,6 +716,34 @@ VALUES (@import_id, @label, @key, @title, @alias, @description, @issued, @versio
         }
 
         return builder.ToString();
+    }
+
+    private static string SanitizeFileStem(string value) {
+        if (string.IsNullOrWhiteSpace(value)) {
+            return "dataset";
+        }
+
+        var builder = new StringBuilder(value.Length);
+        foreach (var ch in value) {
+            if (char.IsLetterOrDigit(ch) || ch is '.' or '_' or '-') {
+                builder.Append(ch);
+            }
+        }
+
+        if (builder.Length == 0) {
+            return "dataset";
+        }
+
+        var sanitized = builder.ToString().Trim('_');
+        if (sanitized.Length == 0) {
+            sanitized = builder.ToString();
+        }
+
+        if (sanitized.Length > 255) {
+            sanitized = sanitized[..255];
+        }
+
+        return sanitized;
     }
 
     private static string SanitizeIdentifierPart(string value) {
