@@ -23,6 +23,7 @@ public sealed class ColImporter {
     private readonly string _rootDir;
     private readonly string _datastoreDir;
     private readonly bool _force;
+    private readonly Dictionary<string, HashSet<string>> _tableColumnsForIndexing = new(StringComparer.OrdinalIgnoreCase);
 
     private static readonly Uri DatapackageUri = new("https://api.catalogueoflife.org/datapackage", UriKind.Absolute);
 
@@ -66,6 +67,7 @@ public sealed class ColImporter {
 
     public void Process(CancellationToken cancellationToken) {
         cancellationToken.ThrowIfCancellationRequested();
+        _tableColumnsForIndexing.Clear();
 
         using var archive = ZipFile.OpenRead(_zipPath);
         var metadataEntry = archive.Entries.FirstOrDefault(e => e.FullName.Equals("metadata.yaml", StringComparison.OrdinalIgnoreCase));
@@ -101,10 +103,7 @@ public sealed class ColImporter {
         using var connection = new SqliteConnection(connectionString);
         connection.Open();
 
-        using (var pragma = connection.CreateCommand()) {
-            pragma.CommandText = "PRAGMA foreign_keys = ON;";
-            pragma.ExecuteNonQuery();
-        }
+        ConfigureConnection(connection);
 
         EnsureImportMetadataTable(connection);
 
@@ -143,6 +142,7 @@ public sealed class ColImporter {
                 }
             }
 
+            FinalizeIndexesAndFts(connection);
             UpdateImportCompleted(connection, importId, DateTimeOffset.UtcNow);
             _console.MarkupLine($"[green]Imported ColDP dataset ->[/] {databasePath}");
         } catch {
@@ -305,7 +305,7 @@ VALUES (@import_id, @label, @key, @title, @alias, @description, @issued, @versio
         cancellationToken.ThrowIfCancellationRequested();
     }
 
-    private static void EnsureDatasetMetadataTable(SqliteConnection connection) {
+    private void EnsureDatasetMetadataTable(SqliteConnection connection) {
         using var cmd = connection.CreateCommand();
         cmd.CommandText = @"CREATE TABLE IF NOT EXISTS dataset_metadata (
     import_id INTEGER NOT NULL,
@@ -320,11 +320,7 @@ VALUES (@import_id, @label, @key, @title, @alias, @description, @issued, @versio
     FOREIGN KEY(import_id) REFERENCES import_metadata(id) ON DELETE CASCADE
 );";
         cmd.ExecuteNonQuery();
-
-        var columns = GetTableColumns(connection, "dataset_metadata") ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase) {
-            "import_id", "dataset_label", "key", "title", "alias", "description", "issued", "version", "raw_yaml"
-        };
-        EnsureColumnIndexes(connection, "dataset_metadata", columns);
+        RegisterTableColumns(connection, "dataset_metadata");
     }
 
     private void ProcessTsv(SqliteConnection connection, long importId, ZipArchiveEntry entry, CancellationToken cancellationToken) {
@@ -392,8 +388,7 @@ VALUES (@import_id, @label, @key, @title, @alias, @description, @issued, @versio
         }
 
         transaction.Commit();
-        EnsureColumnIndexes(connection, tableName, existingColumns);
-        RebuildFtsIfNeeded(connection, tableName, existingColumns);
+        RegisterTableColumns(tableName, existingColumns);
         _console.MarkupLine($"    {tableName}: inserted {inserted:N0} rows (columns: {existingColumns.Count}).");
     }
 
@@ -591,9 +586,7 @@ VALUES (@import_id, @reference_id, @json);";
     FOREIGN KEY(import_id) REFERENCES import_metadata(id) ON DELETE CASCADE
 );";
         cmd.ExecuteNonQuery();
-
-        var columns = GetTableColumns(connection, "reference_json") ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "import_id", "reference_id", "json" };
-        EnsureColumnIndexes(connection, "reference_json", columns);
+        RegisterTableColumns(connection, "reference_json");
     }
 
     private void ProcessSourceYaml(SqliteConnection connection, long importId, ZipArchiveEntry entry, CancellationToken cancellationToken) {
@@ -611,8 +604,8 @@ VALUES (@import_id, @reference_id, @json);";
 
         var map = deserializer.Deserialize<Dictionary<string, object?>>(yamlText) ?? new Dictionary<string, object?>();
 
-    using var cmd = connection.CreateCommand();
-    cmd.CommandText = @"INSERT INTO source_metadata (import_id, source_key, title, alias, description, issued, version, raw_yaml, filename)
+        using var cmd = connection.CreateCommand();
+        cmd.CommandText = @"INSERT INTO source_metadata (import_id, source_key, title, alias, description, issued, version, raw_yaml, filename)
 VALUES (@import_id, @key, @title, @alias, @description, @issued, @version, @raw_yaml, @filename);";
         cmd.Parameters.AddWithValue("@import_id", importId);
         cmd.Parameters.AddWithValue("@key", ExtractString(map, "key") ?? (object)DBNull.Value);
@@ -642,13 +635,10 @@ VALUES (@import_id, @key, @title, @alias, @description, @issued, @version, @raw_
 );";
         cmd.ExecuteNonQuery();
 
-        var columns = GetTableColumns(connection, "source_metadata") ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase) {
-            "import_id", "source_key", "title", "alias", "description", "issued", "version", "raw_yaml", "filename"
-        };
-        EnsureColumnIndexes(connection, "source_metadata", columns);
+        RegisterTableColumns(connection, "source_metadata");
     }
 
-    private static void EnsureColumnIndexes(SqliteConnection connection, string tableName, HashSet<string> columns) {
+    private void EnsureColumnIndexes(SqliteConnection connection, string tableName, HashSet<string> columns) {
         if (columns.Count == 0) {
             return;
         }
@@ -696,9 +686,10 @@ VALUES (@import_id, @key, @title, @alias, @description, @issued, @version, @raw_
         return false;
     }
 
-    private static void CreateColumnIndex(SqliteConnection connection, string tableName, string columnName) {
+    private void CreateColumnIndex(SqliteConnection connection, string tableName, string columnName) {
         using var cmd = connection.CreateCommand();
         var indexName = $"idx_{SanitizeIdentifierPart(tableName)}_{SanitizeIdentifierPart(columnName)}";
+        _console.MarkupLine($"[grey]Ensuring index {indexName} on {tableName}({columnName}).[/]");
         cmd.CommandText = $"CREATE INDEX IF NOT EXISTS {QuoteIdentifier(indexName)} ON {QuoteIdentifier(tableName)}({QuoteIdentifier(columnName)});";
         cmd.ExecuteNonQuery();
     }
@@ -843,6 +834,7 @@ VALUES (@import_id, @key, @title, @alias, @description, @issued, @version, @raw_
             return;
         }
 
+        _console.MarkupLine($"[grey]Rebuilding full-text index {ftsTableName} from {sourceTable} ({activeColumns.Count} columns).[/]");
         var ftsColumns = string.Join(", ", activeColumns.Select(c => c.FtsColumn));
 
         using (var create = connection.CreateCommand()) {
@@ -973,6 +965,75 @@ VALUES (@import_id, @key, @title, @alias, @description, @issued, @version, @raw_
             builder.Append(char.IsLetterOrDigit(ch) ? ch : '_');
         }
         return builder.Length > 0 ? builder.ToString() : "part";
+    }
+
+    private void ConfigureConnection(SqliteConnection connection) {
+        using (var pragma = connection.CreateCommand()) {
+            pragma.CommandText = "PRAGMA foreign_keys = ON;";
+            pragma.ExecuteNonQuery();
+        }
+
+        ConfigureConnectionPerformance(connection);
+    }
+
+    private void ConfigureConnectionPerformance(SqliteConnection connection) {
+        _console.MarkupLine("[grey]Applying SQLite pragmas for faster bulk load (journal_mode=MEMORY, synchronous=OFF, temp_store=MEMORY, cache_size=-200000).[/]");
+
+        using (var journal = connection.CreateCommand()) {
+            journal.CommandText = "PRAGMA journal_mode = MEMORY;";
+            journal.ExecuteScalar();
+        }
+
+        using (var synchronous = connection.CreateCommand()) {
+            synchronous.CommandText = "PRAGMA synchronous = OFF;";
+            synchronous.ExecuteNonQuery();
+        }
+
+        using (var tempStore = connection.CreateCommand()) {
+            tempStore.CommandText = "PRAGMA temp_store = MEMORY;";
+            tempStore.ExecuteNonQuery();
+        }
+
+        using (var cacheSize = connection.CreateCommand()) {
+            cacheSize.CommandText = "PRAGMA cache_size = -200000;";
+            cacheSize.ExecuteNonQuery();
+        }
+    }
+
+    private void FinalizeIndexesAndFts(SqliteConnection connection) {
+        if (_tableColumnsForIndexing.Count == 0) {
+            return;
+        }
+
+        foreach (var tableName in _tableColumnsForIndexing.Keys.OrderBy(t => t, StringComparer.OrdinalIgnoreCase)) {
+            if (!_tableColumnsForIndexing.TryGetValue(tableName, out var columns) || columns.Count == 0) {
+                continue;
+            }
+
+            _console.MarkupLine($"[grey]Finalizing indexes and FTS for {tableName}...[/]");
+            EnsureColumnIndexes(connection, tableName, columns);
+            RebuildFtsIfNeeded(connection, tableName, columns);
+        }
+
+        _tableColumnsForIndexing.Clear();
+    }
+
+    private void RegisterTableColumns(SqliteConnection connection, string tableName) {
+        var columns = GetTableColumns(connection, tableName);
+        if (columns is null) {
+            return;
+        }
+
+        RegisterTableColumns(tableName, columns);
+    }
+
+    private void RegisterTableColumns(string tableName, HashSet<string> columns) {
+        if (!_tableColumnsForIndexing.TryGetValue(tableName, out var existing)) {
+            _tableColumnsForIndexing[tableName] = new HashSet<string>(columns, StringComparer.OrdinalIgnoreCase);
+            return;
+        }
+
+        existing.UnionWith(columns);
     }
 
     private string ToRelative(string fullPath) {
