@@ -835,7 +835,8 @@ VALUES (@import_id, @key, @title, @alias, @description, @issued, @version, @raw_
         }
 
         _console.MarkupLine($"[grey]Rebuilding full-text index {ftsTableName} from {sourceTable} ({activeColumns.Count} columns).[/]");
-        var ftsColumns = string.Join(", ", activeColumns.Select(c => c.FtsColumn));
+        var quotedFtsColumns = activeColumns.Select(c => QuoteIdentifier(c.FtsColumn)).ToList();
+        var ftsColumns = string.Join(", ", quotedFtsColumns);
 
         using (var create = connection.CreateCommand()) {
             create.CommandText = $"CREATE VIRTUAL TABLE IF NOT EXISTS {QuoteIdentifier(ftsTableName)} USING fts5({ftsColumns}, tokenize='{tokenizer}');";
