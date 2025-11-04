@@ -26,6 +26,36 @@ public sealed class ColImporter {
 
     private static readonly Uri DatapackageUri = new("https://api.catalogueoflife.org/datapackage", UriKind.Absolute);
 
+    private sealed record ColumnMapping(string FtsColumn, string[] Candidates, bool IncludeInScientificName, bool IncludeInContext, bool CreateIndex);
+
+    private static readonly ColumnMapping[] NameUsageColumnMappings = new[] {
+        new ColumnMapping("scientificname", new[] { "scientificName" }, true, true, true),
+        new ColumnMapping("originalspelling", new[] { "originalSpelling" }, true, true, false),
+        new ColumnMapping("uninomial", new[] { "uninomial" }, true, true, true),
+        new ColumnMapping("genericname", new[] { "genericName" }, true, true, true),
+        new ColumnMapping("infragenericepithet", new[] { "infragenericEpithet" }, true, true, true),
+        new ColumnMapping("specificepithet", new[] { "specificEpithet" }, true, true, true),
+        new ColumnMapping("infraspecificepithet", new[] { "infraspecificEpithet" }, true, true, true),
+        new ColumnMapping("cultivarepithet", new[] { "cultivarEpithet" }, true, true, true),
+        new ColumnMapping("genus", new[] { "genus" }, true, true, true),
+        new ColumnMapping("subtribe", new[] { "subtribe" }, false, true, true),
+        new ColumnMapping("tribe", new[] { "tribe" }, false, true, true),
+        new ColumnMapping("subfamily", new[] { "subfamily" }, false, true, true),
+        new ColumnMapping("family", new[] { "family" }, false, true, true),
+        new ColumnMapping("superfamily", new[] { "superfamily" }, false, true, true),
+        new ColumnMapping("suborder", new[] { "suborder" }, false, true, true),
+        new ColumnMapping("order", new[] { "order" }, false, true, true),
+        new ColumnMapping("subclass", new[] { "subclass" }, false, true, true),
+        new ColumnMapping("class", new[] { "class" }, false, true, true),
+        new ColumnMapping("subphylum", new[] { "subphylum" }, false, true, true),
+        new ColumnMapping("phylum", new[] { "phylum" }, false, true, true),
+        new ColumnMapping("kingdom", new[] { "kingdom" }, false, true, true)
+    };
+
+    private static readonly HashSet<string> IndexedColumnNames = BuildIndexedColumnNames();
+
+    private sealed record ColumnInfo(string Original, string Sanitized);
+
     public ColImporter(IAnsiConsole console, string zipPath, string rootDir, string datastoreDir, bool force) {
         _console = console;
         _zipPath = Path.GetFullPath(zipPath);
@@ -43,10 +73,10 @@ public sealed class ColImporter {
             throw new InvalidOperationException("metadata.yaml not found inside the ColDP archive.");
         }
 
-    var metadata = ReadDatasetMetadata(metadataEntry, cancellationToken);
-    var datasetLabel = DetermineDatasetLabel(metadata, Path.GetFileNameWithoutExtension(_zipPath));
-    var sanitizedStem = SanitizeFileStem(datasetLabel);
-    var databaseFileName = $"col_coldp_{sanitizedStem}.sqlite";
+        var metadata = ReadDatasetMetadata(metadataEntry, cancellationToken);
+        var datasetLabel = DetermineDatasetLabel(metadata, Path.GetFileNameWithoutExtension(_zipPath));
+        var sanitizedStem = SanitizeFileStem(datasetLabel);
+        var databaseFileName = $"col_coldp_{sanitizedStem}.sqlite";
         var databasePath = Path.Combine(_datastoreDir, databaseFileName);
 
         if (File.Exists(databasePath)) {
@@ -324,21 +354,24 @@ VALUES (@import_id, @label, @key, @title, @alias, @description, @issued, @versio
             return;
         }
 
-        var tableName = SanitizeTableName(Path.GetFileNameWithoutExtension(entry.Name));
-    var existingColumns = EnsureDataTable(connection, tableName, headers);
+        var columnInfos = BuildColumnInfos(headers);
+        var sanitizedHeaders = columnInfos.Select(ci => ci.Sanitized).ToList();
 
-    using var transaction = connection.BeginTransaction();
+        var tableName = SanitizeTableName(Path.GetFileNameWithoutExtension(entry.Name));
+        var existingColumns = EnsureDataTable(connection, tableName, sanitizedHeaders);
+
+        using var transaction = connection.BeginTransaction();
         using var insert = connection.CreateCommand();
         insert.Transaction = transaction;
-        insert.CommandText = BuildInsertSql(tableName, headers);
+        insert.CommandText = BuildInsertSql(tableName, sanitizedHeaders);
 
         var importParam = insert.CreateParameter();
         importParam.ParameterName = "@import_id";
         importParam.Value = importId;
         insert.Parameters.Add(importParam);
 
-        var parameters = new SqliteParameter[headers.Count];
-        for (var i = 0; i < headers.Count; i++) {
+        var parameters = new SqliteParameter[sanitizedHeaders.Count];
+        for (var i = 0; i < sanitizedHeaders.Count; i++) {
             var param = insert.CreateParameter();
             param.ParameterName = "@c" + i.ToString(CultureInfo.InvariantCulture);
             insert.Parameters.Add(param);
@@ -350,7 +383,7 @@ VALUES (@import_id, @label, @key, @title, @alias, @description, @issued, @versio
         long inserted = 0;
         while (csv.Read()) {
             cancellationToken.ThrowIfCancellationRequested();
-            for (var i = 0; i < headers.Count; i++) {
+            for (var i = 0; i < columnInfos.Count; i++) {
                 var raw = csv.GetField(i);
                 parameters[i].Value = string.IsNullOrEmpty(raw) ? DBNull.Value : raw;
             }
@@ -358,8 +391,8 @@ VALUES (@import_id, @label, @key, @title, @alias, @description, @issued, @versio
             inserted += insert.ExecuteNonQuery();
         }
 
-    transaction.Commit();
-    EnsureColumnIndexes(connection, tableName, existingColumns);
+        transaction.Commit();
+        EnsureColumnIndexes(connection, tableName, existingColumns);
         RebuildFtsIfNeeded(connection, tableName, existingColumns);
         _console.MarkupLine($"    {tableName}: inserted {inserted:N0} rows (columns: {existingColumns.Count}).");
     }
@@ -384,6 +417,71 @@ VALUES (@import_id, @label, @key, @title, @alias, @description, @issued, @versio
         }
 
         return existing;
+    }
+
+    private static List<ColumnInfo> BuildColumnInfos(IReadOnlyList<string> headers) {
+        var result = new List<ColumnInfo>(headers.Count);
+        var occurrences = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var header in headers) {
+            var sanitized = SanitizeColumnName(header);
+            var baseName = sanitized;
+
+            if (occurrences.TryGetValue(baseName, out var count)) {
+                count++;
+                var candidate = $"{baseName}_{count}";
+                while (occurrences.ContainsKey(candidate)) {
+                    count++;
+                    candidate = $"{baseName}_{count}";
+                }
+
+                occurrences[baseName] = count;
+                occurrences[candidate] = 0;
+                sanitized = candidate;
+            } else {
+                occurrences[baseName] = 0;
+            }
+
+            result.Add(new ColumnInfo(header, sanitized));
+        }
+
+        return result;
+    }
+
+    private static string SanitizeColumnName(string original) {
+        if (string.IsNullOrWhiteSpace(original)) {
+            return "column";
+        }
+
+        var trimmed = original.Trim();
+        var colonIndex = trimmed.IndexOf(':');
+        if (colonIndex >= 0) {
+            trimmed = trimmed[(colonIndex + 1)..];
+        }
+
+        if (string.IsNullOrWhiteSpace(trimmed)) {
+            trimmed = "column";
+        }
+
+        var builder = new StringBuilder(trimmed.Length);
+        foreach (var ch in trimmed) {
+            if (char.IsLetterOrDigit(ch) || ch == '_') {
+                builder.Append(ch);
+            } else {
+                builder.Append('_');
+            }
+        }
+
+        var sanitized = builder.ToString().Trim('_');
+        if (sanitized.Length == 0) {
+            sanitized = "column";
+        }
+
+        if (char.IsDigit(sanitized[0])) {
+            sanitized = "_" + sanitized;
+        }
+
+        return sanitized;
     }
 
     private static HashSet<string>? GetTableColumns(SqliteConnection connection, string tableName) {
@@ -513,7 +611,7 @@ VALUES (@import_id, @reference_id, @json);";
 
         var map = deserializer.Deserialize<Dictionary<string, object?>>(yamlText) ?? new Dictionary<string, object?>();
 
-        using var cmd = connection.CreateCommand();
+    using var cmd = connection.CreateCommand();
     cmd.CommandText = @"INSERT INTO source_metadata (import_id, source_key, title, alias, description, issued, version, raw_yaml, filename)
 VALUES (@import_id, @key, @title, @alias, @description, @issued, @version, @raw_yaml, @filename);";
         cmd.Parameters.AddWithValue("@import_id", importId);
@@ -578,6 +676,15 @@ VALUES (@import_id, @key, @title, @alias, @description, @issued, @version, @raw_
             return false;
         }
 
+        if (IndexedColumnNames.Contains(columnName)) {
+            return true;
+        }
+
+        if (columnName.IndexOf("authorship", StringComparison.OrdinalIgnoreCase) >= 0 &&
+            !columnName.EndsWith("id", StringComparison.OrdinalIgnoreCase)) {
+            return true;
+        }
+
         if (lower.EndsWith("id", StringComparison.Ordinal)) {
             return true;
         }
@@ -602,76 +709,144 @@ VALUES (@import_id, @key, @title, @alias, @description, @issued, @version, @raw_
         }
 
         if (string.Equals(tableName, "vernacularname", StringComparison.OrdinalIgnoreCase)) {
-            var hasName = columns.Contains("col:name");
-            var hasTrans = columns.Contains("col:transliteration");
+            var hasName = columns.Contains("name");
+            var hasTrans = columns.Contains("transliteration");
             if (hasName || hasTrans) {
                 RebuildVernacularFts(connection, hasName, hasTrans);
             }
             return;
         }
 
-        if (string.Equals(tableName, "nameusage", StringComparison.OrdinalIgnoreCase) && columns.Contains("col:combinationAuthorship")) {
-            RebuildNameUsageCombinationAuthorshipFts(connection);
-            return;
+        if (string.Equals(tableName, "nameusage", StringComparison.OrdinalIgnoreCase)) {
+            RebuildNameUsageScientificNameFts(connection, columns);
+            RebuildNameUsageScientificContextFts(connection, columns);
+            RebuildNameUsageAuthorshipFts(connection, columns);
+            RebuildNameUsageNotesFts(connection, columns);
         }
 
-        if (string.Equals(tableName, "distribution", StringComparison.OrdinalIgnoreCase) && columns.Contains("col:area")) {
+        if (string.Equals(tableName, "distribution", StringComparison.OrdinalIgnoreCase) && columns.Contains("area")) {
             RebuildDistributionAreaFts(connection);
         }
     }
 
     private void RebuildVernacularFts(SqliteConnection connection, bool hasName, bool hasTransliteration) {
-        using (var create = connection.CreateCommand()) {
-            create.CommandText = "CREATE VIRTUAL TABLE IF NOT EXISTS \"vernacularname_fts\" USING fts5(name, transliteration);";
-            create.ExecuteNonQuery();
+        var columns = new List<(string FtsColumn, string DatasetColumn)>();
+        if (hasName) {
+            columns.Add(("name", "name"));
         }
 
-        using var transaction = connection.BeginTransaction();
-
-        using (var clear = connection.CreateCommand()) {
-            clear.Transaction = transaction;
-            clear.CommandText = "DELETE FROM \"vernacularname_fts\";";
-            clear.ExecuteNonQuery();
+        if (hasTransliteration) {
+            columns.Add(("transliteration", "transliteration"));
         }
 
-        var nameSelect = hasName ? "\"col:name\"" : "NULL";
-        var transliterationSelect = hasTransliteration ? "\"col:transliteration\"" : "NULL";
-
-        using (var populate = connection.CreateCommand()) {
-            populate.Transaction = transaction;
-            populate.CommandText = $"INSERT INTO \"vernacularname_fts\"(rowid, name, transliteration) SELECT rowid, {nameSelect}, {transliterationSelect} FROM \"vernacularname\" WHERE {nameSelect} IS NOT NULL OR {transliterationSelect} IS NOT NULL;";
-            populate.ExecuteNonQuery();
-        }
-
-        transaction.Commit();
-    }
-
-    private void RebuildNameUsageCombinationAuthorshipFts(SqliteConnection connection) {
-        using (var create = connection.CreateCommand()) {
-            create.CommandText = "CREATE VIRTUAL TABLE IF NOT EXISTS \"nameusage_combinationauthorship_fts\" USING fts5(combinationauthorship);";
-            create.ExecuteNonQuery();
-        }
-
-        using var transaction = connection.BeginTransaction();
-
-        using (var clear = connection.CreateCommand()) {
-            clear.Transaction = transaction;
-            clear.CommandText = "DELETE FROM \"nameusage_combinationauthorship_fts\";";
-            clear.ExecuteNonQuery();
-        }
-
-        using (var populate = connection.CreateCommand()) {
-            populate.Transaction = transaction;
-            populate.CommandText = "INSERT INTO \"nameusage_combinationauthorship_fts\"(rowid, combinationauthorship) SELECT rowid, \"col:combinationAuthorship\" FROM \"nameusage\" WHERE \"col:combinationAuthorship\" IS NOT NULL;";
-            populate.ExecuteNonQuery();
-        }
-
-        transaction.Commit();
+        RebuildFtsTable(connection, "vernacularname_fts", "vernacularname", columns);
     }
 
     private void RebuildDistributionAreaFts(SqliteConnection connection) {
+        var columns = new List<(string FtsColumn, string DatasetColumn)> {
+            ("area", "area")
+        };
+        RebuildFtsTable(connection, "distribution_area_fts", "distribution", columns);
+    }
+
+    private void RebuildNameUsageScientificNameFts(SqliteConnection connection, HashSet<string> columns) {
+        var active = GetActiveColumns(NameUsageColumnMappings.Where(m => m.IncludeInScientificName), columns);
+        if (active.Count == 0) {
+            return;
+        }
+
+        RebuildFtsTable(connection, "nameusage_scientific_name_fts", "nameusage", active);
+    }
+
+    private void RebuildNameUsageScientificContextFts(SqliteConnection connection, HashSet<string> columns) {
+        var active = GetActiveColumns(NameUsageColumnMappings.Where(m => m.IncludeInContext), columns);
+        if (active.Count == 0) {
+            return;
+        }
+
+        RebuildFtsTable(connection, "nameusage_taxon_context_fts", "nameusage", active);
+    }
+
+    private void RebuildNameUsageAuthorshipFts(SqliteConnection connection, HashSet<string> columns) {
+        var selected = new List<(string FtsColumn, string DatasetColumn)>();
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var column in columns.OrderBy(name => name, StringComparer.OrdinalIgnoreCase)) {
+            if (!column.Contains("authorship", StringComparison.OrdinalIgnoreCase)) {
+                continue;
+            }
+
+            if (column.EndsWith("id", StringComparison.OrdinalIgnoreCase)) {
+                continue;
+            }
+
+            var ftsColumn = ToFtsColumnName(column);
+            if (!seen.Add(ftsColumn)) {
+                continue;
+            }
+
+            selected.Add((ftsColumn, column));
+        }
+
+        if (selected.Count == 0) {
+            return;
+        }
+
+        RebuildFtsTable(connection, "nameusage_authorship_fts", "nameusage", selected);
+    }
+
+    private void RebuildNameUsageNotesFts(SqliteConnection connection, HashSet<string> columns) {
+        var candidates = new (string FtsColumn, string[] SourceColumns)[] {
+            ("etymology", new[] { "etymology" }),
+            ("nameremarks", new[] { "nameRemarks" }),
+            ("remarks", new[] { "remarks" })
+        };
+
+        var active = new List<(string FtsColumn, string DatasetColumn)>();
+        foreach (var (ftsColumn, sourceColumns) in candidates) {
+            var match = sourceColumns.FirstOrDefault(columns.Contains);
+            if (match is null) {
+                continue;
+            }
+            active.Add((ftsColumn, match));
+        }
+
+        if (active.Count == 0) {
+            return;
+        }
+
+        RebuildFtsTable(connection, "nameusage_notes_fts", "nameusage", active);
+    }
+
+    private static List<(string FtsColumn, string DatasetColumn)> GetActiveColumns(IEnumerable<ColumnMapping> mappings, HashSet<string> columns) {
+        var result = new List<(string FtsColumn, string DatasetColumn)>();
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var mapping in mappings) {
+            if (!seen.Add(mapping.FtsColumn)) {
+                continue;
+            }
+
+            var datasetColumn = mapping.Candidates.FirstOrDefault(columns.Contains);
+            if (datasetColumn is null) {
+                continue;
+            }
+
+            result.Add((mapping.FtsColumn, datasetColumn));
+        }
+
+        return result;
+    }
+
+    private void RebuildFtsTable(SqliteConnection connection, string ftsTableName, string sourceTable, List<(string FtsColumn, string DatasetColumn)> activeColumns, string tokenizer = "unicode61") {
+        if (activeColumns.Count == 0) {
+            return;
+        }
+
+        var ftsColumns = string.Join(", ", activeColumns.Select(c => c.FtsColumn));
+
         using (var create = connection.CreateCommand()) {
-            create.CommandText = "CREATE VIRTUAL TABLE IF NOT EXISTS \"distribution_area_fts\" USING fts5(area);";
+            create.CommandText = $"CREATE VIRTUAL TABLE IF NOT EXISTS {QuoteIdentifier(ftsTableName)} USING fts5({ftsColumns}, tokenize='{tokenizer}');";
             create.ExecuteNonQuery();
         }
 
@@ -679,17 +854,63 @@ VALUES (@import_id, @key, @title, @alias, @description, @issued, @version, @raw_
 
         using (var clear = connection.CreateCommand()) {
             clear.Transaction = transaction;
-            clear.CommandText = "DELETE FROM \"distribution_area_fts\";";
+            clear.CommandText = $"DELETE FROM {QuoteIdentifier(ftsTableName)};";
             clear.ExecuteNonQuery();
         }
 
+        var insertColumns = "rowid, " + ftsColumns;
+        var selectColumns = "rowid, " + string.Join(", ", activeColumns.Select(c => QuoteIdentifier(c.DatasetColumn)));
+        var nonNullFilters = activeColumns.Select(c => $"{QuoteIdentifier(c.DatasetColumn)} IS NOT NULL").ToList();
+        var whereClause = nonNullFilters.Count > 0 ? " WHERE " + string.Join(" OR ", nonNullFilters) : string.Empty;
+
         using (var populate = connection.CreateCommand()) {
             populate.Transaction = transaction;
-            populate.CommandText = "INSERT INTO \"distribution_area_fts\"(rowid, area) SELECT rowid, \"col:area\" FROM \"distribution\" WHERE \"col:area\" IS NOT NULL;";
+            populate.CommandText = $"INSERT INTO {QuoteIdentifier(ftsTableName)}({insertColumns}) SELECT {selectColumns} FROM {QuoteIdentifier(sourceTable)}{whereClause};";
             populate.ExecuteNonQuery();
         }
 
         transaction.Commit();
+    }
+
+    private static string ToFtsColumnName(string sourceName) {
+        var builder = new StringBuilder(sourceName.Length);
+        foreach (var ch in sourceName) {
+            if (char.IsLetterOrDigit(ch)) {
+                builder.Append(char.ToLowerInvariant(ch));
+            } else {
+                builder.Append('_');
+            }
+        }
+
+        var result = builder.ToString().Trim('_');
+        if (string.IsNullOrEmpty(result)) {
+            result = "col";
+        }
+
+        if (char.IsDigit(result[0])) {
+            result = "_" + result;
+        }
+
+        return result;
+    }
+
+    private static HashSet<string> BuildIndexedColumnNames() {
+        var set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var mapping in NameUsageColumnMappings) {
+            if (!mapping.CreateIndex) {
+                continue;
+            }
+
+            foreach (var candidate in mapping.Candidates) {
+                if (string.IsNullOrWhiteSpace(candidate)) {
+                    continue;
+                }
+
+                set.Add(candidate);
+            }
+        }
+
+        return set;
     }
 
     private static string QuoteIdentifier(string identifier) {
