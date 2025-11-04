@@ -24,6 +24,9 @@ public sealed class ColImporter {
     private readonly string _datastoreDir;
     private readonly bool _force;
     private readonly Dictionary<string, HashSet<string>> _tableColumnsForIndexing = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, ColumnPopulationSample> _columnPopulationSampleCache = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, int> _tableRowSampleCache = new(StringComparer.OrdinalIgnoreCase);
+    private const int MinimalIndexPopulationThreshold = 10;
 
     private static readonly Uri DatapackageUri = new("https://api.catalogueoflife.org/datapackage", UriKind.Absolute);
 
@@ -68,6 +71,8 @@ public sealed class ColImporter {
     public void Process(CancellationToken cancellationToken) {
         cancellationToken.ThrowIfCancellationRequested();
         _tableColumnsForIndexing.Clear();
+        _columnPopulationSampleCache.Clear();
+        _tableRowSampleCache.Clear();
 
         using var archive = ZipFile.OpenRead(_zipPath);
         var metadataEntry = archive.Entries.FirstOrDefault(e => e.FullName.Equals("metadata.yaml", StringComparison.OrdinalIgnoreCase));
@@ -644,15 +649,11 @@ VALUES (@import_id, @key, @title, @alias, @description, @issued, @version, @raw_
         }
 
         foreach (var column in columns) {
-            if (!ShouldIndexColumn(tableName, column)) {
-                continue;
-            }
-
-            CreateColumnIndex(connection, tableName, column);
+            TryCreateColumnIndex(connection, tableName, column, force: false);
         }
 
-        if (string.Equals(tableName, "source_metadata", StringComparison.OrdinalIgnoreCase) && columns.Contains("alias")) {
-            CreateColumnIndex(connection, tableName, "alias");
+        if (string.Equals(tableName, "source_metadata", StringComparison.OrdinalIgnoreCase) && columns.Contains("alias") && !ShouldIndexColumn(tableName, "alias")) {
+            TryCreateColumnIndex(connection, tableName, "alias", force: true);
         }
     }
 
@@ -688,10 +689,31 @@ VALUES (@import_id, @key, @title, @alias, @description, @issued, @version, @raw_
 
     private void CreateColumnIndex(SqliteConnection connection, string tableName, string columnName) {
         using var cmd = connection.CreateCommand();
-        var indexName = $"idx_{SanitizeIdentifierPart(tableName)}_{SanitizeIdentifierPart(columnName)}";
+        var indexName = BuildIndexName(tableName, columnName);
         _console.MarkupLine($"[grey]Ensuring index {indexName} on {tableName}({columnName}).[/]");
         cmd.CommandText = $"CREATE INDEX IF NOT EXISTS {QuoteIdentifier(indexName)} ON {QuoteIdentifier(tableName)}({QuoteIdentifier(columnName)});";
         cmd.ExecuteNonQuery();
+    }
+
+    private void TryCreateColumnIndex(SqliteConnection connection, string tableName, string columnName, bool force) {
+        if (!force && !ShouldIndexColumn(tableName, columnName)) {
+            return;
+        }
+
+        var sample = GetColumnPopulationSample(connection, tableName, columnName, MinimalIndexPopulationThreshold);
+        if (sample.NonNullCount == 0) {
+            var indexName = BuildIndexName(tableName, columnName);
+            _console.MarkupLine($"[grey]Skipping index {indexName} on {tableName}({columnName}); column has no values.[/]");
+            return;
+        }
+
+        if (sample.TotalCount <= MinimalIndexPopulationThreshold) {
+            var indexName = BuildIndexName(tableName, columnName);
+            _console.MarkupLine($"[grey]Skipping index {indexName} on {tableName}({columnName}); table sampled only {sample.TotalCount:N0} rows (threshold {MinimalIndexPopulationThreshold}).[/]");
+            return;
+        }
+
+        CreateColumnIndex(connection, tableName, columnName);
     }
 
     private void RebuildFtsIfNeeded(SqliteConnection connection, string tableName, HashSet<string> columns) {
@@ -968,6 +990,10 @@ VALUES (@import_id, @key, @title, @alias, @description, @issued, @version, @raw_
         return builder.Length > 0 ? builder.ToString() : "part";
     }
 
+    private static string BuildIndexName(string tableName, string columnName) {
+        return $"idx_{SanitizeIdentifierPart(tableName)}_{SanitizeIdentifierPart(columnName)}";
+    }
+
     private void ConfigureConnection(SqliteConnection connection) {
         using (var pragma = connection.CreateCommand()) {
             pragma.CommandText = "PRAGMA foreign_keys = ON;";
@@ -1036,6 +1062,39 @@ VALUES (@import_id, @key, @title, @alias, @description, @issued, @version, @raw_
 
         existing.UnionWith(columns);
     }
+
+    private ColumnPopulationSample GetColumnPopulationSample(SqliteConnection connection, string tableName, string columnName, int threshold) {
+        var key = tableName + "|" + columnName;
+        if (_columnPopulationSampleCache.TryGetValue(key, out var cached)) {
+            return cached;
+        }
+
+        var totalCount = GetTableRowSample(connection, tableName, threshold);
+
+        using var cmd = connection.CreateCommand();
+        cmd.CommandText = $"SELECT COUNT(1) FROM (SELECT 1 FROM {QuoteIdentifier(tableName)} WHERE {QuoteIdentifier(columnName)} IS NOT NULL LIMIT {threshold + 1});";
+        var result = cmd.ExecuteScalar() ?? 0;
+        var nonNullCount = Convert.ToInt32(result, CultureInfo.InvariantCulture);
+
+        var sample = new ColumnPopulationSample(nonNullCount, totalCount);
+        _columnPopulationSampleCache[key] = sample;
+        return sample;
+    }
+
+    private int GetTableRowSample(SqliteConnection connection, string tableName, int threshold) {
+        if (_tableRowSampleCache.TryGetValue(tableName, out var cached)) {
+            return cached;
+        }
+
+        using var cmd = connection.CreateCommand();
+        cmd.CommandText = $"SELECT COUNT(1) FROM (SELECT 1 FROM {QuoteIdentifier(tableName)} LIMIT {threshold + 1});";
+        var result = cmd.ExecuteScalar() ?? 0;
+        var count = Convert.ToInt32(result, CultureInfo.InvariantCulture);
+        _tableRowSampleCache[tableName] = count;
+        return count;
+    }
+
+    private readonly record struct ColumnPopulationSample(int NonNullCount, int TotalCount);
 
     private string ToRelative(string fullPath) {
         try {
