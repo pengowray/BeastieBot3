@@ -7,16 +7,17 @@ using System.Text.RegularExpressions;
 namespace beastie {
 
     // A binomial or trinomial, with optional stock/population, and threatened status
+
+    // This is basically the information IUCN includes in the CSV export per taxon.
+    // Common name is no longer (as of 2025) part of that of that export (as it was in 2016), and is only available through the API.
+
     // TODO: make into a composite containing a generic Bitri (+ stockpop + status + special status)
-    // TODO regions?
+    // TODO2025: regions
+    
 
     public class IUCNBitri : ICloneable // was: Bitri
     {
-        //enum Kingdom { None, Plant, Animal, Fungi } // etc...
 
-        //▿
-
-        //enum type { None, binom, trinom }
         public bool isStockpop {
             get {
                 return !string.IsNullOrEmpty(stockpop);
@@ -31,34 +32,53 @@ namespace beastie {
 
         public bool isTrinomial {
             get {
-                return (!string.IsNullOrEmpty(epithet) && !string.IsNullOrEmpty(infraspecies));
+                return !string.IsNullOrEmpty(epithet) && !string.IsNullOrEmpty(infraspecies);
             }
         }
 
-        public bool isVariety {
-            get {
-                return (NormalizedInfrarank() == "var.");
+        public bool isVariety
+        {
+            get
+            {
+                return NormalizedInfrarank() == "var.";
             }
         }
 
-        // binomial, not a trinomial, not a stockpop.
+        // binomial, not a trinomial, not a stockpop
+        // global not a regional assessment (newly added to these, as previously did not have regional assessments in data)
         public bool isSpecies
         {
             get
             {
-                return !isStockpop && !isTrinomial;
+                return !isStockpop && !isTrinomial && isGlobal;
             }
         }
 
         public bool isSubspeciesOrVariety {
             get {
-                return !isStockpop && isTrinomial;
+                return !isStockpop && isTrinomial && isGlobal;
             }
         }
 
         public bool isSubspeciesNotVariety {
             get {
-                return !isStockpop && isTrinomial && !isVariety;
+                return !isStockpop && isTrinomial && !isVariety && isGlobal;
+            }
+        }
+
+
+        public bool isGlobal
+        {
+            // TODO2025: check if this is correct
+            get
+            {
+                if (string.IsNullOrEmpty(regions))
+                    return true;
+
+                if (regions.Trim().ToLowerInvariant().StartsWith("global"))
+                    return true;
+
+                return false;
             }
         }
 
@@ -67,14 +87,19 @@ namespace beastie {
         // Excavata (Domain: Eukaryota)
         // Rhizaria (unranked) (Domain: Eukaryota)
         // Chromalveolata (Domain: Eukaryota) (polyphyletic)
-        enum Kingdom_Taxobox { None, Animalia, Archaeplastida, Fungi, Chromalveolata, Rhizaria, Excavata, Amoebozoa, Bacteria, Archaea, Viruses, incertae_sedis, Ichnotaxa, Ootaxa }
-        enum Kingdom_COL { None, Animalia, Archaea, Bacteria, Chromista, Fungi, Plantae, Protozoa, Viruses }
+        //enum Kingdom_Taxobox { None, Animalia, Archaeplastida, Fungi, Chromalveolata, Rhizaria, Excavata, Amoebozoa, Bacteria, Archaea, Viruses, incertae_sedis, Ichnotaxa, Ootaxa }
+        //enum Kingdom_COL { None, Animalia, Archaea, Bacteria, Chromista, Fungi, Plantae, Protozoa, Viruses }
+        
         public enum Kingdom_IUCN { None, Animalia, Bacteria, Chromista, Fungi, Plantae, Protozoa }
-
         public Kingdom_IUCN kingdom;
 
-        public string iucnId;
+        [Obsolete] // predates current taxon id + assessment id
+        public string? iucnId;
 
+        public long taxon_id; // sis identifier for this taxon in IUCN database
+        public long assessment_id; // unique identifier for this assessment in IUCN database
+
+        //note: can also use as IUCNTaxonLadder
         public string genus;
         public string subgenus;
         public string epithet;
@@ -85,9 +110,14 @@ namespace beastie {
         public string stockpop; // stock/subpopulation
         public bool multiStockpop; // if this Bitri represents multiple Stocks/Subpopulation. If true, "stockpop" must contain a description, e.g. "1 stock or subpopulation" or "3 subpopulations", and redlistStatus should only be set if all members are the same
 
-        public string CommonNameEng; // list of comma separated common names from the IUCN
+        // TODO2025
+        public string regions;
 
-        public string FirstCommonNameEng() {
+        //TODO2025: replace with new IUCN name list format (including language and preferred yes/no)
+        [Obsolete]
+        public string? CommonNameEng; // list of comma separated common names from the IUCN
+
+        public string? FirstCommonNameEng() {
             if (string.IsNullOrEmpty(CommonNameEng))
                 return null;
 
@@ -107,7 +137,10 @@ namespace beastie {
             // Fail if any numbers in common name field. Field may have been used for incorrectly for <Author, Year>
             if (CommonNameEng.Any(char.IsNumber))
                 return null;
-            
+
+            //TODO2025: move these rules to a rule list (eg TaxaRuleList); hopefully none are still needed
+
+            // clean up common names (from issues circa 2016)
             return CommonNameEng.Split(new char[] { ',' })
                 .Select(m => m.Trim())
                 .Select(m => Regex.Replace(m, @"^The ", "", RegexOptions.IgnoreCase)) // remove starting "The "
@@ -123,7 +156,7 @@ namespace beastie {
                 .ToArray();
         }
 
-        public string BestCommonNameEng() {
+        public string? BestCommonNameEng() {
             string[] names = CommonNamesEng();
             if (names == null)
                 return null;
@@ -142,10 +175,11 @@ namespace beastie {
 
         public RedStatus Status; // should never be RedStatus.Null. use None or Unknown instead.
 
-        TaxonPage _taxonName; // cached // (use TaxonName instead?)
+        //TaxonPage _taxonName; // cached // (use TaxonName instead?)
 
-        public IUCNBitri() {
-		}
+        public IUCNBitri()
+        {
+        }
 
         // should we hide the infrarank? (i.e. yes for animal subspecies which are written with "ssp.", no otherwise)
         // no longer used
@@ -283,11 +317,12 @@ namespace beastie {
 			return clone;
 		}
 
-		public object Clone()
-		{
-			return this.MemberwiseClone();
-		}
-
+        public object Clone()
+        {
+            return this.MemberwiseClone();
+        }
+        
+#if DISABLED 
         public TaxonPage TaxonName() {
             if (_taxonName == null) {
                 _taxonName = BeastieBot.Instance().GetTaxonNamePage(this);
@@ -295,6 +330,7 @@ namespace beastie {
             
             return _taxonName;
         }
+#endif
 
     }
 }

@@ -11,7 +11,7 @@ namespace beastie {
 
         // e.g. "==[[Mammalia|Mammals]]==" or "==[[Mammalia]] species=="
         // "groupof" may or may not appear in the returned results
-        public static string HeadingString(TaxonNode node, int depth, RedStatus status) {
+        public static string? HeadingString(TaxonNode node, int depth, RedStatus status) {
             bool noHeader0 = true; // no header for depth 0 (e.g. "Mammal species")
             bool skipDepth1 = true; // don't return "=Pangolin species=", instead "==Pangolin species=="
 
@@ -47,16 +47,14 @@ namespace beastie {
         }
 
         //TODO: move to other static class?
-        public static string GrayText(TaxonNode node) {
+        public static string? GrayText(TaxonNode node) {
             var rules = node.rules;
 
             if (rules == null)
                 return null;
 
             if (!string.IsNullOrWhiteSpace(rules.comprises)) {
-                //return string.Format(@"{{gray|{0}}}", comprises);
                 return "{{gray|" + rules.comprises.UpperCaseFirstChar() + "}}"; // {{gray|comprises}}
-
             }
 
             if (!string.IsNullOrWhiteSpace(rules.includes)) {
@@ -67,21 +65,8 @@ namespace beastie {
                 return "{{gray|(\"" + rules.means.UpperCaseFirstChar() + "\")}}"; // {{gray|("means")}} // note: string.Format turns {{ into {.
             }
 
-
             return null;
         }
-
-        /*
-        // replaced with TaxonName.CommonOrTaxoNameLowerPref()
-        public string VernacularStringLower() {
-            if (notAssigned) {
-                return "\"not assigned\""; // lit: "not assigned" (with quotes)
-            }
-
-            return taxonPage.CommonOrTaxoNameLowerPref();
-        }
-        */
-
 
         public static string ArticleBlurb(TaxonNode node, RedStatus status) {
 

@@ -1,4 +1,8 @@
-﻿using System;
+﻿#if DISABLED //TODO2025: re-enable (remove this line) or rewrite
+
+//
+
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -12,7 +16,7 @@ namespace beastie {
 
         public Dupes alsoMatch; // Dictionary<string, List<IUCNBitri>> alsoMatchThese = null
 
-        // taxons which share a 
+        // taxons which share a common name
         public static Dupes FindByCommonNames( IEnumerable<IUCNBitri> bitris, Dupes alsoMatch = null) {
             // Dictionary<string, List<IUCNBitri>> alsoMatchThese = null) {
             //FindDupes(bitris, alsoMatchThese, AllCommonNamesNormalizer);
@@ -362,3 +366,5 @@ namespace beastie {
 
     }
 }
+
+#endif

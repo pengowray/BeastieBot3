@@ -1,4 +1,7 @@
-﻿using System;
+﻿//TODO: rework / replace; use chart module
+
+/*
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -137,13 +140,11 @@ namespace beastie {
 <small>{{notelist|group=ic}}</small>
 }}";
 
-/*
-* 80 to 110 are extinct or extinct in the wild:
-** 78 extinct <small>(EX)</small> species{{efn|omitted from chart|group=ic}}
-** 2 extinct in the wild <small>(EW)</small>
-** 30 possibly extinct <small>[CR(PE)]</small>
-** 0 possibly extinct in the wild <small>[CR(PEW)]</small>
-*/
+// * 80 to 110 are extinct or extinct in the wild:
+// ** 78 extinct <small>(EX)</small> species{{efn|omitted from chart|group=ic}}
+// ** 2 extinct in the wild <small>(EW)</small>
+// ** 30 possibly extinct <small>[CR(PE)]</small>
+// ** 0 possibly extinct in the wild <small>[CR(PEW)]</small>
 
 // todo: use a group for notes? {{notelist|group=beastieChart}}
 
@@ -173,3 +174,4 @@ namespace beastie {
 
     }
 }
+*/

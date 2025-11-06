@@ -531,35 +531,46 @@ namespace beastie {
             output.WriteLine();
         }
 
-        public void AllCaps() {
+        public void AllCaps()
+        {
             output.WriteLine("==All caps==");
+#if DISABLED  //TODO2025: re-enable; requires RedListCapsReport.CorrectCaps()
             bool issueFound = false;
 
-            foreach (var bitri in topNode.DeepBitris().Where(bt => !bt.isStockpop)) {
+            foreach (var bitri in topNode.DeepBitris().Where(bt => !bt.isStockpop))
+            {
                 string namesField = bitri.CommonNameEng;
                 if (namesField == null) continue;
 
                 var names = namesField.Split(new char[] { ',' }).Select(m => m.Trim());
 
-                foreach (string name in names) {
-                    if (name.Any(char.IsLetter) && !name.Any(char.IsLower)) {
+                foreach (string name in names)
+                {
+                    if (name.Any(char.IsLetter) && !name.Any(char.IsLower))
+                    {
+
                         string correctCase = RedListCapsReport.CorrectCaps(name).UpperCaseFirstChar();
-                        correctCase = correctCase.Replace("mediterranean", "Mediterranean"); // hack
+                        correctCase = correctCase.Replace("mediterranean", "Mediterranean"); // hack (TODO2025: ?)
 
                         // check if already has alternative case version
                         string alt = null;
-                        foreach (string othername in names) {
+                        foreach (string othername in names)
+                        {
                             if (othername == name) continue;
-                            if (othername.ToLower() == name.ToLower()) {
+                            if (othername.ToLower() == name.ToLower())
+                            {
                                 alt = othername;
                             }
                         }
 
-                        if (alt != null) {
+                        if (alt != null)
+                        {
                             output.WriteLine("* " + bitri.NameLinkIUCN() + " (" + name + ") — redundant all caps name. Also has name listed as: " + '"' + alt + '"');
                             issueFound = true;
 
-                        } else {
+                        }
+                        else
+                        {
                             output.WriteLine("* " + bitri.NameLinkIUCN() + " (" + name + ") — all caps name. Suggested: " + correctCase);
                             issueFound = true;
 
@@ -568,9 +579,11 @@ namespace beastie {
                 }
 
             }
-            if (!issueFound) {
+            if (!issueFound)
+            {
                 output.WriteLine("No issues found.");
             }
+#endif            
             output.WriteLine();
         }
 

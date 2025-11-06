@@ -1,4 +1,6 @@
-﻿using System;
+﻿#if DISABLED
+
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -169,3 +171,4 @@ namespace beastie {
     }
 
 }
+#endif

@@ -7,7 +7,10 @@ namespace beastie {
 	public class IUCNTaxonLadder
 	{
 		public List<string> ranks = new List<string>(); // kingdom to lowest.
-		public Dictionary<string,string> rankName = new Dictionary<string, string>(); // and other details: authority, "infraspecific rank", "infraspecific name", "stock/subpopulation"
+
+		//TODO2025: rename: rankName -> ladderValues		
+		//rank->value and other details: authority, "infraspecific rank", "infraspecific name", "stock/subpopulation"
+		public Dictionary<string,string> rankName = new Dictionary<string, string>(); 
 
 		public IUCNTaxonLadder() {
 		}
@@ -89,7 +92,9 @@ namespace beastie {
 
 			rankName.TryGetValue("stock/subpopulation", out bitri.stockpop);
 
-            rankName.TryGetValue("common names (eng)", out bitri.CommonNameEng);  //TODO: also "Common names (Fre)", "Common names (Spa)"
+			//TODO2025: region
+
+			rankName.TryGetValue("common names (eng)", out bitri.CommonNameEng);  //TODO: also "Common names (Fre)", "Common names (Spa)"
 
             rankName.TryGetValue("species id", out bitri.iucnId); // "Species ID", e.g. 198785 
 
