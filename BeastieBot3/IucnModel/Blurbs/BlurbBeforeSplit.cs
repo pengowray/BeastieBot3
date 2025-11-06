@@ -7,7 +7,7 @@ using System.Threading.Tasks;
 namespace beastie {
     public class BlurbBeforeSplit : Blurb {
 
-        public static string Text(TaxonNode node, RedStatus status, int depth, bool includeGray = true) {
+        public static string? Text(TaxonNode node, RedStatus status, int depth, bool includeGray = true) {
             if (depth == 0) {
                 return null; // use ArticleBlurb() instead
             }
