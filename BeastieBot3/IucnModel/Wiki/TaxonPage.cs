@@ -974,6 +974,9 @@ namespace beastie {
 
 
         void LoadTaxobox() {
+            //TODO2025
+            throw new NotImplementedException("LoadTaxobox no longer works (fixme).");
+#if DISABLED
             if (page == null)
                 return;
 
@@ -1114,7 +1117,7 @@ namespace beastie {
                     taxonField = taxonField.Trim();
                 }
             }
-
+#endif
         }
 
         public static string FindTemplateName(Page page, string templateName) {

@@ -1,5 +1,4 @@
-﻿#if DISABLED  
-
+﻿
 // 2016 code which read wikipedia pages from XOWA database. 
 // We're going to do it differently now.
 
@@ -97,6 +96,7 @@ namespace beastie {
 
 		public XowaPage() {
 		}
+#if DISABLED  
 
 		public WiktionaryEntry ToWiktionaryEntry() {
 			var entry = new WiktionaryEntry();
@@ -133,8 +133,7 @@ namespace beastie {
 		public void DebugPrint() {
 			Console.WriteLine("{4} {0} (xow-redir:{1}|regex-redir:{2}|{5}): {3}", title, xowa_redirect, IsRedirect(), text, pageId, RedirectsTo());
 		}
+#endif
 	}
 
 }
-
-#endif

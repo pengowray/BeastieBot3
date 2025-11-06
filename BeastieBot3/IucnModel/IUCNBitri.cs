@@ -3,6 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.RegularExpressions;
+using CsvHelper.Configuration.Attributes;
 
 namespace beastie {
 
@@ -46,6 +47,7 @@ namespace beastie {
 
         // binomial, not a trinomial, not a stockpop
         // global not a regional assessment (newly added to these, as previously did not have regional assessments in data)
+        // TODO2025: 
         public bool isSpecies
         {
             get
@@ -175,7 +177,9 @@ namespace beastie {
 
         public RedStatus Status; // should never be RedStatus.Null. use None or Unknown instead.
 
-        //TaxonPage _taxonName; // cached // (use TaxonName instead?)
+        //TODO2025: Replace me
+        [Obsolete]
+        TaxonPage _taxonName = null; // cached // (use TaxonName instead?)
 
         public IUCNBitri()
         {
@@ -322,15 +326,16 @@ namespace beastie {
             return this.MemberwiseClone();
         }
         
-#if DISABLED 
+        //TODO2025: fixme / replace all uses of me
         public TaxonPage TaxonName() {
+#if DISABLED 
             if (_taxonName == null) {
                 _taxonName = BeastieBot.Instance().GetTaxonNamePage(this);
             }
-            
             return _taxonName;
-        }
 #endif
+            throw new NotImplementedException("IUCNBitri.TaxonName() needs fixing.");
+        }
 
     }
 }
