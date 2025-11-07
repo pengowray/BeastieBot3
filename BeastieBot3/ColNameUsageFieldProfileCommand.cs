@@ -141,10 +141,7 @@ public sealed class ColNameUsageFieldProfileCommand : Command<ColNameUsageFieldP
 
             AnsiConsole.MarkupLine($"[green]Completed scan of {processedRows:N0} row(s).[/]");
 
-            var outputTable = BuildSummaryTable(stats.Values);
-        AnsiConsole.Write(outputTable);
-
-        WriteDetailSections(stats.Values);
+            WriteColumnReports(stats.Values);
 
         return 0;
     }
@@ -219,45 +216,6 @@ public sealed class ColNameUsageFieldProfileCommand : Command<ColNameUsageFieldP
 
     private static string QuoteIdentifier(string identifier) {
         return "\"" + identifier.Replace("\"", "\"\"") + "\"";
-    }
-
-    private static Table BuildSummaryTable(IEnumerable<ColumnStats> stats) {
-        var table = new Table().Border(TableBorder.Rounded);
-        table.AddColumn("Column");
-        table.AddColumn("Null");
-        table.AddColumn("Empty");
-        table.AddColumn("Leading/Trailing WS");
-        table.AddColumn("Non-ASCII");
-        table.AddColumn("Control Chars");
-        table.AddColumn("Punctuation");
-        table.AddColumn("Length (min/max/avg)");
-        table.AddColumn("Distinct Non-ASCII");
-
-        foreach (var stat in stats.OrderBy(s => s.Name, StringComparer.OrdinalIgnoreCase)) {
-            var nonNull = stat.TotalObserved - stat.NullCount;
-            var avgLength = nonNull > 0 ? stat.SumLength / (double)nonNull : 0d;
-            var minLength = stat.MinLength == int.MaxValue ? 0 : stat.MinLength;
-
-            table.AddRow(
-                stat.Name,
-                FormatCount(stat.NullCount, stat.TotalObserved),
-                FormatCount(stat.EmptyCount, stat.TotalObserved),
-                stat.TrimDifferenceCount > 0
-                    ? $"{FormatCount(stat.TrimDifferenceCount, stat.TotalObserved)} (lead {FormatCount(stat.LeadingWhitespaceCount, stat.TotalObserved)}, trail {FormatCount(stat.TrailingWhitespaceCount, stat.TotalObserved)})"
-                    : "-",
-                FormatCount(stat.NonAsciiCount, stat.TotalObserved),
-                FormatCount(stat.ControlCharCount, stat.TotalObserved),
-                FormatCount(stat.PunctuationCount, stat.TotalObserved),
-                nonNull > 0
-                    ? $"{minLength}/{stat.MaxLength}/{avgLength:F1}"
-                    : "-",
-                stat.NonAsciiDistinctCount > 0
-                    ? $"{stat.NonAsciiDistinctCount:N0}"
-                    : "-"
-            );
-        }
-
-        return table;
     }
 
     private static string FormatCount(long count, long total) {
@@ -474,66 +432,76 @@ public sealed class ColNameUsageFieldProfileCommand : Command<ColNameUsageFieldP
         };
     }
 
-    private static void WriteDetailSections(IEnumerable<ColumnStats> stats) {
-        foreach (var stat in stats.OrderBy(s => s.Name, StringComparer.OrdinalIgnoreCase)) {
-            var hasNonAscii = stat.NonAsciiDistinctCount > 0;
-            var hasControl = stat.ControlDistinctCount > 0;
-            var hasTrimExample = stat.ExampleTrimDifference is not null;
-            var hasNonAsciiExample = stat.ExampleNonAscii is not null;
-            var hasPunctuation = stat.PunctuationCount > 0;
-            var hasUnicodeBlocks = stat.UnicodeBlocks.Any();
+    private static void WriteColumnReports(IEnumerable<ColumnStats> stats) {
+        var ordered = stats.OrderBy(s => s.Name, StringComparer.OrdinalIgnoreCase).ToList();
+        for (var index = 0; index < ordered.Count; index++) {
+            var stat = ordered[index];
+            var nonNull = stat.TotalObserved - stat.NullCount;
+            var avgLength = nonNull > 0 ? stat.SumLength / (double)nonNull : 0d;
+            var minLength = stat.MinLength == int.MaxValue ? 0 : stat.MinLength;
 
-            if (!hasNonAscii && !hasControl && !hasTrimExample && !hasNonAsciiExample && !hasPunctuation && !hasUnicodeBlocks) {
-                continue;
+            if (index > 0) {
+                AnsiConsole.MarkupLine(string.Empty);
             }
 
-            var panelText = new StringBuilder();
-            panelText.AppendLine($"[bold]{Markup.Escape(stat.Name)}[/]");
+            AnsiConsole.MarkupLine($"[bold]{Markup.Escape(stat.Name)}[/] ({Markup.Escape(stat.DeclaredType ?? string.Empty)})");
+            AnsiConsole.MarkupLine($"  Rows observed: {stat.TotalObserved:N0}");
+            AnsiConsole.MarkupLine($"  Null: {FormatCount(stat.NullCount, stat.TotalObserved)}");
+            AnsiConsole.MarkupLine($"  Empty strings: {FormatCount(stat.EmptyCount, stat.TotalObserved)}");
 
-            if (hasNonAscii) {
-                panelText.AppendLine($"[grey]Non-ASCII characters observed (distinct: {stat.NonAsciiDistinctCount:N0}):[/]");
-                panelText.AppendLine(FormatRuneSamples(stat.NonAsciiDistinctCharacters, stat.MaxSampleCount));
+            if (stat.TrimDifferenceCount > 0) {
+                AnsiConsole.MarkupLine("  Leading/trailing whitespace:");
+                AnsiConsole.MarkupLine($"    Any difference: {FormatCount(stat.TrimDifferenceCount, stat.TotalObserved)}");
+                AnsiConsole.MarkupLine($"    Leading whitespace: {FormatCount(stat.LeadingWhitespaceCount, stat.TotalObserved)}");
+                AnsiConsole.MarkupLine($"    Trailing whitespace: {FormatCount(stat.TrailingWhitespaceCount, stat.TotalObserved)}");
+            } else {
+                AnsiConsole.MarkupLine("  Leading/trailing whitespace: -");
             }
 
-            if (hasControl) {
-                panelText.AppendLine($"[grey]Control characters observed (distinct: {stat.ControlDistinctCount:N0}):[/]");
-                panelText.AppendLine(FormatRuneSamples(stat.ControlDistinctCharacters, stat.MaxSampleCount));
+            AnsiConsole.MarkupLine($"  Length (min / max / avg): {(nonNull > 0 ? $"{minLength}/{stat.MaxLength}/{avgLength:F1}" : "-")}");
+            AnsiConsole.MarkupLine($"  Rows with non-ASCII: {FormatCount(stat.NonAsciiCount, stat.TotalObserved)} (distinct chars: {stat.NonAsciiDistinctCount:N0})");
+            AnsiConsole.MarkupLine($"  Rows with control characters: {FormatCount(stat.ControlCharCount, stat.TotalObserved)} (distinct chars: {stat.ControlDistinctCount:N0})");
+            AnsiConsole.MarkupLine($"  Rows with punctuation: {FormatCount(stat.PunctuationCount, stat.TotalObserved)}");
+
+            if (stat.PunctuationAsciiDistinctCount > 0) {
+                AnsiConsole.MarkupLine("    ASCII punctuation: " + FormatRuneSamples(stat.PunctuationAsciiDistinctCharacters, stat.MaxSampleCount));
+            }
+            if (stat.PunctuationUnicodeDistinctCount > 0) {
+                AnsiConsole.MarkupLine("    Unicode punctuation: " + FormatRuneSamples(stat.PunctuationUnicodeDistinctCharacters, stat.MaxSampleCount));
             }
 
-            if (hasPunctuation) {
-                panelText.AppendLine($"[grey]Punctuation observed in {FormatCount(stat.PunctuationCount, stat.TotalObserved)} rows:[/]");
-                if (stat.PunctuationAsciiDistinctCount > 0) {
-                    panelText.AppendLine("ASCII: " + FormatRuneSamples(stat.PunctuationAsciiDistinctCharacters, stat.MaxSampleCount));
-                }
-                if (stat.PunctuationUnicodeDistinctCount > 0) {
-                    panelText.AppendLine("Unicode: " + FormatRuneSamples(stat.PunctuationUnicodeDistinctCharacters, stat.MaxSampleCount));
-                }
+            if (stat.NonAsciiDistinctCount > 0) {
+                AnsiConsole.MarkupLine("  Non-ASCII samples: " + FormatRuneSamples(stat.NonAsciiDistinctCharacters, stat.MaxSampleCount));
             }
 
-            if (hasUnicodeBlocks) {
-                panelText.AppendLine("[grey]Unicode blocks observed:[/]");
-                foreach (var block in stat.UnicodeBlocks
-                             .OrderByDescending(b => b.RowCount)
-                             .ThenBy(b => b.Name, StringComparer.Ordinal)) {
-                    panelText.AppendLine($"- {block.Name}: rows {block.RowCount:N0}, chars {block.CharacterCount:N0}, distinct {block.DistinctCount:N0}");
-                    var samplesText = FormatRuneSamples(block.DistinctCharacters, stat.MaxSampleCount);
-                    if (!string.Equals(samplesText, "-", StringComparison.Ordinal)) {
-                        panelText.AppendLine("  Samples: " + samplesText);
+            if (stat.ControlDistinctCount > 0) {
+                AnsiConsole.MarkupLine("  Control character samples: " + FormatRuneSamples(stat.ControlDistinctCharacters, stat.MaxSampleCount));
+            }
+
+            var blocks = stat.UnicodeBlocks
+                .OrderByDescending(b => b.RowCount)
+                .ThenBy(b => b.Name, StringComparer.Ordinal)
+                .ToList();
+            if (blocks.Count > 0) {
+                AnsiConsole.MarkupLine("  Unicode blocks:");
+                foreach (var block in blocks) {
+                    AnsiConsole.MarkupLine($"    {block.Name}: rows {block.RowCount:N0}, chars {block.CharacterCount:N0}, distinct {block.DistinctCount:N0}");
+                    var samples = FormatRuneSamples(block.DistinctCharacters, stat.MaxSampleCount);
+                    if (!string.Equals(samples, "-", StringComparison.Ordinal)) {
+                        AnsiConsole.MarkupLine("      Samples: " + samples);
                     }
                 }
             }
 
-            if (hasNonAsciiExample) {
-                panelText.AppendLine("[grey]Example containing non-ASCII characters:[/]");
-                panelText.AppendLine(Markup.Escape(stat.ExampleNonAscii!));
+            if (!string.IsNullOrEmpty(stat.ExampleNonAscii)) {
+                AnsiConsole.MarkupLine("  Example non-ASCII value:");
+                AnsiConsole.MarkupLine("    " + Markup.Escape(stat.ExampleNonAscii));
             }
 
-            if (hasTrimExample) {
-                panelText.AppendLine("[grey]Example with leading/trailing whitespace:[/]");
-                panelText.AppendLine(Markup.Escape(stat.ExampleTrimDifference!));
+            if (!string.IsNullOrEmpty(stat.ExampleTrimDifference)) {
+                AnsiConsole.MarkupLine("  Example with surrounding whitespace:");
+                AnsiConsole.MarkupLine("    " + Markup.Escape(stat.ExampleTrimDifference));
             }
-
-            AnsiConsole.Write(new Panel(panelText.ToString()) { Border = BoxBorder.Rounded });
         }
     }
 
