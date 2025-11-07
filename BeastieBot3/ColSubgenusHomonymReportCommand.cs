@@ -25,10 +25,10 @@ WITH subg AS (
         basionymID,
         LOWER(
             COALESCE(
-                NULLIF(TRIM(infragenericEpithet), ''),
-                NULLIF(TRIM(subgenus), ''),
-                NULLIF(TRIM(uninomial), ''),
-                NULLIF(TRIM(genericName), '')
+                infragenericEpithet,
+                subgenus,
+                uninomial,
+                genericName
             )
         ) AS canonical_name
     FROM nameusage
@@ -46,8 +46,8 @@ WITH subg AS (
         basionymID,
         LOWER(
             COALESCE(
-                NULLIF(TRIM(uninomial), ''),
-                NULLIF(TRIM(genus), '')
+                uninomial,
+                genus
             )
         ) AS canonical_name
     FROM nameusage
