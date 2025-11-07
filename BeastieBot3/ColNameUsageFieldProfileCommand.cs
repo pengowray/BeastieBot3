@@ -434,17 +434,67 @@ public sealed class ColNameUsageFieldProfileCommand : Command<ColNameUsageFieldP
 
     private static void WriteColumnReports(IEnumerable<ColumnStats> stats) {
         var ordered = stats.OrderBy(s => s.Name, StringComparer.OrdinalIgnoreCase).ToList();
+
+        var allNullColumns = new List<ColumnStats>();
+        var columnsWithNbsp = new List<ColumnStats>();
+        var columnsWithNarrowNbsp = new List<ColumnStats>();
+        var columnsWithDirectionalMarks = new List<ColumnStats>();
+        var columnsWithDaggers = new List<ColumnStats>();
+        var columnsWithTrimIssues = new List<ColumnStats>();
+        var columnsWithControlChars = new List<ColumnStats>();
+        var columnsWithNormalizationIssues = new List<ColumnStats>();
+        var columnsWithZeroWidthJoiners = new List<ColumnStats>();
+
         for (var index = 0; index < ordered.Count; index++) {
             var stat = ordered[index];
-            var nonNull = stat.TotalObserved - stat.NullCount;
-            var avgLength = nonNull > 0 ? stat.SumLength / (double)nonNull : 0d;
-            var minLength = stat.MinLength == int.MaxValue ? 0 : stat.MinLength;
+
+            var isAllNull = stat.TotalObserved > 0 && stat.NullCount == stat.TotalObserved;
+            if (isAllNull) {
+                allNullColumns.Add(stat);
+            }
+            if (stat.ContainsNoBreakSpace) {
+                columnsWithNbsp.Add(stat);
+            }
+            if (stat.ContainsNarrowNoBreakSpace) {
+                columnsWithNarrowNbsp.Add(stat);
+            }
+            if (stat.ContainsDirectionalMarks) {
+                columnsWithDirectionalMarks.Add(stat);
+            }
+            if (stat.ContainsDagger) {
+                columnsWithDaggers.Add(stat);
+            }
+            if (stat.TrimDifferenceCount > 0) {
+                columnsWithTrimIssues.Add(stat);
+            }
+            if (stat.ControlCharCount > 0) {
+                columnsWithControlChars.Add(stat);
+            }
+            if (stat.NotNfcCount > 0) {
+                columnsWithNormalizationIssues.Add(stat);
+            }
+            if (stat.ContainsZeroWidthJoiner) {
+                columnsWithZeroWidthJoiners.Add(stat);
+            }
 
             if (index > 0) {
                 AnsiConsole.MarkupLine(string.Empty);
             }
 
             AnsiConsole.MarkupLine($"[bold]{Markup.Escape(stat.Name)}[/] ({Markup.Escape(stat.DeclaredType ?? string.Empty)})");
+
+            if (isAllNull) {
+                AnsiConsole.MarkupLine("  All rows are null.");
+                continue;
+            }
+
+            var nonNull = stat.TotalObserved - stat.NullCount;
+            var nonEmpty = nonNull - stat.EmptyCount;
+            var caseSampleTotal = stat.UppercaseStartCount + stat.LowercaseStartCount + stat.OtherStartCount + stat.WhitespaceOnlyCount;
+            var additionalWordsSampleTotal = stat.AdditionalWordsNoneCount + stat.AdditionalWordsAllUpperCount + stat.AdditionalWordsAllLowerCount + stat.AdditionalWordsMixedOrOtherCount;
+            var avgLength = nonNull > 0 ? stat.SumLength / (double)nonNull : 0d;
+            var minLength = stat.MinLength == int.MaxValue ? 0 : stat.MinLength;
+
             AnsiConsole.MarkupLine($"  Rows observed: {stat.TotalObserved:N0}");
             AnsiConsole.MarkupLine($"  Null: {FormatCount(stat.NullCount, stat.TotalObserved)}");
             AnsiConsole.MarkupLine($"  Empty strings: {FormatCount(stat.EmptyCount, stat.TotalObserved)}");
@@ -459,6 +509,55 @@ public sealed class ColNameUsageFieldProfileCommand : Command<ColNameUsageFieldP
             }
 
             AnsiConsole.MarkupLine($"  Length (min / max / avg): {(nonNull > 0 ? $"{minLength}/{stat.MaxLength}/{avgLength:F1}" : "-")}");
+
+            if (caseSampleTotal > 0) {
+                AnsiConsole.MarkupLine("  First-word casing:" +
+                    $" upper {FormatCount(stat.UppercaseStartCount, caseSampleTotal)}," +
+                    $" lower {FormatCount(stat.LowercaseStartCount, caseSampleTotal)}," +
+                    $" other {FormatCount(stat.OtherStartCount, caseSampleTotal)}," +
+                    $" whitespace-only {FormatCount(stat.WhitespaceOnlyCount, caseSampleTotal)}");
+            }
+
+            if (additionalWordsSampleTotal > 0) {
+                AnsiConsole.MarkupLine("  Additional-word casing:" +
+                    $" none {FormatCount(stat.AdditionalWordsNoneCount, additionalWordsSampleTotal)}," +
+                    $" all upper {FormatCount(stat.AdditionalWordsAllUpperCount, additionalWordsSampleTotal)}," +
+                    $" all lower {FormatCount(stat.AdditionalWordsAllLowerCount, additionalWordsSampleTotal)}," +
+                    $" mixed/other {FormatCount(stat.AdditionalWordsMixedOrOtherCount, additionalWordsSampleTotal)}");
+            }
+
+            if (nonEmpty > 0) {
+                if (stat.NotNfcCount == 0) {
+                    AnsiConsole.MarkupLine("  Unicode normalization: all observed values are NFC");
+                } else {
+                    var normalizationLine = $"  Unicode normalization: {FormatCount(stat.NotNfcCount, nonEmpty)} not NFC";
+                    if (stat.NfdLikelyCount > 0) {
+                        normalizationLine += $", {FormatCount(stat.NfdLikelyCount, nonEmpty)} look like NFD";
+                    }
+                    AnsiConsole.MarkupLine(normalizationLine);
+                }
+            }
+
+            var specials = new List<string>();
+            if (stat.ContainsNoBreakSpace) {
+                specials.Add("NBSP (U+00A0)");
+            }
+            if (stat.ContainsNarrowNoBreakSpace) {
+                specials.Add("Narrow NBSP (U+202F)");
+            }
+            if (stat.ContainsDirectionalMarks) {
+                specials.Add("Directional mark (e.g. U+200E/U+200F)");
+            }
+            if (stat.ContainsZeroWidthJoiner) {
+                specials.Add("Zero-width joiner/non-joiner (U+200C/U+200D)");
+            }
+            if (stat.ContainsDagger) {
+                specials.Add("Dagger (U+2020)");
+            }
+            if (specials.Count > 0) {
+                AnsiConsole.MarkupLine("  Notable characters: " + string.Join(", ", specials));
+            }
+
             AnsiConsole.MarkupLine($"  Rows with non-ASCII: {FormatCount(stat.NonAsciiCount, stat.TotalObserved)} (distinct chars: {stat.NonAsciiDistinctCount:N0})");
             AnsiConsole.MarkupLine($"  Rows with control characters: {FormatCount(stat.ControlCharCount, stat.TotalObserved)} (distinct chars: {stat.ControlDistinctCount:N0})");
             AnsiConsole.MarkupLine($"  Rows with punctuation: {FormatCount(stat.PunctuationCount, stat.TotalObserved)}");
@@ -503,6 +602,32 @@ public sealed class ColNameUsageFieldProfileCommand : Command<ColNameUsageFieldP
                 AnsiConsole.MarkupLine("    " + Markup.Escape(stat.ExampleTrimDifference));
             }
         }
+
+        if (allNullColumns.Count == 0 && columnsWithNbsp.Count == 0 && columnsWithNarrowNbsp.Count == 0 && columnsWithDirectionalMarks.Count == 0 && columnsWithDaggers.Count == 0 && columnsWithTrimIssues.Count == 0 && columnsWithControlChars.Count == 0 && columnsWithNormalizationIssues.Count == 0 && columnsWithZeroWidthJoiners.Count == 0) {
+            return;
+        }
+
+        AnsiConsole.MarkupLine(string.Empty);
+        AnsiConsole.MarkupLine("[bold]Summary[/]");
+
+        PrintSummaryList("All-null columns", allNullColumns);
+        PrintSummaryList("Columns containing NBSP", columnsWithNbsp);
+        PrintSummaryList("Columns containing narrow NBSP", columnsWithNarrowNbsp);
+        PrintSummaryList("Columns containing directional marks", columnsWithDirectionalMarks);
+        PrintSummaryList("Columns containing daggers", columnsWithDaggers);
+        PrintSummaryList("Columns with untrimmed values", columnsWithTrimIssues);
+        PrintSummaryList("Columns with control characters", columnsWithControlChars);
+    PrintSummaryList("Columns with zero-width joiners/non-joiners", columnsWithZeroWidthJoiners);
+        PrintSummaryList("Columns with non-NFC text", columnsWithNormalizationIssues);
+
+        static void PrintSummaryList(string title, IReadOnlyCollection<ColumnStats> items) {
+            if (items.Count == 0) {
+                return;
+            }
+
+            var names = string.Join(", ", items.Select(s => Markup.Escape(s.Name)));
+            AnsiConsole.MarkupLine($"  {title}: {names}");
+        }
     }
 
     private sealed class ColumnStats {
@@ -538,6 +663,21 @@ public sealed class ColNameUsageFieldProfileCommand : Command<ColNameUsageFieldP
         public long SumLength { get; private set; }
         public int MinLength { get; private set; } = int.MaxValue;
         public int MaxLength { get; private set; }
+    public long UppercaseStartCount { get; private set; }
+    public long LowercaseStartCount { get; private set; }
+    public long OtherStartCount { get; private set; }
+    public long WhitespaceOnlyCount { get; private set; }
+    public long AdditionalWordsNoneCount { get; private set; }
+    public long AdditionalWordsAllUpperCount { get; private set; }
+    public long AdditionalWordsAllLowerCount { get; private set; }
+    public long AdditionalWordsMixedOrOtherCount { get; private set; }
+    public long NotNfcCount { get; private set; }
+    public long NfdLikelyCount { get; private set; }
+    public bool ContainsNoBreakSpace { get; private set; }
+    public bool ContainsNarrowNoBreakSpace { get; private set; }
+    public bool ContainsDirectionalMarks { get; private set; }
+    public bool ContainsDagger { get; private set; }
+    public bool ContainsZeroWidthJoiner { get; private set; }
         public int MaxSampleCount => _maxCharSamples;
         public IReadOnlyCollection<uint> NonAsciiDistinctCharacters => _nonAsciiDistinct;
         public int NonAsciiDistinctCount => _nonAsciiDistinct.Count;
@@ -578,6 +718,9 @@ public sealed class ColNameUsageFieldProfileCommand : Command<ColNameUsageFieldP
                 return;
             }
 
+            AnalyzeWordStructure(value);
+            CheckNormalization(value);
+
             var leadingWhitespace = char.IsWhiteSpace(value[0]);
             var trailingWhitespace = char.IsWhiteSpace(value[^1]);
             if (leadingWhitespace || trailingWhitespace) {
@@ -594,6 +737,11 @@ public sealed class ColNameUsageFieldProfileCommand : Command<ColNameUsageFieldP
             var hasNonAscii = false;
             var hasControl = false;
             var sawPunctuation = false;
+            var sawNbsp = false;
+            var sawNarrowNbsp = false;
+            var sawDirectionalMark = false;
+            var sawDagger = false;
+            var sawZeroWidthJoiner = false;
             var blocksSeen = new HashSet<string>(StringComparer.Ordinal);
 
             foreach (var rune in value.EnumerateRunes()) {
@@ -628,6 +776,24 @@ public sealed class ColNameUsageFieldProfileCommand : Command<ColNameUsageFieldP
                     block.AddCharacter(code);
                     blocksSeen.Add(blockName);
                 }
+
+                if (!sawNbsp && code == 0x00A0) {
+                    sawNbsp = true;
+                } else if (!sawNarrowNbsp && code == 0x202F) {
+                    sawNarrowNbsp = true;
+                }
+
+                if (!sawDirectionalMark && IsDirectionalMark(code)) {
+                    sawDirectionalMark = true;
+                }
+
+                if (!sawDagger && (code == 0x2020 || code == 0x2021)) {
+                    sawDagger = true;
+                }
+
+                if (!sawZeroWidthJoiner && (code == 0x200C || code == 0x200D)) {
+                    sawZeroWidthJoiner = true;
+                }
             }
 
             foreach (var blockName in blocksSeen) {
@@ -646,6 +812,26 @@ public sealed class ColNameUsageFieldProfileCommand : Command<ColNameUsageFieldP
             if (sawPunctuation) {
                 PunctuationCount++;
             }
+
+            if (sawNbsp) {
+                ContainsNoBreakSpace = true;
+            }
+
+            if (sawNarrowNbsp) {
+                ContainsNarrowNoBreakSpace = true;
+            }
+
+            if (sawDirectionalMark) {
+                ContainsDirectionalMarks = true;
+            }
+
+            if (sawDagger) {
+                ContainsDagger = true;
+            }
+
+            if (sawZeroWidthJoiner) {
+                ContainsZeroWidthJoiner = true;
+            }
         }
 
         private static string Shorten(string input, int maxLength = 160) {
@@ -653,6 +839,114 @@ public sealed class ColNameUsageFieldProfileCommand : Command<ColNameUsageFieldP
                 return input;
             }
             return input.Substring(0, maxLength) + "…";
+        }
+
+        private void AnalyzeWordStructure(string value) {
+            var index = 0;
+            var length = value.Length;
+
+            while (index < length && char.IsWhiteSpace(value[index])) {
+                index++;
+            }
+
+            if (index >= length) {
+                WhitespaceOnlyCount++;
+                AdditionalWordsNoneCount++;
+                return;
+            }
+
+            var firstRune = Rune.GetRuneAt(value, index);
+            switch (GetCaseCategory(firstRune)) {
+                case RuneCaseCategory.Upper:
+                case RuneCaseCategory.Title:
+                    UppercaseStartCount++;
+                    break;
+                case RuneCaseCategory.Lower:
+                    LowercaseStartCount++;
+                    break;
+                default:
+                    OtherStartCount++;
+                    break;
+            }
+
+            index += firstRune.Utf16SequenceLength;
+            while (index < length && !char.IsWhiteSpace(value[index])) {
+                index++;
+            }
+
+            var sawAdditional = false;
+            var allUpper = true;
+            var allLower = true;
+
+            while (index < length) {
+                while (index < length && char.IsWhiteSpace(value[index])) {
+                    index++;
+                }
+
+                if (index >= length) {
+                    break;
+                }
+
+                sawAdditional = true;
+                var rune = Rune.GetRuneAt(value, index);
+                var caseCategory = GetCaseCategory(rune);
+
+                if (caseCategory is not (RuneCaseCategory.Upper or RuneCaseCategory.Title)) {
+                    allUpper = false;
+                }
+
+                if (caseCategory != RuneCaseCategory.Lower) {
+                    allLower = false;
+                }
+
+                index += rune.Utf16SequenceLength;
+                while (index < length && !char.IsWhiteSpace(value[index])) {
+                    index++;
+                }
+            }
+
+            if (!sawAdditional) {
+                AdditionalWordsNoneCount++;
+            } else if (allUpper && !allLower) {
+                AdditionalWordsAllUpperCount++;
+            } else if (allLower && !allUpper) {
+                AdditionalWordsAllLowerCount++;
+            } else {
+                AdditionalWordsMixedOrOtherCount++;
+            }
+        }
+
+        private void CheckNormalization(string value) {
+            if (value.Length == 0) {
+                return;
+            }
+
+            if (!value.IsNormalized(NormalizationForm.FormC)) {
+                NotNfcCount++;
+                if (value.IsNormalized(NormalizationForm.FormD)) {
+                    NfdLikelyCount++;
+                }
+            }
+        }
+
+        private static bool IsDirectionalMark(uint codePoint) {
+            return codePoint is 0x200E or 0x200F or >= 0x202A and <= 0x202E or >= 0x2066 and <= 0x2069;
+        }
+
+        private static RuneCaseCategory GetCaseCategory(Rune rune) {
+            return Rune.GetUnicodeCategory(rune) switch {
+                UnicodeCategory.UppercaseLetter => RuneCaseCategory.Upper,
+                UnicodeCategory.TitlecaseLetter => RuneCaseCategory.Title,
+                UnicodeCategory.LowercaseLetter => RuneCaseCategory.Lower,
+                _ => RuneCaseCategory.Other
+            };
+        }
+
+        private enum RuneCaseCategory {
+            Upper,
+            Title,
+            Lower,
+            Other
         }
 
         public sealed record UnicodeBlockSnapshot(string Name, long RowCount, long CharacterCount, IReadOnlyCollection<uint> DistinctCharacters, int DistinctCount);
