@@ -41,6 +41,11 @@ namespace BeastieBot3 {
                     col.AddCommand<ColSubgenusHomonymReportCommand>("report-subgenus-homonyms")
                         .WithDescription("Report subgenus entries whose names collide with genus names in the COL database.")
                         .WithExample(new[] { "col", "report-subgenus-homonyms" });
+                    col.AddCommand<ColNameUsageFieldProfileCommand>("report-nameusage-fields")
+                        .WithDescription("Profile COL nameusage fields for whitespace, ASCII coverage, and other text anomalies.")
+                        .WithExample(new[] { "col", "report-nameusage-fields" })
+                        .WithExample(new[] { "col", "report-nameusage-fields", "--columns", "scientificName,authorship" })
+                        .WithExample(new[] { "col", "report-nameusage-fields", "--limit", "100000" });
                 });
 
                 config.AddBranch("iucn", iucn => {

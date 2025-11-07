@@ -9,7 +9,10 @@ using Spectre.Console.Cli;
 
 namespace BeastieBot3;
 
-public sealed class ColSubgenusHomonymReportCommand : Command<CommonSettings> {
+// test example report; doesn't work / runs too slow; probably the LOWER commands.
+
+public sealed class ColSubgenusHomonymReportCommand : Command<CommonSettings>
+{
     // Canonicalize genus and subgenus names and join on the cleaned value to locate potential homonyms.
     private const string ReportSql = @"
 WITH subg AS (
@@ -80,18 +83,21 @@ WHERE s.canonical_name IS NOT NULL
   AND COALESCE(s.ID, '') <> COALESCE(g.ID, '')
 ORDER BY shared_name, subgenus_name, genus_name;";
 
-    public override int Execute(CommandContext context, CommonSettings settings, CancellationToken cancellationToken) {
+    public override int Execute(CommandContext context, CommonSettings settings, CancellationToken cancellationToken)
+    {
         var baseDir = settings.SettingsDir ?? AppContext.BaseDirectory;
         var iniFile = settings.IniFile ?? "paths.ini";
         var paths = new PathsService(iniFile, baseDir);
 
         var dbPath = paths.GetColSqlitePath();
-        if (string.IsNullOrWhiteSpace(dbPath)) {
+        if (string.IsNullOrWhiteSpace(dbPath))
+        {
             AnsiConsole.MarkupLine("[red]COL_sqlite path is not configured. Set [bold]Datastore:COL_sqlite[/] in paths.ini.[/]");
             return -1;
         }
 
-        if (!File.Exists(dbPath)) {
+        if (!File.Exists(dbPath))
+        {
             AnsiConsole.MarkupLine($"[red]COL SQLite database not found at:[/] {Markup.Escape(dbPath)}");
             return -2;
         }
@@ -101,7 +107,8 @@ ORDER BY shared_name, subgenus_name, genus_name;";
 
         var rows = new List<ReportRow>();
 
-        var connectionString = new SqliteConnectionStringBuilder {
+        var connectionString = new SqliteConnectionStringBuilder
+        {
             DataSource = dbPath,
             Mode = SqliteOpenMode.ReadOnly
         }.ToString();
@@ -113,7 +120,8 @@ ORDER BY shared_name, subgenus_name, genus_name;";
         command.CommandText = ReportSql;
 
         using var reader = command.ExecuteReader();
-        while (reader.Read()) {
+        while (reader.Read())
+        {
             cancellationToken.ThrowIfCancellationRequested();
             rows.Add(new ReportRow(
                 SharedName: ReadString(reader, "shared_name"),
@@ -138,7 +146,8 @@ ORDER BY shared_name, subgenus_name, genus_name;";
             ));
         }
 
-        if (rows.Count == 0) {
+        if (rows.Count == 0)
+        {
             AnsiConsole.MarkupLine("[green]No subgenus entries share their name with a genus.[/]");
             return 0;
         }
@@ -148,7 +157,8 @@ ORDER BY shared_name, subgenus_name, genus_name;";
         table.AddColumn("Subgenus");
         table.AddColumn("Genus");
 
-        foreach (var row in rows) {
+        foreach (var row in rows)
+        {
             var sharedName = FormatValue(row.SharedName);
             var subgenusBlock = BuildEntityBlock(
                 ("ID", row.SubgenusId),
@@ -182,18 +192,22 @@ ORDER BY shared_name, subgenus_name, genus_name;";
         return 0;
     }
 
-    private static string? ReadString(SqliteDataReader reader, string columnName) {
+    private static string? ReadString(SqliteDataReader reader, string columnName)
+    {
         var ordinal = reader.GetOrdinal(columnName);
         return reader.IsDBNull(ordinal) ? null : reader.GetString(ordinal);
     }
 
     private static string FormatValue(string? value) => string.IsNullOrWhiteSpace(value) ? "-" : Markup.Escape(value.Trim());
 
-    private static string BuildEntityBlock(params (string Label, string? Value)[] fields) {
+    private static string BuildEntityBlock(params (string Label, string? Value)[] fields)
+    {
         var sb = new StringBuilder();
-        foreach (var (label, value) in fields) {
+        foreach (var (label, value) in fields)
+        {
             var trimmed = value?.Trim();
-            if (string.IsNullOrWhiteSpace(trimmed)) {
+            if (string.IsNullOrWhiteSpace(trimmed))
+            {
                 continue;
             }
 
@@ -203,7 +217,8 @@ ORDER BY shared_name, subgenus_name, genus_name;";
                 .AppendLine();
         }
 
-        if (sb.Length == 0) {
+        if (sb.Length == 0)
+        {
             return "-";
         }
 
