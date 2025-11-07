@@ -38,6 +38,9 @@ namespace BeastieBot3 {
                         .WithDescription("Import Catalogue of Life ColDP zip archives into individual SQLite databases.")
                         .WithExample(new[] { "col", "import" })
                         .WithExample(new[] { "col", "import", "--force" });
+                    col.AddCommand<ColSubgenusHomonymReportCommand>("report-subgenus-homonyms")
+                        .WithDescription("Report subgenus entries whose names collide with genus names in the COL database.")
+                        .WithExample(new[] { "col", "report-subgenus-homonyms" });
                 });
 
                 config.AddBranch("iucn", iucn => {
