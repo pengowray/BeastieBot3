@@ -3,6 +3,10 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 
+// Used for creating reports about species epithets (specific names), grouped by stems
+// For finding missing common Latin (or Multilingual) entries on Wiktionary, based
+// on common species epithets.
+
 namespace beastie {
 	// keeps a bunch of species (and their counts)... usually with the same epithet stem
 	public class LatinStemBall
@@ -227,14 +231,18 @@ namespace beastie {
 		}
 
 		public string DoubleDagger(Species binomial) {
-			var details = new SpeciesDetails(binomial);
+			return ""; 
+			// TODO2025: records from CoL no longer available this way
+#if DISABLED
+			var details = new COLTaxonLadder(binomial);
 			details.Load(); // TODO: error handling
 			if (details.status == Status.accepted || details.status == Status.provisionally_accepted_name) {
 				return "";
 			}
 
 			return "‡";
-		}
+#endif
+        }
 
 		public string PrettyExamples(int max = 5) {
 			// top 5 examples

@@ -101,7 +101,9 @@ namespace beastie {
         public long taxon_id; // sis identifier for this taxon in IUCN database
         public long assessment_id; // unique identifier for this assessment in IUCN database
 
-        //note: can also use as IUCNTaxonLadder
+        // TODO2025: Might prefer to develop a more generic Ladder class for this
+        // Note: This info was also stored in IUCNTaxonLadder, which was used more to store a row from the 2016 CSV format (see RedlistCSV)
+
         public string genus;
         public string subgenus;
         public string epithet;

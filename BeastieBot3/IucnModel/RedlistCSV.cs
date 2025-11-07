@@ -1,4 +1,24 @@
-﻿using System;
+﻿#if DISABLED
+
+// Soime notes from 2025 about this code from 2016:
+
+// This is old csv import code (kept for reference).
+// The CSV format is obsolete, and has changed signifiantly since this code was written.
+// This code would simply import everything to memory for processing, which was feasable for one-off generated pages.
+// This code did not deal with regional assessments (These were avoided by simply not including them in the original IUCN data)
+
+// modern CSV now handled by IucnImportCommand.cs / IucnImporter.cs which imports to SQLite
+
+// this class appears to do way too much processing (lacks separation of concerns).
+
+// some changes since this code was written:
+// - assessment IDs have been added.
+// - common names are no longer in the CSV export data (but are in the IUCN database, available via the API)
+// - CSV has been split into two tables (assessments and taxa)
+// - PE/PEW (Possibly Exitinct/PE in the Wild) statuses have been given their own columns, so no longer need to be manaully ripped out of some pdf report
+// - CSV is now UTF-8 encoded, no longer Windows-1252 encoded
+
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
@@ -481,3 +501,4 @@ namespace beastie {
     }
 }
 
+#endif

@@ -1,4 +1,6 @@
-﻿using System;
+﻿#if DISABLED
+
+using System;
 using DotNetWikiBot;
 
 //almost identical to BeastieBot
@@ -102,3 +104,4 @@ namespace beastie {
 
 }
 
+#endif

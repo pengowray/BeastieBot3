@@ -1,4 +1,9 @@
-﻿using System;
+﻿//TODO2025: reenable this if it's useful.
+
+// Appears to add missing category to certain Wiktionary entries: [[Category:Translingual taxonomic eponyms]]
+
+#if DISABLE
+using System;
 using System.Linq;
 using DotNetWikiBot;
 
@@ -72,3 +77,5 @@ namespace beastie {
 	}
 }
 
+
+#endif

@@ -1,8 +1,4 @@
-﻿#if DISABLED //TODO2025: re-enable (remove this line) or rewrite
-
-//
-
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -366,5 +362,3 @@ namespace beastie {
 
     }
 }
-
-#endif

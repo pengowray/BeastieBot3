@@ -1,4 +1,15 @@
-﻿// DotNetWikiBot Framework 3.11 - designed to make robots for MediaWiki-powered wiki sites
+﻿// this worked well in 2016.
+// but let's use a more modern framework/library for wiki access
+// and separate out parsing.
+
+// Useful code of note:
+// - Some datatypes have been moved to DotNetWikiBotPage.cs in the hope they'll keep old code working
+// - Does appear to contain some useful template parsing code.
+
+//TODO2025: delete this file.
+
+#if DISABLED
+// DotNetWikiBot Framework 3.11 - designed to make robots for MediaWiki-powered wiki sites
 // Requires Microsoft .NET Framework 3.5+ or Mono 1.9+.
 // Distributed under the terms of the GNU GPLv2 license: http://www.gnu.org/licenses/gpl-2.0.html
 // Copyright (c) Iaroslav Vassiliev (2006-2014) codedriller@gmail.com
@@ -23,7 +34,7 @@ using System.Linq;
 using System.Xml.Linq;
 using System.Security;
 using System.Security.Permissions;
-using RestSharp.Contrib;
+//using System.Web; // for HttpUtility.UrlEncode
 using System.Configuration;
 
 namespace DotNetWikiBot
@@ -224,7 +235,7 @@ namespace DotNetWikiBot
 
 			// Find path to index.php
 			string cacheFile = Bot.cacheDir + Path.DirectorySeparatorChar +
-				RestSharp.Contrib.HttpUtility.UrlEncode(address.Replace("://", ".").Replace("/", ".")) + ".xml";
+				System.Web.HttpUtility.UrlEncode(address.Replace("://", ".").Replace("/", ".")) + ".xml";
 			if (!Directory.Exists(Bot.cacheDir))
 				Directory.CreateDirectory(Bot.cacheDir);
 			XElement cache;
@@ -470,7 +481,7 @@ namespace DotNetWikiBot
 					new Regex("offset=([^\"&]+)[^\"]*?\" title=\"[^\"]+\" rel=\"next\"");
 				do {
 					src = GetWebPage(res + (!string.IsNullOrEmpty(src) ? "&offset=" +
-						RestSharp.Contrib.HttpUtility.HtmlDecode(nextPortionRegex.Match(src).Groups[1].Value) : ""));
+                        System.Web.HttpUtility.UrlEncode(nextPortionRegex.Match(src).Groups[1].Value) : ""));
 					src = Bot.GetSubstring(src, "<tbody>", "</tbody>");
 					Console.Write('.');
 					using (XmlReader reader = Bot.GetXMLReader(src)) {
@@ -1744,7 +1755,7 @@ namespace DotNetWikiBot
 		/// http://www.microsoft.com/downloads/results.aspx?freetext=Office%20PIA</remarks>
 		public void ReviseInMsWord()
 		{
-			#if MS_WORD_INTEROP
+#if MS_WORD_INTEROP
 			if (string.IsNullOrEmpty(text))
 			throw new WikiBotException(Bot.Msg("No text on page to revise in Microsoft Word."));
 			Microsoft.Office.Interop.Word.Application app =
@@ -1775,11 +1786,11 @@ namespace DotNetWikiBot
 			GC.WaitForPendingFinalizers();
 			Console.WriteLine(
 			Bot.Msg("Text of \"{0}\" page has been revised in Microsoft Word."), title);
-			#else
+#else
 			throw new WikiBotException(Bot.Msg("Page.ReviseInMSWord() function requires MS " +
 				"Office PIAs to be installed and referenced. Please see remarks in function's " +
 				"documentation in \"Documentation.chm\" file for additional instructions.\n"));
-			#endif
+#endif
 		}
 
 		/// <summary>Uploads local image to wiki site. Function also works with non-image files.
@@ -4844,3 +4855,5 @@ namespace DotNetWikiBot
 		}
 	}
 }
+
+#endif

@@ -1,3 +1,9 @@
+// This is some nasty code for working out what language wiktionary entries belong to.
+// It stored its results inside CatalogueOfLife's mysql database, back 
+// when CatalogOfLife data was distributed as Mysql dumps (either that or as an installer which installed mysql I can't remember).
+
+#if DISABLED
+
 using System;
 using System.IO;
 using System.IO.Compression;
@@ -5,7 +11,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Text;
 using System.Linq;
-using MySql.Data.MySqlClient;
+//using MySql.Data.MySqlClient;
 using System.Diagnostics;
 
 namespace beastie
@@ -374,3 +380,5 @@ namespace beastie
 
 }
 
+
+#endif

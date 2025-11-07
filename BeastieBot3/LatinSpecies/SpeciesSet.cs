@@ -3,7 +3,7 @@ using System.IO;
 using System.Collections;
 using System.Collections.Generic;
 
-using LumenWorks.Framework.IO.Csv;
+//using LumenWorks.Framework.IO.Csv;
 
 namespace beastie
 {
@@ -26,7 +26,11 @@ namespace beastie
 			ReadCsv(speciesSetFile);
 		}
 
+		[Obsolete]
 		public void ReadCsv(string filename) {
+			// (old)
+			throw new NotImplementedException("SpeciesSet.ReadCsv is very old. Reenable if needed.");
+#if DISABLE
 			// open the file "data.csv" which is a CSV file with headers
 			CsvReader csv = new CsvReader(new StreamReader(filename), true);
 
@@ -51,7 +55,8 @@ namespace beastie
 			Console.WriteLine(string.Format("expected records: {0}", expectedRecordCount));
 			Console.WriteLine(string.Format("record count (1): {0}", csv.CurrentRecordIndex + 1));
 			Console.WriteLine(string.Format("record count (2): {0}", species.Count));
-		}
+#endif
+        }
 
 		public bool Contains(string genus, string epithet) {
 			var query = new Species(genus, epithet);

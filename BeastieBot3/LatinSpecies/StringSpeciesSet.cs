@@ -1,3 +1,9 @@
+// Can't remember what StringSpeciesSet was used for. Frequency data I guess.
+// Disabled for now.
+// Requires LumenWorks.Framework.IO.Csv from NuGet
+
+#if DISABLED
+
 using System;
 using System.IO;
 using System.Collections.Generic;
@@ -100,3 +106,4 @@ namespace beastie
 	}
 }
 
+#endif

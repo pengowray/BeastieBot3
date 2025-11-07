@@ -1,4 +1,38 @@
-﻿using System;
+﻿
+//Notes (2025) Contains some important functionality for BeastieBot. Needs to be reworked.
+
+//TODO2025: fix me / reenable
+
+// Category/template parsing functions not yet replaced/ported from DotNetWikiBot
+// Taxoboxes aren't the same as they were in 2016.
+
+
+namespace beastie {
+	public class BeastieBot {
+		private static BeastieBot _instance;
+        public BeastieBot() {
+		}
+        public static BeastieBot Instance() {
+            if (_instance == null) {
+                _instance = new BeastieBot();
+            }
+
+            return _instance;
+        }
+
+        internal XowaPage GetPage(string rto, bool v) {
+            throw new NotImplementedException();
+        }
+
+        internal string? PageNameInWiki(string v) {
+            throw new NotImplementedException();
+        }
+    }
+}
+
+#if DISABLED
+
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
@@ -313,4 +347,4 @@ namespace beastie {
 	}
 
 }
-
+#endif

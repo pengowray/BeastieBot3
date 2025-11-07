@@ -1,4 +1,5 @@
-﻿using System;
+﻿#if DISABLED
+using System;
 using DotNetWikiBot;
 
 namespace beastie {
@@ -49,3 +50,5 @@ namespace beastie {
 	}
 }
 
+
+#endif

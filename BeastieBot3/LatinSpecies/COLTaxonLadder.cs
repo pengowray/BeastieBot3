@@ -1,4 +1,11 @@
-﻿using System;
+﻿// This old code heavily depends on old Catalogue of Life database
+// structure (circa 2016) and MySQL instance.
+//
+// If still needed, will require significant changes.
+
+#if DISABLED
+
+using System;
 using System.Linq;
 using System.Text;
 using System.Data;
@@ -11,8 +18,8 @@ namespace beastie {
 	//Note: Status order matches database. 1=accepted, etc.
 	public enum Status {not_found, accepted, ambiguous_syn, misapplied_name, provisionally_accepted_name, synonym} 
 
-	public class SpeciesDetails //TODO: rename COLTaxonLadder
-	{
+	public class COLTaxonLadder //previously named SpeciesDetails
+    {
 		//public readonly Species species;
 		public Species species;
 		public bool from_id = false; // if true, this species details used col_id as a key
@@ -42,15 +49,15 @@ namespace beastie {
 			}
 		}
 
-		public SpeciesDetails(string binomial) {
+		public COLTaxonLadder(string binomial) {
 			this.species = new Species(binomial);
 		}
 
-		public SpeciesDetails(Species species) {
+		public COLTaxonLadder(Species species) {
 			this.species = species;
 		}
 
-		public SpeciesDetails(long col_id) {
+		public COLTaxonLadder(long col_id) {
 			this.col_id = col_id;
 			from_id = true;
 		}
@@ -328,9 +335,9 @@ namespace beastie {
 			}
 		}
 
-		public SpeciesDetails AcceptedSpeciesDetails() {
+		public COLTaxonLadder AcceptedSpeciesDetails() {
 			if (accepted_species_id != 0) {
-				return new SpeciesDetails(accepted_species_id);
+				return new COLTaxonLadder(accepted_species_id);
 			} else {
 				// error
 				return null;
@@ -460,3 +467,4 @@ namespace beastie {
 	}
 }
 
+#endif
