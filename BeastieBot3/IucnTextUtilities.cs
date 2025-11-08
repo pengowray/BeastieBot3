@@ -228,6 +228,12 @@ internal static class IucnTextUtilities {
         var previousWasSpace = false;
 
         foreach (var ch in value) {
+            if (flavor == PlainTextFlavor.Exact && ShouldPreserveExactWhitespace(ch)) {
+                builder.Append(ch);
+                previousWasSpace = false;
+                continue;
+            }
+
             if (IsNonBreakingSpace(ch) && flavor == PlainTextFlavor.Exact) {
                 builder.Append(ch);
                 previousWasSpace = false;
@@ -272,10 +278,15 @@ internal static class IucnTextUtilities {
         if (flavor == PlainTextFlavor.Exact && IsNonBreakingSpace(ch)) {
             return false;
         }
+        if (flavor == PlainTextFlavor.Exact && ShouldPreserveExactWhitespace(ch)) {
+            return false;
+        }
         return char.IsWhiteSpace(ch);
     }
 
     private static bool IsNonBreakingSpace(char ch) => ch == '\u00A0' || ch == '\u202F' || ch == '\u2007';
+
+    private static bool ShouldPreserveExactWhitespace(char ch) => ch is '\u2028' or '\u2029' or '\u0085';
 
     private static string EncodeReservedCharacters(string value) {
         if (value.Length == 0) {

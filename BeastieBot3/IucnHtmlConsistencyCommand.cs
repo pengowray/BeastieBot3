@@ -201,6 +201,10 @@ public sealed class IucnHtmlConsistencyCommand : Command<IucnHtmlConsistencyComm
                 AppendSampleField(builder, "expected", sample.Expected);
             }
 
+            if (!string.IsNullOrEmpty(sample.Preferred)) {
+                AppendSampleField(builder, "preferred", sample.Preferred);
+            }
+
             foreach (var (detailLabel, detailValue) in ParseAdditionalDetails(sample.Additional)) {
                 AppendSampleField(builder, detailLabel, detailValue);
             }
@@ -347,8 +351,8 @@ public sealed class IucnHtmlConsistencyCommand : Command<IucnHtmlConsistencyComm
                 PlainNullOnlyCount++;
             }
 
-            var htmlExact = IucnTextUtilities.ConvertHtmlToExactPlainText(htmlValue);
-            var plainExact = IucnTextUtilities.NormalizePlainTextExact(plainValue);
+                var htmlExact = IucnTextUtilities.ConvertHtmlToExactPlainText(htmlValue);
+                var plainExact = IucnTextUtilities.NormalizePlainTextExact(plainValue);
 
             if (IucnTextUtilities.NormalizedEquals(htmlExact, plainExact)) {
                 return;
@@ -358,10 +362,11 @@ public sealed class IucnHtmlConsistencyCommand : Command<IucnHtmlConsistencyComm
             if (Samples.Count < _maxSamples) {
                 var observed = IucnTextUtilities.ShortenForDisplay(htmlValue);
                 var expected = IucnTextUtilities.ShortenForDisplay(plainValue);
+                    var preferred = IucnTextUtilities.ShortenForDisplay(IucnTextUtilities.ConvertHtmlToPlainTextNeater(htmlValue));
                 var htmlNormalized = NormalizeForComparison(htmlExact);
                 var plainNormalized = NormalizeForComparison(plainExact);
                 var info = BuildMismatchInfo(htmlExact, plainExact, htmlNormalized, plainNormalized);
-                Samples.Add(new MismatchSample(assessmentId, observed, expected, info));
+                    Samples.Add(new MismatchSample(assessmentId, observed, expected, preferred, info));
             }
         }
 
@@ -497,7 +502,7 @@ public sealed class IucnHtmlConsistencyCommand : Command<IucnHtmlConsistencyComm
         }
     }
 
-    private sealed record MismatchSample(string AssessmentId, string? Observed, string? Expected, string? Additional);
+    private sealed record MismatchSample(string AssessmentId, string? Observed, string? Expected, string? Preferred, string? Additional);
 
     private static bool ObjectExists(SqliteConnection connection, string name, string type) {
         using var command = connection.CreateCommand();
