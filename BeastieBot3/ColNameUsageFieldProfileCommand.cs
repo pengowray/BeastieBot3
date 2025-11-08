@@ -12,6 +12,38 @@ using Spectre.Console.Cli;
 
 namespace BeastieBot3;
 
+// Characterize data in a SQLite database to get a sense of the shape of the data, whether 
+// normalization is needed, how often they have null values, etc.
+//
+// Originally for "nameusage" table in Catalogue of Life, but can be used for other tables too. 
+// (Class and command ought to be renamed to reflect this)
+//
+// Checking for non-normalized or unusual text characters, e.g.
+// - checks for leading/trailing whitespace
+// - checks for non-NFC normalized text
+// - checks for control characters (tabs, newlines, etc.)
+// - checks for use of NBSP (non-breaking spaces), and narrow NBSP
+
+// Focuses somewhat on taxon related things
+// - e.g. checks for daggers in text (which represent extinct taxa but ought to be absent in certain fields)
+// - e.g. checks for capitalization patterns (important for taxa)
+// 
+// TODO: 
+// - [ ] rename and move to more general name/command name
+// - [ ] list fields containing smart quotes
+// - [ ] fix caps checking: characterize caps category of first four words. Categories: none (no first/second/third/fourth word), allcaps, title (initial case), lower, title-mixed (initial letter upper and then mixed), lower-mixed (initial letter lowercase), unicameral (e.g. Arabic, CJK, etc)
+// - [ ] include a count of "only A-Za-z" in the value, and (A-Za-z and ordinary space), and (A-Za-z and ordinary space and period).
+// - [ ] word counts (most common, min, max, average, stdev)
+// - [ ] most common values (ala sqlite-utils analyze-tables); show up to the 10 most common values (including null). If there are 20 or less values in total, show them all.
+// - [ ] frequency of a period in the text (to catch infraspecies categories)
+// - [ ] contains any html tags (simple check)
+// - [ ] contains json structures (simple check)
+// - [ ] output report to a file by default, including name of the database and table profiled in the name. Place in the database's folder in ./data-analysis/
+// - [ ] Guess if a field is free text (e.g. remarks), taxon related, name(s), controlled vocabulary/code (enum), identifier (e.g. uuid), date, numeric value, etc.
+// - [ ] Guess language used (especially those used by IUCN reports: English, Spanish/Castilian, Portuguese, French)
+// - [ ] Check urls
+// - [ ] Auto archive urls in wayback machine
+
 public sealed class ColNameUsageFieldProfileCommand : Command<ColNameUsageFieldProfileCommand.Settings> {
     public sealed class Settings : CommandSettings {
         [CommandOption("-s|--settings-dir <DIR>")]
@@ -22,8 +54,13 @@ public sealed class ColNameUsageFieldProfileCommand : Command<ColNameUsageFieldP
         [Description("INI filename to read. Defaults to paths.ini.")]
         public string? IniFile { get; init; }
 
+        [CommandOption("--database <PATH>")]
+        [Description("Explicit SQLite database path to profile. Overrides dataset defaults.")]
+        public string? DatabasePath { get; init; }
+
         [CommandOption("--table <NAME>")]
-        public string Table { get; init; } = "nameusage";
+        [Description("Table to profile. Defaults to nameusage for COL or taxonomy for IUCN.")]
+        public string? Table { get; init; }
 
         [CommandOption("--columns <COLUMNS>")]
         public string? Columns { get; init; }
@@ -39,6 +76,10 @@ public sealed class ColNameUsageFieldProfileCommand : Command<ColNameUsageFieldP
         [CommandOption("--char-samples <COUNT>")]
         [Description("Maximum distinct non-ASCII/control characters to list per column.")]
         public int MaxCharSamples { get; init; } = 24;
+
+        [CommandOption("--iucn")]
+        [Description("Profile the IUCN SQLite database instead of Catalogue of Life.")]
+        public bool UseIucnDatabase { get; init; }
     }
 
     private sealed record ColumnInfo(string Name, string DeclaredType, bool TreatAsText);
@@ -48,14 +89,31 @@ public sealed class ColNameUsageFieldProfileCommand : Command<ColNameUsageFieldP
         var iniFile = settings.IniFile ?? "paths.ini";
         var paths = new PathsService(iniFile, baseDir);
 
-        var dbPath = paths.GetColSqlitePath();
-        if (string.IsNullOrWhiteSpace(dbPath)) {
-            AnsiConsole.MarkupLine("[red]COL_sqlite path is not configured. Set [bold]Datastore:COL_sqlite[/] in paths.ini.[/]");
+        var datasetLabel = settings.UseIucnDatabase ? "IUCN" : "Catalogue of Life";
+        var configuredPath = !string.IsNullOrWhiteSpace(settings.DatabasePath)
+            ? settings.DatabasePath
+            : settings.UseIucnDatabase
+                ? paths.GetIucnDatabasePath()
+                : paths.GetColSqlitePath();
+
+        if (string.IsNullOrWhiteSpace(configuredPath)) {
+            var guidance = settings.UseIucnDatabase
+                ? "Set [bold]Datastore:IUCN_CVS_sqlite[/] in paths.ini or pass --database."
+                : "Set [bold]Datastore:COL_sqlite[/] in paths.ini or pass --database.";
+            AnsiConsole.MarkupLine($"[red]{datasetLabel} database path is not configured.[/] {guidance}");
+            return -1;
+        }
+
+        string dbPath;
+        try {
+            dbPath = Path.GetFullPath(configuredPath);
+        } catch (Exception ex) {
+            AnsiConsole.MarkupLine($"[red]Failed to resolve database path[/] {Markup.Escape(configuredPath)}: {Markup.Escape(ex.Message)}");
             return -1;
         }
 
         if (!File.Exists(dbPath)) {
-            AnsiConsole.MarkupLine($"[red]COL SQLite database not found at:[/] {Markup.Escape(dbPath)}");
+            AnsiConsole.MarkupLine($"[red]{datasetLabel} SQLite database not found at:[/] {Markup.Escape(dbPath)}");
             return -2;
         }
 
@@ -67,13 +125,17 @@ public sealed class ColNameUsageFieldProfileCommand : Command<ColNameUsageFieldP
         using var connection = new SqliteConnection(connectionString);
         connection.Open();
 
-        if (!TableExists(connection, settings.Table)) {
-            AnsiConsole.MarkupLine($"[red]Table {Markup.Escape(settings.Table)} not found in the database.[/]");
+        var tableName = string.IsNullOrWhiteSpace(settings.Table)
+            ? (settings.UseIucnDatabase ? "taxonomy" : "nameusage")
+            : settings.Table;
+
+        if (!TableExists(connection, tableName)) {
+            AnsiConsole.MarkupLine($"[red]Table {Markup.Escape(tableName)} not found in the database.[/]");
             return -3;
         }
 
         var requestedColumns = ParseColumns(settings.Columns);
-        var availableColumns = GetColumns(connection, settings.Table, settings.IncludeNonText);
+        var availableColumns = GetColumns(connection, tableName, settings.IncludeNonText);
         var selectedColumns = SelectColumns(availableColumns, requestedColumns);
 
         if (selectedColumns.Count == 0) {
@@ -81,7 +143,7 @@ public sealed class ColNameUsageFieldProfileCommand : Command<ColNameUsageFieldP
             return 0;
         }
 
-        var quotedTableName = QuoteIdentifier(settings.Table);
+        var quotedTableName = QuoteIdentifier(tableName);
         var columnNamesSql = string.Join(", ", selectedColumns.Select(c => QuoteIdentifier(c.Name)));
         var limitClause = settings.Limit > 0 ? $" LIMIT {settings.Limit}" : string.Empty;
 
@@ -90,12 +152,13 @@ public sealed class ColNameUsageFieldProfileCommand : Command<ColNameUsageFieldP
             c => new ColumnStats(c.Name, c.DeclaredType, settings.MaxCharSamples)
         );
 
-        var totalRowCount = GetRowCount(connection, settings.Table);
+        var totalRowCount = GetRowCount(connection, tableName);
         var targetRowCount = settings.Limit > 0 && settings.Limit < totalRowCount ? settings.Limit : totalRowCount;
 
         AnsiConsole.MarkupLine($"[grey]Using settings from:[/] {Markup.Escape(paths.SourceFilePath)}");
-        AnsiConsole.MarkupLine($"[grey]Reading Catalogue of Life data from:[/] {Markup.Escape(dbPath)}");
-        AnsiConsole.MarkupLine($"[grey]Profiling table:[/] {Markup.Escape(settings.Table)}");
+        AnsiConsole.MarkupLine($"[grey]Profiling dataset:[/] {datasetLabel}");
+        AnsiConsole.MarkupLine($"[grey]Reading data from:[/] {Markup.Escape(dbPath)}");
+        AnsiConsole.MarkupLine($"[grey]Profiling table:[/] {Markup.Escape(tableName)}");
         AnsiConsole.MarkupLine($"[grey]Columns analysed:[/] {selectedColumns.Count} (text-only: {(!settings.IncludeNonText).ToString().ToLowerInvariant()})");
         AnsiConsole.MarkupLine($"[grey]Rows scheduled for scan:[/] {targetRowCount:N0}{(settings.Limit > 0 && settings.Limit < totalRowCount ? $" (limit {settings.Limit:N0})" : string.Empty)}");
 
@@ -139,9 +202,9 @@ public sealed class ColNameUsageFieldProfileCommand : Command<ColNameUsageFieldP
                 }
             });
 
-            AnsiConsole.MarkupLine($"[green]Completed scan of {processedRows:N0} row(s).[/]");
+        AnsiConsole.MarkupLine($"[green]Completed scan of {processedRows:N0} row(s).[/]");
 
-            WriteColumnReports(stats.Values);
+        WriteColumnReports(stats.Values);
 
         return 0;
     }
@@ -617,7 +680,7 @@ public sealed class ColNameUsageFieldProfileCommand : Command<ColNameUsageFieldP
         PrintSummaryList("Columns containing daggers", columnsWithDaggers);
         PrintSummaryList("Columns with untrimmed values", columnsWithTrimIssues);
         PrintSummaryList("Columns with control characters", columnsWithControlChars);
-    PrintSummaryList("Columns with zero-width joiners/non-joiners", columnsWithZeroWidthJoiners);
+        PrintSummaryList("Columns with zero-width joiners/non-joiners", columnsWithZeroWidthJoiners);
         PrintSummaryList("Columns with non-NFC text", columnsWithNormalizationIssues);
 
         static void PrintSummaryList(string title, IReadOnlyCollection<ColumnStats> items) {
@@ -663,21 +726,21 @@ public sealed class ColNameUsageFieldProfileCommand : Command<ColNameUsageFieldP
         public long SumLength { get; private set; }
         public int MinLength { get; private set; } = int.MaxValue;
         public int MaxLength { get; private set; }
-    public long UppercaseStartCount { get; private set; }
-    public long LowercaseStartCount { get; private set; }
-    public long OtherStartCount { get; private set; }
-    public long WhitespaceOnlyCount { get; private set; }
-    public long AdditionalWordsNoneCount { get; private set; }
-    public long AdditionalWordsAllUpperCount { get; private set; }
-    public long AdditionalWordsAllLowerCount { get; private set; }
-    public long AdditionalWordsMixedOrOtherCount { get; private set; }
-    public long NotNfcCount { get; private set; }
-    public long NfdLikelyCount { get; private set; }
-    public bool ContainsNoBreakSpace { get; private set; }
-    public bool ContainsNarrowNoBreakSpace { get; private set; }
-    public bool ContainsDirectionalMarks { get; private set; }
-    public bool ContainsDagger { get; private set; }
-    public bool ContainsZeroWidthJoiner { get; private set; }
+        public long UppercaseStartCount { get; private set; }
+        public long LowercaseStartCount { get; private set; }
+        public long OtherStartCount { get; private set; }
+        public long WhitespaceOnlyCount { get; private set; }
+        public long AdditionalWordsNoneCount { get; private set; }
+        public long AdditionalWordsAllUpperCount { get; private set; }
+        public long AdditionalWordsAllLowerCount { get; private set; }
+        public long AdditionalWordsMixedOrOtherCount { get; private set; }
+        public long NotNfcCount { get; private set; }
+        public long NfdLikelyCount { get; private set; }
+        public bool ContainsNoBreakSpace { get; private set; }
+        public bool ContainsNarrowNoBreakSpace { get; private set; }
+        public bool ContainsDirectionalMarks { get; private set; }
+        public bool ContainsDagger { get; private set; }
+        public bool ContainsZeroWidthJoiner { get; private set; }
         public int MaxSampleCount => _maxCharSamples;
         public IReadOnlyCollection<uint> NonAsciiDistinctCharacters => _nonAsciiDistinct;
         public int NonAsciiDistinctCount => _nonAsciiDistinct.Count;

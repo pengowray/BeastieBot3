@@ -25,6 +25,6 @@ namespace BeastieBot3 {
 
         public string? GetColSqlitePath() => _reader.Get("Datastore:COL_sqlite");
 
-        public string? GetIucnDatabasePath() => _reader.Get("Datastore:IUCN_DB");
+        public string? GetIucnDatabasePath() => _reader.Get("Datastore:IUCN_sqlite_from_cvs");
     }
 }
