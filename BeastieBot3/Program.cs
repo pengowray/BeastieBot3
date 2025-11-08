@@ -54,6 +54,10 @@ namespace BeastieBot3 {
                         .WithDescription("Import IUCN CSV data from zip archives into the SQLite datastore.")
                         .WithExample(new[] { "iucn", "import" })
                         .WithExample(new[] { "iucn", "import", "--force" });
+                    iucn.AddCommand<IucnHtmlConsistencyCommand>("report-html-consistency")
+                        .WithDescription("Compare HTML and plain-text assessment fields for normalization inconsistencies.")
+                        .WithExample(new[] { "iucn", "report-html-consistency" })
+                        .WithExample(new[] { "iucn", "report-html-consistency", "--limit", "1000" });
                 });
             });
 
