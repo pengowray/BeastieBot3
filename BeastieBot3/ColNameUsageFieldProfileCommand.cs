@@ -33,10 +33,11 @@ namespace BeastieBot3;
 // - [ ] rename and move to more general name/command name
 // - [x] add option to run on all (non-system/non-FTS) tables in the database
 // - [ ] list fields containing smart quotes
-// - [ ] fix caps checking: characterize caps category of first four words. Categories: none (no first/second/third/fourth word), allcaps, title (initial case), lower, title-mixed (initial letter upper and then mixed), lower-mixed (initial letter lowercase), unicameral (e.g. Arabic, CJK, etc)
-// - [ ] include a count of "only A-Za-z" in the value, and (A-Za-z and ordinary space), and (A-Za-z and ordinary space and period). give these shorter names
-// - [ ] word counts (most common, min, max, average, stdev)
-// - [ ] most common values (ala sqlite-utils analyze-tables); show up to the 10 most common values (including null). If there are 20 or less values in total, show them all.
+// - [X] fix caps checking: characterize caps category of first four words. Categories: none (no first/second/third/fourth word), allcaps, title (initial case), lower, title-mixed (initial letter upper and then mixed), lower-mixed (initial letter lowercase), unicameral (e.g. Arabic, CJK, etc)
+// - [ ] include a count of "only A-Za-z" in the value, and (A-Za-z and [ascii] space), and (A-Za-z and ordinary space and period.. and minus [ascii dash]). give these shorter names.. find a better way of grouping them
+// - [X] word counts (most common, min, max, average, stdev)
+// - [ ] list most common values and their counts (ala sqlite-utils analyze-tables); show up to the 5 most common values (including null), but if there are 20 or less total distinct values, show them all with a count of distinct values.
+// - [ ] Any double spaces inside text? (excluding trim)
 // - [ ] frequency of a period in the text (to catch infraspecies categories)
 // - [ ] contains any html tags (simple check)
 // - [ ] contains json structures (simple check)
