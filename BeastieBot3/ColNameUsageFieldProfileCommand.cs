@@ -985,8 +985,9 @@ public sealed class ColNameUsageFieldProfileCommand : Command<ColNameUsageFieldP
                 return Markup.Escape(stat.Name);
             }
 
-            var label = typicalWordCount == 1 ? "word" : "words";
-            return $"{Markup.Escape(stat.Name)} ({typicalWordCount:N0} {label})";
+            //string label = typicalWordCount == 1 ? " word" : " words";
+            string label = "";
+            return $"{Markup.Escape(stat.Name)} ({typicalWordCount:N0}{label})";
         }
 
         static void PrintSummaryList(string title, IReadOnlyCollection<ColumnStats> items, IReportWriter writer, Func<ColumnStats, string>? formatter = null) {
