@@ -6,6 +6,7 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Threading;
+using System.Text.RegularExpressions;
 using Microsoft.Data.Sqlite;
 using Spectre.Console;
 using Spectre.Console.Cli;
@@ -30,7 +31,7 @@ namespace BeastieBot3;
 // 
 // TODO: 
 // - [ ] rename and move to more general name/command name
-// - [ ] add option to run on all (non-FTS) tables in the database
+// - [x] add option to run on all (non-system/non-FTS) tables in the database
 // - [ ] list fields containing smart quotes
 // - [ ] fix caps checking: characterize caps category of first four words. Categories: none (no first/second/third/fourth word), allcaps, title (initial case), lower, title-mixed (initial letter upper and then mixed), lower-mixed (initial letter lowercase), unicameral (e.g. Arabic, CJK, etc)
 // - [ ] include a count of "only A-Za-z" in the value, and (A-Za-z and ordinary space), and (A-Za-z and ordinary space and period). give these shorter names
@@ -39,7 +40,7 @@ namespace BeastieBot3;
 // - [ ] frequency of a period in the text (to catch infraspecies categories)
 // - [ ] contains any html tags (simple check)
 // - [ ] contains json structures (simple check)
-// - [ ] output report to a file by default, including name of the database and table profiled in the name. Place in the database's folder in ./data-analysis/
+// - [x] output report to a file by default, including name of the database and table profiled in the name. Place in the database's folder in ./data-analysis/
 // - [ ] Guess if a field is free text (e.g. remarks), taxon related, name(s), controlled vocabulary/code (enum), identifier (e.g. uuid), date, numeric value, etc.
 // - [ ] Guess language used (especially those used by IUCN reports: English, Spanish/Castilian, Portuguese, French)
 // - [ ] Check urls
@@ -70,6 +71,10 @@ public sealed class ColNameUsageFieldProfileCommand : Command<ColNameUsageFieldP
         [Description("Include non-text columns when calculating field statistics.")]
         public bool IncludeNonText { get; init; }
 
+        [CommandOption("--all-tables")]
+        [Description("Profile every non-system, non-FTS table in the database.")]
+        public bool AllTables { get; init; }
+
         [CommandOption("--limit <ROWS>")]
         [Description("Maximum number of rows to scan (0 = entire table).")]
         public long Limit { get; init; }
@@ -83,7 +88,115 @@ public sealed class ColNameUsageFieldProfileCommand : Command<ColNameUsageFieldP
         public bool UseIucnDatabase { get; init; }
     }
 
+    private static void WriteReport(ReportContext context, IEnumerable<ColumnStats> stats, IReportWriter writer) {
+        writer.WriteLine($"[bold]{Markup.Escape(context.TableName)}[/] field profile");
+        writer.WriteLine($"Dataset: {Markup.Escape(context.DatasetLabel)}");
+        writer.WriteLine($"Database: {Markup.Escape(context.DatabasePath)}");
+        writer.WriteLine($"Settings: {Markup.Escape(context.SettingsFilePath)}");
+
+        var columnLine = $"Columns profiled: {context.ColumnCount:N0}";
+        if (context.IncludeNonTextColumns) {
+            columnLine += " (including non-text columns)";
+        }
+        writer.WriteLine(columnLine);
+
+        writer.WriteLine($"Rows in table: {context.TotalRowCount:N0}");
+        if (context.TargetRowCount != context.TotalRowCount) {
+            writer.WriteLine($"Rows available after limit: {context.TargetRowCount:N0}");
+        }
+        writer.WriteLine($"Rows scanned: {context.ProcessedRowCount:N0}");
+
+        if (context.RowLimit.HasValue) {
+            writer.WriteLine($"Row limit: {context.RowLimit.Value:N0}");
+        }
+
+        writer.WriteLine($"Generated: {context.GeneratedAt:yyyy-MM-dd HH:mm:ss zzz}");
+        writer.WriteLine(string.Empty);
+
+        WriteColumnReports(stats, writer);
+    }
+
+    private static string CreateReportPath(string databasePath, string tableName, DateTimeOffset timestamp) {
+        var directory = Path.GetDirectoryName(databasePath) ?? Directory.GetCurrentDirectory();
+        var reportDirectory = Path.Combine(directory, "data-analysis");
+        Directory.CreateDirectory(reportDirectory);
+
+        var dbName = Path.GetFileNameWithoutExtension(databasePath);
+        var safeTableName = SanitizeForFileName(tableName);
+        var fileName = $"{dbName}-{safeTableName}-profile-{timestamp:yyyyMMdd-HHmmss}.txt";
+        return Path.Combine(reportDirectory, fileName);
+    }
+
+    private static string SanitizeForFileName(string value) {
+        var invalid = Path.GetInvalidFileNameChars();
+        var builder = new StringBuilder(value.Length);
+
+        foreach (var ch in value) {
+            if (invalid.Contains(ch) || char.IsWhiteSpace(ch)) {
+                builder.Append('_');
+            }
+            else {
+                builder.Append(ch);
+            }
+        }
+
+        var sanitized = builder.ToString().Trim('_');
+        return string.IsNullOrEmpty(sanitized) ? "table" : sanitized;
+    }
+
+    private interface IReportWriter {
+        void WriteLine(string value);
+    }
+
+    private sealed class ConsoleReportWriter : IReportWriter {
+        public void WriteLine(string value) {
+            AnsiConsole.MarkupLine(value);
+        }
+    }
+
+    private sealed class PlainTextReportWriter : IReportWriter {
+        private readonly StringBuilder _builder = new();
+
+        public void WriteLine(string value) {
+            _builder.AppendLine(StripMarkup(value));
+        }
+
+        public string GetContent() => _builder.ToString();
+
+        private static string StripMarkup(string value) {
+            if (string.IsNullOrEmpty(value)) {
+                return value;
+            }
+
+            const char openPlaceholder = '\u0001';
+            const char closePlaceholder = '\u0002';
+
+            var normalized = value.Replace("[[", openPlaceholder.ToString(), StringComparison.Ordinal)
+                                   .Replace("]]", closePlaceholder.ToString(), StringComparison.Ordinal);
+
+            normalized = Regex.Replace(normalized, @"\[[^\]]+\]", string.Empty);
+
+            return normalized
+                .Replace(openPlaceholder.ToString(), "[", StringComparison.Ordinal)
+                .Replace(closePlaceholder.ToString(), "]", StringComparison.Ordinal);
+        }
+    }
+
     private sealed record ColumnInfo(string Name, string DeclaredType, bool TreatAsText);
+
+    private sealed record ReportContext(
+        string SettingsFilePath,
+        string DatasetLabel,
+        string DatabasePath,
+        string TableName,
+        int ColumnCount,
+        bool IncludeNonTextColumns,
+        long TotalRowCount,
+        long TargetRowCount,
+        long ProcessedRowCount,
+        long? RowLimit,
+        DateTimeOffset GeneratedAt
+    );
 
     public override int Execute(CommandContext context, Settings settings, CancellationToken cancellationToken) {
         var baseDir = settings.SettingsDir ?? AppContext.BaseDirectory;
@@ -127,89 +240,144 @@ public sealed class ColNameUsageFieldProfileCommand : Command<ColNameUsageFieldP
         using var connection = new SqliteConnection(connectionString);
         connection.Open();
 
-        var tableName = string.IsNullOrWhiteSpace(settings.Table)
+        var defaultTableName = string.IsNullOrWhiteSpace(settings.Table)
             ? (settings.UseIucnDatabase ? "taxonomy" : "nameusage")
             : settings.Table;
 
-        if (!TableExists(connection, tableName)) {
-            AnsiConsole.MarkupLine($"[red]Table {Markup.Escape(tableName)} not found in the database.[/]");
+        if (settings.AllTables && !string.IsNullOrWhiteSpace(settings.Columns)) {
+            AnsiConsole.MarkupLine("[red]--columns cannot be combined with --all-tables.[/]");
+            return -4;
+        }
+
+        if (!settings.AllTables && !TableExists(connection, defaultTableName)) {
+            AnsiConsole.MarkupLine($"[red]Table {Markup.Escape(defaultTableName)} not found in the database.[/]");
             return -3;
         }
 
-        var requestedColumns = ParseColumns(settings.Columns);
-        var availableColumns = GetColumns(connection, tableName, settings.IncludeNonText);
-        var selectedColumns = SelectColumns(availableColumns, requestedColumns);
-
-        if (selectedColumns.Count == 0) {
-            AnsiConsole.MarkupLine("[yellow]No columns selected for profiling.[/]");
-            return 0;
+        if (settings.AllTables && !string.IsNullOrWhiteSpace(settings.Table)) {
+            AnsiConsole.MarkupLine("[yellow]Ignoring --table because --all-tables was specified.[/]");
         }
 
-        var quotedTableName = QuoteIdentifier(tableName);
-        var columnNamesSql = string.Join(", ", selectedColumns.Select(c => QuoteIdentifier(c.Name)));
-        var limitClause = settings.Limit > 0 ? $" LIMIT {settings.Limit}" : string.Empty;
+        var requestedColumns = settings.AllTables
+            ? Array.Empty<string>()
+            : ParseColumns(settings.Columns);
 
-        var stats = selectedColumns.ToDictionary(
-            c => c.Name,
-            c => new ColumnStats(c.Name, c.DeclaredType, settings.MaxCharSamples)
-        );
+        List<string> tablesToProfile;
+        if (settings.AllTables) {
+            tablesToProfile = GetProfileableTables(connection);
+            if (tablesToProfile.Count == 0) {
+                AnsiConsole.MarkupLine("[yellow]No eligible tables found to profile.[/]");
+                return 0;
+            }
+        }
+        else {
+            tablesToProfile = new List<string> { defaultTableName };
+        }
 
-        var totalRowCount = GetRowCount(connection, tableName);
-        var targetRowCount = settings.Limit > 0 && settings.Limit < totalRowCount ? settings.Limit : totalRowCount;
+        var overallSuccess = true;
 
-        AnsiConsole.MarkupLine($"[grey]Using settings from:[/] {Markup.Escape(paths.SourceFilePath)}");
-        AnsiConsole.MarkupLine($"[grey]Profiling dataset:[/] {datasetLabel}");
-        AnsiConsole.MarkupLine($"[grey]Reading data from:[/] {Markup.Escape(dbPath)}");
-        AnsiConsole.MarkupLine($"[grey]Profiling table:[/] {Markup.Escape(tableName)}");
-        AnsiConsole.MarkupLine($"[grey]Columns analysed:[/] {selectedColumns.Count} (text-only: {(!settings.IncludeNonText).ToString().ToLowerInvariant()})");
-        AnsiConsole.MarkupLine($"[grey]Rows scheduled for scan:[/] {targetRowCount:N0}{(settings.Limit > 0 && settings.Limit < totalRowCount ? $" (limit {settings.Limit:N0})" : string.Empty)}");
+        for (var tableIndex = 0; tableIndex < tablesToProfile.Count; tableIndex++) {
+            var tableName = tablesToProfile[tableIndex];
 
-        var selectSql = $"SELECT {columnNamesSql} FROM {quotedTableName}{limitClause}";
+            if (tableIndex > 0) {
+                AnsiConsole.MarkupLine(string.Empty);
+            }
 
-        using var command = connection.CreateCommand();
-        command.CommandText = selectSql;
-        command.CommandTimeout = 0;
+            AnsiConsole.MarkupLine($"[grey]Profiling table:[/] {Markup.Escape(tableName)}");
 
-        long processedRows = 0;
-        AnsiConsole.Status()
-            .Spinner(Spinner.Known.Dots)
-            .Start("Scanning rows...", ctx => {
-                using var reader = command.ExecuteReader();
-                while (reader.Read()) {
-                    cancellationToken.ThrowIfCancellationRequested();
-                    processedRows++;
+            var availableColumns = GetColumns(connection, tableName, settings.IncludeNonText);
+            var selectedColumns = SelectColumns(availableColumns, requestedColumns);
 
-                    for (var i = 0; i < selectedColumns.Count; i++) {
-                        var col = selectedColumns[i];
-                        var columnStats = stats[col.Name];
+            if (selectedColumns.Count == 0) {
+                AnsiConsole.MarkupLine($"[yellow]No columns selected for profiling in table {Markup.Escape(tableName)}.[/]");
+                continue;
+            }
 
-                        if (reader.IsDBNull(i)) {
-                            columnStats.RegisterNull();
-                            continue;
+            var quotedTableName = QuoteIdentifier(tableName);
+            var columnNamesSql = string.Join(", ", selectedColumns.Select(c => QuoteIdentifier(c.Name)));
+            var limitClause = settings.Limit > 0 ? $" LIMIT {settings.Limit}" : string.Empty;
+
+            var stats = selectedColumns.ToDictionary(
+                c => c.Name,
+                c => new ColumnStats(c.Name, c.DeclaredType, settings.MaxCharSamples)
+            );
+
+            var totalRowCount = GetRowCount(connection, tableName);
+            var targetRowCount = settings.Limit > 0 && settings.Limit < totalRowCount ? settings.Limit : totalRowCount;
+
+            var selectSql = $"SELECT {columnNamesSql} FROM {quotedTableName}{limitClause}";
+
+            using var command = connection.CreateCommand();
+            command.CommandText = selectSql;
+            command.CommandTimeout = 0;
+
+            long processedRows = 0;
+            AnsiConsole.Status()
+                .Spinner(Spinner.Known.Dots)
+                .Start($"Scanning rows in {tableName}...", ctx => {
+                    using var reader = command.ExecuteReader();
+                    while (reader.Read()) {
+                        cancellationToken.ThrowIfCancellationRequested();
+                        processedRows++;
+
+                        for (var i = 0; i < selectedColumns.Count; i++) {
+                            var col = selectedColumns[i];
+                            var columnStats = stats[col.Name];
+
+                            if (reader.IsDBNull(i)) {
+                                columnStats.RegisterNull();
+                                continue;
+                            }
+
+                            string? value;
+                            try {
+                                value = reader.GetString(i);
+                            }
+                            catch (InvalidCastException) {
+                                value = Convert.ToString(reader.GetValue(i), CultureInfo.InvariantCulture);
+                            }
+
+                            columnStats.RegisterValue(value);
                         }
 
-                        string? value;
-                        try {
-                            value = reader.GetString(i);
+                        if (processedRows % 200_000 == 0) {
+                            ctx.Status($"Scanning rows in {tableName}... {processedRows:N0}/{targetRowCount:N0}");
                         }
-                        catch (InvalidCastException) {
-                            value = Convert.ToString(reader.GetValue(i), CultureInfo.InvariantCulture);
-                        }
-
-                        columnStats.RegisterValue(value);
                     }
+                });
 
-                    if (processedRows % 200_000 == 0) {
-                        ctx.Status($"Scanning rows... {processedRows:N0}/{targetRowCount:N0}");
-                    }
-                }
-            });
+            var reportContext = new ReportContext(
+                paths.SourceFilePath,
+                datasetLabel,
+                dbPath,
+                tableName,
+                selectedColumns.Count,
+                settings.IncludeNonText,
+                totalRowCount,
+                targetRowCount,
+                processedRows,
+                settings.Limit > 0 ? settings.Limit : null,
+                DateTimeOffset.Now
+            );
 
-        AnsiConsole.MarkupLine($"[green]Completed scan of {processedRows:N0} row(s).[/]");
+            WriteReport(reportContext, stats.Values, new ConsoleReportWriter());
 
-        WriteColumnReports(stats.Values);
+            var plainWriter = new PlainTextReportWriter();
+            WriteReport(reportContext, stats.Values, plainWriter);
+            var reportContent = plainWriter.GetContent();
 
-        return 0;
+            try {
+                var reportPath = CreateReportPath(reportContext.DatabasePath, reportContext.TableName, reportContext.GeneratedAt);
+                File.WriteAllText(reportPath, reportContent, Encoding.UTF8);
+                AnsiConsole.MarkupLine($"[green]Saved report to:[/] {Markup.Escape(reportPath)}");
+            }
+            catch (Exception ex) {
+                overallSuccess = false;
+                AnsiConsole.MarkupLine($"[red]Failed to write report for table {Markup.Escape(tableName)}:[/] {Markup.Escape(ex.Message)}");
+            }
+        }
+
+        return overallSuccess ? 0 : -5;
     }
 
     private static IReadOnlyList<string> ParseColumns(string? rawColumns) {
@@ -239,6 +407,37 @@ public sealed class ColNameUsageFieldProfileCommand : Command<ColNameUsageFieldP
         return result;
     }
 
+    private static List<string> GetProfileableTables(SqliteConnection connection) {
+        using var command = connection.CreateCommand();
+        command.CommandText = @"
+            SELECT name, sql
+            FROM sqlite_master
+            WHERE type = 'table'
+              AND name NOT LIKE 'sqlite_%'
+            ORDER BY name COLLATE NOCASE;";
+
+        var tables = new List<string>();
+        using var reader = command.ExecuteReader();
+        while (reader.Read()) {
+            var name = reader.GetString(0);
+            var definition = reader.IsDBNull(1) ? string.Empty : reader.GetString(1);
+            if (IsFullTextTable(definition)) {
+                continue;
+            }
+            tables.Add(name);
+        }
+
+        return tables;
+    }
+
+    private static bool IsFullTextTable(string? definition) {
+        if (string.IsNullOrWhiteSpace(definition)) {
+            return false;
+        }
+
+        return definition.IndexOf("USING FTS", StringComparison.OrdinalIgnoreCase) >= 0;
+    }
+
     private static List<ColumnInfo> SelectColumns(IEnumerable<ColumnInfo> available, IReadOnlyList<string> requested) {
         if (requested.Count == 0) {
             return available.Where(c => c.TreatAsText).ToList();
@@ -246,6 +445,7 @@ public sealed class ColNameUsageFieldProfileCommand : Command<ColNameUsageFieldP
 
         var lookup = available.ToDictionary(c => c.Name, StringComparer.OrdinalIgnoreCase);
         var selected = new List<ColumnInfo>();
+
         foreach (var name in requested) {
             if (!lookup.TryGetValue(name, out var column)) {
                 AnsiConsole.MarkupLine($"[yellow]Column {Markup.Escape(name)} not found; skipping.[/]");
@@ -498,7 +698,7 @@ public sealed class ColNameUsageFieldProfileCommand : Command<ColNameUsageFieldP
         };
     }
 
-    private static void WriteColumnReports(IEnumerable<ColumnStats> stats) {
+    private static void WriteColumnReports(IEnumerable<ColumnStats> stats, IReportWriter writer) {
         var ordered = stats.OrderBy(s => s.Name, StringComparer.OrdinalIgnoreCase).ToList();
 
         var allNullColumns = new List<ColumnStats>();
@@ -555,13 +755,13 @@ public sealed class ColNameUsageFieldProfileCommand : Command<ColNameUsageFieldP
             }
 
             if (index > 0) {
-                AnsiConsole.MarkupLine(string.Empty);
+                writer.WriteLine(string.Empty);
             }
 
-            AnsiConsole.MarkupLine($"[bold]{Markup.Escape(stat.Name)}[/] ({Markup.Escape(stat.DeclaredType ?? string.Empty)})");
+            writer.WriteLine($"[bold]{Markup.Escape(stat.Name)}[/] ({Markup.Escape(stat.DeclaredType ?? string.Empty)})");
 
             if (isAllNull) {
-                AnsiConsole.MarkupLine("  All rows are null.");
+                writer.WriteLine("  All rows are null.");
                 continue;
             }
 
@@ -570,31 +770,31 @@ public sealed class ColNameUsageFieldProfileCommand : Command<ColNameUsageFieldP
             var avgLength = nonNull > 0 ? stat.SumLength / (double)nonNull : 0d;
             var minLength = stat.MinLength == int.MaxValue ? 0 : stat.MinLength;
 
-            AnsiConsole.MarkupLine($"  Rows observed: {stat.TotalObserved:N0}");
-            AnsiConsole.MarkupLine($"  Null: {FormatCount(stat.NullCount, stat.TotalObserved)}");
-            AnsiConsole.MarkupLine($"  Empty strings: {FormatCount(stat.EmptyCount, stat.TotalObserved)}");
+            writer.WriteLine($"  Rows observed: {stat.TotalObserved:N0}");
+            writer.WriteLine($"  Null: {FormatCount(stat.NullCount, stat.TotalObserved)}");
+            writer.WriteLine($"  Empty strings: {FormatCount(stat.EmptyCount, stat.TotalObserved)}");
 
             if (stat.TrimDifferenceCount > 0) {
-                AnsiConsole.MarkupLine("  Leading/trailing whitespace:");
-                AnsiConsole.MarkupLine($"    Any difference: {FormatCount(stat.TrimDifferenceCount, stat.TotalObserved)}");
-                AnsiConsole.MarkupLine($"    Leading whitespace: {FormatCount(stat.LeadingWhitespaceCount, stat.TotalObserved)}");
-                AnsiConsole.MarkupLine($"    Trailing whitespace: {FormatCount(stat.TrailingWhitespaceCount, stat.TotalObserved)}");
+                writer.WriteLine("  Leading/trailing whitespace:");
+                writer.WriteLine($"    Any difference: {FormatCount(stat.TrimDifferenceCount, stat.TotalObserved)}");
+                writer.WriteLine($"    Leading whitespace: {FormatCount(stat.LeadingWhitespaceCount, stat.TotalObserved)}");
+                writer.WriteLine($"    Trailing whitespace: {FormatCount(stat.TrailingWhitespaceCount, stat.TotalObserved)}");
             }
             else {
-                AnsiConsole.MarkupLine("  Leading/trailing whitespace: -");
+                writer.WriteLine("  Leading/trailing whitespace: -");
             }
 
-            AnsiConsole.MarkupLine($"  Length (min / max / avg): {(nonNull > 0 ? $"{minLength}/{stat.MaxLength}/{avgLength:F1}" : "-")}");
+            writer.WriteLine($"  Length (min / max / avg): {(nonNull > 0 ? $"{minLength}/{stat.MaxLength}/{avgLength:F1}" : "-")}");
 
             if (stat.HasWordCountSamples) {
                 var minWordCount = stat.MinWordCount == int.MaxValue ? 0 : stat.MinWordCount;
-                AnsiConsole.MarkupLine($"  Word count (min / max / avg / stdev): {minWordCount}/{stat.MaxWordCount}/{stat.WordCountAverage:F2}/{stat.WordCountStandardDeviation:F2}");
+                writer.WriteLine($"  Word count (min / max / avg / stdev): {minWordCount}/{stat.MaxWordCount}/{stat.WordCountAverage:F2}/{stat.WordCountStandardDeviation:F2}");
                 if (stat.MostCommonWordCountFrequency > 0) {
-                    AnsiConsole.MarkupLine($"  Word count mode: {stat.MostCommonWordCount} ({FormatCount(stat.MostCommonWordCountFrequency, stat.WordCountSampleCount)})");
+                    writer.WriteLine($"  Word count mode: {stat.MostCommonWordCount} ({FormatCount(stat.MostCommonWordCountFrequency, stat.WordCountSampleCount)})");
                 }
             }
             else {
-                AnsiConsole.MarkupLine("  Word count (min / max / avg / stdev): -");
+                writer.WriteLine("  Word count (min / max / avg / stdev): -");
             }
 
             var wordPositionLabels = new[] { "First", "Second", "Third", "Fourth" };
@@ -615,22 +815,22 @@ public sealed class ColNameUsageFieldProfileCommand : Command<ColNameUsageFieldP
             }
 
             if (wordCasingLines.Count > 0) {
-                AnsiConsole.MarkupLine("  Word casing (first four words):");
+                writer.WriteLine("  Word casing (first four words):");
                 foreach (var casingLine in wordCasingLines) {
-                    AnsiConsole.MarkupLine(casingLine);
+                    writer.WriteLine(casingLine);
                 }
             }
 
             if (nonEmpty > 0) {
                 if (stat.NotNfcCount == 0) {
-                    AnsiConsole.MarkupLine("  Unicode normalization: all observed values are NFC");
+                    writer.WriteLine("  Unicode normalization: all observed values are NFC");
                 }
                 else {
                     var normalizationLine = $"  Unicode normalization: {FormatCount(stat.NotNfcCount, nonEmpty)} not NFC";
                     if (stat.NfdLikelyCount > 0) {
                         normalizationLine += $", {FormatCount(stat.NfdLikelyCount, nonEmpty)} look like NFD";
                     }
-                    AnsiConsole.MarkupLine(normalizationLine);
+                    writer.WriteLine(normalizationLine);
                 }
             }
 
@@ -651,26 +851,26 @@ public sealed class ColNameUsageFieldProfileCommand : Command<ColNameUsageFieldP
                 specials.Add("Dagger (U+2020)");
             }
             if (specials.Count > 0) {
-                AnsiConsole.MarkupLine("  Notable characters: " + string.Join(", ", specials));
+                writer.WriteLine("  Notable characters: " + string.Join(", ", specials));
             }
 
-            AnsiConsole.MarkupLine($"  Rows with non-ASCII: {FormatCount(stat.NonAsciiCount, stat.TotalObserved)} (distinct chars: {stat.NonAsciiDistinctCount:N0})");
-            AnsiConsole.MarkupLine($"  Rows with control characters: {FormatCount(stat.ControlCharCount, stat.TotalObserved)} (distinct chars: {stat.ControlDistinctCount:N0})");
-            AnsiConsole.MarkupLine($"  Rows with punctuation: {FormatCount(stat.PunctuationCount, stat.TotalObserved)}");
+            writer.WriteLine($"  Rows with non-ASCII: {FormatCount(stat.NonAsciiCount, stat.TotalObserved)} (distinct chars: {stat.NonAsciiDistinctCount:N0})");
+            writer.WriteLine($"  Rows with control characters: {FormatCount(stat.ControlCharCount, stat.TotalObserved)} (distinct chars: {stat.ControlDistinctCount:N0})");
+            writer.WriteLine($"  Rows with punctuation: {FormatCount(stat.PunctuationCount, stat.TotalObserved)}");
 
             if (stat.PunctuationAsciiDistinctCount > 0) {
-                AnsiConsole.MarkupLine("    ASCII punctuation: " + FormatRuneSamples(stat.PunctuationAsciiDistinctCharacters, stat.MaxSampleCount));
+                writer.WriteLine("    ASCII punctuation: " + FormatRuneSamples(stat.PunctuationAsciiDistinctCharacters, stat.MaxSampleCount));
             }
             if (stat.PunctuationUnicodeDistinctCount > 0) {
-                AnsiConsole.MarkupLine("    Unicode punctuation: " + FormatRuneSamples(stat.PunctuationUnicodeDistinctCharacters, stat.MaxSampleCount));
+                writer.WriteLine("    Unicode punctuation: " + FormatRuneSamples(stat.PunctuationUnicodeDistinctCharacters, stat.MaxSampleCount));
             }
 
             if (stat.NonAsciiDistinctCount > 0) {
-                AnsiConsole.MarkupLine("  Non-ASCII samples: " + FormatRuneSamples(stat.NonAsciiDistinctCharacters, stat.MaxSampleCount));
+                writer.WriteLine("  Non-ASCII samples: " + FormatRuneSamples(stat.NonAsciiDistinctCharacters, stat.MaxSampleCount));
             }
 
             if (stat.ControlDistinctCount > 0) {
-                AnsiConsole.MarkupLine("  Control character samples: " + FormatRuneSamples(stat.ControlDistinctCharacters, stat.MaxSampleCount));
+                writer.WriteLine("  Control character samples: " + FormatRuneSamples(stat.ControlDistinctCharacters, stat.MaxSampleCount));
             }
 
             var blocks = stat.UnicodeBlocks
@@ -678,24 +878,24 @@ public sealed class ColNameUsageFieldProfileCommand : Command<ColNameUsageFieldP
                 .ThenBy(b => b.Name, StringComparer.Ordinal)
                 .ToList();
             if (blocks.Count > 0) {
-                AnsiConsole.MarkupLine("  Unicode blocks:");
+                writer.WriteLine("  Unicode blocks:");
                 foreach (var block in blocks) {
-                    AnsiConsole.MarkupLine($"    {block.Name}: rows {block.RowCount:N0}, chars {block.CharacterCount:N0}, distinct {block.DistinctCount:N0}");
+                    writer.WriteLine($"    {block.Name}: rows {block.RowCount:N0}, chars {block.CharacterCount:N0}, distinct {block.DistinctCount:N0}");
                     var samples = FormatRuneSamples(block.DistinctCharacters, stat.MaxSampleCount);
                     if (!string.Equals(samples, "-", StringComparison.Ordinal)) {
-                        AnsiConsole.MarkupLine("      Samples: " + samples);
+                        writer.WriteLine("      Samples: " + samples);
                     }
                 }
             }
 
             if (!string.IsNullOrEmpty(stat.ExampleNonAscii)) {
-                AnsiConsole.MarkupLine("  Example non-ASCII value:");
-                AnsiConsole.MarkupLine("    " + Markup.Escape(stat.ExampleNonAscii));
+                writer.WriteLine("  Example non-ASCII value:");
+                writer.WriteLine("    " + Markup.Escape(stat.ExampleNonAscii));
             }
 
             if (!string.IsNullOrEmpty(stat.ExampleTrimDifference)) {
-                AnsiConsole.MarkupLine("  Example with surrounding whitespace:");
-                AnsiConsole.MarkupLine("    " + Markup.Escape(stat.ExampleTrimDifference));
+                writer.WriteLine("  Example with surrounding whitespace:");
+                writer.WriteLine("    " + Markup.Escape(stat.ExampleTrimDifference));
             }
         }
 
@@ -703,29 +903,29 @@ public sealed class ColNameUsageFieldProfileCommand : Command<ColNameUsageFieldP
             return;
         }
 
-        AnsiConsole.MarkupLine(string.Empty);
-        AnsiConsole.MarkupLine("[bold]Summary[/]");
+        writer.WriteLine(string.Empty);
+        writer.WriteLine("[bold]Summary[/]");
 
-        PrintSummaryList("All-null columns", allNullColumns);
-        PrintSummaryList("Columns containing NBSP", columnsWithNbsp);
-        PrintSummaryList("Columns containing narrow NBSP", columnsWithNarrowNbsp);
-        PrintSummaryList("Columns containing directional marks", columnsWithDirectionalMarks);
-        PrintSummaryList("Columns containing daggers", columnsWithDaggers);
-        PrintSummaryList("Columns with untrimmed values", columnsWithTrimIssues);
-        PrintSummaryList("Columns with control characters", columnsWithControlChars);
-        PrintSummaryList("Columns with zero-width joiners/non-joiners", columnsWithZeroWidthJoiners);
-        PrintSummaryList("Columns with non-NFC text", columnsWithNormalizationIssues);
-        PrintSummaryList("Columns with fixed word count", columnsWithFixedWordCount);
+        PrintSummaryList("All-null columns", allNullColumns, writer);
+        PrintSummaryList("Columns containing NBSP", columnsWithNbsp, writer);
+        PrintSummaryList("Columns containing narrow NBSP", columnsWithNarrowNbsp, writer);
+        PrintSummaryList("Columns containing directional marks", columnsWithDirectionalMarks, writer);
+        PrintSummaryList("Columns containing daggers", columnsWithDaggers, writer);
+        PrintSummaryList("Columns with untrimmed values", columnsWithTrimIssues, writer);
+        PrintSummaryList("Columns with control characters", columnsWithControlChars, writer);
+        PrintSummaryList("Columns with zero-width joiners/non-joiners", columnsWithZeroWidthJoiners, writer);
+        PrintSummaryList("Columns with non-NFC text", columnsWithNormalizationIssues, writer);
+        PrintSummaryList("Columns with fixed word count", columnsWithFixedWordCount, writer);
         var almostFixedPct = ColumnStats.AlmostFixedWordCountThreshold * 100d;
-        PrintSummaryList($"Columns with almost fixed word count (≥ {almostFixedPct:F0}% same)", columnsWithAlmostFixedWordCount);
+        PrintSummaryList($"Columns with almost fixed word count (≥ {almostFixedPct:F0}% same)", columnsWithAlmostFixedWordCount, writer);
 
-        static void PrintSummaryList(string title, IReadOnlyCollection<ColumnStats> items) {
+        static void PrintSummaryList(string title, IReadOnlyCollection<ColumnStats> items, IReportWriter writer) {
             if (items.Count == 0) {
                 return;
             }
 
             var names = string.Join(", ", items.Select(s => Markup.Escape(s.Name)));
-            AnsiConsole.MarkupLine($"  {title}: {names}");
+            writer.WriteLine($"  {title}: {names}");
         }
     }
 
