@@ -456,8 +456,8 @@ public sealed class ColNameUsageFieldProfileCommand : Command<ColNameUsageFieldP
     }
 
     private static readonly string[] FullTextShadowSuffixes = {
-        "_content",
-        "_data",
+        //"_content",
+        //"_data",
         "_docsize",
         "_idx",
         "_map",
@@ -674,6 +674,24 @@ public sealed class ColNameUsageFieldProfileCommand : Command<ColNameUsageFieldP
         return $"Supplementary Plane {plane:X}";
     }
 
+    private static IEnumerable<(uint CodePoint, bool IsValid)> EnumerateCodePoints(string value) {
+        if (string.IsNullOrEmpty(value)) {
+            yield break;
+        }
+
+        for (var i = 0; i < value.Length; i++) {
+            var ch = value[i];
+            if (char.IsHighSurrogate(ch) && i + 1 < value.Length && char.IsLowSurrogate(value[i + 1])) {
+                yield return ((uint)char.ConvertToUtf32(ch, value[i + 1]), true);
+                i++;
+            }
+            else {
+                var isValid = !char.IsSurrogate(ch);
+                yield return ((uint)ch, isValid);
+            }
+        }
+    }
+
     private static string DescribeRune(uint codePoint) {
         if (!Rune.TryCreate((int)codePoint, out var rune)) {
             return $"U+{codePoint:X4}";
@@ -736,6 +754,7 @@ public sealed class ColNameUsageFieldProfileCommand : Command<ColNameUsageFieldP
         var columnsWithDaggers = new List<ColumnStats>();
         var columnsWithTrimIssues = new List<ColumnStats>();
         var columnsWithControlChars = new List<ColumnStats>();
+        var columnsWithInvalidUnicode = new List<ColumnStats>();
         var columnsWithNormalizationIssues = new List<ColumnStats>();
         var columnsWithZeroWidthJoiners = new List<ColumnStats>();
         var columnsWithFixedWordCount = new List<ColumnStats>();
@@ -765,6 +784,9 @@ public sealed class ColNameUsageFieldProfileCommand : Command<ColNameUsageFieldP
             }
             if (stat.ControlCharCount > 0) {
                 columnsWithControlChars.Add(stat);
+            }
+            if (stat.InvalidUnicodeCount > 0) {
+                columnsWithInvalidUnicode.Add(stat);
             }
             if (stat.NotNfcCount > 0) {
                 columnsWithNormalizationIssues.Add(stat);
@@ -884,6 +906,7 @@ public sealed class ColNameUsageFieldProfileCommand : Command<ColNameUsageFieldP
 
             writer.WriteLine($"  Rows with non-ASCII: {FormatCount(stat.NonAsciiCount, stat.TotalObserved)} (distinct chars: {stat.NonAsciiDistinctCount:N0})");
             writer.WriteLine($"  Rows with control characters: {FormatCount(stat.ControlCharCount, stat.TotalObserved)} (distinct chars: {stat.ControlDistinctCount:N0})");
+            writer.WriteLine($"  Rows with invalid Unicode: {FormatCount(stat.InvalidUnicodeCount, stat.TotalObserved)} (distinct code points: {stat.InvalidUnicodeDistinctCount:N0})");
             writer.WriteLine($"  Rows with punctuation: {FormatCount(stat.PunctuationCount, stat.TotalObserved)}");
 
             if (stat.PunctuationAsciiDistinctCount > 0) {
@@ -899,6 +922,10 @@ public sealed class ColNameUsageFieldProfileCommand : Command<ColNameUsageFieldP
 
             if (stat.ControlDistinctCount > 0) {
                 writer.WriteLine("  Control character samples: " + FormatRuneSamples(stat.ControlDistinctCharacters, stat.MaxSampleCount));
+            }
+
+            if (stat.InvalidUnicodeDistinctCount > 0) {
+                writer.WriteLine("  Invalid code point samples: " + FormatRuneSamples(stat.InvalidUnicodeDistinctCharacters, stat.MaxSampleCount));
             }
 
             var blocks = stat.UnicodeBlocks
@@ -921,13 +948,18 @@ public sealed class ColNameUsageFieldProfileCommand : Command<ColNameUsageFieldP
                 writer.WriteLine("    " + Markup.Escape(stat.ExampleNonAscii));
             }
 
+            if (!string.IsNullOrEmpty(stat.ExampleInvalidUnicode)) {
+                writer.WriteLine("  Example invalid-Unicode value:");
+                writer.WriteLine("    " + Markup.Escape(ColumnStats.FormatInvalidSample(stat.ExampleInvalidUnicode)));
+            }
+
             if (!string.IsNullOrEmpty(stat.ExampleTrimDifference)) {
                 writer.WriteLine("  Example with surrounding whitespace:");
                 writer.WriteLine("    " + Markup.Escape(stat.ExampleTrimDifference));
             }
         }
 
-        if (allNullColumns.Count == 0 && columnsWithNbsp.Count == 0 && columnsWithNarrowNbsp.Count == 0 && columnsWithDirectionalMarks.Count == 0 && columnsWithDaggers.Count == 0 && columnsWithTrimIssues.Count == 0 && columnsWithControlChars.Count == 0 && columnsWithNormalizationIssues.Count == 0 && columnsWithZeroWidthJoiners.Count == 0 && columnsWithFixedWordCount.Count == 0 && columnsWithAlmostFixedWordCount.Count == 0) {
+        if (allNullColumns.Count == 0 && columnsWithNbsp.Count == 0 && columnsWithNarrowNbsp.Count == 0 && columnsWithDirectionalMarks.Count == 0 && columnsWithDaggers.Count == 0 && columnsWithTrimIssues.Count == 0 && columnsWithControlChars.Count == 0 && columnsWithInvalidUnicode.Count == 0 && columnsWithNormalizationIssues.Count == 0 && columnsWithZeroWidthJoiners.Count == 0 && columnsWithFixedWordCount.Count == 0 && columnsWithAlmostFixedWordCount.Count == 0) {
             return;
         }
 
@@ -941,18 +973,28 @@ public sealed class ColNameUsageFieldProfileCommand : Command<ColNameUsageFieldP
         PrintSummaryList("Columns containing daggers", columnsWithDaggers, writer);
         PrintSummaryList("Columns with untrimmed values", columnsWithTrimIssues, writer);
         PrintSummaryList("Columns with control characters", columnsWithControlChars, writer);
+        PrintSummaryList("Columns with invalid Unicode", columnsWithInvalidUnicode, writer);
         PrintSummaryList("Columns with zero-width joiners/non-joiners", columnsWithZeroWidthJoiners, writer);
         PrintSummaryList("Columns with non-NFC text", columnsWithNormalizationIssues, writer);
-        PrintSummaryList("Columns with fixed word count", columnsWithFixedWordCount, writer);
+        PrintSummaryList("Columns with fixed word count", columnsWithFixedWordCount, writer, stat => FormatWordCountSummary(stat, stat.MinWordCount));
         var almostFixedPct = ColumnStats.AlmostFixedWordCountThreshold * 100d;
-        PrintSummaryList($"Columns with almost fixed word count (≥ {almostFixedPct:F0}% same)", columnsWithAlmostFixedWordCount, writer);
+        PrintSummaryList($"Columns with almost fixed word count (≥ {almostFixedPct:F0}% same)", columnsWithAlmostFixedWordCount, writer, stat => FormatWordCountSummary(stat, stat.MostCommonWordCount));
 
-        static void PrintSummaryList(string title, IReadOnlyCollection<ColumnStats> items, IReportWriter writer) {
+        static string FormatWordCountSummary(ColumnStats stat, int typicalWordCount) {
+            if (typicalWordCount <= 0 || typicalWordCount == int.MaxValue) {
+                return Markup.Escape(stat.Name);
+            }
+
+            var label = typicalWordCount == 1 ? "word" : "words";
+            return $"{Markup.Escape(stat.Name)} ({typicalWordCount:N0} {label})";
+        }
+
+        static void PrintSummaryList(string title, IReadOnlyCollection<ColumnStats> items, IReportWriter writer, Func<ColumnStats, string>? formatter = null) {
             if (items.Count == 0) {
                 return;
             }
 
-            var names = string.Join(", ", items.Select(s => Markup.Escape(s.Name)));
+            var names = string.Join(", ", items.Select(s => formatter?.Invoke(s) ?? Markup.Escape(s.Name)));
             writer.WriteLine($"  {title}: {names}");
         }
     }
@@ -963,6 +1005,7 @@ public sealed class ColNameUsageFieldProfileCommand : Command<ColNameUsageFieldP
         private readonly HashSet<uint> _controlDistinct;
         private readonly HashSet<uint> _punctuationAsciiDistinct;
         private readonly HashSet<uint> _punctuationUnicodeDistinct;
+        private readonly HashSet<uint> _invalidUnicodeDistinct;
         private readonly Dictionary<string, UnicodeBlockInfo> _unicodeBlocks;
 
         public ColumnStats(string name, string declaredType, int maxCharSamples) {
@@ -973,6 +1016,7 @@ public sealed class ColNameUsageFieldProfileCommand : Command<ColNameUsageFieldP
             _controlDistinct = new HashSet<uint>();
             _punctuationAsciiDistinct = new HashSet<uint>();
             _punctuationUnicodeDistinct = new HashSet<uint>();
+            _invalidUnicodeDistinct = new HashSet<uint>();
             _unicodeBlocks = new Dictionary<string, UnicodeBlockInfo>(StringComparer.Ordinal);
         }
 
@@ -986,6 +1030,7 @@ public sealed class ColNameUsageFieldProfileCommand : Command<ColNameUsageFieldP
         public long TrailingWhitespaceCount { get; private set; }
         public long NonAsciiCount { get; private set; }
         public long ControlCharCount { get; private set; }
+        public long InvalidUnicodeCount { get; private set; }
         public long PunctuationCount { get; private set; }
         public long SumLength { get; private set; }
         public int MinLength { get; private set; } = int.MaxValue;
@@ -1022,9 +1067,12 @@ public sealed class ColNameUsageFieldProfileCommand : Command<ColNameUsageFieldP
         public int PunctuationAsciiDistinctCount => _punctuationAsciiDistinct.Count;
         public IReadOnlyCollection<uint> PunctuationUnicodeDistinctCharacters => _punctuationUnicodeDistinct;
         public int PunctuationUnicodeDistinctCount => _punctuationUnicodeDistinct.Count;
+        public IReadOnlyCollection<uint> InvalidUnicodeDistinctCharacters => _invalidUnicodeDistinct;
+        public int InvalidUnicodeDistinctCount => _invalidUnicodeDistinct.Count;
         public IEnumerable<UnicodeBlockSnapshot> UnicodeBlocks => _unicodeBlocks.Values.Select(info => info.CreateSnapshot());
         public string? ExampleNonAscii { get; private set; }
         public string? ExampleTrimDifference { get; private set; }
+        public string? ExampleInvalidUnicode { get; private set; }
         public long WordCountSampleCount { get; private set; }
         public long WordCountSum { get; private set; }
         public double WordCountSumSquares { get; private set; }
@@ -1124,8 +1172,16 @@ public sealed class ColNameUsageFieldProfileCommand : Command<ColNameUsageFieldP
             var sawZeroWidthJoiner = false;
             var blocksSeen = new HashSet<string>(StringComparer.Ordinal);
 
-            foreach (var rune in value.EnumerateRunes()) {
-                var code = (uint)rune.Value;
+            var hasInvalid = false;
+            foreach (var cp in EnumerateCodePoints(value)) {
+                var code = cp.CodePoint;
+                var isValid = cp.IsValid;
+
+                if (!isValid) {
+                    hasInvalid = true;
+                    _invalidUnicodeDistinct.Add(code);
+                    continue;
+                }
 
                 if (code > 0x7F) {
                     hasNonAscii = true;
@@ -1137,7 +1193,11 @@ public sealed class ColNameUsageFieldProfileCommand : Command<ColNameUsageFieldP
                     _controlDistinct.Add(code);
                 }
 
+                if (!Rune.TryCreate((int)code, out var rune)) {
+                    continue;
+                }
                 var category = Rune.GetUnicodeCategory(rune);
+
                 if (IsPunctuationCategory(category)) {
                     sawPunctuation = true;
                     if (code <= 0x7F) {
@@ -1176,6 +1236,11 @@ public sealed class ColNameUsageFieldProfileCommand : Command<ColNameUsageFieldP
                 if (!sawZeroWidthJoiner && (code == 0x200C || code == 0x200D)) {
                     sawZeroWidthJoiner = true;
                 }
+            }
+
+            if (hasInvalid) {
+                InvalidUnicodeCount++;
+                ExampleInvalidUnicode ??= Shorten(value);
             }
 
             foreach (var blockName in blocksSeen) {
@@ -1221,6 +1286,24 @@ public sealed class ColNameUsageFieldProfileCommand : Command<ColNameUsageFieldP
                 return input;
             }
             return input.Substring(0, maxLength) + "…";
+        }
+
+        internal static string FormatInvalidSample(string value) {
+            if (string.IsNullOrEmpty(value)) {
+                return string.Empty;
+            }
+
+            var builder = new StringBuilder(value.Length);
+            foreach (var (codePoint, isValid) in EnumerateCodePoints(value)) {
+                if (isValid && Rune.TryCreate((int)codePoint, out var rune)) {
+                    builder.Append(rune.ToString());
+                }
+                else {
+                    builder.Append($"<U+{codePoint:X4}>");
+                }
+            }
+
+            return builder.ToString();
         }
 
         private int AnalyzeWordData(string value) {
@@ -1273,7 +1356,11 @@ public sealed class ColNameUsageFieldProfileCommand : Command<ColNameUsageFieldP
             var restHasLower = false;
             var restHasTitle = false;
 
-            foreach (var rune in word.EnumerateRunes()) {
+            foreach (var (codePoint, isValid) in EnumerateCodePoints(word.ToString())) {
+                if (!isValid || !Rune.TryCreate((int)codePoint, out var rune)) {
+                    continue;
+                }
+
                 if (!Rune.IsLetter(rune)) {
                     continue;
                 }
@@ -1343,11 +1430,21 @@ public sealed class ColNameUsageFieldProfileCommand : Command<ColNameUsageFieldP
                 return;
             }
 
-            if (!value.IsNormalized(NormalizationForm.FormC)) {
-                NotNfcCount++;
-                if (value.IsNormalized(NormalizationForm.FormD)) {
-                    NfdLikelyCount++;
+            try {
+                if (!value.IsNormalized(NormalizationForm.FormC)) {
+                    NotNfcCount++;
+                    try {
+                        if (value.IsNormalized(NormalizationForm.FormD)) {
+                            NfdLikelyCount++;
+                        }
+                    }
+                    catch (ArgumentException) {
+                        // Ignore invalid sequences when probing for FormD.
+                    }
                 }
+            }
+            catch (ArgumentException) {
+                NotNfcCount++;
             }
         }
 
