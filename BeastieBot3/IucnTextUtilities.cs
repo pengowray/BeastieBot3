@@ -1,6 +1,6 @@
 using System;
+using System.Collections.Generic;
 using System.Globalization;
-using System.IO;
 using System.Net;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -8,56 +8,48 @@ using System.Text.RegularExpressions;
 namespace BeastieBot3;
 
 internal static class IucnTextUtilities {
-    private static readonly Regex BlockTagRegex = new("</?(?:p|br|div|li|ul|ol|table|tr|td|th|blockquote|section|article|h[1-6])[^>]*>", RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
-    private static readonly Regex TagRegex = new("</?[^>]+?>", RegexOptions.Compiled | RegexOptions.CultureInvariant);
+    private enum PlainTextFlavor {
+        Exact,
+        Friendly
+    }
+
+    private const string AttributeFragment = "(?:\"[^\"]*\"|'[^']*'|[^'\"<>])*";
+    private const string TagNamePattern = "[A-Za-z][A-Za-z0-9:_-]*";
+
+    private static readonly Regex CommentRegex = new("<!--.*?-->", RegexOptions.Compiled | RegexOptions.Singleline);
+    private static readonly Regex CDataRegex = new("<!\\[CDATA\\[.*?\\]\\]>", RegexOptions.Compiled | RegexOptions.Singleline);
+    private static readonly Regex ScriptBlockRegex = new($"<script\\b{AttributeFragment}>.*?</script>", RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Singleline);
+    private static readonly Regex StyleBlockRegex = new($"<style\\b{AttributeFragment}>.*?</style>", RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Singleline);
+    private static readonly Regex BreakTagRegex = new($"<br\\b{AttributeFragment}>", RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+    private static readonly Regex BlockTagRegex = new($"</?(?:p|div|section|article|blockquote|ul|ol|li|table|thead|tbody|tfoot|tr|th|td|h[1-6])\\b{AttributeFragment}>", RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+    private static readonly Regex GenericTagRegex = new($"</?{TagNamePattern}\\b{AttributeFragment}>", RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+    private static readonly Regex SupTagRegex = new("<sup\\b[^>]*>(.*?)</sup>", RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.Singleline);
     private static readonly Regex NumericEntityRegex = new("&#(?:(?<dec>[0-9]+)|x(?<hex>[0-9a-fA-F]+));", RegexOptions.Compiled | RegexOptions.CultureInvariant);
 
-    public static string ResolveDatabasePath(string? overridePath, PathsService paths) {
-        var configuredPath = !string.IsNullOrWhiteSpace(overridePath)
-            ? overridePath
-            : paths.GetIucnDatabasePath();
+    private static readonly Dictionary<char, char> SuperscriptMap = new() {
+        ['0'] = '⁰',
+        ['1'] = '¹',
+        ['2'] = '²',
+        ['3'] = '³',
+        ['4'] = '⁴',
+        ['5'] = '⁵',
+        ['6'] = '⁶',
+        ['7'] = '⁷',
+        ['8'] = '⁸',
+        ['9'] = '⁹',
+        ['+'] = '⁺',
+        ['-'] = '⁻',
+        ['='] = '⁼',
+        ['('] = '⁽',
+        [')'] = '⁾',
+        ['n'] = 'ⁿ',
+        ['N'] = 'ᴺ',
+        ['i'] = 'ⁱ'
+    };
 
-        if (string.IsNullOrWhiteSpace(configuredPath)) {
-            throw new InvalidOperationException("IUCN SQLite database path is not configured. Set Datastore:IUCN_sqlite_from_cvs or pass --database.");
-        }
+    public static string? ConvertHtmlToPlainTextNeater(string? html) => ConvertHtmlToPlain(html, PlainTextFlavor.Friendly);
 
-        try {
-            return Path.GetFullPath(configuredPath);
-        }
-        catch (Exception ex) {
-            throw new InvalidOperationException($"Failed to resolve database path {configuredPath}: {ex.Message}", ex);
-        }
-    }
-
-    public static string? ConvertHtmlToPlainText(string? html) {
-        if (html is null) {
-            return null;
-        }
-
-        var decoded = WebUtility.HtmlDecode(html);
-        if (string.IsNullOrEmpty(decoded)) {
-            return decoded;
-        }
-
-        decoded = NormalizeLineEndings(decoded);
-        decoded = BlockTagRegex.Replace(decoded, "\n");
-        decoded = TagRegex.Replace(decoded, string.Empty);
-        decoded = decoded.Replace('\u00A0', ' ').Replace('\u202F', ' ').Replace('\u2007', ' ');
-        return RemoveInvisibleCharacters(decoded);
-    }
-
-    public static string? ConvertHtmlToExactPlainText(string? html) {
-        if (html is null) {
-            return null;
-        }
-
-        var working = NormalizeLineEndings(html);
-        working = BlockTagRegex.Replace(working, string.Empty);
-        working = TagRegex.Replace(working, string.Empty);
-        working = DecodeEntitiesForExactPlain(working);
-        working = RemoveInvisibleCharacters(working);
-        return CollapsePlainWhitespace(working);
-    }
+    public static string? ConvertHtmlToExactPlainText(string? html) => ConvertHtmlToPlain(html, PlainTextFlavor.Exact);
 
     public static string? NormalizePlainTextExact(string? value) {
         if (value is null) {
@@ -65,6 +57,8 @@ internal static class IucnTextUtilities {
         }
 
         var normalized = NormalizeLineEndings(value);
+        normalized = NormalizeNonBreakingSpaces(normalized, PlainTextFlavor.Exact);
+        normalized = DecodeNumericEntities(normalized);
         return RemoveInvisibleCharacters(normalized);
     }
 
@@ -82,12 +76,103 @@ internal static class IucnTextUtilities {
         if (string.IsNullOrEmpty(value)) {
             return value ?? string.Empty;
         }
+
         const int maxLength = 160;
-        var normalized = value.Replace("\r", " ", StringComparison.Ordinal).Replace("\n", " ", StringComparison.Ordinal);
+        var normalized = value.Replace("\r", " ", StringComparison.Ordinal)
+                              .Replace("\n", " ", StringComparison.Ordinal);
         if (normalized.Length <= maxLength) {
             return normalized;
         }
+
         return normalized[..maxLength] + "…";
+    }
+
+    private static string? ConvertHtmlToPlain(string? html, PlainTextFlavor flavor) {
+        if (html is null) {
+            return null;
+        }
+
+        if (html.Length == 0) {
+            return string.Empty;
+        }
+
+        var working = NormalizeLineEndings(html);
+
+        working = CommentRegex.Replace(working, string.Empty);
+        working = CDataRegex.Replace(working, string.Empty);
+        working = ScriptBlockRegex.Replace(working, string.Empty);
+        working = StyleBlockRegex.Replace(working, string.Empty);
+
+        working = ReplaceSupTags(working, flavor);
+        working = ReplaceStructuralTags(working, flavor);
+        working = GenericTagRegex.Replace(working, string.Empty);
+
+        working = WebUtility.HtmlDecode(working);
+        working = DecodeNumericEntities(working);
+        working = NormalizeLineEndings(working);
+
+        working = NormalizeNonBreakingSpaces(working, flavor);
+        working = RemoveInvisibleCharacters(working);
+        working = CollapsePlainWhitespace(working, flavor);
+        working = TrimPlainWhitespace(working, flavor);
+
+        if (flavor == PlainTextFlavor.Exact) {
+            return EncodeReservedCharacters(working);
+        }
+
+        return working;
+    }
+
+    private static string ReplaceSupTags(string value, PlainTextFlavor flavor) {
+        return SupTagRegex.Replace(value, match => {
+            var inner = match.Groups[1].Value;
+            if (inner.Length == 0) {
+                return string.Empty;
+            }
+
+            if (flavor == PlainTextFlavor.Friendly) {
+                return ConvertToSuperscript(inner);
+            }
+
+            return inner;
+        });
+    }
+
+    private static string ReplaceStructuralTags(string value, PlainTextFlavor flavor) {
+    var breakReplacement = flavor == PlainTextFlavor.Friendly ? "\n" : string.Empty;
+        value = BreakTagRegex.Replace(value, breakReplacement);
+
+    var blockReplacement = flavor == PlainTextFlavor.Friendly ? "\n" : string.Empty;
+        return BlockTagRegex.Replace(value, blockReplacement);
+    }
+
+    private static string ConvertToSuperscript(string value) {
+        var leadingSpace = value.Length > 0 && char.IsWhiteSpace(value[0]);
+        var trailingSpace = value.Length > 0 && char.IsWhiteSpace(value[^1]);
+
+        var trimmed = value.Trim();
+        if (trimmed.Length == 0) {
+            return value;
+        }
+
+        var builder = new StringBuilder(trimmed.Length);
+        foreach (var ch in trimmed) {
+            if (SuperscriptMap.TryGetValue(ch, out var sup)) {
+                builder.Append(sup);
+            } else {
+                builder.Append(ch);
+            }
+        }
+
+        if (leadingSpace) {
+            builder.Insert(0, ' ');
+        }
+
+        if (trailingSpace) {
+            builder.Append(' ');
+        }
+
+        return builder.ToString();
     }
 
     private static string NormalizeLineEndings(string value) {
@@ -95,19 +180,55 @@ internal static class IucnTextUtilities {
                     .Replace('\r', '\n');
     }
 
-    private static string RemoveInvisibleCharacters(string value) {
-        return value.Replace("\u200B", string.Empty, StringComparison.Ordinal)
-                    .Replace("\u200C", string.Empty, StringComparison.Ordinal)
-                    .Replace("\u200D", string.Empty, StringComparison.Ordinal)
-                    .Replace("\uFEFF", string.Empty, StringComparison.Ordinal);
+    private static string NormalizeNonBreakingSpaces(string value, PlainTextFlavor flavor) {
+        var builder = new StringBuilder(value.Length);
+        var changed = false;
+
+        foreach (var ch in value) {
+            switch (ch) {
+                case '\u00A0':
+                case '\u2007':
+                case '\u202F':
+                case '\u2009':
+                    builder.Append(flavor == PlainTextFlavor.Exact ? '\u202F' : ' ');
+                    changed = true;
+                    break;
+                default:
+                    builder.Append(ch);
+                    break;
+            }
+        }
+
+        return changed ? builder.ToString() : value;
     }
 
-    private static string CollapsePlainWhitespace(string value) {
+    private static string RemoveInvisibleCharacters(string value) {
+        var builder = new StringBuilder(value.Length);
+        foreach (var ch in value) {
+            switch (ch) {
+                case '\u200B':
+                case '\u200C':
+                case '\u200D':
+                case '\u200E':
+                case '\u200F':
+                case '\u2060':
+                case '\uFEFF':
+                case '\u00AD':
+                    break;
+                default:
+                    builder.Append(ch);
+                    break;
+            }
+        }
+        return builder.ToString();
+    }
+
+    private static string CollapsePlainWhitespace(string value, PlainTextFlavor flavor) {
         var builder = new StringBuilder(value.Length);
         var previousWasSpace = false;
 
         foreach (var ch in value) {
-            if (ch == '\u00A0') {
+            if (IsNonBreakingSpace(ch) && flavor == PlainTextFlavor.Exact) {
                 builder.Append(ch);
                 previousWasSpace = false;
                 continue;
@@ -124,21 +245,21 @@ internal static class IucnTextUtilities {
             }
         }
 
-        return TrimPlainWhitespace(builder.ToString());
+        return builder.ToString();
     }
 
-    private static string TrimPlainWhitespace(string value) {
+    private static string TrimPlainWhitespace(string value, PlainTextFlavor flavor) {
         if (value.Length == 0) {
             return value;
         }
 
         var start = 0;
-        while (start < value.Length && IsTrimmablePlainChar(value[start])) {
+        while (start < value.Length && IsTrimmableWhitespace(value[start], flavor)) {
             start++;
         }
 
         var end = value.Length - 1;
-        while (end >= start && IsTrimmablePlainChar(value[end])) {
+        while (end >= start && IsTrimmableWhitespace(value[end], flavor)) {
             end--;
         }
 
@@ -147,48 +268,63 @@ internal static class IucnTextUtilities {
             : value[start..(end + 1)];
     }
 
-    private static bool IsTrimmablePlainChar(char ch) {
-        return ch != '\u00A0' && char.IsWhiteSpace(ch);
+    private static bool IsTrimmableWhitespace(char ch, PlainTextFlavor flavor) {
+        if (flavor == PlainTextFlavor.Exact && IsNonBreakingSpace(ch)) {
+            return false;
+        }
+        return char.IsWhiteSpace(ch);
     }
 
-    private static string DecodeEntitiesForExactPlain(string value) {
+    private static bool IsNonBreakingSpace(char ch) => ch == '\u00A0' || ch == '\u202F' || ch == '\u2007';
+
+    private static string EncodeReservedCharacters(string value) {
+        if (value.Length == 0) {
+            return value;
+        }
+
+        var builder = new StringBuilder(value.Length);
+        foreach (var ch in value) {
+            switch (ch) {
+                case '&':
+                    builder.Append("&amp;");
+                    break;
+                case '<':
+                    builder.Append("&lt;");
+                    break;
+                case '>':
+                    builder.Append("&gt;");
+                    break;
+                default:
+                    builder.Append(ch);
+                    break;
+            }
+        }
+        return builder.ToString();
+    }
+
+    private static string DecodeNumericEntities(string value) {
         if (string.IsNullOrEmpty(value)) {
             return value;
         }
 
-        // Handle common named entities that the plain-text columns materialize as characters.
-        var result = value.Replace("&nbsp;", "\u00A0", StringComparison.Ordinal)
-                          .Replace("&thinsp;", "\u202F", StringComparison.Ordinal)
-                          .Replace("&ensp;", "\u2002", StringComparison.Ordinal)
-                          .Replace("&emsp;", "\u2003", StringComparison.Ordinal);
-
-        // Convert numeric entities while leaving named entities like &gt; untouched so we preserve the stored form.
-        result = NumericEntityRegex.Replace(result, match => {
-            var decGroup = match.Groups["dec"];
-            if (decGroup.Success && int.TryParse(decGroup.Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var decCode)) {
+        return NumericEntityRegex.Replace(value, match => {
+            if (match.Groups["dec"].Success && int.TryParse(match.Groups["dec"].Value, NumberStyles.Integer, CultureInfo.InvariantCulture, out var decCode)) {
                 return ConvertFromCodePoint(decCode) ?? match.Value;
             }
 
-            var hexGroup = match.Groups["hex"];
-            if (hexGroup.Success && int.TryParse(hexGroup.Value, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var hexCode)) {
+            if (match.Groups["hex"].Success && int.TryParse(match.Groups["hex"].Value, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var hexCode)) {
                 return ConvertFromCodePoint(hexCode) ?? match.Value;
             }
 
             return match.Value;
         });
-
-        return result;
     }
 
     private static string? ConvertFromCodePoint(int codePoint) {
-        if (codePoint <= 0) {
+        if (codePoint <= 0 || codePoint > 0x10FFFF) {
             return null;
         }
 
-        if (codePoint <= 0x10FFFF) {
-            return char.ConvertFromUtf32(codePoint);
-        }
-
-        return null;
+        return char.ConvertFromUtf32(codePoint);
     }
 }

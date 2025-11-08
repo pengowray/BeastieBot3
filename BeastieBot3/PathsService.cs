@@ -1,4 +1,6 @@
+using System;
 using System.Collections.Generic;
+using System.IO;
 
 namespace BeastieBot3 {
     // Provides typed access to paths defined in an INI file, backed by IniPathReader.
@@ -26,5 +28,22 @@ namespace BeastieBot3 {
         public string? GetColSqlitePath() => _reader.Get("Datastore:COL_sqlite");
 
         public string? GetIucnDatabasePath() => _reader.Get("Datastore:IUCN_sqlite_from_cvs");
+
+        public string ResolveIucnDatabasePath(string? overridePath) {
+            var configuredPath = !string.IsNullOrWhiteSpace(overridePath)
+                ? overridePath
+                : GetIucnDatabasePath();
+
+            if (string.IsNullOrWhiteSpace(configuredPath)) {
+                throw new InvalidOperationException("IUCN SQLite database path is not configured. Set Datastore:IUCN_sqlite_from_cvs or pass --database.");
+            }
+
+            try {
+                return Path.GetFullPath(configuredPath);
+            }
+            catch (Exception ex) {
+                throw new InvalidOperationException($"Failed to resolve database path {configuredPath}: {ex.Message}", ex);
+            }
+        }
     }
 }

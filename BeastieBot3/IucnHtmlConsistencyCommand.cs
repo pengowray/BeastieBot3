@@ -50,7 +50,7 @@ public sealed class IucnHtmlConsistencyCommand : Command<IucnHtmlConsistencyComm
 
         string databasePath;
         try {
-            databasePath = IucnTextUtilities.ResolveDatabasePath(settings.DatabasePath, paths);
+            databasePath = paths.ResolveIucnDatabasePath(settings.DatabasePath);
         }
         catch (Exception ex) {
             AnsiConsole.MarkupLine($"[red]{Markup.Escape(ex.Message)}[/]");
