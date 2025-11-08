@@ -30,9 +30,10 @@ namespace BeastieBot3;
 // 
 // TODO: 
 // - [ ] rename and move to more general name/command name
+// - [ ] add option to run on all (non-FTS) tables in the database
 // - [ ] list fields containing smart quotes
 // - [ ] fix caps checking: characterize caps category of first four words. Categories: none (no first/second/third/fourth word), allcaps, title (initial case), lower, title-mixed (initial letter upper and then mixed), lower-mixed (initial letter lowercase), unicameral (e.g. Arabic, CJK, etc)
-// - [ ] include a count of "only A-Za-z" in the value, and (A-Za-z and ordinary space), and (A-Za-z and ordinary space and period).
+// - [ ] include a count of "only A-Za-z" in the value, and (A-Za-z and ordinary space), and (A-Za-z and ordinary space and period). give these shorter names
 // - [ ] word counts (most common, min, max, average, stdev)
 // - [ ] most common values (ala sqlite-utils analyze-tables); show up to the 10 most common values (including null). If there are 20 or less values in total, show them all.
 // - [ ] frequency of a period in the text (to catch infraspecies categories)
@@ -107,7 +108,8 @@ public sealed class ColNameUsageFieldProfileCommand : Command<ColNameUsageFieldP
         string dbPath;
         try {
             dbPath = Path.GetFullPath(configuredPath);
-        } catch (Exception ex) {
+        }
+        catch (Exception ex) {
             AnsiConsole.MarkupLine($"[red]Failed to resolve database path[/] {Markup.Escape(configuredPath)}: {Markup.Escape(ex.Message)}");
             return -1;
         }
@@ -189,7 +191,8 @@ public sealed class ColNameUsageFieldProfileCommand : Command<ColNameUsageFieldP
                         string? value;
                         try {
                             value = reader.GetString(i);
-                        } catch (InvalidCastException) {
+                        }
+                        catch (InvalidCastException) {
                             value = Convert.ToString(reader.GetValue(i), CultureInfo.InvariantCulture);
                         }
 
@@ -507,6 +510,8 @@ public sealed class ColNameUsageFieldProfileCommand : Command<ColNameUsageFieldP
         var columnsWithControlChars = new List<ColumnStats>();
         var columnsWithNormalizationIssues = new List<ColumnStats>();
         var columnsWithZeroWidthJoiners = new List<ColumnStats>();
+        var columnsWithFixedWordCount = new List<ColumnStats>();
+        var columnsWithAlmostFixedWordCount = new List<ColumnStats>();
 
         for (var index = 0; index < ordered.Count; index++) {
             var stat = ordered[index];
@@ -540,6 +545,15 @@ public sealed class ColNameUsageFieldProfileCommand : Command<ColNameUsageFieldP
                 columnsWithZeroWidthJoiners.Add(stat);
             }
 
+            if (stat.HasWordCountSamples) {
+                if (stat.IsFixedWordCount) {
+                    columnsWithFixedWordCount.Add(stat);
+                }
+                else if (stat.IsAlmostFixedWordCount) {
+                    columnsWithAlmostFixedWordCount.Add(stat);
+                }
+            }
+
             if (index > 0) {
                 AnsiConsole.MarkupLine(string.Empty);
             }
@@ -553,8 +567,6 @@ public sealed class ColNameUsageFieldProfileCommand : Command<ColNameUsageFieldP
 
             var nonNull = stat.TotalObserved - stat.NullCount;
             var nonEmpty = nonNull - stat.EmptyCount;
-            var caseSampleTotal = stat.UppercaseStartCount + stat.LowercaseStartCount + stat.OtherStartCount + stat.WhitespaceOnlyCount;
-            var additionalWordsSampleTotal = stat.AdditionalWordsNoneCount + stat.AdditionalWordsAllUpperCount + stat.AdditionalWordsAllLowerCount + stat.AdditionalWordsMixedOrOtherCount;
             var avgLength = nonNull > 0 ? stat.SumLength / (double)nonNull : 0d;
             var minLength = stat.MinLength == int.MaxValue ? 0 : stat.MinLength;
 
@@ -567,32 +579,53 @@ public sealed class ColNameUsageFieldProfileCommand : Command<ColNameUsageFieldP
                 AnsiConsole.MarkupLine($"    Any difference: {FormatCount(stat.TrimDifferenceCount, stat.TotalObserved)}");
                 AnsiConsole.MarkupLine($"    Leading whitespace: {FormatCount(stat.LeadingWhitespaceCount, stat.TotalObserved)}");
                 AnsiConsole.MarkupLine($"    Trailing whitespace: {FormatCount(stat.TrailingWhitespaceCount, stat.TotalObserved)}");
-            } else {
+            }
+            else {
                 AnsiConsole.MarkupLine("  Leading/trailing whitespace: -");
             }
 
             AnsiConsole.MarkupLine($"  Length (min / max / avg): {(nonNull > 0 ? $"{minLength}/{stat.MaxLength}/{avgLength:F1}" : "-")}");
 
-            if (caseSampleTotal > 0) {
-                AnsiConsole.MarkupLine("  First-word casing:" +
-                    $" upper {FormatCount(stat.UppercaseStartCount, caseSampleTotal)}," +
-                    $" lower {FormatCount(stat.LowercaseStartCount, caseSampleTotal)}," +
-                    $" other {FormatCount(stat.OtherStartCount, caseSampleTotal)}," +
-                    $" whitespace-only {FormatCount(stat.WhitespaceOnlyCount, caseSampleTotal)}");
+            if (stat.HasWordCountSamples) {
+                var minWordCount = stat.MinWordCount == int.MaxValue ? 0 : stat.MinWordCount;
+                AnsiConsole.MarkupLine($"  Word count (min / max / avg / stdev): {minWordCount}/{stat.MaxWordCount}/{stat.WordCountAverage:F2}/{stat.WordCountStandardDeviation:F2}");
+                if (stat.MostCommonWordCountFrequency > 0) {
+                    AnsiConsole.MarkupLine($"  Word count mode: {stat.MostCommonWordCount} ({FormatCount(stat.MostCommonWordCountFrequency, stat.WordCountSampleCount)})");
+                }
+            }
+            else {
+                AnsiConsole.MarkupLine("  Word count (min / max / avg / stdev): -");
             }
 
-            if (additionalWordsSampleTotal > 0) {
-                AnsiConsole.MarkupLine("  Additional-word casing:" +
-                    $" none {FormatCount(stat.AdditionalWordsNoneCount, additionalWordsSampleTotal)}," +
-                    $" all upper {FormatCount(stat.AdditionalWordsAllUpperCount, additionalWordsSampleTotal)}," +
-                    $" all lower {FormatCount(stat.AdditionalWordsAllLowerCount, additionalWordsSampleTotal)}," +
-                    $" mixed/other {FormatCount(stat.AdditionalWordsMixedOrOtherCount, additionalWordsSampleTotal)}");
+            var wordPositionLabels = new[] { "First", "Second", "Third", "Fourth" };
+            var wordCasingLines = new List<string>();
+            for (var wordPosition = 0; wordPosition < ColumnStats.WordCasePositions && wordPosition < wordPositionLabels.Length; wordPosition++) {
+                var summary = stat.GetWordCaseSummary(wordPosition);
+                if (summary.Total == 0) {
+                    continue;
+                }
+
+                var parts = summary.Breakdown
+                    .Where(item => item.Count > 0)
+                    .Select(item => $"{item.Category} {FormatCount(item.Count, summary.Total)}")
+                    .ToArray();
+
+                var lineContent = parts.Length > 0 ? string.Join(", ", parts) : "-";
+                wordCasingLines.Add($"    {wordPositionLabels[wordPosition]}: {lineContent}");
+            }
+
+            if (wordCasingLines.Count > 0) {
+                AnsiConsole.MarkupLine("  Word casing (first four words):");
+                foreach (var casingLine in wordCasingLines) {
+                    AnsiConsole.MarkupLine(casingLine);
+                }
             }
 
             if (nonEmpty > 0) {
                 if (stat.NotNfcCount == 0) {
                     AnsiConsole.MarkupLine("  Unicode normalization: all observed values are NFC");
-                } else {
+                }
+                else {
                     var normalizationLine = $"  Unicode normalization: {FormatCount(stat.NotNfcCount, nonEmpty)} not NFC";
                     if (stat.NfdLikelyCount > 0) {
                         normalizationLine += $", {FormatCount(stat.NfdLikelyCount, nonEmpty)} look like NFD";
@@ -666,7 +699,7 @@ public sealed class ColNameUsageFieldProfileCommand : Command<ColNameUsageFieldP
             }
         }
 
-        if (allNullColumns.Count == 0 && columnsWithNbsp.Count == 0 && columnsWithNarrowNbsp.Count == 0 && columnsWithDirectionalMarks.Count == 0 && columnsWithDaggers.Count == 0 && columnsWithTrimIssues.Count == 0 && columnsWithControlChars.Count == 0 && columnsWithNormalizationIssues.Count == 0 && columnsWithZeroWidthJoiners.Count == 0) {
+        if (allNullColumns.Count == 0 && columnsWithNbsp.Count == 0 && columnsWithNarrowNbsp.Count == 0 && columnsWithDirectionalMarks.Count == 0 && columnsWithDaggers.Count == 0 && columnsWithTrimIssues.Count == 0 && columnsWithControlChars.Count == 0 && columnsWithNormalizationIssues.Count == 0 && columnsWithZeroWidthJoiners.Count == 0 && columnsWithFixedWordCount.Count == 0 && columnsWithAlmostFixedWordCount.Count == 0) {
             return;
         }
 
@@ -682,6 +715,9 @@ public sealed class ColNameUsageFieldProfileCommand : Command<ColNameUsageFieldP
         PrintSummaryList("Columns with control characters", columnsWithControlChars);
         PrintSummaryList("Columns with zero-width joiners/non-joiners", columnsWithZeroWidthJoiners);
         PrintSummaryList("Columns with non-NFC text", columnsWithNormalizationIssues);
+        PrintSummaryList("Columns with fixed word count", columnsWithFixedWordCount);
+        var almostFixedPct = ColumnStats.AlmostFixedWordCountThreshold * 100d;
+        PrintSummaryList($"Columns with almost fixed word count (≥ {almostFixedPct:F0}% same)", columnsWithAlmostFixedWordCount);
 
         static void PrintSummaryList(string title, IReadOnlyCollection<ColumnStats> items) {
             if (items.Count == 0) {
@@ -726,14 +762,22 @@ public sealed class ColNameUsageFieldProfileCommand : Command<ColNameUsageFieldP
         public long SumLength { get; private set; }
         public int MinLength { get; private set; } = int.MaxValue;
         public int MaxLength { get; private set; }
-        public long UppercaseStartCount { get; private set; }
-        public long LowercaseStartCount { get; private set; }
-        public long OtherStartCount { get; private set; }
-        public long WhitespaceOnlyCount { get; private set; }
-        public long AdditionalWordsNoneCount { get; private set; }
-        public long AdditionalWordsAllUpperCount { get; private set; }
-        public long AdditionalWordsAllLowerCount { get; private set; }
-        public long AdditionalWordsMixedOrOtherCount { get; private set; }
+        private const int WordPositionsTracked = 4;
+        private const double WordCountAlmostFixedThreshold = 0.95d;
+        private static readonly WordCaseCategory[] WordCaseCategoryOrder =
+        {
+            WordCaseCategory.None,
+            WordCaseCategory.AllCaps,
+            WordCaseCategory.Title,
+            WordCaseCategory.Lower,
+            WordCaseCategory.TitleMixed,
+            WordCaseCategory.LowerMixed,
+            WordCaseCategory.Unicameral
+        };
+
+        private readonly long[,] _wordCaseCounts = new long[WordPositionsTracked, WordCaseCategoryOrder.Length];
+        private readonly Dictionary<int, long> _wordCountHistogram = new();
+
         public long NotNfcCount { get; private set; }
         public long NfdLikelyCount { get; private set; }
         public bool ContainsNoBreakSpace { get; private set; }
@@ -753,6 +797,30 @@ public sealed class ColNameUsageFieldProfileCommand : Command<ColNameUsageFieldP
         public IEnumerable<UnicodeBlockSnapshot> UnicodeBlocks => _unicodeBlocks.Values.Select(info => info.CreateSnapshot());
         public string? ExampleNonAscii { get; private set; }
         public string? ExampleTrimDifference { get; private set; }
+        public long WordCountSampleCount { get; private set; }
+        public long WordCountSum { get; private set; }
+        public double WordCountSumSquares { get; private set; }
+        public int MinWordCount { get; private set; } = int.MaxValue;
+        public int MaxWordCount { get; private set; }
+        public int MostCommonWordCount { get; private set; } = -1;
+        public long MostCommonWordCountFrequency { get; private set; }
+        public bool HasWordCountSamples => WordCountSampleCount > 0;
+        public double WordCountAverage => HasWordCountSamples ? WordCountSum / (double)WordCountSampleCount : 0d;
+        public double WordCountStandardDeviation {
+            get {
+                if (!HasWordCountSamples) {
+                    return 0d;
+                }
+
+                var mean = WordCountAverage;
+                var variance = Math.Max(0d, (WordCountSumSquares / WordCountSampleCount) - (mean * mean));
+                return Math.Sqrt(variance);
+            }
+        }
+        public bool IsFixedWordCount => HasWordCountSamples && MinWordCount == MaxWordCount;
+        public bool IsAlmostFixedWordCount => HasWordCountSamples && !IsFixedWordCount && MostCommonWordCountFrequency >= WordCountAlmostFixedThreshold * WordCountSampleCount;
+        public static int WordCasePositions => WordPositionsTracked;
+        public static double AlmostFixedWordCountThreshold => WordCountAlmostFixedThreshold;
 
         public void RegisterNull() {
             TotalObserved++;
@@ -764,6 +832,28 @@ public sealed class ColNameUsageFieldProfileCommand : Command<ColNameUsageFieldP
             if (value is null) {
                 NullCount++;
                 return;
+            }
+
+            WordCountSampleCount++;
+
+            var wordCount = AnalyzeWordData(value);
+            WordCountSum += wordCount;
+            WordCountSumSquares += (double)wordCount * wordCount;
+            if (wordCount < MinWordCount) {
+                MinWordCount = wordCount;
+            }
+            if (wordCount > MaxWordCount) {
+                MaxWordCount = wordCount;
+            }
+
+            var updatedFrequency = _wordCountHistogram.TryGetValue(wordCount, out var existingFrequency)
+                ? existingFrequency + 1
+                : 1;
+            _wordCountHistogram[wordCount] = updatedFrequency;
+            if (updatedFrequency > MostCommonWordCountFrequency ||
+                (updatedFrequency == MostCommonWordCountFrequency && (MostCommonWordCount == -1 || wordCount < MostCommonWordCount))) {
+                MostCommonWordCount = wordCount;
+                MostCommonWordCountFrequency = updatedFrequency;
             }
 
             var length = value.Length;
@@ -781,7 +871,6 @@ public sealed class ColNameUsageFieldProfileCommand : Command<ColNameUsageFieldP
                 return;
             }
 
-            AnalyzeWordStructure(value);
             CheckNormalization(value);
 
             var leadingWhitespace = char.IsWhiteSpace(value[0]);
@@ -825,7 +914,8 @@ public sealed class ColNameUsageFieldProfileCommand : Command<ColNameUsageFieldP
                     sawPunctuation = true;
                     if (code <= 0x7F) {
                         _punctuationAsciiDistinct.Add(code);
-                    } else {
+                    }
+                    else {
                         _punctuationUnicodeDistinct.Add(code);
                     }
                 }
@@ -842,7 +932,8 @@ public sealed class ColNameUsageFieldProfileCommand : Command<ColNameUsageFieldP
 
                 if (!sawNbsp && code == 0x00A0) {
                     sawNbsp = true;
-                } else if (!sawNarrowNbsp && code == 0x202F) {
+                }
+                else if (!sawNarrowNbsp && code == 0x202F) {
                     sawNarrowNbsp = true;
                 }
 
@@ -904,45 +995,14 @@ public sealed class ColNameUsageFieldProfileCommand : Command<ColNameUsageFieldP
             return input.Substring(0, maxLength) + "…";
         }
 
-        private void AnalyzeWordStructure(string value) {
+        private int AnalyzeWordData(string value) {
+            var span = value.AsSpan();
+            var length = span.Length;
             var index = 0;
-            var length = value.Length;
-
-            while (index < length && char.IsWhiteSpace(value[index])) {
-                index++;
-            }
-
-            if (index >= length) {
-                WhitespaceOnlyCount++;
-                AdditionalWordsNoneCount++;
-                return;
-            }
-
-            var firstRune = Rune.GetRuneAt(value, index);
-            switch (GetCaseCategory(firstRune)) {
-                case RuneCaseCategory.Upper:
-                case RuneCaseCategory.Title:
-                    UppercaseStartCount++;
-                    break;
-                case RuneCaseCategory.Lower:
-                    LowercaseStartCount++;
-                    break;
-                default:
-                    OtherStartCount++;
-                    break;
-            }
-
-            index += firstRune.Utf16SequenceLength;
-            while (index < length && !char.IsWhiteSpace(value[index])) {
-                index++;
-            }
-
-            var sawAdditional = false;
-            var allUpper = true;
-            var allLower = true;
+            var wordIndex = 0;
 
             while (index < length) {
-                while (index < length && char.IsWhiteSpace(value[index])) {
+                while (index < length && char.IsWhiteSpace(span[index])) {
                     index++;
                 }
 
@@ -950,33 +1010,104 @@ public sealed class ColNameUsageFieldProfileCommand : Command<ColNameUsageFieldP
                     break;
                 }
 
-                sawAdditional = true;
-                var rune = Rune.GetRuneAt(value, index);
-                var caseCategory = GetCaseCategory(rune);
-
-                if (caseCategory is not (RuneCaseCategory.Upper or RuneCaseCategory.Title)) {
-                    allUpper = false;
-                }
-
-                if (caseCategory != RuneCaseCategory.Lower) {
-                    allLower = false;
-                }
-
-                index += rune.Utf16SequenceLength;
-                while (index < length && !char.IsWhiteSpace(value[index])) {
+                var start = index;
+                while (index < length && !char.IsWhiteSpace(span[index])) {
                     index++;
                 }
+
+                if (wordIndex < WordPositionsTracked) {
+                    var wordSpan = span.Slice(start, index - start);
+                    var category = CategorizeWord(wordSpan);
+                    _wordCaseCounts[wordIndex, (int)category]++;
+                }
+
+                wordIndex++;
             }
 
-            if (!sawAdditional) {
-                AdditionalWordsNoneCount++;
-            } else if (allUpper && !allLower) {
-                AdditionalWordsAllUpperCount++;
-            } else if (allLower && !allUpper) {
-                AdditionalWordsAllLowerCount++;
-            } else {
-                AdditionalWordsMixedOrOtherCount++;
+            for (var position = wordIndex; position < WordPositionsTracked; position++) {
+                _wordCaseCounts[position, (int)WordCaseCategory.None]++;
             }
+
+            return wordIndex;
+        }
+
+        private static WordCaseCategory CategorizeWord(ReadOnlySpan<char> word) {
+            Rune? firstLetter = null;
+            var firstIsUpper = false;
+            var firstIsLower = false;
+            var firstIsTitle = false;
+
+            var sawLetter = false;
+            var sawUpper = false;
+            var sawLower = false;
+            var sawTitle = false;
+            var restHasUpper = false;
+            var restHasLower = false;
+            var restHasTitle = false;
+
+            foreach (var rune in word.EnumerateRunes()) {
+                if (!Rune.IsLetter(rune)) {
+                    continue;
+                }
+
+                var category = Rune.GetUnicodeCategory(rune);
+                var isUpper = category == UnicodeCategory.UppercaseLetter;
+                var isLower = category == UnicodeCategory.LowercaseLetter;
+                var isTitle = category == UnicodeCategory.TitlecaseLetter;
+
+                if (firstLetter is null) {
+                    firstLetter = rune;
+                    firstIsUpper = isUpper;
+                    firstIsLower = isLower;
+                    firstIsTitle = isTitle;
+                }
+                else {
+                    restHasUpper |= isUpper;
+                    restHasLower |= isLower;
+                    restHasTitle |= isTitle;
+                }
+
+                sawLetter = true;
+                sawUpper |= isUpper;
+                sawLower |= isLower;
+                sawTitle |= isTitle;
+            }
+
+            if (!sawLetter) {
+                return WordCaseCategory.Unicameral;
+            }
+
+            if (!sawUpper && !sawLower && !sawTitle) {
+                return WordCaseCategory.Unicameral;
+            }
+
+            if (sawUpper && !sawLower) {
+                return WordCaseCategory.AllCaps;
+            }
+
+            if (!sawUpper && sawLower && !sawTitle) {
+                return WordCaseCategory.Lower;
+            }
+
+            var firstUpperOrTitle = firstIsUpper || firstIsTitle;
+
+            if (firstUpperOrTitle) {
+                if (!restHasUpper && !restHasTitle) {
+                    return WordCaseCategory.Title;
+                }
+
+                return WordCaseCategory.TitleMixed;
+            }
+
+            if (firstIsLower) {
+                if (restHasUpper || restHasTitle) {
+                    return WordCaseCategory.LowerMixed;
+                }
+
+                return WordCaseCategory.Lower;
+            }
+
+            return WordCaseCategory.Unicameral;
         }
 
         private void CheckNormalization(string value) {
@@ -996,20 +1127,44 @@ public sealed class ColNameUsageFieldProfileCommand : Command<ColNameUsageFieldP
             return codePoint is 0x200E or 0x200F or >= 0x202A and <= 0x202E or >= 0x2066 and <= 0x2069;
         }
 
-        private static RuneCaseCategory GetCaseCategory(Rune rune) {
-            return Rune.GetUnicodeCategory(rune) switch {
-                UnicodeCategory.UppercaseLetter => RuneCaseCategory.Upper,
-                UnicodeCategory.TitlecaseLetter => RuneCaseCategory.Title,
-                UnicodeCategory.LowercaseLetter => RuneCaseCategory.Lower,
-                _ => RuneCaseCategory.Other
+        public WordCaseSummary GetWordCaseSummary(int position) {
+            var breakdown = new List<WordCaseCount>(WordCaseCategoryOrder.Length);
+            long total = 0;
+
+            foreach (var category in WordCaseCategoryOrder) {
+                var count = _wordCaseCounts[position, (int)category];
+                breakdown.Add(new WordCaseCount(GetWordCaseCategoryLabel(category), count));
+                total += count;
+            }
+
+            return new WordCaseSummary(total, breakdown);
+        }
+
+        private static string GetWordCaseCategoryLabel(WordCaseCategory category) {
+            return category switch {
+                WordCaseCategory.None => "none",
+                WordCaseCategory.AllCaps => "allcaps",
+                WordCaseCategory.Title => "title",
+                WordCaseCategory.Lower => "lower",
+                WordCaseCategory.TitleMixed => "title-mixed",
+                WordCaseCategory.LowerMixed => "lower-mixed",
+                WordCaseCategory.Unicameral => "unicameral",
+                _ => category.ToString().ToLowerInvariant()
             };
         }
 
-        private enum RuneCaseCategory {
-            Upper,
+        public sealed record WordCaseCount(string Category, long Count);
+
+        public sealed record WordCaseSummary(long Total, IReadOnlyList<WordCaseCount> Breakdown);
+
+        private enum WordCaseCategory {
+            None,
+            AllCaps,
             Title,
             Lower,
-            Other
+            TitleMixed,
+            LowerMixed,
+            Unicameral
         }
 
         public sealed record UnicodeBlockSnapshot(string Name, long RowCount, long CharacterCount, IReadOnlyCollection<uint> DistinctCharacters, int DistinctCount);
