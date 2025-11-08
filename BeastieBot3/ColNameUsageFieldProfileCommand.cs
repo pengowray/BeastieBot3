@@ -421,7 +421,7 @@ public sealed class ColNameUsageFieldProfileCommand : Command<ColNameUsageFieldP
         while (reader.Read()) {
             var name = reader.GetString(0);
             var definition = reader.IsDBNull(1) ? string.Empty : reader.GetString(1);
-            if (IsFullTextTable(definition)) {
+            if (IsFullTextTable(name, definition)) {
                 continue;
             }
             tables.Add(name);
@@ -430,13 +430,41 @@ public sealed class ColNameUsageFieldProfileCommand : Command<ColNameUsageFieldP
         return tables;
     }
 
-    private static bool IsFullTextTable(string? definition) {
-        if (string.IsNullOrWhiteSpace(definition)) {
-            return false;
+    private static bool IsFullTextTable(string name, string? definition) {
+        if (!string.IsNullOrWhiteSpace(definition) && definition.IndexOf("USING FTS", StringComparison.OrdinalIgnoreCase) >= 0) {
+            return true;
         }
 
-        return definition.IndexOf("USING FTS", StringComparison.OrdinalIgnoreCase) >= 0;
+        var lowerName = name.ToLowerInvariant();
+
+        if (lowerName.EndsWith("_fts", StringComparison.Ordinal) || lowerName.Contains("_fts_", StringComparison.Ordinal) || lowerName.StartsWith("fts_", StringComparison.Ordinal)) {
+            return true;
+        }
+
+        foreach (var suffix in FullTextShadowSuffixes) {
+            if (!lowerName.EndsWith(suffix, StringComparison.Ordinal)) {
+                continue;
+            }
+
+            var prefix = lowerName[..(lowerName.Length - suffix.Length)];
+            if (prefix.EndsWith("_fts", StringComparison.Ordinal)) {
+                return true;
+            }
+        }
+
+        return false;
     }
+
+    private static readonly string[] FullTextShadowSuffixes = {
+        "_content",
+        "_data",
+        "_docsize",
+        "_idx",
+        "_map",
+        "_segments",
+        "_segdir",
+        "_stat"
+    };
 
     private static List<ColumnInfo> SelectColumns(IEnumerable<ColumnInfo> available, IReadOnlyList<string> requested) {
         if (requested.Count == 0) {
