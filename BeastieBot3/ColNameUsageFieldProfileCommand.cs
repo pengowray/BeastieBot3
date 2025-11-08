@@ -36,7 +36,7 @@ namespace BeastieBot3;
 // - [X] fix caps checking: characterize caps category of first four words. Categories: none (no first/second/third/fourth word), allcaps, title (initial case), lower, title-mixed (initial letter upper and then mixed), lower-mixed (initial letter lowercase), unicameral (e.g. Arabic, CJK, etc)
 // - [ ] include a count of "only A-Za-z" in the value, and (A-Za-z and [ascii] space), and (A-Za-z and ordinary space and period.. and minus [ascii dash]). give these shorter names.. find a better way of grouping them
 // - [X] word counts (most common, min, max, average, stdev)
-// - [ ] list most common values and their counts (ala sqlite-utils analyze-tables); show up to the 5 most common values (including null), but if there are 20 or less total distinct values, show them all with a count of distinct values.
+// - [X] list most common values and their counts (ala sqlite-utils analyze-tables); show up to the 5 most common values (including null), but if there are 20 or less total distinct values, show them all with a count of distinct values.
 // - [ ] Any double spaces inside text? (excluding trim)
 // - [ ] frequency of a period in the text (to catch infraspecies categories)
 // - [ ] contains any html tags (simple check)
@@ -748,6 +748,23 @@ public sealed class ColNameUsageFieldProfileCommand : Command<ColNameUsageFieldP
     private static void WriteColumnReports(IEnumerable<ColumnStats> stats, IReportWriter writer) {
         var ordered = stats.OrderBy(s => s.Name, StringComparer.OrdinalIgnoreCase).ToList();
 
+        static string FormatValueLabel(string? value) {
+            if (value is null) {
+                return "[italic](null)[/]";
+            }
+
+            if (value.Length == 0) {
+                return "[italic](empty string)[/]";
+            }
+
+            const int maxLength = 160;
+            var truncated = value.Length <= maxLength ? value : value.Substring(0, maxLength) + "…";
+            var normalized = truncated
+                .Replace("\r", "\\r", StringComparison.Ordinal)
+                .Replace("\n", "\\n", StringComparison.Ordinal);
+            return $"\"{Markup.Escape(normalized)}\"";
+        }
+
         var allNullColumns = new List<ColumnStats>();
         var columnsWithNbsp = new List<ColumnStats>();
         var columnsWithNarrowNbsp = new List<ColumnStats>();
@@ -846,6 +863,33 @@ public sealed class ColNameUsageFieldProfileCommand : Command<ColNameUsageFieldP
             }
             else {
                 writer.WriteLine("  Word count (min / max / avg / stdev): -");
+            }
+
+            if (stat.HasValueFrequencies) {
+                var distinctValueCount = stat.DistinctValueCount;
+                writer.WriteLine($"  Distinct values (incl. null): {distinctValueCount:N0}");
+
+                var frequencies = stat.GetValueFrequencies(includeNull: true);
+                if (frequencies.Count > 0) {
+                    var showAllValues = distinctValueCount <= 20;
+                    var header = showAllValues ? "  Value frequencies:" : "  Most common values:";
+                    writer.WriteLine(header);
+
+                    IReadOnlyList<ColumnStats.ValueFrequency> valuesToShow = showAllValues
+                        ? frequencies
+                        : frequencies.Take(5).ToList();
+
+                    foreach (var frequency in valuesToShow) {
+                        writer.WriteLine($"    {FormatValueLabel(frequency.Value)}: {FormatCount(frequency.Count, stat.TotalObserved)}");
+                    }
+
+                    if (!showAllValues) {
+                        var remainingDistinct = distinctValueCount - valuesToShow.Count;
+                        if (remainingDistinct > 0) {
+                            writer.WriteLine($"    … (+{remainingDistinct:N0} distinct values not shown)");
+                        }
+                    }
+                }
             }
 
             var wordPositionLabels = new[] { "First", "Second", "Third", "Fourth" };
@@ -1008,6 +1052,7 @@ public sealed class ColNameUsageFieldProfileCommand : Command<ColNameUsageFieldP
         private readonly HashSet<uint> _punctuationAsciiDistinct;
         private readonly HashSet<uint> _punctuationUnicodeDistinct;
         private readonly HashSet<uint> _invalidUnicodeDistinct;
+        private readonly Dictionary<string, long> _valueCounts;
         private readonly Dictionary<string, UnicodeBlockInfo> _unicodeBlocks;
 
         public ColumnStats(string name, string declaredType, int maxCharSamples) {
@@ -1019,6 +1064,7 @@ public sealed class ColNameUsageFieldProfileCommand : Command<ColNameUsageFieldP
             _punctuationAsciiDistinct = new HashSet<uint>();
             _punctuationUnicodeDistinct = new HashSet<uint>();
             _invalidUnicodeDistinct = new HashSet<uint>();
+            _valueCounts = new Dictionary<string, long>(StringComparer.Ordinal);
             _unicodeBlocks = new Dictionary<string, UnicodeBlockInfo>(StringComparer.Ordinal);
         }
 
@@ -1037,6 +1083,9 @@ public sealed class ColNameUsageFieldProfileCommand : Command<ColNameUsageFieldP
         public long SumLength { get; private set; }
         public int MinLength { get; private set; } = int.MaxValue;
         public int MaxLength { get; private set; }
+        public long DistinctNonNullValueCount => _valueCounts.Count;
+        public long DistinctValueCount => (long)_valueCounts.Count + (NullCount > 0 ? 1L : 0L);
+        public bool HasValueFrequencies => _valueCounts.Count > 0 || NullCount > 0;
         private const int WordPositionsTracked = 4;
         private const double WordCountAlmostFixedThreshold = 0.95d;
         private static readonly WordCaseCategory[] WordCaseCategoryOrder =
@@ -1100,9 +1149,61 @@ public sealed class ColNameUsageFieldProfileCommand : Command<ColNameUsageFieldP
         public static int WordCasePositions => WordPositionsTracked;
         public static double AlmostFixedWordCountThreshold => WordCountAlmostFixedThreshold;
 
+        public sealed record ValueFrequency(string? Value, long Count);
+
+        private static readonly IComparer<ValueFrequency> ValueFrequencyComparer = Comparer<ValueFrequency>.Create((a, b) => {
+            var countComparison = b.Count.CompareTo(a.Count);
+            if (countComparison != 0) {
+                return countComparison;
+            }
+
+            if (a.Value is null && b.Value is null) {
+                return 0;
+            }
+
+            if (a.Value is null) {
+                return -1;
+            }
+
+            if (b.Value is null) {
+                return 1;
+            }
+
+            return string.CompareOrdinal(a.Value, b.Value);
+        });
+
+        public IReadOnlyList<ValueFrequency> GetValueFrequencies(bool includeNull) {
+            var capacity = _valueCounts.Count + (includeNull && NullCount > 0 ? 1 : 0);
+            if (capacity == 0) {
+                return Array.Empty<ValueFrequency>();
+            }
+
+            var items = new List<ValueFrequency>(capacity);
+
+            if (includeNull && NullCount > 0) {
+                items.Add(new ValueFrequency(null, NullCount));
+            }
+
+            foreach (var kvp in _valueCounts) {
+                items.Add(new ValueFrequency(kvp.Key, kvp.Value));
+            }
+
+            items.Sort(ValueFrequencyComparer);
+            return items;
+        }
+
         public void RegisterNull() {
             TotalObserved++;
             NullCount++;
+        }
+
+        private void RegisterValueFrequency(string value) {
+            if (_valueCounts.TryGetValue(value, out var existing)) {
+                _valueCounts[value] = existing + 1;
+            }
+            else {
+                _valueCounts[value] = 1;
+            }
         }
 
         public void RegisterValue(string? value) {
@@ -1133,6 +1234,8 @@ public sealed class ColNameUsageFieldProfileCommand : Command<ColNameUsageFieldP
                 MostCommonWordCount = wordCount;
                 MostCommonWordCountFrequency = updatedFrequency;
             }
+
+            RegisterValueFrequency(value);
 
             var length = value.Length;
 
