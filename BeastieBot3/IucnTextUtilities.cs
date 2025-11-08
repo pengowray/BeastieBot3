@@ -286,8 +286,9 @@ internal static class IucnTextUtilities {
 
     private static bool IsNonBreakingSpace(char ch) => ch == '\u00A0' || ch == '\u202F' || ch == '\u2007';
 
-    private static bool ShouldPreserveExactWhitespace(char ch) => ch is '\u2028' or '\u2029' or '\u0085';
+    private static bool ShouldPreserveExactWhitespace(char ch) => ch is '\u2028' or '\u2029' or '\u0085' or '\u000B' or '\u200A';
 
+    // needed to preserve exact plain text output; don't use for friendly plain text
     private static string EncodeReservedCharacters(string value) {
         if (value.Length == 0) {
             return value;
