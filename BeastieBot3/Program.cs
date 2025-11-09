@@ -58,6 +58,10 @@ namespace BeastieBot3 {
                         .WithDescription("Compare HTML and plain-text assessment fields for normalization inconsistencies.")
                         .WithExample(new[] { "iucn", "report-html-consistency" })
                         .WithExample(new[] { "iucn", "report-html-consistency", "--limit", "1000" });
+                    iucn.AddCommand<IucnTaxonomyConsistencyCommand>("report-taxonomy-consistency")
+                        .WithDescription("Rebuild scientific names from taxonomy components and verify field alignment.")
+                        .WithExample(new[] { "iucn", "report-taxonomy-consistency" })
+                        .WithExample(new[] { "iucn", "report-taxonomy-consistency", "--limit", "5000" });
                 });
             });
 
