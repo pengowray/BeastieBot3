@@ -6,11 +6,11 @@ namespace beastie {
 		//public LowercaseVernacular() {
 		//}
 
-		static string LowercaseWikiVernacular() {
+		static string? LowercaseWikiVernacular() {
 			return null;
 		}
 
-		static string LowercaseVernacular() {
+		static string? LowercaseVernacular() {
 			//TODO: lowercase 
 			return null;
 		}

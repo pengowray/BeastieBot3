@@ -18,6 +18,7 @@ namespace beastie
 
 		public SpeciesSet ()
 		{
+			species = new List<Species>();
 		}
 
 		// read the Catalogue of Life species and synonyms

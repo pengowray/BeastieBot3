@@ -66,7 +66,7 @@ namespace beastie {
 
 		// Java's String.valueOf()
 		private static string valueOf(char[] data, int offset, int count) {
-			return data.ToString().Substring(offset, count); //TODO: copy before substringing?
+			return new string(data, offset, count);
 		}
 
 		// Java's String.valueOf()
@@ -119,8 +119,13 @@ namespace beastie {
 		}
 
 		// https://stackoverflow.com/questions/249087/how-do-i-remove-diacritics-accents-from-a-string-in-net?lq=1
-		static string RemoveDiacritics(string text) 
+		static string RemoveDiacritics(string? text) 
 		{
+			if (string.IsNullOrWhiteSpace(text))
+			{
+				return string.Empty;
+			}
+
 			var normalizedString = text.Normalize(NormalizationForm.FormD);
 			var stringBuilder = new StringBuilder();
 
@@ -140,7 +145,12 @@ namespace beastie {
 		 * removing known noun suffixe.<br/>
 		 * changes to the snowball - additional suffixe: arum, erum, orum, ebus, uum, ium, ei, ui, im
 		 */
-		public static string stemAsNoun(string noun, bool swapVJ = true) {
+		public static string stemAsNoun(string? noun, bool swapVJ = true) {
+			if (string.IsNullOrWhiteSpace(noun))
+			{
+				return string.Empty;
+			}
+
 			// pengo:
 			noun = noun.ToLowerInvariant();
 			noun = RemoveDiacritics(noun);

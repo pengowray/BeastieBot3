@@ -62,7 +62,7 @@ namespace beastie {
 				total += count;
 		}
 
-		public string bestStem = null; // populated when you call found by calling FirstDeclScore()
+		public string? bestStem; // populated when you call found by calling FirstDeclScore()
 
 		public long FeminineScore() {
 			long ae = 0;

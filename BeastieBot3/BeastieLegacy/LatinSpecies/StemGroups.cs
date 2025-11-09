@@ -14,7 +14,30 @@ namespace beastie
 
 	public class StemGroups
 	{
-		static public List<string> suffixes;
+		private static readonly string[] suffixes = new string[] {
+
+			//taxonomy:
+
+
+			//funny endings
+			"llion","llium","lli",
+			"ensis", "ense", "us", 
+			"ellus", "ella", "ellum",
+			"ii",
+
+			//latin declensions: // todo: be more "systematic"
+			"o","ines", 
+			"er","eri", "ra", "rum", "ri", "ae",
+			"is", "re", "e", "ia",
+			"os","us",
+			"e","ae",
+			"es","arum",
+			"as","ae",
+			"u","ua",
+			"es",
+			"us", "a", "um", "i", "ae", //, ""
+			"x", "ges", "gis", "gum", ""
+		};
 
 		//TODO: there's a one-to-one between stemGroup and group of species and group of keywords. Put them into a single class to simplify things.
 		//TODO: change Species to T, so can create stems of other things too.
@@ -31,33 +54,9 @@ namespace beastie
 
 		public StemGroups()
 		{
-			suffixes = new List<string>(new string[] {
-
-				//taxonomy:
-
-
-				//funny endings
-				"llion","llium","lli",
-				"ensis", "ense", "us", 
-				"ellus", "ella", "ellum",
-				"ii",
-
-				//latin declensions: // todo: be more "systematic"
-				"o","ines", 
-				"er","eri", "ra", "rum", "ri", "ae",
-				"is", "re", "e", "ia",
-				"os","us",
-				"e","ae",
-				"es","arum",
-				"as","ae",
-				"u","ua",
-				"es",
-				"us", "a", "um", "i", "ae", //, ""
-				"x", "ges", "gis", "gum", ""
-			} );
 		}
 
-		public string Stem(string word) {
+		public string? Stem(string word) {
 			return null; //TODO
 		}
 
@@ -67,26 +66,20 @@ namespace beastie
 			foreach (string ending in suffixes) {
 				if (!normalizedWord.EndsWith(ending)) continue;
 
-				string stem;
-				if (ending.Length > 0) {
-					stem = normalizedWord.Remove(normalizedWord.Length - ending.Length);
-				} else {
-					stem = normalizedWord;
-				}
-				if (stem == null || stem.Length == 0) continue;
+				string stem = ending.Length > 0
+					? normalizedWord.Remove(normalizedWord.Length - ending.Length)
+					: normalizedWord;
+				if (stem.Length == 0) continue;
 
-				Bag bag = null;
-				//wordIndex.TryGetValue(word, bag);
-				stemIndex.TryGetValue(stem, out bag);
-				if (bag == null) {
+				if (!stemIndex.TryGetValue(stem, out var bag))
+				{
 					bag = new Bag();
+					stemIndex[stem] = bag;
 				}
 
 				bag.species.Add(sp);
 				bag.words.Add(word);
 				bag.stems.Add(stem);
-
-				stemIndex[stem] = bag;
 
 				if (!wordIndex.ContainsKey(word)) wordIndex[word] = new HashSet<Bag>();
 				//if (!wordIndex[word].Contains(bag)) 
@@ -117,7 +110,10 @@ namespace beastie
 
 
 		public Bag CombinedBagFromWord(string word) {
-			HashSet<Bag> bags = wordIndex[word];
+			if (!wordIndex.TryGetValue(word, out var bags) || bags.Count == 0)
+			{
+				return new Bag();
+			}
 			
 			Bag combinedBag = new Bag();
 			foreach(Bag bag in bags) {
