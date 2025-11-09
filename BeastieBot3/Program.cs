@@ -62,6 +62,10 @@ namespace BeastieBot3 {
                         .WithDescription("Rebuild scientific names from taxonomy components and verify field alignment.")
                         .WithExample(new[] { "iucn", "report-taxonomy-consistency" })
                         .WithExample(new[] { "iucn", "report-taxonomy-consistency", "--limit", "5000" });
+                    iucn.AddCommand<IucnTaxonomyCleanupCommand>("report-taxonomy-cleanup")
+                        .WithDescription("Identify per-record taxonomy fields that need whitespace normalization or marker cleanup.")
+                        .WithExample(new[] { "iucn", "report-taxonomy-cleanup" })
+                        .WithExample(new[] { "iucn", "report-taxonomy-cleanup", "--limit", "10000" });
                 });
             });
 
