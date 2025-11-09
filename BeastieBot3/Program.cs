@@ -66,6 +66,10 @@ namespace BeastieBot3 {
                         .WithDescription("Identify per-record taxonomy fields that need whitespace normalization or marker cleanup.")
                         .WithExample(new[] { "iucn", "report-taxonomy-cleanup" })
                         .WithExample(new[] { "iucn", "report-taxonomy-cleanup", "--limit", "10000" });
+                    iucn.AddCommand<IucnColCrosscheckCommand>("report-col-crosscheck")
+                        .WithDescription("Crosscheck IUCN species against Catalogue of Life for presence, synonymy, and authority alignment.")
+                        .WithExample(new[] { "iucn", "report-col-crosscheck" })
+                        .WithExample(new[] { "iucn", "report-col-crosscheck", "--limit", "5000" });
                 });
             });
 

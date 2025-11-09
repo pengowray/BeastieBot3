@@ -27,12 +27,16 @@ internal sealed class IucnTaxonomyRepository {
     v.redlist_version,
     v.scientificName AS scientificName_assessments,
     v.""scientificName:1"" AS scientificName_taxonomy,
+    v.kingdomName,
+    v.phylumName,
+    v.className,
+    v.orderName,
+    v.familyName,
     v.genusName,
     v.speciesName,
     v.infraType,
     v.infraName,
     v.subpopulationName,
-    v.kingdomName,
     v.authority,
     v.infraAuthority
 FROM view_assessments_html_taxonomy_html v
@@ -57,20 +61,28 @@ ORDER BY v.assessmentId";
                 reader.GetString(ordinals.RedlistVersion),
                 GetNullableString(reader, ordinals.ScientificNameAssessments),
                 GetNullableString(reader, ordinals.ScientificNameTaxonomy),
+                reader.GetString(ordinals.KingdomName),
+                GetNullableString(reader, ordinals.PhylumName),
+                GetNullableString(reader, ordinals.ClassName),
+                GetNullableString(reader, ordinals.OrderName),
+                GetNullableString(reader, ordinals.FamilyName),
                 reader.GetString(ordinals.GenusName),
                 reader.GetString(ordinals.SpeciesName),
                 GetNullableString(reader, ordinals.InfraType),
                 GetNullableString(reader, ordinals.InfraName),
                 GetNullableString(reader, ordinals.SubpopulationName),
-                reader.GetString(ordinals.KingdomName),
                 GetNullableString(reader, ordinals.Authority),
                 GetNullableString(reader, ordinals.InfraAuthority)
             );
         }
     }
 
-    private static string? GetNullableString(SqliteDataReader reader, int ordinal) {
-        return reader.IsDBNull(ordinal) ? null : reader.GetString(ordinal);
+    private static string? GetNullableString(SqliteDataReader reader, int? ordinal) {
+        if (!ordinal.HasValue) {
+            return null;
+        }
+
+        return reader.IsDBNull(ordinal.Value) ? null : reader.GetString(ordinal.Value);
     }
 
     private sealed class Ordinals {
@@ -80,12 +92,16 @@ ORDER BY v.assessmentId";
             RedlistVersion = reader.GetOrdinal("redlist_version");
             ScientificNameAssessments = reader.GetOrdinal("scientificName_assessments");
             ScientificNameTaxonomy = reader.GetOrdinal("scientificName_taxonomy");
+            KingdomName = reader.GetOrdinal("kingdomName");
+            PhylumName = GetOptionalOrdinal(reader, "phylumName");
+            ClassName = GetOptionalOrdinal(reader, "className");
+            OrderName = GetOptionalOrdinal(reader, "orderName");
+            FamilyName = GetOptionalOrdinal(reader, "familyName");
             GenusName = reader.GetOrdinal("genusName");
             SpeciesName = reader.GetOrdinal("speciesName");
             InfraType = reader.GetOrdinal("infraType");
             InfraName = reader.GetOrdinal("infraName");
             SubpopulationName = reader.GetOrdinal("subpopulationName");
-            KingdomName = reader.GetOrdinal("kingdomName");
             Authority = reader.GetOrdinal("authority");
             InfraAuthority = reader.GetOrdinal("infraAuthority");
         }
@@ -95,14 +111,26 @@ ORDER BY v.assessmentId";
         public int RedlistVersion { get; }
         public int ScientificNameAssessments { get; }
         public int ScientificNameTaxonomy { get; }
+        public int KingdomName { get; }
+        public int? PhylumName { get; }
+        public int? ClassName { get; }
+        public int? OrderName { get; }
+        public int? FamilyName { get; }
         public int GenusName { get; }
         public int SpeciesName { get; }
         public int InfraType { get; }
         public int InfraName { get; }
         public int SubpopulationName { get; }
-        public int KingdomName { get; }
         public int Authority { get; }
         public int InfraAuthority { get; }
+    }
+
+    private static int? GetOptionalOrdinal(SqliteDataReader reader, string columnName) {
+        try {
+            return reader.GetOrdinal(columnName);
+        } catch (IndexOutOfRangeException) {
+            return null;
+        }
     }
 }
 
@@ -112,12 +140,16 @@ internal sealed record IucnTaxonomyRow(
     string RedlistVersion,
     string? ScientificNameAssessments,
     string? ScientificNameTaxonomy,
+    string KingdomName,
+    string? PhylumName,
+    string? ClassName,
+    string? OrderName,
+    string? FamilyName,
     string GenusName,
     string SpeciesName,
     string? InfraType,
     string? InfraName,
     string? SubpopulationName,
-    string KingdomName,
     string? Authority,
     string? InfraAuthority
 );
