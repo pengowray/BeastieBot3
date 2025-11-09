@@ -10,21 +10,22 @@ namespace beastie {
         public TaxonNameHigher(string taxon) : base(taxon) {
         }
 
-        override public string CommonOrTaxoNameLowerPref() {
+        [Obsolete]
+        public override string CommonOrTaxoNameLowerPref() {
             return taxon;
         }
 
-        override public string CommonNameLink(bool uppercase = true, PrettyStyle style = PrettyStyle.JustNames) {
+        public override string CommonNameLink(bool uppercase = true, PrettyStyle style = PrettyStyle.JustNames) {
             return string.Format("[[{0}]]", taxon);
         }
 
 
         //// eg "[[Tarsiidae|Tarsier]] species" or  "[[Hominidae|Great apes]]" or "[[Lorisoidea]]"" or "[[Cetartiodactyla|Cetartiodactyls]]"
-        override public string CommonNameGroupTitleLink(bool upperFirstChar = true, string groupof = "species") {
+        public override string CommonNameGroupTitleLink(bool upperFirstChar = true, string groupof = "species") {
             return string.Format("[[{0}]] {1}", taxon, groupof);
         }
 
-        override public string CommonName(bool allowIUCNName = true) {
+        public override string? CommonName(bool allowIUCNName = true) {
             return null;
         }
 

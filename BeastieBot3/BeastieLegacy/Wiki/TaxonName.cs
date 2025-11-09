@@ -11,10 +11,10 @@ namespace beastie {
 
     public class TaxonName { //was: TaxonPageSp
 
-        public string taxon { get; protected set; }
-        public bool isAssigned = true;
+    public string taxon { get; protected set; }
+    public bool isAssigned = true;
 
-        public TaxonRules rules { get; protected set; } // stays null except for in subclass TaxonPage
+    public TaxonRules? rules { get; protected set; } // stays null except for in subclass TaxonPage
 
         public TaxonName(string taxon) {
             this.taxon = taxon;
@@ -37,15 +37,15 @@ namespace beastie {
         }
 
         // see subclass TaxonPage for details
-        virtual public string CommonName(bool allowIUCNName = true) {
+        public virtual string? CommonName(bool allowIUCNName = true) {
             return null;
         }
 
-        virtual public string CommonNameLower() {
+        public virtual string? CommonNameLower() {
             return null;
         }
 
-        virtual public string Plural(bool okIfUppercase = false) {
+        public virtual string? Plural(bool okIfUppercase = false) {
             return null;
         }
 
@@ -55,7 +55,7 @@ namespace beastie {
         }
         
         virtual public string LowerPluralOrTaxon() {
-            string plural = Plural(false);
+            string? plural = Plural(false);
             if (plural == null)
                 return taxon;
 
@@ -63,7 +63,7 @@ namespace beastie {
         }
 
         virtual public string UpperPluralOrTaxon() {
-            string plural = Plural(true);
+            string? plural = Plural(true);
             if (plural == null)
                 return taxon;
 
@@ -86,7 +86,7 @@ namespace beastie {
             }
         }
 
-        public virtual String AdjectivizeMany(bool link = false, bool upperFirstChar = true, string preposition = "in", string phrase = "1 species, 2 subspecies, 3 varities", string desc = null) {
+        public virtual string? AdjectivizeMany(bool link = false, bool upperFirstChar = true, string preposition = "in", string phrase = "1 species, 2 subspecies, 3 varities", string? desc = null) {
             // TODO
             return null;
         }
@@ -114,12 +114,12 @@ namespace beastie {
         //}
 
         public virtual string LowerOrTaxon(bool okIfUppercase = false) {
-            string lower = CommonNameLower();
+            string? lower = CommonNameLower();
             if (lower != null)
                 return lower;
 
             if (okIfUppercase) {
-                string common = CommonName();
+                string? common = CommonName();
                 if (common != null)
                     return common;
             }

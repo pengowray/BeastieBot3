@@ -8,39 +8,33 @@ namespace beastie {
 	{
 		// See also: MultiValueDictionary, https://www.nuget.org/packages/Microsoft.Experimental.Collections
 		//public static void AddToList<T,K>(this IDictionary<T, IList<K>> dict, T key, K value) {
-		public static void AddToList<T,K>(this IDictionary<T, List<K>> dict, T key, K value) {
-			List<K> list = null; // IList<K> list = null;
-			if (dict.TryGetValue(key, out list)) {
-				list.Add(value);
-			} else {
-				list = new List<K>();
-				list.Add(value);
-				dict[key] = list;
-			}
-		}
+        public static void AddToList<T,K>(this IDictionary<T, List<K>> dict, T key, K value) where T : notnull {
+            if (!dict.TryGetValue(key, out var list) || list == null) {
+                list = new List<K>();
+                dict[key] = list;
+            }
+            list.Add(value);
+        }
 
-		public static void AddCount<T>(this Dictionary<T, int> dict, T key, int value) {
-			int currentValue = 0;
-			if (dict.TryGetValue(key, out currentValue)) {
-				dict[key] = currentValue + value;
-			} else {
-				dict[key] = value;
-			}
-		}
+        public static void AddCount<T>(this Dictionary<T, int> dict, T key, int value) where T : notnull {
+            if (dict.TryGetValue(key, out var currentValue)) {
+                dict[key] = currentValue + value;
+            } else {
+                dict[key] = value;
+            }
+        }
 
-		public static void AddCount<T>(this Dictionary<T, long> dict, T key, long value) {
-			long currentValue = 0;
-			if (dict.TryGetValue(key, out currentValue)) {
-				dict[key] = currentValue + value;
-			} else {
-				dict[key] = value;
-			}
-		}
+        public static void AddCount<T>(this Dictionary<T, long> dict, T key, long value) where T : notnull {
+            if (dict.TryGetValue(key, out var currentValue)) {
+                dict[key] = currentValue + value;
+            } else {
+                dict[key] = value;
+            }
+        }
 
         // via http://stackoverflow.com/a/33223183/443019 (as "GetValue")
-        public static TV GetOrDefault<TK, TV>(this IDictionary<TK, TV> dict, TK key, TV defaultValue = default(TV)) {
-            TV value;
-            return dict.TryGetValue(key, out value) ? value : default(TV);
+        public static TV GetOrDefault<TK, TV>(this IDictionary<TK, TV> dict, TK key, TV defaultValue = default!) where TK : notnull {
+            return dict.TryGetValue(key, out var value) ? value : defaultValue;
         }
 
         //public static void GetValueOrDefault<T,K>(this IDictionary<T, List<K>> dict, T key, K value) {
@@ -97,7 +91,7 @@ http://stackoverflow.com/a/27455822
             // consider a thread-safe static instance
             var r = new Random();
             var list = enumerable as IList<T> ?? enumerable.ToList();
-            return list.Count == 0 ? default(T) : list[r.Next(0, list.Count)];
+            return list.Count == 0 ? default! : list[r.Next(0, list.Count)];
         }
 
     }

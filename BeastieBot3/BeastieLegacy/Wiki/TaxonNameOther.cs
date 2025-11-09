@@ -13,18 +13,19 @@ namespace beastie {
             this.isAssigned = false; // i guess?
         }
 
-        override public string CommonOrTaxoNameLowerPref() {
+        [Obsolete]
+        public override string CommonOrTaxoNameLowerPref() {
             return "other " + parent.LowerPluralOrTaxon();
         }
 
-        override public string CommonNameLink(bool upperFirstChar = true, PrettyStyle style = PrettyStyle.JustNames) {
+        public override string CommonNameLink(bool upperFirstChar = true, PrettyStyle style = PrettyStyle.JustNames) {
             // don't show links for "other" taxa
 
             return "other ".UpperCaseFirstChar(upperFirstChar) + parent.LowerPluralOrTaxon();
         }
 
 
-        override public string CommonNameGroupTitleLink(bool upperFirstChar = true, string groupof = "species") {
+        public override string CommonNameGroupTitleLink(bool upperFirstChar = true, string groupof = "species") {
             if (groupof != null) {
                 return "other ".UpperCaseFirstChar(upperFirstChar) + parent.LowerOrTaxon(allowTitlecase) + " " + groupof;
             } else {
@@ -32,11 +33,11 @@ namespace beastie {
             }
         }
 
-        override public string CommonName(bool allowIUCNName = true) {
+        public override string? CommonName(bool allowIUCNName = true) {
             return "Other " + parent.LowerPluralOrTaxon();
         }
 
-        public override string CommonNameLower() {
+        public override string? CommonNameLower() {
             return "other " + parent.LowerPluralOrTaxon();
         }
 

@@ -139,7 +139,7 @@ namespace beastie {
             }
 
             // e.g. mammal species
-            string common = upperFirstChar ? CommonName() : CommonNameLower();
+            string? common = upperFirstChar ? CommonName() : CommonNameLower();
             if (!string.IsNullOrEmpty(common)) {
                 string adj = common.UpperCaseFirstChar(upperFirstChar); // CommonName() still may need uppercasing, e.g. if from rules list
                 if (link) {
@@ -163,9 +163,9 @@ namespace beastie {
         // "The IUCN also lists 140 plant subspecies and 10 varieties as critically endangered"
         // adjective form not used ("The IUCN also lists 14 mammalian subspecies and 20 mammalian subpopulations as critically endangered"
         // use: ToNewspaperSentence() instead
-        public override String AdjectivizeMany(bool link = false, bool upperFirstChar = true, string preposition = "in", string phrase = "1 species, 2 subspecies, 3 varities", string desc = null) {
+    public override string? AdjectivizeMany(bool link = false, bool upperFirstChar = true, string preposition = "in", string phrase = "1 species, 2 subspecies, 3 varities", string? desc = null) {
             string hphrase = phrase.Humanize(); // fix plurals hopefully.. 1 variety, 2 varieties
-            string common = CommonNameLower();
+            string? common = CommonNameLower();
             //TODO: desc (maybe ignore/remove)
             if (!string.IsNullOrEmpty(common)) {
                 return hphrase + " of " + common;
@@ -175,7 +175,7 @@ namespace beastie {
         }
 
         public override bool NonWeirdCommonName() {
-            string common = CommonName();
+            string? common = CommonName();
             if (string.IsNullOrEmpty(common))
                 return false; // doesn't even have one
 
@@ -299,7 +299,7 @@ namespace beastie {
         // lower case common name preferably, otherwise correctly capitalized taxon. italics on binomials etc.
         [Obsolete]
         override public string CommonOrTaxoNameLowerPref() {
-            string common = CommonName();
+            string? common = CommonName();
 
             //if (notAssigned) {
             //return "\"not assigned\""; // lit: "not assigned" (with quotes)
@@ -326,7 +326,7 @@ namespace beastie {
         // "''[[Trachypithecus poliocephalus poliocephalus]]''" 
         // [[Cercopithecidae|Old World monkey]]
         override public string CommonNameLink(bool uppercase = true, PrettyStyle style = PrettyStyle.JustNames) {
-            string common = CommonName();
+            string? common = CommonName();
             string wikilink = originalPageTitle;
             string taxonDisplay = taxon;
             string taxonBracketDisplay = "(" + taxon + ")";
@@ -396,7 +396,7 @@ namespace beastie {
         //singular probably. probably uppercase anyway (unless a taxon given in lowercase, or found in rules)
         public string NameForText(bool upperFirstChar = false) {
             //TODO: don't italicize 'var.' etc
-            string common = CommonName();
+            string? common = CommonName();
             if (common == null) {
                 if (bitri != null) {
                     return "''" + taxon + "''";
@@ -412,12 +412,12 @@ namespace beastie {
         override public string CommonNameGroupTitleLink(bool upperFirstChar = true, string groupof = "species") {
             string wikilink = originalPageTitle;
 
-            string plural = Plural(upperFirstChar);
+            string? plural = Plural(upperFirstChar);
             if (plural != null) {
                 return MakeLink(wikilink, plural, upperFirstChar);
             }
 
-            string common = CommonNameLower();
+            string? common = CommonNameLower();
             if (common != null) {
                 if (bitri != null || !NonWeirdCommonName() || string.IsNullOrEmpty(groupof) ) {
 
@@ -586,7 +586,7 @@ namespace beastie {
             return true;
         }
 
-        override public string CommonName(bool allowIUCNName = true) {
+    public override string? CommonName(bool allowIUCNName = true) {
             if (_commonName != null && allowIUCNName) {
                 if (_commonName == string.Empty)
                     return null;
@@ -681,7 +681,7 @@ namespace beastie {
 
         // common name with starting lowercase letter, unless it's a proper noun.
         // returns null if no common name, or if unsure
-        public override string CommonNameLower() {
+    public override string? CommonNameLower() {
             if (_commonLower != null) {
                 if (_commonLower == string.Empty)
                     return null;
@@ -692,13 +692,14 @@ namespace beastie {
             if (rules != null) {
                 // get lowercase from rules
 
-                _commonLower = rules.commonName;
-                if (_commonLower != null) {
+                var lowerFromRules = rules.commonName;
+                if (lowerFromRules != null) {
+                    _commonLower = lowerFromRules;
                     return _commonLower;
                 }
             }
 
-            string common = CommonName();
+            string? common = CommonName();
             if (common == null) {
                 // no common name to build a lowercase from
                 _commonLower = string.Empty;
@@ -736,8 +737,8 @@ namespace beastie {
             }
         }
 
-        bool pluralFromUpper = false;
-        public override string Plural(bool okIfUppercase = false) { // ok if initial character is title case? if not then might return null instead
+    bool pluralFromUpper = false;
+    public override string? Plural(bool okIfUppercase = false) { // ok if initial character is title case? if not then might return null instead
             if (_commonPlural != null) {
                 if (_commonPlural == string.Empty)
                     return null;
@@ -752,15 +753,16 @@ namespace beastie {
             if (rules != null) {
                 // get plural from rules (which should never be titlecase)
 
-                _commonPlural = rules.commonPlural;
-                if (_commonPlural != null) {
+                var pluralFromRules = rules.commonPlural;
+                if (pluralFromRules != null) {
+                    _commonPlural = pluralFromRules;
                     return _commonPlural;
                 }
 
                 // shortcut: if it's a "frog" or "bat" in rules, then just add -s
                 // note: never add a shortcut for "fish"
                 
-                string cn = rules.commonName;
+                var cn = rules.commonName;
                 if (cn != null) {
                     if (cn.EndsWith(" frog") || cn.EndsWith(" bat") || cn.EndsWith(" worm") || cn.EndsWith(" spider") || cn.EndsWith(" lizard") || cn.EndsWith(" snake") || cn.EndsWith(" gecko")) {
                         _commonPlural = cn + "s";
@@ -774,7 +776,7 @@ namespace beastie {
             // e.g. 2. Pupfish => null ("Pupfishes" not found on page)
 
             //string common = CommonName();
-            string common = CommonNameLower();
+            string? common = CommonNameLower();
 
             // -idae => -ids shortcut
             if (common != null && taxon.EndsWith("idae") && common.EndsWith("id")) {
@@ -802,7 +804,7 @@ namespace beastie {
             candidates[common.Pluralize()] = 0;
 
             int highest = 0;
-            string best = null;
+            string? best = null;
 
             foreach (var c in candidates.Keys) {
                 if (c == common) {
@@ -823,7 +825,7 @@ namespace beastie {
 
             int threshold = 2; // minimum number of times it must appear to count
 
-            if (highest >= threshold) {
+            if (highest >= threshold && best != null) {
                 _commonPlural = best;
                 if (!okIfUppercase && pluralFromUpper)
                     return null;

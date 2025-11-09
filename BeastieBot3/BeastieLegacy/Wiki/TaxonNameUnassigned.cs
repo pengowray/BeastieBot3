@@ -11,11 +11,12 @@ namespace beastie {
             isAssigned = false;
         }
 
-        override public string CommonOrTaxoNameLowerPref() {
+        [Obsolete]
+        public override string CommonOrTaxoNameLowerPref() {
             return "not assigned";
         }
 
-        override public string CommonNameLink(bool uppercase = true, PrettyStyle style = PrettyStyle.JustNames) {
+        public override string CommonNameLink(bool uppercase = true, PrettyStyle style = PrettyStyle.JustNames) {
             if (uppercase) {
                 return "Not assigned";
             } else {
@@ -23,11 +24,11 @@ namespace beastie {
             }
         }
 
-        override public string CommonNameGroupTitleLink(bool upperFirstChar = true, string groupof = "species") {
+        public override string CommonNameGroupTitleLink(bool upperFirstChar = true, string groupof = "species") {
             return CommonNameLink(upperFirstChar);
         }
 
-        override public string CommonName(bool allowIUCNName = true) {
+        public override string? CommonName(bool allowIUCNName = true) {
             return null;
         }
     }

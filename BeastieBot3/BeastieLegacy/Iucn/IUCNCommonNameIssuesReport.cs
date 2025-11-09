@@ -6,6 +6,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 
+#pragma warning disable CS0612 // Legacy code still relies on obsolete CommonNameEng
 namespace beastie {
     public class IUCNCommonNameIssuesReport {
         TaxonNode topNode;
@@ -47,7 +48,7 @@ namespace beastie {
             output.WriteLine("Entries which appear to break the convention of using a comma to separate common names (or have odd formatting along those lines).");
             bool issueFound = false;
             foreach (var bitri in topNode.DeepBitris().Where(bt => !bt.isStockpop)) {
-                string namesField = bitri.CommonNameEng;
+                string? namesField = bitri.CommonNameEng;
                 if (namesField != null && namesField.Contains(" - ")) {
                     output.WriteLine("* ''" + bitri.NameLinkIUCN() + "'' (" + namesField + "), dash with spaces (remove whitespace or replace with a comma)");
                     issueFound = true;
@@ -58,7 +59,7 @@ namespace beastie {
             }
 
             foreach (var bitri in topNode.DeepBitris().Where(bt => !bt.isStockpop)) {
-                string namesField = bitri.CommonNameEng;
+                string? namesField = bitri.CommonNameEng;
                 if (namesField != null && namesField.Contains(";")) {
                     output.WriteLine("* ''" + bitri.NameLinkIUCN() + "'' (" + namesField + "), contains semicolon (;). Perhaps should be a comma (,)");
                     issueFound = true;
@@ -66,7 +67,7 @@ namespace beastie {
             }
 
             foreach (var bitri in topNode.DeepBitris().Where(bt => !bt.isStockpop)) {
-                string namesField = bitri.CommonNameEng;
+                string? namesField = bitri.CommonNameEng;
                 if (namesField != null && namesField.Contains(" or ")) {
                     output.WriteLine("* ''" + bitri.NameLinkIUCN() + "'' (" + namesField + "), 'or'. Perhaps should be a comma (,)");
                     issueFound = true;
@@ -74,7 +75,7 @@ namespace beastie {
             }
 
             foreach (var bitri in topNode.DeepBitris().Where(bt => !bt.isStockpop)) {
-                string namesField = bitri.CommonNameEng;
+                string? namesField = bitri.CommonNameEng;
                 if (namesField != null && Regex.IsMatch(namesField, @"\(.*\,.*\)")) { // ( ... , ... )
                     output.WriteLine("* ''" + bitri.NameLinkIUCN() + "'' \"" + namesField + "\" — name field contains a comma inside parentheses. Trouble for any software which splits common names at commas.");
                     issueFound = true;
@@ -93,7 +94,7 @@ namespace beastie {
             bool issueFound = false;
 
             foreach (var bitri in topNode.DeepBitris().Where(bt => !bt.isStockpop)) {
-                string namesField = bitri.CommonNameEng;
+                string? namesField = bitri.CommonNameEng;
                 if (namesField == null) continue;
 
                 var names = namesField.Split(new char[] { ',' }).Select(m => m.Trim());
@@ -118,7 +119,7 @@ namespace beastie {
             bool issueFound = false;
 
             foreach (var bitri in topNode.DeepBitris().Where(bt => !bt.isStockpop)) {
-                string namesField = bitri.CommonNameEng;
+                string? namesField = bitri.CommonNameEng;
                 if (namesField == null) continue;
 
                 var names = namesField.Split(new char[] { ',' }).Select(m => m.Trim());
@@ -147,7 +148,7 @@ namespace beastie {
             bool issueFound = false;
 
             foreach (var bitri in topNode.DeepBitris().Where(bt => !bt.isStockpop)) {
-                string namesField = bitri.CommonNameEng;
+                string? namesField = bitri.CommonNameEng;
                 if (namesField == null) continue;
 
                 var names = namesField.Split(new char[] { ',' }).Select(m => m.Trim());
@@ -175,7 +176,7 @@ namespace beastie {
             bool issueFound = false;
 
             foreach (var bitri in topNode.DeepBitris().Where(bt => !bt.isStockpop)) {
-                string namesField = bitri.CommonNameEng;
+                string? namesField = bitri.CommonNameEng;
                 if (namesField == null) continue;
 
                 var names = namesField.Split(new char[] { ',' }).Select(m => m.Trim());
@@ -273,7 +274,7 @@ namespace beastie {
             bool issueFound = false;
 
             foreach (var bitri in topNode.DeepBitris().Where(bt => !bt.isStockpop)) {
-                string namesField = bitri.CommonNameEng;
+                string? namesField = bitri.CommonNameEng;
                 if (namesField == null) continue;
 
                 var names = namesField.Split(new char[] { ',' }).Select(m => m.Trim());
@@ -298,7 +299,7 @@ namespace beastie {
             bool issueFound = false;
 
             foreach (var bitri in topNode.DeepBitris().Where(bt => !bt.isStockpop)) {
-                string namesField = bitri.CommonNameEng;
+                string? namesField = bitri.CommonNameEng;
                 if (namesField == null) continue;
 
                 var names = namesField.Split(new char[] { ',' }).Select(m => m.Trim());
@@ -333,7 +334,7 @@ namespace beastie {
             bool issueFound = false;
 
             foreach (var bitri in topNode.DeepBitris().Where(bt => !bt.isStockpop)) {
-                string namesField = bitri.CommonNameEng;
+                string? namesField = bitri.CommonNameEng;
                 if (namesField == null) continue;
 
                 var names = namesField.Split(new char[] { ',' }).Select(m => m.Trim());
@@ -363,7 +364,7 @@ namespace beastie {
             bool issueFound = false;
 
             foreach (var bitri in topNode.DeepBitris().Where(bt => !bt.isStockpop)) {
-                string namesField = bitri.CommonNameEng;
+                string? namesField = bitri.CommonNameEng;
                 if (namesField == null) continue;
 
                 var names = namesField.Split(new char[] { ',' }).Select(m => m.Trim());
@@ -393,7 +394,7 @@ namespace beastie {
             bool issueFound = false;
 
             foreach (var bitri in topNode.DeepBitris().Where(bt => !bt.isStockpop)) {
-                string namesField = bitri.CommonNameEng;
+                string? namesField = bitri.CommonNameEng;
                 if (namesField == null) continue;
 
                 var names = namesField.Split(new char[] { ',' }).Select(m => m.Trim());
@@ -419,7 +420,7 @@ namespace beastie {
             bool issueFound = false;
 
             foreach (var bitri in topNode.DeepBitris().Where(bt => !bt.isStockpop)) {
-                string namesField = bitri.CommonNameEng;
+                string? namesField = bitri.CommonNameEng;
                 if (namesField == null) continue;
 
                 var names = namesField.Split(new char[] { ',' }).Select(m => m.Trim());
@@ -455,7 +456,7 @@ namespace beastie {
             output.WriteLine();
 
             foreach (var bitri in topNode.DeepBitris().Where(bt => !bt.isStockpop)) {
-                string namesField = bitri.CommonNameEng;
+                string? namesField = bitri.CommonNameEng;
                 if (namesField == null) continue;
 
                 var names = namesField.Split(new char[] { ',' }).Select(m => m.Trim());
@@ -500,7 +501,7 @@ namespace beastie {
             output.WriteLine();
 
             foreach (var bitri in topNode.DeepBitris().Where(bt => !bt.isStockpop)) {
-                string namesField = bitri.CommonNameEng;
+                string? namesField = bitri.CommonNameEng;
                 if (namesField == null) continue;
 
                 var names = namesField.Split(new char[] { ',' }).Select(m => m.Trim());
@@ -539,7 +540,7 @@ namespace beastie {
 
             foreach (var bitri in topNode.DeepBitris().Where(bt => !bt.isStockpop))
             {
-                string namesField = bitri.CommonNameEng;
+                string? namesField = bitri.CommonNameEng;
                 if (namesField == null) continue;
 
                 var names = namesField.Split(new char[] { ',' }).Select(m => m.Trim());
@@ -553,7 +554,7 @@ namespace beastie {
                         correctCase = correctCase.Replace("mediterranean", "Mediterranean"); // hack (TODO2025: ?)
 
                         // check if already has alternative case version
-                        string alt = null;
+                        string? alt = null;
                         foreach (string othername in names)
                         {
                             if (othername == name) continue;
@@ -597,7 +598,7 @@ namespace beastie {
             output.WriteLine();
 
             foreach (var bitri in topNode.DeepBitris().Where(bt => !bt.isStockpop)) {
-                string namesField = bitri.CommonNameEng;
+                string? namesField = bitri.CommonNameEng;
                 if (namesField == null) continue;
 
                 var names = namesField.Split(new char[] { ',' }).Select(m => m.Trim());
@@ -728,7 +729,7 @@ namespace beastie {
             int sspNames = 0;
 
             foreach (var bitri in topNode.DeepBitris().Where(bt => !bt.isStockpop)) {
-                string namesField = bitri.CommonNameEng;
+                string? namesField = bitri.CommonNameEng;
                 int namesCount = 0;
                 if (!string.IsNullOrWhiteSpace(namesField)) {
                     namesCount = 1 + namesField.Count(ch => ch == ',');
@@ -778,3 +779,4 @@ namespace beastie {
         }
     }
 }
+#pragma warning restore CS0612
