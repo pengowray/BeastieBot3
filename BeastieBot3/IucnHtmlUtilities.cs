@@ -7,7 +7,7 @@ using System.Text.RegularExpressions;
 
 namespace BeastieBot3;
 
-internal static class IucnTextUtilities {
+internal static class IucnHtmlUtilities {
     private enum PlainTextFlavor {
         Exact,
         Friendly

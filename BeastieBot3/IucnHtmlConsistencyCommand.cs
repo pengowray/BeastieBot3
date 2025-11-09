@@ -351,18 +351,18 @@ public sealed class IucnHtmlConsistencyCommand : Command<IucnHtmlConsistencyComm
                 PlainNullOnlyCount++;
             }
 
-                var htmlExact = IucnTextUtilities.ConvertHtmlToExactPlainText(htmlValue);
-                var plainExact = IucnTextUtilities.NormalizePlainTextExact(plainValue);
+                var htmlExact = IucnHtmlUtilities.ConvertHtmlToExactPlainText(htmlValue);
+                var plainExact = IucnHtmlUtilities.NormalizePlainTextExact(plainValue);
 
-            if (IucnTextUtilities.NormalizedEquals(htmlExact, plainExact)) {
+            if (IucnHtmlUtilities.NormalizedEquals(htmlExact, plainExact)) {
                 return;
             }
 
             MismatchCount++;
             if (Samples.Count < _maxSamples) {
-                var observed = IucnTextUtilities.ShortenForDisplay(htmlValue);
-                var expected = IucnTextUtilities.ShortenForDisplay(plainValue);
-                    var preferred = IucnTextUtilities.ShortenForDisplay(IucnTextUtilities.ConvertHtmlToPlainTextNeater(htmlValue));
+                var observed = IucnHtmlUtilities.ShortenForDisplay(htmlValue);
+                var expected = IucnHtmlUtilities.ShortenForDisplay(plainValue);
+                    var preferred = IucnHtmlUtilities.ShortenForDisplay(IucnHtmlUtilities.ConvertHtmlToPlainTextNeater(htmlValue));
                 var htmlNormalized = NormalizeForComparison(htmlExact);
                 var plainNormalized = NormalizeForComparison(plainExact);
                 var info = BuildMismatchInfo(htmlExact, plainExact, htmlNormalized, plainNormalized);
@@ -379,7 +379,7 @@ public sealed class IucnHtmlConsistencyCommand : Command<IucnHtmlConsistencyComm
 
             AppendDifferenceParts(parts, recreatedPlain, "recreated", storedPlain, "plain", includeCharCodes: true);
 
-            var normalizedMatch = IucnTextUtilities.NormalizedEquals(recreatedNormalized, storedNormalized);
+            var normalizedMatch = IucnHtmlUtilities.NormalizedEquals(recreatedNormalized, storedNormalized);
             if (normalizedMatch) {
                 parts.Add("normalized=match");
             }
