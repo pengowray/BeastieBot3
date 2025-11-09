@@ -322,10 +322,15 @@ internal static class ScientificNameComposer {
 
         var hasInfra = !string.IsNullOrWhiteSpace(row.InfraName);
         var infraName = row.InfraName?.Trim();
+        var hasSubpopulation = !string.IsNullOrWhiteSpace(row.SubpopulationName);
         string? marker = null;
+        var existingMarker = InferExistingMarker(row);
 
         if (hasInfra && !string.IsNullOrEmpty(infraName)) {
-            marker = GetInfraMarker(row);
+            marker = existingMarker;
+            if (marker is null && !hasSubpopulation) {
+                marker = GetInfraMarker(row);
+            }
             if (!string.IsNullOrEmpty(marker)) {
                 parts.Add(marker);
             }
@@ -335,7 +340,7 @@ internal static class ScientificNameComposer {
         var baseName = string.Join(" ", parts);
         var classification = hasInfra ? NameClassification.Infraspecific : NameClassification.SpeciesOrHigher;
 
-        var subpopulation = row.SubpopulationName?.Trim();
+        var subpopulation = hasSubpopulation ? row.SubpopulationName!.Trim() : null;
         var fullName = baseName;
         if (!string.IsNullOrEmpty(subpopulation)) {
             classification = NameClassification.Subpopulation;
@@ -355,12 +360,71 @@ internal static class ScientificNameComposer {
             return null;
         }
 
-        return trimmed switch {
-            "variety" => "var.",
-            "subspecies (plantae)" => "subsp.",
-            "subspecies" when string.Equals(row.KingdomName, "PLANTAE", StringComparison.OrdinalIgnoreCase) => "subsp.",
-            "subspecies" => null,
-            _ => trimmed
+        if (trimmed.Equals("variety", StringComparison.OrdinalIgnoreCase)) {
+            return "var.";
+        }
+
+        if (trimmed.Equals("subspecies (plantae)", StringComparison.OrdinalIgnoreCase)) {
+            return "subsp.";
+        }
+
+        if (trimmed.Equals("subspecies", StringComparison.OrdinalIgnoreCase)) {
+            return string.Equals(row.KingdomName, "PLANTAE", StringComparison.OrdinalIgnoreCase)
+                ? "subsp."
+                : "ssp.";
+        }
+
+        return trimmed;
+    }
+
+    private static string? InferExistingMarker(IucnTaxonomyRow row) {
+        if (string.IsNullOrWhiteSpace(row.InfraName)) {
+            return null;
+        }
+
+        var baseName = row.ScientificNameAssessments ?? row.ScientificNameTaxonomy;
+        if (string.IsNullOrWhiteSpace(baseName)) {
+            return null;
+        }
+
+        var tokens = baseName.Split(new[] { ' ' }, StringSplitOptions.RemoveEmptyEntries);
+        if (tokens.Length == 0) {
+            return null;
+        }
+
+        var infraName = row.InfraName.Trim();
+        var comparer = StringComparer.OrdinalIgnoreCase;
+
+        for (var i = 0; i < tokens.Length; i++) {
+            if (!comparer.Equals(tokens[i], infraName)) {
+                continue;
+            }
+
+            if (i == 0) {
+                continue;
+            }
+
+            var candidate = tokens[i - 1];
+            if (IsKnownMarker(candidate)) {
+                return candidate;
+            }
+        }
+
+        return null;
+    }
+
+    private static bool IsKnownMarker(string candidate) {
+        if (string.IsNullOrEmpty(candidate)) {
+            return false;
+        }
+
+        var normalized = candidate.TrimEnd('.');
+        return normalized.Length > 0 && normalized switch {
+            var value when value.Equals("ssp", StringComparison.OrdinalIgnoreCase) => true,
+            var value when value.Equals("subsp", StringComparison.OrdinalIgnoreCase) => true,
+            var value when value.Equals("var", StringComparison.OrdinalIgnoreCase) => true,
+            var value when value.Equals("variety", StringComparison.OrdinalIgnoreCase) => true,
+            _ => false
         };
     }
 }
