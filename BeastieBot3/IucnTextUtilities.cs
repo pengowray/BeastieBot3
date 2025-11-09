@@ -25,7 +25,7 @@ internal static class IucnTextUtilities {
     private static readonly Regex GenericTagRegex = new($"</?{TagNamePattern}\\b{AttributeFragment}>", RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
     private static readonly Regex SupTagRegex = new("<sup\\b[^>]*>(.*?)</sup>", RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.Singleline);
     private static readonly Regex NumericEntityRegex = new("&#(?:(?<dec>[0-9]+)|x(?<hex>[0-9a-fA-F]+));", RegexOptions.Compiled | RegexOptions.CultureInvariant);
-
+    private static readonly Regex RandomEmailToRemove = new(@"""[^""]*?<[a-z]+@yahoo\.com\.br>.*?""[^""/]*?/", RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
     private static readonly Dictionary<char, char> SuperscriptMap = new() {
         ['0'] = '⁰',
         ['1'] = '¹',
@@ -102,6 +102,8 @@ internal static class IucnTextUtilities {
         working = CDataRegex.Replace(working, string.Empty);
         working = ScriptBlockRegex.Replace(working, string.Empty);
         working = StyleBlockRegex.Replace(working, string.Empty);
+
+        working = RandomEmailToRemove.Replace(working, string.Empty); // fix assessmentId: 104125629 (contains broken nested tags)
 
         working = ReplaceSupTags(working, flavor);
         working = ReplaceStructuralTags(working, flavor);
