@@ -819,9 +819,9 @@ namespace LsonLib
         /// <summary>
         ///     Determines whether this value is equal to the <paramref name="other"/> value. (See also remarks in the other
         ///     overload, <see cref="Equals(LsonValue)"/>.)</summary>
-        public override bool Equals(object other)
+        public override bool Equals(object? obj)
         {
-            return other is LsonValue ? Equals((LsonValue) other) : false;
+            return obj is LsonValue other && Equals(other);
         }
 
         /// <summary>
@@ -830,7 +830,7 @@ namespace LsonLib
         ///     Two values are only considered equal if they are of the same type (e.g. a <see cref="LsonString"/> is never
         ///     equal to a <see cref="LsonNumber"/> even if they contain the same number). Dictionaries are equal if they
         ///     contain the same set of key/value pairs.</remarks>
-        public abstract bool Equals(LsonValue other);
+        public abstract bool Equals(LsonValue? other);
 
         /// <summary>Returns a hash code representing this object.</summary>
         public abstract override int GetHashCode();
@@ -987,26 +987,25 @@ namespace LsonLib
         #endregion
 
         /// <summary>See <see cref="LsonValue.Equals(LsonValue)"/>.</summary>
-        public override bool Equals(object other)
+        public override bool Equals(object? obj)
         {
-            return other is LsonDict && Equals((LsonDict) other);
+            return obj is LsonDict dict && Equals(dict);
         }
 
         /// <summary>See <see cref="LsonValue.Equals(LsonValue)"/>.</summary>
-        public override bool Equals(LsonValue other)
+        public override bool Equals(LsonValue? other)
         {
-            return other is LsonDict ? Equals((LsonDict) other) : false;
+            return other is LsonDict dict && Equals(dict);
         }
 
         /// <summary>See <see cref="LsonValue.Equals(LsonValue)"/>.</summary>
-        public bool Equals(LsonDict other)
+        public bool Equals(LsonDict? other)
         {
-            if (other == null) return false;
+            if (other is null) return false;
             if (this.Count != other.Count) return false;
             foreach (var kvp in this)
             {
-                LsonValue val;
-                if (!other.TryGetValue(kvp.Key, out val))
+                if (!other.TryGetValue(kvp.Key, out var val))
                     return false;
                 if ((kvp.Value == null) != (val == null))
                     return false;
@@ -1394,19 +1393,19 @@ namespace LsonLib
         }
 
         /// <summary>See <see cref="LsonValue.Equals(LsonValue)"/>.</summary>
-        public override bool Equals(object other)
+        public override bool Equals(object? obj)
         {
-            return other is LsonString ? Equals((LsonString) other) : false;
+            return obj is LsonString other && Equals(other);
         }
 
         /// <summary>See <see cref="LsonValue.Equals(LsonValue)"/>.</summary>
-        public override bool Equals(LsonValue other)
+        public override bool Equals(LsonValue? other)
         {
-            return other is LsonString ? Equals((LsonString) other) : false;
+            return other is LsonString str && Equals(str);
         }
 
         /// <summary>See <see cref="LsonValue.Equals(LsonValue)"/>.</summary>
-        public bool Equals(LsonString other)
+        public bool Equals(LsonString? other)
         {
             return other != null && _value == other._value;
         }
@@ -1521,19 +1520,19 @@ namespace LsonLib
         public static implicit operator LsonBool(bool? value) { return value == null ? null : new LsonBool(value.Value); }
 
         /// <summary>See <see cref="LsonValue.Equals(LsonValue)"/>.</summary>
-        public override bool Equals(object other)
+        public override bool Equals(object? obj)
         {
-            return other is LsonBool ? Equals((LsonBool) other) : false;
+            return obj is LsonBool other && Equals(other);
         }
 
         /// <summary>See <see cref="LsonValue.Equals(LsonValue)"/>.</summary>
-        public override bool Equals(LsonValue other)
+        public override bool Equals(LsonValue? other)
         {
-            return other is LsonBool ? Equals((LsonBool) other) : false;
+            return other is LsonBool value && Equals(value);
         }
 
         /// <summary>See <see cref="LsonValue.Equals(LsonValue)"/>.</summary>
-        public bool Equals(LsonBool other)
+        public bool Equals(LsonBool? other)
         {
             return other != null && _value == other._value;
         }
@@ -1849,19 +1848,19 @@ namespace LsonLib
         public object RawValue { get { return double.IsNaN(_double) ? (object) _long : (object) _double; } }
 
         /// <summary>See <see cref="LsonValue.Equals(LsonValue)"/>.</summary>
-        public override bool Equals(object other)
+        public override bool Equals(object? obj)
         {
-            return other is LsonNumber ? Equals((LsonNumber) other) : false;
+            return obj is LsonNumber other && Equals(other);
         }
 
         /// <summary>See <see cref="LsonValue.Equals(LsonValue)"/>.</summary>
-        public override bool Equals(LsonValue other)
+        public override bool Equals(LsonValue? other)
         {
-            return other is LsonNumber ? Equals((LsonNumber) other) : false;
+            return other is LsonNumber number && Equals(number);
         }
 
         /// <summary>See <see cref="LsonValue.Equals(LsonValue)"/>.</summary>
-        public bool Equals(LsonNumber other)
+        public bool Equals(LsonNumber? other)
         {
             if (other == null) return false;
             if (double.IsNaN(this._double) && double.IsNaN(other._double))
@@ -1903,21 +1902,21 @@ namespace LsonLib
         private LsonNoValue() { }
 
         /// <summary>See <see cref="LsonValue.Equals(LsonValue)"/>.</summary>
-        public override bool Equals(object other)
+        public override bool Equals(object? obj)
         {
-            return other is LsonNoValue ? Equals((LsonNoValue) other) : false;
+            return obj is LsonNoValue other && Equals(other);
         }
 
         /// <summary>See <see cref="LsonValue.Equals(LsonValue)"/>.</summary>
-        public override bool Equals(LsonValue other)
+        public override bool Equals(LsonValue? other)
         {
-            return other is LsonNoValue ? Equals((LsonNoValue) other) : false;
+            return other is LsonNoValue value && Equals(value);
         }
 
         /// <summary>See <see cref="LsonValue.Equals(LsonValue)"/>.</summary>
-        public bool Equals(LsonNoValue other)
+        public bool Equals(LsonNoValue? other)
         {
-            return other != null;
+            return !ReferenceEquals(other, null);
         }
 
         /// <summary>
@@ -2004,13 +2003,13 @@ namespace LsonLib
     public sealed class LsonSafeValue
     {
         /// <summary>Gets the underlying LSON value associated with this object.</summary>
-        public LsonValue Value { get; private set; }
+    public LsonValue? Value { get; }
 
         /// <summary>
         ///     Constructor.</summary>
         /// <param name="value">
         ///     Specifies the underlying LSON value to provide safe access to.</param>
-        public LsonSafeValue(LsonValue value) { Value = value is LsonNoValue ? null : value; }
+    public LsonSafeValue(LsonValue value) { Value = value is LsonNoValue ? null : value; }
 
         /// <summary>Returns a hash code representing this object.</summary>
         public override int GetHashCode()
@@ -2019,22 +2018,23 @@ namespace LsonLib
         }
 
         /// <summary>Determines whether the specified instance is equal to this one.</summary>
-        public override bool Equals(object obj)
-        {
-            return obj is LsonSafeValue ? Equals((LsonSafeValue) obj) : false;
-        }
+        public override bool Equals(object? obj) { return obj is LsonSafeValue other && Equals(other); }
 
         /// <summary>
         ///     Determines whether the specified instance is equal to this one. (See remarks.)</summary>
         /// <remarks>
         ///     Two instances of <see cref="LsonSafeValue"/> are considered equal if the underlying values are equal. See <see
         ///     cref="LsonValue.Equals(LsonValue)"/> for details.</remarks>
-        public bool Equals(LsonSafeValue other)
+        public bool Equals(LsonSafeValue? other)
         {
-            if (other == null)
+            if (other is null)
                 return false;
-            if (Value == null)
-                return other.Value == null;
+            if (ReferenceEquals(this, other))
+                return true;
+
+            if (Value is null || other.Value is null)
+                return Value is null && other.Value is null;
+
             return Value.Equals(other.Value);
         }
 
@@ -2045,11 +2045,9 @@ namespace LsonLib
         {
             get
             {
-                var dict = Value as LsonDict;
-                LsonValue value;
-                if (dict == null || !dict.TryGetValue(key, out value))
+                if (Value is not LsonDict dict || !dict.TryGetValue(key, out var result))
                     return LsonNoValue.Instance;
-                return value ?? LsonNoValue.Instance;
+                return result ?? LsonNoValue.Instance;
             }
         }
     }
