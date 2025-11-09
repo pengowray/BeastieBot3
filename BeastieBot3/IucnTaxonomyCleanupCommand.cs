@@ -131,6 +131,8 @@ public sealed class IucnTaxonomyCleanupCommand : Command<IucnTaxonomyCleanupComm
             AppendLine(builder, "internalTaxonId", sample.InternalTaxonId);
             AppendLine(builder, "redlist_version", sample.RedlistVersion);
             AppendLine(builder, "detail", sample.Detail);
+            var url = BuildIucnUrl(sample.InternalTaxonId, sample.AssessmentId);
+            AppendLine(builder, "url", url);
 
             foreach (var field in sample.Fields) {
                 builder.Append("[grey]").Append(Markup.Escape(field.FieldName)).AppendLine("[/]");
@@ -168,6 +170,16 @@ public sealed class IucnTaxonomyCleanupCommand : Command<IucnTaxonomyCleanupComm
         }
     }
 
+    private static string BuildIucnUrl(string internalTaxonId, string assessmentId) {
+        if (string.IsNullOrWhiteSpace(internalTaxonId) || string.IsNullOrWhiteSpace(assessmentId)) {
+            return "(unavailable)";
+        }
+
+        var escapedTaxonId = Markup.Escape(internalTaxonId.Trim());
+        var escapedAssessmentId = Markup.Escape(assessmentId.Trim());
+        return $"https://www.iucnredlist.org/species/{escapedTaxonId}/{escapedAssessmentId}";
+    }
+
     private static string GetIssueLabel(DataCleanupIssueKind kind) => kind switch {
         DataCleanupIssueKind.ScientificNameWhitespace => "scientificName whitespace anomalies",
         DataCleanupIssueKind.TaxonomyScientificNameWhitespace => "scientificName:1 whitespace anomalies",
@@ -175,6 +187,8 @@ public sealed class IucnTaxonomyCleanupCommand : Command<IucnTaxonomyCleanupComm
         DataCleanupIssueKind.InfraNameWhitespace => "infraName whitespace anomalies",
         DataCleanupIssueKind.InfraNameMarkerPrefix => "infraName marker prefixes",
         DataCleanupIssueKind.SubpopulationWhitespace => "subpopulationName whitespace anomalies",
+        DataCleanupIssueKind.AuthorityWhitespace => "authority whitespace anomalies",
+        DataCleanupIssueKind.InfraAuthorityWhitespace => "infraAuthority whitespace anomalies",
         _ => kind.ToString()
     };
 }

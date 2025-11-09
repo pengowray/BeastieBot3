@@ -24,6 +24,8 @@ internal static class IucnDataCleanupAnalyzer {
             AnalyzeScientificNameWhitespace(row, row.ScientificNameTaxonomy, "scientificName:1", DataCleanupIssueKind.TaxonomyScientificNameWhitespace, result);
             AnalyzeFieldWhitespace(row, row.InfraName, "infraName", DataCleanupIssueKind.InfraNameWhitespace, result);
             AnalyzeFieldWhitespace(row, row.SubpopulationName, "subpopulationName", DataCleanupIssueKind.SubpopulationWhitespace, result);
+            AnalyzeFieldWhitespace(row, row.Authority, "authority", DataCleanupIssueKind.AuthorityWhitespace, result);
+            AnalyzeFieldWhitespace(row, row.InfraAuthority, "infraAuthority", DataCleanupIssueKind.InfraAuthorityWhitespace, result);
 
             AnalyzeFieldDisagreement(row, result);
             AnalyzeInfraMarker(row, result);
@@ -274,7 +276,9 @@ internal enum DataCleanupIssueKind {
     ScientificNameDisagreement,
     InfraNameWhitespace,
     InfraNameMarkerPrefix,
-    SubpopulationWhitespace
+    SubpopulationWhitespace,
+    AuthorityWhitespace,
+    InfraAuthorityWhitespace
 }
 
 internal sealed record DataCleanupIssueSample(
