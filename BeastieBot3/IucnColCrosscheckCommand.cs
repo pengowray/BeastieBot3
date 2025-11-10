@@ -41,6 +41,10 @@ public sealed class IucnColCrosscheckCommand : Command<IucnColCrosscheckCommand.
         [CommandOption("--include-subpopulations")]
         [Description("Include IUCN assessments with subpopulation names.")]
         public bool IncludeSubpopulations { get; init; }
+
+        [CommandOption("--random-order")]
+        [Description("Process IUCN rows in a random order instead of taxonomic sort.")]
+        public bool RandomOrder { get; init; }
     }
 
     public override int Execute(CommandContext context, Settings settings, CancellationToken cancellationToken) {
@@ -134,17 +138,23 @@ public sealed class IucnColCrosscheckCommand : Command<IucnColCrosscheckCommand.
             return 0;
         }
 
-        var orderedRows = allRows
-            .OrderBy(r => SortKey(r.KingdomName), StringComparer.OrdinalIgnoreCase)
-            .ThenBy(r => SortKey(r.PhylumName), StringComparer.OrdinalIgnoreCase)
-            .ThenBy(r => SortKey(r.ClassName), StringComparer.OrdinalIgnoreCase)
-            .ThenBy(r => SortKey(r.OrderName), StringComparer.OrdinalIgnoreCase)
-            .ThenBy(r => SortKey(r.FamilyName), StringComparer.OrdinalIgnoreCase)
-            .ThenBy(r => SortKey(r.GenusName), StringComparer.OrdinalIgnoreCase)
-            .ThenBy(r => SortKey(r.SpeciesName), StringComparer.OrdinalIgnoreCase)
-            .ThenBy(r => SortKey(r.InfraName), StringComparer.OrdinalIgnoreCase)
-            .ThenBy(r => r.AssessmentId, StringComparer.OrdinalIgnoreCase)
-            .ToList();
+        List<IucnTaxonomyRow> orderedRows;
+        if (settings.RandomOrder) {
+            orderedRows = new List<IucnTaxonomyRow>(allRows);
+            ShuffleInPlace(orderedRows);
+        } else {
+            orderedRows = allRows
+                .OrderBy(r => SortKey(r.KingdomName), StringComparer.OrdinalIgnoreCase)
+                .ThenBy(r => SortKey(r.PhylumName), StringComparer.OrdinalIgnoreCase)
+                .ThenBy(r => SortKey(r.ClassName), StringComparer.OrdinalIgnoreCase)
+                .ThenBy(r => SortKey(r.OrderName), StringComparer.OrdinalIgnoreCase)
+                .ThenBy(r => SortKey(r.FamilyName), StringComparer.OrdinalIgnoreCase)
+                .ThenBy(r => SortKey(r.GenusName), StringComparer.OrdinalIgnoreCase)
+                .ThenBy(r => SortKey(r.SpeciesName), StringComparer.OrdinalIgnoreCase)
+                .ThenBy(r => SortKey(r.InfraName), StringComparer.OrdinalIgnoreCase)
+                .ThenBy(r => r.AssessmentId, StringComparer.OrdinalIgnoreCase)
+                .ToList();
+        }
 
         var reportPath = ResolveReportPath(settings.OutputPath, iucnPath);
         Directory.CreateDirectory(Path.GetDirectoryName(reportPath)!);
@@ -313,6 +323,7 @@ public sealed class IucnColCrosscheckCommand : Command<IucnColCrosscheckCommand.
         writer.WriteLine($"IUCN database: {iucnPath}");
         writer.WriteLine($"Catalogue of Life database: {colPath}");
         writer.WriteLine($"Include subpopulations: {settings.IncludeSubpopulations}");
+        writer.WriteLine($"Random order: {settings.RandomOrder}");
         if (settings.Limit > 0) {
             writer.WriteLine($"Limit: {settings.Limit:N0}");
         }
@@ -679,6 +690,17 @@ public sealed class IucnColCrosscheckCommand : Command<IucnColCrosscheckCommand.
         Directory.CreateDirectory(reportDir);
         var fileName = $"iucn-col-crosscheck-{DateTimeOffset.Now:yyyyMMdd-HHmmss}.txt";
         return Path.Combine(reportDir, fileName);
+    }
+
+    private static void ShuffleInPlace<T>(IList<T> list) {
+        if (list.Count < 2) {
+            return;
+        }
+
+        for (var i = list.Count - 1; i > 0; i--) {
+            var j = Random.Shared.Next(i + 1);
+            (list[i], list[j]) = (list[j], list[i]);
+        }
     }
 
     private static void RenderSummary(CrosscheckStats stats, string reportPath) {
