@@ -310,7 +310,7 @@ public sealed class IucnColCrosscheckCommand : Command<IucnColCrosscheckCommand.
             writer.WriteLine($"COL candidates ({match.Candidates.Count}): {string.Join(", ", match.Candidates.Select(c => c.Id))}");
         }
 
-    WriteAlignment(writer, alignment, match.LadderSources);
+        WriteAlignment(writer, alignment, match.LadderSources);
 
         writer.WriteLine(new string('-', 80));
         writer.WriteLine();
