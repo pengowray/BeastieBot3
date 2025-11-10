@@ -271,8 +271,8 @@ public sealed class IucnColCrosscheckCommand : Command<IucnColCrosscheckCommand.
             }
         }
 
-        var alignment = BuildAlignment(row, match, colRepository, laddersBuffer, cancellationToken);
-        WriteRow(writer, row, match, iucnAuthority, colAuthority, acceptedAuthority, authorityMatches, alignment.Result, alignment.Sources);
+    var alignment = BuildAlignment(row, match, colRepository, laddersBuffer, cancellationToken);
+    WriteRow(writer, row, match, iucnAuthority, colAuthority, acceptedAuthority, authorityMatches, alignment);
     }
 
     private static AlignmentPayload BuildAlignment(
@@ -302,9 +302,9 @@ public sealed class IucnColCrosscheckCommand : Command<IucnColCrosscheckCommand.
         }
 
         var ladders = buffer.ToArray();
-        var result = TaxonLadderAlignment.Align(ladders);
-        var labels = ladders.Select(l => l.SourceLabel).ToArray();
-        return new AlignmentPayload(result, labels);
+    var result = TaxonLadderAlignment.Align(ladders);
+    var labels = ladders.Select(l => l.SourceLabel).ToArray();
+    return new AlignmentPayload(result, labels, Array.AsReadOnly(ladders));
     }
 
     private static void WriteReportHeader(StreamWriter writer, string iucnPath, string colPath, int totalRows, Settings settings) {
@@ -326,11 +326,10 @@ public sealed class IucnColCrosscheckCommand : Command<IucnColCrosscheckCommand.
         IucnTaxonomyRow row,
         ColMatchResult match,
         string? iucnAuthority,
-        string? colAuthority,
-        string? acceptedAuthority,
-        bool authorityMatches,
-        TaxonLadderAlignmentResult alignment,
-        IReadOnlyList<string> ladderSources) {
+    string? colAuthority,
+    string? acceptedAuthority,
+    bool authorityMatches,
+    AlignmentPayload alignment) {
 
         writer.WriteLine($"Assessment: {row.AssessmentId} | InternalTaxonId: {row.InternalTaxonId} | Version: {row.RedlistVersion}");
         writer.WriteLine($"IUCN scientificName: {SafeValue(row.ScientificNameAssessments) }");
@@ -369,26 +368,32 @@ public sealed class IucnColCrosscheckCommand : Command<IucnColCrosscheckCommand.
             writer.WriteLine($"COL candidates ({match.Candidates.Count}): {string.Join(", ", match.Candidates.Select(c => c.Id))}");
         }
 
-        WriteAlignment(writer, alignment, ladderSources);
+        WriteAlignment(writer, alignment);
 
         writer.WriteLine(new string('-', 80));
         writer.WriteLine();
     }
 
-    private static void WriteAlignment(StreamWriter writer, TaxonLadderAlignmentResult alignment, IReadOnlyList<string> ladders) {
+    private static void WriteAlignment(StreamWriter writer, AlignmentPayload alignmentPayload) {
+        var alignment = alignmentPayload.Result;
+        var ladders = alignmentPayload.Sources;
+        var ladderObjects = alignmentPayload.Ladders;
+
         if (alignment.Rows.Count == 0) {
             writer.WriteLine("Ladder alignment: (no data)");
             return;
         }
 
         var headers = ladders.Count > 0 ? ladders : new[] { "IUCN" };
+        var baselineHeader = DetermineBaseline(headers);
+        var orderedRows = OrderRows(alignment.Rows, baselineHeader, ladderObjects);
         var widths = new int[headers.Count + 2];
         widths[0] = Math.Max(1, "Δ".Length);
-        widths[1] = Math.Max("Rank".Length, alignment.Rows.Max(row => row.Rank.Length));
+        widths[1] = Math.Max("Rank".Length, orderedRows.Max(row => row.Rank.Length));
 
         for (var i = 0; i < headers.Count; i++) {
             var source = headers[i];
-            var max = alignment.Rows.Select(row => row.Values.TryGetValue(source, out var val) ? val.Length : 1).DefaultIfEmpty(1).Max();
+            var max = orderedRows.Select(row => row.Values.TryGetValue(source, out var val) ? val.Length : 1).DefaultIfEmpty(1).Max();
             widths[i + 2] = Math.Max(headers[i].Length, Math.Min(max, 80));
         }
 
@@ -417,15 +422,18 @@ public sealed class IucnColCrosscheckCommand : Command<IucnColCrosscheckCommand.
         writer.WriteLine(headerLine.ToString());
 
         var mismatchRanks = new List<string>();
-        var newRanks = new List<string>();
+        var baselineOnlyRanks = new List<string>();
+        var iucnOnlyRanks = new List<string>();
 
-        foreach (var row in alignment.Rows) {
+        foreach (var row in orderedRows) {
             var line = new StringBuilder();
-            var indicator = GetIndicator(row, headers);
-            if (indicator == "X") {
+            var indicator = GetIndicator(row, headers, baselineHeader);
+            if (indicator == "!") {
                 mismatchRanks.Add(row.Rank);
             } else if (indicator == "+") {
-                newRanks.Add(row.Rank);
+                baselineOnlyRanks.Add(row.Rank);
+            } else if (indicator == "?") {
+                iucnOnlyRanks.Add(row.Rank);
             }
 
             line.Append(FormatCell(indicator, widths[0]));
@@ -441,53 +449,77 @@ public sealed class IucnColCrosscheckCommand : Command<IucnColCrosscheckCommand.
         }
 
         writer.WriteLine();
-        writer.WriteLine("Legend: Δ column — X = mismatch, + = rank present only in Catalogue of Life, - = match/absent.");
+        writer.WriteLine($"Legend: Δ column — baseline={baselineHeader}. '=' match, '!' mismatch, '+' only in baseline, '?' only in IUCN, '.' missing in both.");
         if (mismatchRanks.Count > 0) {
             writer.WriteLine($"Mismatched ranks: {string.Join(", ", mismatchRanks)}");
         }
-        if (newRanks.Count > 0) {
-            writer.WriteLine($"New COL ranks: {string.Join(", ", newRanks)}");
+        if (baselineOnlyRanks.Count > 0) {
+            writer.WriteLine($"Ranks present only in {baselineHeader}: {string.Join(", ", baselineOnlyRanks)}");
+        }
+        if (iucnOnlyRanks.Count > 0) {
+            writer.WriteLine($"Ranks missing from {baselineHeader} but present in IUCN: {string.Join(", ", iucnOnlyRanks)}");
         }
 
-        static string GetIndicator(TaxonLadderAlignmentRow row, IReadOnlyList<string> headers) {
-            var iucnValue = row.Values.TryGetValue("IUCN", out var iucnRaw) ? iucnRaw : null;
-            var hasIucn = !string.IsNullOrWhiteSpace(iucnValue);
-            var hasOther = false;
-            var mismatch = false;
-
-            foreach (var header in headers) {
-                if (string.Equals(header, "IUCN", StringComparison.OrdinalIgnoreCase)) {
-                    continue;
-                }
-
-                var hasValue = row.Values.TryGetValue(header, out var otherRaw) && !string.IsNullOrWhiteSpace(otherRaw);
-                if (!hasValue) {
-                    if (hasIucn) {
-                        mismatch = true;
-                    }
-                    continue;
-                }
-
-                hasOther = true;
-
-                if (!hasIucn) {
-                    continue;
-                }
-
-                if (!string.Equals(iucnValue!.Trim(), otherRaw!.Trim(), StringComparison.OrdinalIgnoreCase)) {
-                    mismatch = true;
-                }
+        static IReadOnlyList<TaxonLadderAlignmentRow> OrderRows(IReadOnlyList<TaxonLadderAlignmentRow> rows, string baselineHeader, IReadOnlyList<TaxonLadder> ladders) {
+            var baseline = ladders.FirstOrDefault(l => l.SourceLabel.Equals(baselineHeader, StringComparison.OrdinalIgnoreCase));
+            if (baseline is null) {
+                return rows;
             }
 
-            if (!hasIucn && hasOther) {
+            var order = baseline.Nodes
+                .Select((node, index) => new { node.Rank, index })
+                .ToDictionary(item => item.Rank, item => item.index, StringComparer.OrdinalIgnoreCase);
+
+            var ordered = rows
+                .Select((row, idx) => new {
+                    Row = row,
+                    Ordinal = order.TryGetValue(row.Rank, out var ordinal) ? ordinal : order.Count + idx,
+                    Index = idx
+                })
+                .OrderBy(item => item.Ordinal)
+                .ThenBy(item => item.Index)
+                .Select(item => item.Row)
+                .ToList();
+
+            return ordered;
+        }
+
+        static string DetermineBaseline(IReadOnlyList<string> headers) {
+            static string? Find(IReadOnlyList<string> values, params string[] targets) {
+                foreach (var target in targets) {
+                    var match = values.FirstOrDefault(h => h.Equals(target, StringComparison.OrdinalIgnoreCase));
+                    if (match is not null) {
+                        return match;
+                    }
+                }
+
+                return null;
+            }
+
+            return Find(headers, "COL-match(lineage)", "COL-accepted(lineage)")
+                ?? headers.FirstOrDefault(h => h.StartsWith("COL", StringComparison.OrdinalIgnoreCase))
+                ?? "IUCN";
+        }
+
+        static string GetIndicator(TaxonLadderAlignmentRow row, IReadOnlyList<string> headers, string baselineHeader) {
+            var baselineValue = row.Values.TryGetValue(baselineHeader, out var baselineRaw) ? baselineRaw : null;
+            var iucnValue = row.Values.TryGetValue("IUCN", out var iucnRaw) ? iucnRaw : null;
+            var hasBaseline = !string.IsNullOrWhiteSpace(baselineValue);
+            var hasIucn = !string.IsNullOrWhiteSpace(iucnValue);
+
+            if (hasBaseline && hasIucn) {
+                return string.Equals(baselineValue!.Trim(), iucnValue!.Trim(), StringComparison.OrdinalIgnoreCase) ? "=" : "!";
+            }
+
+            if (hasBaseline) {
                 return "+";
             }
 
-            if (mismatch) {
-                return "X";
+            if (hasIucn) {
+                return "?";
             }
 
-            return "-";
+            return ".";
         }
     }
 
@@ -530,18 +562,8 @@ public sealed class IucnColCrosscheckCommand : Command<IucnColCrosscheckCommand.
             accepted = repository.GetById(primary.AcceptedNameUsageId, cancellationToken);
         }
 
-        var ladderSources = new List<string> { "IUCN" };
-        if (primary is not null) {
-            ladderSources.Add("COL-match");
-            ladderSources.Add("COL-match(lineage)");
-        }
-        if (accepted is not null && (primary is null || !string.Equals(primary.Id, accepted.Id, StringComparison.Ordinal))) {
-            ladderSources.Add("COL-accepted");
-            ladderSources.Add("COL-accepted(lineage)");
-        }
-
         var distinctMethods = matchMethod.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
-        return new ColMatchResult(primary, accepted, uniqueCandidates, distinctMethods.Count == 0 ? "none" : string.Join(",", distinctMethods), ladderSources);
+        return new ColMatchResult(primary, accepted, uniqueCandidates, distinctMethods.Count == 0 ? "none" : string.Join(",", distinctMethods));
     }
 
     private static ColTaxonRecord? ChoosePrimary(IReadOnlyList<ColTaxonRecord> candidates, bool expectInfra) {
@@ -674,8 +696,7 @@ public sealed class IucnColCrosscheckCommand : Command<IucnColCrosscheckCommand.
         ColTaxonRecord? Primary,
         ColTaxonRecord? Accepted,
         IReadOnlyList<ColTaxonRecord> Candidates,
-        string MatchMethod,
-        IReadOnlyList<string> LadderSources
+        string MatchMethod
     );
 
     private sealed class CrosscheckStats {
@@ -687,5 +708,5 @@ public sealed class IucnColCrosscheckCommand : Command<IucnColCrosscheckCommand.
         public long AuthorityMismatches { get; set; }
     }
 
-    private sealed record AlignmentPayload(TaxonLadderAlignmentResult Result, IReadOnlyList<string> Sources);
+    private sealed record AlignmentPayload(TaxonLadderAlignmentResult Result, IReadOnlyList<string> Sources, IReadOnlyList<TaxonLadder> Ladders);
 }

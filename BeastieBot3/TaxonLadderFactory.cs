@@ -43,16 +43,25 @@ internal static class TaxonLadderFactory {
             sourceLabel = "COL";
         }
 
-        var nodes = new List<TaxonLadderNode>();
-        AddIfPresent(nodes, "kingdom", NormalizeProperCase(record.Kingdom));
-        AddIfPresent(nodes, "phylum", NormalizeProperCase(record.Phylum));
-        AddIfPresent(nodes, "class", NormalizeProperCase(record.Class));
-        AddIfPresent(nodes, "order", NormalizeProperCase(record.Order));
-        AddIfPresent(nodes, "family", NormalizeProperCase(record.Family));
+    var nodes = new List<TaxonLadderNode>();
+    AddIfPresent(nodes, "kingdom", NormalizeProperCase(record.Kingdom));
+    AddIfPresent(nodes, "subkingdom", NormalizeProperCase(record.Subkingdom));
+    AddIfPresent(nodes, "phylum", NormalizeProperCase(record.Phylum));
+    AddIfPresent(nodes, "subphylum", NormalizeProperCase(record.Subphylum));
+    AddIfPresent(nodes, "class", NormalizeProperCase(record.Class));
+    AddIfPresent(nodes, "subclass", NormalizeProperCase(record.Subclass));
+    AddIfPresent(nodes, "order", NormalizeProperCase(record.Order));
+    AddIfPresent(nodes, "suborder", NormalizeProperCase(record.Suborder));
+    AddIfPresent(nodes, "superfamily", NormalizeProperCase(record.Superfamily));
+    AddIfPresent(nodes, "family", NormalizeProperCase(record.Family));
+    AddIfPresent(nodes, "subfamily", NormalizeProperCase(record.Subfamily));
+    AddIfPresent(nodes, "tribe", NormalizeProperCase(record.Tribe));
+    AddIfPresent(nodes, "subtribe", NormalizeProperCase(record.Subtribe));
         AddIfPresent(nodes, "genus", NormalizeScientific(record.Genus));
+        AddIfPresent(nodes, "subgenus", NormalizeScientific(record.Subgenus));
 
-        var speciesName = NormalizeScientific(record.ScientificName);
-        if (!string.IsNullOrEmpty(speciesName)) {
+        var speciesName = BuildSpeciesName(record.Genus, record.SpecificEpithet) ?? NormalizeScientific(record.ScientificName);
+        if (!string.IsNullOrWhiteSpace(speciesName)) {
             AddIfPresent(nodes, "species", speciesName);
         }
 

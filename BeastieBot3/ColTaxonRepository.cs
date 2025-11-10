@@ -161,19 +161,28 @@ internal sealed class ColTaxonRepository {
             var record = new ColTaxonRecord(
                 id,
                 scientificName,
-                ordinals.Authorship.HasValue && !reader.IsDBNull(ordinals.Authorship.Value) ? reader.GetString(ordinals.Authorship.Value) : null,
-                ordinals.Status.HasValue && !reader.IsDBNull(ordinals.Status.Value) ? reader.GetString(ordinals.Status.Value) : null,
-                ordinals.Rank.HasValue && !reader.IsDBNull(ordinals.Rank.Value) ? reader.GetString(ordinals.Rank.Value) : null,
-                ordinals.AcceptedNameUsageId.HasValue && !reader.IsDBNull(ordinals.AcceptedNameUsageId.Value) ? reader.GetString(ordinals.AcceptedNameUsageId.Value) : null,
-                ordinals.ParentId.HasValue && !reader.IsDBNull(ordinals.ParentId.Value) ? reader.GetString(ordinals.ParentId.Value) : null,
-                ordinals.Kingdom.HasValue && !reader.IsDBNull(ordinals.Kingdom.Value) ? reader.GetString(ordinals.Kingdom.Value) : null,
-                ordinals.Phylum.HasValue && !reader.IsDBNull(ordinals.Phylum.Value) ? reader.GetString(ordinals.Phylum.Value) : null,
-                ordinals.Class.HasValue && !reader.IsDBNull(ordinals.Class.Value) ? reader.GetString(ordinals.Class.Value) : null,
-                ordinals.Order.HasValue && !reader.IsDBNull(ordinals.Order.Value) ? reader.GetString(ordinals.Order.Value) : null,
-                ordinals.Family.HasValue && !reader.IsDBNull(ordinals.Family.Value) ? reader.GetString(ordinals.Family.Value) : null,
-                ordinals.Genus.HasValue && !reader.IsDBNull(ordinals.Genus.Value) ? reader.GetString(ordinals.Genus.Value) : null,
-                ordinals.SpecificEpithet.HasValue && !reader.IsDBNull(ordinals.SpecificEpithet.Value) ? reader.GetString(ordinals.SpecificEpithet.Value) : null,
-                ordinals.InfraspecificEpithet.HasValue && !reader.IsDBNull(ordinals.InfraspecificEpithet.Value) ? reader.GetString(ordinals.InfraspecificEpithet.Value) : null
+                ReadString(reader, ordinals.Authorship),
+                ReadString(reader, ordinals.Status),
+                ReadString(reader, ordinals.Rank),
+                ReadString(reader, ordinals.AcceptedNameUsageId),
+                ReadString(reader, ordinals.ParentId),
+                ReadString(reader, ordinals.Kingdom),
+                ReadString(reader, ordinals.Subkingdom),
+                ReadString(reader, ordinals.Phylum),
+                ReadString(reader, ordinals.Subphylum),
+                ReadString(reader, ordinals.Class),
+                ReadString(reader, ordinals.Subclass),
+                ReadString(reader, ordinals.Order),
+                ReadString(reader, ordinals.Suborder),
+                ReadString(reader, ordinals.Superfamily),
+                ReadString(reader, ordinals.Family),
+                ReadString(reader, ordinals.Subfamily),
+                ReadString(reader, ordinals.Tribe),
+                ReadString(reader, ordinals.Subtribe),
+                ReadString(reader, ordinals.Genus),
+                ReadString(reader, ordinals.Subgenus),
+                ReadString(reader, ordinals.SpecificEpithet),
+                ReadString(reader, ordinals.InfraspecificEpithet)
             );
 
             results.Add(record);
@@ -181,6 +190,14 @@ internal sealed class ColTaxonRepository {
         }
 
         return results;
+    }
+
+    private static string? ReadString(SqliteDataReader reader, int? ordinal) {
+        if (!ordinal.HasValue || reader.IsDBNull(ordinal.Value)) {
+            return null;
+        }
+
+        return reader.GetString(ordinal.Value);
     }
 
     private static string BuildComponentsKey(string genus, string species, string? infraEpithet) {
@@ -255,14 +272,23 @@ internal sealed class ColTaxonRepository {
         columns.Add(MapColumn("rank", "rank"));
         columns.Add(MapColumn("acceptedNameUsageID", "acceptedNameUsageID", "acceptedNameUsageId", "acceptedNameUsage"));
         columns.Add(MapColumn("parentID", "parentID", "parentId"));
-        columns.Add(MapColumn("kingdom", "kingdom"));
-        columns.Add(MapColumn("phylum", "phylum", "division"));
-        columns.Add(MapColumn("class", "class"));
-        columns.Add(MapColumn("order", "order"));
-        columns.Add(MapColumn("family", "family"));
-        columns.Add(MapColumn("genericName", "genericName", "genus"));
-        columns.Add(MapColumn("specificEpithet", "specificEpithet", "species"));
-        columns.Add(MapColumn("infraspecificEpithet", "infraspecificEpithet", "infraspecies"));
+    columns.Add(MapColumn("kingdom", "kingdom"));
+    columns.Add(MapColumn("subkingdom", "subkingdom", "subKingdom"));
+    columns.Add(MapColumn("phylum", "phylum", "division"));
+    columns.Add(MapColumn("subphylum", "subphylum", "subPhylum"));
+    columns.Add(MapColumn("class", "class"));
+    columns.Add(MapColumn("subclass", "subclass", "subClass"));
+    columns.Add(MapColumn("order", "order"));
+    columns.Add(MapColumn("suborder", "suborder", "subOrder"));
+    columns.Add(MapColumn("superfamily", "superfamily", "superFamily"));
+    columns.Add(MapColumn("family", "family"));
+    columns.Add(MapColumn("subfamily", "subfamily", "subFamily"));
+    columns.Add(MapColumn("tribe", "tribe"));
+    columns.Add(MapColumn("subtribe", "subtribe", "subTribe"));
+    columns.Add(MapColumn("genericName", "genericName", "genus"));
+    columns.Add(MapColumn("subgenus", "subgenus", "infragenericEpithet"));
+    columns.Add(MapColumn("specificEpithet", "specificEpithet", "species"));
+    columns.Add(MapColumn("infraspecificEpithet", "infraspecificEpithet", "infraspecies"));
 
         return "SELECT\n  " + string.Join(",\n  ", columns);
     }
@@ -295,11 +321,20 @@ internal sealed class ColTaxonRepository {
             AcceptedNameUsageId = TryGetOrdinal(reader, "acceptedNameUsageID");
             ParentId = TryGetOrdinal(reader, "parentID");
             Kingdom = TryGetOrdinal(reader, "kingdom");
+            Subkingdom = TryGetOrdinal(reader, "subkingdom");
             Phylum = TryGetOrdinal(reader, "phylum");
+            Subphylum = TryGetOrdinal(reader, "subphylum");
             Class = TryGetOrdinal(reader, "class");
+            Subclass = TryGetOrdinal(reader, "subclass");
             Order = TryGetOrdinal(reader, "order");
+            Suborder = TryGetOrdinal(reader, "suborder");
+            Superfamily = TryGetOrdinal(reader, "superfamily");
             Family = TryGetOrdinal(reader, "family");
+            Subfamily = TryGetOrdinal(reader, "subfamily");
+            Tribe = TryGetOrdinal(reader, "tribe");
+            Subtribe = TryGetOrdinal(reader, "subtribe");
             Genus = TryGetOrdinal(reader, "genericName");
+            Subgenus = TryGetOrdinal(reader, "subgenus");
             SpecificEpithet = TryGetOrdinal(reader, "specificEpithet");
             InfraspecificEpithet = TryGetOrdinal(reader, "infraspecificEpithet");
         }
@@ -312,11 +347,20 @@ internal sealed class ColTaxonRepository {
         public int? AcceptedNameUsageId { get; }
         public int? ParentId { get; }
         public int? Kingdom { get; }
+        public int? Subkingdom { get; }
         public int? Phylum { get; }
+        public int? Subphylum { get; }
         public int? Class { get; }
+        public int? Subclass { get; }
         public int? Order { get; }
+        public int? Suborder { get; }
+        public int? Superfamily { get; }
         public int? Family { get; }
+        public int? Subfamily { get; }
+        public int? Tribe { get; }
+        public int? Subtribe { get; }
         public int? Genus { get; }
+        public int? Subgenus { get; }
         public int? SpecificEpithet { get; }
         public int? InfraspecificEpithet { get; }
 
@@ -339,11 +383,20 @@ internal sealed record ColTaxonRecord(
     string? AcceptedNameUsageId,
     string? ParentId,
     string? Kingdom,
+    string? Subkingdom,
     string? Phylum,
+    string? Subphylum,
     string? Class,
+    string? Subclass,
     string? Order,
+    string? Suborder,
+    string? Superfamily,
     string? Family,
+    string? Subfamily,
+    string? Tribe,
+    string? Subtribe,
     string? Genus,
+    string? Subgenus,
     string? SpecificEpithet,
     string? InfraspecificEpithet
 );
