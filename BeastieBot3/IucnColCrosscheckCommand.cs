@@ -22,25 +22,29 @@ public sealed class IucnColCrosscheckCommand : Command<IucnColCrosscheckCommand.
         public string? IniFile { get; init; }
 
         [CommandOption("--iucn-database <PATH>")]
-        [Description("Explicit IUCN SQLite database path. Overrides Datastore:IUCN_sqlite_from_cvs.")]
-        public string? IucnDatabasePath { get; init; }
+        [Description("Explicit IUCN SQLite database path. Overrides paths.ini Datastore:IUCN_sqlite_from_cvs.")]
+        public string? IucnDatabase { get; init; }
 
         [CommandOption("--col-database <PATH>")]
-        [Description("Explicit Catalogue of Life SQLite database path. Overrides Datastore:COL_sqlite.")]
-        public string? ColDatabasePath { get; init; }
+        [Description("Explicit Catalogue of Life SQLite database path. Overrides paths.ini Datastore:COL_sqlite.")]
+        public string? ColDatabase { get; init; }
 
         [CommandOption("--limit <ROWS>")]
-        [Description("Maximum number of IUCN rows to inspect (0 = all).")]
+        [Description("Maximum number of IUCN rows to include after filters (0 = all).")]
         public long Limit { get; init; }
 
-        [CommandOption("--max-samples <COUNT>")]
-        [Description("Maximum number of examples to display per finding category.")]
-        public int MaxSamples { get; init; } = 10;
+        [CommandOption("--output <FILE>")]
+        [Description("Optional report output path. Defaults to data-analysis/iucn-col-crosscheck-<timestamp>.txt alongside the IUCN database.")]
+        public string? OutputPath { get; init; }
+
+        [CommandOption("--include-subpopulations")]
+        [Description("Include IUCN assessments with subpopulation names.")]
+        public bool IncludeSubpopulations { get; init; }
     }
 
     public override int Execute(CommandContext context, Settings settings, CancellationToken cancellationToken) {
-        if (settings.MaxSamples <= 0) {
-            AnsiConsole.MarkupLine("[red]--max-samples must be greater than zero.[/]");
+        if (settings.Limit < 0) {
+            AnsiConsole.MarkupLine("[red]--limit must be zero or greater.[/]");
             return -1;
         }
 
@@ -48,622 +52,518 @@ public sealed class IucnColCrosscheckCommand : Command<IucnColCrosscheckCommand.
         var iniFile = settings.IniFile ?? "paths.ini";
         var paths = new PathsService(iniFile, baseDir);
 
-        string iucnDatabasePath;
+        string iucnPath;
         try {
-            iucnDatabasePath = paths.ResolveIucnDatabasePath(settings.IucnDatabasePath);
+            iucnPath = paths.ResolveIucnDatabasePath(settings.IucnDatabase);
         } catch (Exception ex) {
             AnsiConsole.MarkupLine($"[red]{Markup.Escape(ex.Message)}[/]");
             return -2;
         }
 
-        string colDatabasePath;
-        try {
-            colDatabasePath = ResolveColDatabasePath(paths, settings.ColDatabasePath);
-        } catch (Exception ex) {
-            AnsiConsole.MarkupLine($"[red]{Markup.Escape(ex.Message)}[/]");
+        if (!File.Exists(iucnPath)) {
+            AnsiConsole.MarkupLine($"[red]IUCN SQLite database not found at:[/] {Markup.Escape(iucnPath)}");
             return -3;
         }
 
-        if (!File.Exists(iucnDatabasePath)) {
-            AnsiConsole.MarkupLine($"[red]IUCN SQLite database not found at:[/] {Markup.Escape(iucnDatabasePath)}");
+        var colPath = !string.IsNullOrWhiteSpace(settings.ColDatabase)
+            ? settings.ColDatabase.Trim()
+            : paths.GetColSqlitePath();
+
+        if (string.IsNullOrWhiteSpace(colPath)) {
+            AnsiConsole.MarkupLine("[red]Catalogue of Life database path is not configured. Set Datastore:COL_sqlite or pass --col-database.[/]");
             return -4;
         }
 
-        if (!File.Exists(colDatabasePath)) {
-            AnsiConsole.MarkupLine($"[red]Catalogue of Life SQLite database not found at:[/] {Markup.Escape(colDatabasePath)}");
+        colPath = Path.GetFullPath(colPath);
+        if (!File.Exists(colPath)) {
+            AnsiConsole.MarkupLine($"[red]Catalogue of Life SQLite database not found at:[/] {Markup.Escape(colPath)}");
             return -5;
         }
 
         var iucnConnectionString = new SqliteConnectionStringBuilder {
-            DataSource = iucnDatabasePath,
+            DataSource = iucnPath,
             Mode = SqliteOpenMode.ReadOnly
         }.ToString();
 
         var colConnectionString = new SqliteConnectionStringBuilder {
-            DataSource = colDatabasePath,
+            DataSource = colPath,
             Mode = SqliteOpenMode.ReadOnly
         }.ToString();
 
         using var iucnConnection = new SqliteConnection(iucnConnectionString);
         using var colConnection = new SqliteConnection(colConnectionString);
+
         iucnConnection.Open();
         colConnection.Open();
 
         var iucnRepository = new IucnTaxonomyRepository(iucnConnection);
         if (!iucnRepository.ObjectExists("view_assessments_html_taxonomy_html", "view")) {
-            AnsiConsole.MarkupLine("[red]view_assessments_html_taxonomy_html not found. Re-run the IUCN importer to create the joined view.[/]");
+            AnsiConsole.MarkupLine("[red]view_assessments_html_taxonomy_html not found in IUCN database. Run the importer to rebuild the view.[/]");
             return -6;
         }
 
-        var colRepository = new ColNameUsageRepository(colConnection);
-        if (!colRepository.ObjectExists("nameusage", "table")) {
-            AnsiConsole.MarkupLine("[red]nameusage table not found in the COL database.[/]");
-            return -7;
-        }
-
-        if (!colRepository.SupportsAcceptedNameLookup) {
-            var message = colRepository.UsesParentIdFallback
-                ? "[yellow]COL dataset lacks acceptedNameUsageID; falling back to parentID for context only.[/]"
-                : "[yellow]COL dataset lacks acceptedNameUsageID; accepted-name lookups will be skipped.[/]";
-            AnsiConsole.MarkupLine(message);
-        }
-
-        var analysis = new IucnColCrosscheckAnalysis(settings.MaxSamples);
-
-        try {
-            foreach (var row in iucnRepository.ReadRows(settings.Limit, cancellationToken)) {
-                cancellationToken.ThrowIfCancellationRequested();
-                analysis.RegisterRow();
-
-                if (!IsSpeciesCandidate(row)) {
-                    analysis.RegisterSkipped();
-                    continue;
-                }
-
-                var composition = ScientificNameComposer.Compose(row);
-                if (composition.Classification != NameClassification.SpeciesOrHigher || composition.HasInfra) {
-                    analysis.RegisterSkipped();
-                    continue;
-                }
-
-                analysis.RegisterEvaluated();
-
-                var displayName = DetermineDisplayName(row, composition);
-                var normalizedName = NormalizeText(displayName);
-                if (normalizedName is null) {
-                    var missingSample = CreateSample(row, displayName, row.Authority, NormalizeText(row.Authority), null, null, null, null, null, null, 0, "No scientific name available for lookup.");
-                    analysis.RegisterMissing(missingSample);
-                    continue;
-                }
-
-                var matches = colRepository.FindByScientificName(normalizedName, cancellationToken);
-                if (matches.Count == 0) {
-                    matches = colRepository.FindByGenusSpecies(row.GenusName, row.SpeciesName, cancellationToken);
-                }
-
-                if (matches.Count == 0) {
-                    var missingSample = CreateSample(row, displayName, row.Authority, NormalizeText(row.Authority), null, null, null, null, null, null, 0, "Not found in Catalogue of Life.");
-                    analysis.RegisterMissing(missingSample);
-                    continue;
-                }
-
-                analysis.RegisterFound();
-
-                var selected = SelectPreferredMatch(matches);
-                var acceptedEntry = GetAcceptedEntry(selected, colRepository, cancellationToken);
-
-                var acceptedId = acceptedEntry?.Id ?? selected.AcceptedNameUsageId;
-                var acceptedScientificName = acceptedEntry?.ScientificName;
-                var acceptedAuthority = acceptedEntry?.Authorship;
-                var normalizedIucnAuthority = NormalizeText(row.Authority);
-                var normalizedColAuthority = NormalizeText(selected.Authorship);
-                var normalizedAcceptedAuthority = NormalizeText(acceptedAuthority);
-
-                var baseSample = CreateSample(
-                    row,
-                    displayName,
-                    row.Authority,
-                    normalizedIucnAuthority,
-                    selected,
-                    normalizedColAuthority,
-                    acceptedId,
-                    acceptedScientificName,
-                    acceptedAuthority,
-                    normalizedAcceptedAuthority,
-                    matches.Count,
-                    string.Empty
-                );
-
-                if (IsSynonymStatus(selected.Status)) {
-                    var synonymDetail = BuildSynonymDetail(baseSample);
-                    analysis.RegisterSynonym(baseSample with { Detail = synonymDetail });
-                }
-
-                if (AuthoritiesEqual(normalizedIucnAuthority, normalizedColAuthority)) {
-                    analysis.RegisterAuthorityMatch();
-                } else {
-                    var mismatchDetail = BuildAuthorityMismatchDetail(baseSample);
-                    analysis.RegisterAuthorityMismatch(baseSample with { Detail = mismatchDetail });
-                }
-
-                if (matches.Count > 1) {
-                    var multipleDetail = BuildMultipleMatchesDetail(matches);
-                    analysis.RegisterMultipleMatches(baseSample with { Detail = multipleDetail });
-                }
+        using (var pragma = colConnection.CreateCommand()) {
+            pragma.CommandText = "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'nameusage' LIMIT 1";
+            if (pragma.ExecuteScalar() is null) {
+                AnsiConsole.MarkupLine("[red]nameusage table not found in Catalogue of Life database.[/]");
+                return -7;
             }
+        }
+
+        var colRepository = new ColTaxonRepository(colConnection);
+
+        List<IucnTaxonomyRow> allRows;
+        try {
+            allRows = iucnRepository.ReadRows(0, cancellationToken)
+                .Where(row => settings.IncludeSubpopulations || string.IsNullOrWhiteSpace(row.SubpopulationName))
+                .ToList();
         } catch (OperationCanceledException) {
             throw;
         } catch (Exception ex) {
-            AnsiConsole.MarkupLine($"[red]Crosscheck failed:[/] {Markup.Escape(ex.Message)}");
+            AnsiConsole.MarkupLine($"[red]Failed to read IUCN taxonomy data:[/] {Markup.Escape(ex.Message)}");
             return -8;
         }
 
-        RenderResults(analysis, iucnDatabasePath, colDatabasePath, settings.Limit);
+        if (settings.Limit > 0 && allRows.Count > settings.Limit) {
+            allRows = allRows.Take((int)Math.Min(settings.Limit, int.MaxValue)).ToList();
+        }
+
+        if (allRows.Count == 0) {
+            AnsiConsole.MarkupLine("[yellow]No IUCN rows matched the filter criteria.[/]");
+            return 0;
+        }
+
+        var orderedRows = allRows
+            .OrderBy(r => SortKey(r.KingdomName), StringComparer.OrdinalIgnoreCase)
+            .ThenBy(r => SortKey(r.PhylumName), StringComparer.OrdinalIgnoreCase)
+            .ThenBy(r => SortKey(r.ClassName), StringComparer.OrdinalIgnoreCase)
+            .ThenBy(r => SortKey(r.OrderName), StringComparer.OrdinalIgnoreCase)
+            .ThenBy(r => SortKey(r.FamilyName), StringComparer.OrdinalIgnoreCase)
+            .ThenBy(r => SortKey(r.GenusName), StringComparer.OrdinalIgnoreCase)
+            .ThenBy(r => SortKey(r.SpeciesName), StringComparer.OrdinalIgnoreCase)
+            .ThenBy(r => SortKey(r.InfraName), StringComparer.OrdinalIgnoreCase)
+            .ThenBy(r => r.AssessmentId, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        var reportPath = ResolveReportPath(settings.OutputPath, iucnPath);
+        Directory.CreateDirectory(Path.GetDirectoryName(reportPath)!);
+
+        using var stream = new FileStream(reportPath, FileMode.Create, FileAccess.Write, FileShare.Read);
+        using var writer = new StreamWriter(stream, new UTF8Encoding(false));
+
+        WriteReportHeader(writer, iucnPath, colPath, orderedRows.Count, settings);
+
+        var stats = new CrosscheckStats();
+        var laddersBuffer = new List<TaxonLadder>();
+
+        WriteProgress(orderedRows, colRepository, writer, stats, laddersBuffer, cancellationToken);
+
+        writer.Flush();
+
+        RenderSummary(stats, reportPath);
         return 0;
     }
 
-    private static string ResolveColDatabasePath(PathsService paths, string? overridePath) {
-        var configuredPath = !string.IsNullOrWhiteSpace(overridePath)
-            ? overridePath
-            : paths.GetColSqlitePath();
+    private static void WriteProgress(
+        IReadOnlyList<IucnTaxonomyRow> rows,
+        ColTaxonRepository colRepository,
+        StreamWriter writer,
+        CrosscheckStats stats,
+        List<TaxonLadder> laddersBuffer,
+        CancellationToken cancellationToken) {
 
-        if (string.IsNullOrWhiteSpace(configuredPath)) {
-            throw new InvalidOperationException("Catalogue of Life SQLite path is not configured. Set Datastore:COL_sqlite or pass --col-database.");
-        }
+        var columns = new ProgressColumn[] {
+            new TaskDescriptionColumn(),
+            new ProgressBarColumn(),
+            new PercentageColumn(),
+            new RemainingTimeColumn(),
+            new SpinnerColumn()
+        };
 
-        return Path.GetFullPath(configuredPath);
+        AnsiConsole.Progress()
+            .AutoClear(true)
+            .HideCompleted(true)
+            .Columns(columns)
+            .Start(ctx => {
+                var task = ctx.AddTask("Crosschecking IUCN assessments", maxValue: rows.Count);
+
+                foreach (var row in rows) {
+                    cancellationToken.ThrowIfCancellationRequested();
+
+                    ProcessRow(row, colRepository, writer, stats, laddersBuffer, cancellationToken);
+
+                    task.Increment(1);
+                }
+            });
     }
 
-    private static bool IsSpeciesCandidate(IucnTaxonomyRow row) {
+    private static void ProcessRow(
+        IucnTaxonomyRow row,
+        ColTaxonRepository colRepository,
+        StreamWriter writer,
+        CrosscheckStats stats,
+        List<TaxonLadder> laddersBuffer,
+        CancellationToken cancellationToken) {
+
+        var match = FindBestMatch(row, colRepository, cancellationToken);
+
+        stats.Total++;
+        if (match.Primary is null) {
+            stats.NotFound++;
+        } else {
+            stats.Matched++;
+            if (match.Accepted is not null && !string.Equals(match.Primary.Id, match.Accepted.Id, StringComparison.Ordinal)) {
+                stats.Synonyms++;
+            }
+        }
+
+        var iucnAuthority = GetIucnAuthority(row);
+        var colAuthority = match.Primary?.Authorship;
+        var acceptedAuthority = match.Accepted?.Authorship;
+
+        var authorityMatches = match.Primary is not null && AuthorityNormalizer.Equivalent(iucnAuthority, colAuthority);
+        if (match.Primary is not null) {
+            if (authorityMatches) {
+                stats.AuthorityMatches++;
+            } else {
+                stats.AuthorityMismatches++;
+            }
+        }
+
+        var alignment = BuildAlignment(row, match, laddersBuffer);
+        WriteRow(writer, row, match, iucnAuthority, colAuthority, acceptedAuthority, authorityMatches, alignment);
+    }
+
+    private static TaxonLadderAlignmentResult BuildAlignment(IucnTaxonomyRow row, ColMatchResult match, List<TaxonLadder> buffer) {
+        buffer.Clear();
+        buffer.Add(TaxonLadderFactory.FromIucn(row));
+
+        if (match.Primary is not null) {
+            buffer.Add(TaxonLadderFactory.FromCol("COL-match", match.Primary));
+        }
+
+        if (match.Accepted is not null && (match.Primary is null || !string.Equals(match.Accepted.Id, match.Primary.Id, StringComparison.Ordinal))) {
+            buffer.Add(TaxonLadderFactory.FromCol("COL-accepted", match.Accepted));
+        }
+
+        return TaxonLadderAlignment.Align(buffer.ToArray());
+    }
+
+    private static void WriteReportHeader(StreamWriter writer, string iucnPath, string colPath, int totalRows, Settings settings) {
+        writer.WriteLine("IUCN vs Catalogue of Life Crosscheck Report");
+        writer.WriteLine($"Generated: {DateTimeOffset.Now:yyyy-MM-dd HH:mm:ss zzz}");
+        writer.WriteLine($"IUCN database: {iucnPath}");
+        writer.WriteLine($"Catalogue of Life database: {colPath}");
+        writer.WriteLine($"Include subpopulations: {settings.IncludeSubpopulations}");
+        if (settings.Limit > 0) {
+            writer.WriteLine($"Limit: {settings.Limit:N0}");
+        }
+        writer.WriteLine($"Rows processed: {totalRows:N0}");
+        writer.WriteLine(new string('=', 80));
+        writer.WriteLine();
+    }
+
+    private static void WriteRow(
+        StreamWriter writer,
+        IucnTaxonomyRow row,
+        ColMatchResult match,
+        string? iucnAuthority,
+        string? colAuthority,
+        string? acceptedAuthority,
+        bool authorityMatches,
+        TaxonLadderAlignmentResult alignment) {
+
+        writer.WriteLine($"Assessment: {row.AssessmentId} | InternalTaxonId: {row.InternalTaxonId} | Version: {row.RedlistVersion}");
+        writer.WriteLine($"IUCN scientificName: {SafeValue(row.ScientificNameAssessments) }");
+        writer.WriteLine($"IUCN scientificName:1: {SafeValue(row.ScientificNameTaxonomy) }");
+        writer.WriteLine($"IUCN authority: {SafeValue(iucnAuthority)}");
+
+        if (!string.IsNullOrWhiteSpace(row.InfraType) || !string.IsNullOrWhiteSpace(row.InfraName)) {
+            writer.WriteLine($"IUCN infra: {SafeValue(row.InfraType)} {SafeValue(row.InfraName)}");
+        }
+
         if (!string.IsNullOrWhiteSpace(row.SubpopulationName)) {
-            return false;
+            writer.WriteLine($"IUCN subpopulation: {row.SubpopulationName.Trim()}");
         }
 
-        if (!string.IsNullOrWhiteSpace(row.InfraType)) {
-            return false;
+        writer.WriteLine($"IUCN classification: kingdom={SafeValue(row.KingdomName)}, phylum={SafeValue(row.PhylumName)}, class={SafeValue(row.ClassName)}, order={SafeValue(row.OrderName)}, family={SafeValue(row.FamilyName)}, genus={SafeValue(row.GenusName)}, species={SafeValue(row.SpeciesName)}");
+
+        if (match.Primary is null) {
+            writer.WriteLine("COL match: (not found)");
+        } else {
+            writer.WriteLine($"COL match: id={match.Primary.Id}, status={SafeValue(match.Primary.Status)}, rank={SafeValue(match.Primary.Rank)}, via={match.MatchMethod}");
+            writer.WriteLine($"COL name: {match.Primary.ScientificName}");
+            writer.WriteLine($"COL authority: {SafeValue(colAuthority)}");
         }
 
-        if (string.IsNullOrWhiteSpace(row.GenusName) || string.IsNullOrWhiteSpace(row.SpeciesName)) {
-            return false;
+        if (match.Accepted is not null && (match.Primary is null || !string.Equals(match.Accepted.Id, match.Primary.Id, StringComparison.Ordinal))) {
+            writer.WriteLine($"COL accepted: id={match.Accepted.Id}, name={match.Accepted.ScientificName}, authority={SafeValue(acceptedAuthority)}");
         }
 
-        return true;
+        if (match.Primary is not null) {
+            var normalizedIucn = AuthorityNormalizer.Normalize(iucnAuthority);
+            var normalizedCol = AuthorityNormalizer.Normalize(colAuthority);
+            writer.WriteLine($"Authority comparison: {(authorityMatches ? "match" : "mismatch")} | IUCN='{normalizedIucn}' | COL='{normalizedCol}'");
+        }
+
+        if (match.Candidates.Count > 1) {
+            writer.WriteLine($"COL candidates ({match.Candidates.Count}): {string.Join(", ", match.Candidates.Select(c => c.Id))}");
+        }
+
+    WriteAlignment(writer, alignment, match.LadderSources);
+
+        writer.WriteLine(new string('-', 80));
+        writer.WriteLine();
     }
 
-    private static string DetermineDisplayName(IucnTaxonomyRow row, ScientificNameComposition composition) {
-        if (!string.IsNullOrWhiteSpace(composition.BaseName)) {
-            return composition.BaseName;
+    private static void WriteAlignment(StreamWriter writer, TaxonLadderAlignmentResult alignment, IReadOnlyList<string> ladders) {
+        if (alignment.Rows.Count == 0) {
+            writer.WriteLine("Ladder alignment: (no data)");
+            return;
         }
 
-        if (!string.IsNullOrWhiteSpace(row.ScientificNameAssessments)) {
-            return row.ScientificNameAssessments.Trim();
+        var headers = ladders.Count > 0 ? ladders : new[] { "IUCN" };
+        var widths = new int[headers.Count + 1];
+        widths[0] = Math.Max("Rank".Length, alignment.Rows.Max(row => row.Rank.Length));
+
+        for (var i = 0; i < headers.Count; i++) {
+            var source = headers[i];
+            var max = alignment.Rows.Select(row => row.Values.TryGetValue(source, out var val) ? val.Length : 1).DefaultIfEmpty(1).Max();
+            widths[i + 1] = Math.Max(headers[i].Length, Math.Min(max, 80));
         }
 
-        if (!string.IsNullOrWhiteSpace(row.ScientificNameTaxonomy)) {
-            return row.ScientificNameTaxonomy.Trim();
+        static string FormatCell(string value, int width) {
+            if (value.Length <= width) {
+                return value.PadRight(width);
+            }
+
+            if (width <= 3) {
+                return new string('.', width);
+            }
+
+            var sliceLength = Math.Min(width - 3, value.Length);
+            var slice = value.Substring(0, sliceLength);
+            return (slice + "...").PadRight(width);
         }
 
-        return $"{row.GenusName} {row.SpeciesName}".Trim();
+        var headerLine = new StringBuilder();
+        headerLine.Append(FormatCell("Rank", widths[0]));
+        for (var i = 0; i < headers.Count; i++) {
+            headerLine.Append(" | ");
+            headerLine.Append(FormatCell(headers[i], widths[i + 1]));
+        }
+        writer.WriteLine(headerLine.ToString());
+
+        foreach (var row in alignment.Rows) {
+            var line = new StringBuilder();
+            line.Append(FormatCell(row.Rank, widths[0]));
+            for (var i = 0; i < headers.Count; i++) {
+                line.Append(" | ");
+                var source = headers[i];
+                var value = row.Values.TryGetValue(source, out var val) ? val : "-";
+                line.Append(FormatCell(value, widths[i + 1]));
+            }
+            writer.WriteLine(line.ToString());
+        }
     }
 
-    private static ColNameUsageEntry? GetAcceptedEntry(ColNameUsageEntry entry, ColNameUsageRepository repository, CancellationToken cancellationToken) {
-        if (!repository.SupportsAcceptedNameLookup) {
-            return null;
-        }
+    private static ColMatchResult FindBestMatch(IucnTaxonomyRow row, ColTaxonRepository repository, CancellationToken cancellationToken) {
+        var candidates = new List<ColTaxonRecord>();
+        var matchMethod = new List<string>();
 
-        if (string.IsNullOrWhiteSpace(entry.AcceptedNameUsageId)) {
-            return null;
-        }
-
-        return repository.GetById(entry.AcceptedNameUsageId, cancellationToken);
-    }
-
-    private static ColNameUsageEntry SelectPreferredMatch(IReadOnlyList<ColNameUsageEntry> matches) {
-        foreach (var candidate in matches) {
-            if (IsAcceptedStatus(candidate.Status)) {
-                return candidate;
+        var primaryName = row.ScientificNameTaxonomy;
+        if (!string.IsNullOrWhiteSpace(primaryName)) {
+            var nameMatches = repository.FindByScientificName(primaryName, cancellationToken);
+            if (nameMatches.Count > 0) {
+                candidates.AddRange(nameMatches);
+                matchMethod.Add("scientificName:1");
             }
         }
 
-        foreach (var candidate in matches) {
-            if (string.IsNullOrWhiteSpace(candidate.Status)) {
-                return candidate;
+        var fallbackName = row.ScientificNameAssessments;
+        if (!string.IsNullOrWhiteSpace(fallbackName) && candidates.Count == 0) {
+            var fallbackMatches = repository.FindByScientificName(fallbackName, cancellationToken);
+            if (fallbackMatches.Count > 0) {
+                candidates.AddRange(fallbackMatches);
+                matchMethod.Add("scientificName");
             }
         }
 
-        return matches[0];
+        var genus = row.GenusName;
+        var species = row.SpeciesName;
+        var infra = row.InfraName;
+        if (candidates.Count == 0 && !string.IsNullOrWhiteSpace(genus) && !string.IsNullOrWhiteSpace(species)) {
+            var componentMatches = repository.FindByComponents(genus, species, infra, cancellationToken);
+            if (componentMatches.Count > 0) {
+                candidates.AddRange(componentMatches);
+                matchMethod.Add("components");
+            }
+        }
+
+        var uniqueCandidates = candidates
+            .GroupBy(c => c.Id, StringComparer.Ordinal)
+            .Select(g => g.First())
+            .ToList();
+
+        var primary = ChoosePrimary(uniqueCandidates, !string.IsNullOrWhiteSpace(row.InfraName));
+        ColTaxonRecord? accepted = null;
+
+        if (primary is not null && !string.IsNullOrWhiteSpace(primary.AcceptedNameUsageId)) {
+            accepted = repository.GetById(primary.AcceptedNameUsageId, cancellationToken);
+        }
+
+        var ladderSources = new List<string> { "IUCN" };
+        if (primary is not null) {
+            ladderSources.Add("COL-match");
+        }
+        if (accepted is not null && (primary is null || !string.Equals(primary.Id, accepted.Id, StringComparison.Ordinal))) {
+            ladderSources.Add("COL-accepted");
+        }
+
+        var distinctMethods = matchMethod.Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        return new ColMatchResult(primary, accepted, uniqueCandidates, distinctMethods.Count == 0 ? "none" : string.Join(",", distinctMethods), ladderSources);
     }
 
-    private static bool IsAcceptedStatus(string? status) {
+    private static ColTaxonRecord? ChoosePrimary(IReadOnlyList<ColTaxonRecord> candidates, bool expectInfra) {
+        if (candidates.Count == 0) {
+            return null;
+        }
+
+        var acceptedMatches = candidates
+            .Where(c => LooksAccepted(c.Status))
+            .ToList();
+
+        if (acceptedMatches.Count > 0) {
+            var preferredAccepted = PickByInfraExpectation(acceptedMatches, expectInfra);
+            if (preferredAccepted is not null) {
+                return preferredAccepted;
+            }
+        }
+
+        var synonymMatches = candidates
+            .Where(c => LooksSynonym(c.Status))
+            .ToList();
+
+        if (synonymMatches.Count > 0) {
+            var preferredSyn = PickByInfraExpectation(synonymMatches, expectInfra);
+            if (preferredSyn is not null) {
+                return preferredSyn;
+            }
+        }
+
+        return PickByInfraExpectation(candidates, expectInfra) ?? candidates[0];
+    }
+
+    private static ColTaxonRecord? PickByInfraExpectation(IEnumerable<ColTaxonRecord> candidates, bool expectInfra) {
+        var list = candidates.ToList();
+        if (list.Count == 0) {
+            return null;
+        }
+
+        if (!expectInfra) {
+            var speciesLevel = list.FirstOrDefault(c => !LooksInfraRank(c.Rank));
+            if (speciesLevel is not null) {
+                return speciesLevel;
+            }
+        } else {
+            var infraLevel = list.FirstOrDefault(c => LooksInfraRank(c.Rank));
+            if (infraLevel is not null) {
+                return infraLevel;
+            }
+        }
+
+        return list[0];
+    }
+
+    private static bool LooksAccepted(string? status) {
         if (string.IsNullOrWhiteSpace(status)) {
             return false;
         }
 
         var normalized = status.Trim().ToLowerInvariant();
-        if (normalized.Contains("synonym", StringComparison.Ordinal)) {
-            return false;
-        }
-
-        if (normalized.Contains("misapplied", StringComparison.Ordinal)) {
-            return false;
-        }
-
-        return normalized.Contains("accepted", StringComparison.Ordinal) || normalized.Contains("valid", StringComparison.Ordinal);
+        return normalized.Contains("accepted", StringComparison.Ordinal);
     }
 
-    private static bool IsSynonymStatus(string? status) {
+    private static bool LooksSynonym(string? status) {
         if (string.IsNullOrWhiteSpace(status)) {
             return false;
         }
 
-        return status.Contains("synonym", StringComparison.OrdinalIgnoreCase);
+        var normalized = status.Trim().ToLowerInvariant();
+        return normalized.Contains("synonym", StringComparison.Ordinal);
     }
 
-    private static string? NormalizeText(string? value) {
-        if (value is null) {
-            return null;
-        }
-
-        var trimmed = value.Trim();
-        if (trimmed.Length == 0) {
-            return null;
-        }
-
-        var builder = new StringBuilder(trimmed.Length);
-        var previousWasSpace = false;
-
-        foreach (var ch in trimmed) {
-            var normalized = ch switch {
-                '\u00A0' => ' ',
-                '\u2007' => ' ',
-                '\u202F' => ' ',
-                '\u2009' => ' ',
-                '\r' => ' ',
-                '\n' => ' ',
-                '\t' => ' ',
-                _ => ch
-            };
-
-            if (char.IsWhiteSpace(normalized)) {
-                if (!previousWasSpace) {
-                    builder.Append(' ');
-                    previousWasSpace = true;
-                }
-            } else {
-                builder.Append(normalized);
-                previousWasSpace = false;
-            }
-        }
-
-        var result = builder.ToString().Trim();
-        return result.Length == 0 ? null : result;
-    }
-
-    private static bool AuthoritiesEqual(string? a, string? b) {
-        if (string.IsNullOrWhiteSpace(a) && string.IsNullOrWhiteSpace(b)) {
-            return true;
-        }
-
-        if (string.IsNullOrWhiteSpace(a) || string.IsNullOrWhiteSpace(b)) {
+    private static bool LooksInfraRank(string? rank) {
+        if (string.IsNullOrWhiteSpace(rank)) {
             return false;
         }
 
-        return string.Equals(a, b, StringComparison.OrdinalIgnoreCase);
-    }
-
-    private static string BuildSynonymDetail(CrosscheckSample sample) {
-        var status = string.IsNullOrWhiteSpace(sample.ColStatus) ? "unknown" : sample.ColStatus.Trim();
-        if (!string.IsNullOrWhiteSpace(sample.AcceptedScientificName)) {
-            var authority = string.IsNullOrWhiteSpace(sample.AcceptedAuthority) ? "(no authority)" : sample.AcceptedAuthority.Trim();
-            var idLabel = string.IsNullOrWhiteSpace(sample.AcceptedId) ? "(id unavailable)" : sample.AcceptedId;
-            return $"Synonym in COL (status={status}) → accepted {sample.AcceptedScientificName} [{authority}] (ID: {idLabel})";
+        var normalized = rank.Trim().ToLowerInvariant();
+        if (normalized.Contains("subspecies", StringComparison.Ordinal) || normalized.Contains("variety", StringComparison.Ordinal)) {
+            return true;
         }
 
-        if (!string.IsNullOrWhiteSpace(sample.AcceptedId)) {
-            return $"Synonym in COL (status={status}) → accepted ID {sample.AcceptedId} not resolved";
+        return normalized.Contains("form", StringComparison.Ordinal);
+    }
+
+    private static string? GetIucnAuthority(IucnTaxonomyRow row) {
+        if (!string.IsNullOrWhiteSpace(row.InfraName) && !string.IsNullOrWhiteSpace(row.InfraAuthority)) {
+            return row.InfraAuthority!.Trim();
         }
 
-        return $"Synonym in COL (status={status}).";
+        return row.Authority?.Trim();
     }
 
-    private static string BuildAuthorityMismatchDetail(CrosscheckSample sample) {
-        var iucn = sample.NormalizedIucnAuthority ?? "(none)";
-        var col = sample.NormalizedColAuthority ?? "(none)";
-        return $"Authority mismatch after normalization (IUCN={iucn}; COL={col}).";
+    private static string SafeValue(string? value) {
+        return string.IsNullOrWhiteSpace(value) ? "(none)" : value.Trim();
     }
 
-    private static string BuildMultipleMatchesDetail(IReadOnlyList<ColNameUsageEntry> matches) {
-        var parts = matches
-            .Select(match => {
-                var status = string.IsNullOrWhiteSpace(match.Status) ? "?" : match.Status.Trim();
-                return $"{match.Id}:{status}";
-            });
-        return $"Multiple COL candidates ({matches.Count}): {string.Join(", ", parts)}";
+    private static string SortKey(string? value) {
+        return string.IsNullOrWhiteSpace(value) ? "~" : value.Trim();
     }
 
-    private static CrosscheckSample CreateSample(
-        IucnTaxonomyRow row,
-        string scientificName,
-        string? iucnAuthority,
-        string? normalizedIucnAuthority,
-        ColNameUsageEntry? colEntry,
-        string? normalizedColAuthority,
-        string? acceptedId,
-        string? acceptedScientificName,
-        string? acceptedAuthority,
-        string? normalizedAcceptedAuthority,
-        int matchCount,
-        string detail
-    ) {
-        var sortKey = BuildSortKey(row, scientificName);
-        return new CrosscheckSample(
-            sortKey,
-            row.KingdomName,
-            row.PhylumName,
-            row.ClassName,
-            row.OrderName,
-            row.FamilyName,
-            row.GenusName,
-            row.SpeciesName,
-            scientificName,
-            iucnAuthority,
-            normalizedIucnAuthority,
-            colEntry?.Id,
-            colEntry?.ScientificName,
-            colEntry?.Status,
-            colEntry?.Authorship,
-            normalizedColAuthority,
-            acceptedId,
-            acceptedScientificName,
-            acceptedAuthority,
-            normalizedAcceptedAuthority,
-            matchCount,
-            detail,
-            row.AssessmentId,
-            row.InternalTaxonId,
-            row.RedlistVersion
-        );
-    }
-
-    private static string BuildSortKey(IucnTaxonomyRow row, string scientificName) {
-        var parts = new[] {
-            row.KingdomName,
-            row.PhylumName,
-            row.ClassName,
-            row.OrderName,
-            row.FamilyName,
-            row.GenusName,
-            row.SpeciesName,
-            scientificName
-        };
-
-        return string.Join("|", parts.Select(p => (p ?? string.Empty).ToUpperInvariant()));
-    }
-
-    private static void RenderResults(IucnColCrosscheckAnalysis analysis, string iucnDatabasePath, string colDatabasePath, long limit) {
-        AnsiConsole.MarkupLine("[bold]IUCN vs Catalogue of Life Crosscheck[/]");
-        AnsiConsole.MarkupLine($"[grey]IUCN database:[/] {Markup.Escape(Path.GetFileName(iucnDatabasePath))}");
-        AnsiConsole.MarkupLine($"[grey]COL database:[/] {Markup.Escape(Path.GetFileName(colDatabasePath))}");
-        if (limit > 0) {
-            AnsiConsole.MarkupLine($"[grey]Row limit:[/] {limit:N0}");
-        }
-        AnsiConsole.MarkupLine($"[grey]Rows scanned:[/] {analysis.TotalRows:N0}");
-        AnsiConsole.MarkupLine($"[grey]Species evaluated:[/] {analysis.EvaluatedSpecies:N0}");
-        if (analysis.SkippedNonSpecies > 0) {
-            AnsiConsole.MarkupLine($"[grey]Skipped (non-global or infraspecific):[/] {analysis.SkippedNonSpecies:N0}");
-        }
-
-        AnsiConsole.MarkupLine(string.Empty);
-        AnsiConsole.MarkupLine("[bold]Counts[/]");
-        AnsiConsole.MarkupLine($"- Found in COL: {analysis.FoundCount:N0}");
-        AnsiConsole.MarkupLine($"- Missing in COL: {analysis.MissingCount:N0}");
-        AnsiConsole.MarkupLine($"- Synonyms in COL: {analysis.SynonymCount:N0}");
-        AnsiConsole.MarkupLine($"- Authority matches: {analysis.AuthorityMatchCount:N0}");
-        AnsiConsole.MarkupLine($"- Authority mismatches: {analysis.AuthorityMismatchCount:N0}");
-        if (analysis.MultipleMatchesCount > 0) {
-            AnsiConsole.MarkupLine($"- Multiple COL candidates: {analysis.MultipleMatchesCount:N0}");
-        }
-
-        AnsiConsole.MarkupLine(string.Empty);
-        PrintSamples("Missing in COL", analysis.GetSamples(CrosscheckSampleKind.Missing));
-        PrintSamples("Synonyms in COL", analysis.GetSamples(CrosscheckSampleKind.Synonym));
-        PrintSamples("Authority mismatches", analysis.GetSamples(CrosscheckSampleKind.AuthorityMismatch));
-        PrintSamples("Multiple COL candidates", analysis.GetSamples(CrosscheckSampleKind.MultipleMatches));
-    }
-
-    private static void PrintSamples(string title, IReadOnlyList<CrosscheckSample> samples) {
-        if (samples.Count == 0) {
-            return;
-        }
-
-        AnsiConsole.MarkupLine($"[grey]{Markup.Escape(title)}[/]");
-        var ordered = samples
-            .OrderBy(sample => sample.SortKey, StringComparer.Ordinal)
-            .ThenBy(sample => sample.IucnScientificName, StringComparer.OrdinalIgnoreCase)
-            .ToList();
-
-        foreach (var sample in ordered) {
-            var builder = new StringBuilder();
-            AppendField(builder, "classification", BuildClassificationString(sample));
-            AppendField(builder, "iucnScientificName", sample.IucnScientificName);
-            AppendField(builder, "iucnAuthority", FormatAuthority(sample.IucnAuthority, sample.NormalizedIucnAuthority));
-            AppendField(builder, "colScientificName", sample.ColScientificName ?? "(not found)");
-            AppendField(builder, "colId", sample.ColId ?? "(none)");
-            AppendField(builder, "colStatus", sample.ColStatus ?? "(none)");
-            AppendField(builder, "colAuthority", FormatAuthority(sample.ColAuthority, sample.NormalizedColAuthority));
-
-            if (!string.IsNullOrWhiteSpace(sample.AcceptedScientificName) || !string.IsNullOrWhiteSpace(sample.AcceptedId)) {
-                var acceptedLabel = sample.AcceptedScientificName ?? "(unknown)";
-                AppendField(builder, "colAccepted", acceptedLabel);
-                AppendField(builder, "colAcceptedAuthority", FormatAuthority(sample.AcceptedAuthority, sample.NormalizedAcceptedAuthority));
-                AppendField(builder, "colAcceptedId", sample.AcceptedId ?? "(none)");
+    private static string ResolveReportPath(string? outputPath, string iucnPath) {
+        if (!string.IsNullOrWhiteSpace(outputPath)) {
+            var full = Path.GetFullPath(outputPath);
+            var directory = Path.GetDirectoryName(full);
+            if (!string.IsNullOrWhiteSpace(directory) && !Directory.Exists(directory)) {
+                Directory.CreateDirectory(directory);
             }
-
-            AppendField(builder, "matches", sample.MatchCount.ToString());
-            AppendField(builder, "detail", sample.Detail);
-            AppendField(builder, "assessmentId", sample.AssessmentId);
-            AppendField(builder, "internalTaxonId", sample.InternalTaxonId);
-            AppendField(builder, "redlistVersion", sample.RedlistVersion);
-            AppendField(builder, "url", BuildIucnUrl(sample.InternalTaxonId, sample.AssessmentId));
-            builder.AppendLine();
-            AnsiConsole.Markup(builder.ToString());
+            return full;
         }
+
+        var baseDir = Path.GetDirectoryName(iucnPath) ?? Directory.GetCurrentDirectory();
+        var reportDir = Path.Combine(baseDir, "data-analysis");
+        Directory.CreateDirectory(reportDir);
+        var fileName = $"iucn-col-crosscheck-{DateTimeOffset.Now:yyyyMMdd-HHmmss}.txt";
+        return Path.Combine(reportDir, fileName);
     }
 
-    private static void AppendField(StringBuilder builder, string label, string? value) {
-        builder.Append("[grey]").Append(Markup.Escape(label)).AppendLine("[/]");
-        if (value is null) {
-            builder.AppendLine("  (null)");
-            return;
-        }
-
-        if (value.Length == 0) {
-            builder.AppendLine("  (empty)");
-            return;
-        }
-
-        var lines = value.Split('\n');
-        foreach (var line in lines) {
-            builder.Append("  ").AppendLine(Markup.Escape(line.Length == 0 ? "(empty)" : line));
-        }
+    private static void RenderSummary(CrosscheckStats stats, string reportPath) {
+        AnsiConsole.MarkupLine("[bold]IUCN vs COL Crosscheck[/]");
+        AnsiConsole.MarkupLine($"- rows processed: {stats.Total:N0}");
+        AnsiConsole.MarkupLine($"- matches: {stats.Matched:N0}");
+        AnsiConsole.MarkupLine($"- not found: {stats.NotFound:N0}");
+        AnsiConsole.MarkupLine($"- synonyms: {stats.Synonyms:N0}");
+        AnsiConsole.MarkupLine($"- authority matches: {stats.AuthorityMatches:N0}");
+        AnsiConsole.MarkupLine($"- authority mismatches: {stats.AuthorityMismatches:N0}");
+        AnsiConsole.MarkupLine($"[green]Report written to:[/] {Markup.Escape(reportPath)}");
     }
 
-    private static string BuildClassificationString(CrosscheckSample sample) {
-        var parts = new List<string>();
-        if (!string.IsNullOrWhiteSpace(sample.Kingdom)) parts.Add(sample.Kingdom);
-        if (!string.IsNullOrWhiteSpace(sample.Phylum)) parts.Add(sample.Phylum);
-        if (!string.IsNullOrWhiteSpace(sample.Class)) parts.Add(sample.Class);
-        if (!string.IsNullOrWhiteSpace(sample.Order)) parts.Add(sample.Order);
-        if (!string.IsNullOrWhiteSpace(sample.Family)) parts.Add(sample.Family);
-        if (!string.IsNullOrWhiteSpace(sample.Genus)) parts.Add(sample.Genus);
-        if (!string.IsNullOrWhiteSpace(sample.Species)) parts.Add(sample.Species);
-        return parts.Count == 0 ? "(unknown)" : string.Join(" > ", parts);
-    }
+    private sealed record ColMatchResult(
+        ColTaxonRecord? Primary,
+        ColTaxonRecord? Accepted,
+        IReadOnlyList<ColTaxonRecord> Candidates,
+        string MatchMethod,
+        IReadOnlyList<string> LadderSources
+    );
 
-    private static string FormatAuthority(string? raw, string? normalized) {
-        if (string.IsNullOrWhiteSpace(raw)) {
-            return normalized is null ? "(none)" : $"(none) → normalized: {normalized}";
-        }
-
-        if (string.IsNullOrWhiteSpace(normalized)) {
-            return raw;
-        }
-
-        if (string.Equals(raw.Trim(), normalized, StringComparison.Ordinal)) {
-            return raw;
-        }
-
-        return $"{raw} (normalized: {normalized})";
-    }
-
-    private static string BuildIucnUrl(string internalTaxonId, string assessmentId) {
-        if (string.IsNullOrWhiteSpace(internalTaxonId) || string.IsNullOrWhiteSpace(assessmentId)) {
-            return "(unavailable)";
-        }
-
-        var taxon = internalTaxonId.Trim();
-        var assess = assessmentId.Trim();
-        return $"https://www.iucnredlist.org/species/{taxon}/{assess}";
+    private sealed class CrosscheckStats {
+        public long Total { get; set; }
+        public long Matched { get; set; }
+        public long NotFound { get; set; }
+        public long Synonyms { get; set; }
+        public long AuthorityMatches { get; set; }
+        public long AuthorityMismatches { get; set; }
     }
 }
-
-internal sealed class IucnColCrosscheckAnalysis {
-    private readonly int _maxSamples;
-    private readonly List<CrosscheckSample> _missingSamples = new();
-    private readonly List<CrosscheckSample> _synonymSamples = new();
-    private readonly List<CrosscheckSample> _authorityMismatchSamples = new();
-    private readonly List<CrosscheckSample> _multipleMatchSamples = new();
-
-    public IucnColCrosscheckAnalysis(int maxSamples) {
-        _maxSamples = Math.Max(1, maxSamples);
-    }
-
-    public long TotalRows { get; private set; }
-    public long SkippedNonSpecies { get; private set; }
-    public long EvaluatedSpecies { get; private set; }
-    public long MissingCount { get; private set; }
-    public long FoundCount { get; private set; }
-    public long SynonymCount { get; private set; }
-    public long AuthorityMatchCount { get; private set; }
-    public long AuthorityMismatchCount { get; private set; }
-    public long MultipleMatchesCount { get; private set; }
-
-    public void RegisterRow() => TotalRows++;
-
-    public void RegisterSkipped() => SkippedNonSpecies++;
-
-    public void RegisterEvaluated() => EvaluatedSpecies++;
-
-    public void RegisterMissing(CrosscheckSample sample) {
-        MissingCount++;
-        AddSample(_missingSamples, sample);
-    }
-
-    public void RegisterFound() => FoundCount++;
-
-    public void RegisterSynonym(CrosscheckSample sample) {
-        SynonymCount++;
-        AddSample(_synonymSamples, sample);
-    }
-
-    public void RegisterAuthorityMatch() => AuthorityMatchCount++;
-
-    public void RegisterAuthorityMismatch(CrosscheckSample sample) {
-        AuthorityMismatchCount++;
-        AddSample(_authorityMismatchSamples, sample);
-    }
-
-    public void RegisterMultipleMatches(CrosscheckSample sample) {
-        MultipleMatchesCount++;
-        AddSample(_multipleMatchSamples, sample);
-    }
-
-    public IReadOnlyList<CrosscheckSample> GetSamples(CrosscheckSampleKind kind) => kind switch {
-        CrosscheckSampleKind.Missing => _missingSamples,
-        CrosscheckSampleKind.Synonym => _synonymSamples,
-        CrosscheckSampleKind.AuthorityMismatch => _authorityMismatchSamples,
-        CrosscheckSampleKind.MultipleMatches => _multipleMatchSamples,
-        _ => Array.Empty<CrosscheckSample>()
-    };
-
-    private void AddSample(List<CrosscheckSample> list, CrosscheckSample sample) {
-        if (list.Count < _maxSamples) {
-            list.Add(sample);
-        }
-    }
-}
-
-internal enum CrosscheckSampleKind {
-    Missing,
-    Synonym,
-    AuthorityMismatch,
-    MultipleMatches
-}
-
-internal sealed record CrosscheckSample(
-    string SortKey,
-    string Kingdom,
-    string? Phylum,
-    string? Class,
-    string? Order,
-    string? Family,
-    string Genus,
-    string Species,
-    string IucnScientificName,
-    string? IucnAuthority,
-    string? NormalizedIucnAuthority,
-    string? ColId,
-    string? ColScientificName,
-    string? ColStatus,
-    string? ColAuthority,
-    string? NormalizedColAuthority,
-    string? AcceptedId,
-    string? AcceptedScientificName,
-    string? AcceptedAuthority,
-    string? NormalizedAcceptedAuthority,
-    int MatchCount,
-    string Detail,
-    string AssessmentId,
-    string InternalTaxonId,
-    string RedlistVersion
-);

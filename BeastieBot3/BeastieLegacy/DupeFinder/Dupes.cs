@@ -7,13 +7,13 @@ using System.Threading.Tasks;
 
 namespace beastie {
     public class Dupes {
-    public Dictionary<string, List<IUCNBitri>> allFoundNames = new Dictionary<string, List<IUCNBitri>>(); // <comparison string, list of matching>
-    public Dictionary<string, string> dupes = new Dictionary<string, string>(); // output: <comparison string, example of non-mangled string>
+        public Dictionary<string, List<IUCNBitri>> allFoundNames = new Dictionary<string, List<IUCNBitri>>(); // <comparison string, list of matching>
+        public Dictionary<string, string> dupes = new Dictionary<string, string>(); // output: <comparison string, example of non-mangled string>
 
-    public Dupes? alsoMatch; // Dictionary<string, List<IUCNBitri>> alsoMatchThese = null
+        public Dupes? alsoMatch; // Dictionary<string, List<IUCNBitri>> alsoMatchThese = null
 
         // taxons which share a common name
-    public static Dupes FindByCommonNames(IEnumerable<IUCNBitri> bitris, Dupes? alsoMatch = null) {
+        public static Dupes FindByCommonNames(IEnumerable<IUCNBitri> bitris, Dupes? alsoMatch = null) {
             // Dictionary<string, List<IUCNBitri>> alsoMatchThese = null) {
             //FindDupes(bitris, alsoMatchThese, AllCommonNamesNormalizer);
 
@@ -25,7 +25,7 @@ namespace beastie {
         }
 
         // taxons which lead to the same page on Wikipedia
-    public static Dupes FindWikiAmbiguous(IEnumerable<IUCNBitri> bitris, Dupes? alsoMatch = null) {
+        public static Dupes FindWikiAmbiguous(IEnumerable<IUCNBitri> bitris, Dupes? alsoMatch = null) {
             // Dictionary<string, List<IUCNBitri>> alsoMatchThese = null) {
             //FindDupes(bitris, alsoMatchThese, AllCommonNamesNormalizer);
 
@@ -62,14 +62,14 @@ namespace beastie {
                     for (int i = 0; i < list.Count; i++) {
                         var bitri = list[i];
                         var taxonName = bitri.TaxonName();
-                            // check against taxobox taxon
-                            string taxoboxName = taxonName.taxonField;
+                        // check against taxobox taxon
+                        string taxoboxName = taxonName.taxonField;
                         string basicName = bitri.BasicName();
-                            //Console.WriteLine("Taxobox name: " + taxoboxName + ".. vs basic name:" + basicName );
-                            if (taxoboxName != null && taxoboxName.Contains(basicName)) {
-                                // matches scientific name used in taxobox 
-                                //Console.WriteLine("Found within");
-                                // TODO: note that some badly formatted taxoboxes contain have multiple scientific names.. watch out for these.
+                        //Console.WriteLine("Taxobox name: " + taxoboxName + ".. vs basic name:" + basicName );
+                        if (taxoboxName != null && taxoboxName.Contains(basicName)) {
+                            // matches scientific name used in taxobox 
+                            //Console.WriteLine("Found within");
+                            // TODO: note that some badly formatted taxoboxes contain have multiple scientific names.. watch out for these.
                             matchIndex = i;
                             break;
                         }
@@ -99,9 +99,9 @@ namespace beastie {
                 } else {
                     //Console.WriteLine("No best match: " + dupe.Key);
                 }
-}
             }
         }
+    
 
         //static IEnumerable<Tuple<string, string>> AllCommonNamesNormalizer(IUCNBitri bitri) { // Tuple: <normalized, example string>
         static Dictionary<string, string> AllCommonNamesNormalizerDictionary(IUCNBitri bitri) {
