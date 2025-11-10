@@ -484,11 +484,12 @@ public sealed class IucnColCrosscheckCommand : Command<IucnColCrosscheckCommand.
             var ordered = rows
                 .Select((row, idx) => new {
                     Row = row,
-                    Ordinal = order.TryGetValue(row.Rank, out var ordinal) ? ordinal : order.Count + idx,
-                    Index = idx
+                    HasBaseline = order.TryGetValue(row.Rank, out var baselineOrdinal),
+                    BaselineOrdinal = baselineOrdinal,
+                    CanonicalOrdinal = idx
                 })
-                .OrderBy(item => item.Ordinal)
-                .ThenBy(item => item.Index)
+                .OrderBy(item => item.HasBaseline ? 0 : 1)
+                .ThenBy(item => item.HasBaseline ? item.BaselineOrdinal : item.CanonicalOrdinal)
                 .Select(item => item.Row)
                 .ToList();
 
