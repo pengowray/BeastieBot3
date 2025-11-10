@@ -7,13 +7,13 @@ using System.Threading.Tasks;
 
 namespace beastie {
     public class Dupes {
-        public Dictionary<string, List<IUCNBitri>> allFoundNames = new Dictionary<string, List<IUCNBitri>>(); // <comparison string, list of matching>
-        public Dictionary<string, string> dupes = new Dictionary<string, string>(); // output: <comparison string, example of non-mangled string>
+    public Dictionary<string, List<IUCNBitri>> allFoundNames = new Dictionary<string, List<IUCNBitri>>(); // <comparison string, list of matching>
+    public Dictionary<string, string> dupes = new Dictionary<string, string>(); // output: <comparison string, example of non-mangled string>
 
-        public Dupes alsoMatch; // Dictionary<string, List<IUCNBitri>> alsoMatchThese = null
+    public Dupes? alsoMatch; // Dictionary<string, List<IUCNBitri>> alsoMatchThese = null
 
         // taxons which share a common name
-        public static Dupes FindByCommonNames( IEnumerable<IUCNBitri> bitris, Dupes alsoMatch = null) {
+    public static Dupes FindByCommonNames(IEnumerable<IUCNBitri> bitris, Dupes? alsoMatch = null) {
             // Dictionary<string, List<IUCNBitri>> alsoMatchThese = null) {
             //FindDupes(bitris, alsoMatchThese, AllCommonNamesNormalizer);
 
@@ -25,7 +25,7 @@ namespace beastie {
         }
 
         // taxons which lead to the same page on Wikipedia
-        public static Dupes FindWikiAmbiguous(IEnumerable<IUCNBitri> bitris, Dupes alsoMatch = null) {
+    public static Dupes FindWikiAmbiguous(IEnumerable<IUCNBitri> bitris, Dupes? alsoMatch = null) {
             // Dictionary<string, List<IUCNBitri>> alsoMatchThese = null) {
             //FindDupes(bitris, alsoMatchThese, AllCommonNamesNormalizer);
 
@@ -42,67 +42,64 @@ namespace beastie {
             // an "exact" match is where the title matches the bitri, or otherwise the taxobox matches it
             //foreach (var dupe in dupes) {
             foreach (var dupe in dupes.OrderBy(e => e.Value)) {
-                    List<IUCNBitri> list = null;
-                if (allFoundNames.TryGetValue(dupe.Key, out list)) {
-                    list.Sort((a, b) => StringComparer.InvariantCulture.Compare(a.BasicName(), b.BasicName())); // first sort by basic name
+                if (!allFoundNames.TryGetValue(dupe.Key, out var list) || list.Count == 0) {
+                    continue;
+                }
 
-                    int matchIndex = -1;
-                    for (int i = 0; i < list.Count(); i++) {
+                list.Sort((a, b) => StringComparer.InvariantCulture.Compare(a.BasicName(), b.BasicName())); // first sort by basic name
 
-                        var bitri = list[i];
-                        if (bitri.BasicName() == dupe.Key) {
-                            // page name is the same as a bitri
-                            matchIndex = i;
-                            break;
-                        }
-
+                int matchIndex = -1;
+                for (int i = 0; i < list.Count; i++) {
+                    var bitri = list[i];
+                    if (bitri.BasicName() == dupe.Key) {
+                        // page name is the same as a bitri
+                        matchIndex = i;
+                        break;
                     }
+                }
 
-                    if (matchIndex == -1) {
-                        for (int i = 0; i < list.Count(); i++) {
-
-                            var bitri = list[i];
-                            var taxonName = bitri.TaxonName();
+                if (matchIndex == -1) {
+                    for (int i = 0; i < list.Count; i++) {
+                        var bitri = list[i];
+                        var taxonName = bitri.TaxonName();
                             // check against taxobox taxon
                             string taxoboxName = taxonName.taxonField;
-                            string basicName = bitri.BasicName();
+                        string basicName = bitri.BasicName();
                             //Console.WriteLine("Taxobox name: " + taxoboxName + ".. vs basic name:" + basicName );
                             if (taxoboxName != null && taxoboxName.Contains(basicName)) {
                                 // matches scientific name used in taxobox 
                                 //Console.WriteLine("Found within");
                                 // TODO: note that some badly formatted taxoboxes contain have multiple scientific names.. watch out for these.
-                                matchIndex = i;
-                                break;
-                            }
+                            matchIndex = i;
+                            break;
                         }
-                    }
-
-                    if (matchIndex == -1) {
-                        for (int i = 0; i < list.Count(); i++) {
-                            var bitri = list[i];
-                            var taxonName = bitri.TaxonName();
-                            // check specific epithet against taxobox taxon (last ditch effort)
-                            string taxoboxName = taxonName.taxonField;
-                            string epithet = bitri.epithet;
-                            if (taxoboxName != null && taxoboxName.Contains(epithet)) {
-                                // partially matches scientific name used in taxobox 
-                                //Console.WriteLine("Found within I guess");
-                                //TODO: consider trinomials better?
-                                matchIndex = i;
-                                break;
-                            }
-                        }
-                    }
-
-                    if (matchIndex != -1) {
-                        var item = list[matchIndex];
-                        list.RemoveAt(matchIndex);
-                        list.Insert(0, item);
-                        //Console.WriteLine("Moved item to front for: " + dupe.Key + " item: " + item.BasicName());
-                    } else {
-                        //Console.WriteLine("No best match: " + dupe.Key);
                     }
                 }
+
+                if (matchIndex == -1) {
+                    for (int i = 0; i < list.Count; i++) {
+                        var bitri = list[i];
+                        var taxonName = bitri.TaxonName();
+                        string? taxoboxName = taxonName.taxonField;
+                        string epithet = bitri.epithet;
+                        if (!string.IsNullOrEmpty(taxoboxName) && taxoboxName.Contains(epithet, StringComparison.Ordinal)) {
+                            // partially matches scientific name used in taxobox 
+                            //TODO: consider trinomials better?
+                            matchIndex = i;
+                            break;
+                        }
+                    }
+                }
+
+                if (matchIndex >= 0 && matchIndex < list.Count) {
+                    var item = list[matchIndex];
+                    list.RemoveAt(matchIndex);
+                    list.Insert(0, item);
+                    //Console.WriteLine("Moved item to front for: " + dupe.Key + " item: " + item.BasicName());
+                } else {
+                    //Console.WriteLine("No best match: " + dupe.Key);
+                }
+}
             }
         }
 
@@ -110,12 +107,12 @@ namespace beastie {
         static Dictionary<string, string> AllCommonNamesNormalizerDictionary(IUCNBitri bitri) {
 
             Dictionary<string, string> newNames = new Dictionary<string, string>(); // <normalized name, an example of non-normalized name>
-            string exampleName = bitri.TaxonName().CommonName(false);
+            string? exampleName = bitri.TaxonName().CommonName(false);
             if (exampleName != null)
                 newNames[exampleName.NormalizeForComparison()] = exampleName;
 
             // get other common names from iucn red list
-            string[] iucnNames = bitri.CommonNamesEng();
+            string[]? iucnNames = bitri.CommonNamesEng();
             if (iucnNames != null) {
                 foreach (string name in iucnNames) {
                     string norm = name.NormalizeForComparison();
@@ -133,7 +130,7 @@ namespace beastie {
         static IEnumerable<string> AllCommonNamesNormalizer(IUCNBitri bitri) {
 
             HashSet<string> newNames = new HashSet<string>();
-            string exampleName = bitri.TaxonName().CommonName(false);
+            string? exampleName = bitri.TaxonName().CommonName(false);
             if (exampleName != null) {
                 string normalized = exampleName.NormalizeForComparison();
                 if (!string.IsNullOrEmpty(normalized)) {
@@ -142,7 +139,7 @@ namespace beastie {
             }
 
             // get other common names from iucn red list
-            string[] iucnNames = bitri.CommonNamesEng();
+            string[]? iucnNames = bitri.CommonNamesEng();
             if (iucnNames != null) {
                 foreach (string name in iucnNames) {
                     string norm = name.NormalizeForComparison();
@@ -188,21 +185,10 @@ namespace beastie {
                 */
                 ) { // normalized string or wikipage name
 
-            if (allFoundNames == null) {
-                allFoundNames = new Dictionary<string, List<IUCNBitri>>();
-            }
-
-            if (dupes == null) {
-                dupes = new Dictionary<string, string>();
-            }
-
             //dupes = new HashSet<string>(); // normalized strings
 
             //Func<IUCNBitri, string> getComparisonString;
-            Dictionary<string, List<IUCNBitri>> alsoMatchThese = null;
-            if (alsoMatch != null) {
-                alsoMatchThese = alsoMatch.allFoundNames;
-            }
+            Dictionary<string, List<IUCNBitri>>? alsoMatchThese = alsoMatch?.allFoundNames;
 
             foreach (IUCNBitri bitri in bitris) {
 
@@ -212,8 +198,7 @@ namespace beastie {
                     string normalized = item.Key;
                     string example = item.Value;
 
-                    List<IUCNBitri> currentList = null;
-                    if (allFoundNames.TryGetValue(normalized, out currentList)) {
+                    if (allFoundNames.TryGetValue(normalized, out var currentList)) {
 
                         // conflict found
                         dupes[normalized] = example;
@@ -228,17 +213,16 @@ namespace beastie {
                     } else {
 
                         // e.g. novel trinomial common name ...
-                        currentList = new List<IUCNBitri>();
-                        currentList.Add(bitri);
-                        allFoundNames[normalized] = currentList;
+                        var newList = new List<IUCNBitri> { bitri };
+                        allFoundNames[normalized] = newList;
 
                         // but it is it used for a binomial's common name?
-                        if (alsoMatchThese != null && alsoMatchThese.ContainsKey(normalized)) {
+                        if (alsoMatchThese != null && alsoMatchThese.TryGetValue(normalized, out var matches) && matches.Count > 0) {
                             // duplicate
                             dupes[normalized] = example;
                             if (showProgress) {
                                 Console.WriteLine("... Dupe found (also match): {1}. {2} & {3}",
-                                    normalized, example, bitri.FullDebugName(), alsoMatchThese[normalized][0].FullDebugName());
+                                    normalized, example, bitri.FullDebugName(), matches[0].FullDebugName());
                             }
                         }
                     }
@@ -249,41 +233,32 @@ namespace beastie {
 
         }
 
-        public void ExportWithBitris(TextWriter output, string keyword = "dupe", Dupes alsoShow = null, bool wikiize = false) {
+        public void ExportWithBitris(TextWriter output, string keyword = "dupe", Dupes? alsoShow = null, bool wikiize = false) {
 
-            if (alsoShow == null)
-                alsoShow = alsoMatch; // default to showing these too.. TODO: really should show both
+            alsoShow ??= alsoMatch; // default to showing these too.. TODO: really should show both
 
-            Dictionary<string, List<IUCNBitri>> alsoShowThese = null;
-            if (alsoShow != null) {
-                alsoShowThese = alsoShow.allFoundNames;
-            }
+            Dictionary<string, List<IUCNBitri>>? alsoShowThese = alsoShow?.allFoundNames;
 
             foreach (var dupeEntry in dupes.OrderBy(d => d.Value)) { // .OrderBy(e => e.Value) // already sorted via SortBestMatchFirst()
                 string dupeNomralized = dupeEntry.Key;
                 string dupeExampleName = dupeEntry.Value;
 
                 //Console.WriteLine(dupe);
-                List<IUCNBitri> biList = null;
-                List<IUCNBitri> triList = null;
-                bool isBinom = allFoundNames.TryGetValue(dupeNomralized, out biList);
-                bool isTrinom = false;
-                if (alsoShowThese != null)
-                    isTrinom = alsoShowThese.TryGetValue(dupeNomralized, out triList);
+                allFoundNames.TryGetValue(dupeNomralized, out var biList);
+                List<IUCNBitri>? triList = null;
+                bool isTrinom = alsoShowThese != null && alsoShowThese.TryGetValue(dupeNomralized, out triList);
+                bool isBinom = biList != null;
 
-                string format = null;
-                if (wikiize) {
-                    format = "# [[{0}]] {1} ''{2}{3}{4}'' "; // legacy space on the end so it doesn't change from existing article
-                } else {
-                    format = "{0} {1} {2}{3}{4}";
-                }
+                string format = wikiize
+                    ? "# [[{0}]] {1} ''{2}{3}{4}'' "
+                    : "{0} {1} {2}{3}{4}";
 
                 string listString = string.Format(format,
                     dupeExampleName,
                     keyword, // dupeNomralized,
-                    (isBinom ? biList.Select(bt => bt.FullDebugName()).JoinStrings(", ") : ""),
+                    (isBinom && biList != null ? biList.Select(bt => bt.FullDebugName()).JoinStrings(", ") : ""),
                     (isBinom && isTrinom ? ", " : ""),
-                    (isTrinom ? triList.Select(bt => bt.FullDebugName()).JoinStrings(", ") : "")
+                    (isTrinom && triList != null ? triList.Select(bt => bt.FullDebugName()).JoinStrings(", ") : "")
                     );
 
                 output.WriteLine(listString);
@@ -304,6 +279,9 @@ namespace beastie {
 
             SpeciesDupes.alsoMatch = alsoMatch;
             foreach (var item in allFoundNames) {
+                if (item.Value == null || item.Value.Count == 0)
+                    continue;
+
                 var level = item.Value[0].TaxonName().pageLevel;
                 bool isSpeciesLevel = spLevels.Contains(level); // (level == TaxonPage.Level.sp || level == TaxonPage.Level.ssp);
                 Dupes bucket = (isSpeciesLevel ? SpeciesDupes : HigherDupes);
@@ -314,14 +292,10 @@ namespace beastie {
             }
         }
 
-        public void ExportWithBitrisSpeciesLevelPagesOnly(TextWriter output, string keyword = "is linked from", Dupes alsoShow = null, bool showSpeciesLevel = true) {
-            if (alsoShow == null)
-                alsoShow = alsoMatch; // default to showing these too.. TODO: really should show both
+        public void ExportWithBitrisSpeciesLevelPagesOnly(TextWriter output, string keyword = "is linked from", Dupes? alsoShow = null, bool showSpeciesLevel = true) {
+            alsoShow ??= alsoMatch; // default to showing these too.. TODO: really should show both
 
-            Dictionary<string, List<IUCNBitri>> alsoShowThese = null;
-            if (alsoShow != null) {
-                alsoShowThese = alsoShow.allFoundNames;
-            }
+            Dictionary<string, List<IUCNBitri>>? alsoShowThese = alsoShow?.allFoundNames;
 
             foreach (var dupeEntry in dupes.OrderBy(e => e.Value)) {
                 string dupeNomralized = dupeEntry.Key;
@@ -329,14 +303,11 @@ namespace beastie {
 
 
                 //Console.WriteLine(dupe);
-                List<IUCNBitri> biList = null;
-                List<IUCNBitri> triList = null;
-                bool isBinom = allFoundNames.TryGetValue(dupeNomralized, out biList);
-                bool isTrinom = false;
-                if (alsoShowThese != null)
-                    isTrinom = alsoShowThese.TryGetValue(dupeNomralized, out triList);
+                allFoundNames.TryGetValue(dupeNomralized, out var biList);
+                List<IUCNBitri>? triList = null;
+                bool isTrinom = alsoShowThese != null && alsoShowThese.TryGetValue(dupeNomralized, out triList);
 
-                if (isBinom) {
+                if (biList != null && biList.Count > 0) {
                     var level = biList[0].TaxonName().pageLevel;
                     if (showSpeciesLevel != (level == TaxonPage.Level.sp || level == TaxonPage.Level.ssp))
                         continue;
@@ -350,9 +321,9 @@ namespace beastie {
 //                    (isBinom ? biList.Select(bt => bt.FullName()).OrderBy(a => a).JoinStrings(", ") : ""),
 //                    (isBinom && isTrinom ? ", " : ""),
 //                    (isTrinom ? triList.Select(bt => bt.FullName()).OrderBy(a => a).JoinStrings(", ") : ""));
-                    (isBinom ? biList.Select(bt => bt.FullDebugName()).JoinStrings(", ") : ""), // ordered already by SortBestMatchFirst()
-                    (isBinom && isTrinom ? ", " : ""),
-                    (isTrinom ? triList.Select(bt => bt.FullDebugName()).JoinStrings(", ") : ""));
+                    (biList != null ? biList.Select(bt => bt.FullDebugName()).JoinStrings(", ") : ""), // ordered already by SortBestMatchFirst()
+                    (biList != null && isTrinom ? ", " : ""),
+                    (isTrinom && triList != null ? triList.Select(bt => bt.FullDebugName()).JoinStrings(", ") : ""));
 
                 output.WriteLine(listString);
             }

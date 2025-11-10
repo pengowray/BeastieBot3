@@ -13,45 +13,37 @@ namespace beastie {
     public class TaxonPage : TaxonName { //was: BitriPage
 
         // this can be a page for either a bitri, or a taxon. If it's a bitri, then taxon = bitri.BasicName().
-        IUCNBitri bitri;
+        IUCNBitri? bitri;
         //string taxon; // in base class
 
-        BeastieBot _beastieBot;
-        BeastieBot beastieBot {
-            set { _beastieBot = value; }
-            get {
-                if (_beastieBot == null)
-                    return BeastieBot.Instance();
-
-                return _beastieBot;
-            }
-        }
+        BeastieBot? _beastieBot;
+        BeastieBot ActiveBeastieBot => _beastieBot ?? BeastieBot.Instance();
 
 
-        XowaPage page; // the main page (may be where it redirects to)
-        public string originalPageTitle; // before redirect (exists regardless of if the page redirects). Also the wikilink. May be influenced by rules.wikilink[taxon] to produce e.g. "Anura (frog)" not "Anura" (disambig)
-        public string pageTitle;
-        string _commonName = null; // tidied version of pageTitle if pageTitle is a common name. Cached result of CommonName(). Value of "" means a cached null result.
-        string _commonPlural = null; // use CommonPlural(). plural or group name, e.g. "lemurs" (to be used in place of "Lemuroidea species"). Value of "" means a cached null result.
+        XowaPage? page; // the main page (may be where it redirects to)
+        public string originalPageTitle = string.Empty; // before redirect (exists regardless of if the page redirects). Also the wikilink. May be influenced by rules.wikilink[taxon] to produce e.g. "Anura (frog)" not "Anura" (disambig)
+        public string pageTitle = string.Empty;
+        string? _commonName; // tidied version of pageTitle if pageTitle is a common name. Cached result of CommonName(). Value of "" means a cached null result.
+        string? _commonPlural; // use CommonPlural(). plural or group name, e.g. "lemurs" (to be used in place of "Lemuroidea species"). Value of "" means a cached null result.
 
-        string _commonLower = null; // a lowercase version of the common name. Proper nouns are still capitalized (e.g. California). For now this only comes from the rules list. Value of "" means a cached null result.
+        string? _commonLower; // a lowercase version of the common name. Proper nouns are still capitalized (e.g. California). For now this only comes from the rules list. Value of "" means a cached null result.
 
         bool commonNameFromRules = false; // was the commonName taken from a rules file rather than the wiki? Note: should be lowercase if from rules.
         public bool commonNameFromIUCN { get; private set; } // was commonName taken from IUCN Red List common name list? (true only after calling CommonName() once)
         //bool pluralLoaded = false;
 
-        TaxonNode node;  // IUCN node, really just for the rank info
+    TaxonNode? node;  // IUCN node, really just for the rank info
 
-        XowaPage redirFromPage;
+    XowaPage? redirFromPage;
         bool isRedir;
-        List<IUCNBitri> otherBitrisLinkingHere; // may contain a value if DoesABetterBinomialLinkHere() returns true
+    List<IUCNBitri>? otherBitrisLinkingHere; // may contain a value if DoesABetterBinomialLinkHere() returns true
 
         //string basicBitri; // bitri.BasicName(); // use "taxon" instead
 
-        string taxoboxType = null;
-        string taxoboxName = null; // name of template used
-        public string taxonField = null; // the taxo name found in the taxobox
-        string parentTaxonPageTitle = null; // for trinomials, what the title of the page the binomial redirects to
+    string? taxoboxType;
+    string? taxoboxName; // name of template used
+    public string? taxonField; // the taxo name found in the taxobox
+    string? parentTaxonPageTitle; // for trinomials, what the title of the page the binomial redirects to
 
         //Note: use sp level for monotypic genus
         public enum Level { None, ssp, sp, genus, other };
@@ -61,7 +53,7 @@ namespace beastie {
         //bool taxonFieldIsBi;
         //bool taxonFieldIsTri;
 
-        public string cnError; // the error encountered when trying to find the common name
+    public string? cnError; // the error encountered when trying to find the common name
 
         // if it ends with one of these, it's probably not a common name (but need an exception list?)
         private string[] taxonEndings = new string[] { "idae", "aceae", "inae", "iformes", "oidei", "ii",
@@ -69,22 +61,22 @@ namespace beastie {
         "anae", "ales", "ineae", "aria", "acea", "oidea", "oidae", "aceae", "idae", "oideae", "inae", "odd", "ini",
         "inae", "ptera", "ozoa", "icha", "oela"}; //excluded: iti, ad, ina, ia, ura, pha,
 
-        public TaxonPage(TaxonNode node, string taxon, BeastieBot beastieBot = null) : base (taxon) {
-            this.beastieBot = beastieBot;
+        public TaxonPage(TaxonNode? node, string taxon, BeastieBot? beastieBot = null) : base (taxon) {
+            _beastieBot = beastieBot;
             this.node = node; // note: don't use node.name because it just links to this.taxon
 
             Load();
         }
 
-        public TaxonPage(string taxon, BeastieBot beastieBot = null) : base(taxon) {
-            this.beastieBot = beastieBot;
+        public TaxonPage(string taxon, BeastieBot? beastieBot = null) : base(taxon) {
+            _beastieBot = beastieBot;
             //this.taxon = taxon;
 
             Load();
         }
 
-        public TaxonPage(IUCNBitri bitri, BeastieBot beastieBot = null) : base(bitri.BasicName()) {
-            this.beastieBot = beastieBot;
+        public TaxonPage(IUCNBitri bitri, BeastieBot? beastieBot = null) : base(bitri.BasicName()) {
+            _beastieBot = beastieBot;
             this.bitri = bitri;
             //this.taxon = bitri.BasicName(); // e.g. "Lariscus insignis" or "Tarsius bancanus natunensis" (no "ssp." etc)
 
@@ -205,7 +197,7 @@ namespace beastie {
                 }
             }
 
-            return string.Format("{0} ({1})", taxon, node.rank);
+            return string.Format("{0} ({1})", taxon, node?.rank ?? "unknown rank");
         }
 
         // "the class Mammalia" or "Mammalia"
@@ -227,7 +219,7 @@ namespace beastie {
                     return "the genus " + ltaxon; //TODO: italicize? (probably never used anyway)
                 }
 
-            } else if (node.isMajorRank()) {
+            } else if (node?.isMajorRank() == true) {
                 return "the " + node.rank + " " + ltaxon;
             }
             
@@ -247,38 +239,44 @@ namespace beastie {
                     _commonLower = rules.commonName;
                 }
 
-                originalPageTitle = rules.wikilink;
+                if (!string.IsNullOrEmpty(rules.wikilink)) {
+                    originalPageTitle = rules.wikilink;
+                }
             }
 
-            if (originalPageTitle == null) { 
+            if (string.IsNullOrEmpty(originalPageTitle)) { 
                 originalPageTitle = taxon; // may be rewriten again below
             }
 
-            XowaPage firstPage = beastieBot.GetPage(originalPageTitle, false); // xowa.ReadXowaPage(basicName);
+            XowaPage? firstPage = ActiveBeastieBot.GetPage(originalPageTitle, false); // xowa.ReadXowaPage(basicName);
 
             if (firstPage != null) {
-                originalPageTitle = firstPage.title;
+                originalPageTitle = firstPage.title ?? originalPageTitle;
             } else {
+                page = null;
+                pageTitle = string.Empty;
                 return;
             }
 
-            isRedir = (firstPage != null && !string.IsNullOrEmpty(firstPage.text) && firstPage.IsRedirect());
+            string firstPageText = firstPage.text ?? string.Empty;
+            isRedir = (!string.IsNullOrEmpty(firstPageText) && firstPage.IsRedirect());
 
             if (isRedir) {
-                string rto = firstPage.RedirectsTo();
+                string? rto = firstPage.RedirectsTo();
 
                 if (!string.IsNullOrEmpty(rto)) {
-                    page = beastieBot.GetPage(rto, false);
+                    page = ActiveBeastieBot.GetPage(rto, false);
+                } else {
+                    page = null;
                 }
                 redirFromPage = firstPage;
 
             } else {
                 page = firstPage;
+                redirFromPage = null;
             }
 
-            if (page != null) {
-                pageTitle = page.title;
-            }
+            pageTitle = page?.title ?? string.Empty;
 
             //LoadTaxobox();  // wait til it's needed
 
@@ -291,7 +289,8 @@ namespace beastie {
         //}
 
         public int ArticleLength() {
-            return page.text.Length; // todo: remove templates, references, and other junk
+            string? pageText = page?.text;
+            return pageText?.Length ?? 0; // todo: remove templates, references, and other junk
         }
 
 
@@ -327,10 +326,10 @@ namespace beastie {
         // [[Cercopithecidae|Old World monkey]]
         override public string CommonNameLink(bool uppercase = true, PrettyStyle style = PrettyStyle.JustNames) {
             string? common = CommonName();
-            string wikilink = originalPageTitle;
+            string wikilink = string.IsNullOrEmpty(originalPageTitle) ? taxon : originalPageTitle;
             string taxonDisplay = taxon;
             string taxonBracketDisplay = "(" + taxon + ")";
-            string taxonIsJustThisInItalics = null;
+            string? taxonIsJustThisInItalics = null;
 
             if (bitri != null) {
                 taxonDisplay = "''" + taxon + "''";
@@ -433,24 +432,24 @@ namespace beastie {
             }
         }
 
-        public string CommonNameGroupNoLink(bool uppercase = true) {
+        public string? CommonNameGroupNoLink(bool uppercase = true) {
             // todo: return same as CommonNameGroupTitleLink but without the link.
             return null;
         }
 
         // remove redundant display parameter if it's not needed, adds italics if bitri
         // todo: Delete link parameter. It's always == originalPageTitle.
-        string MakeLink(string link, string display = null, bool uppercaseFirstChar = false) {
+        string MakeLink(string? link, string? display = null, bool uppercaseFirstChar = false) {
             if (display != null && uppercaseFirstChar)
                 display = display.UpperCaseFirstChar();
 
-            if (link == null) {
-                link = originalPageTitle;
+            link = !string.IsNullOrEmpty(link) ? link : (!string.IsNullOrEmpty(originalPageTitle) ? originalPageTitle : taxon);
+
+            if (display == null || string.Equals(link, display, StringComparison.Ordinal)) { // first character case is not important.
+                return string.Format("[[{0}]]", link);
             }
 
-            if (display == null || link == display) { // first character case is not important.
-                return string.Format("[[{0}]]", link);
-            } else if (link.UpperCaseFirstChar() == display.UpperCaseFirstChar()) {
+            if (link.UpperCaseFirstChar() == display.UpperCaseFirstChar()) {
                 //TODO: only for Wikipedia, not Wiktionary
                 return string.Format("[[{0}]]", link);
             }
@@ -460,17 +459,17 @@ namespace beastie {
             return string.Format("[[{0}|{1}]]", link, display);
         }
 
-        string MakeItalicLink(string link, string display = null, bool uppercaseFirstChar = false) {
+        string MakeItalicLink(string? link, string? display = null, bool uppercaseFirstChar = false) {
             if (display != null && uppercaseFirstChar)
                 display = display.UpperCaseFirstChar();
 
-            if (link == null) {
-                link = originalPageTitle;
+            link = !string.IsNullOrEmpty(link) ? link : (!string.IsNullOrEmpty(originalPageTitle) ? originalPageTitle : taxon);
+
+            if (display == null || string.Equals(link, display, StringComparison.Ordinal)) { // first character case is not important.
+                    return string.Format("''[[{0}]]''", link);
             }
 
-            if (display == null || link == display) { // first character case is not important.
-                    return string.Format("''[[{0}]]''", link);
-            } else if (link.UpperCaseFirstChar() == display.UpperCaseFirstChar()) {
+            if (link.UpperCaseFirstChar() == display.UpperCaseFirstChar()) {
                 //TODO: only for Wikipedia, not Wiktionary
                 return string.Format("''[[{0}]]''", link);
             }
@@ -481,7 +480,7 @@ namespace beastie {
 
         }
 
-        private string TryGeneratingCommonName(bool allowIUCNName = true) {
+        private string? TryGeneratingCommonName(bool allowIUCNName = true) {
             if (!allowIUCNName)
                 return null;
 
@@ -538,6 +537,9 @@ namespace beastie {
             if (commonEng == null)
                 return true;
 
+            if (bitri == null)
+                return true;
+
             string lower = commonEng.ToLowerInvariant();
 
             // probably not needed any more
@@ -571,27 +573,29 @@ namespace beastie {
                     return true; // subspecies is ambiguous (used by another subspecies or a species)
             }
 
-            if (commonEng != null) {
-                if (commonEng.Length <= 2) {
-                    return true; // 2 letter name? :/
-                }
-                if (pageTitle != null && commonEng.NormalizeForComparison() == pageTitle.NormalizeForComparison()) {
-                    // already considered it. e.g. a better matching binomial links here.
-                    return true;
-                }
-
-                return false;
+            if (commonEng.Length <= 2) {
+                return true; // 2 letter name? :/
             }
 
-            return true;
+            if (!string.IsNullOrEmpty(pageTitle) && commonEng.NormalizeForComparison() == pageTitle.NormalizeForComparison()) {
+                // already considered it. e.g. a better matching binomial links here.
+                return true;
+            }
+
+            return false;
         }
 
-    public override string? CommonName(bool allowIUCNName = true) {
+        public override string? CommonName(bool allowIUCNName = true) {
             if (_commonName != null && allowIUCNName) {
                 if (_commonName == string.Empty)
                     return null;
 
                 return _commonName;
+            }
+
+            string localPageTitle = pageTitle;
+            if (string.IsNullOrEmpty(localPageTitle)) {
+                return TryGeneratingCommonName(allowIUCNName);
             }
 
             //quick, flawed check: if not a redirect then it's still the taxon name? 
@@ -611,10 +615,10 @@ namespace beastie {
                 return TryGeneratingCommonName(allowIUCNName );
             }
 
-            if (pageTitle.StartsWith("Subspecies of ") || 
-                    pageTitle.StartsWith("List of ") ||
-                    pageTitle.StartsWith("Species of ")) {
-                Console.Error.WriteLine("Note: '{0}' redirects to '{1}', which starts funny", taxon, pageTitle);
+            if (localPageTitle.StartsWith("Subspecies of ") || 
+                    localPageTitle.StartsWith("List of ") ||
+                    localPageTitle.StartsWith("Species of ")) {
+                Console.Error.WriteLine("Note: '{0}' redirects to '{1}', which starts funny", taxon, localPageTitle);
                 return TryGeneratingCommonName(allowIUCNName );
             }
 
@@ -622,7 +626,7 @@ namespace beastie {
                 return TryGeneratingCommonName(allowIUCNName);
             }
 
-            string __commonName = pageTitle;
+            string __commonName = localPageTitle;
             // fix double space, such as in "Lipochromis sp. nov.  'backflash cryptodon'"
             __commonName = __commonName.Replace("  ", " ");
 
@@ -648,11 +652,12 @@ namespace beastie {
             if (ruleList == null)
                 return false;
 
-            if (pageTitle == null) {
+            string localPageTitle = pageTitle;
+            if (string.IsNullOrEmpty(localPageTitle)) {
                 return false; // whatever
             }
 
-            string normalizedPageTitle = pageTitle.UpperCaseFirstChar();
+            string normalizedPageTitle = localPageTitle.UpperCaseFirstChar();
 
             if (ruleList.WikiHigherDupes != null && ruleList.WikiHigherDupes.dupes.ContainsKey(normalizedPageTitle)) {
                 // Not really a false synonym, but rather a link to a higher taxon, which should have been caught by isTaxoboxBroaderNarrower().
@@ -668,7 +673,7 @@ namespace beastie {
                     //Console.WriteLine("giving a pass to: " + pageTitle);
                     return false;
                 } else {
-                    //Console.WriteLine("multilink page: " + pageTitle);
+                    //Console.WriteLine("multilink page: " + localPageTitle);
                     otherBitrisLinkingHere = others;
                     return true;
                 }
@@ -716,8 +721,10 @@ namespace beastie {
             string upperRegex = @"\b" + common + @"\b";
             string lowerRegex = @"\b" + lowerCandidate + @"\b";
 
-            int upperCount = Regex.Matches(page.text, upperRegex).Count;
-            int lowerCount = Regex.Matches(page.text, lowerRegex).Count;
+            string pageText = page?.text ?? string.Empty;
+
+            int upperCount = Regex.Matches(pageText, upperRegex).Count;
+            int lowerCount = Regex.Matches(pageText, lowerRegex).Count;
 
             int threshold = 2;
             int deltaThreshold = 2; // how many more lowers than uppers are needed to be sure
@@ -806,6 +813,8 @@ namespace beastie {
             int highest = 0;
             string? best = null;
 
+            string pageText = page?.text ?? string.Empty;
+
             foreach (var c in candidates.Keys) {
                 if (c == common) {
                     // give a warning?
@@ -814,7 +823,7 @@ namespace beastie {
 
                 string regex = @"\b" + c + @"\b";
                 //string regex = c;
-                int count = Regex.Matches(page.text, regex, RegexOptions.IgnoreCase).Count;
+                int count = Regex.Matches(pageText, regex, RegexOptions.IgnoreCase).Count;
                 //candidates[c] = count; // for debugging, so can show all candidates
 
                 if (count > highest) {
@@ -948,7 +957,7 @@ namespace beastie {
 
                 //TODO: move to "private void LoadBinomPageTitle()"
                 if (parentTaxonPageTitle == null) {
-                    parentTaxonPageTitle = beastieBot.PageNameInWiki(bitri.ShortBinomial());
+                    parentTaxonPageTitle = ActiveBeastieBot.PageNameInWiki(bitri.ShortBinomial());
                     if (parentTaxonPageTitle == null)
                         parentTaxonPageTitle = string.Empty; // empty means we've checked for it previously
                 }
@@ -1122,7 +1131,7 @@ namespace beastie {
 #endif
         }
 
-        public static string FindTemplateName(Page page, string templateName) {
+        public static string? FindTemplateName(Page page, string templateName) {
             string wanted = templateName.Trim().NormalizeSpaces().UpperCaseFirstChar();
             foreach (var t in page.GetTemplates(false, false)) {
                 // remove comments, trim and get case right
