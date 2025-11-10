@@ -7,6 +7,7 @@ namespace BeastieBot3;
 
 internal static class TaxonLadderAlignment {
     private static readonly string[] CanonicalRankOrder = {
+        "root",
         "domain",
         "kingdom",
         "phylum",
@@ -25,7 +26,8 @@ internal static class TaxonLadderAlignment {
         "species",
         "subspecies",
         "variety",
-        "form"
+        "form",
+        "unranked"
     };
 
     private static readonly IReadOnlyDictionary<string, int> RankPosition = BuildRankIndices();

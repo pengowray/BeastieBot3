@@ -14,6 +14,10 @@ internal sealed class ColTaxonRepository {
     private readonly SqliteConnection _connection;
     private readonly ReadOnlyDictionary<string, string> _columnLookup;
     private readonly string _selectClause;
+    private readonly Dictionary<string, IReadOnlyList<ColTaxonRecord>> _scientificNameCache = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, IReadOnlyList<ColTaxonRecord>> _componentsCache = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, ColTaxonRecord> _idCache = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, IReadOnlyList<ColTaxonRecord>> _parentChainCache = new(StringComparer.Ordinal);
 
     public ColTaxonRepository(SqliteConnection connection) {
         _connection = connection ?? throw new ArgumentNullException(nameof(connection));
@@ -26,16 +30,29 @@ internal sealed class ColTaxonRepository {
             return Array.Empty<ColTaxonRecord>();
         }
 
+        var key = scientificName.Trim();
+        if (_scientificNameCache.TryGetValue(key, out var cached)) {
+            return cached;
+        }
+
         using var command = _connection.CreateCommand();
         command.CommandText = $"{_selectClause}\nFROM nameusage\nWHERE scientificName = @name COLLATE NOCASE\nAND scientificName IS NOT NULL";
         command.Parameters.AddWithValue("@name", scientificName.Trim());
         command.CommandTimeout = 0;
-        return Execute(command, cancellationToken);
+        var results = Execute(command, cancellationToken);
+        var readOnly = ToReadOnly(results);
+        _scientificNameCache[key] = readOnly;
+        return readOnly;
     }
 
     public IReadOnlyList<ColTaxonRecord> FindByComponents(string genus, string species, string? infraEpithet, CancellationToken cancellationToken) {
         if (string.IsNullOrWhiteSpace(genus) || string.IsNullOrWhiteSpace(species)) {
             return Array.Empty<ColTaxonRecord>();
+        }
+
+        var key = BuildComponentsKey(genus, species, infraEpithet);
+        if (_componentsCache.TryGetValue(key, out var cached)) {
+            return cached;
         }
 
         var whereBuilder = new StringBuilder();
@@ -59,7 +76,10 @@ internal sealed class ColTaxonRepository {
             command.Parameters.Add(parameter);
         }
         command.CommandTimeout = 0;
-        return Execute(command, cancellationToken);
+        var results = Execute(command, cancellationToken);
+        var readOnly = ToReadOnly(results);
+        _componentsCache[key] = readOnly;
+        return readOnly;
     }
 
     public ColTaxonRecord? GetById(string? id, CancellationToken cancellationToken) {
@@ -67,13 +87,54 @@ internal sealed class ColTaxonRepository {
             return null;
         }
 
+        var trimmed = id.Trim();
+        if (_idCache.TryGetValue(trimmed, out var cached)) {
+            return cached;
+        }
+
         using var command = _connection.CreateCommand();
         command.CommandText = $"{_selectClause}\nFROM nameusage\nWHERE id = @id\nLIMIT 1";
-        command.Parameters.AddWithValue("@id", id.Trim());
+        command.Parameters.AddWithValue("@id", trimmed);
         command.CommandTimeout = 0;
 
         var list = Execute(command, cancellationToken);
-        return list.Count > 0 ? list[0] : null;
+        if (list.Count == 0) {
+            return null;
+        }
+
+        var record = list[0];
+        _idCache[record.Id] = record;
+        return record;
+    }
+
+    public IReadOnlyList<ColTaxonRecord> GetParentChain(ColTaxonRecord record, CancellationToken cancellationToken) {
+        if (record is null) {
+            throw new ArgumentNullException(nameof(record));
+        }
+
+        if (_parentChainCache.TryGetValue(record.Id, out var cached)) {
+            return cached;
+        }
+
+        var chain = new List<ColTaxonRecord>();
+        var visited = new HashSet<string>(StringComparer.Ordinal);
+        var current = record;
+
+        while (current is not null && visited.Add(current.Id)) {
+            cancellationToken.ThrowIfCancellationRequested();
+            chain.Add(current);
+
+            if (string.IsNullOrWhiteSpace(current.ParentId)) {
+                break;
+            }
+
+            current = GetById(current.ParentId, cancellationToken);
+        }
+
+        chain.Reverse();
+        var readOnly = ToReadOnly(chain);
+        CacheParentChain(chain, readOnly);
+        return readOnly;
     }
 
     private List<ColTaxonRecord> Execute(SqliteCommand command, CancellationToken cancellationToken) {
@@ -97,7 +158,7 @@ internal sealed class ColTaxonRepository {
                 continue;
             }
 
-            results.Add(new ColTaxonRecord(
+            var record = new ColTaxonRecord(
                 id,
                 scientificName,
                 ordinals.Authorship.HasValue && !reader.IsDBNull(ordinals.Authorship.Value) ? reader.GetString(ordinals.Authorship.Value) : null,
@@ -113,10 +174,54 @@ internal sealed class ColTaxonRepository {
                 ordinals.Genus.HasValue && !reader.IsDBNull(ordinals.Genus.Value) ? reader.GetString(ordinals.Genus.Value) : null,
                 ordinals.SpecificEpithet.HasValue && !reader.IsDBNull(ordinals.SpecificEpithet.Value) ? reader.GetString(ordinals.SpecificEpithet.Value) : null,
                 ordinals.InfraspecificEpithet.HasValue && !reader.IsDBNull(ordinals.InfraspecificEpithet.Value) ? reader.GetString(ordinals.InfraspecificEpithet.Value) : null
-            ));
+            );
+
+            results.Add(record);
+            _idCache[record.Id] = record;
         }
 
         return results;
+    }
+
+    private static string BuildComponentsKey(string genus, string species, string? infraEpithet) {
+        var builder = new StringBuilder();
+        builder.Append(genus.Trim().ToLowerInvariant());
+        builder.Append('|');
+        builder.Append(species.Trim().ToLowerInvariant());
+        builder.Append('|');
+        if (!string.IsNullOrWhiteSpace(infraEpithet)) {
+            builder.Append(infraEpithet.Trim().ToLowerInvariant());
+        }
+
+        return builder.ToString();
+    }
+
+    private static IReadOnlyList<ColTaxonRecord> ToReadOnly(List<ColTaxonRecord> records) {
+        if (records.Count == 0) {
+            return Array.Empty<ColTaxonRecord>();
+        }
+
+        return Array.AsReadOnly(records.ToArray());
+    }
+
+    private void CacheParentChain(List<ColTaxonRecord> chain, IReadOnlyList<ColTaxonRecord> readOnly) {
+        if (chain.Count == 0) {
+            return;
+        }
+
+        for (var i = 0; i < chain.Count; i++) {
+            var record = chain[i];
+            if (_parentChainCache.ContainsKey(record.Id)) {
+                continue;
+            }
+
+            if (i == chain.Count - 1) {
+                _parentChainCache[record.Id] = readOnly;
+            } else {
+                var slice = chain.Take(i + 1).ToList();
+                _parentChainCache[record.Id] = ToReadOnly(slice);
+            }
+        }
     }
 
     private ReadOnlyDictionary<string, string> LoadColumnMap() {

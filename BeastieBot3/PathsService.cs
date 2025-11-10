@@ -35,7 +35,7 @@ namespace BeastieBot3 {
                 : GetIucnDatabasePath();
 
             if (string.IsNullOrWhiteSpace(configuredPath)) {
-                throw new InvalidOperationException("IUCN SQLite database path is not configured. Set Datastore:IUCN_sqlite_from_cvs or pass --database.");
+                throw new InvalidOperationException($"IUCN SQLite database path is not configured. Set Datastore:IUCN_sqlite_from_cvs or pass --database.\n[using ini-file: '{_reader.SourceFilePath}']");
             }
 
             try {

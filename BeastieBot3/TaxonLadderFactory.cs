@@ -31,6 +31,10 @@ internal static class TaxonLadderFactory {
     }
 
     public static TaxonLadder FromCol(string sourceLabel, ColTaxonRecord record) {
+        return FromColClassification(sourceLabel, record);
+    }
+
+    public static TaxonLadder FromColClassification(string sourceLabel, ColTaxonRecord record) {
         if (record is null) {
             throw new ArgumentNullException(nameof(record));
         }
@@ -56,6 +60,34 @@ internal static class TaxonLadderFactory {
             var infraRank = NormalizeInfraRank(record.Rank);
             var infraLabel = BuildColInfraName(speciesName, record.Rank, record.InfraspecificEpithet);
             AddIfPresent(nodes, infraRank, infraLabel);
+        }
+
+        return new TaxonLadder(sourceLabel, nodes);
+    }
+
+    public static TaxonLadder FromColLineage(string sourceLabel, IReadOnlyList<ColTaxonRecord> chain) {
+        if (string.IsNullOrWhiteSpace(sourceLabel)) {
+            throw new ArgumentException("Source label is required.", nameof(sourceLabel));
+        }
+
+        if (chain is null) {
+            throw new ArgumentNullException(nameof(chain));
+        }
+
+        var nodes = new List<TaxonLadderNode>();
+        for (var i = 0; i < chain.Count; i++) {
+            var record = chain[i];
+            if (record is null) {
+                continue;
+            }
+
+            var rank = NormalizeLineageRank(record.Rank, i);
+            var name = NormalizeScientific(record.ScientificName);
+            if (string.IsNullOrWhiteSpace(name)) {
+                continue;
+            }
+
+            AddIfPresent(nodes, rank, name);
         }
 
         return new TaxonLadder(sourceLabel, nodes);
@@ -185,5 +217,22 @@ internal static class TaxonLadderFactory {
             "form" or "f" => "f.",
             _ => normalized
         };
+    }
+
+    private static string NormalizeLineageRank(string? rank, int depth) {
+        if (string.IsNullOrWhiteSpace(rank)) {
+            return depth == 0 ? "root" : "unranked";
+        }
+
+        var trimmed = rank.Trim();
+        if (trimmed.Length == 0) {
+            return depth == 0 ? "root" : "unranked";
+        }
+
+        if (trimmed.Equals("division", StringComparison.OrdinalIgnoreCase)) {
+            return "phylum";
+        }
+
+        return trimmed.ToLowerInvariant();
     }
 }
