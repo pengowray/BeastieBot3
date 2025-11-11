@@ -36,7 +36,8 @@ internal sealed class ColTaxonRepository {
         }
 
         using var command = _connection.CreateCommand();
-        command.CommandText = $"{_selectClause}\nFROM nameusage\nWHERE scientificName = @name COLLATE NOCASE\nAND scientificName IS NOT NULL";
+        //command.CommandText = $"{_selectClause}\nFROM nameusage\nWHERE scientificName = @name COLLATE NOCASE\nAND scientificName IS NOT NULL"; // very slow
+        command.CommandText = $"{_selectClause}\nFROM nameusage\nWHERE scientificName = @name \nAND scientificName IS NOT NULL";
         command.Parameters.AddWithValue("@name", scientificName.Trim());
         command.CommandTimeout = 0;
         var results = Execute(command, cancellationToken);
@@ -56,7 +57,7 @@ internal sealed class ColTaxonRepository {
         }
 
         var whereBuilder = new StringBuilder();
-        whereBuilder.Append("genericName = @genus COLLATE NOCASE\n  AND specificEpithet = @species COLLATE NOCASE");
+        whereBuilder.Append("genericName = @genus \n  AND specificEpithet = @species ");
 
         var parameters = new List<SqliteParameter> {
             new("@genus", genus.Trim()),
@@ -64,7 +65,7 @@ internal sealed class ColTaxonRepository {
         };
 
         if (!string.IsNullOrWhiteSpace(infraEpithet)) {
-            whereBuilder.Append("\n  AND infraspecificEpithet = @infra COLLATE NOCASE");
+            whereBuilder.Append("\n  AND infraspecificEpithet = @infra ");
             parameters.Add(new SqliteParameter("@infra", infraEpithet.Trim()));
         } else {
             whereBuilder.Append("\n  AND (infraspecificEpithet IS NULL OR infraspecificEpithet = '')");

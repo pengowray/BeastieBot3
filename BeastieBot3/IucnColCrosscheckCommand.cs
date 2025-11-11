@@ -194,8 +194,8 @@ public sealed class IucnColCrosscheckCommand : Command<IucnColCrosscheckCommand.
         AnsiConsole.MarkupLineInterpolated($"[grey]Processing {rows.Count:N0} IUCN assessments against Catalogue of Life...[/]");
 
         var stopwatch = Stopwatch.StartNew();
-        const int logInterval = 200;
-        const int descriptionInterval = 10;
+        const int logInterval = 2000;
+        const int descriptionInterval = 100;
 
         AnsiConsole.Progress()
             .AutoClear(false)
