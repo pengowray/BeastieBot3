@@ -148,7 +148,12 @@ namespace beastie {
                     SplitAndAddToRecord(line, " wikilink ", lineNumber, TaxonRules.Field.wikilink);
 
                 } else if (line.Contains(" typo-of ", StringComparison.Ordinal)) {
-                    // same as wikilink but also adds to additional field
+                    // [same as wikilink but also adds to additional field]
+                    // Changes both the link and display of a taxon.
+                    // Also adds a note when listed to say "Listed by IUCN as..." with the original taxon name.
+                    // Changes included at the end of "Common Name Issues" report (IUCNCommonNameIssuesReport).
+                    // Adds to both wikilink and typo-of fields.
+
                     SplitAndAddToRecord(line, " typo-of ", lineNumber, TaxonRules.Field.wikilink);
                     string[]? typo = SplitAndAddToRecord(line, " typo-of ", lineNumber, TaxonRules.Field.typoOf);
                     if (typo is { Length: 2 }) {
