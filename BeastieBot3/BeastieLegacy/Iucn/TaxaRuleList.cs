@@ -1,5 +1,8 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.IO;
+
+#nullable enable
 
 // TODO
 // (done) lemurs, marsupials (in rules)
@@ -13,8 +16,6 @@ using System.IO;
 // weird page with two taxoboxes: https://en.wikipedia.org/wiki/Bongo_(antelope)
 
 //Limnodynastidae redirects to Myobatrachidae, but both families are used by IUCN
-using System.Collections.Generic;
-
 namespace beastie {
     
     public class TaxaRuleList {
@@ -1072,7 +1073,7 @@ Liliopsida = monocotyledon ! monocotyledons
 
 ";
 
-        private static TaxaRuleList _instance;
+        private static TaxaRuleList? _instance;
         public static TaxaRuleList Instance() {
             if (_instance == null) {
                 _instance = new TaxaRuleList();
@@ -1082,20 +1083,24 @@ Liliopsida = monocotyledon ! monocotyledons
             return _instance;
         }
 
-        string rules;
+    private readonly string rules;
+    private Dictionary<string, string> caps = new Dictionary<string, string>();
 
         // compiled:
-        public Dictionary<string, TaxonRules> records = new Dictionary<string, TaxonRules>();
+        public Dictionary<string, TaxonRules> records { get; } = new Dictionary<string, TaxonRules>();
 
-        public HashSet<String> BinomAmbig;
-        public HashSet<String> InfraAmbig;
-        public HashSet<String> WikiPageAmbig; // pages that are pointed to by multiple species
-        public Dictionary<String, String> ScientificTypos = new Dictionary<string, string>();
+        public HashSet<string>? BinomAmbig { get; set; }
+        public HashSet<string>? InfraAmbig { get; set; }
+        public HashSet<string>? WikiPageAmbig { get; set; } // pages that are pointed to by multiple species
+        public Dictionary<string, string> ScientificTypos { get; } = new Dictionary<string, string>();
 
         // see also: https://en.wikipedia.org/wiki/User:Beastie_Bot/Redirects_to_same_title
-        public Dupes WikiSpeciesDupes; // Page names that link to same species
-        public Dupes WikiHigherDupes; // Page names that link to the same higher taxon
-        public Dictionary<string, string> Caps = new Dictionary<string, string>(); // lowercase, corrected case. For IUCN Red List common names
+        public Dupes? WikiSpeciesDupes { get; set; } // Page names that link to same species
+        public Dupes? WikiHigherDupes { get; set; } // Page names that link to the same higher taxon
+        public Dictionary<string, string> Caps {
+            get => caps;
+            set => caps = value ?? new Dictionary<string, string>();
+        } // lowercase, corrected case. For IUCN Red List common names
 
         //public Dictionary<string, TaxonRules.Field> fields = new Dictionary<string, TaxonRules.Field>(); // const
 
@@ -1110,17 +1115,19 @@ Liliopsida = monocotyledon ! monocotyledons
 
     public void Compile() {
             int lineNumber = 0;
-            var reader = new StringReader(rules);
-            string line;
-            while ((line = reader.ReadLine()) != null) {
+            using var reader = new StringReader(rules);
+            string? rawLine;
+            while ((rawLine = reader.ReadLine()) != null) {
+                string line = rawLine;
                 lineNumber++;
 
                 if (string.IsNullOrWhiteSpace(line))
                     continue;
 
                 // remove comments
-                if (line.Contains("//")) {
-                    line = line.Substring(0, line.IndexOf("//"));
+                int commentIndex = line.IndexOf("//", StringComparison.Ordinal);
+                if (commentIndex >= 0) {
+                    line = line.Substring(0, commentIndex);
                 }
 
                 line = line.Trim();
@@ -1128,9 +1135,8 @@ Liliopsida = monocotyledon ! monocotyledons
                 if (string.IsNullOrEmpty(line))
                     continue;
 
-                if (line.Contains(" = ")) {
-                    //string[] parts = SplitAndAddToDictionary(line, " = ", lineNumber, taxonCommonName);
-                    string[] parts = SplitAndAddToRecord(line, " = ", "!", lineNumber, TaxonRules.Field.commonName, TaxonRules.Field.commonPlural);
+                if (line.Contains(" = ", StringComparison.Ordinal)) {
+                    string[]? parts = SplitAndAddToRecord(line, " = ", "!", lineNumber, TaxonRules.Field.commonName, TaxonRules.Field.commonPlural);
 
                     // warn if -s ending
                     if (parts != null) {
@@ -1147,43 +1153,41 @@ Liliopsida = monocotyledon ! monocotyledons
                         }
                     }
 
-                } else if (line.Contains("force-split")) {
-                    string split = line.Substring(0, line.IndexOf("force-split"));
+                } else if (line.Contains("force-split", StringComparison.Ordinal)) {
                     SplitAndAddToRecord(line, " force-split ", lineNumber, TaxonRules.Field.forcesplit);
 
-                } else if (line.Contains(" plural ")) {
-                    //records.GetOrDefault(SplitAndAddToRecord(line, " plural ", lineNumber, TaxonRules.Field.commonPlural);
+                } else if (line.Contains(" plural ", StringComparison.Ordinal)) {
                     SplitAndAddToRecord(line, " plural ", lineNumber, TaxonRules.Field.commonPlural);
 
-                } else if (line.Contains(" adj ")) {
+                } else if (line.Contains(" adj ", StringComparison.Ordinal)) {
                     SplitAndAddToRecord(line, " adj ", lineNumber, TaxonRules.Field.adj);
 
-                } else if (line.Contains(" split-off ")) {
+                } else if (line.Contains(" split-off ", StringComparison.Ordinal)) {
                     SplitAndAddToRecord(line, " split-off ", lineNumber, TaxonRules.Field.splitoff);
 
-                } else if (line.Contains(" below ")) {
+                } else if (line.Contains(" below ", StringComparison.Ordinal)) {
                     //SplitAndAddToRecord(line, " below ", lineNumber, TaxonRules.Field.below);
                     SplitAndAddToRecord(line, " below ", ":", lineNumber, TaxonRules.Field.below, TaxonRules.Field.belowRank);
                     //TODO: error if rank missing
 
-                } else if (line.Contains(" includes ")) {
+                } else if (line.Contains(" includes ", StringComparison.Ordinal)) {
                     SplitAndAddToRecord(line, " includes ", lineNumber, TaxonRules.Field.includes);
 
-                } else if (line.Contains(" comprises ")) {
+                } else if (line.Contains(" comprises ", StringComparison.Ordinal)) {
                     SplitAndAddToRecord(line, " comprises ", lineNumber, TaxonRules.Field.comprises);
 
-                } else if (line.Contains(" means ")) {
+                } else if (line.Contains(" means ", StringComparison.Ordinal)) {
                     SplitAndAddToRecord(line, " means ", lineNumber, TaxonRules.Field.means);
 
-                } else if (line.Contains(" wikilink ")) {
+                } else if (line.Contains(" wikilink ", StringComparison.Ordinal)) {
                     //SplitAndAddToRecord(line, " wikilink ", lineNumber, TaxonRules.Field.wikilink);
                     SplitAndAddToRecord(line, " wikilink ", lineNumber, TaxonRules.Field.wikilink);
 
-                } else if (line.Contains(" typo-of ")) {
+                } else if (line.Contains(" typo-of ", StringComparison.Ordinal)) {
                     // same as wikilink but also adds to additional field
                     SplitAndAddToRecord(line, " typo-of ", lineNumber, TaxonRules.Field.wikilink);
-                    string[] typo = SplitAndAddToRecord(line, " typo-of ", lineNumber, TaxonRules.Field.typoOf);
-                    if (typo.Length == 2) {
+                    string[]? typo = SplitAndAddToRecord(line, " typo-of ", lineNumber, TaxonRules.Field.typoOf);
+                    if (typo is { Length: 2 }) {
                         ScientificTypos[typo[0]] = typo[1];
                     }
 
@@ -1191,7 +1195,7 @@ Liliopsida = monocotyledon ! monocotyledons
             }
         }
 
-        string[] SplitAndAddToRecord(string line, string seperator, int lineNumber, TaxonRules.Field setField = TaxonRules.Field.None) {
+        string[]? SplitAndAddToRecord(string line, string seperator, int lineNumber, TaxonRules.Field setField = TaxonRules.Field.None) {
             var parts = line.Split(new string[] { seperator }, 2, StringSplitOptions.RemoveEmptyEntries);
             if (parts.Length != 2) {
                 Error(lineNumber, line,
@@ -1214,7 +1218,7 @@ Liliopsida = monocotyledon ! monocotyledons
         }
 
         //string[] SplitAndAddToDictionaries(string line, string seperator1, string seperator2, int lineNumber, Dictionary<string, string> addToDictionary1 = null, Dictionary<string, string> addToDictionary2 = null) {
-        string[] SplitAndAddToRecord(string line, string seperator1, string seperator2, int lineNumber, TaxonRules.Field setField1 = TaxonRules.Field.None, TaxonRules.Field setField2 = TaxonRules.Field.None) {
+        string[]? SplitAndAddToRecord(string line, string seperator1, string seperator2, int lineNumber, TaxonRules.Field setField1 = TaxonRules.Field.None, TaxonRules.Field setField2 = TaxonRules.Field.None) {
             
             var parts = line.Split(new string[] { seperator1 }, 2, StringSplitOptions.RemoveEmptyEntries);
             if (parts.Length != 2) {
@@ -1271,12 +1275,11 @@ Liliopsida = monocotyledon ! monocotyledons
         }
 
         TaxonRules GetOrCreateRecord(string taxonString) {
-            TaxonRules record = null;
-            records.TryGetValue(taxonString, out record);
-            if (record == null) {
+            if (!records.TryGetValue(taxonString, out var record)) {
                 record = new TaxonRules();
                 records[taxonString] = record;
             }
+
             return record;
         }
 
@@ -1290,21 +1293,18 @@ Liliopsida = monocotyledon ! monocotyledons
             Console.Error.WriteLine("Line {0}: {1}", lineNumber, line);
         }
 
-        public TaxonRules GetDetails(string taxon) {
-            TaxonRules details = null;
-            records.TryGetValue(taxon, out details);
-            return details;
+        public TaxonRules? GetDetails(string taxon) {
+            return records.TryGetValue(taxon, out var details) ? details : null;
         }
 
         public TaxonRules GetOrCreateDetails(string taxon) {
-            TaxonRules details = null;
-            if (records.TryGetValue(taxon, out details)) { 
-                return details;
-            } else { 
-                details = new TaxonRules();
-                records[taxon] = details;
+            if (records.TryGetValue(taxon, out var details)) {
                 return details;
             }
+
+            var newDetails = new TaxonRules();
+            records[taxon] = newDetails;
+            return newDetails;
         }
     }
 }

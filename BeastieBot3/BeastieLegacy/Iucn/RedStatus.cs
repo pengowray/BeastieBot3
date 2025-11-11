@@ -1,8 +1,5 @@
 ﻿using System;
-using System.Collections.Generic;
 using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
 
 namespace beastie {
 
@@ -130,7 +127,7 @@ namespace beastie {
             return null;
         }
 
-        public static string Text(this RedStatus status) {
+        public static string? Text(this RedStatus status) {
             switch (status) {
                 case RedStatus.LC: return "least concern";
                 case RedStatus.NT: return "near threatened";
@@ -153,7 +150,7 @@ namespace beastie {
             return null; // throw error. should never happen.
         }
 
-        public static string ListsPage(this RedStatus status) {
+        public static string? ListsPage(this RedStatus status) {
             switch (status) {
                 case RedStatus.LC: return "Lists of IUCN Red List least concern species";
                 case RedStatus.NT: return "Lists of IUCN Red List near threatened species";
@@ -176,7 +173,7 @@ namespace beastie {
             return null; // throw error. should never happen.
         }
 
-        public static string TextWithRecently(this RedStatus status) {
+        public static string? TextWithRecently(this RedStatus status) {
             if (status == RedStatus.EX || status == RedStatus.EXplus)
                 return "recently extinct";
 
@@ -184,7 +181,7 @@ namespace beastie {
         }
 
         /// <returns>Best matching English Wikipedia page title for conservation status</returns>
-        public static string WikiPage(this RedStatus status) {
+        public static string? WikiPage(this RedStatus status) {
             switch (status) {
                 case RedStatus.LC: return "Least-concern species";
                 case RedStatus.NT: return "Near-threatened species";
@@ -208,22 +205,26 @@ namespace beastie {
 
         }
 
-        public static string WikiLink(this RedStatus status) {
-            string wikipage = status.WikiPage();
+        public static string? WikiLink(this RedStatus status) {
+            string? wikipage = status.WikiPage();
             if (wikipage == null) {
                 return status.Text();
             }
 
-            string statusText = status.Text();
+            string? statusText = status.Text();
 
-            if (statusText.UpperCaseFirstChar() == wikipage) {
-                return "[[" + status.Text() + "]]";
+            if (statusText == null) {
+                return null;
             }
 
-            return "[[" + wikipage + "|" + status.Text() + "]]";
+            if (statusText.UpperCaseFirstChar() == wikipage) {
+                return "[[" + statusText + "]]";
+            }
+
+            return "[[" + wikipage + "|" + statusText + "]]";
         }
 
-        public static string HexColor(this RedStatus status) {
+        public static string? HexColor(this RedStatus status) {
             switch (status) {
                 case RedStatus.LC: return "#006666";
                 case RedStatus.NT: case RedStatus.CD: return "#99cc99";
@@ -241,7 +242,7 @@ namespace beastie {
             return null; // should never happen... 
         }
 
-        public static string WikiImage(this RedStatus status) {
+        public static string? WikiImage(this RedStatus status) {
             switch (status) {
                 case RedStatus.LC: return null; // TODO
                 case RedStatus.CD: return "[[File:Status iucn2.3 CD.svg|thumb|A visualization of the categories in the no-longer used \"IUCN 1994 Categories & Criteria(version 2.3)\", with ''conservation dependent'' (LR/cd) highlighted. The category was folded into the Near Threatened (NT) category in the 2001 revision, but some species which have not been re-evaluated retain the assessment.]]";
