@@ -78,6 +78,17 @@ namespace BeastieBot3 {
                             .WithExample(new[] { "iucn", "api", "cache-taxa" })
                             .WithExample(new[] { "iucn", "api", "cache-taxa", "--limit", "100" })
                             .WithExample(new[] { "iucn", "api", "cache-taxa", "--failed-only" });
+
+                        api.AddCommand<IucnApiCacheAssessmentsCommand>("cache-assessments")
+                            .WithDescription("Download /api/v4/assessment/{assessment_id} payloads based on the cached taxa backlog.")
+                            .WithExample(new[] { "iucn", "api", "cache-assessments" })
+                            .WithExample(new[] { "iucn", "api", "cache-assessments", "--limit", "100" })
+                            .WithExample(new[] { "iucn", "api", "cache-assessments", "--failed-only" });
+
+                        api.AddCommand<IucnApiCacheFullCommand>("cache-all")
+                            .WithDescription("Run both cache-taxa and cache-assessments sequentially with a single command.")
+                            .WithExample(new[] { "iucn", "api", "cache-all" })
+                            .WithExample(new[] { "iucn", "api", "cache-all", "--taxa-limit", "100", "--assessment-limit", "200" });
                     });
                 });
             });

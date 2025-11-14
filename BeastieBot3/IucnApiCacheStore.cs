@@ -68,6 +68,16 @@ CREATE TABLE IF NOT EXISTS taxa_lookup (
 );
 CREATE INDEX IF NOT EXISTS idx_taxa_lookup_taxa_id ON taxa_lookup(taxa_id);
 CREATE INDEX IF NOT EXISTS idx_taxa_downloaded_at ON taxa(downloaded_at);
+CREATE TABLE IF NOT EXISTS taxa_assessment_backlog (
+    assessment_id INTEGER PRIMARY KEY,
+    taxa_id INTEGER NOT NULL REFERENCES taxa(id) ON DELETE CASCADE,
+    root_sis_id INTEGER NOT NULL,
+    sis_id INTEGER NOT NULL,
+    latest INTEGER NOT NULL,
+    year_published INTEGER,
+    queued_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_assessment_backlog_latest ON taxa_assessment_backlog(latest DESC, year_published DESC);
 CREATE TABLE IF NOT EXISTS assessments (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     assessment_id INTEGER NOT NULL UNIQUE,
@@ -126,6 +136,14 @@ CREATE TABLE IF NOT EXISTS failed_requests (
 JOIN taxa_lookup l ON l.taxa_id = t.id
 WHERE l.sis_id = @sisId LIMIT 1";
         command.Parameters.AddWithValue("@sisId", sisId);
+        var result = command.ExecuteScalar() as string;
+        return DateTime.TryParse(result, out var parsed) ? parsed : null;
+    }
+
+    public DateTime? GetAssessmentDownloadedAt(long assessmentId) {
+        using var command = _connection.CreateCommand();
+        command.CommandText = "SELECT downloaded_at FROM assessments WHERE assessment_id=@id LIMIT 1";
+        command.Parameters.AddWithValue("@id", assessmentId);
         var result = command.ExecuteScalar() as string;
         return DateTime.TryParse(result, out var parsed) ? parsed : null;
     }
@@ -194,6 +212,117 @@ WHERE l.sis_id = @sisId LIMIT 1";
         tx.Commit();
     }
 
+    public long UpsertAssessment(long assessmentId, long sisId, long importId, string json, DateTime downloadedAt) {
+        using var tx = _connection.BeginTransaction();
+
+        long recordId;
+        using (var command = _connection.CreateCommand()) {
+            command.Transaction = tx;
+            command.CommandText = "SELECT id FROM assessments WHERE assessment_id=@assessment LIMIT 1";
+            command.Parameters.AddWithValue("@assessment", assessmentId);
+            var existing = command.ExecuteScalar();
+            if (existing is long id) {
+                recordId = id;
+                command.CommandText = "UPDATE assessments SET sis_id=@sis, import_id=@import, downloaded_at=@downloaded, json=@json WHERE id=@id";
+                command.Parameters.Clear();
+                command.Parameters.AddWithValue("@sis", sisId);
+                command.Parameters.AddWithValue("@import", importId);
+                command.Parameters.AddWithValue("@downloaded", downloadedAt.ToString("O"));
+                command.Parameters.AddWithValue("@json", json);
+                command.Parameters.AddWithValue("@id", recordId);
+                command.ExecuteNonQuery();
+            }
+            else {
+                command.CommandText = "INSERT INTO assessments(assessment_id, sis_id, import_id, downloaded_at, json) VALUES (@assessment, @sis, @import, @downloaded, @json); SELECT last_insert_rowid();";
+                command.Parameters.Clear();
+                command.Parameters.AddWithValue("@assessment", assessmentId);
+                command.Parameters.AddWithValue("@sis", sisId);
+                command.Parameters.AddWithValue("@import", importId);
+                command.Parameters.AddWithValue("@downloaded", downloadedAt.ToString("O"));
+                command.Parameters.AddWithValue("@json", json);
+                recordId = (long)(command.ExecuteScalar() ?? 0L);
+            }
+        }
+
+        tx.Commit();
+        return recordId;
+    }
+
+    public IReadOnlyList<AssessmentQueueRow> GetAssessmentBacklogOrdered() {
+        using var command = _connection.CreateCommand();
+        command.CommandText = @"SELECT b.assessment_id,
+       b.sis_id,
+       b.root_sis_id,
+       b.latest,
+       b.year_published,
+       a.downloaded_at
+FROM taxa_assessment_backlog b
+LEFT JOIN assessments a ON a.assessment_id = b.assessment_id
+ORDER BY b.latest DESC, IFNULL(b.year_published, 0) DESC, b.assessment_id DESC";
+
+        var list = new List<AssessmentQueueRow>();
+        using var reader = command.ExecuteReader();
+        while (reader.Read()) {
+            var assessmentId = reader.GetInt64(0);
+            var sisId = reader.GetInt64(1);
+            var rootSisId = reader.GetInt64(2);
+            var latest = reader.GetInt64(3) != 0;
+            int? year = reader.IsDBNull(4) ? null : reader.GetInt32(4);
+            var downloaded = reader.IsDBNull(5) ? null : reader.GetString(5);
+            DateTime? downloadedAt = null;
+            if (!string.IsNullOrEmpty(downloaded) && DateTime.TryParse(downloaded, out var parsed)) {
+                downloadedAt = parsed;
+            }
+
+            list.Add(new AssessmentQueueRow(assessmentId, sisId, rootSisId, latest, year, downloadedAt));
+        }
+
+        return list;
+    }
+
+    public void ReplaceAssessmentBacklog(long taxaId, long rootSisId, IReadOnlyList<IucnAssessmentHeader> assessments) {
+        using var tx = _connection.BeginTransaction();
+
+        using (var delete = _connection.CreateCommand()) {
+            delete.Transaction = tx;
+            delete.CommandText = "DELETE FROM taxa_assessment_backlog WHERE taxa_id=@taxaId";
+            delete.Parameters.AddWithValue("@taxaId", taxaId);
+            delete.ExecuteNonQuery();
+        }
+
+        if (assessments.Count > 0) {
+            using var insert = _connection.CreateCommand();
+            insert.Transaction = tx;
+            insert.CommandText = "INSERT OR REPLACE INTO taxa_assessment_backlog(assessment_id, taxa_id, root_sis_id, sis_id, latest, year_published, queued_at) VALUES (@assessment,@taxa,@root,@sis,@latest,@year,@queued)";
+            var assessmentParam = insert.Parameters.Add("@assessment", SqliteType.Integer);
+            var taxaParam = insert.Parameters.Add("@taxa", SqliteType.Integer);
+            var rootParam = insert.Parameters.Add("@root", SqliteType.Integer);
+            var sisParam = insert.Parameters.Add("@sis", SqliteType.Integer);
+            var latestParam = insert.Parameters.Add("@latest", SqliteType.Integer);
+            var yearParam = insert.Parameters.Add("@year", SqliteType.Integer);
+            var queuedParam = insert.Parameters.Add("@queued", SqliteType.Text);
+
+            foreach (var assessment in assessments) {
+                assessmentParam.Value = assessment.AssessmentId;
+                taxaParam.Value = taxaId;
+                rootParam.Value = rootSisId;
+                sisParam.Value = assessment.SisId;
+                latestParam.Value = assessment.Latest ? 1 : 0;
+                if (assessment.YearPublished.HasValue) {
+                    yearParam.Value = assessment.YearPublished.Value;
+                }
+                else {
+                    yearParam.Value = DBNull.Value;
+                }
+
+                queuedParam.Value = DateTime.UtcNow.ToString("O");
+                insert.ExecuteNonQuery();
+            }
+        }
+
+        tx.Commit();
+    }
+
     public IReadOnlyList<long> GetFailedEntityIds(string endpoint) {
         using var command = _connection.CreateCommand();
         command.CommandText = "SELECT entity_id FROM failed_requests WHERE endpoint=@endpoint AND (next_attempt_after IS NULL OR next_attempt_after <= @now)";
@@ -241,3 +370,5 @@ ON CONFLICT(endpoint, entity_id) DO UPDATE SET
 }
 
 internal sealed record TaxaLookupRow(long SisId, long RootSisId, string Scope);
+
+internal sealed record AssessmentQueueRow(long AssessmentId, long SisId, long RootSisId, bool Latest, int? YearPublished, DateTime? DownloadedAt);

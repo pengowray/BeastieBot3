@@ -40,8 +40,12 @@ public sealed class IucnApiCacheTaxaSettings : CommonSettings {
 }
 
 public sealed class IucnApiCacheTaxaCommand : AsyncCommand<IucnApiCacheTaxaSettings> {
-    public override async Task<int> ExecuteAsync(CommandContext context, IucnApiCacheTaxaSettings settings, CancellationToken cancellationToken) {
+    public override Task<int> ExecuteAsync(CommandContext context, IucnApiCacheTaxaSettings settings, CancellationToken cancellationToken) {
         _ = context;
+        return RunAsync(settings, cancellationToken);
+    }
+
+    internal static async Task<int> RunAsync(IucnApiCacheTaxaSettings settings, CancellationToken cancellationToken) {
         var paths = new PathsService(settings.IniFile, settings.SettingsDir);
         var sourcePath = paths.ResolveIucnDatabasePath(settings.SourceDatabase);
         var cachePath = paths.ResolveIucnApiCachePath(settings.CacheDatabase);
@@ -172,6 +176,7 @@ public sealed class IucnApiCacheTaxaCommand : AsyncCommand<IucnApiCacheTaxaSetti
             var parsed = IucnTaxaJsonParser.Parse(response.Body);
             var taxaId = cacheStore.UpsertTaxa(parsed.RootSisId, importId, response.Body, DateTime.UtcNow);
             cacheStore.ReplaceTaxaLookups(taxaId, parsed.Mappings);
+            cacheStore.ReplaceAssessmentBacklog(taxaId, parsed.RootSisId, parsed.Assessments);
             cacheStore.ClearFailedRequest("taxa_sis", sisId);
             cacheStore.CompleteImportSuccess(importId, (int)response.StatusCode, response.PayloadBytes, stopwatch.Elapsed);
             return true;
