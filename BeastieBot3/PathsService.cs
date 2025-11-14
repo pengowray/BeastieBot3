@@ -29,6 +29,8 @@ namespace BeastieBot3 {
 
         public string? GetIucnDatabasePath() => _reader.Get("Datastore:IUCN_sqlite_from_cvs");
 
+        public string? GetIucnApiCachePath() => _reader.Get("Datastore:IUCN_api_cache_sqlite");
+
         public string ResolveIucnDatabasePath(string? overridePath) {
             var configuredPath = !string.IsNullOrWhiteSpace(overridePath)
                 ? overridePath
@@ -43,6 +45,23 @@ namespace BeastieBot3 {
             }
             catch (Exception ex) {
                 throw new InvalidOperationException($"Failed to resolve database path {configuredPath}: {ex.Message}", ex);
+            }
+        }
+
+        public string ResolveIucnApiCachePath(string? overridePath) {
+            var configuredPath = !string.IsNullOrWhiteSpace(overridePath)
+                ? overridePath
+                : GetIucnApiCachePath();
+
+            if (string.IsNullOrWhiteSpace(configuredPath)) {
+                throw new InvalidOperationException($"IUCN API cache path is not configured. Set Datastore:IUCN_api_cache_sqlite or pass --cache.");
+            }
+
+            try {
+                return Path.GetFullPath(configuredPath);
+            }
+            catch (Exception ex) {
+                throw new InvalidOperationException($"Failed to resolve API cache path {configuredPath}: {ex.Message}", ex);
             }
         }
     }

@@ -206,6 +206,9 @@ PublishScripts/
 *.nuget.props
 *.nuget.targets
 
+# Environment overrides
+.env
+
 # Microsoft Azure Build Output
 csx/
 *.build.csdef

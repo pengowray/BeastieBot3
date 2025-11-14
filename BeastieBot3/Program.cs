@@ -5,7 +5,7 @@ using System.Threading;
 
 namespace BeastieBot3 {
     // Common CLI settings shared by all commands
-    public sealed class CommonSettings : CommandSettings {
+    public class CommonSettings : CommandSettings {
         [CommandOption("-s|--settings-dir <DIR>")]
         [Description("Directory containing settings files like paths.ini. Defaults to the app base directory.")]
         public string? SettingsDir { get; init; }
@@ -70,6 +70,15 @@ namespace BeastieBot3 {
                         .WithDescription("Crosscheck IUCN species against Catalogue of Life for presence, synonymy, and authority alignment.")
                         .WithExample(new[] { "iucn", "report-col-crosscheck" })
                         .WithExample(new[] { "iucn", "report-col-crosscheck", "--limit", "5000" });
+
+                    iucn.AddBranch("api", api => {
+                        api.SetDescription("Commands that cache data from the live IUCN API");
+                        api.AddCommand<IucnApiCacheTaxaCommand>("cache-taxa")
+                            .WithDescription("Download /api/v4/taxa/sis/{sis_id} payloads into the local API cache.")
+                            .WithExample(new[] { "iucn", "api", "cache-taxa" })
+                            .WithExample(new[] { "iucn", "api", "cache-taxa", "--limit", "100" })
+                            .WithExample(new[] { "iucn", "api", "cache-taxa", "--failed-only" });
+                    });
                 });
             });
 
