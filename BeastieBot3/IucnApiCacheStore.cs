@@ -8,9 +8,11 @@ namespace BeastieBot3;
 
 internal sealed class IucnApiCacheStore : IDisposable {
     private readonly SqliteConnection _connection;
+    private readonly ApiImportMetadataStore _importStore;
 
     private IucnApiCacheStore(SqliteConnection connection) {
         _connection = connection;
+        _importStore = new ApiImportMetadataStore(connection);
     }
 
     public static IucnApiCacheStore Open(string databasePath) {
@@ -34,6 +36,7 @@ internal sealed class IucnApiCacheStore : IDisposable {
         }
 
         var store = new IucnApiCacheStore(connection);
+        store._importStore.EnsureSchema();
         store.EnsureSchema();
         return store;
     }
@@ -43,17 +46,7 @@ internal sealed class IucnApiCacheStore : IDisposable {
     private void EnsureSchema() {
         using var command = _connection.CreateCommand();
         command.CommandText = @"
-CREATE TABLE IF NOT EXISTS import_metadata (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    url TEXT NOT NULL,
-    started_at TEXT NOT NULL,
-    ended_at TEXT,
-    duration_ms INTEGER,
-    http_status INTEGER,
-    payload_bytes INTEGER,
-    error TEXT
-);
-CREATE TABLE IF NOT EXISTS taxa (
+    CREATE TABLE IF NOT EXISTS taxa (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     root_sis_id INTEGER NOT NULL UNIQUE,
     import_id INTEGER NOT NULL REFERENCES import_metadata(id) ON DELETE RESTRICT,
@@ -101,34 +94,13 @@ CREATE TABLE IF NOT EXISTS failed_requests (
         command.ExecuteNonQuery();
     }
 
-    public long BeginImport(string url) {
-        using var command = _connection.CreateCommand();
-        command.CommandText = "INSERT INTO import_metadata(url, started_at) VALUES (@url, @started_at); SELECT last_insert_rowid();";
-        command.Parameters.AddWithValue("@url", url);
-        command.Parameters.AddWithValue("@started_at", DateTime.UtcNow.ToString("O"));
-        return (long)(command.ExecuteScalar() ?? 0L);
-    }
+    public long BeginImport(string url) => _importStore.BeginImport(url);
 
-    public void CompleteImportSuccess(long importId, int httpStatus, long payloadBytes, TimeSpan duration) {
-        using var command = _connection.CreateCommand();
-        command.CommandText = "UPDATE import_metadata SET ended_at=@ended, duration_ms=@duration, http_status=@status, payload_bytes=@bytes WHERE id=@id";
-        command.Parameters.AddWithValue("@ended", DateTime.UtcNow.ToString("O"));
-        command.Parameters.AddWithValue("@duration", (long)duration.TotalMilliseconds);
-        command.Parameters.AddWithValue("@status", httpStatus);
-        command.Parameters.AddWithValue("@bytes", payloadBytes);
-        command.Parameters.AddWithValue("@id", importId);
-        command.ExecuteNonQuery();
-    }
+    public void CompleteImportSuccess(long importId, int httpStatus, long payloadBytes, TimeSpan duration) =>
+        _importStore.CompleteImportSuccess(importId, httpStatus, payloadBytes, duration);
 
-    public void CompleteImportFailure(long importId, string errorMessage, int? statusCode, TimeSpan duration) {
-        using var command = _connection.CreateCommand();
-        command.CommandText = "UPDATE import_metadata SET duration_ms=@duration, http_status=@status, error=@error WHERE id=@id";
-        command.Parameters.AddWithValue("@duration", (long)duration.TotalMilliseconds);
-        command.Parameters.AddWithValue("@status", statusCode.HasValue ? statusCode : DBNull.Value);
-        command.Parameters.AddWithValue("@error", errorMessage);
-        command.Parameters.AddWithValue("@id", importId);
-        command.ExecuteNonQuery();
-    }
+    public void CompleteImportFailure(long importId, string errorMessage, int? statusCode, TimeSpan duration) =>
+        _importStore.CompleteImportFailure(importId, errorMessage, statusCode, duration);
 
     public DateTime? GetTaxaDownloadedAt(long sisId) {
         using var command = _connection.CreateCommand();

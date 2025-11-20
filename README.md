@@ -25,3 +25,22 @@ dotnet run --project BeastieBot3 \
 The command reads SIS IDs from the CSV-derived `IUCN_sqlite_from_cvs` database, calls `/api/v4/taxa/sis/<id>` for each species, and stores the raw JSON in `iucn_api_cache.sqlite` alongside import metadata, lookup rows for nested SIS IDs, and a retry queue for temporary failures.
 
 Use `--failed-only` to exclusively retry entries from the queue, `--force` to bypass freshness checks, and `--cache` / `--source-db` to override database locations when necessary.
+
+## Wikidata Cache
+
+The `wikidata` CLI branch mirrors Wikidata taxa that expose IUCN identifiers (properties `P141` / `P627`). The workflow has two steps:
+
+1. `wikidata seed-taxa` queries the public SPARQL endpoint for Q-ids that reference IUCN conservation data and adds them to `wikidata_cache_sqlite`.
+2. `wikidata cache-entities` (or `wikidata cache-all`) downloads the JSON for each queued entity, stores the payload, and builds lookup indexes for `P627`, `P141` references, `P225` names, and `P105`/`P171` taxonomy so downstream commands can match on taxon id or scientific name.
+
+```bash
+# Discover 2k Wikidata taxa with IUCN IDs and download their JSON payloads
+dotnet run --project BeastieBot3 -- wikidata cache-all \
+  --seed-limit 2000 \
+  --download-limit 500
+
+# Produce a coverage report showing how many IUCN taxa were matched
+dotnet run --project BeastieBot3 -- wikidata report-coverage
+```
+
+Environment variables such as `WIKIDATA_USER_AGENT`, `WIKIDATA_REQUEST_DELAY_MS`, and `WIKIDATA_SPARQL_BATCH_SIZE` (see `.env.example`) allow you to tune the request cadence when mirroring Wikidata at scale.

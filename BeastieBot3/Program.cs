@@ -90,6 +90,26 @@ namespace BeastieBot3 {
                             .WithExample(new[] { "iucn", "api", "cache-all" })
                             .WithExample(new[] { "iucn", "api", "cache-all", "--taxa-limit", "100", "--assessment-limit", "200" });
                     });
+
+                    config.AddBranch("wikidata", wikidata => {
+                        wikidata.SetDescription("Wikidata caching and reporting commands");
+                        wikidata.AddCommand<WikidataSeedCommand>("seed-taxa")
+                            .WithDescription("Fetch Wikidata Q-ids for taxa carrying IUCN identifiers and enqueue them for caching.")
+                            .WithExample(new[] { "wikidata", "seed-taxa" })
+                            .WithExample(new[] { "wikidata", "seed-taxa", "--limit", "1000" });
+                        wikidata.AddCommand<WikidataCacheItemsCommand>("cache-entities")
+                            .WithDescription("Download Wikidata JSON for queued taxa and populate the local cache, including lookup indexes.")
+                            .WithExample(new[] { "wikidata", "cache-entities" })
+                            .WithExample(new[] { "wikidata", "cache-entities", "--failed-only" });
+                        wikidata.AddCommand<WikidataCacheFullCommand>("cache-all")
+                            .WithDescription("Run both the seed and cache steps sequentially.")
+                            .WithExample(new[] { "wikidata", "cache-all" })
+                            .WithExample(new[] { "wikidata", "cache-all", "--seed-limit", "1000", "--download-limit", "200" });
+                        wikidata.AddCommand<WikidataCoverageReportCommand>("report-coverage")
+                            .WithDescription("Report how many IUCN taxa currently map to cached Wikidata entities using P627 and scientific-name matches.")
+                            .WithExample(new[] { "wikidata", "report-coverage" })
+                            .WithExample(new[] { "wikidata", "report-coverage", "--include-subpopulations" });
+                    });
                 });
             });
 

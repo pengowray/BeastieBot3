@@ -31,6 +31,9 @@ namespace BeastieBot3 {
 
         public string? GetIucnApiCachePath() => _reader.Get("Datastore:IUCN_api_cache_sqlite");
 
+        public string? GetWikidataCachePath() =>
+            _reader.Get("Datastore:wikidata_cache_sqlite") ?? _reader.Get("wikidata_cache_sqlite");
+
         public string ResolveIucnDatabasePath(string? overridePath) {
             var configuredPath = !string.IsNullOrWhiteSpace(overridePath)
                 ? overridePath
@@ -62,6 +65,23 @@ namespace BeastieBot3 {
             }
             catch (Exception ex) {
                 throw new InvalidOperationException($"Failed to resolve API cache path {configuredPath}: {ex.Message}", ex);
+            }
+        }
+
+        public string ResolveWikidataCachePath(string? overridePath) {
+            var configuredPath = !string.IsNullOrWhiteSpace(overridePath)
+                ? overridePath
+                : GetWikidataCachePath();
+
+            if (string.IsNullOrWhiteSpace(configuredPath)) {
+                throw new InvalidOperationException("Wikidata cache path is not configured. Set Datastore:wikidata_cache_sqlite or pass --cache.");
+            }
+
+            try {
+                return Path.GetFullPath(configuredPath);
+            }
+            catch (Exception ex) {
+                throw new InvalidOperationException($"Failed to resolve Wikidata cache path {configuredPath}: {ex.Message}", ex);
             }
         }
     }
