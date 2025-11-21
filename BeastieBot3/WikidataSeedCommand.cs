@@ -48,7 +48,8 @@ public sealed class WikidataSeedCommand : AsyncCommand<WikidataSeedSettings> {
 
         var startCursor = DetermineCursor(settings, store);
         var batchSize = Math.Clamp(settings.BatchSize ?? configuration.SparqlBatchSize, 50, 2_000);
-        var totalGoal = settings.Limit.HasValue && settings.Limit.Value > 0 ? settings.Limit.Value : batchSize;
+        var dynamicBatchSize = batchSize;
+        var totalGoal = settings.Limit.HasValue && settings.Limit.Value > 0 ? settings.Limit.Value : int.MaxValue;
 
         if (settings.ResetCursor && settings.Cursor is null) {
             store.SetSyncCursor(CursorKey, startCursor);
@@ -65,8 +66,17 @@ public sealed class WikidataSeedCommand : AsyncCommand<WikidataSeedSettings> {
                 break;
             }
 
-            var requestSize = Math.Min(batchSize, remaining);
-            var seeds = await client.QueryTaxonSeedsAsync(cursor, requestSize, cancellationToken).ConfigureAwait(false);
+            var requestSize = Math.Min(dynamicBatchSize, remaining);
+            IReadOnlyList<WikidataSeedRow> seeds;
+            try {
+                seeds = await client.QueryTaxonSeedsAsync(cursor, requestSize, cancellationToken).ConfigureAwait(false);
+            }
+            catch (WikidataApiException ex) when (ShouldDownshift(ex, dynamicBatchSize)) {
+                dynamicBatchSize = Math.Max(50, dynamicBatchSize / 2);
+                AnsiConsole.MarkupLineInterpolated($"[yellow]SPARQL request timed out (status {(int?)ex.StatusCode ?? 0}). Reducing batch size to {dynamicBatchSize} and retrying from Q{cursor}.[/]");
+                await Task.Delay(TimeSpan.FromSeconds(5), cancellationToken).ConfigureAwait(false);
+                continue;
+            }
             if (seeds.Count == 0) {
                 break;
             }
@@ -82,6 +92,11 @@ public sealed class WikidataSeedCommand : AsyncCommand<WikidataSeedSettings> {
 
             if (seeds.Count < requestSize) {
                 break; // Likely exhausted results even if goal not met
+            }
+
+            // Increase batch size again after a successful request so we eventually ramp back up.
+            if (dynamicBatchSize < batchSize) {
+                dynamicBatchSize = Math.Min(batchSize, dynamicBatchSize + 50);
             }
         }
 
@@ -124,5 +139,18 @@ public sealed class WikidataSeedCommand : AsyncCommand<WikidataSeedSettings> {
         }
 
         return long.TryParse(span, out cursor);
+    }
+    private static bool ShouldDownshift(WikidataApiException ex, int currentBatch) {
+        if (currentBatch <= 50) {
+            return false;
+        }
+
+        if (!ex.StatusCode.HasValue) {
+            return false;
+        }
+
+        return ex.StatusCode.Value is System.Net.HttpStatusCode.GatewayTimeout
+            or System.Net.HttpStatusCode.RequestTimeout
+            or System.Net.HttpStatusCode.ServiceUnavailable;
     }
 }

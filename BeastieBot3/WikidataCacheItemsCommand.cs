@@ -14,8 +14,12 @@ public sealed class WikidataCacheItemsSettings : CommonSettings {
     public string? CacheDatabase { get; init; }
 
     [CommandOption("--limit <N>")]
-    [Description("Maximum number of entities to download in this run (default 100).")]
+    [Description("Maximum number of entities to download in this run (default = all pending).")]
     public int? Limit { get; init; }
+
+    [CommandOption("--batch-size <N>")]
+    [Description("Number of entities to pull from the queue per batch (default 250).")]
+    public int? BatchSize { get; init; }
 
     [CommandOption("--max-age-hours <HOURS>")]
     [Description("Redownload entities older than the supplied age (forces refresh).")]
@@ -49,16 +53,58 @@ public sealed class WikidataCacheItemsCommand : AsyncCommand<WikidataCacheItemsS
             ? DateTime.UtcNow - TimeSpan.FromHours(hours)
             : (DateTime?)null;
 
-        var limit = settings.Limit is { } l && l > 0 ? l : 100;
-        var queue = settings.FailedOnly
-            ? store.GetFailedEntities(limit)
-            : store.GetPendingEntities(limit, refreshThreshold);
+        var limit = settings.Limit is { } l && l > 0 ? l : int.MaxValue;
+        var batchSize = Math.Clamp(settings.BatchSize ?? 250, 25, 2_000);
 
-        if (queue.Count == 0) {
+        var downloaded = 0;
+        var skipped = 0;
+        var failures = 0;
+        var processed = 0;
+
+        while (processed < limit) {
+            var remainingBudget = Math.Min(batchSize, limit - processed);
+            if (remainingBudget <= 0) {
+                break;
+            }
+
+            var queue = settings.FailedOnly
+                ? store.GetFailedEntities(remainingBudget)
+                : store.GetPendingEntities(remainingBudget, refreshThreshold);
+
+            if (queue.Count == 0) {
+                break;
+            }
+
+            var (batchDownloaded, batchSkipped, batchFailures) = await ProcessBatchAsync(queue, settings, refreshThreshold, client, store, cancellationToken).ConfigureAwait(false);
+            downloaded += batchDownloaded;
+            skipped += batchSkipped;
+            failures += batchFailures;
+            processed += queue.Count;
+
+            if (queue.Count < remainingBudget) {
+                // No more pending rows beyond this batch.
+                break;
+            }
+        }
+
+        if (downloaded == 0 && skipped == 0 && failures == 0) {
             AnsiConsole.MarkupLine("[yellow]No Wikidata entities are pending download for the provided filters.[/]");
             return 0;
         }
 
+        AnsiConsole.MarkupLine($"[green]Downloaded:[/] {downloaded}");
+        AnsiConsole.MarkupLine($"[yellow]Skipped:[/] {skipped}");
+        AnsiConsole.MarkupLine($"[red]Failed:[/] {failures}");
+        return failures == 0 ? 0 : -1;
+    }
+
+    private static async Task<(int downloaded, int skipped, int failed)> ProcessBatchAsync(
+        IReadOnlyList<WikidataEntityWorkItem> queue,
+        WikidataCacheItemsSettings settings,
+        DateTime? refreshThreshold,
+        WikidataApiClient client,
+        WikidataCacheStore store,
+        CancellationToken cancellationToken) {
         var downloaded = 0;
         var skipped = 0;
         var failures = 0;
@@ -93,10 +139,7 @@ public sealed class WikidataCacheItemsCommand : AsyncCommand<WikidataCacheItemsS
                 }
             });
 
-        AnsiConsole.MarkupLine($"[green]Downloaded:[/] {downloaded}");
-        AnsiConsole.MarkupLine($"[yellow]Skipped:[/] {skipped}");
-        AnsiConsole.MarkupLine($"[red]Failed:[/] {failures}");
-        return failures == 0 ? 0 : -1;
+        return (downloaded, skipped, failures);
     }
 
     private static bool ShouldDownload(WikidataEntityWorkItem item, DateTime? refreshThreshold) {

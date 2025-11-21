@@ -44,3 +44,6 @@ dotnet run --project BeastieBot3 -- wikidata report-coverage
 ```
 
 Environment variables such as `WIKIDATA_USER_AGENT`, `WIKIDATA_REQUEST_DELAY_MS`, and `WIKIDATA_SPARQL_BATCH_SIZE` (see `.env.example`) allow you to tune the request cadence when mirroring Wikidata at scale.
+
+- `wikidata seed-taxa` keeps paging until the SPARQL endpoint stops returning new rows and automatically reduces its batch size when Wikidata responds with 504/timeout errors, so the default run should eventually catch up without manual throttling.
+- `wikidata cache-entities` now drains the entire pending queue by default (processing it in smaller batches under the hood). Supply `--limit` to cap the number processed in a session or `--batch-size` to change the chunk size pulled from SQLite per round.
