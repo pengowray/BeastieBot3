@@ -151,6 +151,8 @@ public sealed class WikidataSeedCommand : AsyncCommand<WikidataSeedSettings> {
 
         return ex.StatusCode.Value is System.Net.HttpStatusCode.GatewayTimeout
             or System.Net.HttpStatusCode.RequestTimeout
-            or System.Net.HttpStatusCode.ServiceUnavailable;
+            or System.Net.HttpStatusCode.ServiceUnavailable
+            or System.Net.HttpStatusCode.BadGateway
+            or System.Net.HttpStatusCode.InternalServerError;
     }
 }
