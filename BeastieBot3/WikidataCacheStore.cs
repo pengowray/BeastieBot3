@@ -263,6 +263,44 @@ LIMIT @limit";
         return list;
     }
 
+    public int ResetCachedPayloads() {
+        using var tx = _connection.BeginTransaction();
+
+        using (var clear = _connection.CreateCommand()) {
+            clear.Transaction = tx;
+            clear.CommandText =
+                """
+DELETE FROM wikidata_p627_values;
+DELETE FROM wikidata_p141_references;
+DELETE FROM wikidata_p141_statements;
+DELETE FROM wikidata_scientific_names;
+DELETE FROM wikidata_taxon_rank;
+DELETE FROM wikidata_parent_taxa;
+""";
+            clear.ExecuteNonQuery();
+        }
+
+        using var reset = _connection.CreateCommand();
+        reset.Transaction = tx;
+        reset.CommandText =
+            """
+UPDATE wikidata_entities
+SET json_downloaded = 0,
+    downloaded_at = NULL,
+    import_id = NULL,
+    label_en = NULL,
+    description_en = NULL,
+    json = NULL,
+    attempt_count = 0,
+    last_error = NULL,
+    last_attempt_at = NULL
+""";
+        var affected = reset.ExecuteNonQuery();
+
+        tx.Commit();
+        return affected;
+    }
+
     public void RecordFailure(long numericId, string errorMessage) {
         using var command = _connection.CreateCommand();
         command.CommandText = @"UPDATE wikidata_entities

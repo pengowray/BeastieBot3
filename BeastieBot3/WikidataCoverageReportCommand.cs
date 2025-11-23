@@ -4,6 +4,7 @@ using System.ComponentModel;
 using System.Data;
 using System.IO;
 using System.Linq;
+using System.Text.Json;
 using System.Threading;
 using Microsoft.Data.Sqlite;
 using Spectre.Console;
@@ -99,19 +100,23 @@ public sealed class WikidataCoverageReportCommand : AsyncCommand<WikidataCoverag
             stats.Total++;
             var taxonId = row.InternalTaxonId?.Trim();
             var normalizedName = NormalizeScientificName(row);
+            var isSubspecies = IsSubspecies(row);
 
-            if (!string.IsNullOrEmpty(taxonId) && indexes.P627Claims.TryGetValue(taxonId, out _)) {
+            if (!string.IsNullOrEmpty(taxonId) && indexes.P627Claims.TryGetValue(taxonId, out var claimMatches)) {
                 stats.Record(CoverageMatchMethod.P627Claim, row);
+                RecordWikiPresence(stats, isSubspecies, claimMatches, indexes.SiteLinks);
                 continue;
             }
 
-            if (!string.IsNullOrEmpty(taxonId) && indexes.P627References.TryGetValue(taxonId, out _)) {
+            if (!string.IsNullOrEmpty(taxonId) && indexes.P627References.TryGetValue(taxonId, out var referenceMatches)) {
                 stats.Record(CoverageMatchMethod.P627Reference, row);
+                RecordWikiPresence(stats, isSubspecies, referenceMatches, indexes.SiteLinks);
                 continue;
             }
 
-            if (!string.IsNullOrEmpty(normalizedName) && indexes.ScientificNames.TryGetValue(normalizedName, out _)) {
+            if (!string.IsNullOrEmpty(normalizedName) && indexes.ScientificNames.TryGetValue(normalizedName, out var nameMatches)) {
                 stats.Record(CoverageMatchMethod.ScientificName, row);
+                RecordWikiPresence(stats, isSubspecies, nameMatches, indexes.SiteLinks);
                 continue;
             }
 
@@ -139,6 +144,8 @@ public sealed class WikidataCoverageReportCommand : AsyncCommand<WikidataCoverag
 
         AnsiConsole.Write(table);
 
+        RenderWikiCoverage(stats);
+
         if (stats.UnmatchedSamples.Count > 0) {
             var sampleTable = new Table().Title("Unmatched Samples").Border(TableBorder.Minimal);
             sampleTable.AddColumn("IUCN Taxon ID");
@@ -152,6 +159,55 @@ public sealed class WikidataCoverageReportCommand : AsyncCommand<WikidataCoverag
             AnsiConsole.Write(sampleTable);
         }
     }
+
+    private static void RenderWikiCoverage(CoverageStats stats) {
+        var presence = stats.WikiPresence;
+        if (presence.MatchedTotal == 0) {
+            AnsiConsole.MarkupLine("[grey]Wiki coverage stats require at least one matched row.[/]");
+            return;
+        }
+
+        var wikiTable = new Table().Title("Wiki coverage (matched rows)").Border(TableBorder.Minimal);
+        wikiTable.AddColumn("Category");
+        wikiTable.AddColumn("enwiki");
+        wikiTable.AddColumn("Wikispecies");
+
+        wikiTable.AddRow(
+            "All matched",
+            FormatCountPercent(presence.EnWikiTotal, presence.MatchedTotal),
+            FormatCountPercent(presence.WikispeciesTotal, presence.MatchedTotal)
+        );
+
+        wikiTable.AddRow(
+            "Species",
+            FormatCountPercent(presence.SpeciesEnWiki, presence.MatchedSpecies),
+            FormatCountPercent(presence.SpeciesWikispecies, presence.MatchedSpecies)
+        );
+
+        wikiTable.AddRow(
+            "Subspecies",
+            FormatCountPercent(presence.SubspeciesEnWiki, presence.MatchedSubspecies),
+            FormatCountPercent(presence.SubspeciesWikispecies, presence.MatchedSubspecies)
+        );
+
+        AnsiConsole.Write(wikiTable);
+    }
+
+    private static string FormatCountPercent(long count, long total) {
+        if (total <= 0) {
+            return $"{count} (0.0%)";
+        }
+
+        var pct = (double)count / total * 100;
+        return $"{count} ({pct:0.0}%)";
+    }
+
+    private static void RecordWikiPresence(CoverageStats stats, bool isSubspecies, IEnumerable<string>? entityIds, WikidataSiteLinkCache siteLinks) {
+        var presence = entityIds is null ? WikiSiteLinkPresence.Empty : siteLinks.GetPresence(entityIds);
+        stats.RecordSiteLinks(isSubspecies, presence.HasEnWiki, presence.HasWikispecies);
+    }
+
+    private static bool IsSubspecies(IucnTaxonomyRow row) => !string.IsNullOrWhiteSpace(row.InfraName);
 
     private static bool IsPopulationOrRegional(IucnTaxonomyRow row) {
         if (!string.IsNullOrWhiteSpace(row.SubpopulationName)) {
@@ -220,8 +276,15 @@ internal sealed class CoverageStats {
     public long ScientificName { get; private set; }
     public long Unmatched { get; private set; }
     public List<CoverageSample> UnmatchedSamples { get; } = new();
+    public long Matched => P627Claim + P627Reference + ScientificName;
 
     private int MaxSamples { get; }
+    private long _matchedSpecies;
+    private long _matchedSubspecies;
+    private long _speciesEnWiki;
+    private long _speciesWikispecies;
+    private long _subspeciesEnWiki;
+    private long _subspeciesWikispecies;
 
     public void Record(CoverageMatchMethod method, IucnTaxonomyRow row) {
         switch (method) {
@@ -243,6 +306,38 @@ internal sealed class CoverageStats {
         }
     }
 
+    public void RecordSiteLinks(bool isSubspecies, bool hasEnWiki, bool hasWikispecies) {
+        if (isSubspecies) {
+            _matchedSubspecies++;
+            if (hasEnWiki) {
+                _subspeciesEnWiki++;
+            }
+
+            if (hasWikispecies) {
+                _subspeciesWikispecies++;
+            }
+            return;
+        }
+
+        _matchedSpecies++;
+        if (hasEnWiki) {
+            _speciesEnWiki++;
+        }
+
+        if (hasWikispecies) {
+            _speciesWikispecies++;
+        }
+    }
+
+    public CoverageWikiPresence WikiPresence => new(
+        _matchedSpecies,
+        _matchedSubspecies,
+        _speciesEnWiki,
+        _speciesWikispecies,
+        _subspeciesEnWiki,
+        _subspeciesWikispecies
+    );
+
     public string Percent(long count) {
         if (Total == 0) {
             return "0%";
@@ -255,13 +350,123 @@ internal sealed class CoverageStats {
 
 internal sealed record CoverageSample(string? TaxonId, string? ScientificName, string RedlistVersion);
 
+internal readonly record struct CoverageWikiPresence(
+    long MatchedSpecies,
+    long MatchedSubspecies,
+    long SpeciesEnWiki,
+    long SpeciesWikispecies,
+    long SubspeciesEnWiki,
+    long SubspeciesWikispecies
+) {
+    public long MatchedTotal => MatchedSpecies + MatchedSubspecies;
+    public long EnWikiTotal => SpeciesEnWiki + SubspeciesEnWiki;
+    public long WikispeciesTotal => SpeciesWikispecies + SubspeciesWikispecies;
+}
+
+internal sealed class WikidataSiteLinkCache {
+    private readonly SqliteConnection _connection;
+    private readonly Dictionary<string, WikiSiteLinkPresence> _cache = new(StringComparer.OrdinalIgnoreCase);
+
+    public WikidataSiteLinkCache(SqliteConnection connection) {
+        _connection = connection ?? throw new ArgumentNullException(nameof(connection));
+    }
+
+    public WikiSiteLinkPresence GetPresence(IEnumerable<string>? entityIds) {
+        if (entityIds is null) {
+            return WikiSiteLinkPresence.Empty;
+        }
+
+        var aggregate = WikiSiteLinkPresence.Empty;
+        foreach (var entityId in entityIds) {
+            if (string.IsNullOrWhiteSpace(entityId)) {
+                continue;
+            }
+
+            var presence = GetPresenceForEntity(entityId);
+            aggregate = aggregate.Combine(presence);
+            if (aggregate.HasEnWiki && aggregate.HasWikispecies) {
+                break;
+            }
+        }
+
+        return aggregate;
+    }
+
+    private WikiSiteLinkPresence GetPresenceForEntity(string entityId) {
+        if (_cache.TryGetValue(entityId, out var cached)) {
+            return cached;
+        }
+
+        using var command = _connection.CreateCommand();
+        command.CommandText = "SELECT json FROM wikidata_entities WHERE entity_id=@id LIMIT 1";
+        command.Parameters.AddWithValue("@id", entityId);
+        var json = command.ExecuteScalar() as string;
+        var presence = WikiSiteLinkPresence.FromJson(json);
+        _cache[entityId] = presence;
+        return presence;
+    }
+}
+
+internal readonly struct WikiSiteLinkPresence {
+    public static readonly WikiSiteLinkPresence Empty = new(false, false);
+
+    public WikiSiteLinkPresence(bool hasEnWiki, bool hasWikispecies) {
+        HasEnWiki = hasEnWiki;
+        HasWikispecies = hasWikispecies;
+    }
+
+    public bool HasEnWiki { get; }
+    public bool HasWikispecies { get; }
+
+    public WikiSiteLinkPresence Combine(WikiSiteLinkPresence other) =>
+        new(HasEnWiki || other.HasEnWiki, HasWikispecies || other.HasWikispecies);
+
+    public static WikiSiteLinkPresence FromJson(string? json) {
+        if (string.IsNullOrWhiteSpace(json)) {
+            return Empty;
+        }
+
+        try {
+            using var document = JsonDocument.Parse(json);
+            var root = document.RootElement;
+            if (!root.TryGetProperty("entities", out var entities) || entities.ValueKind != JsonValueKind.Object) {
+                return Empty;
+            }
+
+            foreach (var entity in entities.EnumerateObject()) {
+                if (entity.Value.ValueKind != JsonValueKind.Object) {
+                    continue;
+                }
+
+                if (!entity.Value.TryGetProperty("sitelinks", out var sitelinks) || sitelinks.ValueKind != JsonValueKind.Object) {
+                    continue;
+                }
+
+                var hasEnWiki = sitelinks.TryGetProperty("enwiki", out var enwiki) && enwiki.ValueKind == JsonValueKind.Object;
+                var hasWikispecies = sitelinks.TryGetProperty("specieswiki", out var specieswiki) && specieswiki.ValueKind == JsonValueKind.Object;
+                return new WikiSiteLinkPresence(hasEnWiki, hasWikispecies);
+            }
+        }
+        catch (JsonException) {
+            // Ignore malformed JSON; treat as missing sitelinks.
+        }
+
+        return Empty;
+    }
+}
+
 internal sealed class WikidataIndexBundle {
+    private WikidataIndexBundle(WikidataSiteLinkCache siteLinks) {
+        SiteLinks = siteLinks ?? throw new ArgumentNullException(nameof(siteLinks));
+    }
+
+    public WikidataSiteLinkCache SiteLinks { get; }
     public Dictionary<string, List<string>> P627Claims { get; } = new(StringComparer.OrdinalIgnoreCase);
     public Dictionary<string, List<string>> P627References { get; } = new(StringComparer.OrdinalIgnoreCase);
     public Dictionary<string, List<string>> ScientificNames { get; } = new(StringComparer.OrdinalIgnoreCase);
 
     public static WikidataIndexBundle Load(SqliteConnection connection) {
-        var bundle = new WikidataIndexBundle();
+        var bundle = new WikidataIndexBundle(new WikidataSiteLinkCache(connection));
         bundle.LoadP627(connection, "claim", bundle.P627Claims);
         bundle.LoadP627(connection, "reference", bundle.P627References);
         bundle.LoadNames(connection);

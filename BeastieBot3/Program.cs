@@ -105,6 +105,10 @@ namespace BeastieBot3 {
                             .WithDescription("Run both the seed and cache steps sequentially.")
                             .WithExample(new[] { "wikidata", "cache-all" })
                             .WithExample(new[] { "wikidata", "cache-all", "--seed-limit", "1000", "--download-limit", "200" });
+                        wikidata.AddCommand<WikidataResetCacheCommand>("reset-cache")
+                            .WithDescription("Delete downloaded Wikidata JSON payloads while keeping the seed queue intact.")
+                            .WithExample(new[] { "wikidata", "reset-cache" })
+                            .WithExample(new[] { "wikidata", "reset-cache", "--force" });
                         wikidata.AddCommand<WikidataCoverageReportCommand>("report-coverage")
                             .WithDescription("Report how many IUCN taxa currently map to cached Wikidata entities using P627 and scientific-name matches.")
                             .WithExample(new[] { "wikidata", "report-coverage" })

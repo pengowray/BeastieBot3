@@ -47,7 +47,7 @@ public sealed class WikidataSeedCommand : AsyncCommand<WikidataSeedSettings> {
         using var client = new WikidataApiClient(configuration);
 
         var startCursor = DetermineCursor(settings, store);
-        var batchSize = Math.Clamp(settings.BatchSize ?? configuration.SparqlBatchSize, 50, 2_000);
+        var batchSize = Math.Clamp(settings.BatchSize ?? configuration.SparqlBatchSize, 5, 2_000);
         var dynamicBatchSize = batchSize;
         var totalGoal = settings.Limit.HasValue && settings.Limit.Value > 0 ? settings.Limit.Value : int.MaxValue;
 

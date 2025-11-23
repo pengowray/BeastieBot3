@@ -82,9 +82,8 @@ internal sealed class WikidataApiClient : IDisposable {
                 ["action"] = "wbgetentities",
                 ["format"] = "json",
                 ["formatversion"] = "2",
-                ["props"] = "info|labels|descriptions|claims",
+                ["props"] = "aliases|claims|datatype|descriptions|info|labels|sitelinks/urls",
                 ["ids"] = entityId,
-                ["languages"] = "en",
                 ["normalize"] = "1"
             }),
             cancellationToken).ConfigureAwait(false);
