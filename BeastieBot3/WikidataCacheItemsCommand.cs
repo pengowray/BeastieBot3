@@ -56,50 +56,42 @@ public sealed class WikidataCacheItemsCommand : AsyncCommand<WikidataCacheItemsS
         var limit = settings.Limit is { } l && l > 0 ? l : int.MaxValue;
         var batchSize = Math.Clamp(settings.BatchSize ?? 250, 25, 2_000);
 
-        var downloaded = 0;
-        var skipped = 0;
-        var failures = 0;
-        var processed = 0;
+        var totalCandidates = settings.FailedOnly
+            ? store.CountFailedEntities()
+            : store.CountPendingEntities(refreshThreshold);
 
-        while (processed < limit) {
-            var remainingBudget = Math.Min(batchSize, limit - processed);
-            if (remainingBudget <= 0) {
-                break;
-            }
-
-            var queue = settings.FailedOnly
-                ? store.GetFailedEntities(remainingBudget)
-                : store.GetPendingEntities(remainingBudget, refreshThreshold);
-
-            if (queue.Count == 0) {
-                break;
-            }
-
-            var (batchDownloaded, batchSkipped, batchFailures) = await ProcessBatchAsync(queue, settings, refreshThreshold, client, store, cancellationToken).ConfigureAwait(false);
-            downloaded += batchDownloaded;
-            skipped += batchSkipped;
-            failures += batchFailures;
-            processed += queue.Count;
-
-            if (queue.Count < remainingBudget) {
-                // No more pending rows beyond this batch.
-                break;
-            }
-        }
-
-        if (downloaded == 0 && skipped == 0 && failures == 0) {
-            AnsiConsole.MarkupLine("[yellow]No Wikidata entities are pending download for the provided filters.[/]");
+        if (totalCandidates == 0) {
+            var message = settings.FailedOnly
+                ? "[yellow]No previously failed Wikidata entities match the provided filters.[/]"
+                : "[yellow]No Wikidata entities are pending download for the provided filters.[/]";
+            AnsiConsole.MarkupLine(message);
             return 0;
         }
 
-        AnsiConsole.MarkupLine($"[green]Downloaded:[/] {downloaded}");
+        var totalTarget = Math.Min(limit, totalCandidates);
+
+        var (downloaded, skipped, failures, completed) = await DownloadEntitiesAsync(
+            totalTarget,
+            batchSize,
+            settings,
+            refreshThreshold,
+            client,
+            store,
+            cancellationToken).ConfigureAwait(false);
+
+        AnsiConsole.MarkupLine($"[green]Downloaded:[/] {downloaded}/{totalTarget}");
         AnsiConsole.MarkupLine($"[yellow]Skipped:[/] {skipped}");
         AnsiConsole.MarkupLine($"[red]Failed:[/] {failures}");
+
+        if (completed < totalTarget) {
+            AnsiConsole.MarkupLine($"[yellow]Stopped after {completed} entities because no further items matched the current filters.[/]");
+        }
         return failures == 0 ? 0 : -1;
     }
 
-    private static async Task<(int downloaded, int skipped, int failed)> ProcessBatchAsync(
-        IReadOnlyList<WikidataEntityWorkItem> queue,
+    private static async Task<(int downloaded, int skipped, int failed, int completed)> DownloadEntitiesAsync(
+        int totalTarget,
+        int batchSize,
         WikidataCacheItemsSettings settings,
         DateTime? refreshThreshold,
         WikidataApiClient client,
@@ -108,6 +100,7 @@ public sealed class WikidataCacheItemsCommand : AsyncCommand<WikidataCacheItemsS
         var downloaded = 0;
         var skipped = 0;
         var failures = 0;
+        var completed = 0;
 
         await AnsiConsole.Progress()
             .Columns(new ProgressColumn[] {
@@ -118,28 +111,63 @@ public sealed class WikidataCacheItemsCommand : AsyncCommand<WikidataCacheItemsS
                 new SpinnerColumn()
             })
             .StartAsync(async ctx => {
-                var task = ctx.AddTask("Caching Wikidata entities", maxValue: queue.Count);
-                foreach (var item in queue) {
-                    cancellationToken.ThrowIfCancellationRequested();
+                var task = ctx.AddTask("Caching Wikidata entities", maxValue: totalTarget);
+                UpdateTaskDescription(task, completed, totalTarget, downloaded, skipped, failures);
 
-                    if (!settings.Force && !ShouldDownload(item, refreshThreshold)) {
-                        skipped++;
+                while (completed < totalTarget) {
+                    var remainingBudget = Math.Min(batchSize, totalTarget - completed);
+                    if (remainingBudget <= 0) {
+                        break;
+                    }
+
+                    var queue = settings.FailedOnly
+                        ? store.GetFailedEntities(remainingBudget)
+                        : store.GetPendingEntities(remainingBudget, refreshThreshold);
+
+                    if (queue.Count == 0) {
+                        break;
+                    }
+
+                    foreach (var item in queue) {
+                        if (completed >= totalTarget) {
+                            break;
+                        }
+
+                        cancellationToken.ThrowIfCancellationRequested();
+
+                        if (!settings.Force && !ShouldDownload(item, refreshThreshold)) {
+                            skipped++;
+                            completed++;
+                            task.Increment(1);
+                            UpdateTaskDescription(task, completed, totalTarget, downloaded, skipped, failures);
+                            continue;
+                        }
+
+                        if (await DownloadSingleAsync(client, store, item, cancellationToken).ConfigureAwait(false)) {
+                            downloaded++;
+                        }
+                        else {
+                            failures++;
+                        }
+
+                        completed++;
                         task.Increment(1);
-                        continue;
+                        UpdateTaskDescription(task, completed, totalTarget, downloaded, skipped, failures);
                     }
 
-                    if (await DownloadSingleAsync(client, store, item, cancellationToken).ConfigureAwait(false)) {
-                        downloaded++;
+                    if (queue.Count < remainingBudget) {
+                        // Queue exhausted sooner than the current budget.
+                        break;
                     }
-                    else {
-                        failures++;
-                    }
-
-                    task.Increment(1);
                 }
             });
 
-        return (downloaded, skipped, failures);
+        return (downloaded, skipped, failures, completed);
+    }
+
+    private static void UpdateTaskDescription(ProgressTask task, int completed, int total, int downloaded, int skipped, int failed) {
+        var totalText = total > 0 ? total.ToString() : "?";
+        task.Description = $"Caching Wikidata entities ({completed}/{totalText}) D:{downloaded} S:{skipped} F:{failed}";
     }
 
     private static bool ShouldDownload(WikidataEntityWorkItem item, DateTime? refreshThreshold) {

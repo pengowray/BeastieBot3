@@ -263,6 +263,26 @@ LIMIT @limit";
         return list;
     }
 
+    public int CountPendingEntities(DateTime? refreshThreshold) {
+        using var command = _connection.CreateCommand();
+        command.CommandText = @"SELECT COUNT(*)
+FROM wikidata_entities
+WHERE json_downloaded = 0
+   OR (@refresh IS NOT NULL AND downloaded_at IS NOT NULL AND downloaded_at < @refresh)";
+        command.Parameters.AddWithValue("@refresh", refreshThreshold?.ToString("O") ?? (object)DBNull.Value);
+        var result = command.ExecuteScalar();
+        return Convert.ToInt32(result ?? 0);
+    }
+
+    public int CountFailedEntities() {
+        using var command = _connection.CreateCommand();
+        command.CommandText = @"SELECT COUNT(*)
+FROM wikidata_entities
+WHERE json_downloaded = 0 AND attempt_count > 0 AND last_error IS NOT NULL";
+        var result = command.ExecuteScalar();
+        return Convert.ToInt32(result ?? 0);
+    }
+
     public int ResetCachedPayloads() {
         using var tx = _connection.BeginTransaction();
 
