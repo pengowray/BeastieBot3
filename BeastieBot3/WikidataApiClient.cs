@@ -73,6 +73,24 @@ internal sealed class WikidataApiClient : IDisposable {
         }
     }
 
+    public Task<IReadOnlyList<WikidataSearchResult>> SearchTaxaByP225Async(string scientificName, CancellationToken cancellationToken) {
+        if (string.IsNullOrWhiteSpace(scientificName)) {
+            return Task.FromResult<IReadOnlyList<WikidataSearchResult>>(Array.Empty<WikidataSearchResult>());
+        }
+
+        var query = BuildTaxonNameSearchQuery(scientificName);
+        return ExecuteSearchAsync(query, cancellationToken);
+    }
+
+    public Task<IReadOnlyList<WikidataSearchResult>> SearchTaxaByLabelAsync(string scientificName, CancellationToken cancellationToken) {
+        if (string.IsNullOrWhiteSpace(scientificName)) {
+            return Task.FromResult<IReadOnlyList<WikidataSearchResult>>(Array.Empty<WikidataSearchResult>());
+        }
+
+        var query = BuildTaxonLabelSearchQuery(scientificName);
+        return ExecuteSearchAsync(query, cancellationToken);
+    }
+
     private async Task<WikidataApiResponse> SendEntityRequestAsync(string entityId, CancellationToken cancellationToken) {
         return await SendWithRetryAsync(
             _apiClient,
@@ -129,6 +147,23 @@ internal sealed class WikidataApiClient : IDisposable {
                     throw new WikidataApiException(relativeUrl, null, ex.Message, attempt, ex);
                 }
             }
+        }
+    }
+
+    private async Task<IReadOnlyList<WikidataSearchResult>> ExecuteSearchAsync(string query, CancellationToken cancellationToken) {
+        await _sparqlSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try {
+            _nextSparqlAllowed = await EnforceRateLimitAsync(_nextSparqlAllowed, _configuration.SparqlDelay, cancellationToken).ConfigureAwait(false);
+            var response = await SendWithRetryAsync(
+                _sparqlClient,
+                HttpMethod.Post,
+                string.Empty,
+                () => new FormUrlEncodedContent(new[] { new KeyValuePair<string, string>("query", query) }),
+                cancellationToken).ConfigureAwait(false);
+            return ParseSearchResults(response.Body);
+        }
+        finally {
+            _sparqlSemaphore.Release();
         }
     }
 
@@ -197,6 +232,39 @@ ORDER BY ?qid
 LIMIT {limit}";
     }
 
+    private static string BuildTaxonNameSearchQuery(string scientificName) {
+        var literal = EscapeSparqlLiteral(scientificName);
+        return $@"PREFIX wd: <http://www.wikidata.org/entity/>
+PREFIX wdt: <http://www.wikidata.org/prop/direct/>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT ?item ?qid
+WHERE {{
+  ?item wdt:P225 ?taxonName .
+  FILTER(LCASE(?taxonName) = LCASE(""{literal}""))
+  BIND(xsd:integer(STRAFTER(STR(?item), ""http://www.wikidata.org/entity/Q"")) AS ?qid)
+}}
+LIMIT 10";
+    }
+
+    private static string BuildTaxonLabelSearchQuery(string scientificName) {
+        var literal = EscapeSparqlLiteral(scientificName);
+        return $@"PREFIX wd: <http://www.wikidata.org/entity/>
+PREFIX wdt: <http://www.wikidata.org/prop/direct/>
+PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
+PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
+
+SELECT ?item ?qid ?label
+WHERE {{
+  ?item wdt:P31 wd:Q16521 ;
+        rdfs:label ?label .
+  FILTER(LANG(?label) IN ("""", ""mul"", ""la"", ""en""))
+  FILTER(LCASE(STR(?label)) = LCASE(""{literal}""))
+  BIND(xsd:integer(STRAFTER(STR(?item), ""http://www.wikidata.org/entity/Q"")) AS ?qid)
+}}
+LIMIT 10";
+    }
+
     private static IReadOnlyList<WikidataSeedRow> ParseSeedResponse(string json) {
         var list = new List<WikidataSeedRow>();
         using var document = JsonDocument.Parse(json);
@@ -222,6 +290,30 @@ LIMIT {limit}";
         return list;
     }
 
+    private static IReadOnlyList<WikidataSearchResult> ParseSearchResults(string json) {
+        var list = new List<WikidataSearchResult>();
+        using var document = JsonDocument.Parse(json);
+        if (!document.RootElement.TryGetProperty("results", out var results)) {
+            return list;
+        }
+
+        if (!results.TryGetProperty("bindings", out var bindings)) {
+            return list;
+        }
+
+        foreach (var binding in bindings.EnumerateArray()) {
+            if (!TryReadBinding(binding, "qid", out long numericId)) {
+                continue;
+            }
+
+            var entityId = "Q" + numericId;
+            var label = TryReadBindingString(binding, "label", out var labelText) ? labelText : null;
+            list.Add(new WikidataSearchResult(numericId, entityId, label));
+        }
+
+        return list;
+    }
+
     private static bool TryReadBinding(JsonElement binding, string name, out long value) {
         value = 0;
         if (!binding.TryGetProperty(name, out var element)) {
@@ -236,10 +328,37 @@ LIMIT {limit}";
         return long.TryParse(text, out value);
     }
 
+    private static bool TryReadBindingString(JsonElement binding, string name, out string? value) {
+        value = null;
+        if (!binding.TryGetProperty(name, out var element)) {
+            return false;
+        }
+
+        if (!element.TryGetProperty("value", out var raw)) {
+            return false;
+        }
+
+        var text = raw.GetString();
+        if (string.IsNullOrWhiteSpace(text)) {
+            return false;
+        }
+
+        value = text;
+        return true;
+    }
+
     private static TimeSpan NextDelay(TimeSpan current) {
         var doubled = TimeSpan.FromMilliseconds(current.TotalMilliseconds * 2);
         var cap = TimeSpan.FromSeconds(30);
         return doubled <= cap ? doubled : cap;
+    }
+
+    private static string EscapeSparqlLiteral(string value) {
+        return value
+            .Replace("\\", "\\\\")
+            .Replace("\"", "\\\"")
+            .Replace("\n", "\\n")
+            .Replace("\r", "\\r");
     }
 
     private static async Task<DateTime> EnforceRateLimitAsync(DateTime nextAllowed, TimeSpan minDelay, CancellationToken cancellationToken) {
@@ -266,6 +385,8 @@ LIMIT {limit}";
 internal sealed record WikidataApiResponse(string Url, string Body, HttpStatusCode StatusCode, long PayloadBytes);
 
 internal sealed record WikidataSeedRow(long NumericId, string EntityId, bool HasP141, bool HasP627);
+
+internal sealed record WikidataSearchResult(long NumericId, string EntityId, string? Label);
 
 internal sealed class WikidataApiException : Exception {
     public WikidataApiException(string url, HttpStatusCode? statusCode, string responseBody, int attempt, Exception? inner = null)
