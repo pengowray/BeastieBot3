@@ -65,6 +65,10 @@ internal sealed class IucnSynonymService : IDisposable {
         AddCandidate(row.ScientificNameAssessments, TaxonNameSource.IucnAssessments);
         AddCandidate(ScientificNameHelper.BuildFromParts(row.GenusName, row.SpeciesName, row.InfraName), TaxonNameSource.IucnConstructed);
 
+        foreach (var rank in BuildInfraRankTokens(row.InfraType)) {
+            AddCandidate(ScientificNameHelper.BuildWithRankLabel(row.GenusName, row.SpeciesName, rank, row.InfraName), TaxonNameSource.IucnInfraRanked);
+        }
+
         if (long.TryParse(row.InternalTaxonId, out var sisId)) {
             foreach (var synonym in GetIucnApiSynonyms(sisId, cancellationToken)) {
                 AddCandidate(synonym, TaxonNameSource.IucnSynonym);
@@ -148,15 +152,27 @@ internal sealed class IucnSynonymService : IDisposable {
             return Array.Empty<string>();
         }
 
-        var list = matches
-            .Where(m => LooksSynonym(m.Status))
-            .Select(m => m.ScientificName)
-            .Where(name => !string.IsNullOrWhiteSpace(name))
-            .Select(name => name.Trim())
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .ToList();
+        var builder = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-        return list.Count == 0 ? Array.Empty<string>() : list;
+        void Add(string? value) {
+            if (string.IsNullOrWhiteSpace(value)) {
+                return;
+            }
+
+            builder.Add(value.Trim());
+        }
+
+        foreach (var match in matches) {
+            if (!LooksSynonym(match.Status)) {
+                continue;
+            }
+
+            Add(match.ScientificName);
+            Add(ScientificNameHelper.BuildFromParts(match.Genus, match.SpecificEpithet, match.InfraspecificEpithet));
+            Add(ScientificNameHelper.BuildWithSubgenus(match.Genus, match.Subgenus, match.SpecificEpithet, match.InfraspecificEpithet));
+        }
+
+        return builder.Count == 0 ? Array.Empty<string>() : builder.ToList();
     }
 
     private static bool LooksSynonym(string? status) {
@@ -166,6 +182,33 @@ internal sealed class IucnSynonymService : IDisposable {
 
         var normalized = status.Trim().ToLowerInvariant();
         return normalized.Contains("synonym", StringComparison.Ordinal);
+    }
+
+    private static IReadOnlyList<string> BuildInfraRankTokens(string? infraType) {
+        if (string.IsNullOrWhiteSpace(infraType)) {
+            return Array.Empty<string>();
+        }
+
+        var trimmed = infraType.Trim();
+        if (trimmed.Length == 0) {
+            return Array.Empty<string>();
+        }
+
+        var set = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { trimmed };
+        var normalized = trimmed.ToLowerInvariant();
+
+        if (normalized.Contains("subspecies", StringComparison.Ordinal) || normalized.Contains("subsp", StringComparison.Ordinal) || normalized.Contains("ssp", StringComparison.Ordinal)) {
+            set.Add("subsp.");
+            set.Add("ssp.");
+        }
+        else if (normalized.Contains("variety", StringComparison.Ordinal) || normalized.StartsWith("var", StringComparison.Ordinal)) {
+            set.Add("var.");
+        }
+        else if (normalized.StartsWith("form", StringComparison.Ordinal) || normalized.StartsWith("f", StringComparison.Ordinal)) {
+            set.Add("f.");
+        }
+
+        return set.Where(token => !string.IsNullOrWhiteSpace(token)).Select(token => token.Trim()).ToList();
     }
 }
 
@@ -177,6 +220,7 @@ internal enum TaxonNameSource {
     IucnTaxonomy,
     IucnAssessments,
     IucnConstructed,
+    IucnInfraRanked,
     IucnSynonym,
     ColSynonym
 }

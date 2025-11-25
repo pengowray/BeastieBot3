@@ -240,8 +240,7 @@ PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
 
 SELECT ?item ?qid
 WHERE {{
-  ?item wdt:P225 ?taxonName .
-  FILTER(LCASE(?taxonName) = LCASE(""{literal}""))
+    ?item wdt:P225 ""{literal}"" .
   BIND(xsd:integer(STRAFTER(STR(?item), ""http://www.wikidata.org/entity/Q"")) AS ?qid)
 }}
 LIMIT 10";
@@ -256,11 +255,15 @@ PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
 
 SELECT ?item ?qid ?label
 WHERE {{
-  ?item wdt:P31 wd:Q16521 ;
-        rdfs:label ?label .
-  FILTER(LANG(?label) IN ("""", ""mul"", ""la"", ""en""))
-  FILTER(LCASE(STR(?label)) = LCASE(""{literal}""))
-  BIND(xsd:integer(STRAFTER(STR(?item), ""http://www.wikidata.org/entity/Q"")) AS ?qid)
+    VALUES ?label {{
+        ""{literal}""
+        ""{literal}""@mul
+        ""{literal}""@la
+        ""{literal}""@en
+    }}
+    ?item wdt:P31 wd:Q16521 ;
+                rdfs:label ?label .
+    BIND(xsd:integer(STRAFTER(STR(?item), ""http://www.wikidata.org/entity/Q"")) AS ?qid)
 }}
 LIMIT 10";
     }
