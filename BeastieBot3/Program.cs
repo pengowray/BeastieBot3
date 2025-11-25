@@ -70,6 +70,10 @@ namespace BeastieBot3 {
                         .WithDescription("Crosscheck IUCN species against Catalogue of Life for presence, synonymy, and authority alignment.")
                         .WithExample(new[] { "iucn", "report-col-crosscheck" })
                         .WithExample(new[] { "iucn", "report-col-crosscheck", "--limit", "5000" });
+                    iucn.AddCommand<IucnTaxonNameChangeReportCommand>("report-name-changes")
+                        .WithDescription("Report assessments where taxon_scientific_name changes while sharing the same SIS taxon id.")
+                        .WithExample(new[] { "iucn", "report-name-changes" })
+                        .WithExample(new[] { "iucn", "report-name-changes", "--output", "name-changes.md" });
 
                     iucn.AddBranch("api", api => {
                         api.SetDescription("Commands that cache data from the live IUCN API");
