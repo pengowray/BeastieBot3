@@ -65,7 +65,7 @@ internal sealed class IucnSynonymService : IDisposable {
         AddCandidate(row.ScientificNameAssessments, TaxonNameSource.IucnAssessments);
         AddCandidate(ScientificNameHelper.BuildFromParts(row.GenusName, row.SpeciesName, row.InfraName), TaxonNameSource.IucnConstructed);
 
-        foreach (var rank in BuildInfraRankTokens(row.InfraType)) {
+        foreach (var rank in ScientificNameHelper.BuildInfraRankTokens(row.InfraType)) {
             AddCandidate(ScientificNameHelper.BuildWithRankLabel(row.GenusName, row.SpeciesName, rank, row.InfraName), TaxonNameSource.IucnInfraRanked);
         }
 
@@ -184,36 +184,11 @@ internal sealed class IucnSynonymService : IDisposable {
         return normalized.Contains("synonym", StringComparison.Ordinal);
     }
 
-    private static IReadOnlyList<string> BuildInfraRankTokens(string? infraType) {
-        if (string.IsNullOrWhiteSpace(infraType)) {
-            return Array.Empty<string>();
-        }
-
-        var trimmed = infraType.Trim();
-        if (trimmed.Length == 0) {
-            return Array.Empty<string>();
-        }
-
-        var set = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { trimmed };
-        var normalized = trimmed.ToLowerInvariant();
-
-        if (normalized.Contains("subspecies", StringComparison.Ordinal) || normalized.Contains("subsp", StringComparison.Ordinal) || normalized.Contains("ssp", StringComparison.Ordinal)) {
-            set.Add("subsp.");
-            set.Add("ssp.");
-        }
-        else if (normalized.Contains("variety", StringComparison.Ordinal) || normalized.StartsWith("var", StringComparison.Ordinal)) {
-            set.Add("var.");
-        }
-        else if (normalized.StartsWith("form", StringComparison.Ordinal) || normalized.StartsWith("f", StringComparison.Ordinal)) {
-            set.Add("f.");
-        }
-
-        return set.Where(token => !string.IsNullOrWhiteSpace(token)).Select(token => token.Trim()).ToList();
-    }
 }
 
 internal sealed record TaxonNameCandidate(string Name, TaxonNameSource Source) {
     public bool IsSynonym => Source is TaxonNameSource.IucnSynonym or TaxonNameSource.ColSynonym;
+    public bool IsAlternateMatch => IsSynonym || Source is TaxonNameSource.IucnInfraRanked;
 };
 
 internal enum TaxonNameSource {

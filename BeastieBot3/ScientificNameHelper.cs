@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 
 namespace BeastieBot3;
 
@@ -53,6 +54,33 @@ internal static class ScientificNameHelper {
         }
 
         return string.Join(' ', pieces);
+    }
+
+    public static IReadOnlyList<string> BuildInfraRankTokens(string? infraType) {
+        if (string.IsNullOrWhiteSpace(infraType)) {
+            return Array.Empty<string>();
+        }
+
+        var trimmed = infraType.Trim();
+        if (trimmed.Length == 0) {
+            return Array.Empty<string>();
+        }
+
+        var set = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { trimmed };
+        var normalized = trimmed.ToLowerInvariant();
+
+        if (normalized.Contains("subspecies", StringComparison.Ordinal) || normalized.Contains("subsp", StringComparison.Ordinal) || normalized.Contains("ssp", StringComparison.Ordinal)) {
+            set.Add("subsp.");
+            set.Add("ssp.");
+        }
+        else if (normalized.Contains("variety", StringComparison.Ordinal) || normalized.StartsWith("var", StringComparison.Ordinal)) {
+            set.Add("var.");
+        }
+        else if (normalized.StartsWith("form", StringComparison.Ordinal) || normalized.StartsWith("f", StringComparison.Ordinal)) {
+            set.Add("f.");
+        }
+
+        return set.Where(token => !string.IsNullOrWhiteSpace(token)).Select(token => token.Trim()).ToList();
     }
 
     private static void AppendIfAny(ICollection<string> parts, string? value) {

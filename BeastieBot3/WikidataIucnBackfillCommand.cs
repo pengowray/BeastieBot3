@@ -81,9 +81,20 @@ public sealed class WikidataIucnBackfillCommand : AsyncCommand<WikidataIucnBackf
             iucnApiCachePath = null;
         }
 
+        AnsiConsole.MarkupLine("[grey]Starting Wikidata IUCN backfill...[/]");
+        AnsiConsole.MarkupLineInterpolated($"[grey]IUCN DB:[/] {Markup.Escape(iucnPath)}");
+        AnsiConsole.MarkupLineInterpolated($"[grey]Wikidata cache:[/] {Markup.Escape(wikidataCachePath)}");
+        if (!string.IsNullOrWhiteSpace(iucnApiCachePath)) {
+            AnsiConsole.MarkupLineInterpolated($"[grey]IUCN API cache:[/] {Markup.Escape(iucnApiCachePath!)}");
+        }
+        if (!string.IsNullOrWhiteSpace(colPath)) {
+            AnsiConsole.MarkupLineInterpolated($"[grey]COL DB:[/] {Markup.Escape(colPath!)}");
+        }
+
+        AnsiConsole.MarkupLine("[grey]Opening databases...[/]");
         using var iucnConnection = OpenReadOnlyConnection(iucnPath);
-        using var wikidataIndexConnection = OpenReadOnlyConnection(wikidataCachePath);
         using var store = WikidataCacheStore.Open(wikidataCachePath);
+        using var wikidataIndexConnection = OpenReadOnlyConnection(wikidataCachePath);
         using var synonymService = new IucnSynonymService(iucnApiCachePath, colPath);
         using var wikidataClient = new WikidataApiClient(WikidataConfiguration.FromEnvironment());
 
@@ -98,9 +109,14 @@ public sealed class WikidataIucnBackfillCommand : AsyncCommand<WikidataIucnBackf
         var repository = new IucnTaxonomyRepository(iucnConnection);
         var existingTaxonIds = LoadCachedTaxonIds(wikidataIndexConnection);
         var existingNames = LoadScientificNames(wikidataIndexConnection);
-        var cachedEntities = LoadCachedEntityIds(wikidataIndexConnection);
+        var knownEntities = LoadKnownEntityIds(wikidataIndexConnection);
         var stats = new BackfillStats();
         var rowLimit = settings.Limit > 0 ? settings.Limit : int.MaxValue;
+        AnsiConsole.MarkupLineInterpolated($"[grey]Loaded {existingTaxonIds.Count:n0} cached IUCN ids, {existingNames.Count:n0} normalized names, {knownEntities.Count:n0} known entities.[/]");
+        AnsiConsole.MarkupLineInterpolated($"[grey]Queue all synonyms:[/] {(settings.QueueAllSynonyms ? "yes" : "no")}, limit: {(rowLimit == int.MaxValue ? "all" : rowLimit.ToString())}.");
+
+        const int progressInterval = 250;
+        var nextProgress = progressInterval;
 
         foreach (var row in repository.ReadRows(0, cancellationToken)) {
             cancellationToken.ThrowIfCancellationRequested();
@@ -127,6 +143,10 @@ public sealed class WikidataIucnBackfillCommand : AsyncCommand<WikidataIucnBackf
             }
 
             stats.Evaluated++;
+            if (stats.Evaluated >= nextProgress) {
+                AnsiConsole.MarkupLineInterpolated($"[grey]Evaluated {stats.Evaluated:n0} taxa ({stats.Matches:n0} matches, {stats.Queued:n0} queued)...[/]");
+                nextProgress += progressInterval;
+            }
 
             var candidates = synonymService.GetCandidates(row, cancellationToken);
             if (candidates.Count == 0) {
@@ -142,21 +162,27 @@ public sealed class WikidataIucnBackfillCommand : AsyncCommand<WikidataIucnBackf
 
             foreach (var match in matches) {
                 stats.RecordMatch(match);
+                AnsiConsole.MarkupLineInterpolated($"[green]Match #{stats.Matches:n0}:[/] SIS {Markup.Escape(sisId)} via {match.Method} ({Markup.Escape(match.Candidate.Name)}) -> {match.Result.EntityId}");
 
-                if (cachedEntities.Contains(match.Result.NumericId)) {
-                    stats.AlreadyCached++;
+                if (knownEntities.Contains(match.Result.NumericId)) {
+                    stats.AlreadyKnown++;
                     continue;
                 }
 
                 store.UpsertSeeds(new[] { new WikidataSeedRow(match.Result.NumericId, match.Result.EntityId, false, false) });
-                var item = new WikidataEntityWorkItem(match.Result.NumericId, match.Result.EntityId, null, 0);
-                if (await WikidataEntityDownloader.DownloadSingleAsync(wikidataClient, store, item, cancellationToken).ConfigureAwait(false)) {
-                    cachedEntities.Add(match.Result.NumericId);
-                    stats.Downloaded++;
-                }
-                else {
-                    stats.Failures++;
-                }
+                store.UpsertPendingIucnMatches(new[] {
+                    new WikidataPendingIucnMatchRow(
+                        sisId!,
+                        match.Result.NumericId,
+                        match.Result.EntityId,
+                        match.Candidate.Name,
+                        match.Method.ToString(),
+                        match.Candidate.IsSynonym,
+                        DateTime.UtcNow,
+                        DateTime.UtcNow)
+                });
+                knownEntities.Add(match.Result.NumericId);
+                stats.Queued++;
             }
 
             existingTaxonIds.Add(sisId);
@@ -256,7 +282,7 @@ public sealed class WikidataIucnBackfillCommand : AsyncCommand<WikidataIucnBackf
     private static HashSet<string> LoadCachedTaxonIds(SqliteConnection connection) {
         var set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         using var command = connection.CreateCommand();
-        command.CommandText = "SELECT value FROM wikidata_p627_values";
+        command.CommandText = "SELECT value FROM wikidata_p627_values UNION SELECT iucn_taxon_id FROM wikidata_pending_iucn_matches";
         using var reader = command.ExecuteReader();
         while (reader.Read()) {
             var value = reader.IsDBNull(0) ? null : reader.GetString(0);
@@ -285,10 +311,10 @@ public sealed class WikidataIucnBackfillCommand : AsyncCommand<WikidataIucnBackf
         return set;
     }
 
-    private static HashSet<long> LoadCachedEntityIds(SqliteConnection connection) {
+    private static HashSet<long> LoadKnownEntityIds(SqliteConnection connection) {
         var set = new HashSet<long>();
         using var command = connection.CreateCommand();
-        command.CommandText = "SELECT entity_numeric_id FROM wikidata_entities WHERE json_downloaded = 1";
+        command.CommandText = "SELECT entity_numeric_id FROM wikidata_entities";
         using var reader = command.ExecuteReader();
         while (reader.Read()) {
             if (!reader.IsDBNull(0)) {
@@ -381,9 +407,8 @@ public sealed class WikidataIucnBackfillCommand : AsyncCommand<WikidataIucnBackf
         table.AddRow("Eligible taxa", stats.Evaluated.ToString());
         table.AddRow("Matches", stats.Matches.ToString());
         table.AddRow("Synonym matches", stats.SynonymMatches.ToString());
-        table.AddRow("Already cached", stats.AlreadyCached.ToString());
-        table.AddRow("Downloaded", stats.Downloaded.ToString());
-        table.AddRow("Failures", stats.Failures.ToString());
+        table.AddRow("Already known", stats.AlreadyKnown.ToString());
+        table.AddRow("Queued", stats.Queued.ToString());
         table.AddRow("Missing", stats.Missing.ToString());
         AnsiConsole.Write(table);
     }
@@ -392,9 +417,8 @@ public sealed class WikidataIucnBackfillCommand : AsyncCommand<WikidataIucnBackf
         public long Evaluated { get; set; }
         public long Matches { get; private set; }
         public long SynonymMatches { get; private set; }
-        public long AlreadyCached { get; set; }
-        public long Downloaded { get; set; }
-        public long Failures { get; set; }
+        public long AlreadyKnown { get; set; }
+        public long Queued { get; set; }
         public long Missing { get; set; }
 
         public void RecordMatch(WikidataMatch match) {

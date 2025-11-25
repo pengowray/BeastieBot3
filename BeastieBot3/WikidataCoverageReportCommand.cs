@@ -168,7 +168,7 @@ public sealed class WikidataCoverageReportCommand : AsyncCommand<WikidataCoverag
                 continue;
             }
 
-            if (TryMatchSynonyms(row, synonymService, indexes, stats, isSubspecies, cancellationToken)) {
+            if (TryMatchAlternateNames(row, synonymService, indexes, stats, isSubspecies, cancellationToken)) {
                 continue;
             }
 
@@ -261,7 +261,7 @@ public sealed class WikidataCoverageReportCommand : AsyncCommand<WikidataCoverag
         stats.RecordSiteLinks(isSubspecies, viaSynonym, presence);
     }
 
-    private static bool TryMatchSynonyms(
+    private static bool TryMatchAlternateNames(
         IucnTaxonomyRow row,
         IucnSynonymService synonymService,
         WikidataIndexBundle indexes,
@@ -269,7 +269,7 @@ public sealed class WikidataCoverageReportCommand : AsyncCommand<WikidataCoverag
         bool isSubspecies,
         CancellationToken cancellationToken) {
         var candidates = synonymService.GetCandidates(row, cancellationToken)
-            .Where(c => c.IsSynonym);
+            .Where(c => c.IsAlternateMatch);
 
         foreach (var candidate in candidates) {
             var normalized = ScientificNameHelper.Normalize(candidate.Name);

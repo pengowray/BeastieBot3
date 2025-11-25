@@ -122,6 +122,17 @@ CREATE TABLE IF NOT EXISTS wikidata_parent_taxa (
     PRIMARY KEY(entity_numeric_id, parent_qid)
 );
 CREATE INDEX IF NOT EXISTS idx_wikidata_parent_taxa_parent ON wikidata_parent_taxa(parent_qid);
+CREATE TABLE IF NOT EXISTS wikidata_pending_iucn_matches (
+    iucn_taxon_id TEXT PRIMARY KEY,
+    entity_numeric_id INTEGER NOT NULL REFERENCES wikidata_entities(entity_numeric_id) ON DELETE CASCADE,
+    entity_id TEXT NOT NULL,
+    matched_name TEXT,
+    match_method TEXT NOT NULL,
+    is_synonym INTEGER NOT NULL,
+    discovered_at TEXT NOT NULL,
+    last_seen_at TEXT NOT NULL
+);
+CREATE INDEX IF NOT EXISTS idx_pending_iucn_entity ON wikidata_pending_iucn_matches(entity_numeric_id);
 """;
         command.ExecuteNonQuery();
     }
@@ -180,6 +191,46 @@ CREATE INDEX IF NOT EXISTS idx_wikidata_parent_taxa_parent ON wikidata_parent_ta
 
         tx.Commit();
         return new SeedUpsertResult(newCount, updatedCount);
+    }
+
+    public void UpsertPendingIucnMatches(IReadOnlyList<WikidataPendingIucnMatchRow> matches) {
+        if (matches.Count == 0) {
+            return;
+        }
+
+        using var command = _connection.CreateCommand();
+        command.CommandText =
+            """
+INSERT INTO wikidata_pending_iucn_matches(iucn_taxon_id, entity_numeric_id, entity_id, matched_name, match_method, is_synonym, discovered_at, last_seen_at)
+VALUES (@iucn, @id, @entity, @name, @method, @syn, @discovered, @seen)
+ON CONFLICT(iucn_taxon_id) DO UPDATE SET
+    entity_numeric_id=excluded.entity_numeric_id,
+    entity_id=excluded.entity_id,
+    matched_name=excluded.matched_name,
+    match_method=excluded.match_method,
+    is_synonym=excluded.is_synonym,
+    last_seen_at=excluded.last_seen_at
+""";
+        var iucnParam = command.Parameters.Add("@iucn", SqliteType.Text);
+        var idParam = command.Parameters.Add("@id", SqliteType.Integer);
+        var entityParam = command.Parameters.Add("@entity", SqliteType.Text);
+        var nameParam = command.Parameters.Add("@name", SqliteType.Text);
+        var methodParam = command.Parameters.Add("@method", SqliteType.Text);
+        var synParam = command.Parameters.Add("@syn", SqliteType.Integer);
+        var discoveredParam = command.Parameters.Add("@discovered", SqliteType.Text);
+        var seenParam = command.Parameters.Add("@seen", SqliteType.Text);
+
+        foreach (var match in matches) {
+            iucnParam.Value = match.IucnTaxonId;
+            idParam.Value = match.NumericId;
+            entityParam.Value = match.EntityId;
+            nameParam.Value = (object?)match.MatchedName ?? DBNull.Value;
+            methodParam.Value = match.MatchMethod;
+            synParam.Value = match.IsSynonym ? 1 : 0;
+            discoveredParam.Value = match.DiscoveredAt.ToString("O");
+            seenParam.Value = match.LastSeenAt.ToString("O");
+            command.ExecuteNonQuery();
+        }
     }
 
     public long GetSyncCursor(string key) {
@@ -545,3 +596,13 @@ DELETE FROM wikidata_parent_taxa WHERE entity_numeric_id=@id;";
 internal sealed record SeedUpsertResult(int NewCount, int UpdatedCount);
 
 internal sealed record WikidataEntityWorkItem(long NumericId, string EntityId, DateTime? DownloadedAt, int AttemptCount);
+
+internal sealed record WikidataPendingIucnMatchRow(
+    string IucnTaxonId,
+    long NumericId,
+    string EntityId,
+    string? MatchedName,
+    string MatchMethod,
+    bool IsSynonym,
+    DateTime DiscoveredAt,
+    DateTime LastSeenAt);
