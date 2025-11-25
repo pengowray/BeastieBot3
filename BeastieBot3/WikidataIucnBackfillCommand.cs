@@ -340,6 +340,13 @@ public sealed class WikidataIucnBackfillCommand : AsyncCommand<WikidataIucnBackf
         return results;
     }
 
+    /// <summary>
+    /// Searches for a single Wikidata match for the given taxon name candidate, using P225 (taxon name) first, then falling back to label search.
+    /// </summary>
+    /// <param name="candidate">The taxon name candidate to search for.</param>
+    /// <param name="client">The Wikidata API client to use for searching.</param>
+    /// <param name="cancellationToken">A cancellation token to cancel the operation.</param>
+    /// <returns>A task that represents the asynchronous search operation. The task result contains the matched Wikidata entry or null if no match is found.</returns>
     private static async Task<WikidataMatch?> SearchSingleAsync(TaxonNameCandidate candidate, WikidataApiClient client, CancellationToken cancellationToken) {
         var byP225 = await client.SearchTaxaByP225Async(candidate.Name, cancellationToken).ConfigureAwait(false);
         var direct = byP225.FirstOrDefault();
