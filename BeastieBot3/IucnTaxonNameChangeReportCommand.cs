@@ -19,7 +19,23 @@ namespace BeastieBot3;
 ///  - SIS IDs with detected name changes: 0
 ///  - No taxon_scientific_name changes were detected for shared SIS taxon IDs.
 /// 
+/// Notes:
 /// It's likely not possible to have taxon_scientific_name change independently per assessment, so will need to find another way to identify taxon name changes.
+/// 
+/// IUCN amend previous assessments with new taxonomy. The documentation of the changes appears in the "errata" field of old assessments (listed as "Amendment" on the website).
+/// 
+/// Example: 
+/// https://www.iucnredlist.org/species/195459/126665723 (2010 assessment)
+/// Mobula alfredi, which was Manta alfredi when this assessment was made, but there's no database field to give the taxon name that was used when the assessment was made in 2010.
+/// It just has the amendment text: 
+/// 
+/// This amended version of the 2010 assessment was created to update the scientific name: previously on the Red List as Manta alfredi, this species has now been moved to the genus Mobula.
+/// 
+/// another example from the JSON:
+/// 
+/// ...`"errata":[{"reason":"This amended version of the 2009 assessment was created to update the scientific name: previously on the Red List as \u003cem\u003eBarbus trispilopleura\u003c/em\u003e, this species has now been moved to \u003cem\u003eEnteromius\u003c/em\u003e."}]`...
+/// 
+/// This report generator does not look for errata text, only changes in the taxon_scientific_name field (and finds none).
 /// </summary>
 public sealed class IucnTaxonNameChangeReportCommand : Command<IucnTaxonNameChangeReportCommand.Settings> {
     public sealed class Settings : CommonSettings {
