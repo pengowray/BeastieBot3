@@ -4,6 +4,7 @@ using System.ComponentModel;
 using System.Data;
 using System.IO;
 using System.Linq;
+using System.Text;
 using System.Text.Json;
 using System.Threading;
 using Microsoft.Data.Sqlite;
@@ -198,6 +199,7 @@ public sealed class WikidataCoverageReportCommand : AsyncCommand<WikidataCoverag
         AnsiConsole.Write(table);
 
         RenderWikiCoverage(stats);
+        RenderSynonymMatchTree(stats);
 
         if (stats.UnmatchedSamples.Count > 0) {
             var sampleTable = new Table().Title("Unmatched Samples").Border(TableBorder.Minimal);
@@ -247,6 +249,109 @@ public sealed class WikidataCoverageReportCommand : AsyncCommand<WikidataCoverag
         AnsiConsole.Write(wikiTable);
     }
 
+    private static void RenderSynonymMatchTree(CoverageStats stats) {
+        if (stats.SynonymDetails.Count == 0) {
+            return;
+        }
+
+        var levels = new List<TaxonomyTreeLevel<SynonymCoverageItem>> {
+            new("Kingdom", item => item.Row.KingdomName, AlwaysDisplay: true, UnknownLabel: "Unknown kingdom"),
+            new("Phylum", item => item.Row.PhylumName),
+            new("Class", item => item.Row.ClassName),
+            new("Order", item => item.Row.OrderName),
+            new("Family", item => item.Row.FamilyName),
+            new("Genus", item => item.Row.GenusName)
+        };
+
+        var taxonomyTree = TaxonomyTreeBuilder.Build(stats.SynonymDetails, levels);
+        if (!taxonomyTree.HasChildren && taxonomyTree.Items.Count == 0) {
+            return;
+        }
+
+        var tree = new Tree("[bold]Synonym matches grouped by taxonomy[/]");
+        if (taxonomyTree.Items.Count > 0) {
+            foreach (var item in taxonomyTree.Items.OrderBy(i => i.Row.ScientificNameTaxonomy ?? i.Row.ScientificNameAssessments ?? i.Row.SpeciesName)) {
+                tree.AddNode(FormatSynonymLeaf(item));
+            }
+        }
+
+        foreach (var child in taxonomyTree.Children) {
+            var childNode = tree.AddNode(FormatTaxonomyNodeLabel(child));
+            AppendSynonymTree(childNode, child);
+        }
+
+        AnsiConsole.Write(tree);
+    }
+
+    private static void AppendSynonymTree(TreeNode parentNode, TaxonomyTreeNode<SynonymCoverageItem> node) {
+        foreach (var child in node.Children) {
+            var next = parentNode.AddNode(FormatTaxonomyNodeLabel(child));
+            AppendSynonymTree(next, child);
+        }
+
+        if (node.Items.Count == 0) {
+            return;
+        }
+
+        foreach (var item in node.Items.OrderBy(i => i.Row.ScientificNameTaxonomy ?? i.Row.ScientificNameAssessments ?? i.Row.SpeciesName)) {
+            parentNode.AddNode(FormatSynonymLeaf(item));
+        }
+    }
+
+    private static string FormatTaxonomyNodeLabel(TaxonomyTreeNode<SynonymCoverageItem> node) {
+        var label = node.Label is null
+            ? node.Value ?? ""
+            : $"{node.Label}: {node.Value}";
+        var escaped = Markup.Escape(label.Trim());
+        return $"{escaped} [grey]({node.ItemCount})[/]";
+    }
+
+    private static string FormatSynonymLeaf(SynonymCoverageItem item) {
+        var displayName = item.Row.ScientificNameTaxonomy
+            ?? item.Row.ScientificNameAssessments
+            ?? ScientificNameHelper.BuildFromParts(item.Row.GenusName, item.Row.SpeciesName, item.Row.InfraName)
+            ?? item.Candidate.Name;
+
+        var synonymLabel = Markup.Escape(item.Candidate.Name);
+        var scientificLabel = Markup.Escape(displayName);
+        var qidList = FormatQidLinks(item.EntityIds);
+        var iucnLink = BuildIucnAssessmentUrl(item.Row);
+        var builder = new StringBuilder();
+        builder.Append($"[green]{scientificLabel}[/]");
+        builder.Append($" — synonym match: [italic]{synonymLabel}[/] ({item.Candidate.Source})");
+        if (!string.IsNullOrWhiteSpace(qidList)) {
+            builder.Append($" — QIDs: {qidList}");
+        }
+
+        builder.Append($" — [link={Markup.Escape(iucnLink)}]IUCN {Markup.Escape(item.Row.RedlistVersion)}[/]");
+        return builder.ToString();
+    }
+
+    private static string FormatQidLinks(IReadOnlyList<string> entityIds) {
+        if (entityIds.Count == 0) {
+            return string.Empty;
+        }
+
+        var parts = new List<string>(entityIds.Count);
+        foreach (var id in entityIds) {
+            if (string.IsNullOrWhiteSpace(id)) {
+                continue;
+            }
+
+            var trimmed = id.Trim();
+            var url = $"https://www.wikidata.org/wiki/{Markup.Escape(trimmed)}";
+            parts.Add($"[link={url}]{Markup.Escape(trimmed)}[/]");
+        }
+
+        return string.Join(", ", parts);
+    }
+
+    private static string BuildIucnAssessmentUrl(IucnTaxonomyRow row) {
+        var speciesId = row.InternalTaxonId?.Trim() ?? string.Empty;
+        var assessmentId = row.AssessmentId?.Trim() ?? string.Empty;
+        return $"https://www.iucnredlist.org/species/{speciesId}/{assessmentId}";
+    }
+
     private static string FormatCountPercent(long count, long total) {
         if (total <= 0) {
             return $"{count} (0.0%)";
@@ -281,6 +386,7 @@ public sealed class WikidataCoverageReportCommand : AsyncCommand<WikidataCoverag
                 continue;
             }
 
+            stats.RecordSynonymDetail(row, candidate, entityIds);
             stats.Record(CoverageMatchMethod.Synonym, row, isSubspecies);
             RecordWikiPresence(stats, isSubspecies, viaSynonym: true, entityIds, indexes.SiteLinks);
             return true;
@@ -354,6 +460,7 @@ internal sealed class CoverageStats {
     public long SynonymMatches { get; private set; }
     public long Unmatched { get; private set; }
     public List<CoverageSample> UnmatchedSamples { get; } = new();
+    public List<SynonymCoverageItem> SynonymDetails { get; } = new();
     public long Matched => P627Claim + P627Reference + ScientificName + SynonymMatches;
     public long MatchedSpeciesDirect => _matchedSpeciesDirect;
     public long MatchedSpeciesSynonym => _matchedSpeciesSynonym;
@@ -422,6 +529,25 @@ internal sealed class CoverageStats {
         return $"{pct:0.0}%";
     }
 
+    public void RecordSynonymDetail(IucnTaxonomyRow row, TaxonNameCandidate candidate, IEnumerable<string> entityIds) {
+        if (row is null) {
+            throw new ArgumentNullException(nameof(row));
+        }
+
+        if (candidate is null) {
+            throw new ArgumentNullException(nameof(candidate));
+        }
+
+        var ids = entityIds?
+            .Where(id => !string.IsNullOrWhiteSpace(id))
+            .Select(id => id.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList()
+            ?? new List<string>();
+
+        SynonymDetails.Add(new SynonymCoverageItem(row, candidate, ids));
+    }
+
     private void TrackMatch(bool isSubspecies, bool viaSynonym) {
         if (isSubspecies) {
             if (viaSynonym) {
@@ -462,6 +588,11 @@ internal sealed class CoverageStats {
 }
 
 internal sealed record CoverageSample(string? TaxonId, string? ScientificName, string RedlistVersion);
+
+internal sealed record SynonymCoverageItem(
+    IucnTaxonomyRow Row,
+    TaxonNameCandidate Candidate,
+    IReadOnlyList<string> EntityIds);
 
 internal sealed record WikiSiteDescriptor(string Key, string DisplayName);
 
