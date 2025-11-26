@@ -559,11 +559,15 @@ WHERE entity_numeric_id=@id";
     public long RebuildTaxonNameIndex(bool forceRebuild = false, CancellationToken cancellationToken = default) {
         var sourceCount = CountDistinctScientificNameEntities();
         if (sourceCount == 0) {
-            if (forceRebuild) {
-                ClearTaxonNameIndex();
-            }
+            BackfillScientificNamesFromEntities(cancellationToken);
+            sourceCount = CountDistinctScientificNameEntities();
+            if (sourceCount == 0) {
+                if (forceRebuild) {
+                    ClearTaxonNameIndex();
+                }
 
-            return 0;
+                return 0;
+            }
         }
 
         if (forceRebuild) {
@@ -602,6 +606,54 @@ WHERE entity_numeric_id=@id";
 
         tx.Commit();
         return inserted;
+    }
+
+    private long BackfillScientificNamesFromEntities(CancellationToken cancellationToken) {
+        using var select = _connection.CreateCommand();
+        select.CommandText = "SELECT entity_numeric_id, json FROM wikidata_entities WHERE json IS NOT NULL AND TRIM(json) <> ''";
+        using var reader = select.ExecuteReader(CommandBehavior.SequentialAccess);
+        using var tx = _connection.BeginTransaction();
+        using var insert = _connection.CreateCommand();
+        insert.Transaction = tx;
+        insert.CommandText = "INSERT OR IGNORE INTO wikidata_scientific_names(entity_numeric_id, language, name) VALUES (@id,@lang,@name)";
+        var idParam = insert.Parameters.Add("@id", SqliteType.Integer);
+        var langParam = insert.Parameters.Add("@lang", SqliteType.Text);
+        var nameParam = insert.Parameters.Add("@name", SqliteType.Text);
+
+        long entityCount = 0;
+        while (reader.Read()) {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (reader.IsDBNull(1)) {
+                continue;
+            }
+
+            var json = reader.GetString(1);
+            if (string.IsNullOrWhiteSpace(json)) {
+                continue;
+            }
+
+            var record = WikidataEntityParser.Parse(json);
+            if (record.ScientificNames.Count == 0) {
+                continue;
+            }
+
+            idParam.Value = reader.GetInt64(0);
+            var insertedForEntity = false;
+            foreach (var name in record.ScientificNames) {
+                langParam.Value = name.Language;
+                nameParam.Value = name.Value;
+                if (insert.ExecuteNonQuery() == 1) {
+                    insertedForEntity = true;
+                }
+            }
+
+            if (insertedForEntity) {
+                entityCount++;
+            }
+        }
+
+        tx.Commit();
+        return entityCount;
     }
 
     private void InsertTaxonNameIndex(WikidataEntityRecord record, SqliteTransaction tx) {

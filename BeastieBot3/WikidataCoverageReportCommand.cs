@@ -310,16 +310,7 @@ public sealed class WikidataCoverageReportCommand : AsyncCommand<WikidataCoverag
 
     private static string? NormalizeScientificName(IucnTaxonomyRow row) {
         var raw = row.ScientificNameTaxonomy ?? row.ScientificNameAssessments ?? BuildNameFromParts(row);
-        if (string.IsNullOrWhiteSpace(raw)) {
-            return null;
-        }
-
-        var parts = raw.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        if (parts.Length == 0) {
-            return null;
-        }
-
-        return string.Join(' ', parts).ToLowerInvariant();
+        return ScientificNameHelper.Normalize(raw);
     }
 
     private static string? BuildNameFromParts(IucnTaxonomyRow row) {
@@ -643,27 +634,66 @@ WHERE v.source = @source";
     }
 
     private void LoadNames(SqliteConnection connection) {
-        using var command = connection.CreateCommand();
-        command.CommandText = @"SELECT LOWER(name), e.entity_id
+        var (hasIndex, isComplete) = GetTaxonNameIndexStatus(connection);
+        if (hasIndex) {
+            LoadNamesFromQuery(connection,
+                @"SELECT normalized_name, e.entity_id
+FROM wikidata_taxon_name_index n
+JOIN wikidata_entities e ON e.entity_numeric_id = n.entity_numeric_id");
+
+            if (isComplete && ScientificNames.Count > 0) {
+                return;
+            }
+        }
+
+        LoadNamesFromQuery(connection,
+            @"SELECT LOWER(name), e.entity_id
 FROM wikidata_scientific_names n
-JOIN wikidata_entities e ON e.entity_numeric_id = n.entity_numeric_id";
+JOIN wikidata_entities e ON e.entity_numeric_id = n.entity_numeric_id");
+    }
+
+    private void LoadNamesFromQuery(SqliteConnection connection, string sql) {
+        using var command = connection.CreateCommand();
+        command.CommandText = sql;
 
         using var reader = command.ExecuteReader(CommandBehavior.SequentialAccess);
         while (reader.Read()) {
-            var name = reader.IsDBNull(0) ? null : reader.GetString(0)?.Trim();
-            if (string.IsNullOrWhiteSpace(name)) {
+            var raw = reader.IsDBNull(0) ? null : reader.GetString(0);
+            var normalized = ScientificNameHelper.Normalize(raw);
+            if (string.IsNullOrWhiteSpace(normalized)) {
                 continue;
             }
 
             var entityId = reader.GetString(1);
-            if (!ScientificNames.TryGetValue(name!, out var list)) {
+            if (!ScientificNames.TryGetValue(normalized, out var list)) {
                 list = new List<string>();
-                ScientificNames[name!] = list;
+                ScientificNames[normalized] = list;
             }
 
             if (!list.Any(existing => string.Equals(existing, entityId, StringComparison.OrdinalIgnoreCase))) {
                 list.Add(entityId);
             }
         }
+    }
+
+    private static (bool HasIndex, bool IsComplete) GetTaxonNameIndexStatus(SqliteConnection connection) {
+        using var exists = connection.CreateCommand();
+        exists.CommandText = "SELECT 1 FROM sqlite_master WHERE type='table' AND name='wikidata_taxon_name_index' LIMIT 1";
+        var hasIndex = exists.ExecuteScalar() is not null;
+        if (!hasIndex) {
+            return (false, false);
+        }
+
+        var indexCount = GetTableCount(connection, "wikidata_taxon_name_index");
+        var sourceCount = GetTableCount(connection, "wikidata_scientific_names");
+        var isComplete = sourceCount == 0 || indexCount >= sourceCount;
+        return (true, isComplete);
+    }
+
+    private static long GetTableCount(SqliteConnection connection, string tableName) {
+        using var count = connection.CreateCommand();
+        count.CommandText = $"SELECT COUNT(*) FROM {tableName}";
+        var result = count.ExecuteScalar();
+        return Convert.ToInt64(result ?? 0L);
     }
 }

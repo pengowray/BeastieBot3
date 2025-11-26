@@ -100,14 +100,22 @@ internal static class WikidataEntityParser {
                 continue;
             }
 
-            if (dataValue.ValueKind != JsonValueKind.Object) {
-                continue;
+            string? text = null;
+            string language = "und";
+
+            if (dataValue.ValueKind == JsonValueKind.Object) {
+                text = dataValue.TryGetProperty("text", out var textElement) ? textElement.GetString() : null;
+                var lang = dataValue.TryGetProperty("language", out var langElement) ? langElement.GetString() : null;
+                if (!string.IsNullOrWhiteSpace(lang)) {
+                    language = lang.Trim();
+                }
+            }
+            else if (dataValue.ValueKind == JsonValueKind.String) {
+                text = dataValue.GetString();
             }
 
-            var text = dataValue.TryGetProperty("text", out var textElement) ? textElement.GetString() : null;
-            var language = dataValue.TryGetProperty("language", out var langElement) ? langElement.GetString() : null;
-            if (!string.IsNullOrWhiteSpace(text) && !string.IsNullOrWhiteSpace(language)) {
-                values.Add(new WikidataScientificName(language!, text!.Trim()));
+            if (!string.IsNullOrWhiteSpace(text)) {
+                values.Add(new WikidataScientificName(language, text!.Trim()));
             }
         }
 
