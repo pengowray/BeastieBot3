@@ -117,6 +117,10 @@ namespace BeastieBot3 {
                             .WithDescription("Delete downloaded Wikidata JSON payloads while keeping the seed queue intact.")
                             .WithExample(new[] { "wikidata", "reset-cache" })
                             .WithExample(new[] { "wikidata", "reset-cache", "--force" });
+                        wikidata.AddCommand<WikidataRebuildIndexesCommand>("rebuild-indexes")
+                            .WithDescription("Rebuild lookup indexes (currently the normalized taxon-name index) without redownloading Wikidata entities.")
+                            .WithExample(new[] { "wikidata", "rebuild-indexes" })
+                            .WithExample(new[] { "wikidata", "rebuild-indexes", "--force" });
                         wikidata.AddCommand<WikidataCoverageReportCommand>("report-coverage")
                             .WithDescription("Report how many IUCN taxa currently map to cached Wikidata entities using P627 and scientific-name matches.")
                             .WithExample(new[] { "wikidata", "report-coverage" })

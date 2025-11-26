@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Data;
 using System.IO;
+using System.Threading;
 using Microsoft.Data.Sqlite;
 
 namespace BeastieBot3;
@@ -111,6 +112,13 @@ CREATE TABLE IF NOT EXISTS wikidata_scientific_names (
     PRIMARY KEY(entity_numeric_id, language)
 );
 CREATE INDEX IF NOT EXISTS idx_wikidata_scientific_name ON wikidata_scientific_names(name COLLATE NOCASE);
+CREATE TABLE IF NOT EXISTS wikidata_taxon_name_index (
+    entity_numeric_id INTEGER NOT NULL REFERENCES wikidata_entities(entity_numeric_id) ON DELETE CASCADE,
+    normalized_name TEXT NOT NULL,
+    PRIMARY KEY(entity_numeric_id, normalized_name)
+);
+CREATE INDEX IF NOT EXISTS idx_wikidata_taxon_name_value ON wikidata_taxon_name_index(normalized_name);
+CREATE INDEX IF NOT EXISTS idx_wikidata_taxon_name_entity ON wikidata_taxon_name_index(entity_numeric_id);
 CREATE TABLE IF NOT EXISTS wikidata_taxon_rank (
     entity_numeric_id INTEGER PRIMARY KEY REFERENCES wikidata_entities(entity_numeric_id) ON DELETE CASCADE,
     rank_qid INTEGER NOT NULL
@@ -135,6 +143,7 @@ CREATE TABLE IF NOT EXISTS wikidata_pending_iucn_matches (
 CREATE INDEX IF NOT EXISTS idx_pending_iucn_entity ON wikidata_pending_iucn_matches(entity_numeric_id);
 """;
         command.ExecuteNonQuery();
+    BackfillTaxonNameIndex();
     }
 
     public SeedUpsertResult UpsertSeeds(IReadOnlyList<WikidataSeedRow> seeds) {
@@ -345,6 +354,7 @@ DELETE FROM wikidata_p627_values;
 DELETE FROM wikidata_p141_references;
 DELETE FROM wikidata_p141_statements;
 DELETE FROM wikidata_scientific_names;
+DELETE FROM wikidata_taxon_name_index;
 DELETE FROM wikidata_taxon_rank;
 DELETE FROM wikidata_parent_taxa;
 """;
@@ -419,6 +429,7 @@ WHERE entity_numeric_id=@id";
         InsertP627Values(record, tx);
         InsertP141Statements(record, tx);
         InsertScientificNames(record, tx);
+        InsertTaxonNameIndex(record, tx);
         InsertRank(record, tx);
         InsertParentTaxa(record, tx);
 
@@ -429,11 +440,12 @@ WHERE entity_numeric_id=@id";
         using var command = _connection.CreateCommand();
         command.Transaction = tx;
         command.CommandText = @"DELETE FROM wikidata_p627_values WHERE entity_numeric_id=@id;
-DELETE FROM wikidata_p141_references WHERE entity_numeric_id=@id;
-DELETE FROM wikidata_p141_statements WHERE entity_numeric_id=@id;
-DELETE FROM wikidata_scientific_names WHERE entity_numeric_id=@id;
-DELETE FROM wikidata_taxon_rank WHERE entity_numeric_id=@id;
-DELETE FROM wikidata_parent_taxa WHERE entity_numeric_id=@id;";
+    DELETE FROM wikidata_p141_references WHERE entity_numeric_id=@id;
+    DELETE FROM wikidata_p141_statements WHERE entity_numeric_id=@id;
+    DELETE FROM wikidata_scientific_names WHERE entity_numeric_id=@id;
+    DELETE FROM wikidata_taxon_name_index WHERE entity_numeric_id=@id;
+    DELETE FROM wikidata_taxon_rank WHERE entity_numeric_id=@id;
+    DELETE FROM wikidata_parent_taxa WHERE entity_numeric_id=@id;";
         command.Parameters.AddWithValue("@id", numericId);
         command.ExecuteNonQuery();
     }
@@ -544,6 +556,78 @@ DELETE FROM wikidata_parent_taxa WHERE entity_numeric_id=@id;";
         }
     }
 
+    public long RebuildTaxonNameIndex(bool forceRebuild = false, CancellationToken cancellationToken = default) {
+        var sourceCount = CountDistinctScientificNameEntities();
+        if (sourceCount == 0) {
+            if (forceRebuild) {
+                ClearTaxonNameIndex();
+            }
+
+            return 0;
+        }
+
+        if (forceRebuild) {
+            ClearTaxonNameIndex();
+        }
+
+        var existingCount = CountDistinctTaxonNameIndexEntities();
+        if (!forceRebuild && existingCount >= sourceCount) {
+            return 0;
+        }
+
+        using var select = _connection.CreateCommand();
+        select.CommandText = "SELECT entity_numeric_id, name FROM wikidata_scientific_names";
+        using var reader = select.ExecuteReader(CommandBehavior.SequentialAccess);
+        using var tx = _connection.BeginTransaction();
+        using var insert = _connection.CreateCommand();
+        insert.Transaction = tx;
+        insert.CommandText = "INSERT OR IGNORE INTO wikidata_taxon_name_index(entity_numeric_id, normalized_name) VALUES (@id,@name)";
+        var idParam = insert.Parameters.Add("@id", SqliteType.Integer);
+        var nameParam = insert.Parameters.Add("@name", SqliteType.Text);
+
+        long inserted = 0;
+        while (reader.Read()) {
+            cancellationToken.ThrowIfCancellationRequested();
+            var normalized = ScientificNameHelper.Normalize(reader.IsDBNull(1) ? null : reader.GetString(1));
+            if (string.IsNullOrWhiteSpace(normalized)) {
+                continue;
+            }
+
+            idParam.Value = reader.GetInt64(0);
+            nameParam.Value = normalized;
+            if (insert.ExecuteNonQuery() == 1) {
+                inserted++;
+            }
+        }
+
+        tx.Commit();
+        return inserted;
+    }
+
+    private void InsertTaxonNameIndex(WikidataEntityRecord record, SqliteTransaction tx) {
+        if (record.ScientificNames.Count == 0) {
+            return;
+        }
+
+        using var command = _connection.CreateCommand();
+        command.Transaction = tx;
+        command.CommandText = "INSERT OR IGNORE INTO wikidata_taxon_name_index(entity_numeric_id, normalized_name) VALUES (@id,@name)";
+        var idParam = command.Parameters.Add("@id", SqliteType.Integer);
+        var nameParam = command.Parameters.Add("@name", SqliteType.Text);
+        idParam.Value = record.NumericId;
+
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var name in record.ScientificNames) {
+            var normalized = ScientificNameHelper.Normalize(name.Value);
+            if (string.IsNullOrWhiteSpace(normalized) || !seen.Add(normalized)) {
+                continue;
+            }
+
+            nameParam.Value = normalized;
+            command.ExecuteNonQuery();
+        }
+    }
+
     private void InsertRank(WikidataEntityRecord record, SqliteTransaction tx) {
         using var command = _connection.CreateCommand();
         command.Transaction = tx;
@@ -590,6 +674,28 @@ DELETE FROM wikidata_parent_taxa WHERE entity_numeric_id=@id;";
             parentParam.Value = parent;
             insert.ExecuteNonQuery();
         }
+    }
+
+    private void BackfillTaxonNameIndex() => RebuildTaxonNameIndex(false, CancellationToken.None);
+
+    private long CountDistinctScientificNameEntities() {
+        using var command = _connection.CreateCommand();
+        command.CommandText = "SELECT COUNT(DISTINCT entity_numeric_id) FROM wikidata_scientific_names";
+        var result = command.ExecuteScalar();
+        return Convert.ToInt64(result ?? 0L);
+    }
+
+    private long CountDistinctTaxonNameIndexEntities() {
+        using var command = _connection.CreateCommand();
+        command.CommandText = "SELECT COUNT(DISTINCT entity_numeric_id) FROM wikidata_taxon_name_index";
+        var result = command.ExecuteScalar();
+        return Convert.ToInt64(result ?? 0L);
+    }
+
+    private void ClearTaxonNameIndex() {
+        using var command = _connection.CreateCommand();
+        command.CommandText = "DELETE FROM wikidata_taxon_name_index";
+        command.ExecuteNonQuery();
     }
 }
 

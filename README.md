@@ -47,3 +47,4 @@ Environment variables such as `WIKIDATA_USER_AGENT`, `WIKIDATA_REQUEST_DELAY_MS`
 
 - `wikidata seed-taxa` keeps paging until the SPARQL endpoint stops returning new rows and automatically reduces its batch size when Wikidata responds with 504/timeout errors, so the default run should eventually catch up without manual throttling.
 - `wikidata cache-entities` now drains the entire pending queue by default (processing it in smaller batches under the hood). Supply `--limit` to cap the number processed in a session or `--batch-size` to change the chunk size pulled from SQLite per round.
+- `wikidata rebuild-indexes` rebuilds the normalized taxon-name index inside `wikidata_cache_sqlite` without deleting your downloaded payloads. Run it after pulling new code that introduces lookup tables, or add `--force` to drop and recreate the index from scratch if you suspect corruption.

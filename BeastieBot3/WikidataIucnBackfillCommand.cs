@@ -296,19 +296,51 @@ public sealed class WikidataIucnBackfillCommand : AsyncCommand<WikidataIucnBackf
 
     private static HashSet<string> LoadScientificNames(SqliteConnection connection) {
         var set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var (hasIndex, isComplete) = GetTaxonNameIndexStatus(connection);
+        if (hasIndex) {
+            LoadScientificNamesFromQuery(connection, set, "SELECT normalized_name FROM wikidata_taxon_name_index");
+            if (isComplete && set.Count > 0) {
+                return set;
+            }
+        }
+
+        LoadScientificNamesFromQuery(connection, set, "SELECT LOWER(name) FROM wikidata_scientific_names");
+        return set;
+    }
+
+    private static void LoadScientificNamesFromQuery(SqliteConnection connection, HashSet<string> target, string sql) {
         using var command = connection.CreateCommand();
-        command.CommandText = "SELECT LOWER(name) FROM wikidata_scientific_names";
+        command.CommandText = sql;
         using var reader = command.ExecuteReader();
         while (reader.Read()) {
             if (!reader.IsDBNull(0)) {
                 var name = reader.GetString(0)?.Trim();
                 if (!string.IsNullOrWhiteSpace(name)) {
-                    set.Add(name);
+                    target.Add(name);
                 }
             }
         }
+    }
 
-        return set;
+    private static (bool HasIndex, bool IsComplete) GetTaxonNameIndexStatus(SqliteConnection connection) {
+        using var existsCommand = connection.CreateCommand();
+        existsCommand.CommandText = "SELECT 1 FROM sqlite_master WHERE type='table' AND name='wikidata_taxon_name_index' LIMIT 1";
+        var hasIndex = existsCommand.ExecuteScalar() is not null;
+        if (!hasIndex) {
+            return (false, false);
+        }
+
+        var indexCount = GetCount(connection, "wikidata_taxon_name_index");
+        var sourceCount = GetCount(connection, "wikidata_scientific_names");
+        var isComplete = sourceCount == 0 || indexCount >= sourceCount;
+        return (true, isComplete);
+    }
+
+    private static long GetCount(SqliteConnection connection, string table) {
+        using var command = connection.CreateCommand();
+        command.CommandText = $"SELECT COUNT(*) FROM {table}";
+        var result = command.ExecuteScalar();
+        return Convert.ToInt64(result ?? 0L);
     }
 
     private static HashSet<long> LoadKnownEntityIds(SqliteConnection connection) {
