@@ -259,17 +259,26 @@ internal static class WikidataEntityParser {
         return new List<string>(values);
     }
 
-    private static bool TryGetDataValue(JsonElement claim, out JsonElement value) {
+    private static bool TryGetDataValue(JsonElement element, out JsonElement value) {
         value = default;
-        if (!claim.TryGetProperty("mainsnak", out var snak)) {
+        if (TryGetDirectDataValue(element, out value)) {
+            return true;
+        }
+
+        if (!element.TryGetProperty("mainsnak", out var snak)) {
             return false;
         }
 
-        if (!snak.TryGetProperty("datavalue", out var datavalue)) {
+        return TryGetDirectDataValue(snak, out value);
+    }
+
+    private static bool TryGetDirectDataValue(JsonElement element, out JsonElement value) {
+        value = default;
+        if (!element.TryGetProperty("datavalue", out var dataValue) || dataValue.ValueKind != JsonValueKind.Object) {
             return false;
         }
 
-        if (!datavalue.TryGetProperty("value", out value)) {
+        if (!dataValue.TryGetProperty("value", out value)) {
             return false;
         }
 
