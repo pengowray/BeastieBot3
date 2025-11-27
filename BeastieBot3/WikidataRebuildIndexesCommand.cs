@@ -15,6 +15,10 @@ public sealed class WikidataRebuildIndexesSettings : CommonSettings {
     [CommandOption("--force")]
     [Description("Drop and fully rebuild the selected indexes instead of filling in missing rows only.")]
     public bool Force { get; init; }
+
+    [CommandOption("--include-p141")]
+    [Description("Also rebuild cached P141 statements/references from stored Wikidata JSON.")]
+    public bool IncludeP141 { get; init; }
 }
 
 public sealed class WikidataRebuildIndexesCommand : AsyncCommand<WikidataRebuildIndexesSettings> {
@@ -42,6 +46,19 @@ public sealed class WikidataRebuildIndexesCommand : AsyncCommand<WikidataRebuild
             else {
                 var action = settings.Force ? "recreated" : "filled";
                 AnsiConsole.MarkupLineInterpolated($"[green]Successfully {action} normalized taxon-name index entries ({inserted:n0} new rows).[/]");
+            }
+
+            if (settings.IncludeP141) {
+                var p141Result = store.RebuildP141Tables(settings.Force, cancellationToken);
+                if (p141Result.WasSkipped) {
+                    AnsiConsole.MarkupLine("[green]P141 statements already exist. Re-run with --force to rebuild from scratch.[/]");
+                }
+                else {
+                    AnsiConsole.MarkupLineInterpolated($"[green]Rebuilt P141 cache for {p141Result.EntitiesProcessed:n0} entities ({p141Result.StatementsInserted:n0} statements, {p141Result.ReferencesInserted:n0} references).[/]");
+                    if (p141Result.JsonFailures > 0) {
+                        AnsiConsole.MarkupLineInterpolated($"[yellow]Skipped {p141Result.JsonFailures:n0} entities due to JSON parse errors.[/]");
+                    }
+                }
             }
 
             return Task.FromResult(0);

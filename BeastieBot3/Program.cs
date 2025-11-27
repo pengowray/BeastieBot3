@@ -118,9 +118,10 @@ namespace BeastieBot3 {
                             .WithExample(new[] { "wikidata", "reset-cache" })
                             .WithExample(new[] { "wikidata", "reset-cache", "--force" });
                         wikidata.AddCommand<WikidataRebuildIndexesCommand>("rebuild-indexes")
-                            .WithDescription("Rebuild lookup indexes (currently the normalized taxon-name index) without redownloading Wikidata entities.")
+                            .WithDescription("Rebuild lookup indexes (normalized taxon-name index plus optional P141 cache) without redownloading Wikidata entities.")
                             .WithExample(new[] { "wikidata", "rebuild-indexes" })
-                            .WithExample(new[] { "wikidata", "rebuild-indexes", "--force" });
+                            .WithExample(new[] { "wikidata", "rebuild-indexes", "--force" })
+                            .WithExample(new[] { "wikidata", "rebuild-indexes", "--include-p141" });
                         wikidata.AddCommand<WikidataCoverageReportCommand>("report-coverage")
                             .WithDescription("Report how many IUCN taxa currently map to cached Wikidata entities using P627 and scientific-name matches.")
                             .WithExample(new[] { "wikidata", "report-coverage" })
@@ -129,6 +130,10 @@ namespace BeastieBot3 {
                             .WithDescription("List synonym-only matches and unmatched taxa grouped hierarchically by taxonomy.")
                             .WithExample(new[] { "wikidata", "report-coverage-details" })
                             .WithExample(new[] { "wikidata", "report-coverage-details", "--limit", "25000" });
+                        wikidata.AddCommand<WikidataIucnFreshnessReportCommand>("report-iucn-freshness")
+                            .WithDescription("Generate a Markdown report describing how current IUCN data is reflected in cached Wikidata entities.")
+                            .WithExample(new[] { "wikidata", "report-iucn-freshness" })
+                            .WithExample(new[] { "wikidata", "report-iucn-freshness", "--output", "reports/freshness.md" });
                     });
                 });
             });

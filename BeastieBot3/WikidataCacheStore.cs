@@ -427,7 +427,7 @@ WHERE entity_numeric_id=@id";
 
         ClearIndexes(record.NumericId, tx);
         InsertP627Values(record, tx);
-        InsertP141Statements(record, tx);
+        _ = InsertP141Statements(record, tx);
         InsertScientificNames(record, tx);
         InsertTaxonNameIndex(record, tx);
         InsertRank(record, tx);
@@ -482,7 +482,7 @@ WHERE entity_numeric_id=@id";
         }
     }
 
-    private void InsertP141Statements(WikidataEntityRecord record, SqliteTransaction tx) {
+    private P141InsertResult InsertP141Statements(WikidataEntityRecord record, SqliteTransaction tx) {
         using var statementCommand = _connection.CreateCommand();
         statementCommand.Transaction = tx;
         statementCommand.CommandText = "INSERT INTO wikidata_p141_statements(entity_numeric_id, statement_id, status_qid, status_entity_id, rank) VALUES (@id,@statement,@status,@statusId,@rank)";
@@ -503,12 +503,15 @@ WHERE entity_numeric_id=@id";
         var iucnParam = referenceCommand.Parameters.Add("@iucn", SqliteType.Text);
         refIdParam.Value = record.NumericId;
 
+        long statementCount = 0;
+        long referenceCount = 0;
         foreach (var statement in record.P141Statements) {
             statementParam.Value = statement.StatementId;
             statusParam.Value = statement.StatusNumericId;
             statusIdParam.Value = statement.StatusEntityId;
             rankParam.Value = statement.Rank;
             statementCommand.ExecuteNonQuery();
+            statementCount++;
 
             foreach (var reference in statement.References) {
                 if (reference.IucnTaxonIds.Count == 0) {
@@ -526,9 +529,28 @@ WHERE entity_numeric_id=@id";
 
                     iucnParam.Value = value;
                     referenceCommand.ExecuteNonQuery();
+                    referenceCount++;
                 }
             }
         }
+
+        return new P141InsertResult(statementCount, referenceCount);
+    }
+
+    private void ClearP141Entries(long numericId, SqliteTransaction tx) {
+        using var command = _connection.CreateCommand();
+        command.Transaction = tx;
+        command.CommandText = @"DELETE FROM wikidata_p141_references WHERE entity_numeric_id=@id;
+DELETE FROM wikidata_p141_statements WHERE entity_numeric_id=@id;";
+        command.Parameters.AddWithValue("@id", numericId);
+        command.ExecuteNonQuery();
+    }
+
+    private void ClearAllP141Entries(SqliteTransaction tx) {
+        using var command = _connection.CreateCommand();
+        command.Transaction = tx;
+        command.CommandText = "DELETE FROM wikidata_p141_references;DELETE FROM wikidata_p141_statements;";
+        command.ExecuteNonQuery();
     }
 
     private void InsertScientificNames(WikidataEntityRecord record, SqliteTransaction tx) {
@@ -606,6 +628,61 @@ WHERE entity_numeric_id=@id";
 
         tx.Commit();
         return inserted;
+    }
+
+    public P141RebuildResult RebuildP141Tables(bool forceRebuild = false, CancellationToken cancellationToken = default) {
+        var existingStatements = GetTableRowCount("wikidata_p141_statements");
+        if (!forceRebuild && existingStatements > 0) {
+            return new P141RebuildResult(0, 0, 0, 0, WasSkipped: true);
+        }
+
+        using var select = _connection.CreateCommand();
+        select.CommandText = "SELECT entity_numeric_id, json FROM wikidata_entities WHERE json IS NOT NULL AND TRIM(json) <> ''";
+        using var reader = select.ExecuteReader(CommandBehavior.SequentialAccess);
+        using var tx = _connection.BeginTransaction();
+        if (forceRebuild) {
+            ClearAllP141Entries(tx);
+        }
+
+        long processedEntities = 0;
+        long statementsInserted = 0;
+        long referencesInserted = 0;
+        long jsonFailures = 0;
+
+        while (reader.Read()) {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (reader.IsDBNull(1)) {
+                continue;
+            }
+
+            var entityId = reader.GetInt64(0);
+            var json = reader.GetString(1);
+            if (string.IsNullOrWhiteSpace(json)) {
+                continue;
+            }
+
+            WikidataEntityRecord record;
+            try {
+                record = WikidataEntityParser.Parse(json);
+            }
+            catch (Exception) {
+                jsonFailures++;
+                continue;
+            }
+
+            if (record.P141Statements.Count == 0) {
+                continue;
+            }
+
+            processedEntities++;
+            ClearP141Entries(entityId, tx);
+            var insertResult = InsertP141Statements(record, tx);
+            statementsInserted += insertResult.StatementCount;
+            referencesInserted += insertResult.ReferenceCount;
+        }
+
+        tx.Commit();
+        return new P141RebuildResult(processedEntities, statementsInserted, referencesInserted, jsonFailures, WasSkipped: false);
     }
 
     private long BackfillScientificNamesFromEntities(CancellationToken cancellationToken) {
@@ -749,6 +826,13 @@ WHERE entity_numeric_id=@id";
         command.CommandText = "DELETE FROM wikidata_taxon_name_index";
         command.ExecuteNonQuery();
     }
+
+    private long GetTableRowCount(string tableName) {
+        using var command = _connection.CreateCommand();
+        command.CommandText = $"SELECT COUNT(*) FROM {tableName}";
+        var result = command.ExecuteScalar();
+        return Convert.ToInt64(result ?? 0L);
+    }
 }
 
 internal sealed record SeedUpsertResult(int NewCount, int UpdatedCount);
@@ -764,3 +848,12 @@ internal sealed record WikidataPendingIucnMatchRow(
     bool IsSynonym,
     DateTime DiscoveredAt,
     DateTime LastSeenAt);
+
+internal sealed record P141InsertResult(long StatementCount, long ReferenceCount);
+
+internal sealed record P141RebuildResult(
+    long EntitiesProcessed,
+    long StatementsInserted,
+    long ReferencesInserted,
+    long JsonFailures,
+    bool WasSkipped);
