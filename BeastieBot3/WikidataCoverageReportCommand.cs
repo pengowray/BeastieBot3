@@ -2,9 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Data;
-using System.IO;
 using System.Linq;
-using System.Text;
 using System.Text.Json;
 using System.Threading;
 using Microsoft.Data.Sqlite;
@@ -44,145 +42,25 @@ public sealed class WikidataCoverageReportSettings : CommonSettings {
 }
 
 public sealed class WikidataCoverageReportCommand : AsyncCommand<WikidataCoverageReportSettings> {
-    private static readonly WikiSiteDescriptor[] WikiSites = new[] {
-        new WikiSiteDescriptor("enwiki", "English Wikipedia"),
-        new WikiSiteDescriptor("commonswiki", "Wikimedia Commons"),
-        new WikiSiteDescriptor("specieswiki", "Wikispecies")
-    };
-
     public override Task<int> ExecuteAsync(CommandContext context, WikidataCoverageReportSettings settings, CancellationToken cancellationToken) {
         _ = context;
         return Task.FromResult(Run(settings, cancellationToken));
     }
 
     private static int Run(WikidataCoverageReportSettings settings, CancellationToken cancellationToken) {
-        if (settings.SampleCount < 0) {
-            AnsiConsole.MarkupLine("[red]--sample-count must be zero or greater.[/]");
-            return -1;
+        var exitCode = WikidataCoverageAnalysis.TryExecute(settings, cancellationToken, out var analysisResult);
+        if (exitCode != 0 || analysisResult is null) {
+            return exitCode;
         }
 
-        var paths = new PathsService(settings.IniFile, settings.SettingsDir);
-        string iucnDb;
-        string wikidataDb;
-        try {
-            iucnDb = paths.ResolveIucnDatabasePath(settings.IucnDatabase);
-            wikidataDb = paths.ResolveWikidataCachePath(settings.WikidataCache);
-        }
-        catch (Exception ex) {
-            AnsiConsole.MarkupLineInterpolated($"[red]{Markup.Escape(ex.Message)}[/]");
-            return -2;
-        }
-
-        if (!File.Exists(iucnDb)) {
-            AnsiConsole.MarkupLine($"[red]IUCN SQLite database not found:[/] {Markup.Escape(iucnDb)}");
-            return -3;
-        }
-
-        if (!File.Exists(wikidataDb)) {
-            AnsiConsole.MarkupLine($"[red]Wikidata cache SQLite database not found:[/] {Markup.Escape(wikidataDb)}");
-            return -4;
-        }
-
-        static string? ResolveOptionalPath(string? overridePath, string? configuredPath, string description) {
-            var candidate = !string.IsNullOrWhiteSpace(overridePath) ? overridePath : configuredPath;
-            if (string.IsNullOrWhiteSpace(candidate)) {
-                return null;
-            }
-
-            try {
-                var resolved = Path.GetFullPath(candidate);
-                if (!File.Exists(resolved)) {
-                    AnsiConsole.MarkupLineInterpolated($"[yellow]{description} not found at {Markup.Escape(resolved)}; skipping.[/]");
-                    return null;
-                }
-
-                return resolved;
-            }
-            catch (Exception ex) {
-                AnsiConsole.MarkupLineInterpolated($"[yellow]Unable to resolve {description} '{Markup.Escape(candidate)}': {Markup.Escape(ex.Message)}[/]");
-                return null;
-            }
-        }
-
-        var iucnApiCachePath = ResolveOptionalPath(settings.IucnApiCache, paths.GetIucnApiCachePath(), "IUCN API cache SQLite database");
-        var colDbPath = ResolveOptionalPath(settings.ColDatabase, paths.GetColSqlitePath(), "Catalogue of Life SQLite database");
-
-        var iucnConnectionString = new SqliteConnectionStringBuilder {
-            DataSource = iucnDb,
-            Mode = SqliteOpenMode.ReadOnly
-        }.ToString();
-
-        var wikidataConnectionString = new SqliteConnectionStringBuilder {
-            DataSource = wikidataDb,
-            Mode = SqliteOpenMode.ReadOnly
-        }.ToString();
-
-        using var iucnConnection = new SqliteConnection(iucnConnectionString);
-        using var wikidataConnection = new SqliteConnection(wikidataConnectionString);
-        iucnConnection.Open();
-        wikidataConnection.Open();
-        using var synonymService = new IucnSynonymService(iucnApiCachePath, colDbPath);
-
-        if (!synonymService.HasIucnApiCache) {
-            AnsiConsole.MarkupLine("[yellow]IUCN API cache not available; only locally derived names will be used for synonyms.[/]");
-        }
-
-        if (!synonymService.HasColDatabase) {
-            AnsiConsole.MarkupLine("[yellow]Catalogue of Life database not available; COL synonyms will be skipped.[/]");
-        }
-
-        var repository = new IucnTaxonomyRepository(iucnConnection);
-        if (!repository.ObjectExists("view_assessments_html_taxonomy_html", "view")) {
-            AnsiConsole.MarkupLine("[red]Missing view view_assessments_html_taxonomy_html in the IUCN database.[/]");
-            return -5;
-        }
-
-        var siteKeys = WikiSites.Select(s => s.Key).ToArray();
-        var indexes = WikidataIndexBundle.Load(wikidataConnection, siteKeys);
-        var stats = new CoverageStats(settings.SampleCount, WikiSites);
-
-        foreach (var row in repository.ReadRows(settings.Limit, cancellationToken)) {
-            if (!settings.IncludeSubpopulations && IsPopulationOrRegional(row)) {
-                continue;
-            }
-
-            stats.Total++;
-            var taxonId = row.InternalTaxonId?.Trim();
-            var normalizedName = NormalizeScientificName(row);
-            var isSubspecies = IsSubspecies(row);
-
-            if (!string.IsNullOrEmpty(taxonId) && indexes.P627Claims.TryGetValue(taxonId, out var claimMatches)) {
-                stats.Record(CoverageMatchMethod.P627Claim, row, isSubspecies);
-                RecordWikiPresence(stats, isSubspecies, viaSynonym: false, claimMatches, indexes.SiteLinks);
-                continue;
-            }
-
-            if (!string.IsNullOrEmpty(taxonId) && indexes.P627References.TryGetValue(taxonId, out var referenceMatches)) {
-                stats.Record(CoverageMatchMethod.P627Reference, row, isSubspecies);
-                RecordWikiPresence(stats, isSubspecies, viaSynonym: false, referenceMatches, indexes.SiteLinks);
-                continue;
-            }
-
-            if (!string.IsNullOrEmpty(normalizedName) && indexes.ScientificNames.TryGetValue(normalizedName, out var nameMatches)) {
-                stats.Record(CoverageMatchMethod.ScientificName, row, isSubspecies);
-                RecordWikiPresence(stats, isSubspecies, viaSynonym: false, nameMatches, indexes.SiteLinks);
-                continue;
-            }
-
-            if (TryMatchAlternateNames(row, synonymService, indexes, stats, isSubspecies, cancellationToken)) {
-                continue;
-            }
-
-            stats.Record(CoverageMatchMethod.None, row, isSubspecies);
-        }
-
-        RenderReport(stats, iucnDb, wikidataDb, settings);
+        RenderReport(analysisResult, settings);
         return 0;
     }
 
-    private static void RenderReport(CoverageStats stats, string iucnPath, string wikidataPath, WikidataCoverageReportSettings settings) {
-        AnsiConsole.MarkupLine($"[grey]IUCN DB:[/] {Markup.Escape(iucnPath)}");
-        AnsiConsole.MarkupLine($"[grey]Wikidata cache:[/] {Markup.Escape(wikidataPath)}");
+    private static void RenderReport(WikidataCoverageAnalysisResult result, WikidataCoverageReportSettings settings) {
+        var stats = result.Stats;
+        AnsiConsole.MarkupLine($"[grey]IUCN DB:[/] {Markup.Escape(result.IucnDatabasePath)}");
+        AnsiConsole.MarkupLine($"[grey]Wikidata cache:[/] {Markup.Escape(result.WikidataDatabasePath)}");
         AnsiConsole.MarkupLine($"[grey]Rows considered:[/] {stats.Total}");
 
         var table = new Table().Border(TableBorder.Rounded);
@@ -199,7 +77,6 @@ public sealed class WikidataCoverageReportCommand : AsyncCommand<WikidataCoverag
         AnsiConsole.Write(table);
 
         RenderWikiCoverage(stats);
-        RenderSynonymMatchTree(stats);
 
         if (stats.UnmatchedSamples.Count > 0) {
             var sampleTable = new Table().Title("Unmatched Samples").Border(TableBorder.Minimal);
@@ -223,7 +100,7 @@ public sealed class WikidataCoverageReportCommand : AsyncCommand<WikidataCoverag
 
         var wikiTable = new Table().Title("Wiki coverage (matched rows)").Border(TableBorder.Minimal);
         wikiTable.AddColumn("Category");
-        foreach (var site in WikiSites) {
+        foreach (var site in WikidataCoverageSites.All) {
             wikiTable.AddColumn(site.DisplayName);
         }
 
@@ -238,7 +115,7 @@ public sealed class WikidataCoverageReportCommand : AsyncCommand<WikidataCoverag
         foreach (var row in rows) {
             var counts = stats.GetSiteCounts(row.Bucket);
             var values = new List<string> { row.Label };
-            foreach (var site in WikiSites) {
+            foreach (var site in WikidataCoverageSites.All) {
                 counts.TryGetValue(site.Key, out var count);
                 values.Add(FormatCountPercent(count, row.Denominator));
             }
@@ -247,109 +124,6 @@ public sealed class WikidataCoverageReportCommand : AsyncCommand<WikidataCoverag
         }
 
         AnsiConsole.Write(wikiTable);
-    }
-
-    private static void RenderSynonymMatchTree(CoverageStats stats) {
-        if (stats.SynonymDetails.Count == 0) {
-            return;
-        }
-
-        var levels = new List<TaxonomyTreeLevel<SynonymCoverageItem>> {
-            new("Kingdom", item => item.Row.KingdomName, AlwaysDisplay: true, UnknownLabel: "Unknown kingdom"),
-            new("Phylum", item => item.Row.PhylumName),
-            new("Class", item => item.Row.ClassName),
-            new("Order", item => item.Row.OrderName),
-            new("Family", item => item.Row.FamilyName),
-            new("Genus", item => item.Row.GenusName)
-        };
-
-        var taxonomyTree = TaxonomyTreeBuilder.Build(stats.SynonymDetails, levels);
-        if (!taxonomyTree.HasChildren && taxonomyTree.Items.Count == 0) {
-            return;
-        }
-
-        var tree = new Tree("[bold]Synonym matches grouped by taxonomy[/]");
-        if (taxonomyTree.Items.Count > 0) {
-            foreach (var item in taxonomyTree.Items.OrderBy(i => i.Row.ScientificNameTaxonomy ?? i.Row.ScientificNameAssessments ?? i.Row.SpeciesName)) {
-                tree.AddNode(FormatSynonymLeaf(item));
-            }
-        }
-
-        foreach (var child in taxonomyTree.Children) {
-            var childNode = tree.AddNode(FormatTaxonomyNodeLabel(child));
-            AppendSynonymTree(childNode, child);
-        }
-
-        AnsiConsole.Write(tree);
-    }
-
-    private static void AppendSynonymTree(TreeNode parentNode, TaxonomyTreeNode<SynonymCoverageItem> node) {
-        foreach (var child in node.Children) {
-            var next = parentNode.AddNode(FormatTaxonomyNodeLabel(child));
-            AppendSynonymTree(next, child);
-        }
-
-        if (node.Items.Count == 0) {
-            return;
-        }
-
-        foreach (var item in node.Items.OrderBy(i => i.Row.ScientificNameTaxonomy ?? i.Row.ScientificNameAssessments ?? i.Row.SpeciesName)) {
-            parentNode.AddNode(FormatSynonymLeaf(item));
-        }
-    }
-
-    private static string FormatTaxonomyNodeLabel(TaxonomyTreeNode<SynonymCoverageItem> node) {
-        var label = node.Label is null
-            ? node.Value ?? ""
-            : $"{node.Label}: {node.Value}";
-        var escaped = Markup.Escape(label.Trim());
-        return $"{escaped} [grey]({node.ItemCount})[/]";
-    }
-
-    private static string FormatSynonymLeaf(SynonymCoverageItem item) {
-        var displayName = item.Row.ScientificNameTaxonomy
-            ?? item.Row.ScientificNameAssessments
-            ?? ScientificNameHelper.BuildFromParts(item.Row.GenusName, item.Row.SpeciesName, item.Row.InfraName)
-            ?? item.Candidate.Name;
-
-        var synonymLabel = Markup.Escape(item.Candidate.Name);
-        var scientificLabel = Markup.Escape(displayName);
-        var qidList = FormatQidLinks(item.EntityIds);
-        var iucnLink = BuildIucnAssessmentUrl(item.Row);
-        var builder = new StringBuilder();
-        builder.Append($"[green]{scientificLabel}[/]");
-        builder.Append($" — synonym match: [italic]{synonymLabel}[/] ({item.Candidate.Source})");
-        if (!string.IsNullOrWhiteSpace(qidList)) {
-            builder.Append($" — QIDs: {qidList}");
-        }
-
-        builder.Append($" — [link={Markup.Escape(iucnLink)}]IUCN {Markup.Escape(item.Row.RedlistVersion)}[/]");
-        return builder.ToString();
-    }
-
-    private static string FormatQidLinks(IReadOnlyList<string> entityIds) {
-        if (entityIds.Count == 0) {
-            return string.Empty;
-        }
-
-        var parts = new List<string>(entityIds.Count);
-        foreach (var id in entityIds) {
-            if (string.IsNullOrWhiteSpace(id)) {
-                continue;
-            }
-
-            var trimmed = id.Trim();
-            var url = $"https://www.wikidata.org/wiki/{Markup.Escape(trimmed)}";
-            parts.Add($"[link={url}]{Markup.Escape(trimmed)}[/]");
-        }
-
-        return string.Join(", ", parts);
-    }
-
-    private static string BuildIucnAssessmentUrl(IucnTaxonomyRow row) {
-        var speciesId = row.InternalTaxonId?.Trim() ?? string.Empty;
-        var assessmentId = row.AssessmentId?.Trim() ?? string.Empty;
-        return $"https://www.iucnredlist.org/species/{speciesId}/{assessmentId}";
     }
 
     private static string FormatCountPercent(long count, long total) {
@@ -361,80 +135,6 @@ public sealed class WikidataCoverageReportCommand : AsyncCommand<WikidataCoverag
         return $"{count} ({pct:0.0}%)";
     }
 
-    private static void RecordWikiPresence(CoverageStats stats, bool isSubspecies, bool viaSynonym, IEnumerable<string>? entityIds, WikidataSiteLinkCache siteLinks) {
-        var presence = entityIds is null ? WikiSiteLinkPresence.Empty : siteLinks.GetPresence(entityIds);
-        stats.RecordSiteLinks(isSubspecies, viaSynonym, presence);
-    }
-
-    private static bool TryMatchAlternateNames(
-        IucnTaxonomyRow row,
-        IucnSynonymService synonymService,
-        WikidataIndexBundle indexes,
-        CoverageStats stats,
-        bool isSubspecies,
-        CancellationToken cancellationToken) {
-        var candidates = synonymService.GetCandidates(row, cancellationToken)
-            .Where(c => c.IsAlternateMatch);
-
-        foreach (var candidate in candidates) {
-            var normalized = ScientificNameHelper.Normalize(candidate.Name);
-            if (string.IsNullOrEmpty(normalized)) {
-                continue;
-            }
-
-            if (!indexes.ScientificNames.TryGetValue(normalized, out var entityIds)) {
-                continue;
-            }
-
-            stats.RecordSynonymDetail(row, candidate, entityIds);
-            stats.Record(CoverageMatchMethod.Synonym, row, isSubspecies);
-            RecordWikiPresence(stats, isSubspecies, viaSynonym: true, entityIds, indexes.SiteLinks);
-            return true;
-        }
-
-        return false;
-    }
-
-    private static bool IsSubspecies(IucnTaxonomyRow row) => !string.IsNullOrWhiteSpace(row.InfraName);
-
-    private static bool IsPopulationOrRegional(IucnTaxonomyRow row) {
-        if (!string.IsNullOrWhiteSpace(row.SubpopulationName)) {
-            return true;
-        }
-
-        if (!string.IsNullOrWhiteSpace(row.InfraType)) {
-            var infra = row.InfraType.Trim();
-            if (infra.Contains("population", StringComparison.OrdinalIgnoreCase)
-                || infra.Contains("subpopulation", StringComparison.OrdinalIgnoreCase)
-                || infra.Contains("regional", StringComparison.OrdinalIgnoreCase)) {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
-    private static string? NormalizeScientificName(IucnTaxonomyRow row) {
-        var raw = row.ScientificNameTaxonomy ?? row.ScientificNameAssessments ?? BuildNameFromParts(row);
-        return ScientificNameHelper.Normalize(raw);
-    }
-
-    private static string? BuildNameFromParts(IucnTaxonomyRow row) {
-        var pieces = new List<string>();
-        if (!string.IsNullOrWhiteSpace(row.GenusName)) {
-            pieces.Add(row.GenusName.Trim());
-        }
-
-        if (!string.IsNullOrWhiteSpace(row.SpeciesName)) {
-            pieces.Add(row.SpeciesName.Trim());
-        }
-
-        if (!string.IsNullOrWhiteSpace(row.InfraName)) {
-            pieces.Add(row.InfraName.Trim());
-        }
-
-        return pieces.Count > 0 ? string.Join(' ', pieces) : null;
-    }
 }
 
 internal enum CoverageMatchMethod {
@@ -461,6 +161,7 @@ internal sealed class CoverageStats {
     public long Unmatched { get; private set; }
     public List<CoverageSample> UnmatchedSamples { get; } = new();
     public List<SynonymCoverageItem> SynonymDetails { get; } = new();
+    public List<IucnTaxonomyRow> UnmatchedDetails { get; } = new();
     public long Matched => P627Claim + P627Reference + ScientificName + SynonymMatches;
     public long MatchedSpeciesDirect => _matchedSpeciesDirect;
     public long MatchedSpeciesSynonym => _matchedSpeciesSynonym;
@@ -495,6 +196,7 @@ internal sealed class CoverageStats {
                 break;
             default:
                 Unmatched++;
+                UnmatchedDetails.Add(row);
                 if (UnmatchedSamples.Count < MaxSamples) {
                     UnmatchedSamples.Add(new CoverageSample(row.InternalTaxonId, row.ScientificNameTaxonomy ?? row.ScientificNameAssessments, row.RedlistVersion ?? "?"));
                 }

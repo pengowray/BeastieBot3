@@ -125,6 +125,10 @@ namespace BeastieBot3 {
                             .WithDescription("Report how many IUCN taxa currently map to cached Wikidata entities using P627 and scientific-name matches.")
                             .WithExample(new[] { "wikidata", "report-coverage" })
                             .WithExample(new[] { "wikidata", "report-coverage", "--include-subpopulations" });
+                        wikidata.AddCommand<WikidataCoverageDetailsCommand>("report-coverage-details")
+                            .WithDescription("List synonym-only matches and unmatched taxa grouped hierarchically by taxonomy.")
+                            .WithExample(new[] { "wikidata", "report-coverage-details" })
+                            .WithExample(new[] { "wikidata", "report-coverage-details", "--limit", "25000" });
                     });
                 });
             });
