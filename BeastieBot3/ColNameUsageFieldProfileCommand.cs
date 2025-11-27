@@ -117,15 +117,17 @@ public sealed class ColNameUsageFieldProfileCommand : Command<ColNameUsageFieldP
         WriteColumnReports(stats, writer);
     }
 
-    private static string CreateReportPath(string databasePath, string tableName, DateTimeOffset timestamp) {
-        var directory = Path.GetDirectoryName(databasePath) ?? Directory.GetCurrentDirectory();
-        var reportDirectory = Path.Combine(directory, "data-analysis");
-        Directory.CreateDirectory(reportDirectory);
-
+    private static string CreateReportPath(PathsService paths, string databasePath, string tableName, DateTimeOffset timestamp) {
+        var fallbackBaseDir = Path.GetDirectoryName(databasePath) ?? Directory.GetCurrentDirectory();
         var dbName = Path.GetFileNameWithoutExtension(databasePath);
         var safeTableName = SanitizeForFileName(tableName);
         var fileName = $"{dbName}-{safeTableName}-profile-{timestamp:yyyyMMdd-HHmmss}.txt";
-        return Path.Combine(reportDirectory, fileName);
+        return ReportPathResolver.ResolveFilePath(
+            paths,
+            explicitFilePath: null,
+            explicitDirectory: null,
+            fallbackBaseDirectory: fallbackBaseDir,
+            defaultFileName: fileName);
     }
 
     private static string SanitizeForFileName(string value) {
@@ -368,7 +370,7 @@ public sealed class ColNameUsageFieldProfileCommand : Command<ColNameUsageFieldP
             var reportContent = plainWriter.GetContent();
 
             try {
-                var reportPath = CreateReportPath(reportContext.DatabasePath, reportContext.TableName, reportContext.GeneratedAt);
+                var reportPath = CreateReportPath(paths, reportContext.DatabasePath, reportContext.TableName, reportContext.GeneratedAt);
                 File.WriteAllText(reportPath, reportContent, Encoding.UTF8);
                 AnsiConsole.MarkupLine($"[green]Saved report to:[/] {Markup.Escape(reportPath)}");
             }

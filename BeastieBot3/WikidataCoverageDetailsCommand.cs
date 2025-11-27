@@ -21,13 +21,15 @@ public sealed class WikidataCoverageDetailsCommand : AsyncCommand<WikidataCovera
             return exitCode;
         }
 
-        RenderDetails(analysisResult, settings);
+        var paths = new PathsService(settings.IniFile, settings.SettingsDir);
+        RenderDetails(paths, analysisResult, settings);
         return 0;
     }
 
-    private static void RenderDetails(WikidataCoverageAnalysisResult result, WikidataCoverageReportSettings settings) {
+    private static void RenderDetails(PathsService paths, WikidataCoverageAnalysisResult result, WikidataCoverageReportSettings settings) {
         var stats = result.Stats;
-        var (synonymPath, unmatchedPath) = ResolveOutputPaths(settings);
+        var generatedAt = DateTimeOffset.Now;
+        var (synonymPath, unmatchedPath) = ResolveOutputPaths(paths, settings, result.IucnDatabasePath, generatedAt);
 
         using var commonNames = new CommonNameProvider(result.WikidataDatabasePath, result.IucnApiCachePath);
         var synonymMarkdown = BuildSynonymDocument(result, commonNames);
@@ -224,20 +226,30 @@ public sealed class WikidataCoverageDetailsCommand : AsyncCommand<WikidataCovera
         return $"https://www.iucnredlist.org/species/{speciesId}/{assessmentId}";
     }
 
-    private static (string SynonymPath, string UnmatchedPath) ResolveOutputPaths(WikidataCoverageReportSettings settings) {
-        var baseDirectory = string.IsNullOrWhiteSpace(settings.OutputDirectory)
-            ? Environment.CurrentDirectory
+    private static (string SynonymPath, string UnmatchedPath) ResolveOutputPaths(
+        PathsService paths,
+        WikidataCoverageReportSettings settings,
+        string iucnDatabasePath,
+        DateTimeOffset timestamp) {
+        var fallbackBaseDir = Path.GetDirectoryName(iucnDatabasePath) ?? Environment.CurrentDirectory;
+        var explicitDirectory = string.IsNullOrWhiteSpace(settings.OutputDirectory)
+            ? null
             : settings.OutputDirectory;
-        baseDirectory = Path.GetFullPath(baseDirectory);
-        var timestamp = DateTimeOffset.Now.ToString("yyyyMMdd-HHmmss");
+        var stamp = timestamp.ToString("yyyyMMdd-HHmmss");
 
-        var synonymPath = !string.IsNullOrWhiteSpace(settings.SynonymOutputPath)
-            ? Path.GetFullPath(settings.SynonymOutputPath)
-            : Path.Combine(baseDirectory, $"wikidata-coverage-synonyms-{timestamp}.md");
+        var synonymPath = ReportPathResolver.ResolveFilePath(
+            paths,
+            settings.SynonymOutputPath,
+            explicitDirectory,
+            fallbackBaseDirectory: fallbackBaseDir,
+            defaultFileName: $"wikidata-coverage-synonyms-{stamp}.md");
 
-        var unmatchedPath = !string.IsNullOrWhiteSpace(settings.UnmatchedOutputPath)
-            ? Path.GetFullPath(settings.UnmatchedOutputPath)
-            : Path.Combine(baseDirectory, $"wikidata-coverage-unmatched-{timestamp}.md");
+        var unmatchedPath = ReportPathResolver.ResolveFilePath(
+            paths,
+            settings.UnmatchedOutputPath,
+            explicitDirectory,
+            fallbackBaseDirectory: fallbackBaseDir,
+            defaultFileName: $"wikidata-coverage-unmatched-{stamp}.md");
 
         return (synonymPath, unmatchedPath);
     }

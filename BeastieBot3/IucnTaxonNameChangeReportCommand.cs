@@ -44,7 +44,7 @@ public sealed class IucnTaxonNameChangeReportCommand : Command<IucnTaxonNameChan
         public string? CacheDatabase { get; init; }
 
         [CommandOption("--output <PATH>")]
-        [Description("Write the generated report to this path. Defaults to ./iucn-name-changes-<timestamp>.md.")]
+        [Description("Write the generated report to this path. Defaults to Reports:output_dir (or <cache dir>/data-analysis if unset).")]
         public string? OutputPath { get; init; }
 
         [CommandOption("--limit <ROWS>")]
@@ -73,7 +73,7 @@ public sealed class IucnTaxonNameChangeReportCommand : Command<IucnTaxonNameChan
 
         string outputPath;
         try {
-            outputPath = ResolveOutputPath(settings.OutputPath);
+            outputPath = ResolveOutputPath(paths, settings.OutputPath, cachePath);
         }
         catch (Exception ex) {
             AnsiConsole.MarkupLine($"[red]Failed to resolve output path:[/] {Markup.Escape(ex.Message)}");
@@ -128,13 +128,14 @@ public sealed class IucnTaxonNameChangeReportCommand : Command<IucnTaxonNameChan
         return 0;
     }
 
-    private static string ResolveOutputPath(string? requestedPath) {
-        if (!string.IsNullOrWhiteSpace(requestedPath)) {
-            return Path.GetFullPath(requestedPath);
-        }
-
-        var fileName = $"iucn-name-changes-{DateTimeOffset.Now:yyyyMMdd-HHmmss}.md";
-        return Path.Combine(Environment.CurrentDirectory, fileName);
+    private static string ResolveOutputPath(PathsService paths, string? requestedPath, string cachePath) {
+        var fallbackBaseDir = Path.GetDirectoryName(cachePath) ?? Environment.CurrentDirectory;
+        return ReportPathResolver.ResolveFilePath(
+            paths,
+            requestedPath,
+            explicitDirectory: null,
+            fallbackBaseDirectory: fallbackBaseDir,
+            defaultFileName: $"iucn-name-changes-{DateTimeOffset.Now:yyyyMMdd-HHmmss}.md");
     }
 
     private static bool TableExists(SqliteConnection connection, string tableName) {

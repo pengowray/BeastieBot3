@@ -8,6 +8,7 @@ namespace BeastieBot3 {
         private readonly IniPathReader _reader;
 
         public string SourceFilePath => _reader.SourceFilePath;
+        public string BaseDirectory => _reader.BaseDirectory;
 
         public PathsService(string? iniFile = null, string? baseDirectory = null) {
             _reader = new IniPathReader(iniFile, baseDirectory);
@@ -33,6 +34,11 @@ namespace BeastieBot3 {
 
         public string? GetWikidataCachePath() =>
             _reader.Get("Datastore:wikidata_cache_sqlite") ?? _reader.Get("wikidata_cache_sqlite");
+
+        public string? GetReportOutputDirectory() =>
+            _reader.Get("Reports:output_dir")
+            ?? _reader.Get("Datastore:reports_dir")
+            ?? _reader.Get("reports_output_dir");
 
         public string ResolveIucnDatabasePath(string? overridePath) {
             var configuredPath = !string.IsNullOrWhiteSpace(overridePath)

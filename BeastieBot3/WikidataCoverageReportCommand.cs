@@ -41,7 +41,7 @@ public sealed class WikidataCoverageReportSettings : CommonSettings {
     public int SampleCount { get; init; } = 10;
 
     [CommandOption("--output-dir <DIR>")]
-    [Description("Base directory for coverage detail outputs. Defaults to the current working directory.")]
+    [Description("Base directory for coverage detail outputs. Defaults to Reports:output_dir (or <IUCN DB>/data-analysis if unset).")]
     public string? OutputDirectory { get; init; }
 
     [CommandOption("--synonym-output <FILE>")]

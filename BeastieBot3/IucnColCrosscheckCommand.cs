@@ -35,7 +35,7 @@ public sealed class IucnColCrosscheckCommand : Command<IucnColCrosscheckCommand.
         public long Limit { get; init; }
 
         [CommandOption("--output <FILE>")]
-        [Description("Optional report output path. Defaults to data-analysis/iucn-col-crosscheck-<timestamp>.txt alongside the IUCN database.")]
+        [Description("Optional report output path. Defaults to Reports:output_dir (or <IUCN DB>/data-analysis if unset).")]
         public string? OutputPath { get; init; }
 
         [CommandOption("--include-subpopulations")]
@@ -156,8 +156,14 @@ public sealed class IucnColCrosscheckCommand : Command<IucnColCrosscheckCommand.
                 .ToList();
         }
 
-        var reportPath = ResolveReportPath(settings.OutputPath, iucnPath);
-        Directory.CreateDirectory(Path.GetDirectoryName(reportPath)!);
+        var fallbackBaseDir = Path.GetDirectoryName(iucnPath) ?? Directory.GetCurrentDirectory();
+        var timestamp = DateTimeOffset.Now;
+        var reportPath = ReportPathResolver.ResolveFilePath(
+            paths,
+            settings.OutputPath,
+            explicitDirectory: null,
+            fallbackBaseDirectory: fallbackBaseDir,
+            defaultFileName: $"iucn-col-crosscheck-{timestamp:yyyyMMdd-HHmmss}.txt");
 
         using var stream = new FileStream(reportPath, FileMode.Create, FileAccess.Write, FileShare.Read);
         using var writer = new StreamWriter(stream, new UTF8Encoding(false));
@@ -674,23 +680,6 @@ public sealed class IucnColCrosscheckCommand : Command<IucnColCrosscheckCommand.
 
     private static string SortKey(string? value) {
         return string.IsNullOrWhiteSpace(value) ? "~" : value.Trim();
-    }
-
-    private static string ResolveReportPath(string? outputPath, string iucnPath) {
-        if (!string.IsNullOrWhiteSpace(outputPath)) {
-            var full = Path.GetFullPath(outputPath);
-            var directory = Path.GetDirectoryName(full);
-            if (!string.IsNullOrWhiteSpace(directory) && !Directory.Exists(directory)) {
-                Directory.CreateDirectory(directory);
-            }
-            return full;
-        }
-
-        var baseDir = Path.GetDirectoryName(iucnPath) ?? Directory.GetCurrentDirectory();
-        var reportDir = Path.Combine(baseDir, "data-analysis");
-        Directory.CreateDirectory(reportDir);
-        var fileName = $"iucn-col-crosscheck-{DateTimeOffset.Now:yyyyMMdd-HHmmss}.txt";
-        return Path.Combine(reportDir, fileName);
     }
 
     private static void ShuffleInPlace<T>(IList<T> list) {

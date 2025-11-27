@@ -25,7 +25,7 @@ public sealed class WikidataIucnFreshnessReportSettings : CommonSettings {
     public bool IncludeSubpopulations { get; init; }
 
     [CommandOption("--output <PATH>")]
-    [Description("Write the generated report to this path. Defaults to ./reports/wikidata-iucn-freshness-<timestamp>.md.")]
+    [Description("Write the generated report to this path. Defaults to Reports:output_dir (or <IUCN DB>/data-analysis if unset).")]
     public string? OutputPath { get; init; }
 }
 
@@ -59,15 +59,6 @@ public sealed class WikidataIucnFreshnessReportCommand : AsyncCommand<WikidataIu
             return -3;
         }
 
-        string outputPath;
-        try {
-            outputPath = ResolveOutputPath(settings.OutputPath);
-        }
-        catch (Exception ex) {
-            AnsiConsole.MarkupLineInterpolated($"[red]Failed to resolve output path:[/] {Markup.Escape(ex.Message)}");
-            return -4;
-        }
-
         var iucnConnectionString = new SqliteConnectionStringBuilder {
             DataSource = iucnPath,
             Mode = SqliteOpenMode.ReadOnly
@@ -86,12 +77,28 @@ public sealed class WikidataIucnFreshnessReportCommand : AsyncCommand<WikidataIu
         var analyzer = new WikidataIucnFreshnessAnalyzer(iucnConnection, wikidataConnection, settings.IncludeSubpopulations);
         var stats = analyzer.Execute(cancellationToken);
 
+        var generatedAt = DateTimeOffset.Now;
+        var fallbackBaseDir = Path.GetDirectoryName(iucnPath) ?? Environment.CurrentDirectory;
+        string outputPath;
+        try {
+            outputPath = ReportPathResolver.ResolveFilePath(
+                paths,
+                settings.OutputPath,
+                explicitDirectory: null,
+                fallbackBaseDirectory: fallbackBaseDir,
+                defaultFileName: $"wikidata-iucn-freshness-{generatedAt:yyyyMMdd-HHmmss}.md");
+        }
+        catch (Exception ex) {
+            AnsiConsole.MarkupLineInterpolated($"[red]Failed to resolve output path:[/] {Markup.Escape(ex.Message)}");
+            return -4;
+        }
+
         var context = new WikidataIucnFreshnessReportContext(
             iucnPath,
             wikidataPath,
             outputPath,
             settings.IncludeSubpopulations,
-            DateTimeOffset.Now);
+            generatedAt);
 
         var markdown = WikidataIucnFreshnessReportBuilder.Build(context, stats);
 
@@ -114,15 +121,6 @@ public sealed class WikidataIucnFreshnessReportCommand : AsyncCommand<WikidataIu
         return 0;
     }
 
-    private static string ResolveOutputPath(string? requestedPath) {
-        if (!string.IsNullOrWhiteSpace(requestedPath)) {
-            return Path.GetFullPath(requestedPath);
-        }
-
-        var baseDir = Path.Combine(Environment.CurrentDirectory, "reports");
-        var fileName = $"wikidata-iucn-freshness-{DateTimeOffset.Now:yyyyMMdd-HHmmss}.md";
-        return Path.GetFullPath(Path.Combine(baseDir, fileName));
-    }
 }
 
 internal sealed record WikidataIucnFreshnessReportContext(
