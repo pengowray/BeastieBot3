@@ -11,7 +11,8 @@ namespace BeastieBot3;
 internal sealed record WikidataCoverageAnalysisResult(
     CoverageStats Stats,
     string IucnDatabasePath,
-    string WikidataDatabasePath
+    string WikidataDatabasePath,
+    string? IucnApiCachePath
 );
 
 internal static class WikidataCoverageAnalysis {
@@ -117,7 +118,7 @@ internal static class WikidataCoverageAnalysis {
             stats.Record(CoverageMatchMethod.None, row, isSubspecies);
         }
 
-        result = new WikidataCoverageAnalysisResult(stats, iucnDb, wikidataDb);
+        result = new WikidataCoverageAnalysisResult(stats, iucnDb, wikidataDb, iucnApiCachePath);
         return 0;
     }
 

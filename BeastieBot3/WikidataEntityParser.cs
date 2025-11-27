@@ -35,6 +35,7 @@ internal static class WikidataEntityParser {
         var rankQid = ParseSingleEntityId(claims, "P105");
         var parentTaxa = ParseEntityIds(claims, "P171");
         var p141Statements = ParseP141Statements(claims);
+        var commonNames = ParseMonolingualClaims(claims, "P1843");
         var p627FromReferences = CollectP627FromReferences(p141Statements);
 
         return new WikidataEntityRecord(
@@ -48,6 +49,7 @@ internal static class WikidataEntityParser {
             p627FromReferences,
             p141Statements,
             scientificNames,
+            commonNames,
             rankQid,
             parentTaxa
         );
@@ -85,8 +87,8 @@ internal static class WikidataEntityParser {
         return values;
     }
 
-    private static IReadOnlyList<WikidataScientificName> ParseMonolingualClaims(JsonElement claims, string propertyId) {
-        var values = new List<WikidataScientificName>();
+    private static IReadOnlyList<WikidataMonolingualText> ParseMonolingualClaims(JsonElement claims, string propertyId) {
+        var values = new List<WikidataMonolingualText>();
         if (claims.ValueKind != JsonValueKind.Object) {
             return values;
         }
@@ -115,7 +117,7 @@ internal static class WikidataEntityParser {
             }
 
             if (!string.IsNullOrWhiteSpace(text)) {
-                values.Add(new WikidataScientificName(language, text!.Trim()));
+                values.Add(new WikidataMonolingualText(language, text!.Trim()));
             }
         }
 
@@ -332,7 +334,8 @@ internal sealed record WikidataEntityRecord(
     IReadOnlyList<string> P627Claims,
     IReadOnlyList<string> P627References,
     IReadOnlyList<WikidataP141Statement> P141Statements,
-    IReadOnlyList<WikidataScientificName> ScientificNames,
+    IReadOnlyList<WikidataMonolingualText> ScientificNames,
+    IReadOnlyList<WikidataMonolingualText> CommonNames,
     long? RankQid,
     IReadOnlyList<long> ParentTaxaQids
 );
@@ -351,4 +354,4 @@ internal sealed record WikidataP141Reference(
     IReadOnlyList<string> IucnTaxonIds
 );
 
-internal sealed record WikidataScientificName(string Language, string Value);
+internal sealed record WikidataMonolingualText(string Language, string Value);

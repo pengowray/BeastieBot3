@@ -39,6 +39,18 @@ public sealed class WikidataCoverageReportSettings : CommonSettings {
     [CommandOption("--sample-count <N>")]
     [Description("Number of unmatched samples to display (default 10).")]
     public int SampleCount { get; init; } = 10;
+
+    [CommandOption("--output-dir <DIR>")]
+    [Description("Base directory for coverage detail outputs. Defaults to the current working directory.")]
+    public string? OutputDirectory { get; init; }
+
+    [CommandOption("--synonym-output <FILE>")]
+    [Description("Optional path for the synonym matches Markdown output file.")]
+    public string? SynonymOutputPath { get; init; }
+
+    [CommandOption("--unmatched-output <FILE>")]
+    [Description("Optional path for the unmatched taxa Markdown output file.")]
+    public string? UnmatchedOutputPath { get; init; }
 }
 
 public sealed class WikidataCoverageReportCommand : AsyncCommand<WikidataCoverageReportSettings> {
