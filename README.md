@@ -47,6 +47,7 @@ Use `--failed-only` to exclusively retry entries from the queue, `--force` to by
 - `iucn report-taxonomy-cleanup` &mdash; Highlights taxonomy columns that need whitespace normalization or marker cleanup.
 - `iucn report-col-crosscheck` &mdash; Cross-references IUCN species with Catalogue of Life entries for synonymy and authority alignment.
 - `iucn report-name-changes` &mdash; Surfaces SIS taxon ids whose `taxon_scientific_name` changed across assessments; emit Markdown via `--output` when needed.
+- `iucn report-synonym-formatting` &mdash; Scans cached IUCN synonyms for double spaces, stray whitespace, or embedded markup and saves both Markdown plus CSV summaries.
 
 #### IUCN API cache (`iucn api`)
 

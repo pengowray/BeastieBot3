@@ -74,6 +74,10 @@ namespace BeastieBot3 {
                         .WithDescription("Report assessments where taxon_scientific_name changes while sharing the same SIS taxon id.")
                         .WithExample(new[] { "iucn", "report-name-changes" })
                         .WithExample(new[] { "iucn", "report-name-changes", "--output", "name-changes.md" });
+                    iucn.AddCommand<IucnSynonymFormattingReportCommand>("report-synonym-formatting")
+                        .WithDescription("List IUCN synonyms that contain double spaces or other formatting issues and export Markdown plus CSV reports.")
+                        .WithExample(new[] { "iucn", "report-synonym-formatting" })
+                        .WithExample(new[] { "iucn", "report-synonym-formatting", "--limit", "1000" });
 
                     iucn.AddBranch("api", api => {
                         api.SetDescription("Commands that cache data from the live IUCN API");
