@@ -74,6 +74,18 @@ internal sealed class WikidataCacheStore : IDisposable {
     attempt_count INTEGER NOT NULL DEFAULT 0,
     json TEXT
 );
+
+internal sealed record WikidataEnwikiSitelink(long EntityNumericId, string EntityId, string Title);
+
+internal sealed record WikidataPendingIucnMatchRow(
+    string IucnTaxonId,
+    long NumericId,
+    string EntityId,
+    string? MatchedName,
+    string MatchMethod,
+    bool IsSynonym,
+    DateTime DiscoveredAt,
+    DateTime LastSeenAt);
 CREATE INDEX IF NOT EXISTS idx_wikidata_entities_downloaded ON wikidata_entities(json_downloaded, entity_numeric_id);
 CREATE INDEX IF NOT EXISTS idx_wikidata_entities_last_seen ON wikidata_entities(last_seen_at);
 CREATE TABLE IF NOT EXISTS wikidata_sync_state (
@@ -200,6 +212,41 @@ CREATE INDEX IF NOT EXISTS idx_pending_iucn_entity ON wikidata_pending_iucn_matc
 
         tx.Commit();
         return new SeedUpsertResult(newCount, updatedCount);
+    }
+
+    public IReadOnlyList<WikidataEnwikiSitelink> GetEnwikiSitelinks(long? resumeAfterNumericId, int limit) {
+        if (limit <= 0) {
+            return Array.Empty<WikidataEnwikiSitelink>();
+        }
+
+        using var command = _connection.CreateCommand();
+        var builder = new System.Text.StringBuilder();
+        builder.Append("SELECT entity_numeric_id, entity_id, json FROM wikidata_entities WHERE json_downloaded = 1 AND json IS NOT NULL AND TRIM(json) <> ''");
+        if (resumeAfterNumericId.HasValue) {
+            builder.Append(" AND entity_numeric_id > @resume");
+            command.Parameters.AddWithValue("@resume", resumeAfterNumericId.Value);
+        }
+
+        builder.Append(" ORDER BY entity_numeric_id LIMIT @limit");
+        command.CommandText = builder.ToString();
+        command.Parameters.AddWithValue("@limit", limit);
+
+        var list = new List<WikidataEnwikiSitelink>();
+        using var reader = command.ExecuteReader(System.Data.CommandBehavior.SequentialAccess);
+        while (reader.Read()) {
+            if (reader.IsDBNull(2)) {
+                continue;
+            }
+
+            var json = reader.GetString(2);
+            if (!WikidataSitelinkExtractor.TryGetEnwikiTitle(json, out var title) || string.IsNullOrWhiteSpace(title)) {
+                continue;
+            }
+
+            list.Add(new WikidataEnwikiSitelink(reader.GetInt64(0), reader.GetString(1), title));
+        }
+
+        return list;
     }
 
     public void UpsertPendingIucnMatches(IReadOnlyList<WikidataPendingIucnMatchRow> matches) {
@@ -857,3 +904,5 @@ internal sealed record P141RebuildResult(
     long ReferencesInserted,
     long JsonFailures,
     bool WasSkipped);
+
+internal sealed record WikidataEnwikiSitelink(long EntityNumericId, string EntityId, string Title);

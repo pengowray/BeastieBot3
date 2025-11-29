@@ -139,6 +139,23 @@ namespace BeastieBot3 {
                             .WithExample(new[] { "wikidata", "report-iucn-freshness" })
                             .WithExample(new[] { "wikidata", "report-iucn-freshness", "--output", "reports/freshness.md" });
                     });
+
+                    config.AddBranch("wikipedia", wikipedia => {
+                        wikipedia.SetDescription("Wikipedia caching and inspection commands");
+                        wikipedia.AddCommand<WikipediaCacheStatusCommand>("cache-status")
+                            .WithDescription("Show high-level statistics about the local Wikipedia cache database.")
+                            .WithExample(new[] { "wikipedia", "cache-status" })
+                            .WithExample(new[] { "wikipedia", "cache-status", "--cache", "data/enwiki-cache.sqlite" });
+                        wikipedia.AddCommand<WikipediaEnqueueCommand>("enqueue-wikidata")
+                            .WithDescription("Seed the Wikipedia cache with titles discovered via Wikidata enwiki sitelinks.")
+                            .WithExample(new[] { "wikipedia", "enqueue-wikidata" })
+                            .WithExample(new[] { "wikipedia", "enqueue-wikidata", "--limit", "1000" });
+                        wikipedia.AddCommand<WikipediaFetchCommand>("fetch-pages")
+                            .WithDescription("Download pending Wikipedia pages (HTML plus wikitext) into the local cache.")
+                            .WithExample(new[] { "wikipedia", "fetch-pages" })
+                            .WithExample(new[] { "wikipedia", "fetch-pages", "--limit", "25" })
+                            .WithExample(new[] { "wikipedia", "fetch-pages", "--title", "Ursus maritimus" });
+                    });
                 });
             });
 

@@ -35,6 +35,9 @@ namespace BeastieBot3 {
         public string? GetWikidataCachePath() =>
             _reader.Get("Datastore:wikidata_cache_sqlite") ?? _reader.Get("wikidata_cache_sqlite");
 
+        public string? GetWikipediaCachePath() =>
+            _reader.Get("Datastore:enwiki_cache_sqlite") ?? _reader.Get("enwiki_cache_sqlite");
+
         public string? GetReportOutputDirectory() =>
             _reader.Get("Reports:output_dir")
             ?? _reader.Get("Datastore:reports_dir")
@@ -88,6 +91,23 @@ namespace BeastieBot3 {
             }
             catch (Exception ex) {
                 throw new InvalidOperationException($"Failed to resolve Wikidata cache path {configuredPath}: {ex.Message}", ex);
+            }
+        }
+
+        public string ResolveWikipediaCachePath(string? overridePath) {
+            var configuredPath = !string.IsNullOrWhiteSpace(overridePath)
+                ? overridePath
+                : GetWikipediaCachePath();
+
+            if (string.IsNullOrWhiteSpace(configuredPath)) {
+                throw new InvalidOperationException("Wikipedia cache path is not configured. Set Datastore:enwiki_cache_sqlite or pass --cache.");
+            }
+
+            try {
+                return Path.GetFullPath(configuredPath);
+            }
+            catch (Exception ex) {
+                throw new InvalidOperationException($"Failed to resolve Wikipedia cache path {configuredPath}: {ex.Message}", ex);
             }
         }
     }
