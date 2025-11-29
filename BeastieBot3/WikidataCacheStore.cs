@@ -74,18 +74,6 @@ internal sealed class WikidataCacheStore : IDisposable {
     attempt_count INTEGER NOT NULL DEFAULT 0,
     json TEXT
 );
-
-internal sealed record WikidataEnwikiSitelink(long EntityNumericId, string EntityId, string Title);
-
-internal sealed record WikidataPendingIucnMatchRow(
-    string IucnTaxonId,
-    long NumericId,
-    string EntityId,
-    string? MatchedName,
-    string MatchMethod,
-    bool IsSynonym,
-    DateTime DiscoveredAt,
-    DateTime LastSeenAt);
 CREATE INDEX IF NOT EXISTS idx_wikidata_entities_downloaded ON wikidata_entities(json_downloaded, entity_numeric_id);
 CREATE INDEX IF NOT EXISTS idx_wikidata_entities_last_seen ON wikidata_entities(last_seen_at);
 CREATE TABLE IF NOT EXISTS wikidata_sync_state (
