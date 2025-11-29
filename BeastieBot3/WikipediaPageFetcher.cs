@@ -70,6 +70,13 @@ internal sealed class WikipediaPageFetcher {
             _cache.SavePageContent(content);
             _cache.ReplaceCategories(workItem.PageRowId, queryResult.Categories);
             _cache.ReplaceRedirectChain(workItem.PageRowId, BuildRedirectEdges(queryResult.Redirects));
+            var taxobox = TaxoboxParser.TryParse(workItem.PageRowId, queryResult.Wikitext);
+            if (taxobox is not null) {
+                _cache.UpsertTaxoboxData(taxobox);
+            }
+            else {
+                _cache.DeleteTaxoboxData(workItem.PageRowId);
+            }
             _cache.CompleteImportSuccess(importId, (int)htmlResult.StatusCode, htmlResult.PayloadBytes, DateTime.UtcNow - importStarted);
             return WikipediaFetchOutcome.CreateSuccess(workItem.PageTitle, canonicalTitle);
         }

@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Data;
 using System.Threading;
 using Microsoft.Data.Sqlite;
 
@@ -75,6 +76,64 @@ ORDER BY v.assessmentId";
                 GetNullableString(reader, ordinals.InfraAuthority)
             );
         }
+    }
+
+    public IucnTaxonomyRow? GetRowByInternalId(string? internalTaxonId) {
+        if (string.IsNullOrWhiteSpace(internalTaxonId)) {
+            return null;
+        }
+
+        var sql = @"SELECT
+    v.assessmentId,
+    v.internalTaxonId,
+    v.redlist_version,
+    v.scientificName AS scientificName_assessments,
+    v.""scientificName:1"" AS scientificName_taxonomy,
+    v.kingdomName,
+    v.phylumName,
+    v.className,
+    v.orderName,
+    v.familyName,
+    v.genusName,
+    v.speciesName,
+    v.infraType,
+    v.infraName,
+    v.subpopulationName,
+    v.authority,
+    v.infraAuthority
+FROM view_assessments_html_taxonomy_html v
+WHERE v.internalTaxonId = @id
+LIMIT 1";
+
+        using var command = _connection.CreateCommand();
+        command.CommandText = sql;
+        command.CommandTimeout = 0;
+        command.Parameters.AddWithValue("@id", internalTaxonId.Trim());
+
+        using var reader = command.ExecuteReader(CommandBehavior.SingleRow);
+        if (!reader.Read()) {
+            return null;
+        }
+
+        var ordinals = new Ordinals(reader);
+        return new IucnTaxonomyRow(
+            reader.GetString(ordinals.AssessmentId),
+            reader.GetString(ordinals.InternalTaxonId),
+            reader.GetString(ordinals.RedlistVersion),
+            GetNullableString(reader, ordinals.ScientificNameAssessments),
+            GetNullableString(reader, ordinals.ScientificNameTaxonomy),
+            reader.GetString(ordinals.KingdomName),
+            GetNullableString(reader, ordinals.PhylumName),
+            GetNullableString(reader, ordinals.ClassName),
+            GetNullableString(reader, ordinals.OrderName),
+            GetNullableString(reader, ordinals.FamilyName),
+            reader.GetString(ordinals.GenusName),
+            reader.GetString(ordinals.SpeciesName),
+            GetNullableString(reader, ordinals.InfraType),
+            GetNullableString(reader, ordinals.InfraName),
+            GetNullableString(reader, ordinals.SubpopulationName),
+            GetNullableString(reader, ordinals.Authority),
+            GetNullableString(reader, ordinals.InfraAuthority));
     }
 
     private static string? GetNullableString(SqliteDataReader reader, int? ordinal) {

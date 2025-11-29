@@ -8,15 +8,15 @@ using Spectre.Console.Cli;
 namespace BeastieBot3;
 
 public sealed class WikipediaFetchCommand : AsyncCommand<WikipediaFetchCommand.Settings> {
+    private const int DefaultBatchSize = 25;
     public sealed class Settings : CommonSettings {
         [CommandOption("--cache <FILE>")]
         [Description("Path to the Wikipedia cache SQLite database. Defaults to Datastore:enwiki_cache_sqlite.")]
         public string? CachePath { get; init; }
 
         [CommandOption("--limit <N>")]
-        [Description("Maximum number of pages to fetch from the pending queue (default 10).")]
-        [DefaultValue(10)]
-        public int Limit { get; init; } = 10;
+        [Description("Maximum number of pages to fetch (0 = all pending).")]
+        public int Limit { get; init; }
 
         [CommandOption("--refresh-days <DAYS>")]
         [Description("Re-download cached pages older than the specified number of days.")]
@@ -47,21 +47,13 @@ public sealed class WikipediaFetchCommand : AsyncCommand<WikipediaFetchCommand.S
             workItems.Add(new WikiPageWorkItem(upsert.PageRowId, candidate.Title, candidate.NormalizedTitle, WikiPageDownloadStatus.Pending, null, 0));
         }
 
-        var limit = Math.Clamp(settings.Limit, 1, 100);
-        if (workItems.Count < limit) {
-            DateTime? refreshThreshold = null;
-            if (settings.RefreshDays.HasValue && settings.RefreshDays.Value > 0) {
-                refreshThreshold = DateTime.UtcNow.AddDays(-settings.RefreshDays.Value);
-            }
-
-            var pending = cacheStore.GetPendingPages(limit - workItems.Count, refreshThreshold);
-            workItems.AddRange(pending);
+        DateTime? refreshThreshold = null;
+        if (settings.RefreshDays.HasValue && settings.RefreshDays.Value > 0) {
+            refreshThreshold = DateTime.UtcNow.AddDays(-settings.RefreshDays.Value);
         }
 
-        if (workItems.Count == 0) {
-            AnsiConsole.MarkupLine("[yellow]No wikipedia pages are pending for download.[/]");
-            return 0;
-        }
+        var totalLimit = settings.Limit > 0 ? settings.Limit : int.MaxValue;
+        var processed = 0;
 
         var configuration = WikipediaConfiguration.FromEnvironment();
         using var client = new WikipediaApiClient(configuration);
@@ -71,10 +63,30 @@ public sealed class WikipediaFetchCommand : AsyncCommand<WikipediaFetchCommand.S
         var missing = 0;
         var failed = 0;
 
-        foreach (var item in workItems) {
+        while (processed < totalLimit) {
             cancellationToken.ThrowIfCancellationRequested();
+
+            if (workItems.Count == 0) {
+                var needed = Math.Min(DefaultBatchSize, totalLimit - processed);
+                if (needed <= 0) {
+                    break;
+                }
+
+                var pending = cacheStore.GetPendingPages(needed, refreshThreshold);
+                if (pending.Count == 0) {
+                    break;
+                }
+
+                workItems.AddRange(pending);
+            }
+
+            var item = workItems[0];
+            workItems.RemoveAt(0);
+
             AnsiConsole.MarkupLine($"[grey]Fetching[/] {item.PageTitle}...");
             var outcome = await fetcher.FetchAsync(item, cancellationToken).ConfigureAwait(false);
+            processed++;
+
             if (outcome.Success) {
                 success++;
                 AnsiConsole.MarkupLine($"[green]✓[/] {outcome.FinalTitle ?? outcome.RequestedTitle}");
@@ -87,6 +99,11 @@ public sealed class WikipediaFetchCommand : AsyncCommand<WikipediaFetchCommand.S
                 failed++;
                 AnsiConsole.MarkupLine($"[red]x[/] Failed {outcome.RequestedTitle}: {outcome.Message}");
             }
+        }
+
+        if (processed == 0) {
+            AnsiConsole.MarkupLine("[yellow]No wikipedia pages are pending for download.[/]");
+            return 0;
         }
 
         AnsiConsole.MarkupLine($"Completed fetches. Success: [green]{success}[/], Missing: [yellow]{missing}[/], Failed: [red]{failed}[/].");

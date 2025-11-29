@@ -237,6 +237,48 @@ CREATE INDEX IF NOT EXISTS idx_pending_iucn_entity ON wikidata_pending_iucn_matc
         return list;
     }
 
+    public string? GetEnwikiTitle(long entityNumericId) {
+        using var command = _connection.CreateCommand();
+        command.CommandText = "SELECT json FROM wikidata_entities WHERE entity_numeric_id=@id LIMIT 1";
+        command.Parameters.AddWithValue("@id", entityNumericId);
+        var json = command.ExecuteScalar() as string;
+        if (string.IsNullOrWhiteSpace(json)) {
+            return null;
+        }
+
+        return WikidataSitelinkExtractor.TryGetEnwikiTitle(json, out var title) ? title : null;
+    }
+
+    public IReadOnlyList<WikidataIucnMapping> GetIucnMappings() {
+        using var command = _connection.CreateCommand();
+        command.CommandText =
+            """
+SELECT v.entity_numeric_id, e.entity_id, v.value
+FROM wikidata_p627_values v
+JOIN wikidata_entities e ON e.entity_numeric_id = v.entity_numeric_id
+""";
+
+        var list = new List<WikidataIucnMapping>();
+        using var reader = command.ExecuteReader();
+        while (reader.Read()) {
+            if (reader.IsDBNull(2)) {
+                continue;
+            }
+
+            var iucnId = reader.GetString(2)?.Trim();
+            if (string.IsNullOrWhiteSpace(iucnId)) {
+                continue;
+            }
+
+            list.Add(new WikidataIucnMapping(
+                reader.GetInt64(0),
+                reader.IsDBNull(1) ? $"Q{reader.GetInt64(0)}" : reader.GetString(1),
+                iucnId));
+        }
+
+        return list;
+    }
+
     public void UpsertPendingIucnMatches(IReadOnlyList<WikidataPendingIucnMatchRow> matches) {
         if (matches.Count == 0) {
             return;
@@ -883,6 +925,8 @@ internal sealed record WikidataPendingIucnMatchRow(
     bool IsSynonym,
     DateTime DiscoveredAt,
     DateTime LastSeenAt);
+
+internal sealed record WikidataIucnMapping(long EntityNumericId, string EntityId, string IucnTaxonId);
 
 internal sealed record P141InsertResult(long StatementCount, long ReferenceCount);
 

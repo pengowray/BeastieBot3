@@ -138,6 +138,10 @@ namespace BeastieBot3 {
                             .WithDescription("Generate a Markdown report describing how current IUCN data is reflected in cached Wikidata entities.")
                             .WithExample(new[] { "wikidata", "report-iucn-freshness" })
                             .WithExample(new[] { "wikidata", "report-iucn-freshness", "--output", "reports/freshness.md" });
+                        wikidata.AddCommand<WikidataWikipediaMismatchReportCommand>("report-wiki-mismatches")
+                            .WithDescription("Report Wikidata entries whose enwiki sitelinks resolve to redirects, disambiguations, or mismatched taxa.")
+                            .WithExample(new[] { "wikidata", "report-wiki-mismatches" })
+                            .WithExample(new[] { "wikidata", "report-wiki-mismatches", "--markdown-output", "reports/wiki-mismatches.md" });
                     });
 
                     config.AddBranch("wikipedia", wikipedia => {
@@ -155,6 +159,11 @@ namespace BeastieBot3 {
                             .WithExample(new[] { "wikipedia", "fetch-pages" })
                             .WithExample(new[] { "wikipedia", "fetch-pages", "--limit", "25" })
                             .WithExample(new[] { "wikipedia", "fetch-pages", "--title", "Ursus maritimus" });
+                        wikipedia.AddCommand<WikipediaMatchTaxaCommand>("match-taxa")
+                            .WithDescription("Attempt to match IUCN taxa to cached Wikipedia pages using Wikidata sitelinks and synonyms.")
+                            .WithExample(new[] { "wikipedia", "match-taxa" })
+                            .WithExample(new[] { "wikipedia", "match-taxa", "--limit", "500" })
+                            .WithExample(new[] { "wikipedia", "match-taxa", "--resume-after", "12345" });
                     });
                 });
             });

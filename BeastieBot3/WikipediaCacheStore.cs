@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Data;
+using System.Globalization;
 using System.IO;
 using System.Text;
 using Microsoft.Data.Sqlite;
@@ -283,6 +284,46 @@ LIMIT @limit
         return new WikiPageUpsertResult(pageRowId, isNew);
     }
 
+    public WikiPageSummary? GetPageByNormalizedTitle(string normalizedTitle) {
+        if (string.IsNullOrWhiteSpace(normalizedTitle)) {
+            return null;
+        }
+
+        using var command = _connection.CreateCommand();
+        command.CommandText =
+            """
+SELECT id, page_title, normalized_title, download_status, is_redirect, redirect_target, is_disambiguation, is_set_index, has_taxobox, last_seen_at
+FROM wiki_pages
+WHERE normalized_title=@title
+LIMIT 1
+""";
+        command.Parameters.AddWithValue("@title", normalizedTitle);
+        using var reader = command.ExecuteReader(CommandBehavior.SingleRow);
+        if (!reader.Read()) {
+            return null;
+        }
+
+        DateTime? lastSeen = null;
+        if (!reader.IsDBNull(9)) {
+            var raw = reader.GetString(9);
+            if (!string.IsNullOrWhiteSpace(raw) && DateTime.TryParse(raw, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var parsed)) {
+                lastSeen = parsed;
+            }
+        }
+
+        return new WikiPageSummary(
+            reader.GetInt64(0),
+            reader.IsDBNull(1) ? normalizedTitle : reader.GetString(1),
+            reader.IsDBNull(2) ? normalizedTitle : reader.GetString(2),
+            reader.IsDBNull(3) ? WikiPageDownloadStatus.Pending : reader.GetString(3),
+            !reader.IsDBNull(4) && reader.GetInt64(4) != 0,
+            reader.IsDBNull(5) ? null : reader.GetString(5),
+            !reader.IsDBNull(6) && reader.GetInt64(6) != 0,
+            !reader.IsDBNull(7) && reader.GetInt64(7) != 0,
+            !reader.IsDBNull(8) && reader.GetInt64(8) != 0,
+            lastSeen);
+    }
+
     public void SavePageContent(WikiPageContent content) {
         if (content is null) {
             throw new ArgumentNullException(nameof(content));
@@ -401,6 +442,13 @@ WHERE id=@id
         tx.Commit();
     }
 
+    public void DeletePage(long pageRowId) {
+        using var command = _connection.CreateCommand();
+        command.CommandText = "DELETE FROM wiki_pages WHERE id=@id";
+        command.Parameters.AddWithValue("@id", pageRowId);
+        command.ExecuteNonQuery();
+    }
+
     public void UpsertTaxoboxData(WikiTaxoboxData data) {
         if (data is null) {
             throw new ArgumentNullException(nameof(data));
@@ -441,6 +489,58 @@ ON CONFLICT(page_row_id) DO UPDATE SET
         command.Parameters.AddWithValue("@mono", data.IsMonotypic.HasValue ? (data.IsMonotypic.Value ? 1 : 0) : DBNull.Value);
         command.Parameters.AddWithValue("@json", (object?)data.DataJson ?? DBNull.Value);
         command.ExecuteNonQuery();
+    }
+
+    public void DeleteTaxoboxData(long pageRowId) {
+        using var command = _connection.CreateCommand();
+        command.CommandText = "DELETE FROM wiki_taxobox_data WHERE page_row_id=@id";
+        command.Parameters.AddWithValue("@id", pageRowId);
+        command.ExecuteNonQuery();
+    }
+
+    public WikiTaxoboxData? GetTaxoboxData(long pageRowId) {
+        using var command = _connection.CreateCommand();
+        command.CommandText =
+            """
+SELECT page_row_id, scientific_name, rank, kingdom, phylum, class_name, order_name, family, subfamily, tribe, genus, species, is_monotypic, data_json
+FROM wiki_taxobox_data
+WHERE page_row_id=@id
+LIMIT 1
+""";
+        command.Parameters.AddWithValue("@id", pageRowId);
+        using var reader = command.ExecuteReader(CommandBehavior.SingleRow);
+        if (!reader.Read()) {
+            return null;
+        }
+
+        bool? ParseBool(int ordinal) {
+            if (reader.IsDBNull(ordinal)) {
+                return null;
+            }
+
+            var value = reader.GetInt64(ordinal);
+            return value switch {
+                0 => false,
+                1 => true,
+                _ => null
+            };
+        }
+
+        return new WikiTaxoboxData(
+            reader.GetInt64(0),
+            reader.IsDBNull(1) ? null : reader.GetString(1),
+            reader.IsDBNull(2) ? null : reader.GetString(2),
+            reader.IsDBNull(3) ? null : reader.GetString(3),
+            reader.IsDBNull(4) ? null : reader.GetString(4),
+            reader.IsDBNull(5) ? null : reader.GetString(5),
+            reader.IsDBNull(6) ? null : reader.GetString(6),
+            reader.IsDBNull(7) ? null : reader.GetString(7),
+            reader.IsDBNull(8) ? null : reader.GetString(8),
+            reader.IsDBNull(9) ? null : reader.GetString(9),
+            reader.IsDBNull(10) ? null : reader.GetString(10),
+            reader.IsDBNull(11) ? null : reader.GetString(11),
+            ParseBool(12),
+            reader.IsDBNull(13) ? null : reader.GetString(13));
     }
 
     public void RecordPageFailure(long pageRowId, string errorMessage, DateTime occurredAt) {
@@ -562,6 +662,51 @@ VALUES (@source,@id,@order,@title,@normalized,@hint,@outcome,@page,@redirect,@no
         command.Parameters.AddWithValue("@attempted", attempt.AttemptedAt.ToString("O"));
         command.ExecuteNonQuery();
     }
+
+    public TaxonWikiMatch? GetTaxonMatch(string taxonSource, string taxonIdentifier) {
+        using var command = _connection.CreateCommand();
+        command.CommandText =
+            """
+SELECT taxon_source, taxon_identifier, match_status, page_row_id, candidate_title, normalized_title, synonym_used, redirect_final_title, match_method, notes, matched_at
+FROM taxon_wiki_matches
+WHERE taxon_source=@source AND taxon_identifier=@id
+LIMIT 1
+""";
+        command.Parameters.AddWithValue("@source", taxonSource);
+        command.Parameters.AddWithValue("@id", taxonIdentifier);
+        using var reader = command.ExecuteReader(CommandBehavior.SingleRow);
+        if (!reader.Read()) {
+            return null;
+        }
+
+        var matchedValue = reader.IsDBNull(10) ? null : reader.GetString(10);
+        var matchedAt = DateTime.TryParse(matchedValue, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var parsed)
+            ? parsed
+            : DateTime.MinValue;
+
+        return new TaxonWikiMatch(
+            reader.GetString(0),
+            reader.GetString(1),
+            reader.GetString(2),
+            reader.IsDBNull(3) ? null : reader.GetInt64(3),
+            reader.IsDBNull(4) ? null : reader.GetString(4),
+            reader.IsDBNull(5) ? null : reader.GetString(5),
+            reader.IsDBNull(6) ? null : reader.GetString(6),
+            reader.IsDBNull(7) ? null : reader.GetString(7),
+            reader.IsDBNull(8) ? null : reader.GetString(8),
+            reader.IsDBNull(9) ? null : reader.GetString(9),
+            matchedAt);
+    }
+
+    public int GetNextAttemptOrder(string taxonSource, string taxonIdentifier) {
+        using var command = _connection.CreateCommand();
+        command.CommandText = "SELECT IFNULL(MAX(attempt_order), 0) FROM taxon_wiki_match_attempts WHERE taxon_source=@source AND taxon_identifier=@id";
+        command.Parameters.AddWithValue("@source", taxonSource);
+        command.Parameters.AddWithValue("@id", taxonIdentifier);
+        var value = command.ExecuteScalar();
+        var current = value is null || value is DBNull ? 0 : Convert.ToInt32(value, CultureInfo.InvariantCulture);
+        return current + 1;
+    }
 }
 
 internal static class WikiPageDownloadStatus {
@@ -584,9 +729,23 @@ internal static class TaxonWikiAttemptOutcome {
     public const string Missing = "missing";
     public const string Failed = "failed";
     public const string Skipped = "skipped";
+    public const string PendingFetch = "pending";
 }
 
 internal sealed record WikiPageCandidate(string Title, string NormalizedTitle, long? PageId, DateTime DiscoveredAt, DateTime LastSeenAt);
+
+internal sealed record WikiPageSummary(
+    long PageRowId,
+    string PageTitle,
+    string NormalizedTitle,
+    string DownloadStatus,
+    bool IsRedirect,
+    string? RedirectTarget,
+    bool IsDisambiguation,
+    bool IsSetIndex,
+    bool HasTaxobox,
+    DateTime? LastSeenAt
+);
 
 internal sealed record WikiPageUpsertResult(long PageRowId, bool IsNew);
 

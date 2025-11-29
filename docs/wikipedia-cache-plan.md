@@ -39,8 +39,7 @@
 1. `wikipedia cache-status` — already implemented.
 2. `wikipedia enqueue-wikidata` — seed `wiki_pages` from Wikidata sitelinks (current step).
 3. `wikipedia fetch-pages` — download pending pages (batch-friendly, retry support).
-4. Planned additions:
-   - `wikipedia match-taxa` — iterate taxa, attempt to link them to cached pages, log attempts, fill match tables.
+4. `wikipedia match-taxa` — iterate taxa, attempt to link them to cached pages, log attempts, fill match tables.
 
 ## Rate Limits & HTTP
 - Dedicated `WikipediaApiClient` with REST + Action API HttpClients, enforcing configurable minimum delay and descriptive User-Agent.
