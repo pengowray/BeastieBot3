@@ -316,7 +316,7 @@ public sealed class IucnSynonymFormattingReportCommand : Command<IucnSynonymForm
             builder.AppendLine("| Issue | Count |");
             builder.AppendLine("| --- | --- |");
             foreach (var entry in result.IssueCounts
-                         .OrderByDescending(kvp => kvp.Value)
+                         .OrderBy(kvp => GetIssueSortOrder(kvp.Key))
                          .ThenBy(kvp => GetIssueLabel(kvp.Key), StringComparer.Ordinal)) {
                 builder.AppendLine($"| {EscapeMarkdown(GetIssueLabel(entry.Key))} | {entry.Value:N0} |");
             }
@@ -326,8 +326,8 @@ public sealed class IucnSynonymFormattingReportCommand : Command<IucnSynonymForm
         builder.AppendLine("## Detailed entries");
         var groupedIssues = GroupIssuesByKind(result.Issues);
         foreach (var group in groupedIssues
-                     .OrderByDescending(kvp => kvp.Value.Count)
-                     .ThenBy(kvp => GetIssueLabel(kvp.Key), StringComparer.Ordinal)) {
+                 .OrderBy(kvp => GetIssueSortOrder(kvp.Key))
+                 .ThenBy(kvp => GetIssueLabel(kvp.Key), StringComparer.Ordinal)) {
             builder.AppendLine($"### {EscapeMarkdown(GetIssueLabel(group.Key))} ({group.Value.Count:N0})");
             foreach (var issue in group.Value
                          .OrderBy(r => r.RootSisId)
@@ -420,7 +420,7 @@ public sealed class IucnSynonymFormattingReportCommand : Command<IucnSynonymForm
     private static string FormatIssueEntry(SynonymIssueRecord issue) {
         var sisId = EscapeMarkdown(issue.RootSisId.ToString(CultureInfo.InvariantCulture));
         var taxon = EscapeMarkdown(issue.TaxonName ?? "(unknown)");
-        var synonym = EscapeMarkdown(issue.RawSynonym);
+        var synonym = WrapInlineCode(issue.RawSynonym);
         var issueText = EscapeMarkdown(FormatIssueList(issue.IssueKinds));
         var parts = new List<string> {
             $"synonym: {synonym}",
@@ -435,7 +435,29 @@ public sealed class IucnSynonymFormattingReportCommand : Command<IucnSynonymForm
             parts.Add($"IUCN: {EscapeMarkdown(url)}");
         }
 
-        return $"- SIS {sisId} ({taxon}) — {string.Join("; ", parts)}";
+        return $"- SIS {sisId} ('{taxon}') — {string.Join("; ", parts)}";
+    }
+
+    private static string WrapInlineCode(string value) {
+        if (value is null) {
+            return "``";
+        }
+
+        var sanitized = value
+            .Replace("\r", "\\r")
+            .Replace("\n", "\\n");
+
+        if (!sanitized.Contains('`')) {
+            return $"`{sanitized}`";
+        }
+
+        var fenceLength = 2;
+        while (sanitized.Contains(new string('`', fenceLength))) {
+            fenceLength++;
+        }
+
+        var fence = new string('`', fenceLength);
+        return $"{fence} {sanitized} {fence}";
     }
 
     private static string EscapeMarkdown(string value) {
@@ -444,9 +466,8 @@ public sealed class IucnSynonymFormattingReportCommand : Command<IucnSynonymForm
         }
 
         var sanitized = value
-            .Replace("|", "\\|")
-            .Replace("\r", " ")
-            .Replace("\n", " ");
+            .Replace("\r", "\\r")
+            .Replace("\n", "\\n");
         return sanitized;
     }
 
@@ -468,6 +489,15 @@ public sealed class IucnSynonymFormattingReportCommand : Command<IucnSynonymForm
         SynonymIssueKind.SpecialWhitespace => "non-breaking or control whitespace",
         SynonymIssueKind.HtmlMarkup => "contains HTML markup",
         _ => kind.ToString()
+    };
+
+    private static int GetIssueSortOrder(SynonymIssueKind kind) => kind switch {
+        SynonymIssueKind.HtmlMarkup => 0,
+        SynonymIssueKind.SpecialWhitespace => 1,
+        SynonymIssueKind.LeadingTrailingWhitespace => 2,
+        SynonymIssueKind.RepeatedSpaces => 3,
+        SynonymIssueKind.EmptyOrWhitespace => 4,
+        _ => 100 + (int)kind
     };
 
     private sealed class SynonymScanResult {
