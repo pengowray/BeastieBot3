@@ -449,6 +449,36 @@ WHERE id=@id
         command.ExecuteNonQuery();
     }
 
+    public void MergePageRecords(long sourcePageRowId, long targetPageRowId) {
+        if (sourcePageRowId == targetPageRowId) {
+            return;
+        }
+
+        using var tx = _connection.BeginTransaction();
+
+        void UpdateReference(string sql) {
+            using var update = _connection.CreateCommand();
+            update.Transaction = tx;
+            update.CommandText = sql;
+            update.Parameters.AddWithValue("@target", targetPageRowId);
+            update.Parameters.AddWithValue("@source", sourcePageRowId);
+            update.ExecuteNonQuery();
+        }
+
+        UpdateReference("UPDATE taxon_wiki_matches SET page_row_id=@target WHERE page_row_id=@source");
+        UpdateReference("UPDATE taxon_wiki_match_attempts SET page_row_id=@target WHERE page_row_id=@source");
+        UpdateReference("UPDATE wiki_redirect_edges SET target_page_row_id=@target WHERE target_page_row_id=@source");
+
+        using (var delete = _connection.CreateCommand()) {
+            delete.Transaction = tx;
+            delete.CommandText = "DELETE FROM wiki_pages WHERE id=@id";
+            delete.Parameters.AddWithValue("@id", sourcePageRowId);
+            delete.ExecuteNonQuery();
+        }
+
+        tx.Commit();
+    }
+
     public void UpsertTaxoboxData(WikiTaxoboxData data) {
         if (data is null) {
             throw new ArgumentNullException(nameof(data));

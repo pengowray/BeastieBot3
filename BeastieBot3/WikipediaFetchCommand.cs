@@ -62,6 +62,7 @@ public sealed class WikipediaFetchCommand : AsyncCommand<WikipediaFetchCommand.S
         var success = 0;
         var missing = 0;
         var failed = 0;
+        var skipped = 0;
 
         while (processed < totalLimit) {
             cancellationToken.ThrowIfCancellationRequested();
@@ -95,6 +96,10 @@ public sealed class WikipediaFetchCommand : AsyncCommand<WikipediaFetchCommand.S
                 missing++;
                 AnsiConsole.MarkupLine($"[yellow]![/] Missing {outcome.RequestedTitle} ({outcome.Message ?? "not found"})");
             }
+            else if (outcome.Skipped) {
+                skipped++;
+                AnsiConsole.MarkupLine($"[grey]-[/] Skipped {outcome.RequestedTitle} ({outcome.Message ?? "duplicate"})");
+            }
             else {
                 failed++;
                 AnsiConsole.MarkupLine($"[red]x[/] Failed {outcome.RequestedTitle}: {outcome.Message}");
@@ -106,7 +111,7 @@ public sealed class WikipediaFetchCommand : AsyncCommand<WikipediaFetchCommand.S
             return 0;
         }
 
-        AnsiConsole.MarkupLine($"Completed fetches. Success: [green]{success}[/], Missing: [yellow]{missing}[/], Failed: [red]{failed}[/].");
+        AnsiConsole.MarkupLine($"Completed fetches. Success: [green]{success}[/], Missing: [yellow]{missing}[/], Skipped: [grey]{skipped}[/], Failed: [red]{failed}[/].");
         return failed > 0 ? 1 : 0;
     }
 }

@@ -17,12 +17,13 @@ internal sealed class WikipediaPageFetcher {
     }
 
     public async Task<WikipediaFetchOutcome> FetchAsync(WikiPageWorkItem workItem, CancellationToken cancellationToken) {
+        var pageRowId = workItem.PageRowId;
         WikipediaQueryResult queryResult;
         try {
             queryResult = await _client.QueryPageAsync(workItem.PageTitle, cancellationToken).ConfigureAwait(false);
         }
         catch (WikipediaApiException ex) {
-            _cache.RecordPageFailure(workItem.PageRowId, ex.Message, DateTime.UtcNow);
+            _cache.RecordPageFailure(pageRowId, ex.Message, DateTime.UtcNow);
             return WikipediaFetchOutcome.CreateFailure(workItem.PageTitle, ex.Message);
         }
 
@@ -30,11 +31,23 @@ internal sealed class WikipediaPageFetcher {
             var normalized = WikipediaTitleHelper.Normalize(workItem.PageTitle);
             var missing = new WikiMissingTitle(workItem.PageTitle, normalized, queryResult.MissingReason ?? "missing", queryResult.MissingReason, DateTime.UtcNow);
             _cache.RecordMissingTitle(missing);
-            _cache.MarkPageMissing(workItem.PageRowId, queryResult.MissingReason ?? "missing", DateTime.UtcNow);
+            _cache.MarkPageMissing(pageRowId, queryResult.MissingReason ?? "missing", DateTime.UtcNow);
             return WikipediaFetchOutcome.CreateMissing(workItem.PageTitle, queryResult.MissingReason);
         }
 
         var canonicalTitle = queryResult.CanonicalTitle ?? workItem.PageTitle;
+        var normalizedTitle = WikipediaTitleHelper.Normalize(canonicalTitle);
+        if (!string.Equals(workItem.NormalizedTitle, normalizedTitle, StringComparison.Ordinal)) {
+            var existing = _cache.GetPageByNormalizedTitle(normalizedTitle);
+            if (existing is not null && existing.PageRowId != workItem.PageRowId) {
+                _cache.MergePageRecords(workItem.PageRowId, existing.PageRowId);
+                pageRowId = existing.PageRowId;
+                if (existing.DownloadStatus == WikiPageDownloadStatus.Cached) {
+                    return WikipediaFetchOutcome.CreateSkipped(workItem.PageTitle, existing.PageTitle ?? canonicalTitle, "Already cached");
+                }
+            }
+        }
+
         var importId = _cache.BeginImport($"enwiki:{canonicalTitle}");
         var importStarted = DateTime.UtcNow;
         WikipediaMobileHtmlResult htmlResult;
@@ -42,16 +55,15 @@ internal sealed class WikipediaPageFetcher {
             htmlResult = await _client.GetMobileHtmlAsync(canonicalTitle, cancellationToken).ConfigureAwait(false);
         }
         catch (WikipediaApiException ex) {
-            _cache.RecordPageFailure(workItem.PageRowId, ex.Message, DateTime.UtcNow);
+            _cache.RecordPageFailure(pageRowId, ex.Message, DateTime.UtcNow);
             _cache.CompleteImportFailure(importId, ex.Message, (int?)ex.StatusCode, DateTime.UtcNow - importStarted);
             return WikipediaFetchOutcome.CreateFailure(workItem.PageTitle, ex.Message);
         }
         try {
             var hash = ComputeSha256(htmlResult.Html);
             var hasTaxobox = HasTaxobox(queryResult.Wikitext);
-            var normalizedTitle = WikipediaTitleHelper.Normalize(canonicalTitle);
             var content = new WikiPageContent(
-                workItem.PageRowId,
+                pageRowId,
                 queryResult.PageId,
                 canonicalTitle,
                 normalizedTitle,
@@ -68,20 +80,20 @@ internal sealed class WikipediaPageFetcher {
                 DateTime.UtcNow);
 
             _cache.SavePageContent(content);
-            _cache.ReplaceCategories(workItem.PageRowId, queryResult.Categories);
-            _cache.ReplaceRedirectChain(workItem.PageRowId, BuildRedirectEdges(queryResult.Redirects));
-            var taxobox = TaxoboxParser.TryParse(workItem.PageRowId, queryResult.Wikitext);
+            _cache.ReplaceCategories(pageRowId, queryResult.Categories);
+            _cache.ReplaceRedirectChain(pageRowId, BuildRedirectEdges(queryResult.Redirects));
+            var taxobox = TaxoboxParser.TryParse(pageRowId, queryResult.Wikitext);
             if (taxobox is not null) {
                 _cache.UpsertTaxoboxData(taxobox);
             }
             else {
-                _cache.DeleteTaxoboxData(workItem.PageRowId);
+                _cache.DeleteTaxoboxData(pageRowId);
             }
             _cache.CompleteImportSuccess(importId, (int)htmlResult.StatusCode, htmlResult.PayloadBytes, DateTime.UtcNow - importStarted);
             return WikipediaFetchOutcome.CreateSuccess(workItem.PageTitle, canonicalTitle);
         }
         catch (Exception ex) {
-            _cache.RecordPageFailure(workItem.PageRowId, ex.Message, DateTime.UtcNow);
+            _cache.RecordPageFailure(pageRowId, ex.Message, DateTime.UtcNow);
             _cache.CompleteImportFailure(importId, ex.Message, null, DateTime.UtcNow - importStarted);
             return WikipediaFetchOutcome.CreateFailure(workItem.PageTitle, ex.Message);
         }
@@ -133,8 +145,9 @@ internal sealed class WikipediaPageFetcher {
     }
 }
 
-internal sealed record WikipediaFetchOutcome(string RequestedTitle, string? FinalTitle, bool Success, bool Missing, string? Message) {
-    public static WikipediaFetchOutcome CreateSuccess(string requested, string final) => new(requested, final, true, false, null);
-    public static WikipediaFetchOutcome CreateMissing(string requested, string? reason) => new(requested, null, false, true, reason);
-    public static WikipediaFetchOutcome CreateFailure(string requested, string? message) => new(requested, null, false, false, message);
+internal sealed record WikipediaFetchOutcome(string RequestedTitle, string? FinalTitle, bool Success, bool Missing, bool Skipped, string? Message) {
+    public static WikipediaFetchOutcome CreateSuccess(string requested, string final) => new(requested, final, true, false, false, null);
+    public static WikipediaFetchOutcome CreateMissing(string requested, string? reason) => new(requested, null, false, true, false, reason);
+    public static WikipediaFetchOutcome CreateFailure(string requested, string? message) => new(requested, null, false, false, false, message);
+    public static WikipediaFetchOutcome CreateSkipped(string requested, string? final, string? message) => new(requested, final, false, false, true, message);
 }
