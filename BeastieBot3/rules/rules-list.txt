@@ -700,7 +700,7 @@ Actinopterygii below Fish : paraphyletic-group
 Cephalaspidomorphi below Fish : paraphyletic-group // lampreys and fossil species (disputed, but used by IUCN for lampreys)
 Chondrichthyes below Fish : paraphyletic-group
 Placodermi below Fish : paraphyletic-group
-Sarcopterygii below Fish : paraphyletic-group
+Sarcopterygii below Fish : paraphyletic-group // lobe-finned fish
 Myxini below Fish : paraphyletic-group // hagfishes
 Fish = fish ! fishes // common name of sorts
 Perciformes means perch-like
@@ -717,23 +717,26 @@ Chondrichthyes = cartilaginous fish ! cartilaginous fishes
 Placodermi = armoured fish ! armoured fishes // fossil
 Sarcopterygii = lobe-finned fish ! lobe-finned fishes
 Cobitidae = true loach ! true loaches
-Cyprinidae = cyprinid ! cyprinids
-Psilorhynchus = mountain carp ! mountain carps
+//Cyprinidae = cyprinid ! cyprinids
+Cyprinidae = mountain carp ! mountain carps
+Psilorhynchus = torrent minnow ! torrent minnows
 Catostomidae = sucker ! suckers
 Osmeriformes includes freshwater smelts and allies
 Osmeriformes means smelt-shaped
 Percopsiformes comprises trout-perch and its allies
-Gonorynchiformes includes milkfish, beaked salmon and allies
+//Gonorynchiformes includes milkfish, beaked salmon and allies
+Gonorynchiformes comprises milkfishes, beaked sandfishes, shellears, and snake mudheads
 Lamniformes = mackerel shark ! mackerel sharks
 Rajiformes plural rays and skates // TODO: different syntax for this (and similar items)
 Carcharhiniformes = ground shark ! ground sharks
 Salmonidae = salmonid ! salmonids
-Atheriniformes = silverside ! silversides
+//Atheriniformes = silverside ! silversides // includes the Old & New World silversides, the rainbowfishes, and several less-familiar families, including the unusual Phallostethidae.
+Atheriniformes includes silversides and relatives
 Gasterosteiformes includes sticklebacks and relatives
 // Gasterosteiformes means bone-bellies-like
-Sarotherodon linnellii = unga // or blackbelly tilapia
-// Cephalaspidomorphi means head-shield
-Cephalaspidomorphi = lamprey ! lampreys // note: contains fossil species which are not lampreys. also disputed.
+// Cephalaspidomorphi means head-shield // Cephalaspidomorphi no longer used by IUCN; lampreys under class Petromyzonti, order Petromyzontiformes
+// Cephalaspidomorphi = lamprey ! lampreys // note: contains fossil species which are not lampreys. also disputed.
+Petromyzonti = lamprey ! lampreys
 
 // fish species
 Dipturus confusus = Australian longnose skate // usually called just the 'longnose skate' but this name is ambiguous
@@ -742,6 +745,7 @@ Romanogobio antipai = Danube delta gudgeon
 Girardinichthys turneri = highland splitfin
 Eptatretus octatrema = eightgill hagfish
 Paraschistura chrysicristinae = Diyarbakir loach // Diyarbakır Loach (dotless i on IUCN becomes 'Diyarbak?r loach')
+Sarotherodon linnellii = unga // or blackbelly tilapia
 
 // Frog groups
 Aromobatidae = cryptic forest frog
