@@ -14,7 +14,7 @@
 //locations?, e.g. of Pitheciidae
 //Carnivora = carnivoran // meh
 
-Mammalia blurb The IUCN claims its Red List dataset contains information on the conservation status of all of the world's known mammal species.<ref>http://www.iucnredlist.org/initiatives/mammals/process/methods</ref> 
+Mammalia blurb According to the IUCN, all known living mammal species have been assessed for the red list of threatened species.<ref>http://www.iucnredlist.org/initiatives/mammals/process/methods</ref>
 
 // top
 Mammalia = mammal
