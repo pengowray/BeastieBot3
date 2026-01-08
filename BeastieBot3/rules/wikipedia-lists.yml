@@ -1,0 +1,283 @@
+# Wikipedia list definitions for the new generator. These values are intentionally opinionated
+# so that editors can tweak scope, headings, and templates without recompiling the tool.
+defaults:
+  header_template: status-default
+  footer_template: references-default
+  grouping:
+    - level: order
+      label: "Order"
+      always_display: false
+      unknown_label: "Other orders"
+    - level: family
+      label: "Family"
+      always_display: false
+      unknown_label: "Unassigned families"
+  display:
+    prefer_common_names: true
+    italicize_scientific: true
+    include_status_template: true
+    include_status_label: true
+
+lists:
+  - id: amphibians-ex
+    title: "List of recently extinct amphibians"
+    description: "Species, subspecies, and subpopulations assessed as Extinct (EX) or flagged as possibly extinct."
+    output_file: "List_of_recently_extinct_amphibians.wikitext"
+    templates:
+      header: amphibians-status
+      footer: references-short
+    filters:
+      - rank: kingdom
+        value: Animalia
+      - rank: class
+        value: Amphibia
+    sections:
+      - key: extinct
+        heading: "Extinct species and subspecies"
+        statuses:
+          - code: EX
+      - key: possibly-extinct
+        heading: "Possibly extinct"
+        description: "Listed by the IUCN as Critically Endangered (Possibly Extinct)."
+        statuses:
+          - code: "CR(PE)"
+            label: "Possibly extinct"
+          - code: "CR(PEW)"
+            label: "Possibly extinct in the wild"
+
+  - id: amphibians-cr
+    title: "List of critically endangered amphibians"
+    description: "Current IUCN assessments in categories CR, CR(PE), and CR(PEW)."
+    output_file: "List_of_critically_endangered_amphibians.wikitext"
+    filters:
+      - rank: kingdom
+        value: Animalia
+      - rank: class
+        value: Amphibia
+    sections:
+      - key: critically-endangered
+        heading: "Critically endangered"
+        statuses:
+          - code: CR
+          - code: "CR(PE)"
+            label: "Possibly extinct"
+          - code: "CR(PEW)"
+            label: "Possibly extinct in the wild"
+
+  - id: amphibians-en
+    title: "List of endangered amphibians"
+    description: "Combines endangered and critically endangered amphibians so editors can review the worst-off taxa in one place."
+    output_file: "List_of_endangered_amphibians.wikitext"
+    filters:
+      - rank: kingdom
+        value: Animalia
+      - rank: class
+        value: Amphibia
+    sections:
+      - key: endangered
+        heading: "Endangered"
+        statuses:
+          - code: EN
+      - key: critically-endangered
+        heading: "Critically endangered"
+        statuses:
+          - code: CR
+          - code: "CR(PE)"
+            label: "Possibly extinct"
+          - code: "CR(PEW)"
+            label: "Possibly extinct in the wild"
+
+  - id: amphibians-threatened
+    title: "List of threatened amphibians"
+    description: "Vulnerable, endangered, and critically endangered amphibians grouped by higher taxa."
+    output_file: "List_of_threatened_amphibians.wikitext"
+    filters:
+      - rank: kingdom
+        value: Animalia
+      - rank: class
+        value: Amphibia
+    sections:
+      - key: vulnerable
+        heading: "Vulnerable"
+        statuses:
+          - code: VU
+      - key: endangered
+        heading: "Endangered"
+        statuses:
+          - code: EN
+      - key: critically-endangered
+        heading: "Critically endangered"
+        statuses:
+          - code: CR
+          - code: "CR(PE)"
+            label: "Possibly extinct"
+          - code: "CR(PEW)"
+            label: "Possibly extinct in the wild"
+
+  - id: amphibians-nt
+    title: "List of near threatened amphibians"
+    description: "Includes legacy LR/nt and LR/cd assessments that pre-date the current NT category."
+    output_file: "List_of_near_threatened_amphibians.wikitext"
+    filters:
+      - rank: kingdom
+        value: Animalia
+      - rank: class
+        value: Amphibia
+    sections:
+      - key: near-threatened
+        heading: "Near threatened"
+        statuses:
+          - code: NT
+          - code: "LR/nt"
+          - code: "LR/cd"
+            label: "Conservation dependent"
+
+  - id: amphibians-lc
+    title: "List of least concern amphibians"
+    description: "Least Concern plus the legacy LR/lc assessments."
+    output_file: "List_of_least_concern_amphibians.wikitext"
+    filters:
+      - rank: kingdom
+        value: Animalia
+      - rank: class
+        value: Amphibia
+    sections:
+      - key: least-concern
+        heading: "Least concern"
+        statuses:
+          - code: LC
+          - code: "LR/lc"
+
+  - id: chromista-status
+    title: "List of Chromista by conservation status"
+    description: "All Chromista assessments, grouped by IUCN category."
+    output_file: "List_of_Chromista_by_conservation_status.wikitext"
+    templates:
+      header: taxonomy-status-summary
+    filters:
+      - rank: kingdom
+        value: Chromista
+    sections:
+      - key: extinct
+        heading: "Extinct"
+        statuses:
+          - code: EX
+      - key: extinct-in-the-wild
+        heading: "Extinct in the wild"
+        statuses:
+          - code: EW
+      - key: critically-endangered
+        heading: "Critically endangered"
+        statuses:
+          - code: CR
+      - key: endangered
+        heading: "Endangered"
+        statuses:
+          - code: EN
+      - key: vulnerable
+        heading: "Vulnerable"
+        statuses:
+          - code: VU
+      - key: near-threatened
+        heading: "Near threatened"
+        statuses:
+          - code: NT
+          - code: "LR/nt"
+      - key: least-concern
+        heading: "Least concern"
+        statuses:
+          - code: LC
+          - code: "LR/lc"
+      - key: data-deficient
+        heading: "Data deficient"
+        statuses:
+          - code: DD
+
+  - id: fungi-status
+    title: "List of fungi by conservation status"
+    description: "Compact status overview for the fungal kingdom."
+    output_file: "List_of_fungi_by_conservation_status.wikitext"
+    templates:
+      header: taxonomy-status-summary
+    filters:
+      - rank: kingdom
+        value: Fungi
+    sections:
+      - key: extinct
+        heading: "Extinct"
+        statuses:
+          - code: EX
+      - key: extinct-in-the-wild
+        heading: "Extinct in the wild"
+        statuses:
+          - code: EW
+      - key: critically-endangered
+        heading: "Critically endangered"
+        statuses:
+          - code: CR
+          - code: "CR(PE)"
+            label: "Possibly extinct"
+      - key: endangered
+        heading: "Endangered"
+        statuses:
+          - code: EN
+      - key: vulnerable
+        heading: "Vulnerable"
+        statuses:
+          - code: VU
+      - key: near-threatened
+        heading: "Near threatened"
+        statuses:
+          - code: NT
+          - code: "LR/nt"
+      - key: least-concern
+        heading: "Least concern"
+        statuses:
+          - code: LC
+          - code: "LR/lc"
+      - key: data-deficient
+        heading: "Data deficient"
+        statuses:
+          - code: DD
+
+  - id: ew-animals
+    title: "List of animals that are extinct in the wild"
+    description: "Animal taxa with an EW status."
+    output_file: "List_of_animals_that_are_extinct_in_the_wild.wikitext"
+    filters:
+      - rank: kingdom
+        value: Animalia
+    sections:
+      - key: extinct-in-the-wild
+        heading: "Extinct in the wild"
+        statuses:
+          - code: EW
+          - code: "CR(PEW)"
+            label: "Possibly extinct in the wild"
+
+  - id: ew-plants
+    title: "List of plants that are extinct in the wild"
+    description: "Plant taxa with an EW assessment."
+    output_file: "List_of_plants_that_are_extinct_in_the_wild.wikitext"
+    filters:
+      - rank: kingdom
+        value: Plantae
+    sections:
+      - key: extinct-in-the-wild
+        heading: "Extinct in the wild"
+        statuses:
+          - code: EW
+          - code: "CR(PEW)"
+            label: "Possibly extinct in the wild"
+
+  - id: lr-cd
+    title: "IUCN Red List conservation dependent species"
+    description: "Legacy LR/cd assessments across every kingdom."
+    output_file: "IUCN_Red_List_conservation_dependent_species.wikitext"
+    templates:
+      header: legacy-status-note
+    sections:
+      - key: conservation-dependent
+        heading: "Conservation dependent"
+        statuses:
+          - code: "LR/cd"

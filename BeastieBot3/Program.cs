@@ -1,4 +1,5 @@
-﻿using Spectre.Console;
+﻿using BeastieBot3.WikipediaLists;
+using Spectre.Console;
 using Spectre.Console.Cli;
 using System.ComponentModel;
 using System.Threading;
@@ -164,6 +165,10 @@ namespace BeastieBot3 {
                             .WithExample(new[] { "wikipedia", "match-taxa" })
                             .WithExample(new[] { "wikipedia", "match-taxa", "--limit", "500" })
                             .WithExample(new[] { "wikipedia", "match-taxa", "--resume-after", "12345" });
+                        wikipedia.AddCommand<WikipediaListCommand>("generate-lists")
+                            .WithDescription("Generate wikitext for IUCN conservation status lists using YAML definitions and mustache templates.")
+                            .WithExample(new[] { "wikipedia", "generate-lists" })
+                            .WithExample(new[] { "wikipedia", "generate-lists", "--list", "amphibians-cr" });
                     });
                 });
             });
