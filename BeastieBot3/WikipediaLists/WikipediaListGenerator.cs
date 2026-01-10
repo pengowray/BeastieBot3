@@ -290,10 +290,11 @@ internal sealed class WikipediaListGenerator {
         }
 
         // Map legacy/alternative codes
+        // Note: LR/cd is a valid Wikipedia template code, don't map it to NT
         return normalized switch {
             "CR(PE)" or "PE" => "CR(PE)",
             "CR(PEW)" or "PEW" => "CR(PEW)",
-            "LR/CD" or "CD" => "NT",
+            "LR/CD" or "CD" => "LR/cd",
             "LR/NT" => "NT",
             "LR/LC" => "LC",
             _ => normalized
