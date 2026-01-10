@@ -91,8 +91,20 @@ public sealed class WikipediaListCommand : Command<WikipediaListCommand.Settings
             return Path.GetFullPath(overridePath);
         }
 
-        return paths.GetReportOutputDirectory()
-            ?? Path.Combine(paths.BaseDirectory, "output", "wikipedia");
+        // Use dedicated wikipedia output dir from paths.ini, fallback to datastore subdir
+        var configuredPath = paths.GetWikipediaOutputDirectory();
+        if (!string.IsNullOrWhiteSpace(configuredPath)) {
+            return Path.GetFullPath(configuredPath);
+        }
+
+        // Fallback: use datastore_dir/wikipedia-lists if datastore is configured
+        var datastoreDir = paths.GetDatastoreDir();
+        if (!string.IsNullOrWhiteSpace(datastoreDir)) {
+            return Path.Combine(Path.GetFullPath(datastoreDir), "wikipedia-lists");
+        }
+
+        // Last resort: relative to the base directory
+        return Path.Combine(paths.BaseDirectory, "output", "wikipedia");
     }
 
     private static IReadOnlyList<WikipediaListDefinition> FilterDefinitions(IReadOnlyList<WikipediaListDefinition> definitions, string[]? ids) {

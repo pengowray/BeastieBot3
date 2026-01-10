@@ -43,6 +43,10 @@ namespace BeastieBot3 {
             ?? _reader.Get("Datastore:reports_dir")
             ?? _reader.Get("reports_output_dir");
 
+        public string? GetWikipediaOutputDirectory() =>
+            _reader.Get("Datastore:wikipedia_output_dir")
+            ?? _reader.Get("wikipedia_output_dir");
+
         public string ResolveIucnDatabasePath(string? overridePath) {
             var configuredPath = !string.IsNullOrWhiteSpace(overridePath)
                 ? overridePath

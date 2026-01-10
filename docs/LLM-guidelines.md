@@ -6,10 +6,12 @@ These notes exist so the next AI (or human) that drops into this repo avoids the
 - Command routing lives in [BeastieBot3/Program.cs](BeastieBot3/Program.cs); verify flag names and activation logic there before adding new options.
 - Everything that needs filesystem locations (datasets, caches, reports) should go through [BeastieBot3/PathsService.cs](BeastieBot3/PathsService.cs) plus `--settings-dir` / `--ini-file` overrides. Do not hardcode `D:\` paths outside the INI plumbing.
 - Reports pick their destination using [BeastieBot3/ReportPathResolver.cs](BeastieBot3/ReportPathResolver.cs), which falls back to `<repo>/data-analysis`. Reuse that helper so every analyzer drops files under the same umbrella.
-- [run-log.txt](run-log.txt) shows the latest Wikipedia list batch. The current log has “0 taxa, dataset unknown” for every list, which means the INI did not point at a populated SQLite file. Fix the INI and re-run a single list with a tight `--limit` before queueing the whole suite.
+- [run-log.txt](run-log.txt) shows the latest Wikipedia list batch. If you see "0 taxa, dataset unknown" for every list, the INI did not point at a populated SQLite file. Fix the INI and re-run a single list with a tight `--limit` before queueing the whole suite.
+- Wikipedia list output goes to `Datastore:wikipedia_output_dir` in paths.ini (default: `D:\datasets\beastiebot\wikipedia-lists`). Override with `--output-dir`.
 
 ## IUCN SQLite performance rules
 - The database exposes assessments per taxon via the `view_assessments_html_taxonomy_html` view. This is a simple join on `taxonId` between assessments and taxonomy tables.
+
 - **Do NOT wrap queries in extra CTEs** like `WITH latest AS (SELECT taxonId, MAX(redlist_version) ...)`. We import a single IUCN release at a time, so all rows share the same import. The `import_metadata` table tracks which zip file was imported.
 - Column comparisons must stay sargable. Never wrap columns in `LOWER`, `UPPER`, `LIKE '%foo%'`, or other functions unless the column is truly case-insensitive. Normalize values **before** binding them to parameters instead.
 - Stick to exact matches on indexed columns (e.g., `kingdomName`, `className`, `redlistCategory`). Filters that match against constants run quickly; function calls on the column force SQLite to scan everything.
@@ -43,10 +45,25 @@ These notes exist so the next AI (or human) that drops into this repo avoids the
 - The YAML config should cover every taxonomic group + status combination without copy/paste explosions. Reuse defaults aggressively and only override templates or grouping when a list genuinely needs a bespoke layout.
 - Current required coverage: amphibians, arthropods, birds, fishes, insects, invertebrates, reptiles, plants, chromista, fungi (yes, some overlap); statuses EX, EW, CR, EN, combined EN+CR ("endangered"), combined CR+EN+VU ("threatened"), NT (with legacy LR/nt), LC (with LR/lc), DD, LR/cd. Plan lists so editors get meaningful slices without us generating near-duplicate files.
 
+## Wikipedia list generation
+- [BeastieBot3/WikipediaLists/WikipediaListGenerator.cs](BeastieBot3/WikipediaLists/WikipediaListGenerator.cs) produces wikitext files from YAML definitions and IUCN SQLite data.
+- Output format uses `{{IUCN status|XX|taxonId/assessmentId|1|year=YYYY}}` at end of each species line. The `|1` makes the link visible.
+- **Status codes for Wikipedia template:**
+  - `CR(PE)` for Critically Endangered species with `possiblyExtinct = 'true'`
+  - `CR(PEW)` for Critically Endangered species with `possiblyExtinctInTheWild = 'true'`
+  - `CR` for regular Critically Endangered species
+  - `EX`, `EW` omit the `year=` parameter
+  - Legacy `LR/CD` maps to `NT`, `LR/NT` to `NT`, `LR/LC` to `LC`
+- **Database columns for PE/PEW detection:** `assessments_html.possiblyExtinct` and `assessments_html.possiblyExtinctInTheWild` are TEXT columns with values "true" or "false".
+- The `IucnListQueryService` handles SQL generation; `WikipediaListGenerator.GetWikipediaStatusCode()` transforms database values to Wikipedia template codes.
+- Mustache templates live in `rules/wikipedia/templates/` with custom `<? ?>` delimiters (configured in `WikipediaTemplateRenderer`).
+- Context-aware label suppression avoids redundancy (e.g., don't say "extinct in the wild" on an EW-specific list).
+- Sample run: `dotnet run --project BeastieBot3 -- wikipedia generate-lists --list amphibians-ex --limit 10`
+
 ## General workflow hygiene
 - Run `dotnet build` after structural changes, then target a single list with `dotnet run -- wikipedia generate-lists --list <id> --limit 100` before kicking off the full batch.
-- Avoid speculative refactors of legacy SQL or filesystem layout unless you have benchmarks or actual requirements. The data pipeline is already heavy; accidental O(n²) work makes the CLI appear "hung" even when it is just crawling.
-- Log timings when you touch anything that hits SQLite. `sqlite3 .timer on` is fine, but kill the command if it exceeds a minute—you almost certainly regressed the query plan.
+- Wikipedia list generation is currently fast (~30s for 48 lists), but may slow as we add features.
+- Consider logging timings when you touch anything that hits SQLite. `sqlite3 .timer on` is fine, but kill the command if it exceeds a minute—you almost certainly regressed the query plan.
 
 ## IUCN API cache schema
 - [BeastieBot3/IucnApiCacheStore.cs](BeastieBot3/IucnApiCacheStore.cs) owns the cache.
