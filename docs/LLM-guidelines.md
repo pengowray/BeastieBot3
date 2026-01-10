@@ -42,11 +42,23 @@ These notes exist so the next AI (or human) that drops into this repo avoids the
 - When you discover a mismatch (say casing drift in `familyName`), document the expected shape here and optionally wire a lightweight analyzer under `docs/` or `reports/` so the next pass can be re-run without embedding the check into every list execution.
 
 ## YAML list definitions
-- The YAML config should cover every taxonomic group + status combination without copy/paste explosions. Reuse defaults aggressively and only override templates or grouping when a list genuinely needs a bespoke layout.
-- Current required coverage: amphibians, arthropods, birds, fishes, insects, invertebrates, reptiles, plants, chromista, fungi (yes, some overlap); statuses EX, EW, CR, EN, combined EN+CR ("endangered"), combined CR+EN+VU ("threatened"), NT (with legacy LR/nt), LC (with LR/lc), DD, LR/cd. Plan lists so editors get meaningful slices without us generating near-duplicate files.
+## YAML list definitions (modular structure)
+- The YAML config uses a modular three-file structure for maintainability:
+  - `rules/taxa-groups.yml` - Defines taxonomic groups (amphibians, birds, etc.) with their kingdom/class filters
+  - `rules/list-presets.yml` - Defines section presets for different list types (ex, cr, threatened, etc.) with template expansion
+  - `rules/wikipedia-lists.yml` - The main file that combines taxa groups + presets via `taxa_group:` and `preset:` references
+- Example shorthand definition: `{ id: birds-cr, taxa_group: birds, preset: cr }` expands to a full list definition
+- Lists can also be defined explicitly with all fields for custom cases (e.g., cross-taxa lists like "animals EW")
+- The loader in `WikipediaListDefinitionLoader.cs` merges all three files and expands templates like `{taxa_name}`, `{taxa_slug}`
+- **Commingling behavior:**
+  - For "threatened" lists, all VU/EN/CR are listed together in one section (not separated)
+  - For "CR" lists, CR/CR(PE)/CR(PEW) are commingled in one section
+  - For "EX" lists, EX species are in one section, then PE/PEW in a separate "Possibly extinct" section
+- Current required coverage: amphibians, birds, reptiles, mammals, fishes, insects, gastropods, crustaceans, corals, arachnids, plants, conifers, cycads, chromista, fungi
 
 ## Wikipedia list generation
 - [BeastieBot3/WikipediaLists/WikipediaListGenerator.cs](BeastieBot3/WikipediaLists/WikipediaListGenerator.cs) produces wikitext files from YAML definitions and IUCN SQLite data.
+- Output goes to `Datastore:wikipedia_output_dir` (default: `D:\datasets\beastiebot\wikipedia-lists`)
 - Output format uses `{{IUCN status|XX|taxonId/assessmentId|1|year=YYYY}}` at end of each species line. The `|1` makes the link visible.
 - **Status codes for Wikipedia template:**
   - `CR(PE)` for Critically Endangered species with `possiblyExtinct = 'true'`

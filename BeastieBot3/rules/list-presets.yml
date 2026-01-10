@@ -1,0 +1,212 @@
+# Section presets for Wikipedia list generation.
+# Each preset defines the sections and statuses for a particular type of list.
+# Reference these by name in wikipedia-lists.yml using "preset: <name>"
+
+presets:
+  # ==================== EXTINCTION LISTS ====================
+  # EX lists show extinct species first, then possibly extinct in separate sections
+  ex:
+    name: "Recently extinct"
+    description_template: "{taxa_name} species, subspecies, and subpopulations assessed as Extinct (EX) or flagged as possibly extinct."
+    title_template: "List of recently extinct {taxa_name_lower}"
+    output_template: "List_of_recently_extinct_{taxa_slug}.wikitext"
+    templates:
+      footer: references-short
+    sections:
+      - key: extinct
+        heading: "Extinct species and subspecies"
+        statuses:
+          - code: EX
+      - key: possibly-extinct
+        heading: "Possibly extinct"
+        description: "Listed by the IUCN as Critically Endangered (Possibly Extinct)."
+        statuses:
+          - code: "CR(PE)"
+          - code: "CR(PEW)"
+
+  ew:
+    name: "Extinct in the wild"
+    description_template: "{taxa_name} taxa with an EW status."
+    title_template: "List of {taxa_name_lower} that are extinct in the wild"
+    output_template: "List_of_{taxa_slug}_that_are_extinct_in_the_wild.wikitext"
+    sections:
+      - key: extinct-in-the-wild
+        heading: "Extinct in the wild"
+        statuses:
+          - code: EW
+          - code: "CR(PEW)"
+
+  # ==================== SINGLE STATUS LISTS ====================
+  # These lists show only one status category
+
+  cr:
+    name: "Critically endangered"
+    description_template: "{taxa_name} taxa currently assessed as Critically Endangered."
+    title_template: "List of critically endangered {taxa_name_lower}"
+    output_template: "List_of_critically_endangered_{taxa_slug}.wikitext"
+    sections:
+      - key: critically-endangered
+        heading: "Critically endangered"
+        statuses:
+          - code: CR
+          - code: "CR(PE)"
+            label: "Possibly extinct"
+          - code: "CR(PEW)"
+            label: "Possibly extinct in the wild"
+
+  en:
+    name: "Endangered"
+    description_template: "{taxa_name} taxa assessed as Endangered."
+    title_template: "List of endangered {taxa_name_lower}"
+    output_template: "List_of_endangered_{taxa_slug}.wikitext"
+    sections:
+      - key: endangered
+        heading: "Endangered"
+        statuses:
+          - code: EN
+
+  vu:
+    name: "Vulnerable"
+    description_template: "{taxa_name} taxa assessed as Vulnerable."
+    title_template: "List of vulnerable {taxa_name_lower}"
+    output_template: "List_of_vulnerable_{taxa_slug}.wikitext"
+    sections:
+      - key: vulnerable
+        heading: "Vulnerable"
+        statuses:
+          - code: VU
+
+  nt:
+    name: "Near threatened"
+    description_template: "{taxa_name} taxa assessed as Near Threatened."
+    title_template: "List of near threatened {taxa_name_lower}"
+    output_template: "List_of_near_threatened_{taxa_slug}.wikitext"
+    sections:
+      - key: near-threatened
+        heading: "Near threatened"
+        statuses:
+          - code: NT
+          - code: "LR/nt"
+          - code: "LR/cd"
+            label: "Conservation dependent"
+
+  lc:
+    name: "Least concern"
+    description_template: "{taxa_name} taxa assessed as Least Concern."
+    title_template: "List of least concern {taxa_name_lower}"
+    output_template: "List_of_least_concern_{taxa_slug}.wikitext"
+    sections:
+      - key: least-concern
+        heading: "Least concern"
+        statuses:
+          - code: LC
+          - code: "LR/lc"
+
+  dd:
+    name: "Data deficient"
+    description_template: "{taxa_name} taxa assessed as Data Deficient."
+    title_template: "List of data deficient {taxa_name_lower}"
+    output_template: "List_of_data_deficient_{taxa_slug}.wikitext"
+    sections:
+      - key: data-deficient
+        heading: "Data deficient"
+        statuses:
+          - code: DD
+
+  # ==================== COMBINED/COMMINGLED LISTS ====================
+  # These lists combine multiple statuses in a single section
+
+  threatened:
+    name: "Threatened"
+    description_template: "{taxa_name} taxa in threatened categories (Vulnerable, Endangered, or Critically Endangered), listed together."
+    title_template: "List of threatened {taxa_name_lower}"
+    output_template: "List_of_threatened_{taxa_slug}.wikitext"
+    sections:
+      - key: threatened
+        heading: "Threatened species"
+        statuses:
+          - code: VU
+          - code: EN
+          - code: CR
+          - code: "CR(PE)"
+            label: "Possibly extinct"
+          - code: "CR(PEW)"
+            label: "Possibly extinct in the wild"
+
+  endangered-combined:
+    name: "Endangered (combined)"
+    description_template: "{taxa_name} taxa assessed as Endangered or Critically Endangered, listed together."
+    title_template: "List of endangered {taxa_name_lower}"
+    output_template: "List_of_endangered_{taxa_slug}.wikitext"
+    sections:
+      - key: endangered
+        heading: "Endangered and critically endangered"
+        statuses:
+          - code: EN
+          - code: CR
+          - code: "CR(PE)"
+            label: "Possibly extinct"
+          - code: "CR(PEW)"
+            label: "Possibly extinct in the wild"
+
+  # ==================== SPECIAL LISTS ====================
+
+  all-status:
+    name: "By conservation status"
+    description_template: "All {taxa_name} assessments, grouped by IUCN category."
+    title_template: "List of {taxa_name} by conservation status"
+    output_template: "List_of_{taxa_name}_by_conservation_status.wikitext"
+    templates:
+      header: taxonomy-status-summary
+    sections:
+      - key: extinct
+        heading: "Extinct"
+        statuses:
+          - code: EX
+      - key: extinct-in-the-wild
+        heading: "Extinct in the wild"
+        statuses:
+          - code: EW
+      - key: critically-endangered
+        heading: "Critically endangered"
+        statuses:
+          - code: CR
+          - code: "CR(PE)"
+            label: "Possibly extinct"
+          - code: "CR(PEW)"
+            label: "Possibly extinct in the wild"
+      - key: endangered
+        heading: "Endangered"
+        statuses:
+          - code: EN
+      - key: vulnerable
+        heading: "Vulnerable"
+        statuses:
+          - code: VU
+      - key: near-threatened
+        heading: "Near threatened"
+        statuses:
+          - code: NT
+          - code: "LR/nt"
+      - key: least-concern
+        heading: "Least concern"
+        statuses:
+          - code: LC
+          - code: "LR/lc"
+      - key: data-deficient
+        heading: "Data deficient"
+        statuses:
+          - code: DD
+
+  conservation-dependent:
+    name: "Conservation dependent"
+    description_template: "Legacy LR/cd assessments."
+    title_template: "IUCN Red List conservation dependent species"
+    output_template: "IUCN_Red_List_conservation_dependent_species.wikitext"
+    templates:
+      header: legacy-status-note
+    sections:
+      - key: conservation-dependent
+        heading: "Conservation dependent"
+        statuses:
+          - code: "LR/cd"

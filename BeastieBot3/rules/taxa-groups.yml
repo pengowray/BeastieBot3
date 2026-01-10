@@ -1,0 +1,145 @@
+# Taxonomic group definitions for Wikipedia list generation.
+# Each group defines the filters needed to select taxa from the IUCN database.
+# Reference these by name in wikipedia-lists.yml using "taxa_group: <name>"
+
+groups:
+  # ==================== ANIMALIA - VERTEBRATES ====================
+  amphibians:
+    name: "Amphibians"
+    filters:
+      - rank: kingdom
+        value: Animalia
+      - rank: class
+        value: Amphibia
+
+  birds:
+    name: "Birds"
+    filters:
+      - rank: kingdom
+        value: Animalia
+      - rank: class
+        value: Aves
+
+  reptiles:
+    name: "Reptiles"
+    filters:
+      - rank: kingdom
+        value: Animalia
+      - rank: class
+        value: Reptilia
+
+  mammals:
+    name: "Mammals"
+    filters:
+      - rank: kingdom
+        value: Animalia
+      - rank: class
+        value: Mammalia
+
+  ray-finned-fishes:
+    name: "Ray-finned fishes"
+    filters:
+      - rank: kingdom
+        value: Animalia
+      - rank: class
+        value: Actinopterygii
+
+  sharks-rays:
+    name: "Sharks and rays"
+    filters:
+      - rank: kingdom
+        value: Animalia
+      - rank: class
+        value: Chondrichthyes
+
+  # ==================== ANIMALIA - INVERTEBRATES ====================
+  insects:
+    name: "Insects"
+    filters:
+      - rank: kingdom
+        value: Animalia
+      - rank: class
+        value: Insecta
+
+  gastropods:
+    name: "Gastropods"
+    filters:
+      - rank: kingdom
+        value: Animalia
+      - rank: class
+        value: Gastropoda
+
+  bivalves:
+    name: "Bivalves"
+    filters:
+      - rank: kingdom
+        value: Animalia
+      - rank: class
+        value: Bivalvia
+
+  crustaceans:
+    name: "Crustaceans"
+    filters:
+      - rank: kingdom
+        value: Animalia
+      - rank: class
+        value: Malacostraca
+
+  corals:
+    name: "Corals"
+    filters:
+      - rank: kingdom
+        value: Animalia
+      - rank: class
+        value: Anthozoa
+
+  arachnids:
+    name: "Arachnids"
+    filters:
+      - rank: kingdom
+        value: Animalia
+      - rank: class
+        value: Arachnida
+
+  # ==================== ANIMALIA - KINGDOM LEVEL ====================
+  animals:
+    name: "Animals"
+    filters:
+      - rank: kingdom
+        value: Animalia
+
+  # ==================== PLANTAE ====================
+  plants:
+    name: "Plants"
+    filters:
+      - rank: kingdom
+        value: Plantae
+
+  conifers:
+    name: "Conifers"
+    filters:
+      - rank: kingdom
+        value: Plantae
+      - rank: class
+        value: Pinopsida
+
+  cycads:
+    name: "Cycads"
+    filters:
+      - rank: kingdom
+        value: Plantae
+      - rank: class
+        value: Cycadopsida
+
+  # ==================== OTHER KINGDOMS ====================
+  fungi:
+    name: "Fungi"
+    filters:
+      - rank: kingdom
+        value: Fungi
+
+  chromista:
+    name: "Chromista"
+    filters:
+      - rank: kingdom
+        value: Chromista
