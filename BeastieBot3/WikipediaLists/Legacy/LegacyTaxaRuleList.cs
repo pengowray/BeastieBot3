@@ -72,6 +72,17 @@ internal sealed class LegacyTaxaRuleList {
         }
 
         var record = _records.TryGetValue(taxon, out var existing) ? existing : (_records[taxon] = new LegacyTaxonRules());
+
+        // Handle "singular ! plural" format in CommonName assignments
+        if (field == LegacyTaxonField.CommonName && value.Contains(" ! ", StringComparison.Ordinal)) {
+            var nameParts = value.Split(new[] { " ! " }, 2, StringSplitOptions.RemoveEmptyEntries);
+            if (nameParts.Length == 2) {
+                record[LegacyTaxonField.CommonName] = nameParts[0].Trim();
+                record[LegacyTaxonField.CommonPlural] = nameParts[1].Trim();
+                return;
+            }
+        }
+
         record[field] = value;
     }
 }

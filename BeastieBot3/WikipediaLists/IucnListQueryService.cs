@@ -29,6 +29,13 @@ internal sealed class IucnListQueryService : IDisposable {
         _connection.Open();
     }
 
+    public string GetDatasetVersion() {
+        using var command = _connection.CreateCommand();
+        command.CommandText = "SELECT DISTINCT redlist_version FROM import_metadata LIMIT 1";
+        var result = command.ExecuteScalar();
+        return result?.ToString() ?? "unknown";
+    }
+
     public IReadOnlyList<IucnSpeciesRecord> QuerySpecies(
         WikipediaListDefinition definition,
         IReadOnlyCollection<RedlistStatusDescriptor> statuses,
@@ -107,6 +114,8 @@ internal sealed class IucnListQueryService : IDisposable {
     }
 
     private static void AppendStatusClauses(StringBuilder builder, IReadOnlyCollection<RedlistStatusDescriptor> statuses, List<SqliteParameter> parameters) {
+        // Wrap all status OR clauses in parentheses to avoid AND/OR precedence issues
+        builder.AppendLine("  (");
         var index = 0;
         foreach (var descriptor in statuses) {
             var prefix = index == 0 ? "    (" : "    OR (";
@@ -133,6 +142,7 @@ internal sealed class IucnListQueryService : IDisposable {
             builder.AppendLine();
             index++;
         }
+        builder.AppendLine("  )");
     }
 
     private static string? ResolveColumn(string rank) => rank?.Trim().ToLowerInvariant() switch {

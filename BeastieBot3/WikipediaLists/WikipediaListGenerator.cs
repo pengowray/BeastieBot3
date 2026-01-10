@@ -38,19 +38,19 @@ internal sealed class WikipediaListGenerator {
         }
 
         var totalCount = sections.Sum(section => section.Records.Count);
-        var datasetVersion = "unknown"; // Version now stored in import_metadata, not per-row
+        var datasetVersion = _queryService.GetDatasetVersion();
 
         var scopeLabel = BuildScopeLabel(definition);
         var sectionSummary = string.Join("; ", sections.Select(section => $"{section.Definition.Heading} ({section.Records.Count})"));
 
-        var context = new TemplateContext {
-            Title = definition.Title,
-            Description = definition.Description,
-            ScopeLabel = scopeLabel,
-            DatasetVersion = datasetVersion,
-            GeneratedAt = DateTimeOffset.UtcNow.ToString("yyyy-MM-dd HH:mm 'UTC'", CultureInfo.InvariantCulture),
-            TotalEntries = totalCount,
-            SectionsSummary = sectionSummary
+        var context = new Dictionary<string, object?> {
+            ["title"] = definition.Title,
+            ["description"] = definition.Description,
+            ["scope_label"] = scopeLabel,
+            ["dataset_version"] = datasetVersion,
+            ["generated_at"] = DateTimeOffset.UtcNow.ToString("yyyy-MM-dd HH:mm 'UTC'", CultureInfo.InvariantCulture),
+            ["total_entries"] = totalCount,
+            ["sections_summary"] = sectionSummary
         };
 
         var headerTemplate = definition.Templates.Header ?? defaults.HeaderTemplate;
@@ -93,13 +93,23 @@ internal sealed class WikipediaListGenerator {
         return new WikipediaListResult(outputPath, totalCount, datasetVersion);
     }
 
+    private static readonly Dictionary<string, int> RankOrder = new(StringComparer.OrdinalIgnoreCase) {
+        ["kingdom"] = 1,
+        ["phylum"] = 2,
+        ["class"] = 3,
+        ["order"] = 4,
+        ["family"] = 5,
+        ["genus"] = 6,
+        ["species"] = 7
+    };
+
     private static string BuildScopeLabel(WikipediaListDefinition definition) {
         if (definition.Filters.Count == 0) {
             return "global";
         }
 
         var ordered = definition.Filters
-            .OrderBy(filter => filter.Rank, StringComparer.OrdinalIgnoreCase)
+            .OrderBy(filter => RankOrder.GetValueOrDefault(filter.Rank?.Trim().ToLowerInvariant() ?? "", 99))
             .Select(filter => filter.Value.Trim())
             .ToList();
 
@@ -301,16 +311,6 @@ internal sealed class WikipediaListGenerator {
 }
 
 internal sealed record WikipediaListResult(string OutputPath, int TotalEntries, string DatasetVersion);
-
-internal sealed class TemplateContext {
-    public string Title { get; init; } = string.Empty;
-    public string? Description { get; init; }
-    public string ScopeLabel { get; init; } = string.Empty;
-    public string DatasetVersion { get; init; } = string.Empty;
-    public string GeneratedAt { get; init; } = string.Empty;
-    public int TotalEntries { get; init; }
-    public string SectionsSummary { get; init; } = string.Empty;
-}
 
 internal static class IucnSpeciesRecordExtensions {
     public static IucnTaxonomyRow ToTaxonomyRow(this IucnSpeciesRecord record) {
