@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -161,9 +162,6 @@ public sealed class WikidataCoverageDetailsCommand : AsyncCommand<WikidataCovera
         }
 
         var iucnUrl = BuildIucnAssessmentUrl(item.Row);
-        if (!string.IsNullOrWhiteSpace(item.Row.RedlistVersion)) {
-            pieces.Add($"Red List {EscapeMarkdown(item.Row.RedlistVersion)}");
-        }
         if (!string.IsNullOrWhiteSpace(iucnUrl)) {
             pieces.Add(iucnUrl);
         }
@@ -174,8 +172,7 @@ public sealed class WikidataCoverageDetailsCommand : AsyncCommand<WikidataCovera
         var displayName = row.ScientificNameTaxonomy
             ?? row.ScientificNameAssessments
             ?? ScientificNameHelper.BuildFromParts(row.GenusName, row.SpeciesName, row.InfraName)
-            ?? row.InternalTaxonId
-            ?? "Unknown taxon";
+            ?? row.TaxonId.ToString(CultureInfo.InvariantCulture);
 
         var pieces = new List<string> { $"**{EscapeMarkdown(displayName)}**" };
 
@@ -185,12 +182,7 @@ public sealed class WikidataCoverageDetailsCommand : AsyncCommand<WikidataCovera
         }
 
         var link = BuildIucnAssessmentUrl(row);
-        if (!string.IsNullOrWhiteSpace(row.InternalTaxonId)) {
-            pieces.Add($"ID {EscapeMarkdown(row.InternalTaxonId)}");
-        }
-        if (!string.IsNullOrWhiteSpace(row.RedlistVersion)) {
-            pieces.Add($"Red List {EscapeMarkdown(row.RedlistVersion)}");
-        }
+        pieces.Add($"ID {row.TaxonId}");
         if (!string.IsNullOrWhiteSpace(link)) {
             pieces.Add(link);
         }
@@ -217,13 +209,7 @@ public sealed class WikidataCoverageDetailsCommand : AsyncCommand<WikidataCovera
     }
 
     private static string BuildIucnAssessmentUrl(IucnTaxonomyRow row) {
-        var speciesId = row.InternalTaxonId?.Trim() ?? string.Empty;
-        var assessmentId = row.AssessmentId?.Trim() ?? string.Empty;
-        if (string.IsNullOrWhiteSpace(speciesId) || string.IsNullOrWhiteSpace(assessmentId)) {
-            return string.Empty;
-        }
-
-        return $"https://www.iucnredlist.org/species/{speciesId}/{assessmentId}";
+        return $"https://www.iucnredlist.org/species/{row.TaxonId}/{row.AssessmentId}";
     }
 
     private static (string SynonymPath, string UnmatchedPath) ResolveOutputPaths(

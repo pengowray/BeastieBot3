@@ -68,7 +68,7 @@ public sealed class IucnImporter {
                     continue;
                 }
 
-                ImportCsv(importId, redlistVersion, spec, entry!, transaction, cancellationToken);
+                ImportCsv(importId, spec, entry!, transaction, cancellationToken);
             }
             transaction.Commit();
 
@@ -197,7 +197,7 @@ VALUES (@filename, @version, @started);";
         _console.MarkupLine($"[blue]ZIP[/] {relativeName} -> {found}/{_expectedEntries.Length} csv files ({string.Join(", ", parts)})");
     }
 
-    private void ImportCsv(long importId, string redlistVersion, ZipEntrySpec spec, ZipArchiveEntry entry, SqliteTransaction transaction, CancellationToken cancellationToken) {
+    private void ImportCsv(long importId, ZipEntrySpec spec, ZipArchiveEntry entry, SqliteTransaction transaction, CancellationToken cancellationToken) {
         using var stream = entry.Open();
         using var reader = new StreamReader(stream, Encoding.UTF8, true);
         var config = new CsvConfiguration(CultureInfo.InvariantCulture) {
@@ -228,11 +228,6 @@ VALUES (@filename, @version, @started);";
         importParam.ParameterName = "@import_id";
         importParam.Value = importId;
         insert.Parameters.Add(importParam);
-
-        var versionParam = insert.CreateParameter();
-        versionParam.ParameterName = "@redlist_version";
-        versionParam.Value = redlistVersion;
-        insert.Parameters.Add(versionParam);
 
         var parameterMap = new Dictionary<string, SqliteParameter>(headers.Count, StringComparer.OrdinalIgnoreCase);
         for (var i = 0; i < headers.Count; i++) {
@@ -269,16 +264,18 @@ VALUES (@filename, @version, @started);";
             return GetTableColumns(tableName) ?? throw new InvalidOperationException($"Table {tableName} was not created as expected.");
         }
 
-        if (!existingColumns.Contains("import_id") || !existingColumns.Contains("redlist_version")) {
-            throw new InvalidOperationException($"Existing table {tableName} is missing required columns. Please migrate or drop the table.");
+        if (!existingColumns.Contains("import_id")) {
+            throw new InvalidOperationException($"Existing table {tableName} is missing required import_id column. Please migrate or drop the table.");
         }
 
         foreach (var column in csvColumns) {
-            if (existingColumns.Contains(column)) continue;
+            var mappedName = MapColumnName(column);
+            if (existingColumns.Contains(mappedName)) continue;
+            var colType = GetColumnType(mappedName);
             using var cmd = _connection.CreateCommand();
-            cmd.CommandText = $"ALTER TABLE {QuoteIdentifier(tableName)} ADD COLUMN {QuoteIdentifier(column)} TEXT;";
+            cmd.CommandText = $"ALTER TABLE {QuoteIdentifier(tableName)} ADD COLUMN {QuoteIdentifier(mappedName)} {colType};";
             cmd.ExecuteNonQuery();
-            existingColumns.Add(column);
+            existingColumns.Add(mappedName);
         }
 
         return existingColumns;
@@ -300,11 +297,12 @@ VALUES (@filename, @version, @started);";
 
     private void CreateNewDataTable(string tableName, IReadOnlyList<string> csvColumns) {
         var columns = new List<string> {
-            "\"import_id\" INTEGER NOT NULL",
-            "\"redlist_version\" TEXT NOT NULL"
+            "\"import_id\" INTEGER NOT NULL"
         };
         foreach (var column in csvColumns) {
-            columns.Add($"{QuoteIdentifier(column)} TEXT");
+            var colName = MapColumnName(column);
+            var colType = GetColumnType(colName);
+            columns.Add($"{QuoteIdentifier(colName)} {colType}");
         }
         columns.Add("FOREIGN KEY(\"import_id\") REFERENCES import_metadata(\"id\") ON DELETE CASCADE");
 
@@ -324,14 +322,12 @@ VALUES (@filename, @version, @started);";
         switch (tableName.ToLowerInvariant()) {
             case "assessments":
             case "assessments_html":
-                if (HasColumn("internalTaxonId")) {
-                    CreateIndex(tableName, "internalTaxonId", "internalTaxonId");
+                if (HasColumn("taxonId")) {
+                    CreateIndex(tableName, "taxonId", "taxonId");
                 }
                 if (HasColumn("assessmentId")) {
                     CreateIndex(tableName, "assessmentId", "assessmentId");
-                    if (HasColumn("redlist_version")) {
-                        CreateIndex(tableName, "uniq_assessmentId", true, "redlist_version", "assessmentId");
-                    }
+                    CreateIndex(tableName, "uniq_assessmentId", true, "assessmentId");
                 }
                 if (HasColumn("scientificName")) {
                     CreateIndex(tableName, "scientificName", "scientificName");
@@ -339,11 +335,9 @@ VALUES (@filename, @version, @started);";
                 break;
             case "taxonomy":
             case "taxonomy_html":
-                if (HasColumn("internalTaxonId")) {
-                    CreateIndex(tableName, "internalTaxonId", "internalTaxonId");
-                    if (HasColumn("redlist_version")) {
-                        CreateIndex(tableName, "uniq_internalTaxonId", true, "redlist_version", "internalTaxonId");
-                    }
+                if (HasColumn("taxonId")) {
+                    CreateIndex(tableName, "taxonId", "taxonId");
+                    CreateIndex(tableName, "uniq_taxonId", true, "taxonId");
                 }
                 if (HasColumn("scientificName")) {
                     CreateIndex(tableName, "scientificName", "scientificName");
@@ -383,26 +377,34 @@ VALUES (@filename, @version, @started);";
 
     private void EnsureViews() {
         if (GetTableColumns("assessments") is not null && GetTableColumns("taxonomy") is not null) {
-            var selectStatement = $"""
-SELECT a.*, t.*
-FROM {QuoteIdentifier("assessments")} AS a
-LEFT JOIN {QuoteIdentifier("taxonomy")} AS t
-  ON t.{QuoteIdentifier("internalTaxonId")} = a.{QuoteIdentifier("internalTaxonId")}
- AND t.{QuoteIdentifier("redlist_version")} = a.{QuoteIdentifier("redlist_version")}
-""";
+            var selectStatement = BuildViewSelect("assessments", "taxonomy");
             RecreateView("view_assessments_taxonomy", selectStatement);
         }
 
         if (GetTableColumns("assessments_html") is not null && GetTableColumns("taxonomy_html") is not null) {
-            var selectStatementHtml = $"""
-SELECT a.*, t.*
-FROM {QuoteIdentifier("assessments_html")} AS a
-LEFT JOIN {QuoteIdentifier("taxonomy_html")} AS t
-  ON t.{QuoteIdentifier("internalTaxonId")} = a.{QuoteIdentifier("internalTaxonId")}
- AND t.{QuoteIdentifier("redlist_version")} = a.{QuoteIdentifier("redlist_version")}
-""";
-            RecreateView("view_assessments_html_taxonomy_html", selectStatementHtml);
+            var selectStatement = BuildViewSelect("assessments_html", "taxonomy_html");
+            RecreateView("view_assessments_html_taxonomy_html", selectStatement);
         }
+    }
+
+    private string BuildViewSelect(string assessmentsTable, string taxonomyTable) {
+        var assessmentCols = GetTableColumns(assessmentsTable) ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var taxonomyCols = GetTableColumns(taxonomyTable) ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        var selectParts = new List<string>();
+        foreach (var col in assessmentCols) {
+            selectParts.Add($"a.{QuoteIdentifier(col)}");
+        }
+        foreach (var col in taxonomyCols) {
+            if (col.Equals("taxonId", StringComparison.OrdinalIgnoreCase) ||
+                col.Equals("import_id", StringComparison.OrdinalIgnoreCase)) {
+                continue;
+            }
+            var alias = assessmentCols.Contains(col) ? $"{col}_taxonomy" : col;
+            selectParts.Add($"t.{QuoteIdentifier(col)} AS {QuoteIdentifier(alias)}");
+        }
+
+        return $"SELECT {string.Join(", ", selectParts)} FROM {QuoteIdentifier(assessmentsTable)} AS a LEFT JOIN {QuoteIdentifier(taxonomyTable)} AS t ON t.taxonId = a.taxonId";
     }
 
     private void RecreateView(string viewName, string selectStatement) {
@@ -418,17 +420,30 @@ LEFT JOIN {QuoteIdentifier("taxonomy_html")} AS t
     }
 
     private static string BuildInsertSql(string tableName, IReadOnlyList<string> csvColumns) {
-        var columns = new List<string> { "import_id", "redlist_version" };
-        columns.AddRange(csvColumns);
+        var columns = new List<string> { "import_id" };
+        columns.AddRange(csvColumns.Select(MapColumnName));
         var identifiers = string.Join(", ", columns.Select(QuoteIdentifier));
 
-        var parameters = new List<string> { "@import_id", "@redlist_version" };
+        var parameters = new List<string> { "@import_id" };
         for (var i = 0; i < csvColumns.Count; i++) {
             parameters.Add("@c" + i.ToString(CultureInfo.InvariantCulture));
         }
 
         return $"INSERT OR IGNORE INTO {QuoteIdentifier(tableName)} ({identifiers}) VALUES ({string.Join(", ", parameters)});";
     }
+
+    private static string MapColumnName(string csvColumn) =>
+        csvColumn switch {
+            "internalTaxonId" => "taxonId",
+            _ => csvColumn
+        };
+
+    private static string GetColumnType(string columnName) =>
+        columnName switch {
+            "taxonId" => "INTEGER NOT NULL",
+            "assessmentId" => "INTEGER NOT NULL",
+            _ => "TEXT"
+        };
 
     private static string QuoteIdentifier(string identifier) {
         return "\"" + identifier.Replace("\"", "\"\"") + "\"";

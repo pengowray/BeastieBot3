@@ -265,7 +265,7 @@ internal sealed class DataCleanupAnalysisResult {
 
         var bucket = _samples[kind];
         if (bucket.Count < _maxSamples) {
-            bucket.Add(new DataCleanupIssueSample(row.AssessmentId, row.InternalTaxonId, row.RedlistVersion, detail, fields));
+            bucket.Add(new DataCleanupIssueSample(row.AssessmentId, row.TaxonId, detail, fields));
         }
     }
 }
@@ -282,9 +282,8 @@ internal enum DataCleanupIssueKind {
 }
 
 internal sealed record DataCleanupIssueSample(
-    string AssessmentId,
-    string InternalTaxonId,
-    string RedlistVersion,
+    long AssessmentId,
+    long TaxonId,
     string Detail,
     IReadOnlyList<DataCleanupFieldSuggestion> Fields
 );

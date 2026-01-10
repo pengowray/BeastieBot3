@@ -24,10 +24,9 @@ internal sealed class IucnTaxonomyRepository {
     public IEnumerable<IucnTaxonomyRow> ReadRows(long limit, CancellationToken cancellationToken) {
         var sql = @"SELECT
     v.assessmentId,
-    v.internalTaxonId,
-    v.redlist_version,
+    v.taxonId,
     v.scientificName AS scientificName_assessments,
-    v.""scientificName:1"" AS scientificName_taxonomy,
+    v.scientificName_taxonomy,
     v.kingdomName,
     v.phylumName,
     v.className,
@@ -57,9 +56,8 @@ ORDER BY v.assessmentId";
             cancellationToken.ThrowIfCancellationRequested();
 
             yield return new IucnTaxonomyRow(
-                reader.GetString(ordinals.AssessmentId),
-                reader.GetString(ordinals.InternalTaxonId),
-                reader.GetString(ordinals.RedlistVersion),
+                reader.GetInt64(ordinals.AssessmentId),
+                reader.GetInt64(ordinals.TaxonId),
                 GetNullableString(reader, ordinals.ScientificNameAssessments),
                 GetNullableString(reader, ordinals.ScientificNameTaxonomy),
                 reader.GetString(ordinals.KingdomName),
@@ -78,17 +76,16 @@ ORDER BY v.assessmentId";
         }
     }
 
-    public IucnTaxonomyRow? GetRowByInternalId(string? internalTaxonId) {
-        if (string.IsNullOrWhiteSpace(internalTaxonId)) {
+    public IucnTaxonomyRow? GetRowByTaxonId(long? taxonId) {
+        if (taxonId is null) {
             return null;
         }
 
         var sql = @"SELECT
     v.assessmentId,
-    v.internalTaxonId,
-    v.redlist_version,
+    v.taxonId,
     v.scientificName AS scientificName_assessments,
-    v.""scientificName:1"" AS scientificName_taxonomy,
+    v.scientificName_taxonomy,
     v.kingdomName,
     v.phylumName,
     v.className,
@@ -102,13 +99,13 @@ ORDER BY v.assessmentId";
     v.authority,
     v.infraAuthority
 FROM view_assessments_html_taxonomy_html v
-WHERE v.internalTaxonId = @id
+WHERE v.taxonId = @id
 LIMIT 1";
 
         using var command = _connection.CreateCommand();
         command.CommandText = sql;
         command.CommandTimeout = 0;
-        command.Parameters.AddWithValue("@id", internalTaxonId.Trim());
+        command.Parameters.AddWithValue("@id", taxonId.Value);
 
         using var reader = command.ExecuteReader(CommandBehavior.SingleRow);
         if (!reader.Read()) {
@@ -117,9 +114,8 @@ LIMIT 1";
 
         var ordinals = new Ordinals(reader);
         return new IucnTaxonomyRow(
-            reader.GetString(ordinals.AssessmentId),
-            reader.GetString(ordinals.InternalTaxonId),
-            reader.GetString(ordinals.RedlistVersion),
+            reader.GetInt64(ordinals.AssessmentId),
+            reader.GetInt64(ordinals.TaxonId),
             GetNullableString(reader, ordinals.ScientificNameAssessments),
             GetNullableString(reader, ordinals.ScientificNameTaxonomy),
             reader.GetString(ordinals.KingdomName),
@@ -147,8 +143,7 @@ LIMIT 1";
     private sealed class Ordinals {
         public Ordinals(SqliteDataReader reader) {
             AssessmentId = reader.GetOrdinal("assessmentId");
-            InternalTaxonId = reader.GetOrdinal("internalTaxonId");
-            RedlistVersion = reader.GetOrdinal("redlist_version");
+            TaxonId = reader.GetOrdinal("taxonId");
             ScientificNameAssessments = reader.GetOrdinal("scientificName_assessments");
             ScientificNameTaxonomy = reader.GetOrdinal("scientificName_taxonomy");
             KingdomName = reader.GetOrdinal("kingdomName");
@@ -166,8 +161,7 @@ LIMIT 1";
         }
 
         public int AssessmentId { get; }
-        public int InternalTaxonId { get; }
-        public int RedlistVersion { get; }
+        public int TaxonId { get; }
         public int ScientificNameAssessments { get; }
         public int ScientificNameTaxonomy { get; }
         public int KingdomName { get; }
@@ -194,9 +188,8 @@ LIMIT 1";
 }
 
 internal sealed record IucnTaxonomyRow(
-    string AssessmentId,
-    string InternalTaxonId,
-    string RedlistVersion,
+    long AssessmentId,
+    long TaxonId,
     string? ScientificNameAssessments,
     string? ScientificNameTaxonomy,
     string KingdomName,

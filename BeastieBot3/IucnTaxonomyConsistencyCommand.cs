@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -152,8 +153,8 @@ public sealed class IucnTaxonomyConsistencyCommand : Command<IucnTaxonomyConsist
         AnsiConsole.MarkupLine($"[grey]{Markup.Escape(label)}[/]");
         foreach (var sample in samples) {
             var builder = new StringBuilder();
-            AppendSample(builder, "assessmentId", sample.AssessmentId);
-            AppendSample(builder, "internalTaxonId", sample.InternalTaxonId);
+            AppendSample(builder, "assessmentId", sample.AssessmentId.ToString(CultureInfo.InvariantCulture));
+            AppendSample(builder, "taxonId", sample.TaxonId.ToString(CultureInfo.InvariantCulture));
             AppendSample(builder, "classification", sample.Classification);
             AppendSample(builder, "kingdom", sample.KingdomName);
             if (!string.IsNullOrEmpty(sample.InfraType)) {

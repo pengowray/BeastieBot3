@@ -9,26 +9,34 @@ These notes exist so the next AI (or human) that drops into this repo avoids the
 - [run-log.txt](run-log.txt) shows the latest Wikipedia list batch. The current log has “0 taxa, dataset unknown” for every list, which means the INI did not point at a populated SQLite file. Fix the INI and re-run a single list with a tight `--limit` before queueing the whole suite.
 
 ## IUCN SQLite performance rules
-- The database already exposes the latest assessment per taxon via the `view_assessments_html_taxonomy_html` view. Do **not** wrap that in another `WITH latest AS (...)` CTE or try to `MAX(redlist_version)` yourself – it is redundant and slows every query dramatically.
+- The database exposes assessments per taxon via the `view_assessments_html_taxonomy_html` view. This is a simple join on `taxonId` between assessments and taxonomy tables.
+- **Do NOT wrap queries in extra CTEs** like `WITH latest AS (SELECT taxonId, MAX(redlist_version) ...)`. We import a single IUCN release at a time, so all rows share the same import. The `import_metadata` table tracks which zip file was imported.
 - Column comparisons must stay sargable. Never wrap columns in `LOWER`, `UPPER`, `LIKE '%foo%'`, or other functions unless the column is truly case-insensitive. Normalize values **before** binding them to parameters instead.
 - Stick to exact matches on indexed columns (e.g., `kingdomName`, `className`, `redlistCategory`). Filters that match against constants run quickly; function calls on the column force SQLite to scan everything.
 - If you need boolean flags like `possiblyExtinct`, compare using `IFNULL(flag,'false') = 'true'` (or pre-normalize the value) but do not add `LOWER()` on either side.
-- When testing or iterating, use `--list <id>` and `--limit <n>` to bound the workload. The full Wikipedia list pass is expensive and hides regressions for far too long.
 
 ## IUCN datastore layout cheat-sheet
-- `view_assessments_html_taxonomy_html` joins `assessments_html` with the taxonomy table and already carries the denormalized columns we need (`kingdomName`, `className`, duplicated scientific names, infra ranks, etc.). The naming convention uses uppercase for high-level ranks (e.g., `AMPHIBIA`) and mixed case for genus/species. Normalize inputs to match that reality instead of transforming columns in SQL.
-- `assessments_html` stores every historical assessment; the view surfaces only the latest per `internalTaxonId`. That is why extra CTEs are redundant.
-- Redundant scientific name columns (`scientificName`, `"scientificName:1"`) map to assessments vs taxonomy sources. Prefer taxonomy when present, fall back to assessments.
+- **Key column renames (2025-01 schema update)**:
+  - `internalTaxonId` → `taxonId` (INTEGER NOT NULL)
+  - `assessmentId` is now INTEGER NOT NULL
+  - `redlist_version` removed from data tables (kept only in `import_metadata` for provenance)
+- `view_assessments_html_taxonomy_html` joins `assessments_html` with `taxonomy_html` on `taxonId`. It contains denormalized columns (`kingdomName`, `className`, `scientificName_taxonomy`, etc.). The naming convention uses uppercase for high-level ranks (e.g., `AMPHIBIA`) and mixed case for genus/species. Normalize inputs to match that reality instead of transforming columns in SQL.
+- The view avoids column name conflicts by aliasing taxonomy columns that also exist in assessments (e.g., `scientificName_taxonomy` instead of duplicate `scientificName`).
 - Boolean-ish flags arrive as text ("true"/"false"). Treat them as such—comparisons should remain string equality checks after applying `IFNULL(...,'false')` to handle null rows.
 - Legacy LR/* categories and combined views (threatened/endangered) are assembled in code, not SQL. Keep SQL focused on primitive filters (kingdom, class, status) and let the generator group/label.
-- [BeastieBot3/IucnImporter.cs](BeastieBot3/IucnImporter.cs) writes four tables (`assessments`, `assessments_html`, `taxonomy`, `taxonomy_html`) plus `import_metadata`, creating columns on the fly so future CSVs do not choke the schema. Expect everything to be TEXT unless we have a compelling reason otherwise.
-- Indexes exist on `internalTaxonId`, `assessmentId`, `scientificName`, and the kingdom→species ladder. If a query needs a new filter, add a matching index inside the importer instead of bolting an `ORDER BY` on a random column.
+- [BeastieBot3/IucnImporter.cs](BeastieBot3/IucnImporter.cs) writes four tables (`assessments`, `assessments_html`, `taxonomy`, `taxonomy_html`) plus `import_metadata`. The `taxonId` and `assessmentId` columns are INTEGER NOT NULL; all other CSV columns are TEXT.
+- Indexes exist on `taxonId`, `assessmentId`, `scientificName`, and the kingdom→species ladder. If a query needs a new filter, add a matching index inside the importer instead of bolting an `ORDER BY` on a random column.
 - The importer recreates `view_assessments_taxonomy` and `view_assessments_html_taxonomy_html` every run. If a dev database is missing them, rerun `iucn import --force`—do not try to patch the view manually.
-- Each zip import is logged with filename and `redlist_version`. If you need to replay a single archive, delete the corresponding `import_metadata` row (or pass `--force`) so the importer will reinsert it cleanly.
+- Each zip import is logged with filename and `redlist_version` in `import_metadata`. If you need to replay a single archive, delete the corresponding row (or pass `--force`) so the importer will reinsert it cleanly.
+
+## Non-HTML tables (_html suffix)
+- The `assessments` and `taxonomy` tables (without `_html`) are the plain-text versions of the data. The `assessments_html` and `taxonomy_html` tables contain HTML-formatted fields.
+- **Prefer the `_html` versions** for all production queries. The non-HTML tables are kept primarily for analysis and comparison.
+- In future, we may add an import option to skip plain-text tables entirely to reduce database size.
 
 ## Verification vs production queries
 - It is absolutely fine to add targeted verification commands (e.g., `iucn report-taxonomy-consistency`, `iucn report-name-changes`) or to spin up quick scripts/notebooks to check assumptions such as casing, null rates, or category coverage.
-- Those checks should stay separate from the hot-path generator queries. If you must run an expensive scan (like recomputing `MAX(redlist_version)` or checking for unexpected flag values), do it in a dedicated report/command or behind a CLI flag so normal list generation stays fast.
+- Those checks should stay separate from the hot-path generator queries. Run expensive scans in a dedicated report/command or behind a CLI flag so normal list generation stays fast.
 - When you discover a mismatch (say casing drift in `familyName`), document the expected shape here and optionally wire a lightweight analyzer under `docs/` or `reports/` so the next pass can be re-run without embedding the check into every list execution.
 
 ## YAML list definitions
@@ -98,7 +106,7 @@ sqlite3 "D:/datasets/beastiebot/IUCN_2025-2.sqlite" "SELECT name FROM sqlite_mas
 
 ```bash
 sqlite3 "D:/datasets/beastiebot/IUCN_2025-2.sqlite" \
-"SELECT internalTaxonId, scientificName, \"scientificName:1\", kingdomName, className FROM view_assessments_html_taxonomy_html LIMIT 20;"
+"SELECT taxonId, scientificName, scientificName_taxonomy, kingdomName, className FROM view_assessments_html_taxonomy_html LIMIT 20;"
 ```
 
 - Inspect the API cache for stale taxa before downloading again:

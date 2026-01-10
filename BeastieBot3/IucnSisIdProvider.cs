@@ -31,31 +31,25 @@ internal sealed class IucnSisIdProvider {
         using var reader = command.ExecuteReader();
         while (reader.Read()) {
             cancellationToken.ThrowIfCancellationRequested();
-            var internalTaxonId = reader.GetString(0);
-            if (long.TryParse(internalTaxonId, out var sisId)) {
-                yield return sisId;
-            }
+            var sisId = reader.GetInt64(0);
+            yield return sisId;
         }
     }
 
     private static string BuildSql(SqliteConnection connection) {
         if (ObjectExists(connection, "view_assessments_html_taxonomy_html")) {
-            return @"SELECT DISTINCT internalTaxonId
+            return @"SELECT DISTINCT taxonId
 FROM view_assessments_html_taxonomy_html
-WHERE internalTaxonId IS NOT NULL
-  AND TRIM(internalTaxonId) <> ''
-  AND (subpopulationName IS NULL OR TRIM(subpopulationName) = '')
+WHERE (subpopulationName IS NULL OR TRIM(subpopulationName) = '')
   AND (infraType IS NULL OR TRIM(infraType) = '')
-ORDER BY CAST(internalTaxonId AS INTEGER)";
+ORDER BY taxonId";
         }
 
-        return @"SELECT DISTINCT internalTaxonId
+        return @"SELECT DISTINCT taxonId
 FROM taxonomy
-WHERE internalTaxonId IS NOT NULL
-  AND TRIM(internalTaxonId) <> ''
-  AND (subpopulationName IS NULL OR TRIM(subpopulationName) = '')
+WHERE (subpopulationName IS NULL OR TRIM(subpopulationName) = '')
   AND (infraType IS NULL OR TRIM(infraType) = '')
-ORDER BY CAST(internalTaxonId AS INTEGER)";
+ORDER BY taxonId";
     }
 
     private static bool ObjectExists(SqliteConnection connection, string name) {

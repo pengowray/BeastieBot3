@@ -29,7 +29,7 @@ internal sealed class CommonNameProvider : IDisposable {
             return wikidata;
         }
 
-        var iucn = GetIucnCommonName(row.InternalTaxonId, disallowed);
+        var iucn = GetIucnCommonName(row.TaxonId.ToString(System.Globalization.CultureInfo.InvariantCulture), disallowed);
         return string.IsNullOrWhiteSpace(iucn) ? null : iucn;
     }
 

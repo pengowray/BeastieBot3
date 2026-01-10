@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Globalization;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
@@ -122,7 +123,8 @@ public sealed class WikipediaMatchTaxaCommand : AsyncCommand<WikipediaMatchTaxaC
         foreach (var row in repository.ReadRows(0, cancellationToken)) {
             cancellationToken.ThrowIfCancellationRequested();
 
-            if (resumeToken is not null && string.Compare(row.InternalTaxonId, resumeToken, StringComparison.Ordinal) <= 0) {
+            var rowTaxonId = row.TaxonId.ToString(CultureInfo.InvariantCulture);
+            if (resumeToken is not null && string.Compare(rowTaxonId, resumeToken, StringComparison.Ordinal) <= 0) {
                 continue;
             }
 
@@ -158,10 +160,7 @@ public sealed class WikipediaMatchTaxaCommand : AsyncCommand<WikipediaMatchTaxaC
         IucnSynonymService synonymService,
         Settings settings,
         CancellationToken cancellationToken) {
-        var taxonId = row.InternalTaxonId?.Trim();
-        if (string.IsNullOrWhiteSpace(taxonId)) {
-            return TaxonProcessResult.Skipped;
-        }
+        var taxonId = row.TaxonId.ToString(CultureInfo.InvariantCulture);
 
         var existing = cacheStore.GetTaxonMatch(TaxonSources.Iucn, taxonId);
         if (!settings.ReprocessMatched && existing is not null && string.Equals(existing.MatchStatus, TaxonWikiMatchStatus.Matched, StringComparison.OrdinalIgnoreCase)) {
@@ -319,7 +318,7 @@ public sealed class WikipediaMatchTaxaCommand : AsyncCommand<WikipediaMatchTaxaC
             list.Add(new WikipediaMatchCandidate(title.Trim(), normalized, sourceHint, matchMethod, isSynonym, synonymValue));
         }
 
-        var wikidata = wikidataLookup.GetCandidate(row.InternalTaxonId);
+        var wikidata = wikidataLookup.GetCandidate(row.TaxonId.ToString(CultureInfo.InvariantCulture));
         if (wikidata is not null) {
             AddCandidate(wikidata.Title, "wikidata", wikidata.MatchMethod, wikidata.IsSynonym, wikidata.MatchedName);
         }

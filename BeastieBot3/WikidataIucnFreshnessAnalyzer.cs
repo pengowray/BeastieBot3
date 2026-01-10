@@ -43,7 +43,7 @@ internal sealed class WikidataIucnFreshnessAnalyzer {
 
     private Dictionary<string, IucnTaxonRecord> LoadIucnTaxa(CancellationToken cancellationToken) {
         using var command = _iucnConnection.CreateCommand();
-        command.CommandText = "SELECT internalTaxonId, scientificName, genusName, speciesName, infraName, infraType, subpopulationName FROM taxonomy_html";
+        command.CommandText = "SELECT taxonId, scientificName, genusName, speciesName, infraName, infraType, subpopulationName FROM taxonomy_html";
         command.CommandTimeout = 0;
 
         var taxa = new Dictionary<string, IucnTaxonRecord>(StringComparer.OrdinalIgnoreCase);
@@ -51,10 +51,7 @@ internal sealed class WikidataIucnFreshnessAnalyzer {
         while (reader.Read()) {
             cancellationToken.ThrowIfCancellationRequested();
 
-            var taxonId = reader.IsDBNull(0) ? null : reader.GetString(0);
-            if (string.IsNullOrWhiteSpace(taxonId)) {
-                continue;
-            }
+            var taxonId = reader.GetInt64(0).ToString(CultureInfo.InvariantCulture);
 
             var subpopulationName = reader.IsDBNull(6) ? null : reader.GetString(6);
             var infraType = reader.IsDBNull(5) ? null : reader.GetString(5);
@@ -74,7 +71,7 @@ internal sealed class WikidataIucnFreshnessAnalyzer {
 
             var normalized = ScientificNameHelper.Normalize(canonicalName);
             var comparable = TaxonNameComparer.NormalizeForExactMatch(canonicalName);
-            taxa[taxonId.Trim()] = new IucnTaxonRecord(taxonId.Trim(), canonicalName?.Trim(), normalized, comparable, infraType, subpopulationName);
+            taxa[taxonId] = new IucnTaxonRecord(taxonId, canonicalName?.Trim(), normalized, comparable, infraType, subpopulationName);
         }
 
         return taxa;
@@ -82,32 +79,27 @@ internal sealed class WikidataIucnFreshnessAnalyzer {
 
     private void LoadIucnStatuses(Dictionary<string, IucnTaxonRecord> taxa, CancellationToken cancellationToken) {
         using var command = _iucnConnection.CreateCommand();
-        command.CommandText = "SELECT internalTaxonId, redlistCategory, redlist_version, yearPublished FROM assessments_html";
+        command.CommandText = "SELECT taxonId, redlistCategory, yearPublished FROM assessments_html";
         command.CommandTimeout = 0;
 
         using var reader = command.ExecuteReader(CommandBehavior.SequentialAccess);
         while (reader.Read()) {
             cancellationToken.ThrowIfCancellationRequested();
 
-            var taxonId = reader.IsDBNull(0) ? null : reader.GetString(0);
-            if (string.IsNullOrWhiteSpace(taxonId)) {
-                continue;
-            }
+            var taxonId = reader.GetInt64(0).ToString(CultureInfo.InvariantCulture);
 
-            if (!taxa.TryGetValue(taxonId.Trim(), out var taxon)) {
+            if (!taxa.TryGetValue(taxonId, out var taxon)) {
                 continue;
             }
 
             var category = reader.IsDBNull(1) ? null : reader.GetString(1);
-            var version = reader.IsDBNull(2) ? null : reader.GetString(2);
-            var yearText = reader.IsDBNull(3) ? null : reader.GetString(3);
-            var versionKey = RedlistVersionKey.From(version, yearText);
+            var yearText = reader.IsDBNull(2) ? null : reader.GetString(2);
+            var versionKey = RedlistVersionKey.From(null, yearText);
             if (taxon.LatestVersion is not null && taxon.LatestVersion.Value.CompareTo(versionKey) >= 0) {
                 continue;
             }
 
             taxon.LatestVersion = versionKey;
-            taxon.LatestRedlistVersion = version;
             taxon.LatestCategoryRaw = category;
             taxon.LatestCategoryCode = IucnCategoryMapper.Normalize(category);
         }
@@ -717,7 +709,6 @@ internal sealed class IucnTaxonRecord {
     public string? ComparableName { get; }
     public string? InfraType { get; }
     public string? SubpopulationName { get; }
-    public string? LatestRedlistVersion { get; set; }
     public string? LatestCategoryRaw { get; set; }
     public string? LatestCategoryCode { get; set; }
     public RedlistVersionKey? LatestVersion { get; set; }

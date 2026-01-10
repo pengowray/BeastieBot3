@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Data;
+using System.Globalization;
 using System.Linq;
 using System.Text.Json;
 using System.Threading;
@@ -94,10 +95,9 @@ public sealed class WikidataCoverageReportCommand : AsyncCommand<WikidataCoverag
             var sampleTable = new Table().Title("Unmatched Samples").Border(TableBorder.Minimal);
             sampleTable.AddColumn("IUCN Taxon ID");
             sampleTable.AddColumn("Scientific Name");
-            sampleTable.AddColumn("RedList Version");
 
             foreach (var sample in stats.UnmatchedSamples.Take(settings.SampleCount)) {
-                sampleTable.AddRow(sample.TaxonId ?? "?", sample.ScientificName ?? "?", sample.RedlistVersion);
+                sampleTable.AddRow(sample.TaxonId ?? "?", sample.ScientificName ?? "?");
             }
 
             AnsiConsole.Write(sampleTable);
@@ -210,7 +210,7 @@ internal sealed class CoverageStats {
                 Unmatched++;
                 UnmatchedDetails.Add(row);
                 if (UnmatchedSamples.Count < MaxSamples) {
-                    UnmatchedSamples.Add(new CoverageSample(row.InternalTaxonId, row.ScientificNameTaxonomy ?? row.ScientificNameAssessments, row.RedlistVersion ?? "?"));
+                    UnmatchedSamples.Add(new CoverageSample(row.TaxonId.ToString(CultureInfo.InvariantCulture), row.ScientificNameTaxonomy ?? row.ScientificNameAssessments));
                 }
                 break;
         }
@@ -301,7 +301,7 @@ internal sealed class CoverageStats {
     }
 }
 
-internal sealed record CoverageSample(string? TaxonId, string? ScientificName, string RedlistVersion);
+internal sealed record CoverageSample(string? TaxonId, string? ScientificName);
 
 internal sealed record SynonymCoverageItem(
     IucnTaxonomyRow Row,

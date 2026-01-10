@@ -251,7 +251,11 @@ internal sealed class WikidataWikipediaMismatchAnalyzer {
             return cached;
         }
 
-        var row = _iucnRepository.GetRowByInternalId(iucnTaxonId);
+        if (!long.TryParse(iucnTaxonId, out var taxonIdLong)) {
+            return null;
+        }
+
+        var row = _iucnRepository.GetRowByTaxonId(taxonIdLong);
         if (row is not null) {
             _iucnCache[iucnTaxonId] = row;
         }

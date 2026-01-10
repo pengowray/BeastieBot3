@@ -79,7 +79,7 @@ internal static class IucnScientificNameVerifier {
     private static ScientificNameMismatchSample BuildSample(IucnTaxonomyRow row, ScientificNameComposition composition, string? normalizedAssess, string? normalizedTaxonomy, string? normalizedReconstructed, string detail) {
         return new ScientificNameMismatchSample(
             row.AssessmentId,
-            row.InternalTaxonId,
+            row.TaxonId,
             composition.Classification.ToString(),
             row.ScientificNameAssessments,
             row.ScientificNameTaxonomy,
@@ -288,8 +288,8 @@ internal enum ScientificNameMismatchKind {
 }
 
 internal sealed record ScientificNameMismatchSample(
-    string AssessmentId,
-    string InternalTaxonId,
+    long AssessmentId,
+    long TaxonId,
     string Classification,
     string? ScientificNameAssessments,
     string? ScientificNameTaxonomy,

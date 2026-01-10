@@ -152,7 +152,7 @@ public sealed class IucnColCrosscheckCommand : Command<IucnColCrosscheckCommand.
                 .ThenBy(r => SortKey(r.GenusName), StringComparer.OrdinalIgnoreCase)
                 .ThenBy(r => SortKey(r.SpeciesName), StringComparer.OrdinalIgnoreCase)
                 .ThenBy(r => SortKey(r.InfraName), StringComparer.OrdinalIgnoreCase)
-                .ThenBy(r => r.AssessmentId, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(r => r.AssessmentId)
                 .ToList();
         }
 
@@ -348,9 +348,9 @@ public sealed class IucnColCrosscheckCommand : Command<IucnColCrosscheckCommand.
     bool authorityMatches,
     AlignmentPayload alignment) {
 
-        writer.WriteLine($"Assessment: {row.AssessmentId} | InternalTaxonId: {row.InternalTaxonId} | Version: {row.RedlistVersion}");
+        writer.WriteLine($"Assessment: {row.AssessmentId} | TaxonId: {row.TaxonId}");
         writer.WriteLine($"IUCN scientificName: {SafeValue(row.ScientificNameAssessments) }");
-        writer.WriteLine($"IUCN scientificName:1: {SafeValue(row.ScientificNameTaxonomy) }");
+        writer.WriteLine($"IUCN scientificName_taxonomy: {SafeValue(row.ScientificNameTaxonomy) }");
         writer.WriteLine($"IUCN authority: {SafeValue(iucnAuthority)}");
 
         if (!string.IsNullOrWhiteSpace(row.InfraType) || !string.IsNullOrWhiteSpace(row.InfraName)) {

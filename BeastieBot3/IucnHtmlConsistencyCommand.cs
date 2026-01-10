@@ -83,7 +83,7 @@ public sealed class IucnHtmlConsistencyCommand : Command<IucnHtmlConsistencyComm
         var viewColumns = GetColumnSet(connection, "view_assessments_html_taxonomy_html");
         var plainColumns = GetColumnSet(connection, "assessments");
 
-        var requiredViewColumns = new[] { "assessmentId", "redlist_version" }.Concat(HtmlFields);
+        var requiredViewColumns = new[] { "assessmentId" }.Concat(HtmlFields);
         var missingView = requiredViewColumns.Where(col => !viewColumns.Contains(col)).ToList();
         if (missingView.Count > 0) {
             AnsiConsole.MarkupLine("[red]Required columns missing from view:[/] " + string.Join(", ", missingView.Select(Markup.Escape)));
@@ -106,8 +106,7 @@ public sealed class IucnHtmlConsistencyCommand : Command<IucnHtmlConsistencyComm
         var fieldAliases = HtmlFields.Select(name => new HtmlFieldAlias(name, $"{name}_html", $"{name}_plain")).ToList();
 
         var selectParts = new List<string> {
-            "    v.assessmentId",
-            "    v.redlist_version"
+            "    v.assessmentId"
         };
 
         foreach (var field in fieldAliases) {
@@ -119,7 +118,7 @@ public sealed class IucnHtmlConsistencyCommand : Command<IucnHtmlConsistencyComm
         sql.AppendLine("SELECT");
         sql.AppendLine(string.Join(",\n", selectParts));
         sql.AppendLine("FROM view_assessments_html_taxonomy_html v");
-        sql.AppendLine("JOIN assessments p ON p.assessmentId = v.assessmentId AND p.redlist_version = v.redlist_version");
+        sql.AppendLine("JOIN assessments p ON p.assessmentId = v.assessmentId");
         sql.AppendLine("ORDER BY v.assessmentId");
         if (rowLimit > 0) {
             sql.AppendLine("LIMIT @limit");

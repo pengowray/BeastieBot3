@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -127,11 +128,10 @@ public sealed class IucnTaxonomyCleanupCommand : Command<IucnTaxonomyCleanupComm
         AnsiConsole.MarkupLine($"[grey]{Markup.Escape(label)}[/]");
         foreach (var sample in samples) {
             var builder = new StringBuilder();
-            AppendLine(builder, "assessmentId", sample.AssessmentId);
-            AppendLine(builder, "internalTaxonId", sample.InternalTaxonId);
-            AppendLine(builder, "redlist_version", sample.RedlistVersion);
+            AppendLine(builder, "assessmentId", sample.AssessmentId.ToString(CultureInfo.InvariantCulture));
+            AppendLine(builder, "taxonId", sample.TaxonId.ToString(CultureInfo.InvariantCulture));
             AppendLine(builder, "detail", sample.Detail);
-            var url = BuildIucnUrl(sample.InternalTaxonId, sample.AssessmentId);
+            var url = BuildIucnUrl(sample.TaxonId, sample.AssessmentId);
             AppendLine(builder, "url", url);
 
             foreach (var field in sample.Fields) {
@@ -170,14 +170,8 @@ public sealed class IucnTaxonomyCleanupCommand : Command<IucnTaxonomyCleanupComm
         }
     }
 
-    private static string BuildIucnUrl(string internalTaxonId, string assessmentId) {
-        if (string.IsNullOrWhiteSpace(internalTaxonId) || string.IsNullOrWhiteSpace(assessmentId)) {
-            return "(unavailable)";
-        }
-
-        var escapedTaxonId = Markup.Escape(internalTaxonId.Trim());
-        var escapedAssessmentId = Markup.Escape(assessmentId.Trim());
-        return $"https://www.iucnredlist.org/species/{escapedTaxonId}/{escapedAssessmentId}";
+    private static string BuildIucnUrl(long taxonId, long assessmentId) {
+        return $"https://www.iucnredlist.org/species/{taxonId}/{assessmentId}";
     }
 
     private static string GetIssueLabel(DataCleanupIssueKind kind) => kind switch {

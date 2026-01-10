@@ -69,10 +69,9 @@ internal sealed class IucnSynonymService : IDisposable {
             AddCandidate(ScientificNameHelper.BuildWithRankLabel(row.GenusName, row.SpeciesName, rank, row.InfraName), TaxonNameSource.IucnInfraRanked);
         }
 
-        if (long.TryParse(row.InternalTaxonId, out var sisId)) {
-            foreach (var synonym in GetIucnApiSynonyms(sisId, cancellationToken)) {
-                AddCandidate(synonym, TaxonNameSource.IucnSynonym);
-            }
+        var sisId = row.TaxonId;
+        foreach (var synonym in GetIucnApiSynonyms(sisId, cancellationToken)) {
+            AddCandidate(synonym, TaxonNameSource.IucnSynonym);
         }
 
         if (_colRepository is not null) {

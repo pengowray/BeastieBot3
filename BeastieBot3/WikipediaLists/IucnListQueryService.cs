@@ -56,20 +56,14 @@ internal sealed class IucnListQueryService : IDisposable {
     private (string Text, List<SqliteParameter> Parameters) BuildSql(WikipediaListDefinition definition, IReadOnlyCollection<RedlistStatusDescriptor> statuses, int? limit) {
         var parameters = new List<SqliteParameter>();
         var builder = new StringBuilder();
-        builder.AppendLine("WITH latest AS (");
-        builder.AppendLine("    SELECT internalTaxonId, MAX(redlist_version) AS max_version");
-        builder.AppendLine("    FROM assessments_html");
-        builder.AppendLine("    GROUP BY internalTaxonId");
-        builder.AppendLine(")");
         builder.AppendLine("SELECT");
-        builder.AppendLine("    v.internalTaxonId,");
+        builder.AppendLine("    v.taxonId,");
         builder.AppendLine("    v.assessmentId,");
         builder.AppendLine("    v.redlistCategory,");
         builder.AppendLine("    v.possiblyExtinct,");
         builder.AppendLine("    v.possiblyExtinctInTheWild,");
-        builder.AppendLine("    v.redlist_version,");
         builder.AppendLine("    v.scientificName AS scientificName_assessments,");
-        builder.AppendLine("    v.\"scientificName:1\" AS scientificName_taxonomy,");
+        builder.AppendLine("    v.scientificName_taxonomy,");
         builder.AppendLine("    v.kingdomName,");
         builder.AppendLine("    v.phylumName,");
         builder.AppendLine("    v.className,");
@@ -84,7 +78,6 @@ internal sealed class IucnListQueryService : IDisposable {
         builder.AppendLine("    v.infraAuthority,");
         builder.AppendLine("    v.yearPublished");
         builder.AppendLine("FROM view_assessments_html_taxonomy_html v");
-        builder.AppendLine("JOIN latest l ON l.internalTaxonId = v.internalTaxonId AND l.max_version = v.redlist_version");
         builder.AppendLine("WHERE");
         AppendStatusClauses(builder, statuses, parameters);
 
@@ -170,11 +163,10 @@ internal sealed class IucnListQueryService : IDisposable {
         var descriptor = IucnRedlistStatus.ResolveFromDatabase(redlistCategory, possiblyExtinct, possiblyExtinctInTheWild);
 
         return new IucnSpeciesRecord(
-            reader.GetString(reader.GetOrdinal("internalTaxonId")),
-            reader.GetString(reader.GetOrdinal("assessmentId")),
+            reader.GetInt64(reader.GetOrdinal("taxonId")),
+            reader.GetInt64(reader.GetOrdinal("assessmentId")),
             redlistCategory,
             descriptor.Code,
-            reader.GetString(reader.GetOrdinal("redlist_version")),
             GetStringOrNull(reader, "scientificName_assessments"),
             GetStringOrNull(reader, "scientificName_taxonomy"),
             reader.GetString(reader.GetOrdinal("kingdomName")),
@@ -206,11 +198,10 @@ internal sealed class IucnListQueryService : IDisposable {
 }
 
 internal sealed record IucnSpeciesRecord(
-    string InternalTaxonId,
-    string AssessmentId,
+    long TaxonId,
+    long AssessmentId,
     string RedlistCategory,
     string StatusCode,
-    string RedlistVersion,
     string? ScientificNameAssessments,
     string? ScientificNameTaxonomy,
     string KingdomName,

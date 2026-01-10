@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Threading;
@@ -125,10 +126,7 @@ public sealed class WikidataIucnBackfillCommand : AsyncCommand<WikidataIucnBackf
                 continue;
             }
 
-            var sisId = row.InternalTaxonId?.Trim();
-            if (string.IsNullOrWhiteSpace(sisId)) {
-                continue;
-            }
+            var sisId = row.TaxonId.ToString(CultureInfo.InvariantCulture);
 
             if (existingTaxonIds.Contains(sisId)) {
                 continue;

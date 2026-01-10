@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Threading;
@@ -89,17 +90,17 @@ internal static class WikidataCoverageAnalysis {
             }
 
             stats.Total++;
-            var taxonId = row.InternalTaxonId?.Trim();
+            var taxonId = row.TaxonId.ToString(CultureInfo.InvariantCulture);
             var normalizedName = NormalizeScientificName(row);
             var isSubspecies = IsSubspecies(row);
 
-            if (!string.IsNullOrEmpty(taxonId) && indexes.P627Claims.TryGetValue(taxonId, out var claimMatches)) {
+            if (indexes.P627Claims.TryGetValue(taxonId, out var claimMatches)) {
                 stats.Record(CoverageMatchMethod.P627Claim, row, isSubspecies);
                 RecordWikiPresence(stats, isSubspecies, viaSynonym: false, claimMatches, indexes.SiteLinks);
                 continue;
             }
 
-            if (!string.IsNullOrEmpty(taxonId) && indexes.P627References.TryGetValue(taxonId, out var referenceMatches)) {
+            if (indexes.P627References.TryGetValue(taxonId, out var referenceMatches)) {
                 stats.Record(CoverageMatchMethod.P627Reference, row, isSubspecies);
                 RecordWikiPresence(stats, isSubspecies, viaSynonym: false, referenceMatches, indexes.SiteLinks);
                 continue;

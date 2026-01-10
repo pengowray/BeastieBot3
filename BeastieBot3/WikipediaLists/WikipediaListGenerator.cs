@@ -38,12 +38,7 @@ internal sealed class WikipediaListGenerator {
         }
 
         var totalCount = sections.Sum(section => section.Records.Count);
-        var datasetVersions = records.Select(r => r.RedlistVersion).Where(v => !string.IsNullOrWhiteSpace(v)).Distinct().ToList();
-        var datasetVersion = datasetVersions.Count switch {
-            0 => "unknown",
-            1 => datasetVersions[0]!,
-            _ => string.Join(", ", datasetVersions)
-        };
+        var datasetVersion = "unknown"; // Version now stored in import_metadata, not per-row
 
         var scopeLabel = BuildScopeLabel(definition);
         var sectionSummary = string.Join("; ", sections.Select(section => $"{section.Definition.Heading} ({section.Records.Count})"));
@@ -321,8 +316,7 @@ internal static class IucnSpeciesRecordExtensions {
     public static IucnTaxonomyRow ToTaxonomyRow(this IucnSpeciesRecord record) {
         return new IucnTaxonomyRow(
             record.AssessmentId,
-            record.InternalTaxonId,
-            record.RedlistVersion,
+            record.TaxonId,
             record.ScientificNameAssessments,
             record.ScientificNameTaxonomy,
             record.KingdomName,
