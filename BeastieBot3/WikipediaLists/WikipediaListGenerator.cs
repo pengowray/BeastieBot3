@@ -273,7 +273,7 @@ internal sealed class WikipediaListGenerator {
     /// <summary>
     /// Maps IUCN status codes to Wikipedia template codes.
     /// Uses PE/PEW database flags for CR species to produce CR(PE) or CR(PEW).
-    /// Maps legacy LR/* codes to their modern equivalents.
+    /// Maps legacy LR/* codes to their modern equivalents, except LR/cd which has no exact equivalent.
     /// </summary>
     private static string GetWikipediaStatusCode(string code, string? possiblyExtinct, string? possiblyExtinctInTheWild) {
         var normalized = code.ToUpperInvariant();
@@ -295,8 +295,8 @@ internal sealed class WikipediaListGenerator {
             "CR(PE)" or "PE" => "CR(PE)",
             "CR(PEW)" or "PEW" => "CR(PEW)",
             "LR/CD" or "CD" => "LR/cd",
-            "LR/NT" => "NT",
-            "LR/LC" => "LC",
+            "LR/NT" => "LR/nt", //"NT",
+            "LR/LC" => "LR/lc", //"LC"",
             _ => normalized
         };
     }
