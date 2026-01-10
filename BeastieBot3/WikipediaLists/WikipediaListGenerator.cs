@@ -79,7 +79,7 @@ internal sealed class WikipediaListGenerator {
                 builder.AppendLine();
             }
 
-            builder.AppendLine(BuildSectionBody(section.Records, grouping, display));
+            builder.AppendLine(BuildSectionBody(section.Records, grouping, display, section.StatusContext));
             builder.AppendLine();
         }
 
@@ -150,13 +150,13 @@ internal sealed class WikipediaListGenerator {
         return map.Values.ToList();
     }
 
-    private string BuildSectionBody(IReadOnlyList<IucnSpeciesRecord> records, IReadOnlyList<GroupingLevelDefinition> grouping, DisplayPreferences display) {
+    private string BuildSectionBody(IReadOnlyList<IucnSpeciesRecord> records, IReadOnlyList<GroupingLevelDefinition> grouping, DisplayPreferences display, string? statusContext) {
         if (records.Count == 0) {
             return "''No taxa currently listable.''";
         }
 
         if (grouping.Count == 0) {
-            return string.Join(Environment.NewLine, records.Select(record => FormatSpeciesLine(record, display)));
+            return string.Join(Environment.NewLine, records.Select(record => FormatSpeciesLine(record, display, statusContext)));
         }
 
         var levels = grouping
@@ -169,7 +169,7 @@ internal sealed class WikipediaListGenerator {
 
         var tree = TaxonomyTreeBuilder.Build(records, levels);
         var builder = new StringBuilder();
-        AppendTree(builder, tree, startHeading: 3, display);
+        AppendTree(builder, tree, startHeading: 3, display, statusContext);
         return builder.ToString().TrimEnd();
     }
 
@@ -183,16 +183,16 @@ internal sealed class WikipediaListGenerator {
         _ => _ => null
     };
 
-    private void AppendTree(StringBuilder builder, TaxonomyTreeNode<IucnSpeciesRecord> node, int startHeading, DisplayPreferences display) {
+    private void AppendTree(StringBuilder builder, TaxonomyTreeNode<IucnSpeciesRecord> node, int startHeading, DisplayPreferences display, string? statusContext) {
         foreach (var child in node.Children) {
             var headingLevel = Math.Min(startHeading, 6);
             var headingMarkup = new string('=', headingLevel);
             builder.AppendLine($"{headingMarkup} {FormatHeading(child.Value)} {headingMarkup}");
-            AppendTree(builder, child, headingLevel + 1, display);
+            AppendTree(builder, child, headingLevel + 1, display, statusContext);
         }
 
         foreach (var record in node.Items) {
-            builder.AppendLine(FormatSpeciesLine(record, display));
+            builder.AppendLine(FormatSpeciesLine(record, display, statusContext));
         }
     }
 
@@ -217,30 +217,97 @@ internal sealed class WikipediaListGenerator {
         return raw;
     }
 
-    private string FormatSpeciesLine(IucnSpeciesRecord record, DisplayPreferences display) {
+    private string FormatSpeciesLine(IucnSpeciesRecord record, DisplayPreferences display, string? listStatusContext) {
         var descriptor = IucnRedlistStatus.Describe(record.StatusCode);
         var builder = new StringBuilder();
         builder.Append("* ");
-        if (display.IncludeStatusTemplate && !string.IsNullOrWhiteSpace(descriptor.TemplateName)) {
-            builder.Append("{{");
-            builder.Append(descriptor.TemplateName);
-            builder.Append("}} ");
-        }
 
         builder.Append(BuildNameFragment(record, display));
 
-        if (display.IncludeStatusLabel && !string.IsNullOrWhiteSpace(descriptor.Label)) {
-            builder.Append(" – ");
-            builder.Append(descriptor.Label);
+        // Add special indicator for PE/PEW if not redundant with list context
+        var specialLabel = GetSpecialStatusLabel(record.StatusCode, listStatusContext);
+        if (!string.IsNullOrWhiteSpace(specialLabel)) {
+            builder.Append(" (");
+            builder.Append(specialLabel);
+            builder.Append(')');
         }
 
+        // Append subpopulation name if present
         if (!string.IsNullOrWhiteSpace(record.SubpopulationName)) {
             builder.Append(" (subpopulation: ");
             builder.Append(record.SubpopulationName);
             builder.Append(')');
         }
 
+        // Add IUCN status template at end: {{IUCN status|XX|taxonId/assessmentId|1|year=YYYY}}
+        if (display.IncludeStatusTemplate) {
+            builder.Append(' ');
+            builder.Append(BuildIucnStatusTemplate(record, descriptor));
+        }
+
         return builder.ToString();
+    }
+
+    private static string BuildIucnStatusTemplate(IucnSpeciesRecord record, RedlistStatusDescriptor descriptor) {
+        // Use Limited status code (PE → CR, PEW → CR, CD → NT)
+        var statusCode = GetLimitedStatusCode(descriptor.Code);
+        var builder = new StringBuilder();
+        builder.Append("{{IUCN status|");
+        builder.Append(statusCode);
+        builder.Append('|');
+        builder.Append(record.TaxonId);
+        builder.Append('/');
+        builder.Append(record.AssessmentId);
+        builder.Append("|1"); // 1 = make link visible
+
+        // Add year for non-extinct statuses
+        if (!IsExtinctStatus(descriptor.Code) && !string.IsNullOrWhiteSpace(record.YearPublished)) {
+            builder.Append("|year=");
+            builder.Append(record.YearPublished);
+        }
+
+        builder.Append("}}");
+        return builder.ToString();
+    }
+
+    private static string GetLimitedStatusCode(string code) => code.ToUpperInvariant() switch {
+        "CR(PE)" or "PE" => "CR",
+        "CR(PEW)" or "PEW" => "CR",
+        "LR/CD" or "CD" => "NT",
+        "LR/NT" => "NT",
+        "LR/LC" => "LC",
+        _ => code.ToUpperInvariant()
+    };
+
+    private static bool IsExtinctStatus(string code) => code.ToUpperInvariant() switch {
+        "EX" or "EW" => true,
+        _ => false
+    };
+
+    private static string? GetSpecialStatusLabel(string statusCode, string? listStatusContext) {
+        // Don't add redundant labels when the list is specifically for that status
+        var code = statusCode.ToUpperInvariant();
+        var context = listStatusContext?.ToUpperInvariant() ?? string.Empty;
+
+        // PE/PEW always need indicator except on dedicated PE lists
+        if (code is "CR(PE)" or "PE") {
+            // If context contains CR(PE) or PE, suppress the label
+            if (context.Contains("CR(PE)") || (context.Contains("PE") && !context.Contains("PEW"))) return null;
+            return "possibly\u00A0extinct"; // non-breaking space
+        }
+
+        if (code is "CR(PEW)" or "PEW") {
+            if (context.Contains("CR(PEW)") || context.Contains("PEW")) return null;
+            return "possibly extinct in the wild";
+        }
+
+        // EW indicator only needed if not on an EW-specific list
+        if (code == "EW") {
+            if (context.Contains("EW")) return null;
+            return "extinct in the wild";
+        }
+
+        return null;
     }
 
     private string BuildNameFragment(IucnSpeciesRecord record, DisplayPreferences display) {
@@ -302,10 +369,13 @@ internal sealed class WikipediaListGenerator {
         public SectionRuntime(WikipediaSectionDefinition definition, HashSet<string> statusSet) {
             Definition = definition;
             StatusSet = statusSet;
+            // Build context string from status codes for suppressing redundant labels
+            StatusContext = string.Join(",", statusSet.Select(s => s.ToUpperInvariant()));
         }
 
         public WikipediaSectionDefinition Definition { get; }
         public HashSet<string> StatusSet { get; }
+        public string StatusContext { get; }
         public List<IucnSpeciesRecord> Records { get; } = new();
     }
 }

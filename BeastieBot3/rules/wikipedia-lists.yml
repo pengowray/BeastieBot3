@@ -281,3 +281,646 @@ lists:
         heading: "Conservation dependent"
         statuses:
           - code: "LR/cd"
+
+  # ==================== BIRDS (AVES) ====================
+
+  - id: birds-ex
+    title: "List of recently extinct birds"
+    description: "Bird species, subspecies, and subpopulations assessed as Extinct (EX) or flagged as possibly extinct."
+    output_file: "List_of_recently_extinct_birds.wikitext"
+    filters:
+      - rank: kingdom
+        value: Animalia
+      - rank: class
+        value: Aves
+    sections:
+      - key: extinct
+        heading: "Extinct species and subspecies"
+        statuses:
+          - code: EX
+      - key: possibly-extinct
+        heading: "Possibly extinct"
+        description: "Listed by the IUCN as Critically Endangered (Possibly Extinct)."
+        statuses:
+          - code: "CR(PE)"
+          - code: "CR(PEW)"
+
+  - id: birds-cr
+    title: "List of critically endangered birds"
+    description: "Bird taxa currently assessed as Critically Endangered."
+    output_file: "List_of_critically_endangered_birds.wikitext"
+    filters:
+      - rank: kingdom
+        value: Animalia
+      - rank: class
+        value: Aves
+    sections:
+      - key: critically-endangered
+        heading: "Critically endangered"
+        statuses:
+          - code: CR
+          - code: "CR(PE)"
+          - code: "CR(PEW)"
+
+  - id: birds-en
+    title: "List of endangered birds"
+    description: "Bird taxa assessed as Endangered or Critically Endangered."
+    output_file: "List_of_endangered_birds.wikitext"
+    filters:
+      - rank: kingdom
+        value: Animalia
+      - rank: class
+        value: Aves
+    sections:
+      - key: endangered
+        heading: "Endangered"
+        statuses:
+          - code: EN
+      - key: critically-endangered
+        heading: "Critically endangered"
+        statuses:
+          - code: CR
+          - code: "CR(PE)"
+          - code: "CR(PEW)"
+
+  - id: birds-vu
+    title: "List of vulnerable birds"
+    description: "Bird taxa assessed as Vulnerable."
+    output_file: "List_of_vulnerable_birds.wikitext"
+    filters:
+      - rank: kingdom
+        value: Animalia
+      - rank: class
+        value: Aves
+    sections:
+      - key: vulnerable
+        heading: "Vulnerable"
+        statuses:
+          - code: VU
+
+  - id: birds-nt
+    title: "List of near threatened birds"
+    description: "Bird taxa assessed as Near Threatened."
+    output_file: "List_of_near_threatened_birds.wikitext"
+    filters:
+      - rank: kingdom
+        value: Animalia
+      - rank: class
+        value: Aves
+    sections:
+      - key: near-threatened
+        heading: "Near threatened"
+        statuses:
+          - code: NT
+          - code: "LR/nt"
+          - code: "LR/cd"
+
+  - id: birds-lc
+    title: "List of least concern birds"
+    description: "Bird taxa assessed as Least Concern."
+    output_file: "List_of_least_concern_birds.wikitext"
+    filters:
+      - rank: kingdom
+        value: Animalia
+      - rank: class
+        value: Aves
+    sections:
+      - key: least-concern
+        heading: "Least concern"
+        statuses:
+          - code: LC
+          - code: "LR/lc"
+
+  # ==================== REPTILES (REPTILIA) ====================
+
+  - id: reptiles-ex
+    title: "List of recently extinct reptiles"
+    description: "Reptile species assessed as Extinct or flagged as possibly extinct."
+    output_file: "List_of_recently_extinct_reptiles.wikitext"
+    filters:
+      - rank: kingdom
+        value: Animalia
+      - rank: class
+        value: Reptilia
+    sections:
+      - key: extinct
+        heading: "Extinct species"
+        statuses:
+          - code: EX
+      - key: possibly-extinct
+        heading: "Possibly extinct"
+        statuses:
+          - code: "CR(PE)"
+          - code: "CR(PEW)"
+
+  - id: reptiles-cr
+    title: "List of critically endangered reptiles"
+    description: "Reptile taxa assessed as Critically Endangered."
+    output_file: "List_of_critically_endangered_reptiles.wikitext"
+    filters:
+      - rank: kingdom
+        value: Animalia
+      - rank: class
+        value: Reptilia
+    sections:
+      - key: critically-endangered
+        heading: "Critically endangered"
+        statuses:
+          - code: CR
+          - code: "CR(PE)"
+          - code: "CR(PEW)"
+
+  - id: reptiles-en
+    title: "List of endangered reptiles"
+    description: "Reptile taxa assessed as Endangered."
+    output_file: "List_of_endangered_reptiles.wikitext"
+    filters:
+      - rank: kingdom
+        value: Animalia
+      - rank: class
+        value: Reptilia
+    sections:
+      - key: endangered
+        heading: "Endangered"
+        statuses:
+          - code: EN
+
+  - id: reptiles-vu
+    title: "List of vulnerable reptiles"
+    description: "Reptile taxa assessed as Vulnerable."
+    output_file: "List_of_vulnerable_reptiles.wikitext"
+    filters:
+      - rank: kingdom
+        value: Animalia
+      - rank: class
+        value: Reptilia
+    sections:
+      - key: vulnerable
+        heading: "Vulnerable"
+        statuses:
+          - code: VU
+
+  - id: reptiles-nt
+    title: "List of near threatened reptiles"
+    description: "Reptile taxa assessed as Near Threatened."
+    output_file: "List_of_near_threatened_reptiles.wikitext"
+    filters:
+      - rank: kingdom
+        value: Animalia
+      - rank: class
+        value: Reptilia
+    sections:
+      - key: near-threatened
+        heading: "Near threatened"
+        statuses:
+          - code: NT
+          - code: "LR/nt"
+          - code: "LR/cd"
+
+  # ==================== MAMMALS (MAMMALIA) ====================
+
+  - id: mammals-ex
+    title: "List of recently extinct mammals"
+    description: "Mammal species assessed as Extinct or flagged as possibly extinct."
+    output_file: "List_of_recently_extinct_mammals.wikitext"
+    filters:
+      - rank: kingdom
+        value: Animalia
+      - rank: class
+        value: Mammalia
+    sections:
+      - key: extinct
+        heading: "Extinct species"
+        statuses:
+          - code: EX
+      - key: possibly-extinct
+        heading: "Possibly extinct"
+        statuses:
+          - code: "CR(PE)"
+          - code: "CR(PEW)"
+
+  - id: mammals-cr
+    title: "List of critically endangered mammals"
+    description: "Mammal taxa assessed as Critically Endangered."
+    output_file: "List_of_critically_endangered_mammals.wikitext"
+    filters:
+      - rank: kingdom
+        value: Animalia
+      - rank: class
+        value: Mammalia
+    sections:
+      - key: critically-endangered
+        heading: "Critically endangered"
+        statuses:
+          - code: CR
+          - code: "CR(PE)"
+          - code: "CR(PEW)"
+
+  - id: mammals-en
+    title: "List of endangered mammals"
+    description: "Mammal taxa assessed as Endangered."
+    output_file: "List_of_endangered_mammals.wikitext"
+    filters:
+      - rank: kingdom
+        value: Animalia
+      - rank: class
+        value: Mammalia
+    sections:
+      - key: endangered
+        heading: "Endangered"
+        statuses:
+          - code: EN
+
+  - id: mammals-vu
+    title: "List of vulnerable mammals"
+    description: "Mammal taxa assessed as Vulnerable."
+    output_file: "List_of_vulnerable_mammals.wikitext"
+    filters:
+      - rank: kingdom
+        value: Animalia
+      - rank: class
+        value: Mammalia
+    sections:
+      - key: vulnerable
+        heading: "Vulnerable"
+        statuses:
+          - code: VU
+
+  - id: mammals-nt
+    title: "List of near threatened mammals"
+    description: "Mammal taxa assessed as Near Threatened."
+    output_file: "List_of_near_threatened_mammals.wikitext"
+    filters:
+      - rank: kingdom
+        value: Animalia
+      - rank: class
+        value: Mammalia
+    sections:
+      - key: near-threatened
+        heading: "Near threatened"
+        statuses:
+          - code: NT
+          - code: "LR/nt"
+          - code: "LR/cd"
+
+  # ==================== FISHES (ACTINOPTERYGII + CHONDRICHTHYES) ====================
+
+  - id: ray-finned-fishes-cr
+    title: "List of critically endangered ray-finned fishes"
+    description: "Ray-finned fish taxa assessed as Critically Endangered."
+    output_file: "List_of_critically_endangered_ray-finned_fishes.wikitext"
+    filters:
+      - rank: kingdom
+        value: Animalia
+      - rank: class
+        value: Actinopterygii
+    sections:
+      - key: critically-endangered
+        heading: "Critically endangered"
+        statuses:
+          - code: CR
+          - code: "CR(PE)"
+          - code: "CR(PEW)"
+
+  - id: ray-finned-fishes-en
+    title: "List of endangered ray-finned fishes"
+    description: "Ray-finned fish taxa assessed as Endangered."
+    output_file: "List_of_endangered_ray-finned_fishes.wikitext"
+    filters:
+      - rank: kingdom
+        value: Animalia
+      - rank: class
+        value: Actinopterygii
+    sections:
+      - key: endangered
+        heading: "Endangered"
+        statuses:
+          - code: EN
+
+  - id: ray-finned-fishes-vu
+    title: "List of vulnerable ray-finned fishes"
+    description: "Ray-finned fish taxa assessed as Vulnerable."
+    output_file: "List_of_vulnerable_ray-finned_fishes.wikitext"
+    filters:
+      - rank: kingdom
+        value: Animalia
+      - rank: class
+        value: Actinopterygii
+    sections:
+      - key: vulnerable
+        heading: "Vulnerable"
+        statuses:
+          - code: VU
+
+  - id: sharks-rays-cr
+    title: "List of critically endangered sharks and rays"
+    description: "Cartilaginous fish taxa (sharks, rays, chimaeras) assessed as Critically Endangered."
+    output_file: "List_of_critically_endangered_sharks_and_rays.wikitext"
+    filters:
+      - rank: kingdom
+        value: Animalia
+      - rank: class
+        value: Chondrichthyes
+    sections:
+      - key: critically-endangered
+        heading: "Critically endangered"
+        statuses:
+          - code: CR
+          - code: "CR(PE)"
+
+  - id: sharks-rays-en
+    title: "List of endangered sharks and rays"
+    description: "Cartilaginous fish taxa assessed as Endangered."
+    output_file: "List_of_endangered_sharks_and_rays.wikitext"
+    filters:
+      - rank: kingdom
+        value: Animalia
+      - rank: class
+        value: Chondrichthyes
+    sections:
+      - key: endangered
+        heading: "Endangered"
+        statuses:
+          - code: EN
+
+  # ==================== INSECTS (INSECTA) ====================
+
+  - id: insects-cr
+    title: "List of critically endangered insects"
+    description: "Insect taxa assessed as Critically Endangered."
+    output_file: "List_of_critically_endangered_insects.wikitext"
+    filters:
+      - rank: kingdom
+        value: Animalia
+      - rank: class
+        value: Insecta
+    sections:
+      - key: critically-endangered
+        heading: "Critically endangered"
+        statuses:
+          - code: CR
+          - code: "CR(PE)"
+          - code: "CR(PEW)"
+
+  - id: insects-en
+    title: "List of endangered insects"
+    description: "Insect taxa assessed as Endangered."
+    output_file: "List_of_endangered_insects.wikitext"
+    filters:
+      - rank: kingdom
+        value: Animalia
+      - rank: class
+        value: Insecta
+    sections:
+      - key: endangered
+        heading: "Endangered"
+        statuses:
+          - code: EN
+
+  - id: insects-vu
+    title: "List of vulnerable insects"
+    description: "Insect taxa assessed as Vulnerable."
+    output_file: "List_of_vulnerable_insects.wikitext"
+    filters:
+      - rank: kingdom
+        value: Animalia
+      - rank: class
+        value: Insecta
+    sections:
+      - key: vulnerable
+        heading: "Vulnerable"
+        statuses:
+          - code: VU
+
+  # ==================== GASTROPODS (GASTROPODA) ====================
+
+  - id: gastropods-cr
+    title: "List of critically endangered gastropods"
+    description: "Snails and slugs assessed as Critically Endangered."
+    output_file: "List_of_critically_endangered_gastropods.wikitext"
+    filters:
+      - rank: kingdom
+        value: Animalia
+      - rank: class
+        value: Gastropoda
+    sections:
+      - key: critically-endangered
+        heading: "Critically endangered"
+        statuses:
+          - code: CR
+          - code: "CR(PE)"
+
+  - id: gastropods-en
+    title: "List of endangered gastropods"
+    description: "Snails and slugs assessed as Endangered."
+    output_file: "List_of_endangered_gastropods.wikitext"
+    filters:
+      - rank: kingdom
+        value: Animalia
+      - rank: class
+        value: Gastropoda
+    sections:
+      - key: endangered
+        heading: "Endangered"
+        statuses:
+          - code: EN
+
+  # ==================== CRUSTACEANS (MALACOSTRACA) ====================
+
+  - id: crustaceans-cr
+    title: "List of critically endangered crustaceans"
+    description: "Crustacean taxa assessed as Critically Endangered."
+    output_file: "List_of_critically_endangered_crustaceans.wikitext"
+    filters:
+      - rank: kingdom
+        value: Animalia
+      - rank: class
+        value: Malacostraca
+    sections:
+      - key: critically-endangered
+        heading: "Critically endangered"
+        statuses:
+          - code: CR
+          - code: "CR(PE)"
+
+  # ==================== CORALS (ANTHOZOA) ====================
+
+  - id: corals-cr
+    title: "List of critically endangered corals"
+    description: "Coral taxa assessed as Critically Endangered."
+    output_file: "List_of_critically_endangered_corals.wikitext"
+    filters:
+      - rank: kingdom
+        value: Animalia
+      - rank: class
+        value: Anthozoa
+    sections:
+      - key: critically-endangered
+        heading: "Critically endangered"
+        statuses:
+          - code: CR
+
+  - id: corals-en
+    title: "List of endangered corals"
+    description: "Coral taxa assessed as Endangered."
+    output_file: "List_of_endangered_corals.wikitext"
+    filters:
+      - rank: kingdom
+        value: Animalia
+      - rank: class
+        value: Anthozoa
+    sections:
+      - key: endangered
+        heading: "Endangered"
+        statuses:
+          - code: EN
+
+  - id: corals-vu
+    title: "List of vulnerable corals"
+    description: "Coral taxa assessed as Vulnerable."
+    output_file: "List_of_vulnerable_corals.wikitext"
+    filters:
+      - rank: kingdom
+        value: Animalia
+      - rank: class
+        value: Anthozoa
+    sections:
+      - key: vulnerable
+        heading: "Vulnerable"
+        statuses:
+          - code: VU
+
+  # ==================== PLANTS (PLANTAE) ====================
+
+  - id: plants-ex
+    title: "List of recently extinct plants"
+    description: "Plant species assessed as Extinct or flagged as possibly extinct."
+    output_file: "List_of_recently_extinct_plants.wikitext"
+    filters:
+      - rank: kingdom
+        value: Plantae
+    sections:
+      - key: extinct
+        heading: "Extinct species"
+        statuses:
+          - code: EX
+      - key: possibly-extinct
+        heading: "Possibly extinct"
+        statuses:
+          - code: "CR(PE)"
+          - code: "CR(PEW)"
+
+  - id: plants-cr
+    title: "List of critically endangered plants"
+    description: "Plant taxa assessed as Critically Endangered."
+    output_file: "List_of_critically_endangered_plants.wikitext"
+    filters:
+      - rank: kingdom
+        value: Plantae
+    sections:
+      - key: critically-endangered
+        heading: "Critically endangered"
+        statuses:
+          - code: CR
+          - code: "CR(PE)"
+          - code: "CR(PEW)"
+
+  - id: plants-en
+    title: "List of endangered plants"
+    description: "Plant taxa assessed as Endangered."
+    output_file: "List_of_endangered_plants.wikitext"
+    filters:
+      - rank: kingdom
+        value: Plantae
+    sections:
+      - key: endangered
+        heading: "Endangered"
+        statuses:
+          - code: EN
+
+  - id: plants-vu
+    title: "List of vulnerable plants"
+    description: "Plant taxa assessed as Vulnerable."
+    output_file: "List_of_vulnerable_plants.wikitext"
+    filters:
+      - rank: kingdom
+        value: Plantae
+    sections:
+      - key: vulnerable
+        heading: "Vulnerable"
+        statuses:
+          - code: VU
+
+  - id: conifers-threatened
+    title: "List of threatened conifers"
+    description: "Conifer species (Pinopsida) in threatened categories."
+    output_file: "List_of_threatened_conifers.wikitext"
+    filters:
+      - rank: kingdom
+        value: Plantae
+      - rank: class
+        value: Pinopsida
+    sections:
+      - key: critically-endangered
+        heading: "Critically endangered"
+        statuses:
+          - code: CR
+          - code: "CR(PE)"
+      - key: endangered
+        heading: "Endangered"
+        statuses:
+          - code: EN
+      - key: vulnerable
+        heading: "Vulnerable"
+        statuses:
+          - code: VU
+
+  - id: cycads-threatened
+    title: "List of threatened cycads"
+    description: "Cycad species in threatened categories."
+    output_file: "List_of_threatened_cycads.wikitext"
+    filters:
+      - rank: kingdom
+        value: Plantae
+      - rank: class
+        value: Cycadopsida
+    sections:
+      - key: critically-endangered
+        heading: "Critically endangered"
+        statuses:
+          - code: CR
+          - code: "CR(PE)"
+      - key: endangered
+        heading: "Endangered"
+        statuses:
+          - code: EN
+      - key: vulnerable
+        heading: "Vulnerable"
+        statuses:
+          - code: VU
+
+  # ==================== ARACHNIDS (ARACHNIDA) ====================
+
+  - id: arachnids-threatened
+    title: "List of threatened arachnids"
+    description: "Spiders, scorpions and related taxa in threatened categories."
+    output_file: "List_of_threatened_arachnids.wikitext"
+    filters:
+      - rank: kingdom
+        value: Animalia
+      - rank: class
+        value: Arachnida
+    sections:
+      - key: critically-endangered
+        heading: "Critically endangered"
+        statuses:
+          - code: CR
+          - code: "CR(PE)"
+      - key: endangered
+        heading: "Endangered"
+        statuses:
+          - code: EN
+      - key: vulnerable
+        heading: "Vulnerable"
+        statuses:
+          - code: VU
