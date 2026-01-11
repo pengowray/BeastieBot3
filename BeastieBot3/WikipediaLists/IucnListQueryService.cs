@@ -95,14 +95,33 @@ internal sealed class IucnListQueryService : IDisposable {
                 continue;
             }
 
-            var normalizedValue = NormalizeFilterValue(filter.Rank, filter.Value);
-            if (string.IsNullOrWhiteSpace(normalizedValue)) {
-                continue;
+            // Check if using multi-value OR filter
+            if (filter.Values is { Count: > 0 }) {
+                var orClauses = new List<string>();
+                for (var j = 0; j < filter.Values.Count; j++) {
+                    var normalizedValue = NormalizeFilterValue(filter.Rank, filter.Values[j]);
+                    if (string.IsNullOrWhiteSpace(normalizedValue)) {
+                        continue;
+                    }
+                    var parameter = new SqliteParameter($"@f_{column}_{i}_{j}", normalizedValue);
+                    orClauses.Add($"v.{column} = {parameter.ParameterName}");
+                    parameters.Add(parameter);
+                }
+                if (orClauses.Count > 0) {
+                    builder.AppendLine($"  AND ({string.Join(" OR ", orClauses)})");
+                }
             }
+            else {
+                // Single value filter
+                var normalizedValue = NormalizeFilterValue(filter.Rank, filter.Value);
+                if (string.IsNullOrWhiteSpace(normalizedValue)) {
+                    continue;
+                }
 
-            var parameter = new SqliteParameter($"@f_{column}_{i}", normalizedValue);
-            builder.AppendLine($"  AND v.{column} = {parameter.ParameterName}");
-            parameters.Add(parameter);
+                var parameter = new SqliteParameter($"@f_{column}_{i}", normalizedValue);
+                builder.AppendLine($"  AND v.{column} = {parameter.ParameterName}");
+                parameters.Add(parameter);
+            }
         }
 
         builder.AppendLine("ORDER BY v.orderName, v.familyName, v.genusName, v.speciesName");

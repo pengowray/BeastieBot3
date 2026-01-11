@@ -53,13 +53,72 @@ public sealed class WikipediaListCommand : Command<WikipediaListCommand.Settings
         var rules = new Legacy.LegacyTaxaRuleList(rulesPath);
         var generator = new WikipediaListGenerator(query, templates, rules, commonNames);
 
+        var results = new List<(WikipediaListDefinition Definition, WikipediaListResult Result)>();
         foreach (var definition in definitions) {
             AnsiConsole.MarkupLine($"[grey]Generating[/] [white]{definition.Title}[/]...");
             var result = generator.Generate(definition, config.Defaults, outputDir, settings.Limit);
-            AnsiConsole.MarkupLine($"  [green]saved[/] {result.OutputPath} ([cyan]{result.TotalEntries}[/] taxa, dataset {result.DatasetVersion}).");
+            results.Add((definition, result));
+            AnsiConsole.MarkupLine($"  [green]saved[/] {result.OutputPath} ([cyan]{result.TotalEntries}[/] taxa, [cyan]{result.HeadingCount}[/] headings, dataset {result.DatasetVersion}).");
         }
 
+        // Write report file
+        WriteReport(outputDir, results);
+
         return 0;
+    }
+
+    private static void WriteReport(string outputDir, List<(WikipediaListDefinition Definition, WikipediaListResult Result)> results) {
+        if (results.Count == 0) {
+            return;
+        }
+
+        var reportPath = Path.Combine(outputDir, "generation-report.txt");
+        var datasetVersion = results[0].Result.DatasetVersion;
+        var generatedAt = DateTimeOffset.UtcNow.ToString("yyyy-MM-dd HH:mm:ss", System.Globalization.CultureInfo.InvariantCulture);
+
+        using var writer = new StreamWriter(reportPath);
+        writer.WriteLine($"Wikipedia List Generation Report");
+        writer.WriteLine($"================================");
+        writer.WriteLine($"Generated: {generatedAt} UTC");
+        writer.WriteLine($"Dataset: {datasetVersion}");
+        writer.WriteLine($"Lists: {results.Count}");
+        writer.WriteLine();
+
+        // Section 1: By generation order
+        writer.WriteLine("BY GENERATION ORDER");
+        writer.WriteLine("-------------------");
+        writer.WriteLine();
+        WriteReportTable(writer, results);
+
+        // Section 2: Sorted by taxa desc, then headings desc
+        writer.WriteLine();
+        writer.WriteLine("BY SIZE (LARGEST FIRST)");
+        writer.WriteLine("-----------------------");
+        writer.WriteLine();
+        var sorted = results
+            .OrderByDescending(r => r.Result.TotalEntries)
+            .ThenByDescending(r => r.Result.HeadingCount)
+            .ToList();
+        WriteReportTable(writer, sorted);
+
+        AnsiConsole.MarkupLine($"[grey]Report saved to[/] {reportPath}");
+    }
+
+    private static void WriteReportTable(StreamWriter writer, List<(WikipediaListDefinition Definition, WikipediaListResult Result)> results) {
+        writer.WriteLine($"{"File",-60} {"Taxa",8} {"Headings",10}");
+        writer.WriteLine(new string('-', 80));
+
+        var totalTaxa = 0;
+        var totalHeadings = 0;
+        foreach (var (definition, result) in results) {
+            var fileName = Path.GetFileName(result.OutputPath);
+            writer.WriteLine($"{fileName,-60} {result.TotalEntries,8} {result.HeadingCount,10}");
+            totalTaxa += result.TotalEntries;
+            totalHeadings += result.HeadingCount;
+        }
+
+        writer.WriteLine(new string('-', 80));
+        writer.WriteLine($"{"TOTAL",-60} {totalTaxa,8} {totalHeadings,10}");
     }
 
     private static string ResolveConfigPath(PathsService paths, string? overridePath) {

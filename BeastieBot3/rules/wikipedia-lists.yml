@@ -1,9 +1,10 @@
 # Wikipedia list definitions for the new generator.
 # This file references taxa-groups.yml and list-presets.yml for a cleaner, more maintainable structure.
 #
-# Each list can be defined in two ways:
-# 1. Shorthand: specify taxa_group + preset, and the loader expands templates automatically
-# 2. Full: specify all fields explicitly (for custom lists that don't fit a preset)
+# Syntax options:
+# 1. Compact multi-preset: taxa_group + presets array → generates one list per preset
+# 2. Single preset: taxa_group + preset → generates one list
+# 3. Full definition: specify all fields explicitly (for custom lists)
 
 defaults:
   header_template: status-default
@@ -25,198 +26,78 @@ defaults:
 
 lists:
   # ==================== AMPHIBIANS ====================
-  - id: amphibians-ex
-    taxa_group: amphibians
-    preset: ex
+  - taxa_group: amphibians
+    presets: [ex, cr, en, vu, nt, lc, dd, threatened]
     templates:
       header: amphibians-status
 
-  - id: amphibians-cr
-    taxa_group: amphibians
-    preset: cr
-
-  - id: amphibians-en
-    taxa_group: amphibians
-    preset: endangered-combined
-
-  - id: amphibians-threatened
-    taxa_group: amphibians
-    preset: threatened
-
-  - id: amphibians-nt
-    taxa_group: amphibians
-    preset: nt
-
-  - id: amphibians-lc
-    taxa_group: amphibians
-    preset: lc
-
   # ==================== BIRDS ====================
-  - id: birds-ex
-    taxa_group: birds
-    preset: ex
-
-  - id: birds-cr
-    taxa_group: birds
-    preset: cr
-
-  - id: birds-en
-    taxa_group: birds
-    preset: endangered-combined
-
-  - id: birds-vu
-    taxa_group: birds
-    preset: vu
-
-  - id: birds-nt
-    taxa_group: birds
-    preset: nt
-
-  - id: birds-lc
-    taxa_group: birds
-    preset: lc
+  - taxa_group: birds
+    presets: [ex, ew, cr, en, vu, nt, lc, dd, threatened]
 
   # ==================== REPTILES ====================
-  - id: reptiles-ex
-    taxa_group: reptiles
-    preset: ex
-
-  - id: reptiles-cr
-    taxa_group: reptiles
-    preset: cr
-
-  - id: reptiles-en
-    taxa_group: reptiles
-    preset: en
-
-  - id: reptiles-vu
-    taxa_group: reptiles
-    preset: vu
-
-  - id: reptiles-nt
-    taxa_group: reptiles
-    preset: nt
+  - taxa_group: reptiles
+    presets: [ex, ew, cr, en, vu, nt, lc, dd, threatened]
 
   # ==================== MAMMALS ====================
-  - id: mammals-ex
-    taxa_group: mammals
-    preset: ex
+  - taxa_group: mammals
+    presets: [ex, ew, cr, en, vu, nt, lc, dd, threatened]
 
-  - id: mammals-cr
-    taxa_group: mammals
-    preset: cr
+  # ==================== MARINE MAMMALS (paraphyletic) ====================
+  - taxa_group: marine-mammals
+    presets: [ex, ew, cr, en, vu, nt, lc, dd, threatened, all-status]
 
-  - id: mammals-en
-    taxa_group: mammals
-    preset: en
+  # ==================== RAY-FINNED FISHES ====================
+  - taxa_group: ray-finned-fishes
+    presets: [ex, cr, en, vu, nt, lc, dd, threatened]
 
-  - id: mammals-vu
-    taxa_group: mammals
-    preset: vu
-
-  - id: mammals-nt
-    taxa_group: mammals
-    preset: nt
-
-  # ==================== FISHES ====================
-  - id: ray-finned-fishes-cr
-    taxa_group: ray-finned-fishes
-    preset: cr
-
-  - id: ray-finned-fishes-en
-    taxa_group: ray-finned-fishes
-    preset: en
-
-  - id: ray-finned-fishes-vu
-    taxa_group: ray-finned-fishes
-    preset: vu
-
-  - id: sharks-rays-cr
-    taxa_group: sharks-rays
-    preset: cr
-
-  - id: sharks-rays-en
-    taxa_group: sharks-rays
-    preset: en
+  # ==================== SHARKS & RAYS ====================
+  - taxa_group: sharks-rays
+    presets: [ex, cr, en, vu, nt, lc, dd, threatened]
 
   # ==================== INSECTS ====================
-  - id: insects-cr
-    taxa_group: insects
-    preset: cr
-
-  - id: insects-en
-    taxa_group: insects
-    preset: en
-
-  - id: insects-vu
-    taxa_group: insects
-    preset: vu
+  - taxa_group: insects
+    presets: [ex, cr, en, vu, nt, lc, dd, threatened]
 
   # ==================== GASTROPODS ====================
-  - id: gastropods-cr
-    taxa_group: gastropods
-    preset: cr
+  - taxa_group: gastropods
+    presets: [ex, cr, en, vu, nt, lc, dd, threatened]
 
-  - id: gastropods-en
-    taxa_group: gastropods
-    preset: en
+  # ==================== BIVALVES ====================
+  - taxa_group: bivalves
+    presets: [ex, cr, en, vu, nt, lc, dd, threatened]
 
   # ==================== CRUSTACEANS ====================
-  - id: crustaceans-cr
-    taxa_group: crustaceans
-    preset: cr
+  - taxa_group: crustaceans
+    presets: [ex, cr, en, vu, nt, lc, dd, threatened]
 
   # ==================== CORALS ====================
-  - id: corals-cr
-    taxa_group: corals
-    preset: cr
-
-  - id: corals-en
-    taxa_group: corals
-    preset: en
-
-  - id: corals-vu
-    taxa_group: corals
-    preset: vu
+  - taxa_group: corals
+    presets: [ex, cr, en, vu, nt, lc, dd, threatened]
 
   # ==================== ARACHNIDS ====================
-  - id: arachnids-threatened
-    taxa_group: arachnids
-    preset: threatened
+  - taxa_group: arachnids
+    presets: [ex, cr, en, vu, nt, lc, dd, threatened]
 
   # ==================== PLANTS ====================
-  - id: plants-ex
-    taxa_group: plants
-    preset: ex
+  - taxa_group: plants
+    presets: [ex, ew, cr, en, vu, nt, lc, dd, threatened]
 
-  - id: plants-cr
-    taxa_group: plants
-    preset: cr
+  # ==================== CONIFERS ====================
+  - taxa_group: conifers
+    presets: [ex, cr, en, vu, nt, lc, dd, threatened]
 
-  - id: plants-en
-    taxa_group: plants
-    preset: en
+  # ==================== CYCADS ====================
+  - taxa_group: cycads
+    presets: [ex, cr, en, vu, nt, lc, dd, threatened]
 
-  - id: plants-vu
-    taxa_group: plants
-    preset: vu
+  # ==================== CHROMISTA ====================
+  - taxa_group: chromista
+    presets: [all-status]
 
-  - id: conifers-threatened
-    taxa_group: conifers
-    preset: threatened
-
-  - id: cycads-threatened
-    taxa_group: cycads
-    preset: threatened
-
-  # ==================== OTHER KINGDOMS ====================
-  - id: chromista-status
-    taxa_group: chromista
-    preset: all-status
-
-  - id: fungi-status
-    taxa_group: fungi
-    preset: all-status
+  # ==================== FUNGI ====================
+  - taxa_group: fungi
+    presets: [all-status, ex, cr, en, vu, threatened]
 
   # ==================== SPECIAL CROSS-TAXA LISTS ====================
   # These don't fit the taxa_group + preset pattern, so are defined explicitly

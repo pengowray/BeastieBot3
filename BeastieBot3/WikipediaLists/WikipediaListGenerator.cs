@@ -65,6 +65,7 @@ internal sealed class WikipediaListGenerator {
             ?? new List<GroupingLevelDefinition>());
         var display = definition.Display ?? defaults.Display ?? new DisplayPreferences();
 
+        var totalHeadingCount = 0;
         foreach (var section in sections) {
             if (section.Records.Count == 0) {
                 continue;
@@ -72,6 +73,7 @@ internal sealed class WikipediaListGenerator {
 
             if (!section.Definition.HideHeading) {
                 builder.AppendLine($"== {section.Definition.Heading} ==");
+                totalHeadingCount++;
             }
 
             if (!string.IsNullOrWhiteSpace(section.Definition.Description)) {
@@ -79,7 +81,9 @@ internal sealed class WikipediaListGenerator {
                 builder.AppendLine();
             }
 
-            builder.AppendLine(BuildSectionBody(section.Records, grouping, display, section.StatusContext));
+            var (sectionBody, sectionHeadingCount) = BuildSectionBody(section.Records, grouping, display, section.StatusContext);
+            totalHeadingCount += sectionHeadingCount;
+            builder.AppendLine(sectionBody);
             builder.AppendLine();
         }
 
@@ -90,7 +94,7 @@ internal sealed class WikipediaListGenerator {
         var outputPath = Path.Combine(outputDirectory, definition.OutputFile);
         File.WriteAllText(outputPath, builder.ToString());
 
-        return new WikipediaListResult(outputPath, totalCount, datasetVersion);
+        return new WikipediaListResult(outputPath, totalCount, totalHeadingCount, datasetVersion);
     }
 
     private static readonly Dictionary<string, int> RankOrder = new(StringComparer.OrdinalIgnoreCase) {
@@ -150,13 +154,13 @@ internal sealed class WikipediaListGenerator {
         return map.Values.ToList();
     }
 
-    private string BuildSectionBody(IReadOnlyList<IucnSpeciesRecord> records, IReadOnlyList<GroupingLevelDefinition> grouping, DisplayPreferences display, string? statusContext) {
+    private (string Body, int HeadingCount) BuildSectionBody(IReadOnlyList<IucnSpeciesRecord> records, IReadOnlyList<GroupingLevelDefinition> grouping, DisplayPreferences display, string? statusContext) {
         if (records.Count == 0) {
-            return "''No taxa currently listable.''";
+            return ("''No taxa currently listable.''", 0);
         }
 
         if (grouping.Count == 0) {
-            return string.Join(Environment.NewLine, records.Select(record => FormatSpeciesLine(record, display, statusContext)));
+            return (string.Join(Environment.NewLine, records.Select(record => FormatSpeciesLine(record, display, statusContext))), 0);
         }
 
         var levels = grouping
@@ -169,8 +173,9 @@ internal sealed class WikipediaListGenerator {
 
         var tree = TaxonomyTreeBuilder.Build(records, levels);
         var builder = new StringBuilder();
-        AppendTree(builder, tree, startHeading: 3, display, statusContext);
-        return builder.ToString().TrimEnd();
+        var headingCount = 0;
+        AppendTree(builder, tree, startHeading: 3, display, statusContext, ref headingCount);
+        return (builder.ToString().TrimEnd(), headingCount);
     }
 
     private static Func<IucnSpeciesRecord, string?> BuildSelector(string level) => level.ToLowerInvariant() switch {
@@ -183,12 +188,17 @@ internal sealed class WikipediaListGenerator {
         _ => _ => null
     };
 
-    private void AppendTree(StringBuilder builder, TaxonomyTreeNode<IucnSpeciesRecord> node, int startHeading, DisplayPreferences display, string? statusContext) {
+    private void AppendTree(StringBuilder builder, TaxonomyTreeNode<IucnSpeciesRecord> node, int startHeading, DisplayPreferences display, string? statusContext, ref int headingCount) {
         foreach (var child in node.Children) {
             var headingLevel = Math.Min(startHeading, 6);
             var headingMarkup = new string('=', headingLevel);
-            builder.AppendLine($"{headingMarkup} {FormatHeading(child.Value)} {headingMarkup}");
-            AppendTree(builder, child, headingLevel + 1, display, statusContext);
+            var heading = FormatHeading(child.Value);
+            builder.AppendLine($"{headingMarkup} {heading.Text} {headingMarkup}");
+            headingCount++;
+            if (!string.IsNullOrWhiteSpace(heading.MainLink)) {
+                builder.AppendLine($"{{{{main|{heading.MainLink}}}}}");
+            }
+            AppendTree(builder, child, headingLevel + 1, display, statusContext, ref headingCount);
         }
 
         foreach (var record in node.Items) {
@@ -196,25 +206,38 @@ internal sealed class WikipediaListGenerator {
         }
     }
 
-    private string FormatHeading(string? raw) {
+    private readonly record struct HeadingInfo(string Text, string? MainLink);
+
+    private HeadingInfo FormatHeading(string? raw) {
         if (string.IsNullOrWhiteSpace(raw)) {
-            return "Unassigned";
+            return new HeadingInfo("Unassigned", null);
         }
 
         var rules = _legacyRules.Get(raw);
         if (!string.IsNullOrWhiteSpace(rules?.CommonPlural)) {
-            return $"{Uppercase(rules!.CommonPlural)} ({raw})";
+            return new HeadingInfo(Uppercase(rules!.CommonPlural)!, ToTitleCase(raw));
         }
 
         if (!string.IsNullOrWhiteSpace(rules?.CommonName)) {
-            return $"{Uppercase(rules!.CommonName)} ({raw})";
+            return new HeadingInfo(Uppercase(rules!.CommonName)!, ToTitleCase(raw));
         }
 
         if (!string.IsNullOrWhiteSpace(rules?.Wikilink)) {
-            return $"[[{rules!.Wikilink}|{raw}]]";
+            return new HeadingInfo(raw, rules!.Wikilink);
         }
 
-        return raw;
+        return new HeadingInfo(raw, null);
+    }
+
+    /// <summary>
+    /// Converts a taxonomic name to title case (e.g., "ARTIODACTYLA" → "Artiodactyla").
+    /// </summary>
+    private static string ToTitleCase(string value) {
+        if (string.IsNullOrWhiteSpace(value)) {
+            return value;
+        }
+
+        return char.ToUpperInvariant(value[0]) + value[1..].ToLowerInvariant();
     }
 
     private string FormatSpeciesLine(IucnSpeciesRecord record, DisplayPreferences display, string? listStatusContext) {
@@ -402,7 +425,7 @@ internal sealed class WikipediaListGenerator {
     }
 }
 
-internal sealed record WikipediaListResult(string OutputPath, int TotalEntries, string DatasetVersion);
+internal sealed record WikipediaListResult(string OutputPath, int TotalEntries, int HeadingCount, string DatasetVersion);
 
 internal static class IucnSpeciesRecordExtensions {
     public static IucnTaxonomyRow ToTaxonomyRow(this IucnSpeciesRecord record) {

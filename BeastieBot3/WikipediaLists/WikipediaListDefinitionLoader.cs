@@ -70,8 +70,25 @@ internal sealed class WikipediaListDefinitionLoader {
         var expandedLists = new List<WikipediaListDefinition>();
 
         foreach (var rawList in raw.Lists) {
-            // If this is a shorthand reference (taxa_group + preset), expand it
-            if (!string.IsNullOrEmpty(rawList.TaxaGroup) && !string.IsNullOrEmpty(rawList.Preset)) {
+            // Multi-preset syntax: taxa_group + presets array
+            if (!string.IsNullOrEmpty(rawList.TaxaGroup) && rawList.Presets is { Count: > 0 }) {
+                foreach (var presetName in rawList.Presets) {
+                    var syntheticRaw = new WikipediaListDefinitionRaw {
+                        Id = $"{rawList.TaxaGroup}-{presetName}",
+                        TaxaGroup = rawList.TaxaGroup,
+                        Preset = presetName,
+                        Templates = rawList.Templates,
+                        Grouping = rawList.Grouping,
+                        Display = rawList.Display,
+                    };
+                    var expanded = ExpandFromReference(syntheticRaw, taxaGroups, presets);
+                    if (expanded != null) {
+                        expandedLists.Add(expanded);
+                    }
+                }
+            }
+            // Single preset syntax: taxa_group + preset
+            else if (!string.IsNullOrEmpty(rawList.TaxaGroup) && !string.IsNullOrEmpty(rawList.Preset)) {
                 var expanded = ExpandFromReference(rawList, taxaGroups, presets);
                 if (expanded != null) {
                     expandedLists.Add(expanded);
@@ -175,6 +192,7 @@ internal sealed class WikipediaListDefinitionRaw {
     // Shorthand references
     public string? TaxaGroup { get; init; }
     public string? Preset { get; init; }
+    public List<string>? Presets { get; init; }  // Multiple presets: generates one list per preset
 
     // Explicit values (override templates if provided)
     public string? Title { get; init; }

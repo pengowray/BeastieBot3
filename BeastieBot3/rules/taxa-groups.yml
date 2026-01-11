@@ -36,6 +36,44 @@ groups:
       - rank: class
         value: Mammalia
 
+  # Marine mammals (paraphyletic): Cetaceans, Sirenians, Pinnipeds, Sea Otters, Polar Bears
+  # Uses family-level filtering for accuracy within CARNIVORA
+  marine-mammals:
+    name: "Marine mammals"
+    filters:
+      - rank: kingdom
+        value: Animalia
+      - rank: class
+        value: Mammalia
+      - rank: family
+        values:
+          # Cetaceans (whales, dolphins, porpoises)
+          - BALAENIDAE        # Right whales
+          - BALAENOPTERIDAE   # Rorquals
+          - DELPHINIDAE       # Oceanic dolphins
+          - ESCHRICHTIIDAE    # Gray whale
+          - INIIDAE           # River dolphins
+          - KOGIIDAE          # Pygmy/dwarf sperm whales
+          - LIPOTIDAE         # Baiji
+          - MONODONTIDAE      # Narwhal, beluga
+          - PHOCOENIDAE       # Porpoises
+          - PHYSETERIDAE      # Sperm whale
+          - PLATANISTIDAE     # South Asian river dolphins
+          - PONTOPORIIDAE     # La Plata dolphin
+          - ZIPHIIDAE         # Beaked whales
+          # Sirenians
+          - DUGONGIDAE        # Dugong
+          - TRICHECHIDAE      # Manatees
+          # Pinnipeds
+          - OTARIIDAE         # Eared seals (sea lions, fur seals)
+          - PHOCIDAE          # True seals
+          - ODOBENIDAE        # Walrus
+          # Mustelidae has sea otter but also many non-marine species
+          # We'll include the whole family but sea otter is the main marine one
+          - MUSTELIDAE        # Includes sea otter (Enhydra lutris)
+          # Ursidae has polar bear but also many non-marine species
+          - URSIDAE           # Includes polar bear (Ursus maritimus)
+
   ray-finned-fishes:
     name: "Ray-finned fishes"
     filters:

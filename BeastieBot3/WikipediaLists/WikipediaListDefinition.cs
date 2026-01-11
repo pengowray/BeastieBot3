@@ -34,6 +34,10 @@ internal sealed class TemplateSettings {
 internal sealed class TaxonFilterDefinition {
     public string Rank { get; init; } = string.Empty;
     public string Value { get; init; } = string.Empty;
+    /// <summary>
+    /// Multiple values to match with OR logic. If provided, takes precedence over single Value.
+    /// </summary>
+    public List<string>? Values { get; init; }
 }
 
 internal sealed class WikipediaSectionDefinition {
