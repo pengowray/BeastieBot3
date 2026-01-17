@@ -33,8 +33,16 @@ internal sealed class CommonNameAggregateCommand : AsyncCommand<CommonNameAggreg
         [Description("Path to the Wikipedia cache SQLite database.")]
         public string? WikipediaCachePath { get; init; }
 
+        [CommandOption("--col-sqlite <PATH>")]
+        [Description("Path to the Catalogue of Life SQLite database.")]
+        public string? ColSqlitePath { get; init; }
+
+        [CommandOption("--include-synonyms")]
+        [Description("Also import scientific name synonyms from IUCN API.")]
+        public bool IncludeSynonyms { get; init; }
+
         [CommandOption("--source <SOURCE>")]
-        [Description("Only aggregate from specific source: iucn, wikidata, wikipedia, or all (default).")]
+        [Description("Only aggregate from specific source: iucn, wikidata, wikipedia, col, or all (default).")]
         public string Source { get; init; } = "all";
 
         [CommandOption("--limit <N>")]
@@ -56,6 +64,11 @@ internal sealed class CommonNameAggregateCommand : AsyncCommand<CommonNameAggreg
             var iucnApiPath = settings.IucnApiCachePath ?? paths.GetIucnApiCachePath();
             if (!string.IsNullOrWhiteSpace(iucnApiPath) && File.Exists(iucnApiPath)) {
                 await AggregateIucnCommonNamesAsync(store, iucnApiPath, settings.Limit, cancellationToken);
+
+                // Also import IUCN synonyms if requested
+                if (settings.IncludeSynonyms) {
+                    await AggregateIucnSynonymsAsync(store, iucnApiPath, settings.Limit, cancellationToken);
+                }
             } else {
                 AnsiConsole.MarkupLine("[yellow]Skipping IUCN:[/] API cache not found");
             }
@@ -76,6 +89,15 @@ internal sealed class CommonNameAggregateCommand : AsyncCommand<CommonNameAggreg
                 await AggregateWikipediaCommonNamesAsync(store, wikipediaPath, settings.Limit, cancellationToken);
             } else {
                 AnsiConsole.MarkupLine("[yellow]Skipping Wikipedia:[/] cache not found");
+            }
+        }
+
+        if (source is "all" or "col") {
+            var colPath = settings.ColSqlitePath ?? paths.GetColSqlitePath();
+            if (!string.IsNullOrWhiteSpace(colPath) && File.Exists(colPath)) {
+                await AggregateColVernacularNamesAsync(store, colPath, settings.Limit, cancellationToken);
+            } else {
+                AnsiConsole.MarkupLine("[yellow]Skipping COL:[/] database not found");
             }
         }
 
@@ -186,6 +208,124 @@ internal sealed class CommonNameAggregateCommand : AsyncCommand<CommonNameAggreg
                 $"Skipped {skippedNoTaxon} records with no matching taxon, processed {processedTaxa.Count} unique taxa");
             AnsiConsole.MarkupLine($"[green]IUCN:[/] {added:N0} common names from {processedTaxa.Count:N0} taxa ({errors} errors, {skippedNoTaxon} skipped)");
         }, cancellationToken);
+    }
+
+    private static Task AggregateIucnSynonymsAsync(CommonNameStore store, string iucnApiPath, int? limit, CancellationToken cancellationToken) {
+        return Task.Run(() => {
+            AnsiConsole.MarkupLine("[yellow]Aggregating IUCN scientific name synonyms...[/]");
+
+            var runId = store.BeginImportRun("synonyms_iucn");
+            var processed = 0;
+            var added = 0;
+            var errors = 0;
+
+            using var iucnConnection = new SqliteConnection($"Data Source={iucnApiPath};Mode=ReadOnly");
+            iucnConnection.Open();
+
+            using var command = iucnConnection.CreateCommand();
+            command.CommandText = limit.HasValue
+                ? "SELECT sis_id, json FROM assessments WHERE json IS NOT NULL LIMIT @limit"
+                : "SELECT sis_id, json FROM assessments WHERE json IS NOT NULL";
+            if (limit.HasValue) {
+                command.Parameters.AddWithValue("@limit", limit.Value);
+            }
+
+            var processedTaxa = new HashSet<long>();
+
+            AnsiConsole.Progress()
+                .AutoClear(false)
+                .Columns(
+                    new TaskDescriptionColumn(),
+                    new ProgressBarColumn(),
+                    new PercentageColumn(),
+                    new SpinnerColumn())
+                .Start(ctx => {
+                    var task = ctx.AddTask("[green]IUCN synonyms[/]", autoStart: true);
+                    task.IsIndeterminate = !limit.HasValue;
+                    if (limit.HasValue) task.MaxValue = limit.Value;
+
+                    using var reader = command.ExecuteReader();
+                    while (reader.Read()) {
+                        cancellationToken.ThrowIfCancellationRequested();
+                        processed++;
+                        if (limit.HasValue) task.Increment(1);
+
+                        var sisId = reader.GetInt64(0);
+                        var json = reader.IsDBNull(1) ? null : reader.GetString(1);
+
+                        if (string.IsNullOrWhiteSpace(json)) continue;
+                        if (!processedTaxa.Add(sisId)) continue;
+
+                        var taxonId = store.FindTaxonBySourceId("iucn", sisId.ToString());
+                        if (!taxonId.HasValue) continue;
+
+                        try {
+                            var synonyms = ExtractIucnSynonyms(json);
+                            foreach (var (originalName, genusName, speciesName) in synonyms) {
+                                // Build the canonical synonym name
+                                var synonymScientific = string.IsNullOrWhiteSpace(genusName) || string.IsNullOrWhiteSpace(speciesName)
+                                    ? originalName
+                                    : $"{genusName} {speciesName}";
+
+                                var normalized = ScientificNameNormalizer.Normalize(synonymScientific);
+                                if (normalized == null) continue;
+
+                                store.InsertSynonym(
+                                    taxonId.Value,
+                                    normalized,
+                                    originalName,
+                                    "iucn",
+                                    "synonym"
+                                );
+                                added++;
+                            }
+                        } catch (Exception ex) {
+                            errors++;
+                            if (errors <= 5) {
+                                AnsiConsole.MarkupLine($"[red]Error parsing IUCN synonyms for SIS {sisId}:[/] {ex.Message}");
+                            }
+                        }
+                    }
+                });
+
+            store.CompleteImportRun(runId, processed, added, 0, errors,
+                $"Processed {processedTaxa.Count} unique taxa");
+            AnsiConsole.MarkupLine($"[green]IUCN synonyms:[/] {added:N0} synonyms from {processedTaxa.Count:N0} taxa ({errors} errors)");
+        }, cancellationToken);
+    }
+
+    private static IReadOnlyList<(string OriginalName, string? GenusName, string? SpeciesName)> ExtractIucnSynonyms(string json) {
+        var results = new List<(string, string?, string?)>();
+
+        try {
+            using var document = JsonDocument.Parse(json);
+            var root = document.RootElement;
+
+            // Synonyms are in taxon.synonyms
+            JsonElement synonymsElement = default;
+
+            if (root.TryGetProperty("taxon", out var taxon) && taxon.TryGetProperty("synonyms", out var syn)) {
+                synonymsElement = syn;
+            }
+
+            if (synonymsElement.ValueKind == JsonValueKind.Array) {
+                foreach (var entry in synonymsElement.EnumerateArray()) {
+                    if (entry.ValueKind != JsonValueKind.Object) continue;
+
+                    var name = GetStringProperty(entry, "name");
+                    if (string.IsNullOrWhiteSpace(name)) continue;
+
+                    var genusName = GetStringProperty(entry, "genus_name");
+                    var speciesName = GetStringProperty(entry, "species_name");
+
+                    results.Add((name.Trim(), genusName?.Trim(), speciesName?.Trim()));
+                }
+            }
+        } catch (JsonException) {
+            // Ignore malformed JSON
+        }
+
+        return results;
     }
 
     private static IReadOnlyList<(string Name, bool IsPreferred, string Language)> ExtractIucnCommonNames(string json) {
@@ -398,26 +538,50 @@ internal sealed class CommonNameAggregateCommand : AsyncCommand<CommonNameAggreg
 
             var runId = store.BeginImportRun("common_names_wikipedia");
             var processed = 0;
-            var added = 0;
+            var titleAdded = 0;
+            var taxoboxAdded = 0;
             var matched = 0;
 
             using var wikiConnection = new SqliteConnection($"Data Source={wikipediaPath};Mode=ReadOnly");
             wikiConnection.Open();
 
-            // Query matched taxa from Wikipedia cache
+            // First, try to use taxon_wiki_matches if available
+            var useTaxonMatches = TableHasRows(wikiConnection, "taxon_wiki_matches", "match_status = 'matched'");
+
             using var command = wikiConnection.CreateCommand();
-            command.CommandText = limit.HasValue
-                ? @"SELECT m.taxon_identifier, p.page_title, p.normalized_title
-                    FROM taxon_wiki_matches m
-                    JOIN wiki_pages p ON p.id = m.page_row_id
-                    WHERE m.taxon_source = 'IUCN' AND m.match_status = 'matched'
-                    LIMIT @limit"
-                : @"SELECT m.taxon_identifier, p.page_title, p.normalized_title
-                    FROM taxon_wiki_matches m
-                    JOIN wiki_pages p ON p.id = m.page_row_id
-                    WHERE m.taxon_source = 'IUCN' AND m.match_status = 'matched'";
-            if (limit.HasValue) {
-                command.Parameters.AddWithValue("@limit", limit.Value);
+            if (useTaxonMatches) {
+                // Use pre-computed matches
+                command.CommandText = limit.HasValue
+                    ? @"SELECT m.taxon_identifier, p.page_title, p.normalized_title, t.data_json
+                        FROM taxon_wiki_matches m
+                        JOIN wiki_pages p ON p.id = m.page_row_id
+                        LEFT JOIN wiki_taxobox_data t ON t.page_row_id = p.id
+                        WHERE m.taxon_source = 'IUCN' AND m.match_status = 'matched'
+                        LIMIT @limit"
+                    : @"SELECT m.taxon_identifier, p.page_title, p.normalized_title, t.data_json
+                        FROM taxon_wiki_matches m
+                        JOIN wiki_pages p ON p.id = m.page_row_id
+                        LEFT JOIN wiki_taxobox_data t ON t.page_row_id = p.id
+                        WHERE m.taxon_source = 'IUCN' AND m.match_status = 'matched'";
+                if (limit.HasValue) {
+                    command.Parameters.AddWithValue("@limit", limit.Value);
+                }
+            } else {
+                // Fall back to matching via taxobox scientific names
+                AnsiConsole.MarkupLine("[grey]No pre-computed matches found, using taxobox scientific names...[/]");
+                command.CommandText = limit.HasValue
+                    ? @"SELECT t.scientific_name, p.page_title, t.data_json
+                        FROM wiki_taxobox_data t
+                        JOIN wiki_pages p ON p.id = t.page_row_id
+                        WHERE t.scientific_name IS NOT NULL AND t.scientific_name != ''
+                        LIMIT @limit"
+                    : @"SELECT t.scientific_name, p.page_title, t.data_json
+                        FROM wiki_taxobox_data t
+                        JOIN wiki_pages p ON p.id = t.page_row_id
+                        WHERE t.scientific_name IS NOT NULL AND t.scientific_name != ''";
+                if (limit.HasValue) {
+                    command.Parameters.AddWithValue("@limit", limit.Value);
+                }
             }
 
             AnsiConsole.Progress()
@@ -428,7 +592,7 @@ internal sealed class CommonNameAggregateCommand : AsyncCommand<CommonNameAggreg
                     new PercentageColumn(),
                     new SpinnerColumn())
                 .Start(ctx => {
-                    var task = ctx.AddTask("[green]Wikipedia titles[/]", autoStart: true);
+                    var task = ctx.AddTask("[green]Wikipedia pages[/]", autoStart: true);
                     task.IsIndeterminate = !limit.HasValue;
                     if (limit.HasValue) task.MaxValue = limit.Value;
 
@@ -438,46 +602,136 @@ internal sealed class CommonNameAggregateCommand : AsyncCommand<CommonNameAggreg
                         processed++;
                         if (limit.HasValue) task.Increment(1);
 
-                        var taxonIdentifier = reader.GetString(0); // IUCN SIS ID
-                        var pageTitle = reader.GetString(1);
+                        string? taxonIdentifier;
+                        string pageTitle;
+                        string? taxoboxJson;
+
+                        if (useTaxonMatches) {
+                            taxonIdentifier = reader.GetString(0); // IUCN SIS ID
+                            pageTitle = reader.GetString(1);
+                            taxoboxJson = reader.IsDBNull(3) ? null : reader.GetString(3);
+                        } else {
+                            // Using taxobox scientific name - need to match to our taxa
+                            var scientificName = reader.GetString(0);
+                            pageTitle = reader.GetString(1);
+                            taxoboxJson = reader.IsDBNull(2) ? null : reader.GetString(2);
+
+                            // Clean up scientific name (may contain wiki markup)
+                            scientificName = CleanWikiScientificName(scientificName);
+                            taxonIdentifier = scientificName; // Use as identifier for matching
+                        }
 
                         // Find the taxon
-                        var taxonId = store.FindTaxonBySourceId("iucn", taxonIdentifier);
+                        long? taxonId;
+                        if (useTaxonMatches) {
+                            taxonId = store.FindTaxonBySourceId("iucn", taxonIdentifier!);
+                        } else {
+                            // Match by scientific name
+                            taxonId = store.FindTaxonByScientificName(taxonIdentifier!);
+                        }
+
                         if (!taxonId.HasValue) continue;
                         matched++;
 
-                        // The Wikipedia page title might be a common name
-                        // We need to check it's not a scientific name
+                        // Add page title as common name (cleaned)
                         var cleanTitle = CommonNameNormalizer.RemoveDisambiguationSuffix(pageTitle);
                         var normalized = CommonNameNormalizer.NormalizeForMatching(cleanTitle);
 
-                        if (normalized == null) continue;
-
-                        // Skip if it looks like a scientific name (contains only Latin binomial pattern)
-                        // This is a heuristic - proper check would need the genus/species
-                        if (cleanTitle.Split(' ').Length == 2 &&
-                            cleanTitle.Split(' ').All(p => p.Length > 0 && char.IsLetter(p[0]))) {
-                            // Could be scientific or common - we'll add it and let conflict detection handle it
+                        if (normalized != null) {
+                            store.InsertCommonName(
+                                taxonId.Value,
+                                cleanTitle,
+                                normalized,
+                                displayName: null,
+                                "en",
+                                "wikipedia_title",
+                                pageTitle,
+                                isPreferred: true // Wikipedia title is a strong signal
+                            );
+                            titleAdded++;
                         }
 
-                        store.InsertCommonName(
-                            taxonId.Value,
-                            cleanTitle,
-                            normalized,
-                            displayName: null,
-                            "en",
-                            "wikipedia_title",
-                            pageTitle,
-                            isPreferred: true // Wikipedia title is a strong signal
-                        );
-                        added++;
+                        // Extract common name from taxobox "name" field
+                        if (!string.IsNullOrWhiteSpace(taxoboxJson)) {
+                            var taxoboxName = ExtractTaxoboxName(taxoboxJson);
+                            if (!string.IsNullOrWhiteSpace(taxoboxName)) {
+                                var taxoboxNormalized = CommonNameNormalizer.NormalizeForMatching(taxoboxName);
+                                if (taxoboxNormalized != null && taxoboxNormalized != normalized) {
+                                    store.InsertCommonName(
+                                        taxonId.Value,
+                                        taxoboxName,
+                                        taxoboxNormalized,
+                                        displayName: null,
+                                        "en",
+                                        "wikipedia_taxobox",
+                                        pageTitle,
+                                        isPreferred: false
+                                    );
+                                    taxoboxAdded++;
+                                }
+                            }
+                        }
                     }
                 });
 
-            store.CompleteImportRun(runId, processed, added, 0, 0,
-                $"Matched {matched} pages to taxa");
-            AnsiConsole.MarkupLine($"[green]Wikipedia:[/] {added:N0} titles from {matched:N0} matched pages");
+            var totalAdded = titleAdded + taxoboxAdded;
+            store.CompleteImportRun(runId, processed, totalAdded, 0, 0,
+                $"Matched {matched} pages to taxa, {titleAdded} titles, {taxoboxAdded} taxobox names");
+            AnsiConsole.MarkupLine($"[green]Wikipedia:[/] {titleAdded:N0} titles + {taxoboxAdded:N0} taxobox names from {matched:N0} matched pages");
         }, cancellationToken);
+    }
+
+    private static string? ExtractTaxoboxName(string json) {
+        try {
+            using var document = JsonDocument.Parse(json);
+            var root = document.RootElement;
+
+            // The taxobox "name" field typically contains the common name
+            if (root.TryGetProperty("name", out var nameProp) && nameProp.ValueKind == JsonValueKind.String) {
+                var name = nameProp.GetString()?.Trim();
+                if (string.IsNullOrWhiteSpace(name)) return null;
+
+                // Clean up wiki markup if present
+                // Remove things like [[...]], {{...}}, <ref>...</ref>
+                name = System.Text.RegularExpressions.Regex.Replace(name, @"\[\[([^\]|]*\|)?([^\]]*)\]\]", "$2");
+                name = System.Text.RegularExpressions.Regex.Replace(name, @"\{\{[^}]*\}\}", "");
+                name = System.Text.RegularExpressions.Regex.Replace(name, @"<ref[^>]*>.*?</ref>", "", System.Text.RegularExpressions.RegexOptions.Singleline);
+                name = System.Text.RegularExpressions.Regex.Replace(name, @"<[^>]+>", "");
+                name = name.Trim();
+
+                // Skip if it looks like a scientific name (italic binomial)
+                if (name.Contains("''")) return null;
+
+                // Skip if empty after cleanup
+                if (string.IsNullOrWhiteSpace(name)) return null;
+
+                return name;
+            }
+        } catch (JsonException) {
+            // Ignore malformed JSON
+        }
+
+        return null;
+    }
+
+    private static bool TableHasRows(SqliteConnection connection, string tableName, string? whereClause = null) {
+        using var cmd = connection.CreateCommand();
+        cmd.CommandText = string.IsNullOrWhiteSpace(whereClause)
+            ? $"SELECT 1 FROM {tableName} LIMIT 1"
+            : $"SELECT 1 FROM {tableName} WHERE {whereClause} LIMIT 1";
+        return cmd.ExecuteScalar() != null;
+    }
+
+    private static string CleanWikiScientificName(string name) {
+        // Remove wiki markup from scientific names
+        // e.g., "Panthera leo<ref name=MSW3>...</ref>" -> "Panthera leo"
+        name = System.Text.RegularExpressions.Regex.Replace(name, @"<ref[^>]*>.*?</ref>", "", System.Text.RegularExpressions.RegexOptions.Singleline);
+        name = System.Text.RegularExpressions.Regex.Replace(name, @"<ref[^/]*/?>", "");
+        name = System.Text.RegularExpressions.Regex.Replace(name, @"\[\[([^\]|]*\|)?([^\]]*)\]\]", "$2");
+        name = System.Text.RegularExpressions.Regex.Replace(name, @"\{\{[^}]*\}\}", "");
+        name = System.Text.RegularExpressions.Regex.Replace(name, @"<[^>]+>", "");
+        name = System.Text.RegularExpressions.Regex.Replace(name, @"''", ""); // Remove italic markers
+        return name.Trim();
     }
 
     private static string? GetStringProperty(JsonElement element, string propertyName) {
@@ -485,5 +739,120 @@ internal sealed class CommonNameAggregateCommand : AsyncCommand<CommonNameAggreg
             return prop.GetString();
         }
         return null;
+    }
+
+    private static Task AggregateColVernacularNamesAsync(CommonNameStore store, string colPath, int? limit, CancellationToken cancellationToken) {
+        return Task.Run(() => {
+            AnsiConsole.MarkupLine("[yellow]Aggregating COL vernacular names...[/]");
+            AnsiConsole.MarkupLine($"[blue]COL database:[/] {colPath}");
+
+            var runId = store.BeginImportRun("common_names_col");
+            var processed = 0;
+            var added = 0;
+            var matched = 0;
+            var skippedNoTaxon = 0;
+
+            using var colConnection = new SqliteConnection($"Data Source={colPath};Mode=ReadOnly");
+            colConnection.Open();
+
+            // Query vernacular names with their associated scientific names
+            // Join to nameusage to get the scientific name and status
+            using var command = colConnection.CreateCommand();
+            var sql = @"
+                SELECT v.taxonID, v.name, v.language, v.preferred, n.scientificName, n.status, n.rank
+                FROM vernacularname v
+                JOIN nameusage n ON v.taxonID = n.ID
+                WHERE v.language LIKE 'en%'
+                  AND v.name IS NOT NULL
+                  AND v.name != ''
+                  AND n.status = 'accepted'";
+            if (limit.HasValue) {
+                sql += $" LIMIT {limit.Value}";
+            }
+            command.CommandText = sql;
+            command.CommandTimeout = 0;
+
+            // Count for progress (approximate)
+            using var countCommand = colConnection.CreateCommand();
+            countCommand.CommandText = "SELECT COUNT(*) FROM vernacularname WHERE language LIKE 'en%'";
+            var totalCount = limit.HasValue ? limit.Value : Convert.ToInt32(countCommand.ExecuteScalar() ?? 0);
+
+            AnsiConsole.Progress()
+                .AutoClear(true)
+                .HideCompleted(true)
+                .Columns(
+                    new TaskDescriptionColumn(),
+                    new ProgressBarColumn(),
+                    new PercentageColumn(),
+                    new SpinnerColumn())
+                .Start(ctx => {
+                    var task = ctx.AddTask("[green]COL vernacular names[/]", autoStart: true);
+                    task.MaxValue = totalCount;
+
+                    using var reader = command.ExecuteReader();
+                    while (reader.Read()) {
+                        cancellationToken.ThrowIfCancellationRequested();
+                        processed++;
+                        task.Increment(1);
+
+                        var colTaxonId = reader.GetString(0);
+                        var vernacularName = reader.GetString(1);
+                        var language = reader.IsDBNull(2) ? "en" : reader.GetString(2);
+                        var preferred = reader.IsDBNull(3) ? null : reader.GetString(3);
+                        var scientificName = reader.GetString(4);
+                        var status = reader.IsDBNull(5) ? null : reader.GetString(5);
+                        var rank = reader.IsDBNull(6) ? null : reader.GetString(6);
+
+                        // Skip non-species ranks (we want species and subspecies)
+                        if (rank != null && rank != "species" && rank != "subspecies" && rank != "variety") {
+                            continue;
+                        }
+
+                        // Normalize the scientific name
+                        var normalizedScientific = ScientificNameNormalizer.Normalize(scientificName);
+                        if (normalizedScientific == null) continue;
+
+                        // Try to find the taxon by scientific name (COL uses different IDs than IUCN)
+                        var taxonId = store.FindTaxonByScientificName(normalizedScientific);
+
+                        // If not found, try by COL ID
+                        if (!taxonId.HasValue) {
+                            taxonId = store.FindTaxonBySourceId("col", colTaxonId);
+                        }
+
+                        if (!taxonId.HasValue) {
+                            skippedNoTaxon++;
+                            continue;
+                        }
+                        matched++;
+
+                        // Normalize the vernacular name
+                        var normalized = CommonNameNormalizer.NormalizeForMatching(vernacularName);
+                        if (normalized == null) continue;
+
+                        // Normalize language code (col uses "eng", "en", etc.)
+                        var normalizedLang = NormalizeLanguageCode(language);
+
+                        // Determine if preferred (COL uses "true"/"false" string or null)
+                        var isPreferred = preferred?.Equals("true", StringComparison.OrdinalIgnoreCase) == true;
+
+                        store.InsertCommonName(
+                            taxonId.Value,
+                            vernacularName,
+                            normalized,
+                            displayName: null,
+                            normalizedLang,
+                            "col",
+                            colTaxonId,
+                            isPreferred
+                        );
+                        added++;
+                    }
+                });
+
+            store.CompleteImportRun(runId, processed, added, 0, skippedNoTaxon,
+                $"Matched {matched} to existing taxa, {skippedNoTaxon} skipped (no matching taxon)");
+            AnsiConsole.MarkupLine($"[green]COL:[/] {added:N0} vernacular names from {matched:N0} matched taxa ({skippedNoTaxon:N0} skipped)");
+        }, cancellationToken);
     }
 }

@@ -21,6 +21,7 @@ The application is a CLI tool with a hierarchical command structure.
 - `iucn`: IUCN Red List data imports, reports, and API caching.
 - `wikidata`: Wikidata seeding, caching, and cross-referencing with IUCN.
 - `wikipedia`: Wikipedia page caching, matching, and list generation.
+- `common-names`: Aggregates vernacular names from multiple sources for disambiguation analysis.
 
 ### Tests
 There is currently no formal test suite (xUnit/NUnit) configured in the solution.

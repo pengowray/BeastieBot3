@@ -255,6 +255,21 @@ internal sealed class CommonNameStore : IDisposable {
         return result == null || result == DBNull.Value ? null : (long)result;
     }
 
+    /// <summary>
+    /// Find a taxon by scientific name, checking canonical name first, then synonyms.
+    /// </summary>
+    public long? FindTaxonByScientificName(string scientificName) {
+        // First try canonical name (normalized)
+        var normalized = ScientificNameNormalizer.Normalize(scientificName);
+        if (normalized == null) return null;
+
+        var taxonId = FindTaxonByCanonicalName(normalized);
+        if (taxonId.HasValue) return taxonId;
+
+        // Try synonyms
+        return FindTaxonBySynonym(normalized);
+    }
+
     #endregion
 
     #region Synonym Operations
@@ -541,6 +556,105 @@ internal sealed class CommonNameStore : IDisposable {
             return (reader.GetInt32(0), reader.GetInt32(1), reader.GetInt32(2), reader.GetInt32(3));
         }
         return (0, 0, 0, 0);
+    }
+
+    /// <summary>
+    /// Get normalized names that are IUCN-preferred for multiple distinct taxa (efficient SQL query).
+    /// </summary>
+    public IReadOnlyList<string> GetIucnPreferredConflictNames(int limit, string? kingdom = null) {
+        using var command = _connection.CreateCommand();
+        var kingdomFilter = kingdom != null ? "AND t.kingdom = @kingdom" : "";
+        command.CommandText = $@"
+            SELECT c.normalized_name
+            FROM common_names c
+            JOIN taxa t ON c.taxon_id = t.id
+            WHERE c.source = 'iucn' 
+              AND c.is_preferred = 1 
+              AND c.language = 'en'
+              AND t.validity_status = 'valid'
+              AND t.is_fossil = 0
+              {kingdomFilter}
+            GROUP BY c.normalized_name
+            HAVING COUNT(DISTINCT c.taxon_id) > 1
+            ORDER BY COUNT(DISTINCT c.taxon_id) DESC
+            LIMIT @limit;
+        ";
+        command.Parameters.AddWithValue("@limit", limit);
+        if (kingdom != null) {
+            command.Parameters.AddWithValue("@kingdom", kingdom);
+        }
+
+        var results = new List<string>();
+        using var reader = command.ExecuteReader();
+        while (reader.Read()) {
+            results.Add(reader.GetString(0));
+        }
+        return results;
+    }
+
+    /// <summary>
+    /// Get normalized names from Wikipedia sources that map to multiple distinct taxa.
+    /// </summary>
+    public IReadOnlyList<string> GetWikipediaAmbiguousNames(int limit, string? kingdom = null) {
+        using var command = _connection.CreateCommand();
+        var kingdomFilter = kingdom != null ? "AND t.kingdom = @kingdom" : "";
+        command.CommandText = $@"
+            SELECT c.normalized_name
+            FROM common_names c
+            JOIN taxa t ON c.taxon_id = t.id
+            WHERE c.source IN ('wikipedia_title', 'wikipedia_taxobox')
+              AND c.language = 'en'
+              AND t.validity_status = 'valid'
+              AND t.is_fossil = 0
+              {kingdomFilter}
+            GROUP BY c.normalized_name
+            HAVING COUNT(DISTINCT c.taxon_id) > 1
+            ORDER BY COUNT(DISTINCT c.taxon_id) DESC
+            LIMIT @limit;
+        ";
+        command.Parameters.AddWithValue("@limit", limit);
+        if (kingdom != null) {
+            command.Parameters.AddWithValue("@kingdom", kingdom);
+        }
+
+        var results = new List<string>();
+        using var reader = command.ExecuteReader();
+        while (reader.Read()) {
+            results.Add(reader.GetString(0));
+        }
+        return results;
+    }
+
+    /// <summary>
+    /// Get normalized names that map to multiple distinct taxa (general ambiguity check).
+    /// </summary>
+    public IReadOnlyList<string> GetAmbiguousCommonNames(int limit, string? kingdom = null) {
+        using var command = _connection.CreateCommand();
+        var kingdomFilter = kingdom != null ? "AND t.kingdom = @kingdom" : "";
+        command.CommandText = $@"
+            SELECT c.normalized_name
+            FROM common_names c
+            JOIN taxa t ON c.taxon_id = t.id
+            WHERE c.language = 'en'
+              AND t.validity_status = 'valid'
+              AND t.is_fossil = 0
+              {kingdomFilter}
+            GROUP BY c.normalized_name
+            HAVING COUNT(DISTINCT c.taxon_id) > 1
+            ORDER BY COUNT(DISTINCT c.taxon_id) DESC
+            LIMIT @limit;
+        ";
+        command.Parameters.AddWithValue("@limit", limit);
+        if (kingdom != null) {
+            command.Parameters.AddWithValue("@kingdom", kingdom);
+        }
+
+        var results = new List<string>();
+        using var reader = command.ExecuteReader();
+        while (reader.Read()) {
+            results.Add(reader.GetString(0));
+        }
+        return results;
     }
 
     #endregion
