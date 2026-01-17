@@ -105,21 +105,8 @@ public sealed class WikidataWikipediaMismatchReportCommand : Command<WikidataWik
     }
 
     private static string DetermineOutputDirectory(WikidataWikipediaMismatchReportSettings settings, PathsService paths, string iucnPath) {
-        if (!string.IsNullOrWhiteSpace(settings.OutputDirectory)) {
-            return Path.GetFullPath(settings.OutputDirectory);
-        }
-
-        var configured = paths.GetReportOutputDirectory();
-        if (!string.IsNullOrWhiteSpace(configured)) {
-            return configured!;
-        }
-
-        var baseDir = Path.GetDirectoryName(iucnPath);
-        if (string.IsNullOrWhiteSpace(baseDir)) {
-            baseDir = Directory.GetCurrentDirectory();
-        }
-
-        return Path.Combine(baseDir!, "reports");
+        var fallbackBaseDir = Path.GetDirectoryName(iucnPath) ?? Directory.GetCurrentDirectory();
+        return ReportPathResolver.ResolveDirectory(paths, settings.OutputDirectory, fallbackBaseDir);
     }
 
     private static SqliteConnection OpenReadOnlyConnection(string path) {

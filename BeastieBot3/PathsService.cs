@@ -41,7 +41,12 @@ namespace BeastieBot3 {
         public string? GetReportOutputDirectory() =>
             _reader.Get("Reports:output_dir")
             ?? _reader.Get("Datastore:reports_dir")
+            ?? _reader.Get("reports_dir")
             ?? _reader.Get("reports_output_dir");
+
+        public string? GetDataAnalysisDirectory() =>
+            _reader.Get("Datastore:data_analysis_dir")
+            ?? _reader.Get("data_analysis_dir");
 
         public string? GetWikipediaOutputDirectory() =>
             _reader.Get("Datastore:wikipedia_output_dir")
