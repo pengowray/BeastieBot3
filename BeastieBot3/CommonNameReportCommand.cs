@@ -49,8 +49,8 @@ internal sealed class CommonNameReportCommand : AsyncCommand<CommonNameReportCom
         var reportType = settings.ReportType.ToLowerInvariant();
 
         return reportType switch {
-            "ambiguous" => await GenerateAmbiguousReportAsync(store, settings, cancellationToken),
-            "caps" => await GenerateCapsReportAsync(store, settings, cancellationToken),
+            "ambiguous" => await GenerateAmbiguousReportAsync(store, settings, paths, cancellationToken),
+            "caps" => await GenerateCapsReportAsync(store, settings, paths, cancellationToken),
             "summary" or _ => await GenerateSummaryReportAsync(store, settings, cancellationToken)
         };
     }
@@ -77,7 +77,7 @@ internal sealed class CommonNameReportCommand : AsyncCommand<CommonNameReportCom
         }, cancellationToken);
     }
 
-    private static Task<int> GenerateAmbiguousReportAsync(CommonNameStore store, Settings settings, CancellationToken cancellationToken) {
+    private static Task<int> GenerateAmbiguousReportAsync(CommonNameStore store, Settings settings, PathsService paths, CancellationToken cancellationToken) {
         return Task.Run(() => {
             AnsiConsole.MarkupLine("[yellow]Generating ambiguous common names report...[/]");
 
@@ -142,24 +142,19 @@ internal sealed class CommonNameReportCommand : AsyncCommand<CommonNameReportCom
                 sb.AppendLine();
             }
 
-            // Output
-            if (!string.IsNullOrWhiteSpace(settings.OutputPath)) {
-                var outputDir = Path.GetDirectoryName(settings.OutputPath);
-                if (!string.IsNullOrWhiteSpace(outputDir)) {
-                    Directory.CreateDirectory(outputDir);
-                }
-                File.WriteAllText(settings.OutputPath, sb.ToString());
-                AnsiConsole.MarkupLine($"[green]Report written to:[/] {settings.OutputPath}");
-            } else {
-                AnsiConsole.WriteLine(sb.ToString());
-            }
+            // Output - save to disk by default
+            var timestamp = DateTime.UtcNow.ToString("yyyyMMdd-HHmmss");
+            var defaultFileName = $"common-name-ambiguous-{timestamp}.md";
+            var outputPath = ReportPathResolver.ResolveFilePath(paths, settings.OutputPath, null, null, defaultFileName);
 
+            File.WriteAllText(outputPath, sb.ToString());
+            AnsiConsole.MarkupLine($"[green]Report written to:[/] {outputPath}");
             AnsiConsole.MarkupLine($"[green]Found {conflictingNames.Count} ambiguous common names[/]");
             return 0;
         }, cancellationToken);
     }
 
-    private static Task<int> GenerateCapsReportAsync(CommonNameStore store, Settings settings, CancellationToken cancellationToken) {
+    private static Task<int> GenerateCapsReportAsync(CommonNameStore store, Settings settings, PathsService paths, CancellationToken cancellationToken) {
         return Task.Run(() => {
             AnsiConsole.MarkupLine("[yellow]Checking for missing capitalization rules...[/]");
 
@@ -229,18 +224,13 @@ internal sealed class CommonNameReportCommand : AsyncCommand<CommonNameReportCom
             }
             sb.AppendLine("```");
 
-            // Output
-            if (!string.IsNullOrWhiteSpace(settings.OutputPath)) {
-                var outputDir = Path.GetDirectoryName(settings.OutputPath);
-                if (!string.IsNullOrWhiteSpace(outputDir)) {
-                    Directory.CreateDirectory(outputDir);
-                }
-                File.WriteAllText(settings.OutputPath, sb.ToString());
-                AnsiConsole.MarkupLine($"[green]Report written to:[/] {settings.OutputPath}");
-            } else {
-                AnsiConsole.WriteLine(sb.ToString());
-            }
+            // Output - save to disk by default
+            var timestamp = DateTime.UtcNow.ToString("yyyyMMdd-HHmmss");
+            var defaultFileName = $"common-name-caps-{timestamp}.md";
+            var outputPath = ReportPathResolver.ResolveFilePath(paths, settings.OutputPath, null, null, defaultFileName);
 
+            File.WriteAllText(outputPath, sb.ToString());
+            AnsiConsole.MarkupLine($"[green]Report written to:[/] {outputPath}");
             AnsiConsole.MarkupLine($"[green]Found {sortedMissing.Count} words missing caps rules[/]");
             return 0;
         }, cancellationToken);
