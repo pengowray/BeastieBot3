@@ -47,6 +47,9 @@ namespace BeastieBot3 {
             _reader.Get("Datastore:wikipedia_output_dir")
             ?? _reader.Get("wikipedia_output_dir");
 
+        public string? GetCommonNameStorePath() =>
+            _reader.Get("Datastore:common_names_sqlite") ?? _reader.Get("common_names_sqlite");
+
         public string ResolveIucnDatabasePath(string? overridePath) {
             var configuredPath = !string.IsNullOrWhiteSpace(overridePath)
                 ? overridePath
@@ -112,6 +115,29 @@ namespace BeastieBot3 {
             }
             catch (Exception ex) {
                 throw new InvalidOperationException($"Failed to resolve Wikipedia cache path {configuredPath}: {ex.Message}", ex);
+            }
+        }
+
+        public string ResolveCommonNameStorePath(string? overridePath) {
+            var configuredPath = !string.IsNullOrWhiteSpace(overridePath)
+                ? overridePath
+                : GetCommonNameStorePath();
+
+            if (string.IsNullOrWhiteSpace(configuredPath)) {
+                // Default to datastore directory if not explicitly configured
+                var datastoreDir = GetDatastoreDir();
+                if (!string.IsNullOrWhiteSpace(datastoreDir)) {
+                    configuredPath = Path.Combine(datastoreDir, "common_names.sqlite");
+                } else {
+                    throw new InvalidOperationException("Common name store path is not configured. Set Datastore:common_names_sqlite or pass --database.");
+                }
+            }
+
+            try {
+                return Path.GetFullPath(configuredPath);
+            }
+            catch (Exception ex) {
+                throw new InvalidOperationException($"Failed to resolve common name store path {configuredPath}: {ex.Message}", ex);
             }
         }
     }

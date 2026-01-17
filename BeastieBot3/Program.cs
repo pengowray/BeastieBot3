@@ -170,6 +170,29 @@ namespace BeastieBot3 {
                             .WithExample(new[] { "wikipedia", "generate-lists" })
                             .WithExample(new[] { "wikipedia", "generate-lists", "--list", "amphibians-cr" });
                     });
+
+                    config.AddBranch("common-names", cn => {
+                        cn.SetDescription("Common name disambiguation and reporting commands");
+                        cn.AddCommand<CommonNameInitCommand>("init")
+                            .WithDescription("Initialize the common name store with taxa from IUCN and caps rules from caps.txt.")
+                            .WithExample(new[] { "common-names", "init" })
+                            .WithExample(new[] { "common-names", "init", "--limit", "1000" })
+                            .WithExample(new[] { "common-names", "init", "--skip-taxa" });
+                        cn.AddCommand<CommonNameAggregateCommand>("aggregate")
+                            .WithDescription("Aggregate common names from all sources (IUCN API, Wikidata, Wikipedia) into the store.")
+                            .WithExample(new[] { "common-names", "aggregate" })
+                            .WithExample(new[] { "common-names", "aggregate", "--source", "iucn" })
+                            .WithExample(new[] { "common-names", "aggregate", "--limit", "1000" });
+                        cn.AddCommand<CommonNameDetectConflictsCommand>("detect-conflicts")
+                            .WithDescription("Detect ambiguous common names (same name used for different valid taxa).")
+                            .WithExample(new[] { "common-names", "detect-conflicts" })
+                            .WithExample(new[] { "common-names", "detect-conflicts", "--clear-existing" });
+                        cn.AddCommand<CommonNameReportCommand>("report")
+                            .WithDescription("Generate reports about common name conflicts and capitalization issues.")
+                            .WithExample(new[] { "common-names", "report" })
+                            .WithExample(new[] { "common-names", "report", "--report", "ambiguous", "-o", "reports/ambiguous.md" })
+                            .WithExample(new[] { "common-names", "report", "--report", "caps", "-o", "reports/caps.md" });
+                    });
                 });
             });
 
