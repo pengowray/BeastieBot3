@@ -113,6 +113,7 @@ The `common-names` CLI branch aggregates vernacular (common) names from multiple
 - `common-names report --report caps` &mdash; Reports capitalization inconsistencies where the same normalized name appears with different casing across sources.
 - `common-names report --report wiki-disambig` &mdash; Identifies Wikipedia article titles that could refer to multiple species, useful for finding articles that may need disambiguation.
 - `common-names report --report iucn-preferred` &mdash; Finds common names marked as "preferred" (main=true) by IUCN for multiple different species, indicating potential data quality issues.
+- `common-names report --report all` &mdash; Generates all file-based reports (ambiguous, caps, wiki-disambig, iucn-preferred) in one run.
 
 ### Example Workflow
 
@@ -128,8 +129,8 @@ dotnet run --project BeastieBot3 -- common-names aggregate --source col --col-sq
 
 # Generate reports
 dotnet run --project BeastieBot3 -- common-names report --report summary
+dotnet run --project BeastieBot3 -- common-names report --report all --limit 100
 dotnet run --project BeastieBot3 -- common-names report --report ambiguous --limit 100 --kingdom Animalia
-dotnet run --project BeastieBot3 -- common-names report --report iucn-preferred --limit 50
 ```
 
 Reports are saved to the `reports_dir` path configured in `paths.ini` (defaults to `beastiebot/reports`).

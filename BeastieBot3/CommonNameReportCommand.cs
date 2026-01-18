@@ -22,7 +22,7 @@ internal sealed class CommonNameReportCommand : AsyncCommand<CommonNameReportCom
         public string? DatabasePath { get; init; }
 
         [CommandOption("--report <TYPE>")]
-        [Description("Report type: ambiguous, caps, summary, wiki-disambig, iucn-preferred (default: summary)")]
+        [Description("Report type: ambiguous, caps, summary, wiki-disambig, iucn-preferred, all (default: summary)")]
         public string ReportType { get; init; } = "summary";
 
         [CommandOption("-o|--output <PATH>")]
@@ -53,6 +53,7 @@ internal sealed class CommonNameReportCommand : AsyncCommand<CommonNameReportCom
             "caps" => await GenerateCapsReportAsync(store, settings, paths, cancellationToken),
             "wiki-disambig" => await GenerateWikiDisambigReportAsync(store, settings, paths, cancellationToken),
             "iucn-preferred" => await GenerateIucnPreferredConflictReportAsync(store, settings, paths, cancellationToken),
+            "all" => await GenerateAllReportsAsync(store, settings, paths, cancellationToken),
             "summary" or _ => await GenerateSummaryReportAsync(store, settings, cancellationToken)
         };
     }
@@ -77,6 +78,24 @@ internal sealed class CommonNameReportCommand : AsyncCommand<CommonNameReportCom
 
             return 0;
         }, cancellationToken);
+    }
+
+    private static async Task<int> GenerateAllReportsAsync(CommonNameStore store, Settings settings, PathsService paths, CancellationToken cancellationToken) {
+        AnsiConsole.MarkupLine("[blue]Generating all reports...[/]");
+        AnsiConsole.WriteLine();
+
+        var results = new List<(string Name, int Result)>();
+
+        results.Add(("Ambiguous", await GenerateAmbiguousReportAsync(store, settings, paths, cancellationToken)));
+        results.Add(("Caps", await GenerateCapsReportAsync(store, settings, paths, cancellationToken)));
+        results.Add(("Wiki-Disambig", await GenerateWikiDisambigReportAsync(store, settings, paths, cancellationToken)));
+        results.Add(("IUCN-Preferred", await GenerateIucnPreferredConflictReportAsync(store, settings, paths, cancellationToken)));
+
+        AnsiConsole.WriteLine();
+        AnsiConsole.MarkupLine("[green]All reports completed![/]");
+
+        var failedCount = results.Count(r => r.Result != 0);
+        return failedCount > 0 ? 1 : 0;
     }
 
     private static Task<int> GenerateAmbiguousReportAsync(CommonNameStore store, Settings settings, PathsService paths, CancellationToken cancellationToken) {

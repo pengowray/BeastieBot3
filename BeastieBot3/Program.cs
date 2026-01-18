@@ -190,6 +190,7 @@ namespace BeastieBot3 {
                         cn.AddCommand<CommonNameReportCommand>("report")
                             .WithDescription("Generate reports about common name conflicts and capitalization issues.")
                             .WithExample(new[] { "common-names", "report" })
+                            .WithExample(new[] { "common-names", "report", "--report", "all", "--limit", "100" })
                             .WithExample(new[] { "common-names", "report", "--report", "ambiguous", "-o", "reports/ambiguous.md" })
                             .WithExample(new[] { "common-names", "report", "--report", "caps", "-o", "reports/caps.md" });
                     });
