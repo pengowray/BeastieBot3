@@ -500,20 +500,35 @@ internal sealed class CommonNameAggregateCommand : AsyncCommand<CommonNameAggreg
                             }
 
                             // Also add the English label as a common name candidate
+                            // BUT skip if it looks like a scientific name (matches P225 or is Genus species format)
                             if (!string.IsNullOrWhiteSpace(record.LabelEn)) {
-                                var normalized = CommonNameNormalizer.NormalizeForMatching(record.LabelEn);
-                                if (normalized != null) {
-                                    store.InsertCommonName(
-                                        taxonId.Value,
-                                        record.LabelEn.Trim(),
-                                        normalized,
-                                        displayName: null,
-                                        "en",
-                                        "wikidata_label",
-                                        entityId,
-                                        isPreferred: false
-                                    );
-                                    added++;
+                                var labelTrimmed = record.LabelEn.Trim();
+                                
+                                // Check if label matches any scientific name from P225
+                                var isScientificName = record.ScientificNames
+                                    .Any(sn => sn.Value.Equals(labelTrimmed, StringComparison.OrdinalIgnoreCase));
+                                
+                                // Also check if it looks like a scientific name (Genus species format)
+                                // Scientific names: start with capital, second word lowercase, typically 2 words
+                                if (!isScientificName) {
+                                    isScientificName = LooksLikeScientificName(labelTrimmed);
+                                }
+                                
+                                if (!isScientificName) {
+                                    var normalized = CommonNameNormalizer.NormalizeForMatching(labelTrimmed);
+                                    if (normalized != null) {
+                                        store.InsertCommonName(
+                                            taxonId.Value,
+                                            labelTrimmed,
+                                            normalized,
+                                            displayName: null,
+                                            "en",
+                                            "wikidata_label",
+                                            entityId,
+                                            isPreferred: false
+                                        );
+                                        added++;
+                                    }
                                 }
                             }
                         } catch (Exception ex) {
@@ -634,29 +649,34 @@ internal sealed class CommonNameAggregateCommand : AsyncCommand<CommonNameAggreg
                         matched++;
 
                         // Add page title as common name (cleaned)
+                        // BUT skip if the title looks like a scientific name
                         var cleanTitle = CommonNameNormalizer.RemoveDisambiguationSuffix(pageTitle);
-                        var normalized = CommonNameNormalizer.NormalizeForMatching(cleanTitle);
+                        
+                        if (!LooksLikeScientificName(cleanTitle)) {
+                            var normalized = CommonNameNormalizer.NormalizeForMatching(cleanTitle);
 
-                        if (normalized != null) {
-                            store.InsertCommonName(
-                                taxonId.Value,
-                                cleanTitle,
-                                normalized,
-                                displayName: null,
-                                "en",
-                                "wikipedia_title",
-                                pageTitle,
-                                isPreferred: true // Wikipedia title is a strong signal
-                            );
-                            titleAdded++;
+                            if (normalized != null) {
+                                store.InsertCommonName(
+                                    taxonId.Value,
+                                    cleanTitle,
+                                    normalized,
+                                    displayName: null,
+                                    "en",
+                                    "wikipedia_title",
+                                    pageTitle,
+                                    isPreferred: true // Wikipedia title is a strong signal
+                                );
+                                titleAdded++;
+                            }
                         }
 
                         // Extract common name from taxobox "name" field
                         if (!string.IsNullOrWhiteSpace(taxoboxJson)) {
                             var taxoboxName = ExtractTaxoboxName(taxoboxJson);
-                            if (!string.IsNullOrWhiteSpace(taxoboxName)) {
+                            if (!string.IsNullOrWhiteSpace(taxoboxName) && !LooksLikeScientificName(taxoboxName)) {
                                 var taxoboxNormalized = CommonNameNormalizer.NormalizeForMatching(taxoboxName);
-                                if (taxoboxNormalized != null && taxoboxNormalized != normalized) {
+                                var cleanTitleNormalized = CommonNameNormalizer.NormalizeForMatching(cleanTitle);
+                                if (taxoboxNormalized != null && taxoboxNormalized != cleanTitleNormalized) {
                                     store.InsertCommonName(
                                         taxonId.Value,
                                         taxoboxName,
@@ -854,5 +874,47 @@ internal sealed class CommonNameAggregateCommand : AsyncCommand<CommonNameAggreg
                 $"Matched {matched} to existing taxa, {skippedNoTaxon} skipped (no matching taxon)");
             AnsiConsole.MarkupLine($"[green]COL:[/] {added:N0} vernacular names from {matched:N0} matched taxa ({skippedNoTaxon:N0} skipped)");
         }, cancellationToken);
+    }
+
+    /// <summary>
+    /// Heuristic to detect if a string looks like a scientific name (binomial nomenclature).
+    /// Scientific names: "Genus species" or "Genus species subspecies" with first word capitalized,
+    /// subsequent words lowercase, typically Latin/Greek roots.
+    /// </summary>
+    private static bool LooksLikeScientificName(string name) {
+        if (string.IsNullOrWhiteSpace(name)) return false;
+        
+        var words = name.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        
+        // Scientific names are typically 2-4 words
+        if (words.Length < 2 || words.Length > 4) return false;
+        
+        // First word (genus) should be capitalized
+        if (!char.IsUpper(words[0][0])) return false;
+        
+        // Second word (species epithet) should be all lowercase
+        if (words.Length >= 2 && words[1].Any(char.IsUpper)) return false;
+        
+        // If 3+ words, check if they follow scientific name patterns
+        // (subspecies, variety markers like "var.", "subsp.")
+        if (words.Length >= 3) {
+            var third = words[2];
+            // If third word is all lowercase or a taxonomic marker, likely scientific
+            if (third.All(c => char.IsLower(c) || c == '.')) return true;
+            // If third word has capitals, probably not scientific (e.g., "American Black Bear")
+            if (third.Any(char.IsUpper)) return false;
+        }
+        
+        // Check for common Latin/Greek species epithet endings
+        var epithet = words[1].ToLowerInvariant();
+        var latinEndings = new[] { "ii", "ae", "is", "us", "um", "a", "ensis", "oides", "ica", "icum", "icus" };
+        if (latinEndings.Any(ending => epithet.EndsWith(ending))) return true;
+        
+        // If first word ends in common genus patterns and second is lowercase, likely scientific
+        var genus = words[0].ToLowerInvariant();
+        var genusEndings = new[] { "us", "a", "um", "is", "on", "ia", "ops", "yx", "ax" };
+        if (genusEndings.Any(ending => genus.EndsWith(ending)) && words[1].All(char.IsLower)) return true;
+        
+        return false;
     }
 }
