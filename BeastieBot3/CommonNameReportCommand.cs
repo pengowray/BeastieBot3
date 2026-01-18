@@ -180,35 +180,48 @@ internal sealed class CommonNameReportCommand : AsyncCommand<CommonNameReportCom
             sb.AppendLine($"Generated: {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss} UTC");
             sb.AppendLine();
 
-            // Get all English common names and check for missing caps rules
-            var distinctNames = store.GetDistinctNormalizedCommonNames("en");
+            // Load all caps rules into memory once (instead of querying per word)
+            AnsiConsole.MarkupLine("[grey]Loading caps rules...[/]");
+            var capsRules = store.GetAllCapsRules();
+            AnsiConsole.MarkupLine($"[grey]Loaded {capsRules.Count:N0} caps rules[/]");
+
+            // Get all distinct raw common names (much faster than iterating normalized -> records)
+            AnsiConsole.MarkupLine("[grey]Loading common names...[/]");
+            var rawNames = store.GetDistinctRawCommonNames("en", settings.Limit);
+            AnsiConsole.MarkupLine($"[grey]Loaded {rawNames.Count:N0} distinct raw names[/]");
+
             var missingWords = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
-            var processedNames = 0;
 
-            foreach (var normalizedName in distinctNames) {
-                var records = store.GetCommonNamesByNormalized(normalizedName, "en");
-                foreach (var record in records) {
-                    var words = CommonNameNormalizer.FindMissingCapsWords(
-                        record.RawName,
-                        word => store.GetCorrectCapitalization(word) != null
-                    );
+            // Process with progress bar
+            AnsiConsole.Progress()
+                .AutoClear(true)
+                .Columns(new TaskDescriptionColumn(), new ProgressBarColumn(), new PercentageColumn(), new SpinnerColumn())
+                .Start(ctx => {
+                    var task = ctx.AddTask("[green]Scanning for missing caps[/]", maxValue: rawNames.Count);
 
-                    foreach (var word in words) {
-                        var lower = word.ToLowerInvariant();
-                        if (!missingWords.ContainsKey(lower)) {
-                            missingWords[lower] = new List<string>();
+                    foreach (var rawName in rawNames) {
+                        cancellationToken.ThrowIfCancellationRequested();
+
+                        // Check each word against in-memory caps rules (fast!)
+                        var words = CommonNameNormalizer.FindMissingCapsWords(
+                            rawName,
+                            word => capsRules.ContainsKey(word.ToLowerInvariant())
+                        );
+
+                        foreach (var word in words) {
+                            var lower = word.ToLowerInvariant();
+                            if (!missingWords.TryGetValue(lower, out var examples)) {
+                                examples = new List<string>();
+                                missingWords[lower] = examples;
+                            }
+                            if (examples.Count < 3) { // Keep up to 3 examples
+                                examples.Add(rawName);
+                            }
                         }
-                        if (missingWords[lower].Count < 3) { // Keep up to 3 examples
-                            missingWords[lower].Add(record.RawName);
-                        }
+
+                        task.Increment(1);
                     }
-                }
-                processedNames++;
-
-                if (settings.Limit.HasValue && processedNames >= settings.Limit.Value) {
-                    break;
-                }
-            }
+                });
 
             // Sort by frequency (most common missing words first)
             var sortedMissing = missingWords

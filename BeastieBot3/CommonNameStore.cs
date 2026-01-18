@@ -405,6 +405,26 @@ internal sealed class CommonNameStore : IDisposable {
         return results;
     }
 
+    /// <summary>
+    /// Get all distinct raw common names for a language. More efficient for caps checking
+    /// since we only need the raw names, not full records.
+    /// </summary>
+    public IReadOnlyList<string> GetDistinctRawCommonNames(string language = "en", int? limit = null) {
+        using var command = _connection.CreateCommand();
+        var sql = "SELECT DISTINCT raw_name FROM common_names WHERE language = @lang";
+        if (limit.HasValue) {
+            sql += $" LIMIT {limit.Value}";
+        }
+        command.CommandText = sql;
+        command.Parameters.AddWithValue("@lang", language);
+        var results = new List<string>();
+        using var reader = command.ExecuteReader();
+        while (reader.Read()) {
+            results.Add(reader.GetString(0));
+        }
+        return results;
+    }
+
     #endregion
 
     #region Cross-Reference Operations
@@ -488,6 +508,20 @@ internal sealed class CommonNameStore : IDisposable {
         command.Parameters.AddWithValue("@word", lowercaseWord.ToLowerInvariant());
         var result = command.ExecuteScalar();
         return result == null || result == DBNull.Value ? null : (string)result;
+    }
+
+    /// <summary>
+    /// Load all caps rules into memory for efficient batch lookups.
+    /// </summary>
+    public Dictionary<string, string> GetAllCapsRules() {
+        using var command = _connection.CreateCommand();
+        command.CommandText = "SELECT lowercase_word, correct_form FROM caps_rules";
+        var results = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        using var reader = command.ExecuteReader();
+        while (reader.Read()) {
+            results[reader.GetString(0)] = reader.GetString(1);
+        }
+        return results;
     }
 
     public int GetCapsRuleCount() {
