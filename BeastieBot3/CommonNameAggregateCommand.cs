@@ -96,6 +96,7 @@ internal sealed class CommonNameAggregateCommand : AsyncCommand<CommonNameAggreg
             var colPath = settings.ColSqlitePath ?? paths.GetColSqlitePath();
             if (!string.IsNullOrWhiteSpace(colPath) && File.Exists(colPath)) {
                 await AggregateColVernacularNamesAsync(store, colPath, settings.Limit, cancellationToken);
+                await AggregateColSynonymsAsync(store, colPath, settings.Limit, cancellationToken);
             } else {
                 AnsiConsole.MarkupLine("[yellow]Skipping COL:[/] database not found");
             }
@@ -873,6 +874,112 @@ internal sealed class CommonNameAggregateCommand : AsyncCommand<CommonNameAggreg
             store.CompleteImportRun(runId, processed, added, 0, skippedNoTaxon,
                 $"Matched {matched} to existing taxa, {skippedNoTaxon} skipped (no matching taxon)");
             AnsiConsole.MarkupLine($"[green]COL:[/] {added:N0} vernacular names from {matched:N0} matched taxa ({skippedNoTaxon:N0} skipped)");
+        }, cancellationToken);
+    }
+
+    private static Task AggregateColSynonymsAsync(CommonNameStore store, string colPath, int? limit, CancellationToken cancellationToken) {
+        return Task.Run(() => {
+            AnsiConsole.MarkupLine("[yellow]Aggregating COL scientific name synonyms...[/]");
+            AnsiConsole.MarkupLine($"[blue]COL database:[/] {colPath}");
+
+            var runId = store.BeginImportRun("synonyms_col");
+            var processed = 0;
+            var added = 0;
+            var skippedNoTaxon = 0;
+            var matched = 0;
+
+            using var colConnection = new SqliteConnection($"Data Source={colPath};Mode=ReadOnly");
+            colConnection.Open();
+
+            using var command = colConnection.CreateCommand();
+            // Get synonyms: join synonym records to their accepted name (via parentID)
+            // We need the synonym scientific name and the accepted name's scientific name to match to our taxa
+            var sql = """
+                SELECT 
+                    s.ID as synonym_id,
+                    s.scientificName as synonym_name,
+                    s.status as synonym_status,
+                    s.rank as synonym_rank,
+                    a.scientificName as accepted_name,
+                    a.ID as accepted_id
+                FROM nameusage s
+                JOIN nameusage a ON s.parentID = a.ID
+                WHERE s.status IN ('synonym', 'ambiguous synonym')
+                AND a.status = 'accepted'
+                AND s.rank IN ('species', 'subspecies', 'variety')
+                """;
+
+            if (limit.HasValue) {
+                sql += $" LIMIT {limit.Value}";
+            }
+            command.CommandText = sql;
+            command.CommandTimeout = 0;
+
+            // Count for progress (approximate)
+            using var countCommand = colConnection.CreateCommand();
+            countCommand.CommandText = "SELECT COUNT(*) FROM nameusage WHERE status IN ('synonym', 'ambiguous synonym')";
+            var totalCount = limit.HasValue ? limit.Value : Convert.ToInt32(countCommand.ExecuteScalar() ?? 0);
+
+            AnsiConsole.Progress()
+                .AutoClear(true)
+                .HideCompleted(true)
+                .Columns(
+                    new TaskDescriptionColumn(),
+                    new ProgressBarColumn(),
+                    new PercentageColumn(),
+                    new SpinnerColumn())
+                .Start(ctx => {
+                    var task = ctx.AddTask("[green]COL synonyms[/]", autoStart: true);
+                    task.MaxValue = totalCount;
+
+                    using var reader = command.ExecuteReader();
+                    while (reader.Read()) {
+                        cancellationToken.ThrowIfCancellationRequested();
+                        processed++;
+                        task.Increment(1);
+
+                        var synonymId = reader.GetString(0);
+                        var synonymName = reader.GetString(1);
+                        var synonymStatus = reader.IsDBNull(2) ? null : reader.GetString(2);
+                        var synonymRank = reader.IsDBNull(3) ? null : reader.GetString(3);
+                        var acceptedName = reader.GetString(4);
+                        var acceptedId = reader.GetString(5);
+
+                        // Normalize both names
+                        var normalizedSynonym = ScientificNameNormalizer.Normalize(synonymName);
+                        var normalizedAccepted = ScientificNameNormalizer.Normalize(acceptedName);
+
+                        if (normalizedSynonym == null || normalizedAccepted == null) continue;
+
+                        // Try to find the accepted taxon in our database
+                        var taxonId = store.FindTaxonByScientificName(normalizedAccepted);
+                        if (!taxonId.HasValue) {
+                            taxonId = store.FindTaxonBySourceId("col", acceptedId);
+                        }
+
+                        if (!taxonId.HasValue) {
+                            skippedNoTaxon++;
+                            continue;
+                        }
+                        matched++;
+
+                        // Determine synonym type
+                        var synonymType = synonymStatus == "ambiguous synonym" ? "ambiguous_synonym" : "synonym";
+
+                        store.InsertSynonym(
+                            taxonId.Value,
+                            normalizedSynonym,
+                            synonymName,
+                            "col",
+                            synonymType
+                        );
+                        added++;
+                    }
+                });
+
+            store.CompleteImportRun(runId, processed, added, 0, skippedNoTaxon,
+                $"Matched {matched} synonyms to existing taxa, {skippedNoTaxon} skipped (no matching taxon)");
+            AnsiConsole.MarkupLine($"[green]COL synonyms:[/] {added:N0} synonyms from {matched:N0} matched taxa ({skippedNoTaxon:N0} skipped)");
         }, cancellationToken);
     }
 
