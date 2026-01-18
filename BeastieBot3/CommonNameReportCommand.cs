@@ -22,7 +22,7 @@ internal sealed class CommonNameReportCommand : AsyncCommand<CommonNameReportCom
         public string? DatabasePath { get; init; }
 
         [CommandOption("--report <TYPE>")]
-        [Description("Report type: ambiguous, caps, summary, wiki-disambig, iucn-preferred, all (default: summary)")]
+        [Description("Report type: ambiguous, ambiguous-iucn, caps, summary, wiki-disambig, iucn-preferred, all (default: summary)")]
         public string ReportType { get; init; } = "summary";
 
         [CommandOption("-o|--output <PATH>")]
@@ -50,6 +50,7 @@ internal sealed class CommonNameReportCommand : AsyncCommand<CommonNameReportCom
 
         return reportType switch {
             "ambiguous" => await GenerateAmbiguousReportAsync(store, settings, paths, cancellationToken),
+            "ambiguous-iucn" => await GenerateAmbiguousIucnReportAsync(store, settings, paths, cancellationToken),
             "caps" => await GenerateCapsReportAsync(store, settings, paths, cancellationToken),
             "wiki-disambig" => await GenerateWikiDisambigReportAsync(store, settings, paths, cancellationToken),
             "iucn-preferred" => await GenerateIucnPreferredConflictReportAsync(store, settings, paths, cancellationToken),
@@ -87,6 +88,7 @@ internal sealed class CommonNameReportCommand : AsyncCommand<CommonNameReportCom
         var results = new List<(string Name, int Result)>();
 
         results.Add(("Ambiguous", await GenerateAmbiguousReportAsync(store, settings, paths, cancellationToken)));
+        results.Add(("Ambiguous-IUCN", await GenerateAmbiguousIucnReportAsync(store, settings, paths, cancellationToken)));
         results.Add(("Caps", await GenerateCapsReportAsync(store, settings, paths, cancellationToken)));
         results.Add(("Wiki-Disambig", await GenerateWikiDisambigReportAsync(store, settings, paths, cancellationToken)));
         results.Add(("IUCN-Preferred", await GenerateIucnPreferredConflictReportAsync(store, settings, paths, cancellationToken)));
@@ -108,10 +110,8 @@ internal sealed class CommonNameReportCommand : AsyncCommand<CommonNameReportCom
             sb.AppendLine($"Generated: {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss} UTC");
             sb.AppendLine();
 
-            var limit = settings.Limit ?? 100;
-
-            // Use efficient SQL query to find ambiguous names directly
-            var ambiguousNames = store.GetAmbiguousCommonNames(limit, settings.Kingdom);
+            // Use efficient SQL query to find ambiguous names directly (no default limit)
+            var ambiguousNames = store.GetAmbiguousCommonNames(settings.Limit, settings.Kingdom);
             var conflictingNames = new List<(string NormalizedName, List<CommonNameRecord> Records)>();
 
             AnsiConsole.Progress()
@@ -153,7 +153,8 @@ internal sealed class CommonNameReportCommand : AsyncCommand<CommonNameReportCom
                     var first = taxonGroup.First();
                     var sources = string.Join(", ", taxonGroup.Select(r => r.Source).Distinct());
                     var isPreferred = taxonGroup.Any(r => r.IsPreferred) ? "Yes" : "No";
-                    sb.AppendLine($"| {first.TaxonCanonicalName} | {first.TaxonKingdom ?? "?"} | {sources} | {isPreferred} |");
+                    var scientificName = CapitalizeFirst(first.TaxonCanonicalName);
+                    sb.AppendLine($"| {scientificName} | {first.TaxonKingdom ?? "?"} | {sources} | {isPreferred} |");
                 }
                 sb.AppendLine();
             }
@@ -245,7 +246,7 @@ internal sealed class CommonNameReportCommand : AsyncCommand<CommonNameReportCom
             sb.AppendLine("### Suggested caps.txt entries");
             sb.AppendLine();
             sb.AppendLine("```");
-            foreach (var (word, examples) in sortedMissing.Take(50)) {
+            foreach (var (word, examples) in sortedMissing) {
                 // Guess capitalization based on patterns
                 var guessedForm = GuessCapitalization(word, examples);
                 var exampleStr = examples.FirstOrDefault() ?? "";
@@ -283,6 +284,92 @@ internal sealed class CommonNameReportCommand : AsyncCommand<CommonNameReportCom
         return word.ToLowerInvariant();
     }
 
+    private static string CapitalizeFirst(string s) {
+        if (string.IsNullOrEmpty(s)) return s;
+        return char.ToUpperInvariant(s[0]) + s.Substring(1);
+    }
+
+    /// <summary>
+    /// Report ambiguous common names that have at least one IUCN preferred source.
+    /// </summary>
+    private static Task<int> GenerateAmbiguousIucnReportAsync(CommonNameStore store, Settings settings, PathsService paths, CancellationToken cancellationToken) {
+        return Task.Run(() => {
+            AnsiConsole.MarkupLine("[yellow]Generating ambiguous IUCN-preferred common names report...[/]");
+
+            var sb = new StringBuilder();
+            sb.AppendLine("# Ambiguous Common Names Report (IUCN Preferred)");
+            sb.AppendLine();
+            sb.AppendLine($"Generated: {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss} UTC");
+            sb.AppendLine();
+            sb.AppendLine("This report lists common names that are ambiguous (map to multiple species)");
+            sb.AppendLine("where at least one usage is marked as IUCN preferred (main=true).");
+            sb.AppendLine();
+
+            // Use efficient SQL query to find ambiguous names (no default limit)
+            var ambiguousNames = store.GetAmbiguousCommonNames(settings.Limit, settings.Kingdom);
+            var conflictingNames = new List<(string NormalizedName, List<CommonNameRecord> Records)>();
+
+            AnsiConsole.Progress()
+                .AutoClear(true)
+                .Columns(new TaskDescriptionColumn(), new ProgressBarColumn(), new PercentageColumn())
+                .Start(ctx => {
+                    var task = ctx.AddTask("[green]Loading conflicts[/]", maxValue: ambiguousNames.Count);
+                    foreach (var normalizedName in ambiguousNames) {
+                        cancellationToken.ThrowIfCancellationRequested();
+                        task.Increment(1);
+
+                        var records = store.GetCommonNamesByNormalized(normalizedName, "en")
+                            .Where(r => r.TaxonValidityStatus == "valid" && !r.TaxonIsFossil)
+                            .ToList();
+
+                        if (!string.IsNullOrWhiteSpace(settings.Kingdom)) {
+                            records = records.Where(r =>
+                                r.TaxonKingdom?.Equals(settings.Kingdom, StringComparison.OrdinalIgnoreCase) == true).ToList();
+                        }
+
+                        // Only include if there's at least one IUCN preferred record
+                        var hasIucnPreferred = records.Any(r => r.Source == "iucn" && r.IsPreferred);
+                        if (!hasIucnPreferred) continue;
+
+                        if (records.Select(r => r.TaxonId).Distinct().Count() > 1) {
+                            conflictingNames.Add((normalizedName, records));
+                        }
+                    }
+                });
+
+            sb.AppendLine($"## Ambiguous Names with IUCN Preferred ({conflictingNames.Count} found)");
+            sb.AppendLine();
+
+            foreach (var (normalizedName, records) in conflictingNames) {
+                var displayName = records.FirstOrDefault()?.RawName ?? normalizedName;
+                sb.AppendLine($"### {displayName}");
+                sb.AppendLine();
+                sb.AppendLine("| Scientific Name | Kingdom | Source | Preferred |");
+                sb.AppendLine("|-----------------|---------|--------|-----------|");
+
+                var groupedByTaxon = records.GroupBy(r => r.TaxonId);
+                foreach (var taxonGroup in groupedByTaxon) {
+                    var first = taxonGroup.First();
+                    var sources = string.Join(", ", taxonGroup.Select(r => r.Source).Distinct());
+                    var isPreferred = taxonGroup.Any(r => r.IsPreferred) ? "Yes" : "No";
+                    var scientificName = CapitalizeFirst(first.TaxonCanonicalName);
+                    sb.AppendLine($"| {scientificName} | {first.TaxonKingdom ?? "?"} | {sources} | {isPreferred} |");
+                }
+                sb.AppendLine();
+            }
+
+            // Output - save to disk by default
+            var timestamp = DateTime.UtcNow.ToString("yyyyMMdd-HHmmss");
+            var defaultFileName = $"common-name-ambiguous-iucn-{timestamp}.md";
+            var outputPath = ReportPathResolver.ResolveFilePath(paths, settings.OutputPath, null, null, defaultFileName);
+
+            File.WriteAllText(outputPath, sb.ToString());
+            AnsiConsole.MarkupLine($"[green]Report written to:[/] {outputPath}");
+            AnsiConsole.MarkupLine($"[green]Found {conflictingNames.Count} ambiguous common names with IUCN preferred[/]");
+            return 0;
+        }, cancellationToken);
+    }
+
     /// <summary>
     /// Report Wikipedia titles that are ambiguous (same title maps to multiple species).
     /// </summary>
@@ -299,10 +386,8 @@ internal sealed class CommonNameReportCommand : AsyncCommand<CommonNameReportCom
             sb.AppendLine("These may need disambiguation on Wikipedia.");
             sb.AppendLine();
 
-            var limit = settings.Limit ?? 100;
-
-            // Use efficient SQL query to find Wikipedia ambiguous names directly
-            var wikiAmbiguousNames = store.GetWikipediaAmbiguousNames(limit, settings.Kingdom);
+            // Use efficient SQL query to find Wikipedia ambiguous names directly (no default limit)
+            var wikiAmbiguousNames = store.GetWikipediaAmbiguousNames(settings.Limit, settings.Kingdom);
             var ambiguousWikiTitles = new List<(string NormalizedName, List<CommonNameRecord> Records)>();
 
             AnsiConsole.Progress()
@@ -345,7 +430,8 @@ internal sealed class CommonNameReportCommand : AsyncCommand<CommonNameReportCom
                 foreach (var taxonGroup in groupedByTaxon) {
                     var first = taxonGroup.First();
                     var sources = string.Join(", ", taxonGroup.Select(r => r.Source).Distinct());
-                    sb.AppendLine($"| {first.TaxonCanonicalName} | {first.TaxonKingdom ?? "?"} | {sources} |");
+                    var scientificName = CapitalizeFirst(first.TaxonCanonicalName);
+                    sb.AppendLine($"| {scientificName} | {first.TaxonKingdom ?? "?"} | {sources} |");
                 }
                 sb.AppendLine();
             }
@@ -378,9 +464,8 @@ internal sealed class CommonNameReportCommand : AsyncCommand<CommonNameReportCom
             sb.AppendLine("for multiple different species. These may indicate data quality issues.");
             sb.AppendLine();
 
-            // Find preferred IUCN common names using efficient SQL query
-            var limit = settings.Limit ?? 100;
-            var conflictNames = store.GetIucnPreferredConflictNames(limit, settings.Kingdom);
+            // Find preferred IUCN common names using efficient SQL query (no default limit)
+            var conflictNames = store.GetIucnPreferredConflictNames(settings.Limit, settings.Kingdom);
 
             // Get full records for each conflict
             var preferredConflicts = new List<(string NormalizedName, List<CommonNameRecord> Records)>();
@@ -414,7 +499,8 @@ internal sealed class CommonNameReportCommand : AsyncCommand<CommonNameReportCom
                 sb.AppendLine("|-----------------|---------|---------|");
 
                 foreach (var record in records.DistinctBy(r => r.TaxonId)) {
-                    sb.AppendLine($"| {record.TaxonCanonicalName} | {record.TaxonKingdom ?? "?"} | {record.SourceIdentifier} |");
+                    var scientificName = CapitalizeFirst(record.TaxonCanonicalName);
+                    sb.AppendLine($"| {scientificName} | {record.TaxonKingdom ?? "?"} | {record.SourceIdentifier} |");
                 }
                 sb.AppendLine();
             }

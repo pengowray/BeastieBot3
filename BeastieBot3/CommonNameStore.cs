@@ -595,9 +595,10 @@ internal sealed class CommonNameStore : IDisposable {
     /// <summary>
     /// Get normalized names that are IUCN-preferred for multiple distinct taxa (efficient SQL query).
     /// </summary>
-    public IReadOnlyList<string> GetIucnPreferredConflictNames(int limit, string? kingdom = null) {
+    public IReadOnlyList<string> GetIucnPreferredConflictNames(int? limit, string? kingdom = null) {
         using var command = _connection.CreateCommand();
         var kingdomFilter = kingdom != null ? "AND t.kingdom = @kingdom" : "";
+        var limitClause = limit.HasValue ? "LIMIT @limit" : "";
         command.CommandText = $@"
             SELECT c.normalized_name
             FROM common_names c
@@ -611,9 +612,11 @@ internal sealed class CommonNameStore : IDisposable {
             GROUP BY c.normalized_name
             HAVING COUNT(DISTINCT c.taxon_id) > 1
             ORDER BY COUNT(DISTINCT c.taxon_id) DESC
-            LIMIT @limit;
+            {limitClause};
         ";
-        command.Parameters.AddWithValue("@limit", limit);
+        if (limit.HasValue) {
+            command.Parameters.AddWithValue("@limit", limit.Value);
+        }
         if (kingdom != null) {
             command.Parameters.AddWithValue("@kingdom", kingdom);
         }
@@ -629,9 +632,10 @@ internal sealed class CommonNameStore : IDisposable {
     /// <summary>
     /// Get normalized names from Wikipedia sources that map to multiple distinct taxa.
     /// </summary>
-    public IReadOnlyList<string> GetWikipediaAmbiguousNames(int limit, string? kingdom = null) {
+    public IReadOnlyList<string> GetWikipediaAmbiguousNames(int? limit, string? kingdom = null) {
         using var command = _connection.CreateCommand();
         var kingdomFilter = kingdom != null ? "AND t.kingdom = @kingdom" : "";
+        var limitClause = limit.HasValue ? "LIMIT @limit" : "";
         command.CommandText = $@"
             SELECT c.normalized_name
             FROM common_names c
@@ -644,9 +648,11 @@ internal sealed class CommonNameStore : IDisposable {
             GROUP BY c.normalized_name
             HAVING COUNT(DISTINCT c.taxon_id) > 1
             ORDER BY COUNT(DISTINCT c.taxon_id) DESC
-            LIMIT @limit;
+            {limitClause};
         ";
-        command.Parameters.AddWithValue("@limit", limit);
+        if (limit.HasValue) {
+            command.Parameters.AddWithValue("@limit", limit.Value);
+        }
         if (kingdom != null) {
             command.Parameters.AddWithValue("@kingdom", kingdom);
         }
@@ -662,9 +668,10 @@ internal sealed class CommonNameStore : IDisposable {
     /// <summary>
     /// Get normalized names that map to multiple distinct taxa (general ambiguity check).
     /// </summary>
-    public IReadOnlyList<string> GetAmbiguousCommonNames(int limit, string? kingdom = null) {
+    public IReadOnlyList<string> GetAmbiguousCommonNames(int? limit, string? kingdom = null) {
         using var command = _connection.CreateCommand();
         var kingdomFilter = kingdom != null ? "AND t.kingdom = @kingdom" : "";
+        var limitClause = limit.HasValue ? "LIMIT @limit" : "";
         command.CommandText = $@"
             SELECT c.normalized_name
             FROM common_names c
@@ -676,9 +683,11 @@ internal sealed class CommonNameStore : IDisposable {
             GROUP BY c.normalized_name
             HAVING COUNT(DISTINCT c.taxon_id) > 1
             ORDER BY COUNT(DISTINCT c.taxon_id) DESC
-            LIMIT @limit;
+            {limitClause};
         ";
-        command.Parameters.AddWithValue("@limit", limit);
+        if (limit.HasValue) {
+            command.Parameters.AddWithValue("@limit", limit.Value);
+        }
         if (kingdom != null) {
             command.Parameters.AddWithValue("@kingdom", kingdom);
         }
