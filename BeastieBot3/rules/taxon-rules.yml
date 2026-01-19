@@ -2,13 +2,24 @@
 # This file extends the legacy rules-list.txt with additional features.
 #
 # Features:
-# - Exclusion patterns (exclude taxa from lists)
-# - Main article links
-# - List-specific overrides
-# - Force-split rules
+# - Exclusion patterns (exclude taxa from lists based on regex)
+# - Main article links ({{main|...}} templates in headings)
+# - List-specific overrides (exclude/rename taxa per list)
+# - Force-split rules (skip heading for a taxon, group by children instead)
 #
 # The legacy rules-list.txt is still used for common names and wikilinks.
 # This file adds newer features that can't be expressed in the legacy format.
+#
+# Force-split example:
+#   When grouping by "order", if Squamata has force_split: true, instead of:
+#     === Squamata ===
+#     * Species A
+#     * Species B
+#   The items will be pushed to the next grouping level (e.g., family):
+#     === Colubridae ===
+#     * Species A
+#     === Viperidae ===
+#     * Species B
 
 # Global exclusion patterns (regex)
 # Taxa matching any pattern are excluded from all lists

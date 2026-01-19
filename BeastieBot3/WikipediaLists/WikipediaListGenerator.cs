@@ -213,7 +213,10 @@ internal sealed class WikipediaListGenerator {
                 level.OtherLabel))
             .ToList();
 
-        var tree = TaxonomyTreeBuilder.Build(records, levels);
+        Func<string, bool>? shouldSkip = _taxonRules != null 
+            ? taxon => _taxonRules.ShouldForceSplit(taxon) 
+            : null;
+        var tree = TaxonomyTreeBuilder.Build(records, levels, shouldSkip);
         var builder = new StringBuilder();
         var headingCount = 0;
         AppendTree(builder, tree, startHeading: 3, display, statusContext, ref headingCount);
@@ -247,7 +250,10 @@ internal sealed class WikipediaListGenerator {
                 level.OtherLabel))
             .ToList();
 
-        var tree = TaxonomyTreeBuilder.Build(enrichedRecords, levels);
+        Func<string, bool>? shouldSkip = _taxonRules != null 
+            ? taxon => _taxonRules.ShouldForceSplit(taxon) 
+            : null;
+        var tree = TaxonomyTreeBuilder.Build(enrichedRecords, levels, shouldSkip);
         var builder = new StringBuilder();
         var headingCount = 0;
         AppendEnrichedTree(builder, tree, startHeading: 3, display, statusContext, ref headingCount);

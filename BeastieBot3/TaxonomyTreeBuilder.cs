@@ -6,6 +6,19 @@ namespace BeastieBot3;
 
 internal static class TaxonomyTreeBuilder {
     public static TaxonomyTreeNode<T> Build<T>(IEnumerable<T> items, IReadOnlyList<TaxonomyTreeLevel<T>> levels) {
+        return Build(items, levels, shouldSkipGroup: null);
+    }
+
+    /// <summary>
+    /// Build a taxonomy tree with optional group skipping (for force-split support).
+    /// </summary>
+    /// <param name="items">Items to organize into the tree.</param>
+    /// <param name="levels">Hierarchical grouping levels.</param>
+    /// <param name="shouldSkipGroup">Optional callback to determine if a group value should be skipped (items pushed to next level).</param>
+    public static TaxonomyTreeNode<T> Build<T>(
+        IEnumerable<T> items, 
+        IReadOnlyList<TaxonomyTreeLevel<T>> levels,
+        Func<string, bool>? shouldSkipGroup) {
         if (items is null) {
             throw new ArgumentNullException(nameof(items));
         }
@@ -20,11 +33,16 @@ internal static class TaxonomyTreeBuilder {
             return root;
         }
 
-        BuildRecursive(root, materialized, levels, 0);
+        BuildRecursive(root, materialized, levels, 0, shouldSkipGroup);
         return root;
     }
 
-    private static void BuildRecursive<T>(TaxonomyTreeNode<T> parent, IReadOnlyList<T> items, IReadOnlyList<TaxonomyTreeLevel<T>> levels, int levelIndex) {
+    private static void BuildRecursive<T>(
+        TaxonomyTreeNode<T> parent, 
+        IReadOnlyList<T> items, 
+        IReadOnlyList<TaxonomyTreeLevel<T>> levels, 
+        int levelIndex,
+        Func<string, bool>? shouldSkipGroup) {
         if (items.Count == 0) {
             return;
         }
@@ -37,19 +55,42 @@ internal static class TaxonomyTreeBuilder {
         var level = levels[levelIndex];
         var groups = CreateGroups(items, level);
         if (groups.Count == 0) {
-            BuildRecursive(parent, items, levels, levelIndex + 1);
+            BuildRecursive(parent, items, levels, levelIndex + 1, shouldSkipGroup);
             return;
         }
 
         if (!level.AlwaysDisplay && groups.Count == 1) {
-            BuildRecursive(parent, groups[0].Items, levels, levelIndex + 1);
+            BuildRecursive(parent, groups[0].Items, levels, levelIndex + 1, shouldSkipGroup);
             return;
         }
 
+        // Separate groups into normal and force-split
+        var normalGroups = new List<TreeGroup<T>>();
+        var skipItems = new List<T>();
+
         foreach (var group in groups) {
-            var child = parent.AddChild(level.Label, group.DisplayValue);
-            BuildRecursive(child, group.Items, levels, levelIndex + 1);
+            if (shouldSkipGroup != null && shouldSkipGroup(group.DisplayValue)) {
+                // Force-split: don't create a heading for this group, push items to next level
+                skipItems.AddRange(group.Items);
+            } else {
+                normalGroups.Add(group);
+            }
         }
+
+        // Process normal groups with headings
+        foreach (var group in normalGroups) {
+            var child = parent.AddChild(level.Label, group.DisplayValue);
+            BuildRecursive(child, group.Items, levels, levelIndex + 1, shouldSkipGroup);
+        }
+
+        // Process skipped items at the next level (no heading for the current level)
+        if (skipItems.Count > 0) {
+            BuildRecursive(parent, skipItems, levels, levelIndex + 1, shouldSkipGroup);
+        }
+    }
+
+    private static void BuildRecursive<T>(TaxonomyTreeNode<T> parent, IReadOnlyList<T> items, IReadOnlyList<TaxonomyTreeLevel<T>> levels, int levelIndex) {
+        BuildRecursive(parent, items, levels, levelIndex, shouldSkipGroup: null);
     }
 
     private static List<TreeGroup<T>> CreateGroups<T>(IEnumerable<T> items, TaxonomyTreeLevel<T> level) {
