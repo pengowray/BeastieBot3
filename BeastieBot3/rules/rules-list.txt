@@ -143,10 +143,8 @@ Rita kuturnee = Deccan rita
 Rita sacerdotum = Salween rita
 
 // mammal groups/ranks
-Cetartiodactyla includes dolphins, whales and even-toed ungulates
-Cetartiodactyla force-split true // Tylopoda, Artiofabula (so includes Baiji and Pygmy hog)
-// Chiroptera force-split true // micro and macro
-Cetartiodactyla split-off Cetacea
+// Cetartiodactyla/Artiodactyla: now handled by virtual_groups in taxon-rules.yml
+// (splits into Cetaceans and Even-toed ungulates)
 //Cetartiodactyla below Ungulata // TODO: wasn't created.. needs rank.. also should be hidden (don't need an extra heading level, just keep the entries together)
 //Perissodactyla below Ungulata
 Ungulata = ungulate ! ungulates
@@ -165,7 +163,7 @@ Giraffidae = giraffid ! giraffids
 Suidae = suid ! suids
 // Muridae force-split true // maybe.. not really needed
 Proboscidea = proboscidean ! proboscideans
-Cetartiodactyla = cetartiodactyl ! cetartiodactyls
+// Cetartiodactyla = cetartiodactyl ! cetartiodactyls // now in taxon-rules.yml
 Pilosa comprises anteaters and sloths
 Lemuroidea = lemur ! lemurs
 Marsupialia = marsupial ! marsupials
@@ -787,17 +785,8 @@ Peripatopsis leonina = Lion's Hill velvet worm
 Telemidae = six-eyed spider
 Microgale jenkinsae = Jenkins' shrew tenrec // missing taxobox
 
-Artiodactyla = non-cetacean even-toed ungulate ! non-cetacean even-toed ungulates // not a true clade, but allows spliting of cetaceans and land mammals for display purposes
-Hippopotamidae below Artiodactyla : unranked
-Moschidae below Artiodactyla : unranked
-Tayassuidae below Artiodactyla : unranked
-Suidae below Artiodactyla : unranked
-Cervidae below Artiodactyla : unranked
-Giraffidae below Artiodactyla : unranked
-Camelidae below Artiodactyla : unranked
-Bovidae below Artiodactyla : unranked
-Tragulidae below Artiodactyla : unranked
-Antilocapridae below Artiodactyla : unranked
+// Artiodactyla: now handled by virtual_groups in taxon-rules.yml
+// (splits into Cetaceans and Even-toed ungulates)
 
 // CETACEA
 // IUCN has all Cetecea under CETARTIODACTYLA (order on iucn, unranked on wiki)

@@ -626,10 +626,22 @@ internal sealed class WikipediaListGenerator {
         // Apply title case to the raw taxon name for display
         var displayName = ToTitleCase(raw);
 
-        // Check new YAML rules first for main article
+        // Check new YAML rules first (they take precedence)
         var yamlMainArticle = _taxonRules?.GetMainArticle(raw);
         var yamlRule = _taxonRules?.GetRule(raw);
         
+        // YAML rules take precedence for common names
+        if (!string.IsNullOrWhiteSpace(yamlRule?.CommonPlural)) {
+            var mainLink = yamlMainArticle ?? displayName;
+            return new HeadingInfo(Uppercase(yamlRule.CommonPlural)!, mainLink);
+        }
+
+        if (!string.IsNullOrWhiteSpace(yamlRule?.CommonName)) {
+            var mainLink = yamlMainArticle ?? displayName;
+            return new HeadingInfo(Uppercase(yamlRule.CommonName)!, mainLink);
+        }
+
+        // Fall back to legacy rules for common names
         var rules = _legacyRules.Get(raw);
         if (!string.IsNullOrWhiteSpace(rules?.CommonPlural)) {
             var mainLink = yamlMainArticle ?? displayName;
@@ -641,24 +653,13 @@ internal sealed class WikipediaListGenerator {
             return new HeadingInfo(Uppercase(rules!.CommonName)!, mainLink);
         }
 
-        // Check YAML rules for common name
-        if (!string.IsNullOrWhiteSpace(yamlRule?.CommonPlural)) {
-            var mainLink = yamlMainArticle ?? displayName;
-            return new HeadingInfo(Uppercase(yamlRule.CommonPlural)!, mainLink);
-        }
-
-        if (!string.IsNullOrWhiteSpace(yamlRule?.CommonName)) {
-            var mainLink = yamlMainArticle ?? displayName;
-            return new HeadingInfo(Uppercase(yamlRule.CommonName)!, mainLink);
+        // Check for wikilink overrides
+        if (!string.IsNullOrWhiteSpace(yamlRule?.Wikilink)) {
+            return new HeadingInfo(displayName, yamlRule.Wikilink);
         }
 
         if (!string.IsNullOrWhiteSpace(rules?.Wikilink)) {
             return new HeadingInfo(displayName, rules!.Wikilink);
-        }
-
-        // Check YAML rules for wikilink
-        if (!string.IsNullOrWhiteSpace(yamlRule?.Wikilink)) {
-            return new HeadingInfo(displayName, yamlRule.Wikilink);
         }
 
         // If we have a main article from YAML, use it

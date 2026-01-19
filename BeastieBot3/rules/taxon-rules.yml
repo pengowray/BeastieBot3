@@ -105,6 +105,89 @@ virtual_groups:
         clades:
           - Iguania
 
+  # Artiodactyla/Cetartiodactyla: separate cetaceans from even-toed ungulates
+  # IUCN uses both "ARTIODACTYLA" and "CETARTIODACTYLA" depending on the taxon
+  Artiodactyla:
+    groups:
+      - name: Cetaceans
+        common_name: cetacean
+        common_plural: cetaceans
+        main_article: Cetacea
+        families:
+          # Baleen whales (Mysticeti)
+          - Balaenidae        # right whales
+          - Balaenopteridae   # rorquals
+          - Eschrichtiidae    # gray whale
+          - Neobalaenidae     # pygmy right whale
+          # Toothed whales (Odontoceti)
+          - Delphinidae       # oceanic dolphins
+          - Iniidae           # river dolphins
+          - Kogiidae          # dwarf/pygmy sperm whales
+          - Lipotidae         # baiji (extinct)
+          - Monodontidae      # narwhal, beluga
+          - Phocoenidae       # porpoises
+          - Physeteridae      # sperm whale
+          - Platanistidae     # South Asian river dolphins
+          - Pontoporiidae     # La Plata dolphin
+          - Ziphiidae         # beaked whales
+
+      - name: Even-toed ungulates
+        common_name: even-toed ungulate
+        common_plural: even-toed ungulates
+        main_article: Even-toed ungulate
+        default: true
+        families:
+          - Antilocapridae    # pronghorn
+          - Bovidae           # cattle, antelope, sheep, goats
+          - Camelidae         # camels, llamas
+          - Cervidae          # deer
+          - Giraffidae        # giraffes, okapi
+          - Hippopotamidae    # hippos
+          - Moschidae         # musk deer
+          - Suidae            # pigs
+          - Tayassuidae       # peccaries
+          - Tragulidae        # chevrotains
+
+  # Copy for CETARTIODACTYLA (IUCN uses this name for some taxa)
+  Cetartiodactyla:
+    groups:
+      - name: Cetaceans
+        common_name: cetacean
+        common_plural: cetaceans
+        main_article: Cetacea
+        families:
+          - Balaenidae
+          - Balaenopteridae
+          - Eschrichtiidae
+          - Neobalaenidae
+          - Delphinidae
+          - Iniidae
+          - Kogiidae
+          - Lipotidae
+          - Monodontidae
+          - Phocoenidae
+          - Physeteridae
+          - Platanistidae
+          - Pontoporiidae
+          - Ziphiidae
+
+      - name: Even-toed ungulates
+        common_name: even-toed ungulate
+        common_plural: even-toed ungulates
+        main_article: Even-toed ungulate
+        default: true
+        families:
+          - Antilocapridae
+          - Bovidae
+          - Camelidae
+          - Cervidae
+          - Giraffidae
+          - Hippopotamidae
+          - Moschidae
+          - Suidae
+          - Tayassuidae
+          - Tragulidae
+
 # Taxa-specific rules
 taxa:
   # Example: Chordata should always split into classes
@@ -118,6 +201,22 @@ taxa:
     use_virtual_groups: true
     main_article: Squamata
     comprises: "lizards, snakes, and amphisbaenians"
+
+  # Artiodactyla uses virtual groups to separate cetaceans
+  Artiodactyla:
+    use_virtual_groups: true
+    common_name: artiodactyl
+    common_plural: Artiodactyls
+    main_article: Even-toed ungulate
+    comprises: "even-toed ungulates and cetaceans"
+
+  # Cetartiodactyla is the combined order name used by IUCN
+  Cetartiodactyla:
+    use_virtual_groups: true
+    common_name: cetartiodactyl
+    common_plural: Cetartiodactyls
+    main_article: Even-toed ungulate
+    comprises: "even-toed ungulates and cetaceans"
 
   # Example: Testudines with main article
   Testudines:
