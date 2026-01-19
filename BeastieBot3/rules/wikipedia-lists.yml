@@ -143,3 +143,32 @@ lists:
         heading: "Conservation dependent"
         statuses:
           - code: "LR/cd"
+  # ==================== TEST: COL ENRICHED GROUPING ====================
+  # This tests the COL-based taxonomy enrichment with superfamily-level grouping
+  - id: test-reptiles-ex-enriched
+    title: "Test: Extinct reptiles with COL superfamily grouping"
+    description: "Testing COL taxonomy enrichment for finer-grained grouping."
+    output_file: "Test_extinct_reptiles_col_enriched.wikitext"
+    filters:
+      - rank: kingdom
+        value: Animalia
+      - rank: class
+        value: Reptilia
+    sections:
+      - key: extinct
+        heading: "Extinct species"
+        statuses:
+          - code: EX
+    grouping:
+      - level: order
+        label: "Order"
+        always_display: false
+        unknown_label: "Other orders"
+      - level: superfamily
+        label: "Superfamily"
+        always_display: false
+        unknown_label: "Other superfamilies"
+      - level: family
+        label: "Family"
+        always_display: false
+        unknown_label: "Unassigned families"

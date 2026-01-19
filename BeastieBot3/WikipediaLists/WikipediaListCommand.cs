@@ -37,6 +37,14 @@ public sealed class WikipediaListCommand : Command<WikipediaListCommand.Settings
         [CommandOption("--common-names-db <PATH>")]
         [System.ComponentModel.Description("Path to the common names SQLite database.")]
         public string? CommonNamesDbPath { get; init; }
+
+        [CommandOption("--col-database <PATH>")]
+        [System.ComponentModel.Description("Path to the Catalogue of Life SQLite database for enriched taxonomy grouping.")]
+        public string? ColDatabasePath { get; init; }
+
+        [CommandOption("--no-col-enrichment")]
+        [System.ComponentModel.Description("Disable COL-based taxonomy enrichment even if database is available.")]
+        public bool NoColEnrichment { get; init; }
     }
 
     public override int Execute(CommandContext context, Settings settings, System.Threading.CancellationToken cancellationToken) {
@@ -63,24 +71,34 @@ public sealed class WikipediaListCommand : Command<WikipediaListCommand.Settings
         var commonNamesDbPath = settings.CommonNamesDbPath ?? paths.ResolveCommonNameStorePath(null);
         var useStoreBackedProvider = !settings.UseLegacyNames && File.Exists(commonNamesDbPath);
 
+        // Determine COL enricher availability
+        var colDbPath = settings.ColDatabasePath ?? paths.GetColSqlitePath();
+        var useColEnrichment = !settings.NoColEnrichment && !string.IsNullOrWhiteSpace(colDbPath) && File.Exists(colDbPath);
+        ColTaxonomyEnricher? colEnricher = null;
+
+        if (useColEnrichment) {
+            AnsiConsole.MarkupLine($"[grey]Using COL taxonomy enrichment from:[/] {colDbPath}");
+            colEnricher = new ColTaxonomyEnricher(colDbPath!);
+        }
+
         WikipediaListGenerator generator;
         IDisposable? providerToDispose = null;
 
-        if (useStoreBackedProvider) {
-            AnsiConsole.MarkupLine($"[grey]Using aggregated common names from:[/] {commonNamesDbPath}");
-            var storeProvider = new StoreBackedCommonNameProvider(commonNamesDbPath);
-            providerToDispose = storeProvider;
-            generator = new WikipediaListGenerator(query, templates, rules, storeProvider);
-        } else {
-            if (!settings.UseLegacyNames) {
-                AnsiConsole.MarkupLine("[yellow]Common names store not found, using legacy provider.[/]");
-            }
-            var legacyProvider = new CommonNameProvider(paths.GetWikidataCachePath(), paths.GetIucnApiCachePath());
-            providerToDispose = legacyProvider;
-            generator = new WikipediaListGenerator(query, templates, rules, legacyProvider);
-        }
-
         try {
+            if (useStoreBackedProvider) {
+                AnsiConsole.MarkupLine($"[grey]Using aggregated common names from:[/] {commonNamesDbPath}");
+                var storeProvider = new StoreBackedCommonNameProvider(commonNamesDbPath);
+                providerToDispose = storeProvider;
+                generator = new WikipediaListGenerator(query, templates, rules, storeProvider, colEnricher);
+            } else {
+                if (!settings.UseLegacyNames) {
+                    AnsiConsole.MarkupLine("[yellow]Common names store not found, using legacy provider.[/]");
+                }
+                var legacyProvider = new CommonNameProvider(paths.GetWikidataCachePath(), paths.GetIucnApiCachePath());
+                providerToDispose = legacyProvider;
+                generator = new WikipediaListGenerator(query, templates, rules, legacyProvider);
+            }
+
             var results = new List<(WikipediaListDefinition Definition, WikipediaListResult Result)>();
             foreach (var definition in definitions) {
                 AnsiConsole.MarkupLine($"[grey]Generating[/] [white]{definition.Title}[/]...");
@@ -96,6 +114,7 @@ public sealed class WikipediaListCommand : Command<WikipediaListCommand.Settings
         }
         finally {
             providerToDispose?.Dispose();
+            colEnricher?.Dispose();
         }
     }
 

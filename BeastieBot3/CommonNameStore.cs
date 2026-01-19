@@ -11,6 +11,10 @@ namespace BeastieBot3;
 /// </summary>
 internal sealed class CommonNameStore : IDisposable {
     private readonly SqliteConnection _connection;
+    
+    // Cache for ambiguous names set (expensive to compute, rarely changes)
+    private HashSet<string>? _cachedAmbiguousNames;
+    private string? _cachedAmbiguousNamesLanguage;
 
     private CommonNameStore(SqliteConnection connection) {
         _connection = connection;
@@ -524,9 +528,14 @@ internal sealed class CommonNameStore : IDisposable {
 
     /// <summary>
     /// Get the set of normalized names that are ambiguous (used by multiple valid taxa).
-    /// Cached per-call for efficiency when doing batch lookups.
+    /// Result is cached for efficiency when doing repeated lookups.
     /// </summary>
     private HashSet<string> GetAmbiguousNamesSet(string language = "en") {
+        // Return cached value if available for same language
+        if (_cachedAmbiguousNames != null && _cachedAmbiguousNamesLanguage == language) {
+            return _cachedAmbiguousNames;
+        }
+
         using var command = _connection.CreateCommand();
         command.CommandText =
             """
@@ -546,7 +555,20 @@ internal sealed class CommonNameStore : IDisposable {
         while (reader.Read()) {
             set.Add(reader.GetString(0));
         }
+        
+        // Cache the result
+        _cachedAmbiguousNames = set;
+        _cachedAmbiguousNamesLanguage = language;
+        
         return set;
+    }
+
+    /// <summary>
+    /// Clears the cached ambiguous names set. Call this after modifying common name data.
+    /// </summary>
+    public void InvalidateAmbiguousNamesCache() {
+        _cachedAmbiguousNames = null;
+        _cachedAmbiguousNamesLanguage = null;
     }
 
     /// <summary>

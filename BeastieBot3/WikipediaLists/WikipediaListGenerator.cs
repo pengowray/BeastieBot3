@@ -4,6 +4,7 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Threading;
 using BeastieBot3.WikipediaLists.Legacy;
 
 namespace BeastieBot3.WikipediaLists;
@@ -14,6 +15,7 @@ internal sealed class WikipediaListGenerator {
     private readonly LegacyTaxaRuleList _legacyRules;
     private readonly CommonNameProvider? _commonNameProvider;
     private readonly StoreBackedCommonNameProvider? _storeBackedProvider;
+    private readonly ColTaxonomyEnricher? _colEnricher;
 
     public WikipediaListGenerator(
         IucnListQueryService queryService,
@@ -25,6 +27,7 @@ internal sealed class WikipediaListGenerator {
         _legacyRules = legacyRules ?? throw new ArgumentNullException(nameof(legacyRules));
         _commonNameProvider = commonNameProvider;
         _storeBackedProvider = null;
+        _colEnricher = null;
     }
 
     /// <summary>
@@ -34,12 +37,14 @@ internal sealed class WikipediaListGenerator {
         IucnListQueryService queryService,
         WikipediaTemplateRenderer templateRenderer,
         LegacyTaxaRuleList legacyRules,
-        StoreBackedCommonNameProvider? storeBackedProvider) {
+        StoreBackedCommonNameProvider? storeBackedProvider,
+        ColTaxonomyEnricher? colEnricher = null) {
         _queryService = queryService ?? throw new ArgumentNullException(nameof(queryService));
         _templateRenderer = templateRenderer ?? throw new ArgumentNullException(nameof(templateRenderer));
         _legacyRules = legacyRules ?? throw new ArgumentNullException(nameof(legacyRules));
         _commonNameProvider = null;
         _storeBackedProvider = storeBackedProvider;
+        _colEnricher = colEnricher;
     }
 
     public WikipediaListResult Generate(
@@ -180,6 +185,13 @@ internal sealed class WikipediaListGenerator {
             return (string.Join(Environment.NewLine, records.Select(record => FormatSpeciesLine(record, display, statusContext))), 0);
         }
 
+        // Check if we need COL enrichment (any grouping level uses COL-specific ranks)
+        var needsEnrichment = _colEnricher != null && grouping.Any(g => IsColEnrichedRank(g.Level));
+        
+        if (needsEnrichment) {
+            return BuildEnrichedSectionBody(records, grouping, display, statusContext);
+        }
+
         var levels = grouping
             .Select(level => new TaxonomyTreeLevel<IucnSpeciesRecord>(
                 level.Label ?? level.Level,
@@ -195,6 +207,64 @@ internal sealed class WikipediaListGenerator {
         return (builder.ToString().TrimEnd(), headingCount);
     }
 
+    private static readonly HashSet<string> ColEnrichedRanks = new(StringComparer.OrdinalIgnoreCase) {
+        "subkingdom", "subphylum", "superclass", "subclass", "infraclass",
+        "superorder", "suborder", "infraorder", "parvorder",
+        "superfamily", "subfamily", "tribe", "subtribe", "subgenus"
+    };
+
+    private static bool IsColEnrichedRank(string level) => ColEnrichedRanks.Contains(level);
+
+    private (string Body, int HeadingCount) BuildEnrichedSectionBody(
+        IReadOnlyList<IucnSpeciesRecord> records, 
+        IReadOnlyList<GroupingLevelDefinition> grouping, 
+        DisplayPreferences display, 
+        string? statusContext) {
+        
+        // Enrich records with COL taxonomy
+        var enrichedRecords = _colEnricher!.Enrich(records, CancellationToken.None);
+
+        var levels = grouping
+            .Select(level => new TaxonomyTreeLevel<EnrichedSpeciesRecord>(
+                level.Label ?? level.Level,
+                BuildEnrichedSelector(level.Level),
+                level.AlwaysDisplay,
+                level.UnknownLabel))
+            .ToList();
+
+        var tree = TaxonomyTreeBuilder.Build(enrichedRecords, levels);
+        var builder = new StringBuilder();
+        var headingCount = 0;
+        AppendEnrichedTree(builder, tree, startHeading: 3, display, statusContext, ref headingCount);
+        return (builder.ToString().TrimEnd(), headingCount);
+    }
+
+    private void AppendEnrichedTree(
+        StringBuilder builder, 
+        TaxonomyTreeNode<EnrichedSpeciesRecord> node, 
+        int startHeading, 
+        DisplayPreferences display, 
+        string? statusContext, 
+        ref int headingCount) {
+        
+        foreach (var child in node.Children) {
+            var headingLevel = Math.Min(startHeading, 6);
+            var headingMarkup = new string('=', headingLevel);
+            var heading = FormatHeading(child.Value);
+            builder.AppendLine($"{headingMarkup} {heading.Text} {headingMarkup}");
+            headingCount++;
+            if (!string.IsNullOrWhiteSpace(heading.MainLink)) {
+                builder.AppendLine($"{{{{main|{heading.MainLink}}}}}");
+            }
+            AppendEnrichedTree(builder, child, headingLevel + 1, display, statusContext, ref headingCount);
+        }
+
+        foreach (var record in node.Items) {
+            // Convert back to IucnSpeciesRecord for formatting
+            builder.AppendLine(FormatSpeciesLine(record.ToIucnRecord(), display, statusContext));
+        }
+    }
+
     private static Func<IucnSpeciesRecord, string?> BuildSelector(string level) => level.ToLowerInvariant() switch {
         "kingdom" => record => record.KingdomName,
         "phylum" => record => record.PhylumName,
@@ -202,6 +272,35 @@ internal sealed class WikipediaListGenerator {
         "order" => record => record.OrderName,
         "family" => record => record.FamilyName,
         "genus" => record => record.GenusName,
+        _ => _ => null
+    };
+
+    /// <summary>
+    /// Build a selector for enriched records that includes COL's additional ranks.
+    /// </summary>
+    private static Func<EnrichedSpeciesRecord, string?> BuildEnrichedSelector(string level) => level.ToLowerInvariant() switch {
+        // Standard IUCN ranks
+        "kingdom" => record => record.KingdomName,
+        "phylum" => record => record.PhylumName,
+        "class" => record => record.ClassName,
+        "order" => record => record.OrderName,
+        "family" => record => record.FamilyName,
+        "genus" => record => record.GenusName,
+        // COL-enriched intermediate ranks
+        "subkingdom" => record => record.Subkingdom,
+        "subphylum" => record => record.Subphylum,
+        "superclass" => record => record.Superclass,
+        "subclass" => record => record.Subclass,
+        "infraclass" => record => record.Infraclass,
+        "superorder" => record => record.Superorder,
+        "suborder" => record => record.Suborder,
+        "infraorder" => record => record.Infraorder,
+        "parvorder" => record => record.Parvorder,
+        "superfamily" => record => record.Superfamily,
+        "subfamily" => record => record.Subfamily,
+        "tribe" => record => record.Tribe,
+        "subtribe" => record => record.Subtribe,
+        "subgenus" => record => record.Subgenus,
         _ => _ => null
     };
 
