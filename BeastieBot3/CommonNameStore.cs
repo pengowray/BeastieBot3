@@ -652,6 +652,34 @@ internal sealed class CommonNameStore : IDisposable {
         return results;
     }
 
+    /// <summary>
+    /// Get the Wikipedia article title for a taxon.
+    /// Returns the raw_name from wikipedia_title or wikipedia_taxobox sources.
+    /// </summary>
+    public string? GetWikipediaArticleTitle(long taxonId, string language = "en") {
+        using var command = _connection.CreateCommand();
+        command.CommandText =
+            """
+            SELECT cn.raw_name
+            FROM common_names cn
+            WHERE cn.taxon_id = @taxonId 
+              AND cn.language = @lang
+              AND cn.source IN ('wikipedia_title', 'wikipedia_taxobox')
+            ORDER BY 
+              CASE cn.source 
+                WHEN 'wikipedia_title' THEN 1 
+                WHEN 'wikipedia_taxobox' THEN 2 
+              END,
+              cn.is_preferred DESC
+            LIMIT 1;
+            """;
+        command.Parameters.AddWithValue("@taxonId", taxonId);
+        command.Parameters.AddWithValue("@lang", language);
+        
+        var result = command.ExecuteScalar();
+        return result as string;
+    }
+
     #endregion
 
     #region Cross-Reference Operations

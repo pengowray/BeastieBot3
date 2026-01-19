@@ -99,6 +99,23 @@ internal sealed class StoreBackedCommonNameProvider : IDisposable {
     }
 
     /// <summary>
+    /// Get the Wikipedia article title for a species record.
+    /// Returns the article title from wikipedia_title or wikipedia_taxobox sources.
+    /// </summary>
+    public string? GetWikipediaArticleTitle(IucnSpeciesRecord record) {
+        if (record is null) {
+            return null;
+        }
+
+        var taxonId = FindTaxonId(record);
+        if (!taxonId.HasValue) {
+            return null;
+        }
+
+        return _store.GetWikipediaArticleTitle(taxonId.Value, "en");
+    }
+
+    /// <summary>
     /// Batch lookup for multiple records.
     /// </summary>
     public Dictionary<long, string> GetBestCommonNames(IEnumerable<IucnSpeciesRecord> records) {

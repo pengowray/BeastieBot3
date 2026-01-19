@@ -436,47 +436,50 @@ internal sealed class WikipediaListGenerator {
             return new HeadingInfo("Unassigned", null);
         }
 
+        // Apply title case to the raw taxon name for display
+        var displayName = ToTitleCase(raw);
+
         // Check new YAML rules first for main article
         var yamlMainArticle = _taxonRules?.GetMainArticle(raw);
         var yamlRule = _taxonRules?.GetRule(raw);
         
         var rules = _legacyRules.Get(raw);
         if (!string.IsNullOrWhiteSpace(rules?.CommonPlural)) {
-            var mainLink = yamlMainArticle ?? ToTitleCase(raw);
+            var mainLink = yamlMainArticle ?? displayName;
             return new HeadingInfo(Uppercase(rules!.CommonPlural)!, mainLink);
         }
 
         if (!string.IsNullOrWhiteSpace(rules?.CommonName)) {
-            var mainLink = yamlMainArticle ?? ToTitleCase(raw);
+            var mainLink = yamlMainArticle ?? displayName;
             return new HeadingInfo(Uppercase(rules!.CommonName)!, mainLink);
         }
 
         // Check YAML rules for common name
         if (!string.IsNullOrWhiteSpace(yamlRule?.CommonPlural)) {
-            var mainLink = yamlMainArticle ?? ToTitleCase(raw);
+            var mainLink = yamlMainArticle ?? displayName;
             return new HeadingInfo(Uppercase(yamlRule.CommonPlural)!, mainLink);
         }
 
         if (!string.IsNullOrWhiteSpace(yamlRule?.CommonName)) {
-            var mainLink = yamlMainArticle ?? ToTitleCase(raw);
+            var mainLink = yamlMainArticle ?? displayName;
             return new HeadingInfo(Uppercase(yamlRule.CommonName)!, mainLink);
         }
 
         if (!string.IsNullOrWhiteSpace(rules?.Wikilink)) {
-            return new HeadingInfo(raw, rules!.Wikilink);
+            return new HeadingInfo(displayName, rules!.Wikilink);
         }
 
         // Check YAML rules for wikilink
         if (!string.IsNullOrWhiteSpace(yamlRule?.Wikilink)) {
-            return new HeadingInfo(raw, yamlRule.Wikilink);
+            return new HeadingInfo(displayName, yamlRule.Wikilink);
         }
 
         // If we have a main article from YAML, use it
         if (!string.IsNullOrWhiteSpace(yamlMainArticle)) {
-            return new HeadingInfo(raw, yamlMainArticle);
+            return new HeadingInfo(displayName, yamlMainArticle);
         }
 
-        return new HeadingInfo(raw, null);
+        return new HeadingInfo(displayName, null);
     }
 
     /// <summary>
@@ -608,15 +611,48 @@ internal sealed class WikipediaListGenerator {
     private string BuildNameFragment(IucnSpeciesRecord record, DisplayPreferences display) {
         var commonName = ResolveCommonName(record);
         var scientific = ResolveScientificName(record);
+        var rawScientific = scientific; // Keep unformatted version for links
+        
         if (display.ItalicizeScientific && !string.IsNullOrWhiteSpace(scientific)) {
             scientific = $"''{scientific}''";
         }
 
         if (!string.IsNullOrWhiteSpace(commonName) && display.PreferCommonNames) {
+            // Try to get Wikipedia article link
+            var articleTitle = ResolveWikipediaArticle(record);
+            
+            if (!string.IsNullOrWhiteSpace(articleTitle)) {
+                // We have a Wikipedia article
+                // Collapse [[X|X]] to [[X]] when article title matches common name
+                var link = string.Equals(articleTitle, commonName, StringComparison.Ordinal)
+                    ? $"[[{commonName}]]"
+                    : $"[[{articleTitle}|{commonName}]]";
+                return $"{link} ({scientific})";
+            }
+            
+            // No Wikipedia article - use scientific name as link target
+            // [[Scientific Name|Common Name]] (''Scientific Name'')
+            if (!string.IsNullOrWhiteSpace(rawScientific)) {
+                return $"[[{rawScientific}|{commonName}]] ({scientific})";
+            }
+            
+            // Fallback: just link the common name
             return $"[[{commonName}]] ({scientific})";
         }
 
         return scientific ?? record.GenusName;
+    }
+
+    /// <summary>
+    /// Resolve the Wikipedia article title for a record.
+    /// </summary>
+    private string? ResolveWikipediaArticle(IucnSpeciesRecord record) {
+        // Try store-backed provider first (has Wikipedia source data)
+        if (_storeBackedProvider is not null) {
+            return _storeBackedProvider.GetWikipediaArticleTitle(record);
+        }
+        
+        return null;
     }
 
     private string? ResolveCommonName(IucnSpeciesRecord record) {
