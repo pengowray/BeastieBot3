@@ -37,6 +37,10 @@ internal sealed class CommonNameInitCommand : AsyncCommand<CommonNameInitCommand
         [CommandOption("--limit <N>")]
         [Description("Limit number of taxa to import (for testing).")]
         public int? Limit { get; init; }
+
+        [CommandOption("--aggregate")]
+        [Description("After initialization, aggregate common names from all available sources.")]
+        public bool Aggregate { get; init; }
     }
 
     public override async Task<int> ExecuteAsync(CommandContext context, Settings settings, CancellationToken cancellationToken) {
@@ -59,10 +63,32 @@ internal sealed class CommonNameInitCommand : AsyncCommand<CommonNameInitCommand
             await ImportIucnTaxaAsync(store, iucnDbPath, settings.Limit);
         }
 
-        // Show statistics
+        // Show statistics after init
+        ShowStatistics(store, "Common name store initialized:");
+
+        // Run aggregation if requested
+        if (settings.Aggregate) {
+            AnsiConsole.WriteLine();
+            AnsiConsole.MarkupLine("[yellow]Running aggregation from all sources...[/]");
+            AnsiConsole.WriteLine();
+
+            var aggregateCommand = new CommonNameAggregateCommand();
+            var aggregateSettings = new CommonNameAggregateCommand.Settings {
+                IniFile = settings.IniFile,
+                DatabasePath = commonNameDbPath,
+                Source = "all",
+                Limit = settings.Limit
+            };
+            await aggregateCommand.ExecuteAsync(context, aggregateSettings, cancellationToken);
+        }
+
+        return 0;
+    }
+
+    private static void ShowStatistics(CommonNameStore store, string title) {
         var stats = store.GetStatistics();
         AnsiConsole.WriteLine();
-        AnsiConsole.MarkupLine("[green]Common name store initialized:[/]");
+        AnsiConsole.MarkupLine($"[green]{title}[/]");
         var table = new Table();
         table.AddColumn("Metric");
         table.AddColumn(new TableColumn("Count").RightAligned());
@@ -72,8 +98,6 @@ internal sealed class CommonNameInitCommand : AsyncCommand<CommonNameInitCommand
         table.AddRow("Conflicts", stats.ConflictCount.ToString("N0"));
         table.AddRow("Caps Rules", store.GetCapsRuleCount().ToString("N0"));
         AnsiConsole.Write(table);
-
-        return 0;
     }
 
     private static Task ImportCapsRulesAsync(CommonNameStore store, string? capsFilePath) {

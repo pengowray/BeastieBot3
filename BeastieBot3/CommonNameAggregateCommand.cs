@@ -179,8 +179,11 @@ internal sealed class CommonNameAggregateCommand : AsyncCommand<CommonNameAggreg
                         }
 
                         try {
-                            var names = ExtractIucnCommonNames(json);
-                            foreach (var (name, isPreferred, language) in names) {
+                            var extraction = ExtractIucnCommonNamesWithScientific(json);
+                            foreach (var (name, isPreferred, language) in extraction.CommonNames) {
+                                // Skip names that match the scientific name (case-insensitive)
+                                if (IsScientificNameMatch(name, extraction.ScientificName, extraction.GenusName, extraction.SpeciesEpithet)) continue;
+
                                 var normalized = CommonNameNormalizer.NormalizeForMatching(name);
                                 if (normalized == null) continue;
 
@@ -329,18 +332,48 @@ internal sealed class CommonNameAggregateCommand : AsyncCommand<CommonNameAggreg
         return results;
     }
 
-    private static IReadOnlyList<(string Name, bool IsPreferred, string Language)> ExtractIucnCommonNames(string json) {
-        var results = new List<(string, bool, string)>();
+    /// <summary>
+    /// Result of extracting common names and scientific name data from IUCN JSON.
+    /// </summary>
+    private sealed record IucnCommonNameExtraction(
+        IReadOnlyList<(string Name, bool IsPreferred, string Language)> CommonNames,
+        string? ScientificName,
+        string? GenusName,
+        string? SpeciesEpithet
+    );
+
+    /// <summary>
+    /// Extracts common names along with the scientific name from IUCN JSON.
+    /// This allows filtering common names that are actually the scientific name.
+    /// </summary>
+    private static IucnCommonNameExtraction ExtractIucnCommonNamesWithScientific(string json) {
+        var commonNames = new List<(string, bool, string)>();
+        string? scientificName = null;
+        string? genusName = null;
+        string? speciesEpithet = null;
 
         try {
             using var document = JsonDocument.Parse(json);
             var root = document.RootElement;
 
-            // Common names are in the assessments JSON under taxon.common_names
-            // Structure: {"taxon": {"common_names": [{"main": true, "name": "...", "language": "eng"}]}}
-            JsonElement commonNamesElement = default;
+            // Extract scientific name parts from taxon
+            JsonElement taxonElement = default;
+            if (root.TryGetProperty("taxon", out var taxon)) {
+                taxonElement = taxon;
+            } else {
+                taxonElement = root;
+            }
 
-            if (root.TryGetProperty("taxon", out var taxon) && taxon.TryGetProperty("common_names", out var tcn)) {
+            scientificName = GetStringProperty(taxonElement, "scientific_name")
+                ?? GetStringProperty(taxonElement, "scientificName");
+            genusName = GetStringProperty(taxonElement, "genus_name")
+                ?? GetStringProperty(taxonElement, "genusName");
+            speciesEpithet = GetStringProperty(taxonElement, "species_name")
+                ?? GetStringProperty(taxonElement, "speciesName");
+
+            // Extract common names
+            JsonElement commonNamesElement = default;
+            if (taxonElement.TryGetProperty("common_names", out var tcn)) {
                 commonNamesElement = tcn;
             } else if (root.TryGetProperty("common_names", out var cn)) {
                 commonNamesElement = cn;
@@ -353,23 +386,65 @@ internal sealed class CommonNameAggregateCommand : AsyncCommand<CommonNameAggreg
                     var name = GetStringProperty(entry, "name");
                     if (string.IsNullOrWhiteSpace(name)) continue;
 
+                    var trimmedName = name.Trim();
+
+                    // Skip "Species code:" entries (e.g., "Species code: Zp")
+                    if (trimmedName.StartsWith("Species code", StringComparison.OrdinalIgnoreCase)) continue;
+
                     // Get language (IUCN uses "eng", "fra", "spa", etc.)
                     var language = GetStringProperty(entry, "language") ?? "eng";
-                    // Normalize language codes to ISO 639-1 style
                     language = NormalizeLanguageCode(language);
 
                     // Check if this is the "main" (preferred) common name
                     var isMain = entry.TryGetProperty("main", out var mainProp) &&
                                  mainProp.ValueKind == JsonValueKind.True;
 
-                    results.Add((name.Trim(), isMain, language));
+                    commonNames.Add((trimmedName, isMain, language));
                 }
             }
         } catch (JsonException) {
             // Ignore malformed JSON
         }
 
-        return results;
+        return new IucnCommonNameExtraction(commonNames, scientificName, genusName, speciesEpithet);
+    }
+
+    /// <summary>
+    /// Checks if a common name is actually a scientific name by comparing against known scientific name parts.
+    /// This is more accurate than heuristic-based detection.
+    /// </summary>
+    private static bool IsScientificNameMatch(string commonName, string? scientificName, string? genusName, string? speciesEpithet) {
+        if (string.IsNullOrWhiteSpace(commonName)) return false;
+
+        var trimmed = commonName.Trim();
+
+        // Direct match with full scientific name
+        if (!string.IsNullOrWhiteSpace(scientificName) &&
+            trimmed.Equals(scientificName, StringComparison.OrdinalIgnoreCase)) {
+            return true;
+        }
+
+        // Match with just the species epithet (e.g., "afer" for "Alphester afer")
+        if (!string.IsNullOrWhiteSpace(speciesEpithet) &&
+            trimmed.Equals(speciesEpithet, StringComparison.OrdinalIgnoreCase)) {
+            return true;
+        }
+
+        // Match with genus name alone
+        if (!string.IsNullOrWhiteSpace(genusName) &&
+            trimmed.Equals(genusName, StringComparison.OrdinalIgnoreCase)) {
+            return true;
+        }
+
+        // If we have both genus and epithet, check for "Genus species" pattern match
+        if (!string.IsNullOrWhiteSpace(genusName) && !string.IsNullOrWhiteSpace(speciesEpithet)) {
+            var expectedBinomial = $"{genusName} {speciesEpithet}";
+            if (trimmed.Equals(expectedBinomial, StringComparison.OrdinalIgnoreCase)) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private static string NormalizeLanguageCode(string language) {
@@ -1053,4 +1128,37 @@ internal sealed class CommonNameAggregateCommand : AsyncCommand<CommonNameAggreg
         
         return false;
     }
-}
+
+    /// <summary>
+    /// Checks if a single word looks like a species epithet (the second word of a binomial name).
+    /// Used to filter out IUCN data entry errors where only the epithet was entered as a "common name".
+    /// Examples: "afer", "affinis", "bilobatus", "zrmanjae"
+    /// </summary>
+    private static bool IsLikelySpeciesEpithet(string word) {
+        if (string.IsNullOrWhiteSpace(word)) return false;
+        if (word.Length < 3) return false;
+
+        // Must be all lowercase (or all uppercase which we'll normalize)
+        var lower = word.ToLowerInvariant();
+        if (word != lower && word != word.ToUpperInvariant()) {
+            // Mixed case is likely a real common name
+            return false;
+        }
+
+        // Check for common Latin/Greek species epithet endings
+        var latinEndings = new[] {
+            "ii", "ae", "is", "us", "um", "ensis", "oides", "ica", "icum", "icus",
+            "atus", "ata", "atum", "inus", "ina", "inum", "alis", "ale", "ilis", "ile",
+            "osus", "osa", "osum", "eus", "ea", "eum", "ifer", "ifera", "iferum",
+            "anus", "ana", "anum", "ensis", "ense"
+        };
+
+        if (latinEndings.Any(ending => lower.EndsWith(ending) && lower.Length > ending.Length + 2)) {
+            return true;
+        }
+
+        // Single lowercase word that's 4+ letters and looks Latin is suspicious
+        // But we need to avoid filtering real common names like "toad", "frog", etc.
+        // So we only flag words with clearly Latin patterns
+        return false;
+    }}

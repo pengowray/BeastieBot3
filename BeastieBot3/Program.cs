@@ -174,15 +174,19 @@ namespace BeastieBot3 {
                     config.AddBranch("common-names", cn => {
                         cn.SetDescription("Common name disambiguation and reporting commands");
                         cn.AddCommand<CommonNameInitCommand>("init")
-                            .WithDescription("Initialize the common name store with taxa from IUCN and caps rules from caps.txt.")
+                            .WithDescription("Initialize the common name store with taxa from IUCN and caps rules. Safe to re-run (uses upsert).")
                             .WithExample(new[] { "common-names", "init" })
+                            .WithExample(new[] { "common-names", "init", "--aggregate" })
                             .WithExample(new[] { "common-names", "init", "--limit", "1000" })
                             .WithExample(new[] { "common-names", "init", "--skip-taxa" });
                         cn.AddCommand<CommonNameAggregateCommand>("aggregate")
-                            .WithDescription("Aggregate common names from all sources (IUCN API, Wikidata, Wikipedia) into the store.")
+                            .WithDescription("Aggregate common names from sources (IUCN, Wikidata, Wikipedia, COL). Safe to re-run (uses upsert).")
                             .WithExample(new[] { "common-names", "aggregate" })
                             .WithExample(new[] { "common-names", "aggregate", "--source", "iucn" })
                             .WithExample(new[] { "common-names", "aggregate", "--limit", "1000" });
+                        cn.AddCommand<CommonNameSourcesCommand>("sources")
+                            .WithDescription("Show status of common name data sources - which are available and which have been aggregated.")
+                            .WithExample(new[] { "common-names", "sources" });
                         cn.AddCommand<CommonNameDetectConflictsCommand>("detect-conflicts")
                             .WithDescription("Detect ambiguous common names (same name used for different valid taxa).")
                             .WithExample(new[] { "common-names", "detect-conflicts" })

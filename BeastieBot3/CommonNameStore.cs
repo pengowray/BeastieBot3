@@ -571,6 +571,35 @@ internal sealed class CommonNameStore : IDisposable {
         command.ExecuteNonQuery();
     }
 
+    /// <summary>
+    /// Gets a summary of the most recent import run for each import type.
+    /// </summary>
+    public IReadOnlyList<ImportRunSummary> GetImportRunSummaries() {
+        using var command = _connection.CreateCommand();
+        command.CommandText =
+            """
+            SELECT 
+                import_type,
+                MAX(ended_at) as last_run,
+                SUM(CASE WHEN status = 'completed' THEN records_added ELSE 0 END) as total_added,
+                MAX(CASE WHEN status = 'completed' THEN 1 ELSE 0 END) as has_completed
+            FROM import_runs
+            GROUP BY import_type
+            ORDER BY import_type;
+            """;
+
+        var results = new List<ImportRunSummary>();
+        using var reader = command.ExecuteReader();
+        while (reader.Read()) {
+            var importType = reader.GetString(0);
+            var lastRun = reader.IsDBNull(1) ? (DateTime?)null : DateTime.Parse(reader.GetString(1));
+            var totalAdded = reader.GetInt32(2);
+            var hasCompleted = reader.GetInt32(3) == 1;
+            results.Add(new ImportRunSummary(importType, lastRun, totalAdded, hasCompleted));
+        }
+        return results;
+    }
+
     #endregion
 
     #region Statistics
@@ -718,4 +747,13 @@ public record CommonNameRecord(
     string TaxonValidityStatus,
     bool TaxonIsExtinct,
     bool TaxonIsFossil
+);
+/// <summary>
+/// Summary of import runs for a specific import type.
+/// </summary>
+public record ImportRunSummary(
+    string ImportType,
+    DateTime? LastRun,
+    int TotalAdded,
+    bool HasCompleted
 );
