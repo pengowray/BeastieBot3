@@ -1,0 +1,53 @@
+# Taxon Rules Configuration
+# This file extends the legacy rules-list.txt with additional features.
+#
+# Features:
+# - Exclusion patterns (exclude taxa from lists)
+# - Main article links
+# - List-specific overrides
+# - Force-split rules
+#
+# The legacy rules-list.txt is still used for common names and wikilinks.
+# This file adds newer features that can't be expressed in the legacy format.
+
+# Global exclusion patterns (regex)
+# Taxa matching any pattern are excluded from all lists
+global_exclusions:
+  # Example: exclude fossil-only taxa (if you had a pattern for them)
+  # - "^Fossil "
+
+# Taxa-specific rules
+taxa:
+  # Example: Chordata should always split into classes
+  Chordata:
+    force_split: true
+    main_article: Chordate
+    comprises: "vertebrates and some invertebrates"
+
+  # Example: Squamata could split into Serpentes and Sauria if we had that data
+  Squamata:
+    force_split: true
+    main_article: Squamata
+    comprises: "lizards, snakes, and amphisbaenians"
+
+  # Example: Testudines with main article
+  Testudines:
+    main_article: Turtle
+    common_name: turtle
+    common_plural: turtles and tortoises
+
+  # Example: Anura with wikilink disambiguation
+  Anura:
+    wikilink: "Anura (frog)"
+    common_name: frog
+    common_plural: frogs
+
+  # Example: Hygrophila with kingdom-aware disambiguation
+  Hygrophila:
+    wikilink: "Hygrophila (gastropod)"
+
+  # Example: List-specific exclusion
+  # Homo sapiens:
+  #   list_overrides:
+  #     mammals-cr:
+  #       exclude: true

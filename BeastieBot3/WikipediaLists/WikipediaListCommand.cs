@@ -67,6 +67,10 @@ public sealed class WikipediaListCommand : Command<WikipediaListCommand.Settings
         var templates = new WikipediaTemplateRenderer(templatesDir);
         var rules = new Legacy.LegacyTaxaRuleList(rulesPath);
         
+        // Load YAML-based taxon rules (optional)
+        var taxonRulesPath = ResolveTaxonRulesPath(paths, rulesPath);
+        TaxonRulesService? taxonRules = taxonRulesPath != null ? TaxonRulesService.Load(taxonRulesPath) : null;
+        
         // Determine which common name provider to use
         var commonNamesDbPath = settings.CommonNamesDbPath ?? paths.ResolveCommonNameStorePath(null);
         var useStoreBackedProvider = !settings.UseLegacyNames && File.Exists(commonNamesDbPath);
@@ -89,14 +93,14 @@ public sealed class WikipediaListCommand : Command<WikipediaListCommand.Settings
                 AnsiConsole.MarkupLine($"[grey]Using aggregated common names from:[/] {commonNamesDbPath}");
                 var storeProvider = new StoreBackedCommonNameProvider(commonNamesDbPath);
                 providerToDispose = storeProvider;
-                generator = new WikipediaListGenerator(query, templates, rules, storeProvider, colEnricher);
+                generator = new WikipediaListGenerator(query, templates, rules, storeProvider, colEnricher, taxonRules);
             } else {
                 if (!settings.UseLegacyNames) {
                     AnsiConsole.MarkupLine("[yellow]Common names store not found, using legacy provider.[/]");
                 }
                 var legacyProvider = new CommonNameProvider(paths.GetWikidataCachePath(), paths.GetIucnApiCachePath());
                 providerToDispose = legacyProvider;
-                generator = new WikipediaListGenerator(query, templates, rules, legacyProvider);
+                generator = new WikipediaListGenerator(query, templates, rules, legacyProvider, taxonRules);
             }
 
             var results = new List<(WikipediaListDefinition Definition, WikipediaListResult Result)>();
@@ -194,6 +198,13 @@ public sealed class WikipediaListCommand : Command<WikipediaListCommand.Settings
         }
 
         return Path.Combine(paths.BaseDirectory, "rules", "rules-list.txt");
+    }
+
+    private static string? ResolveTaxonRulesPath(PathsService paths, string? rulesPath) {
+        // Look for taxon-rules.yml in the same directory as the legacy rules file
+        var rulesDir = Path.GetDirectoryName(rulesPath) ?? Path.Combine(paths.BaseDirectory, "rules");
+        var taxonRulesPath = Path.Combine(rulesDir, "taxon-rules.yml");
+        return File.Exists(taxonRulesPath) ? taxonRulesPath : null;
     }
 
     private static string ResolveOutputDir(PathsService paths, string? overridePath) {

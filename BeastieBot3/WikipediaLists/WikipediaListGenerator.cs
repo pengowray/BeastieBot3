@@ -13,6 +13,7 @@ internal sealed class WikipediaListGenerator {
     private readonly IucnListQueryService _queryService;
     private readonly WikipediaTemplateRenderer _templateRenderer;
     private readonly LegacyTaxaRuleList _legacyRules;
+    private readonly TaxonRulesService? _taxonRules;
     private readonly CommonNameProvider? _commonNameProvider;
     private readonly StoreBackedCommonNameProvider? _storeBackedProvider;
     private readonly ColTaxonomyEnricher? _colEnricher;
@@ -21,13 +22,15 @@ internal sealed class WikipediaListGenerator {
         IucnListQueryService queryService,
         WikipediaTemplateRenderer templateRenderer,
         LegacyTaxaRuleList legacyRules,
-        CommonNameProvider? commonNameProvider) {
+        CommonNameProvider? commonNameProvider,
+        TaxonRulesService? taxonRules = null) {
         _queryService = queryService ?? throw new ArgumentNullException(nameof(queryService));
         _templateRenderer = templateRenderer ?? throw new ArgumentNullException(nameof(templateRenderer));
         _legacyRules = legacyRules ?? throw new ArgumentNullException(nameof(legacyRules));
         _commonNameProvider = commonNameProvider;
         _storeBackedProvider = null;
         _colEnricher = null;
+        _taxonRules = taxonRules;
     }
 
     /// <summary>
@@ -38,13 +41,15 @@ internal sealed class WikipediaListGenerator {
         WikipediaTemplateRenderer templateRenderer,
         LegacyTaxaRuleList legacyRules,
         StoreBackedCommonNameProvider? storeBackedProvider,
-        ColTaxonomyEnricher? colEnricher = null) {
+        ColTaxonomyEnricher? colEnricher = null,
+        TaxonRulesService? taxonRules = null) {
         _queryService = queryService ?? throw new ArgumentNullException(nameof(queryService));
         _templateRenderer = templateRenderer ?? throw new ArgumentNullException(nameof(templateRenderer));
         _legacyRules = legacyRules ?? throw new ArgumentNullException(nameof(legacyRules));
         _commonNameProvider = null;
         _storeBackedProvider = storeBackedProvider;
         _colEnricher = colEnricher;
+        _taxonRules = taxonRules;
     }
 
     public WikipediaListResult Generate(
@@ -54,6 +59,12 @@ internal sealed class WikipediaListGenerator {
         int? limit) {
         var statusDescriptors = CollectStatusDescriptors(definition);
         var records = _queryService.QuerySpecies(definition, statusDescriptors, limit);
+        
+        // Apply exclusion rules if taxon rules are configured
+        if (_taxonRules != null) {
+            records = records.Where(r => !ShouldExcludeRecord(r, definition.Id)).ToList();
+        }
+        
         var sections = PrepareSections(definition);
         foreach (var section in sections) {
             section.Records.AddRange(records.Where(record => section.StatusSet.Contains(record.StatusCode)));
@@ -419,17 +430,44 @@ internal sealed class WikipediaListGenerator {
             return new HeadingInfo("Unassigned", null);
         }
 
+        // Check new YAML rules first for main article
+        var yamlMainArticle = _taxonRules?.GetMainArticle(raw);
+        var yamlRule = _taxonRules?.GetRule(raw);
+        
         var rules = _legacyRules.Get(raw);
         if (!string.IsNullOrWhiteSpace(rules?.CommonPlural)) {
-            return new HeadingInfo(Uppercase(rules!.CommonPlural)!, ToTitleCase(raw));
+            var mainLink = yamlMainArticle ?? ToTitleCase(raw);
+            return new HeadingInfo(Uppercase(rules!.CommonPlural)!, mainLink);
         }
 
         if (!string.IsNullOrWhiteSpace(rules?.CommonName)) {
-            return new HeadingInfo(Uppercase(rules!.CommonName)!, ToTitleCase(raw));
+            var mainLink = yamlMainArticle ?? ToTitleCase(raw);
+            return new HeadingInfo(Uppercase(rules!.CommonName)!, mainLink);
+        }
+
+        // Check YAML rules for common name
+        if (!string.IsNullOrWhiteSpace(yamlRule?.CommonPlural)) {
+            var mainLink = yamlMainArticle ?? ToTitleCase(raw);
+            return new HeadingInfo(Uppercase(yamlRule.CommonPlural)!, mainLink);
+        }
+
+        if (!string.IsNullOrWhiteSpace(yamlRule?.CommonName)) {
+            var mainLink = yamlMainArticle ?? ToTitleCase(raw);
+            return new HeadingInfo(Uppercase(yamlRule.CommonName)!, mainLink);
         }
 
         if (!string.IsNullOrWhiteSpace(rules?.Wikilink)) {
             return new HeadingInfo(raw, rules!.Wikilink);
+        }
+
+        // Check YAML rules for wikilink
+        if (!string.IsNullOrWhiteSpace(yamlRule?.Wikilink)) {
+            return new HeadingInfo(raw, yamlRule.Wikilink);
+        }
+
+        // If we have a main article from YAML, use it
+        if (!string.IsNullOrWhiteSpace(yamlMainArticle)) {
+            return new HeadingInfo(raw, yamlMainArticle);
         }
 
         return new HeadingInfo(raw, null);
@@ -621,6 +659,42 @@ internal sealed class WikipediaListGenerator {
         return value.Length == 1
             ? value.ToUpperInvariant()
             : char.ToUpperInvariant(value[0]) + value[1..];
+    }
+
+    /// <summary>
+    /// Check if a record should be excluded based on taxon rules.
+    /// </summary>
+    private bool ShouldExcludeRecord(IucnSpeciesRecord record, string? listId) {
+        if (_taxonRules == null) {
+            return false;
+        }
+
+        // Build full scientific name for pattern matching
+        var scientificName = ResolveScientificName(record);
+        
+        // Check global exclusion patterns
+        if (!string.IsNullOrWhiteSpace(scientificName) && _taxonRules.ShouldExclude(scientificName)) {
+            return true;
+        }
+
+        // Check list-specific exclusions for higher taxa
+        var higherTaxa = new[] {
+            record.KingdomName,
+            record.PhylumName,
+            record.ClassName,
+            record.OrderName,
+            record.FamilyName,
+            record.GenusName
+        }.Where(t => !string.IsNullOrWhiteSpace(t));
+
+        foreach (var taxon in higherTaxa) {
+            var rule = _taxonRules.GetRule(taxon!, listId);
+            if (rule?.Exclude == true) {
+                return true;
+            }
+        }
+
+        return false;
     }
 
     private sealed class SectionRuntime {
