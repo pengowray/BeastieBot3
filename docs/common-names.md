@@ -11,6 +11,27 @@ Common names for species are notoriously ambiguous. The same name can refer to d
 3. **Applies capitalization rules** based on a curated rules file
 4. **Generates reports** for Wikipedia editors to help with disambiguation
 
+## Performance Notes
+
+These commands process large amounts of data and can take significant time to run. All times measured on a Windows desktop with SSD storage:
+
+| Command | Fresh Run | Re-run | Notes |
+|---------|-----------|--------|-------|
+| `init` | ~5-6 min | ~5-6 min | Same time (upserts 183k taxa) |
+| `aggregate --source iucn` | ~7 min | ~7 min | Processes 178k assessments |
+| `aggregate --source wikidata` | ~20 min | ~20 min | Matches 180k entities |
+| `aggregate --source wikipedia` | ~22 min | ~22 min | Parses 30k page taxoboxes |
+| `aggregate --source col` | ~110 min | ~110 min | Includes COL synonym import |
+| `aggregate` (all sources) | ~160 min | ~160 min | Total of above |
+| `detect-conflicts` | ~45 min | ~45 min | Analyzes 385k common names |
+| `init --aggregate` + `detect-conflicts` | ~210 min | - | Full fresh setup (~3.5 hours) |
+
+**Re-running commands:**
+- All commands use **UPSERT** operations - safe to re-run at any time
+- Re-running takes approximately the same time as a fresh run
+- No data is lost when re-running; existing records are updated in place
+- Use `common-names sources` to check which sources have been aggregated
+
 ## Data Sources
 
 | Source | Import Type | Description |
@@ -41,7 +62,8 @@ beastiebot3 common-names init --limit 1000
 **Behavior with existing data:**
 - **Taxa**: Uses UPSERT - existing taxa with the same `(primary_source, primary_source_id)` are updated, new taxa are inserted
 - **Caps rules**: Uses UPSERT - existing rules for the same word are updated with new correct form
-- Safe to re-run to refresh data without losing existing records
+- **Safe to re-run**: Refreshes data without losing existing records or causing duplicates
+- Re-running takes approximately the same time as a fresh run (~5-6 minutes)
 
 **Options:**
 - `--aggregate` - After initialization, run aggregation from all available sources
@@ -73,7 +95,9 @@ beastiebot3 common-names aggregate --source iucn --limit 1000
   - `raw_name` - updated to new value
   - `display_name` - updated only if new value is non-null (preserves existing)
   - `is_preferred` - keeps the maximum (true wins over false)
-- Safe to re-run to refresh data; records are tracked in `import_runs` table
+- **Safe to re-run**: Refreshes data without losing existing records or causing duplicates
+- Records are tracked in `import_runs` table (view with `common-names sources`)
+- Re-running a source takes approximately the same time as a fresh run
 
 **Source matching:**
 - Each source attempts to match its taxa against the common names database
@@ -109,6 +133,8 @@ beastiebot3 common-names detect-conflicts --clear-existing
 **Behavior with existing data:**
 - By default, adds new conflicts while preserving existing ones
 - Use `--clear-existing` to start fresh
+- **Safe to re-run**: Use `--clear-existing` for a complete refresh
+- Detection takes ~45 minutes on a full dataset (~385k common names)
 
 ### `common-names report`
 
@@ -139,6 +165,8 @@ beastiebot3 common-names report --report all --limit 100
 - `all` - Generate all reports
 
 ## Typical Workflow
+
+> **Time expectation:** A complete fresh setup takes approximately 3-4 hours. Once set up, re-running individual sources or conflict detection takes the same time as shown in the Performance Notes table above.
 
 ### First-time setup
 
