@@ -13,6 +13,7 @@ internal sealed class WikipediaListGenerator {
     private readonly WikipediaTemplateRenderer _templateRenderer;
     private readonly LegacyTaxaRuleList _legacyRules;
     private readonly CommonNameProvider? _commonNameProvider;
+    private readonly StoreBackedCommonNameProvider? _storeBackedProvider;
 
     public WikipediaListGenerator(
         IucnListQueryService queryService,
@@ -23,6 +24,22 @@ internal sealed class WikipediaListGenerator {
         _templateRenderer = templateRenderer ?? throw new ArgumentNullException(nameof(templateRenderer));
         _legacyRules = legacyRules ?? throw new ArgumentNullException(nameof(legacyRules));
         _commonNameProvider = commonNameProvider;
+        _storeBackedProvider = null;
+    }
+
+    /// <summary>
+    /// Constructor using the new store-backed common name provider with pre-aggregated names.
+    /// </summary>
+    public WikipediaListGenerator(
+        IucnListQueryService queryService,
+        WikipediaTemplateRenderer templateRenderer,
+        LegacyTaxaRuleList legacyRules,
+        StoreBackedCommonNameProvider? storeBackedProvider) {
+        _queryService = queryService ?? throw new ArgumentNullException(nameof(queryService));
+        _templateRenderer = templateRenderer ?? throw new ArgumentNullException(nameof(templateRenderer));
+        _legacyRules = legacyRules ?? throw new ArgumentNullException(nameof(legacyRules));
+        _commonNameProvider = null;
+        _storeBackedProvider = storeBackedProvider;
     }
 
     public WikipediaListResult Generate(
@@ -370,11 +387,18 @@ internal sealed class WikipediaListGenerator {
     }
 
     private string? ResolveCommonName(IucnSpeciesRecord record) {
+        // First check legacy rules (highest priority - manual overrides)
         var taxaRules = _legacyRules.Get(record.ScientificNameTaxonomy ?? record.ScientificNameAssessments ?? string.Empty);
         if (!string.IsNullOrWhiteSpace(taxaRules?.CommonName)) {
             return Uppercase(taxaRules!.CommonName);
         }
 
+        // Try the new store-backed provider if available
+        if (_storeBackedProvider is not null) {
+            return _storeBackedProvider.GetBestCommonName(record);
+        }
+
+        // Fall back to legacy provider
         if (_commonNameProvider is null) {
             return null;
         }

@@ -178,7 +178,7 @@ beastiebot3 common-names init --aggregate
 beastiebot3 common-names detect-conflicts
 
 # Generate reports
-beastiebot3 common-names report --report all -o reports/common-names-report.md
+beastiebot3 common-names report --report all
 ```
 
 ### Updating data

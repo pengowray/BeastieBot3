@@ -29,6 +29,14 @@ public sealed class WikipediaListCommand : Command<WikipediaListCommand.Settings
 
         [CommandOption("--limit <N>")]
         public int? Limit { get; init; }
+
+        [CommandOption("--use-legacy-names")]
+        [System.ComponentModel.Description("Use legacy common name provider instead of the aggregated common names store.")]
+        public bool UseLegacyNames { get; init; }
+
+        [CommandOption("--common-names-db <PATH>")]
+        [System.ComponentModel.Description("Path to the common names SQLite database.")]
+        public string? CommonNamesDbPath { get; init; }
     }
 
     public override int Execute(CommandContext context, Settings settings, System.Threading.CancellationToken cancellationToken) {
@@ -48,23 +56,47 @@ public sealed class WikipediaListCommand : Command<WikipediaListCommand.Settings
         }
 
         using var query = new IucnListQueryService(databasePath);
-        using var commonNames = new CommonNameProvider(paths.GetWikidataCachePath(), paths.GetIucnApiCachePath());
         var templates = new WikipediaTemplateRenderer(templatesDir);
         var rules = new Legacy.LegacyTaxaRuleList(rulesPath);
-        var generator = new WikipediaListGenerator(query, templates, rules, commonNames);
+        
+        // Determine which common name provider to use
+        var commonNamesDbPath = settings.CommonNamesDbPath ?? paths.ResolveCommonNameStorePath(null);
+        var useStoreBackedProvider = !settings.UseLegacyNames && File.Exists(commonNamesDbPath);
 
-        var results = new List<(WikipediaListDefinition Definition, WikipediaListResult Result)>();
-        foreach (var definition in definitions) {
-            AnsiConsole.MarkupLine($"[grey]Generating[/] [white]{definition.Title}[/]...");
-            var result = generator.Generate(definition, config.Defaults, outputDir, settings.Limit);
-            results.Add((definition, result));
-            AnsiConsole.MarkupLine($"  [green]saved[/] {result.OutputPath} ([cyan]{result.TotalEntries}[/] taxa, [cyan]{result.HeadingCount}[/] headings, dataset {result.DatasetVersion}).");
+        WikipediaListGenerator generator;
+        IDisposable? providerToDispose = null;
+
+        if (useStoreBackedProvider) {
+            AnsiConsole.MarkupLine($"[grey]Using aggregated common names from:[/] {commonNamesDbPath}");
+            var storeProvider = new StoreBackedCommonNameProvider(commonNamesDbPath);
+            providerToDispose = storeProvider;
+            generator = new WikipediaListGenerator(query, templates, rules, storeProvider);
+        } else {
+            if (!settings.UseLegacyNames) {
+                AnsiConsole.MarkupLine("[yellow]Common names store not found, using legacy provider.[/]");
+            }
+            var legacyProvider = new CommonNameProvider(paths.GetWikidataCachePath(), paths.GetIucnApiCachePath());
+            providerToDispose = legacyProvider;
+            generator = new WikipediaListGenerator(query, templates, rules, legacyProvider);
         }
 
-        // Write report file
-        WriteReport(outputDir, results);
+        try {
+            var results = new List<(WikipediaListDefinition Definition, WikipediaListResult Result)>();
+            foreach (var definition in definitions) {
+                AnsiConsole.MarkupLine($"[grey]Generating[/] [white]{definition.Title}[/]...");
+                var result = generator.Generate(definition, config.Defaults, outputDir, settings.Limit);
+                results.Add((definition, result));
+                AnsiConsole.MarkupLine($"  [green]saved[/] {result.OutputPath} ([cyan]{result.TotalEntries}[/] taxa, [cyan]{result.HeadingCount}[/] headings, dataset {result.DatasetVersion}).");
+            }
 
-        return 0;
+            // Write report file
+            WriteReport(outputDir, results);
+
+            return 0;
+        }
+        finally {
+            providerToDispose?.Dispose();
+        }
     }
 
     private static void WriteReport(string outputDir, List<(WikipediaListDefinition Definition, WikipediaListResult Result)> results) {
