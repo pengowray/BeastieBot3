@@ -96,41 +96,87 @@ Environment variables such as `WIKIDATA_USER_AGENT`, `WIKIDATA_REQUEST_DELAY_MS`
 
 The `common-names` CLI branch aggregates vernacular (common) names from multiple sources into a unified SQLite database for disambiguation analysis. This helps identify cases where the same common name refers to multiple species, or where sources disagree on preferred names.
 
+### Data Sources
+
+The system imports data from four primary sources:
+
+| Source | Common Names | Synonyms | Description |
+|--------|--------------|----------|-------------|
+| **IUCN** | ~175k | ~133k | Vernacular names and scientific synonyms from IUCN Red List API assessments |
+| **Wikidata** | ~87k | — | Taxon common names (P1843) and item labels from Wikidata entities |
+| **Wikipedia** | ~33k | — | Article titles and taxobox vernacular names matched to taxa |
+| **COL** | ~120k | ~200+ | English vernacular names and scientific synonyms from Catalogue of Life |
+
 ### Commands
 
-#### Initialization and Aggregation
+#### Initialization
 
-- `common-names init` &mdash; Creates or resets the common names SQLite database. Use `--force` to drop existing tables and start fresh.
-- `common-names aggregate --source iucn` &mdash; Imports common names from the IUCN API cache. Add `--include-synonyms` to also import scientific name synonyms from assessment data.
-- `common-names aggregate --source wikidata` &mdash; Imports common names from cached Wikidata entities (P1843 labels).
-- `common-names aggregate --source wikipedia` &mdash; Imports common names by matching Wikipedia article titles to taxa. Falls back to extracting names from taxobox data when direct title matches aren't available.
-- `common-names aggregate --source col` &mdash; Imports English vernacular names from a Catalogue of Life SQLite database. Requires `--col-sqlite` to specify the COL database path.
+- `common-names init` &mdash; Creates or resets the common names SQLite database schema. Imports taxa from IUCN taxonomy and generates scientific name variants for matching.
+  - `--force` &mdash; Drop existing tables and reinitialize from scratch.
+  - `--common-names-db <path>` &mdash; Override the database path (default from paths.ini).
+
+#### Aggregation
+
+Aggregate commands import data from external sources into the common names database. Use `--source all` to import from all configured sources, or specify individual sources.
+
+- `common-names aggregate --source all` &mdash; Imports from all available sources (IUCN, Wikidata, Wikipedia, COL).
+- `common-names aggregate --source iucn` &mdash; Imports common names from IUCN API cache.
+  - Also imports scientific name synonyms from assessment taxonomy data.
+- `common-names aggregate --source wikidata` &mdash; Imports from cached Wikidata entities:
+  - **P1843 (taxon common name)** &mdash; Official vernacular names with language tags.
+  - **Item labels** &mdash; Wikidata item labels (filtered to exclude scientific names).
+- `common-names aggregate --source wikipedia` &mdash; Imports from Wikipedia cache:
+  - **Article titles** &mdash; Matched to taxa by scientific name.
+  - **Taxobox names** &mdash; Extracted vernacular names from infobox templates.
+- `common-names aggregate --source col` &mdash; Imports from Catalogue of Life SQLite database:
+  - **Vernacular names** &mdash; English common names linked to accepted species.
+  - **Scientific synonyms** &mdash; Synonym names linked to their accepted taxon.
+  - Requires COL database path in paths.ini or `--col-sqlite` option.
+
+**Common options:**
+- `--limit <n>` &mdash; Limit the number of records processed (useful for testing).
+- `--col-sqlite <path>` &mdash; Override the COL database path.
+- `--wikidata-cache <path>` &mdash; Override the Wikidata cache path.
+- `--wikipedia-cache <path>` &mdash; Override the Wikipedia cache path.
 
 #### Reports
 
 - `common-names report --report summary` &mdash; Displays statistics about the common names database (taxa count, name count, conflicts detected).
 - `common-names report --report ambiguous` &mdash; Lists common names that map to multiple species. Use `--limit` to cap results and `--kingdom` to filter by taxonomic kingdom.
+- `common-names report --report ambiguous-iucn` &mdash; Lists IUCN-sourced common names that map to multiple species (higher confidence conflicts).
 - `common-names report --report caps` &mdash; Reports capitalization inconsistencies where the same normalized name appears with different casing across sources.
 - `common-names report --report wiki-disambig` &mdash; Identifies Wikipedia article titles that could refer to multiple species, useful for finding articles that may need disambiguation.
 - `common-names report --report iucn-preferred` &mdash; Finds common names marked as "preferred" (main=true) by IUCN for multiple different species, indicating potential data quality issues.
-- `common-names report --report all` &mdash; Generates all file-based reports (ambiguous, caps, wiki-disambig, iucn-preferred) in one run.
+- `common-names report --report all` &mdash; Generates all file-based reports (ambiguous, ambiguous-iucn, caps, wiki-disambig, iucn-preferred) in one run.
+
+**Report options:**
+- `--limit <n>` &mdash; Limit the number of conflicts reported (default: no limit).
+- `--kingdom <name>` &mdash; Filter to a specific kingdom (Animalia, Plantae, Fungi, Chromista).
+- `--output-dir <path>` &mdash; Override the reports output directory.
 
 ### Example Workflow
 
 ```bash
-# Initialize the database
+# Initialize the database (creates schema, imports IUCN taxa)
 dotnet run --project BeastieBot3 -- common-names init
 
-# Aggregate from all sources
-dotnet run --project BeastieBot3 -- common-names aggregate --source iucn --include-synonyms
+# Aggregate from all sources (recommended order)
+dotnet run --project BeastieBot3 -- common-names aggregate --source iucn
 dotnet run --project BeastieBot3 -- common-names aggregate --source wikidata
 dotnet run --project BeastieBot3 -- common-names aggregate --source wikipedia
-dotnet run --project BeastieBot3 -- common-names aggregate --source col --col-sqlite "path/to/col.sqlite"
+dotnet run --project BeastieBot3 -- common-names aggregate --source col
 
-# Generate reports
+# Or aggregate from all sources at once
+dotnet run --project BeastieBot3 -- common-names aggregate --source all
+
+# Generate summary statistics
 dotnet run --project BeastieBot3 -- common-names report --report summary
-dotnet run --project BeastieBot3 -- common-names report --report all --limit 100
-dotnet run --project BeastieBot3 -- common-names report --report ambiguous --limit 100 --kingdom Animalia
+
+# Generate all disambiguation reports
+dotnet run --project BeastieBot3 -- common-names report --report all
+
+# Generate specific report with filters
+dotnet run --project BeastieBot3 -- common-names report --report ambiguous --kingdom Animalia
 ```
 
 Reports are saved to the `reports_dir` path configured in `paths.ini` (defaults to `beastiebot/reports`).

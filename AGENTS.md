@@ -23,6 +23,11 @@ The application is a CLI tool with a hierarchical command structure.
 - `wikipedia`: Wikipedia page caching, matching, and list generation.
 - `common-names`: Aggregates vernacular names from multiple sources for disambiguation analysis.
 
+**Common Names Subcommands:**
+- `common-names init` &mdash; Initialize the common names SQLite database with IUCN taxa.
+- `common-names aggregate --source <source>` &mdash; Import data from sources: `all`, `iucn`, `wikidata`, `wikipedia`, `col`.
+- `common-names report --report <type>` &mdash; Generate reports: `summary`, `ambiguous`, `ambiguous-iucn`, `caps`, `wiki-disambig`, `iucn-preferred`, `all`.
+
 ### Tests
 There is currently no formal test suite (xUnit/NUnit) configured in the solution.
 - **Verification**: Developers should verify changes by building the project (`dotnet build`) and running the relevant CLI command.

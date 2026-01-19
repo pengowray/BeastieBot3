@@ -762,6 +762,19 @@ internal sealed class CommonNameAggregateCommand : AsyncCommand<CommonNameAggreg
         return null;
     }
 
+    /// <summary>
+    /// Aggregates English vernacular (common) names from the Catalogue of Life database.
+    /// 
+    /// This imports common names from COL's vernacularname table, matching them to our existing
+    /// IUCN-based taxa by normalized scientific name. Only species/subspecies/variety ranks
+    /// with accepted status are imported.
+    /// 
+    /// Data flow:
+    /// 1. Query COL vernacularname joined to nameusage for English names
+    /// 2. Normalize the scientific name to match our canonical format
+    /// 3. Find matching taxon in our database by canonical name or synonym
+    /// 4. Insert the vernacular name with source="col"
+    /// </summary>
     private static Task AggregateColVernacularNamesAsync(CommonNameStore store, string colPath, int? limit, CancellationToken cancellationToken) {
         return Task.Run(() => {
             AnsiConsole.MarkupLine("[yellow]Aggregating COL vernacular names...[/]");
@@ -877,6 +890,22 @@ internal sealed class CommonNameAggregateCommand : AsyncCommand<CommonNameAggreg
         }, cancellationToken);
     }
 
+    /// <summary>
+    /// Aggregates scientific name synonyms from the Catalogue of Life database.
+    /// 
+    /// COL stores synonyms in the nameusage table with status='synonym' or 'ambiguous synonym'.
+    /// The parentID field links synonyms to their accepted taxon. This method imports these
+    /// synonyms for taxa that exist in our database (matched from IUCN).
+    /// 
+    /// Data flow:
+    /// 1. Query COL nameusage for synonym records joined to their accepted names
+    /// 2. Normalize both synonym and accepted scientific names
+    /// 3. Find matching taxon in our database by the accepted name
+    /// 4. Insert the synonym with source="col" and appropriate synonym_type
+    /// 
+    /// Note: The number of imported synonyms depends on overlap between COL's accepted
+    /// names and our IUCN-based taxa. Many COL species aren't assessed by IUCN.
+    /// </summary>
     private static Task AggregateColSynonymsAsync(CommonNameStore store, string colPath, int? limit, CancellationToken cancellationToken) {
         return Task.Run(() => {
             AnsiConsole.MarkupLine("[yellow]Aggregating COL scientific name synonyms...[/]");
