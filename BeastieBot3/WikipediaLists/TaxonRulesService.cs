@@ -14,10 +14,15 @@ namespace BeastieBot3.WikipediaLists;
 internal sealed class TaxonRulesService {
     private readonly Dictionary<string, TaxonRule> _rules;
     private readonly List<Regex> _globalExclusionPatterns;
+    private readonly Dictionary<string, VirtualGroupConfig> _virtualGroups;
 
     public TaxonRulesService(TaxonRulesConfig config) {
         _rules = new Dictionary<string, TaxonRule>(
             config.Taxa ?? new Dictionary<string, TaxonRule>(),
+            StringComparer.OrdinalIgnoreCase);
+        
+        _virtualGroups = new Dictionary<string, VirtualGroupConfig>(
+            config.VirtualGroups ?? new Dictionary<string, VirtualGroupConfig>(),
             StringComparer.OrdinalIgnoreCase);
         
         _globalExclusionPatterns = new List<Regex>();
@@ -142,5 +147,79 @@ internal sealed class TaxonRulesService {
     public string? GetWikilink(string taxonName, string? listId = null) {
         var rule = GetRule(taxonName, listId);
         return rule?.Wikilink;
+    }
+
+    /// <summary>
+    /// Check if a taxon should use virtual groups.
+    /// </summary>
+    public bool ShouldUseVirtualGroups(string taxonName) {
+        if (string.IsNullOrWhiteSpace(taxonName)) {
+            return false;
+        }
+
+        return _rules.TryGetValue(taxonName, out var rule) && rule.UseVirtualGroups;
+    }
+
+    /// <summary>
+    /// Check if virtual groups are defined for a parent taxon.
+    /// </summary>
+    public bool HasVirtualGroups(string parentTaxon) {
+        return _virtualGroups.ContainsKey(parentTaxon);
+    }
+
+    /// <summary>
+    /// Get the virtual groups for a parent taxon.
+    /// </summary>
+    public VirtualGroupConfig? GetVirtualGroups(string parentTaxon) {
+        return _virtualGroups.TryGetValue(parentTaxon, out var config) ? config : null;
+    }
+
+    /// <summary>
+    /// Resolve which virtual group a record belongs to, based on its family/superfamily/clade.
+    /// Returns null if no virtual groups are defined or no match is found.
+    /// </summary>
+    public VirtualGroup? ResolveVirtualGroup(string parentTaxon, string? family, string? superfamily, string? clade) {
+        if (!_virtualGroups.TryGetValue(parentTaxon, out var config) || config.Groups.Count == 0) {
+            return null;
+        }
+
+        VirtualGroup? defaultGroup = null;
+
+        foreach (var group in config.Groups) {
+            if (group.Default) {
+                defaultGroup = group;
+                continue;
+            }
+
+            // Check superfamilies
+            if (!string.IsNullOrEmpty(superfamily) && group.Superfamilies.Count > 0) {
+                foreach (var sf in group.Superfamilies) {
+                    if (string.Equals(sf, superfamily, StringComparison.OrdinalIgnoreCase)) {
+                        return group;
+                    }
+                }
+            }
+
+            // Check families
+            if (!string.IsNullOrEmpty(family) && group.Families.Count > 0) {
+                foreach (var f in group.Families) {
+                    if (string.Equals(f, family, StringComparison.OrdinalIgnoreCase)) {
+                        return group;
+                    }
+                }
+            }
+
+            // Check clades
+            if (!string.IsNullOrEmpty(clade) && group.Clades.Count > 0) {
+                foreach (var c in group.Clades) {
+                    if (string.Equals(c, clade, StringComparison.OrdinalIgnoreCase)) {
+                        return group;
+                    }
+                }
+            }
+        }
+
+        // Return default group if no match found
+        return defaultGroup;
     }
 }

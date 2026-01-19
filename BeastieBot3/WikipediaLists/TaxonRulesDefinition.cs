@@ -17,6 +17,67 @@ internal sealed class TaxonRulesConfig {
     /// Taxa matching any pattern are excluded from all lists.
     /// </summary>
     public List<string> GlobalExclusions { get; init; } = new();
+    
+    /// <summary>
+    /// Virtual group definitions keyed by parent taxon name.
+    /// Used to organize taxa into logical groupings (e.g., Squamata → Snakes, Lizards).
+    /// </summary>
+    public Dictionary<string, VirtualGroupConfig> VirtualGroups { get; init; } = new();
+}
+
+/// <summary>
+/// Virtual group configuration for a parent taxon.
+/// </summary>
+internal sealed class VirtualGroupConfig {
+    /// <summary>
+    /// Ordered list of groups. First matching group wins.
+    /// </summary>
+    public List<VirtualGroup> Groups { get; init; } = new();
+}
+
+/// <summary>
+/// A virtual group that organizes taxa by family/superfamily/clade membership.
+/// </summary>
+internal sealed class VirtualGroup {
+    /// <summary>
+    /// Display name for the group heading.
+    /// </summary>
+    public string Name { get; init; } = string.Empty;
+    
+    /// <summary>
+    /// Common name (singular).
+    /// </summary>
+    public string? CommonName { get; init; }
+    
+    /// <summary>
+    /// Common name (plural).
+    /// </summary>
+    public string? CommonPlural { get; init; }
+    
+    /// <summary>
+    /// Main article to link under the heading.
+    /// </summary>
+    public string? MainArticle { get; init; }
+    
+    /// <summary>
+    /// Superfamilies that belong to this group.
+    /// </summary>
+    public List<string> Superfamilies { get; init; } = new();
+    
+    /// <summary>
+    /// Families that belong to this group.
+    /// </summary>
+    public List<string> Families { get; init; } = new();
+    
+    /// <summary>
+    /// Unranked clades that belong to this group (e.g., Iguania).
+    /// </summary>
+    public List<string> Clades { get; init; } = new();
+    
+    /// <summary>
+    /// Whether this is the default/fallback group for unmatched taxa.
+    /// </summary>
+    public bool Default { get; init; }
 }
 
 /// <summary>
@@ -64,6 +125,11 @@ internal sealed class TaxonRule {
     /// Whether to force-split into lower ranks even if there are few items.
     /// </summary>
     public bool ForceSplit { get; init; }
+    
+    /// <summary>
+    /// Whether to use virtual groups for this taxon instead of rank-based splitting.
+    /// </summary>
+    public bool UseVirtualGroups { get; init; }
     
     /// <summary>
     /// Whether to exclude this taxon from lists.

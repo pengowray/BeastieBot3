@@ -6,6 +6,7 @@
 # - Main article links ({{main|...}} templates in headings)
 # - List-specific overrides (exclude/rename taxa per list)
 # - Force-split rules (skip heading for a taxon, group by children instead)
+# - Virtual groups (organize taxa by custom groupings instead of ranks)
 #
 # The legacy rules-list.txt is still used for common names and wikilinks.
 # This file adds newer features that can't be expressed in the legacy format.
@@ -20,12 +21,89 @@
 #     * Species A
 #     === Viperidae ===
 #     * Species B
+#
+# Virtual groups example:
+#   For Squamata, instead of just splitting by family, we can define
+#   logical groups like "Snakes" and "Lizards" based on superfamily/clade membership.
 
 # Global exclusion patterns (regex)
 # Taxa matching any pattern are excluded from all lists
 global_exclusions:
   # Example: exclude fossil-only taxa (if you had a pattern for them)
   # - "^Fossil "
+
+# Virtual groups define custom taxonomic groupings
+# These override the normal rank-based grouping for specific parent taxa
+virtual_groups:
+  # Squamata: organize into Snakes, Lizards, and Worm lizards
+  Squamata:
+    # Groups are checked in order; first match wins
+    groups:
+      - name: Snakes
+        common_name: snake
+        common_plural: snakes
+        main_article: Snake
+        # Match by superfamily (from COL enrichment)
+        superfamilies:
+          - Colubroidea
+          - Booidea
+          - Pythonoidea
+          - Typhlopoidea
+          - Uropeltoidea
+          - Acrochordoidea
+        # Or by family if superfamily not available
+        families:
+          - Viperidae
+          - Colubridae
+          - Elapidae
+          - Boidae
+          - Pythonidae
+          - Typhlopidae
+          - Leptotyphlopidae
+          - Anomalepididae
+          - Uropeltidae
+          - Homalopsidae
+          - Lamprophiidae
+          - Pareidae
+          - Xenodermidae
+          - Bolyeridae
+          - Tropidophiidae
+          - Aniliidae
+          - Cylindrophiidae
+          - Anomochilidae
+          - Xenophidiidae
+          - Acrochordidae
+          - Pseudoxyrhophiidae
+          - Atractaspididae
+          - Prosymnidae
+          - Psammophiidae
+          - Dipsadidae
+          - Calamariidae
+
+      - name: Worm lizards
+        common_name: worm lizard
+        common_plural: worm lizards
+        main_article: Amphisbaenia
+        families:
+          - Amphisbaenidae
+          - Blanidae
+          - Bipedidae
+          - Cadeidae
+          - Rhineuridae
+          - Trogonophidae
+
+      - name: Lizards
+        common_name: lizard
+        common_plural: lizards
+        main_article: Lizard
+        # Default group for anything else in Squamata
+        default: true
+        # Can also explicitly list families/superfamilies for lizards
+        superfamilies:
+          - Lacertoidea
+          - Shinisauroidea
+        clades:
+          - Iguania
 
 # Taxa-specific rules
 taxa:
@@ -35,9 +113,9 @@ taxa:
     main_article: Chordate
     comprises: "vertebrates and some invertebrates"
 
-  # Example: Squamata could split into Serpentes and Sauria if we had that data
+  # Squamata uses virtual groups defined above
   Squamata:
-    force_split: true
+    use_virtual_groups: true
     main_article: Squamata
     comprises: "lizards, snakes, and amphisbaenians"
 

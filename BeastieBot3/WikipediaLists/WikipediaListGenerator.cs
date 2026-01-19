@@ -196,8 +196,11 @@ internal sealed class WikipediaListGenerator {
             return (string.Join(Environment.NewLine, records.Select(record => FormatSpeciesLine(record, display, statusContext))), 0);
         }
 
-        // Check if we need COL enrichment (any grouping level uses COL-specific ranks)
-        var needsEnrichment = _colEnricher != null && grouping.Any(g => IsColEnrichedRank(g.Level));
+        // Check if we need COL enrichment:
+        // 1. Any grouping level uses COL-specific ranks
+        // 2. Any taxon uses virtual groups (which rely on COL superfamily/family)
+        var needsEnrichment = _colEnricher != null && 
+            (grouping.Any(g => IsColEnrichedRank(g.Level)) || HasVirtualGroupsInGrouping(grouping));
         
         if (needsEnrichment) {
             return BuildEnrichedSectionBody(records, grouping, display, statusContext);
@@ -221,6 +224,28 @@ internal sealed class WikipediaListGenerator {
         var headingCount = 0;
         AppendTree(builder, tree, startHeading: 3, display, statusContext, ref headingCount);
         return (builder.ToString().TrimEnd(), headingCount);
+    }
+
+    /// <summary>
+    /// Check if any taxa in the grouping hierarchy might use virtual groups.
+    /// </summary>
+    private bool HasVirtualGroupsInGrouping(IReadOnlyList<GroupingLevelDefinition> grouping) {
+        if (_taxonRules == null) {
+            return false;
+        }
+
+        // Check common grouping levels that might have virtual groups defined
+        foreach (var level in grouping) {
+            var levelName = level.Level.ToLowerInvariant();
+            // Order level is the most likely to have virtual groups (e.g., Squamata)
+            if (levelName == "order") {
+                // Check if we have any virtual groups defined for orders
+                if (_taxonRules.HasVirtualGroups("Squamata")) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     private static readonly HashSet<string> ColEnrichedRanks = new(StringComparer.OrdinalIgnoreCase) {
@@ -269,15 +294,26 @@ internal sealed class WikipediaListGenerator {
         ref int headingCount) {
         
         foreach (var child in node.Children) {
+            var taxonName = child.Value;
             var headingLevel = Math.Min(startHeading, 6);
             var headingMarkup = new string('=', headingLevel);
-            var heading = FormatHeading(child.Value);
+            var heading = FormatHeading(taxonName);
             builder.AppendLine($"{headingMarkup} {heading.Text} {headingMarkup}");
             headingCount++;
             if (!string.IsNullOrWhiteSpace(heading.MainLink)) {
                 builder.AppendLine($"{{{{main|{heading.MainLink}}}}}");
             }
-            AppendEnrichedTree(builder, child, headingLevel + 1, display, statusContext, ref headingCount);
+
+            // Check if this taxon uses virtual groups
+            if (!string.IsNullOrWhiteSpace(taxonName) &&
+                _taxonRules != null && 
+                _taxonRules.ShouldUseVirtualGroups(taxonName) && 
+                _taxonRules.HasVirtualGroups(taxonName)) {
+                // Render virtual groups instead of normal children
+                AppendVirtualGroups(builder, child, taxonName, headingLevel + 1, display, statusContext, ref headingCount);
+            } else {
+                AppendEnrichedTree(builder, child, headingLevel + 1, display, statusContext, ref headingCount);
+            }
         }
 
         // Convert enriched records to IUCN records for output
@@ -289,6 +325,157 @@ internal sealed class WikipediaListGenerator {
                 builder.AppendLine(FormatSpeciesLine(record, display, statusContext));
             }
         }
+    }
+
+    /// <summary>
+    /// Appends items grouped by virtual groups (e.g., Snakes, Lizards, Worm lizards for Squamata).
+    /// </summary>
+    private void AppendVirtualGroups(
+        StringBuilder builder,
+        TaxonomyTreeNode<EnrichedSpeciesRecord> parentNode,
+        string parentTaxon,
+        int headingLevel,
+        DisplayPreferences display,
+        string? statusContext,
+        ref int headingCount) {
+        
+        // Collect all enriched records from this node and its descendants
+        var allRecords = CollectAllEnrichedRecords(parentNode);
+
+        // Group by virtual group
+        var groupedRecords = new Dictionary<VirtualGroup, List<EnrichedSpeciesRecord>>();
+        VirtualGroup? defaultGroup = null;
+        List<EnrichedSpeciesRecord>? unmatchedRecords = null;
+
+        foreach (var record in allRecords) {
+            var virtualGroup = _taxonRules!.ResolveVirtualGroup(
+                parentTaxon, 
+                record.FamilyName, 
+                record.Superfamily, 
+                clade: null); // TODO: We don't have clade in enriched record yet
+
+            if (virtualGroup == null) {
+                // No match, collect for later
+                unmatchedRecords ??= new List<EnrichedSpeciesRecord>();
+                unmatchedRecords.Add(record);
+            } else if (virtualGroup.Default) {
+                defaultGroup = virtualGroup;
+                if (!groupedRecords.ContainsKey(virtualGroup)) {
+                    groupedRecords[virtualGroup] = new List<EnrichedSpeciesRecord>();
+                }
+                groupedRecords[virtualGroup].Add(record);
+            } else {
+                if (!groupedRecords.ContainsKey(virtualGroup)) {
+                    groupedRecords[virtualGroup] = new List<EnrichedSpeciesRecord>();
+                }
+                groupedRecords[virtualGroup].Add(record);
+            }
+        }
+
+        // Add unmatched records to the default group
+        if (unmatchedRecords != null && defaultGroup != null && groupedRecords.ContainsKey(defaultGroup)) {
+            groupedRecords[defaultGroup].AddRange(unmatchedRecords);
+            unmatchedRecords = null;
+        }
+
+        // Render each virtual group as a heading
+        var virtualGroupConfig = _taxonRules!.GetVirtualGroups(parentTaxon);
+        if (virtualGroupConfig != null) {
+            foreach (var vg in virtualGroupConfig.Groups) {
+                if (!groupedRecords.TryGetValue(vg, out var records) || records.Count == 0) {
+                    continue;
+                }
+
+                var headingMarkup = new string('=', Math.Min(headingLevel, 6));
+                var groupHeading = FormatVirtualGroupHeading(vg);
+                builder.AppendLine($"{headingMarkup} {groupHeading.Text} {headingMarkup}");
+                headingCount++;
+                if (!string.IsNullOrWhiteSpace(groupHeading.MainLink)) {
+                    builder.AppendLine($"{{{{main|{groupHeading.MainLink}}}}}");
+                }
+
+                // Sort and output records for this group, grouped by family
+                var recordsByFamily = records
+                    .GroupBy(r => r.FamilyName ?? "Unknown")
+                    .OrderBy(g => g.Key, StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+
+                // If multiple families, add family subheadings
+                if (recordsByFamily.Count > 1) {
+                    foreach (var familyGroup in recordsByFamily) {
+                        var familyHeadingLevel = Math.Min(headingLevel + 1, 6);
+                        var familyHeadingMarkup = new string('=', familyHeadingLevel);
+                        var familyHeading = FormatHeading(familyGroup.Key);
+                        builder.AppendLine($"{familyHeadingMarkup} {familyHeading.Text} {familyHeadingMarkup}");
+                        headingCount++;
+                        if (!string.IsNullOrWhiteSpace(familyHeading.MainLink)) {
+                            builder.AppendLine($"{{{{main|{familyHeading.MainLink}}}}}");
+                        }
+
+                        OutputEnrichedRecords(builder, familyGroup.ToList(), display, statusContext);
+                    }
+                } else {
+                    // Single family, no extra heading needed
+                    OutputEnrichedRecords(builder, records, display, statusContext);
+                }
+            }
+        }
+
+        // Handle any remaining unmatched records (shouldn't happen if default group is defined)
+        if (unmatchedRecords != null && unmatchedRecords.Count > 0) {
+            var headingMarkup = new string('=', Math.Min(headingLevel, 6));
+            builder.AppendLine($"{headingMarkup} Other {headingMarkup}");
+            headingCount++;
+            OutputEnrichedRecords(builder, unmatchedRecords, display, statusContext);
+        }
+    }
+
+    /// <summary>
+    /// Collects all enriched records from a node and all its descendants.
+    /// </summary>
+    private static List<EnrichedSpeciesRecord> CollectAllEnrichedRecords(TaxonomyTreeNode<EnrichedSpeciesRecord> node) {
+        var result = new List<EnrichedSpeciesRecord>();
+        CollectRecordsRecursive(node, result);
+        return result;
+    }
+
+    private static void CollectRecordsRecursive(TaxonomyTreeNode<EnrichedSpeciesRecord> node, List<EnrichedSpeciesRecord> result) {
+        result.AddRange(node.Items);
+        foreach (var child in node.Children) {
+            CollectRecordsRecursive(child, result);
+        }
+    }
+
+    /// <summary>
+    /// Output enriched records (converted to IUCN records for compatibility).
+    /// </summary>
+    private void OutputEnrichedRecords(
+        StringBuilder builder,
+        IReadOnlyList<EnrichedSpeciesRecord> records,
+        DisplayPreferences display,
+        string? statusContext) {
+        
+        var iucnRecords = records.Select(r => r.ToIucnRecord()).ToList();
+        if (display.GroupSubspecies) {
+            AppendItemsWithSubspeciesGrouping(builder, iucnRecords, display, statusContext);
+        } else {
+            foreach (var record in iucnRecords) {
+                builder.AppendLine(FormatSpeciesLine(record, display, statusContext));
+            }
+        }
+    }
+
+    /// <summary>
+    /// Format a virtual group heading.
+    /// </summary>
+    private static HeadingInfo FormatVirtualGroupHeading(VirtualGroup group) {
+        var displayName = !string.IsNullOrWhiteSpace(group.CommonPlural) 
+            ? Uppercase(group.CommonPlural) 
+            : !string.IsNullOrWhiteSpace(group.CommonName)
+                ? Uppercase(group.CommonName)
+                : group.Name;
+        
+        return new HeadingInfo(displayName!, group.MainArticle);
     }
 
     private static Func<IucnSpeciesRecord, string?> BuildSelector(string level) => level.ToLowerInvariant() switch {

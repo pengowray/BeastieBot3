@@ -2177,3 +2177,12 @@ Zedong // Mao Zedong more than crab
 Zempoaltepec // Mount Zempoaltepec alligator lizard
 zephyr // Spanish zephyr blue, Alpine zephyr blue
 zone // Dry zone toque macaque, Dry zone mahogany
+
+boa
+racer
+longtailed
+turtle
+tortoise
+threadsnake
+galliwasp
+iguana 
