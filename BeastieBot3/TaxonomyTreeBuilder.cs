@@ -71,6 +71,35 @@ internal static class TaxonomyTreeBuilder {
             bucket.Items.Add(item);
         }
 
+        // Merge small groups into "Other" if MinItems > 1
+        if (level.MinItems > 1) {
+            var otherLabel = level.OtherLabel ?? $"Other {level.Label?.ToLowerInvariant() ?? "taxa"}";
+            var smallGroups = buckets.Values
+                .Where(g => g.Items.Count < level.MinItems)
+                .ToList();
+
+            if (smallGroups.Count > 0) {
+                // Only merge if there's more than one small group, or if there's at least one item
+                var totalSmallItems = smallGroups.Sum(g => g.Items.Count);
+                if (totalSmallItems > 0) {
+                    // Remove small groups from buckets
+                    foreach (var small in smallGroups) {
+                        buckets.Remove(small.DisplayValue);
+                    }
+
+                    // Create or merge into "Other" bucket
+                    if (!buckets.TryGetValue(otherLabel, out var otherBucket)) {
+                        otherBucket = new TreeGroup<T>(otherLabel);
+                        buckets[otherLabel] = otherBucket;
+                    }
+
+                    foreach (var small in smallGroups) {
+                        otherBucket.Items.AddRange(small.Items);
+                    }
+                }
+            }
+        }
+
         return buckets.Values
             .OrderBy(group => group.DisplayValue, comparer)
             .ToList();
@@ -118,4 +147,10 @@ internal sealed class TaxonomyTreeNode<T> {
     }
 }
 
-internal sealed record TaxonomyTreeLevel<T>(string Label, Func<T, string?> Selector, bool AlwaysDisplay = false, string? UnknownLabel = null);
+internal sealed record TaxonomyTreeLevel<T>(
+    string Label, 
+    Func<T, string?> Selector, 
+    bool AlwaysDisplay = false, 
+    string? UnknownLabel = null,
+    int MinItems = 1,
+    string? OtherLabel = null);

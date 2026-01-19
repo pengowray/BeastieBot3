@@ -197,7 +197,9 @@ internal sealed class WikipediaListGenerator {
                 level.Label ?? level.Level,
                 BuildSelector(level.Level),
                 level.AlwaysDisplay,
-                level.UnknownLabel))
+                level.UnknownLabel,
+                level.MinItems,
+                level.OtherLabel))
             .ToList();
 
         var tree = TaxonomyTreeBuilder.Build(records, levels);
@@ -229,7 +231,9 @@ internal sealed class WikipediaListGenerator {
                 level.Label ?? level.Level,
                 BuildEnrichedSelector(level.Level),
                 level.AlwaysDisplay,
-                level.UnknownLabel))
+                level.UnknownLabel,
+                level.MinItems,
+                level.OtherLabel))
             .ToList();
 
         var tree = TaxonomyTreeBuilder.Build(enrichedRecords, levels);
@@ -259,9 +263,14 @@ internal sealed class WikipediaListGenerator {
             AppendEnrichedTree(builder, child, headingLevel + 1, display, statusContext, ref headingCount);
         }
 
-        foreach (var record in node.Items) {
-            // Convert back to IucnSpeciesRecord for formatting
-            builder.AppendLine(FormatSpeciesLine(record.ToIucnRecord(), display, statusContext));
+        // Convert enriched records to IUCN records for output
+        var iucnRecords = node.Items.Select(r => r.ToIucnRecord()).ToList();
+        if (display.GroupSubspecies) {
+            AppendItemsWithSubspeciesGrouping(builder, iucnRecords, display, statusContext);
+        } else {
+            foreach (var record in iucnRecords) {
+                builder.AppendLine(FormatSpeciesLine(record, display, statusContext));
+            }
         }
     }
 
@@ -317,9 +326,90 @@ internal sealed class WikipediaListGenerator {
             AppendTree(builder, child, headingLevel + 1, display, statusContext, ref headingCount);
         }
 
-        foreach (var record in node.Items) {
-            builder.AppendLine(FormatSpeciesLine(record, display, statusContext));
+        if (display.GroupSubspecies) {
+            AppendItemsWithSubspeciesGrouping(builder, node.Items, display, statusContext);
+        } else {
+            foreach (var record in node.Items) {
+                builder.AppendLine(FormatSpeciesLine(record, display, statusContext));
+            }
         }
+    }
+
+    /// <summary>
+    /// Appends species with subspecies grouped under their parent species.
+    /// </summary>
+    private void AppendItemsWithSubspeciesGrouping(
+        StringBuilder builder,
+        IReadOnlyList<IucnSpeciesRecord> items,
+        DisplayPreferences display,
+        string? statusContext) {
+        
+        // Separate species and subspecies
+        var species = new List<IucnSpeciesRecord>();
+        var subspeciesGroups = new Dictionary<string, List<IucnSpeciesRecord>>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var record in items) {
+            if (IsSubspecies(record)) {
+                var parentKey = GetParentSpeciesKey(record);
+                if (!subspeciesGroups.TryGetValue(parentKey, out var list)) {
+                    list = new List<IucnSpeciesRecord>();
+                    subspeciesGroups[parentKey] = list;
+                }
+                list.Add(record);
+            } else {
+                species.Add(record);
+            }
+        }
+
+        // Output species, inserting subspecies underneath if present
+        var processedSubspeciesGroups = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var record in species) {
+            var speciesKey = GetParentSpeciesKey(record);
+            builder.AppendLine(FormatSpeciesLine(record, display, statusContext));
+            
+            // Check if this species has subspecies
+            if (subspeciesGroups.TryGetValue(speciesKey, out var subs)) {
+                foreach (var sub in subs.OrderBy(s => s.InfraName, StringComparer.OrdinalIgnoreCase)) {
+                    builder.AppendLine(FormatSubspeciesLine(sub, display, statusContext));
+                }
+                processedSubspeciesGroups.Add(speciesKey);
+            }
+        }
+
+        // Output any subspecies whose parent species isn't in the list
+        foreach (var (key, subs) in subspeciesGroups) {
+            if (processedSubspeciesGroups.Contains(key)) {
+                continue;
+            }
+
+            // Create a parent species heading for orphan subspecies
+            var firstSub = subs[0];
+            var parentName = $"''{firstSub.GenusName} {firstSub.SpeciesName}''";
+            builder.AppendLine($"* {parentName}");
+            
+            foreach (var sub in subs.OrderBy(s => s.InfraName, StringComparer.OrdinalIgnoreCase)) {
+                builder.AppendLine(FormatSubspeciesLine(sub, display, statusContext));
+            }
+        }
+    }
+
+    private static bool IsSubspecies(IucnSpeciesRecord record) {
+        return !string.IsNullOrWhiteSpace(record.InfraType) && !string.IsNullOrWhiteSpace(record.InfraName);
+    }
+
+    private static string GetParentSpeciesKey(IucnSpeciesRecord record) {
+        return $"{record.GenusName?.ToLowerInvariant()}|{record.SpeciesName?.ToLowerInvariant()}";
+    }
+
+    private string FormatSubspeciesLine(IucnSpeciesRecord record, DisplayPreferences display, string? statusContext) {
+        // Indented subspecies line
+        var line = FormatSpeciesLine(record, display, statusContext);
+        // Add extra indentation (** instead of *)
+        if (line.StartsWith("* ")) {
+            return "*" + line;
+        }
+        return line;
     }
 
     private readonly record struct HeadingInfo(string Text, string? MainLink);

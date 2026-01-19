@@ -58,6 +58,17 @@ internal sealed record GroupingLevelDefinition {
     public string? Label { get; init; }
     public bool AlwaysDisplay { get; init; }
     public string? UnknownLabel { get; init; }
+    /// <summary>
+    /// Minimum number of items required for a group to have its own heading.
+    /// Groups with fewer items are merged into an "Other" bucket.
+    /// Default is 1 (no merging).
+    /// </summary>
+    public int MinItems { get; init; } = 1;
+    /// <summary>
+    /// Label for the "Other" bucket when small groups are merged.
+    /// Defaults to "Other {Label}" if not specified.
+    /// </summary>
+    public string? OtherLabel { get; init; }
 }
 
 internal sealed class DisplayPreferences {
@@ -65,4 +76,9 @@ internal sealed class DisplayPreferences {
     public bool ItalicizeScientific { get; init; } = true;
     public bool IncludeStatusTemplate { get; init; } = true;
     public bool IncludeStatusLabel { get; init; } = true;
+    /// <summary>
+    /// Whether to group subspecies under their parent species.
+    /// When true, subspecies are indented under a parent species heading.
+    /// </summary>
+    public bool GroupSubspecies { get; init; } = false;
 }

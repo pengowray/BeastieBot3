@@ -172,3 +172,62 @@ lists:
         label: "Family"
         always_display: false
         unknown_label: "Unassigned families"
+  # ==================== TEST: MIN_ITEMS / OTHER GROUPING ====================
+  # Tests merging small family groups into "Other families"
+  - id: test-mammals-ex-minitems
+    title: "Test: Extinct mammals with min_items grouping"
+    description: "Testing min_items to merge small families into Other."
+    output_file: "Test_extinct_mammals_minitems.wikitext"
+    filters:
+      - rank: kingdom
+        value: Animalia
+      - rank: class
+        value: Mammalia
+    sections:
+      - key: extinct
+        heading: "Extinct species"
+        statuses:
+          - code: EX
+    grouping:
+      - level: order
+        label: "Order"
+        always_display: false
+        unknown_label: "Other orders"
+      - level: family
+        label: "Family"
+        always_display: false
+        unknown_label: "Unassigned families"
+        min_items: 3
+        other_label: "Other families"
+
+  # ==================== TEST: SUBSPECIES GROUPING ====================
+  # Tests grouping subspecies under their parent species
+  - id: test-mammals-ex-subspecies
+    title: "Test: Extinct mammals with subspecies grouping"
+    description: "Testing subspecies grouping under parent species."
+    output_file: "Test_extinct_mammals_subspecies.wikitext"
+    filters:
+      - rank: kingdom
+        value: Animalia
+      - rank: class
+        value: Mammalia
+    sections:
+      - key: extinct
+        heading: "Extinct species and subspecies"
+        statuses:
+          - code: EX
+    grouping:
+      - level: order
+        label: "Order"
+        always_display: false
+        unknown_label: "Other orders"
+      - level: family
+        label: "Family"
+        always_display: false
+        unknown_label: "Unassigned families"
+    display:
+      prefer_common_names: true
+      italicize_scientific: true
+      include_status_template: true
+      include_status_label: true
+      group_subspecies: true
