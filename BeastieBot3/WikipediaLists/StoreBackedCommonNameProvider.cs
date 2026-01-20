@@ -172,10 +172,19 @@ internal sealed class StoreBackedCommonNameProvider : IDisposable {
         // Split into words and apply rules
         var words = name.Split(' ');
         for (int i = 0; i < words.Length; i++) {
-            var lower = words[i].ToLowerInvariant();
+            var word = words[i];
+            var lower = word.ToLowerInvariant();
+            
             if (_capsRules.TryGetValue(lower, out var correctForm)) {
+                // Use the caps rule if we have one
                 words[i] = correctForm;
+            } else if (IsAllCaps(word) && word.Length > 1) {
+                // If word is ALL CAPS (more than 1 letter) and not in caps rules, apply default casing:
+                // - First word: Title Case
+                // - Other words: lowercase
+                words[i] = i == 0 ? ToTitleCase(word) : lower;
             }
+            // Otherwise leave as-is (single letters or mixed case words are likely already correct)
         }
 
         // Ensure first letter is capitalized
@@ -185,6 +194,31 @@ internal sealed class StoreBackedCommonNameProvider : IDisposable {
         }
 
         return result;
+    }
+
+    /// <summary>
+    /// Check if a word is entirely uppercase letters (ignoring non-letters).
+    /// </summary>
+    private static bool IsAllCaps(string word) {
+        if (string.IsNullOrEmpty(word)) return false;
+        
+        bool hasLetter = false;
+        foreach (var c in word) {
+            if (char.IsLetter(c)) {
+                hasLetter = true;
+                if (!char.IsUpper(c)) return false;
+            }
+        }
+        return hasLetter;
+    }
+
+    /// <summary>
+    /// Convert to title case (first letter upper, rest lower).
+    /// </summary>
+    private static string ToTitleCase(string word) {
+        if (string.IsNullOrEmpty(word)) return word;
+        if (word.Length == 1) return word.ToUpperInvariant();
+        return char.ToUpperInvariant(word[0]) + word[1..].ToLowerInvariant();
     }
 
     public void Dispose() {

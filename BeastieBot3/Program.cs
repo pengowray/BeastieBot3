@@ -169,6 +169,10 @@ namespace BeastieBot3 {
                             .WithDescription("Generate wikitext for IUCN conservation status lists using YAML definitions and mustache templates.")
                             .WithExample(new[] { "wikipedia", "generate-lists" })
                             .WithExample(new[] { "wikipedia", "generate-lists", "--list", "amphibians-cr" });
+                        wikipedia.AddCommand<MarineMammalsConfigCommand>("marine-mammals-config")
+                            .WithDescription("Generate YAML configuration for marine mammals virtual groups based on IUCN Marine system tags.")
+                            .WithExample(new[] { "wikipedia", "marine-mammals-config" })
+                            .WithExample(new[] { "wikipedia", "marine-mammals-config", "--output", "marine-mammals.yml" });
                     });
 
                     config.AddBranch("common-names", cn => {
