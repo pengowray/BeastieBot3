@@ -90,6 +90,16 @@ internal sealed class IucnListQueryService : IDisposable {
 
         for (var i = 0; i < definition.Filters.Count; i++) {
             var filter = definition.Filters[i];
+            
+            // Handle system tag filter (e.g., Marine, Freshwater, Terrestrial)
+            if (!string.IsNullOrWhiteSpace(filter.System)) {
+                var systemParam = new SqliteParameter($"@system_{i}", $"%{filter.System}%");
+                builder.AppendLine($"  AND v.systems LIKE {systemParam.ParameterName}");
+                parameters.Add(systemParam);
+                continue;
+            }
+            
+            // Handle rank-based filters
             var column = ResolveColumn(filter.Rank);
             if (column is null) {
                 continue;

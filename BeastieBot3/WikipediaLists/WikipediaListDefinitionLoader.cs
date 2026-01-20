@@ -80,6 +80,7 @@ internal sealed class WikipediaListDefinitionLoader {
                         Templates = rawList.Templates,
                         Grouping = rawList.Grouping,
                         Display = rawList.Display,
+                        CustomGroups = rawList.CustomGroups,
                     };
                     var expanded = ExpandFromReference(syntheticRaw, taxaGroups, presets);
                     if (expanded != null) {
@@ -146,6 +147,7 @@ internal sealed class WikipediaListDefinitionLoader {
             Sections = raw.Sections ?? preset.Sections ?? new(),
             Grouping = raw.Grouping,
             Display = raw.Display,
+            CustomGroups = raw.CustomGroups ?? taxaGroup.CustomGroups,
         };
     }
 
@@ -160,6 +162,7 @@ internal sealed class WikipediaListDefinitionLoader {
             Sections = raw.Sections ?? new(),
             Grouping = raw.Grouping,
             Display = raw.Display,
+            CustomGroups = raw.CustomGroups,
         };
     }
 
@@ -203,6 +206,11 @@ internal sealed class WikipediaListDefinitionRaw {
     public List<WikipediaSectionDefinition>? Sections { get; init; }
     public List<GroupingLevelDefinition>? Grouping { get; init; }
     public DisplayPreferences? Display { get; init; }
+    
+    /// <summary>
+    /// Custom family-based grouping (for paraphyletic groups like marine mammals).
+    /// </summary>
+    public List<CustomGroupDefinition>? CustomGroups { get; init; }
 }
 
 // ==================== Supporting file structures ====================
@@ -214,6 +222,11 @@ internal sealed class TaxaGroupsFile {
 internal sealed class TaxaGroupDefinition {
     public string? Name { get; init; }
     public List<TaxonFilterDefinition>? Filters { get; init; }
+    /// <summary>
+    /// Custom family-based grouping for paraphyletic groups.
+    /// When defined, these groups replace the normal taxonomic grouping.
+    /// </summary>
+    public List<CustomGroupDefinition>? CustomGroups { get; init; }
 }
 
 internal sealed class ListPresetsFile {

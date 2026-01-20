@@ -114,7 +114,8 @@ internal sealed class WikipediaListGenerator {
                 builder.AppendLine();
             }
 
-            var (sectionBody, sectionHeadingCount) = BuildSectionBody(section.Records, grouping, display, section.StatusContext);
+            var (sectionBody, sectionHeadingCount) = BuildSectionBody(
+                section.Records, grouping, display, section.StatusContext, definition.CustomGroups);
             totalHeadingCount += sectionHeadingCount;
             builder.AppendLine(sectionBody);
             builder.AppendLine();
@@ -187,9 +188,21 @@ internal sealed class WikipediaListGenerator {
         return map.Values.ToList();
     }
 
-    private (string Body, int HeadingCount) BuildSectionBody(IReadOnlyList<IucnSpeciesRecord> records, IReadOnlyList<GroupingLevelDefinition> grouping, DisplayPreferences display, string? statusContext) {
+    private (string Body, int HeadingCount) BuildSectionBody(
+        IReadOnlyList<IucnSpeciesRecord> records, 
+        IReadOnlyList<GroupingLevelDefinition> grouping, 
+        DisplayPreferences display, 
+        string? statusContext,
+        IReadOnlyList<CustomGroupDefinition>? customGroups = null,
+        int startHeading = 3) {
+        
         if (records.Count == 0) {
             return ("''No taxa currently listable.''", 0);
+        }
+
+        // If custom groups are defined, use custom grouping instead of taxonomic grouping
+        if (customGroups != null && customGroups.Count > 0) {
+            return BuildCustomGroupedSectionBody(records, customGroups, grouping, display, statusContext, startHeading);
         }
 
         if (grouping.Count == 0) {
@@ -222,7 +235,7 @@ internal sealed class WikipediaListGenerator {
         var tree = TaxonomyTreeBuilder.Build(records, levels, shouldSkip);
         var builder = new StringBuilder();
         var headingCount = 0;
-        AppendTree(builder, tree, startHeading: 3, display, statusContext, ref headingCount);
+        AppendTree(builder, tree, startHeading, display, statusContext, ref headingCount);
         return (builder.ToString().TrimEnd(), headingCount);
     }
 
@@ -234,13 +247,14 @@ internal sealed class WikipediaListGenerator {
             return false;
         }
 
-        // Check common grouping levels that might have virtual groups defined
+        // Check if any grouping level might have virtual groups defined
         foreach (var level in grouping) {
             var levelName = level.Level.ToLowerInvariant();
-            // Order level is the most likely to have virtual groups (e.g., Squamata)
+            // Order level is the most likely to have virtual groups
             if (levelName == "order") {
-                // Check if we have any virtual groups defined for orders
-                if (_taxonRules.HasVirtualGroups("Squamata")) {
+                // Check if we have any virtual groups defined for any order
+                // (Squamata, Artiodactyla, Cetartiodactyla, Carnivora, etc.)
+                if (_taxonRules.HasAnyVirtualGroups()) {
                     return true;
                 }
             }
@@ -255,6 +269,125 @@ internal sealed class WikipediaListGenerator {
     };
 
     private static bool IsColEnrichedRank(string level) => ColEnrichedRanks.Contains(level);
+
+    /// <summary>
+    /// Build section body using custom family-based groups instead of taxonomic hierarchy.
+    /// Used for paraphyletic groups like marine mammals.
+    /// </summary>
+    private (string Body, int HeadingCount) BuildCustomGroupedSectionBody(
+        IReadOnlyList<IucnSpeciesRecord> records, 
+        IReadOnlyList<CustomGroupDefinition> customGroups,
+        IReadOnlyList<GroupingLevelDefinition> subGrouping,
+        DisplayPreferences display, 
+        string? statusContext,
+        int startHeading = 3) {
+        
+        var builder = new StringBuilder();
+        var headingCount = 0;
+
+        // Group records by custom group based on family
+        var groupedRecords = new Dictionary<CustomGroupDefinition, List<IucnSpeciesRecord>>();
+        CustomGroupDefinition? defaultGroup = null;
+        List<IucnSpeciesRecord>? unmatchedRecords = null;
+
+        // Initialize groups
+        foreach (var group in customGroups) {
+            groupedRecords[group] = new List<IucnSpeciesRecord>();
+            if (group.Default) {
+                defaultGroup = group;
+            }
+        }
+
+        // Assign records to groups
+        foreach (var record in records) {
+            var matchedGroup = FindMatchingCustomGroup(record, customGroups);
+            if (matchedGroup != null) {
+                groupedRecords[matchedGroup].Add(record);
+            } else if (defaultGroup != null) {
+                groupedRecords[defaultGroup].Add(record);
+            } else {
+                unmatchedRecords ??= new List<IucnSpeciesRecord>();
+                unmatchedRecords.Add(record);
+            }
+        }
+
+        // Build remaining grouping levels (skip first level since custom groups replace it)
+        var remainingGrouping = subGrouping.Count > 1 
+            ? subGrouping.Skip(1).ToList() 
+            : new List<GroupingLevelDefinition>();
+
+        // Render each custom group
+        foreach (var group in customGroups) {
+            var groupRecords = groupedRecords[group];
+            if (groupRecords.Count == 0) {
+                continue;
+            }
+
+            // Group heading at startHeading level
+            var headingLevel = Math.Min(startHeading, 6);
+            var headingMarkup = new string('=', headingLevel);
+            var displayName = !string.IsNullOrWhiteSpace(group.CommonPlural)
+                ? Uppercase(group.CommonPlural)!
+                : group.Name;
+            builder.AppendLine($"{headingMarkup} {displayName} {headingMarkup}");
+            headingCount++;
+
+            if (!string.IsNullOrWhiteSpace(group.MainArticle)) {
+                builder.AppendLine($"{{{{main|{group.MainArticle}}}}}");
+            }
+
+            // Render records with remaining grouping (e.g., by family) at next heading level
+            if (remainingGrouping.Count > 0) {
+                var (groupBody, groupHeadingCount) = BuildSectionBody(
+                    groupRecords, remainingGrouping, display, statusContext, 
+                    customGroups: null, startHeading: headingLevel + 1);
+                headingCount += groupHeadingCount;
+                builder.AppendLine(groupBody);
+            } else {
+                // No sub-grouping, just output records
+                foreach (var record in groupRecords.OrderBy(r => r.ScientificNameTaxonomy ?? r.ScientificNameAssessments)) {
+                    builder.AppendLine(FormatSpeciesLine(record, display, statusContext));
+                }
+            }
+            builder.AppendLine();
+        }
+
+        // Handle any unmatched records
+        if (unmatchedRecords != null && unmatchedRecords.Count > 0) {
+            var headingLevel = Math.Min(startHeading, 6);
+            var headingMarkup = new string('=', headingLevel);
+            builder.AppendLine($"{headingMarkup} Other {headingMarkup}");
+            headingCount++;
+            foreach (var record in unmatchedRecords.OrderBy(r => r.ScientificNameTaxonomy ?? r.ScientificNameAssessments)) {
+                builder.AppendLine(FormatSpeciesLine(record, display, statusContext));
+            }
+            builder.AppendLine();
+        }
+
+        return (builder.ToString().TrimEnd(), headingCount);
+    }
+
+    /// <summary>
+    /// Find which custom group a record belongs to based on family membership.
+    /// </summary>
+    private static CustomGroupDefinition? FindMatchingCustomGroup(
+        IucnSpeciesRecord record, 
+        IReadOnlyList<CustomGroupDefinition> customGroups) {
+        
+        var family = record.FamilyName;
+        if (string.IsNullOrWhiteSpace(family)) {
+            return null;
+        }
+
+        // Check non-default groups first (in order)
+        foreach (var group in customGroups.Where(g => !g.Default)) {
+            if (group.Families.Any(f => f.Equals(family, StringComparison.OrdinalIgnoreCase))) {
+                return group;
+            }
+        }
+
+        return null; // Let caller assign to default group
+    }
 
     private (string Body, int HeadingCount) BuildEnrichedSectionBody(
         IReadOnlyList<IucnSpeciesRecord> records, 

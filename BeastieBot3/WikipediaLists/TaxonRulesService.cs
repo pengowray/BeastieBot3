@@ -161,6 +161,13 @@ internal sealed class TaxonRulesService {
     }
 
     /// <summary>
+    /// Check if any virtual groups are defined at all.
+    /// </summary>
+    public bool HasAnyVirtualGroups() {
+        return _virtualGroups.Count > 0;
+    }
+
+    /// <summary>
     /// Check if virtual groups are defined for a parent taxon.
     /// </summary>
     public bool HasVirtualGroups(string parentTaxon) {

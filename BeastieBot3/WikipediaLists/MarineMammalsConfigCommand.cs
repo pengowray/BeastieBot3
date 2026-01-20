@@ -12,9 +12,46 @@ namespace BeastieBot3.WikipediaLists;
 
 /// <summary>
 /// Command to generate YAML configuration for marine mammals virtual groups.
-/// This queries the IUCN database for taxa tagged as Marine and outputs
-/// the families/species needed for the taxon-rules.yml virtual_groups section.
 /// </summary>
+/// <remarks>
+/// <para>
+/// This command queries the IUCN database for taxa tagged with the "Marine" system
+/// and analyzes which mammalian families are fully marine vs partially marine.
+/// </para>
+/// <para>
+/// <b>IMPORTANT:</b> Unlike Squamata (snakes/lizards) or Artiodactyla (cetaceans/ungulates),
+/// the marine mammals grouping is only relevant for a dedicated "List of marine mammals" article.
+/// General mammal lists should NOT use virtual groups to separate pinnipeds from other carnivores.
+/// The output from this command is for reference when creating marine-specific list configurations.
+/// </para>
+/// <para>
+/// <b>Usage:</b> <c>wikipedia marine-mammals-config [--output path]</c>
+/// </para>
+/// <para>
+/// <b>Output:</b>
+/// <list type="bullet">
+/// <item>Analysis of which families are fully marine vs partially marine</item>
+/// <item>Family lists for each marine mammal group</item>
+/// <item>Summary table of marine mammals by order</item>
+/// </list>
+/// </para>
+/// <para>
+/// <b>Marine mammal groups identified:</b>
+/// <list type="bullet">
+/// <item><b>Cetaceans</b> (Artiodactyla): whales, dolphins, porpoises - 100% marine families</item>
+/// <item><b>Pinnipeds</b> (Carnivora): seals, sea lions, walrus - Odobenidae, Otariidae, Phocidae</item>
+/// <item><b>Sirenians</b> (Sirenia): manatees, dugongs - entire order is marine</item>
+/// </list>
+/// </para>
+/// <para>
+/// <b>Partially marine families</b> (individual species, not family-level):
+/// <list type="bullet">
+/// <item>Mustelidae: sea otters and some river otters</item>
+/// <item>Ursidae: polar bear</item>
+/// <item>Canidae: arctic fox (coastal populations)</item>
+/// </list>
+/// </para>
+/// </remarks>
 internal sealed class MarineMammalsConfigCommand : Command<MarineMammalsConfigCommand.Settings> {
     public sealed class Settings : CommandSettings {
         [CommandOption("--database <PATH>")]

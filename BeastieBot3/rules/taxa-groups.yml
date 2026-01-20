@@ -37,7 +37,7 @@ groups:
         value: Mammalia
 
   # Marine mammals (paraphyletic): Cetaceans, Sirenians, Pinnipeds, Sea Otters, Polar Bears
-  # Uses family-level filtering for accuracy within CARNIVORA
+  # Uses IUCN's "Marine" system tag for accurate filtering
   marine-mammals:
     name: "Marine mammals"
     filters:
@@ -45,34 +45,48 @@ groups:
         value: Animalia
       - rank: class
         value: Mammalia
-      - rank: family
-        values:
-          # Cetaceans (whales, dolphins, porpoises)
-          - BALAENIDAE        # Right whales
-          - BALAENOPTERIDAE   # Rorquals
-          - DELPHINIDAE       # Oceanic dolphins
-          - ESCHRICHTIIDAE    # Gray whale
-          - INIIDAE           # River dolphins
-          - KOGIIDAE          # Pygmy/dwarf sperm whales
-          - LIPOTIDAE         # Baiji
-          - MONODONTIDAE      # Narwhal, beluga
-          - PHOCOENIDAE       # Porpoises
-          - PHYSETERIDAE      # Sperm whale
-          - PLATANISTIDAE     # South Asian river dolphins
-          - PONTOPORIIDAE     # La Plata dolphin
-          - ZIPHIIDAE         # Beaked whales
-          # Sirenians
-          - DUGONGIDAE        # Dugong
-          - TRICHECHIDAE      # Manatees
-          # Pinnipeds
-          - OTARIIDAE         # Eared seals (sea lions, fur seals)
-          - PHOCIDAE          # True seals
-          - ODOBENIDAE        # Walrus
-          # Mustelidae has sea otter but also many non-marine species
-          # We'll include the whole family but sea otter is the main marine one
-          - MUSTELIDAE        # Includes sea otter (Enhydra lutris)
-          # Ursidae has polar bear but also many non-marine species
-          - URSIDAE           # Includes polar bear (Ursus maritimus)
+      - system: Marine
+    # Custom grouping for display: organize by biological group, not order
+    custom_groups:
+      - name: Cetaceans
+        common_name: cetacean
+        common_plural: cetaceans
+        main_article: Cetacea
+        families:
+          - BALAENIDAE
+          - BALAENOPTERIDAE
+          - DELPHINIDAE
+          - ESCHRICHTIIDAE
+          - INIIDAE
+          - KOGIIDAE
+          - LIPOTIDAE
+          - MONODONTIDAE
+          - NEOBALAENIDAE
+          - PHOCOENIDAE
+          - PHYSETERIDAE
+          - PLATANISTIDAE
+          - PONTOPORIIDAE
+          - ZIPHIIDAE
+      - name: Sirenians
+        common_name: sirenian
+        common_plural: sirenians
+        main_article: Sirenia
+        families:
+          - DUGONGIDAE
+          - TRICHECHIDAE
+      - name: Pinnipeds
+        common_name: pinniped
+        common_plural: pinnipeds
+        main_article: Pinniped
+        families:
+          - OTARIIDAE
+          - PHOCIDAE
+          - ODOBENIDAE
+      - name: Other marine mammals
+        common_plural: other marine mammals
+        main_article: Marine mammal
+        default: true
+        # Catches sea otters (Mustelidae) and polar bear (Ursidae)
 
   ray-finned-fishes:
     name: "Ray-finned fishes"
