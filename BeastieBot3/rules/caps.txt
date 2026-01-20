@@ -1,4 +1,9 @@
+// reimport with: 
+// dotnet run -- common-names init --skip-taxa
+
+// old instructions:
 // Rename to (or replace) caps.txt to use capitalization from this file. Generated file preserves caps but not comments. 
+
 a // Without a staminoda phragmipedium
 acanacu // Abra acanacu marsupial frog
 acraea // Common acraea mimic, Maessen's acraea mimic
@@ -2178,11 +2183,69 @@ Zempoaltepec // Mount Zempoaltepec alligator lizard
 zephyr // Spanish zephyr blue, Alpine zephyr blue
 zone // Dry zone toque macaque, Dry zone mahogany
 
+
+// common reptiles + mammals
 boa
 racer
-longtailed
+sphaero
 turtle
 tortoise
 threadsnake
 galliwasp
+curlytail
 iguana 
+
+// common mammals
+colobus
+macaque
+deermouse
+mole
+mole-rat
+rock
+rat
+mouse
+chinchilla
+titi
+lemur
+gibbons
+gazelle 
+gorilla
+orangutan
+hutia
+dog
+seal
+mink
+deer 
+deermouse
+gopher
+whale
+dolphin
+lechwe
+civet
+cuscus
+hare
+rabbit
+echidna 
+onager
+donkey
+pangolin
+mangabey
+sifaka
+loris
+tarsier
+elephant
+hamster
+tuco-tuco
+threadsnake
+
+// descriptive
+long
+long-beaked
+yellow
+yellow-tailed 
+tailed
+giant
+hreadsnake
+longtailed
+ten-lined
+four-lined
