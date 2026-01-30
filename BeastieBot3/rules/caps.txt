@@ -2201,7 +2201,6 @@ colobus
 cuscus
 deer 
 deermouse
-deermouse
 dog
 dolphin
 donkey
@@ -2236,6 +2235,8 @@ threadsnake
 titi
 tuco-tuco
 whale
+otter
+manatee
 
 // descriptive
 four-lined
