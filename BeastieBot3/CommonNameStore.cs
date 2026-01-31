@@ -432,15 +432,19 @@ internal sealed class CommonNameStore : IDisposable {
     /// <summary>
     /// Source priority for common name selection.
     /// Lower numbers = higher priority. Wikipedia sources are preferred as they match existing article titles.
+    /// Order: wikipedia_title, wikipedia_taxobox, wikidata_label, iucn (preferred), iucn (other), col, wikidata (aliases).
     /// </summary>
-    private static readonly Dictionary<string, int> SourcePriority = new(StringComparer.OrdinalIgnoreCase) {
-        ["wikipedia_title"] = 1,
-        ["wikipedia_taxobox"] = 2,
-        ["wikidata"] = 3,
-        ["wikidata_label"] = 4,
-        ["iucn"] = 5,
-        ["col"] = 6
-    };
+    private static int GetSourcePriority(string source, bool isPreferred) {
+        return source.ToLowerInvariant() switch {
+            "wikipedia_title" => 1,
+            "wikipedia_taxobox" => 2,
+            "wikidata_label" => 3,
+            "iucn" => isPreferred ? 4 : 5,
+            "col" => 6,
+            "wikidata" => 7,
+            _ => 99
+        };
+    }
 
     /// <summary>
     /// Get the best non-ambiguous common name for a taxon.
@@ -460,10 +464,10 @@ internal sealed class CommonNameStore : IDisposable {
         // Get set of ambiguous normalized names (names that refer to multiple taxa)
         var ambiguousNames = allowAmbiguous ? new HashSet<string>() : GetAmbiguousNamesSet(language);
 
-        // Sort by: is_preferred DESC, source priority ASC, raw_name ASC (for determinism)
+        // Sort by: source priority ASC, is_preferred DESC (within source), raw_name ASC (for determinism)
         var sorted = candidates
-            .OrderByDescending(c => c.IsPreferred)
-            .ThenBy(c => SourcePriority.GetValueOrDefault(c.Source, 99))
+            .OrderBy(c => GetSourcePriority(c.Source, c.IsPreferred))
+            .ThenByDescending(c => c.IsPreferred)
             .ThenBy(c => c.RawName, StringComparer.OrdinalIgnoreCase)
             .ToList();
 
@@ -628,8 +632,8 @@ internal sealed class CommonNameStore : IDisposable {
         var results = new Dictionary<long, CommonNameResult>();
         foreach (var (taxonId, candidates) in byTaxon) {
             var sorted = candidates
-                .OrderByDescending(c => c.IsPreferred)
-                .ThenBy(c => SourcePriority.GetValueOrDefault(c.Source, 99))
+                .OrderBy(c => GetSourcePriority(c.Source, c.IsPreferred))
+                .ThenByDescending(c => c.IsPreferred)
                 .ThenBy(c => c.RawName, StringComparer.OrdinalIgnoreCase)
                 .ToList();
 
