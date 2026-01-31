@@ -155,6 +155,11 @@ namespace BeastieBot3 {
                             .WithDescription("Seed the Wikipedia cache with titles discovered via Wikidata enwiki sitelinks.")
                             .WithExample(new[] { "wikipedia", "enqueue-wikidata" })
                             .WithExample(new[] { "wikipedia", "enqueue-wikidata", "--limit", "1000" });
+                        wikipedia.AddCommand<WikipediaEnqueueTaxaCommand>("enqueue-taxa")
+                            .WithDescription("Seed the Wikipedia cache with higher-taxon titles from the IUCN taxonomy view (for redirect lookup).")
+                            .WithExample(new[] { "wikipedia", "enqueue-taxa" })
+                            .WithExample(new[] { "wikipedia", "enqueue-taxa", "--ranks", "class,order,family" })
+                            .WithExample(new[] { "wikipedia", "enqueue-taxa", "--limit", "500" });
                         wikipedia.AddCommand<WikipediaFetchCommand>("fetch-pages")
                             .WithDescription("Download pending Wikipedia pages (HTML plus wikitext) into the local cache.")
                             .WithExample(new[] { "wikipedia", "fetch-pages" })

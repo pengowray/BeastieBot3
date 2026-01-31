@@ -797,6 +797,15 @@ internal sealed class WikipediaListGenerator {
                 var mainLink = yamlMainArticle ?? _storeBackedProvider.GetWikipediaArticleTitleByScientificName(raw, kingdom);
                 return new HeadingInfo(Uppercase(storeName)!, mainLink);
             }
+
+            // Fallback: Wikipedia redirect target (e.g., Araneae -> Spider)
+            var redirectTitle = _storeBackedProvider.GetWikipediaRedirectTitleByScientificName(raw);
+            if (!string.IsNullOrWhiteSpace(redirectTitle) && !redirectTitle.Equals(raw, StringComparison.OrdinalIgnoreCase)) {
+                var redirectDisplayName = CommonNameNormalizer.RemoveDisambiguationSuffix(redirectTitle);
+                if (!CommonNameNormalizer.LooksLikeScientificName(redirectDisplayName, null, null)) {
+                    return new HeadingInfo(Uppercase(redirectDisplayName)!, redirectTitle);
+                }
+            }
         }
 
         // Check for wikilink overrides

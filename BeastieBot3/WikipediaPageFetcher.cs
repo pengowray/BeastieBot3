@@ -37,14 +37,25 @@ internal sealed class WikipediaPageFetcher {
 
         var canonicalTitle = queryResult.CanonicalTitle ?? workItem.PageTitle;
         var normalizedTitle = WikipediaTitleHelper.Normalize(canonicalTitle);
-        if (!string.Equals(workItem.NormalizedTitle, normalizedTitle, StringComparison.Ordinal)) {
-            var existing = _cache.GetPageByNormalizedTitle(normalizedTitle);
-            if (existing is not null && existing.PageRowId != workItem.PageRowId) {
-                _cache.MergePageRecords(workItem.PageRowId, existing.PageRowId);
-                pageRowId = existing.PageRowId;
-                if (existing.DownloadStatus == WikiPageDownloadStatus.Cached) {
-                    return WikipediaFetchOutcome.CreateSkipped(workItem.PageTitle, existing.PageTitle ?? canonicalTitle, "Already cached");
-                }
+        var isRedirectRequest = !string.Equals(workItem.NormalizedTitle, normalizedTitle, StringComparison.Ordinal);
+        var contentRowId = pageRowId;
+
+        if (isRedirectRequest) {
+            var existingCanonical = _cache.GetPageByNormalizedTitle(normalizedTitle);
+            if (existingCanonical is not null) {
+                contentRowId = existingCanonical.PageRowId;
+            } else {
+                var now = DateTime.UtcNow;
+                var candidate = new WikiPageCandidate(canonicalTitle, normalizedTitle, PageId: null, now, now);
+                var upsert = _cache.UpsertPageCandidate(candidate);
+                contentRowId = upsert.PageRowId;
+            }
+
+            _cache.MarkRedirectStub(pageRowId, workItem.PageTitle, workItem.NormalizedTitle, canonicalTitle, DateTime.UtcNow);
+            _cache.ReplaceRedirectChain(pageRowId, BuildRedirectEdges(queryResult.Redirects));
+
+            if (existingCanonical is not null && existingCanonical.DownloadStatus == WikiPageDownloadStatus.Cached) {
+                return WikipediaFetchOutcome.CreateSuccess(workItem.PageTitle, existingCanonical.PageTitle ?? canonicalTitle);
             }
         }
 
@@ -63,13 +74,13 @@ internal sealed class WikipediaPageFetcher {
             var hash = ComputeSha256(htmlResult.Html);
             var hasTaxobox = HasTaxobox(queryResult.Wikitext);
             var content = new WikiPageContent(
-                pageRowId,
+                contentRowId,
                 queryResult.PageId,
                 canonicalTitle,
                 normalizedTitle,
                 queryResult.RevisionId,
-                queryResult.Redirects.Count > 0,
-                queryResult.Redirects.Count > 0 ? canonicalTitle : null,
+                isRedirectRequest,
+                isRedirectRequest ? canonicalTitle : null,
                 queryResult.IsDisambiguation,
                 queryResult.IsSetIndex,
                 hasTaxobox,
@@ -80,14 +91,16 @@ internal sealed class WikipediaPageFetcher {
                 DateTime.UtcNow);
 
             _cache.SavePageContent(content);
-            _cache.ReplaceCategories(pageRowId, queryResult.Categories);
-            _cache.ReplaceRedirectChain(pageRowId, BuildRedirectEdges(queryResult.Redirects));
-            var taxobox = TaxoboxParser.TryParse(pageRowId, queryResult.Wikitext);
+            _cache.ReplaceCategories(contentRowId, queryResult.Categories);
+            if (!isRedirectRequest) {
+                _cache.ReplaceRedirectChain(contentRowId, BuildRedirectEdges(queryResult.Redirects));
+            }
+            var taxobox = TaxoboxParser.TryParse(contentRowId, queryResult.Wikitext);
             if (taxobox is not null) {
                 _cache.UpsertTaxoboxData(taxobox);
             }
             else {
-                _cache.DeleteTaxoboxData(pageRowId);
+                _cache.DeleteTaxoboxData(contentRowId);
             }
             _cache.CompleteImportSuccess(importId, (int)htmlResult.StatusCode, htmlResult.PayloadBytes, DateTime.UtcNow - importStarted);
             return WikipediaFetchOutcome.CreateSuccess(workItem.PageTitle, canonicalTitle);

@@ -377,6 +377,31 @@ WHERE id=@id
         command.ExecuteNonQuery();
     }
 
+    public void MarkRedirectStub(long pageRowId, string pageTitle, string normalizedTitle, string redirectTarget, DateTime seenAt) {
+        using var command = _connection.CreateCommand();
+        command.CommandText =
+            """
+UPDATE wiki_pages
+SET page_title=@title,
+    normalized_title=@normalized,
+    download_status=@status,
+    downloaded_at=COALESCE(downloaded_at, @seen),
+    last_seen_at=@seen,
+    is_redirect=1,
+    redirect_target=@redirectTarget,
+    attempt_count=0,
+    last_error=NULL
+WHERE id=@id
+""";
+        command.Parameters.AddWithValue("@title", pageTitle);
+        command.Parameters.AddWithValue("@normalized", normalizedTitle);
+        command.Parameters.AddWithValue("@status", WikiPageDownloadStatus.Cached);
+        command.Parameters.AddWithValue("@seen", seenAt.ToString("O"));
+        command.Parameters.AddWithValue("@redirectTarget", redirectTarget);
+        command.Parameters.AddWithValue("@id", pageRowId);
+        command.ExecuteNonQuery();
+    }
+
     public void ReplaceCategories(long pageRowId, IEnumerable<string> categories) {
         if (categories is null) {
             throw new ArgumentNullException(nameof(categories));

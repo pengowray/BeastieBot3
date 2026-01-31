@@ -91,7 +91,11 @@ public sealed class WikipediaListCommand : Command<WikipediaListCommand.Settings
         try {
             if (useStoreBackedProvider) {
                 AnsiConsole.MarkupLine($"[grey]Using aggregated common names from:[/] {commonNamesDbPath}");
-                var storeProvider = new StoreBackedCommonNameProvider(commonNamesDbPath);
+                var wikipediaCachePath = paths.GetWikipediaCachePath();
+                if (!string.IsNullOrWhiteSpace(wikipediaCachePath) && File.Exists(wikipediaCachePath)) {
+                    AnsiConsole.MarkupLine($"[grey]Using Wikipedia cache from:[/] {wikipediaCachePath}");
+                }
+                var storeProvider = new StoreBackedCommonNameProvider(commonNamesDbPath, wikipediaCachePath);
                 providerToDispose = storeProvider;
                 generator = new WikipediaListGenerator(query, templates, rules, storeProvider, colEnricher, taxonRules);
             } else {

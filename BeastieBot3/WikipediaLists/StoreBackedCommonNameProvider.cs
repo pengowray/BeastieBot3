@@ -1,5 +1,7 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
+using BeastieBot3;
 
 namespace BeastieBot3.WikipediaLists;
 
@@ -10,27 +12,39 @@ namespace BeastieBot3.WikipediaLists;
 internal sealed class StoreBackedCommonNameProvider : IDisposable {
     private readonly CommonNameStore _store;
     private readonly bool _ownsStore;
+    private readonly WikipediaCacheStore? _wikiCache;
+    private readonly bool _ownsWikiCache;
     private readonly Dictionary<string, string> _capsRules;
     private readonly bool _allowAmbiguous;
 
     /// <summary>
     /// Creates a provider that owns and will dispose the store.
     /// </summary>
-    public StoreBackedCommonNameProvider(string commonNameDbPath, bool allowAmbiguous = false) {
+    public StoreBackedCommonNameProvider(string commonNameDbPath, string? wikipediaCachePath = null, bool allowAmbiguous = false) {
         _store = CommonNameStore.Open(commonNameDbPath);
         _ownsStore = true;
         _capsRules = _store.GetAllCapsRules();
         _allowAmbiguous = allowAmbiguous;
+
+        if (!string.IsNullOrWhiteSpace(wikipediaCachePath) && File.Exists(wikipediaCachePath)) {
+            _wikiCache = WikipediaCacheStore.Open(wikipediaCachePath);
+            _ownsWikiCache = true;
+        } else {
+            _wikiCache = null;
+            _ownsWikiCache = false;
+        }
     }
 
     /// <summary>
     /// Creates a provider using an existing store (caller retains ownership).
     /// </summary>
-    public StoreBackedCommonNameProvider(CommonNameStore store, bool allowAmbiguous = false) {
+    public StoreBackedCommonNameProvider(CommonNameStore store, WikipediaCacheStore? wikiCache = null, bool allowAmbiguous = false) {
         _store = store ?? throw new ArgumentNullException(nameof(store));
         _ownsStore = false;
         _capsRules = _store.GetAllCapsRules();
         _allowAmbiguous = allowAmbiguous;
+        _wikiCache = wikiCache;
+        _ownsWikiCache = false;
     }
 
     /// <summary>
@@ -153,6 +167,32 @@ internal sealed class StoreBackedCommonNameProvider : IDisposable {
     }
 
     /// <summary>
+    /// Get the redirect target title for a scientific name using the Wikipedia cache.
+    /// Useful for higher taxa where the scientific name redirects to a common-name article.
+    /// </summary>
+    public string? GetWikipediaRedirectTitleByScientificName(string scientificName) {
+        if (_wikiCache is null || string.IsNullOrWhiteSpace(scientificName)) {
+            return null;
+        }
+
+        var normalized = WikipediaTitleHelper.Normalize(scientificName);
+        if (string.IsNullOrWhiteSpace(normalized)) {
+            return null;
+        }
+
+        var summary = _wikiCache.GetPageByNormalizedTitle(normalized);
+        if (summary is null) {
+            return null;
+        }
+
+        if (!summary.IsRedirect || string.IsNullOrWhiteSpace(summary.RedirectTarget)) {
+            return null;
+        }
+
+        return summary.RedirectTarget;
+    }
+
+    /// <summary>
     /// Batch lookup for multiple records.
     /// </summary>
     public Dictionary<long, string> GetBestCommonNames(IEnumerable<IucnSpeciesRecord> records) {
@@ -270,6 +310,9 @@ internal sealed class StoreBackedCommonNameProvider : IDisposable {
     }
 
     public void Dispose() {
+        if (_ownsWikiCache) {
+            _wikiCache?.Dispose();
+        }
         if (_ownsStore) {
             _store.Dispose();
         }
