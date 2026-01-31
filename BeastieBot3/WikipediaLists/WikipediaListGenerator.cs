@@ -430,7 +430,7 @@ internal sealed class WikipediaListGenerator {
             var taxonName = child.Value;
             var headingLevel = Math.Min(startHeading, 6);
             var headingMarkup = new string('=', headingLevel);
-            var heading = FormatHeading(taxonName);
+            var heading = FormatHeading(taxonName, child.Label, GetKingdomName(child));
             builder.AppendLine($"{headingMarkup} {heading.Text} {headingMarkup}");
             headingCount++;
             if (!string.IsNullOrWhiteSpace(heading.MainLink)) {
@@ -538,7 +538,7 @@ internal sealed class WikipediaListGenerator {
                     foreach (var familyGroup in recordsByFamily) {
                         var familyHeadingLevel = Math.Min(headingLevel + 1, 6);
                         var familyHeadingMarkup = new string('=', familyHeadingLevel);
-                        var familyHeading = FormatHeading(familyGroup.Key);
+                        var familyHeading = FormatHeading(familyGroup.Key, "family", GetKingdomName(familyGroup));
                         builder.AppendLine($"{familyHeadingMarkup} {familyHeading.Text} {familyHeadingMarkup}");
                         headingCount++;
                         if (!string.IsNullOrWhiteSpace(familyHeading.MainLink)) {
@@ -654,7 +654,7 @@ internal sealed class WikipediaListGenerator {
         foreach (var child in node.Children) {
             var headingLevel = Math.Min(startHeading, 6);
             var headingMarkup = new string('=', headingLevel);
-            var heading = FormatHeading(child.Value);
+            var heading = FormatHeading(child.Value, child.Label, GetKingdomName(child));
             builder.AppendLine($"{headingMarkup} {heading.Text} {headingMarkup}");
             headingCount++;
             if (!string.IsNullOrWhiteSpace(heading.MainLink)) {
@@ -751,9 +751,13 @@ internal sealed class WikipediaListGenerator {
 
     private readonly record struct HeadingInfo(string Text, string? MainLink);
 
-    private HeadingInfo FormatHeading(string? raw) {
+    private HeadingInfo FormatHeading(string? raw, string? rank = null, string? kingdom = null) {
         if (string.IsNullOrWhiteSpace(raw)) {
             return new HeadingInfo("Unassigned", null);
+        }
+
+        if (IsOtherOrUnknownHeading(raw)) {
+            return new HeadingInfo(raw.Trim(), null);
         }
 
         // Apply title case to the raw taxon name for display
@@ -786,6 +790,15 @@ internal sealed class WikipediaListGenerator {
             return new HeadingInfo(Uppercase(rules!.CommonName)!, mainLink);
         }
 
+        // Store-backed common names for higher taxa (if available)
+        if (_storeBackedProvider is not null) {
+            var storeName = _storeBackedProvider.GetBestCommonNameByScientificName(raw, kingdom);
+            if (!string.IsNullOrWhiteSpace(storeName)) {
+                var mainLink = yamlMainArticle ?? _storeBackedProvider.GetWikipediaArticleTitleByScientificName(raw, kingdom);
+                return new HeadingInfo(Uppercase(storeName)!, mainLink);
+            }
+        }
+
         // Check for wikilink overrides
         if (!string.IsNullOrWhiteSpace(yamlRule?.Wikilink)) {
             return new HeadingInfo(displayName, yamlRule.Wikilink);
@@ -801,6 +814,49 @@ internal sealed class WikipediaListGenerator {
         }
 
         return new HeadingInfo(displayName, null);
+    }
+
+    private static bool IsOtherOrUnknownHeading(string raw) {
+        var trimmed = raw.Trim();
+        return trimmed.StartsWith("Other ", StringComparison.OrdinalIgnoreCase)
+            || trimmed.StartsWith("Unknown ", StringComparison.OrdinalIgnoreCase)
+            || trimmed.Equals("Other", StringComparison.OrdinalIgnoreCase)
+            || trimmed.Equals("Unknown", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string? GetKingdomName(TaxonomyTreeNode<IucnSpeciesRecord> node) {
+        if (node.Items.Count > 0) {
+            return node.Items[0].KingdomName;
+        }
+        foreach (var child in node.Children) {
+            var value = GetKingdomName(child);
+            if (!string.IsNullOrWhiteSpace(value)) {
+                return value;
+            }
+        }
+        return null;
+    }
+
+    private static string? GetKingdomName(TaxonomyTreeNode<EnrichedSpeciesRecord> node) {
+        if (node.Items.Count > 0) {
+            return node.Items[0].KingdomName;
+        }
+        foreach (var child in node.Children) {
+            var value = GetKingdomName(child);
+            if (!string.IsNullOrWhiteSpace(value)) {
+                return value;
+            }
+        }
+        return null;
+    }
+
+    private static string? GetKingdomName(IEnumerable<EnrichedSpeciesRecord> records) {
+        foreach (var record in records) {
+            if (!string.IsNullOrWhiteSpace(record.KingdomName)) {
+                return record.KingdomName;
+            }
+        }
+        return null;
     }
 
     /// <summary>

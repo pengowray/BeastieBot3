@@ -58,6 +58,27 @@ internal sealed class StoreBackedCommonNameProvider : IDisposable {
     }
 
     /// <summary>
+    /// Get the best common name for a taxon by scientific name (supports higher taxa).
+    /// </summary>
+    public string? GetBestCommonNameByScientificName(string scientificName, string? kingdom = null) {
+        if (string.IsNullOrWhiteSpace(scientificName)) {
+            return null;
+        }
+
+        var taxonId = FindTaxonIdByScientificName(scientificName, kingdom);
+        if (!taxonId.HasValue) {
+            return null;
+        }
+
+        var result = _store.GetBestCommonNameForTaxon(taxonId.Value, "en", _allowAmbiguous);
+        if (result is null) {
+            return null;
+        }
+
+        return ApplyCapitalization(result.DisplayName);
+    }
+
+    /// <summary>
     /// Get the best common name for a taxon by its IUCN taxon ID.
     /// </summary>
     public string? GetBestCommonNameByTaxonId(long iucnTaxonId) {
@@ -116,6 +137,22 @@ internal sealed class StoreBackedCommonNameProvider : IDisposable {
     }
 
     /// <summary>
+    /// Get the Wikipedia article title for a taxon by scientific name (supports higher taxa).
+    /// </summary>
+    public string? GetWikipediaArticleTitleByScientificName(string scientificName, string? kingdom = null) {
+        if (string.IsNullOrWhiteSpace(scientificName)) {
+            return null;
+        }
+
+        var taxonId = FindTaxonIdByScientificName(scientificName, kingdom);
+        if (!taxonId.HasValue) {
+            return null;
+        }
+
+        return _store.GetWikipediaArticleTitle(taxonId.Value, "en");
+    }
+
+    /// <summary>
     /// Batch lookup for multiple records.
     /// </summary>
     public Dictionary<long, string> GetBestCommonNames(IEnumerable<IucnSpeciesRecord> records) {
@@ -162,6 +199,17 @@ internal sealed class StoreBackedCommonNameProvider : IDisposable {
         }
 
         return null;
+    }
+
+    private long? FindTaxonIdByScientificName(string scientificName, string? kingdom) {
+        // Prefer kingdom-filtered lookup when provided
+        var taxonId = _store.FindTaxonByScientificName(scientificName, kingdom);
+        if (taxonId.HasValue) {
+            return taxonId;
+        }
+
+        // Fall back to kingdom-agnostic lookup
+        return _store.FindTaxonByScientificName(scientificName);
     }
 
     private string ApplyCapitalization(string name) {

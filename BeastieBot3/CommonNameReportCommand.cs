@@ -21,8 +21,12 @@ internal sealed class CommonNameReportCommand : AsyncCommand<CommonNameReportCom
         [Description("Path to the common names SQLite database. Defaults to paths.ini value.")]
         public string? DatabasePath { get; init; }
 
+        [CommandOption("--iucn-db <PATH>")]
+        [Description("Path to the IUCN SQLite database (for trace sampling and taxonomy context).")]
+        public string? IucnDatabasePath { get; init; }
+
         [CommandOption("--report <TYPE>")]
-        [Description("Report type: ambiguous, ambiguous-iucn, caps, summary, wiki-disambig, iucn-preferred, all (default: summary)")]
+        [Description("Report type: ambiguous, ambiguous-iucn, caps, summary, wiki-disambig, iucn-preferred, trace, all (default: summary)")]
         public string ReportType { get; init; } = "summary";
 
         [CommandOption("-o|--output <PATH>")]
@@ -32,6 +36,10 @@ internal sealed class CommonNameReportCommand : AsyncCommand<CommonNameReportCom
         [CommandOption("--limit <N>")]
         [Description("Limit number of items in report.")]
         public int? Limit { get; init; }
+
+        [CommandOption("--trace-per-group <N>")]
+        [Description("Number of taxa to include per major group for trace report (default: 20).")]
+        public int? TracePerGroup { get; init; }
 
         [CommandOption("--kingdom <KINGDOM>")]
         [Description("Filter by kingdom (Animalia, Plantae, etc.)")]
@@ -54,6 +62,7 @@ internal sealed class CommonNameReportCommand : AsyncCommand<CommonNameReportCom
             "caps" => await GenerateCapsReportAsync(store, settings, paths, cancellationToken),
             "wiki-disambig" => await GenerateWikiDisambigReportAsync(store, settings, paths, cancellationToken),
             "iucn-preferred" => await GenerateIucnPreferredConflictReportAsync(store, settings, paths, cancellationToken),
+            "trace" => await GenerateCommonNameTraceReportAsync(store, settings, paths, cancellationToken),
             "all" => await GenerateAllReportsAsync(store, settings, paths, cancellationToken),
             "summary" or _ => await GenerateSummaryReportAsync(store, settings, cancellationToken)
         };
@@ -92,6 +101,7 @@ internal sealed class CommonNameReportCommand : AsyncCommand<CommonNameReportCom
         results.Add(("Caps", await GenerateCapsReportAsync(store, settings, paths, cancellationToken)));
         results.Add(("Wiki-Disambig", await GenerateWikiDisambigReportAsync(store, settings, paths, cancellationToken)));
         results.Add(("IUCN-Preferred", await GenerateIucnPreferredConflictReportAsync(store, settings, paths, cancellationToken)));
+        results.Add(("Trace", await GenerateCommonNameTraceReportAsync(store, settings, paths, cancellationToken)));
 
         AnsiConsole.WriteLine();
         AnsiConsole.MarkupLine("[green]All reports completed![/]");
@@ -264,6 +274,330 @@ internal sealed class CommonNameReportCommand : AsyncCommand<CommonNameReportCom
             AnsiConsole.MarkupLine($"[green]Found {sortedMissing.Count} words missing caps rules[/]");
             return 0;
         }, cancellationToken);
+    }
+
+    private sealed record TaxonGroup(string Name, string? ClassName, string? Kingdom);
+
+    private sealed record TaxonTraceRow(
+        long TaxonId,
+        string ScientificName,
+        string? Kingdom,
+        string? ClassName,
+        string? OrderName,
+        string? FamilyName,
+        string GenusName,
+        string SpeciesName
+    );
+
+    private sealed record TraceCandidate(
+        CommonNameRecord Record,
+        string CleanedName,
+        int Priority,
+        bool IsEnglish,
+        bool IsAmbiguous,
+        bool MatchesScientific,
+        bool HasDisambigSuffix
+    );
+
+    private sealed record TraceIssue(string GroupName, string ScientificName, string IssueType, string Details);
+
+    private static Task<int> GenerateCommonNameTraceReportAsync(CommonNameStore store, Settings settings, PathsService paths, CancellationToken cancellationToken) {
+        return Task.Run(() => {
+            AnsiConsole.MarkupLine("[yellow]Generating common name trace report...[/]");
+
+            var iucnDbPath = paths.ResolveIucnDatabasePath(settings.IucnDatabasePath);
+            AnsiConsole.MarkupLine($"[blue]IUCN database:[/] {iucnDbPath}");
+
+            using var iucnConnection = new SqliteConnection($"Data Source={iucnDbPath};Mode=ReadOnly");
+            iucnConnection.Open();
+
+            if (!ObjectExists(iucnConnection, "view_assessments_html_taxonomy_html", "view")) {
+                var sbMissing = new StringBuilder();
+                sbMissing.AppendLine("# Common Name Trace Report");
+                sbMissing.AppendLine();
+                sbMissing.AppendLine($"Generated: {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss} UTC");
+                sbMissing.AppendLine();
+                sbMissing.AppendLine("**Error:** Missing view `view_assessments_html_taxonomy_html` in the IUCN database.");
+                sbMissing.AppendLine("Re-run the IUCN importer to rebuild the view, then re-run this report.");
+
+                var timestampMissing = DateTime.UtcNow.ToString("yyyyMMdd-HHmmss");
+                var defaultFileNameMissing = $"common-name-trace-{timestampMissing}.md";
+                var outputPathMissing = ReportPathResolver.ResolveFilePath(paths, settings.OutputPath, null, null, defaultFileNameMissing);
+                File.WriteAllText(outputPathMissing, sbMissing.ToString());
+                AnsiConsole.MarkupLine($"[red]Missing view view_assessments_html_taxonomy_html.[/] Report written to: {outputPathMissing}");
+                return 1;
+            }
+
+            var perGroup = settings.TracePerGroup ?? settings.Limit ?? 20;
+
+            var groups = new List<TaxonGroup> {
+                new("Mammals", "Mammalia", null),
+                new("Birds", "Aves", null),
+                new("Reptiles", "Reptilia", null),
+                new("Amphibians", "Amphibia", null),
+                new("Ray-finned fishes", "Actinopterygii", null),
+                new("Cartilaginous fishes", "Chondrichthyes", null),
+                new("Insects", "Insecta", null),
+                new("Arachnids", "Arachnida", null),
+                new("Molluscs", "Mollusca", null),
+                new("Plants", null, "Plantae"),
+                new("Fungi", null, "Fungi")
+            };
+
+            var sb = new StringBuilder();
+            sb.AppendLine("# Common Name Trace Report");
+            sb.AppendLine();
+            sb.AppendLine($"Generated: {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss} UTC");
+            sb.AppendLine($"Per-group sample size: {perGroup}");
+            sb.AppendLine();
+            sb.AppendLine("This report traces common-name selection for representative taxa, showing candidate names, rejection reasons, and source priority.");
+            sb.AppendLine();
+
+            var issues = new List<TraceIssue>();
+            var ambiguousSet = store.GetAmbiguousNames("en");
+            var capsRules = store.GetAllCapsRules();
+
+            foreach (var group in groups) {
+                cancellationToken.ThrowIfCancellationRequested();
+
+                var taxa = LoadTraceTaxa(iucnConnection, group, perGroup);
+                if (taxa.Count == 0) {
+                    continue;
+                }
+
+                sb.AppendLine($"## {group.Name} ({taxa.Count} taxa)");
+                sb.AppendLine();
+
+                foreach (var taxon in taxa) {
+                    cancellationToken.ThrowIfCancellationRequested();
+
+                    var storeTaxonId = store.FindTaxonBySourceId("iucn", taxon.TaxonId.ToString());
+                    if (!storeTaxonId.HasValue) {
+                        continue;
+                    }
+
+                    var candidates = store.GetCommonNamesForTaxonAllLanguages(storeTaxonId.Value);
+                    var scientificNames = store.GetScientificNamesForTaxon(storeTaxonId.Value);
+                    var scientificNormalized = BuildScientificNormalizedSet(scientificNames);
+
+                    var traceCandidates = candidates
+                        .Select(record => BuildTraceCandidate(record, taxon, ambiguousSet, scientificNormalized))
+                        .ToList();
+
+                    var englishCandidates = traceCandidates.Where(c => c.IsEnglish).ToList();
+                    var selected = SelectBestCandidate(englishCandidates);
+
+                    sb.AppendLine($"### {taxon.ScientificName}");
+                    sb.AppendLine();
+                    sb.AppendLine($"- IUCN taxon id: {taxon.TaxonId}");
+                    if (!string.IsNullOrWhiteSpace(taxon.ClassName)) sb.AppendLine($"- Class: {taxon.ClassName}");
+                    if (!string.IsNullOrWhiteSpace(taxon.OrderName)) sb.AppendLine($"- Order: {taxon.OrderName}");
+                    if (!string.IsNullOrWhiteSpace(taxon.FamilyName)) sb.AppendLine($"- Family: {taxon.FamilyName}");
+
+                    if (selected != null) {
+                        var displayName = GetDisplayName(selected.Record, capsRules);
+                        sb.AppendLine($"- Selected common name: **{selected.Record.RawName}** (source: {selected.Record.Source}, preferred: {(selected.Record.IsPreferred ? "yes" : "no")}, priority: {selected.Priority})");
+                        sb.AppendLine($"- Selected display name: **{displayName}**");
+                    } else {
+                        sb.AppendLine("- Selected common name: **(none)**");
+                    }
+                    sb.AppendLine();
+
+                    sb.AppendLine("**English candidates**");
+                    sb.AppendLine();
+                    sb.AppendLine("| Candidate | Source | Preferred | Priority | Ambiguous | Rejected | Reason | Notes |");
+                    sb.AppendLine("|----------|--------|-----------|----------|-----------|----------|--------|-------|");
+
+                    foreach (var candidate in englishCandidates.OrderBy(c => c.Priority).ThenByDescending(c => c.Record.IsPreferred).ThenBy(c => c.Record.RawName, StringComparer.OrdinalIgnoreCase)) {
+                        var rejected = candidate.MatchesScientific || candidate.IsAmbiguous;
+                        var reason = new List<string>();
+                        if (candidate.MatchesScientific) reason.Add("matches scientific name");
+                        if (candidate.IsAmbiguous) reason.Add("ambiguous");
+
+                        var notes = new List<string>();
+                        if (candidate.HasDisambigSuffix) notes.Add("disambiguation suffix removed");
+
+                        sb.AppendLine($"| {candidate.CleanedName} | {candidate.Record.Source} | {(candidate.Record.IsPreferred ? "Yes" : "No")} | {candidate.Priority} | {(candidate.IsAmbiguous ? "Yes" : "No")} | {(rejected ? "Yes" : "No")} | {string.Join("; ", reason)} | {string.Join("; ", notes)} |");
+                    }
+                    sb.AppendLine();
+
+                    var nonEnglish = traceCandidates.Where(c => !c.IsEnglish).ToList();
+                    if (nonEnglish.Count > 0) {
+                        sb.AppendLine("**Non-English names (for debugging)**");
+                        sb.AppendLine();
+                        foreach (var candidate in nonEnglish.OrderBy(c => c.Record.Language).ThenBy(c => c.Record.RawName, StringComparer.OrdinalIgnoreCase)) {
+                            sb.AppendLine($"- {candidate.CleanedName} [{candidate.Record.Language}] (source: {candidate.Record.Source})");
+                        }
+                        sb.AppendLine();
+                    }
+
+                    AddTraceIssues(issues, group.Name, taxon.ScientificName, englishCandidates, selected);
+                }
+            }
+
+            if (issues.Count > 0) {
+                sb.AppendLine("## Trace issues to investigate");
+                sb.AppendLine();
+                sb.AppendLine("| Group | Scientific name | Issue | Details |");
+                sb.AppendLine("|-------|-----------------|-------|---------|");
+                foreach (var issue in issues) {
+                    sb.AppendLine($"| {issue.GroupName} | {issue.ScientificName} | {issue.IssueType} | {issue.Details} |");
+                }
+                sb.AppendLine();
+            }
+
+            var timestamp = DateTime.UtcNow.ToString("yyyyMMdd-HHmmss");
+            var defaultFileName = $"common-name-trace-{timestamp}.md";
+            var outputPath = ReportPathResolver.ResolveFilePath(paths, settings.OutputPath, null, null, defaultFileName);
+
+            File.WriteAllText(outputPath, sb.ToString());
+            AnsiConsole.MarkupLine($"[green]Report written to:[/] {outputPath}");
+            return 0;
+        }, cancellationToken);
+    }
+
+    private static IReadOnlyList<TaxonTraceRow> LoadTraceTaxa(SqliteConnection connection, TaxonGroup group, int perGroup) {
+        using var command = connection.CreateCommand();
+        var whereClause = new List<string> {
+            "(infraType IS NULL OR infraType = '')",
+            "(subpopulationName IS NULL OR subpopulationName = '')"
+        };
+
+        if (!string.IsNullOrWhiteSpace(group.ClassName)) {
+            whereClause.Add("TRIM(className) = @class COLLATE NOCASE");
+            command.Parameters.AddWithValue("@class", group.ClassName);
+        }
+
+        if (!string.IsNullOrWhiteSpace(group.Kingdom)) {
+            whereClause.Add("TRIM(kingdomName) = @kingdom COLLATE NOCASE");
+            command.Parameters.AddWithValue("@kingdom", group.Kingdom);
+        }
+
+        var where = string.Join(" AND ", whereClause);
+        command.CommandText = $@"
+            SELECT DISTINCT taxonId, scientificName_taxonomy, kingdomName, className, orderName, familyName, genusName, speciesName
+            FROM view_assessments_html_taxonomy_html
+            WHERE {where}
+            ORDER BY taxonId
+            LIMIT @limit;";
+        command.Parameters.AddWithValue("@limit", perGroup);
+
+        var results = new List<TaxonTraceRow>();
+        using var reader = command.ExecuteReader();
+        while (reader.Read()) {
+            var taxonId = reader.GetInt64(0);
+            var sci = reader.IsDBNull(1) ? null : reader.GetString(1);
+            var kingdom = reader.IsDBNull(2) ? null : reader.GetString(2);
+            var className = reader.IsDBNull(3) ? null : reader.GetString(3);
+            var orderName = reader.IsDBNull(4) ? null : reader.GetString(4);
+            var familyName = reader.IsDBNull(5) ? null : reader.GetString(5);
+            var genusName = reader.GetString(6);
+            var speciesName = reader.GetString(7);
+
+            var scientificName = sci ?? $"{genusName} {speciesName}";
+
+            results.Add(new TaxonTraceRow(
+                taxonId,
+                scientificName,
+                kingdom,
+                className,
+                orderName,
+                familyName,
+                genusName,
+                speciesName
+            ));
+        }
+
+        return results;
+    }
+
+    private static bool ObjectExists(SqliteConnection connection, string name, string type) {
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT 1 FROM sqlite_master WHERE type = @type AND name = @name LIMIT 1";
+        command.Parameters.AddWithValue("@type", type);
+        command.Parameters.AddWithValue("@name", name);
+        return command.ExecuteScalar() is not null;
+    }
+
+    private static HashSet<string> BuildScientificNormalizedSet(IReadOnlyList<string> scientificNames) {
+        var set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var name in scientificNames) {
+            var normalized = ScientificNameNormalizer.Normalize(name) ?? name;
+            var key = CommonNameNormalizer.NormalizeForMatching(normalized);
+            if (!string.IsNullOrWhiteSpace(key)) {
+                set.Add(key);
+            }
+        }
+        return set;
+    }
+
+    private static TraceCandidate BuildTraceCandidate(
+        CommonNameRecord record,
+        TaxonTraceRow taxon,
+        IReadOnlySet<string> ambiguousSet,
+        HashSet<string> scientificNormalized) {
+        var isEnglish = record.Language.Equals("en", StringComparison.OrdinalIgnoreCase);
+        var cleaned = CommonNameNormalizer.RemoveDisambiguationSuffix(record.RawName);
+        var hasDisambigSuffix = !string.Equals(cleaned, record.RawName, StringComparison.Ordinal);
+
+        var normalizedCandidate = record.NormalizedName;
+        var matchesScientific = scientificNormalized.Contains(normalizedCandidate)
+            || CommonNameNormalizer.LooksLikeScientificName(cleaned, taxon.GenusName, taxon.SpeciesName);
+
+        var isAmbiguous = isEnglish && ambiguousSet.Contains(normalizedCandidate);
+        var priority = CommonNameStore.GetSourcePriority(record.Source, record.IsPreferred);
+
+        return new TraceCandidate(
+            record,
+            cleaned,
+            priority,
+            isEnglish,
+            isAmbiguous,
+            matchesScientific,
+            hasDisambigSuffix
+        );
+    }
+
+    private static TraceCandidate? SelectBestCandidate(IReadOnlyList<TraceCandidate> candidates) {
+        return candidates
+            .Where(c => !c.MatchesScientific && !c.IsAmbiguous)
+            .OrderBy(c => c.Priority)
+            .ThenByDescending(c => c.Record.IsPreferred)
+            .ThenBy(c => c.Record.RawName, StringComparer.OrdinalIgnoreCase)
+            .FirstOrDefault();
+    }
+
+    private static string GetDisplayName(CommonNameRecord record, IReadOnlyDictionary<string, string> capsRules) {
+        var baseName = record.DisplayName ?? record.RawName;
+        return CommonNameNormalizer.ApplyCapitalization(baseName, word =>
+            capsRules.TryGetValue(word, out var value) ? value : null);
+    }
+
+    private static void AddTraceIssues(
+        List<TraceIssue> issues,
+        string groupName,
+        string scientificName,
+        IReadOnlyList<TraceCandidate> englishCandidates,
+        TraceCandidate? selected) {
+        var rejectedScientific = englishCandidates.Count(c => c.MatchesScientific);
+        var rejectedAmbiguous = englishCandidates.Count(c => c.IsAmbiguous);
+        var acceptableCount = englishCandidates.Count(c => !c.MatchesScientific && !c.IsAmbiguous);
+
+        if (acceptableCount == 0 && englishCandidates.Count > 0) {
+            issues.Add(new TraceIssue(groupName, scientificName, "No acceptable English name", $"{englishCandidates.Count} candidates, all rejected"));
+        }
+
+        if (rejectedScientific >= 3) {
+            issues.Add(new TraceIssue(groupName, scientificName, "Many scientific-name-like candidates", $"{rejectedScientific} rejected"));
+        }
+
+        if (rejectedAmbiguous >= 3) {
+            issues.Add(new TraceIssue(groupName, scientificName, "Many ambiguous candidates", $"{rejectedAmbiguous} rejected"));
+        }
+
+        if (selected != null && selected.Priority >= 6) {
+            issues.Add(new TraceIssue(groupName, scientificName, "Selected from low-priority source", $"priority {selected.Priority} ({selected.Record.Source})"));
+        }
     }
 
     private static string GuessCapitalization(string word, List<string> examples) {

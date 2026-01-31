@@ -274,6 +274,19 @@ internal sealed class CommonNameStore : IDisposable {
         return FindTaxonBySynonym(normalized);
     }
 
+    /// <summary>
+    /// Find a taxon by scientific name with optional kingdom filtering.
+    /// </summary>
+    public long? FindTaxonByScientificName(string scientificName, string? kingdom) {
+        var normalized = ScientificNameNormalizer.Normalize(scientificName);
+        if (normalized == null) return null;
+
+        var taxonId = FindTaxonByCanonicalName(normalized, kingdom);
+        if (taxonId.HasValue) return taxonId;
+
+        return FindTaxonBySynonym(normalized, kingdom);
+    }
+
     #endregion
 
     #region Synonym Operations
@@ -304,6 +317,31 @@ internal sealed class CommonNameStore : IDisposable {
             WHERE s.normalized_name = @name AND t.validity_status = 'valid'
             LIMIT 1;
             """;
+        command.Parameters.AddWithValue("@name", normalizedName);
+        var result = command.ExecuteScalar();
+        return result == null || result == DBNull.Value ? null : (long)result;
+    }
+
+    public long? FindTaxonBySynonym(string normalizedName, string? kingdom) {
+        using var command = _connection.CreateCommand();
+        if (!string.IsNullOrWhiteSpace(kingdom)) {
+            command.CommandText =
+                """
+                SELECT t.id FROM taxa t
+                JOIN scientific_name_synonyms s ON s.taxon_id = t.id
+                WHERE s.normalized_name = @name AND t.validity_status = 'valid' AND t.kingdom = @kingdom
+                LIMIT 1;
+                """;
+            command.Parameters.AddWithValue("@kingdom", kingdom);
+        } else {
+            command.CommandText =
+                """
+                SELECT t.id FROM taxa t
+                JOIN scientific_name_synonyms s ON s.taxon_id = t.id
+                WHERE s.normalized_name = @name AND t.validity_status = 'valid'
+                LIMIT 1;
+                """;
+        }
         command.Parameters.AddWithValue("@name", normalizedName);
         var result = command.ExecuteScalar();
         return result == null || result == DBNull.Value ? null : (long)result;
@@ -432,16 +470,16 @@ internal sealed class CommonNameStore : IDisposable {
     /// <summary>
     /// Source priority for common name selection.
     /// Lower numbers = higher priority. Wikipedia sources are preferred as they match existing article titles.
-    /// Order: wikipedia_title, wikipedia_taxobox, wikidata_label, iucn (preferred), iucn (other), col, wikidata (aliases).
+    /// Order: wikipedia_title, wikipedia_taxobox, wikidata_label, iucn (preferred), iucn (other), wikidata (aliases), col.
     /// </summary>
-    private static int GetSourcePriority(string source, bool isPreferred) {
+    internal static int GetSourcePriority(string source, bool isPreferred) {
         return source.ToLowerInvariant() switch {
             "wikipedia_title" => 1,
             "wikipedia_taxobox" => 2,
             "wikidata_label" => 3,
             "iucn" => isPreferred ? 4 : 5,
-            "col" => 6,
-            "wikidata" => 7,
+            "wikidata" => 6,
+            "col" => 7,
             _ => 99
         };
     }
@@ -565,6 +603,81 @@ internal sealed class CommonNameStore : IDisposable {
         _cachedAmbiguousNamesLanguage = language;
         
         return set;
+    }
+
+    /// <summary>
+    /// Get the cached set of ambiguous names (normalized) for the given language.
+    /// </summary>
+    public IReadOnlySet<string> GetAmbiguousNames(string language = "en") {
+        return GetAmbiguousNamesSet(language);
+    }
+
+    /// <summary>
+    /// Get all scientific names (canonical + synonyms) for a taxon.
+    /// </summary>
+    public IReadOnlyList<string> GetScientificNamesForTaxon(long taxonId) {
+        var results = new List<string>();
+
+        using (var command = _connection.CreateCommand()) {
+            command.CommandText = "SELECT canonical_name, original_name FROM taxa WHERE id = @id";
+            command.Parameters.AddWithValue("@id", taxonId);
+            using var reader = command.ExecuteReader();
+            if (reader.Read()) {
+                if (!reader.IsDBNull(0)) results.Add(reader.GetString(0));
+                if (!reader.IsDBNull(1)) results.Add(reader.GetString(1));
+            }
+        }
+
+        using (var command = _connection.CreateCommand()) {
+            command.CommandText = "SELECT original_name FROM scientific_name_synonyms WHERE taxon_id = @id";
+            command.Parameters.AddWithValue("@id", taxonId);
+            using var reader = command.ExecuteReader();
+            while (reader.Read()) {
+                if (!reader.IsDBNull(0)) results.Add(reader.GetString(0));
+            }
+        }
+
+        return results;
+    }
+
+    /// <summary>
+    /// Get all common names for a specific taxon across all languages.
+    /// </summary>
+    public IReadOnlyList<CommonNameRecord> GetCommonNamesForTaxonAllLanguages(long taxonId) {
+        using var command = _connection.CreateCommand();
+        command.CommandText =
+            """
+            SELECT cn.id, cn.taxon_id, cn.raw_name, cn.normalized_name, cn.display_name, 
+                   cn.language, cn.source, cn.source_identifier, cn.is_preferred,
+                   t.canonical_name, t.kingdom, t.validity_status, t.is_extinct, t.is_fossil
+            FROM common_names cn
+            JOIN taxa t ON t.id = cn.taxon_id
+            WHERE cn.taxon_id = @taxonId
+            ORDER BY cn.language, cn.is_preferred DESC, cn.source;
+            """;
+        command.Parameters.AddWithValue("@taxonId", taxonId);
+
+        var results = new List<CommonNameRecord>();
+        using var reader = command.ExecuteReader();
+        while (reader.Read()) {
+            results.Add(new CommonNameRecord(
+                Id: reader.GetInt64(0),
+                TaxonId: reader.GetInt64(1),
+                RawName: reader.GetString(2),
+                NormalizedName: reader.GetString(3),
+                DisplayName: reader.IsDBNull(4) ? null : reader.GetString(4),
+                Language: reader.GetString(5),
+                Source: reader.GetString(6),
+                SourceIdentifier: reader.IsDBNull(7) ? null : reader.GetString(7),
+                IsPreferred: reader.GetInt32(8) == 1,
+                TaxonCanonicalName: reader.GetString(9),
+                TaxonKingdom: reader.IsDBNull(10) ? null : reader.GetString(10),
+                TaxonValidityStatus: reader.GetString(11),
+                TaxonIsExtinct: reader.GetInt32(12) == 1,
+                TaxonIsFossil: reader.GetInt32(13) == 1
+            ));
+        }
+        return results;
     }
 
     /// <summary>
