@@ -202,15 +202,15 @@ SELECT
         }
 
         using var command = _connection.CreateCommand();
-        command.CommandText =
-            """
+          command.CommandText =
+                """
 SELECT id, IFNULL(page_title, normalized_title), normalized_title, download_status, downloaded_at, attempt_count
 FROM wiki_pages
-WHERE download_status IN (@pending, @failed, @missing)
-   OR (@refresh IS NOT NULL AND downloaded_at IS NOT NULL AND downloaded_at < @refresh)
-ORDER BY CASE download_status WHEN @pending THEN 0 WHEN @failed THEN 1 WHEN @missing THEN 2 ELSE 3 END,
-         IFNULL(downloaded_at, '0000-01-01T00:00:00Z'),
-         id
+WHERE download_status IN (@pending, @failed)
+    OR (@refresh IS NOT NULL AND downloaded_at IS NOT NULL AND downloaded_at < @refresh)
+ORDER BY CASE download_status WHEN @pending THEN 0 WHEN @failed THEN 1 ELSE 2 END,
+            IFNULL(downloaded_at, '0000-01-01T00:00:00Z'),
+            id
 LIMIT @limit
 """;
         command.Parameters.AddWithValue("@pending", WikiPageDownloadStatus.Pending);
