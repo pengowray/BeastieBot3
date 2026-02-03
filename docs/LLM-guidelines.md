@@ -154,4 +154,139 @@ sqlite3 "D:/datasets/beastiebot/wikidata_cache.sqlite" \
 
 - Remember the rule above: these inspection helpers are great, but never fold them into the giant Wikipedia list query. Keep every diagnostic either in its own CLI command or as a notebook/SQL snippet you run manually.
 
+## IUCN assessment types (subspecies, varieties, regional, global)
+
+The IUCN database distinguishes different assessment types using several fields in `view_assessments_html_taxonomy_html`:
+
+### Species vs Subspecies vs Varieties
+
+- **Species**: `infraType` is NULL or empty, and `infraName` is NULL or empty
+- **Subspecies**: `infraType` contains "ssp." or "subsp." (IUCN uses both interchangeably)
+- **Varieties**: `infraType` contains "var."
+- **Other infra ranks**: `infraType` may also be "f." (form) or other botanical ranks
+
+Key helpers:
+```csharp
+// Check if record is a subspecies/variety
+bool IsSubspecies(record) => !string.IsNullOrWhiteSpace(record.InfraType) && !string.IsNullOrWhiteSpace(record.InfraName);
+
+// Check if variety specifically
+bool IsVariety(record) => record.InfraType?.ToLowerInvariant()?.Contains("var") == true;
+```
+
+### Regional vs Global Assessments
+
+- **Subpopulations/Regional**: `subpopulationName` is NOT NULL/empty - these are regional assessments
+- **Global assessments**: `subpopulationName` IS NULL or empty
+
+For most Wikipedia lists, we exclude regional assessments (subpopulations). Use:
+```sql
+WHERE (subpopulationName IS NULL OR TRIM(subpopulationName) = '')
+```
+
+### Infrarank normalization for display
+
+When displaying subspecies/varieties:
+- For **animals**: Hide the "ssp." rank label (use "Genus species subspecies" not "Genus species ssp. subspecies")
+- For **plants**: Always use "subsp." (not "ssp.") and keep it visible
+- For **varieties**: Always show "var."
+
+Format examples:
+- Animal subspecies: `''[[Genus species subspecies]]''`
+- Plant subspecies: `[[Link|''Genus species'' subsp. ''subspecies'']]`
+- Variety: `[[Link|''Genus species'' var. ''variety'']]`
+
+## Wikipedia species listing styles
+
+Lists support three display styles configured via `display.listing_style` in YAML.
+Note: Use PascalCase for enum values in YAML (YamlDotNet is case-insensitive).
+
+### Style A: Scientific name focus
+For plants and invertebrates (large species counts, rare common names). Sort by scientific name.
+```
+* ''[[Scientific name]]'', Common name
+* ''[[Scientific name]]''  (when no common name)
+* ''[[Wikilink|Scientific name]]'', Common name  (when article uses common name)
+```
+
+### Style B: Common name focus (default)
+General default when A and C don't apply. Always include scientific name.
+```
+* [[Common name]] (''Scientific name'')
+* [[Wikilink|Common name]] (''Scientific name'')
+* [[Scientific name|Common name]] (''Scientific name'')  (when wikilink is scientific name)
+* ''[[Scientific name]]''  (fallback when no common name)
+```
+
+### Style C: Common name only
+For mammals, birds, bats, sharks & rays (unambiguous common names for all species).
+```
+* [[Common name]]
+* [[Wikipage|Common name]]
+* ''[[Scientific name]]''  (fallback when no common name)
+```
+
+### Formatting rules
+
+- **Italics**: Only use for scientific names, never for common names
+- **Link simplification**: Use `''[[X]]''` not `[[X|''X'']]` unless infrarank needs splitting
+- **Infrarank formatting**:
+  - `[[Abies pinsapo var. marocana|''Abies pinsapo'' var. ''marocana'']]` (with common name after)
+  - For animals, omit "ssp." entirely
+- **IUCN status template**: All entries include `{{IUCN status|XX|taxonId/assessmentId|1|year=YYYY}}`
+
+## List section structure
+
+### Taxa grouping headings
+
+When there are >30 species under a single heading, add intermediate taxonomy headings (Family, Superfamily) using COL enrichment. Headings include rank labels:
+
+```
+==== Superfamily Ctenodactyloidea ====
+===== Family Ctenodactylidae =====
+```
+
+### Merging small groups
+
+When 3+ families each have ≤4 species, merge into "Other [parent taxon]" heading. Don't merge at the top level (keep separate order headings even with few items).
+
+```
+==== Other Squaliformes ====
+* [[Species A]] (Family: [[Familyidae]])
+* [[Species B]] (Family: Familyidae)
+```
+
+Note: Only first family instance is linked.
+
+### Subspecies, Variety, and Subpopulation sections
+
+Under each taxonomic heading, species are grouped into sections:
+
+```
+'''Species'''
+{{div col|colwidth=30em}}
+* ...
+{{div col end}}
+'''Subspecies'''
+{{div col|colwidth=30em}}
+* ...
+{{div col end}}
+'''Varieties'''
+{{div col|colwidth=30em}}
+* ...
+{{div col end}}
+'''Stocks and populations'''
+{{div col|colwidth=30em}}
+* ...
+{{div col end}}
+```
+
+For lists containing **all assessments** (not just threatened), subspecies can be shown as sub-bullets under parent species:
+```
+* ''[[Genus species]]''
+** ''G. s.'' subsp. ''subspecies1''
+** ''G. s.'' subsp. ''subspecies2''
+```
+
 Keep this file updated whenever we learn a new "never again" lesson.
+

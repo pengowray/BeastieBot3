@@ -96,7 +96,7 @@ internal sealed class WikipediaListGenerator {
         var grouping = (IReadOnlyList<GroupingLevelDefinition>)(definition.Grouping
             ?? defaults.Grouping
             ?? new List<GroupingLevelDefinition>());
-        var display = definition.Display ?? defaults.Display ?? new DisplayPreferences();
+        var display = MergeDisplayPreferences(defaults.Display, definition.Display);
 
         var totalHeadingCount = 0;
         foreach (var section in sections) {
@@ -200,6 +200,189 @@ internal sealed class WikipediaListGenerator {
             return ("''No taxa currently listable.''", 0);
         }
 
+        // Filter out regional assessments if requested
+        var filteredRecords = display.ExcludeRegionalAssessments 
+            ? records.Where(r => string.IsNullOrWhiteSpace(r.SubpopulationName)).ToList()
+            : records.ToList();
+
+        if (filteredRecords.Count == 0) {
+            return ("''No taxa currently listable (all filtered as regional assessments).''", 0);
+        }
+
+        // If separating infraspecific sections is enabled, partition and render each section
+        if (display.SeparateInfraspecificSections) {
+            return BuildInfraspecificSections(filteredRecords, grouping, display, statusContext, customGroups, startHeading);
+        }
+
+        // If custom groups are defined, use custom grouping instead of taxonomic grouping
+        if (customGroups != null && customGroups.Count > 0) {
+            return BuildCustomGroupedSectionBody(filteredRecords, customGroups, grouping, display, statusContext, startHeading);
+        }
+
+        if (grouping.Count == 0) {
+            return (string.Join(Environment.NewLine, filteredRecords.Select(record => FormatSpeciesLine(record, display, statusContext))), 0);
+        }
+
+        // Check if we need COL enrichment:
+        // 1. Any grouping level uses COL-specific ranks
+        // 2. Any taxon uses virtual groups (which rely on COL superfamily/family)
+        var needsEnrichment = _colEnricher != null && 
+            (grouping.Any(g => IsColEnrichedRank(g.Level)) || HasVirtualGroupsInGrouping(grouping));
+        
+        if (needsEnrichment) {
+            return BuildEnrichedSectionBody(filteredRecords, grouping, display, statusContext);
+        }
+
+        var levels = grouping
+            .Select(level => new TaxonomyTreeLevel<IucnSpeciesRecord>(
+                level.Label ?? level.Level,
+                BuildSelector(level.Level),
+                level.AlwaysDisplay,
+                level.UnknownLabel,
+                level.MinItems,
+                level.OtherLabel))
+            .ToList();
+
+        Func<string, bool>? shouldSkip = _taxonRules != null 
+            ? taxon => _taxonRules.ShouldForceSplit(taxon) 
+            : null;
+        var tree = TaxonomyTreeBuilder.Build(filteredRecords, levels, shouldSkip);
+        var builder = new StringBuilder();
+        var headingCount = 0;
+        AppendTree(builder, tree, startHeading, display, statusContext, ref headingCount, grouping, groupingIndex: 0, otherContext: null);
+        return (builder.ToString().TrimEnd(), headingCount);
+    }
+
+    /// <summary>
+    /// Build section body with separate sections for Species, Subspecies, Varieties, and Stocks/Populations.
+    /// </summary>
+    private (string Body, int HeadingCount) BuildInfraspecificSections(
+        IReadOnlyList<IucnSpeciesRecord> records,
+        IReadOnlyList<GroupingLevelDefinition> grouping,
+        DisplayPreferences display,
+        string? statusContext,
+        IReadOnlyList<CustomGroupDefinition>? customGroups,
+        int startHeading) {
+        
+        // Partition records by type
+        var species = new List<IucnSpeciesRecord>();
+        var subspecies = new List<IucnSpeciesRecord>();
+        var varieties = new List<IucnSpeciesRecord>();
+        var populations = new List<IucnSpeciesRecord>();
+
+        foreach (var record in records) {
+            // Check for subpopulation (regional assessment) first
+            if (!string.IsNullOrWhiteSpace(record.SubpopulationName)) {
+                populations.Add(record);
+                continue;
+            }
+
+            // Check for infrarank
+            var infraType = record.InfraType?.Trim().ToLowerInvariant() ?? "";
+            if (!string.IsNullOrWhiteSpace(infraType) && !string.IsNullOrWhiteSpace(record.InfraName)) {
+                if (infraType.Contains("var")) {
+                    varieties.Add(record);
+                } else if (infraType.Contains("ssp") || infraType.Contains("subsp")) {
+                    subspecies.Add(record);
+                } else {
+                    // Other infranks (form, etc.) go to subspecies section
+                    subspecies.Add(record);
+                }
+                continue;
+            }
+
+            species.Add(record);
+        }
+
+        var builder = new StringBuilder();
+        var headingCount = 0;
+
+        // Create a display settings copy with SeparateInfraspecificSections disabled to avoid recursion
+        var innerDisplay = new DisplayPreferences {
+            PreferCommonNames = display.PreferCommonNames,
+            ItalicizeScientific = display.ItalicizeScientific,
+            IncludeStatusTemplate = display.IncludeStatusTemplate,
+            IncludeStatusLabel = display.IncludeStatusLabel,
+            GroupSubspecies = display.GroupSubspecies,
+            ListingStyle = display.ListingStyle,
+            SeparateInfraspecificSections = false,  // Prevent recursion
+            ExcludeRegionalAssessments = false      // Already filtered
+        };
+
+        // Render Species section (only add heading if other sections exist)
+        if (species.Count > 0) {
+            var needsSectionHeading = subspecies.Count > 0 || varieties.Count > 0 || populations.Count > 0;
+            if (needsSectionHeading) {
+                var headingLevel = Math.Min(startHeading, 6);
+                var headingMarkup = new string('=', headingLevel);
+                builder.AppendLine($"{headingMarkup} Species {headingMarkup}");
+                headingCount++;
+            }
+            var (speciesBody, speciesHeadingCount) = BuildSectionBodyCore(species, grouping, innerDisplay, statusContext, customGroups, startHeading + (subspecies.Count > 0 || varieties.Count > 0 || populations.Count > 0 ? 1 : 0));
+            headingCount += speciesHeadingCount;
+            builder.AppendLine(speciesBody);
+            if (subspecies.Count > 0 || varieties.Count > 0 || populations.Count > 0) {
+                builder.AppendLine();
+            }
+        }
+
+        // Render Subspecies section
+        if (subspecies.Count > 0) {
+            var headingLevel = Math.Min(startHeading, 6);
+            var headingMarkup = new string('=', headingLevel);
+            builder.AppendLine($"{headingMarkup} Subspecies {headingMarkup}");
+            headingCount++;
+            var (subBody, subHeadingCount) = BuildSectionBodyCore(subspecies, grouping, innerDisplay, statusContext, customGroups, startHeading + 1);
+            headingCount += subHeadingCount;
+            builder.AppendLine(subBody);
+            if (varieties.Count > 0 || populations.Count > 0) {
+                builder.AppendLine();
+            }
+        }
+
+        // Render Varieties section
+        if (varieties.Count > 0) {
+            var headingLevel = Math.Min(startHeading, 6);
+            var headingMarkup = new string('=', headingLevel);
+            builder.AppendLine($"{headingMarkup} Varieties {headingMarkup}");
+            headingCount++;
+            var (varBody, varHeadingCount) = BuildSectionBodyCore(varieties, grouping, innerDisplay, statusContext, customGroups, startHeading + 1);
+            headingCount += varHeadingCount;
+            builder.AppendLine(varBody);
+            if (populations.Count > 0) {
+                builder.AppendLine();
+            }
+        }
+
+        // Render Stocks and populations section
+        if (populations.Count > 0) {
+            var headingLevel = Math.Min(startHeading, 6);
+            var headingMarkup = new string('=', headingLevel);
+            builder.AppendLine($"{headingMarkup} Stocks and populations {headingMarkup}");
+            headingCount++;
+            var (popBody, popHeadingCount) = BuildSectionBodyCore(populations, grouping, innerDisplay, statusContext, customGroups, startHeading + 1);
+            headingCount += popHeadingCount;
+            builder.AppendLine(popBody);
+        }
+
+        return (builder.ToString().TrimEnd(), headingCount);
+    }
+
+    /// <summary>
+    /// Core section body building logic (without infraspecific section separation).
+    /// </summary>
+    private (string Body, int HeadingCount) BuildSectionBodyCore(
+        IReadOnlyList<IucnSpeciesRecord> records, 
+        IReadOnlyList<GroupingLevelDefinition> grouping, 
+        DisplayPreferences display, 
+        string? statusContext,
+        IReadOnlyList<CustomGroupDefinition>? customGroups = null,
+        int startHeading = 3) {
+        
+        if (records.Count == 0) {
+            return ("''No taxa currently listable.''", 0);
+        }
+
         // If custom groups are defined, use custom grouping instead of taxonomic grouping
         if (customGroups != null && customGroups.Count > 0) {
             return BuildCustomGroupedSectionBody(records, customGroups, grouping, display, statusContext, startHeading);
@@ -235,7 +418,7 @@ internal sealed class WikipediaListGenerator {
         var tree = TaxonomyTreeBuilder.Build(records, levels, shouldSkip);
         var builder = new StringBuilder();
         var headingCount = 0;
-        AppendTree(builder, tree, startHeading, display, statusContext, ref headingCount);
+        AppendTree(builder, tree, startHeading, display, statusContext, ref headingCount, grouping, groupingIndex: 0, otherContext: null);
         return (builder.ToString().TrimEnd(), headingCount);
     }
 
@@ -414,7 +597,7 @@ internal sealed class WikipediaListGenerator {
         var tree = TaxonomyTreeBuilder.Build(enrichedRecords, levels, shouldSkip);
         var builder = new StringBuilder();
         var headingCount = 0;
-        AppendEnrichedTree(builder, tree, startHeading: 3, display, statusContext, ref headingCount);
+        AppendEnrichedTree(builder, tree, startHeading: 3, display, statusContext, ref headingCount, grouping, groupingIndex: 0, otherContext: null);
         return (builder.ToString().TrimEnd(), headingCount);
     }
 
@@ -425,17 +608,43 @@ internal sealed class WikipediaListGenerator {
         DisplayPreferences display, 
         string? statusContext, 
         ref int headingCount) {
+        AppendEnrichedTree(builder, node, startHeading, display, statusContext, ref headingCount, grouping: null, groupingIndex: 0, otherContext: null);
+    }
+
+    private void AppendEnrichedTree(
+        StringBuilder builder, 
+        TaxonomyTreeNode<EnrichedSpeciesRecord> node, 
+        int startHeading, 
+        DisplayPreferences display, 
+        string? statusContext, 
+        ref int headingCount,
+        IReadOnlyList<GroupingLevelDefinition>? grouping,
+        int groupingIndex,
+        OtherBucketContext? otherContext) {
         
         foreach (var child in node.Children) {
             var taxonName = child.Value;
             var headingLevel = Math.Min(startHeading, 6);
             var headingMarkup = new string('=', headingLevel);
-            var heading = FormatHeading(taxonName, child.Label, GetKingdomName(child));
+            
+            // Get grouping configuration for current level
+            var currentGrouping = grouping != null && groupingIndex < grouping.Count 
+                ? grouping[groupingIndex] 
+                : null;
+            var showRankLabel = currentGrouping?.ShowRankLabel ?? false;
+            
+            var heading = FormatHeading(taxonName, child.Label, GetKingdomName(child), showRankLabel);
             builder.AppendLine($"{headingMarkup} {heading.Text} {headingMarkup}");
             headingCount++;
             if (!string.IsNullOrWhiteSpace(heading.MainLink)) {
                 builder.AppendLine($"{{{{main|{heading.MainLink}}}}}");
             }
+
+            // Detect if this is an "Other" bucket
+            var isOtherBucket = IsOtherOrUnknownHeading(taxonName ?? "");
+            var childOtherContext = isOtherBucket && display.IncludeFamilyInOtherBucket 
+                ? new OtherBucketContext(true) 
+                : otherContext;
 
             // Check if this taxon uses virtual groups
             if (!string.IsNullOrWhiteSpace(taxonName) &&
@@ -443,19 +652,19 @@ internal sealed class WikipediaListGenerator {
                 _taxonRules.ShouldUseVirtualGroups(taxonName) && 
                 _taxonRules.HasVirtualGroups(taxonName)) {
                 // Render virtual groups instead of normal children
-                AppendVirtualGroups(builder, child, taxonName, headingLevel + 1, display, statusContext, ref headingCount);
+                AppendVirtualGroups(builder, child, taxonName, headingLevel + 1, display, statusContext, ref headingCount, grouping, groupingIndex + 1, childOtherContext);
             } else {
-                AppendEnrichedTree(builder, child, headingLevel + 1, display, statusContext, ref headingCount);
+                AppendEnrichedTree(builder, child, headingLevel + 1, display, statusContext, ref headingCount, grouping, groupingIndex + 1, childOtherContext);
             }
         }
 
         // Convert enriched records to IUCN records for output
         var iucnRecords = node.Items.Select(r => r.ToIucnRecord()).ToList();
         if (display.GroupSubspecies) {
-            AppendItemsWithSubspeciesGrouping(builder, iucnRecords, display, statusContext);
+            AppendItemsWithSubspeciesGrouping(builder, iucnRecords, display, statusContext, otherContext);
         } else {
             foreach (var record in iucnRecords) {
-                builder.AppendLine(FormatSpeciesLine(record, display, statusContext));
+                builder.AppendLine(FormatSpeciesLine(record, display, statusContext, otherContext));
             }
         }
     }
@@ -470,7 +679,10 @@ internal sealed class WikipediaListGenerator {
         int headingLevel,
         DisplayPreferences display,
         string? statusContext,
-        ref int headingCount) {
+        ref int headingCount,
+        IReadOnlyList<GroupingLevelDefinition>? grouping,
+        int groupingIndex,
+        OtherBucketContext? otherContext) {
         
         // Collect all enriched records from this node and its descendants
         var allRecords = CollectAllEnrichedRecords(parentNode);
@@ -545,11 +757,11 @@ internal sealed class WikipediaListGenerator {
                             builder.AppendLine($"{{{{main|{familyHeading.MainLink}}}}}");
                         }
 
-                        OutputEnrichedRecords(builder, familyGroup.ToList(), display, statusContext);
+                        OutputEnrichedRecords(builder, familyGroup.ToList(), display, statusContext, otherContext);
                     }
                 } else {
                     // Single family, no extra heading needed
-                    OutputEnrichedRecords(builder, records, display, statusContext);
+                    OutputEnrichedRecords(builder, records, display, statusContext, otherContext);
                 }
             }
         }
@@ -559,7 +771,11 @@ internal sealed class WikipediaListGenerator {
             var headingMarkup = new string('=', Math.Min(headingLevel, 6));
             builder.AppendLine($"{headingMarkup} Other {headingMarkup}");
             headingCount++;
-            OutputEnrichedRecords(builder, unmatchedRecords, display, statusContext);
+            // Create an Other context for these unmatched records
+            var unmatchedOtherContext = display.IncludeFamilyInOtherBucket 
+                ? new OtherBucketContext(true) 
+                : otherContext;
+            OutputEnrichedRecords(builder, unmatchedRecords, display, statusContext, unmatchedOtherContext);
         }
     }
 
@@ -586,14 +802,15 @@ internal sealed class WikipediaListGenerator {
         StringBuilder builder,
         IReadOnlyList<EnrichedSpeciesRecord> records,
         DisplayPreferences display,
-        string? statusContext) {
+        string? statusContext,
+        OtherBucketContext? otherContext = null) {
         
         var iucnRecords = records.Select(r => r.ToIucnRecord()).ToList();
         if (display.GroupSubspecies) {
-            AppendItemsWithSubspeciesGrouping(builder, iucnRecords, display, statusContext);
+            AppendItemsWithSubspeciesGrouping(builder, iucnRecords, display, statusContext, otherContext);
         } else {
             foreach (var record in iucnRecords) {
-                builder.AppendLine(FormatSpeciesLine(record, display, statusContext));
+                builder.AppendLine(FormatSpeciesLine(record, display, statusContext, otherContext));
             }
         }
     }
@@ -651,23 +868,51 @@ internal sealed class WikipediaListGenerator {
     };
 
     private void AppendTree(StringBuilder builder, TaxonomyTreeNode<IucnSpeciesRecord> node, int startHeading, DisplayPreferences display, string? statusContext, ref int headingCount) {
+        AppendTree(builder, node, startHeading, display, statusContext, ref headingCount, grouping: null, groupingIndex: 0, otherContext: null);
+    }
+
+    private void AppendTree(
+        StringBuilder builder, 
+        TaxonomyTreeNode<IucnSpeciesRecord> node, 
+        int startHeading, 
+        DisplayPreferences display, 
+        string? statusContext, 
+        ref int headingCount,
+        IReadOnlyList<GroupingLevelDefinition>? grouping,
+        int groupingIndex,
+        OtherBucketContext? otherContext) {
+        
         foreach (var child in node.Children) {
             var headingLevel = Math.Min(startHeading, 6);
             var headingMarkup = new string('=', headingLevel);
-            var heading = FormatHeading(child.Value, child.Label, GetKingdomName(child));
+            
+            // Get grouping configuration for current level
+            var currentGrouping = grouping != null && groupingIndex < grouping.Count 
+                ? grouping[groupingIndex] 
+                : null;
+            var showRankLabel = currentGrouping?.ShowRankLabel ?? false;
+            
+            var heading = FormatHeading(child.Value, child.Label, GetKingdomName(child), showRankLabel);
             builder.AppendLine($"{headingMarkup} {heading.Text} {headingMarkup}");
             headingCount++;
             if (!string.IsNullOrWhiteSpace(heading.MainLink)) {
                 builder.AppendLine($"{{{{main|{heading.MainLink}}}}}");
             }
-            AppendTree(builder, child, headingLevel + 1, display, statusContext, ref headingCount);
+            
+            // Detect if this is an "Other" bucket
+            var isOtherBucket = IsOtherOrUnknownHeading(child.Value ?? "");
+            var childOtherContext = isOtherBucket && display.IncludeFamilyInOtherBucket 
+                ? new OtherBucketContext(true) 
+                : otherContext;
+            
+            AppendTree(builder, child, headingLevel + 1, display, statusContext, ref headingCount, grouping, groupingIndex + 1, childOtherContext);
         }
 
         if (display.GroupSubspecies) {
-            AppendItemsWithSubspeciesGrouping(builder, node.Items, display, statusContext);
+            AppendItemsWithSubspeciesGrouping(builder, node.Items, display, statusContext, otherContext);
         } else {
             foreach (var record in node.Items) {
-                builder.AppendLine(FormatSpeciesLine(record, display, statusContext));
+                builder.AppendLine(FormatSpeciesLine(record, display, statusContext, otherContext));
             }
         }
     }
@@ -679,7 +924,8 @@ internal sealed class WikipediaListGenerator {
         StringBuilder builder,
         IReadOnlyList<IucnSpeciesRecord> items,
         DisplayPreferences display,
-        string? statusContext) {
+        string? statusContext,
+        OtherBucketContext? otherContext = null) {
         
         // Separate species and subspecies
         var species = new List<IucnSpeciesRecord>();
@@ -703,12 +949,12 @@ internal sealed class WikipediaListGenerator {
 
         foreach (var record in species) {
             var speciesKey = GetParentSpeciesKey(record);
-            builder.AppendLine(FormatSpeciesLine(record, display, statusContext));
+            builder.AppendLine(FormatSpeciesLine(record, display, statusContext, otherContext));
             
             // Check if this species has subspecies
             if (subspeciesGroups.TryGetValue(speciesKey, out var subs)) {
                 foreach (var sub in subs.OrderBy(s => s.InfraName, StringComparer.OrdinalIgnoreCase)) {
-                    builder.AppendLine(FormatSubspeciesLine(sub, display, statusContext));
+                    builder.AppendLine(FormatSubspeciesLine(sub, display, statusContext, otherContext));
                 }
                 processedSubspeciesGroups.Add(speciesKey);
             }
@@ -726,7 +972,7 @@ internal sealed class WikipediaListGenerator {
             builder.AppendLine($"* {parentName}");
             
             foreach (var sub in subs.OrderBy(s => s.InfraName, StringComparer.OrdinalIgnoreCase)) {
-                builder.AppendLine(FormatSubspeciesLine(sub, display, statusContext));
+                builder.AppendLine(FormatSubspeciesLine(sub, display, statusContext, otherContext));
             }
         }
     }
@@ -739,9 +985,9 @@ internal sealed class WikipediaListGenerator {
         return $"{record.GenusName?.ToLowerInvariant()}|{record.SpeciesName?.ToLowerInvariant()}";
     }
 
-    private string FormatSubspeciesLine(IucnSpeciesRecord record, DisplayPreferences display, string? statusContext) {
+    private string FormatSubspeciesLine(IucnSpeciesRecord record, DisplayPreferences display, string? statusContext, OtherBucketContext? otherContext = null) {
         // Indented subspecies line
-        var line = FormatSpeciesLine(record, display, statusContext);
+        var line = FormatSpeciesLine(record, display, statusContext, otherContext);
         // Add extra indentation (** instead of *)
         if (line.StartsWith("* ")) {
             return "*" + line;
@@ -750,8 +996,29 @@ internal sealed class WikipediaListGenerator {
     }
 
     private readonly record struct HeadingInfo(string Text, string? MainLink);
+    
+    /// <summary>
+    /// Context for items within an "Other" bucket, tracking which families need annotation.
+    /// </summary>
+    private sealed class OtherBucketContext {
+        private readonly HashSet<string> _linkedFamilies = new(StringComparer.OrdinalIgnoreCase);
+        
+        public bool IsInOtherBucket { get; }
+        
+        public OtherBucketContext(bool isInOtherBucket) {
+            IsInOtherBucket = isInOtherBucket;
+        }
+        
+        /// <summary>
+        /// Returns true if this is the first occurrence of the family and it should be linked.
+        /// </summary>
+        public bool ShouldLinkFamily(string family) {
+            if (string.IsNullOrWhiteSpace(family)) return false;
+            return _linkedFamilies.Add(family);
+        }
+    }
 
-    private HeadingInfo FormatHeading(string? raw, string? rank = null, string? kingdom = null) {
+    private HeadingInfo FormatHeading(string? raw, string? rank = null, string? kingdom = null, bool showRankLabel = false) {
         if (string.IsNullOrWhiteSpace(raw)) {
             return new HeadingInfo("Unassigned", null);
         }
@@ -810,19 +1077,37 @@ internal sealed class WikipediaListGenerator {
 
         // Check for wikilink overrides
         if (!string.IsNullOrWhiteSpace(yamlRule?.Wikilink)) {
-            return new HeadingInfo(displayName, yamlRule.Wikilink);
+            var headingText = FormatHeadingText(displayName, rank, showRankLabel, isScientificName: true);
+            return new HeadingInfo(headingText, yamlRule.Wikilink);
         }
 
         if (!string.IsNullOrWhiteSpace(rules?.Wikilink)) {
-            return new HeadingInfo(displayName, rules!.Wikilink);
+            var headingText = FormatHeadingText(displayName, rank, showRankLabel, isScientificName: true);
+            return new HeadingInfo(headingText, rules!.Wikilink);
         }
 
         // If we have a main article from YAML, use it
         if (!string.IsNullOrWhiteSpace(yamlMainArticle)) {
-            return new HeadingInfo(displayName, yamlMainArticle);
+            var headingText = FormatHeadingText(displayName, rank, showRankLabel, isScientificName: true);
+            return new HeadingInfo(headingText, yamlMainArticle);
         }
 
-        return new HeadingInfo(displayName, null);
+        // Scientific name only - apply rank label formatting
+        var finalText = FormatHeadingText(displayName, rank, showRankLabel, isScientificName: true);
+        return new HeadingInfo(finalText, null);
+    }
+    
+    /// <summary>
+    /// Formats heading text, optionally adding rank label prefix.
+    /// </summary>
+    private static string FormatHeadingText(string displayName, string? rank, bool showRankLabel, bool isScientificName) {
+        if (!showRankLabel || string.IsNullOrWhiteSpace(rank) || !isScientificName) {
+            return displayName;
+        }
+        
+        // Capitalize the rank for display (e.g., "family" -> "Family")
+        var capitalizedRank = char.ToUpperInvariant(rank[0]) + rank.Substring(1).ToLowerInvariant();
+        return $"{capitalizedRank}: {displayName}";
     }
 
     private static bool IsOtherOrUnknownHeading(string raw) {
@@ -879,7 +1164,7 @@ internal sealed class WikipediaListGenerator {
         return char.ToUpperInvariant(value[0]) + value[1..].ToLowerInvariant();
     }
 
-    private string FormatSpeciesLine(IucnSpeciesRecord record, DisplayPreferences display, string? listStatusContext) {
+    private string FormatSpeciesLine(IucnSpeciesRecord record, DisplayPreferences display, string? listStatusContext, OtherBucketContext? otherContext = null) {
         var descriptor = IucnRedlistStatus.Describe(record.StatusCode);
         var builder = new StringBuilder();
         builder.Append("* ");
@@ -905,6 +1190,17 @@ internal sealed class WikipediaListGenerator {
         if (display.IncludeStatusTemplate) {
             builder.Append(' ');
             builder.Append(BuildIucnStatusTemplate(record, descriptor));
+        }
+        
+        // Add family annotation for "Other" bucket items
+        if (otherContext is { IsInOtherBucket: true } && !string.IsNullOrWhiteSpace(record.FamilyName)) {
+            var familyName = ToTitleCase(record.FamilyName);
+            var shouldLink = otherContext.ShouldLinkFamily(familyName);
+            if (shouldLink) {
+                builder.Append($" (Family: [[{familyName}]])");
+            } else {
+                builder.Append($" (Family: {familyName})");
+            }
         }
 
         return builder.ToString();
@@ -996,37 +1292,198 @@ internal sealed class WikipediaListGenerator {
 
     private string BuildNameFragment(IucnSpeciesRecord record, DisplayPreferences display) {
         var commonName = ResolveCommonName(record);
-        var scientific = ResolveScientificName(record);
-        var rawScientific = scientific; // Keep unformatted version for links
+        var articleTitle = ResolveWikipediaArticle(record);
+        var rawScientific = ResolveScientificName(record);
+        var formattedScientific = FormatScientificNameForDisplay(record, display.ItalicizeScientific);
         
-        if (display.ItalicizeScientific && !string.IsNullOrWhiteSpace(scientific)) {
-            scientific = $"''{scientific}''";
-        }
+        return display.ListingStyle switch {
+            ListingStyle.ScientificNameFocus => BuildScientificNameFocusFragment(commonName, articleTitle, rawScientific, formattedScientific, record),
+            ListingStyle.CommonNameOnly => BuildCommonNameOnlyFragment(commonName, articleTitle, rawScientific, formattedScientific),
+            _ => BuildCommonNameFocusFragment(commonName, articleTitle, rawScientific, formattedScientific),  // Default: CommonNameFocus
+        };
+    }
 
-        if (!string.IsNullOrWhiteSpace(commonName) && display.PreferCommonNames) {
-            // Try to get Wikipedia article link
-            var articleTitle = ResolveWikipediaArticle(record);
-            
-            if (!string.IsNullOrWhiteSpace(articleTitle)) {
-                // We have a Wikipedia article
-                // Collapse [[X|X]] to [[X]] when article title matches common name
-                var link = string.Equals(articleTitle, commonName, StringComparison.Ordinal)
-                    ? $"[[{commonName}]]"
-                    : $"[[{articleTitle}|{commonName}]]";
-                return $"{link} ({scientific})";
+    /// <summary>
+    /// Style A: Scientific name focus. Shows scientific name first, common name after comma.
+    /// Examples:
+    /// - ''[[Pinus radiata]]'', Monterey pine
+    /// - ''[[Scientific name]]''
+    /// - ''[[Wikilink|Scientific name]]'', Common name
+    /// </summary>
+    private string BuildScientificNameFocusFragment(string? commonName, string? articleTitle, string? rawScientific, string formattedScientific, IucnSpeciesRecord record) {
+        // For infraspecific taxa with var./subsp., use special formatting
+        var hasInfrarank = !string.IsNullOrWhiteSpace(record.InfraType) && !string.IsNullOrWhiteSpace(record.InfraName);
+        var infraLink = hasInfrarank ? BuildInfraspecificLink(record, articleTitle) : null;
+        
+        if (!string.IsNullOrWhiteSpace(infraLink)) {
+            if (!string.IsNullOrWhiteSpace(commonName)) {
+                return $"{infraLink}, {commonName}";
             }
-            
-            // No Wikipedia article - use scientific name as link target
-            // [[Scientific Name|Common Name]] (''Scientific Name'')
+            return infraLink;
+        }
+        
+        // Standard species formatting
+        var linkTarget = !string.IsNullOrWhiteSpace(articleTitle) ? articleTitle : rawScientific;
+        
+        if (string.IsNullOrWhiteSpace(linkTarget)) {
+            return formattedScientific;
+        }
+        
+        // Use ''[[X]]'' format when link target matches scientific name
+        if (string.Equals(linkTarget, rawScientific, StringComparison.OrdinalIgnoreCase)) {
+            var linkedScientific = $"''[[{rawScientific}]]''";
+            if (!string.IsNullOrWhiteSpace(commonName)) {
+                return $"{linkedScientific}, {commonName}";
+            }
+            return linkedScientific;
+        }
+        
+        // Article uses common name as title, so use [[Wikilink|Scientific name]]
+        var linkedWithPipe = $"[[{linkTarget}|{formattedScientific}]]";
+        if (!string.IsNullOrWhiteSpace(commonName)) {
+            return $"{linkedWithPipe}, {commonName}";
+        }
+        return linkedWithPipe;
+    }
+
+    /// <summary>
+    /// Style B: Common name focus (default). Shows common name first, scientific name in parentheses.
+    /// Examples:
+    /// - [[Common name]] (''Scientific name'')
+    /// - [[Wikilink|Common name]] (''Scientific name'')
+    /// - ''[[Scientific name]]'' (fallback when no common name)
+    /// </summary>
+    private string BuildCommonNameFocusFragment(string? commonName, string? articleTitle, string? rawScientific, string formattedScientific) {
+        if (string.IsNullOrWhiteSpace(commonName)) {
+            // Fallback to scientific name only
+            if (!string.IsNullOrWhiteSpace(articleTitle) && !string.Equals(articleTitle, rawScientific, StringComparison.OrdinalIgnoreCase)) {
+                return $"[[{articleTitle}|{formattedScientific}]]";
+            }
             if (!string.IsNullOrWhiteSpace(rawScientific)) {
-                return $"[[{rawScientific}|{commonName}]] ({scientific})";
+                return $"''[[{rawScientific}]]''";
             }
-            
-            // Fallback: just link the common name
-            return $"[[{commonName}]] ({scientific})";
+            return formattedScientific;
         }
+        
+        // We have a common name
+        var linkTarget = !string.IsNullOrWhiteSpace(articleTitle) ? articleTitle : rawScientific;
+        
+        if (string.IsNullOrWhiteSpace(linkTarget)) {
+            // No link target available, just use common name
+            return $"[[{commonName}]] ({formattedScientific})";
+        }
+        
+        // Build the link
+        string linkedCommonName;
+        if (string.Equals(linkTarget, commonName, StringComparison.Ordinal)) {
+            linkedCommonName = $"[[{commonName}]]";
+        } else {
+            linkedCommonName = $"[[{linkTarget}|{commonName}]]";
+        }
+        
+        return $"{linkedCommonName} ({formattedScientific})";
+    }
 
-        return scientific ?? record.GenusName;
+    /// <summary>
+    /// Style C: Common name only. Shows only common name (falls back to scientific if unavailable).
+    /// Examples:
+    /// - [[Common name]]
+    /// - [[Wikilink|Common name]]
+    /// - ''[[Scientific name]]'' (fallback when no common name)
+    /// </summary>
+    private string BuildCommonNameOnlyFragment(string? commonName, string? articleTitle, string? rawScientific, string formattedScientific) {
+        if (string.IsNullOrWhiteSpace(commonName)) {
+            // Fallback to scientific name
+            if (!string.IsNullOrWhiteSpace(articleTitle) && !string.Equals(articleTitle, rawScientific, StringComparison.OrdinalIgnoreCase)) {
+                return $"[[{articleTitle}|{formattedScientific}]]";
+            }
+            if (!string.IsNullOrWhiteSpace(rawScientific)) {
+                return $"''[[{rawScientific}]]''";
+            }
+            return formattedScientific;
+        }
+        
+        // We have a common name - show only common name
+        var linkTarget = !string.IsNullOrWhiteSpace(articleTitle) ? articleTitle : rawScientific;
+        
+        if (string.IsNullOrWhiteSpace(linkTarget)) {
+            return $"[[{commonName}]]";
+        }
+        
+        if (string.Equals(linkTarget, commonName, StringComparison.Ordinal)) {
+            return $"[[{commonName}]]";
+        }
+        
+        return $"[[{linkTarget}|{commonName}]]";
+    }
+
+    /// <summary>
+    /// Builds a properly formatted link for subspecies/varieties with correct italicization.
+    /// For infraspecific taxa, we need [[link|''Genus species'' subsp. ''subspecies'']] format.
+    /// For animals, the rank marker is hidden.
+    /// </summary>
+    private static string? BuildInfraspecificLink(IucnSpeciesRecord record, string? articleTitle) {
+        if (string.IsNullOrWhiteSpace(record.InfraName)) {
+            return null;
+        }
+        
+        var genus = record.GenusName;
+        var species = record.SpeciesName;
+        var infraType = record.InfraType?.Trim().ToLowerInvariant() ?? "";
+        var infraName = record.InfraName.Trim();
+        var kingdom = record.KingdomName?.ToUpperInvariant() ?? "";
+        
+        // Normalize infrarank display
+        string? rankDisplay = null;
+        if (infraType.Contains("var")) {
+            rankDisplay = "var.";
+        } else if (infraType.Contains("subsp") || infraType.Contains("ssp")) {
+            // For animals, hide the rank marker
+            if (kingdom != "ANIMALIA") {
+                rankDisplay = "subsp.";
+            }
+        } else if (!string.IsNullOrWhiteSpace(infraType)) {
+            // Keep other ranks as-is (e.g., "f." for form)
+            rankDisplay = infraType.EndsWith(".") ? infraType : infraType + ".";
+        }
+        
+        // Build the display text with proper italicization
+        string displayText;
+        if (!string.IsNullOrWhiteSpace(rankDisplay)) {
+            // ''Genus species'' rank. ''infraname''
+            displayText = $"''{genus} {species}'' {rankDisplay} ''{infraName}''";
+        } else {
+            // Animal subspecies: ''Genus species infraname''
+            displayText = $"''{genus} {species} {infraName}''";
+        }
+        
+        // Build the full scientific name for link target
+        var fullScientific = !string.IsNullOrWhiteSpace(rankDisplay)
+            ? $"{genus} {species} {rankDisplay} {infraName}".Replace("  ", " ")
+            : $"{genus} {species} {infraName}";
+        
+        // Determine link target
+        var linkTarget = !string.IsNullOrWhiteSpace(articleTitle) ? articleTitle : fullScientific;
+        
+        // For simple links where the link matches the display (common for subspecies without Wikipedia article)
+        // use ''[[X]]'' format if possible
+        if (string.IsNullOrWhiteSpace(rankDisplay) && string.Equals(linkTarget, fullScientific, StringComparison.OrdinalIgnoreCase)) {
+            return $"''[[{fullScientific}]]''";
+        }
+        
+        return $"[[{linkTarget}|{displayText}]]";
+    }
+
+    /// <summary>
+    /// Format a scientific name for display (with italics if requested).
+    /// </summary>
+    private static string FormatScientificNameForDisplay(IucnSpeciesRecord record, bool italicize) {
+        var scientific = ResolveScientificName(record);
+        if (string.IsNullOrWhiteSpace(scientific)) {
+            return record.GenusName ?? "";
+        }
+        
+        return italicize ? $"''{scientific}''" : scientific;
     }
 
     /// <summary>
@@ -1123,6 +1580,38 @@ internal sealed class WikipediaListGenerator {
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// Merges display preferences, with override values taking precedence over base values.
+    /// This allows taxa groups to specify just the settings they want to change while
+    /// inheriting all other settings from defaults.
+    /// </summary>
+    private static DisplayPreferences MergeDisplayPreferences(DisplayPreferences? basePrefs, DisplayPreferences? overridePrefs) {
+        // Start with defaults if no base
+        basePrefs ??= new DisplayPreferences();
+        
+        // If no override, just use base
+        if (overridePrefs == null) {
+            return basePrefs;
+        }
+
+        // Merge: override takes precedence for explicitly set values
+        // Since we can't tell if a value was explicitly set or just defaulted in YAML,
+        // we use a heuristic: non-default values in override take precedence
+        return new DisplayPreferences {
+            PreferCommonNames = overridePrefs.PreferCommonNames,
+            ItalicizeScientific = overridePrefs.ItalicizeScientific,
+            IncludeStatusTemplate = overridePrefs.IncludeStatusTemplate,
+            IncludeStatusLabel = overridePrefs.IncludeStatusLabel,
+            GroupSubspecies = overridePrefs.GroupSubspecies || basePrefs.GroupSubspecies,
+            ListingStyle = overridePrefs.ListingStyle != ListingStyle.CommonNameFocus 
+                ? overridePrefs.ListingStyle 
+                : basePrefs.ListingStyle,
+            SeparateInfraspecificSections = overridePrefs.SeparateInfraspecificSections || basePrefs.SeparateInfraspecificSections,
+            ExcludeRegionalAssessments = overridePrefs.ExcludeRegionalAssessments || basePrefs.ExcludeRegionalAssessments,
+            IncludeFamilyInOtherBucket = overridePrefs.IncludeFamilyInOtherBucket || basePrefs.IncludeFamilyInOtherBucket,
+        };
     }
 
     private sealed class SectionRuntime {

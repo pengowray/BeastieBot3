@@ -146,7 +146,7 @@ internal sealed class WikipediaListDefinitionLoader {
             Filters = raw.Filters ?? taxaGroup.Filters ?? new(),
             Sections = raw.Sections ?? preset.Sections ?? new(),
             Grouping = raw.Grouping,
-            Display = raw.Display,
+            Display = raw.Display ?? taxaGroup.Display,
             CustomGroups = raw.CustomGroups ?? taxaGroup.CustomGroups,
         };
     }
@@ -227,6 +227,11 @@ internal sealed class TaxaGroupDefinition {
     /// When defined, these groups replace the normal taxonomic grouping.
     /// </summary>
     public List<CustomGroupDefinition>? CustomGroups { get; init; }
+    /// <summary>
+    /// Default display preferences for this taxa group.
+    /// Can be overridden at the list level.
+    /// </summary>
+    public DisplayPreferences? Display { get; init; }
 }
 
 internal sealed class ListPresetsFile {

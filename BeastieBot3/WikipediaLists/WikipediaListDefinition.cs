@@ -128,6 +128,36 @@ internal sealed record GroupingLevelDefinition {
     /// Defaults to "Other {Label}" if not specified.
     /// </summary>
     public string? OtherLabel { get; init; }
+    /// <summary>
+    /// Whether to show rank label in headings (e.g., "Family: [[Familyidae]]").
+    /// Default is false (just show "[[Familyidae]]").
+    /// </summary>
+    public bool ShowRankLabel { get; init; } = false;
+}
+
+/// <summary>
+/// Species listing style for Wikipedia output.
+/// </summary>
+internal enum ListingStyle {
+    /// <summary>
+    /// Style B: Common name focus (default). Shows common name first, scientific name in parentheses.
+    /// Example: [[Western gorilla]] (''Gorilla gorilla'')
+    /// </summary>
+    CommonNameFocus,
+    
+    /// <summary>
+    /// Style A: Scientific name focus. Shows scientific name first, common name after comma.
+    /// Best for plants and invertebrates.
+    /// Example: ''[[Pinus radiata]]'', Monterey pine
+    /// </summary>
+    ScientificNameFocus,
+    
+    /// <summary>
+    /// Style C: Common name only. Shows only common name (falls back to scientific if unavailable).
+    /// Best for mammals, birds, bats, sharks where all species have unambiguous common names.
+    /// Example: [[Western gorilla]]
+    /// </summary>
+    CommonNameOnly
 }
 
 internal sealed class DisplayPreferences {
@@ -140,4 +170,32 @@ internal sealed class DisplayPreferences {
     /// When true, subspecies are indented under a parent species heading.
     /// </summary>
     public bool GroupSubspecies { get; init; } = false;
+    
+    /// <summary>
+    /// Listing style for species entries.
+    /// Default is CommonNameFocus (Style B).
+    /// </summary>
+    public ListingStyle ListingStyle { get; init; } = ListingStyle.CommonNameFocus;
+    
+    /// <summary>
+    /// Whether to separate subspecies, varieties, and subpopulations into their own sections.
+    /// When true, adds "Species", "Subspecies", "Varieties", "Stocks and populations" subheadings.
+    /// Default is false for backward compatibility.
+    /// </summary>
+    public bool SeparateInfraspecificSections { get; init; } = false;
+    
+    /// <summary>
+    /// Whether to filter out regional assessments (subpopulations) from the list.
+    /// Default is false to include all assessments (backward compatible).
+    /// Set to true to show only global assessments.
+    /// </summary>
+    public bool ExcludeRegionalAssessments { get; init; } = false;
+    
+    /// <summary>
+    /// Whether to include family annotation for items in "Other" bucket.
+    /// Example: "[[Species]] (Family: [[Familyidae]])"
+    /// Default is false.
+    /// </summary>
+    public bool IncludeFamilyInOtherBucket { get; init; } = false;
 }
+

@@ -1,6 +1,11 @@
 # Taxonomic group definitions for Wikipedia list generation.
 # Each group defines the filters needed to select taxa from the IUCN database.
 # Reference these by name in wikipedia-lists.yml using "taxa_group: <name>"
+#
+# Listing styles (display.listing_style):
+# - CommonNameFocus (default): [[Common name]] (''Scientific name'')
+# - ScientificNameFocus: ''[[Scientific name]]'', Common name (for plants/invertebrates)
+# - CommonNameOnly: [[Common name]] (for mammals, birds with unambiguous names)
 
 groups:
   # ==================== ANIMALIA - VERTEBRATES ====================
@@ -14,6 +19,8 @@ groups:
 
   birds:
     name: "Birds"
+    display:
+      listing_style: CommonNameOnly  # All birds have common names
     filters:
       - rank: kingdom
         value: Animalia
@@ -30,6 +37,8 @@ groups:
 
   mammals:
     name: "Mammals"
+    display:
+      listing_style: CommonNameOnly  # All mammals have common names
     filters:
       - rank: kingdom
         value: Animalia
@@ -40,6 +49,8 @@ groups:
   # Uses IUCN's "Marine" system tag for accurate filtering
   marine-mammals:
     name: "Marine mammals"
+    display:
+      listing_style: CommonNameOnly  # All marine mammals have common names
     filters:
       - rank: kingdom
         value: Animalia
@@ -98,6 +109,8 @@ groups:
 
   sharks-rays:
     name: "Sharks and rays"
+    display:
+      listing_style: CommonNameOnly  # Sharks/rays have common names
     filters:
       - rank: kingdom
         value: Animalia
@@ -105,8 +118,11 @@ groups:
         value: Chondrichthyes
 
   # ==================== ANIMALIA - INVERTEBRATES ====================
+  # Note: Invertebrates typically use ScientificNameFocus because common names are sparse/unreliable
   insects:
     name: "Insects"
+    display:
+      listing_style: ScientificNameFocus
     filters:
       - rank: kingdom
         value: Animalia
@@ -115,6 +131,8 @@ groups:
 
   gastropods:
     name: "Gastropods"
+    display:
+      listing_style: ScientificNameFocus
     filters:
       - rank: kingdom
         value: Animalia
@@ -123,6 +141,8 @@ groups:
 
   bivalves:
     name: "Bivalves"
+    display:
+      listing_style: ScientificNameFocus
     filters:
       - rank: kingdom
         value: Animalia
@@ -131,6 +151,8 @@ groups:
 
   crustaceans:
     name: "Crustaceans"
+    display:
+      listing_style: ScientificNameFocus
     filters:
       - rank: kingdom
         value: Animalia
@@ -139,6 +161,8 @@ groups:
 
   corals:
     name: "Corals"
+    display:
+      listing_style: ScientificNameFocus
     filters:
       - rank: kingdom
         value: Animalia
@@ -147,6 +171,8 @@ groups:
 
   arachnids:
     name: "Arachnids"
+    display:
+      listing_style: ScientificNameFocus
     filters:
       - rank: kingdom
         value: Animalia
@@ -161,14 +187,19 @@ groups:
         value: Animalia
 
   # ==================== PLANTAE ====================
+  # Note: Plants use ScientificNameFocus because common names are sparse/unreliable
   plants:
     name: "Plants"
+    display:
+      listing_style: ScientificNameFocus
     filters:
       - rank: kingdom
         value: Plantae
 
   conifers:
     name: "Conifers"
+    display:
+      listing_style: ScientificNameFocus
     filters:
       - rank: kingdom
         value: Plantae
@@ -177,6 +208,8 @@ groups:
 
   cycads:
     name: "Cycads"
+    display:
+      listing_style: ScientificNameFocus
     filters:
       - rank: kingdom
         value: Plantae
@@ -186,12 +219,16 @@ groups:
   # ==================== OTHER KINGDOMS ====================
   fungi:
     name: "Fungi"
+    display:
+      listing_style: ScientificNameFocus
     filters:
       - rank: kingdom
         value: Fungi
 
   chromista:
     name: "Chromista"
+    display:
+      listing_style: ScientificNameFocus
     filters:
       - rank: kingdom
         value: Chromista
