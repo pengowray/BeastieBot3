@@ -60,6 +60,7 @@ These notes exist so the next AI (or human) that drops into this repo avoids the
 - [BeastieBot3/WikipediaLists/WikipediaListGenerator.cs](BeastieBot3/WikipediaLists/WikipediaListGenerator.cs) produces wikitext files from YAML definitions and IUCN SQLite data.
 - Output goes to `Datastore:wikipedia_output_dir` (default: `D:\datasets\beastiebot\wikipedia-lists`)
 - Output format uses `{{IUCN status|XX|taxonId/assessmentId|1|year=YYYY}}` at end of each species line. The `|1` makes the link visible.
+- Legacy rule behavior and its YAML mapping are summarized in [docs/wikipedia-list-legacy-rules.md](docs/wikipedia-list-legacy-rules.md).
 - **Status codes for Wikipedia template:**
   - `CR(PE)` for Critically Endangered species with `possiblyExtinct = 'true'`
   - `CR(PEW)` for Critically Endangered species with `possiblyExtinctInTheWild = 'true'`
@@ -235,6 +236,15 @@ For mammals, birds, bats, sharks & rays (unambiguous common names for all specie
   - For animals, omit "ssp." entirely
 - **IUCN status template**: All entries include `{{IUCN status|XX|taxonId/assessmentId|1|year=YYYY}}`
 
+### Infraspecific display modes
+
+Lists can choose how subspecies/varieties/populations are shown:
+
+- `infraspecific_display_mode: SeparateSections` (default): Adds bold `Species/Subspecies/Varieties/Stocks and populations` headers with `{{div col}}` wrappers.
+- `infraspecific_display_mode: GroupedUnderSpecies`: Lists subspecies/varieties/populations as sub-bullets under the parent species. Sub-bullets abbreviate the genus (e.g., `''G. species'' subsp. ''name''`).
+
+Use `GroupedUnderSpecies` for all-assessments lists (preset `all-status`), and `SeparateSections` for most status-specific lists.
+
 ## List section structure
 
 ### Taxa grouping headings
@@ -257,6 +267,9 @@ When 3+ families each have ≤4 species, merge into "Other [parent taxon]" headi
 ```
 
 Note: Only first family instance is linked.
+"Other ..." headings are plain text (no link).
+
+Implementation detail: set `min_items: 5` and `min_groups_for_other: 3` on the family grouping level in YAML to enable this behavior.
 
 ### Subspecies, Variety, and Subpopulation sections
 

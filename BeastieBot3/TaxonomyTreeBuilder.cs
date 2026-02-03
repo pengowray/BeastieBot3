@@ -120,6 +120,12 @@ internal static class TaxonomyTreeBuilder {
                 .ToList();
 
             if (smallGroups.Count > 0) {
+                if (level.MinGroupsForOther > 0 && smallGroups.Count < level.MinGroupsForOther) {
+                    return buckets.Values
+                        .OrderBy(group => group.DisplayValue, comparer)
+                        .ToList();
+                }
+
                 // Only merge if there's more than one small group, or if there's at least one item
                 var totalSmallItems = smallGroups.Sum(g => g.Items.Count);
                 if (totalSmallItems > 0) {
@@ -142,8 +148,19 @@ internal static class TaxonomyTreeBuilder {
         }
 
         return buckets.Values
-            .OrderBy(group => group.DisplayValue, comparer)
+            .OrderBy(group => IsOtherLabel(group.DisplayValue) ? 1 : 0)
+            .ThenBy(group => group.DisplayValue, comparer)
             .ToList();
+    }
+
+    private static bool IsOtherLabel(string value) {
+        if (string.IsNullOrWhiteSpace(value)) {
+            return false;
+        }
+
+        var trimmed = value.Trim();
+        return trimmed.Equals("Other", StringComparison.OrdinalIgnoreCase)
+            || trimmed.StartsWith("Other ", StringComparison.OrdinalIgnoreCase);
     }
 
     private sealed class TreeGroup<T> {
@@ -194,4 +211,5 @@ internal sealed record TaxonomyTreeLevel<T>(
     bool AlwaysDisplay = false, 
     string? UnknownLabel = null,
     int MinItems = 1,
-    string? OtherLabel = null);
+    string? OtherLabel = null,
+    int MinGroupsForOther = 0);

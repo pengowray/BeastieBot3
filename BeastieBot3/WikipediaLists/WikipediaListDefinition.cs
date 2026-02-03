@@ -129,6 +129,11 @@ internal sealed record GroupingLevelDefinition {
     /// </summary>
     public string? OtherLabel { get; init; }
     /// <summary>
+    /// Minimum number of small groups required before merging into "Other".
+    /// Default is 0 (no minimum; any small groups can be merged when MinItems applies).
+    /// </summary>
+    public int MinGroupsForOther { get; init; } = 0;
+    /// <summary>
     /// Whether to show rank label in headings (e.g., "Family: [[Familyidae]]").
     /// Default is false (just show "[[Familyidae]]").
     /// </summary>
@@ -160,6 +165,17 @@ internal enum ListingStyle {
     CommonNameOnly
 }
 
+internal enum InfraspecificDisplayMode {
+    /// <summary>
+    /// Use separate sections for Species, Subspecies, Varieties, and Stocks/Populations.
+    /// </summary>
+    SeparateSections,
+    /// <summary>
+    /// Group subspecies/varieties/populations under their parent species as sub-bullets.
+    /// </summary>
+    GroupedUnderSpecies
+}
+
 internal sealed class DisplayPreferences {
     public bool PreferCommonNames { get; init; } = true;
     public bool ItalicizeScientific { get; init; } = true;
@@ -176,6 +192,12 @@ internal sealed class DisplayPreferences {
     /// Default is CommonNameFocus (Style B).
     /// </summary>
     public ListingStyle ListingStyle { get; init; } = ListingStyle.CommonNameFocus;
+
+    /// <summary>
+    /// How to display infraspecific taxa (subspecies, varieties, and populations).
+    /// Default is SeparateSections for backward compatibility.
+    /// </summary>
+    public InfraspecificDisplayMode InfraspecificDisplayMode { get; init; } = InfraspecificDisplayMode.SeparateSections;
     
     /// <summary>
     /// Whether to separate subspecies, varieties, and subpopulations into their own sections.

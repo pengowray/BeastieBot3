@@ -134,6 +134,9 @@ internal sealed class WikipediaListDefinitionLoader {
         var description = raw.Description ?? ExpandTemplate(preset.DescriptionTemplate, vars);
         var outputFile = raw.OutputFile ?? ExpandTemplate(preset.OutputTemplate, vars);
 
+        var mergedDisplay = DisplayPreferenceMerger.Merge(preset.Display, taxaGroup.Display);
+        mergedDisplay = DisplayPreferenceMerger.Merge(mergedDisplay, raw.Display);
+
         return new WikipediaListDefinition {
             Id = raw.Id,
             Title = title ?? $"List of {vars["taxa_name_lower"]}",
@@ -146,7 +149,7 @@ internal sealed class WikipediaListDefinitionLoader {
             Filters = raw.Filters ?? taxaGroup.Filters ?? new(),
             Sections = raw.Sections ?? preset.Sections ?? new(),
             Grouping = raw.Grouping,
-            Display = raw.Display ?? taxaGroup.Display,
+            Display = mergedDisplay,
             CustomGroups = raw.CustomGroups ?? taxaGroup.CustomGroups,
         };
     }
@@ -245,4 +248,34 @@ internal sealed class ListPresetDefinition {
     public string? OutputTemplate { get; init; }
     public TemplateSettings? Templates { get; init; }
     public List<WikipediaSectionDefinition>? Sections { get; init; }
+    public DisplayPreferences? Display { get; init; }
+}
+
+internal static class DisplayPreferenceMerger {
+    public static DisplayPreferences? Merge(DisplayPreferences? basePrefs, DisplayPreferences? overridePrefs) {
+        if (basePrefs == null) {
+            return overridePrefs;
+        }
+
+        if (overridePrefs == null) {
+            return basePrefs;
+        }
+
+        return new DisplayPreferences {
+            PreferCommonNames = overridePrefs.PreferCommonNames,
+            ItalicizeScientific = overridePrefs.ItalicizeScientific,
+            IncludeStatusTemplate = overridePrefs.IncludeStatusTemplate,
+            IncludeStatusLabel = overridePrefs.IncludeStatusLabel,
+            GroupSubspecies = overridePrefs.GroupSubspecies || basePrefs.GroupSubspecies,
+            ListingStyle = overridePrefs.ListingStyle != ListingStyle.CommonNameFocus
+                ? overridePrefs.ListingStyle
+                : basePrefs.ListingStyle,
+            InfraspecificDisplayMode = overridePrefs.InfraspecificDisplayMode != InfraspecificDisplayMode.SeparateSections
+                ? overridePrefs.InfraspecificDisplayMode
+                : basePrefs.InfraspecificDisplayMode,
+            SeparateInfraspecificSections = overridePrefs.SeparateInfraspecificSections || basePrefs.SeparateInfraspecificSections,
+            ExcludeRegionalAssessments = overridePrefs.ExcludeRegionalAssessments || basePrefs.ExcludeRegionalAssessments,
+            IncludeFamilyInOtherBucket = overridePrefs.IncludeFamilyInOtherBucket || basePrefs.IncludeFamilyInOtherBucket,
+        };
+    }
 }

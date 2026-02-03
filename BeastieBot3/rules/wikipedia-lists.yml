@@ -18,7 +18,9 @@ defaults:
       label: "Family"
       always_display: false
       unknown_label: "Unassigned families"
-      show_rank_label: true  # Show "Family: [[Familyidae]]" format
+      min_items: 5
+      min_groups_for_other: 3
+      show_rank_label: true  # Show "Family [[Familyidae]]" format
   display:
     prefer_common_names: true
     italicize_scientific: true

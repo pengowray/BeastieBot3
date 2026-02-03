@@ -158,6 +158,8 @@ presets:
     output_template: "List_of_{taxa_name}_by_conservation_status.wikitext"
     templates:
       header: taxonomy-status-summary
+    display:
+      infraspecific_display_mode: GroupedUnderSpecies
     sections:
       - key: extinct
         heading: "Extinct"
