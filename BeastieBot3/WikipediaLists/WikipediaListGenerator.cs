@@ -201,9 +201,8 @@ internal sealed class WikipediaListGenerator {
         }
 
         // Filter out regional assessments if requested
-        var filteredRecords = display.ExcludeRegionalAssessments 
-            ? records.Where(r => string.IsNullOrWhiteSpace(r.SubpopulationName)).ToList()
-            : records.ToList();
+        // Regional assessments are excluded from main lists to keep output global-only
+        var filteredRecords = records.Where(r => !IsRegionalAssessment(r)).ToList();
 
         if (filteredRecords.Count == 0) {
             return ("''No taxa currently listable (all filtered as regional assessments).''", 0);
@@ -274,8 +273,8 @@ internal sealed class WikipediaListGenerator {
         var populations = new List<IucnSpeciesRecord>();
 
         foreach (var record in records) {
-            // Check for subpopulation (regional assessment) first
-            if (!string.IsNullOrWhiteSpace(record.SubpopulationName)) {
+            // Check for non-global assessments first (regional scopes or subpopulations)
+            if (IsRegionalAssessment(record)) {
                 populations.Add(record);
                 continue;
             }
@@ -1172,7 +1171,39 @@ internal sealed class WikipediaListGenerator {
     }
 
     private static bool IsRegionalAssessment(IucnSpeciesRecord record) {
-        return !string.IsNullOrWhiteSpace(record.SubpopulationName);
+        if (!string.IsNullOrWhiteSpace(record.SubpopulationName)) {
+            return true;
+        }
+
+        var scopes = record.Scopes;
+        if (string.IsNullOrWhiteSpace(scopes)) {
+            return false;
+        }
+
+        var parts = scopes.Split(new[] { ',', ';', '&' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+        var hasGlobalScope = parts.Any(part => part.Contains("global", StringComparison.OrdinalIgnoreCase));
+        if (hasGlobalScope) {
+            return false;
+        }
+
+        return parts.Length > 0;
+    }
+
+    private static string? GetRegionalScopeLabel(IucnSpeciesRecord record) {
+        if (!IsRegionalAssessment(record)) {
+            return null;
+        }
+
+        if (string.IsNullOrWhiteSpace(record.Scopes)) {
+            return null;
+        }
+
+        var parts = record.Scopes
+            .Split(new[] { ',', ';', '&' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Where(part => !part.Contains("global", StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        return parts.Count == 0 ? null : string.Join(", ", parts);
     }
 
     private static InfraspecificDisplayMode ResolveInfraspecificMode(DisplayPreferences display) {
@@ -1238,9 +1269,22 @@ internal sealed class WikipediaListGenerator {
             builder.Append(')');
         }
 
-        if (!string.IsNullOrWhiteSpace(record.SubpopulationName)) {
-            builder.Append(" (subpopulation: ");
-            builder.Append(record.SubpopulationName);
+        var scopeLabel = GetRegionalScopeLabel(record);
+        if (!string.IsNullOrWhiteSpace(record.SubpopulationName) || !string.IsNullOrWhiteSpace(scopeLabel)) {
+            builder.Append(" (");
+            if (!string.IsNullOrWhiteSpace(record.SubpopulationName)) {
+                builder.Append("subpopulation: ");
+                builder.Append(record.SubpopulationName);
+            }
+
+            if (!string.IsNullOrWhiteSpace(scopeLabel)) {
+                if (!string.IsNullOrWhiteSpace(record.SubpopulationName)) {
+                    builder.Append("; ");
+                }
+                builder.Append("scope: ");
+                builder.Append(scopeLabel);
+            }
+
             builder.Append(')');
         }
 
@@ -1447,9 +1491,22 @@ internal sealed class WikipediaListGenerator {
         }
 
         // Append subpopulation name if present
-        if (!string.IsNullOrWhiteSpace(record.SubpopulationName)) {
-            builder.Append(" (subpopulation: ");
-            builder.Append(record.SubpopulationName);
+        var scopeLabel = GetRegionalScopeLabel(record);
+        if (!string.IsNullOrWhiteSpace(record.SubpopulationName) || !string.IsNullOrWhiteSpace(scopeLabel)) {
+            builder.Append(" (");
+            if (!string.IsNullOrWhiteSpace(record.SubpopulationName)) {
+                builder.Append("subpopulation: ");
+                builder.Append(record.SubpopulationName);
+            }
+
+            if (!string.IsNullOrWhiteSpace(scopeLabel)) {
+                if (!string.IsNullOrWhiteSpace(record.SubpopulationName)) {
+                    builder.Append("; ");
+                }
+                builder.Append("scope: ");
+                builder.Append(scopeLabel);
+            }
+
             builder.Append(')');
         }
 

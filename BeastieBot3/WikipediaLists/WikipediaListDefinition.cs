@@ -208,10 +208,9 @@ internal sealed class DisplayPreferences {
     
     /// <summary>
     /// Whether to filter out regional assessments (subpopulations) from the list.
-    /// Default is false to include all assessments (backward compatible).
-    /// Set to true to show only global assessments.
+    /// Regional assessments are never included in main lists; default is true to enforce global-only output.
     /// </summary>
-    public bool ExcludeRegionalAssessments { get; init; } = false;
+    public bool ExcludeRegionalAssessments { get; init; } = true;
     
     /// <summary>
     /// Whether to include family annotation for items in "Other" bucket.

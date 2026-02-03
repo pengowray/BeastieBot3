@@ -81,6 +81,7 @@ internal sealed class IucnListQueryService : IDisposable {
         builder.AppendLine("    v.infraType,");
         builder.AppendLine("    v.infraName,");
         builder.AppendLine("    v.subpopulationName,");
+        builder.AppendLine("    v.scopes,");
         builder.AppendLine("    v.authority,");
         builder.AppendLine("    v.infraAuthority,");
         builder.AppendLine("    v.yearPublished");
@@ -218,6 +219,7 @@ internal sealed class IucnListQueryService : IDisposable {
             GetStringOrNull(reader, "infraType"),
             GetStringOrNull(reader, "infraName"),
             GetStringOrNull(reader, "subpopulationName"),
+            GetStringOrNull(reader, "scopes"),
             GetStringOrNull(reader, "authority"),
             GetStringOrNull(reader, "infraAuthority"),
             possiblyExtinct,
@@ -253,6 +255,7 @@ internal sealed record IucnSpeciesRecord(
     string? InfraType,
     string? InfraName,
     string? SubpopulationName,
+    string? Scopes,
     string? Authority,
     string? InfraAuthority,
     string? PossiblyExtinct,

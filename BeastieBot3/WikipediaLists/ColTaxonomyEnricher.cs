@@ -168,6 +168,7 @@ internal sealed class ColTaxonomyEnricher : IDisposable {
             InfraType: iucn.InfraType,
             InfraName: iucn.InfraName,
             SubpopulationName: iucn.SubpopulationName,
+            Scopes: iucn.Scopes,
             Authority: iucn.Authority,
             InfraAuthority: iucn.InfraAuthority,
             PossiblyExtinct: iucn.PossiblyExtinct,
@@ -243,6 +244,7 @@ internal sealed record EnrichedSpeciesRecord(
     string? InfraType,
     string? InfraName,
     string? SubpopulationName,
+    string? Scopes,
     string? Authority,
     string? InfraAuthority,
     string? PossiblyExtinct,
@@ -274,6 +276,6 @@ internal sealed record EnrichedSpeciesRecord(
         ScientificNameAssessments, ScientificNameTaxonomy,
         KingdomName, PhylumName, ClassName, OrderName, FamilyName,
         GenusName, SpeciesName, InfraType, InfraName, SubpopulationName,
-        Authority, InfraAuthority, PossiblyExtinct, PossiblyExtinctInTheWild, YearPublished
+        Scopes, Authority, InfraAuthority, PossiblyExtinct, PossiblyExtinctInTheWild, YearPublished
     );
 }
