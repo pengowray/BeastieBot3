@@ -5,6 +5,13 @@ using System.Net;
 using System.Text;
 using System.Text.RegularExpressions;
 
+// HTML-to-text conversion for IUCN assessment narratives. Handles:
+// - Tag stripping with special cases (<p>, <br>, <li> → newlines)
+// - HTML entity decoding (&amp;, &#123;, etc.)
+// - IUCN-specific patterns (non-breaking spaces, line breaking)
+// - Two modes: "Exact" for comparison, "Friendly" for display
+// Used by IucnHtmlConsistencyCommand for field validation.
+
 namespace BeastieBot3;
 
 internal static class IucnHtmlUtilities {

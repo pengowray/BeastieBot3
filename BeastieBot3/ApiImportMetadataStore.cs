@@ -1,6 +1,11 @@
 using System;
 using Microsoft.Data.Sqlite;
 
+// Shared component embedded in each cache database (IucnApiCacheStore, WikidataCacheStore,
+// WikipediaCacheStore). Creates an import_metadata table that logs each HTTP request with
+// timing, status codes, and payload sizes. Used for debugging, progress tracking, and
+// identifying failed requests that need retry.
+
 namespace BeastieBot3;
 
 /// <summary>

@@ -8,6 +8,11 @@ using Microsoft.Data.Sqlite;
 using Spectre.Console;
 using Spectre.Console.Cli;
 
+// Helper command to generate YAML configuration for marine mammals lists.
+// Analyzes Carnivora (seals/sea lions), Cetartiodactyla (whales/dolphins),
+// Sirenia (manatees). Outputs virtual_groups definitions for list YAML.
+// Utility for list definition authoring, not part of main workflow.
+
 namespace BeastieBot3.WikipediaLists;
 
 /// <summary>

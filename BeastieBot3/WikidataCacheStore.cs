@@ -5,6 +5,13 @@ using System.IO;
 using System.Threading;
 using Microsoft.Data.Sqlite;
 
+// SQLite store for Wikidata entities (Datastore:wikidata_cache_sqlite).
+// Schema: wikidata_items (qid, status, json_response), wikidata_iucn_id
+// (sis_id→qid mapping from P627), wikidata_sitelinks (qid→wiki article titles).
+// Seeded via SPARQL: "?item wdt:P627 ?iucnId" finds taxa with IUCN IDs.
+// JSON parsed by WikidataEntityParser for P1843 (common names), P225 (taxon name).
+// Used by WikipediaEnqueueCommand to find article titles for species.
+
 namespace BeastieBot3;
 
 internal sealed class WikidataCacheStore : IDisposable {

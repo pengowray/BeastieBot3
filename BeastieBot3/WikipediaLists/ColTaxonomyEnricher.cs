@@ -4,6 +4,12 @@ using System.Linq;
 using System.Threading;
 using Microsoft.Data.Sqlite;
 
+// Enriches IUCN species with additional ranks from COL's NameUsage table.
+// IUCN has limited taxonomy (class/order/family); COL provides suborder,
+// superfamily, infraorder, etc. Enables list groupings like separating
+// snakes (Serpentes) from lizards within Squamata. Uses ColNameUsageRepository
+// to query COL parent chain. Called by WikipediaListGenerator.
+
 namespace BeastieBot3.WikipediaLists;
 
 /// <summary>

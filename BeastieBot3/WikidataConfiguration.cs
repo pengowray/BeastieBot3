@@ -1,5 +1,12 @@
 using System;
 
+// Configuration record for WikidataApiClient. Environment variables:
+// - WIKIDATA_API_ENDPOINT (default: www.wikidata.org)
+// - WIKIDATA_SPARQL_ENDPOINT (default: query.wikidata.org/sparql)
+// - WIKIDATA_USER_AGENT (required: Wikimedia policy)
+// - WIKIDATA_REQUEST_DELAY_MS, WIKIDATA_SPARQL_BATCH_SIZE
+// Calls EnvFileLoader.LoadIfPresent() at startup.
+
 namespace BeastieBot3;
 
 internal sealed record WikidataConfiguration(

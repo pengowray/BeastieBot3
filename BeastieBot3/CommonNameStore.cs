@@ -3,6 +3,12 @@ using System.Collections.Generic;
 using System.IO;
 using Microsoft.Data.Sqlite;
 
+// Unified SQLite store aggregating vernacular names from IUCN, Wikidata, Wikipedia, and COL.
+// Schema: taxa (sis_id, scientific_name), common_names (name, language, source, taxon_id),
+// caps_rules (capitalization overrides from caps.txt). Detects ambiguous names that map to
+// multiple taxa. Used by CommonNameAggregateCommand to import, CommonNameReportCommand for
+// analysis, and StoreBackedCommonNameProvider for Wikipedia list generation.
+
 namespace BeastieBot3;
 
 /// <summary>

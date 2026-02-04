@@ -11,6 +11,12 @@ using Microsoft.Data.Sqlite;
 using Spectre.Console;
 using Spectre.Console.Cli;
 
+// Analyzes synonym entries from IUCN API cache (taxa_cache JSON). Reports:
+// - Missing or malformed authority strings
+// - Inconsistent year formatting in authorities
+// - Duplicate synonym entries per taxon
+// Parses synonym array from each taxa JSON. Outputs Markdown to reports dir.
+
 namespace BeastieBot3;
 
 public sealed class IucnSynonymFormattingReportCommand : Command<IucnSynonymFormattingReportCommand.Settings> {

@@ -4,6 +4,11 @@ using Spectre.Console;
 using Spectre.Console.Cli;
 using System.Threading;
 
+// Diagnostic command to display resolved paths from paths.ini configuration.
+// Shows all [Datastore] and [Dirs] values with resolved absolute paths.
+// Useful for debugging path resolution issues across platforms.
+// Run via: show-paths
+
 namespace BeastieBot3 {
     public sealed class ShowPathsCommand : Command<CommonSettings> {
         public override int Execute(CommandContext context, CommonSettings settings, CancellationToken cancellationToken) {

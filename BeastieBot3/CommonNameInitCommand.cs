@@ -7,6 +7,11 @@ using System.Threading.Tasks;
 using Spectre.Console;
 using Spectre.Console.Cli;
 
+// First step in common-names workflow. Creates the CommonNameStore database schema,
+// imports all taxa from IUCN CSV database (sis_id, scientific_name, kingdom, etc.),
+// and loads caps.txt rules. Must run before common-names aggregate. Reads from
+// paths.ini [Datastore] iucn_sqlite_from_csv and common_names_sqlite.
+
 namespace BeastieBot3;
 
 /// <summary>

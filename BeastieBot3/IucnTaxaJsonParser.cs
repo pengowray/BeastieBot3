@@ -2,6 +2,12 @@ using System;
 using System.Collections.Generic;
 using System.Text.Json;
 
+// Parses /api/v4/taxa/sis/{id} JSON responses into structured records.
+// Extracts: sis_id, scientific_name, kingdom/phylum/class/order/family,
+// assessment_id references, and scope mappings (species/subpopulation/infrarank).
+// Returns ParsedTaxaDocument with TaxaLookupRow list for hierarchy tracking.
+// Used by IucnApiCacheTaxaCommand during cache population.
+
 namespace BeastieBot3;
 
 internal static class IucnTaxaJsonParser {

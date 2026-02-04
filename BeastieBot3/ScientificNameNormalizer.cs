@@ -2,6 +2,13 @@ using System;
 using System.Collections.Generic;
 using System.Text.RegularExpressions;
 
+// Normalizes scientific names for fuzzy matching across databases. Features:
+// - Strips authority strings ("Linnaeus, 1758")
+// - Handles subgenus: "Genus (Subgenus) species" → "Genus species"
+// - Expands rank markers: "var." → "variety", "subsp." → "subspecies"
+// - Generates variants for matching (with/without subgenus, rank variations)
+// Critical for IucnColCrosscheckCommand and Wikipedia matching.
+
 namespace BeastieBot3;
 
 /// <summary>

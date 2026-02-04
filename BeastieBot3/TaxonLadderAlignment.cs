@@ -3,6 +3,12 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
 
+// Aligns multiple TaxonLadder instances for side-by-side comparison.
+// Uses canonical rank order: domain→kingdom→phylum→class→order→family→genus→species.
+// Identifies where IUCN/COL/Wikipedia disagree (e.g., different family assignment).
+// Returns AlignedRow entries with values from each source at each rank.
+// Used for taxonomy discrepancy reports.
+
 namespace BeastieBot3;
 
 internal static class TaxonLadderAlignment {

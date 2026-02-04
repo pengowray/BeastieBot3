@@ -4,6 +4,11 @@ using System.IO;
 using Stubble.Core.Builders;
 using Stubble.Core.Classes;
 
+// Mustache template renderer using Stubble library. Uses custom delimiters
+// ("<?" and "?>") to avoid conflicts with MediaWiki template syntax.
+// Caches loaded templates from Dirs:list_templates. Renders header/footer
+// and per-row content for Wikipedia list articles.
+
 namespace BeastieBot3.WikipediaLists;
 
 internal sealed class WikipediaTemplateRenderer {

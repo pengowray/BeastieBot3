@@ -1,3 +1,7 @@
+// WikidataIucnFreshnessAnalyzer.cs
+// Analyzes freshness of IUCN data in Wikidata entities. Compares conservation
+// status (P141) values against current IUCN assessments to identify stale entries.
+
 using System;
 using System.Collections.Generic;
 using System.Data;

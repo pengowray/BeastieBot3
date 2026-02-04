@@ -3,6 +3,12 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
 
+// Immutable representation of a taxonomic hierarchy from one source.
+// Contains TaxonLadderNode entries keyed by rank (kingdom, phylum, class, etc.).
+// Created by TaxonLadderFactory from IUCN/COL/Wikipedia records. Used by
+// TaxonLadderAlignment to compare classifications across sources. Each node
+// stores rank name, taxon name, and optional authority.
+
 namespace BeastieBot3;
 
 internal sealed class TaxonLadder {

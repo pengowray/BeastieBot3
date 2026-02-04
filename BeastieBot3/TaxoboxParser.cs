@@ -4,6 +4,12 @@ using System.Globalization;
 using System.Text;
 using System.Text.Json;
 
+// Extracts taxonomy data from Wikipedia wikitext taxobox templates. Supported
+// templates: {{Taxobox}}, {{Automatic taxobox}}, {{Speciesbox}}, {{Subspeciesbox}},
+// {{Insectbox}}, {{Infraspeciesbox}}, {{Virusbox}}. Extracts: taxon, name,
+// genus, species, binomial, parent, familia, classis. Used by Wikipedia cache
+// commands for matching species articles to IUCN taxa.
+
 namespace BeastieBot3;
 
 internal static class TaxoboxParser {

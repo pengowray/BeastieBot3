@@ -2,6 +2,13 @@ using System;
 using System.Globalization;
 using System.Text;
 
+// Normalizes Wikipedia page titles for consistent matching. Rules:
+// - Convert underscores to spaces, then collapse multiple spaces
+// - First character uppercase (Wikipedia's canonical form)
+// - Remove fragment anchors (#section)
+// - URL-decode percent-encoded characters
+// Used by WikipediaMatchTaxaCommand for title comparison.
+
 namespace BeastieBot3;
 
 internal static class WikipediaTitleHelper {

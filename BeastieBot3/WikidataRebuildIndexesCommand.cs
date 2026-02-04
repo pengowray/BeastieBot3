@@ -1,3 +1,7 @@
+// WikidataRebuildIndexesCommand.cs
+// CLI command that rebuilds lookup indexes in the Wikidata cache database.
+// Regenerates taxon name and P141 indexes for improved query performance.
+
 using System;
 using System.ComponentModel;
 using System.Threading;

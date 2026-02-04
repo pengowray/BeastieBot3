@@ -8,6 +8,12 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 
+// HTTP client for English Wikipedia with two endpoints:
+// 1. Action API (api.php?action=query): page metadata, revisions, redirects
+// 2. REST API (api/rest_v1/page/html|mobile-html): rendered content
+// Uses WikipediaConfiguration for User-Agent and rate limits. Implements
+// semaphore-based concurrency and exponential backoff. Used by WikipediaPageFetcher.
+
 namespace BeastieBot3;
 
 internal sealed class WikipediaApiClient : IDisposable {

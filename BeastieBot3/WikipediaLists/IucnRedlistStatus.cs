@@ -3,6 +3,11 @@ using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 
+// Maps IUCN Red List category codes to display names and sort order.
+// Categories: EX (Extinct), EW, CR, CR(PE), CR(PEW), EN, VU, NT, LC, DD, NE.
+// Provides TriStateFilter for possibly-extinct flags (PE, PEW).
+// Used by WikipediaListGenerator for status display and ordering.
+
 namespace BeastieBot3.WikipediaLists;
 
 internal static class IucnRedlistStatus {

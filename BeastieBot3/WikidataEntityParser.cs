@@ -2,6 +2,13 @@ using System;
 using System.Collections.Generic;
 using System.Text.Json;
 
+// Parses Wikidata entity JSON into WikidataEntityRecord. Extracts:
+// - Labels and descriptions (multilingual)
+// - Claims: P627 (IUCN ID), P225 (taxon name), P1843 (vernacular names),
+//   P141 (IUCN conservation status), P105 (taxon rank)
+// - Sitelinks: article titles on enwiki, specieswiki, commonswiki
+// Used by WikidataCacheStore after downloading entity JSON.
+
 namespace BeastieBot3;
 
 internal static class WikidataEntityParser {

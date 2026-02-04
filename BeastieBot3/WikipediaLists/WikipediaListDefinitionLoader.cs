@@ -6,6 +6,12 @@ using System.Text.RegularExpressions;
 using YamlDotNet.Serialization;
 using YamlDotNet.Serialization.NamingConventions;
 
+// Loads list configuration from YAML (via YamlDotNet). File structure:
+// defaults: (header_template, footer_template, grouping)
+// lists: [{id, title, filter: {taxonomy, status}, grouping, display}]
+// Uses underscored_naming convention. Validates required fields.
+// Called by WikipediaListCommand with --config parameter.
+
 namespace BeastieBot3.WikipediaLists;
 
 internal sealed class WikipediaListDefinitionLoader {

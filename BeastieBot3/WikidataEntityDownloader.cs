@@ -4,6 +4,11 @@ using System.Threading;
 using System.Threading.Tasks;
 using Spectre.Console;
 
+// Downloads single Wikidata entity via WikidataApiClient.GetEntityAsync().
+// Records import metadata (timing, status) via ApiImportMetadataStore.
+// Called in a loop by WikidataCacheItemsCommand for each pending Q-ID.
+// Stores raw JSON response in WikidataCacheStore.wikidata_items table.
+
 namespace BeastieBot3;
 
 internal static class WikidataEntityDownloader {

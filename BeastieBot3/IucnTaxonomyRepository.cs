@@ -4,6 +4,12 @@ using System.Data;
 using System.Threading;
 using Microsoft.Data.Sqlite;
 
+// Data access for CSV-imported IUCN database (Datastore:IUCN_sqlite_from_cvs).
+// Queries taxonomy table: sis_id, scientific_name, kingdom, phylum, class,
+// order, family, genus, species, subspecies, authority, main_common_name.
+// Returns IucnTaxonomyRow records. Used by import commands, analyzers, and
+// crosscheck commands. Separate from API cache which is IucnApiCacheStore.
+
 namespace BeastieBot3;
 
 internal sealed class IucnTaxonomyRepository {

@@ -5,6 +5,12 @@ using System.Linq;
 using System.Text.Json;
 using Microsoft.Data.Sqlite;
 
+// Retrieves the best common name for a taxon by querying Wikidata and IUCN API
+// caches. Uses priority ordering: Wikidata P1843 claims (with English preferred),
+// then IUCN main_common_name. Caches results in memory to avoid repeated DB queries.
+// Consumed by WikipediaListGenerator for building species lists. Requires both
+// Datastore:wikidata_cache_sqlite and Datastore:IUCN_api_cache_sqlite paths.
+
 namespace BeastieBot3;
 
 internal sealed class CommonNameProvider : IDisposable {

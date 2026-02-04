@@ -1,3 +1,8 @@
+// WikidataIucnFreshnessReportCommand.cs
+// CLI command that generates reports on Wikidata entries with outdated IUCN
+// conservation status. Identifies entities needing updates to match current
+// Red List assessments.
+
 using System;
 using System.ComponentModel;
 using System.Globalization;

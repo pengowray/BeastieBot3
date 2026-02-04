@@ -3,6 +3,12 @@ using System.Collections.Generic;
 using System.IO;
 using Microsoft.Extensions.Configuration;
 
+// Reads paths.ini configuration using Microsoft.Extensions.Configuration.
+// Returns flattened keys like "Datastore:IUCN_sqlite_from_cvs" from [Datastore]
+// section. Paths are relative to the INI file location unless absolute.
+// Supports optional platform-specific files (paths-win.ini, paths-linux.ini)
+// which are tried first. Used by PathsService for centralized path resolution.
+
 namespace BeastieBot3 {
     // Reads path values from an INI file (default: "paths.ini" next to the app).
     // All key/value pairs across all sections are returned as flattened keys like "Section:Key".

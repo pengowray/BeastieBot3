@@ -4,6 +4,11 @@ using System.Threading.Tasks;
 using Spectre.Console;
 using Spectre.Console.Cli;
 
+// Convenience command that runs both Wikidata caching steps sequentially:
+// 1. Seed: SPARQL query to find taxon Q-IDs with IUCN IDs (P627)
+// 2. Cache: Download entity JSON for each seeded Q-ID
+// Creates/updates Datastore:wikidata_cache_sqlite. Run via: wikidata cache full
+
 namespace BeastieBot3;
 
 public sealed class WikidataCacheFullSettings : CommonSettings {

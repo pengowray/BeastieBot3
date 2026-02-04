@@ -1,3 +1,7 @@
+// WikidataIucnMatchLookup.cs
+// Looks up IUCN taxa matches in the Wikidata cache. Searches by SIS ID (P627)
+// and scientific name to find corresponding Wikidata entities for taxa.
+
 using System.Data;
 using Microsoft.Data.Sqlite;
 

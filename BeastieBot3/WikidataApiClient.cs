@@ -8,6 +8,13 @@ using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 
+// HTTP client for Wikidata with two endpoints:
+// 1. REST API (www.wikidata.org/wiki/Special:EntityData) for entity JSON
+// 2. SPARQL (query.wikidata.org/sparql) for taxon discovery queries
+// Uses WikidataConfiguration for User-Agent and rate limits. Implements
+// exponential backoff for 429/5xx. Used by WikidataCacheItemsCommand and
+// WikidataSeedCommand.
+
 namespace BeastieBot3;
 
 internal sealed class WikidataApiClient : IDisposable {

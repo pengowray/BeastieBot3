@@ -3,6 +3,12 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 
+// Analyzes IUCN taxonomy data for cleanup opportunities. Detects: duplicate
+// scientific names, inconsistent authority formatting, missing fields (class,
+// order, family), and data quality issues. Returns DataCleanupAnalysisResult
+// with categorized samples. Used by IucnTaxonomyCleanupCommand. Operates on
+// IucnTaxonomyRow records from IucnTaxonomyRepository.
+
 namespace BeastieBot3;
 
 internal static class IucnDataCleanupAnalyzer {

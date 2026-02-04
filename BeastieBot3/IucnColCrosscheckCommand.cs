@@ -10,6 +10,12 @@ using Microsoft.Data.Sqlite;
 using Spectre.Console;
 using Spectre.Console.Cli;
 
+// Cross-references IUCN Red List against Catalogue of Life (COL) for consistency.
+// Uses IucnTaxonomyRepository and ColTaxonRepository to compare accepted species.
+// Reports: taxa in IUCN but not COL, taxa in COL but not IUCN, name/authority
+// mismatches. Outputs Markdown to Dirs:output_reports. Uses normalized names via
+// ScientificNameNormalizer for fuzzy matching. Run: iucn col-crosscheck
+
 namespace BeastieBot3;
 
 public sealed class IucnColCrosscheckCommand : Command<IucnColCrosscheckCommand.Settings> {

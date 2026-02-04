@@ -2,6 +2,12 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
+// Generic tree builder for organizing flat records into nested hierarchy.
+// Configured via TaxonomyTreeLevel<T> to specify grouping columns and sort order.
+// Used for generating hierarchical reports (Kingdom → Phylum → Class → ...).
+// Supports force-split groups and skip conditions. Returns TaxonomyTreeNode<T>
+// root with Children for each taxonomic rank level.
+
 namespace BeastieBot3;
 
 internal static class TaxonomyTreeBuilder {

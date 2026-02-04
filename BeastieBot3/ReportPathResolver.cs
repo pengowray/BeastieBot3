@@ -1,6 +1,12 @@
 using System;
 using System.IO;
 
+// Determines output location for generated Markdown reports. Priority:
+// 1. Explicit --output-dir command option
+// 2. Dirs:output_reports from paths.ini
+// 3. Fallback to current directory
+// Creates directory if missing. Used by all report-generating commands.
+
 namespace BeastieBot3;
 
 internal static class ReportPathResolver {

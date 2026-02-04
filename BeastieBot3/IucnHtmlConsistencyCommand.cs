@@ -11,6 +11,11 @@ using Spectre.Console;
 using Spectre.Console.Cli;
 using System.Text.RegularExpressions;
 
+// Compares HTML (_html fields) vs plain text versions of IUCN assessment data.
+// Uses IucnHtmlUtilities to strip tags, then checks if stripped HTML matches
+// plain text field. Reports discrepancies (e.g., rationale vs rationale_html).
+// Reads from API cache (assessment_cache table). Outputs Markdown report.
+
 namespace BeastieBot3;
 
 public sealed class IucnHtmlConsistencyCommand : Command<IucnHtmlConsistencyCommand.Settings> {

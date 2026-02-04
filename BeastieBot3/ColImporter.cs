@@ -15,6 +15,11 @@ using Spectre.Console;
 using YamlDotNet.Serialization;
 using YamlDotNet.Serialization.NamingConventions;
 
+// Imports Catalogue of Life ColDP ZIP archives (coldp.zip format) into per-dataset SQLite
+// databases. Reads metadata.yaml for dataset info, then bulk-imports TSV files: NameUsage.tsv,
+// Taxon.tsv, VernacularName.tsv, Distribution.tsv, etc. Creates FTS5 indexes for scientific
+// name search. Output path configured via paths.ini [Datastore] section. Used by ColImportCommand.
+
 namespace BeastieBot3;
 
 public sealed class ColImporter {

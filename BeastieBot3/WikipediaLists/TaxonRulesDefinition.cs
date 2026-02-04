@@ -1,5 +1,13 @@
 using System.Collections.Generic;
 
+// Data model for taxon-rules.yml configuration. Structure:
+// taxa:
+//   "Panthera leo":
+//     exclude: true|false
+//     alternate_name: "African lion"
+//     lists: { "list-id": { exclude: true } }
+// Deserialized by TaxonRulesService. Applied by WikipediaListGenerator.
+
 namespace BeastieBot3.WikipediaLists;
 
 /// <summary>

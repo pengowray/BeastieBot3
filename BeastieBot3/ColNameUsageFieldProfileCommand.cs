@@ -11,6 +11,11 @@ using Microsoft.Data.Sqlite;
 using Spectre.Console;
 using Spectre.Console.Cli;
 
+// Analyzes the NameUsage table from imported COL databases to profile field quality.
+// Reports on column population rates, value distributions, encoding anomalies, and
+// potential data issues. Useful for understanding COL data structure before building
+// queries. Outputs to console or markdown files in the reports directory.
+
 namespace BeastieBot3;
 
 // Characterize data in a SQLite database to get a sense of the shape of the data, whether 

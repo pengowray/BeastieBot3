@@ -5,6 +5,13 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
+// Orchestrates page downloads for WikipediaFetchCommand. For each queued title:
+// 1. Calls WikipediaApiClient.GetPageAsync() for HTML/wikitext
+// 2. Follows redirects, records redirect chains
+// 3. Computes SHA256 content hash for change detection
+// 4. Calls TaxoboxParser to extract taxon data from wikitext
+// 5. Stores everything in WikipediaCacheStore
+
 namespace BeastieBot3;
 
 internal sealed class WikipediaPageFetcher {

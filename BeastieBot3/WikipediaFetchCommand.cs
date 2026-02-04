@@ -5,6 +5,11 @@ using System.Threading.Tasks;
 using Spectre.Console;
 using Spectre.Console.Cli;
 
+// Processes the Wikipedia page_queue: fetches HTML and wikitext via API,
+// stores in pages table. Uses WikipediaPageFetcher for download orchestration.
+// Parses taxobox templates from wikitext, storing results in taxobox_data.
+// Default batch size 25, respects rate limits. Run via: wikipedia fetch
+
 namespace BeastieBot3;
 
 public sealed class WikipediaFetchCommand : AsyncCommand<WikipediaFetchCommand.Settings> {

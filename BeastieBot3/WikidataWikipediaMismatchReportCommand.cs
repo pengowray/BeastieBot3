@@ -1,3 +1,8 @@
+// WikidataWikipediaMismatchReportCommand.cs
+// CLI command that generates reports on mismatches between Wikidata entities and
+// their linked Wikipedia articles. Identifies inconsistent taxonomy, missing
+// articles, and broken sitelinks.
+
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;

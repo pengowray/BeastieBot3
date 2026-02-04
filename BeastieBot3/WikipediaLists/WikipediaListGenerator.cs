@@ -7,6 +7,15 @@ using System.Text;
 using System.Threading;
 using BeastieBot3.WikipediaLists.Legacy;
 
+// Main engine for generating Wikipedia species list wikitext. Workflow:
+// 1. IucnListQueryService fetches matching species from IUCN database
+// 2. ColTaxonomyEnricher adds COL ranks for grouping
+// 3. StoreBackedCommonNameProvider resolves vernacular names
+// 4. TaxonRulesService applies exclusions/overrides
+// 5. TaxonomyTreeBuilder groups by taxonomy hierarchy
+// 6. WikipediaTemplateRenderer outputs final wikitext
+// Orchestrated by WikipediaListCommand.
+
 namespace BeastieBot3.WikipediaLists;
 
 internal sealed class WikipediaListGenerator {

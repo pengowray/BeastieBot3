@@ -8,6 +8,11 @@ using System.Text;
 using System.Threading;
 using Microsoft.Data.Sqlite;
 
+// Data access for COL Taxon table (from Taxon.tsv). Provides lookups by ID, scientific
+// name, and parent traversal for building full taxonomic hierarchies. Used by
+// IucnColCrosscheckCommand to compare IUCN vs COL classifications, and by
+// ColTaxonomyEnricher to supplement IUCN taxa with intermediate ranks.
+
 namespace BeastieBot3;
 
 internal sealed class ColTaxonRepository {

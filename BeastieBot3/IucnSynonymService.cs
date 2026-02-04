@@ -6,6 +6,11 @@ using System.Text.Json;
 using System.Threading;
 using Microsoft.Data.Sqlite;
 
+// Aggregates synonyms from two sources: IUCN API cache (taxa_cache.synonym array)
+// and COL database (via ColTaxonRepository). Caches results in memory by sis_id.
+// Used by WikipediaListGenerator to include synonym redirects in species lists.
+// Opens both Datastore:IUCN_api_cache_sqlite and Datastore:COL_sqlite.
+
 namespace BeastieBot3;
 
 internal sealed class IucnSynonymService : IDisposable {

@@ -3,6 +3,12 @@ using System.Collections.Generic;
 using System.IO;
 using BeastieBot3;
 
+// CommonNameStore-backed provider for Wikipedia list generation. Queries
+// aggregated common names with source priority (IUCN > Wikipedia > Wikidata).
+// Handles ambiguity detection (names shared by multiple taxa). Applies
+// caps-list.txt overrides for display capitalization. Uses WikipediaCacheStore
+// to check if common name matches Wikipedia article title.
+
 namespace BeastieBot3.WikipediaLists;
 
 /// <summary>

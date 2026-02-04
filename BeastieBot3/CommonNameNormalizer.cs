@@ -3,6 +3,11 @@ using System.Collections.Generic;
 using System.Text;
 using System.Text.RegularExpressions;
 
+// Two-mode normalizer for common names: ForMatching() strips all non-alphanumeric
+// and lowercases for database comparisons; ForDisplay() applies caps.txt rules
+// for proper rendering. Strips Wikipedia disambiguation suffixes like "(fish)".
+// Used by CommonNameStore for indexing and StoreBackedCommonNameProvider for output.
+
 namespace BeastieBot3;
 
 /// <summary>

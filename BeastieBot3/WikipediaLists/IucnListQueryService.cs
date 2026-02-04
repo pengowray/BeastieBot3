@@ -5,6 +5,12 @@ using System.IO;
 using System.Text;
 using Microsoft.Data.Sqlite;
 
+// Builds and executes SQL queries against IUCN CSV-imported database for
+// list generation. Constructs WHERE clauses from WikipediaListDefinition
+// filters (taxonomy, status, population_trend). Returns SpeciesListItem
+// records with sis_id, scientific_name, main_common_name, category.
+// Used by WikipediaListGenerator.
+
 namespace BeastieBot3.WikipediaLists;
 
 internal sealed class IucnListQueryService : IDisposable {

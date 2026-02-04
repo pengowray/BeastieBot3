@@ -4,6 +4,12 @@ using System.Threading.Tasks;
 using Spectre.Console;
 using Spectre.Console.Cli;
 
+// Convenience command that runs both API cache steps sequentially:
+// 1. IucnApiCacheTaxaCommand - fetches /taxa/sis/{sisId} for all IUCN species
+// 2. IucnApiCacheAssessmentsCommand - fetches /assessment/{id} from taxa JSON
+// Creates/updates Datastore:IUCN_api_cache_sqlite. Resume-safe; skips existing.
+// Run via: iucn api-cache full
+
 namespace BeastieBot3;
 
 public sealed class IucnApiCacheFullSettings : CommonSettings {

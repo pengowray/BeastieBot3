@@ -7,6 +7,11 @@ using System.Threading.Tasks;
 using Spectre.Console;
 using Spectre.Console.Cli;
 
+// Scans CommonNameStore to find vernacular names that refer to multiple distinct taxa
+// (e.g., "sea lion" used for different species). These ambiguous names need special
+// handling in Wikipedia lists—either disambiguation suffixes or exclusion. Results
+// inform the ambiguous_names table used by StoreBackedCommonNameProvider.
+
 namespace BeastieBot3;
 
 /// <summary>

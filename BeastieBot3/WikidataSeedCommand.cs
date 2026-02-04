@@ -5,6 +5,11 @@ using System.Threading.Tasks;
 using Spectre.Console;
 using Spectre.Console.Cli;
 
+// Step 1 of Wikidata caching: runs SPARQL query to discover taxon Q-IDs.
+// Query: SELECT ?item WHERE { ?item wdt:P627 ?iucnId } finds all Wikidata
+// items with IUCN Red List IDs (P627). Inserts Q-IDs into wikidata_items
+// table with status='pending'. Run via: wikidata seed
+
 namespace BeastieBot3;
 
 public sealed class WikidataSeedSettings : CommonSettings {

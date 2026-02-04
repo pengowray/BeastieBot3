@@ -2,6 +2,11 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 
+// Loads environment variables from .env file (KEY=VALUE format). Environment
+// values already set take precedence—useful for CI/production overrides. Called
+// by IucnApiConfiguration and WikidataConfiguration at startup. Primary keys:
+// IUCN_API_TOKEN (required for API access), WIKIDATA_* settings.
+
 namespace BeastieBot3;
 
 /// <summary>

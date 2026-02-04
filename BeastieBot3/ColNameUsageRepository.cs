@@ -3,6 +3,11 @@ using System.Collections.Generic;
 using System.Threading;
 using Microsoft.Data.Sqlite;
 
+// Data access for COL NameUsage table (imported from NameUsage.tsv by ColImporter).
+// Handles schema variations between COL releases where columns may be added/removed.
+// Used by ColTaxonomyEnricher to look up additional ranks (superfamily, infraorder)
+// not present in IUCN data. Supports fallback to parentID when acceptedNameUsageID missing.
+
 namespace BeastieBot3;
 
 internal sealed class ColNameUsageRepository {

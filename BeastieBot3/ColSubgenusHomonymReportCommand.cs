@@ -7,6 +7,11 @@ using Microsoft.Data.Sqlite;
 using Spectre.Console;
 using Spectre.Console.Cli;
 
+// EXPERIMENTAL: Reports on subgenus names that collide with genus names in COL,
+// which can cause issues when matching Wikipedia articles (e.g., "Boa (Boa)" vs "Boa").
+// Currently too slow due to case-insensitive comparisons on large tables.
+// Needs index optimization before practical use.
+
 namespace BeastieBot3;
 
 // test example report; doesn't work / runs too slow; probably the LOWER commands.

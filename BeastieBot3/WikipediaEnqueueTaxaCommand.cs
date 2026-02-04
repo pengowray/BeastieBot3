@@ -7,6 +7,12 @@ using Microsoft.Data.Sqlite;
 using Spectre.Console;
 using Spectre.Console.Cli;
 
+// Enqueues Wikipedia pages for higher-rank taxa (not species). Reads unique
+// class_name, order_name, family_name from IUCN taxonomy, adds each as a page
+// title to fetch. Useful for adding context pages like "Felidae" or "Carnivora".
+// Separate from species pages which come from Wikidata sitelinks.
+// Run via: wikipedia enqueue-taxa
+
 namespace BeastieBot3;
 
 public sealed class WikipediaEnqueueTaxaCommand : Command<WikipediaEnqueueTaxaCommand.Settings> {

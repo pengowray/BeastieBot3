@@ -1,5 +1,12 @@
 using System;
 
+// Configuration record for WikipediaApiClient. Environment variables:
+// - WIKIPEDIA_ACTION_ENDPOINT (default: en.wikipedia.org/w/api.php)
+// - WIKIPEDIA_REST_ENDPOINT (default: en.wikipedia.org/api/rest_v1)
+// - WIKIPEDIA_USER_AGENT (recommended for Wikimedia API policy)
+// - WIKIPEDIA_ACTION_DELAY_MS, WIKIPEDIA_REST_DELAY_MS for rate limiting
+// Calls EnvFileLoader.LoadIfPresent() at startup.
+
 namespace BeastieBot3;
 
 internal sealed record WikipediaConfiguration(

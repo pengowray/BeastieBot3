@@ -10,6 +10,15 @@ using Microsoft.Data.Sqlite;
 using Spectre.Console;
 using Spectre.Console.Cli;
 
+// Generates reports from CommonNameStore database. Report types:
+// - summary: Counts by source (iucn/wikidata/wikipedia/col)
+// - ambiguous: Names mapping to multiple taxa (all sources)
+// - ambiguous-iucn: Ambiguous names limited to IUCN-assessed species
+// - caps: Case inconsistencies across sources for the same name
+// - wiki-disambig: Wikipedia disambiguation pages needing attention
+// - iucn-preferred: IUCN main_common_name vs Wikipedia title mismatches
+// Outputs Markdown to Dirs:output_reports or --output-dir.
+
 namespace BeastieBot3;
 
 /// <summary>

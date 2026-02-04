@@ -3,6 +3,11 @@ using System.Collections.Generic;
 using System.Threading;
 using Microsoft.Data.Sqlite;
 
+// Enumerates SIS (Species Information Service) IDs from CSV-imported IUCN
+// database (taxonomy table). Returns IDs in ascending order, supporting
+// optional limit for testing. Used by IucnApiCacheTaxaCommand to determine
+// which taxa to fetch from API. Yields lazily to handle ~200K species.
+
 namespace BeastieBot3;
 
 internal sealed class IucnSisIdProvider {

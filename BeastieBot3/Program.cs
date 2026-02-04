@@ -4,6 +4,11 @@ using Spectre.Console.Cli;
 using System.ComponentModel;
 using System.Threading;
 
+// Main entry point configuring the CLI command tree using Spectre.Console.Cli.
+// Each branch (col, iucn, wikidata, wikipedia, common-names, wikipedia-list) groups
+// related commands that share similar settings. CommonSettings provides base options
+// for INI configuration that all commands inherit.
+
 namespace BeastieBot3 {
     // Common CLI settings shared by all commands
     public class CommonSettings : CommandSettings {

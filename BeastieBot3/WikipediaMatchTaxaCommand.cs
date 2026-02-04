@@ -9,6 +9,13 @@ using Microsoft.Data.Sqlite;
 using Spectre.Console;
 using Spectre.Console.Cli;
 
+// Links IUCN taxa to Wikipedia articles using multiple strategies:
+// 1. Exact match: IUCN scientific_name = Wikipedia page title
+// 2. Wikidata sitelinks: enwiki title from wikidata_sitelinks
+// 3. Synonyms: IucnSynonymService provides alternate names
+// 4. Taxobox parsing: scientific name extracted from cached wikitext
+// Writes matches to taxon_matches table. Run via: wikipedia match-taxa
+
 namespace BeastieBot3;
 
 public sealed class WikipediaMatchTaxaCommand : AsyncCommand<WikipediaMatchTaxaCommand.Settings> {

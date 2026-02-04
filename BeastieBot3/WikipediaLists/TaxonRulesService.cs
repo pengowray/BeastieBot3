@@ -5,6 +5,11 @@ using System.Text.RegularExpressions;
 using YamlDotNet.Serialization;
 using YamlDotNet.Serialization.NamingConventions;
 
+// Loads taxon-rules.yml (via YamlDotNet) and provides rule lookup.
+// Rules specify exclusions and alternate names per taxon, optionally
+// scoped to specific list IDs. Used by WikipediaListGenerator to filter
+// species and customize display. Supports regex patterns for taxon matching.
+
 namespace BeastieBot3.WikipediaLists;
 
 /// <summary>

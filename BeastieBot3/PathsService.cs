@@ -2,6 +2,12 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 
+// Typed facade over IniPathReader for application-wide path configuration.
+// Wraps paths.ini access with methods like GetIucnDatabasePath(), GetColDatabasePath(),
+// GetWikidataCachePath(). INI sections: [Datastore] for .sqlite files,
+// [Dirs] for folders (iucn_csv_folder, output_reports, col_dpfiles).
+// Used by nearly all commands for consistent path resolution.
+
 namespace BeastieBot3 {
     // Provides typed access to paths defined in an INI file, backed by IniPathReader.
     public sealed class PathsService {

@@ -1,6 +1,11 @@
 using System;
 using System.Text;
 
+// Normalizes taxonomic authority strings (e.g., "(Linnaeus, 1758)") for consistent
+// comparison. Collapses whitespace, normalizes parentheses, handles "&" vs "and",
+// and strips trailing punctuation. Used by IucnScientificNameVerifier and synonym
+// matching to compare authorities across IUCN, COL, and Wikipedia sources.
+
 namespace BeastieBot3;
 
 internal static class AuthorityNormalizer {

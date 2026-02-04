@@ -8,6 +8,11 @@ using System.Threading;
 using Spectre.Console;
 using Spectre.Console.Cli;
 
+// Generates detailed missing-species reports organized by taxonomy.
+// Uses TaxonomyTreeBuilder to create hierarchical Markdown output showing
+// which IUCN taxa lack Wikidata entries, grouped by Class → Order → Family.
+// Outputs to Dirs:output_reports. Run via: wikidata coverage-details
+
 namespace BeastieBot3;
 
 public sealed class WikidataCoverageDetailsCommand : AsyncCommand<WikidataCoverageReportSettings> {

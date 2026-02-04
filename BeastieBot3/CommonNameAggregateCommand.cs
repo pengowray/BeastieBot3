@@ -10,6 +10,13 @@ using Microsoft.Data.Sqlite;
 using Spectre.Console;
 using Spectre.Console.Cli;
 
+// Imports vernacular names from each source into CommonNameStore. Sources:
+// - IUCN: main_common_name from CSV import + names from API cache JSON
+// - Wikidata: P1843 (taxon common name) claims with language qualifiers
+// - Wikipedia: taxobox "name" field from cached wikitext
+// - COL: VernacularName.tsv from ColDP archives
+// Run with --source all|iucn|wikidata|wikipedia|col after common-names init.
+
 namespace BeastieBot3;
 
 /// <summary>

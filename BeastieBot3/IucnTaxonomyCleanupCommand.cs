@@ -10,6 +10,11 @@ using Microsoft.Data.Sqlite;
 using Spectre.Console;
 using Spectre.Console.Cli;
 
+// CLI wrapper for IucnDataCleanupAnalyzer. Reads IUCN taxonomy from CSV-imported
+// database, runs analysis, outputs Markdown report of cleanup opportunities.
+// Flags: duplicate names, inconsistent higher taxonomy, missing required fields.
+// Uses IucnTaxonomyRepository for data access. Run: iucn taxonomy-cleanup
+
 namespace BeastieBot3;
 
 public sealed class IucnTaxonomyCleanupCommand : Command<IucnTaxonomyCleanupCommand.Settings> {

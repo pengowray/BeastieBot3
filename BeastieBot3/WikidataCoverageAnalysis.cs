@@ -7,6 +7,11 @@ using System.Threading;
 using Microsoft.Data.Sqlite;
 using Spectre.Console;
 
+// Core analysis logic for Wikidata coverage statistics. Joins IUCN taxonomy
+// (sis_id) against wikidata_iucn_id table to calculate coverage. Returns
+// CoverageStats: total IUCN species, species with Wikidata entity, species
+// with enwiki article. Used by WikidataCoverageReportCommand.
+
 namespace BeastieBot3;
 
 internal sealed record WikidataCoverageAnalysisResult(

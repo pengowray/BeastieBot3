@@ -10,6 +10,11 @@ using Microsoft.Data.Sqlite;
 using Spectre.Console;
 using Spectre.Console.Cli;
 
+// Identifies IUCN taxa without Wikidata entities and attempts to find them.
+// Uses SPARQL to search for taxa by scientific name when P627 (IUCN ID) is
+// missing. Adds discovered Q-IDs to wikidata_items for subsequent download.
+// Improves coverage beyond the P627-based seed. Run: wikidata backfill
+
 namespace BeastieBot3;
 
 public sealed class WikidataIucnBackfillSettings : CommonSettings {

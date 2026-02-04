@@ -1,3 +1,7 @@
+// Constants for tagging records with their origin database. Currently only
+// "iucn" is defined; other sources (col, wikidata, wikipedia) use string
+// literals directly. Could be expanded for consistency.
+
 namespace BeastieBot3;
 
 internal static class TaxonSources {

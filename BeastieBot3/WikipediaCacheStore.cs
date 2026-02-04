@@ -6,6 +6,12 @@ using System.IO;
 using System.Text;
 using Microsoft.Data.Sqlite;
 
+// SQLite store for English Wikipedia pages (Datastore:enwiki_cache_sqlite).
+// Schema: pages (title PK, page_id, html, wikitext, content_hash), page_queue
+// (titles to fetch), redirects (from_title→to_title), taxobox_data (parsed
+// wikitext), taxon_matches (sis_id→page_title). Populated by WikipediaFetchCommand,
+// matched by WikipediaMatchTaxaCommand. TaxoboxParser extracts scientific names.
+
 namespace BeastieBot3;
 
 internal sealed class WikipediaCacheStore : IDisposable {

@@ -4,6 +4,10 @@ using Spectre.Console;
 using Spectre.Console.Cli;
 using System.Threading;
 
+// Diagnostic command to verify the COL dataset directory is accessible. Primarily
+// useful in Docker where COL data is volume-mounted (configured in docker-compose.yml).
+// Checks the path from [Dirs] col_dir in paths.ini, falling back to default mount point.
+
 namespace BeastieBot3 {
     public sealed class CheckColCommand : Command<CommonSettings> {
         public override int Execute(CommandContext context, CommonSettings settings, CancellationToken cancellationToken) {

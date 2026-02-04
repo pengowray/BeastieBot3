@@ -3,6 +3,11 @@ using System.Collections.Generic;
 using System.IO;
 using System.Text.RegularExpressions;
 
+// Parses caps.txt files from the rules/ directory that define how to capitalize common
+// names. Format: "ProperWord // example usage, another example". Rules override default
+// title-casing for words like "and", "de", species epithets, etc. Loaded by CommonNameStore
+// and used by CommonNameNormalizer for display formatting.
+
 namespace BeastieBot3;
 
 /// <summary>

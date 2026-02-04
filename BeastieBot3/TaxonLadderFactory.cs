@@ -2,6 +2,13 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
+// Creates TaxonLadder instances from source-specific records:
+// - FromIucn(): IucnTaxonomyRow with kingdom_name, phylum_name, etc.
+// - FromCol(): COL taxon with classification array from ColDP Taxon.tsv
+// - FromWikipedia(): Parsed taxobox with classis, familia, etc. in Latin
+// Normalizes rank names and handles missing intermediate ranks. Ladders are
+// then passed to TaxonLadderAlignment for cross-source comparison.
+
 namespace BeastieBot3;
 
 internal static class TaxonLadderFactory {

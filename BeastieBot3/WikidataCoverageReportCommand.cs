@@ -10,6 +10,12 @@ using Microsoft.Data.Sqlite;
 using Spectre.Console;
 using Spectre.Console.Cli;
 
+// Summary statistics report for IUCN ↔ Wikidata coverage. Sections:
+// - Overall counts (IUCN total, with Wikidata, with enwiki)
+// - Coverage by IUCN category (Mammalia, Aves, etc.)
+// - Coverage by conservation status (CR, EN, VU, etc.)
+// Uses WikidataCoverageAnalysis for calculations. Run via: wikidata coverage
+
 namespace BeastieBot3;
 
 public sealed class WikidataCoverageReportSettings : CommonSettings {

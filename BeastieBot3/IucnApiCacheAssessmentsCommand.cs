@@ -8,6 +8,12 @@ using System.Threading.Tasks;
 using Spectre.Console;
 using Spectre.Console.Cli;
 
+// Step 2 of API caching: downloads /api/v4/assessment/{id} for each assessment_id
+// found in previously cached taxa JSON. Stores responses in assessment_cache table.
+// Taxa must be cached first (IucnApiCacheTaxaCommand). Assessment JSON includes
+// conservation measures, threats, habitat, and population trend details not in CSV.
+// Run via: iucn api-cache assessments
+
 namespace BeastieBot3;
 
 public sealed class IucnApiCacheAssessmentsSettings : CommonSettings {

@@ -5,6 +5,12 @@ using System.Threading.Tasks;
 using Spectre.Console;
 using Spectre.Console.Cli;
 
+// Step 2 of Wikidata caching: downloads full entity JSON for Q-IDs in
+// wikidata_items table that have status='pending'. Uses WikidataApiClient to
+// fetch from Special:EntityData. Entity JSON includes labels, sitelinks, and
+// claims (P627 IUCN ID, P1843 common names, P225 taxon name). Resume-safe.
+// Run via: wikidata cache items
+
 namespace BeastieBot3;
 
 public sealed class WikidataCacheItemsSettings : CommonSettings {

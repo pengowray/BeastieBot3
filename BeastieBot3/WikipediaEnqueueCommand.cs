@@ -4,6 +4,11 @@ using System.Threading;
 using Spectre.Console;
 using Spectre.Console.Cli;
 
+// Copies enwiki sitelinks from WikidataCacheStore to WikipediaCacheStore queue.
+// Reads wikidata_sitelinks table (populated when parsing Wikidata entity JSON),
+// adds titles to page_queue for WikipediaFetchCommand. Supports --refresh-days
+// to re-fetch stale pages. Run via: wikipedia enqueue
+
 namespace BeastieBot3;
 
 public sealed class WikipediaEnqueueCommand : Command<WikipediaEnqueueCommand.Settings> {

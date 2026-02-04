@@ -10,6 +10,12 @@ using Microsoft.Data.Sqlite;
 using Spectre.Console;
 using Spectre.Console.Cli;
 
+// Uses IucnScientificNameVerifier to validate taxonomy fields. Checks:
+// - Higher taxonomy consistency (same genus should have same family)
+// - scientific_name matches concatenated genus + species
+// - Authority formatting follows conventions
+// Reads from Datastore:IUCN_sqlite_from_cvs. Outputs report to Dirs:output_reports.
+
 namespace BeastieBot3;
 
 public sealed class IucnTaxonomyConsistencyCommand : Command<IucnTaxonomyConsistencyCommand.Settings> {

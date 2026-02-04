@@ -4,6 +4,12 @@ using System.Threading;
 using Spectre.Console;
 using Spectre.Console.Cli;
 
+// Diagnostic command displaying WikipediaCacheStore statistics:
+// - Total pages in cache, pending in queue, failed fetches
+// - Matched taxa count (from taxon_matches table)
+// - Last fetch timestamp
+// Useful for monitoring cache progress. Run via: wikipedia status
+
 namespace BeastieBot3;
 
 public sealed class WikipediaCacheStatusCommand : Command<WikipediaCacheStatusCommand.Settings> {

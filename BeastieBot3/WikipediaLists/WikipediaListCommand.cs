@@ -5,6 +5,12 @@ using System.Linq;
 using Spectre.Console;
 using Spectre.Console.Cli;
 
+// CLI entry point for Wikipedia list generation. Loads list config YAML,
+// initializes WikipediaListGenerator with all dependencies, outputs wikitext
+// files to --output-dir. Example:
+//   wikipedia-list --config lists/mammals.yml --list endangered-primates
+// Uses paths.ini for database locations unless overridden with --database.
+
 namespace BeastieBot3.WikipediaLists;
 
 public sealed class WikipediaListCommand : Command<WikipediaListCommand.Settings> {

@@ -6,6 +6,11 @@ using System.Threading;
 using Spectre.Console;
 using Spectre.Console.Cli;
 
+// CLI entry point for COL import. Locates ColDP ZIP files in the configured directory
+// (from paths.ini), creates output SQLite databases named after each archive, and
+// delegates to ColImporter. Supports --force to re-import existing databases.
+// Output: one SQLite DB per archive in [Datastore] col_output_dir.
+
 namespace BeastieBot3;
 
 public sealed class ColImportCommand : Command<ColImportCommand.Settings> {

@@ -7,6 +7,11 @@ using System.Threading.Tasks;
 using Spectre.Console;
 using Spectre.Console.Cli;
 
+// Diagnostic command showing aggregation status of common name sources.
+// Queries CommonNameStore for record counts from each source (iucn, wikidata,
+// wikipedia, col) and displays availability of upstream databases. Useful for
+// verifying that aggregate steps completed before running reports.
+
 namespace BeastieBot3;
 
 /// <summary>

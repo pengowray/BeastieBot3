@@ -6,6 +6,12 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 
+// HTTP client for IUCN Red List API v4 (apiv4.iucnredlist.org). Configuration from
+// IucnApiConfiguration (IUCN_API_TOKEN env var required). Implements concurrency
+// limiting via semaphore and exponential backoff (2s→90s) for 429/5xx responses.
+// Endpoints: /api/v4/taxa/sis/{sisId}, /api/v4/assessment/{assessmentId}.
+// Used by IucnApiCacheTaxaCommand and IucnApiCacheAssessmentsCommand.
+
 namespace BeastieBot3;
 
 internal sealed class IucnApiClient : IDisposable {

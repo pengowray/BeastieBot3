@@ -3,6 +3,13 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Text;
 
+// Validates scientific name consistency in IucnTaxonomyRow records. Checks:
+// - scientific_name matches "Genus species" from genus + species fields
+// - Authority string formatting (parentheses, year patterns)
+// - Infraspecific rank consistency (var., subsp., f.)
+// Returns ScientificNameVerificationResult with categorized issues.
+// Used by IucnTaxonomyConsistencyCommand.
+
 namespace BeastieBot3;
 
 internal static class IucnScientificNameVerifier {

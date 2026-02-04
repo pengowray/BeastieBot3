@@ -1,5 +1,12 @@
 using System.Collections.Generic;
 
+// YAML deserialization model for list configuration. Key properties:
+// - filter: taxonomy (class, order, family) and status (CR, EN, VU, etc.)
+// - grouping: hierarchy levels (order, family, genus) with sort options
+// - display: show_status, show_trend, link_species, scientific_name_format
+// - virtual_groups: custom groupings (e.g., "Marine mammals")
+// Loaded by WikipediaListDefinitionLoader, consumed by WikipediaListGenerator.
+
 namespace BeastieBot3.WikipediaLists;
 
 internal sealed class WikipediaListConfig {

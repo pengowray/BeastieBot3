@@ -1,3 +1,7 @@
+// WikidataResetCacheCommand.cs
+// CLI command that clears cached Wikidata JSON payloads while preserving seed
+// rows. Allows re-downloading entity data without losing the entity ID list.
+
 using System.ComponentModel;
 using System.Threading;
 using System.Threading.Tasks;

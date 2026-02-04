@@ -2,6 +2,11 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
+// Low-level name construction utilities. Builds binomial (Genus species) and
+// trinomial (Genus species var. subspecies) from component parts. Simpler than
+// ScientificNameNormalizer (which handles matching/comparison). Used when
+// constructing display names from separate genus/species/subspecies fields.
+
 namespace BeastieBot3;
 
 internal static class ScientificNameHelper {

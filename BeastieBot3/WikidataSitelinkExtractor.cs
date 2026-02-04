@@ -1,3 +1,7 @@
+// WikidataSitelinkExtractor.cs
+// Extracts Wikipedia sitelinks from Wikidata entity JSON. Retrieves enwiki
+// article titles from entity responses for cross-referencing with Wikipedia cache.
+
 using System.Text.Json;
 
 namespace BeastieBot3;
