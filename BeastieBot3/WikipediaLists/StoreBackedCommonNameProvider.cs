@@ -2,6 +2,9 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using BeastieBot3;
+using BeastieBot3.CommonNames;
+using BeastieBot3.Taxonomy;
+using BeastieBot3.Wikipedia;
 
 // CommonNameStore-backed provider for Wikipedia list generation. Queries
 // aggregated common names with source priority (IUCN > Wikipedia > Wikidata).

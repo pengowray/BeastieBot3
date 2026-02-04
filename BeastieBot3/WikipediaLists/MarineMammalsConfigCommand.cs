@@ -7,6 +7,7 @@ using System.Threading;
 using Microsoft.Data.Sqlite;
 using Spectre.Console;
 using Spectre.Console.Cli;
+using BeastieBot3.Configuration;
 
 // Helper command to generate YAML configuration for marine mammals lists.
 // Analyzes Carnivora (seals/sea lions), Cetartiodactyla (whales/dolphins),

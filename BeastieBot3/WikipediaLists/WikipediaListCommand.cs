@@ -4,6 +4,8 @@ using System.IO;
 using System.Linq;
 using Spectre.Console;
 using Spectre.Console.Cli;
+using BeastieBot3.CommonNames;
+using BeastieBot3.Configuration;
 
 // CLI entry point for Wikipedia list generation. Loads list config YAML,
 // initializes WikipediaListGenerator with all dependencies, outputs wikitext

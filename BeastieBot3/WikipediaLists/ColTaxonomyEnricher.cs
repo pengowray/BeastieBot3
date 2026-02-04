@@ -3,6 +3,8 @@ using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
 using Microsoft.Data.Sqlite;
+using BeastieBot3.Col;
+using BeastieBot3.Taxonomy;
 
 // Enriches IUCN species with additional ranks from COL's NameUsage table.
 // IUCN has limited taxonomy (class/order/family); COL provides suborder,

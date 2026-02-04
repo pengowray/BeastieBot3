@@ -6,6 +6,9 @@ using System.Linq;
 using System.Text;
 using System.Threading;
 using BeastieBot3.WikipediaLists.Legacy;
+using BeastieBot3.CommonNames;
+using BeastieBot3.Iucn;
+using BeastieBot3.Taxonomy;
 
 // Main engine for generating Wikipedia species list wikitext. Workflow:
 // 1. IucnListQueryService fetches matching species from IUCN database

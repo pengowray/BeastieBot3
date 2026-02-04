@@ -1,4 +1,10 @@
-﻿using BeastieBot3.WikipediaLists;
+﻿using BeastieBot3.Col;
+using BeastieBot3.CommonNames;
+using BeastieBot3.Infrastructure;
+using BeastieBot3.Iucn;
+using BeastieBot3.Wikidata;
+using BeastieBot3.Wikipedia;
+using BeastieBot3.WikipediaLists;
 using Spectre.Console;
 using Spectre.Console.Cli;
 using System.ComponentModel;
@@ -9,7 +15,7 @@ using System.Threading;
 // related commands that share similar settings. CommonSettings provides base options
 // for INI configuration that all commands inherit.
 
-namespace BeastieBot3 {
+namespace BeastieBot3;
     // Common CLI settings shared by all commands
     public class CommonSettings : CommandSettings {
         [CommandOption("-s|--settings-dir <DIR>")]
@@ -218,4 +224,3 @@ namespace BeastieBot3 {
             return app.Run(args);
         }
     }
-}
