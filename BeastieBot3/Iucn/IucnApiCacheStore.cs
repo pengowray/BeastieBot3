@@ -59,7 +59,8 @@ internal sealed class IucnApiCacheStore : IDisposable {
     root_sis_id INTEGER NOT NULL UNIQUE,
     import_id INTEGER NOT NULL REFERENCES import_metadata(id) ON DELETE RESTRICT,
     downloaded_at TEXT NOT NULL,
-    json TEXT NOT NULL
+    json TEXT NOT NULL,
+    has_current_assessment INTEGER NOT NULL DEFAULT 1
 );
 CREATE TABLE IF NOT EXISTS taxa_lookup (
     sis_id INTEGER PRIMARY KEY,
@@ -98,8 +99,34 @@ CREATE TABLE IF NOT EXISTS failed_requests (
     next_attempt_after TEXT,
     UNIQUE(endpoint, entity_id)
 );
+CREATE INDEX IF NOT EXISTS idx_taxa_has_current_assessment ON taxa(has_current_assessment);
 ";
         command.ExecuteNonQuery();
+
+        // Add has_current_assessment column to existing databases that don't have it yet.
+        MigrateAddHasCurrentAssessment();
+    }
+
+    private void MigrateAddHasCurrentAssessment() {
+        using var check = _connection.CreateCommand();
+        check.CommandText = "SELECT COUNT(*) FROM pragma_table_info('taxa') WHERE name='has_current_assessment'";
+        var exists = (long)(check.ExecuteScalar() ?? 0L) > 0;
+        if (exists) {
+            return;
+        }
+
+        using var alter = _connection.CreateCommand();
+        alter.CommandText = "ALTER TABLE taxa ADD COLUMN has_current_assessment INTEGER NOT NULL DEFAULT 1";
+        alter.ExecuteNonQuery();
+
+        // Backfill: set has_current_assessment based on existing backlog data.
+        using var backfill = _connection.CreateCommand();
+        backfill.CommandText = @"UPDATE taxa SET has_current_assessment = (
+    SELECT CASE WHEN EXISTS (
+        SELECT 1 FROM taxa_assessment_backlog b WHERE b.taxa_id = taxa.id AND b.latest = 1
+    ) THEN 1 ELSE 0 END
+)";
+        backfill.ExecuteNonQuery();
     }
 
     public long BeginImport(string url) => _importStore.BeginImport(url);
@@ -270,6 +297,7 @@ ORDER BY b.latest DESC, IFNULL(b.year_published, 0) DESC, b.assessment_id DESC";
             delete.ExecuteNonQuery();
         }
 
+        var hasCurrent = false;
         if (assessments.Count > 0) {
             using var insert = _connection.CreateCommand();
             insert.Transaction = tx;
@@ -297,7 +325,20 @@ ORDER BY b.latest DESC, IFNULL(b.year_published, 0) DESC, b.assessment_id DESC";
 
                 queuedParam.Value = DateTime.UtcNow.ToString("O");
                 insert.ExecuteNonQuery();
+
+                if (assessment.Latest) {
+                    hasCurrent = true;
+                }
             }
+        }
+
+        // Update the denormalized flag on the taxa row.
+        using (var update = _connection.CreateCommand()) {
+            update.Transaction = tx;
+            update.CommandText = "UPDATE taxa SET has_current_assessment=@flag WHERE id=@taxaId";
+            update.Parameters.AddWithValue("@flag", hasCurrent ? 1 : 0);
+            update.Parameters.AddWithValue("@taxaId", taxaId);
+            update.ExecuteNonQuery();
         }
 
         tx.Commit();

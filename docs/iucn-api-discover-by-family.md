@@ -104,6 +104,12 @@ dotnet run --project BeastieBot3/BeastieBot3.csproj -- iucn api discover-by-fami
    beastiebot3 iucn api cache-assessments
    ```
 
+4. **Report** taxa with no current assessment:
+   ```bash
+   beastiebot3 iucn api report-no-current
+   ```
+   This generates a Markdown report (grouped by taxonomy) and a companion CSV listing every taxon that has no latest assessment — i.e. species that were removed, delisted, or reclassified.
+
 ## Performance Notes
 
 - The family list endpoint returns ~800–1000 families
