@@ -268,7 +268,9 @@ internal sealed class WikipediaListGenerator {
     }
 
     /// <summary>
-    /// Build section body with separate sections for Species, Subspecies, Varieties, and Stocks/Populations.
+    /// Build section body with infraspecific taxa (subspecies, varieties, populations)
+    /// rendered within each taxonomy heading rather than as separate global sections.
+    /// Delegates to the normal taxonomy tree path with a flag that triggers per-node partitioning.
     /// </summary>
     private (string Body, int HeadingCount) BuildInfraspecificSections(
         IReadOnlyList<IucnSpeciesRecord> records,
@@ -278,40 +280,10 @@ internal sealed class WikipediaListGenerator {
         IReadOnlyList<CustomGroupDefinition>? customGroups,
         int startHeading) {
         
-        // Partition records by type
-        var species = new List<IucnSpeciesRecord>();
-        var subspecies = new List<IucnSpeciesRecord>();
-        var varieties = new List<IucnSpeciesRecord>();
-        var populations = new List<IucnSpeciesRecord>();
-
-        foreach (var record in records) {
-            // Check for non-global assessments first (regional scopes or subpopulations)
-            if (IsRegionalAssessment(record)) {
-                populations.Add(record);
-                continue;
-            }
-
-            // Check for infrarank
-            var infraType = record.InfraType?.Trim().ToLowerInvariant() ?? "";
-            if (!string.IsNullOrWhiteSpace(infraType) && !string.IsNullOrWhiteSpace(record.InfraName)) {
-                if (infraType.Contains("var")) {
-                    varieties.Add(record);
-                } else if (infraType.Contains("ssp") || infraType.Contains("subsp")) {
-                    subspecies.Add(record);
-                } else {
-                    // Other infranks (form, etc.) go to subspecies section
-                    subspecies.Add(record);
-                }
-                continue;
-            }
-
-            species.Add(record);
-        }
-
-        var builder = new StringBuilder();
-        var headingCount = 0;
-
-        // Create a display settings copy with infraspecific grouping disabled to avoid recursion
+        // Create a display settings copy that signals per-node infraspecific partitioning
+        // SeparateInfraspecificSections = false prevents re-entering this method,
+        // while InfraspecificDisplayMode stays SeparateSections so AppendTree knows
+        // to partition items within each leaf node.
         var innerDisplay = new DisplayPreferences {
             PreferCommonNames = display.PreferCommonNames,
             ItalicizeScientific = display.ItalicizeScientific,
@@ -320,75 +292,13 @@ internal sealed class WikipediaListGenerator {
             GroupSubspecies = false,
             ListingStyle = display.ListingStyle,
             InfraspecificDisplayMode = InfraspecificDisplayMode.SeparateSections,
-            SeparateInfraspecificSections = false,  // Prevent recursion
-            ExcludeRegionalAssessments = false,     // Already filtered
+            SeparateInfraspecificSections = false,  // Prevent recursion back here
+            ExcludeRegionalAssessments = false,     // Already filtered above
             IncludeFamilyInOtherBucket = display.IncludeFamilyInOtherBucket
         };
 
-        void AppendSectionHeader(string label) {
-            builder.AppendLine($"'''{label}'''");
-            builder.AppendLine("{{div col|colwidth=30em}}");
-        }
-
-        void AppendSectionFooter() {
-            builder.AppendLine("{{div col end}}");
-        }
-
-        // Render Species section (only add heading if other sections exist)
-        if (species.Count > 0) {
-            var needsSectionHeading = subspecies.Count > 0 || varieties.Count > 0 || populations.Count > 0;
-            if (needsSectionHeading) {
-                AppendSectionHeader("Species");
-                headingCount++;
-            }
-            var (speciesBody, speciesHeadingCount) = BuildSectionBodyCore(species, grouping, innerDisplay, statusContext, customGroups, startHeading + (subspecies.Count > 0 || varieties.Count > 0 || populations.Count > 0 ? 1 : 0));
-            headingCount += speciesHeadingCount;
-            builder.AppendLine(speciesBody);
-            if (needsSectionHeading) {
-                AppendSectionFooter();
-            }
-            if (subspecies.Count > 0 || varieties.Count > 0 || populations.Count > 0) {
-                builder.AppendLine();
-            }
-        }
-
-        // Render Subspecies section
-        if (subspecies.Count > 0) {
-            AppendSectionHeader("Subspecies");
-            headingCount++;
-            var (subBody, subHeadingCount) = BuildSectionBodyCore(subspecies, grouping, innerDisplay, statusContext, customGroups, startHeading + 1);
-            headingCount += subHeadingCount;
-            builder.AppendLine(subBody);
-            AppendSectionFooter();
-            if (varieties.Count > 0 || populations.Count > 0) {
-                builder.AppendLine();
-            }
-        }
-
-        // Render Varieties section
-        if (varieties.Count > 0) {
-            AppendSectionHeader("Varieties");
-            headingCount++;
-            var (varBody, varHeadingCount) = BuildSectionBodyCore(varieties, grouping, innerDisplay, statusContext, customGroups, startHeading + 1);
-            headingCount += varHeadingCount;
-            builder.AppendLine(varBody);
-            AppendSectionFooter();
-            if (populations.Count > 0) {
-                builder.AppendLine();
-            }
-        }
-
-        // Render Stocks and populations section
-        if (populations.Count > 0) {
-            AppendSectionHeader("Stocks and populations");
-            headingCount++;
-            var (popBody, popHeadingCount) = BuildSectionBodyCore(populations, grouping, innerDisplay, statusContext, customGroups, startHeading + 1);
-            headingCount += popHeadingCount;
-            builder.AppendLine(popBody);
-            AppendSectionFooter();
-        }
-
-        return (builder.ToString().TrimEnd(), headingCount);
+        // Pass ALL records (species + infraspecific) through the normal tree path
+        return BuildSectionBodyCore(records, grouping, innerDisplay, statusContext, customGroups, startHeading);
     }
 
     /// <summary>
@@ -947,13 +857,113 @@ internal sealed class WikipediaListGenerator {
             AppendTree(builder, child, headingLevel + 1, display, statusContext, ref headingCount, grouping, groupingIndex + 1, childOtherContext, parentTaxon: child.Value);
         }
 
+        if (node.Items.Count == 0) {
+            return;
+        }
+
         var infraspecificMode = ResolveInfraspecificMode(display);
         if (infraspecificMode == InfraspecificDisplayMode.GroupedUnderSpecies) {
             AppendItemsWithInfraspecificGrouping(builder, node.Items, display, statusContext, otherContext);
+        } else if (infraspecificMode == InfraspecificDisplayMode.SeparateSections) {
+            AppendPartitionedItems(builder, node.Items, display, statusContext, otherContext);
         } else {
             foreach (var record in OrderRecordsForOutput(node.Items, otherContext)) {
                 builder.AppendLine(FormatSpeciesLine(record, display, statusContext, otherContext));
             }
+        }
+    }
+
+    /// <summary>
+    /// Partitions items within a single taxonomy node into species, subspecies, varieties,
+    /// and populations. Each partition gets its own {{div col}} wrapper and bold sub-heading.
+    /// This produces the per-family subspecies grouping rather than one global section.
+    /// </summary>
+    private void AppendPartitionedItems(
+        StringBuilder builder,
+        IReadOnlyList<IucnSpeciesRecord> items,
+        DisplayPreferences display,
+        string? statusContext,
+        OtherBucketContext? otherContext) {
+
+        var species = new List<IucnSpeciesRecord>();
+        var subspecies = new List<IucnSpeciesRecord>();
+        var varieties = new List<IucnSpeciesRecord>();
+        var populations = new List<IucnSpeciesRecord>();
+
+        foreach (var record in items) {
+            if (IsRegionalAssessment(record)) {
+                populations.Add(record);
+                continue;
+            }
+
+            var infraType = record.InfraType?.Trim().ToLowerInvariant() ?? "";
+            if (!string.IsNullOrWhiteSpace(infraType) && !string.IsNullOrWhiteSpace(record.InfraName)) {
+                if (infraType.Contains("var")) {
+                    varieties.Add(record);
+                } else if (infraType.Contains("ssp") || infraType.Contains("subsp")) {
+                    subspecies.Add(record);
+                } else {
+                    subspecies.Add(record);
+                }
+                continue;
+            }
+
+            species.Add(record);
+        }
+
+        var hasInfraspecific = subspecies.Count > 0 || varieties.Count > 0 || populations.Count > 0;
+
+        // Species items
+        if (species.Count > 0) {
+            builder.AppendLine("{{div col|colwidth=30em}}");
+            foreach (var record in OrderRecordsForOutput(species, otherContext)) {
+                builder.AppendLine(FormatSpeciesLine(record, display, statusContext, otherContext));
+            }
+            builder.AppendLine("{{div col end}}");
+        }
+
+        // Subspecies
+        if (subspecies.Count > 0) {
+            if (species.Count > 0) {
+                builder.AppendLine();
+            }
+            builder.AppendLine("'''Subspecies'''");
+            builder.AppendLine();
+            builder.AppendLine("{{div col|colwidth=30em}}");
+            foreach (var record in OrderRecordsForOutput(subspecies, otherContext)) {
+                builder.AppendLine(FormatSpeciesLine(record, display, statusContext, otherContext));
+            }
+            builder.AppendLine("{{div col end}}");
+        }
+
+        // Varieties
+        if (varieties.Count > 0) {
+            builder.AppendLine();
+            builder.AppendLine("'''Varieties'''");
+            builder.AppendLine();
+            builder.AppendLine("{{div col|colwidth=30em}}");
+            foreach (var record in OrderRecordsForOutput(varieties, otherContext)) {
+                builder.AppendLine(FormatSpeciesLine(record, display, statusContext, otherContext));
+            }
+            builder.AppendLine("{{div col end}}");
+        }
+
+        // Stocks and populations
+        if (populations.Count > 0) {
+            builder.AppendLine();
+            builder.AppendLine("'''Stocks and populations'''");
+            builder.AppendLine();
+            builder.AppendLine("{{div col|colwidth=30em}}");
+            foreach (var record in OrderRecordsForOutput(populations, otherContext)) {
+                builder.AppendLine(FormatSpeciesLine(record, display, statusContext, otherContext));
+            }
+            builder.AppendLine("{{div col end}}");
+        }
+
+        // If only infraspecific taxa exist (no species), still render them
+        if (species.Count == 0 && !hasInfraspecific) {
+            // Shouldn't happen since we checked node.Items.Count > 0 above,
+            // but guard anyway
         }
     }
 
@@ -1026,6 +1036,8 @@ internal sealed class WikipediaListGenerator {
         var infraspecificMode = ResolveInfraspecificMode(display);
         if (infraspecificMode == InfraspecificDisplayMode.GroupedUnderSpecies) {
             AppendItemsWithInfraspecificGrouping(builder, records, display, statusContext, otherContext);
+        } else if (infraspecificMode == InfraspecificDisplayMode.SeparateSections) {
+            AppendPartitionedItems(builder, records, display, statusContext, otherContext);
         } else {
             foreach (var record in OrderRecordsForOutput(records, otherContext)) {
                 builder.AppendLine(FormatSpeciesLine(record, display, statusContext, otherContext));
@@ -1699,9 +1711,7 @@ internal sealed class WikipediaListGenerator {
                 if (string.Equals(linkTarget, rawScientific, StringComparison.OrdinalIgnoreCase)) {
                     return $"''[[{linkTarget}]]''";
                 }
-                // Link target differs from scientific name (e.g. article titled by common name).
-                // Link to scientific name for discoverability; show article title as display text,
-                // so the scientific name is always explicitly visible — not hidden inside a link.
+
                 if (!string.IsNullOrWhiteSpace(rawScientific)) {
                     return $"[[{rawScientific}|{linkTarget}]] ({formattedScientific})";
                 }

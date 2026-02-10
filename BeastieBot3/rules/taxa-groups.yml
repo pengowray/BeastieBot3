@@ -102,6 +102,8 @@ groups:
 
   ray-finned-fishes:
     name: "Ray-finned fishes"
+    display:
+      listing_style: ScientificNameFocus
     filters:
       - rank: kingdom
         value: Animalia
