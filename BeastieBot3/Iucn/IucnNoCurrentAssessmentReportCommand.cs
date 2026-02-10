@@ -46,6 +46,13 @@ public sealed class IucnNoCurrentAssessmentReportCommand : Command<IucnNoCurrent
 
         AnsiConsole.MarkupLine($"[grey]API cache database:[/] {Markup.Escape(cachePath)}");
 
+        // Open the store briefly in read-write mode so that EnsureSchema runs the
+        // migration adding has_current_assessment (+ backfill + index).  This is a
+        // no-op when the column already exists.
+        using (var store = IucnApiCacheStore.Open(cachePath)) {
+            // migration runs inside Open → EnsureSchema
+        }
+
         var builder = new SqliteConnectionStringBuilder {
             DataSource = cachePath,
             Mode = SqliteOpenMode.ReadOnly
@@ -59,7 +66,7 @@ public sealed class IucnNoCurrentAssessmentReportCommand : Command<IucnNoCurrent
             return -1;
         }
 
-        // Detect whether the denormalized flag is available; fall back to JOIN query if not.
+        // The migration guarantees the flag column exists; verify just in case.
         var hasFlag = HasColumn(connection, "taxa", "has_current_assessment");
 
         AnsiConsole.MarkupLine("[grey]Scanning for taxa with no current assessment...[/]");
