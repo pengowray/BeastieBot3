@@ -602,6 +602,8 @@ internal sealed class WikipediaListGenerator {
         var infraspecificMode = ResolveInfraspecificMode(display);
         if (infraspecificMode == InfraspecificDisplayMode.GroupedUnderSpecies) {
             AppendItemsWithInfraspecificGrouping(builder, iucnRecords, display, statusContext, otherContext);
+        } else if (infraspecificMode == InfraspecificDisplayMode.SeparateSections) {
+            AppendPartitionedItems(builder, iucnRecords, display, statusContext, otherContext);
         } else {
             foreach (var record in OrderRecordsForOutput(iucnRecords, otherContext)) {
                 builder.AppendLine(FormatSpeciesLine(record, display, statusContext, otherContext));
@@ -749,6 +751,8 @@ internal sealed class WikipediaListGenerator {
         var infraspecificMode = ResolveInfraspecificMode(display);
         if (infraspecificMode == InfraspecificDisplayMode.GroupedUnderSpecies) {
             AppendItemsWithInfraspecificGrouping(builder, iucnRecords, display, statusContext, otherContext);
+        } else if (infraspecificMode == InfraspecificDisplayMode.SeparateSections) {
+            AppendPartitionedItems(builder, iucnRecords, display, statusContext, otherContext);
         } else {
             foreach (var record in OrderRecordsForOutput(iucnRecords, otherContext)) {
                 builder.AppendLine(FormatSpeciesLine(record, display, statusContext, otherContext));
