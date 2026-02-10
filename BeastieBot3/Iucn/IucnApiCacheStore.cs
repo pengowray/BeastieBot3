@@ -60,7 +60,7 @@ internal sealed class IucnApiCacheStore : IDisposable {
     import_id INTEGER NOT NULL REFERENCES import_metadata(id) ON DELETE RESTRICT,
     downloaded_at TEXT NOT NULL,
     json TEXT NOT NULL,
-    has_current_assessment INTEGER NOT NULL DEFAULT 1
+    has_latest_flag_in_assessments INTEGER NOT NULL DEFAULT 1
 );
 CREATE TABLE IF NOT EXISTS taxa_lookup (
     sis_id INTEGER PRIMARY KEY,
@@ -103,33 +103,47 @@ CREATE TABLE IF NOT EXISTS failed_requests (
 ";
         command.ExecuteNonQuery();
 
-        // Add has_current_assessment column to existing databases that don't have it yet.
-        MigrateAddHasCurrentAssessment();
+        MigrateHasLatestFlag();
     }
 
-    private void MigrateAddHasCurrentAssessment() {
-        using var check = _connection.CreateCommand();
-        check.CommandText = "SELECT COUNT(*) FROM pragma_table_info('taxa') WHERE name='has_current_assessment'";
-        var columnExists = (long)(check.ExecuteScalar() ?? 0L) > 0;
+    private void MigrateHasLatestFlag() {
+        using var checkNew = _connection.CreateCommand();
+        checkNew.CommandText = "SELECT COUNT(*) FROM pragma_table_info('taxa') WHERE name='has_latest_flag_in_assessments'";
+        var newExists = (long)(checkNew.ExecuteScalar() ?? 0L) > 0;
 
-        if (!columnExists) {
-            using var alter = _connection.CreateCommand();
-            alter.CommandText = "ALTER TABLE taxa ADD COLUMN has_current_assessment INTEGER NOT NULL DEFAULT 1";
-            alter.ExecuteNonQuery();
+        if (!newExists) {
+            // Check whether the old column name (has_current_assessment) exists.
+            using var checkOld = _connection.CreateCommand();
+            checkOld.CommandText = "SELECT COUNT(*) FROM pragma_table_info('taxa') WHERE name='has_current_assessment'";
+            var oldExists = (long)(checkOld.ExecuteScalar() ?? 0L) > 0;
 
-            // Backfill: set has_current_assessment based on existing backlog data.
-            using var backfill = _connection.CreateCommand();
-            backfill.CommandText = @"UPDATE taxa SET has_current_assessment = (
+            if (oldExists) {
+                using var rename = _connection.CreateCommand();
+                rename.CommandText = "ALTER TABLE taxa RENAME COLUMN has_current_assessment TO has_latest_flag_in_assessments";
+                rename.ExecuteNonQuery();
+            }
+            else {
+                using var alter = _connection.CreateCommand();
+                alter.CommandText = "ALTER TABLE taxa ADD COLUMN has_latest_flag_in_assessments INTEGER NOT NULL DEFAULT 1";
+                alter.ExecuteNonQuery();
+
+                using var backfill = _connection.CreateCommand();
+                backfill.CommandText = @"UPDATE taxa SET has_latest_flag_in_assessments = (
     SELECT CASE WHEN EXISTS (
         SELECT 1 FROM taxa_assessment_backlog b WHERE b.taxa_id = taxa.id AND b.latest = 1
     ) THEN 1 ELSE 0 END
 )";
-            backfill.ExecuteNonQuery();
+                backfill.ExecuteNonQuery();
+            }
         }
 
-        // Always ensure the index exists (covers both fresh-migration and already-migrated DBs).
+        // Clean up old index name, ensure new index exists.
+        using var dropOld = _connection.CreateCommand();
+        dropOld.CommandText = "DROP INDEX IF EXISTS idx_taxa_has_current_assessment";
+        dropOld.ExecuteNonQuery();
+
         using var idx = _connection.CreateCommand();
-        idx.CommandText = "CREATE INDEX IF NOT EXISTS idx_taxa_has_current_assessment ON taxa(has_current_assessment)";
+        idx.CommandText = "CREATE INDEX IF NOT EXISTS idx_taxa_has_latest_flag ON taxa(has_latest_flag_in_assessments)";
         idx.ExecuteNonQuery();
     }
 
@@ -339,7 +353,7 @@ ORDER BY b.latest DESC, IFNULL(b.year_published, 0) DESC, b.assessment_id DESC";
         // Update the denormalized flag on the taxa row.
         using (var update = _connection.CreateCommand()) {
             update.Transaction = tx;
-            update.CommandText = "UPDATE taxa SET has_current_assessment=@flag WHERE id=@taxaId";
+            update.CommandText = "UPDATE taxa SET has_latest_flag_in_assessments=@flag WHERE id=@taxaId";
             update.Parameters.AddWithValue("@flag", hasCurrent ? 1 : 0);
             update.Parameters.AddWithValue("@taxaId", taxaId);
             update.ExecuteNonQuery();

@@ -117,11 +117,11 @@ namespace BeastieBot3;
                             .WithExample(new[] { "iucn", "api", "discover-by-family", "--family", "Felidae,Canidae" })
                             .WithExample(new[] { "iucn", "api", "discover-by-family", "--force", "--limit", "100" });
 
-                        api.AddCommand<IucnNoCurrentAssessmentReportCommand>("report-no-current")
+                        api.AddCommand<IucnNoCurrentAssessmentReportCommand>("report-no-latest")
                             .WithDescription("Report all cached taxa with no current (latest) assessment, grouped phylogenetically. Outputs Markdown and CSV.")
-                            .WithExample(new[] { "iucn", "api", "report-no-current" })
-                            .WithExample(new[] { "iucn", "api", "report-no-current", "--limit", "500" })
-                            .WithExample(new[] { "iucn", "api", "report-no-current", "-o", "report.md", "--csv-output", "report.csv" });
+                            .WithExample(new[] { "iucn", "api", "report-no-latest" })
+                            .WithExample(new[] { "iucn", "api", "report-no-latest", "--limit", "500" })
+                            .WithExample(new[] { "iucn", "api", "report-no-latest", "-o", "report.md", "--csv-output", "report.csv" });
                     });
 
                     config.AddBranch("wikidata", wikidata => {

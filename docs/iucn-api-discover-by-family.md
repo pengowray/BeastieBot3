@@ -106,7 +106,7 @@ dotnet run --project BeastieBot3/BeastieBot3.csproj -- iucn api discover-by-fami
 
 4. **Report** taxa with no current assessment:
    ```bash
-   beastiebot3 iucn api report-no-current
+   beastiebot3 iucn api report-no-latest
    ```
    This generates a Markdown report (grouped by taxonomy) and a companion CSV listing every taxon that has no latest assessment — i.e. species that were removed, delisted, or reclassified.
 

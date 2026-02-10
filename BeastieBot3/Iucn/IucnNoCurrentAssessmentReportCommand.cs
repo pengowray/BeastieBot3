@@ -13,10 +13,11 @@ using Spectre.Console.Cli;
 using BeastieBot3.Configuration;
 using BeastieBot3.Infrastructure;
 
-// Generates a phylogenetically grouped report of all cached taxa that have no
-// current (latest) assessment on the IUCN Red List. These are typically species
-// which have been removed, delisted, or reclassified. Outputs both Markdown
-// (grouped by taxonomy) and a companion CSV. Run via: iucn api report-no-current
+// Generates a phylogenetically grouped report of all cached taxa where no
+// assessment in the JSON carries "latest": true.  These are typically species
+// that have been removed, delisted, or reclassified on the IUCN Red List.
+// Outputs Markdown (grouped by taxonomy) and a companion CSV.
+// Run via: iucn api report-no-latest
 
 namespace BeastieBot3.Iucn;
 
@@ -46,18 +47,16 @@ public sealed class IucnNoCurrentAssessmentReportCommand : Command<IucnNoCurrent
 
         AnsiConsole.MarkupLine($"[grey]API cache database:[/] {Markup.Escape(cachePath)}");
 
-        // Open the store briefly in read-write mode so that EnsureSchema runs the
-        // migration adding has_current_assessment (+ backfill + index).  This is a
-        // no-op when the column already exists.
-        using (var store = IucnApiCacheStore.Open(cachePath)) {
-            // migration runs inside Open → EnsureSchema
-        }
+        // Open the store so EnsureSchema runs the migration (adds/renames the
+        // has_latest_flag_in_assessments column, backfills, creates indexes).
+        // We keep the same connection for queries to avoid WAL visibility gaps.
+        using var store = IucnApiCacheStore.Open(cachePath);
 
+        // Grab the underlying connection via a lightweight read query to verify tables.
         var builder = new SqliteConnectionStringBuilder {
             DataSource = cachePath,
-            Mode = SqliteOpenMode.ReadOnly
+            Mode = SqliteOpenMode.ReadWrite
         };
-
         using var connection = new SqliteConnection(builder.ConnectionString);
         connection.Open();
 
@@ -66,15 +65,15 @@ public sealed class IucnNoCurrentAssessmentReportCommand : Command<IucnNoCurrent
             return -1;
         }
 
-        // The migration guarantees the flag column exists; verify just in case.
-        var hasFlag = HasColumn(connection, "taxa", "has_current_assessment");
-
-        AnsiConsole.MarkupLine("[grey]Scanning for taxa with no current assessment...[/]");
-        var taxa = ScanTaxaWithNoCurrentAssessment(connection, hasFlag, settings.Limit);
-        AnsiConsole.MarkupLine($"[grey]Found {taxa.Count:N0} taxa with no current assessment.[/]");
+        AnsiConsole.MarkupLine("[grey]Scanning for taxa with no latest assessment flag...[/]");
+        var (taxa, skippedCount) = ScanTaxaWithNoLatestFlag(connection, settings.Limit);
+        AnsiConsole.MarkupLine($"[grey]Found {taxa.Count:N0} taxa with no latest assessment.[/]");
+        if (skippedCount > 0) {
+            AnsiConsole.MarkupLine($"[yellow]Skipped {skippedCount:N0} taxa where the backlog was stale (JSON actually contains latest=true).[/]");
+        }
 
         if (taxa.Count == 0) {
-            AnsiConsole.MarkupLine("[green]All cached taxa have a current assessment.[/]");
+            AnsiConsole.MarkupLine("[green]All cached taxa have a latest assessment.[/]");
             return 0;
         }
 
@@ -96,10 +95,10 @@ public sealed class IucnNoCurrentAssessmentReportCommand : Command<IucnNoCurrent
             settings.OutputPath,
             explicitDirectory: null,
             fallbackBaseDirectory: fallbackBaseDir,
-            defaultFileName: $"iucn-no-current-assessment-{timestamp}.md");
+            defaultFileName: $"iucn-no-latest-assessment-{timestamp}.md");
 
         var csvPath = settings.CsvOutputPath
-            ?? Path.Combine(Path.GetDirectoryName(mdPath) ?? ".", $"iucn-no-current-assessment-{timestamp}.csv");
+            ?? Path.Combine(Path.GetDirectoryName(mdPath) ?? ".", $"iucn-no-latest-assessment-{timestamp}.csv");
         var csvDir = Path.GetDirectoryName(csvPath);
         if (!string.IsNullOrEmpty(csvDir)) {
             Directory.CreateDirectory(csvDir);
@@ -121,21 +120,23 @@ public sealed class IucnNoCurrentAssessmentReportCommand : Command<IucnNoCurrent
         return 0;
     }
 
-    private static List<TaxonReportRow> ScanTaxaWithNoCurrentAssessment(SqliteConnection connection, bool hasFlag, long? limit) {
+    /// <summary>
+    /// Query taxa whose backlog contains no latest=1 entry (fast indexed scan),
+    /// then verify each candidate against the actual JSON to eliminate false
+    /// positives from stale backlog data.
+    /// </summary>
+    private static (List<TaxonReportRow> Results, int SkippedCount) ScanTaxaWithNoLatestFlag(
+        SqliteConnection connection, long? limit) {
+
         using var command = connection.CreateCommand();
 
-        string sql;
-        if (hasFlag) {
-            sql = "SELECT t.root_sis_id, t.json FROM taxa t WHERE t.has_current_assessment = 0";
-        }
-        else {
-            sql = @"SELECT t.root_sis_id, t.json FROM taxa t
+        // NOT EXISTS is fast thanks to idx_assessment_backlog_taxa_latest(taxa_id, latest).
+        var sql = @"SELECT t.root_sis_id, t.json FROM taxa t
 WHERE NOT EXISTS (
     SELECT 1 FROM taxa_assessment_backlog b WHERE b.taxa_id = t.id AND b.latest = 1
-)";
-        }
+)
+ORDER BY t.root_sis_id";
 
-        sql += " ORDER BY t.root_sis_id";
         if (limit.HasValue && limit.Value > 0) {
             sql += " LIMIT @limit";
             command.Parameters.AddWithValue("@limit", limit.Value);
@@ -145,16 +146,23 @@ WHERE NOT EXISTS (
         command.CommandTimeout = 0;
 
         var results = new List<TaxonReportRow>();
+        var skipped = 0;
         using var reader = command.ExecuteReader();
         while (reader.Read()) {
             var rootSisId = reader.GetInt64(0);
             var json = reader.IsDBNull(1) ? null : reader.GetString(1);
 
+            // Safety: verify the JSON itself has no assessment with latest=true.
+            // If it does, the backlog is stale — skip rather than report a false positive.
+            if (json is not null && JsonHasLatestAssessment(json)) {
+                skipped++;
+                continue;
+            }
+
             var taxonomy = json is not null
                 ? IucnTaxaTaxonomyExtractor.Extract(json) ?? EmptyTaxonomy(rootSisId)
                 : EmptyTaxonomy(rootSisId);
 
-            // Extract most recent assessment info from the JSON
             AssessmentBrief? mostRecent = null;
             if (json is not null) {
                 mostRecent = ExtractMostRecentAssessment(json, rootSisId);
@@ -163,7 +171,39 @@ WHERE NOT EXISTS (
             results.Add(new TaxonReportRow(rootSisId, taxonomy, mostRecent));
         }
 
-        return results;
+        return (results, skipped);
+    }
+
+    /// <summary>
+    /// Returns true if any assessment in the cached JSON has "latest": true.
+    /// </summary>
+    private static bool JsonHasLatestAssessment(string json) {
+        try {
+            using var document = JsonDocument.Parse(json);
+            var root = document.RootElement;
+            if (!root.TryGetProperty("assessments", out var assessments) ||
+                assessments.ValueKind != JsonValueKind.Array) {
+                return false;
+            }
+
+            foreach (var assessment in assessments.EnumerateArray()) {
+                if (!assessment.TryGetProperty("latest", out var latestProp)) {
+                    continue;
+                }
+                if (latestProp.ValueKind == JsonValueKind.True) {
+                    return true;
+                }
+                if (latestProp.ValueKind == JsonValueKind.String &&
+                    bool.TryParse(latestProp.GetString(), out var parsed) && parsed) {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+        catch (JsonException) {
+            return false;
+        }
     }
 
     private static AssessmentBrief? ExtractMostRecentAssessment(string json, long rootSisId) {
@@ -200,13 +240,13 @@ WHERE NOT EXISTS (
 
     private static string BuildMarkdownReport(string cachePath, List<TaxonReportRow> taxa) {
         var sb = new StringBuilder();
-        sb.AppendLine("# IUCN Taxa With No Current Assessment");
+        sb.AppendLine("# IUCN Taxa With No Latest Assessment");
         sb.AppendLine();
         sb.AppendLine($"- **Generated:** {DateTimeOffset.Now:O}");
         sb.AppendLine($"- **Cache database:** `{EscapeMarkdown(cachePath)}`");
-        sb.AppendLine($"- **Taxa with no current assessment:** {taxa.Count:N0}");
+        sb.AppendLine($"- **Taxa with no latest assessment:** {taxa.Count:N0}");
         sb.AppendLine();
-        sb.AppendLine("These are species in the IUCN API cache where no assessment is marked as `latest`. ");
+        sb.AppendLine("These are species in the IUCN API cache where no assessment has `\"latest\": true`. ");
         sb.AppendLine("They may have been removed from the Red List, merged into another taxon, or reclassified.");
         sb.AppendLine();
 
@@ -306,7 +346,7 @@ WHERE NOT EXISTS (
                 }
                 var url = assessment.Url ?? $"https://www.iucnredlist.org/species/{assessment.RootSisId}/{assessment.AssessmentId}";
                 var assessmentLabel = assessmentParts.Count > 0 ? string.Join(" ", assessmentParts) : $"#{assessment.AssessmentId}";
-                parts.Add($"— [{EscapeMarkdown(assessmentLabel)}]({url})");
+                parts.Add($"\u2014 [{EscapeMarkdown(assessmentLabel)}]({url})");
             }
 
             sb.AppendLine($"- {string.Join(" ", parts)}");
@@ -359,7 +399,7 @@ WHERE NOT EXISTS (
         }
 
         AnsiConsole.Write(table);
-        AnsiConsole.MarkupLine($"[grey]Total taxa with no current assessment:[/] {taxa.Count:N0}");
+        AnsiConsole.MarkupLine($"[grey]Total taxa with no latest assessment:[/] {taxa.Count:N0}");
     }
 
     private static TaxaTaxonomyInfo EmptyTaxonomy(long sisId) =>
@@ -382,13 +422,6 @@ WHERE NOT EXISTS (
         command.CommandText = "SELECT 1 FROM sqlite_master WHERE type='table' AND name=@name LIMIT 1";
         command.Parameters.AddWithValue("@name", tableName);
         return command.ExecuteScalar() is not null;
-    }
-
-    private static bool HasColumn(SqliteConnection connection, string tableName, string columnName) {
-        using var command = connection.CreateCommand();
-        command.CommandText = $"SELECT COUNT(*) FROM pragma_table_info('{tableName}') WHERE name=@name";
-        command.Parameters.AddWithValue("@name", columnName);
-        return (long)(command.ExecuteScalar() ?? 0L) > 0;
     }
 
     private static long? TryGetLong(JsonElement element, string propertyName) {
