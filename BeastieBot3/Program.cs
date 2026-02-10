@@ -109,6 +109,13 @@ namespace BeastieBot3;
                             .WithDescription("Run both cache-taxa and cache-assessments sequentially with a single command.")
                             .WithExample(new[] { "iucn", "api", "cache-all" })
                             .WithExample(new[] { "iucn", "api", "cache-all", "--taxa-limit", "100", "--assessment-limit", "200" });
+
+                        api.AddCommand<IucnApiCacheDiscoverByFamilyCommand>("discover-by-family")
+                            .WithDescription("Scan IUCN families via the API to discover taxa missing from the local cache (removed or reclassified species).")
+                            .WithExample(new[] { "iucn", "api", "discover-by-family", "--dry-run" })
+                            .WithExample(new[] { "iucn", "api", "discover-by-family" })
+                            .WithExample(new[] { "iucn", "api", "discover-by-family", "--family", "Felidae,Canidae" })
+                            .WithExample(new[] { "iucn", "api", "discover-by-family", "--force", "--limit", "100" });
                     });
 
                     config.AddBranch("wikidata", wikidata => {

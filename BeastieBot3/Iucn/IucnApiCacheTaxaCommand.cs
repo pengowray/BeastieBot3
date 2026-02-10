@@ -163,7 +163,7 @@ public sealed class IucnApiCacheTaxaCommand : AsyncCommand<IucnApiCacheTaxaSetti
         return queue.GetRange(0, count);
     }
 
-    private static bool ShouldDownload(IucnApiCacheStore cacheStore, long sisId, DateTime? refreshThreshold) {
+    internal static bool ShouldDownload(IucnApiCacheStore cacheStore, long sisId, DateTime? refreshThreshold) {
         var downloadedAt = cacheStore.GetTaxaDownloadedAt(sisId);
         if (downloadedAt is null) {
             return true;
@@ -172,7 +172,7 @@ public sealed class IucnApiCacheTaxaCommand : AsyncCommand<IucnApiCacheTaxaSetti
         return refreshThreshold.HasValue && downloadedAt.Value < refreshThreshold.Value;
     }
 
-    private static async Task<bool> DownloadSingleAsync(IucnApiClient apiClient, IucnApiCacheStore cacheStore, long sisId, CancellationToken cancellationToken) {
+    internal static async Task<bool> DownloadSingleAsync(IucnApiClient apiClient, IucnApiCacheStore cacheStore, long sisId, CancellationToken cancellationToken) {
         var url = $"/api/v4/taxa/sis/{sisId}";
         var importId = cacheStore.BeginImport(url);
         var stopwatch = Stopwatch.StartNew();

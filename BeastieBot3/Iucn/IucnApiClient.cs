@@ -47,6 +47,12 @@ internal sealed class IucnApiClient : IDisposable {
     public Task<IucnApiResponse> GetAssessmentAsync(long assessmentId, CancellationToken cancellationToken) =>
         SendAsync($"/api/v4/assessment/{assessmentId}", cancellationToken);
 
+    public Task<IucnApiResponse> GetTaxaFamilyListAsync(CancellationToken cancellationToken) =>
+        SendAsync("/api/v4/taxa/family/", cancellationToken);
+
+    public Task<IucnApiResponse> GetTaxaByFamilyAsync(string familyName, int page, CancellationToken cancellationToken) =>
+        SendAsync($"/api/v4/taxa/family/{Uri.EscapeDataString(familyName)}?page={page}", cancellationToken);
+
     private async Task<IucnApiResponse> SendAsync(string relativeUrl, CancellationToken cancellationToken) {
         await _semaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
         try {
