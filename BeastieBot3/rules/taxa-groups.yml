@@ -3,9 +3,10 @@
 # Reference these by name in wikipedia-lists.yml using "taxa_group: <name>"
 #
 # Listing styles (display.listing_style):
-# - CommonNameFocus (default): [[Common name]] (''Scientific name'')
+# - CommonNameFocus (default): [[Common name]] (''Scientific name'') (e.g. for reptiles)
 # - ScientificNameFocus: ''[[Scientific name]]'', Common name (for plants/invertebrates)
-# - CommonNameOnly: [[Common name]] (for mammals, birds with unambiguous names)
+# - CommonNameOnly: [[Common name]] (for mammals, birds, sharks+rays) -- Scientific name (italicized) displayed when common name is missing.
+# notes: Link points to the taxon page if known, otherwise redlink to scientific name from IUCN assessment.
 
 groups:
   # ==================== ANIMALIA - VERTEBRATES ====================
