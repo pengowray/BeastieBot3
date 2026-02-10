@@ -1684,20 +1684,28 @@ internal sealed class WikipediaListGenerator {
 
     /// <summary>
     /// Style B: Common name focus (default). Shows common name first, scientific name in parentheses.
+    /// Scientific name must always be explicitly visible — never hidden inside a link.
     /// Examples:
     /// - [[Common name]] (''Scientific name'')
     /// - [[Wikilink|Common name]] (''Scientific name'')
-    /// - ''[[Scientific name]]'' (fallback when no common name)
+    /// - [[Scientific name|Article title]] (''Scientific name'')  (fallback when no common name but article exists with different title)
+    /// - ''[[Scientific name]]'' (fallback when no common name and no distinct article)
     /// </summary>
     private string BuildCommonNameFocusFragment(string? commonName, string? articleTitle, string? rawScientific, string formattedScientific, IucnSpeciesRecord record) {
         if (string.IsNullOrWhiteSpace(commonName)) {
-            // Fallback to scientific name only
+            // Fallback: no common name resolved
             var linkTarget = ResolveLinkTarget(record, articleTitle, rawScientific);
             if (!string.IsNullOrWhiteSpace(linkTarget)) {
                 if (string.Equals(linkTarget, rawScientific, StringComparison.OrdinalIgnoreCase)) {
                     return $"''[[{linkTarget}]]''";
                 }
-                return $"[[{linkTarget}|{formattedScientific}]]";
+                // Link target differs from scientific name (e.g. article titled by common name).
+                // Link to scientific name for discoverability; show article title as display text,
+                // so the scientific name is always explicitly visible — not hidden inside a link.
+                if (!string.IsNullOrWhiteSpace(rawScientific)) {
+                    return $"[[{rawScientific}|{linkTarget}]] ({formattedScientific})";
+                }
+                return $"[[{linkTarget}]] ({formattedScientific})";
             }
             return formattedScientific;
         }
