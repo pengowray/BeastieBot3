@@ -33,6 +33,7 @@ public sealed class WikipediaListCommand : Command<WikipediaListCommand.Settings
         public string? RulesPath { get; init; }
 
         [CommandOption("--list <ID>")]
+        [System.ComponentModel.Description("Filter to specific list IDs (repeatable). Use 'wikipedia show-lists' to see available IDs.")]
         public string[]? ListIds { get; init; }
 
         [CommandOption("--limit <N>")]
@@ -67,7 +68,13 @@ public sealed class WikipediaListCommand : Command<WikipediaListCommand.Settings
         var config = loader.Load(configPath);
         var definitions = FilterDefinitions(config.Lists, settings.ListIds);
         if (definitions.Count == 0) {
-            AnsiConsole.MarkupLine("[yellow]No matching lists found in the configuration.[/]");
+            if (settings.ListIds is { Length: > 0 }) {
+                var requested = string.Join(", ", settings.ListIds);
+                AnsiConsole.MarkupLine($"[yellow]No lists matched:[/] {Markup.Escape(requested)}");
+            } else {
+                AnsiConsole.MarkupLine("[yellow]No lists found in the configuration.[/]");
+            }
+            AnsiConsole.MarkupLine("[grey]Run[/] [white]wikipedia show-lists[/] [grey]to see all available list IDs.[/]");
             return 0;
         }
 
