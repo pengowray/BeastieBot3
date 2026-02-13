@@ -919,11 +919,11 @@ internal sealed class WikipediaListGenerator {
 
         // Species items
         if (species.Count > 0) {
-            builder.AppendLine("{{div col|colwidth=30em}}");
+            if (species.Count > 1) builder.AppendLine("{{div col|colwidth=30em}}");
             foreach (var record in OrderRecordsForOutput(species, otherContext)) {
                 builder.AppendLine(FormatSpeciesLine(record, display, statusContext, otherContext));
             }
-            builder.AppendLine("{{div col end}}");
+            if (species.Count > 1) builder.AppendLine("{{div col end}}");
         }
 
         // Subspecies
@@ -933,11 +933,11 @@ internal sealed class WikipediaListGenerator {
             }
             builder.AppendLine("'''Subspecies'''");
             builder.AppendLine();
-            builder.AppendLine("{{div col|colwidth=30em}}");
+            if (subspecies.Count > 1) builder.AppendLine("{{div col|colwidth=30em}}");
             foreach (var record in OrderRecordsForOutput(subspecies, otherContext)) {
                 builder.AppendLine(FormatSpeciesLine(record, display, statusContext, otherContext));
             }
-            builder.AppendLine("{{div col end}}");
+            if (subspecies.Count > 1) builder.AppendLine("{{div col end}}");
         }
 
         // Varieties
@@ -945,11 +945,11 @@ internal sealed class WikipediaListGenerator {
             builder.AppendLine();
             builder.AppendLine("'''Varieties'''");
             builder.AppendLine();
-            builder.AppendLine("{{div col|colwidth=30em}}");
+            if (varieties.Count > 1) builder.AppendLine("{{div col|colwidth=30em}}");
             foreach (var record in OrderRecordsForOutput(varieties, otherContext)) {
                 builder.AppendLine(FormatSpeciesLine(record, display, statusContext, otherContext));
             }
-            builder.AppendLine("{{div col end}}");
+            if (varieties.Count > 1) builder.AppendLine("{{div col end}}");
         }
 
         // Stocks and populations
@@ -957,11 +957,11 @@ internal sealed class WikipediaListGenerator {
             builder.AppendLine();
             builder.AppendLine("'''Stocks and populations'''");
             builder.AppendLine();
-            builder.AppendLine("{{div col|colwidth=30em}}");
+            if (populations.Count > 1) builder.AppendLine("{{div col|colwidth=30em}}");
             foreach (var record in OrderRecordsForOutput(populations, otherContext)) {
                 builder.AppendLine(FormatSpeciesLine(record, display, statusContext, otherContext));
             }
-            builder.AppendLine("{{div col end}}");
+            if (populations.Count > 1) builder.AppendLine("{{div col end}}");
         }
 
         // If only infraspecific taxa exist (no species), still render them
