@@ -563,9 +563,7 @@ internal sealed class WikipediaListGenerator {
             var currentGrouping = grouping != null && groupingIndex < grouping.Count 
                 ? grouping[groupingIndex] 
                 : null;
-            var showRankLabel = currentGrouping?.ShowRankLabel ?? false;
-            
-            var heading = FormatHeading(taxonName, child.Label, GetKingdomName(child), showRankLabel);
+            var heading = FormatHeading(taxonName, child.Label, GetKingdomName(child));
             var headingText = heading.Text;
             if (IsOtherOrUnknownHeading(taxonName ?? string.Empty) &&
                 currentGrouping?.Level.Equals("family", StringComparison.OrdinalIgnoreCase) == true &&
@@ -575,14 +573,16 @@ internal sealed class WikipediaListGenerator {
 
             builder.AppendLine($"{headingMarkup} {headingText} {headingMarkup}");
             headingCount++;
-            if (!string.IsNullOrWhiteSpace(heading.MainLink) && !IsOtherOrUnknownHeading(headingText)) {
+            if (!string.IsNullOrWhiteSpace(heading.CommonNameSentence)) {
+                builder.AppendLine(heading.CommonNameSentence);
+            } else if (!string.IsNullOrWhiteSpace(heading.MainLink) && !IsOtherOrUnknownHeading(headingText)) {
                 builder.AppendLine($"{{{{main|{heading.MainLink}}}}}");
             }
 
             // Detect if this is an "Other" bucket
             var isOtherBucket = IsOtherOrUnknownHeading(taxonName ?? "");
-            var childOtherContext = isOtherBucket && display.IncludeFamilyInOtherBucket 
-                ? new OtherBucketContext(true) 
+            var childOtherContext = isOtherBucket && display.IncludeFamilyInOtherBucket
+                ? new OtherBucketContext(true)
                 : otherContext;
 
             // Check if this taxon uses virtual groups
@@ -695,7 +695,9 @@ internal sealed class WikipediaListGenerator {
                         var familyHeading = FormatHeading(familyGroup.Key, "family", GetKingdomName(familyGroup));
                         builder.AppendLine($"{familyHeadingMarkup} {familyHeading.Text} {familyHeadingMarkup}");
                         headingCount++;
-                        if (!string.IsNullOrWhiteSpace(familyHeading.MainLink)) {
+                        if (!string.IsNullOrWhiteSpace(familyHeading.CommonNameSentence)) {
+                            builder.AppendLine(familyHeading.CommonNameSentence);
+                        } else if (!string.IsNullOrWhiteSpace(familyHeading.MainLink)) {
                             builder.AppendLine($"{{{{main|{familyHeading.MainLink}}}}}");
                         }
 
@@ -836,9 +838,7 @@ internal sealed class WikipediaListGenerator {
             var currentGrouping = grouping != null && groupingIndex < grouping.Count 
                 ? grouping[groupingIndex] 
                 : null;
-            var showRankLabel = currentGrouping?.ShowRankLabel ?? false;
-            
-            var heading = FormatHeading(child.Value, child.Label, GetKingdomName(child), showRankLabel);
+            var heading = FormatHeading(child.Value, child.Label, GetKingdomName(child));
             var headingText = heading.Text;
             if (IsOtherOrUnknownHeading(child.Value ?? string.Empty) &&
                 currentGrouping?.Level.Equals("family", StringComparison.OrdinalIgnoreCase) == true &&
@@ -848,16 +848,18 @@ internal sealed class WikipediaListGenerator {
 
             builder.AppendLine($"{headingMarkup} {headingText} {headingMarkup}");
             headingCount++;
-            if (!string.IsNullOrWhiteSpace(heading.MainLink) && !IsOtherOrUnknownHeading(headingText)) {
+            if (!string.IsNullOrWhiteSpace(heading.CommonNameSentence)) {
+                builder.AppendLine(heading.CommonNameSentence);
+            } else if (!string.IsNullOrWhiteSpace(heading.MainLink) && !IsOtherOrUnknownHeading(headingText)) {
                 builder.AppendLine($"{{{{main|{heading.MainLink}}}}}");
             }
-            
+
             // Detect if this is an "Other" bucket
             var isOtherBucket = IsOtherOrUnknownHeading(child.Value ?? "");
-            var childOtherContext = isOtherBucket && display.IncludeFamilyInOtherBucket 
-                ? new OtherBucketContext(true) 
+            var childOtherContext = isOtherBucket && display.IncludeFamilyInOtherBucket
+                ? new OtherBucketContext(true)
                 : otherContext;
-            
+
             AppendTree(builder, child, headingLevel + 1, display, statusContext, ref headingCount, grouping, groupingIndex + 1, childOtherContext, parentTaxon: child.Value);
         }
 
@@ -1334,7 +1336,7 @@ internal sealed class WikipediaListGenerator {
         return builder.ToString();
     }
 
-    private readonly record struct HeadingInfo(string Text, string? MainLink);
+    private readonly record struct HeadingInfo(string Text, string? MainLink, string? CommonNameSentence = null);
     
     /// <summary>
     /// Context for items within an "Other" bucket, tracking which families need annotation.
@@ -1357,7 +1359,7 @@ internal sealed class WikipediaListGenerator {
         }
     }
 
-    private HeadingInfo FormatHeading(string? raw, string? rank = null, string? kingdom = null, bool showRankLabel = false) {
+    private HeadingInfo FormatHeading(string? raw, string? rank = null, string? kingdom = null) {
         if (string.IsNullOrWhiteSpace(raw)) {
             return new HeadingInfo("Unassigned", null);
         }
@@ -1369,71 +1371,58 @@ internal sealed class WikipediaListGenerator {
         // Apply title case to the raw taxon name for display
         var displayName = ToTitleCase(raw);
 
-        // Check new YAML rules first (they take precedence)
-        var yamlMainArticle = _taxonRules?.GetMainArticle(raw);
+        // --- Heading text is always the scientific name with rank label ---
+        var headingText = FormatHeadingText(displayName, rank, showRankLabel: true, isScientificName: true);
+
+        // --- Resolve common name from all sources (for sentence, not heading) ---
+        string? commonName = null;
         var yamlRule = _taxonRules?.GetRule(raw);
-        
-        // YAML rules take precedence for common names
-        if (!string.IsNullOrWhiteSpace(yamlRule?.CommonPlural)) {
-            var mainLink = yamlMainArticle ?? displayName;
-            return new HeadingInfo(Uppercase(yamlRule.CommonPlural)!, mainLink);
-        }
+        var legacyRules = _legacyRules.Get(raw);
 
-        if (!string.IsNullOrWhiteSpace(yamlRule?.CommonName)) {
-            var mainLink = yamlMainArticle ?? displayName;
-            return new HeadingInfo(Uppercase(yamlRule.CommonName)!, mainLink);
-        }
-
-        // Fall back to legacy rules for common names
-        var rules = _legacyRules.Get(raw);
-        if (!string.IsNullOrWhiteSpace(rules?.CommonPlural)) {
-            var mainLink = yamlMainArticle ?? displayName;
-            return new HeadingInfo(Uppercase(rules!.CommonPlural)!, mainLink);
-        }
-
-        if (!string.IsNullOrWhiteSpace(rules?.CommonName)) {
-            var mainLink = yamlMainArticle ?? displayName;
-            return new HeadingInfo(Uppercase(rules!.CommonName)!, mainLink);
-        }
-
-        // Store-backed common names for higher taxa (if available)
-        if (_storeBackedProvider is not null) {
+        // Priority: YAML CommonPlural > YAML CommonName > Legacy CommonPlural > Legacy CommonName
+        if (!string.IsNullOrWhiteSpace(yamlRule?.CommonPlural))
+            commonName = yamlRule.CommonPlural;
+        else if (!string.IsNullOrWhiteSpace(yamlRule?.CommonName))
+            commonName = yamlRule.CommonName;
+        else if (!string.IsNullOrWhiteSpace(legacyRules?.CommonPlural))
+            commonName = legacyRules.CommonPlural;
+        else if (!string.IsNullOrWhiteSpace(legacyRules?.CommonName))
+            commonName = legacyRules.CommonName;
+        else if (_storeBackedProvider is not null) {
+            // Store-backed common names for higher taxa
             var storeName = _storeBackedProvider.GetBestCommonNameByScientificName(raw, kingdom);
             if (!string.IsNullOrWhiteSpace(storeName)) {
-                var mainLink = yamlMainArticle ?? _storeBackedProvider.GetWikipediaArticleTitleByScientificName(raw, kingdom);
-                return new HeadingInfo(Uppercase(storeName)!, mainLink);
-            }
-
-            // Fallback: Wikipedia redirect target (e.g., Araneae -> Spider)
-            var redirectTitle = _storeBackedProvider.GetWikipediaRedirectTitleByScientificName(raw);
-            if (!string.IsNullOrWhiteSpace(redirectTitle) && !redirectTitle.Equals(raw, StringComparison.OrdinalIgnoreCase)) {
-                var redirectDisplayName = CommonNameNormalizer.RemoveDisambiguationSuffix(redirectTitle);
-                if (!CommonNameNormalizer.LooksLikeScientificName(redirectDisplayName, null, null)) {
-                    return new HeadingInfo(Uppercase(redirectDisplayName)!, redirectTitle);
+                commonName = storeName;
+            } else {
+                // Fallback: Wikipedia redirect target (e.g., Araneae -> Spider)
+                var redirectTitle = _storeBackedProvider.GetWikipediaRedirectTitleByScientificName(raw);
+                if (!string.IsNullOrWhiteSpace(redirectTitle) && !redirectTitle.Equals(raw, StringComparison.OrdinalIgnoreCase)) {
+                    var cleaned = CommonNameNormalizer.RemoveDisambiguationSuffix(redirectTitle);
+                    if (!CommonNameNormalizer.LooksLikeScientificName(cleaned, null, null)) {
+                        commonName = cleaned;
+                    }
                 }
             }
         }
 
-        // Check for wikilink overrides
-        if (!string.IsNullOrWhiteSpace(yamlRule?.Wikilink)) {
-            var headingText = FormatHeadingText(displayName, rank, showRankLabel, isScientificName: true);
-            return new HeadingInfo(headingText, yamlRule.Wikilink);
+        // --- Resolve wikilink target for the sentence ---
+        string? wikilinkTarget = null;
+        if (!string.IsNullOrWhiteSpace(yamlRule?.Wikilink))
+            wikilinkTarget = yamlRule.Wikilink;
+        else if (!string.IsNullOrWhiteSpace(legacyRules?.Wikilink))
+            wikilinkTarget = legacyRules.Wikilink;
+        else {
+            var yamlMainArticle = _taxonRules?.GetMainArticle(raw);
+            if (!string.IsNullOrWhiteSpace(yamlMainArticle))
+                wikilinkTarget = yamlMainArticle;
+            else if (_storeBackedProvider is not null)
+                wikilinkTarget = _storeBackedProvider.GetWikipediaArticleTitleByScientificName(raw, kingdom);
         }
 
-        if (!string.IsNullOrWhiteSpace(rules?.Wikilink)) {
-            var headingText = FormatHeadingText(displayName, rank, showRankLabel, isScientificName: true);
-            return new HeadingInfo(headingText, rules!.Wikilink);
-        }
+        // --- Build common name sentence ---
+        var sentence = BuildCommonNameSentence(displayName, rank, commonName, wikilinkTarget);
 
-        // If we have a main article from YAML, use it
-        if (!string.IsNullOrWhiteSpace(yamlMainArticle)) {
-            var headingText = FormatHeadingText(displayName, rank, showRankLabel, isScientificName: true);
-            return new HeadingInfo(headingText, yamlMainArticle);
-        }
-
-        // Scientific name only - apply rank label formatting
-        var finalText = FormatHeadingText(displayName, rank, showRankLabel, isScientificName: true);
-        return new HeadingInfo(finalText, null);
+        return new HeadingInfo(headingText, null, sentence);
     }
     
     /// <summary>
@@ -1447,6 +1436,34 @@ internal sealed class WikipediaListGenerator {
         // Capitalize the rank for display (e.g., "family" -> "Family")
         var capitalizedRank = char.ToUpperInvariant(rank[0]) + rank.Substring(1).ToLowerInvariant();
         return $"{capitalizedRank} {displayName}";
+    }
+
+    /// <summary>
+    /// Builds a descriptive sentence showing the common name for a taxon.
+    /// Example: "Members of the [[Sminthidae]] family are called birch mice."
+    /// </summary>
+    private static string? BuildCommonNameSentence(
+        string scientificName, string? rank, string? commonNameOrPlural, string? wikilinkOverride) {
+        if (string.IsNullOrWhiteSpace(commonNameOrPlural)) {
+            return null;
+        }
+
+        // Build wikilink expression
+        string wikilink;
+        if (!string.IsNullOrWhiteSpace(wikilinkOverride) &&
+            !wikilinkOverride.Equals(scientificName, StringComparison.OrdinalIgnoreCase)) {
+            wikilink = $"[[{wikilinkOverride}|{scientificName}]]";
+        } else {
+            wikilink = $"[[{scientificName}]]";
+        }
+
+        // Build sentence with or without rank
+        if (!string.IsNullOrWhiteSpace(rank)) {
+            var lowerRank = rank.ToLowerInvariant();
+            return $"Members of the {wikilink} {lowerRank} are called {commonNameOrPlural}.";
+        }
+
+        return $"Members of {wikilink} are called {commonNameOrPlural}.";
     }
 
     private static bool IsOtherOrUnknownHeading(string raw) {

@@ -955,7 +955,7 @@ Sparganium subglobosum = Floating burr-reed // IUCN name contains a soft-hyphen
 //Bryophytes (non vascular land plants)
 //Pteridophytes (non-seeded vascular plants)
 //Gymnosperms (seeded non-flowering plants)
-//Dicotyledons (flowering plants
+//Dicotyledons (flowering plants)
 //Monocotyledons (flower plants; in the traditional sort order, monocots precede dicots, but they follow dicots in more recent works)
 
 // algae
