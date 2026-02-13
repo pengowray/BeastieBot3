@@ -146,9 +146,11 @@ public sealed class WikipediaListCommand : Command<WikipediaListCommand.Settings
             return;
         }
 
-        var reportPath = Path.Combine(outputDir, "generation-report.txt");
+        var now = DateTimeOffset.UtcNow;
+        var timestamp = now.ToString("yyyyMMdd-HHmmss", System.Globalization.CultureInfo.InvariantCulture);
+        var reportPath = Path.Combine(outputDir, $"generation-report-{timestamp}.txt");
         var datasetVersion = results[0].Result.DatasetVersion;
-        var generatedAt = DateTimeOffset.UtcNow.ToString("yyyy-MM-dd HH:mm:ss", System.Globalization.CultureInfo.InvariantCulture);
+        var generatedAt = now.ToString("yyyy-MM-dd HH:mm:ss", System.Globalization.CultureInfo.InvariantCulture);
 
         using var writer = new StreamWriter(reportPath);
         writer.WriteLine($"Wikipedia List Generation Report");

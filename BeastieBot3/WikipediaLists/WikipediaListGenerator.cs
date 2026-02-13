@@ -1647,11 +1647,17 @@ internal sealed class WikipediaListGenerator {
         var articleTitle = ResolveWikipediaArticle(record);
         var rawScientific = ResolveScientificName(record);
         var formattedScientific = FormatScientificNameForDisplay(record, display.ItalicizeScientific);
-        
+
+        // For infraspecific taxa, use properly formatted name for link targets.
+        // This ensures animal subspecies omit "ssp." and plants include "subsp."/"var.".
+        var linkScientific = !string.IsNullOrWhiteSpace(record.InfraName)
+            ? BuildScientificNameForLink(record)
+            : rawScientific;
+
         return display.ListingStyle switch {
-            ListingStyle.ScientificNameFocus => BuildScientificNameFocusFragment(commonName, articleTitle, rawScientific, formattedScientific, record),
-            ListingStyle.CommonNameOnly => BuildCommonNameOnlyFragment(commonName, articleTitle, rawScientific, formattedScientific, record),
-            _ => BuildCommonNameFocusFragment(commonName, articleTitle, rawScientific, formattedScientific, record),  // Default: CommonNameFocus
+            ListingStyle.ScientificNameFocus => BuildScientificNameFocusFragment(commonName, articleTitle, linkScientific, formattedScientific, record),
+            ListingStyle.CommonNameOnly => BuildCommonNameOnlyFragment(commonName, articleTitle, linkScientific, formattedScientific, record),
+            _ => BuildCommonNameFocusFragment(commonName, articleTitle, linkScientific, formattedScientific, record),  // Default: CommonNameFocus
         };
     }
 
@@ -1709,6 +1715,15 @@ internal sealed class WikipediaListGenerator {
     /// </summary>
     private string BuildCommonNameFocusFragment(string? commonName, string? articleTitle, string? rawScientific, string formattedScientific, IucnSpeciesRecord record) {
         if (string.IsNullOrWhiteSpace(commonName)) {
+            // For infraspecific taxa, use specialized formatting with proper rank markers
+            var hasInfrarank = !string.IsNullOrWhiteSpace(record.InfraType) && !string.IsNullOrWhiteSpace(record.InfraName);
+            if (hasInfrarank) {
+                var infraLink = BuildInfraspecificLink(record, articleTitle);
+                if (!string.IsNullOrWhiteSpace(infraLink)) {
+                    return infraLink;
+                }
+            }
+
             // Fallback: no common name resolved
             var linkTarget = ResolveLinkTarget(record, articleTitle, rawScientific);
             if (!string.IsNullOrWhiteSpace(linkTarget)) {
@@ -1752,6 +1767,15 @@ internal sealed class WikipediaListGenerator {
     /// </summary>
     private string BuildCommonNameOnlyFragment(string? commonName, string? articleTitle, string? rawScientific, string formattedScientific, IucnSpeciesRecord record) {
         if (string.IsNullOrWhiteSpace(commonName)) {
+            // For infraspecific taxa, use specialized formatting with proper rank markers
+            var hasInfrarank = !string.IsNullOrWhiteSpace(record.InfraType) && !string.IsNullOrWhiteSpace(record.InfraName);
+            if (hasInfrarank) {
+                var infraLink = BuildInfraspecificLink(record, articleTitle);
+                if (!string.IsNullOrWhiteSpace(infraLink)) {
+                    return infraLink;
+                }
+            }
+
             // Fallback to scientific name
             var linkTarget = ResolveLinkTarget(record, articleTitle, rawScientific);
             if (!string.IsNullOrWhiteSpace(linkTarget)) {
