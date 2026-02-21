@@ -157,6 +157,10 @@ internal sealed class WikipediaListDefinitionLoader {
             Grouping = raw.Grouping,
             Display = mergedDisplay,
             CustomGroups = raw.CustomGroups ?? taxaGroup.CustomGroups,
+            TaxaAdjective = taxaGroup.Adjective,
+            TaxaNameLower = vars["taxa_name_lower"],
+            StatusText = preset.StatusText,
+            StatusWikiLink = preset.StatusWikiLink,
         };
     }
 
@@ -230,6 +234,10 @@ internal sealed class TaxaGroupsFile {
 
 internal sealed class TaxaGroupDefinition {
     public string? Name { get; init; }
+    /// <summary>
+    /// Adjective form of the group name for use in prose (e.g., "mammalian", "amphibian").
+    /// </summary>
+    public string? Adjective { get; init; }
     public List<TaxonFilterDefinition>? Filters { get; init; }
     /// <summary>
     /// Custom family-based grouping for paraphyletic groups.
@@ -249,6 +257,14 @@ internal sealed class ListPresetsFile {
 
 internal sealed class ListPresetDefinition {
     public string? Name { get; init; }
+    /// <summary>
+    /// Human-readable status text (e.g., "critically endangered").
+    /// </summary>
+    public string? StatusText { get; init; }
+    /// <summary>
+    /// Wiki-linked status text (e.g., "[[Critically endangered species|critically endangered]]").
+    /// </summary>
+    public string? StatusWikiLink { get; init; }
     public string? TitleTemplate { get; init; }
     public string? DescriptionTemplate { get; init; }
     public string? OutputTemplate { get; init; }

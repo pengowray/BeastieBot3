@@ -239,6 +239,81 @@ internal sealed class IucnListQueryService : IDisposable {
         return reader.IsDBNull(ordinal) ? null : reader.GetString(ordinal);
     }
 
+    /// <summary>
+    /// Counts species-rank assessments matching the given taxonomic filters (all statuses).
+    /// Excludes infraspecific taxa and subpopulations.
+    /// </summary>
+    public int CountEvaluatedSpecies(List<TaxonFilterDefinition> filters) {
+        return CountWithFilters(filters, statusCategory: null);
+    }
+
+    /// <summary>
+    /// Counts species-rank assessments matching the given taxonomic filters for a specific status code.
+    /// Translates the short code (e.g., "CR") to the database category text (e.g., "Critically Endangered").
+    /// Excludes infraspecific taxa and subpopulations.
+    /// </summary>
+    public int CountSpeciesByStatus(List<TaxonFilterDefinition> filters, string statusCode) {
+        var descriptor = IucnRedlistStatus.Describe(statusCode);
+        return CountWithFilters(filters, descriptor.Category);
+    }
+
+    private int CountWithFilters(List<TaxonFilterDefinition> filters, string? statusCategory) {
+        var parameters = new List<SqliteParameter>();
+        var builder = new StringBuilder();
+        builder.AppendLine("SELECT COUNT(*) FROM view_assessments_html_taxonomy_html v");
+        builder.AppendLine("WHERE (v.infraType IS NULL OR v.infraType = '')");
+        builder.AppendLine("  AND (v.subpopulationName IS NULL OR v.subpopulationName = '')");
+
+        if (!string.IsNullOrEmpty(statusCategory)) {
+            var param = new SqliteParameter("@statusCat", statusCategory);
+            builder.AppendLine($"  AND v.redlistCategory = {param.ParameterName}");
+            parameters.Add(param);
+        }
+
+        for (var i = 0; i < filters.Count; i++) {
+            var filter = filters[i];
+            if (!string.IsNullOrWhiteSpace(filter.System)) {
+                var systemParam = new SqliteParameter($"@csystem_{i}", $"%{filter.System}%");
+                builder.AppendLine($"  AND v.systems LIKE {systemParam.ParameterName}");
+                parameters.Add(systemParam);
+                continue;
+            }
+
+            var column = ResolveColumn(filter.Rank);
+            if (column is null) continue;
+
+            if (filter.Values is { Count: > 0 }) {
+                var orClauses = new List<string>();
+                for (var j = 0; j < filter.Values.Count; j++) {
+                    var normalizedValue = NormalizeFilterValue(filter.Rank, filter.Values[j]);
+                    if (string.IsNullOrWhiteSpace(normalizedValue)) continue;
+                    var parameter = new SqliteParameter($"@cf_{column}_{i}_{j}", normalizedValue);
+                    orClauses.Add($"v.{column} = {parameter.ParameterName}");
+                    parameters.Add(parameter);
+                }
+                if (orClauses.Count > 0) {
+                    builder.AppendLine($"  AND ({string.Join(" OR ", orClauses)})");
+                }
+            }
+            else {
+                var normalizedValue = NormalizeFilterValue(filter.Rank, filter.Value);
+                if (string.IsNullOrWhiteSpace(normalizedValue)) continue;
+                var parameter = new SqliteParameter($"@cf_{column}_{i}", normalizedValue);
+                builder.AppendLine($"  AND v.{column} = {parameter.ParameterName}");
+                parameters.Add(parameter);
+            }
+        }
+
+        using var command = _connection.CreateCommand();
+        command.CommandText = builder.ToString();
+        foreach (var parameter in parameters) {
+            command.Parameters.Add(parameter);
+        }
+
+        var result = command.ExecuteScalar();
+        return Convert.ToInt32(result);
+    }
+
     public void Dispose() {
         _connection.Dispose();
     }

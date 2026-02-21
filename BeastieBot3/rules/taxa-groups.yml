@@ -12,6 +12,7 @@ groups:
   # ==================== ANIMALIA - VERTEBRATES ====================
   amphibians:
     name: "Amphibians"
+    adjective: "amphibian"
     filters:
       - rank: kingdom
         value: Animalia
@@ -20,6 +21,7 @@ groups:
 
   birds:
     name: "Birds"
+    adjective: "bird"
     display:
       listing_style: CommonNameOnly  # All birds have common names
     filters:
@@ -30,6 +32,7 @@ groups:
 
   reptiles:
     name: "Reptiles"
+    adjective: "reptile"
     filters:
       - rank: kingdom
         value: Animalia
@@ -38,6 +41,7 @@ groups:
 
   mammals:
     name: "Mammals"
+    adjective: "mammalian"
     display:
       listing_style: CommonNameOnly  # All mammals have common names
     filters:
@@ -50,6 +54,7 @@ groups:
   # Uses IUCN's "Marine" system tag for accurate filtering
   marine-mammals:
     name: "Marine mammals"
+    adjective: "marine mammal"
     display:
       listing_style: CommonNameOnly  # All marine mammals have common names
     filters:
@@ -102,6 +107,7 @@ groups:
 
   ray-finned-fishes:
     name: "Ray-finned fishes"
+    adjective: "ray-finned fish"
     display:
       listing_style: ScientificNameFocus
     filters:
@@ -112,6 +118,7 @@ groups:
 
   sharks-rays:
     name: "Sharks and rays"
+    adjective: "shark and ray"
     display:
       listing_style: CommonNameOnly  # Sharks/rays have common names
     filters:
@@ -124,6 +131,7 @@ groups:
   # Note: Invertebrates typically use ScientificNameFocus because common names are sparse/unreliable
   insects:
     name: "Insects"
+    adjective: "insect"
     display:
       listing_style: ScientificNameFocus
     filters:
@@ -134,6 +142,7 @@ groups:
 
   gastropods:
     name: "Gastropods"
+    adjective: "gastropod"
     display:
       listing_style: ScientificNameFocus
     filters:
@@ -144,6 +153,7 @@ groups:
 
   bivalves:
     name: "Bivalves"
+    adjective: "bivalve"
     display:
       listing_style: ScientificNameFocus
     filters:
@@ -154,6 +164,7 @@ groups:
 
   crustaceans:
     name: "Crustaceans"
+    adjective: "crustacean"
     display:
       listing_style: ScientificNameFocus
     filters:
@@ -164,6 +175,7 @@ groups:
 
   corals:
     name: "Corals"
+    adjective: "coral"
     display:
       listing_style: ScientificNameFocus
     filters:
@@ -174,6 +186,7 @@ groups:
 
   arachnids:
     name: "Arachnids"
+    adjective: "arachnid"
     display:
       listing_style: ScientificNameFocus
     filters:
@@ -185,6 +198,7 @@ groups:
   # ==================== ANIMALIA - KINGDOM LEVEL ====================
   animals:
     name: "Animals"
+    adjective: "animal"
     filters:
       - rank: kingdom
         value: Animalia
@@ -193,6 +207,7 @@ groups:
   # Note: Plants use ScientificNameFocus because common names are sparse/unreliable
   plants:
     name: "Plants"
+    adjective: "plant"
     display:
       listing_style: ScientificNameFocus
     filters:
@@ -201,6 +216,7 @@ groups:
 
   conifers:
     name: "Conifers"
+    adjective: "conifer"
     display:
       listing_style: ScientificNameFocus
     filters:
@@ -211,6 +227,7 @@ groups:
 
   cycads:
     name: "Cycads"
+    adjective: "cycad"
     display:
       listing_style: ScientificNameFocus
     filters:
@@ -222,6 +239,7 @@ groups:
   # ==================== OTHER KINGDOMS ====================
   fungi:
     name: "Fungi"
+    adjective: "fungus"
     display:
       listing_style: ScientificNameFocus
     filters:
@@ -230,6 +248,7 @@ groups:
 
   chromista:
     name: "Chromista"
+    adjective: "chromist"
     display:
       listing_style: ScientificNameFocus
     filters:

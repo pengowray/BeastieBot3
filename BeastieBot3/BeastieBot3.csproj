@@ -62,6 +62,9 @@
     <None Update="rules\wikipedia\templates\status-default.mustache">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <None Update="rules\wikipedia\templates\status-ex.mustache">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
     <None Update="rules\wikipedia\templates\taxonomy-status-summary.mustache">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>

@@ -7,10 +7,13 @@ presets:
   # EX lists show extinct species first, then possibly extinct in separate sections
   ex:
     name: "Recently extinct"
+    status_text: "extinct"
+    status_wiki_link: "[[Extinction|extinct]]"
     description_template: "{taxa_name} species, subspecies, and subpopulations assessed as Extinct (EX) or flagged as possibly extinct."
     title_template: "List of recently extinct {taxa_name_lower}"
     output_template: "List_of_recently_extinct_{taxa_slug}.wikitext"
     templates:
+      header: status-ex
       footer: references-short
     sections:
       - key: extinct
@@ -26,6 +29,8 @@ presets:
 
   ew:
     name: "Extinct in the wild"
+    status_text: "extinct in the wild"
+    status_wiki_link: "[[Extinct in the wild|extinct in the wild]]"
     description_template: "{taxa_name} taxa with an EW status."
     title_template: "List of {taxa_name_lower} that are extinct in the wild"
     output_template: "List_of_{taxa_slug}_that_are_extinct_in_the_wild.wikitext"
@@ -41,6 +46,8 @@ presets:
 
   cr:
     name: "Critically endangered"
+    status_text: "critically endangered"
+    status_wiki_link: "[[Critically endangered species|critically endangered]]"
     description_template: "{taxa_name} taxa currently assessed as Critically Endangered."
     title_template: "List of critically endangered {taxa_name_lower}"
     output_template: "List_of_critically_endangered_{taxa_slug}.wikitext"
@@ -56,6 +63,8 @@ presets:
 
   en:
     name: "Endangered"
+    status_text: "endangered"
+    status_wiki_link: "[[Endangered species|endangered]]"
     description_template: "{taxa_name} taxa assessed as Endangered."
     title_template: "List of endangered {taxa_name_lower}"
     output_template: "List_of_endangered_{taxa_slug}.wikitext"
@@ -67,6 +76,8 @@ presets:
 
   vu:
     name: "Vulnerable"
+    status_text: "vulnerable"
+    status_wiki_link: "[[Vulnerable species|vulnerable]]"
     description_template: "{taxa_name} taxa assessed as Vulnerable."
     title_template: "List of vulnerable {taxa_name_lower}"
     output_template: "List_of_vulnerable_{taxa_slug}.wikitext"
@@ -78,6 +89,8 @@ presets:
 
   nt:
     name: "Near threatened"
+    status_text: "near threatened"
+    status_wiki_link: "[[Near-threatened species|near threatened]]"
     description_template: "{taxa_name} taxa assessed as Near Threatened."
     title_template: "List of near threatened {taxa_name_lower}"
     output_template: "List_of_near_threatened_{taxa_slug}.wikitext"
@@ -92,6 +105,8 @@ presets:
 
   lc:
     name: "Least concern"
+    status_text: "least concern"
+    status_wiki_link: "[[Least-concern species|least concern]]"
     description_template: "{taxa_name} taxa assessed as Least Concern."
     title_template: "List of least concern {taxa_name_lower}"
     output_template: "List_of_least_concern_{taxa_slug}.wikitext"
@@ -104,6 +119,8 @@ presets:
 
   dd:
     name: "Data deficient"
+    status_text: "data deficient"
+    status_wiki_link: "[[Data deficient|data deficient]]"
     description_template: "{taxa_name} taxa assessed as Data Deficient."
     title_template: "List of data deficient {taxa_name_lower}"
     output_template: "List_of_data_deficient_{taxa_slug}.wikitext"
@@ -118,6 +135,8 @@ presets:
 
   threatened:
     name: "Threatened"
+    status_text: "threatened"
+    status_wiki_link: "[[Threatened species|threatened]]"
     description_template: "{taxa_name} taxa in threatened categories (Vulnerable, Endangered, or Critically Endangered), listed together."
     title_template: "List of threatened {taxa_name_lower}"
     output_template: "List_of_threatened_{taxa_slug}.wikitext"
@@ -135,6 +154,8 @@ presets:
 
   endangered-combined:
     name: "Endangered (combined)"
+    status_text: "endangered"
+    status_wiki_link: "[[Endangered species|endangered]]"
     description_template: "{taxa_name} taxa assessed as Endangered or Critically Endangered, listed together."
     title_template: "List of endangered {taxa_name_lower}"
     output_template: "List_of_endangered_{taxa_slug}.wikitext"

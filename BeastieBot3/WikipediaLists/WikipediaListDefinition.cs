@@ -31,7 +31,28 @@ internal sealed class WikipediaListDefinition {
     public List<WikipediaSectionDefinition> Sections { get; init; } = new();
     public List<GroupingLevelDefinition>? Grouping { get; init; }
     public DisplayPreferences? Display { get; init; }
-    
+
+    /// <summary>
+    /// Adjective form of the taxa group name (e.g., "mammalian", "amphibian").
+    /// Used in intro text like "mammalian species".
+    /// </summary>
+    public string? TaxaAdjective { get; init; }
+
+    /// <summary>
+    /// Lowercase taxa group name (e.g., "mammals", "amphibians").
+    /// </summary>
+    public string? TaxaNameLower { get; init; }
+
+    /// <summary>
+    /// Human-readable status text (e.g., "critically endangered", "vulnerable").
+    /// </summary>
+    public string? StatusText { get; init; }
+
+    /// <summary>
+    /// Wiki-linked status text (e.g., "[[Critically endangered species|critically endangered]]").
+    /// </summary>
+    public string? StatusWikiLink { get; init; }
+
     /// <summary>
     /// Custom family-based grouping that replaces the normal taxonomy grouping.
     /// Used for paraphyletic groups like marine mammals where the grouping

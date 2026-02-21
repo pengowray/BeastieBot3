@@ -28,7 +28,9 @@ internal sealed class WikipediaTemplateRenderer {
         }
 
         _renderer = new StubbleBuilder()
-            .Configure(settings => settings.SetDefaultTags(CustomTags))
+            .Configure(settings => settings
+                .SetDefaultTags(CustomTags)
+                .SetEncodingFunction(s => s)) // No HTML encoding — output is wikitext, not HTML
             .Build();
     }
 
