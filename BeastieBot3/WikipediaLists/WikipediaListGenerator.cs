@@ -674,9 +674,11 @@ internal sealed class WikipediaListGenerator {
         } else if (infraspecificMode == InfraspecificDisplayMode.SeparateSections) {
             AppendPartitionedItems(builder, iucnRecords, display, statusContext, otherContext);
         } else {
+            if (iucnRecords.Count >= 3) builder.AppendLine("{{div col|colwidth=30em}}");
             foreach (var record in OrderRecordsForOutput(iucnRecords, otherContext)) {
                 builder.AppendLine(FormatSpeciesLine(record, display, statusContext, otherContext));
             }
+            if (iucnRecords.Count >= 3) builder.AppendLine("{{div col end}}");
         }
     }
 
@@ -825,9 +827,11 @@ internal sealed class WikipediaListGenerator {
         } else if (infraspecificMode == InfraspecificDisplayMode.SeparateSections) {
             AppendPartitionedItems(builder, iucnRecords, display, statusContext, otherContext);
         } else {
+            if (iucnRecords.Count >= 3) builder.AppendLine("{{div col|colwidth=30em}}");
             foreach (var record in OrderRecordsForOutput(iucnRecords, otherContext)) {
                 builder.AppendLine(FormatSpeciesLine(record, display, statusContext, otherContext));
             }
+            if (iucnRecords.Count >= 3) builder.AppendLine("{{div col end}}");
         }
     }
 
@@ -942,9 +946,11 @@ internal sealed class WikipediaListGenerator {
         } else if (infraspecificMode == InfraspecificDisplayMode.SeparateSections) {
             AppendPartitionedItems(builder, node.Items, display, statusContext, otherContext);
         } else {
+            if (node.Items.Count >= 3) builder.AppendLine("{{div col|colwidth=30em}}");
             foreach (var record in OrderRecordsForOutput(node.Items, otherContext)) {
                 builder.AppendLine(FormatSpeciesLine(record, display, statusContext, otherContext));
             }
+            if (node.Items.Count >= 3) builder.AppendLine("{{div col end}}");
         }
     }
 
@@ -990,11 +996,11 @@ internal sealed class WikipediaListGenerator {
 
         // Species items
         if (species.Count > 0) {
-            if (species.Count > 1) builder.AppendLine("{{div col|colwidth=30em}}");
+            if (species.Count >= 3) builder.AppendLine("{{div col|colwidth=30em}}");
             foreach (var record in OrderRecordsForOutput(species, otherContext)) {
                 builder.AppendLine(FormatSpeciesLine(record, display, statusContext, otherContext));
             }
-            if (species.Count > 1) builder.AppendLine("{{div col end}}");
+            if (species.Count >= 3) builder.AppendLine("{{div col end}}");
         }
 
         // Subspecies
@@ -1004,11 +1010,11 @@ internal sealed class WikipediaListGenerator {
             }
             builder.AppendLine("'''Subspecies'''");
             builder.AppendLine();
-            if (subspecies.Count > 1) builder.AppendLine("{{div col|colwidth=30em}}");
+            if (subspecies.Count >= 3) builder.AppendLine("{{div col|colwidth=30em}}");
             foreach (var record in OrderRecordsForOutput(subspecies, otherContext)) {
                 builder.AppendLine(FormatSpeciesLine(record, display, statusContext, otherContext));
             }
-            if (subspecies.Count > 1) builder.AppendLine("{{div col end}}");
+            if (subspecies.Count >= 3) builder.AppendLine("{{div col end}}");
         }
 
         // Varieties
@@ -1016,11 +1022,11 @@ internal sealed class WikipediaListGenerator {
             builder.AppendLine();
             builder.AppendLine("'''Varieties'''");
             builder.AppendLine();
-            if (varieties.Count > 1) builder.AppendLine("{{div col|colwidth=30em}}");
+            if (varieties.Count >= 3) builder.AppendLine("{{div col|colwidth=30em}}");
             foreach (var record in OrderRecordsForOutput(varieties, otherContext)) {
                 builder.AppendLine(FormatSpeciesLine(record, display, statusContext, otherContext));
             }
-            if (varieties.Count > 1) builder.AppendLine("{{div col end}}");
+            if (varieties.Count >= 3) builder.AppendLine("{{div col end}}");
         }
 
         // Stocks and populations
@@ -1028,11 +1034,11 @@ internal sealed class WikipediaListGenerator {
             builder.AppendLine();
             builder.AppendLine("'''Stocks and populations'''");
             builder.AppendLine();
-            if (populations.Count > 1) builder.AppendLine("{{div col|colwidth=30em}}");
+            if (populations.Count >= 3) builder.AppendLine("{{div col|colwidth=30em}}");
             foreach (var record in OrderRecordsForOutput(populations, otherContext)) {
                 builder.AppendLine(FormatSpeciesLine(record, display, statusContext, otherContext));
             }
-            if (populations.Count > 1) builder.AppendLine("{{div col end}}");
+            if (populations.Count >= 3) builder.AppendLine("{{div col end}}");
         }
 
         // If only infraspecific taxa exist (no species), still render them
@@ -1114,9 +1120,11 @@ internal sealed class WikipediaListGenerator {
         } else if (infraspecificMode == InfraspecificDisplayMode.SeparateSections) {
             AppendPartitionedItems(builder, records, display, statusContext, otherContext);
         } else {
+            if (records.Count >= 3) builder.AppendLine("{{div col|colwidth=30em}}");
             foreach (var record in OrderRecordsForOutput(records, otherContext)) {
                 builder.AppendLine(FormatSpeciesLine(record, display, statusContext, otherContext));
             }
+            if (records.Count >= 3) builder.AppendLine("{{div col end}}");
         }
         return builder.ToString().TrimEnd();
     }
@@ -1168,6 +1176,8 @@ internal sealed class WikipediaListGenerator {
             species.Add(record);
         }
 
+        if (items.Count >= 3) builder.AppendLine("{{div col|colwidth=30em}}");
+
         var processedKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var record in OrderRecordsForOutput(species, otherContext)) {
             var speciesKey = GetParentSpeciesKey(record);
@@ -1190,6 +1200,8 @@ internal sealed class WikipediaListGenerator {
             builder.AppendLine(parentHeading);
             AppendInfraspecificSubitems(builder, key, subspeciesGroups, varietyGroups, populationGroups, display, statusContext, otherContext);
         }
+
+        if (items.Count >= 3) builder.AppendLine("{{div col end}}");
     }
 
     private static string GetRepresentativeFamilyName(
@@ -1372,7 +1384,6 @@ internal sealed class WikipediaListGenerator {
         if (!string.IsNullOrWhiteSpace(record.SubpopulationName) || !string.IsNullOrWhiteSpace(scopeLabel)) {
             builder.Append(" (");
             if (!string.IsNullOrWhiteSpace(record.SubpopulationName)) {
-                builder.Append("subpopulation: ");
                 builder.Append(record.SubpopulationName);
             }
 
@@ -1609,7 +1620,6 @@ internal sealed class WikipediaListGenerator {
         if (!string.IsNullOrWhiteSpace(record.SubpopulationName) || !string.IsNullOrWhiteSpace(scopeLabel)) {
             builder.Append(" (");
             if (!string.IsNullOrWhiteSpace(record.SubpopulationName)) {
-                builder.Append("subpopulation: ");
                 builder.Append(record.SubpopulationName);
             }
 
