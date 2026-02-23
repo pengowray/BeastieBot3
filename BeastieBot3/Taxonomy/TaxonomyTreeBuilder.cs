@@ -22,9 +22,22 @@ internal static class TaxonomyTreeBuilder {
     /// <param name="levels">Hierarchical grouping levels.</param>
     /// <param name="shouldSkipGroup">Optional callback to determine if a group value should be skipped (items pushed to next level).</param>
     public static TaxonomyTreeNode<T> Build<T>(
-        IEnumerable<T> items, 
+        IEnumerable<T> items,
         IReadOnlyList<TaxonomyTreeLevel<T>> levels,
         Func<string, bool>? shouldSkipGroup) {
+        return Build(items, levels, shouldSkipGroup, autoSplit: null);
+    }
+
+    /// <summary>
+    /// Build a taxonomy tree with optional group skipping and auto-split support.
+    /// Auto-split dynamically inserts additional grouping levels when leaf groups
+    /// exceed a threshold, using CoL-enriched intermediate ranks.
+    /// </summary>
+    public static TaxonomyTreeNode<T> Build<T>(
+        IEnumerable<T> items,
+        IReadOnlyList<TaxonomyTreeLevel<T>> levels,
+        Func<string, bool>? shouldSkipGroup,
+        AutoSplitOptions<T>? autoSplit) {
         if (items is null) {
             throw new ArgumentNullException(nameof(items));
         }
@@ -39,21 +52,29 @@ internal static class TaxonomyTreeBuilder {
             return root;
         }
 
-        BuildRecursive(root, materialized, levels, 0, shouldSkipGroup);
+        BuildRecursive(root, materialized, levels, 0, shouldSkipGroup, autoSplit);
         return root;
     }
 
     private static void BuildRecursive<T>(
-        TaxonomyTreeNode<T> parent, 
-        IReadOnlyList<T> items, 
-        IReadOnlyList<TaxonomyTreeLevel<T>> levels, 
+        TaxonomyTreeNode<T> parent,
+        IReadOnlyList<T> items,
+        IReadOnlyList<TaxonomyTreeLevel<T>> levels,
         int levelIndex,
-        Func<string, bool>? shouldSkipGroup) {
+        Func<string, bool>? shouldSkipGroup,
+        AutoSplitOptions<T>? autoSplit) {
         if (items.Count == 0) {
             return;
         }
 
         if (levelIndex >= levels.Count) {
+            // Try auto-split if items exceed threshold
+            if (autoSplit != null && items.Count >= autoSplit.Threshold && autoSplit.CandidateLevels.Count > 0) {
+                if (TryAutoSplit(parent, items, autoSplit)) {
+                    return;
+                }
+            }
+
             parent.AddItems(items);
             return;
         }
@@ -61,12 +82,12 @@ internal static class TaxonomyTreeBuilder {
         var level = levels[levelIndex];
         var groups = CreateGroups(items, level);
         if (groups.Count == 0) {
-            BuildRecursive(parent, items, levels, levelIndex + 1, shouldSkipGroup);
+            BuildRecursive(parent, items, levels, levelIndex + 1, shouldSkipGroup, autoSplit);
             return;
         }
 
         if (!level.AlwaysDisplay && groups.Count == 1) {
-            BuildRecursive(parent, groups[0].Items, levels, levelIndex + 1, shouldSkipGroup);
+            BuildRecursive(parent, groups[0].Items, levels, levelIndex + 1, shouldSkipGroup, autoSplit);
             return;
         }
 
@@ -86,17 +107,71 @@ internal static class TaxonomyTreeBuilder {
         // Process normal groups with headings
         foreach (var group in normalGroups) {
             var child = parent.AddChild(level.Label, group.DisplayValue);
-            BuildRecursive(child, group.Items, levels, levelIndex + 1, shouldSkipGroup);
+            BuildRecursive(child, group.Items, levels, levelIndex + 1, shouldSkipGroup, autoSplit);
         }
 
         // Process skipped items at the next level (no heading for the current level)
         if (skipItems.Count > 0) {
-            BuildRecursive(parent, skipItems, levels, levelIndex + 1, shouldSkipGroup);
+            BuildRecursive(parent, skipItems, levels, levelIndex + 1, shouldSkipGroup, autoSplit);
         }
     }
 
+    /// <summary>
+    /// Attempts to split a large group of items using candidate levels.
+    /// Tries each candidate level in order; accepts the first that produces
+    /// at least one group with >= MinGroupSize items and more than one group.
+    /// Returns true if a split was applied.
+    /// </summary>
+    private static bool TryAutoSplit<T>(
+        TaxonomyTreeNode<T> parent,
+        IReadOnlyList<T> items,
+        AutoSplitOptions<T> autoSplit) {
+
+        for (int i = 0; i < autoSplit.CandidateLevels.Count; i++) {
+            var candidateLevel = autoSplit.CandidateLevels[i];
+            var groups = CreateGroups(items, candidateLevel);
+
+            // Need more than one group for a meaningful split
+            if (groups.Count <= 1) {
+                continue;
+            }
+
+            // Reject if ALL groups have fewer than MinGroupSize items
+            bool hasMeaningfulGroup = groups.Any(g => g.Items.Count >= autoSplit.MinGroupSize);
+            if (!hasMeaningfulGroup) {
+                continue;
+            }
+
+            // This candidate works — build sub-groups with remaining candidates
+            var remainingCandidates = i + 1 < autoSplit.CandidateLevels.Count
+                ? new AutoSplitOptions<T>(
+                    autoSplit.Threshold,
+                    autoSplit.MinGroupSize,
+                    autoSplit.CandidateLevels.Skip(i + 1).ToList())
+                : null;
+
+            foreach (var group in groups) {
+                var child = parent.AddChild(candidateLevel.Label, group.DisplayValue);
+                // Recursively try auto-split on sub-groups still exceeding threshold
+                if (remainingCandidates != null &&
+                    group.Items.Count >= autoSplit.Threshold &&
+                    remainingCandidates.CandidateLevels.Count > 0) {
+                    if (!TryAutoSplit(child, group.Items, remainingCandidates)) {
+                        child.AddItems(group.Items);
+                    }
+                } else {
+                    child.AddItems(group.Items);
+                }
+            }
+
+            return true;
+        }
+
+        return false;
+    }
+
     private static void BuildRecursive<T>(TaxonomyTreeNode<T> parent, IReadOnlyList<T> items, IReadOnlyList<TaxonomyTreeLevel<T>> levels, int levelIndex) {
-        BuildRecursive(parent, items, levels, levelIndex, shouldSkipGroup: null);
+        BuildRecursive(parent, items, levels, levelIndex, shouldSkipGroup: null, autoSplit: null);
     }
 
     private static List<TreeGroup<T>> CreateGroups<T>(IEnumerable<T> items, TaxonomyTreeLevel<T> level) {
@@ -212,10 +287,24 @@ internal sealed class TaxonomyTreeNode<T> {
 }
 
 internal sealed record TaxonomyTreeLevel<T>(
-    string Label, 
-    Func<T, string?> Selector, 
-    bool AlwaysDisplay = false, 
+    string Label,
+    Func<T, string?> Selector,
+    bool AlwaysDisplay = false,
     string? UnknownLabel = null,
     int MinItems = 1,
     string? OtherLabel = null,
     int MinGroupsForOther = 0);
+
+/// <summary>
+/// Options for automatic section splitting when leaf groups exceed a threshold.
+/// When enabled, the tree builder tries candidate levels (in order) to subdivide
+/// large leaf groups. A split is accepted if at least one resulting group has
+/// >= MinGroupSize items.
+/// </summary>
+internal sealed record AutoSplitOptions<T>(
+    /// <summary>Minimum item count to trigger auto-split (e.g. 30).</summary>
+    int Threshold,
+    /// <summary>Reject a split if ALL resulting groups have fewer than this many items.</summary>
+    int MinGroupSize,
+    /// <summary>Candidate grouping levels to try, in order from broadest to narrowest.</summary>
+    IReadOnlyList<TaxonomyTreeLevel<T>> CandidateLevels);

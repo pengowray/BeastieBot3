@@ -21,6 +21,9 @@ defaults:
       min_items: 5
       min_groups_for_other: 3
       show_rank_label: true  # Show "Family [[Familyidae]]" format
+  auto_split:
+    threshold: 30          # Split groups with >= 30 species into finer taxonomy headings
+    min_group_size: 5      # Don't split if ALL resulting groups have < 5 species
   display:
     prefer_common_names: true
     italicize_scientific: true

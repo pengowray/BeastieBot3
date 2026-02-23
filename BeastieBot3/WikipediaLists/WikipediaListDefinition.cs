@@ -19,6 +19,7 @@ internal sealed class WikipediaListDefaults {
     public string? FooterTemplate { get; init; }
     public List<GroupingLevelDefinition>? Grouping { get; init; }
     public DisplayPreferences Display { get; init; } = new();
+    public AutoSplitConfig? AutoSplit { get; init; }
 }
 
 internal sealed class WikipediaListDefinition {
@@ -59,6 +60,11 @@ internal sealed class WikipediaListDefinition {
     /// doesn't follow normal taxonomic ranks.
     /// </summary>
     public List<CustomGroupDefinition>? CustomGroups { get; init; }
+
+    /// <summary>
+    /// Auto-split configuration for this list. Overrides defaults if specified.
+    /// </summary>
+    public AutoSplitConfig? AutoSplit { get; init; }
 }
 
 /// <summary>
@@ -246,5 +252,29 @@ internal sealed class DisplayPreferences {
     /// Default is false.
     /// </summary>
     public bool IncludeFamilyInOtherBucket { get; init; } = false;
+}
+
+/// <summary>
+/// Configuration for automatic section splitting of large groups.
+/// When a leaf group exceeds the threshold, the tree builder tries CoL-enriched
+/// intermediate ranks to insert finer-grained headings.
+/// </summary>
+internal sealed class AutoSplitConfig {
+    /// <summary>
+    /// Whether auto-split is enabled. Default is true when this config is present.
+    /// </summary>
+    public bool Enabled { get; init; } = true;
+
+    /// <summary>
+    /// Minimum number of items in a group to trigger auto-split.
+    /// Default is 30.
+    /// </summary>
+    public int Threshold { get; init; } = 30;
+
+    /// <summary>
+    /// Reject a split if ALL resulting groups have fewer than this many items.
+    /// Default is 5.
+    /// </summary>
+    public int MinGroupSize { get; init; } = 5;
 }
 

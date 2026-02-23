@@ -195,8 +195,10 @@ internal sealed class WikipediaListGenerator {
                 builder.AppendLine();
             }
 
+            var autoSplitConfig = ResolveAutoSplitConfig(definition, defaults);
             var (sectionBody, sectionHeadingCount) = BuildSectionBody(
-                section.Records, grouping, display, section.StatusContext, definition.CustomGroups);
+                section.Records, grouping, display, section.StatusContext, definition.CustomGroups,
+                autoSplit: autoSplitConfig);
             totalHeadingCount += sectionHeadingCount;
             builder.AppendLine(sectionBody);
             builder.AppendLine();
@@ -270,13 +272,14 @@ internal sealed class WikipediaListGenerator {
     }
 
     private (string Body, int HeadingCount) BuildSectionBody(
-        IReadOnlyList<IucnSpeciesRecord> records, 
-        IReadOnlyList<GroupingLevelDefinition> grouping, 
-        DisplayPreferences display, 
+        IReadOnlyList<IucnSpeciesRecord> records,
+        IReadOnlyList<GroupingLevelDefinition> grouping,
+        DisplayPreferences display,
         string? statusContext,
         IReadOnlyList<CustomGroupDefinition>? customGroups = null,
-        int startHeading = 3) {
-        
+        int startHeading = 3,
+        AutoSplitConfig? autoSplit = null) {
+
         if (records.Count == 0) {
             return ("''No taxa currently listable.''", 0);
         }
@@ -293,7 +296,7 @@ internal sealed class WikipediaListGenerator {
 
         // If separating infraspecific sections is enabled, partition and render each section
         if (infraspecificMode == InfraspecificDisplayMode.SeparateSections && display.SeparateInfraspecificSections) {
-            return BuildInfraspecificSections(filteredRecords, grouping, display, statusContext, customGroups, startHeading);
+            return BuildInfraspecificSections(filteredRecords, grouping, display, statusContext, customGroups, startHeading, autoSplit);
         }
 
         // If custom groups are defined, use custom grouping instead of taxonomic grouping
@@ -308,11 +311,13 @@ internal sealed class WikipediaListGenerator {
         // Check if we need COL enrichment:
         // 1. Any grouping level uses COL-specific ranks
         // 2. Any taxon uses virtual groups (which rely on COL superfamily/family)
-        var needsEnrichment = _colEnricher != null && 
-            (grouping.Any(g => IsColEnrichedRank(g.Level)) || HasVirtualGroupsInGrouping(grouping));
-        
+        // 3. Auto-split is enabled (needs COL intermediate ranks as candidates)
+        var needsEnrichment = _colEnricher != null &&
+            (grouping.Any(g => IsColEnrichedRank(g.Level)) || HasVirtualGroupsInGrouping(grouping)
+             || (autoSplit != null && autoSplit.Enabled));
+
         if (needsEnrichment) {
-            return BuildEnrichedSectionBody(filteredRecords, grouping, display, statusContext);
+            return BuildEnrichedSectionBody(filteredRecords, grouping, display, statusContext, autoSplit);
         }
 
         var levels = grouping
@@ -326,10 +331,13 @@ internal sealed class WikipediaListGenerator {
                 level.MinGroupsForOther))
             .ToList();
 
-        Func<string, bool>? shouldSkip = _taxonRules != null 
-            ? taxon => _taxonRules.ShouldForceSplit(taxon) 
+        // Build auto-split options for non-enriched path (limited to genus)
+        var autoSplitOptions = BuildAutoSplitOptionsIucn(autoSplit, grouping);
+
+        Func<string, bool>? shouldSkip = _taxonRules != null
+            ? taxon => _taxonRules.ShouldForceSplit(taxon)
             : null;
-        var tree = TaxonomyTreeBuilder.Build(filteredRecords, levels, shouldSkip);
+        var tree = TaxonomyTreeBuilder.Build(filteredRecords, levels, shouldSkip, autoSplitOptions);
         var builder = new StringBuilder();
         var headingCount = 0;
         AppendTree(builder, tree, startHeading, display, statusContext, ref headingCount, grouping, groupingIndex: 0, otherContext: null, parentTaxon: null);
@@ -347,8 +355,9 @@ internal sealed class WikipediaListGenerator {
         DisplayPreferences display,
         string? statusContext,
         IReadOnlyList<CustomGroupDefinition>? customGroups,
-        int startHeading) {
-        
+        int startHeading,
+        AutoSplitConfig? autoSplit = null) {
+
         // Create a display settings copy that signals per-node infraspecific partitioning
         // SeparateInfraspecificSections = false prevents re-entering this method,
         // while InfraspecificDisplayMode stays SeparateSections so AppendTree knows
@@ -367,20 +376,21 @@ internal sealed class WikipediaListGenerator {
         };
 
         // Pass ALL records (species + infraspecific) through the normal tree path
-        return BuildSectionBodyCore(records, grouping, innerDisplay, statusContext, customGroups, startHeading);
+        return BuildSectionBodyCore(records, grouping, innerDisplay, statusContext, customGroups, startHeading, autoSplit);
     }
 
     /// <summary>
     /// Core section body building logic (without infraspecific section separation).
     /// </summary>
     private (string Body, int HeadingCount) BuildSectionBodyCore(
-        IReadOnlyList<IucnSpeciesRecord> records, 
-        IReadOnlyList<GroupingLevelDefinition> grouping, 
-        DisplayPreferences display, 
+        IReadOnlyList<IucnSpeciesRecord> records,
+        IReadOnlyList<GroupingLevelDefinition> grouping,
+        DisplayPreferences display,
         string? statusContext,
         IReadOnlyList<CustomGroupDefinition>? customGroups = null,
-        int startHeading = 3) {
-        
+        int startHeading = 3,
+        AutoSplitConfig? autoSplit = null) {
+
         if (records.Count == 0) {
             return ("''No taxa currently listable.''", 0);
         }
@@ -397,11 +407,13 @@ internal sealed class WikipediaListGenerator {
         // Check if we need COL enrichment:
         // 1. Any grouping level uses COL-specific ranks
         // 2. Any taxon uses virtual groups (which rely on COL superfamily/family)
-        var needsEnrichment = _colEnricher != null && 
-            (grouping.Any(g => IsColEnrichedRank(g.Level)) || HasVirtualGroupsInGrouping(grouping));
-        
+        // 3. Auto-split is enabled (needs COL intermediate ranks as candidates)
+        var needsEnrichment = _colEnricher != null &&
+            (grouping.Any(g => IsColEnrichedRank(g.Level)) || HasVirtualGroupsInGrouping(grouping)
+             || (autoSplit != null && autoSplit.Enabled));
+
         if (needsEnrichment) {
-            return BuildEnrichedSectionBody(records, grouping, display, statusContext);
+            return BuildEnrichedSectionBody(records, grouping, display, statusContext, autoSplit);
         }
 
         var levels = grouping
@@ -415,10 +427,13 @@ internal sealed class WikipediaListGenerator {
                 level.MinGroupsForOther))
             .ToList();
 
-        Func<string, bool>? shouldSkip = _taxonRules != null 
-            ? taxon => _taxonRules.ShouldForceSplit(taxon) 
+        // Build auto-split options for non-enriched path (limited to genus)
+        var autoSplitOptions = BuildAutoSplitOptionsIucn(autoSplit, grouping);
+
+        Func<string, bool>? shouldSkip = _taxonRules != null
+            ? taxon => _taxonRules.ShouldForceSplit(taxon)
             : null;
-        var tree = TaxonomyTreeBuilder.Build(records, levels, shouldSkip);
+        var tree = TaxonomyTreeBuilder.Build(records, levels, shouldSkip, autoSplitOptions);
         var builder = new StringBuilder();
         var headingCount = 0;
         AppendTree(builder, tree, startHeading, display, statusContext, ref headingCount, grouping, groupingIndex: 0, otherContext: null, parentTaxon: null);
@@ -572,11 +587,12 @@ internal sealed class WikipediaListGenerator {
     }
 
     private (string Body, int HeadingCount) BuildEnrichedSectionBody(
-        IReadOnlyList<IucnSpeciesRecord> records, 
-        IReadOnlyList<GroupingLevelDefinition> grouping, 
-        DisplayPreferences display, 
-        string? statusContext) {
-        
+        IReadOnlyList<IucnSpeciesRecord> records,
+        IReadOnlyList<GroupingLevelDefinition> grouping,
+        DisplayPreferences display,
+        string? statusContext,
+        AutoSplitConfig? autoSplit = null) {
+
         // Enrich records with COL taxonomy
         var enrichedRecords = _colEnricher!.Enrich(records, CancellationToken.None);
 
@@ -591,10 +607,13 @@ internal sealed class WikipediaListGenerator {
                 level.MinGroupsForOther))
             .ToList();
 
-        Func<string, bool>? shouldSkip = _taxonRules != null 
-            ? taxon => _taxonRules.ShouldForceSplit(taxon) 
+        // Build auto-split options with COL intermediate rank candidates
+        var autoSplitOptions = BuildAutoSplitOptionsEnriched(autoSplit, grouping);
+
+        Func<string, bool>? shouldSkip = _taxonRules != null
+            ? taxon => _taxonRules.ShouldForceSplit(taxon)
             : null;
-        var tree = TaxonomyTreeBuilder.Build(enrichedRecords, levels, shouldSkip);
+        var tree = TaxonomyTreeBuilder.Build(enrichedRecords, levels, shouldSkip, autoSplitOptions);
         var builder = new StringBuilder();
         var headingCount = 0;
         AppendEnrichedTree(builder, tree, startHeading: 3, display, statusContext, ref headingCount, grouping, groupingIndex: 0, otherContext: null, parentTaxon: null);
@@ -886,6 +905,104 @@ internal sealed class WikipediaListGenerator {
         "subgenus" => record => record.Subgenus,
         _ => _ => null
     };
+
+    // Rank hierarchy from broadest to narrowest, used for auto-split candidate selection.
+    // Only ranks that are useful for section splitting (not kingdom/phylum/class which are too broad).
+    private static readonly string[] RankHierarchy = {
+        "order", "suborder", "infraorder", "parvorder", "superfamily",
+        "family", "subfamily", "tribe", "subtribe", "subgenus", "genus"
+    };
+
+    /// <summary>
+    /// Resolve auto-split config: list-level overrides defaults.
+    /// </summary>
+    private static AutoSplitConfig? ResolveAutoSplitConfig(
+        WikipediaListDefinition definition, WikipediaListDefaults defaults) {
+        return definition.AutoSplit ?? defaults.AutoSplit;
+    }
+
+    /// <summary>
+    /// Build auto-split options for non-enriched (IUCN-only) records.
+    /// Candidates are limited to family and genus (the only ranks available without COL).
+    /// </summary>
+    private static AutoSplitOptions<IucnSpeciesRecord>? BuildAutoSplitOptionsIucn(
+        AutoSplitConfig? config,
+        IReadOnlyList<GroupingLevelDefinition> definedLevels) {
+        if (config == null || !config.Enabled) {
+            return null;
+        }
+
+        var definedRanks = new HashSet<string>(
+            definedLevels.Select(l => l.Level.ToLowerInvariant()),
+            StringComparer.OrdinalIgnoreCase);
+
+        var candidates = new List<TaxonomyTreeLevel<IucnSpeciesRecord>>();
+        var iucnRanks = new[] { "order", "family", "genus" };
+
+        var lastDefinedIndex = -1;
+        for (int i = 0; i < iucnRanks.Length; i++) {
+            if (definedRanks.Contains(iucnRanks[i])) {
+                lastDefinedIndex = i;
+            }
+        }
+
+        // Add ranks below the last defined rank that aren't already defined
+        for (int i = lastDefinedIndex + 1; i < iucnRanks.Length; i++) {
+            var rank = iucnRanks[i];
+            if (!definedRanks.Contains(rank)) {
+                candidates.Add(new TaxonomyTreeLevel<IucnSpeciesRecord>(
+                    rank, BuildSelector(rank)));
+            }
+        }
+
+        if (candidates.Count == 0) {
+            return null;
+        }
+
+        return new AutoSplitOptions<IucnSpeciesRecord>(
+            config.Threshold, config.MinGroupSize, candidates);
+    }
+
+    /// <summary>
+    /// Build auto-split options for COL-enriched records.
+    /// Candidates are all COL intermediate ranks below the last defined grouping level.
+    /// </summary>
+    private static AutoSplitOptions<EnrichedSpeciesRecord>? BuildAutoSplitOptionsEnriched(
+        AutoSplitConfig? config,
+        IReadOnlyList<GroupingLevelDefinition> definedLevels) {
+        if (config == null || !config.Enabled) {
+            return null;
+        }
+
+        var definedRanks = new HashSet<string>(
+            definedLevels.Select(l => l.Level.ToLowerInvariant()),
+            StringComparer.OrdinalIgnoreCase);
+
+        // Find the position of the last defined rank in the hierarchy
+        var lastDefinedIndex = -1;
+        for (int i = 0; i < RankHierarchy.Length; i++) {
+            if (definedRanks.Contains(RankHierarchy[i])) {
+                lastDefinedIndex = i;
+            }
+        }
+
+        // Add ranks below the last defined rank that aren't already defined
+        var candidates = new List<TaxonomyTreeLevel<EnrichedSpeciesRecord>>();
+        for (int i = lastDefinedIndex + 1; i < RankHierarchy.Length; i++) {
+            var rank = RankHierarchy[i];
+            if (!definedRanks.Contains(rank)) {
+                candidates.Add(new TaxonomyTreeLevel<EnrichedSpeciesRecord>(
+                    rank, BuildEnrichedSelector(rank)));
+            }
+        }
+
+        if (candidates.Count == 0) {
+            return null;
+        }
+
+        return new AutoSplitOptions<EnrichedSpeciesRecord>(
+            config.Threshold, config.MinGroupSize, candidates);
+    }
 
     private void AppendTree(StringBuilder builder, TaxonomyTreeNode<IucnSpeciesRecord> node, int startHeading, DisplayPreferences display, string? statusContext, ref int headingCount) {
         AppendTree(builder, node, startHeading, display, statusContext, ref headingCount, grouping: null, groupingIndex: 0, otherContext: null, parentTaxon: null);
