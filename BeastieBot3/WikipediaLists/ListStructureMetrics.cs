@@ -154,6 +154,12 @@ internal static class WikitextMetricsCollector {
         FlushHeadings(headingStack, 0, metrics);
     }
 
+    /// <summary>
+    /// Pops headings from the stack that are at or deeper than <paramref name="newLevel"/>,
+    /// recording metrics for each. Only leaf headings (no child sub-headings) are checked
+    /// for empty/single-item status — parent headings naturally have 0 direct items.
+    /// Also marks the new stack top as having children, so it won't be flagged as empty.
+    /// </summary>
     private static void FlushHeadings(List<HeadingContext> stack, int newLevel, ListStructureMetrics metrics) {
         // Pop headings that are at the same level or deeper than the new heading
         while (stack.Count > 0 && stack[stack.Count - 1].Level >= newLevel) {
@@ -184,6 +190,10 @@ internal static class WikitextMetricsCollector {
         }
     }
 
+    /// <summary>
+    /// Parses a wikitext heading line (e.g., "=== Carnivora ===") to extract its level (2-6)
+    /// and inner text. Returns false for non-heading lines or invalid heading levels.
+    /// </summary>
     private static bool IsHeadingLine(string line, out int level, out string headingText) {
         level = 0;
         headingText = string.Empty;
@@ -247,6 +257,10 @@ internal static class WikitextMetricsCollector {
         }
     }
 
+    /// <summary>
+    /// Returns true for standard Wikipedia footer headings (References, See also, etc.)
+    /// that should be excluded from structural quality metrics.
+    /// </summary>
     private static bool IsFooterHeading(string value) {
         var trimmed = value.Trim();
         return trimmed.Equals("References", StringComparison.OrdinalIgnoreCase)
@@ -264,6 +278,11 @@ internal static class WikitextMetricsCollector {
             || trimmed.Equals("Unknown", StringComparison.OrdinalIgnoreCase);
     }
 
+    /// <summary>
+    /// Tracks state for a heading during wikitext parsing. <c>HasChildHeadings</c> distinguishes
+    /// parent headings (which naturally have 0 direct items) from leaf headings (which are
+    /// flagged as empty/single-item when appropriate).
+    /// </summary>
     private sealed record HeadingContext(int Level, bool IsOtherUnknown, int ItemCount, bool HasChildHeadings = false) {
         public HeadingContext WithIncrementedItems() => this with { ItemCount = ItemCount + 1 };
         public HeadingContext WithChildHeading() => this with { HasChildHeadings = true };

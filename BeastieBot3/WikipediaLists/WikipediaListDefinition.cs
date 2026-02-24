@@ -9,11 +9,19 @@ using System.Collections.Generic;
 
 namespace BeastieBot3.WikipediaLists;
 
+/// <summary>
+/// Root YAML model for <c>wikipedia-lists.yml</c>. Contains global defaults and the list of
+/// Wikipedia list definitions to generate.
+/// </summary>
 internal sealed class WikipediaListConfig {
     public WikipediaListDefaults Defaults { get; init; } = new();
     public List<WikipediaListDefinition> Lists { get; init; } = new();
 }
 
+/// <summary>
+/// Global defaults applied to all lists unless overridden at the list level.
+/// Includes header/footer templates, grouping hierarchy, display preferences, and auto-split config.
+/// </summary>
 internal sealed class WikipediaListDefaults {
     public string? HeaderTemplate { get; init; }
     public string? FooterTemplate { get; init; }

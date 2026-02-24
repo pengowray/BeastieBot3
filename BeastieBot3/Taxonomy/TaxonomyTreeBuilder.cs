@@ -2,15 +2,23 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 
-// Generic tree builder for organizing flat records into nested hierarchy.
-// Configured via TaxonomyTreeLevel<T> to specify grouping columns and sort order.
-// Used for generating hierarchical reports (Kingdom → Phylum → Class → ...).
-// Supports force-split groups and skip conditions. Returns TaxonomyTreeNode<T>
-// root with Children for each taxonomic rank level.
-
 namespace BeastieBot3.Taxonomy;
 
+/// <summary>
+/// Builds hierarchical trees from flat records using configurable taxonomy levels.
+/// Each <see cref="TaxonomyTreeLevel{T}"/> defines a grouping column (e.g., order, family).
+/// Records flow through levels top-down; single-group levels are collapsed unless
+/// <c>AlwaysDisplay</c> is set. Groups below <c>MinItems</c> merge into "Other" buckets.
+///
+/// <b>Auto-split</b>: When leaf groups exceed a threshold, <see cref="TryAutoSplit"/>
+/// tries CoL intermediate ranks (subfamily → tribe → genus) with quality gates that
+/// prevent fragmentation. Gates are rank-aware: genus/subgenus require stricter thresholds
+/// than higher ranks like subfamily. See <see cref="AutoSplitOptions{T}"/> for configuration.
+/// </summary>
 internal static class TaxonomyTreeBuilder {
+    /// <summary>
+    /// Build a taxonomy tree from flat items using the given grouping levels.
+    /// </summary>
     public static TaxonomyTreeNode<T> Build<T>(IEnumerable<T> items, IReadOnlyList<TaxonomyTreeLevel<T>> levels) {
         return Build(items, levels, shouldSkipGroup: null);
     }
@@ -56,6 +64,13 @@ internal static class TaxonomyTreeBuilder {
         return root;
     }
 
+    /// <summary>
+    /// Recursively groups items through each level. At each level:
+    /// 1. Groups items by the level's selector
+    /// 2. Collapses single-group levels (unless AlwaysDisplay)
+    /// 3. Separates force-split groups (via shouldSkipGroup) from normal groups
+    /// 4. At the leaf level, triggers auto-split if items exceed the threshold
+    /// </summary>
     private static void BuildRecursive<T>(
         TaxonomyTreeNode<T> parent,
         IReadOnlyList<T> items,
@@ -117,10 +132,26 @@ internal static class TaxonomyTreeBuilder {
     }
 
     /// <summary>
-    /// Attempts to split a large group of items using candidate levels with quality gates.
-    /// Tries each candidate level in order; applies lumping to merge small groups into "Other",
-    /// then evaluates: meaningful group count, Other/Unknown fraction, max groups, and nesting depth.
-    /// Returns true if a split was applied.
+    /// Attempts to split a large leaf group using candidate taxonomy levels with quality gates.
+    /// Tries each candidate level in order (broadest to narrowest, e.g., subfamily → tribe → genus).
+    /// For each candidate, creates groups with lumping (small groups → "Other {rank}"), then
+    /// evaluates a series of quality gates:
+    ///
+    /// <list type="number">
+    ///   <item>Depth limit — rejects if already at <c>MaxDepth</c> nesting</item>
+    ///   <item>Single group — rejects if grouping produces only 1 bucket</item>
+    ///   <item>Unknown rejection — rejects if any "Unknown X" group exists (configurable)</item>
+    ///   <item>Meaningful group count — requires <c>MinMeaningfulGroups</c> non-Other groups
+    ///         (3 for genus/subgenus, 2 for higher ranks)</item>
+    ///   <item>Group size — <b>rank-aware</b>:
+    ///         genus/subgenus: ALL meaningful groups must be ≥ <c>MinGroupSize</c> (one exception at 4+ groups);
+    ///         higher ranks: at least one group ≥ half <c>MinGroupSize</c> (min 5)</item>
+    ///   <item>Other fraction — rejects if &gt; <c>MaxOtherFraction</c> items are in Other/Unknown</item>
+    ///   <item>Max groups — rejects if total groups exceed <c>MaxGroups</c></item>
+    /// </list>
+    ///
+    /// On acceptance, builds child nodes and may recursively auto-split sub-groups (but never
+    /// Other/Unknown groups, and with incremented depth). Returns true if a split was applied.
     /// </summary>
     private static bool TryAutoSplit<T>(
         TaxonomyTreeNode<T> parent,
@@ -259,6 +290,13 @@ internal static class TaxonomyTreeBuilder {
         BuildRecursive(parent, items, levels, levelIndex, shouldSkipGroup: null, autoSplit: null);
     }
 
+    /// <summary>
+    /// Groups items by the level's selector into display-value buckets.
+    /// Items with null/blank selector values go into the <c>UnknownLabel</c> bucket.
+    /// When <c>MinItems</c> &gt; 1, groups below that size are merged into an "Other" bucket
+    /// (unless fewer than <c>MinGroupsForOther</c> small groups exist).
+    /// Result is sorted alphabetically with "Other" buckets last.
+    /// </summary>
     private static List<TreeGroup<T>> CreateGroups<T>(IEnumerable<T> items, TaxonomyTreeLevel<T> level) {
         var comparer = StringComparer.OrdinalIgnoreCase;
         var buckets = new Dictionary<string, TreeGroup<T>>(comparer);
@@ -319,6 +357,7 @@ internal static class TaxonomyTreeBuilder {
             .ToList();
     }
 
+    /// <summary>Returns true if the display value starts with "Other" (used for sort ordering).</summary>
     private static bool IsOtherLabel(string value) {
         if (string.IsNullOrWhiteSpace(value)) {
             return false;
@@ -339,6 +378,7 @@ internal static class TaxonomyTreeBuilder {
             || rankLabel.Equals("subgenus", StringComparison.OrdinalIgnoreCase);
     }
 
+    /// <summary>Returns true if the display value starts with "Unknown" (triggers rejection gate).</summary>
     private static bool IsUnknownLabel(string value) {
         if (string.IsNullOrWhiteSpace(value)) {
             return false;
@@ -349,6 +389,7 @@ internal static class TaxonomyTreeBuilder {
             || trimmed.StartsWith("Unknown ", StringComparison.OrdinalIgnoreCase);
     }
 
+    /// <summary>Returns true for "Other X" or "Unknown X" labels (residual/unclassified buckets).</summary>
     private static bool IsOtherOrUnknownLabel(string value) {
         if (string.IsNullOrWhiteSpace(value)) {
             return false;
@@ -372,6 +413,11 @@ internal static class TaxonomyTreeBuilder {
     }
 }
 
+/// <summary>
+/// A node in the taxonomy tree. Each node has a rank label (e.g., "Order") and display value
+/// (e.g., "Carnivora"), child nodes for the next grouping level, and direct items (species)
+/// at leaf level. <see cref="ItemCount"/> recursively sums items across all descendants.
+/// </summary>
 internal sealed class TaxonomyTreeNode<T> {
     private readonly List<TaxonomyTreeNode<T>> _children = new();
     private readonly List<T> _items = new();
@@ -403,6 +449,18 @@ internal sealed class TaxonomyTreeNode<T> {
     }
 }
 
+/// <summary>
+/// Defines one grouping level in the taxonomy tree.
+/// </summary>
+/// <param name="Label">Rank name used as heading prefix (e.g., "Family").</param>
+/// <param name="Selector">Extracts the grouping value from each item (e.g., item → item.Family).</param>
+/// <param name="AlwaysDisplay">If true, show this level's heading even when all items share one value.</param>
+/// <param name="UnknownLabel">Display value for items where Selector returns null/blank.
+/// Defaults to "Unknown {Label}". Set equal to OtherLabel to route unknowns into the Other bucket.</param>
+/// <param name="MinItems">Minimum items for a group to keep its own heading. Smaller groups merge into Other.</param>
+/// <param name="OtherLabel">Heading text for the merged bucket (e.g., "Other genera"). Defaults to "Other {label}".</param>
+/// <param name="MinGroupsForOther">Minimum number of small groups before merging kicks in.
+/// Prevents a single small group from being renamed to "Other".</param>
 internal sealed record TaxonomyTreeLevel<T>(
     string Label,
     Func<T, string?> Selector,

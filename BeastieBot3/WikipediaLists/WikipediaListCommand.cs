@@ -8,14 +8,13 @@ using Spectre.Console.Cli;
 using BeastieBot3.CommonNames;
 using BeastieBot3.Configuration;
 
-// CLI entry point for Wikipedia list generation. Loads list config YAML,
-// initializes WikipediaListGenerator with all dependencies, outputs wikitext
-// files to --output-dir. Example:
-//   wikipedia-list --config lists/mammals.yml --list endangered-primates
-// Uses paths.ini for database locations unless overridden with --database.
-
 namespace BeastieBot3.WikipediaLists;
 
+/// <summary>
+/// CLI command for Wikipedia list generation. Loads list definitions from YAML,
+/// generates wikitext files, writes a generation report + JSON metrics, and
+/// optionally compares against a previous run via <c>--compare</c>.
+/// </summary>
 public sealed class WikipediaListCommand : Command<WikipediaListCommand.Settings> {
     public sealed class Settings : CommonSettings {
         [CommandOption("--database <PATH>")]
@@ -156,6 +155,10 @@ public sealed class WikipediaListCommand : Command<WikipediaListCommand.Settings
         }
     }
 
+    /// <summary>
+    /// Writes a timestamped text report with two tables (by generation order and by size)
+    /// plus a problems section listing any structural issues detected in the generated lists.
+    /// </summary>
     private static void WriteReport(string outputDir, List<(WikipediaListDefinition Definition, WikipediaListResult Result)> results) {
         if (results.Count == 0) {
             return;
@@ -235,6 +238,10 @@ public sealed class WikipediaListCommand : Command<WikipediaListCommand.Settings
         writer.WriteLine($"{"TOTAL",-55} {totalTaxa,7} {totalHeadings,6}");
     }
 
+    /// <summary>
+    /// Writes <c>structure-metrics.json</c> containing per-list metrics and auto-split decisions.
+    /// This file can be passed to <c>--compare</c> on a future run for A/B testing.
+    /// </summary>
     private static void WriteMetricsJson(string outputDir, List<(WikipediaListDefinition Definition, WikipediaListResult Result)> results) {
         if (results.Count == 0) {
             return;
@@ -255,6 +262,10 @@ public sealed class WikipediaListCommand : Command<WikipediaListCommand.Settings
         AnsiConsole.MarkupLine($"[grey]Metrics saved to[/] {jsonPath}");
     }
 
+    /// <summary>
+    /// Prints a console summary of lists with structural problems (FRAGMENTED, OVER-SPLIT, etc.),
+    /// limited to the first 10 problematic lists.
+    /// </summary>
     private static void ShowProblemsSummary(List<(WikipediaListDefinition Definition, WikipediaListResult Result)> results) {
         var problemLists = results
             .Where(r => r.Result.Metrics?.Problems.Count > 0)
@@ -276,6 +287,10 @@ public sealed class WikipediaListCommand : Command<WikipediaListCommand.Settings
         }
     }
 
+    /// <summary>
+    /// Loads a previous <c>structure-metrics.json</c> and displays a side-by-side comparison
+    /// table showing heading count and single-item heading deltas per list, with IMPROVED/DEGRADED/UNCHANGED status.
+    /// </summary>
     private static void RunComparison(string compareFile, List<(WikipediaListDefinition Definition, WikipediaListResult Result)> results) {
         if (!File.Exists(compareFile)) {
             AnsiConsole.MarkupLine($"[red]Comparison file not found:[/] {compareFile}");

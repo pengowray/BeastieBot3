@@ -940,6 +940,9 @@ internal sealed class WikipediaListGenerator {
     /// <summary>
     /// Build auto-split options for non-enriched (IUCN-only) records.
     /// Candidates are limited to family and genus (the only ranks available without COL).
+    /// Each candidate level sets <c>UnknownLabel = OtherLabel</c> so that species missing
+    /// a rank value route into "Other {rank}" instead of "Unknown {rank}" — this prevents
+    /// the RejectUnknownGroups gate from blocking otherwise good splits.
     /// </summary>
     private static AutoSplitOptions<IucnSpeciesRecord>? BuildAutoSplitOptionsIucn(
         AutoSplitConfig? config,
@@ -993,7 +996,10 @@ internal sealed class WikipediaListGenerator {
 
     /// <summary>
     /// Build auto-split options for COL-enriched records.
-    /// Candidates are all COL intermediate ranks below the last defined grouping level.
+    /// Candidates are all COL intermediate ranks below the last defined grouping level
+    /// (subfamily, tribe, subtribe, subgenus, genus).
+    /// Each candidate level sets <c>UnknownLabel = OtherLabel</c> so that species missing
+    /// a rank value route into "Other {rank}" instead of "Unknown {rank}".
     /// </summary>
     private static AutoSplitOptions<EnrichedSpeciesRecord>? BuildAutoSplitOptionsEnriched(
         AutoSplitConfig? config,
