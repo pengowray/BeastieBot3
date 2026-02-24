@@ -272,10 +272,11 @@ internal sealed class AutoSplitConfig {
     public int Threshold { get; init; } = 30;
 
     /// <summary>
-    /// Reject a split if no meaningful (non-Other/Unknown) group has at least this many items.
-    /// Default is 5.
+    /// All meaningful (non-Other/Unknown) groups must have at least this many items.
+    /// When 4+ meaningful groups exist, one group may be below this threshold.
+    /// Default is 10.
     /// </summary>
-    public int MinGroupSize { get; init; } = 5;
+    public int MinGroupSize { get; init; } = 10;
 
     /// <summary>
     /// Minimum items for a sub-group to get its own heading in auto-split.
@@ -304,5 +305,17 @@ internal sealed class AutoSplitConfig {
     /// Default is 1 (one level of auto-split headings).
     /// </summary>
     public int MaxDepth { get; init; } = 1;
+
+    /// <summary>
+    /// Minimum number of meaningful (non-Other/Unknown) groups required to accept a split.
+    /// Default is 3.
+    /// </summary>
+    public int MinMeaningfulGroups { get; init; } = 3;
+
+    /// <summary>
+    /// When true, reject any split that produces groups with "Unknown" in the label.
+    /// Unknown groupings create confusion for editors. Default is true.
+    /// </summary>
+    public bool RejectUnknownGroups { get; init; } = true;
 }
 

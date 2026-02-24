@@ -967,10 +967,12 @@ internal sealed class WikipediaListGenerator {
         for (int i = lastDefinedIndex + 1; i < iucnRanks.Length; i++) {
             var rank = iucnRanks[i];
             if (!definedRanks.Contains(rank)) {
+                var otherLabel = GetOtherLabel(rank);
                 candidates.Add(new TaxonomyTreeLevel<IucnSpeciesRecord>(
                     rank, BuildSelector(rank),
+                    UnknownLabel: otherLabel,
                     MinItems: config.MinItemsPerGroup,
-                    OtherLabel: GetOtherLabel(rank),
+                    OtherLabel: otherLabel,
                     MinGroupsForOther: 2));
             }
         }
@@ -984,6 +986,8 @@ internal sealed class WikipediaListGenerator {
             MaxOtherFraction: config.MaxOtherFraction,
             MaxGroups: config.MaxGroups,
             MaxDepth: config.MaxDepth,
+            MinMeaningfulGroups: config.MinMeaningfulGroups,
+            RejectUnknownGroups: config.RejectUnknownGroups,
             Diagnostics: diagnostics);
     }
 
@@ -1016,10 +1020,12 @@ internal sealed class WikipediaListGenerator {
         for (int i = lastDefinedIndex + 1; i < RankHierarchy.Length; i++) {
             var rank = RankHierarchy[i];
             if (!definedRanks.Contains(rank)) {
+                var otherLabel = GetOtherLabel(rank);
                 candidates.Add(new TaxonomyTreeLevel<EnrichedSpeciesRecord>(
                     rank, BuildEnrichedSelector(rank),
+                    UnknownLabel: otherLabel,
                     MinItems: config.MinItemsPerGroup,
-                    OtherLabel: GetOtherLabel(rank),
+                    OtherLabel: otherLabel,
                     MinGroupsForOther: 2));
             }
         }
@@ -1033,6 +1039,8 @@ internal sealed class WikipediaListGenerator {
             MaxOtherFraction: config.MaxOtherFraction,
             MaxGroups: config.MaxGroups,
             MaxDepth: config.MaxDepth,
+            MinMeaningfulGroups: config.MinMeaningfulGroups,
+            RejectUnknownGroups: config.RejectUnknownGroups,
             Diagnostics: diagnostics);
     }
 

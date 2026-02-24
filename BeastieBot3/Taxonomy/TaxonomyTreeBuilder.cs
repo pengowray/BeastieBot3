@@ -151,21 +151,50 @@ internal static class TaxonomyTreeBuilder {
             // Rule 1: Only count non-Other/non-Unknown groups as meaningful
             var meaningfulGroups = groups.Where(g => !IsOtherOrUnknownLabel(g.DisplayValue)).ToList();
 
-            // Gate: at least 2 meaningful (named) groups
-            if (meaningfulGroups.Count < 2) {
+            // Gate: reject if any group has "Unknown" label (confusing for editors)
+            if (autoSplit.RejectUnknownGroups) {
+                bool hasUnknown = groups.Any(g => IsUnknownLabel(g.DisplayValue));
+                if (hasUnknown) {
+                    autoSplit.Diagnostics?.RecordDecision(new AutoSplitDecision(
+                        parentPath, items.Count, candidateLevel.Label, "rejected:has_unknown",
+                        GroupCount: groups.Count, MeaningfulGroups: meaningfulGroups.Count));
+                    continue;
+                }
+            }
+
+            // Genus/subgenus splits need stricter gates than higher-rank splits
+            bool isFineGrainedRank = IsFineGrainedRank(candidateLevel.Label);
+            int requiredMeaningful = isFineGrainedRank ? autoSplit.MinMeaningfulGroups : 2;
+            int requiredGroupSize = isFineGrainedRank ? autoSplit.MinGroupSize : Math.Max(autoSplit.MinGroupSize / 2, 5);
+
+            // Gate: minimum meaningful (named) groups
+            if (meaningfulGroups.Count < requiredMeaningful) {
                 autoSplit.Diagnostics?.RecordDecision(new AutoSplitDecision(
                     parentPath, items.Count, candidateLevel.Label, "rejected:few_meaningful",
                     GroupCount: groups.Count, MeaningfulGroups: meaningfulGroups.Count));
                 continue;
             }
 
-            // Gate: at least one meaningful group has >= MinGroupSize items
-            bool hasMeaningfulGroup = meaningfulGroups.Any(g => g.Items.Count >= autoSplit.MinGroupSize);
-            if (!hasMeaningfulGroup) {
-                autoSplit.Diagnostics?.RecordDecision(new AutoSplitDecision(
-                    parentPath, items.Count, candidateLevel.Label, "rejected:no_meaningful",
-                    GroupCount: groups.Count, MeaningfulGroups: meaningfulGroups.Count));
-                continue;
+            // Gate: group size check (rank-dependent)
+            // Fine-grained (genus/subgenus): ALL meaningful groups must be >= MinGroupSize (one exception at 4+)
+            // Higher ranks (subfamily, tribe, etc.): at least one meaningful group >= threshold
+            if (isFineGrainedRank) {
+                var smallMeaningful = meaningfulGroups.Count(g => g.Items.Count < requiredGroupSize);
+                int allowedSmall = meaningfulGroups.Count >= 4 ? 1 : 0;
+                if (smallMeaningful > allowedSmall) {
+                    autoSplit.Diagnostics?.RecordDecision(new AutoSplitDecision(
+                        parentPath, items.Count, candidateLevel.Label, "rejected:groups_too_small",
+                        GroupCount: groups.Count, MeaningfulGroups: meaningfulGroups.Count));
+                    continue;
+                }
+            } else {
+                bool hasMeaningfulGroup = meaningfulGroups.Any(g => g.Items.Count >= requiredGroupSize);
+                if (!hasMeaningfulGroup) {
+                    autoSplit.Diagnostics?.RecordDecision(new AutoSplitDecision(
+                        parentPath, items.Count, candidateLevel.Label, "rejected:no_meaningful",
+                        GroupCount: groups.Count, MeaningfulGroups: meaningfulGroups.Count));
+                    continue;
+                }
             }
 
             // Rule 3: Check Other+Unknown fraction
@@ -300,6 +329,26 @@ internal static class TaxonomyTreeBuilder {
             || trimmed.StartsWith("Other ", StringComparison.OrdinalIgnoreCase);
     }
 
+    /// <summary>
+    /// Genus and subgenus are "fine-grained" ranks that need stricter auto-split gates
+    /// because they tend to produce many tiny headings. Higher ranks (subfamily, tribe, etc.)
+    /// use more lenient gates.
+    /// </summary>
+    private static bool IsFineGrainedRank(string rankLabel) {
+        return rankLabel.Equals("genus", StringComparison.OrdinalIgnoreCase)
+            || rankLabel.Equals("subgenus", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsUnknownLabel(string value) {
+        if (string.IsNullOrWhiteSpace(value)) {
+            return false;
+        }
+
+        var trimmed = value.Trim();
+        return trimmed.Equals("Unknown", StringComparison.OrdinalIgnoreCase)
+            || trimmed.StartsWith("Unknown ", StringComparison.OrdinalIgnoreCase);
+    }
+
     private static bool IsOtherOrUnknownLabel(string value) {
         if (string.IsNullOrWhiteSpace(value)) {
             return false;
@@ -372,7 +421,7 @@ internal sealed record TaxonomyTreeLevel<T>(
 internal sealed record AutoSplitOptions<T>(
     /// <summary>Minimum item count to trigger auto-split (e.g. 30).</summary>
     int Threshold,
-    /// <summary>Reject a split if no meaningful (non-Other/Unknown) group has at least this many items.</summary>
+    /// <summary>All meaningful groups must have at least this many items (one exception when 4+ groups).</summary>
     int MinGroupSize,
     /// <summary>Candidate grouping levels to try, in order from broadest to narrowest.</summary>
     IReadOnlyList<TaxonomyTreeLevel<T>> CandidateLevels,
@@ -384,5 +433,9 @@ internal sealed record AutoSplitOptions<T>(
     int MaxDepth = 1,
     /// <summary>Current recursion depth (incremented internally). Starts at 0.</summary>
     int CurrentDepth = 0,
+    /// <summary>Minimum number of meaningful (non-Other/Unknown) groups required. Default 3.</summary>
+    int MinMeaningfulGroups = 3,
+    /// <summary>When true, reject splits that produce "Unknown" groups. Default true.</summary>
+    bool RejectUnknownGroups = true,
     /// <summary>Optional diagnostics collector for recording split decisions.</summary>
     IAutoSplitDiagnostics? Diagnostics = null);
