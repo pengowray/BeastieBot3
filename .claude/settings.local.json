@@ -2,7 +2,10 @@
   "permissions": {
     "allow": [
       "Bash(dotnet build:*)",
-      "Bash(dotnet run:*)"
+      "Bash(dotnet run:*)",
+      "Bash(ls:*)",
+      "Read(//c/Users/pengo/Dropbox/projects/BeastieBot3/**)",
+      "Bash(python3:*)"
     ]
   }
 }

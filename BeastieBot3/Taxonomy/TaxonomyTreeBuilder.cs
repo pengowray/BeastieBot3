@@ -70,7 +70,7 @@ internal static class TaxonomyTreeBuilder {
         if (levelIndex >= levels.Count) {
             // Try auto-split if items exceed threshold
             if (autoSplit != null && items.Count >= autoSplit.Threshold && autoSplit.CandidateLevels.Count > 0) {
-                if (TryAutoSplit(parent, items, autoSplit)) {
+                if (TryAutoSplit(parent, items, autoSplit, parent.Value ?? "(root)")) {
                     return;
                 }
             }
@@ -117,46 +117,102 @@ internal static class TaxonomyTreeBuilder {
     }
 
     /// <summary>
-    /// Attempts to split a large group of items using candidate levels.
-    /// Tries each candidate level in order; accepts the first that produces
-    /// at least one group with >= MinGroupSize items and more than one group.
+    /// Attempts to split a large group of items using candidate levels with quality gates.
+    /// Tries each candidate level in order; applies lumping to merge small groups into "Other",
+    /// then evaluates: meaningful group count, Other/Unknown fraction, max groups, and nesting depth.
     /// Returns true if a split was applied.
     /// </summary>
     private static bool TryAutoSplit<T>(
         TaxonomyTreeNode<T> parent,
         IReadOnlyList<T> items,
-        AutoSplitOptions<T> autoSplit) {
+        AutoSplitOptions<T> autoSplit,
+        string parentPath) {
+
+        // Rule 5: Respect nesting depth limit
+        if (autoSplit.CurrentDepth >= autoSplit.MaxDepth) {
+            autoSplit.Diagnostics?.RecordDecision(new AutoSplitDecision(
+                parentPath, items.Count, "(all)", "rejected:depth_limit"));
+            return false;
+        }
 
         for (int i = 0; i < autoSplit.CandidateLevels.Count; i++) {
             var candidateLevel = autoSplit.CandidateLevels[i];
+            // Rule 2: CreateGroups now applies lumping via MinItems/OtherLabel on the level
             var groups = CreateGroups(items, candidateLevel);
 
             // Need more than one group for a meaningful split
             if (groups.Count <= 1) {
+                autoSplit.Diagnostics?.RecordDecision(new AutoSplitDecision(
+                    parentPath, items.Count, candidateLevel.Label, "rejected:single_group",
+                    GroupCount: groups.Count));
                 continue;
             }
 
-            // Reject if ALL groups have fewer than MinGroupSize items
-            bool hasMeaningfulGroup = groups.Any(g => g.Items.Count >= autoSplit.MinGroupSize);
+            // Rule 1: Only count non-Other/non-Unknown groups as meaningful
+            var meaningfulGroups = groups.Where(g => !IsOtherOrUnknownLabel(g.DisplayValue)).ToList();
+
+            // Gate: at least 2 meaningful (named) groups
+            if (meaningfulGroups.Count < 2) {
+                autoSplit.Diagnostics?.RecordDecision(new AutoSplitDecision(
+                    parentPath, items.Count, candidateLevel.Label, "rejected:few_meaningful",
+                    GroupCount: groups.Count, MeaningfulGroups: meaningfulGroups.Count));
+                continue;
+            }
+
+            // Gate: at least one meaningful group has >= MinGroupSize items
+            bool hasMeaningfulGroup = meaningfulGroups.Any(g => g.Items.Count >= autoSplit.MinGroupSize);
             if (!hasMeaningfulGroup) {
+                autoSplit.Diagnostics?.RecordDecision(new AutoSplitDecision(
+                    parentPath, items.Count, candidateLevel.Label, "rejected:no_meaningful",
+                    GroupCount: groups.Count, MeaningfulGroups: meaningfulGroups.Count));
                 continue;
             }
 
-            // This candidate works — build sub-groups with remaining candidates
+            // Rule 3: Check Other+Unknown fraction
+            var otherUnknownCount = groups
+                .Where(g => IsOtherOrUnknownLabel(g.DisplayValue))
+                .Sum(g => g.Items.Count);
+            double otherFraction = items.Count > 0 ? (double)otherUnknownCount / items.Count : 0;
+            if (otherFraction > autoSplit.MaxOtherFraction) {
+                autoSplit.Diagnostics?.RecordDecision(new AutoSplitDecision(
+                    parentPath, items.Count, candidateLevel.Label, "rejected:high_other",
+                    GroupCount: groups.Count, MeaningfulGroups: meaningfulGroups.Count,
+                    OtherFraction: otherFraction));
+                continue;
+            }
+
+            // Rule 4: Check max groups limit
+            if (groups.Count > autoSplit.MaxGroups) {
+                autoSplit.Diagnostics?.RecordDecision(new AutoSplitDecision(
+                    parentPath, items.Count, candidateLevel.Label, "rejected:too_many_groups",
+                    GroupCount: groups.Count, MeaningfulGroups: meaningfulGroups.Count,
+                    OtherFraction: otherFraction));
+                continue;
+            }
+
+            // All gates passed — record acceptance and build sub-groups
+            var largestMeaningful = meaningfulGroups.Max(g => g.Items.Count);
+            autoSplit.Diagnostics?.RecordDecision(new AutoSplitDecision(
+                parentPath, items.Count, candidateLevel.Label, "accepted",
+                GroupCount: groups.Count, MeaningfulGroups: meaningfulGroups.Count,
+                OtherFraction: otherFraction, LargestGroup: largestMeaningful));
+
             var remainingCandidates = i + 1 < autoSplit.CandidateLevels.Count
-                ? new AutoSplitOptions<T>(
-                    autoSplit.Threshold,
-                    autoSplit.MinGroupSize,
-                    autoSplit.CandidateLevels.Skip(i + 1).ToList())
+                ? autoSplit with {
+                    CandidateLevels = autoSplit.CandidateLevels.Skip(i + 1).ToList(),
+                    CurrentDepth = autoSplit.CurrentDepth + 1
+                  }
                 : null;
 
             foreach (var group in groups) {
                 var child = parent.AddChild(candidateLevel.Label, group.DisplayValue);
-                // Recursively try auto-split on sub-groups still exceeding threshold
+                // Rule 6: Don't recursively auto-split Other/Unknown groups
                 if (remainingCandidates != null &&
                     group.Items.Count >= autoSplit.Threshold &&
-                    remainingCandidates.CandidateLevels.Count > 0) {
-                    if (!TryAutoSplit(child, group.Items, remainingCandidates)) {
+                    remainingCandidates.CandidateLevels.Count > 0 &&
+                    !IsOtherOrUnknownLabel(group.DisplayValue)) {
+                    var childPath = $"{parentPath} → {group.DisplayValue}";
+                    if (!TryAutoSplit(child, group.Items, remainingCandidates, childPath)) {
                         child.AddItems(group.Items);
                     }
                 } else {
@@ -244,6 +300,18 @@ internal static class TaxonomyTreeBuilder {
             || trimmed.StartsWith("Other ", StringComparison.OrdinalIgnoreCase);
     }
 
+    private static bool IsOtherOrUnknownLabel(string value) {
+        if (string.IsNullOrWhiteSpace(value)) {
+            return false;
+        }
+
+        var trimmed = value.Trim();
+        return trimmed.Equals("Other", StringComparison.OrdinalIgnoreCase)
+            || trimmed.StartsWith("Other ", StringComparison.OrdinalIgnoreCase)
+            || trimmed.Equals("Unknown", StringComparison.OrdinalIgnoreCase)
+            || trimmed.StartsWith("Unknown ", StringComparison.OrdinalIgnoreCase);
+    }
+
     private sealed class TreeGroup<T> {
         public TreeGroup(string displayValue) {
             DisplayValue = displayValue;
@@ -298,13 +366,23 @@ internal sealed record TaxonomyTreeLevel<T>(
 /// <summary>
 /// Options for automatic section splitting when leaf groups exceed a threshold.
 /// When enabled, the tree builder tries candidate levels (in order) to subdivide
-/// large leaf groups. A split is accepted if at least one resulting group has
-/// >= MinGroupSize items.
+/// large leaf groups. Quality gates ensure splits are informative: meaningful groups
+/// must exist, the Other/Unknown fraction must be limited, and nesting depth is capped.
 /// </summary>
 internal sealed record AutoSplitOptions<T>(
     /// <summary>Minimum item count to trigger auto-split (e.g. 30).</summary>
     int Threshold,
-    /// <summary>Reject a split if ALL resulting groups have fewer than this many items.</summary>
+    /// <summary>Reject a split if no meaningful (non-Other/Unknown) group has at least this many items.</summary>
     int MinGroupSize,
     /// <summary>Candidate grouping levels to try, in order from broadest to narrowest.</summary>
-    IReadOnlyList<TaxonomyTreeLevel<T>> CandidateLevels);
+    IReadOnlyList<TaxonomyTreeLevel<T>> CandidateLevels,
+    /// <summary>Maximum fraction (0.0-1.0) of items in Other+Unknown groups before rejecting.</summary>
+    double MaxOtherFraction = 0.6,
+    /// <summary>Maximum number of groups (after lumping) before rejecting a split.</summary>
+    int MaxGroups = 15,
+    /// <summary>Maximum auto-split nesting depth (additional heading levels).</summary>
+    int MaxDepth = 1,
+    /// <summary>Current recursion depth (incremented internally). Starts at 0.</summary>
+    int CurrentDepth = 0,
+    /// <summary>Optional diagnostics collector for recording split decisions.</summary>
+    IAutoSplitDiagnostics? Diagnostics = null);

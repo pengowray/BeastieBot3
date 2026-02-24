@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text.Json;
 using Spectre.Console;
 using Spectre.Console.Cli;
 using BeastieBot3.CommonNames;
@@ -54,6 +55,10 @@ public sealed class WikipediaListCommand : Command<WikipediaListCommand.Settings
         [CommandOption("--no-col-enrichment")]
         [System.ComponentModel.Description("Disable COL-based taxonomy enrichment even if database is available.")]
         public bool NoColEnrichment { get; init; }
+
+        [CommandOption("--compare <FILE>")]
+        [System.ComponentModel.Description("Compare against a previous structure-metrics.json file for A/B testing.")]
+        public string? CompareFile { get; init; }
     }
 
     public override int Execute(CommandContext context, Settings settings, System.Threading.CancellationToken cancellationToken) {
@@ -81,11 +86,11 @@ public sealed class WikipediaListCommand : Command<WikipediaListCommand.Settings
         using var query = new IucnListQueryService(databasePath);
         var templates = new WikipediaTemplateRenderer(templatesDir);
         var rules = new Legacy.LegacyTaxaRuleList(rulesPath);
-        
+
         // Load YAML-based taxon rules (optional)
         var taxonRulesPath = ResolveTaxonRulesPath(paths, rulesPath);
         TaxonRulesService? taxonRules = taxonRulesPath != null ? TaxonRulesService.Load(taxonRulesPath) : null;
-        
+
         // Determine which common name provider to use
         var commonNamesDbPath = settings.CommonNamesDbPath ?? paths.ResolveCommonNameStorePath(null);
         var useStoreBackedProvider = !settings.UseLegacyNames && File.Exists(commonNamesDbPath);
@@ -127,11 +132,21 @@ public sealed class WikipediaListCommand : Command<WikipediaListCommand.Settings
                 AnsiConsole.MarkupLine($"[grey]Generating[/] [white]{definition.Title}[/]...");
                 var result = generator.Generate(definition, config.Defaults, outputDir, settings.Limit);
                 results.Add((definition, result));
-                AnsiConsole.MarkupLine($"  [green]saved[/] {result.OutputPath} ([cyan]{result.TotalEntries}[/] taxa, [cyan]{result.HeadingCount}[/] headings, dataset {result.DatasetVersion}).");
+                var problemFlag = result.Metrics?.Problems.Count > 0 ? $" [yellow]({result.Metrics.Problems.Count} problems)[/]" : "";
+                AnsiConsole.MarkupLine($"  [green]saved[/] {result.OutputPath} ([cyan]{result.TotalEntries}[/] taxa, [cyan]{result.HeadingCount}[/] headings, dataset {result.DatasetVersion}).{problemFlag}");
             }
 
-            // Write report file
+            // Write reports
             WriteReport(outputDir, results);
+            WriteMetricsJson(outputDir, results);
+
+            // Show problems summary
+            ShowProblemsSummary(results);
+
+            // Comparison mode
+            if (!string.IsNullOrWhiteSpace(settings.CompareFile)) {
+                RunComparison(settings.CompareFile, results);
+            }
 
             return 0;
         }
@@ -177,24 +192,157 @@ public sealed class WikipediaListCommand : Command<WikipediaListCommand.Settings
             .ToList();
         WriteReportTable(writer, sorted);
 
+        // Section 3: Problems
+        var problemLists = results
+            .Where(r => r.Result.Metrics?.Problems.Count > 0)
+            .OrderByDescending(r => r.Result.Metrics!.Problems.Count)
+            .ToList();
+        if (problemLists.Count > 0) {
+            writer.WriteLine();
+            writer.WriteLine("PROBLEMS DETECTED");
+            writer.WriteLine("-----------------");
+            writer.WriteLine();
+            foreach (var (definition, result) in problemLists) {
+                var fileName = Path.GetFileName(result.OutputPath);
+                writer.WriteLine($"{fileName}:");
+                foreach (var problem in result.Metrics!.Problems) {
+                    writer.WriteLine($"  - {problem}");
+                }
+                writer.WriteLine();
+            }
+        }
+
         AnsiConsole.MarkupLine($"[grey]Report saved to[/] {reportPath}");
     }
 
     private static void WriteReportTable(StreamWriter writer, List<(WikipediaListDefinition Definition, WikipediaListResult Result)> results) {
-        writer.WriteLine($"{"File",-60} {"Taxa",8} {"Headings",10}");
-        writer.WriteLine(new string('-', 80));
+        writer.WriteLine($"{"File",-55} {"Taxa",7} {"Hdgs",6} {"Ratio",7} {"1-item",7} {"Empty",6} {"Other",6} {"MaxLf",6}");
+        writer.WriteLine(new string('-', 102));
 
         var totalTaxa = 0;
         var totalHeadings = 0;
         foreach (var (definition, result) in results) {
             var fileName = Path.GetFileName(result.OutputPath);
-            writer.WriteLine($"{fileName,-60} {result.TotalEntries,8} {result.HeadingCount,10}");
+            if (fileName.Length > 55) fileName = fileName[..52] + "...";
+            var m = result.Metrics;
+            var ratio = result.TotalEntries > 0 ? (double)result.HeadingCount / result.TotalEntries : 0;
+            writer.WriteLine($"{fileName,-55} {result.TotalEntries,7} {result.HeadingCount,6} {ratio,7:F3} {m?.SingleItemHeadings ?? 0,7} {m?.EmptyHeadings ?? 0,6} {m?.OtherUnknownHeadings ?? 0,6} {m?.MaxLeafSize ?? 0,6}");
             totalTaxa += result.TotalEntries;
             totalHeadings += result.HeadingCount;
         }
 
-        writer.WriteLine(new string('-', 80));
-        writer.WriteLine($"{"TOTAL",-60} {totalTaxa,8} {totalHeadings,10}");
+        writer.WriteLine(new string('-', 102));
+        writer.WriteLine($"{"TOTAL",-55} {totalTaxa,7} {totalHeadings,6}");
+    }
+
+    private static void WriteMetricsJson(string outputDir, List<(WikipediaListDefinition Definition, WikipediaListResult Result)> results) {
+        if (results.Count == 0) {
+            return;
+        }
+
+        var report = new GenerationMetricsReport {
+            GeneratedAt = DateTimeOffset.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ", System.Globalization.CultureInfo.InvariantCulture),
+            DatasetVersion = results[0].Result.DatasetVersion,
+            Lists = results
+                .Where(r => r.Result.Metrics != null)
+                .Select(r => r.Result.Metrics!)
+                .ToList()
+        };
+
+        var jsonPath = Path.Combine(outputDir, "structure-metrics.json");
+        var options = new JsonSerializerOptions { WriteIndented = true };
+        File.WriteAllText(jsonPath, JsonSerializer.Serialize(report, options));
+        AnsiConsole.MarkupLine($"[grey]Metrics saved to[/] {jsonPath}");
+    }
+
+    private static void ShowProblemsSummary(List<(WikipediaListDefinition Definition, WikipediaListResult Result)> results) {
+        var problemLists = results
+            .Where(r => r.Result.Metrics?.Problems.Count > 0)
+            .ToList();
+
+        if (problemLists.Count == 0) {
+            return;
+        }
+
+        AnsiConsole.MarkupLine($"\n[yellow]Problems detected in {problemLists.Count} list(s):[/]");
+        foreach (var (definition, result) in problemLists.Take(10)) {
+            var fileName = Path.GetFileName(result.OutputPath);
+            foreach (var problem in result.Metrics!.Problems) {
+                AnsiConsole.MarkupLine($"  [grey]{fileName}:[/] [yellow]{Markup.Escape(problem)}[/]");
+            }
+        }
+        if (problemLists.Count > 10) {
+            AnsiConsole.MarkupLine($"  [grey]... and {problemLists.Count - 10} more (see report)[/]");
+        }
+    }
+
+    private static void RunComparison(string compareFile, List<(WikipediaListDefinition Definition, WikipediaListResult Result)> results) {
+        if (!File.Exists(compareFile)) {
+            AnsiConsole.MarkupLine($"[red]Comparison file not found:[/] {compareFile}");
+            return;
+        }
+
+        GenerationMetricsReport? previous;
+        try {
+            var json = File.ReadAllText(compareFile);
+            previous = JsonSerializer.Deserialize<GenerationMetricsReport>(json);
+        } catch (Exception ex) {
+            AnsiConsole.MarkupLine($"[red]Failed to parse comparison file:[/] {ex.Message}");
+            return;
+        }
+
+        if (previous?.Lists == null || previous.Lists.Count == 0) {
+            AnsiConsole.MarkupLine("[yellow]Comparison file contains no list data.[/]");
+            return;
+        }
+
+        var previousByFile = previous.Lists.ToDictionary(m => m.FileName, StringComparer.OrdinalIgnoreCase);
+        AnsiConsole.MarkupLine($"\n[bold]COMPARISON[/] (vs {previous.GeneratedAt})");
+
+        var table = new Table();
+        table.AddColumn(new TableColumn("File").Width(50));
+        table.AddColumn(new TableColumn("Taxa").RightAligned());
+        table.AddColumn(new TableColumn("Headings").RightAligned());
+        table.AddColumn(new TableColumn("Delta Hdg").RightAligned());
+        table.AddColumn(new TableColumn("1-item").RightAligned());
+        table.AddColumn(new TableColumn("Delta 1-item").RightAligned());
+        table.AddColumn(new TableColumn("Status"));
+
+        foreach (var (definition, result) in results) {
+            var fileName = Path.GetFileName(result.OutputPath);
+            var m = result.Metrics;
+            if (m == null) continue;
+
+            if (previousByFile.TryGetValue(fileName, out var prev)) {
+                var deltaH = m.HeadingCount - prev.HeadingCount;
+                var delta1 = m.SingleItemHeadings - prev.SingleItemHeadings;
+                var status = deltaH < 0 ? "[green]IMPROVED[/]"
+                    : deltaH > 0 ? "[red]DEGRADED[/]"
+                    : "[grey]UNCHANGED[/]";
+                var deltaHStr = deltaH == 0 ? "0" : deltaH > 0 ? $"[red]+{deltaH}[/]" : $"[green]{deltaH}[/]";
+                var delta1Str = delta1 == 0 ? "0" : delta1 > 0 ? $"[red]+{delta1}[/]" : $"[green]{delta1}[/]";
+
+                table.AddRow(
+                    Markup.Escape(fileName.Length > 50 ? fileName[..47] + "..." : fileName),
+                    m.TotalTaxa.ToString(),
+                    m.HeadingCount.ToString(),
+                    deltaHStr,
+                    m.SingleItemHeadings.ToString(),
+                    delta1Str,
+                    status);
+            } else {
+                table.AddRow(
+                    Markup.Escape(fileName.Length > 50 ? fileName[..47] + "..." : fileName),
+                    m.TotalTaxa.ToString(),
+                    m.HeadingCount.ToString(),
+                    "[grey]NEW[/]",
+                    m.SingleItemHeadings.ToString(),
+                    "[grey]NEW[/]",
+                    "[blue]NEW[/]");
+            }
+        }
+
+        AnsiConsole.Write(table);
     }
 
     private static string ResolveConfigPath(PathsService paths, string? overridePath) {

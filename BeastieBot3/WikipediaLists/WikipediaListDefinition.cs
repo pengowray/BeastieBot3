@@ -272,9 +272,37 @@ internal sealed class AutoSplitConfig {
     public int Threshold { get; init; } = 30;
 
     /// <summary>
-    /// Reject a split if ALL resulting groups have fewer than this many items.
+    /// Reject a split if no meaningful (non-Other/Unknown) group has at least this many items.
     /// Default is 5.
     /// </summary>
     public int MinGroupSize { get; init; } = 5;
+
+    /// <summary>
+    /// Minimum items for a sub-group to get its own heading in auto-split.
+    /// Groups below this are lumped into "Other {rank}".
+    /// Default is 3 (headings with 1-2 species are noise).
+    /// </summary>
+    public int MinItemsPerGroup { get; init; } = 3;
+
+    /// <summary>
+    /// Maximum fraction (0.0-1.0) of items allowed in Other+Unknown groups combined.
+    /// If exceeded, the split is rejected as not informative.
+    /// Default is 0.6 (reject if &gt;60% of items are residual).
+    /// </summary>
+    public double MaxOtherFraction { get; init; } = 0.6;
+
+    /// <summary>
+    /// Maximum number of heading groups allowed after lumping.
+    /// Prevents walls of headings even when groups are above MinItemsPerGroup.
+    /// Default is 15.
+    /// </summary>
+    public int MaxGroups { get; init; } = 15;
+
+    /// <summary>
+    /// Maximum auto-split nesting depth (additional heading levels inserted).
+    /// Prevents heading level cap violations from deep recursive splitting.
+    /// Default is 1 (one level of auto-split headings).
+    /// </summary>
+    public int MaxDepth { get; init; } = 1;
 }
 

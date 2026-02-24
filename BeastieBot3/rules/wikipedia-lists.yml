@@ -23,7 +23,11 @@ defaults:
       show_rank_label: true  # Show "Family [[Familyidae]]" format
   auto_split:
     threshold: 30          # Split groups with >= 30 species into finer taxonomy headings
-    min_group_size: 5      # Don't split if ALL resulting groups have < 5 species
+    min_group_size: 5      # Don't split if no meaningful (non-Other/Unknown) group has >= 5 species
+    min_items_per_group: 3 # Groups with fewer items get lumped into "Other {rank}"
+    max_other_fraction: 0.6 # Reject split if >60% of items end up in Other/Unknown groups
+    max_groups: 15         # Reject split if it produces more than 15 groups after lumping
+    max_depth: 1           # Maximum auto-split nesting levels (prevents heading depth violations)
   display:
     prefer_common_names: true
     italicize_scientific: true

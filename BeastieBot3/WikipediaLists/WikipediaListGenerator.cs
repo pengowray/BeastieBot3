@@ -209,9 +209,20 @@ internal sealed class WikipediaListGenerator {
 
         Directory.CreateDirectory(outputDirectory);
         var outputPath = Path.Combine(outputDirectory, definition.OutputFile);
-        File.WriteAllText(outputPath, builder.ToString());
+        var content = builder.ToString();
+        File.WriteAllText(outputPath, content);
 
-        return new WikipediaListResult(outputPath, totalCount, totalHeadingCount, datasetVersion);
+        // Collect structural metrics from the generated wikitext
+        var metrics = new ListStructureMetrics {
+            ListId = definition.Id,
+            FileName = Path.GetFileName(outputPath),
+            TotalTaxa = totalCount,
+            HeadingCount = totalHeadingCount
+        };
+        WikitextMetricsCollector.CollectFromWikitext(content, metrics);
+        WikitextMetricsCollector.DetectProblems(metrics);
+
+        return new WikipediaListResult(outputPath, totalCount, totalHeadingCount, datasetVersion, metrics);
     }
 
     private static readonly Dictionary<string, int> RankOrder = new(StringComparer.OrdinalIgnoreCase) {
@@ -643,13 +654,18 @@ internal sealed class WikipediaListGenerator {
         string? parentTaxon) {
         
         foreach (var child in node.Children) {
+            // Rule 7: Skip empty headings (no items and no children)
+            if (child.ItemCount == 0) {
+                continue;
+            }
+
             var taxonName = child.Value;
             var headingLevel = Math.Min(startHeading, 6);
             var headingMarkup = new string('=', headingLevel);
-            
+
             // Get grouping configuration for current level
-            var currentGrouping = grouping != null && groupingIndex < grouping.Count 
-                ? grouping[groupingIndex] 
+            var currentGrouping = grouping != null && groupingIndex < grouping.Count
+                ? grouping[groupingIndex]
                 : null;
             var heading = FormatHeading(taxonName, child.Label, GetKingdomName(child));
             var headingText = heading.Text;
@@ -675,8 +691,8 @@ internal sealed class WikipediaListGenerator {
 
             // Check if this taxon uses virtual groups
             if (!string.IsNullOrWhiteSpace(taxonName) &&
-                _taxonRules != null && 
-                _taxonRules.ShouldUseVirtualGroups(taxonName) && 
+                _taxonRules != null &&
+                _taxonRules.ShouldUseVirtualGroups(taxonName) &&
                 _taxonRules.HasVirtualGroups(taxonName)) {
                 // Render virtual groups instead of normal children
                 AppendVirtualGroups(builder, child, taxonName, headingLevel + 1, display, statusContext, ref headingCount, grouping, groupingIndex + 1, childOtherContext);
@@ -927,7 +943,8 @@ internal sealed class WikipediaListGenerator {
     /// </summary>
     private static AutoSplitOptions<IucnSpeciesRecord>? BuildAutoSplitOptionsIucn(
         AutoSplitConfig? config,
-        IReadOnlyList<GroupingLevelDefinition> definedLevels) {
+        IReadOnlyList<GroupingLevelDefinition> definedLevels,
+        IAutoSplitDiagnostics? diagnostics = null) {
         if (config == null || !config.Enabled) {
             return null;
         }
@@ -951,7 +968,10 @@ internal sealed class WikipediaListGenerator {
             var rank = iucnRanks[i];
             if (!definedRanks.Contains(rank)) {
                 candidates.Add(new TaxonomyTreeLevel<IucnSpeciesRecord>(
-                    rank, BuildSelector(rank)));
+                    rank, BuildSelector(rank),
+                    MinItems: config.MinItemsPerGroup,
+                    OtherLabel: GetOtherLabel(rank),
+                    MinGroupsForOther: 2));
             }
         }
 
@@ -960,7 +980,11 @@ internal sealed class WikipediaListGenerator {
         }
 
         return new AutoSplitOptions<IucnSpeciesRecord>(
-            config.Threshold, config.MinGroupSize, candidates);
+            config.Threshold, config.MinGroupSize, candidates,
+            MaxOtherFraction: config.MaxOtherFraction,
+            MaxGroups: config.MaxGroups,
+            MaxDepth: config.MaxDepth,
+            Diagnostics: diagnostics);
     }
 
     /// <summary>
@@ -969,7 +993,8 @@ internal sealed class WikipediaListGenerator {
     /// </summary>
     private static AutoSplitOptions<EnrichedSpeciesRecord>? BuildAutoSplitOptionsEnriched(
         AutoSplitConfig? config,
-        IReadOnlyList<GroupingLevelDefinition> definedLevels) {
+        IReadOnlyList<GroupingLevelDefinition> definedLevels,
+        IAutoSplitDiagnostics? diagnostics = null) {
         if (config == null || !config.Enabled) {
             return null;
         }
@@ -992,7 +1017,10 @@ internal sealed class WikipediaListGenerator {
             var rank = RankHierarchy[i];
             if (!definedRanks.Contains(rank)) {
                 candidates.Add(new TaxonomyTreeLevel<EnrichedSpeciesRecord>(
-                    rank, BuildEnrichedSelector(rank)));
+                    rank, BuildEnrichedSelector(rank),
+                    MinItems: config.MinItemsPerGroup,
+                    OtherLabel: GetOtherLabel(rank),
+                    MinGroupsForOther: 2));
             }
         }
 
@@ -1001,8 +1029,27 @@ internal sealed class WikipediaListGenerator {
         }
 
         return new AutoSplitOptions<EnrichedSpeciesRecord>(
-            config.Threshold, config.MinGroupSize, candidates);
+            config.Threshold, config.MinGroupSize, candidates,
+            MaxOtherFraction: config.MaxOtherFraction,
+            MaxGroups: config.MaxGroups,
+            MaxDepth: config.MaxDepth,
+            Diagnostics: diagnostics);
     }
+
+    private static string GetOtherLabel(string rank) => rank.ToLowerInvariant() switch {
+        "subfamily" => "Other subfamilies",
+        "superfamily" => "Other superfamilies",
+        "family" => "Other families",
+        "subgenus" => "Other subgenera",
+        "genus" => "Other genera",
+        "tribe" => "Other tribes",
+        "subtribe" => "Other subtribes",
+        "suborder" => "Other suborders",
+        "infraorder" => "Other infraorders",
+        "parvorder" => "Other parvorders",
+        "order" => "Other orders",
+        _ => $"Other {rank}"
+    };
 
     private void AppendTree(StringBuilder builder, TaxonomyTreeNode<IucnSpeciesRecord> node, int startHeading, DisplayPreferences display, string? statusContext, ref int headingCount) {
         AppendTree(builder, node, startHeading, display, statusContext, ref headingCount, grouping: null, groupingIndex: 0, otherContext: null, parentTaxon: null);
@@ -1021,12 +1068,17 @@ internal sealed class WikipediaListGenerator {
         string? parentTaxon) {
         
         foreach (var child in node.Children) {
+            // Rule 7: Skip empty headings (no items and no children)
+            if (child.ItemCount == 0) {
+                continue;
+            }
+
             var headingLevel = Math.Min(startHeading, 6);
             var headingMarkup = new string('=', headingLevel);
-            
+
             // Get grouping configuration for current level
-            var currentGrouping = grouping != null && groupingIndex < grouping.Count 
-                ? grouping[groupingIndex] 
+            var currentGrouping = grouping != null && groupingIndex < grouping.Count
+                ? grouping[groupingIndex]
                 : null;
             var heading = FormatHeading(child.Value, child.Label, GetKingdomName(child));
             var headingText = heading.Text;
@@ -2420,7 +2472,12 @@ internal sealed class WikipediaListGenerator {
     }
 }
 
-internal sealed record WikipediaListResult(string OutputPath, int TotalEntries, int HeadingCount, string DatasetVersion);
+internal sealed record WikipediaListResult(
+    string OutputPath,
+    int TotalEntries,
+    int HeadingCount,
+    string DatasetVersion,
+    ListStructureMetrics? Metrics = null);
 
 internal static class IucnSpeciesRecordExtensions {
     public static IucnTaxonomyRow ToTaxonomyRow(this IucnSpeciesRecord record) {
