@@ -40,71 +40,71 @@ defaults:
     separate_infraspecific_sections: true  # Separate subspecies/varieties/subpopulations into own sections
 
 lists:
+  # ==================== MAMMALS ====================
+  - taxa_group: mammals
+    presets: [threatened, cr, en, vu, nt, dd, lc, ew, ex]
+
   # ==================== AMPHIBIANS ====================
   - taxa_group: amphibians
-    presets: [ex, cr, en, vu, nt, lc, dd, threatened]
+    presets: [threatened, cr, en, vu, nt, dd, lc, ex]
     templates:
       header: amphibians-status
 
   # ==================== BIRDS ====================
   - taxa_group: birds
-    presets: [ex, ew, cr, en, vu, nt, lc, dd, threatened]
+    presets: [threatened, cr, en, vu, nt, dd, lc, ew, ex]
 
   # ==================== REPTILES ====================
   - taxa_group: reptiles
-    presets: [ex, ew, cr, en, vu, nt, lc, dd, threatened]
-
-  # ==================== MAMMALS ====================
-  - taxa_group: mammals
-    presets: [ex, ew, cr, en, vu, nt, lc, dd, threatened]
+    presets: [threatened, cr, en, vu, nt, dd, lc, ew, ex]
 
   # ==================== MARINE MAMMALS (paraphyletic) ====================
   - taxa_group: marine-mammals
-    presets: [ex, ew, cr, en, vu, nt, lc, dd, threatened, all-status]
+    presets: [threatened, cr, en, vu, nt, dd, lc, ew, ex, all-status]
 
   # ==================== RAY-FINNED FISHES ====================
   - taxa_group: ray-finned-fishes
-    presets: [ex, cr, en, vu, nt, lc, dd, threatened]
+    presets: [threatened, cr, en, vu, nt, dd, lc, ex]
 
   # ==================== SHARKS & RAYS ====================
   - taxa_group: sharks-rays
-    presets: [ex, cr, en, vu, nt, lc, dd, threatened]
+    presets: [threatened, cr, en, vu, nt, dd, lc, ex]
 
   # ==================== INSECTS ====================
   - taxa_group: insects
-    presets: [ex, cr, en, vu, nt, lc, dd, threatened]
+    presets: [threatened, cr, en, vu, nt, dd, lc, ex]
 
   # ==================== GASTROPODS ====================
   - taxa_group: gastropods
-    presets: [ex, cr, en, vu, nt, lc, dd, threatened]
+    presets: [threatened, cr, en, vu, nt, dd, lc, ex]
 
   # ==================== BIVALVES ====================
   - taxa_group: bivalves
-    presets: [ex, cr, en, vu, nt, lc, dd, threatened]
+    presets: [threatened, cr, en, vu, nt, dd, lc, ex]
 
   # ==================== CRUSTACEANS ====================
   - taxa_group: crustaceans
-    presets: [ex, cr, en, vu, nt, lc, dd, threatened]
+    presets: [threatened, cr, en, vu, nt, dd, lc, ex]
 
   # ==================== CORALS ====================
   - taxa_group: corals
-    presets: [ex, cr, en, vu, nt, lc, dd, threatened]
+    presets: [threatened, cr, en, vu, nt, dd, lc, ex]
 
   # ==================== ARACHNIDS ====================
   - taxa_group: arachnids
-    presets: [ex, cr, en, vu, nt, lc, dd, threatened]
+    presets: [threatened, cr, en, vu, nt, dd, lc, ex]
 
   # ==================== PLANTS ====================
   - taxa_group: plants
-    presets: [ex, ew, cr, en, vu, nt, lc, dd, threatened]
+    presets: [threatened, cr, en, vu, nt, dd, lc, ew, ex]
 
   # ==================== CONIFERS ====================
   - taxa_group: conifers
-    presets: [ex, cr, en, vu, nt, lc, dd, threatened]
+    presets: [threatened, cr, en, vu, nt, dd, lc, ex]
 
   # ==================== CYCADS ====================
   - taxa_group: cycads
-    presets: [ex, cr, en, vu, nt, lc, dd, threatened]
+    presets: [threatened, cr, en, vu, nt, dd, lc, ex]
 
   # ==================== CHROMISTA ====================
   - taxa_group: chromista
@@ -112,7 +112,7 @@ lists:
 
   # ==================== FUNGI ====================
   - taxa_group: fungi
-    presets: [all-status, ex, cr, en, vu, threatened]
+    presets: [threatened, cr, en, vu, ex, all-status]
 
   # ==================== SPECIAL CROSS-TAXA LISTS ====================
   # These don't fit the taxa_group + preset pattern, so are defined explicitly
