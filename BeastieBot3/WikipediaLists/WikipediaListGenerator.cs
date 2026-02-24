@@ -84,6 +84,9 @@ internal sealed class WikipediaListGenerator {
 
         var totalCount = sections.Sum(section => section.Records.Count);
         var datasetVersion = _queryService.GetDatasetVersion();
+        var datasetYear = datasetVersion.IndexOf('-') is var dash and >= 0
+            ? datasetVersion[..dash]
+            : datasetVersion;
 
         var scopeLabel = BuildScopeLabel(definition);
         var sectionSummary = string.Join("; ", sections.Select(section => $"{section.Definition.Heading} ({section.Records.Count})"));
@@ -148,6 +151,7 @@ internal sealed class WikipediaListGenerator {
             ["description"] = definition.Description,
             ["scope_label"] = scopeLabel,
             ["dataset_version"] = datasetVersion,
+            ["dataset_year"] = datasetYear,
             ["generated_at"] = DateTimeOffset.UtcNow.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
             ["total_entries"] = totalCount,
             ["sections_summary"] = sectionSummary,
@@ -686,7 +690,7 @@ internal sealed class WikipediaListGenerator {
             // Detect if this is an "Other" bucket
             var isOtherBucket = IsOtherOrUnknownHeading(taxonName ?? "");
             var childOtherContext = isOtherBucket && display.IncludeFamilyInOtherBucket
-                ? new OtherBucketContext(true)
+                ? BuildEnrichedOtherContext(child)
                 : otherContext;
 
             // Check if this taxon uses virtual groups
@@ -838,11 +842,47 @@ internal sealed class WikipediaListGenerator {
         return result;
     }
 
-    private static void CollectRecordsRecursive(TaxonomyTreeNode<EnrichedSpeciesRecord> node, List<EnrichedSpeciesRecord> result) {
+    private static void CollectRecordsRecursive<T>(TaxonomyTreeNode<T> node, List<T> result) {
         result.AddRange(node.Items);
         foreach (var child in node.Children) {
             CollectRecordsRecursive(child, result);
         }
+    }
+
+    /// <summary>
+    /// Builds an OtherBucketContext for an enriched "Other" node, capturing the rank label
+    /// and each record's value for that rank (e.g., Subfamily name) so parenthetical
+    /// annotations show the correct rank instead of always "Family".
+    /// </summary>
+    private static OtherBucketContext BuildEnrichedOtherContext(TaxonomyTreeNode<EnrichedSpeciesRecord> node) {
+        var rankLabel = node.Label ?? "Family";
+        var selector = BuildEnrichedSelector(rankLabel.ToLowerInvariant());
+        var map = new Dictionary<long, string>();
+        foreach (var record in CollectAllEnrichedRecords(node)) {
+            var value = selector(record);
+            if (!string.IsNullOrWhiteSpace(value)) {
+                map[record.TaxonId] = value;
+            }
+        }
+        return new OtherBucketContext(true, rankLabel, map);
+    }
+
+    /// <summary>
+    /// Builds an OtherBucketContext for an IUCN-only "Other" node.
+    /// </summary>
+    private static OtherBucketContext BuildIucnOtherContext(TaxonomyTreeNode<IucnSpeciesRecord> node) {
+        var rankLabel = node.Label ?? "Family";
+        var selector = BuildSelector(rankLabel.ToLowerInvariant());
+        var map = new Dictionary<long, string>();
+        var records = new List<IucnSpeciesRecord>();
+        CollectRecordsRecursive(node, records);
+        foreach (var record in records) {
+            var value = selector(record);
+            if (!string.IsNullOrWhiteSpace(value)) {
+                map[record.TaxonId] = value;
+            }
+        }
+        return new OtherBucketContext(true, rankLabel, map);
     }
 
     /// <summary>
@@ -976,7 +1016,7 @@ internal sealed class WikipediaListGenerator {
                     UnknownLabel: otherLabel,
                     MinItems: config.MinItemsPerGroup,
                     OtherLabel: otherLabel,
-                    MinGroupsForOther: 2));
+                    MinGroupsForOther: 3));
             }
         }
 
@@ -1032,7 +1072,7 @@ internal sealed class WikipediaListGenerator {
                     UnknownLabel: otherLabel,
                     MinItems: config.MinItemsPerGroup,
                     OtherLabel: otherLabel,
-                    MinGroupsForOther: 2));
+                    MinGroupsForOther: 3));
             }
         }
 
@@ -1113,7 +1153,7 @@ internal sealed class WikipediaListGenerator {
             // Detect if this is an "Other" bucket
             var isOtherBucket = IsOtherOrUnknownHeading(child.Value ?? "");
             var childOtherContext = isOtherBucket && display.IncludeFamilyInOtherBucket
-                ? new OtherBucketContext(true)
+                ? BuildIucnOtherContext(child)
                 : otherContext;
 
             AppendTree(builder, child, headingLevel + 1, display, statusContext, ref headingCount, grouping, groupingIndex + 1, childOtherContext, parentTaxon: child.Value);
@@ -1518,7 +1558,7 @@ internal sealed class WikipediaListGenerator {
         var ordered = records;
         if (otherContext is { IsInOtherBucket: true }) {
             ordered = ordered
-                .OrderBy(r => r.FamilyName ?? string.Empty, StringComparer.OrdinalIgnoreCase)
+                .OrderBy(r => otherContext.GetRankValue(r) ?? string.Empty, StringComparer.OrdinalIgnoreCase)
                 .ThenBy(r => ResolveScientificName(r) ?? string.Empty, StringComparer.OrdinalIgnoreCase);
         }
         return ordered;
@@ -1586,13 +1626,16 @@ internal sealed class WikipediaListGenerator {
             builder.Append(BuildIucnStatusTemplate(record, descriptor));
         }
 
-        if (otherContext is { IsInOtherBucket: true } && !string.IsNullOrWhiteSpace(record.FamilyName)) {
-            var familyName = ToTitleCase(record.FamilyName);
-            var shouldLink = otherContext.ShouldLinkFamily(familyName);
-            if (shouldLink) {
-                builder.Append($" (Family: [[{familyName}]])");
-            } else {
-                builder.Append($" (Family: {familyName})");
+        if (otherContext is { IsInOtherBucket: true }) {
+            var rankValue = otherContext.GetRankValue(record);
+            if (!string.IsNullOrWhiteSpace(rankValue)) {
+                var displayValue = ToTitleCase(rankValue);
+                var shouldLink = otherContext.ShouldLinkValue(displayValue);
+                if (shouldLink) {
+                    builder.Append($" ({otherContext.RankLabel}: [[{displayValue}]])");
+                } else {
+                    builder.Append($" ({otherContext.RankLabel}: {displayValue})");
+                }
             }
         }
 
@@ -1602,23 +1645,41 @@ internal sealed class WikipediaListGenerator {
     private readonly record struct HeadingInfo(string Text, string? MainLink, string? CommonNameSentence = null);
     
     /// <summary>
-    /// Context for items within an "Other" bucket, tracking which families need annotation.
+    /// Context for items within an "Other" bucket, tracking which rank values need annotation.
+    /// Stores the rank label (e.g., "Subfamily") and per-taxon rank values so that
+    /// parenthetical annotations reflect the actual grouping rank rather than always "Family".
     /// </summary>
     private sealed class OtherBucketContext {
-        private readonly HashSet<string> _linkedFamilies = new(StringComparer.OrdinalIgnoreCase);
-        
+        private readonly HashSet<string> _linkedValues = new(StringComparer.OrdinalIgnoreCase);
+        private readonly Dictionary<long, string>? _valuesByTaxonId;
+
         public bool IsInOtherBucket { get; }
-        
-        public OtherBucketContext(bool isInOtherBucket) {
+        public string RankLabel { get; }
+
+        public OtherBucketContext(bool isInOtherBucket, string rankLabel = "Family", Dictionary<long, string>? valuesByTaxonId = null) {
             IsInOtherBucket = isInOtherBucket;
+            RankLabel = rankLabel;
+            _valuesByTaxonId = valuesByTaxonId;
         }
-        
+
         /// <summary>
-        /// Returns true if this is the first occurrence of the family and it should be linked.
+        /// Gets the rank value for a record. Looks up the per-taxon map first,
+        /// then falls back to FamilyName only if the rank IS family.
+        /// Returns null if the rank-specific value is unknown (avoids redundant annotations).
         /// </summary>
-        public bool ShouldLinkFamily(string family) {
-            if (string.IsNullOrWhiteSpace(family)) return false;
-            return _linkedFamilies.Add(family);
+        public string? GetRankValue(IucnSpeciesRecord record) {
+            if (_valuesByTaxonId != null && _valuesByTaxonId.TryGetValue(record.TaxonId, out var value)) {
+                return value;
+            }
+            return RankLabel.Equals("Family", StringComparison.OrdinalIgnoreCase) ? record.FamilyName : null;
+        }
+
+        /// <summary>
+        /// Returns true if this is the first occurrence of the value and it should be wiki-linked.
+        /// </summary>
+        public bool ShouldLinkValue(string value) {
+            if (string.IsNullOrWhiteSpace(value)) return false;
+            return _linkedValues.Add(value);
         }
     }
 
@@ -1823,14 +1884,17 @@ internal sealed class WikipediaListGenerator {
             builder.Append(BuildIucnStatusTemplate(record, descriptor));
         }
         
-        // Add family annotation for "Other" bucket items
-        if (otherContext is { IsInOtherBucket: true } && !string.IsNullOrWhiteSpace(record.FamilyName)) {
-            var familyName = ToTitleCase(record.FamilyName);
-            var shouldLink = otherContext.ShouldLinkFamily(familyName);
-            if (shouldLink) {
-                builder.Append($" (Family: [[{familyName}]])");
-            } else {
-                builder.Append($" (Family: {familyName})");
+        // Add rank annotation for "Other" bucket items (e.g., Family, Subfamily, Tribe)
+        if (otherContext is { IsInOtherBucket: true }) {
+            var rankValue = otherContext.GetRankValue(record);
+            if (!string.IsNullOrWhiteSpace(rankValue)) {
+                var displayValue = ToTitleCase(rankValue);
+                var shouldLink = otherContext.ShouldLinkValue(displayValue);
+                if (shouldLink) {
+                    builder.Append($" ({otherContext.RankLabel}: [[{displayValue}]])");
+                } else {
+                    builder.Append($" ({otherContext.RankLabel}: {displayValue})");
+                }
             }
         }
 
