@@ -48,7 +48,7 @@ Structure:
 
 ### `.wikitext` — Wikipedia Embedding Snippet (per group)
 
-Wikitext to replace templates like `{{IUCN mammal chart}}`. Uses `{{image frame}}` with `{{#chart:IUCN Red List species.Bar.chart|data=IUCN Red List mammals.tab}}` to embed with the shared chart definition and per-group data.
+Wikitext to replace templates like `{{IUCN mammal chart}}`. Uses `{{image frame}}` with `{{#chart:IUCN species.Bar.chart|data=IUCN Red List mammals.tab}}` to embed with the shared chart definition and per-group data.
 
 ### `summary.txt` — Run Summary
 

@@ -86,7 +86,7 @@ internal static class ChartOutputWriter {
     /// Filename for the single shared chart definition.
     /// All per-group wikitext snippets reference this via {{#chart:}} with |data= override.
     /// </summary>
-    public static string SharedChartFileName => "IUCN Red List species.Bar.chart";
+    public static string SharedChartFileName => "IUCN species.Bar.chart";
 
     public static string BuildSharedChartJson() {
         var chart = new Dictionary<string, object> {
@@ -144,8 +144,8 @@ internal static class ChartOutputWriter {
         sb.AppendLine($"|caption='''{chartTitle} species''' (IUCN, {result.DatasetVersion})");
 
         // Total assessed
-        if (result.Comprehensive) {
-            sb.AppendLine($"* {Fmt(total)} species assessed (comprehensively assessed group)");
+        if (dd > 0) {
+            sb.AppendLine($"* {Fmt(total)} species assessed, including {Fmt(dd)} [[data deficient]] (DD)");
         } else {
             sb.AppendLine($"* {Fmt(total)} species assessed");
         }
@@ -155,10 +155,10 @@ internal static class ChartOutputWriter {
             var extinctTotal = ex + ew;
             if (ex > 0 && ew > 0) {
                 sb.AppendLine($"* {Fmt(extinctTotal)} assessed as [[extinction|extinct]] (EX) or [[extinct in the wild]] (EW):");
-                sb.AppendLine($"** {Fmt(ex)} [[extinct]] <small>(EX)</small>{{{{efn|Extinct (EX) as defined by the IUCN: no reasonable doubt that the last individual has died. Includes species declared extinct since the Red List began.|group=ic}}}}");
+                sb.AppendLine($"** {Fmt(ex)} [[extinct]] <small>(EX)</small>{{{{efn|A taxon is [[Extinct]] (EX) when there is no reasonable doubt that the last individual has died. The Red List primarily documents extinctions since approximately 1500 CE.|group=ic}}}}");
                 sb.AppendLine($"** {Fmt(ew)} [[extinct in the wild]] <small>(EW)</small>");
             } else if (ex > 0) {
-                sb.AppendLine($"* {Fmt(ex)} assessed as [[extinction|extinct]] <small>(EX)</small>{{{{efn|Extinct (EX) as defined by the IUCN: no reasonable doubt that the last individual has died. Includes species declared extinct since the Red List began.|group=ic}}}}");
+                sb.AppendLine($"* {Fmt(ex)} assessed as [[extinction|extinct]] <small>(EX)</small>{{{{efn|A taxon is [[Extinct]] (EX) when there is no reasonable doubt that the last individual has died. The Red List primarily documents extinctions since approximately 1500 CE.|group=ic}}}}");
             } else {
                 sb.AppendLine($"* {Fmt(ew)} assessed as [[extinct in the wild]] <small>(EW)</small>");
             }
@@ -199,17 +199,12 @@ internal static class ChartOutputWriter {
 
         // Not threatened
         if (notThreatened > 0) {
-            sb.Append($"* {Fmt(notThreatened)} not threatened at present");
+            sb.Append($"* {Fmt(notThreatened)} assessed as non-threatened");
             if (result.LrCdMerged > 0) {
                 sb.AppendLine($"{{{{efn|[[Near threatened]] (NT) and [[Least concern]] (LC). NT includes {Fmt(result.LrCdMerged)} species assessed as [[conservation dependent|Lower Risk/conservation dependent]] (LR/cd).|group=ic}}}}");
             } else {
                 sb.AppendLine("{{efn|[[Near threatened]] (NT) and [[Least concern]] (LC).|group=ic}}");
             }
-        }
-
-        // Data Deficient
-        if (dd > 0) {
-            sb.AppendLine($"* {Fmt(dd)} [[data deficient]] <small>(DD)</small>");
         }
 
         // Footnotes
