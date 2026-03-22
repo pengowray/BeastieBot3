@@ -170,7 +170,7 @@ Each group references a `taxa_group` from `taxa-groups.yml` and adds:
 
 - `comprehensive` — whether IUCN considers the group fully assessed (affects caption text).
 - `template_name` — Wikipedia template this chart replaces (e.g. `IUCN mammal chart`).
-- `chart_name` — used in filenames (e.g. `IUCN Red List mammals 2025-2.tab`).
+- `chart_name` — used in filenames (e.g. `IUCN Red List mammals.tab`).
 
 A `taxa_group` of `~` (null) means no taxonomic filter — counts all species in the database.
 

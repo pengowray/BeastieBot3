@@ -26,15 +26,22 @@ internal static class ChartOutputWriter {
     };
 
     /// <summary>
-    /// Base filename without extension, e.g. "IUCN Red List mammals 2025-2".
+    /// Base filename with version for .tab data files, e.g. "IUCN Red List mammals 2025-2".
     /// </summary>
     public static string BaseFileName(ChartGroupResult result) =>
         $"IUCN Red List {result.ChartName} {result.DatasetVersion}";
 
+    /// <summary>
+    /// Base filename without version for .wikitext files, e.g. "IUCN Red List mammals".
+    /// Wikitext files are updated in place and reference the versioned .tab file.
+    /// </summary>
+    public static string WikitextFileName(ChartGroupResult result) =>
+        $"IUCN Red List {result.ChartName}";
+
     // ==================== .tab file ====================
 
     public static string BuildTabJson(ChartGroupResult result) {
-        var description = $"IUCN Red List assessment counts for {result.ChartName} by conservation status category";
+        var description = $"IUCN Red List assessment counts for {result.ChartName} by conservation status category (version {result.DatasetVersion})";
 
         var notes = new List<string>();
         notes.Add($"Source: IUCN Red List of Threatened Species, version {result.DatasetVersion}.");
@@ -76,18 +83,18 @@ internal static class ChartOutputWriter {
     // ==================== Shared .chart file ====================
 
     /// <summary>
-    /// Filename for the single shared chart definition, e.g. "IUCN Red List species.Bar.chart".
+    /// Filename for the single shared chart definition.
     /// All per-group wikitext snippets reference this via {{#chart:}} with |data= override.
     /// </summary>
     public static string SharedChartFileName => "IUCN Red List species.Bar.chart";
 
-    public static string BuildSharedChartJson(string datasetVersion) {
+    public static string BuildSharedChartJson() {
         var chart = new Dictionary<string, object> {
             ["license"] = "CC0-1.0",
             ["version"] = 1,
             ["type"] = "bar",
             ["title"] = new Dictionary<string, string> {
-                ["en"] = $"Number of species by IUCN Red List category ({datasetVersion})"
+                ["en"] = "Number of species by IUCN Red List category"
             },
             ["xAxis"] = new Dictionary<string, object> {
                 ["title"] = new Dictionary<string, string> { ["en"] = "Red List category" },
@@ -107,6 +114,24 @@ internal static class ChartOutputWriter {
         var baseName = BaseFileName(result);
         var sb = new StringBuilder();
 
+        // Extract all counts
+        var ex = CountFor(result, "EX");
+        var ew = CountFor(result, "EW");
+        var crPe = CountFor(result, "CR(PE)");
+        var crPew = CountFor(result, "CR(PEW)");
+        var crPure = CountFor(result, "CR");
+        var en = CountFor(result, "EN");
+        var vu = CountFor(result, "VU");
+        var nt = CountFor(result, "NT");
+        var lc = CountFor(result, "LC");
+        var dd = CountFor(result, "DD");
+
+        var crTotal = crPure + crPe + crPew;
+        var total = result.TotalAssessed;
+        var threatened = crTotal + en + vu;
+        var threatenedUpper = threatened + dd;
+        var notThreatened = nt + lc;
+
         // Chart invocation with image frame — uses shared chart definition with |data= override
         sb.AppendLine("{{image frame");
         sb.AppendLine($"|content={{{{#chart:{SharedChartFileName}|data={baseName}.tab}}}} [[commons:Data:{baseName}.tab|'''Raw data''']]");
@@ -114,41 +139,82 @@ internal static class ChartOutputWriter {
         sb.AppendLine("|align=right");
         sb.AppendLine("|pos=bottom");
 
-        // Caption
-        sb.Append($"|caption='''IUCN Red List status of {result.ChartName}''' ({result.DatasetVersion})");
-        sb.AppendLine();
+        // Caption title
+        var chartTitle = char.ToUpper(result.ChartName[0]) + result.ChartName[1..];
+        sb.AppendLine($"|caption='''{chartTitle} species''' (IUCN, {result.DatasetVersion})");
 
-        // Summary statistics
-        var total = result.TotalAssessed;
-        var crPe = result.Counts.FirstOrDefault(c => c.Code == "CR(PE)")?.Count ?? 0;
-        var crPew = result.Counts.FirstOrDefault(c => c.Code == "CR(PEW)")?.Count ?? 0;
-        var crPure = result.Counts.FirstOrDefault(c => c.Code == "CR")?.Count ?? 0;
-        var crTotal = crPure + crPe + crPew;
-        var ex = result.Counts.FirstOrDefault(c => c.Code == "EX")?.Count ?? 0;
-        var ew = result.Counts.FirstOrDefault(c => c.Code == "EW")?.Count ?? 0;
-        var en = result.Counts.FirstOrDefault(c => c.Code == "EN")?.Count ?? 0;
-        var vu = result.Counts.FirstOrDefault(c => c.Code == "VU")?.Count ?? 0;
-        var nt = result.Counts.FirstOrDefault(c => c.Code == "NT")?.Count ?? 0;
-        var lc = result.Counts.FirstOrDefault(c => c.Code == "LC")?.Count ?? 0;
-        var dd = result.Counts.FirstOrDefault(c => c.Code == "DD")?.Count ?? 0;
+        // Total assessed
+        if (result.Comprehensive) {
+            sb.AppendLine($"* {Fmt(total)} species assessed (comprehensively assessed group)");
+        } else {
+            sb.AppendLine($"* {Fmt(total)} species assessed");
+        }
 
-        var threatened = crTotal + en + vu;
-        var extantAssessed = total - ex;
-
-        sb.AppendLine($"* {FormatNum(total)} species assessed");
-        sb.AppendLine($"* {FormatNum(threatened)} [[threatened species|threatened]] (CR, EN, VU)");
-
-        if (crPe > 0 || crPew > 0) {
-            sb.Append($"* CR includes {FormatNum(crPe)} [[possibly extinct]]");
-            if (crPew > 0) {
-                sb.Append($" and {FormatNum(crPew)} possibly extinct in the wild");
+        // Extinct and extinct in the wild
+        if (ex > 0 || ew > 0) {
+            var extinctTotal = ex + ew;
+            if (ex > 0 && ew > 0) {
+                sb.AppendLine($"* {Fmt(extinctTotal)} assessed as [[extinction|extinct]] (EX) or [[extinct in the wild]] (EW):");
+                sb.AppendLine($"** {Fmt(ex)} [[extinct]] <small>(EX)</small>{{{{efn|Extinct (EX) as defined by the IUCN: no reasonable doubt that the last individual has died. Includes species declared extinct since the Red List began.|group=ic}}}}");
+                sb.AppendLine($"** {Fmt(ew)} [[extinct in the wild]] <small>(EW)</small>");
+            } else if (ex > 0) {
+                sb.AppendLine($"* {Fmt(ex)} assessed as [[extinction|extinct]] <small>(EX)</small>{{{{efn|Extinct (EX) as defined by the IUCN: no reasonable doubt that the last individual has died. Includes species declared extinct since the Red List began.|group=ic}}}}");
+            } else {
+                sb.AppendLine($"* {Fmt(ew)} assessed as [[extinct in the wild]] <small>(EW)</small>");
             }
-            sb.AppendLine(" (shown separately in chart)");
         }
 
-        if (result.LrCdMerged > 0) {
-            sb.AppendLine($"* NT includes {FormatNum(result.LrCdMerged)} [[conservation dependent]] (LR/cd) species");
+        // Threatened: CR + EN + VU (with DD upper estimate)
+        if (threatened > 0) {
+            if (dd > 0) {
+                sb.AppendLine($"* {Fmt(threatened)} to {Fmt(threatenedUpper)} [[threatened species|threatened]]{{{{efn|Threatened comprises CR, EN, and VU. Upper estimate additionally includes [[data deficient|Data Deficient]] (DD) species, which may prove to be threatened once assessed.|group=ic}}}}");
+            } else {
+                sb.AppendLine($"* {Fmt(threatened)} [[threatened species|threatened]] (CR, EN, VU)");
+            }
         }
+
+        // CR detail with PE/PEW breakdown
+        if (crTotal > 0) {
+            sb.Append($"** {Fmt(crTotal)} [[critically endangered]] <small>(CR)</small>");
+            if (crPe > 0 || crPew > 0) {
+                var peDetails = new List<string>();
+                if (crPe > 0) {
+                    peDetails.Add($"{Fmt(crPe)} [[possibly extinct]]");
+                }
+                if (crPew > 0) {
+                    peDetails.Add($"{Fmt(crPew)} possibly extinct in the wild");
+                }
+                sb.Append($", including {string.Join(" and ", peDetails)} (shown separately in chart)");
+            }
+            sb.AppendLine();
+        }
+
+        // EN and VU
+        if (en > 0) {
+            sb.AppendLine($"** {Fmt(en)} [[endangered species|endangered]] <small>(EN)</small>");
+        }
+        if (vu > 0) {
+            sb.AppendLine($"** {Fmt(vu)} [[vulnerable species|vulnerable]] <small>(VU)</small>");
+        }
+
+        // Not threatened
+        if (notThreatened > 0) {
+            sb.Append($"* {Fmt(notThreatened)} not threatened at present");
+            if (result.LrCdMerged > 0) {
+                sb.AppendLine($"{{{{efn|[[Near threatened]] (NT) and [[Least concern]] (LC). NT includes {Fmt(result.LrCdMerged)} species assessed as [[conservation dependent|Lower Risk/conservation dependent]] (LR/cd).|group=ic}}}}");
+            } else {
+                sb.AppendLine("{{efn|[[Near threatened]] (NT) and [[Least concern]] (LC).|group=ic}}");
+            }
+        }
+
+        // Data Deficient
+        if (dd > 0) {
+            sb.AppendLine($"* {Fmt(dd)} [[data deficient]] <small>(DD)</small>");
+        }
+
+        // Footnotes
+        sb.AppendLine("----");
+        sb.AppendLine("<small>{{notelist|group=ic}}</small>");
 
         sb.AppendLine("}}");
         sb.AppendLine();
@@ -165,22 +231,21 @@ internal static class ChartOutputWriter {
     /// </summary>
     public static void WriteGroupFiles(ChartGroupResult result, string outputDirectory) {
         Directory.CreateDirectory(outputDirectory);
-        var baseName = BaseFileName(result);
 
-        var tabPath = Path.Combine(outputDirectory, $"{baseName}.tab");
+        var tabPath = Path.Combine(outputDirectory, $"{BaseFileName(result)}.tab");
         File.WriteAllText(tabPath, BuildTabJson(result), Encoding.UTF8);
 
-        var wikitextPath = Path.Combine(outputDirectory, $"{baseName}.wikitext");
+        var wikitextPath = Path.Combine(outputDirectory, $"{WikitextFileName(result)}.wikitext");
         File.WriteAllText(wikitextPath, BuildWikitext(result), Encoding.UTF8);
     }
 
     /// <summary>
     /// Writes the single shared .Bar.chart definition (once per run).
     /// </summary>
-    public static void WriteSharedChart(string datasetVersion, string outputDirectory) {
+    public static void WriteSharedChart(string outputDirectory) {
         Directory.CreateDirectory(outputDirectory);
         var chartPath = Path.Combine(outputDirectory, SharedChartFileName);
-        File.WriteAllText(chartPath, BuildSharedChartJson(datasetVersion), Encoding.UTF8);
+        File.WriteAllText(chartPath, BuildSharedChartJson(), Encoding.UTF8);
     }
 
     // ==================== Summary file ====================
@@ -190,7 +255,7 @@ internal static class ChartOutputWriter {
         var sb = new StringBuilder();
 
         var version = results.Count > 0 ? results[0].DatasetVersion : "unknown";
-        sb.AppendLine($"IUCN Red List Chart Generation Summary");
+        sb.AppendLine("IUCN Red List Chart Generation Summary");
         sb.AppendLine($"Dataset version: {version}");
         sb.AppendLine($"Generated: {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss} UTC");
         sb.AppendLine($"Groups: {results.Count}");
@@ -207,17 +272,17 @@ internal static class ChartOutputWriter {
             sb.AppendLine(string.Format(
                 "{0,-22} {1,8} {2,6} {3,6} {4,7} {5,8} {6,6} {7,6} {8,6} {9,6} {10,6} {11,6}",
                 result.ChartName,
-                FormatNum(result.TotalAssessed),
-                FormatNum(GetCount(c, "EX")),
-                FormatNum(GetCount(c, "EW")),
-                FormatNum(GetCount(c, "CR(PE)")),
-                FormatNum(GetCount(c, "CR(PEW)")),
-                FormatNum(GetCount(c, "CR")),
-                FormatNum(GetCount(c, "EN")),
-                FormatNum(GetCount(c, "VU")),
-                FormatNum(GetCount(c, "NT")),
-                FormatNum(GetCount(c, "LC")),
-                FormatNum(GetCount(c, "DD"))));
+                Fmt(result.TotalAssessed),
+                Fmt(GetCount(c, "EX")),
+                Fmt(GetCount(c, "EW")),
+                Fmt(GetCount(c, "CR(PE)")),
+                Fmt(GetCount(c, "CR(PEW)")),
+                Fmt(GetCount(c, "CR")),
+                Fmt(GetCount(c, "EN")),
+                Fmt(GetCount(c, "VU")),
+                Fmt(GetCount(c, "NT")),
+                Fmt(GetCount(c, "LC")),
+                Fmt(GetCount(c, "DD"))));
         }
 
         sb.AppendLine();
@@ -231,7 +296,7 @@ internal static class ChartOutputWriter {
         if (anyLrCd) {
             sb.AppendLine("  - NT includes Lower Risk/conservation dependent (LR/cd) species:");
             foreach (var r in results.Where(r => r.LrCdMerged > 0)) {
-                sb.AppendLine($"      {r.ChartName}: {FormatNum(r.LrCdMerged)} LR/cd merged into NT");
+                sb.AppendLine($"      {r.ChartName}: {Fmt(r.LrCdMerged)} LR/cd merged into NT");
             }
         }
 
@@ -239,17 +304,19 @@ internal static class ChartOutputWriter {
         sb.AppendLine("Files generated:");
         sb.AppendLine($"  Shared chart: {SharedChartFileName}");
         foreach (var result in results) {
-            var baseName = BaseFileName(result);
-            sb.AppendLine($"  {baseName}.tab");
-            sb.AppendLine($"  {baseName}.wikitext");
+            sb.AppendLine($"  {BaseFileName(result)}.tab");
+            sb.AppendLine($"  {WikitextFileName(result)}.wikitext");
         }
 
         var summaryPath = Path.Combine(outputDirectory, "summary.txt");
         File.WriteAllText(summaryPath, sb.ToString(), Encoding.UTF8);
     }
 
+    private static int CountFor(ChartGroupResult result, string code) =>
+        result.Counts.FirstOrDefault(c => c.Code == code)?.Count ?? 0;
+
     private static int GetCount(Dictionary<string, int> counts, string code) =>
         counts.TryGetValue(code, out var c) ? c : 0;
 
-    private static string FormatNum(int n) => n.ToString("N0", CultureInfo.InvariantCulture);
+    private static string Fmt(int n) => n.ToString("N0", CultureInfo.InvariantCulture);
 }

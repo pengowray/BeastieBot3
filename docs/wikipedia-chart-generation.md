@@ -24,11 +24,11 @@ dotnet run --project BeastieBot3/BeastieBot3.csproj -- wikipedia generate-charts
 
 ## Output Files
 
-Per group, two files are generated with a common base name like `IUCN Red List mammals 2025-2`. One shared chart definition and a summary file are also produced.
+Per group, two files are generated with a common base name like `IUCN Red List mammals`. One shared chart definition and a summary file are also produced.
 
 ### `.tab` — Tabular Data (JSON, per group)
 
-Uploaded to Wikimedia Commons as `Data:IUCN Red List mammals 2025-2.tab`. Uses the [Frictionless Data](https://specs.frictionlessdata.io/tabular-data-resource/) standard for tabular data resources.
+Uploaded to Wikimedia Commons as `Data:IUCN Red List mammals.tab`. Uses the [Frictionless Data](https://specs.frictionlessdata.io/tabular-data-resource/) standard for tabular data resources.
 
 Structure:
 - `license`: CC0-1.0
@@ -48,7 +48,7 @@ Structure:
 
 ### `.wikitext` — Wikipedia Embedding Snippet (per group)
 
-Wikitext to replace templates like `{{IUCN mammal chart}}`. Uses `{{image frame}}` with `{{#chart:IUCN Red List species.Bar.chart|data=IUCN Red List mammals 2025-2.tab}}` to embed with the shared chart definition and per-group data.
+Wikitext to replace templates like `{{IUCN mammal chart}}`. Uses `{{image frame}}` with `{{#chart:IUCN Red List species.Bar.chart|data=IUCN Red List mammals.tab}}` to embed with the shared chart definition and per-group data.
 
 ### `summary.txt` — Run Summary
 

@@ -85,7 +85,7 @@ internal sealed class ChartGeneratorCommand : Command<ChartGeneratorCommand.Sett
         AnsiConsole.WriteLine();
 
         // Write the single shared .chart definition
-        ChartOutputWriter.WriteSharedChart(version, outputDir);
+        ChartOutputWriter.WriteSharedChart(outputDir);
         AnsiConsole.MarkupLine($"  [green]✓[/] {Markup.Escape(ChartOutputWriter.SharedChartFileName)} (shared chart definition)");
 
         // Summary table for console output
