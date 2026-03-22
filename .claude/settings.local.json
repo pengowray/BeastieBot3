@@ -5,7 +5,8 @@
       "Bash(dotnet run:*)",
       "Bash(ls:*)",
       "Read(//c/Users/pengo/Dropbox/projects/BeastieBot3/**)",
-      "Bash(python3:*)"
+      "Bash(python3:*)",
+      "WebSearch"
     ]
   }
 }

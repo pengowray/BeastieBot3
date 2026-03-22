@@ -107,11 +107,12 @@ Use `ReportPathResolver` to resolve output paths. Priority: explicit CLI `--outp
 
 ### YAML Modular Structure
 
-Three-file config in `rules/`:
+Four-file config in `rules/`:
 
-- `taxa-groups.yml` — taxonomic groups with kingdom/class filters.
+- `taxa-groups.yml` — taxonomic groups with kingdom/class/order filters (shared by lists and charts).
 - `list-presets.yml` — section presets (ex, cr, threatened, etc.) with template expansion.
 - `wikipedia-lists.yml` — combines taxa groups + presets via `taxa_group:` and `preset:` references.
+- `chart-groups.yml` — chart group definitions referencing taxa groups, with completeness flags and template names.
 
 Shorthand: `{ id: birds-cr, taxa_group: birds, preset: cr }`. Loader in `WikipediaListDefinitionLoader.cs` merges and expands `{taxa_name}`, `{taxa_slug}` templates.
 
@@ -143,6 +144,43 @@ Shorthand: `{ id: birds-cr, taxa_group: birds, preset: cr }`. Loader in `Wikiped
 
 Templates in `rules/wikipedia/templates/` use custom delimiters `<? ?>`. Inverted sections (`<?^ var ?>`) don't work with custom delimiters — use a separate boolean guard variable instead. Use `null` for falsy values (empty strings may be truthy in Stubble).
 
+## Wikipedia Chart Generation
+
+The `wikipedia generate-charts` command produces IUCN Red List bar chart files for the MediaWiki Extension:Chart format. For each chart group defined in `chart-groups.yml`, it generates:
+
+- **`.tab`** — Wikimedia Commons tabular data JSON (Frictionless Data format, CC0-1.0) for the `Data:` namespace.
+- **`.Bar.chart`** — Extension:Chart bar chart definition JSON for the `Data:` namespace.
+- **`.wikitext`** — Wikitext snippet using `{{image frame}}` + `{{#chart:}}` to embed on Wikipedia, replacing templates like `{{IUCN mammal chart}}`.
+
+### Status Category Ordering
+
+Bars are ordered: EX, EW, CR(PE), CR(PEW), CR, EN, VU, NT, LC, DD. All bars are mutually exclusive — CR excludes PE/PEW species, and NT absorbs any LR/cd species.
+
+### Scope Filtering
+
+Only global species-level assessments are counted. The query excludes:
+
+- Subspecies and varieties (`infraType` IS NULL or empty)
+- Subpopulations/regional assessments (`subpopulationName` IS NULL or empty)
+- Non-global scopes (`scopes LIKE '%Global%'`) — **note**: this filter needs auditing; the `scopes` column is not yet indexed.
+
+### Chart Group Configuration (`chart-groups.yml`)
+
+Each group references a `taxa_group` from `taxa-groups.yml` and adds:
+
+- `comprehensive` — whether IUCN considers the group fully assessed (affects caption text).
+- `template_name` — Wikipedia template this chart replaces (e.g. `IUCN mammal chart`).
+- `chart_name` — used in filenames (e.g. `IUCN Red List mammals 2025-2.tab`).
+
+A `taxa_group` of `~` (null) means no taxonomic filter — counts all species in the database.
+
+### Extension:Chart Constraints
+
+- **No custom colors** — Extension:Chart uses a fixed 10-color accessibility palette. IUCN status colours are not available.
+- **No stacked bars** — only `bar` type (grouped), not stacked.
+- **Chart sizing** controlled via `{{image frame|max-width=N}}` in wikitext, not in the chart definition.
+- **Localization** via `LocalizableString` objects (language-code-keyed JSON). Charts render in the wiki's content language.
+
 ## Workflow
 
 - Always test with `--limit` before running full batches: `dotnet run --project BeastieBot3/BeastieBot3.csproj -- wikipedia generate-lists --list <id> --limit 100`
@@ -157,6 +195,7 @@ Templates in `rules/wikipedia/templates/` use custom delimiters `<? ?>`. Inverte
 | `docs/wikipedia-list-formatting.md` | Wikipedia list output format specifications |
 | `docs/common-names.md` | Common names aggregation workflow |
 | `docs/iucn-api-discover-by-family.md` | IUCN API discovery strategy |
+| `docs/wikipedia-chart-generation.md` | Chart generation workflow, Extension:Chart format, output files |
 
 ## Code Conventions
 

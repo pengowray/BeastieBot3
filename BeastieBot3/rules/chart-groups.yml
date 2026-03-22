@@ -1,0 +1,122 @@
+# Chart group definitions for IUCN Red List bar charts.
+# Each entry references a taxa group from taxa-groups.yml and adds chart-specific metadata.
+#
+# comprehensive: true if IUCN considers this group comprehensively assessed
+#   (i.e. all or nearly all known species have been evaluated).
+#   Affects caption text — comprehensive groups can state totals authoritatively;
+#   non-comprehensive groups should note that coverage is partial.
+#
+# chart_name: Name used in Commons Data: namespace filenames.
+#   Convention: "IUCN Red List {chart_name} {version}.tab"
+#
+# template_name: Wikipedia template name this chart replaces, if any.
+#   e.g. "IUCN mammal chart" → {{IUCN mammal chart}}
+
+groups:
+  # ==================== BROAD GROUPINGS ====================
+  all:
+    taxa_group: ~  # No filter — all species in the database
+    chart_name: "species"
+    comprehensive: false
+    caption: "All species assessed by the IUCN"
+
+  animals:
+    taxa_group: animals
+    chart_name: "animals"
+    comprehensive: false
+    caption: "Animal species assessed by the IUCN"
+
+  # ==================== VERTEBRATES ====================
+  mammals:
+    taxa_group: mammals
+    chart_name: "mammals"
+    comprehensive: true
+    template_name: "IUCN mammal chart"
+
+  birds:
+    taxa_group: birds
+    chart_name: "birds"
+    comprehensive: true
+    template_name: "IUCN bird chart"
+
+  reptiles:
+    taxa_group: reptiles
+    chart_name: "reptiles"
+    comprehensive: true
+    template_name: "IUCN reptile chart"
+
+  amphibians:
+    taxa_group: amphibians
+    chart_name: "amphibians"
+    comprehensive: true
+    template_name: "IUCN amphibian chart"
+
+  sharks-rays:
+    taxa_group: sharks-rays
+    chart_name: "sharks and rays"
+    comprehensive: true
+    template_name: "IUCN shark chart"
+
+  ray-finned-fishes:
+    taxa_group: ray-finned-fishes
+    chart_name: "ray-finned fishes"
+    comprehensive: false
+
+  # ==================== MAMMAL ORDERS ====================
+  bats:
+    taxa_group: bats
+    chart_name: "bats"
+    comprehensive: true  # Assessed as part of comprehensive mammal assessment
+
+  rodents:
+    taxa_group: rodents
+    chart_name: "rodents"
+    comprehensive: true
+
+  primates:
+    taxa_group: primates
+    chart_name: "primates"
+    comprehensive: true
+
+  # ==================== INVERTEBRATES ====================
+  insects:
+    taxa_group: insects
+    chart_name: "insects"
+    comprehensive: false
+
+  corals:
+    taxa_group: corals
+    chart_name: "corals"
+    comprehensive: true
+
+  crustaceans:
+    taxa_group: crustaceans
+    chart_name: "crustaceans"
+    comprehensive: false
+
+  gastropods:
+    taxa_group: gastropods
+    chart_name: "gastropods"
+    comprehensive: false
+
+  # ==================== PLANTS ====================
+  plants:
+    taxa_group: plants
+    chart_name: "plants"
+    comprehensive: false
+
+  conifers:
+    taxa_group: conifers
+    chart_name: "conifers"
+    comprehensive: true
+
+  cycads:
+    taxa_group: cycads
+    chart_name: "cycads"
+    comprehensive: true
+
+  # ==================== OTHER KINGDOMS ====================
+  fungi:
+    taxa_group: fungi
+    chart_name: "fungi"
+    comprehensive: false

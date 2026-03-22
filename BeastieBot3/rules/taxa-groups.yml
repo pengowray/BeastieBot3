@@ -50,6 +50,45 @@ groups:
       - rank: class
         value: Mammalia
 
+  bats:
+    name: "Bats"
+    adjective: "bat"
+    display:
+      listing_style: CommonNameOnly
+    filters:
+      - rank: kingdom
+        value: Animalia
+      - rank: class
+        value: Mammalia
+      - rank: order
+        value: Chiroptera
+
+  rodents:
+    name: "Rodents"
+    adjective: "rodent"
+    display:
+      listing_style: CommonNameOnly
+    filters:
+      - rank: kingdom
+        value: Animalia
+      - rank: class
+        value: Mammalia
+      - rank: order
+        value: Rodentia
+
+  primates:
+    name: "Primates"
+    adjective: "primate"
+    display:
+      listing_style: CommonNameOnly
+    filters:
+      - rank: kingdom
+        value: Animalia
+      - rank: class
+        value: Mammalia
+      - rank: order
+        value: Primates
+
   # Marine mammals (paraphyletic): Cetaceans, Sirenians, Pinnipeds, Sea Otters, Polar Bears
   # Uses IUCN's "Marine" system tag for accurate filtering
   marine-mammals:

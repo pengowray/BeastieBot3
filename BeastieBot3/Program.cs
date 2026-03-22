@@ -201,6 +201,11 @@ namespace BeastieBot3;
                         wikipedia.AddCommand<WikipediaShowListsCommand>("show-lists")
                             .WithDescription("Show all available list IDs that can be used with generate-lists --list.")
                             .WithExample(new[] { "wikipedia", "show-lists" });
+                        wikipedia.AddCommand<ChartGeneratorCommand>("generate-charts")
+                            .WithDescription("Generate IUCN Red List bar chart data files (.tab, .chart, .wikitext) for Wikipedia.")
+                            .WithExample(new[] { "wikipedia", "generate-charts" })
+                            .WithExample(new[] { "wikipedia", "generate-charts", "--group", "mammals", "--group", "birds" })
+                            .WithExample(new[] { "wikipedia", "generate-charts", "--output-dir", "charts/" });
                         wikipedia.AddCommand<MarineMammalsConfigCommand>("marine-mammals-config")
                             .WithDescription("Generate YAML configuration for marine mammals virtual groups based on IUCN Marine system tags.")
                             .WithExample(new[] { "wikipedia", "marine-mammals-config" })
