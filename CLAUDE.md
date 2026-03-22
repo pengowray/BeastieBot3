@@ -149,8 +149,8 @@ Templates in `rules/wikipedia/templates/` use custom delimiters `<? ?>`. Inverte
 The `wikipedia generate-charts` command produces IUCN Red List bar chart files for the MediaWiki Extension:Chart format. For each chart group defined in `chart-groups.yml`, it generates:
 
 - **`.tab`** — Wikimedia Commons tabular data JSON (Frictionless Data format, CC0-1.0) for the `Data:` namespace.
-- **`.Bar.chart`** — Extension:Chart bar chart definition JSON for the `Data:` namespace.
-- **`.wikitext`** — Wikitext snippet using `{{image frame}}` + `{{#chart:}}` to embed on Wikipedia, replacing templates like `{{IUCN mammal chart}}`.
+- **`.Bar.chart`** — Single shared Extension:Chart bar chart definition JSON for the `Data:` namespace. Per-group wikitext uses `|data=` to override the data source.
+- **`.wikitext`** — Wikitext snippet using `{{image frame}}` + `{{#chart:...|data=...}}` to embed on Wikipedia, replacing templates like `{{IUCN mammal chart}}`.
 
 ### Status Category Ordering
 

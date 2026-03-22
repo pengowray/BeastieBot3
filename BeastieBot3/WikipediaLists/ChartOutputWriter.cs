@@ -8,10 +8,10 @@ using System.Text.Encodings.Web;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 
-// Generates three output files per chart group:
-//   1. .tab  — Wikimedia Commons tabular data JSON (for Data: namespace)
-//   2. .chart — Extension:Chart bar chart definition JSON
-//   3. .wikitext — wikitext snippet to replace Wikipedia templates like {{IUCN mammal chart}}
+// Generates output files for chart groups:
+//   Per group:  .tab (tabular data) and .wikitext (embedding snippet)
+//   Once:       shared .Bar.chart definition (reused via |data= override)
+//               summary.txt with all group statistics
 //
 // Uses System.Text.Json for output (no ORM, no Mustache — the JSON structure is
 // fixed and simple enough that templates would add complexity without benefit).
@@ -73,18 +73,22 @@ internal static class ChartOutputWriter {
         return JsonSerializer.Serialize(tab, JsonOptions);
     }
 
-    // ==================== .chart file ====================
+    // ==================== Shared .chart file ====================
 
-    public static string BuildChartJson(ChartGroupResult result) {
-        var baseName = BaseFileName(result);
-        var titleText = $"IUCN Red List status of {result.ChartName} ({result.DatasetVersion})";
+    /// <summary>
+    /// Filename for the single shared chart definition, e.g. "IUCN Red List species.Bar.chart".
+    /// All per-group wikitext snippets reference this via {{#chart:}} with |data= override.
+    /// </summary>
+    public static string SharedChartFileName => "IUCN Red List species.Bar.chart";
 
+    public static string BuildSharedChartJson(string datasetVersion) {
         var chart = new Dictionary<string, object> {
             ["license"] = "CC0-1.0",
             ["version"] = 1,
             ["type"] = "bar",
-            ["source"] = $"{baseName}.tab",
-            ["title"] = new Dictionary<string, string> { ["en"] = titleText },
+            ["title"] = new Dictionary<string, string> {
+                ["en"] = $"Number of species by IUCN Red List category ({datasetVersion})"
+            },
             ["xAxis"] = new Dictionary<string, object> {
                 ["title"] = new Dictionary<string, string> { ["en"] = "Red List category" },
             },
@@ -103,9 +107,9 @@ internal static class ChartOutputWriter {
         var baseName = BaseFileName(result);
         var sb = new StringBuilder();
 
-        // Chart invocation with image frame
+        // Chart invocation with image frame — uses shared chart definition with |data= override
         sb.AppendLine("{{image frame");
-        sb.AppendLine($"|content={{{{#chart:{baseName}.Bar.chart}}}} [[commons:Data:{baseName}.tab|'''Raw data''']]");
+        sb.AppendLine($"|content={{{{#chart:{SharedChartFileName}|data={baseName}.tab}}}} [[commons:Data:{baseName}.tab|'''Raw data''']]");
         sb.AppendLine("|max-width=400");
         sb.AppendLine("|align=right");
         sb.AppendLine("|pos=bottom");
@@ -153,21 +157,99 @@ internal static class ChartOutputWriter {
         return sb.ToString();
     }
 
-    // ==================== Write all files ====================
+    // ==================== Write per-group files ====================
 
-    public static void WriteAll(ChartGroupResult result, string outputDirectory) {
+    /// <summary>
+    /// Writes .tab and .wikitext for a single chart group.
+    /// The shared .chart file is written separately via <see cref="WriteSharedChart"/>.
+    /// </summary>
+    public static void WriteGroupFiles(ChartGroupResult result, string outputDirectory) {
         Directory.CreateDirectory(outputDirectory);
         var baseName = BaseFileName(result);
 
         var tabPath = Path.Combine(outputDirectory, $"{baseName}.tab");
         File.WriteAllText(tabPath, BuildTabJson(result), Encoding.UTF8);
 
-        var chartPath = Path.Combine(outputDirectory, $"{baseName}.Bar.chart");
-        File.WriteAllText(chartPath, BuildChartJson(result), Encoding.UTF8);
-
         var wikitextPath = Path.Combine(outputDirectory, $"{baseName}.wikitext");
         File.WriteAllText(wikitextPath, BuildWikitext(result), Encoding.UTF8);
     }
+
+    /// <summary>
+    /// Writes the single shared .Bar.chart definition (once per run).
+    /// </summary>
+    public static void WriteSharedChart(string datasetVersion, string outputDirectory) {
+        Directory.CreateDirectory(outputDirectory);
+        var chartPath = Path.Combine(outputDirectory, SharedChartFileName);
+        File.WriteAllText(chartPath, BuildSharedChartJson(datasetVersion), Encoding.UTF8);
+    }
+
+    // ==================== Summary file ====================
+
+    public static void WriteSummary(IReadOnlyList<ChartGroupResult> results, string outputDirectory) {
+        Directory.CreateDirectory(outputDirectory);
+        var sb = new StringBuilder();
+
+        var version = results.Count > 0 ? results[0].DatasetVersion : "unknown";
+        sb.AppendLine($"IUCN Red List Chart Generation Summary");
+        sb.AppendLine($"Dataset version: {version}");
+        sb.AppendLine($"Generated: {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss} UTC");
+        sb.AppendLine($"Groups: {results.Count}");
+        sb.AppendLine();
+
+        // Header
+        sb.AppendLine(string.Format(
+            "{0,-22} {1,8} {2,6} {3,6} {4,7} {5,8} {6,6} {7,6} {8,6} {9,6} {10,6} {11,6}",
+            "Group", "Total", "EX", "EW", "CR(PE)", "CR(PEW)", "CR", "EN", "VU", "NT", "LC", "DD"));
+        sb.AppendLine(new string('-', 107));
+
+        foreach (var result in results) {
+            var c = result.Counts.ToDictionary(x => x.Code, x => x.Count);
+            sb.AppendLine(string.Format(
+                "{0,-22} {1,8} {2,6} {3,6} {4,7} {5,8} {6,6} {7,6} {8,6} {9,6} {10,6} {11,6}",
+                result.ChartName,
+                FormatNum(result.TotalAssessed),
+                FormatNum(GetCount(c, "EX")),
+                FormatNum(GetCount(c, "EW")),
+                FormatNum(GetCount(c, "CR(PE)")),
+                FormatNum(GetCount(c, "CR(PEW)")),
+                FormatNum(GetCount(c, "CR")),
+                FormatNum(GetCount(c, "EN")),
+                FormatNum(GetCount(c, "VU")),
+                FormatNum(GetCount(c, "NT")),
+                FormatNum(GetCount(c, "LC")),
+                FormatNum(GetCount(c, "DD"))));
+        }
+
+        sb.AppendLine();
+
+        // Notes
+        sb.AppendLine("Notes:");
+        sb.AppendLine("  - Counts include global assessments of full species only.");
+        sb.AppendLine("  - CR excludes CR(PE) and CR(PEW); all bars are mutually exclusive.");
+
+        var anyLrCd = results.Any(r => r.LrCdMerged > 0);
+        if (anyLrCd) {
+            sb.AppendLine("  - NT includes Lower Risk/conservation dependent (LR/cd) species:");
+            foreach (var r in results.Where(r => r.LrCdMerged > 0)) {
+                sb.AppendLine($"      {r.ChartName}: {FormatNum(r.LrCdMerged)} LR/cd merged into NT");
+            }
+        }
+
+        sb.AppendLine();
+        sb.AppendLine("Files generated:");
+        sb.AppendLine($"  Shared chart: {SharedChartFileName}");
+        foreach (var result in results) {
+            var baseName = BaseFileName(result);
+            sb.AppendLine($"  {baseName}.tab");
+            sb.AppendLine($"  {baseName}.wikitext");
+        }
+
+        var summaryPath = Path.Combine(outputDirectory, "summary.txt");
+        File.WriteAllText(summaryPath, sb.ToString(), Encoding.UTF8);
+    }
+
+    private static int GetCount(Dictionary<string, int> counts, string code) =>
+        counts.TryGetValue(code, out var c) ? c : 0;
 
     private static string FormatNum(int n) => n.ToString("N0", CultureInfo.InvariantCulture);
 }

@@ -24,9 +24,9 @@ dotnet run --project BeastieBot3/BeastieBot3.csproj -- wikipedia generate-charts
 
 ## Output Files
 
-For each chart group, three files are generated with a common base name like `IUCN Red List mammals 2025-2`:
+Per group, two files are generated with a common base name like `IUCN Red List mammals 2025-2`. One shared chart definition and a summary file are also produced.
 
-### `.tab` — Tabular Data (JSON)
+### `.tab` — Tabular Data (JSON, per group)
 
 Uploaded to Wikimedia Commons as `Data:IUCN Red List mammals 2025-2.tab`. Uses the [Frictionless Data](https://specs.frictionlessdata.io/tabular-data-resource/) standard for tabular data resources.
 
@@ -37,19 +37,22 @@ Structure:
 - `schema.fields`: Two columns — `category` (string) and `count` (number)
 - `data`: Array of `[category_code, count]` pairs in display order
 
-### `.Bar.chart` — Chart Definition (JSON)
+### `.Bar.chart` — Chart Definition (JSON, shared)
 
-Uploaded to Wikimedia Commons as `Data:IUCN Red List mammals 2025-2.Bar.chart`. References the `.tab` file as its data source.
+A single shared file uploaded to Wikimedia Commons as `Data:IUCN Red List species.Bar.chart`. Defines chart type, axis labels, and formatting. Per-group wikitext overrides the data source at embed time using `|data=`.
 
 Structure:
 - `type`: `"bar"`
-- `source`: Name of the `.tab` page (without `Data:` prefix)
-- `title`: Localizable chart title
+- `title`: Generic localizable chart title
 - `xAxis` / `yAxis`: Axis titles; `yAxis.format` is `false` (no abbreviation)
 
-### `.wikitext` — Wikipedia Embedding Snippet
+### `.wikitext` — Wikipedia Embedding Snippet (per group)
 
-Wikitext to replace templates like `{{IUCN mammal chart}}`. Uses `{{image frame}}` with `{{#chart:}}` parser function, plus caption text with summary statistics.
+Wikitext to replace templates like `{{IUCN mammal chart}}`. Uses `{{image frame}}` with `{{#chart:IUCN Red List species.Bar.chart|data=IUCN Red List mammals 2025-2.tab}}` to embed with the shared chart definition and per-group data.
+
+### `summary.txt` — Run Summary
+
+Plain text file with a table of all group counts, notes about LR/cd merging, and a list of generated files. Written once at the end of the run.
 
 ## Status Category Ordering
 
@@ -145,7 +148,7 @@ Extension:Chart is the replacement for the deprecated `Extension:Graph` on Wikim
 |------|---------|
 | `WikipediaLists/ChartGeneratorCommand.cs` | CLI command, YAML loading, path resolution |
 | `WikipediaLists/IucnChartDataBuilder.cs` | SQL queries for aggregate counts per status per group |
-| `WikipediaLists/ChartOutputWriter.cs` | Generates `.tab` JSON, `.chart` JSON, and `.wikitext` |
+| `WikipediaLists/ChartOutputWriter.cs` | Generates per-group `.tab`/`.wikitext`, shared `.chart`, and `summary.txt` |
 | `rules/chart-groups.yml` | Chart group definitions |
 | `rules/taxa-groups.yml` | Taxonomic group filters (shared with list generation) |
 

@@ -84,7 +84,11 @@ internal sealed class ChartGeneratorCommand : Command<ChartGeneratorCommand.Sett
         AnsiConsole.MarkupLine($"[grey]Dataset version:[/] {version}");
         AnsiConsole.WriteLine();
 
-        // Summary table
+        // Write the single shared .chart definition
+        ChartOutputWriter.WriteSharedChart(version, outputDir);
+        AnsiConsole.MarkupLine($"  [green]✓[/] {Markup.Escape(ChartOutputWriter.SharedChartFileName)} (shared chart definition)");
+
+        // Summary table for console output
         var table = new Table()
             .Border(TableBorder.Rounded)
             .AddColumn("Group")
@@ -99,6 +103,8 @@ internal sealed class ChartGeneratorCommand : Command<ChartGeneratorCommand.Sett
             .AddColumn(new TableColumn("NT").RightAligned())
             .AddColumn(new TableColumn("LC").RightAligned())
             .AddColumn(new TableColumn("DD").RightAligned());
+
+        var allResults = new List<ChartGroupResult>();
 
         foreach (var (groupId, chartDef) in groupsToGenerate) {
             // Resolve taxonomic filters
@@ -119,7 +125,8 @@ internal sealed class ChartGeneratorCommand : Command<ChartGeneratorCommand.Sett
                 chartDef.Caption,
                 filters);
 
-            ChartOutputWriter.WriteAll(result, outputDir);
+            ChartOutputWriter.WriteGroupFiles(result, outputDir);
+            allResults.Add(result);
 
             // Add row to summary table
             var countByCode = result.Counts.ToDictionary(c => c.Code, c => c.Count);
@@ -140,6 +147,12 @@ internal sealed class ChartGeneratorCommand : Command<ChartGeneratorCommand.Sett
 
             var baseName = ChartOutputWriter.BaseFileName(result);
             AnsiConsole.MarkupLine($"  [green]✓[/] {Markup.Escape(baseName)} ([cyan]{result.TotalAssessed:N0}[/] species)");
+        }
+
+        // Write summary file
+        if (allResults.Count > 0) {
+            ChartOutputWriter.WriteSummary(allResults, outputDir);
+            AnsiConsole.MarkupLine($"  [green]✓[/] summary.txt");
         }
 
         AnsiConsole.WriteLine();
