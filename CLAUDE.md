@@ -67,7 +67,7 @@ Use `ReportPathResolver` to resolve output paths. Priority: explicit CLI `--outp
 ## Key Directories
 
 | Directory | Purpose |
-|---|---|
+| --- | --- |
 | `BeastieBot3/Iucn/` | IUCN CSV import, API caching, crosscheck and consistency reports |
 | `BeastieBot3/Wikidata/` | SPARQL seeding, Wikidata entity caching, coverage reports |
 | `BeastieBot3/Wikipedia/` | Wikipedia page fetching and taxon matching |
@@ -79,6 +79,84 @@ Use `ReportPathResolver` to resolve output paths. Priority: explicit CLI `--outp
 | `BeastieBot3/Infrastructure/` | `ApiImportMetadataStore`, `ReportPathResolver` |
 | `BeastieBot3/rules/` | YAML rule files and Mustache templates for list generation |
 | `BeastieBot3/BeastieLegacy/` | Legacy code — read for output format reference only; do not reuse directly |
+
+## IUCN SQLite Rules
+
+### Schema Essentials
+
+- Key columns: `taxonId` (INTEGER NOT NULL), `assessmentId` (INTEGER NOT NULL). All other CSV columns are TEXT.
+- Main view: `view_assessments_html_taxonomy_html` joins `assessments_html` with `taxonomy_html` on `taxonId`. Prefer `_html` tables for production queries.
+- Boolean flags (`possiblyExtinct`, `possiblyExtinctInTheWild`) are TEXT `"true"`/`"false"` — use `IFNULL(flag,'false') = 'true'`.
+- The importer recreates views every run. Missing views? Rerun `iucn import --force`.
+
+### Performance
+
+- **No extra CTEs** — we import one IUCN release at a time, so no `MAX(redlist_version)` needed.
+- **Keep queries sargable** — never wrap columns in `LOWER()`, `UPPER()`, or `LIKE '%foo%'`. Normalize values before binding to parameters.
+- Stick to exact matches on indexed columns (`kingdomName`, `className`, `redlistCategory`).
+- Need a new filter? Add a matching index in the importer, don't bolt `ORDER BY` on a random column.
+
+### Assessment Types
+
+- **Species**: `infraType` and `infraName` are both NULL/empty.
+- **Subspecies**: `infraType` contains `"ssp."` or `"subsp."` (used interchangeably).
+- **Varieties**: `infraType` contains `"var."`.
+- **Subpopulations/Regional**: `subpopulationName` is NOT NULL/empty. Exclude from most Wikipedia lists with `WHERE (subpopulationName IS NULL OR TRIM(subpopulationName) = '')`.
+
+## Wikipedia List Generation
+
+### YAML Modular Structure
+
+Three-file config in `rules/`:
+
+- `taxa-groups.yml` — taxonomic groups with kingdom/class filters.
+- `list-presets.yml` — section presets (ex, cr, threatened, etc.) with template expansion.
+- `wikipedia-lists.yml` — combines taxa groups + presets via `taxa_group:` and `preset:` references.
+
+Shorthand: `{ id: birds-cr, taxa_group: birds, preset: cr }`. Loader in `WikipediaListDefinitionLoader.cs` merges and expands `{taxa_name}`, `{taxa_slug}` templates.
+
+### Status Code Mapping
+
+| Database value | Wikipedia code |
+| --- | --- |
+| Critically Endangered + `possiblyExtinct='true'` | `CR(PE)` |
+| Critically Endangered + `possiblyExtinctInTheWild='true'` | `CR(PEW)` |
+| Critically Endangered | `CR` |
+| EX, EW | Omit `year=` parameter |
+| Legacy `LR/CD`, `LR/NT` | → `NT` |
+| Legacy `LR/LC` | → `LC` |
+
+### Listing Styles (`display.listing_style` in YAML)
+
+- **Style A** (scientific name focus) — plants, invertebrates. Sort by scientific name.
+- **Style B** (common name focus) — default. Always includes scientific name in parens.
+- **Style C** (common name only) — mammals, birds, bats, sharks. Fallback to scientific name when no common name.
+
+### Infrarank Display
+
+- **Animals**: hide `"ssp."` rank label (`Genus species subspecies`).
+- **Plants**: always use `"subsp."` (not `"ssp."`), keep visible.
+- **Varieties**: always show `"var."`.
+- Infraspecific display modes: `SeparateSections` (default, bold headers) or `GroupedUnderSpecies` (sub-bullets, abbreviated genus).
+
+### Mustache Templates
+
+Templates in `rules/wikipedia/templates/` use custom delimiters `<? ?>`. Inverted sections (`<?^ var ?>`) don't work with custom delimiters — use a separate boolean guard variable instead. Use `null` for falsy values (empty strings may be truthy in Stubble).
+
+## Workflow
+
+- Always test with `--limit` before running full batches: `dotnet run --project BeastieBot3/BeastieBot3.csproj -- wikipedia generate-lists --list <id> --limit 100`
+- Keep diagnostic queries in dedicated report commands — never fold them into the main list generation SQL.
+- If a query exceeds ~1 minute, you almost certainly regressed the query plan.
+
+## Detailed Documentation
+
+| Doc | Content |
+| --- | --- |
+| `docs/LLM-guidelines.md` | Comprehensive schema details, query patterns, and "never again" lessons |
+| `docs/wikipedia-list-formatting.md` | Wikipedia list output format specifications |
+| `docs/common-names.md` | Common names aggregation workflow |
+| `docs/iucn-api-discover-by-family.md` | IUCN API discovery strategy |
 
 ## Code Conventions
 
