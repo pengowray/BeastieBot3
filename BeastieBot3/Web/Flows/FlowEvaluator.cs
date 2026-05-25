@@ -7,21 +7,38 @@ namespace BeastieBot3.Web.Flows;
 // Resolves a FlowDefinition into a runtime snapshot the UI can render:
 //   - each step gets a status (ready / ok / blocked) derived from data-source
 //     presence, plus a "last run" timestamp from the job history store
+//   - each step's OutputPatterns are matched against the safe-root dirs; the
+//     newest matching file per pattern is surfaced as a "View latest" link
+//   - any currently-running job whose command matches the step's commands is
+//     attached so the UI can show an in-flight indicator
 //   - each FlowResource gets its on-disk absolute path so the file viewer
 //     can list/read it via safe-rooted FilesEndpoints
 
 public sealed class FlowEvaluator {
     private readonly StatusService _status;
     private readonly JobHistoryStore? _history;
+    private readonly JobRegistry? _registry;
+    private readonly PathsService _paths;
 
-    public FlowEvaluator(StatusService status, JobHistoryStore? history) {
+    public FlowEvaluator(StatusService status, JobHistoryStore? history, JobRegistry? registry = null) {
         _status = status;
         _history = history;
+        _registry = registry;
+        _paths = new PathsService();
     }
 
     public FlowSnapshot Snapshot(FlowDefinition flow) {
         var sourceStatusById = _status.Collect().ToDictionary(s => s.Id);
-        var steps = flow.Steps.Select(s => Evaluate(s, sourceStatusById)).ToList();
+
+        // Capture currently-running jobs once per snapshot so each step looks them
+        // up in memory rather than hitting JobRegistry per step.
+        var runningJobsByCommand = _registry?.All()
+            .Where(j => j.Status is JobStatus.Pending or JobStatus.Running)
+            .GroupBy(j => j.Command)
+            .ToDictionary(g => g.Key, g => g.ToList())
+            ?? new Dictionary<string, List<Job>>();
+
+        var steps = flow.Steps.Select(s => Evaluate(s, sourceStatusById, runningJobsByCommand)).ToList();
         return new FlowSnapshot {
             Id = flow.Id,
             Title = flow.Title,
@@ -32,7 +49,9 @@ public sealed class FlowEvaluator {
         };
     }
 
-    private FlowStepSnapshot Evaluate(FlowStep step, IReadOnlyDictionary<string, DataSourceStatus> sources) {
+    private FlowStepSnapshot Evaluate(FlowStep step,
+                                      IReadOnlyDictionary<string, DataSourceStatus> sources,
+                                      IReadOnlyDictionary<string, List<Job>> runningJobsByCommand) {
         // Block status: any required input data source missing.
         // (Optional steps still report block info; the UI styles them differently.)
         var missingInputs = step.InputSourceIds
@@ -53,9 +72,29 @@ public sealed class FlowEvaluator {
             }
         }
 
+        // Active job(s) for this step.
+        var running = step.Commands
+            .SelectMany(c => runningJobsByCommand.TryGetValue(c, out var jobs) ? jobs : Enumerable.Empty<Job>())
+            .Select(j => new FlowRunningJob {
+                JobId = j.Id,
+                Command = j.Command,
+                Status = j.Status.ToString().ToLowerInvariant(),
+                StartedAt = j.StartedAt,
+            })
+            .ToList();
+
+        // Latest matching file per output pattern.
+        var latestOutputs = new List<FlowOutputFile>();
+        foreach (var p in step.OutputPatterns) {
+            var match = FindLatestMatch(p);
+            if (match is not null) latestOutputs.Add(match);
+        }
+
         string status;
         if (missingInputs.Count > 0) {
             status = "blocked";
+        } else if (running.Count > 0) {
+            status = "running";
         } else if (lastRun is null) {
             status = "never-run";
         } else {
@@ -75,8 +114,40 @@ public sealed class FlowEvaluator {
             MissingInputs = missingInputs,
             LastRunAt = lastRun,
             LastRunCommand = lastRunCommand,
+            RunningJobs = running,
+            LatestOutputs = latestOutputs,
         };
     }
+
+    // Resolves a FlowOutputPattern against the matching safe-root directory
+    // and returns metadata for the most recently modified file (or null).
+    private FlowOutputFile? FindLatestMatch(FlowOutputPattern pattern) {
+        var rootPath = ResolveRootPath(pattern.Root);
+        if (rootPath is null || !Directory.Exists(rootPath)) return null;
+        try {
+            var newest = new DirectoryInfo(rootPath)
+                .EnumerateFiles(pattern.Pattern, SearchOption.TopDirectoryOnly)
+                .OrderByDescending(f => f.LastWriteTimeUtc)
+                .FirstOrDefault();
+            if (newest is null) return null;
+            return new FlowOutputFile {
+                Root = pattern.Root,
+                Path = newest.Name,
+                Label = pattern.Label ?? pattern.Pattern,
+                Modified = newest.LastWriteTimeUtc,
+                Size = newest.Length,
+            };
+        } catch {
+            return null;
+        }
+    }
+
+    private string? ResolveRootPath(string root) => root switch {
+        "rules"            => Path.Combine(AppContext.BaseDirectory, "rules"),
+        "reports"          => _paths.GetReportOutputDirectory() is { Length: > 0 } r ? Path.GetFullPath(r) : null,
+        "wikipedia-output" => _paths.GetWikipediaOutputDirectory() is { Length: > 0 } w ? Path.GetFullPath(w) : null,
+        _ => null,
+    };
 }
 
 public sealed record FlowSnapshot {
@@ -97,8 +168,25 @@ public sealed record FlowStepSnapshot {
     public required IReadOnlyList<string> OutputSourceIds { get; init; }
     public required bool Optional { get; init; }
     public string? Note { get; init; }
-    public required string Status { get; init; }              // "blocked" | "never-run" | "ok"
+    public required string Status { get; init; }              // "blocked" | "running" | "never-run" | "ok"
     public required IReadOnlyList<string> MissingInputs { get; init; }
     public DateTimeOffset? LastRunAt { get; init; }
     public string? LastRunCommand { get; init; }
+    public IReadOnlyList<FlowRunningJob> RunningJobs { get; init; } = Array.Empty<FlowRunningJob>();
+    public IReadOnlyList<FlowOutputFile> LatestOutputs { get; init; } = Array.Empty<FlowOutputFile>();
+}
+
+public sealed record FlowRunningJob {
+    public required string JobId { get; init; }
+    public required string Command { get; init; }
+    public required string Status { get; init; }
+    public DateTimeOffset? StartedAt { get; init; }
+}
+
+public sealed record FlowOutputFile {
+    public required string Root { get; init; }
+    public required string Path { get; init; }
+    public required string Label { get; init; }
+    public required DateTimeOffset Modified { get; init; }
+    public required long Size { get; init; }
 }

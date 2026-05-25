@@ -410,10 +410,24 @@
     if (document.hidden) return;
     refreshStatus();
     refreshJobList();
+    refreshActiveFlow();
   }, STATUS_POLL_MS);
   document.addEventListener('visibilitychange', () => {
-    if (!document.hidden) { refreshStatus(); refreshJobList(); }
+    if (!document.hidden) { refreshStatus(); refreshJobList(); refreshActiveFlow(); }
   });
+
+  async function refreshActiveFlow() {
+    // Re-fetch the snapshot for the currently-selected flow tab so step
+    // timestamps, running indicators and latest-output links stay live.
+    // expandedStepId is preserved across re-renders so an open drawer
+    // does not flicker shut underneath the user.
+    if (!activeFlowId) return;
+    try {
+      const res = await fetch('/api/flows/' + encodeURIComponent(activeFlowId));
+      if (!res.ok) return;
+      renderFlow(await res.json());
+    } catch (_) { /* silent — next tick will retry */ }
+  }
 
   // --- Command browser ----------------------------------------------
   //
@@ -784,6 +798,8 @@
     status.className = 'flow-step-status status-' + step.status;
     if (step.status === 'blocked') {
       status.textContent = 'blocked';
+    } else if (step.status === 'running') {
+      status.textContent = '● running';
     } else if (step.status === 'never-run') {
       status.textContent = 'not run';
     } else if (step.lastRunAt) {
@@ -832,6 +848,59 @@
     }
     if (step.outputSourceIds && step.outputSourceIds.length > 0) {
       body.appendChild(renderSourceList('Outputs', step.outputSourceIds));
+    }
+
+    // Running jobs: surface in-flight job ids with links to open them.
+    if (step.runningJobs && step.runningJobs.length > 0) {
+      const r = document.createElement('div');
+      r.className = 'flow-step-running';
+      const lbl = document.createElement('span');
+      lbl.className = 'small muted';
+      lbl.textContent = 'In flight:';
+      r.appendChild(lbl);
+      for (const rj of step.runningJobs) {
+        const link = document.createElement('a');
+        link.href = '#';
+        link.className = 'running-job-link';
+        link.textContent = '● ' + rj.command + ' (job ' + rj.jobId + ')';
+        link.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          replayJob(rj.jobId);
+          // Scroll active-job pane into view.
+          document.getElementById('active-job')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        });
+        r.appendChild(link);
+      }
+      body.appendChild(r);
+    }
+
+    // Latest output files surfaced from OutputPatterns.
+    if (step.latestOutputs && step.latestOutputs.length > 0) {
+      const out = document.createElement('div');
+      out.className = 'flow-step-outputs';
+      const lbl = document.createElement('span');
+      lbl.className = 'small muted';
+      lbl.textContent = 'Latest output:';
+      out.appendChild(lbl);
+      for (const f of step.latestOutputs) {
+        const link = document.createElement('a');
+        link.href = '#';
+        link.className = 'latest-output-link';
+        link.textContent = f.label + ': ' + f.path;
+        link.title = f.root + '/' + f.path + '  ·  ' + formatBytes(f.size) + '  ·  ' + new Date(f.modified).toLocaleString();
+        link.addEventListener('click', (e) => {
+          e.preventDefault();
+          e.stopPropagation();
+          openFile(f.root, f.path);
+        });
+        out.appendChild(link);
+        const meta = document.createElement('span');
+        meta.className = 'small muted';
+        meta.textContent = formatRelative(f.modified);
+        out.appendChild(meta);
+      }
+      body.appendChild(out);
     }
 
     // Commands with Run buttons.
@@ -963,18 +1032,41 @@
 
   function renderFileContent(path, content) {
     viewerBody.innerHTML = '';
-    const isMarkdown = /\.md$/i.test(path);
-    if (isMarkdown) {
-      const wrap = document.createElement('div');
-      wrap.className = 'markdown';
-      wrap.innerHTML = MarkdownRenderer.toHtml(content);
-      viewerBody.appendChild(wrap);
-    } else {
-      const pre = document.createElement('pre');
-      pre.className = 'file-raw';
-      pre.textContent = content;
-      viewerBody.appendChild(pre);
+    const ext = (path.match(/\.([a-z0-9]+)$/i) || [, ''])[1].toLowerCase();
+    const renderers = [];
+    if (ext === 'md') {
+      renderers.push({ name: 'Rendered', html: () => '<div class="markdown">' + MarkdownRenderer.toHtml(content) + '</div>' });
+    } else if (ext === 'csv') {
+      renderers.push({ name: 'Table', html: () => MarkdownRenderer.csvToHtml(content) });
     }
+    renderers.push({ name: 'Raw', html: () => '<pre class="file-raw">' + MarkdownRenderer.escape(content) + '</pre>' });
+
+    if (renderers.length === 1) {
+      const div = document.createElement('div');
+      div.innerHTML = renderers[0].html();
+      viewerBody.appendChild(div);
+      return;
+    }
+
+    // Two-tab view (rendered + raw).
+    const tabs = document.createElement('div');
+    tabs.className = 'view-tabs';
+    const body = document.createElement('div');
+    body.className = 'view-tab-body';
+    renderers.forEach((r, idx) => {
+      const btn = document.createElement('button');
+      btn.className = 'view-tab' + (idx === 0 ? ' active' : '');
+      btn.textContent = r.name;
+      btn.addEventListener('click', () => {
+        tabs.querySelectorAll('.view-tab').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        body.innerHTML = r.html();
+      });
+      tabs.appendChild(btn);
+    });
+    body.innerHTML = renderers[0].html();
+    viewerBody.appendChild(tabs);
+    viewerBody.appendChild(body);
   }
 
   async function openDir(root, subdir) {

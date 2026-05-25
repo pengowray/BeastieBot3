@@ -160,8 +160,59 @@
     return s.split('|').map(c => c.trim());
   }
 
+  // Minimal CSV -> HTML table renderer. Handles RFC-4180-style quoting
+  // ("...","field with, comma","line\nbreak","quote ""inside"") well enough
+  // for the reports we produce. First row is treated as the header.
+  function csvToHtml(text) {
+    const rows = parseCsv(text);
+    if (rows.length === 0) return '<p class="muted">(empty)</p>';
+    const header = rows[0];
+    const body = rows.slice(1);
+    const thead = '<thead><tr>' + header.map(c => '<th>' + escapeHtml(c) + '</th>').join('') + '</tr></thead>';
+    const tbody = '<tbody>' + body.map(r =>
+      '<tr>' + r.map(c => '<td>' + escapeHtml(c) + '</td>').join('') + '</tr>').join('') + '</tbody>';
+    return '<div class="csv-summary muted small">' + body.length + ' rows · ' + header.length + ' columns</div>' +
+           '<table class="csv-table">' + thead + tbody + '</table>';
+  }
+
+  function parseCsv(text) {
+    // Character-by-character pass — small and correct for quoted fields.
+    const rows = [];
+    let row = [];
+    let field = '';
+    let inQuote = false;
+    let i = 0;
+    while (i < text.length) {
+      const c = text[i];
+      if (inQuote) {
+        if (c === '"') {
+          if (text[i + 1] === '"') { field += '"'; i += 2; continue; }
+          inQuote = false;
+          i++;
+          continue;
+        }
+        field += c;
+        i++;
+        continue;
+      }
+      if (c === '"') { inQuote = true; i++; continue; }
+      if (c === ',') { row.push(field); field = ''; i++; continue; }
+      if (c === '\r') { i++; continue; }
+      if (c === '\n') { row.push(field); rows.push(row); row = []; field = ''; i++; continue; }
+      field += c;
+      i++;
+    }
+    if (field.length > 0 || row.length > 0) { row.push(field); rows.push(row); }
+    // Drop a trailing empty row produced by a final newline.
+    if (rows.length > 0 && rows[rows.length - 1].length === 1 && rows[rows.length - 1][0] === '') {
+      rows.pop();
+    }
+    return rows;
+  }
+
   global.MarkdownRenderer = {
     toHtml: renderBlocks,
+    csvToHtml: csvToHtml,
     escape: escapeHtml,
   };
 })(window);

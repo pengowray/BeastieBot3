@@ -29,6 +29,19 @@ public sealed record FlowStep {
     public IReadOnlyList<string> OutputSourceIds { get; init; } = Array.Empty<string>();
     public bool Optional { get; init; } = false;
     public string? Note { get; init; }
+
+    // Glob patterns (under a named safe root) that match the step's output
+    // files. The evaluator picks the most-recent matching file per pattern
+    // and surfaces it in the snapshot so the UI can link "View latest" per
+    // step. Empty = no specific output file (the step writes only to the
+    // sqlite stores referenced by OutputSourceIds).
+    public IReadOnlyList<FlowOutputPattern> OutputPatterns { get; init; } = Array.Empty<FlowOutputPattern>();
+}
+
+public sealed record FlowOutputPattern {
+    public required string Root { get; init; }       // "reports" | "wikipedia-output"
+    public required string Pattern { get; init; }    // e.g. "iucn-name-changes-*.md"
+    public string? Label { get; init; }              // optional human label; defaults to pattern
 }
 
 // A file or directory the flow points users at — templates the commands
@@ -144,6 +157,11 @@ public static class FlowCatalogue {
                     InputSourceIds = new[] { "iucn-main", "wikipedia-cache", "common-names", "col-sqlite" },
                     OutputSourceIds = Array.Empty<string>(),
                     Note = "Uses rules/wikipedia-lists.yml, rules/chart-groups.yml, and templates under rules/wikipedia/templates/.",
+                    OutputPatterns = new[] {
+                        new FlowOutputPattern { Root = "wikipedia-output", Pattern = "*.wikitext", Label = "Lists" },
+                        new FlowOutputPattern { Root = "wikipedia-output", Pattern = "*.tab",      Label = "Chart data" },
+                        new FlowOutputPattern { Root = "wikipedia-output", Pattern = "*.chart",    Label = "Chart def" },
+                    },
                 },
             },
             Templates = new[] {
@@ -190,6 +208,10 @@ public static class FlowCatalogue {
                     Description = "Per-taxon list of synonym-only matches and unmatched taxa grouped by taxonomy.",
                     Commands = new[] { "wikidata report-coverage-details" },
                     InputSourceIds = new[] { "iucn-main", "wikidata-cache" },
+                    OutputPatterns = new[] {
+                        new FlowOutputPattern { Root = "reports", Pattern = "wikidata-coverage-synonyms-*.md",  Label = "Synonym-only matches" },
+                        new FlowOutputPattern { Root = "reports", Pattern = "wikidata-coverage-unmatched-*.md", Label = "Unmatched taxa" },
+                    },
                 },
                 new FlowStep {
                     Id = "freshness",
@@ -197,6 +219,9 @@ public static class FlowCatalogue {
                     Description = "Compare IUCN data against the IUCN claims stored in cached Wikidata entities; surface stale rows.",
                     Commands = new[] { "wikidata report-iucn-freshness" },
                     InputSourceIds = new[] { "iucn-main", "wikidata-cache" },
+                    OutputPatterns = new[] {
+                        new FlowOutputPattern { Root = "reports", Pattern = "wikidata-iucn-freshness-*.md" },
+                    },
                 },
                 new FlowStep {
                     Id = "wiki-mismatches",
@@ -204,6 +229,10 @@ public static class FlowCatalogue {
                     Description = "Wikidata entries whose enwiki sitelinks resolve to redirects, disambiguations, or mismatched taxa.",
                     Commands = new[] { "wikidata report-wiki-mismatches" },
                     InputSourceIds = new[] { "wikidata-cache", "wikipedia-cache" },
+                    OutputPatterns = new[] {
+                        new FlowOutputPattern { Root = "reports", Pattern = "wikidata-wiki-mismatches*.md", Label = "Markdown" },
+                        new FlowOutputPattern { Root = "reports", Pattern = "wikidata-wiki-mismatches*.csv", Label = "CSV" },
+                    },
                 },
             },
             Outputs = new[] {
@@ -247,6 +276,9 @@ public static class FlowCatalogue {
                     Description = "Compare IUCN species against COL for presence, synonymy, and authority alignment.",
                     Commands = new[] { "iucn report-col-crosscheck" },
                     InputSourceIds = new[] { "iucn-main", "col-sqlite" },
+                    OutputPatterns = new[] {
+                        new FlowOutputPattern { Root = "reports", Pattern = "iucn-col-crosscheck-*.txt" },
+                    },
                 },
                 new FlowStep {
                     Id = "name-changes",
@@ -254,6 +286,9 @@ public static class FlowCatalogue {
                     Description = "Report assessments where taxon_scientific_name changes while sharing the same SIS taxon id.",
                     Commands = new[] { "iucn report-name-changes" },
                     InputSourceIds = new[] { "iucn-api-cache" },
+                    OutputPatterns = new[] {
+                        new FlowOutputPattern { Root = "reports", Pattern = "iucn-name-changes-*.md" },
+                    },
                 },
                 new FlowStep {
                     Id = "synonym-formatting",
@@ -261,6 +296,10 @@ public static class FlowCatalogue {
                     Description = "List IUCN synonyms with double spaces, stray punctuation, or other formatting issues.",
                     Commands = new[] { "iucn report-synonym-formatting" },
                     InputSourceIds = new[] { "iucn-api-cache" },
+                    OutputPatterns = new[] {
+                        new FlowOutputPattern { Root = "reports", Pattern = "iucn-synonym-formatting-*.md",  Label = "Markdown" },
+                        new FlowOutputPattern { Root = "reports", Pattern = "iucn-synonym-formatting-*.csv", Label = "CSV" },
+                    },
                 },
                 new FlowStep {
                     Id = "no-latest",
@@ -268,6 +307,10 @@ public static class FlowCatalogue {
                     Description = "Cached taxa whose `latest_assessment` is missing, grouped phylogenetically.",
                     Commands = new[] { "iucn api report-no-latest" },
                     InputSourceIds = new[] { "iucn-api-cache" },
+                    OutputPatterns = new[] {
+                        new FlowOutputPattern { Root = "reports", Pattern = "iucn-no-latest-assessment-*.md",  Label = "Markdown" },
+                        new FlowOutputPattern { Root = "reports", Pattern = "iucn-no-latest-assessment-*.csv", Label = "CSV" },
+                    },
                 },
             },
             Outputs = new[] {

@@ -23,10 +23,10 @@ public static class FlowsEndpoints {
             return Results.Json(list);
         });
 
-        app.MapGet("/api/flows/{id}", (string id, JobHistoryStore? history) => {
+        app.MapGet("/api/flows/{id}", (string id, JobHistoryStore? history, JobRegistry? registry) => {
             var flow = FlowCatalogue.Find(id);
             if (flow is null) return Results.NotFound();
-            var evaluator = new FlowEvaluator(new StatusService(), history);
+            var evaluator = new FlowEvaluator(new StatusService(), history, registry);
             return Results.Json(evaluator.Snapshot(flow));
         });
     }
