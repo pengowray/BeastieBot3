@@ -760,11 +760,30 @@
     desc.textContent = snap.description;
     root.appendChild(desc);
 
-    // Pipeline
+    // Split steps into pipeline (core path) and maintenance (only-when-needed).
+    const pipelineSteps = snap.steps.filter(s => (s.section || 'pipeline') === 'pipeline');
+    const maintenanceSteps = snap.steps.filter(s => s.section === 'maintenance');
+
     const pipeline = document.createElement('div');
     pipeline.className = 'flow-pipeline';
-    for (const step of snap.steps) pipeline.appendChild(renderStep(step, snap));
+    for (const step of pipelineSteps) pipeline.appendChild(renderStep(step, snap));
     root.appendChild(pipeline);
+
+    if (maintenanceSteps.length > 0) {
+      const wrap = document.createElement('details');
+      wrap.className = 'flow-maintenance';
+      const summary = document.createElement('summary');
+      summary.innerHTML = '<span class="flow-maintenance-title">Maintenance</span> ' +
+                          '<span class="small muted">' + maintenanceSteps.length + ' step' +
+                          (maintenanceSteps.length === 1 ? '' : 's') +
+                          ' — only run when coverage drops or caches need repair</span>';
+      wrap.appendChild(summary);
+      const pipe = document.createElement('div');
+      pipe.className = 'flow-pipeline';
+      for (const step of maintenanceSteps) pipe.appendChild(renderStep(step, snap));
+      wrap.appendChild(pipe);
+      root.appendChild(wrap);
+    }
 
     // Side panels: templates + outputs
     const sidebar = document.createElement('div');
@@ -844,10 +863,10 @@
     }
 
     if (step.inputSourceIds && step.inputSourceIds.length > 0) {
-      body.appendChild(renderSourceList('Inputs', step.inputSourceIds));
+      body.appendChild(renderSourceList('Inputs', step.inputSourceIds, snap.sources || {}));
     }
     if (step.outputSourceIds && step.outputSourceIds.length > 0) {
-      body.appendChild(renderSourceList('Outputs', step.outputSourceIds));
+      body.appendChild(renderSourceList('Outputs', step.outputSourceIds, snap.sources || {}));
     }
 
     // Running jobs: surface in-flight job ids with links to open them.
@@ -936,7 +955,7 @@
     return wrap;
   }
 
-  function renderSourceList(label, ids) {
+  function renderSourceList(label, ids, sourcesById) {
     const wrap = document.createElement('div');
     wrap.className = 'flow-step-sources';
     const lbl = document.createElement('span');
@@ -944,9 +963,20 @@
     lbl.textContent = label + ':';
     wrap.appendChild(lbl);
     for (const id of ids) {
+      const info = sourcesById[id];
       const chip = document.createElement('span');
-      chip.className = 'source-chip';
-      chip.textContent = id;
+      chip.className = 'source-chip' + (info ? (info.exists ? ' ok' : ' missing') : '');
+      const name = document.createElement('span');
+      name.className = 'source-name';
+      name.textContent = info ? info.name : id;
+      chip.appendChild(name);
+      if (info && info.headline) {
+        const meta = document.createElement('span');
+        meta.className = 'source-meta';
+        meta.textContent = info.headline;
+        chip.appendChild(meta);
+      }
+      chip.title = id + (info && !info.exists ? '  (missing)' : '');
       wrap.appendChild(chip);
     }
     return wrap;

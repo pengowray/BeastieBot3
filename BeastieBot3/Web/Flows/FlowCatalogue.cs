@@ -20,6 +20,11 @@ public sealed record FlowDefinition {
     public IReadOnlyList<FlowResource> Outputs { get; init; } = Array.Empty<FlowResource>();
 }
 
+public enum FlowSection {
+    Pipeline,     // core path through the flow; rendered as a vertical timeline
+    Maintenance,  // repair/coverage steps not normally needed; rendered in a separate panel
+}
+
 public sealed record FlowStep {
     public required string Id { get; init; }
     public required string Title { get; init; }
@@ -29,6 +34,7 @@ public sealed record FlowStep {
     public IReadOnlyList<string> OutputSourceIds { get; init; } = Array.Empty<string>();
     public bool Optional { get; init; } = false;
     public string? Note { get; init; }
+    public FlowSection Section { get; init; } = FlowSection.Pipeline;
 
     // Glob patterns (under a named safe root) that match the step's output
     // files. The evaluator picks the most-recent matching file per pattern
@@ -64,8 +70,9 @@ public static class FlowCatalogue {
         new FlowDefinition {
             Id = "wiki-reports",
             Title = "Wikipedia reports pipeline",
-            Description = "Generate wikitext lists and IUCN charts for Wikipedia. Each step caches data locally so re-runs only download new material.",
+            Description = "Generate wikitext lists and IUCN charts for Wikipedia. Each step caches data locally so re-runs only download new material. Maintenance steps (below) are not normally needed — they exist for coverage gaps and cache repair.",
             Steps = new[] {
+                // -------- Pipeline (core path) --------
                 new FlowStep {
                     Id = "iucn-import",
                     Title = "Import IUCN Red List CSVs",
@@ -84,54 +91,22 @@ public static class FlowCatalogue {
                     Optional = true,
                 },
                 new FlowStep {
-                    Id = "wikidata-seed",
-                    Title = "Seed Wikidata Q-ids",
-                    Description = "Find Wikidata entities for taxa carrying IUCN identifiers and queue them for download.",
-                    Commands = new[] { "wikidata seed-taxa" },
+                    Id = "wikidata-cache",
+                    Title = "Seed and cache Wikidata entities",
+                    Description = "Discover Wikidata Q-ids for IUCN-linked taxa (SPARQL on P627) and download their entity JSON, populating the normalised taxon-name lookup index inline.",
+                    Commands = new[] { "wikidata cache-all", "wikidata seed-taxa", "wikidata cache-entities" },
                     InputSourceIds = new[] { "iucn-main" },
                     OutputSourceIds = new[] { "wikidata-cache" },
-                    Note = "Requires WIKIDATA_USER_AGENT in .env.",
+                    Note = "Run wikidata cache-all to do both steps in one go. Requires WIKIDATA_USER_AGENT in .env.",
                 },
                 new FlowStep {
-                    Id = "wikidata-cache",
-                    Title = "Cache Wikidata entities",
-                    Description = "Download queued Wikidata JSON payloads into the local cache.",
-                    Commands = new[] { "wikidata cache-entities" },
-                    InputSourceIds = new[] { "wikidata-cache" },
-                    OutputSourceIds = new[] { "wikidata-cache" },
-                },
-                new FlowStep {
-                    Id = "wikidata-backfill",
-                    Title = "Backfill missing Wikidata matches",
-                    Description = "For IUCN taxa not yet linked to a Wikidata entity, search by scientific name and synonyms.",
-                    Commands = new[] { "wikidata backfill-iucn" },
-                    InputSourceIds = new[] { "iucn-main", "wikidata-cache" },
-                    OutputSourceIds = new[] { "wikidata-cache" },
-                    Optional = true,
-                },
-                new FlowStep {
-                    Id = "wikidata-rebuild-indexes",
-                    Title = "Rebuild Wikidata lookup indexes",
-                    Description = "Build the normalised taxon-name index used downstream for matching. Re-run after backfills.",
-                    Commands = new[] { "wikidata rebuild-indexes" },
-                    InputSourceIds = new[] { "wikidata-cache" },
-                    OutputSourceIds = new[] { "wikidata-cache" },
-                },
-                new FlowStep {
-                    Id = "wikipedia-enqueue",
-                    Title = "Enqueue Wikipedia pages",
-                    Description = "Seed the Wikipedia cache with page titles to fetch — both Wikidata sitelinks and higher-taxon names.",
-                    Commands = new[] { "wikipedia enqueue-wikidata", "wikipedia enqueue-taxa" },
+                    Id = "wikipedia-enqueue-fetch",
+                    Title = "Enqueue and fetch Wikipedia pages",
+                    Description = "Seed the Wikipedia page queue from Wikidata enwiki sitelinks and higher-taxon names, then download HTML + wikitext for every queued title.",
+                    Commands = new[] { "wikipedia enqueue-wikidata", "wikipedia enqueue-taxa", "wikipedia fetch-pages" },
                     InputSourceIds = new[] { "iucn-main", "wikidata-cache" },
                     OutputSourceIds = new[] { "wikipedia-cache" },
-                },
-                new FlowStep {
-                    Id = "wikipedia-fetch",
-                    Title = "Fetch Wikipedia pages",
-                    Description = "Download HTML and wikitext for every queued title. Respects MediaWiki rate limits.",
-                    Commands = new[] { "wikipedia fetch-pages" },
-                    InputSourceIds = new[] { "wikipedia-cache" },
-                    OutputSourceIds = new[] { "wikipedia-cache" },
+                    Note = "Three separate commands by default. fetch-pages can also enqueue+fetch a one-off page inline via --title \"Ursus maritimus\".",
                 },
                 new FlowStep {
                     Id = "wikipedia-match",
@@ -162,6 +137,37 @@ public static class FlowCatalogue {
                         new FlowOutputPattern { Root = "wikipedia-output", Pattern = "*.tab",      Label = "Chart data" },
                         new FlowOutputPattern { Root = "wikipedia-output", Pattern = "*.chart",    Label = "Chart def" },
                     },
+                },
+
+                // -------- Maintenance (only when needed) --------
+                new FlowStep {
+                    Id = "wikidata-backfill",
+                    Title = "Backfill: discover missing Wikidata Q-ids",
+                    Description = "For IUCN taxa not linked to a Wikidata entity (i.e. Wikidata never declared P627 for them), search by scientific name and synonyms to find a likely match. Run when Wikidata coverage drops.",
+                    Commands = new[] { "wikidata backfill-iucn" },
+                    InputSourceIds = new[] { "iucn-main", "wikidata-cache" },
+                    OutputSourceIds = new[] { "wikidata-cache" },
+                    Section = FlowSection.Maintenance,
+                    Note = "Only needed if `wikidata report-coverage` shows many unmatched taxa — the standard cache-all pass only finds Q-ids that Wikidata already knows are IUCN species.",
+                },
+                new FlowStep {
+                    Id = "wikidata-rebuild-indexes",
+                    Title = "Rebuild Wikidata lookup indexes",
+                    Description = "Recompute the normalised taxon-name index from cached entity JSON. cache-entities already populates this inline; only run if the index is suspected stale.",
+                    Commands = new[] { "wikidata rebuild-indexes" },
+                    InputSourceIds = new[] { "wikidata-cache" },
+                    OutputSourceIds = new[] { "wikidata-cache" },
+                    Section = FlowSection.Maintenance,
+                    Note = "--force drops and rebuilds; --include-p141 also rebuilds the P141 statement cache.",
+                },
+                new FlowStep {
+                    Id = "wikidata-reset",
+                    Title = "Reset Wikidata cache",
+                    Description = "Delete every downloaded Wikidata entity payload while keeping the seed queue intact. Use only if you want to redo entity downloads from scratch.",
+                    Commands = new[] { "wikidata reset-cache" },
+                    InputSourceIds = Array.Empty<string>(),
+                    OutputSourceIds = new[] { "wikidata-cache" },
+                    Section = FlowSection.Maintenance,
                 },
             },
             Templates = new[] {

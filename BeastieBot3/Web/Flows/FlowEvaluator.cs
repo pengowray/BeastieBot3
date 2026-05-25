@@ -39,14 +39,47 @@ public sealed class FlowEvaluator {
             ?? new Dictionary<string, List<Job>>();
 
         var steps = flow.Steps.Select(s => Evaluate(s, sourceStatusById, runningJobsByCommand)).ToList();
+
+        // Collect the subset of data sources actually referenced by this flow,
+        // so the UI can render input/output chips with their existence and
+        // primary row count without a second /api/status fetch.
+        var referencedIds = flow.Steps
+            .SelectMany(s => s.InputSourceIds.Concat(s.OutputSourceIds))
+            .Distinct(StringComparer.Ordinal);
+        var sources = new Dictionary<string, FlowSourceInfo>();
+        foreach (var id in referencedIds) {
+            if (!sourceStatusById.TryGetValue(id, out var s)) continue;
+            sources[id] = new FlowSourceInfo {
+                Id = s.Id,
+                Name = s.Name,
+                Kind = s.Kind,
+                Exists = s.Exists,
+                Headline = SummariseHeadline(s),
+            };
+        }
+
         return new FlowSnapshot {
             Id = flow.Id,
             Title = flow.Title,
             Description = flow.Description,
             Steps = steps,
+            Sources = sources,
             Templates = flow.Templates,
             Outputs = flow.Outputs,
         };
+    }
+
+    // Pick the most informative single metric from a DataSourceStatus to show
+    // as a one-line headline on a step's source chip. Prefers the first non-
+    // null, non-zero metric so a brand-new database that has only "0 rows"
+    // metrics still shows "0 taxa" rather than blank.
+    private static string? SummariseHeadline(DataSourceStatus s) {
+        if (!s.Exists) return "missing";
+        if (s.Metrics.Count == 0) return null;
+        var first = s.Metrics.FirstOrDefault(m => m.Value is > 0)
+                    ?? s.Metrics.First();
+        if (first.Value is null) return first.Label + ": n/a";
+        return string.Format("{0:N0} {1}", first.Value, first.Label);
     }
 
     private FlowStepSnapshot Evaluate(FlowStep step,
@@ -109,6 +142,7 @@ public sealed class FlowEvaluator {
             InputSourceIds = step.InputSourceIds,
             OutputSourceIds = step.OutputSourceIds,
             Optional = step.Optional,
+            Section = step.Section.ToString().ToLowerInvariant(),
             Note = step.Note,
             Status = status,
             MissingInputs = missingInputs,
@@ -155,8 +189,17 @@ public sealed record FlowSnapshot {
     public required string Title { get; init; }
     public required string Description { get; init; }
     public required IReadOnlyList<FlowStepSnapshot> Steps { get; init; }
+    public required IReadOnlyDictionary<string, FlowSourceInfo> Sources { get; init; }
     public required IReadOnlyList<FlowResource> Templates { get; init; }
     public required IReadOnlyList<FlowResource> Outputs { get; init; }
+}
+
+public sealed record FlowSourceInfo {
+    public required string Id { get; init; }
+    public required string Name { get; init; }
+    public required string Kind { get; init; }     // "sqlite" | "directory"
+    public required bool Exists { get; init; }
+    public string? Headline { get; init; }          // e.g. "191,472 assessments"
 }
 
 public sealed record FlowStepSnapshot {
@@ -167,6 +210,7 @@ public sealed record FlowStepSnapshot {
     public required IReadOnlyList<string> InputSourceIds { get; init; }
     public required IReadOnlyList<string> OutputSourceIds { get; init; }
     public required bool Optional { get; init; }
+    public required string Section { get; init; }            // "pipeline" | "maintenance"
     public string? Note { get; init; }
     public required string Status { get; init; }              // "blocked" | "running" | "never-run" | "ok"
     public required IReadOnlyList<string> MissingInputs { get; init; }
