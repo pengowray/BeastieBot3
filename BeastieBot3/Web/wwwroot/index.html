@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>BeastieBot3</title>
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<link rel="stylesheet" href="/style.css">
+</head>
+<body>
+<header>
+  <h1>BeastieBot3</h1>
+  <span class="tag">local web UI</span>
+</header>
+
+<main>
+  <section class="card">
+    <h2>Data sources</h2>
+    <div class="card-header-row">
+      <p class="muted" id="status-generated">Loading&hellip;</p>
+      <button id="refresh-status" class="ghost">Refresh</button>
+    </div>
+    <ul id="status-list" class="status-list"></ul>
+  </section>
+
+  <section class="card">
+    <h2>Workflows</h2>
+    <p class="muted small">Guided pipelines. Each step shows what it needs, what it produces, and when it last ran.</p>
+    <div class="flow-tabs" id="flow-tabs"></div>
+    <div id="flow-content"></div>
+  </section>
+
+  <section class="card">
+    <h2>Run a command</h2>
+    <p class="muted small">
+      Click a command to open its form. Output streams below in real time
+      and into the terminal where <code>serve</code> is running.
+      <span class="dot dot-destructive"></span> destructive commands ask
+      for confirmation and block other jobs while running.
+    </p>
+    <div class="filter-bar">
+      <input type="search" id="cmd-search" placeholder="Filter commands…" autocomplete="off">
+      <div class="kind-filter" id="cmd-kind-filter">
+        <label><input type="checkbox" value="readonly" checked> <span class="dot dot-readonly"></span>read-only</label>
+        <label><input type="checkbox" value="mutates" checked> <span class="dot dot-mutates"></span>mutates</label>
+        <label><input type="checkbox" value="destructive" checked> <span class="dot dot-destructive"></span>destructive</label>
+      </div>
+    </div>
+    <div id="command-tree"><p class="muted">Loading commands…</p></div>
+
+    <div id="active-job" hidden>
+      <div class="job-header">
+        <strong id="job-title">&nbsp;</strong>
+        <span class="header-right">
+          <span id="job-status" class="status">&nbsp;</span>
+          <button id="job-cancel" class="ghost cancel-btn" hidden>Cancel</button>
+        </span>
+      </div>
+      <pre id="job-output" class="terminal"></pre>
+    </div>
+  </section>
+
+  <section class="card">
+    <h2>Recent jobs</h2>
+    <button id="refresh-jobs" class="ghost">Refresh</button>
+    <ul id="job-list" class="job-list"><li class="muted">No jobs yet.</li></ul>
+  </section>
+
+  <section class="card">
+    <h2>Settings (paths.ini)</h2>
+    <p class="muted">Resolved paths from <code id="paths-source">paths.ini</code>.</p>
+    <button id="load-paths" class="ghost">Load paths</button>
+    <table id="paths-table" hidden>
+      <thead><tr><th>Key</th><th>Value</th></tr></thead>
+      <tbody></tbody>
+    </table>
+  </section>
+</main>
+
+<div id="file-viewer" class="modal" hidden>
+  <div class="modal-backdrop"></div>
+  <div class="modal-panel">
+    <div class="modal-header">
+      <span id="file-viewer-title" class="path">&nbsp;</span>
+      <span class="modal-actions">
+        <span id="file-viewer-meta" class="muted small"></span>
+        <button id="file-viewer-close" class="ghost">Close</button>
+      </span>
+    </div>
+    <div id="file-viewer-body" class="modal-body"></div>
+  </div>
+</div>
+
+<script src="/ansi.js"></script>
+<script src="/markdown.js"></script>
+<script src="/app.js"></script>
+</body>
+</html>

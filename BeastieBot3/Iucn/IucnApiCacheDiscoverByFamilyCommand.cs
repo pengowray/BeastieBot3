@@ -46,6 +46,15 @@ public sealed class IucnApiCacheDiscoverByFamilySettings : CommonSettings {
     public double? MaxAgeHours { get; init; }
 }
 
+[CommandInfo("iucn api discover-by-family", CommandKind.Mutates,
+    "Scan IUCN families via the API to discover taxa missing from the local cache (removed or reclassified species).",
+    Reason = "Adds newly-discovered taxa to the cache; --dry-run only inspects.",
+    Examples = new[] {
+        "iucn api discover-by-family --dry-run",
+        "iucn api discover-by-family",
+        "iucn api discover-by-family --family Felidae,Canidae",
+        "iucn api discover-by-family --force --limit 100"
+    })]
 public sealed class IucnApiCacheDiscoverByFamilyCommand : AsyncCommand<IucnApiCacheDiscoverByFamilySettings> {
     public override async Task<int> ExecuteAsync(CommandContext context, IucnApiCacheDiscoverByFamilySettings settings, CancellationToken cancellationToken) {
         _ = context;

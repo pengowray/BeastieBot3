@@ -21,6 +21,12 @@ using BeastieBot3.Infrastructure;
 
 namespace BeastieBot3.Iucn;
 
+[CommandInfo("iucn report-synonym-formatting", CommandKind.ReadOnly,
+    "List IUCN synonyms that contain double spaces or other formatting issues and export Markdown plus CSV reports.",
+    Examples = new[] {
+        "iucn report-synonym-formatting",
+        "iucn report-synonym-formatting --limit 1000"
+    })]
 public sealed class IucnSynonymFormattingReportCommand : Command<IucnSynonymFormattingReportCommand.Settings> {
     public sealed class Settings : CommonSettings {
         [CommandOption("--cache <PATH>")]

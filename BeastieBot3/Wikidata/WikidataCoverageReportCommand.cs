@@ -62,6 +62,12 @@ public sealed class WikidataCoverageReportSettings : CommonSettings {
     public string? UnmatchedOutputPath { get; init; }
 }
 
+[CommandInfo("wikidata report-coverage", CommandKind.ReadOnly,
+    "Report how many IUCN taxa currently map to cached Wikidata entities using P627 and scientific-name matches.",
+    Examples = new[] {
+        "wikidata report-coverage",
+        "wikidata report-coverage --include-subpopulations"
+    })]
 public sealed class WikidataCoverageReportCommand : AsyncCommand<WikidataCoverageReportSettings> {
     public override Task<int> ExecuteAsync(CommandContext context, WikidataCoverageReportSettings settings, CancellationToken cancellationToken) {
         _ = context;

@@ -36,6 +36,12 @@ public sealed class WikidataIucnFreshnessReportSettings : CommonSettings {
     public string? OutputPath { get; init; }
 }
 
+[CommandInfo("wikidata report-iucn-freshness", CommandKind.ReadOnly,
+    "Generate a Markdown report describing how current IUCN data is reflected in cached Wikidata entities.",
+    Examples = new[] {
+        "wikidata report-iucn-freshness",
+        "wikidata report-iucn-freshness --output reports/freshness.md"
+    })]
 public sealed class WikidataIucnFreshnessReportCommand : AsyncCommand<WikidataIucnFreshnessReportSettings> {
     public override Task<int> ExecuteAsync(CommandContext context, WikidataIucnFreshnessReportSettings settings, CancellationToken cancellationToken) {
         _ = context;

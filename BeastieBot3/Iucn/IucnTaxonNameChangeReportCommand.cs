@@ -45,6 +45,12 @@ namespace BeastieBot3.Iucn;
 /// 
 /// This report generator does not look for errata text, only changes in the taxon_scientific_name field (and finds none).
 /// </summary>
+[CommandInfo("iucn report-name-changes", CommandKind.ReadOnly,
+    "Report assessments where taxon_scientific_name changes while sharing the same SIS taxon id.",
+    Examples = new[] {
+        "iucn report-name-changes",
+        "iucn report-name-changes --output name-changes.md"
+    })]
 public sealed class IucnTaxonNameChangeReportCommand : Command<IucnTaxonNameChangeReportCommand.Settings> {
     public sealed class Settings : CommonSettings {
         [CommandOption("--cache <PATH>")]

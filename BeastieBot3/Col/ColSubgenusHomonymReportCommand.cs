@@ -17,6 +17,9 @@ namespace BeastieBot3.Col;
 
 // test example report; doesn't work / runs too slow; probably the LOWER commands.
 
+[CommandInfo("col report-subgenus-homonyms", CommandKind.ReadOnly,
+    "Report subgenus entries whose names collide with genus names in the COL database.",
+    Examples = new[] { "col report-subgenus-homonyms" })]
 public sealed class ColSubgenusHomonymReportCommand : Command<CommonSettings>
 {
     // Canonicalize genus and subgenus names and join on the cleaned value to locate potential homonyms.

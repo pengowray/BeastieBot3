@@ -20,6 +20,12 @@ using BeastieBot3.Taxonomy;
 
 namespace BeastieBot3.Wikidata;
 
+[CommandInfo("wikidata report-coverage-details", CommandKind.ReadOnly,
+    "List synonym-only matches and unmatched taxa grouped hierarchically by taxonomy.",
+    Examples = new[] {
+        "wikidata report-coverage-details",
+        "wikidata report-coverage-details --limit 25000"
+    })]
 public sealed class WikidataCoverageDetailsCommand : AsyncCommand<WikidataCoverageReportSettings> {
     public override Task<int> ExecuteAsync(CommandContext context, WikidataCoverageReportSettings settings, CancellationToken cancellationToken) {
         _ = context;

@@ -35,6 +35,13 @@ public sealed class WikidataSeedSettings : CommonSettings {
     public bool ResetCursor { get; init; }
 }
 
+[CommandInfo("wikidata seed-taxa", CommandKind.Mutates,
+    "Fetch Wikidata Q-ids for taxa carrying IUCN identifiers and enqueue them for caching.",
+    Reason = "Enqueues Wikidata Q-ids for IUCN-linked taxa.",
+    Examples = new[] {
+        "wikidata seed-taxa",
+        "wikidata seed-taxa --limit 1000"
+    })]
 public sealed class WikidataSeedCommand : AsyncCommand<WikidataSeedSettings> {
     private const string CursorKey = "wikidata_taxa_cursor";
 

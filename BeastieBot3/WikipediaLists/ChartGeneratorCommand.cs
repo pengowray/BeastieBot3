@@ -23,6 +23,14 @@ using YamlDotNet.Serialization.NamingConventions;
 
 namespace BeastieBot3.WikipediaLists;
 
+[CommandInfo("wikipedia generate-charts", CommandKind.ReadOnly,
+    "Generate IUCN Red List bar chart data files (.tab, .chart, .wikitext) for Wikipedia.",
+    Reason = "Generates chart output files (.tab/.chart/.wikitext) only.",
+    Examples = new[] {
+        "wikipedia generate-charts",
+        "wikipedia generate-charts --group mammals --group birds",
+        "wikipedia generate-charts --output-dir charts/"
+    })]
 internal sealed class ChartGeneratorCommand : Command<ChartGeneratorCommand.Settings> {
     public sealed class Settings : CommonSettings {
         [CommandOption("--database <PATH>")]

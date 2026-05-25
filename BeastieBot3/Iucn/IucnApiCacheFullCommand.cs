@@ -62,6 +62,13 @@ public sealed class IucnApiCacheFullSettings : CommonSettings {
     public bool ContinueOnTaxaFailure { get; init; }
 }
 
+[CommandInfo("iucn api cache-all", CommandKind.Mutates,
+    "Run both cache-taxa and cache-assessments sequentially with a single command.",
+    Reason = "Runs cache-taxa + cache-assessments sequentially.",
+    Examples = new[] {
+        "iucn api cache-all",
+        "iucn api cache-all --taxa-limit 100 --assessment-limit 200"
+    })]
 public sealed class IucnApiCacheFullCommand : AsyncCommand<IucnApiCacheFullSettings> {
     public override async Task<int> ExecuteAsync(CommandContext context, IucnApiCacheFullSettings settings, CancellationToken cancellationToken) {
         _ = context;

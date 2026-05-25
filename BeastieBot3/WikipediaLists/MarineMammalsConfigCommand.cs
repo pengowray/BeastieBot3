@@ -58,6 +58,13 @@ namespace BeastieBot3.WikipediaLists;
 /// </list>
 /// </para>
 /// </remarks>
+[CommandInfo("wikipedia marine-mammals-config", CommandKind.ReadOnly,
+    "Generate YAML configuration for marine mammals virtual groups based on IUCN Marine system tags.",
+    Reason = "Generates a YAML config file only.",
+    Examples = new[] {
+        "wikipedia marine-mammals-config",
+        "wikipedia marine-mammals-config --output marine-mammals.yml"
+    })]
 internal sealed class MarineMammalsConfigCommand : Command<MarineMammalsConfigCommand.Settings> {
     public sealed class Settings : CommandSettings {
         [CommandOption("--database <PATH>")]

@@ -26,6 +26,14 @@ public sealed class WikidataRebuildIndexesSettings : CommonSettings {
     public bool IncludeP141 { get; init; }
 }
 
+[CommandInfo("wikidata rebuild-indexes", CommandKind.Mutates,
+    "Rebuild lookup indexes (normalized taxon-name index plus optional P141 cache) without redownloading Wikidata entities.",
+    Reason = "Rebuilds lookup indexes from cached Wikidata JSON; --force replaces existing rows.",
+    Examples = new[] {
+        "wikidata rebuild-indexes",
+        "wikidata rebuild-indexes --force",
+        "wikidata rebuild-indexes --include-p141"
+    })]
 public sealed class WikidataRebuildIndexesCommand : AsyncCommand<WikidataRebuildIndexesSettings> {
     public override Task<int> ExecuteAsync(CommandContext context, WikidataRebuildIndexesSettings settings, CancellationToken cancellationToken) {
         _ = context;

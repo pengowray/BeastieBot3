@@ -40,6 +40,13 @@ public sealed class WikidataCacheItemsSettings : CommonSettings {
     public bool FailedOnly { get; init; }
 }
 
+[CommandInfo("wikidata cache-entities", CommandKind.Mutates,
+    "Download Wikidata JSON for queued taxa and populate the local cache, including lookup indexes.",
+    Reason = "Downloads queued Wikidata entity JSON into the cache.",
+    Examples = new[] {
+        "wikidata cache-entities",
+        "wikidata cache-entities --failed-only"
+    })]
 public sealed class WikidataCacheItemsCommand : AsyncCommand<WikidataCacheItemsSettings> {
     public override Task<int> ExecuteAsync(CommandContext context, WikidataCacheItemsSettings settings, CancellationToken cancellationToken) {
         _ = context;

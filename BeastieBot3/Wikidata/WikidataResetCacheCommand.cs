@@ -21,6 +21,13 @@ public sealed class WikidataResetCacheSettings : CommonSettings {
     public bool Force { get; init; }
 }
 
+[CommandInfo("wikidata reset-cache", CommandKind.Destructive,
+    "Delete downloaded Wikidata JSON payloads while keeping the seed queue intact.",
+    Reason = "Deletes downloaded Wikidata JSON payloads.",
+    Examples = new[] {
+        "wikidata reset-cache",
+        "wikidata reset-cache --force"
+    })]
 public sealed class WikidataResetCacheCommand : AsyncCommand<WikidataResetCacheSettings> {
     public override Task<int> ExecuteAsync(CommandContext context, WikidataResetCacheSettings settings, CancellationToken cancellationToken) {
         _ = context;

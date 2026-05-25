@@ -13,6 +13,14 @@ using BeastieBot3.Configuration;
 
 namespace BeastieBot3.Wikipedia;
 
+[CommandInfo("wikipedia fetch-pages", CommandKind.Mutates,
+    "Download pending Wikipedia pages (HTML plus wikitext) into the local cache.",
+    Reason = "Downloads pending Wikipedia pages into the local cache.",
+    Examples = new[] {
+        "wikipedia fetch-pages",
+        "wikipedia fetch-pages --limit 25",
+        "wikipedia fetch-pages --title \"Ursus maritimus\""
+    })]
 public sealed class WikipediaFetchCommand : AsyncCommand<WikipediaFetchCommand.Settings> {
     private const int DefaultBatchSize = 25;
     public sealed class Settings : CommonSettings {

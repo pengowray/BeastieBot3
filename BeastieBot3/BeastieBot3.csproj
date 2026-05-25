@@ -9,6 +9,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <FrameworkReference Include="Microsoft.AspNetCore.App" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="CXuesong.MW.WikiClientLibrary" Version="0.8.0" />
     <PackageReference Include="CXuesong.MW.WikiClientLibrary.Wikibase" Version="0.8.0" />
     <PackageReference Include="CsvHelper" Version="32.0.2" />
@@ -71,6 +75,9 @@
     <None Update="rules\wikipedia\templates\taxonomy-status-summary.mustache">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <Content Include="Web\wwwroot\**\*">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </Content>
   </ItemGroup>
 
 </Project>

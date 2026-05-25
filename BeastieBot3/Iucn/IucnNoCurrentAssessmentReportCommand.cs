@@ -21,6 +21,13 @@ using BeastieBot3.Infrastructure;
 
 namespace BeastieBot3.Iucn;
 
+[CommandInfo("iucn api report-no-latest", CommandKind.ReadOnly,
+    "Report all cached taxa with no current (latest) assessment, grouped phylogenetically. Outputs Markdown and CSV.",
+    Examples = new[] {
+        "iucn api report-no-latest",
+        "iucn api report-no-latest --limit 500",
+        "iucn api report-no-latest -o report.md --csv-output report.csv"
+    })]
 public sealed class IucnNoCurrentAssessmentReportCommand : Command<IucnNoCurrentAssessmentReportCommand.Settings> {
     public sealed class Settings : CommonSettings {
         [CommandOption("--cache <PATH>")]

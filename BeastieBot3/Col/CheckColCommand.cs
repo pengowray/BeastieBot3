@@ -11,6 +11,9 @@ using System.Threading;
 
 namespace BeastieBot3.Col;
 
+[CommandInfo("col check", CommandKind.ReadOnly,
+    "Detect the mounted COL dataset inside the container.",
+    Examples = new[] { "col check" })]
 public sealed class CheckColCommand : Command<CommonSettings> {
     public override int Execute(CommandContext context, CommonSettings settings, CancellationToken cancellationToken) {
         var baseDir = settings.SettingsDir ?? AppContext.BaseDirectory;

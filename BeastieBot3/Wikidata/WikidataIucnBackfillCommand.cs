@@ -46,6 +46,13 @@ public sealed class WikidataIucnBackfillSettings : CommonSettings {
     public bool QueueAllSynonyms { get; init; }
 }
 
+[CommandInfo("wikidata backfill-iucn", CommandKind.Mutates,
+    "Search Wikidata for IUCN taxa lacking cached entities and download them using taxon names and synonyms.",
+    Reason = "Searches Wikidata for IUCN taxa without cached entities and downloads them.",
+    Examples = new[] {
+        "wikidata backfill-iucn",
+        "wikidata backfill-iucn --limit 500 --queue-all-synonyms"
+    })]
 public sealed class WikidataIucnBackfillCommand : AsyncCommand<WikidataIucnBackfillSettings> {
     public override async Task<int> ExecuteAsync(CommandContext context, WikidataIucnBackfillSettings settings, CancellationToken cancellationToken) {
         _ = context;

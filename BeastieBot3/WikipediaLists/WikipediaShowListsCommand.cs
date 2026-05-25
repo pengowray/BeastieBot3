@@ -5,6 +5,9 @@ using Spectre.Console.Cli;
 
 namespace BeastieBot3.WikipediaLists;
 
+[CommandInfo("wikipedia show-lists", CommandKind.ReadOnly,
+    "Show all available list IDs that can be used with generate-lists --list.",
+    Examples = new[] { "wikipedia show-lists" })]
 internal sealed class WikipediaShowListsCommand : Command<WikipediaShowListsCommand.Settings> {
     public sealed class Settings : CommonSettings {
         [CommandOption("--config <FILE>")]

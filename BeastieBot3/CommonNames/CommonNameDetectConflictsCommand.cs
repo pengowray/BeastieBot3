@@ -18,6 +18,13 @@ namespace BeastieBot3.CommonNames;
 /// <summary>
 /// Detects ambiguous common names (same normalized name used for different valid taxa in the same kingdom).
 /// </summary>
+[CommandInfo("common-names detect-conflicts", CommandKind.Mutates,
+    "Detect ambiguous common names (same name used for different valid taxa).",
+    Reason = "Writes conflict rows into the store; --clear-existing also wipes prior conflicts.",
+    Examples = new[] {
+        "common-names detect-conflicts",
+        "common-names detect-conflicts --clear-existing"
+    })]
 internal sealed class CommonNameDetectConflictsCommand : AsyncCommand<CommonNameDetectConflictsCommand.Settings> {
     public sealed class Settings : CommonSettings {
         [CommandOption("-d|--database <PATH>")]

@@ -19,6 +19,12 @@ using BeastieBot3.Configuration;
 
 namespace BeastieBot3.Iucn;
 
+[CommandInfo("iucn report-taxonomy-consistency", CommandKind.ReadOnly,
+    "Rebuild scientific names from taxonomy components and verify field alignment.",
+    Examples = new[] {
+        "iucn report-taxonomy-consistency",
+        "iucn report-taxonomy-consistency --limit 5000"
+    })]
 public sealed class IucnTaxonomyConsistencyCommand : Command<IucnTaxonomyConsistencyCommand.Settings> {
     public sealed class Settings : CommandSettings {
         [CommandOption("-s|--settings-dir <DIR>")]

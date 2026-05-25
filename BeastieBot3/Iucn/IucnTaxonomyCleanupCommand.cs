@@ -18,6 +18,12 @@ using BeastieBot3.Configuration;
 
 namespace BeastieBot3.Iucn;
 
+[CommandInfo("iucn report-taxonomy-cleanup", CommandKind.ReadOnly,
+    "Identify per-record taxonomy fields that need whitespace normalization or marker cleanup.",
+    Examples = new[] {
+        "iucn report-taxonomy-cleanup",
+        "iucn report-taxonomy-cleanup --limit 10000"
+    })]
 public sealed class IucnTaxonomyCleanupCommand : Command<IucnTaxonomyCleanupCommand.Settings> {
     public sealed class Settings : CommandSettings {
         [CommandOption("-s|--settings-dir <DIR>")]

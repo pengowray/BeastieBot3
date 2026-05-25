@@ -22,6 +22,12 @@ using BeastieBot3.Taxonomy;
 
 namespace BeastieBot3.Iucn;
 
+[CommandInfo("iucn report-col-crosscheck", CommandKind.ReadOnly,
+    "Crosscheck IUCN species against Catalogue of Life for presence, synonymy, and authority alignment.",
+    Examples = new[] {
+        "iucn report-col-crosscheck",
+        "iucn report-col-crosscheck --limit 5000"
+    })]
 public sealed class IucnColCrosscheckCommand : Command<IucnColCrosscheckCommand.Settings> {
     public sealed class Settings : CommandSettings {
         [CommandOption("-s|--settings-dir <DIR>")]

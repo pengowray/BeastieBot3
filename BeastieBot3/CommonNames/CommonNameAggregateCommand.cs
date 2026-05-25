@@ -25,6 +25,14 @@ namespace BeastieBot3.CommonNames;
 /// <summary>
 /// Aggregates common names from all sources (IUCN API, Wikidata, Wikipedia) into the common name store.
 /// </summary>
+[CommandInfo("common-names aggregate", CommandKind.Mutates,
+    "Aggregate common names from sources (IUCN, Wikidata, Wikipedia, COL). Safe to re-run (uses upsert).",
+    Reason = "Aggregates common names from sources via upsert (idempotent).",
+    Examples = new[] {
+        "common-names aggregate",
+        "common-names aggregate --source iucn",
+        "common-names aggregate --limit 1000"
+    })]
 internal sealed class CommonNameAggregateCommand : AsyncCommand<CommonNameAggregateCommand.Settings> {
     public sealed class Settings : CommonSettings {
         [CommandOption("-d|--database <PATH>")]

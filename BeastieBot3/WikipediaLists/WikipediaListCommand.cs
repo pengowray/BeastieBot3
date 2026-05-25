@@ -15,6 +15,13 @@ namespace BeastieBot3.WikipediaLists;
 /// generates wikitext files, writes a generation report + JSON metrics, and
 /// optionally compares against a previous run via <c>--compare</c>.
 /// </summary>
+[CommandInfo("wikipedia generate-lists", CommandKind.ReadOnly,
+    "Generate wikitext for IUCN conservation status lists using YAML definitions and mustache templates.",
+    Reason = "Generates wikitext list output files only.",
+    Examples = new[] {
+        "wikipedia generate-lists",
+        "wikipedia generate-lists --list amphibians-cr"
+    })]
 public sealed class WikipediaListCommand : Command<WikipediaListCommand.Settings> {
     public sealed class Settings : CommonSettings {
         [CommandOption("--database <PATH>")]

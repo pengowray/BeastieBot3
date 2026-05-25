@@ -19,6 +19,12 @@ using BeastieBot3.Configuration;
 
 namespace BeastieBot3.Iucn;
 
+[CommandInfo("iucn report-html-consistency", CommandKind.ReadOnly,
+    "Compare HTML and plain-text assessment fields for normalization inconsistencies.",
+    Examples = new[] {
+        "iucn report-html-consistency",
+        "iucn report-html-consistency --limit 1000"
+    })]
 public sealed class IucnHtmlConsistencyCommand : Command<IucnHtmlConsistencyCommand.Settings> {
     public sealed class Settings : CommandSettings {
         [CommandOption("-s|--settings-dir <DIR>")]
@@ -302,13 +308,11 @@ public sealed class IucnHtmlConsistencyCommand : Command<IucnHtmlConsistencyComm
 
         public HtmlOrdinals(SqliteDataReader reader, IEnumerable<HtmlFieldAlias> aliases) {
             AssessmentId = reader.GetOrdinal("assessmentId");
-            RedlistVersion = reader.GetOrdinal("redlist_version");
             _htmlOrdinals = aliases.ToDictionary(a => a.FieldName, a => reader.GetOrdinal(a.HtmlAlias), StringComparer.OrdinalIgnoreCase);
             _plainOrdinals = aliases.ToDictionary(a => a.FieldName, a => reader.GetOrdinal(a.PlainAlias), StringComparer.OrdinalIgnoreCase);
         }
 
         public int AssessmentId { get; }
-        public int RedlistVersion { get; }
         public int GetHtml(HtmlFieldAlias alias) => _htmlOrdinals[alias.FieldName];
         public int GetPlain(HtmlFieldAlias alias) => _plainOrdinals[alias.FieldName];
     }

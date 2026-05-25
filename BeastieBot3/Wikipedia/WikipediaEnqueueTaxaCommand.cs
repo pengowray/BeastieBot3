@@ -16,6 +16,14 @@ using BeastieBot3.Configuration;
 
 namespace BeastieBot3.Wikipedia;
 
+[CommandInfo("wikipedia enqueue-taxa", CommandKind.Mutates,
+    "Seed the Wikipedia cache with higher-taxon titles from the IUCN taxonomy view (for redirect lookup).",
+    Reason = "Seeds the Wikipedia cache with higher-taxon titles from IUCN.",
+    Examples = new[] {
+        "wikipedia enqueue-taxa",
+        "wikipedia enqueue-taxa --ranks class,order,family",
+        "wikipedia enqueue-taxa --limit 500"
+    })]
 public sealed class WikipediaEnqueueTaxaCommand : Command<WikipediaEnqueueTaxaCommand.Settings> {
     public sealed class Settings : CommonSettings {
         [CommandOption("--cache <FILE>")]

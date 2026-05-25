@@ -51,6 +51,13 @@ public sealed class WikidataCacheFullSettings : CommonSettings {
     public bool ContinueOnSeedFailure { get; init; }
 }
 
+[CommandInfo("wikidata cache-all", CommandKind.Mutates,
+    "Run both the seed and cache steps sequentially.",
+    Reason = "Runs seed + cache-entities sequentially.",
+    Examples = new[] {
+        "wikidata cache-all",
+        "wikidata cache-all --seed-limit 1000 --download-limit 200"
+    })]
 public sealed class WikidataCacheFullCommand : AsyncCommand<WikidataCacheFullSettings> {
     public override async Task<int> ExecuteAsync(CommandContext context, WikidataCacheFullSettings settings, CancellationToken cancellationToken) {
         _ = context;

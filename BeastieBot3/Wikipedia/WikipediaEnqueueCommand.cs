@@ -13,6 +13,13 @@ using BeastieBot3.Wikidata;
 
 namespace BeastieBot3.Wikipedia;
 
+[CommandInfo("wikipedia enqueue-wikidata", CommandKind.Mutates,
+    "Seed the Wikipedia cache with titles discovered via Wikidata enwiki sitelinks.",
+    Reason = "Seeds the Wikipedia cache with titles from Wikidata enwiki sitelinks.",
+    Examples = new[] {
+        "wikipedia enqueue-wikidata",
+        "wikipedia enqueue-wikidata --limit 1000"
+    })]
 public sealed class WikipediaEnqueueCommand : Command<WikipediaEnqueueCommand.Settings> {
     public sealed class Settings : CommonSettings {
         [CommandOption("--cache <FILE>")]

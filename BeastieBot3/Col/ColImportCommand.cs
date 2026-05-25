@@ -14,6 +14,10 @@ using BeastieBot3.Configuration;
 
 namespace BeastieBot3.Col;
 
+[CommandInfo("col import", CommandKind.Destructive,
+    "Import Catalogue of Life ColDP zip archives into individual SQLite databases.",
+    Reason = "Recreates per-archive SQLite databases from scratch with --force.",
+    Examples = new[] { "col import", "col import --force" })]
 public sealed class ColImportCommand : Command<ColImportCommand.Settings> {
     public sealed class Settings : CommandSettings {
         [CommandOption("-s|--settings-dir <DIR>")]

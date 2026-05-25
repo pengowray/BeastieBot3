@@ -45,6 +45,14 @@ public sealed class IucnApiCacheTaxaSettings : CommonSettings {
     public int SleepBetweenRequests { get; init; } = 250;
 }
 
+[CommandInfo("iucn api cache-taxa", CommandKind.Mutates,
+    "Download /api/v4/taxa/sis/{sis_id} payloads into the local API cache.",
+    Reason = "Downloads IUCN /api/v4/taxa payloads into the local cache (idempotent additive).",
+    Examples = new[] {
+        "iucn api cache-taxa",
+        "iucn api cache-taxa --limit 100",
+        "iucn api cache-taxa --failed-only"
+    })]
 public sealed class IucnApiCacheTaxaCommand : AsyncCommand<IucnApiCacheTaxaSettings> {
     public override Task<int> ExecuteAsync(CommandContext context, IucnApiCacheTaxaSettings settings, CancellationToken cancellationToken) {
         _ = context;

@@ -43,6 +43,14 @@ public sealed class IucnApiCacheAssessmentsSettings : CommonSettings {
     public int SleepBetweenRequests { get; init; } = 250;
 }
 
+[CommandInfo("iucn api cache-assessments", CommandKind.Mutates,
+    "Download /api/v4/assessment/{assessment_id} payloads based on the cached taxa backlog.",
+    Reason = "Downloads IUCN /api/v4/assessment payloads into the local cache (idempotent additive).",
+    Examples = new[] {
+        "iucn api cache-assessments",
+        "iucn api cache-assessments --limit 100",
+        "iucn api cache-assessments --failed-only"
+    })]
 public sealed class IucnApiCacheAssessmentsCommand : AsyncCommand<IucnApiCacheAssessmentsSettings> {
     public override Task<int> ExecuteAsync(CommandContext context, IucnApiCacheAssessmentsSettings settings, CancellationToken cancellationToken) {
         _ = context;

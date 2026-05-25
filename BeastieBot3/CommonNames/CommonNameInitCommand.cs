@@ -20,6 +20,15 @@ namespace BeastieBot3.CommonNames;
 /// <summary>
 /// Initializes the common name store, importing taxa from IUCN and caps rules from caps.txt.
 /// </summary>
+[CommandInfo("common-names init", CommandKind.Mutates,
+    "Initialize the common name store with taxa from IUCN and caps rules. Safe to re-run (uses upsert).",
+    Reason = "Initializes the common name store via upsert (idempotent).",
+    Examples = new[] {
+        "common-names init",
+        "common-names init --aggregate",
+        "common-names init --limit 1000",
+        "common-names init --skip-taxa"
+    })]
 internal sealed class CommonNameInitCommand : AsyncCommand<CommonNameInitCommand.Settings> {
     public sealed class Settings : CommonSettings {
         [CommandOption("-d|--database <PATH>")]

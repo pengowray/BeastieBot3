@@ -11,6 +11,9 @@ using System.Threading;
 // Run via: show-paths
 
 namespace BeastieBot3.Infrastructure;
+    [CommandInfo("show-paths", CommandKind.ReadOnly,
+        "Show all key/value pairs from the settings INI file.",
+        Examples = new[] { "show-paths", "show-paths --settings-dir /config" })]
     public sealed class ShowPathsCommand : Command<CommonSettings> {
         public override int Execute(CommandContext context, CommonSettings settings, CancellationToken cancellationToken) {
             var baseDir = settings.SettingsDir ?? AppContext.BaseDirectory;

@@ -47,6 +47,12 @@ public sealed class WikidataWikipediaMismatchReportSettings : CommonSettings {
     public string? CsvOutput { get; init; }
 }
 
+[CommandInfo("wikidata report-wiki-mismatches", CommandKind.ReadOnly,
+    "Report Wikidata entries whose enwiki sitelinks resolve to redirects, disambiguations, or mismatched taxa.",
+    Examples = new[] {
+        "wikidata report-wiki-mismatches",
+        "wikidata report-wiki-mismatches --markdown-output reports/wiki-mismatches.md"
+    })]
 public sealed class WikidataWikipediaMismatchReportCommand : Command<WikidataWikipediaMismatchReportSettings> {
     public override int Execute(CommandContext context, WikidataWikipediaMismatchReportSettings settings, CancellationToken cancellationToken) {
         _ = context;

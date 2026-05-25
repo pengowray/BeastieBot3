@@ -27,6 +27,14 @@ namespace BeastieBot3.CommonNames;
 /// <summary>
 /// Generates reports about common name conflicts and capitalization issues.
 /// </summary>
+[CommandInfo("common-names report", CommandKind.ReadOnly,
+    "Generate reports about common name conflicts and capitalization issues.",
+    Examples = new[] {
+        "common-names report",
+        "common-names report --report all --limit 100",
+        "common-names report --report ambiguous -o reports/ambiguous.md",
+        "common-names report --report caps -o reports/caps.md"
+    })]
 internal sealed class CommonNameReportCommand : AsyncCommand<CommonNameReportCommand.Settings> {
     public sealed class Settings : CommonSettings {
         [CommandOption("-d|--database <PATH>")]

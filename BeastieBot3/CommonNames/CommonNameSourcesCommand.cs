@@ -18,6 +18,9 @@ namespace BeastieBot3.CommonNames;
 /// <summary>
 /// Shows the status of common name data sources - which are available and which have been aggregated.
 /// </summary>
+[CommandInfo("common-names sources", CommandKind.ReadOnly,
+    "Show status of common name data sources - which are available and which have been aggregated.",
+    Examples = new[] { "common-names sources" })]
 internal sealed class CommonNameSourcesCommand : AsyncCommand<CommonNameSourcesCommand.Settings> {
     public sealed class Settings : CommonSettings {
         [CommandOption("-d|--database <PATH>")]

@@ -13,6 +13,12 @@ using BeastieBot3.Configuration;
 
 namespace BeastieBot3.Wikipedia;
 
+[CommandInfo("wikipedia cache-status", CommandKind.ReadOnly,
+    "Show high-level statistics about the local Wikipedia cache database.",
+    Examples = new[] {
+        "wikipedia cache-status",
+        "wikipedia cache-status --cache data/enwiki-cache.sqlite"
+    })]
 public sealed class WikipediaCacheStatusCommand : Command<WikipediaCacheStatusCommand.Settings> {
     public sealed class Settings : CommonSettings {
         [CommandOption("--cache <FILE>")]

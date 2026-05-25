@@ -15,6 +15,10 @@ using BeastieBot3.Configuration;
 
 namespace BeastieBot3.Iucn;
 
+[CommandInfo("iucn import", CommandKind.Destructive,
+    "Import IUCN CSV data from zip archives into the SQLite datastore.",
+    Reason = "Rewrites IUCN SQLite tables from the CSV release; --force drops existing data.",
+    Examples = new[] { "iucn import", "iucn import --force" })]
 public sealed class IucnImportCommand : Command<IucnImportCommand.Settings> {
     public sealed class Settings : CommandSettings {
         [CommandOption("-s|--settings-dir <DIR>")]

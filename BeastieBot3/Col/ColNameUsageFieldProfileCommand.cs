@@ -54,6 +54,13 @@ namespace BeastieBot3.Col;
 // - [ ] Check urls
 // - [ ] Auto archive urls in wayback machine
 
+[CommandInfo("col report-nameusage-fields", CommandKind.ReadOnly,
+    "Profile COL nameusage fields for whitespace, ASCII coverage, and other text anomalies.",
+    Examples = new[] {
+        "col report-nameusage-fields",
+        "col report-nameusage-fields --columns scientificName,authorship",
+        "col report-nameusage-fields --limit 100000"
+    })]
 public sealed class ColNameUsageFieldProfileCommand : Command<ColNameUsageFieldProfileCommand.Settings> {
     public sealed class Settings : CommandSettings {
         [CommandOption("-s|--settings-dir <DIR>")]
