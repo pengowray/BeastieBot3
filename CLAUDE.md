@@ -10,7 +10,9 @@ dotnet run --project BeastieBot3/BeastieBot3.csproj -- [command]    # run a comm
 dotnet run --project BeastieBot3/BeastieBot3.csproj -- show-paths   # verify INI config is loading correctly
 ```
 
-No test suite exists — verify changes by building and running the relevant CLI command.
+No unit-test suite exists — verify CLI changes by building and running the relevant command.
+
+For the local web UI (`serve`), read-only Playwright smoke tests live in `e2e/` (`cd e2e && npm install && npm test`). They launch `serve` on a throwaway port and only issue read-only GETs — a network guard aborts any `POST /api/jobs` so they never run a command, download, or mutate anything.
 
 ## Project Overview
 
