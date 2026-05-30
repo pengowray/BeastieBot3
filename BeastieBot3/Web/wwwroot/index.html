@@ -66,6 +66,48 @@
   </section>
 
   <section class="card">
+    <h2>Taxa grouping</h2>
+    <p class="muted small">
+      Pick a parent group and a child rank to see per-sub-taxon IUCN counts (the same numbers the
+      generated summary table uses). Tick existing groups to set them as the parent's sub-lists.
+    </p>
+    <div class="filter-bar">
+      <label>Parent <select id="grp-parent"></select></label>
+      <label>Child rank
+        <select id="grp-rank">
+          <option value="class" selected>class</option>
+          <option value="order">order</option>
+          <option value="family">family</option>
+          <option value="phylum">phylum</option>
+        </select>
+      </label>
+      <button id="grp-load" class="ghost">Show counts</button>
+      <button id="grp-save" class="ghost" hidden>Save sub-groups</button>
+    </div>
+    <p class="muted small" id="grp-msg"></p>
+    <div id="grp-counts"></div>
+  </section>
+
+  <section class="card">
+    <h2>Rules editor (draft &rarr; apply)</h2>
+    <p class="muted small" id="rules-locations">Loading locations&hellip;</p>
+    <div class="filter-bar">
+      <label>File <select id="rules-file"></select></label>
+      <button id="rules-reload" class="ghost">Reload</button>
+      <button id="rules-save" class="ghost">Save draft</button>
+      <button id="rules-revert" class="ghost">Revert from source</button>
+    </div>
+    <textarea id="rules-text" spellcheck="false" style="width:100%;min-height:320px;font-family:monospace;white-space:pre;" placeholder="Select a file…"></textarea>
+    <p class="muted small" id="rules-msg"></p>
+    <div class="filter-bar">
+      <button id="rules-diff" class="ghost">Diff draft vs source</button>
+      <button id="rules-apply" class="ghost">Apply changed files to source</button>
+      <button id="rules-run" class="ghost">Run generate-lists (from source)</button>
+    </div>
+    <div id="rules-diff-out"></div>
+  </section>
+
+  <section class="card">
     <h2>Settings (paths.ini)</h2>
     <p class="muted">Resolved paths from <code id="paths-source">paths.ini</code>.</p>
     <button id="load-paths" class="ghost">Load paths</button>
@@ -93,5 +135,6 @@
 <script src="/ansi.js"></script>
 <script src="/markdown.js"></script>
 <script src="/app.js"></script>
+<script src="/rules-editor.js"></script>
 </body>
 </html>

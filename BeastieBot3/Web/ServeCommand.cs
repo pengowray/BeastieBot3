@@ -109,6 +109,8 @@ internal sealed class ServeCommand : AsyncCommand<ServeCommand.Settings> {
         app.MapCommandsEndpoints();
         app.MapFlowsEndpoints();
         app.MapFilesEndpoints();
+        app.MapRulesEditorEndpoints();
+        app.MapTaxaGroupingEndpoints();
 
         AnsiConsole.MarkupLine($"[green]BeastieBot3 web UI[/] listening on [cyan]{url}[/]");
         AnsiConsole.MarkupLine($"[grey]Job history:[/] {jobHistoryPath}");

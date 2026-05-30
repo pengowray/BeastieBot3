@@ -61,6 +61,15 @@ namespace BeastieBot3.Configuration;
         public string? GetCommonNameStorePath() =>
             _reader.Get("Datastore:common_names_sqlite") ?? _reader.Get("common_names_sqlite");
 
+        /// <summary>
+        /// Explicit path to the SOURCE rules/ directory (the editable copy in the repo, not the
+        /// build-output copy the app reads at runtime). Used by the web rule editor's draft/apply
+        /// flow. Set [Dirs] rules_source_dir (or [Datastore] rules_source_dir) in paths.ini. When
+        /// unset, the editor falls back to walking up for BeastieBot3.csproj — see RulesPaths.
+        /// </summary>
+        public string? GetRulesSourceDir() =>
+            _reader.Get("Dirs:rules_source_dir") ?? _reader.Get("Datastore:rules_source_dir") ?? _reader.Get("rules_source_dir");
+
         public string ResolveIucnDatabasePath(string? overridePath) {
             var configuredPath = !string.IsNullOrWhiteSpace(overridePath)
                 ? overridePath
