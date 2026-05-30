@@ -29,13 +29,17 @@ internal sealed class WikipediaListGenerator {
     private readonly CommonNameProvider? _commonNameProvider;
     private readonly StoreBackedCommonNameProvider? _storeBackedProvider;
     private readonly ColTaxonomyEnricher? _colEnricher;
+    // Per-child status-count aggregator for parent lists (summary table + count sentences).
+    // Optional: when null, parent lists degrade gracefully (no summary table).
+    private readonly IucnChartDataBuilder? _chartData;
 
     public WikipediaListGenerator(
         IucnListQueryService queryService,
         WikipediaTemplateRenderer templateRenderer,
         LegacyTaxaRuleList legacyRules,
         CommonNameProvider? commonNameProvider,
-        TaxonRulesService? taxonRules = null) {
+        TaxonRulesService? taxonRules = null,
+        IucnChartDataBuilder? chartData = null) {
         _queryService = queryService ?? throw new ArgumentNullException(nameof(queryService));
         _templateRenderer = templateRenderer ?? throw new ArgumentNullException(nameof(templateRenderer));
         _legacyRules = legacyRules ?? throw new ArgumentNullException(nameof(legacyRules));
@@ -43,6 +47,7 @@ internal sealed class WikipediaListGenerator {
         _storeBackedProvider = null;
         _colEnricher = null;
         _taxonRules = taxonRules;
+        _chartData = chartData;
     }
 
     /// <summary>
@@ -54,7 +59,8 @@ internal sealed class WikipediaListGenerator {
         LegacyTaxaRuleList legacyRules,
         StoreBackedCommonNameProvider? storeBackedProvider,
         ColTaxonomyEnricher? colEnricher = null,
-        TaxonRulesService? taxonRules = null) {
+        TaxonRulesService? taxonRules = null,
+        IucnChartDataBuilder? chartData = null) {
         _queryService = queryService ?? throw new ArgumentNullException(nameof(queryService));
         _templateRenderer = templateRenderer ?? throw new ArgumentNullException(nameof(templateRenderer));
         _legacyRules = legacyRules ?? throw new ArgumentNullException(nameof(legacyRules));
@@ -62,6 +68,7 @@ internal sealed class WikipediaListGenerator {
         _storeBackedProvider = storeBackedProvider;
         _colEnricher = colEnricher;
         _taxonRules = taxonRules;
+        _chartData = chartData;
     }
 
     public WikipediaListResult Generate(
@@ -183,6 +190,11 @@ internal sealed class WikipediaListGenerator {
             ?? new List<GroupingLevelDefinition>());
         var display = MergeDisplayPreferences(defaults.Display, definition.Display);
 
+        // A parent list (one with resolved phylogenetic children) renders a summary table + bare-bones
+        // child sections instead of the flat species body. Requires the count aggregator.
+        var isParent = definition.SubLists.Count > 0 && _chartData != null;
+        var parentTableEmitted = false;
+
         var totalHeadingCount = 0;
         foreach (var section in sections) {
             if (section.Records.Count == 0) {
@@ -199,13 +211,30 @@ internal sealed class WikipediaListGenerator {
                 builder.AppendLine();
             }
 
+            int sectionHeadingCount;
+            string sectionBody;
             var autoSplitConfig = ResolveAutoSplitConfig(definition, defaults);
-            var (sectionBody, sectionHeadingCount) = BuildSectionBody(
-                section.Records, grouping, display, section.StatusContext, definition.CustomGroups,
-                autoSplit: autoSplitConfig);
+            if (isParent) {
+                (sectionBody, sectionHeadingCount) = BuildParentSectionBody(
+                    section, definition, grouping, display, autoSplitConfig, datasetYear,
+                    startHeading: 3, includeTable: !parentTableEmitted);
+                parentTableEmitted = true;
+            } else {
+                (sectionBody, sectionHeadingCount) = BuildSectionBody(
+                    section.Records, grouping, display, section.StatusContext, definition.CustomGroups,
+                    autoSplit: autoSplitConfig);
+            }
             totalHeadingCount += sectionHeadingCount;
             builder.AppendLine(sectionBody);
             builder.AppendLine();
+        }
+
+        // Non-phylogenetic cross-references (e.g. marine mammals under mammals) render once as a plain
+        // bullet block — never as count rows or nested phylogenetic sub-lists.
+        if (isParent && definition.SeeAlso.Count > 0) {
+            builder.AppendLine(BuildRelatedListsBlock(definition.SeeAlso));
+            builder.AppendLine();
+            totalHeadingCount++;
         }
 
         builder.AppendLine(_templateRenderer.Render(footerTemplate, context).TrimEnd());
@@ -221,7 +250,8 @@ internal sealed class WikipediaListGenerator {
             ListId = definition.Id,
             FileName = Path.GetFileName(outputPath),
             TotalTaxa = totalCount,
-            HeadingCount = totalHeadingCount
+            HeadingCount = totalHeadingCount,
+            IsParent = isParent
         };
         WikitextMetricsCollector.CollectFromWikitext(content, metrics);
         WikitextMetricsCollector.DetectProblems(metrics);
@@ -244,12 +274,34 @@ internal sealed class WikipediaListGenerator {
             return "global";
         }
 
-        var ordered = definition.Filters
+        var parts = definition.Filters
             .OrderBy(filter => RankOrder.GetValueOrDefault(filter.Rank?.Trim().ToLowerInvariant() ?? "", 99))
-            .Select(filter => filter.Value.Trim())
+            .Select(FilterScopeLabel)
+            .Where(s => !string.IsNullOrWhiteSpace(s))
             .ToList();
 
-        return string.Join(" › ", ordered);
+        return parts.Count > 0 ? string.Join(" › ", parts!) : "global";
+    }
+
+    /// <summary>
+    /// A human-readable breadcrumb segment for one filter. Handles System tags, multi-value (Values)
+    /// includes, and exclude-only filters so virtual parents (Fish = several classes; Invertebrates =
+    /// Animalia minus Chordata) and System-filter groups (marine mammals) never render blank segments.
+    /// </summary>
+    private static string? FilterScopeLabel(TaxonFilterDefinition filter) {
+        if (!string.IsNullOrWhiteSpace(filter.System)) {
+            return filter.System.Trim();
+        }
+        if (filter.Values is { Count: > 0 }) {
+            var joined = string.Join("/", filter.Values.Select(v => v.Trim()).Where(v => v.Length > 0));
+            return string.IsNullOrWhiteSpace(joined) ? null : joined;
+        }
+        var value = filter.Value?.Trim();
+        var hasExclude = filter.Exclude is { Count: > 0 };
+        if (!string.IsNullOrWhiteSpace(value)) {
+            return hasExclude ? $"{value} (excl. {string.Join(", ", filter.Exclude!)})" : value;
+        }
+        return hasExclude ? $"excl. {string.Join(", ", filter.Exclude!)}" : null;
     }
 
     private static List<SectionRuntime> PrepareSections(WikipediaListDefinition definition) {
@@ -332,7 +384,7 @@ internal sealed class WikipediaListGenerator {
              || (autoSplit != null && autoSplit.Enabled));
 
         if (needsEnrichment) {
-            return BuildEnrichedSectionBody(filteredRecords, grouping, display, statusContext, autoSplit);
+            return BuildEnrichedSectionBody(filteredRecords, grouping, display, statusContext, startHeading, autoSplit);
         }
 
         var levels = grouping
@@ -357,6 +409,279 @@ internal sealed class WikipediaListGenerator {
         var headingCount = 0;
         AppendTree(builder, tree, startHeading, display, statusContext, ref headingCount, grouping, groupingIndex: 0, otherContext: null, parentTaxon: null);
         return (builder.ToString().TrimEnd(), headingCount);
+    }
+
+    // ==================== Parent (nested) list rendering ====================
+
+    /// <summary>
+    /// Render a PARENT list section: a full EX..DD summary table of child sub-taxa (once per list) plus
+    /// a bare-bones summary block per phylogenetic child (heading + {{main}} + a status-scoped count
+    /// sentence). The parent links to and summarizes its children; it never re-queries or inlines their
+    /// species. Counts come from the canonical <see cref="IucnChartDataBuilder.BuildChildBreakdown"/>.
+    /// </summary>
+    private (string Body, int HeadingCount) BuildParentSectionBody(
+        SectionRuntime section,
+        WikipediaListDefinition definition,
+        IReadOnlyList<GroupingLevelDefinition> grouping,
+        DisplayPreferences display,
+        AutoSplitConfig? autoSplit,
+        string datasetYear,
+        int startHeading,
+        bool includeTable) {
+
+        var sb = new StringBuilder();
+        var headingCount = 0;
+
+        // Determine the rank that distinguishes children (e.g. "class") and each child's value at it.
+        var childRank = DeriveChildRank(definition.SubLists);
+        var linkByValue = new Dictionary<string, ChildListLink>(StringComparer.Ordinal);
+        var orderedKeys = new List<string>();
+        foreach (var link in definition.SubLists) {
+            var val = ChildDiscriminatingValue(link, childRank);
+            if (val != null && !linkByValue.ContainsKey(val)) {
+                linkByValue[val] = link;
+                orderedKeys.Add(val);
+            }
+        }
+
+        // One GROUP BY scan over the parent scope, grouped by the child rank column. Curated children
+        // are seeded so zero-count children still appear; other classes/orders under the parent appear too.
+        Dictionary<string, IReadOnlyList<StatusCount>>? breakdown = null;
+        if (childRank != null && _chartData != null) {
+            breakdown = _chartData.BuildChildBreakdown(definition.Filters, childRank, orderedKeys);
+        }
+
+        if (includeTable && breakdown is { Count: > 0 }) {
+            sb.AppendLine(BuildChildSummaryTable(breakdown, orderedKeys, linkByValue));
+            sb.AppendLine();
+        }
+
+        var statusText = !string.IsNullOrWhiteSpace(definition.StatusText)
+            ? definition.StatusText
+            : section.Definition.Heading.ToLowerInvariant();
+
+        // One bare-bones block per phylogenetic child, scoped to THIS section's statuses.
+        foreach (var link in definition.SubLists) {
+            var val = ChildDiscriminatingValue(link, childRank);
+            IReadOnlyList<StatusCount>? row = null;
+            if (val != null && breakdown != null) breakdown.TryGetValue(val, out row);
+            var n = row != null ? SectionStatusTotal(row, section.StatusSet) : 0;
+            if (n == 0) continue; // omit empty child SECTIONS — the child still appears as a table row
+
+            var markup = new string('=', Math.Min(startHeading, 6));
+            sb.AppendLine($"{markup} {link.DisplayName} {markup}");
+            headingCount++;
+            sb.AppendLine($"{{{{main|{link.WikiTitle}}}}}");
+            var adj = string.IsNullOrWhiteSpace(link.Adjective) ? string.Empty : link.Adjective + " ";
+            // Append a possibly-extinct breakdown only when this section actually covers CR(PE)/CR(PEW)
+            // and the counts are nonzero.
+            var pe = section.StatusSet.Contains("CR(PE)") ? RowCount(row!, "CR(PE)") : 0;
+            var pew = section.StatusSet.Contains("CR(PEW)") ? RowCount(row!, "CR(PEW)") : 0;
+            sb.AppendLine($"As of {datasetYear}, the IUCN Red List lists {NewspaperNumber(n)} {statusText} {adj}species{PossiblyExtinctClause(pe, pew)}.");
+            sb.AppendLine();
+        }
+
+        // Orphan sub-taxa: parent-scope taxa with NO dedicated sub-list. Each gets its own heading
+        // (a peer of the linked children, e.g. === Cephalopoda ===) with a flat species list beneath —
+        // no "Other" wrapper heading and no deeper order/family nesting at the top level. Nothing is
+        // dropped, so the sub-lists + orphan sections together cover the whole parent scope.
+        if (childRank != null) {
+            var selector = BuildSelector(childRank);
+            var childValueSet = new HashSet<string>(orderedKeys, StringComparer.Ordinal);
+            var orphanGroups = section.Records
+                .Where(r => !IsRegionalAssessment(r))
+                .Where(r => {
+                    var v = TaxonFilterSql.NormalizeValue(childRank, selector(r));
+                    return v == null || !childValueSet.Contains(v);
+                })
+                .GroupBy(r => selector(r) ?? string.Empty)
+                .OrderByDescending(g => g.Count())
+                .ThenBy(g => g.Key, StringComparer.Ordinal);
+
+            var markup = new string('=', Math.Min(startHeading, 6));
+            foreach (var grp in orphanGroups) {
+                var heading = string.IsNullOrWhiteSpace(grp.Key) ? "Unassigned" : ToTitleCase(grp.Key);
+                sb.AppendLine($"{markup} {heading} {markup}");
+                headingCount++;
+                // Reuse the standard list-generation path so an orphan class splits into orders/families
+                // (and auto-splits) exactly when a normal list would — no bespoke rendering for these.
+                var (body, hc) = BuildSectionBody(
+                    grp.ToList(), grouping, display, section.StatusContext, definition.CustomGroups,
+                    startHeading: Math.Min(startHeading, 6) + 1, autoSplit: autoSplit);
+                headingCount += hc;
+                sb.AppendLine(body);
+                sb.AppendLine();
+            }
+        }
+
+        return (sb.ToString().TrimEnd(), headingCount);
+    }
+
+    // Soft highlight tints for the critically-endangered family columns (PE/PEW/CR) and the CR-total.
+    private const string CrCellStyle = "style=\"background:#fce8e6\"|";
+    private const string CrTotalStyle = "style=\"background:#f8d7da\"|";
+
+    private static bool IsCrFamily(string code) =>
+        code is "CR" or "CR(PE)" or "CR(PEW)";
+
+    // Header tooltip text for a status entry (pure CR gets an explicit exclusion note).
+    private static string StatusTooltip(ChartStatusEntry e) =>
+        e.Code == "CR" ? "Critically Endangered (excluding possibly-extinct)" : e.Label;
+
+    /// <summary>
+    /// Build the per-child summary wikitable: a single sortable header row (so column sorting works),
+    /// the full EX..DD breakdown that sums to Total, then a derived <em>CR total</em> column placed at
+    /// the far right so it never disturbs the additive columns. PE/PEW/CR cells are tinted; a status-code
+    /// legend (the pie-chart replacement) follows the table. Curated children first, then the remaining
+    /// sub-taxa by descending total, with a pinned Total row.
+    /// </summary>
+    private string BuildChildSummaryTable(
+        Dictionary<string, IReadOnlyList<StatusCount>> breakdown,
+        IReadOnlyList<string> orderedCuratedKeys,
+        IReadOnlyDictionary<string, ChildListLink> linkByValue) {
+
+        var entries = ChartStatusOrder.Entries;
+        var sb = new StringBuilder();
+        sb.AppendLine("{| class=\"wikitable sortable\"");
+
+        // Single header row: abbr tooltips on every code, CR family tinted; Total, then CR total last.
+        var header = new StringBuilder("! Group");
+        foreach (var e in entries) {
+            var hl = IsCrFamily(e.Code) ? CrCellStyle : "";
+            header.Append($" !! {hl}{{{{abbr|{e.Code}|{StatusTooltip(e)}}}}}");
+        }
+        header.Append(" !! Total");
+        header.Append($" !! {CrTotalStyle}{{{{abbr|CR total|All critically endangered, including CR(PE) and CR(PEW)}}}}");
+        sb.AppendLine(header.ToString());
+
+        var totals = new int[entries.Count];
+        var grandTotal = 0;
+        var grandCr = 0;
+        var emitted = new HashSet<string>(StringComparer.Ordinal);
+
+        void EmitRow(string key, IReadOnlyList<StatusCount> row) {
+            sb.AppendLine("|-");
+            var label = linkByValue.TryGetValue(key, out var link)
+                ? $"[[{link.WikiTitle}|{link.DisplayName}]]"
+                : ToTitleCase(key);
+            var cells = new StringBuilder($"| {label}");
+            var rowTotal = 0;
+            var rowCr = 0;
+            for (var i = 0; i < entries.Count; i++) {
+                var c = row[i].Count;
+                var hl = IsCrFamily(entries[i].Code) ? CrCellStyle : "";
+                cells.Append($" || {hl}{c}");
+                totals[i] += c;
+                rowTotal += c;
+                if (IsCrFamily(entries[i].Code)) rowCr += c;
+            }
+            cells.Append($" || {rowTotal}");
+            cells.Append($" || {CrTotalStyle}{rowCr}");
+            sb.AppendLine(cells.ToString());
+            grandTotal += rowTotal;
+            grandCr += rowCr;
+        }
+
+        foreach (var key in orderedCuratedKeys) {
+            if (breakdown.TryGetValue(key, out var row) && emitted.Add(key)) EmitRow(key, row);
+        }
+        foreach (var kv in breakdown
+            .Where(k => !emitted.Contains(k.Key))
+            .OrderByDescending(k => k.Value.Sum(s => s.Count))
+            .ThenBy(k => k.Key, StringComparer.Ordinal)) {
+            EmitRow(kv.Key, kv.Value);
+            emitted.Add(kv.Key);
+        }
+
+        sb.AppendLine("|- class=\"sortbottom\"");
+        var totalCells = new StringBuilder("! Total");
+        for (var i = 0; i < entries.Count; i++) {
+            var hl = IsCrFamily(entries[i].Code) ? CrCellStyle : "";
+            totalCells.Append($" !! {hl}{totals[i]}");
+        }
+        totalCells.Append($" !! {grandTotal}");
+        totalCells.Append($" !! {CrTotalStyle}{grandCr}");
+        sb.AppendLine(totalCells.ToString());
+        sb.AppendLine("|}");
+        sb.Append(BuildStatusLegend());
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// Reader-facing key to the status columns — the explanatory text that replaces the old pie charts.
+    /// </summary>
+    private static string BuildStatusLegend() {
+        return
+            "''Conservation status'' ([[IUCN Red List]]): " +
+            "[[Extinct]] (EX), [[Extinct in the wild]] (EW), " +
+            "[[Critically endangered]] (CR) — shown split into possibly extinct (PE), " +
+            "possibly extinct in the wild (PEW), and other critically endangered; " +
+            "[[Endangered species|Endangered]] (EN), [[Vulnerable species|Vulnerable]] (VU), " +
+            "[[Near-threatened species|Near threatened]] (NT), [[Least-concern species|Least concern]] (LC), " +
+            "[[Data deficient]] (DD). " +
+            "The category columns (EX–DD) add up to ''Total''; the ''CR total'' column on the right " +
+            "is the sum of CR, CR(PE) and CR(PEW).";
+    }
+
+    /// <summary>The finest rank-based single-value filter the children carry (e.g. "class" for insects/gastropods).</summary>
+    private static string? DeriveChildRank(IReadOnlyList<ChildListLink> children) {
+        string? best = null;
+        var bestOrder = -1;
+        foreach (var link in children) {
+            foreach (var f in link.Filters) {
+                if (!string.IsNullOrWhiteSpace(f.System) || string.IsNullOrWhiteSpace(f.Value)) continue;
+                var rank = f.Rank?.Trim().ToLowerInvariant();
+                if (rank == null || !RankOrder.TryGetValue(rank, out var ord)) continue;
+                if (ord > bestOrder) { bestOrder = ord; best = rank; }
+            }
+        }
+        return best;
+    }
+
+    /// <summary>A child's normalized value at the parent's child rank (e.g. "INSECTA"), matching the breakdown keys.</summary>
+    private static string? ChildDiscriminatingValue(ChildListLink link, string? childRank) {
+        if (childRank == null) return null;
+        foreach (var f in link.Filters) {
+            if (!string.IsNullOrWhiteSpace(f.System)) continue;
+            if (!string.Equals(f.Rank?.Trim(), childRank, StringComparison.OrdinalIgnoreCase)) continue;
+            if (string.IsNullOrWhiteSpace(f.Value)) continue;
+            return TaxonFilterSql.NormalizeValue(childRank, f.Value);
+        }
+        return null;
+    }
+
+    /// <summary>Sum a child's breakdown row over the codes this section covers (e.g. CR+CR(PE)+CR(PEW) for a CR list).</summary>
+    private static int SectionStatusTotal(IReadOnlyList<StatusCount> row, IReadOnlyCollection<string> sectionStatusCodes) {
+        var set = new HashSet<string>(sectionStatusCodes, StringComparer.OrdinalIgnoreCase);
+        return row.Where(sc => set.Contains(sc.Code)).Sum(sc => sc.Count);
+    }
+
+    /// <summary>Count for one status code in a breakdown row (0 if absent).</summary>
+    private static int RowCount(IReadOnlyList<StatusCount> row, string code) =>
+        row.FirstOrDefault(sc => sc.Code == code)?.Count ?? 0;
+
+    /// <summary>
+    /// A trailing ", including N possibly extinct [and M possibly extinct in the wild]" clause for a
+    /// child count sentence. Empty when both counts are zero; omits whichever of PE/PEW is zero.
+    /// </summary>
+    private string PossiblyExtinctClause(int pe, int pew) {
+        if (pe > 0 && pew > 0)
+            return $", including {NewspaperNumber(pe)} ''possibly extinct'' and {NewspaperNumber(pew)} ''possibly extinct in the wild''";
+        if (pe > 0)
+            return $", including {NewspaperNumber(pe)} ''possibly extinct''";
+        if (pew > 0)
+            return $", including {NewspaperNumber(pew)} ''possibly extinct in the wild''";
+        return string.Empty;
+    }
+
+    /// <summary>Plain "Related lists" bullet block for non-phylogenetic see-also cross-references.</summary>
+    private static string BuildRelatedListsBlock(IReadOnlyList<ChildListLink> seeAlso) {
+        var sb = new StringBuilder();
+        sb.AppendLine("== Related lists ==");
+        foreach (var link in seeAlso) {
+            sb.AppendLine($"* [[{link.WikiTitle}|{link.DisplayName}]]");
+        }
+        return sb.ToString().TrimEnd();
     }
 
     /// <summary>
@@ -428,7 +753,7 @@ internal sealed class WikipediaListGenerator {
              || (autoSplit != null && autoSplit.Enabled));
 
         if (needsEnrichment) {
-            return BuildEnrichedSectionBody(records, grouping, display, statusContext, autoSplit);
+            return BuildEnrichedSectionBody(records, grouping, display, statusContext, startHeading, autoSplit);
         }
 
         var levels = grouping
@@ -606,6 +931,7 @@ internal sealed class WikipediaListGenerator {
         IReadOnlyList<GroupingLevelDefinition> grouping,
         DisplayPreferences display,
         string? statusContext,
+        int startHeading = 3,
         AutoSplitConfig? autoSplit = null) {
 
         // Enrich records with COL taxonomy
@@ -631,16 +957,16 @@ internal sealed class WikipediaListGenerator {
         var tree = TaxonomyTreeBuilder.Build(enrichedRecords, levels, shouldSkip, autoSplitOptions);
         var builder = new StringBuilder();
         var headingCount = 0;
-        AppendEnrichedTree(builder, tree, startHeading: 3, display, statusContext, ref headingCount, grouping, groupingIndex: 0, otherContext: null, parentTaxon: null);
+        AppendEnrichedTree(builder, tree, startHeading, display, statusContext, ref headingCount, grouping, groupingIndex: 0, otherContext: null, parentTaxon: null);
         return (builder.ToString().TrimEnd(), headingCount);
     }
 
     private void AppendEnrichedTree(
-        StringBuilder builder, 
-        TaxonomyTreeNode<EnrichedSpeciesRecord> node, 
-        int startHeading, 
-        DisplayPreferences display, 
-        string? statusContext, 
+        StringBuilder builder,
+        TaxonomyTreeNode<EnrichedSpeciesRecord> node,
+        int startHeading,
+        DisplayPreferences display,
+        string? statusContext,
         ref int headingCount) {
         AppendEnrichedTree(builder, node, startHeading, display, statusContext, ref headingCount, grouping: null, groupingIndex: 0, otherContext: null, parentTaxon: null);
     }
@@ -685,6 +1011,9 @@ internal sealed class WikipediaListGenerator {
                 builder.AppendLine(heading.CommonNameSentence);
             } else if (!string.IsNullOrWhiteSpace(heading.MainLink) && !IsOtherOrUnknownHeading(headingText)) {
                 builder.AppendLine($"{{{{main|{heading.MainLink}}}}}");
+            }
+            if (!string.IsNullOrWhiteSpace(heading.Description)) {
+                builder.AppendLine(heading.Description);
             }
 
             // Detect if this is an "Other" bucket
@@ -1148,6 +1477,9 @@ internal sealed class WikipediaListGenerator {
                 builder.AppendLine(heading.CommonNameSentence);
             } else if (!string.IsNullOrWhiteSpace(heading.MainLink) && !IsOtherOrUnknownHeading(headingText)) {
                 builder.AppendLine($"{{{{main|{heading.MainLink}}}}}");
+            }
+            if (!string.IsNullOrWhiteSpace(heading.Description)) {
+                builder.AppendLine(heading.Description);
             }
 
             // Detect if this is an "Other" bucket
@@ -1642,7 +1974,7 @@ internal sealed class WikipediaListGenerator {
         return builder.ToString();
     }
 
-    private readonly record struct HeadingInfo(string Text, string? MainLink, string? CommonNameSentence = null);
+    private readonly record struct HeadingInfo(string Text, string? MainLink, string? CommonNameSentence = null, string? Description = null);
     
     /// <summary>
     /// Context for items within an "Other" bucket, tracking which rank values need annotation.
@@ -1746,7 +2078,26 @@ internal sealed class WikipediaListGenerator {
         // --- Build common name sentence ---
         var sentence = BuildCommonNameSentence(displayName, rank, commonName, wikilinkTarget);
 
-        return new HeadingInfo(headingText, null, sentence);
+        // --- Revived comprises/blurb grey-text line (legacy TaxonHeaderBlurb.GrayText) ---
+        var description = FormatTaxonDescription(yamlRule);
+
+        return new HeadingInfo(headingText, null, sentence, description);
+    }
+
+    /// <summary>
+    /// Build the optional descriptive line under a heading from a taxon rule's <c>blurb</c>/<c>comprises</c>.
+    /// <c>blurb</c> is emitted as authored (already a sentence, e.g. "Includes tree frogs and allies");
+    /// <c>comprises</c> becomes an italic "Comprises X." line. Returns null when neither is authored.
+    /// </summary>
+    private static string? FormatTaxonDescription(TaxonRule? rule) {
+        if (rule is null) return null;
+        if (!string.IsNullOrWhiteSpace(rule.Blurb)) {
+            return rule.Blurb.Trim();
+        }
+        if (!string.IsNullOrWhiteSpace(rule.Comprises)) {
+            return $"''Comprises {rule.Comprises.Trim()}.''";
+        }
+        return null;
     }
     
     /// <summary>

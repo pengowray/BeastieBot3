@@ -234,6 +234,32 @@ groups:
       - rank: class
         value: Arachnida
 
+  # ==================== VIRTUAL PARENTS (nested lists) ====================
+  # Parent groups aggregate several leaf groups: they render a per-child summary table + bare-bones
+  # sections + links DOWN to the child lists, instead of a flat species body. See docs/wikipedia-list-formatting.md.
+
+  # Invertebrates = all animals except chordates (true paraphyly → needs the exclude filter).
+  invertebrates:
+    name: "Invertebrates"
+    adjective: "invertebrate"
+    filters:
+      - rank: kingdom
+        value: Animalia
+      - rank: phylum
+        exclude: [Chordata]
+    children: [insects, gastropods, bivalves, crustaceans, corals, arachnids]
+
+  # Fish = the five fish classes (no single Linnaean class). Multi-class include, no exclude needed.
+  fish:
+    name: "Fish"
+    adjective: "fish"
+    display:
+      listing_style: CommonNameOnly
+    filters:
+      - rank: class
+        values: [Actinopterygii, Chondrichthyes, Myxini, Petromyzonti, Sarcopterygii]
+    children: [ray-finned-fishes, sharks-rays]
+
   # ==================== ANIMALIA - KINGDOM LEVEL ====================
   animals:
     name: "Animals"

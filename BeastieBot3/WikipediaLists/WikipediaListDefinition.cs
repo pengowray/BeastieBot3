@@ -73,7 +73,51 @@ internal sealed class WikipediaListDefinition {
     /// Auto-split configuration for this list. Overrides defaults if specified.
     /// </summary>
     public AutoSplitConfig? AutoSplit { get; init; }
+
+    /// <summary>
+    /// Resolved phylogenetic child lists this list summarizes and links down to (e.g.
+    /// invertebrates-cr → insects-cr, gastropods-cr). Empty for ordinary leaf lists. Populated by a
+    /// post-expansion pass in the loader and only for children that actually generate (same preset).
+    /// A non-empty value makes this a "parent" list (summary table + bare-bones child sections).
+    /// </summary>
+    public List<ChildListLink> SubLists { get; } = new();
+
+    /// <summary>
+    /// Resolved non-phylogenetic cross-reference lists (e.g. mammals → marine-mammals). Rendered as a
+    /// plain "Related lists" bullet block, NOT as nested phylogenetic sub-lists or count rows.
+    /// </summary>
+    public List<ChildListLink> SeeAlso { get; } = new();
 }
+
+/// <summary>
+/// How a child reference is rendered under a parent list.
+/// </summary>
+internal enum GroupingKind {
+    /// <summary>Phylogenetic decomposition: gets a summary-table row + a bare-bones summary section.</summary>
+    Phylogenetic,
+    /// <summary>Non-phylogenetic cross-reference: a plain bullet link under "Related lists".</summary>
+    SeeAlso
+}
+
+/// <summary>
+/// A resolved link from a parent list to one already-generated child list. The child remains its own
+/// independently-generated file; the parent only summarizes counts and links to it. Built by the
+/// loader's post-expansion pass, so <see cref="WikiTitle"/>/<see cref="Filters"/> come from the
+/// child's own expanded definition (no second generation pass, no DB hit).
+/// </summary>
+/// <param name="Id">Child list id, e.g. "insects-cr".</param>
+/// <param name="DisplayName">Child taxa-group display name, e.g. "Insects".</param>
+/// <param name="Adjective">Child taxa-group adjective for prose, e.g. "insect" (may be empty).</param>
+/// <param name="WikiTitle">Article title for [[...]] links, derived from the child OutputFile.</param>
+/// <param name="Filters">Child taxa-group filters — used to derive the child rank/value for the summary table.</param>
+/// <param name="Kind">Phylogenetic (table row + section) or SeeAlso (bullet link).</param>
+internal sealed record ChildListLink(
+    string Id,
+    string DisplayName,
+    string Adjective,
+    string WikiTitle,
+    List<TaxonFilterDefinition> Filters,
+    GroupingKind Kind);
 
 /// <summary>
 /// A custom group for family-based grouping.
@@ -132,7 +176,16 @@ internal sealed class TaxonFilterDefinition {
     /// Multiple values to match with OR logic. If provided, takes precedence over single Value.
     /// </summary>
     public List<string>? Values { get; init; }
-    
+
+    /// <summary>
+    /// Values to EXCLUDE for this rank (NULL-safe NOT IN). Combinable with Value/Values:
+    /// the include clause (if any) is applied first, then matching rows in Exclude are removed.
+    /// A filter row with only Rank + Exclude (no Value/Values) emits just the exclusion —
+    /// e.g. Invertebrates = {rank: kingdom, value: Animalia}, {rank: phylum, exclude: [Chordata]}.
+    /// Rows whose column is NULL are KEPT (NULL NOT IN (...) would otherwise drop them).
+    /// </summary>
+    public List<string>? Exclude { get; init; }
+
     /// <summary>
     /// System tag filter (e.g., "Marine", "Freshwater", "Terrestrial").
     /// Uses LIKE matching on the IUCN systems field.

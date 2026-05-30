@@ -90,6 +90,8 @@ public sealed class WikipediaListCommand : Command<WikipediaListCommand.Settings
         }
 
         using var query = new IucnListQueryService(databasePath);
+        // Read-only per-child status aggregator for parent (nested) lists. Shares the same IUCN DB.
+        using var chartData = new IucnChartDataBuilder(databasePath);
         var templates = new WikipediaTemplateRenderer(templatesDir);
         var rules = new Legacy.LegacyTaxaRuleList(rulesPath);
 
@@ -123,14 +125,14 @@ public sealed class WikipediaListCommand : Command<WikipediaListCommand.Settings
                 }
                 var storeProvider = new StoreBackedCommonNameProvider(commonNamesDbPath, wikipediaCachePath);
                 providerToDispose = storeProvider;
-                generator = new WikipediaListGenerator(query, templates, rules, storeProvider, colEnricher, taxonRules);
+                generator = new WikipediaListGenerator(query, templates, rules, storeProvider, colEnricher, taxonRules, chartData);
             } else {
                 if (!settings.UseLegacyNames) {
                     AnsiConsole.MarkupLine("[yellow]Common names store not found, using legacy provider.[/]");
                 }
                 var legacyProvider = new CommonNameProvider(paths.GetWikidataCachePath(), paths.GetIucnApiCachePath());
                 providerToDispose = legacyProvider;
-                generator = new WikipediaListGenerator(query, templates, rules, legacyProvider, taxonRules);
+                generator = new WikipediaListGenerator(query, templates, rules, legacyProvider, taxonRules, chartData);
             }
 
             var results = new List<(WikipediaListDefinition Definition, WikipediaListResult Result)>();

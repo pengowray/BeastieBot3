@@ -94,6 +94,15 @@ lists:
   - taxa_group: arachnids
     presets: [threatened, cr, en, vu, nt, dd, lc, ex]
 
+  # ==================== INVERTEBRATES (parent — nests insects, gastropods, ...) ====================
+  # Presets MUST be a subset of every child's presets so each {child}-{preset} link resolves.
+  - taxa_group: invertebrates
+    presets: [threatened, cr, en, vu, nt, dd, lc, ex]
+
+  # ==================== FISH (parent — nests ray-finned + sharks/rays) ====================
+  - taxa_group: fish
+    presets: [threatened, cr, en, vu, nt, dd, lc, ex]
+
   # ==================== PLANTS ====================
   - taxa_group: plants
     presets: [threatened, cr, en, vu, nt, dd, lc, ew, ex]

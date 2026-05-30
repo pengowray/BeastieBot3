@@ -187,53 +187,112 @@ internal sealed class IucnChartDataBuilder : IDisposable {
         if (filters is null) return;
 
         for (var i = 0; i < filters.Count; i++) {
-            var filter = filters[i];
-
-            if (!string.IsNullOrWhiteSpace(filter.System)) {
-                var p = new SqliteParameter($"@sys_{i}", $"%{filter.System}%");
-                sql.AppendLine($"  AND v.systems LIKE @sys_{i}");
-                parameters.Add(p);
-                continue;
-            }
-
-            var column = filter.Rank?.Trim().ToLowerInvariant() switch {
-                "kingdom" => "kingdomName",
-                "phylum" => "phylumName",
-                "class" => "className",
-                "order" => "orderName",
-                "family" => "familyName",
-                "genus" => "genusName",
-                _ => null
-            };
-            if (column is null) continue;
-
-            if (filter.Values is { Count: > 0 }) {
-                var orClauses = new List<string>();
-                for (var j = 0; j < filter.Values.Count; j++) {
-                    var val = NormalizeFilterValue(filter.Rank, filter.Values[j]);
-                    if (string.IsNullOrWhiteSpace(val)) continue;
-                    var p = new SqliteParameter($"@f_{column}_{i}_{j}", val);
-                    orClauses.Add($"v.{column} = @f_{column}_{i}_{j}");
-                    parameters.Add(p);
-                }
-                if (orClauses.Count > 0)
-                    sql.AppendLine($"  AND ({string.Join(" OR ", orClauses)})");
-            } else {
-                var val = NormalizeFilterValue(filter.Rank, filter.Value);
-                if (string.IsNullOrWhiteSpace(val)) continue;
-                var p = new SqliteParameter($"@f_{column}_{i}", val);
-                sql.AppendLine($"  AND v.{column} = @f_{column}_{i}");
-                parameters.Add(p);
-            }
+            TaxonFilterSql.AppendFilter(sql, parameters, filters[i], i);
         }
     }
 
-    private static string? NormalizeFilterValue(string? rank, string? value) {
-        if (string.IsNullOrWhiteSpace(value)) return null;
-        return rank?.Trim().ToLowerInvariant() switch {
-            "kingdom" or "phylum" or "class" or "order" or "family" => value.Trim().ToUpperInvariant(),
-            _ => value.Trim()
-        };
+    /// <summary>
+    /// Per-child status breakdown computed in ONE GROUP BY scan: for a parent filter set and a child
+    /// rank, returns childKey -&gt; ordered <see cref="StatusCount"/>[] (full EX..DD in
+    /// <see cref="ChartStatusOrder"/> order). Uses the SAME scope / species-only / no-subpop predicate
+    /// and the SAME CR(PE)/CR(PEW)/pure-CR split and LR/cd-&gt;NT merge as <see cref="BuildCounts"/>, so
+    /// per-status numbers match the chart by construction. This one method backs both the parent
+    /// summary table and the web taxa-grouping counts endpoint.
+    /// </summary>
+    /// <param name="parentFilters">Filters selecting the parent's scope (exclude-aware).</param>
+    /// <param name="childRank">Rank whose column is grouped (kingdom/phylum/class/order/family/genus).</param>
+    /// <param name="curatedChildren">Display keys to seed as all-zero rows (in desired order) so unlisted
+    /// children still appear. Pass normalized values (UPPERCASE for kingdom..family). If null, only
+    /// non-empty children appear.</param>
+    /// <param name="memberToGroup">Optional normalized raw-value -&gt; display-key map that folds several
+    /// classes/orders into one supergroup row (e.g. MYXINI + PETROMYZONTI -&gt; "Jawless fishes"). Values
+    /// absent from the map key on their own raw value.</param>
+    public Dictionary<string, IReadOnlyList<StatusCount>> BuildChildBreakdown(
+        List<TaxonFilterDefinition>? parentFilters,
+        string childRank,
+        IReadOnlyList<string>? curatedChildren = null,
+        IReadOnlyDictionary<string, string>? memberToGroup = null) {
+
+        var column = TaxonFilterSql.ResolveColumn(childRank)
+            ?? throw new ArgumentException($"Unknown child rank '{childRank}'.", nameof(childRank));
+
+        var parameters = new List<SqliteParameter>();
+        var sql = new StringBuilder();
+        sql.AppendLine($"SELECT v.{column} AS childVal, v.redlistCategory, v.possiblyExtinct, v.possiblyExtinctInTheWild, COUNT(*) AS n");
+        sql.AppendLine("FROM view_assessments_html_taxonomy_html v");
+        sql.AppendLine("WHERE (v.infraType IS NULL OR v.infraType = '')");
+        sql.AppendLine("  AND (v.subpopulationName IS NULL OR TRIM(v.subpopulationName) = '')");
+        sql.AppendLine("  AND (v.scopes IS NULL OR v.scopes = '' OR v.scopes LIKE '%Global%')");
+        if (parentFilters != null) {
+            for (var i = 0; i < parentFilters.Count; i++) {
+                TaxonFilterSql.AppendFilter(sql, parameters, parentFilters[i], i, paramPrefix: "b");
+            }
+        }
+        sql.AppendLine($"GROUP BY v.{column}, v.redlistCategory, v.possiblyExtinct, v.possiblyExtinctInTheWild");
+
+        // childKey -> (chart code -> count). Ordinal compare keeps DB-uppercase keys exact.
+        var acc = new Dictionary<string, Dictionary<string, int>>(StringComparer.Ordinal);
+
+        // Seed curated children first so zero-count children still render, in the requested order.
+        if (curatedChildren != null) {
+            foreach (var c in curatedChildren) {
+                if (!string.IsNullOrWhiteSpace(c) && !acc.ContainsKey(c)) {
+                    acc[c] = new Dictionary<string, int>(StringComparer.Ordinal);
+                }
+            }
+        }
+
+        using (var cmd = _connection.CreateCommand()) {
+            cmd.CommandText = sql.ToString();
+            foreach (var p in parameters) cmd.Parameters.Add(p);
+            using var reader = cmd.ExecuteReader();
+            while (reader.Read()) {
+                var rawVal = reader.IsDBNull(0) ? string.Empty : reader.GetString(0);
+                var category = reader.IsDBNull(1) ? null : reader.GetString(1);
+                var pe = reader.IsDBNull(2) ? null : reader.GetString(2);
+                var pew = reader.IsDBNull(3) ? null : reader.GetString(3);
+                var n = reader.GetInt32(4);
+
+                var code = ResolveChartCode(category, pe, pew);
+                if (code is null) continue; // categories outside the 10 chart bars (LR/nt, LR/lc, NE, ...)
+
+                var key = memberToGroup != null && memberToGroup.TryGetValue(rawVal, out var g) ? g : rawVal;
+                if (string.IsNullOrWhiteSpace(key)) continue; // NULL/blank child column: not attributable to a child
+
+                if (!acc.TryGetValue(key, out var bucket)) {
+                    bucket = new Dictionary<string, int>(StringComparer.Ordinal);
+                    acc[key] = bucket;
+                }
+                bucket[code] = bucket.GetValueOrDefault(code) + n;
+            }
+        }
+
+        var result = new Dictionary<string, IReadOnlyList<StatusCount>>(StringComparer.Ordinal);
+        foreach (var (key, bucket) in acc) {
+            result[key] = ChartStatusOrder.Entries
+                .Select(e => new StatusCount(e.Code, e.Label, bucket.GetValueOrDefault(e.Code)))
+                .ToList();
+        }
+        return result;
+    }
+
+    /// <summary>
+    /// Map a raw (category, possiblyExtinct, possiblyExtinctInTheWild) triple to its
+    /// <see cref="ChartStatusOrder"/> code, mirroring CountSpecies/CountLrCd exactly (IFNULL-&gt;'false'
+    /// for the PE/PEW flags; LR/cd folds into NT). Returns null for categories outside the 10 bars.
+    /// </summary>
+    private static string? ResolveChartCode(string? category, string? pe, string? pew) {
+        if (string.IsNullOrEmpty(category)) return null;
+        if (category == "Lower Risk/conservation dependent") return "NT"; // MergesLrCd
+        var peEff = string.IsNullOrEmpty(pe) ? "false" : pe;
+        var pewEff = string.IsNullOrEmpty(pew) ? "false" : pew;
+        foreach (var e in ChartStatusOrder.Entries) {
+            if (e.DbCategory != category) continue;
+            if (e.PeFilter != null && e.PeFilter != peEff) continue;
+            if (e.PewFilter != null && e.PewFilter != pewEff) continue;
+            return e.Code;
+        }
+        return null;
     }
 
     private int ExecuteCount(string sql, List<SqliteParameter> parameters) {

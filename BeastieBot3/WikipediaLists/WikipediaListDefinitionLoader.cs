@@ -74,6 +74,9 @@ internal sealed class WikipediaListDefinitionLoader {
         Dictionary<string, ListPresetDefinition> presets) {
 
         var expandedLists = new List<WikipediaListDefinition>();
+        // Track (group, preset) per expanded list id so the post-expansion pass can resolve a parent's
+        // children to the actual {child}-{preset} ids — only for those that genuinely generated.
+        var groupPresetById = new Dictionary<string, (string Group, string Preset)>(StringComparer.OrdinalIgnoreCase);
 
         foreach (var rawList in raw.Lists) {
             // Multi-preset syntax: taxa_group + presets array
@@ -91,6 +94,7 @@ internal sealed class WikipediaListDefinitionLoader {
                     var expanded = ExpandFromReference(syntheticRaw, taxaGroups, presets);
                     if (expanded != null) {
                         expandedLists.Add(expanded);
+                        groupPresetById[expanded.Id] = (rawList.TaxaGroup!, presetName);
                     }
                 }
             }
@@ -99,6 +103,7 @@ internal sealed class WikipediaListDefinitionLoader {
                 var expanded = ExpandFromReference(rawList, taxaGroups, presets);
                 if (expanded != null) {
                     expandedLists.Add(expanded);
+                    groupPresetById[expanded.Id] = (rawList.TaxaGroup!, rawList.Preset!);
                 }
             }
             else {
@@ -107,10 +112,76 @@ internal sealed class WikipediaListDefinitionLoader {
             }
         }
 
+        ResolveChildLinks(expandedLists, groupPresetById, taxaGroups);
+
         return new WikipediaListConfig {
             Defaults = raw.Defaults ?? new WikipediaListDefaults(),
             Lists = expandedLists
         };
+    }
+
+    /// <summary>
+    /// Post-expansion pass: attach each parent list's resolved child/see-also links. A link is added
+    /// only when the corresponding <c>{childGroup}-{preset}</c> list actually exists in the expanded
+    /// set — so a parent like <c>invertebrates-ew</c> won't emit a dangling link to a never-generated
+    /// <c>insects-ew</c>. Title/filters come from the child's already-expanded definition (no re-gen).
+    /// </summary>
+    private static void ResolveChildLinks(
+        List<WikipediaListDefinition> lists,
+        Dictionary<string, (string Group, string Preset)> groupPresetById,
+        Dictionary<string, TaxaGroupDefinition> taxaGroups) {
+
+        var byId = new Dictionary<string, WikipediaListDefinition>(StringComparer.OrdinalIgnoreCase);
+        foreach (var list in lists) byId[list.Id] = list;
+
+        foreach (var def in lists) {
+            if (!groupPresetById.TryGetValue(def.Id, out var gp)) continue;
+            if (!taxaGroups.TryGetValue(gp.Group, out var group)) continue;
+
+            AddChildLinks(def.SubLists, group.Children, GroupingKind.Phylogenetic, gp.Preset, byId, taxaGroups, def.Id);
+            AddChildLinks(def.SeeAlso, group.SeeAlso, GroupingKind.SeeAlso, gp.Preset, byId, taxaGroups, def.Id);
+        }
+    }
+
+    private static void AddChildLinks(
+        List<ChildListLink> target,
+        List<string>? childGroupNames,
+        GroupingKind kind,
+        string preset,
+        Dictionary<string, WikipediaListDefinition> byId,
+        Dictionary<string, TaxaGroupDefinition> taxaGroups,
+        string parentId) {
+
+        if (childGroupNames is null) return;
+
+        foreach (var childGroupName in childGroupNames) {
+            if (!taxaGroups.TryGetValue(childGroupName, out var childGroup)) {
+                Console.Error.WriteLine($"Warning: child group '{childGroupName}' referenced by '{parentId}' not found in taxa-groups.yml");
+                continue;
+            }
+
+            var childId = $"{childGroupName}-{preset}";
+            if (!byId.TryGetValue(childId, out var childDef)) {
+                // The child group exists but has no list for this preset (e.g. invertebrates-ew but
+                // insects defines no 'ew'). Skip rather than emit a dangling wikilink.
+                continue;
+            }
+
+            target.Add(new ChildListLink(
+                Id: childId,
+                DisplayName: childGroup.Name ?? childGroupName,
+                Adjective: childGroup.Adjective ?? string.Empty,
+                WikiTitle: DeriveWikiTitle(childDef.OutputFile),
+                Filters: childDef.Filters,
+                Kind: kind));
+        }
+    }
+
+    /// <summary>Derive a Wikipedia article title from an output filename
+    /// (e.g. "List_of_critically_endangered_insects.wikitext" → "List of critically endangered insects").</summary>
+    private static string DeriveWikiTitle(string outputFile) {
+        var name = Path.GetFileNameWithoutExtension(outputFile);
+        return name.Replace('_', ' ');
     }
 
     private WikipediaListDefinition? ExpandFromReference(
@@ -239,6 +310,19 @@ internal sealed class TaxaGroupDefinition {
     /// </summary>
     public string? Adjective { get; init; }
     public List<TaxonFilterDefinition>? Filters { get; init; }
+
+    /// <summary>
+    /// Phylogenetic child group names (e.g. invertebrates → [insects, gastropods, ...]). For each
+    /// preset of this group, the loader attaches a <see cref="ChildListLink"/> to the matching
+    /// <c>{child}-{preset}</c> list IF it exists, making this group's lists "parent" lists.
+    /// </summary>
+    public List<string>? Children { get; init; }
+
+    /// <summary>
+    /// Non-phylogenetic cross-reference group names (e.g. mammals → [marine-mammals]). Rendered as a
+    /// plain "Related lists" bullet block, never as count rows or nested phylogenetic sub-lists.
+    /// </summary>
+    public List<string>? SeeAlso { get; init; }
     /// <summary>
     /// Custom family-based grouping for paraphyletic groups.
     /// When defined, these groups replace the normal taxonomic grouping.

@@ -23,6 +23,14 @@ internal sealed class ListStructureMetrics {
     [JsonPropertyName("heading_count")]
     public int HeadingCount { get; set; }
 
+    /// <summary>
+    /// True for a parent (nested) list: a summary table + bare-bones child sections. Such lists
+    /// intentionally have headings without species bullets, so the flat-list quality heuristics
+    /// (EMPTY/FRAGMENTED/OVER-SPLIT) do not apply.
+    /// </summary>
+    [JsonPropertyName("is_parent")]
+    public bool IsParent { get; set; }
+
     [JsonPropertyName("single_item_headings")]
     public int SingleItemHeadings { get; set; }
 
@@ -228,22 +236,26 @@ internal static class WikitextMetricsCollector {
     /// Detect structural problems and add them to the metrics.
     /// </summary>
     public static void DetectProblems(ListStructureMetrics metrics) {
-        // FRAGMENTED: more than 1 heading per 4 species
-        if (metrics.TotalTaxa > 0 && metrics.HeadingCount > 0) {
-            double ratio = (double)metrics.HeadingCount / metrics.TotalTaxa;
-            if (ratio > 0.25) {
-                metrics.Problems.Add($"FRAGMENTED: heading-to-species ratio {ratio:F3} (>{0.25})");
+        // Parent (nested) lists are exempt from the flat-species-list heuristics: their child headings
+        // intentionally hold {{main}} + a count sentence rather than a species bullet list.
+        if (!metrics.IsParent) {
+            // FRAGMENTED: more than 1 heading per 4 species
+            if (metrics.TotalTaxa > 0 && metrics.HeadingCount > 0) {
+                double ratio = (double)metrics.HeadingCount / metrics.TotalTaxa;
+                if (ratio > 0.25) {
+                    metrics.Problems.Add($"FRAGMENTED: heading-to-species ratio {ratio:F3} (>{0.25})");
+                }
             }
-        }
 
-        // OVER-SPLIT: many single-item headings
-        if (metrics.SingleItemHeadings > 10) {
-            metrics.Problems.Add($"OVER-SPLIT: {metrics.SingleItemHeadings} single-item headings");
-        }
+            // OVER-SPLIT: many single-item headings
+            if (metrics.SingleItemHeadings > 10) {
+                metrics.Problems.Add($"OVER-SPLIT: {metrics.SingleItemHeadings} single-item headings");
+            }
 
-        // EMPTY: headings with no content
-        if (metrics.EmptyHeadings > 0) {
-            metrics.Problems.Add($"EMPTY: {metrics.EmptyHeadings} empty headings");
+            // EMPTY: headings with no content
+            if (metrics.EmptyHeadings > 0) {
+                metrics.Problems.Add($"EMPTY: {metrics.EmptyHeadings} empty headings");
+            }
         }
 
         // DOMINATED: Other/Unknown items outnumber named items

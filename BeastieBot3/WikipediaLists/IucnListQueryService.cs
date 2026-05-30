@@ -96,49 +96,7 @@ internal sealed class IucnListQueryService : IDisposable {
         AppendStatusClauses(builder, statuses, parameters);
 
         for (var i = 0; i < definition.Filters.Count; i++) {
-            var filter = definition.Filters[i];
-            
-            // Handle system tag filter (e.g., Marine, Freshwater, Terrestrial)
-            if (!string.IsNullOrWhiteSpace(filter.System)) {
-                var systemParam = new SqliteParameter($"@system_{i}", $"%{filter.System}%");
-                builder.AppendLine($"  AND v.systems LIKE {systemParam.ParameterName}");
-                parameters.Add(systemParam);
-                continue;
-            }
-            
-            // Handle rank-based filters
-            var column = ResolveColumn(filter.Rank);
-            if (column is null) {
-                continue;
-            }
-
-            // Check if using multi-value OR filter
-            if (filter.Values is { Count: > 0 }) {
-                var orClauses = new List<string>();
-                for (var j = 0; j < filter.Values.Count; j++) {
-                    var normalizedValue = NormalizeFilterValue(filter.Rank, filter.Values[j]);
-                    if (string.IsNullOrWhiteSpace(normalizedValue)) {
-                        continue;
-                    }
-                    var parameter = new SqliteParameter($"@f_{column}_{i}_{j}", normalizedValue);
-                    orClauses.Add($"v.{column} = {parameter.ParameterName}");
-                    parameters.Add(parameter);
-                }
-                if (orClauses.Count > 0) {
-                    builder.AppendLine($"  AND ({string.Join(" OR ", orClauses)})");
-                }
-            }
-            else {
-                // Single value filter
-                var normalizedValue = NormalizeFilterValue(filter.Rank, filter.Value);
-                if (string.IsNullOrWhiteSpace(normalizedValue)) {
-                    continue;
-                }
-
-                var parameter = new SqliteParameter($"@f_{column}_{i}", normalizedValue);
-                builder.AppendLine($"  AND v.{column} = {parameter.ParameterName}");
-                parameters.Add(parameter);
-            }
+            TaxonFilterSql.AppendFilter(builder, parameters, definition.Filters[i], i);
         }
 
         builder.AppendLine("ORDER BY v.orderName, v.familyName, v.genusName, v.speciesName");
@@ -179,27 +137,6 @@ internal sealed class IucnListQueryService : IDisposable {
             index++;
         }
         builder.AppendLine("  )");
-    }
-
-    private static string? ResolveColumn(string rank) => rank?.Trim().ToLowerInvariant() switch {
-        "kingdom" => "kingdomName",
-        "phylum" => "phylumName",
-        "class" => "className",
-        "order" => "orderName",
-        "family" => "familyName",
-        "genus" => "genusName",
-        _ => null
-    };
-
-    private static string? NormalizeFilterValue(string rank, string? value) {
-        if (string.IsNullOrWhiteSpace(value)) {
-            return null;
-        }
-
-        return rank?.Trim().ToLowerInvariant() switch {
-            "kingdom" or "phylum" or "class" or "order" or "family" => value.Trim().ToUpperInvariant(),
-            _ => value.Trim()
-        };
     }
 
     private static IucnSpeciesRecord ReadRecord(SqliteDataReader reader) {
@@ -271,37 +208,7 @@ internal sealed class IucnListQueryService : IDisposable {
         }
 
         for (var i = 0; i < filters.Count; i++) {
-            var filter = filters[i];
-            if (!string.IsNullOrWhiteSpace(filter.System)) {
-                var systemParam = new SqliteParameter($"@csystem_{i}", $"%{filter.System}%");
-                builder.AppendLine($"  AND v.systems LIKE {systemParam.ParameterName}");
-                parameters.Add(systemParam);
-                continue;
-            }
-
-            var column = ResolveColumn(filter.Rank);
-            if (column is null) continue;
-
-            if (filter.Values is { Count: > 0 }) {
-                var orClauses = new List<string>();
-                for (var j = 0; j < filter.Values.Count; j++) {
-                    var normalizedValue = NormalizeFilterValue(filter.Rank, filter.Values[j]);
-                    if (string.IsNullOrWhiteSpace(normalizedValue)) continue;
-                    var parameter = new SqliteParameter($"@cf_{column}_{i}_{j}", normalizedValue);
-                    orClauses.Add($"v.{column} = {parameter.ParameterName}");
-                    parameters.Add(parameter);
-                }
-                if (orClauses.Count > 0) {
-                    builder.AppendLine($"  AND ({string.Join(" OR ", orClauses)})");
-                }
-            }
-            else {
-                var normalizedValue = NormalizeFilterValue(filter.Rank, filter.Value);
-                if (string.IsNullOrWhiteSpace(normalizedValue)) continue;
-                var parameter = new SqliteParameter($"@cf_{column}_{i}", normalizedValue);
-                builder.AppendLine($"  AND v.{column} = {parameter.ParameterName}");
-                parameters.Add(parameter);
-            }
+            TaxonFilterSql.AppendFilter(builder, parameters, filters[i], i, paramPrefix: "c");
         }
 
         using var command = _connection.CreateCommand();
