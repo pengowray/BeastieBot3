@@ -34,11 +34,15 @@ internal sealed class WikipediaShowListsCommand : Command<WikipediaShowListsComm
 
         var table = new Table();
         table.AddColumn("ID");
+        table.AddColumn("Taxa group");
+        table.AddColumn("Status");
         table.AddColumn("Title");
 
         foreach (var list in config.Lists.OrderBy(l => l.Id)) {
             table.AddRow(
                 Markup.Escape(list.Id),
+                Markup.Escape(list.TaxaGroup ?? "—"),
+                Markup.Escape(list.Preset ?? "—"),
                 Markup.Escape(list.Title));
         }
 
@@ -47,8 +51,26 @@ internal sealed class WikipediaShowListsCommand : Command<WikipediaShowListsComm
         AnsiConsole.WriteLine();
         AnsiConsole.Write(table);
         AnsiConsole.WriteLine();
-        AnsiConsole.MarkupLine("[grey]To generate a specific list:[/]  wikipedia generate-lists --list <ID>");
-        AnsiConsole.MarkupLine("[grey]To generate all lists:[/]       wikipedia generate-lists");
+
+        // Surface the distinct values usable with the --taxa-group / --status filters.
+        var taxaGroupValues = config.Lists
+            .Where(l => l.TaxaGroup is not null)
+            .Select(l => l.TaxaGroup!)
+            .Distinct(System.StringComparer.OrdinalIgnoreCase)
+            .OrderBy(v => v, System.StringComparer.OrdinalIgnoreCase);
+        var statusValues = config.Lists
+            .Where(l => l.Preset is not null)
+            .Select(l => l.Preset!)
+            .Distinct(System.StringComparer.OrdinalIgnoreCase)
+            .OrderBy(v => v, System.StringComparer.OrdinalIgnoreCase);
+        AnsiConsole.MarkupLine($"[grey]--taxa-group values:[/] {Markup.Escape(string.Join(", ", taxaGroupValues))}");
+        AnsiConsole.MarkupLine($"[grey]--status values:[/]     {Markup.Escape(string.Join(", ", statusValues))}");
+        AnsiConsole.WriteLine();
+
+        AnsiConsole.MarkupLine("[grey]Generate a specific list:[/]    wikipedia generate-lists --list <ID>");
+        AnsiConsole.MarkupLine("[grey]Generate one status:[/]         wikipedia generate-lists --status cr");
+        AnsiConsole.MarkupLine("[grey]Generate one taxa group:[/]     wikipedia generate-lists --taxa-group mammals");
+        AnsiConsole.MarkupLine("[grey]Generate all lists:[/]          wikipedia generate-lists");
         AnsiConsole.WriteLine();
         AnsiConsole.MarkupLine($"[grey]Edit list definitions in:[/]    {Path.GetFileName(configPath)}");
 

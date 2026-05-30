@@ -20,7 +20,9 @@ namespace BeastieBot3.WikipediaLists;
     Reason = "Generates wikitext list output files only.",
     Examples = new[] {
         "wikipedia generate-lists",
-        "wikipedia generate-lists --list amphibians-cr"
+        "wikipedia generate-lists --list amphibians-cr",
+        "wikipedia generate-lists --status cr",
+        "wikipedia generate-lists --taxa-group mammals --status cr"
     })]
 public sealed class WikipediaListCommand : Command<WikipediaListCommand.Settings> {
     public sealed class Settings : CommonSettings {
@@ -42,6 +44,14 @@ public sealed class WikipediaListCommand : Command<WikipediaListCommand.Settings
         [CommandOption("--list <ID>")]
         [System.ComponentModel.Description("Filter to specific list IDs (repeatable). Use 'wikipedia show-lists' to see available IDs.")]
         public string[]? ListIds { get; init; }
+
+        [CommandOption("--status <CODE>")]
+        [System.ComponentModel.Description("Filter to lists whose preset (threat-status grouping) matches, e.g. cr, ex, threatened (repeatable). Handy for testing one status across all taxa.")]
+        public string[]? Statuses { get; init; }
+
+        [CommandOption("--taxa-group <NAME>")]
+        [System.ComponentModel.Description("Filter to lists whose taxa group matches, e.g. mammals, birds, marine-mammals (repeatable). Combine with --status to narrow further.")]
+        public string[]? TaxaGroups { get; init; }
 
         [CommandOption("--limit <N>")]
         public int? Limit { get; init; }
@@ -77,16 +87,21 @@ public sealed class WikipediaListCommand : Command<WikipediaListCommand.Settings
 
         var loader = new WikipediaListDefinitionLoader();
         var config = loader.Load(configPath);
-        var definitions = FilterDefinitions(config.Lists, settings.ListIds);
+        var definitions = FilterDefinitions(config.Lists, settings.ListIds, settings.Statuses, settings.TaxaGroups);
         if (definitions.Count == 0) {
-            if (settings.ListIds is { Length: > 0 }) {
-                var requested = string.Join(", ", settings.ListIds);
-                AnsiConsole.MarkupLine($"[yellow]No lists matched:[/] {Markup.Escape(requested)}");
+            var activeFilters = DescribeFilters(settings);
+            if (activeFilters is not null) {
+                AnsiConsole.MarkupLine($"[yellow]No lists matched[/] {activeFilters}.");
             } else {
                 AnsiConsole.MarkupLine("[yellow]No lists found in the configuration.[/]");
             }
-            AnsiConsole.MarkupLine("[grey]Run[/] [white]wikipedia show-lists[/] [grey]to see all available list IDs.[/]");
+            AnsiConsole.MarkupLine("[grey]Run[/] [white]wikipedia show-lists[/] [grey]to see all available list IDs, taxa groups and statuses.[/]");
             return 0;
+        }
+
+        var summary = DescribeFilters(settings);
+        if (summary is not null) {
+            AnsiConsole.MarkupLine($"[grey]Filtered to[/] [cyan]{definitions.Count}[/] [grey]list(s) by[/] {summary}.");
         }
 
         using var query = new IucnListQueryService(databasePath);
@@ -421,12 +436,47 @@ public sealed class WikipediaListCommand : Command<WikipediaListCommand.Settings
         return Path.Combine(paths.BaseDirectory, "output", "wikipedia");
     }
 
-    private static IReadOnlyList<WikipediaListDefinition> FilterDefinitions(IReadOnlyList<WikipediaListDefinition> definitions, string[]? ids) {
-        if (ids is null || ids.Length == 0) {
-            return definitions;
+    /// <summary>
+    /// Narrows the list set by id, preset (threat status) and/or taxa group. Filters compose with AND
+    /// across kinds and OR within a kind, so <c>--status cr --taxa-group mammals birds</c> yields
+    /// {mammals-cr, birds-cr}. With no filters the full set is returned (the usual "generate all").
+    /// </summary>
+    private static IReadOnlyList<WikipediaListDefinition> FilterDefinitions(
+        IReadOnlyList<WikipediaListDefinition> definitions,
+        string[]? ids,
+        string[]? statuses,
+        string[]? taxaGroups) {
+
+        IEnumerable<WikipediaListDefinition> result = definitions;
+
+        if (ids is { Length: > 0 }) {
+            var wanted = new HashSet<string>(ids.Select(id => id.Trim()), StringComparer.OrdinalIgnoreCase);
+            result = result.Where(def => wanted.Contains(def.Id));
+        }
+        if (statuses is { Length: > 0 }) {
+            var wanted = new HashSet<string>(statuses.Select(s => s.Trim()), StringComparer.OrdinalIgnoreCase);
+            result = result.Where(def => def.Preset is not null && wanted.Contains(def.Preset));
+        }
+        if (taxaGroups is { Length: > 0 }) {
+            var wanted = new HashSet<string>(taxaGroups.Select(s => s.Trim()), StringComparer.OrdinalIgnoreCase);
+            result = result.Where(def => def.TaxaGroup is not null && wanted.Contains(def.TaxaGroup));
         }
 
-        var wanted = new HashSet<string>(ids.Select(id => id.Trim()), StringComparer.OrdinalIgnoreCase);
-        return definitions.Where(def => wanted.Contains(def.Id)).ToList();
+        return result.ToList();
+    }
+
+    /// <summary>Builds a human-readable description of the active generation filters, or null if none.</summary>
+    private static string? DescribeFilters(Settings settings) {
+        var parts = new List<string>();
+        if (settings.ListIds is { Length: > 0 }) {
+            parts.Add($"list [white]{Markup.Escape(string.Join(", ", settings.ListIds))}[/]");
+        }
+        if (settings.Statuses is { Length: > 0 }) {
+            parts.Add($"status [white]{Markup.Escape(string.Join(", ", settings.Statuses))}[/]");
+        }
+        if (settings.TaxaGroups is { Length: > 0 }) {
+            parts.Add($"taxa group [white]{Markup.Escape(string.Join(", ", settings.TaxaGroups))}[/]");
+        }
+        return parts.Count == 0 ? null : string.Join(" and ", parts);
     }
 }

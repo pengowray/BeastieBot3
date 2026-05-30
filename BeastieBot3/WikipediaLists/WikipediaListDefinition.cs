@@ -42,6 +42,21 @@ internal sealed class WikipediaListDefinition {
     public DisplayPreferences? Display { get; init; }
 
     /// <summary>
+    /// Source taxa-group id this list was expanded from (e.g. "mammals", "marine-mammals").
+    /// Null for full/explicit definitions that don't reference a taxa_group.
+    /// Used by the <c>--taxa-group</c> generation filter. Parsing the <see cref="Id"/> would be
+    /// unreliable because group and preset names can themselves contain hyphens.
+    /// </summary>
+    public string? TaxaGroup { get; init; }
+
+    /// <summary>
+    /// Source preset id (threat-status grouping) this list was expanded from (e.g. "cr", "ex",
+    /// "threatened"). Null for full/explicit definitions that don't reference a preset.
+    /// Used by the <c>--status</c> generation filter.
+    /// </summary>
+    public string? Preset { get; init; }
+
+    /// <summary>
     /// Adjective form of the taxa group name (e.g., "mammalian", "amphibian").
     /// Used in intro text like "mammalian species".
     /// </summary>

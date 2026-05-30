@@ -228,6 +228,8 @@ internal sealed class WikipediaListDefinitionLoader {
             Grouping = raw.Grouping,
             Display = mergedDisplay,
             CustomGroups = raw.CustomGroups ?? taxaGroup.CustomGroups,
+            TaxaGroup = raw.TaxaGroup,
+            Preset = raw.Preset,
             TaxaAdjective = taxaGroup.Adjective,
             TaxaNameLower = vars["taxa_name_lower"],
             StatusText = preset.StatusText,
