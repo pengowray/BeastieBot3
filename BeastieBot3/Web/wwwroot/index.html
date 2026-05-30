@@ -10,113 +10,175 @@
 <header>
   <h1>BeastieBot3</h1>
   <span class="tag">local web UI</span>
+  <span class="header-spacer"></span>
+  <span id="header-clock" class="muted small"></span>
 </header>
 
-<main>
-  <section class="card">
-    <h2>Data sources</h2>
-    <div class="card-header-row">
-      <p class="muted" id="status-generated">Loading&hellip;</p>
-      <button id="refresh-status" class="ghost">Refresh</button>
-    </div>
-    <ul id="status-list" class="status-list"></ul>
-  </section>
+<div class="app-shell">
+  <aside class="sidebar">
+    <nav id="sidebar-nav">
+      <a class="nav-item" href="#/dashboard" data-view="dashboard"><span class="nav-icon">▦</span> Dashboard</a>
+      <a class="nav-item" href="#/sources"   data-view="sources"><span class="nav-icon">🗄</span> Data sources</a>
+      <a class="nav-item" href="#/run"        data-view="run"><span class="nav-icon">▶</span> Run command</a>
+      <a class="nav-item" href="#/workflows"  data-view="workflows"><span class="nav-icon">⇄</span> Workflows</a>
+      <a class="nav-item" href="#/jobs"       data-view="jobs"><span class="nav-icon">≣</span> Jobs</a>
+      <a class="nav-item" href="#/grouping"   data-view="grouping"><span class="nav-icon">⊞</span> Taxa grouping</a>
+      <a class="nav-item" href="#/rules"      data-view="rules"><span class="nav-icon">✎</span> Rules editor</a>
+      <a class="nav-item" href="#/settings"   data-view="settings"><span class="nav-icon">⚙</span> Settings</a>
+    </nav>
+  </aside>
 
-  <section class="card">
-    <h2>Workflows</h2>
-    <p class="muted small">Guided pipelines. Each step shows what it needs, what it produces, and when it last ran.</p>
-    <div class="flow-tabs" id="flow-tabs"></div>
-    <div id="flow-content"></div>
-  </section>
+  <main class="content">
 
-  <section class="card">
-    <h2>Run a command</h2>
-    <p class="muted small">
-      Click a command to open its form. Output streams below in real time
-      and into the terminal where <code>serve</code> is running.
-      <span class="dot dot-destructive"></span> destructive commands ask
-      for confirmation and block other jobs while running.
-    </p>
-    <div class="filter-bar">
-      <input type="search" id="cmd-search" placeholder="Filter commands…" autocomplete="off">
-      <div class="kind-filter" id="cmd-kind-filter">
-        <label><input type="checkbox" value="readonly" checked> <span class="dot dot-readonly"></span>read-only</label>
-        <label><input type="checkbox" value="mutates" checked> <span class="dot dot-mutates"></span>mutates</label>
-        <label><input type="checkbox" value="destructive" checked> <span class="dot dot-destructive"></span>destructive</label>
+    <!-- ============ Dashboard ============ -->
+    <section class="view" data-view="dashboard">
+      <div class="view-head">
+        <h2 class="view-title">Dashboard</h2>
+        <button id="dash-refresh" class="ghost">Refresh</button>
       </div>
-    </div>
-    <div id="command-tree"><p class="muted">Loading commands…</p></div>
+      <div id="dash-grid" class="dash-grid">
+        <p class="muted">Loading&hellip;</p>
+      </div>
+    </section>
 
-    <div id="active-job" hidden>
-      <div class="job-header">
-        <strong id="job-title">&nbsp;</strong>
-        <span class="header-right">
-          <span id="job-status" class="status">&nbsp;</span>
-          <button id="job-cancel" class="ghost cancel-btn" hidden>Cancel</button>
+    <!-- ============ Data sources ============ -->
+    <section class="view" data-view="sources">
+      <div class="view-head">
+        <h2 class="view-title">Data sources</h2>
+        <span class="view-head-right">
+          <span class="muted small" id="status-generated">Loading&hellip;</span>
+          <button id="refresh-status" class="ghost">Refresh</button>
         </span>
       </div>
-      <pre id="job-output" class="terminal"></pre>
-    </div>
-  </section>
+      <section class="card">
+        <ul id="status-list" class="status-list"></ul>
+      </section>
+    </section>
 
-  <section class="card">
-    <h2>Recent jobs</h2>
-    <button id="refresh-jobs" class="ghost">Refresh</button>
-    <ul id="job-list" class="job-list"><li class="muted">No jobs yet.</li></ul>
-  </section>
+    <!-- ============ Run a command ============ -->
+    <section class="view" data-view="run">
+      <div class="view-head"><h2 class="view-title">Run a command</h2></div>
+      <section class="card">
+        <p class="muted small">
+          Click a command to open its form. Output streams in the dock at the
+          bottom and into the terminal where <code>serve</code> is running.
+          <span class="dot dot-destructive"></span> destructive commands ask
+          for confirmation and block other jobs while running.
+        </p>
+        <div class="filter-bar">
+          <input type="search" id="cmd-search" placeholder="Filter commands…" autocomplete="off">
+          <div class="kind-filter" id="cmd-kind-filter">
+            <label><input type="checkbox" value="readonly" checked> <span class="dot dot-readonly"></span>read-only</label>
+            <label><input type="checkbox" value="mutates" checked> <span class="dot dot-mutates"></span>mutates</label>
+            <label><input type="checkbox" value="destructive" checked> <span class="dot dot-destructive"></span>destructive</label>
+          </div>
+        </div>
+        <div id="command-tree"><p class="muted">Loading commands…</p></div>
+      </section>
+    </section>
 
-  <section class="card">
-    <h2>Taxa grouping</h2>
-    <p class="muted small">
-      Pick a parent group and a child rank to see per-sub-taxon IUCN counts (the same numbers the
-      generated summary table uses). Tick existing groups to set them as the parent's sub-lists.
-    </p>
-    <div class="filter-bar">
-      <label>Parent <select id="grp-parent"></select></label>
-      <label>Child rank
-        <select id="grp-rank">
-          <option value="class" selected>class</option>
-          <option value="order">order</option>
-          <option value="family">family</option>
-          <option value="phylum">phylum</option>
-        </select>
-      </label>
-      <button id="grp-load" class="ghost">Show counts</button>
-      <button id="grp-save" class="ghost" hidden>Save sub-groups</button>
-    </div>
-    <p class="muted small" id="grp-msg"></p>
-    <div id="grp-counts"></div>
-  </section>
+    <!-- ============ Workflows ============ -->
+    <section class="view" data-view="workflows">
+      <div class="view-head"><h2 class="view-title">Workflows</h2></div>
+      <section class="card">
+        <p class="muted small">Guided pipelines. Each step shows what it needs, what it produces, and when it last ran.</p>
+        <div class="flow-tabs" id="flow-tabs"></div>
+        <div id="flow-content"></div>
+      </section>
+    </section>
 
-  <section class="card">
-    <h2>Rules editor (draft &rarr; apply)</h2>
-    <p class="muted small" id="rules-locations">Loading locations&hellip;</p>
-    <div class="filter-bar">
-      <label>File <select id="rules-file"></select></label>
-      <button id="rules-reload" class="ghost">Reload</button>
-      <button id="rules-save" class="ghost">Save draft</button>
-      <button id="rules-revert" class="ghost">Revert from source</button>
-    </div>
-    <textarea id="rules-text" spellcheck="false" style="width:100%;min-height:320px;font-family:monospace;white-space:pre;" placeholder="Select a file…"></textarea>
-    <p class="muted small" id="rules-msg"></p>
-    <div class="filter-bar">
-      <button id="rules-diff" class="ghost">Diff draft vs source</button>
-      <button id="rules-apply" class="ghost">Apply changed files to source</button>
-      <button id="rules-run" class="ghost">Run generate-lists (from source)</button>
-    </div>
-    <div id="rules-diff-out"></div>
-  </section>
+    <!-- ============ Jobs ============ -->
+    <section class="view" data-view="jobs">
+      <div class="view-head">
+        <h2 class="view-title">Jobs</h2>
+        <button id="refresh-jobs" class="ghost">Refresh</button>
+      </div>
+      <section class="card">
+        <p class="muted small">Click a job to open it in the dock below. Running jobs can be cancelled from there.</p>
+        <ul id="job-list" class="job-list"><li class="muted">No jobs yet.</li></ul>
+      </section>
+    </section>
 
-  <section class="card">
-    <h2>Settings (paths.ini)</h2>
-    <p class="muted">Resolved paths from <code id="paths-source">paths.ini</code>.</p>
-    <button id="load-paths" class="ghost">Load paths</button>
-    <table id="paths-table" hidden>
-      <thead><tr><th>Key</th><th>Value</th></tr></thead>
-      <tbody></tbody>
-    </table>
-  </section>
-</main>
+    <!-- ============ Taxa grouping ============ -->
+    <section class="view" data-view="grouping">
+      <div class="view-head"><h2 class="view-title">Taxa grouping</h2></div>
+      <section class="card">
+        <p class="muted small">
+          Pick a parent group and a child rank to see per-sub-taxon IUCN counts (the same numbers the
+          generated summary table uses). Tick existing groups to set them as the parent's sub-lists.
+        </p>
+        <div class="filter-bar">
+          <label>Parent <select id="grp-parent"></select></label>
+          <label>Child rank
+            <select id="grp-rank">
+              <option value="class" selected>class</option>
+              <option value="order">order</option>
+              <option value="family">family</option>
+              <option value="phylum">phylum</option>
+            </select>
+          </label>
+          <button id="grp-load" class="ghost">Show counts</button>
+          <button id="grp-save" class="ghost" hidden>Save sub-groups</button>
+        </div>
+        <p class="muted small" id="grp-msg"></p>
+        <div id="grp-counts"></div>
+      </section>
+    </section>
+
+    <!-- ============ Rules editor ============ -->
+    <section class="view" data-view="rules">
+      <div class="view-head"><h2 class="view-title">Rules editor</h2></div>
+      <section class="card">
+        <p class="muted small">Draft &rarr; apply. Edit a draft copy, diff it against source, then apply.</p>
+        <p class="muted small" id="rules-locations">Loading locations&hellip;</p>
+        <div class="filter-bar">
+          <label>File <select id="rules-file"></select></label>
+          <button id="rules-reload" class="ghost">Reload</button>
+          <button id="rules-save" class="ghost">Save draft</button>
+          <button id="rules-revert" class="ghost">Revert from source</button>
+        </div>
+        <textarea id="rules-text" spellcheck="false" style="width:100%;min-height:320px;font-family:monospace;white-space:pre;" placeholder="Select a file…"></textarea>
+        <p class="muted small" id="rules-msg"></p>
+        <div class="filter-bar">
+          <button id="rules-diff" class="ghost">Diff draft vs source</button>
+          <button id="rules-apply" class="ghost">Apply changed files to source</button>
+          <button id="rules-run" class="ghost">Run generate-lists (from source)</button>
+        </div>
+        <div id="rules-diff-out"></div>
+      </section>
+    </section>
+
+    <!-- ============ Settings ============ -->
+    <section class="view" data-view="settings">
+      <div class="view-head"><h2 class="view-title">Settings</h2></div>
+      <section class="card">
+        <p class="muted">Resolved paths from <code id="paths-source">paths.ini</code>.</p>
+        <button id="load-paths" class="ghost">Load paths</button>
+        <table id="paths-table" hidden>
+          <thead><tr><th>Key</th><th>Value</th></tr></thead>
+          <tbody></tbody>
+        </table>
+      </section>
+    </section>
+
+  </main>
+</div>
+
+<!-- ============ Persistent job dock ============ -->
+<div id="job-dock" class="job-dock" hidden>
+  <div class="dock-bar">
+    <button id="dock-toggle" class="dock-toggle" title="Expand / collapse">▾</button>
+    <strong id="job-title" class="dock-title">&nbsp;</strong>
+    <span class="dock-right">
+      <span id="job-status" class="status">&nbsp;</span>
+      <button id="job-cancel" class="ghost cancel-btn" hidden>Cancel</button>
+      <button id="dock-close" class="ghost dock-close" title="Close dock">✕</button>
+    </span>
+  </div>
+  <div id="active-job" class="dock-body">
+    <pre id="job-output" class="terminal"></pre>
+  </div>
+</div>
 
 <div id="file-viewer" class="modal" hidden>
   <div class="modal-backdrop"></div>
@@ -136,5 +198,6 @@
 <script src="/markdown.js"></script>
 <script src="/app.js"></script>
 <script src="/rules-editor.js"></script>
+<script src="/router.js"></script>
 </body>
 </html>

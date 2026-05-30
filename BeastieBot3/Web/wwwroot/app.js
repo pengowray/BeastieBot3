@@ -32,13 +32,36 @@
 
   // --- Job runner -----------------------------------------------------
 
-  const activeJob = $('#active-job');
+  const jobDock = $('#job-dock');
+  const dockToggle = $('#dock-toggle');
+  const dockClose = $('#dock-close');
   const jobTitle = $('#job-title');
   const jobStatus = $('#job-status');
   const jobOutput = $('#job-output');
   const jobCancel = $('#job-cancel');
   let currentEventSource = null;
   let currentJobId = null;
+
+  // --- Persistent dock --------------------------------------------------
+  // The dock lives outside the view container so a running job stays visible
+  // (and streaming) while the user navigates between views — "run a task,
+  // browse elsewhere, flip back".
+
+  function setDockExpanded(expanded) {
+    jobDock.classList.toggle('collapsed', !expanded);
+    dockToggle.textContent = expanded ? '▾' : '▸';
+  }
+  function showDock(expanded) {
+    jobDock.hidden = false;
+    setDockExpanded(expanded !== false);
+  }
+  dockToggle.addEventListener('click', () => {
+    setDockExpanded(jobDock.classList.contains('collapsed'));
+  });
+  dockClose.addEventListener('click', () => {
+    if (currentEventSource) { currentEventSource.close(); currentEventSource = null; }
+    jobDock.hidden = true;
+  });
 
   // Accumulated text for the line currently being built (so \r overwrites work).
   let pendingLine = '';
@@ -145,7 +168,7 @@
       currentEventSource.close();
       currentEventSource = null;
     }
-    activeJob.hidden = false;
+    showDock(true);
     jobTitle.textContent = '$ beastiebot3 ' + command + (args && args.length ? ' ' + args.join(' ') : '');
     jobOutput.innerHTML = '';
     pendingLine = '';
@@ -235,7 +258,7 @@
       currentEventSource.close();
       currentEventSource = null;
     }
-    activeJob.hidden = false;
+    showDock(true);
     jobOutput.innerHTML = '';
     pendingLine = '';
     setStatus('running');
@@ -401,20 +424,8 @@
   $('#refresh-status').addEventListener('click', refreshStatus);
   refreshStatus();
 
-  // Auto-refresh: poll every 10s, but pause while the tab is hidden so we
-  // don't burn cycles on background tabs. Catches up immediately when the
-  // user returns. 10s feels live for backlog counts without spamming the
-  // server during dashboard idle time.
-  const STATUS_POLL_MS = 10000;
-  setInterval(() => {
-    if (document.hidden) return;
-    refreshStatus();
-    refreshJobList();
-    refreshActiveFlow();
-  }, STATUS_POLL_MS);
-  document.addEventListener('visibilitychange', () => {
-    if (!document.hidden) { refreshStatus(); refreshJobList(); refreshActiveFlow(); }
-  });
+  // Polling is owned by router.js, which refreshes the active view (plus the
+  // always-cheap status/jobs/flow) on an interval and pauses on hidden tabs.
 
   async function refreshActiveFlow() {
     // Re-fetch the snapshot for the currently-selected flow tab so step
@@ -886,8 +897,6 @@
           e.preventDefault();
           e.stopPropagation();
           replayJob(rj.jobId);
-          // Scroll active-job pane into view.
-          document.getElementById('active-job')?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
         });
         r.appendChild(link);
       }
@@ -1186,4 +1195,16 @@
   }
 
   loadFlowsList();
+
+  // --- Public surface for router.js / dashboard ----------------------
+  // Exposes the handful of cross-cutting actions and helpers the router and
+  // dashboard need: attaching jobs to the dock, opening files, and the live
+  // data getters/refreshers. Everything else stays private to this IIFE.
+  window.Beastie = {
+    enqueue, replayJob, openFile, openDir,
+    refreshStatus, refreshJobList, refreshActiveFlow, loadFlowsList, selectFlow,
+    formatBytes, formatRelative, formatNumber, statusKind,
+    getFlows: () => allFlows,
+    getCommands: () => allCommands,
+  };
 })();
