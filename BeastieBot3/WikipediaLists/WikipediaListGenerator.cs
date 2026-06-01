@@ -2606,6 +2606,12 @@ internal sealed class WikipediaListGenerator {
             return kingdom == "ANIMALIA" ? null : "subsp.";
         }
 
+        // Botanical "form" rank (IUCN/CoL spell it "forma"/"form"/"f."). Map to the
+        // canonical marker rather than fabricating "forma." in the fall-through below.
+        if (infraType.StartsWith("form") || infraType == "f." || infraType == "f") {
+            return "f.";
+        }
+
         if (!string.IsNullOrWhiteSpace(infraType)) {
             return infraType.EndsWith(".") ? infraType : infraType + ".";
         }

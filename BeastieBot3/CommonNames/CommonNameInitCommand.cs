@@ -56,7 +56,7 @@ internal sealed class CommonNameInitCommand : AsyncCommand<CommonNameInitCommand
         public int? Limit { get; init; }
 
         [CommandOption("--aggregate")]
-        [Description("After initialization, aggregate common names from all available sources.")]
+        [Description("Also run the common-names aggregate pass once init completes (equivalent to running 'common-names aggregate' afterward).")]
         public bool Aggregate { get; init; }
     }
 

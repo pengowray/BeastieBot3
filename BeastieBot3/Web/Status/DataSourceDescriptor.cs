@@ -67,6 +67,17 @@ public static class DataSourceCatalogue {
             },
         },
         new DataSourceDescriptor {
+            Id = "iucn-api-projected",
+            Name = "IUCN API projection",
+            Kind = "sqlite",
+            Description = "CSV-shaped projection of the API cache for list/chart generation, built by `iucn api project-view`.",
+            ResolvePath = p => p.GetIucnApiProjectedPath(),
+            Metrics = new[] {
+                new MetricSpec { Label = "assessments (latest)", Sql = "SELECT COUNT(*) FROM assessments_html" },
+                new MetricSpec { Label = "taxonomy rows",        Sql = "SELECT COUNT(*) FROM taxonomy_html" },
+            },
+        },
+        new DataSourceDescriptor {
             Id = "wikidata-cache",
             Name = "Wikidata cache",
             Kind = "sqlite",

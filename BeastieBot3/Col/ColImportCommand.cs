@@ -17,6 +17,8 @@ namespace BeastieBot3.Col;
 [CommandInfo("col import", CommandKind.Destructive,
     "Import Catalogue of Life ColDP zip archives into individual SQLite databases.",
     Reason = "Recreates per-archive SQLite databases from scratch with --force.",
+    Rerun = RerunEffect.FreshDataset,
+    RerunNote = "Each CoL archive imports into its own version-named DB (col_coldp_<label>.sqlite); an existing file is skipped unless --force. After a CoL update, point COL_dir at the new archive and re-run.",
     Examples = new[] { "col import", "col import --force" })]
 public sealed class ColImportCommand : Command<ColImportCommand.Settings> {
     public sealed class Settings : CommandSettings {

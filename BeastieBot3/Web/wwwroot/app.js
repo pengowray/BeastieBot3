@@ -419,7 +419,85 @@
     } catch (e) {
       generatedEl.textContent = 'Error: ' + e.message;
     }
+    // IUCN version (local-only, no live call) + dataset comparison ride along
+    // with the sources refresh.
+    refreshIucnVersion();
+    refreshDatasetCompare();
   }
+
+  // --- IUCN version freshness + CSV-vs-API dataset comparison --------------
+
+  async function refreshIucnVersion(opts) {
+    const body = $('#iucn-version-body');
+    if (!body) return;
+    const refresh = opts && opts.refresh;
+    if (refresh) body.textContent = 'Checking live IUCN API…';
+    try {
+      const res = await fetch('/api/iucn-version' + (refresh ? '?refresh=1' : ''));
+      if (!res.ok) { body.textContent = 'Failed: ' + res.status; return; }
+      renderIucnVersion(await res.json());
+    } catch (e) { body.textContent = 'Error: ' + e.message; }
+  }
+
+  function renderIucnVersion(d) {
+    const body = $('#iucn-version-body');
+    if (!body) return;
+    let pillCls = 'missing', pillText = 'not checked';
+    if (d.fresh === true) { pillCls = 'ok'; pillText = 'up to date'; }
+    else if (d.fresh === false) { pillCls = 'warn'; pillText = 'out of date'; }
+    const bits = [];
+    bits.push('<span>Local imported version: <strong>' + escapeHtml(String(d.local || '(none imported)')) + '</strong></span>');
+    if (d.latest) bits.push('<span class="sep">·</span><span>Latest published: <strong>' + escapeHtml(d.latest) + '</strong></span>');
+    bits.push('<span class="status-pill ' + pillCls + '">' + pillText + '</span>');
+    let html = '<div class="iucn-version-row">' + bits.join(' ') + '</div>';
+    if (!d.hasToken) html += '<p class="small muted">Set IUCN_API_TOKEN in <code>.env</code> to compare against the live IUCN API.</p>';
+    else if (d.error) html += '<p class="small reason">Live check error: ' + escapeHtml(d.error) + '</p>';
+    else if (!d.latest) html += '<p class="small muted">Click “Check live version” to query the IUCN API.</p>';
+    else if (d.checkedAt) html += '<p class="small muted">Checked ' + formatRelative(d.checkedAt) + '.</p>';
+    body.innerHTML = html;
+  }
+
+  async function refreshDatasetCompare() {
+    const body = $('#dataset-compare-body');
+    if (!body) return;
+    try {
+      const res = await fetch('/api/dataset-compare');
+      if (!res.ok) { body.textContent = 'Failed: ' + res.status; return; }
+      renderDatasetCompare(await res.json());
+    } catch (e) { body.textContent = 'Error: ' + e.message; }
+  }
+
+  function renderDatasetCompare(d) {
+    const body = $('#dataset-compare-body');
+    if (!body) return;
+    const csv = d.csv || {}, api = d.api || {};
+    if (!csv.exists && !api.exists) { body.textContent = 'Neither IUCN dataset is available.'; return; }
+    const num = (v) => (v == null ? '—' : Number(v).toLocaleString());
+    let html = '<table class="compare-table"><thead><tr><th></th><th>CSV release</th><th>API projection</th><th></th></tr></thead><tbody>';
+    html += '<tr><td class="ct-label">Version</td><td>' + escapeHtml(String(csv.version || '—')) +
+            '</td><td>' + escapeHtml(String(api.version || (api.exists ? '—' : 'not built'))) + '</td><td></td></tr>';
+    html += '<tr><td class="ct-label">Updated</td><td>' + (csv.lastModified ? formatRelative(csv.lastModified) : '—') +
+            '</td><td>' + (api.lastModified ? formatRelative(api.lastModified) : '—') + '</td><td></td></tr>';
+    for (const row of (d.comparison || [])) {
+      let mark = '';
+      if (row.csv != null && row.api != null) {
+        mark = row.equal
+          ? '<span class="agree ok">✓</span>'
+          : '<span class="agree warn">Δ ' + (row.delta > 0 ? '+' : '') + Number(row.delta).toLocaleString() + '</span>';
+      }
+      html += '<tr class="' + (row.category ? 'ct-cat' : 'ct-metric') + '"><td class="ct-label">' +
+              escapeHtml(row.label) + '</td><td>' + num(row.csv) + '</td><td>' + num(row.api) + '</td><td>' + mark + '</td></tr>';
+    }
+    html += '</tbody></table>';
+    if (!api.exists) {
+      html += '<p class="small muted">API projection not built. Run <code>iucn api project-view</code> ' +
+              '(after <code>iucn api cache-all</code>) to enable <code>--dataset api</code>.</p>';
+    }
+    body.innerHTML = html;
+  }
+
+  const iucnVersionCheck = $('#iucn-version-check');
+  if (iucnVersionCheck) iucnVersionCheck.addEventListener('click', () => refreshIucnVersion({ refresh: true }));
 
   $('#refresh-status').addEventListener('click', refreshStatus);
   refreshStatus();
@@ -510,6 +588,18 @@
     }
   }
 
+  // Human-readable "what happens if I run this (again)?" hint, keyed off the
+  // command's `rerun` effect (served by /api/commands). Orthogonal to `kind`.
+  const EFFECTS = {
+    readonly:      { label: 'read-only',  cls: 'readonly',  icon: '👁', hint: 'Read-only — produces output/reports; never changes cached data.' },
+    idempotentadd: { label: 'adds new',   cls: 'add',       icon: '＋', hint: 'Safe to re-run — skips entries already present and only fetches/adds new ones.' },
+    discovers:     { label: 'discovers',  cls: 'discovers', icon: '🔍', hint: 'Discovers new entries — scans an external source for items not yet cached locally.' },
+    rebuilds:      { label: 'rebuilds',   cls: 'rebuilds',  icon: '🔁', hint: 'Rebuilds a derived artifact from data already held locally.' },
+    clearscache:   { label: 'clears cache', cls: 'fresh',   icon: '🧹', hint: 'Deletes cached payloads in place; the seed/queue is kept so the next fetch re-downloads.' },
+    freshdataset:  { label: 'fresh DB',   cls: 'fresh',     icon: '🗄', hint: 'Establishes or replaces a dataset — a new release belongs in a fresh database file.' },
+  };
+  function effectInfo(cmd) { return EFFECTS[cmd.rerun] || null; }
+
   function renderCommandRow(cmd) {
     const wrap = document.createElement('div');
 
@@ -539,6 +629,16 @@
     badge.textContent = cmd.kind;
     row.appendChild(badge);
 
+    // Secondary effect pill (skip for read-only — `kind` already conveys it).
+    const eff = effectInfo(cmd);
+    if (eff && cmd.rerun !== 'readonly') {
+      const effBadge = document.createElement('span');
+      effBadge.className = 'effect-badge ' + eff.cls;
+      effBadge.textContent = eff.label;
+      effBadge.title = eff.hint;
+      row.appendChild(effBadge);
+    }
+
     row.addEventListener('click', () => {
       expandedPath = expandedPath === cmd.path ? null : cmd.path;
       renderCommandTree();
@@ -566,6 +666,15 @@
       form.appendChild(r);
     }
 
+    // "What happens if I run this?" effect hint + any command-specific note.
+    const eff = effectInfo(cmd);
+    if (eff) {
+      const h = document.createElement('p');
+      h.className = 'effect-hint ' + eff.cls;
+      h.textContent = eff.icon + ' ' + eff.hint + (cmd.rerunNote ? ' ' + cmd.rerunNote : '');
+      form.appendChild(h);
+    }
+
     const fields = cmd.form.fields || [];
     if (fields.length === 0) {
       const empty = document.createElement('p');
@@ -578,6 +687,27 @@
       for (const f of fields) renderField(grid, f);
       form.appendChild(grid);
     }
+
+    // Contextual redundancy warning: --force / --max-age-hours re-fetch already-
+    // cached entries. Driven by the live form state (no per-command metadata).
+    const forceWarn = document.createElement('p');
+    forceWarn.className = 'force-warn';
+    forceWarn.hidden = true;
+    form.appendChild(forceWarn);
+    const updateForceWarn = () => {
+      const inputs = Array.from(form.querySelectorAll('[data-field-name]'));
+      const forced = inputs.some(i => i.dataset.fieldKind === 'Flag' && i.checked && /force/i.test(i.dataset.fieldName));
+      const aged = inputs.some(i => /max-age/i.test(i.dataset.fieldName) && (i.value || '').trim() !== '');
+      if (forced) {
+        forceWarn.hidden = false;
+        forceWarn.textContent = '⚠ --force re-downloads / recreates everything already present — redundant work unless the source data has changed.';
+      } else if (aged) {
+        forceWarn.hidden = false;
+        forceWarn.textContent = 'ℹ --max-age-hours re-fetches entries older than the threshold (some redundant downloads).';
+      } else {
+        forceWarn.hidden = true;
+      }
+    };
 
     const actions = document.createElement('div');
     actions.className = 'actions';
@@ -596,8 +726,9 @@
       preview.textContent = '$ beastiebot3 ' + cmd.path + (args.length ? ' ' + args.join(' ') : '');
     };
     updatePreview();
-    form.addEventListener('input', updatePreview);
-    form.addEventListener('change', updatePreview);
+    updateForceWarn();
+    form.addEventListener('input', () => { updatePreview(); updateForceWarn(); });
+    form.addEventListener('change', () => { updatePreview(); updateForceWarn(); });
 
     form.addEventListener('submit', (e) => {
       e.preventDefault();

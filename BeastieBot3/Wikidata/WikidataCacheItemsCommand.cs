@@ -41,8 +41,8 @@ public sealed class WikidataCacheItemsSettings : CommonSettings {
 }
 
 [CommandInfo("wikidata cache-entities", CommandKind.Mutates,
-    "Download Wikidata JSON for queued taxa and populate the local cache, including lookup indexes.",
-    Reason = "Downloads queued Wikidata entity JSON into the cache.",
+    "Download Wikidata entity JSON for taxa queued by seed-taxa (or cache-all), populating the cache and its normalised taxon-name lookup indexes.",
+    Reason = "Downloads queued Wikidata entity JSON into the cache (idempotent additive; --download-force re-downloads already-cached entities).",
     Examples = new[] {
         "wikidata cache-entities",
         "wikidata cache-entities --failed-only"

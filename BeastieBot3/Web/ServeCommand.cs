@@ -106,6 +106,8 @@ internal sealed class ServeCommand : AsyncCommand<ServeCommand.Settings> {
         app.MapJobsEndpoints();
         app.MapPathsEndpoints();
         app.MapStatusEndpoints();
+        app.MapDatasetCompareEndpoints();
+        app.MapIucnVersionEndpoints();
         app.MapCommandsEndpoints();
         app.MapFlowsEndpoints();
         app.MapFilesEndpoints();

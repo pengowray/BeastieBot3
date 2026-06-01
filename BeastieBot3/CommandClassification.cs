@@ -32,6 +32,21 @@ public enum CommandKind {
     Destructive,  // wholesale rewrite or deletion of state; UI re-confirms
 }
 
+// Finer-grained "what happens if I run this (again)?" classification, orthogonal
+// to CommandKind. Surfaced in the web UI so a user can tell, before clicking,
+// whether a run is cheap-and-safe, will discover new work, rebuilds a derived
+// artifact, or should target a fresh database. Unset (= default) is derived from
+// CommandKind in RegisteredCommand.Rerun so most commands need no annotation.
+public enum RerunEffect {
+    Default,        // unspecified — derive from CommandKind
+    ReadOnly,       // reads/produces reports only; never changes cached state
+    IdempotentAdd,  // additive: skips entries already present, only fetches/adds new (safe, cheap re-run)
+    Discovers,      // scans an external source to find entries not yet known locally
+    Rebuilds,       // recomputes/replaces a derived artifact from data already held locally
+    ClearsCache,    // deletes cached payloads in place (a queue/seed is kept; next fetch re-downloads)
+    FreshDataset,   // establishes or replaces a dataset; for a NEW release, target a fresh database file
+}
+
 // Describes a CLI branch (intermediate node in the path tree). One per
 // branch path, declared as an assembly-level attribute at the top of this
 // file because branches don't have a class to attach to.
@@ -54,6 +69,13 @@ public sealed class CommandInfoAttribute : Attribute {
 
     // Human-readable note shown alongside Destructive commands ("Rewrites X tables...").
     public string? Reason { get; init; }
+
+    // What happens on (re-)run. Default is derived from Kind (see RegisteredCommand.Rerun).
+    public RerunEffect Rerun { get; init; } = RerunEffect.Default;
+
+    // Optional one-line specific about the re-run effect (e.g. "--force re-downloads
+    // everything already cached"). Surfaced beside the effect hint in the web UI.
+    public string? RerunNote { get; init; }
 
     // CLI usage examples. Each string is one example command line; the shell-quote
     // tokenizer in `CommandRegistry.ParseShellTokens` understands `"quoted values"`.

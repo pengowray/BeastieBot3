@@ -47,6 +47,12 @@ internal sealed class IucnApiClient : IDisposable {
     public Task<IucnApiResponse> GetAssessmentAsync(long assessmentId, CancellationToken cancellationToken) =>
         SendAsync($"/api/v4/assessment/{assessmentId}", cancellationToken);
 
+    // IUCN Red List API v4 information endpoint returning the current published
+    // release version (e.g. { "red_list_version": "2025-2" }). Used by the web UI
+    // freshness check; if IUCN changes this path the caller degrades gracefully.
+    public Task<IucnApiResponse> GetRedListVersionAsync(CancellationToken cancellationToken) =>
+        SendAsync("/api/v4/information/red_list_version", cancellationToken);
+
     public Task<IucnApiResponse> GetTaxaFamilyListAsync(CancellationToken cancellationToken) =>
         SendAsync("/api/v4/taxa/family/", cancellationToken);
 

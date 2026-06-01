@@ -37,6 +37,10 @@ internal sealed class ChartGeneratorCommand : Command<ChartGeneratorCommand.Sett
         [Description("Path to IUCN SQLite database. Defaults to paths.ini value.")]
         public string? DatabasePath { get; init; }
 
+        [CommandOption("--dataset <SOURCE>")]
+        [Description("Which IUCN dataset to read: 'csv' (default, the imported CSV release) or 'api' (the CSV-shaped projection of the API cache built by 'iucn api project-view').")]
+        public string? Dataset { get; init; }
+
         [CommandOption("--output-dir <DIR>")]
         [Description("Output directory for generated chart files. Defaults to report output directory.")]
         public string? OutputDirectory { get; init; }
@@ -56,7 +60,7 @@ internal sealed class ChartGeneratorCommand : Command<ChartGeneratorCommand.Sett
 
     public override int Execute(CommandContext context, Settings settings, System.Threading.CancellationToken cancellationToken) {
         var paths = new PathsService(settings.IniFile, settings.SettingsDir);
-        var databasePath = paths.ResolveIucnDatabasePath(settings.DatabasePath);
+        var databasePath = IucnDatasetResolver.Resolve(paths, settings.Dataset, settings.DatabasePath);
 
         var chartConfigPath = ResolveChartConfigPath(paths, settings.ChartConfigPath);
         var taxaConfigPath = ResolveTaxaConfigPath(paths, settings.TaxaConfigPath);

@@ -14,7 +14,7 @@ namespace BeastieBot3.Iucn;
 
 public sealed class IucnApiCacheFullSettings : CommonSettings {
     [CommandOption("--source-db <PATH>")]
-    [Description("Override path to the CSV-derived IUCN SQLite database (defaults to Datastore:IUCN_sqlite_from_cvs). Applied to the taxa step.")]
+    [Description("Override path to the CSV-derived IUCN SQLite database (defaults to Datastore:IUCN_sqlite_from_cvs). Used by the cache-taxa phase to choose which species to fetch.")]
     public string? SourceDatabase { get; init; }
 
     [CommandOption("--cache <PATH>")]
@@ -58,13 +58,14 @@ public sealed class IucnApiCacheFullSettings : CommonSettings {
     public bool SkipAssessments { get; init; }
 
     [CommandOption("--continue-on-taxa-failure")]
-    [Description("Proceed to assessments even if the taxa step returns a non-zero exit code.")]
+    [Description("Proceed to the cache-assessments phase even if the cache-taxa phase returns a non-zero exit code.")]
     public bool ContinueOnTaxaFailure { get; init; }
 }
 
 [CommandInfo("iucn api cache-all", CommandKind.Mutates,
-    "Run both cache-taxa and cache-assessments sequentially with a single command.",
-    Reason = "Runs cache-taxa + cache-assessments sequentially.",
+    "Convenience wrapper: downloads IUCN /api/v4 taxa payloads, then their /api/v4/assessment payloads, into the local API cache in one job (equivalent to running cache-taxa then cache-assessments).",
+    Reason = "Caches IUCN /api/v4 taxa + assessment payloads into the local API cache (idempotent additive; --force-taxa/--force-assessments re-download already-cached entries).",
+    Rerun = RerunEffect.IdempotentAdd,
     Examples = new[] {
         "iucn api cache-all",
         "iucn api cache-all --taxa-limit 100 --assessment-limit 200"

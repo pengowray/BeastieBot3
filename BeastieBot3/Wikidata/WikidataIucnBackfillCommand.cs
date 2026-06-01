@@ -49,6 +49,7 @@ public sealed class WikidataIucnBackfillSettings : CommonSettings {
 [CommandInfo("wikidata backfill-iucn", CommandKind.Mutates,
     "Search Wikidata for IUCN taxa lacking cached entities and download them using taxon names and synonyms.",
     Reason = "Searches Wikidata for IUCN taxa without cached entities and downloads them.",
+    Rerun = RerunEffect.Discovers,
     Examples = new[] {
         "wikidata backfill-iucn",
         "wikidata backfill-iucn --limit 500 --queue-all-synonyms"

@@ -44,8 +44,9 @@ public sealed class IucnApiCacheAssessmentsSettings : CommonSettings {
 }
 
 [CommandInfo("iucn api cache-assessments", CommandKind.Mutates,
-    "Download /api/v4/assessment/{assessment_id} payloads based on the cached taxa backlog.",
-    Reason = "Downloads IUCN /api/v4/assessment payloads into the local cache (idempotent additive).",
+    "Download /api/v4/assessment/{assessment_id} payloads for assessments queued in the API cache's taxa-assessment backlog (the backlog is populated by cache-taxa or discover-by-family).",
+    Reason = "Downloads IUCN /api/v4/assessment payloads into the local cache (idempotent additive; --force re-downloads already-cached assessments).",
+    RerunNote = "Skips assessments already downloaded; --force re-downloads everything in the backlog.",
     Examples = new[] {
         "iucn api cache-assessments",
         "iucn api cache-assessments --limit 100",

@@ -13,7 +13,7 @@ namespace BeastieBot3.Wikidata;
 
 public sealed class WikidataCacheFullSettings : CommonSettings {
     [CommandOption("--cache <PATH>")]
-    [Description("Override path to the Wikidata cache SQLite database (defaults to Datastore:wikidata_cache_sqlite). Applied to both steps.")]
+    [Description("Override path to the Wikidata cache SQLite database (defaults to Datastore:wikidata_cache_sqlite). Used by both the seed-taxa and cache-entities phases.")]
     public string? CacheDatabase { get; init; }
 
     [CommandOption("--seed-limit <N>")]
@@ -47,13 +47,14 @@ public sealed class WikidataCacheFullSettings : CommonSettings {
     public bool SkipDownload { get; init; }
 
     [CommandOption("--continue-on-seed-failure")]
-    [Description("Proceed to the download step even if the seed step returned a non-zero exit code.")]
+    [Description("Proceed to the cache-entities (download) phase even if the seed-taxa phase returned a non-zero exit code.")]
     public bool ContinueOnSeedFailure { get; init; }
 }
 
 [CommandInfo("wikidata cache-all", CommandKind.Mutates,
-    "Run both the seed and cache steps sequentially.",
-    Reason = "Runs seed + cache-entities sequentially.",
+    "Convenience wrapper: discovers Wikidata Q-ids for IUCN taxa (SPARQL on P627) and downloads their entity JSON in one job (equivalent to running seed-taxa then cache-entities). Requires WIKIDATA_USER_AGENT in .env.",
+    Reason = "Discovers Wikidata Q-ids and downloads their entity JSON into the cache (idempotent additive; --download-force re-downloads already-cached entities).",
+    Rerun = RerunEffect.IdempotentAdd,
     Examples = new[] {
         "wikidata cache-all",
         "wikidata cache-all --seed-limit 1000 --download-limit 200"

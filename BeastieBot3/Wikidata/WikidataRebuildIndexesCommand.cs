@@ -29,6 +29,7 @@ public sealed class WikidataRebuildIndexesSettings : CommonSettings {
 [CommandInfo("wikidata rebuild-indexes", CommandKind.Mutates,
     "Rebuild lookup indexes (normalized taxon-name index plus optional P141 cache) without redownloading Wikidata entities.",
     Reason = "Rebuilds lookup indexes from cached Wikidata JSON; --force replaces existing rows.",
+    Rerun = RerunEffect.Rebuilds,
     Examples = new[] {
         "wikidata rebuild-indexes",
         "wikidata rebuild-indexes --force",

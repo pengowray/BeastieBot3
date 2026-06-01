@@ -50,6 +50,25 @@
           <button id="refresh-status" class="ghost">Refresh</button>
         </span>
       </div>
+      <section class="card" id="iucn-version-card">
+        <div class="card-head">
+          <h3>IUCN Red List version</h3>
+          <button id="iucn-version-check" class="ghost small">Check live version</button>
+        </div>
+        <div id="iucn-version-body" class="muted small">Loading&hellip;</div>
+      </section>
+      <section class="card" id="dataset-compare-card">
+        <div class="card-head">
+          <h3>IUCN dataset comparison — CSV vs API</h3>
+        </div>
+        <p class="muted small">
+          List/chart generation can read either the imported CSV release or the API-cache projection
+          (<code>iucn api project-view</code>, selected with <code>--dataset api</code>). Small differences are
+          expected: the API set excludes delisted taxa that no longer carry a latest assessment, and a few
+          latest assessments may not be downloaded yet.
+        </p>
+        <div id="dataset-compare-body" class="muted small">Loading&hellip;</div>
+      </section>
       <section class="card">
         <ul id="status-list" class="status-list"></ul>
       </section>

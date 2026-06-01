@@ -297,6 +297,71 @@ button.ghost:hover { background: #1f242c; }
 .kind-badge.mutates { color: var(--accent); border: 1px solid rgba(122,162,247,0.4); }
 .kind-badge.destructive { color: var(--warn); border: 1px solid rgba(224,175,104,0.4); }
 
+/* Secondary "what happens on (re-)run" pill — orthogonal to kind, muted by default. */
+.cmd-row .effect-badge {
+  font-size: 0.68em;
+  letter-spacing: 0.03em;
+  padding: 0.08rem 0.4rem;
+  border-radius: 10px;
+  color: var(--muted);
+  border: 1px solid var(--border);
+  white-space: nowrap;
+}
+.effect-badge.discovers { color: var(--accent); border-color: rgba(122,162,247,0.35); }
+.effect-badge.fresh     { color: var(--warn);   border-color: rgba(224,175,104,0.35); }
+.effect-badge.rebuilds  { color: var(--muted);  border-color: var(--border); }
+.effect-badge.add       { color: var(--muted);  border-color: var(--border); }
+
+.cmd-form .effect-hint {
+  font-size: 0.8em;
+  color: var(--muted);
+  margin: 0 0 0.6rem 0;
+}
+.cmd-form .effect-hint.discovers { color: var(--accent); }
+.cmd-form .effect-hint.fresh { color: var(--warn); }
+.cmd-form .force-warn {
+  font-size: 0.8em;
+  color: var(--warn);
+  margin: 0.4rem 0 0.2rem 0;
+}
+
+/* IUCN version freshness + CSV-vs-API dataset comparison (Data sources view). */
+.card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+.card-head h3 { margin: 0; font-size: 0.95em; }
+.iucn-version-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-wrap: wrap;
+  font-size: 0.9em;
+  margin-bottom: 0.25rem;
+}
+table.compare-table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 0.85em;
+  margin-top: 0.25rem;
+}
+table.compare-table th,
+table.compare-table td {
+  text-align: right;
+  padding: 0.15rem 0.6rem;
+  border-bottom: 1px solid var(--border);
+}
+table.compare-table th:first-child,
+table.compare-table td.ct-label { text-align: left; }
+table.compare-table thead th { color: var(--muted); font-weight: 600; }
+table.compare-table tr.ct-metric td { font-weight: 600; }
+table.compare-table tr.ct-cat td.ct-label { color: var(--muted); padding-left: 1.2rem; }
+.compare-table .agree.ok { color: var(--ok); }
+.compare-table .agree.warn { color: var(--warn); font-size: 0.92em; }
+
 .cmd-form {
   margin: 0.25rem 0 0.5rem 2rem;
   padding: 0.75rem 1rem;

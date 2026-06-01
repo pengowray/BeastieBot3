@@ -381,46 +381,15 @@ VALUES (@filename, @version, @started);";
     }
 
     private void EnsureViews() {
+        // The join view definition (and its collision-aliasing) lives in the shared
+        // IucnViewBuilder so the CSV importer and the API-cache projection can never
+        // produce divergent column sets.
         if (GetTableColumns("assessments") is not null && GetTableColumns("taxonomy") is not null) {
-            var selectStatement = BuildViewSelect("assessments", "taxonomy");
-            RecreateView("view_assessments_taxonomy", selectStatement);
+            IucnViewBuilder.RecreateJoinView(_connection, "view_assessments_taxonomy", "assessments", "taxonomy");
         }
 
         if (GetTableColumns("assessments_html") is not null && GetTableColumns("taxonomy_html") is not null) {
-            var selectStatement = BuildViewSelect("assessments_html", "taxonomy_html");
-            RecreateView("view_assessments_html_taxonomy_html", selectStatement);
-        }
-    }
-
-    private string BuildViewSelect(string assessmentsTable, string taxonomyTable) {
-        var assessmentCols = GetTableColumns(assessmentsTable) ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var taxonomyCols = GetTableColumns(taxonomyTable) ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-
-        var selectParts = new List<string>();
-        foreach (var col in assessmentCols) {
-            selectParts.Add($"a.{QuoteIdentifier(col)}");
-        }
-        foreach (var col in taxonomyCols) {
-            if (col.Equals("taxonId", StringComparison.OrdinalIgnoreCase) ||
-                col.Equals("import_id", StringComparison.OrdinalIgnoreCase)) {
-                continue;
-            }
-            var alias = assessmentCols.Contains(col) ? $"{col}_taxonomy" : col;
-            selectParts.Add($"t.{QuoteIdentifier(col)} AS {QuoteIdentifier(alias)}");
-        }
-
-        return $"SELECT {string.Join(", ", selectParts)} FROM {QuoteIdentifier(assessmentsTable)} AS a LEFT JOIN {QuoteIdentifier(taxonomyTable)} AS t ON t.taxonId = a.taxonId";
-    }
-
-    private void RecreateView(string viewName, string selectStatement) {
-        using (var drop = _connection.CreateCommand()) {
-            drop.CommandText = $"DROP VIEW IF EXISTS {QuoteIdentifier(viewName)};";
-            drop.ExecuteNonQuery();
-        }
-
-        using (var create = _connection.CreateCommand()) {
-            create.CommandText = $"CREATE VIEW {QuoteIdentifier(viewName)} AS {selectStatement};";
-            create.ExecuteNonQuery();
+            IucnViewBuilder.RecreateJoinView(_connection, "view_assessments_html_taxonomy_html", "assessments_html", "taxonomy_html");
         }
     }
 

@@ -38,6 +38,9 @@ namespace BeastieBot3.Configuration;
 
         public string? GetIucnApiCachePath() => _reader.Get("Datastore:IUCN_api_cache_sqlite");
 
+        // Derived CSV-shaped projection of the API cache (built by `iucn api project-view`).
+        public string? GetIucnApiProjectedPath() => _reader.Get("Datastore:IUCN_api_projected_sqlite");
+
         public string? GetWikidataCachePath() =>
             _reader.Get("Datastore:wikidata_cache_sqlite") ?? _reader.Get("wikidata_cache_sqlite");
 
@@ -101,6 +104,41 @@ namespace BeastieBot3.Configuration;
             }
             catch (Exception ex) {
                 throw new InvalidOperationException($"Failed to resolve API cache path {configuredPath}: {ex.Message}", ex);
+            }
+        }
+
+        /// <summary>
+        /// Resolve the CSV-shaped API projection database path. Falls back to a file next to the
+        /// API cache (iucn_api_projected.sqlite), then the datastore dir, so `iucn api project-view`
+        /// works without an explicit INI entry. The file may not exist yet — callers that READ it
+        /// (e.g. generate-lists --dataset api) must check File.Exists and tell the user to build it.
+        /// </summary>
+        public string ResolveIucnApiProjectedPath(string? overridePath) {
+            var configuredPath = !string.IsNullOrWhiteSpace(overridePath)
+                ? overridePath
+                : GetIucnApiProjectedPath();
+
+            if (string.IsNullOrWhiteSpace(configuredPath)) {
+                var cachePath = GetIucnApiCachePath();
+                if (!string.IsNullOrWhiteSpace(cachePath)) {
+                    var dir = Path.GetDirectoryName(Path.GetFullPath(cachePath));
+                    if (!string.IsNullOrWhiteSpace(dir)) {
+                        configuredPath = Path.Combine(dir, "iucn_api_projected.sqlite");
+                    }
+                }
+                if (string.IsNullOrWhiteSpace(configuredPath)) {
+                    var datastoreDir = GetDatastoreDir();
+                    configuredPath = !string.IsNullOrWhiteSpace(datastoreDir)
+                        ? Path.Combine(datastoreDir, "iucn_api_projected.sqlite")
+                        : throw new InvalidOperationException("IUCN API projection path is not configured. Set Datastore:IUCN_api_projected_sqlite or pass --output.");
+                }
+            }
+
+            try {
+                return Path.GetFullPath(configuredPath);
+            }
+            catch (Exception ex) {
+                throw new InvalidOperationException($"Failed to resolve API projection path {configuredPath}: {ex.Message}", ex);
             }
         }
 

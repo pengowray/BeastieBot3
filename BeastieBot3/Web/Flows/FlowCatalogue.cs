@@ -80,6 +80,9 @@ public static class FlowCatalogue {
                     Commands = new[] { "iucn import" },
                     InputSourceIds = new[] { "iucn-csv-input" },
                     OutputSourceIds = new[] { "iucn-main" },
+                    Note = "This is the CSV path: fast and the current published snapshot, but the zip must be downloaded manually. " +
+                           "An alternative dataset comes from the IUCN API (see the IUCN data-quality workflow): build it with `iucn api cache-all` then `iucn api project-view`, and generate lists/charts from it with `--dataset api`. " +
+                           "A new IUCN release belongs in a fresh database file (IUCN_<version>.sqlite) — importing into an existing DB double-counts.",
                 },
                 new FlowStep {
                     Id = "col-import",
@@ -97,7 +100,7 @@ public static class FlowCatalogue {
                     Commands = new[] { "wikidata cache-all", "wikidata seed-taxa", "wikidata cache-entities" },
                     InputSourceIds = new[] { "iucn-main" },
                     OutputSourceIds = new[] { "wikidata-cache" },
-                    Note = "Run wikidata cache-all to do both steps in one go. Requires WIKIDATA_USER_AGENT in .env.",
+                    Note = "wikidata cache-all bundles the seed-taxa (Q-id discovery) and cache-entities (JSON download) passes into a single job. Requires WIKIDATA_USER_AGENT in .env.",
                 },
                 new FlowStep {
                     Id = "wikipedia-enqueue-fetch",
@@ -106,7 +109,7 @@ public static class FlowCatalogue {
                     Commands = new[] { "wikipedia enqueue-wikidata", "wikipedia enqueue-taxa", "wikipedia fetch-pages" },
                     InputSourceIds = new[] { "iucn-main", "wikidata-cache" },
                     OutputSourceIds = new[] { "wikipedia-cache" },
-                    Note = "Three separate commands by default. fetch-pages can also enqueue+fetch a one-off page inline via --title \"Ursus maritimus\".",
+                    Note = "By default this runs three commands — enqueue-wikidata, enqueue-taxa, then fetch-pages. fetch-pages can also enqueue+fetch a single page inline via --title \"Ursus maritimus\".",
                 },
                 new FlowStep {
                     Id = "wikipedia-match",
@@ -148,12 +151,12 @@ public static class FlowCatalogue {
                     InputSourceIds = new[] { "iucn-main", "wikidata-cache" },
                     OutputSourceIds = new[] { "wikidata-cache" },
                     Section = FlowSection.Maintenance,
-                    Note = "Only needed if `wikidata report-coverage` shows many unmatched taxa — the standard cache-all pass only finds Q-ids that Wikidata already knows are IUCN species.",
+                    Note = "Only needed if `wikidata report-coverage` shows many unmatched taxa. The main cache-all / seed-taxa pass only finds Q-ids that Wikidata already tags as IUCN species (via P627); backfill searches by scientific name and synonyms for the rest.",
                 },
                 new FlowStep {
                     Id = "wikidata-rebuild-indexes",
                     Title = "Rebuild Wikidata lookup indexes",
-                    Description = "Recompute the normalised taxon-name index from cached entity JSON. cache-entities already populates this inline; only run if the index is suspected stale.",
+                    Description = "Recompute the normalised taxon-name index from cached entity JSON. The cache-entities command builds this index automatically during download, so only run this when the index is suspected stale.",
                     Commands = new[] { "wikidata rebuild-indexes" },
                     InputSourceIds = new[] { "wikidata-cache" },
                     OutputSourceIds = new[] { "wikidata-cache" },
@@ -317,6 +320,29 @@ public static class FlowCatalogue {
                         new FlowOutputPattern { Root = "reports", Pattern = "iucn-no-latest-assessment-*.md",  Label = "Markdown" },
                         new FlowOutputPattern { Root = "reports", Pattern = "iucn-no-latest-assessment-*.csv", Label = "CSV" },
                     },
+                },
+
+                // -------- Maintenance: building & projecting the IUCN API dataset --------
+                // Two ways to populate IUCN data, shown together so the trade-offs are clear.
+                new FlowStep {
+                    Id = "build-api-cache",
+                    Title = "Build / refresh the IUCN API cache",
+                    Description = "Populate the local API cache (the source for the reports above and for the optional API dataset). Two complementary commands: cache-all walks the SIS ids present in the imported CSV; discover-by-family pages every family on the live API to also pick up removed/historical/reclassified taxa the CSV omits.",
+                    Commands = new[] { "iucn api cache-all", "iucn api discover-by-family" },
+                    InputSourceIds = new[] { "iucn-main" },
+                    OutputSourceIds = new[] { "iucn-api-cache" },
+                    Section = FlowSection.Maintenance,
+                    Note = "CSV import vs API cache: the CSV path (iucn import, in the Wikipedia reports workflow) is faster and is the current published snapshot, but the zip is downloaded manually. The API cache is more complete (historical + delisted taxa via discover-by-family) and richer (synonyms, narratives), but is built incrementally over many HTTP calls. Both are idempotent — re-running only fetches what's missing unless you pass --force.",
+                },
+                new FlowStep {
+                    Id = "project-api-view",
+                    Title = "Project the API cache for list/chart generation",
+                    Description = "Re-shape the latest cached assessments into a CSV-compatible relational view so list/chart generation can read the API dataset via --dataset api. Compare the two datasets on the Data sources page.",
+                    Commands = new[] { "iucn api project-view" },
+                    InputSourceIds = new[] { "iucn-api-cache" },
+                    OutputSourceIds = new[] { "iucn-api-projected" },
+                    Section = FlowSection.Maintenance,
+                    Note = "Rebuilds the projection from whatever is currently cached (latest assessments only). Run after cache-all / cache-assessments. Then: wikipedia generate-lists --dataset api / generate-charts --dataset api.",
                 },
             },
             Outputs = new[] {

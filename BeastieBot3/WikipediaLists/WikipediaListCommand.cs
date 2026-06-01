@@ -29,6 +29,10 @@ public sealed class WikipediaListCommand : Command<WikipediaListCommand.Settings
         [CommandOption("--database <PATH>")]
         public string? DatabasePath { get; init; }
 
+        [CommandOption("--dataset <SOURCE>")]
+        [System.ComponentModel.Description("Which IUCN dataset to read: 'csv' (default, the imported CSV release) or 'api' (the CSV-shaped projection of the API cache built by 'iucn api project-view').")]
+        public string? Dataset { get; init; }
+
         [CommandOption("--config <FILE>")]
         public string? ConfigPath { get; init; }
 
@@ -83,7 +87,7 @@ public sealed class WikipediaListCommand : Command<WikipediaListCommand.Settings
         var templatesDir = ResolveTemplatesDir(paths, settings.TemplatesDirectory);
         var rulesPath = ResolveRulesPath(paths, settings.RulesPath);
         var outputDir = ResolveOutputDir(paths, settings.OutputDirectory);
-        var databasePath = paths.ResolveIucnDatabasePath(settings.DatabasePath);
+        var databasePath = IucnDatasetResolver.Resolve(paths, settings.Dataset, settings.DatabasePath);
 
         var loader = new WikipediaListDefinitionLoader();
         var config = loader.Load(configPath);

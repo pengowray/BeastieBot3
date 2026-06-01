@@ -17,6 +17,8 @@ public static class CommandsEndpoints {
                 description = c.Description,
                 kind = c.Kind.ToString().ToLowerInvariant(),
                 reason = c.Reason,
+                rerun = c.Rerun.ToString().ToLowerInvariant(),
+                rerunNote = c.RerunNote,
                 examples = c.Examples,
                 branch = c.Branch,
                 form = CommandReflector.BuildSchema(c.Type),

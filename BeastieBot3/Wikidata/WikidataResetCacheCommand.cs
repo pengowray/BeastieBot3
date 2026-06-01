@@ -24,6 +24,8 @@ public sealed class WikidataResetCacheSettings : CommonSettings {
 [CommandInfo("wikidata reset-cache", CommandKind.Destructive,
     "Delete downloaded Wikidata JSON payloads while keeping the seed queue intact.",
     Reason = "Deletes downloaded Wikidata JSON payloads.",
+    Rerun = RerunEffect.ClearsCache,
+    RerunNote = "Deletes downloaded entity JSON but preserves the seed queue, so a following cache-entities re-downloads from scratch.",
     Examples = new[] {
         "wikidata reset-cache",
         "wikidata reset-cache --force"
