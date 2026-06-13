@@ -9,6 +9,10 @@ using BeastieBot3.WikipediaLists.Legacy;
 using BeastieBot3.CommonNames;
 using BeastieBot3.Iucn;
 using BeastieBot3.Taxonomy;
+using static BeastieBot3.WikipediaLists.RecordClassification;
+using static BeastieBot3.WikipediaLists.ProseFormat;
+using static BeastieBot3.WikipediaLists.ParentSummaryTableBuilder;
+using static BeastieBot3.WikipediaLists.SpeciesLineFormatter;
 
 // Main engine for generating Wikipedia species list wikitext. Workflow:
 // 1. IucnListQueryService fetches matching species from IUCN database
@@ -32,6 +36,10 @@ internal sealed class WikipediaListGenerator {
     // Per-child status-count aggregator for parent lists (summary table + count sentences).
     // Optional: when null, parent lists degrade gracefully (no summary table).
     private readonly IucnChartDataBuilder? _chartData;
+    // Builds the English-prose intro + mustache template context (counts, percentages, paragraphs).
+    private readonly IntroProseBuilder _introProse;
+    // Renders one record to a wikitext bullet line in the selected listing style (owns name resolution).
+    private readonly SpeciesLineFormatter _lineFormatter;
 
     public WikipediaListGenerator(
         IucnListQueryService queryService,
@@ -48,6 +56,8 @@ internal sealed class WikipediaListGenerator {
         _colEnricher = null;
         _taxonRules = taxonRules;
         _chartData = chartData;
+        _introProse = new IntroProseBuilder(_queryService);
+        _lineFormatter = new SpeciesLineFormatter(_legacyRules, _storeBackedProvider, _commonNameProvider);
     }
 
     /// <summary>
@@ -69,6 +79,8 @@ internal sealed class WikipediaListGenerator {
         _colEnricher = colEnricher;
         _taxonRules = taxonRules;
         _chartData = chartData;
+        _introProse = new IntroProseBuilder(_queryService);
+        _lineFormatter = new SpeciesLineFormatter(_legacyRules, _storeBackedProvider, _commonNameProvider);
     }
 
     public WikipediaListResult Generate(
@@ -98,85 +110,9 @@ internal sealed class WikipediaListGenerator {
         var scopeLabel = BuildScopeLabel(definition);
         var sectionSummary = string.Join("; ", sections.Select(section => $"{section.Definition.Heading} ({section.Records.Count})"));
 
-        // Classify records by rank
         var allRecords = sections.SelectMany(s => s.Records).ToList();
-        var speciesCount = allRecords.Count(r => !IsInfraspecific(r) && string.IsNullOrWhiteSpace(r.SubpopulationName));
-        var subspeciesCount = allRecords.Count(IsSubspecies);
-        var varietyCount = allRecords.Count(IsVariety);
-        var subpopCount = allRecords.Count(r => !string.IsNullOrWhiteSpace(r.SubpopulationName));
-
-        var taxaAdj = definition.TaxaAdjective ?? "";
-        var taxaNameLower = definition.TaxaNameLower ?? "";
-        var statusText = definition.StatusText ?? "";
-        var statusWikiLink = definition.StatusWikiLink ?? "";
-
-        var isExtinct = statusText == "extinct" || statusText == "extinct in the wild";
-        var hasIntroMetadata = !string.IsNullOrEmpty(definition.TaxaAdjective) && !string.IsNullOrEmpty(definition.StatusText);
-
-        // Compute percentage of evaluated species (skip for extinct lists and lists without intro metadata)
-        string? percentageText = null;
-        if (hasIntroMetadata && !isExtinct) {
-            var evaluatedTotal = _queryService.CountEvaluatedSpecies(definition.Filters);
-            if (evaluatedTotal > 0 && speciesCount > 0) {
-                percentageText = $"{FormatPercentage(speciesCount, evaluatedTotal)} of all evaluated {taxaAdj} species are listed as {statusText}.";
-            }
-        }
-
-        // Build pre-rendered intro paragraphs (skip when no intro metadata, suppress subpops for extinct)
-        string? subspeciesParagraph = null;
-        string? subpopulationParagraph = null;
-        string? threatenedContext = null;
-        string? ddInfo = null;
-        string? notesParagraph = null;
-        if (hasIntroMetadata) {
-            subspeciesParagraph = BuildSubspeciesParagraph(subspeciesCount, varietyCount, taxaAdj, statusText);
-            subpopulationParagraph = isExtinct ? null : BuildSubpopulationParagraph(subpopCount, taxaNameLower, statusText);
-            threatenedContext = BuildThreatenedContext(definition, taxaAdj, taxaNameLower);
-            ddInfo = BuildDataDeficientInfo(definition, taxaAdj);
-            notesParagraph = BuildNotesParagraph(speciesCount, subspeciesCount, varietyCount, subpopCount, taxaAdj, statusText);
-        }
-
-        // CR-specific: possibly extinct counts
-        string? peText = null;
-        if (statusText == "critically endangered") {
-            var peCount = allRecords.Count(r => r.StatusCode == "CR(PE)" && !IsInfraspecific(r) && string.IsNullOrWhiteSpace(r.SubpopulationName));
-            var pewCount = allRecords.Count(r => r.StatusCode == "CR(PEW)" && !IsInfraspecific(r) && string.IsNullOrWhiteSpace(r.SubpopulationName));
-            var combinedPe = peCount + pewCount;
-            if (combinedPe > 0) {
-                if (peCount > 0 && pewCount == 0) {
-                    peText = $", including {NewspaperNumber(peCount)} which are tagged as ''possibly extinct''";
-                } else {
-                    peText = $", including {NewspaperNumber(combinedPe)} which are tagged as ''possibly extinct'' or ''possibly extinct in the wild''";
-                }
-            } else {
-                peText = ", none of which are tagged as ''possibly extinct''";
-            }
-        }
-
-        var context = new Dictionary<string, object?> {
-            ["title"] = definition.Title,
-            ["description"] = definition.Description,
-            ["scope_label"] = scopeLabel,
-            ["dataset_version"] = datasetVersion,
-            ["dataset_year"] = datasetYear,
-            ["generated_at"] = DateTimeOffset.UtcNow.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
-            ["total_entries"] = totalCount,
-            ["sections_summary"] = sectionSummary,
-            // Intro text variables
-            ["species_count"] = NewspaperNumber(speciesCount),
-            ["taxa_adjective"] = string.IsNullOrEmpty(taxaAdj) ? null : taxaAdj,
-            ["taxa_name_lower"] = taxaNameLower,
-            ["status_text"] = statusText,
-            ["status_wiki_link"] = statusWikiLink,
-            ["percentage_text"] = percentageText,
-            ["pe_text"] = peText,
-            ["subspecies_paragraph"] = subspeciesParagraph,
-            ["subpopulation_paragraph"] = subpopulationParagraph,
-            ["threatened_context"] = threatenedContext,
-            ["dd_info"] = ddInfo,
-            ["notes_paragraph"] = notesParagraph,
-            ["simple_intro"] = hasIntroMetadata ? null : "1",
-        };
+        var context = _introProse.BuildContext(
+            definition, allRecords, totalCount, scopeLabel, sectionSummary, datasetVersion, datasetYear);
 
         var headerTemplate = definition.Templates.Header ?? defaults.HeaderTemplate;
         var footerTemplate = definition.Templates.Footer ?? defaults.FooterTemplate;
@@ -517,112 +453,6 @@ internal sealed class WikipediaListGenerator {
         return (sb.ToString().TrimEnd(), headingCount);
     }
 
-    // Soft highlight tints for the critically-endangered family columns (PE/PEW/CR) and the CR-total.
-    private const string CrCellStyle = "style=\"background:#fce8e6\"|";
-    private const string CrTotalStyle = "style=\"background:#f8d7da\"|";
-
-    private static bool IsCrFamily(string code) =>
-        code is "CR" or "CR(PE)" or "CR(PEW)";
-
-    // Header tooltip text for a status entry (pure CR gets an explicit exclusion note).
-    private static string StatusTooltip(ChartStatusEntry e) =>
-        e.Code == "CR" ? "Critically Endangered (excluding possibly-extinct)" : e.Label;
-
-    /// <summary>
-    /// Build the per-child summary wikitable: a single sortable header row (so column sorting works),
-    /// the full EX..DD breakdown that sums to Total, then a derived <em>CR total</em> column placed at
-    /// the far right so it never disturbs the additive columns. PE/PEW/CR cells are tinted; a status-code
-    /// legend (the pie-chart replacement) follows the table. Curated children first, then the remaining
-    /// sub-taxa by descending total, with a pinned Total row.
-    /// </summary>
-    private string BuildChildSummaryTable(
-        Dictionary<string, IReadOnlyList<StatusCount>> breakdown,
-        IReadOnlyList<string> orderedCuratedKeys,
-        IReadOnlyDictionary<string, ChildListLink> linkByValue) {
-
-        var entries = ChartStatusOrder.Entries;
-        var sb = new StringBuilder();
-        sb.AppendLine("{| class=\"wikitable sortable\"");
-
-        // Single header row: abbr tooltips on every code, CR family tinted; Total, then CR total last.
-        var header = new StringBuilder("! Group");
-        foreach (var e in entries) {
-            var hl = IsCrFamily(e.Code) ? CrCellStyle : "";
-            header.Append($" !! {hl}{{{{abbr|{e.Code}|{StatusTooltip(e)}}}}}");
-        }
-        header.Append(" !! Total");
-        header.Append($" !! {CrTotalStyle}{{{{abbr|CR total|All critically endangered, including CR(PE) and CR(PEW)}}}}");
-        sb.AppendLine(header.ToString());
-
-        var totals = new int[entries.Count];
-        var grandTotal = 0;
-        var grandCr = 0;
-        var emitted = new HashSet<string>(StringComparer.Ordinal);
-
-        void EmitRow(string key, IReadOnlyList<StatusCount> row) {
-            sb.AppendLine("|-");
-            var label = linkByValue.TryGetValue(key, out var link)
-                ? $"[[{link.WikiTitle}|{link.DisplayName}]]"
-                : ToTitleCase(key);
-            var cells = new StringBuilder($"| {label}");
-            var rowTotal = 0;
-            var rowCr = 0;
-            for (var i = 0; i < entries.Count; i++) {
-                var c = row[i].Count;
-                var hl = IsCrFamily(entries[i].Code) ? CrCellStyle : "";
-                cells.Append($" || {hl}{c}");
-                totals[i] += c;
-                rowTotal += c;
-                if (IsCrFamily(entries[i].Code)) rowCr += c;
-            }
-            cells.Append($" || {rowTotal}");
-            cells.Append($" || {CrTotalStyle}{rowCr}");
-            sb.AppendLine(cells.ToString());
-            grandTotal += rowTotal;
-            grandCr += rowCr;
-        }
-
-        foreach (var key in orderedCuratedKeys) {
-            if (breakdown.TryGetValue(key, out var row) && emitted.Add(key)) EmitRow(key, row);
-        }
-        foreach (var kv in breakdown
-            .Where(k => !emitted.Contains(k.Key))
-            .OrderByDescending(k => k.Value.Sum(s => s.Count))
-            .ThenBy(k => k.Key, StringComparer.Ordinal)) {
-            EmitRow(kv.Key, kv.Value);
-            emitted.Add(kv.Key);
-        }
-
-        sb.AppendLine("|- class=\"sortbottom\"");
-        var totalCells = new StringBuilder("! Total");
-        for (var i = 0; i < entries.Count; i++) {
-            var hl = IsCrFamily(entries[i].Code) ? CrCellStyle : "";
-            totalCells.Append($" !! {hl}{totals[i]}");
-        }
-        totalCells.Append($" !! {grandTotal}");
-        totalCells.Append($" !! {CrTotalStyle}{grandCr}");
-        sb.AppendLine(totalCells.ToString());
-        sb.AppendLine("|}");
-        sb.Append(BuildStatusLegend());
-        return sb.ToString();
-    }
-
-    /// <summary>
-    /// Reader-facing key to the status columns — the explanatory text that replaces the old pie charts.
-    /// </summary>
-    private static string BuildStatusLegend() {
-        return
-            "''Conservation status'' ([[IUCN Red List]]): " +
-            "[[Extinct]] (EX), [[Extinct in the wild]] (EW), " +
-            "[[Critically endangered]] (CR) — shown split into possibly extinct (PE), " +
-            "possibly extinct in the wild (PEW), and other critically endangered; " +
-            "[[Endangered species|Endangered]] (EN), [[Vulnerable species|Vulnerable]] (VU), " +
-            "[[Near-threatened species|Near threatened]] (NT), [[Least-concern species|Least concern]] (LC), " +
-            "[[Data deficient]] (DD). " +
-            "The category columns (EX–DD) add up to ''Total''; the ''CR total'' column on the right " +
-            "is the sum of CR, CR(PE) and CR(PEW).";
-    }
-
     /// <summary>The finest rank-based single-value filter the children carry (e.g. "class" for insects/gastropods).</summary>
     private static string? DeriveChildRank(IReadOnlyList<ChildListLink> children) {
         string? best = null;
@@ -648,40 +478,6 @@ internal sealed class WikipediaListGenerator {
             return TaxonFilterSql.NormalizeValue(childRank, f.Value);
         }
         return null;
-    }
-
-    /// <summary>Sum a child's breakdown row over the codes this section covers (e.g. CR+CR(PE)+CR(PEW) for a CR list).</summary>
-    private static int SectionStatusTotal(IReadOnlyList<StatusCount> row, IReadOnlyCollection<string> sectionStatusCodes) {
-        var set = new HashSet<string>(sectionStatusCodes, StringComparer.OrdinalIgnoreCase);
-        return row.Where(sc => set.Contains(sc.Code)).Sum(sc => sc.Count);
-    }
-
-    /// <summary>Count for one status code in a breakdown row (0 if absent).</summary>
-    private static int RowCount(IReadOnlyList<StatusCount> row, string code) =>
-        row.FirstOrDefault(sc => sc.Code == code)?.Count ?? 0;
-
-    /// <summary>
-    /// A trailing ", including N possibly extinct [and M possibly extinct in the wild]" clause for a
-    /// child count sentence. Empty when both counts are zero; omits whichever of PE/PEW is zero.
-    /// </summary>
-    private string PossiblyExtinctClause(int pe, int pew) {
-        if (pe > 0 && pew > 0)
-            return $", including {NewspaperNumber(pe)} ''possibly extinct'' and {NewspaperNumber(pew)} ''possibly extinct in the wild''";
-        if (pe > 0)
-            return $", including {NewspaperNumber(pe)} ''possibly extinct''";
-        if (pew > 0)
-            return $", including {NewspaperNumber(pew)} ''possibly extinct in the wild''";
-        return string.Empty;
-    }
-
-    /// <summary>Plain "Related lists" bullet block for non-phylogenetic see-also cross-references.</summary>
-    private static string BuildRelatedListsBlock(IReadOnlyList<ChildListLink> seeAlso) {
-        var sb = new StringBuilder();
-        sb.AppendLine("== Related lists ==");
-        foreach (var link in seeAlso) {
-            sb.AppendLine($"* [[{link.WikiTitle}|{link.DisplayName}]]");
-        }
-        return sb.ToString().TrimEnd();
     }
 
     /// <summary>
@@ -1044,7 +840,7 @@ internal sealed class WikipediaListGenerator {
         } else {
             if (iucnRecords.Count >= 3) builder.AppendLine("{{div col|colwidth=30em}}");
             foreach (var record in OrderRecordsForOutput(iucnRecords, otherContext)) {
-                builder.AppendLine(FormatSpeciesLine(record, display, statusContext, otherContext));
+                builder.AppendLine(_lineFormatter.FormatSpeciesLine(record, display, statusContext, otherContext));
             }
             if (iucnRecords.Count >= 3) builder.AppendLine("{{div col end}}");
         }
@@ -1233,7 +1029,7 @@ internal sealed class WikipediaListGenerator {
         } else {
             if (iucnRecords.Count >= 3) builder.AppendLine("{{div col|colwidth=30em}}");
             foreach (var record in OrderRecordsForOutput(iucnRecords, otherContext)) {
-                builder.AppendLine(FormatSpeciesLine(record, display, statusContext, otherContext));
+                builder.AppendLine(_lineFormatter.FormatSpeciesLine(record, display, statusContext, otherContext));
             }
             if (iucnRecords.Count >= 3) builder.AppendLine("{{div col end}}");
         }
@@ -1503,7 +1299,7 @@ internal sealed class WikipediaListGenerator {
         } else {
             if (node.Items.Count >= 3) builder.AppendLine("{{div col|colwidth=30em}}");
             foreach (var record in OrderRecordsForOutput(node.Items, otherContext)) {
-                builder.AppendLine(FormatSpeciesLine(record, display, statusContext, otherContext));
+                builder.AppendLine(_lineFormatter.FormatSpeciesLine(record, display, statusContext, otherContext));
             }
             if (node.Items.Count >= 3) builder.AppendLine("{{div col end}}");
         }
@@ -1553,7 +1349,7 @@ internal sealed class WikipediaListGenerator {
         if (species.Count > 0) {
             if (species.Count >= 3) builder.AppendLine("{{div col|colwidth=30em}}");
             foreach (var record in OrderRecordsForOutput(species, otherContext)) {
-                builder.AppendLine(FormatSpeciesLine(record, display, statusContext, otherContext));
+                builder.AppendLine(_lineFormatter.FormatSpeciesLine(record, display, statusContext, otherContext));
             }
             if (species.Count >= 3) builder.AppendLine("{{div col end}}");
         }
@@ -1567,7 +1363,7 @@ internal sealed class WikipediaListGenerator {
             builder.AppendLine();
             if (subspecies.Count >= 3) builder.AppendLine("{{div col|colwidth=30em}}");
             foreach (var record in OrderRecordsForOutput(subspecies, otherContext)) {
-                builder.AppendLine(FormatSpeciesLine(record, display, statusContext, otherContext));
+                builder.AppendLine(_lineFormatter.FormatSpeciesLine(record, display, statusContext, otherContext));
             }
             if (subspecies.Count >= 3) builder.AppendLine("{{div col end}}");
         }
@@ -1579,7 +1375,7 @@ internal sealed class WikipediaListGenerator {
             builder.AppendLine();
             if (varieties.Count >= 3) builder.AppendLine("{{div col|colwidth=30em}}");
             foreach (var record in OrderRecordsForOutput(varieties, otherContext)) {
-                builder.AppendLine(FormatSpeciesLine(record, display, statusContext, otherContext));
+                builder.AppendLine(_lineFormatter.FormatSpeciesLine(record, display, statusContext, otherContext));
             }
             if (varieties.Count >= 3) builder.AppendLine("{{div col end}}");
         }
@@ -1591,7 +1387,7 @@ internal sealed class WikipediaListGenerator {
             builder.AppendLine();
             if (populations.Count >= 3) builder.AppendLine("{{div col|colwidth=30em}}");
             foreach (var record in OrderRecordsForOutput(populations, otherContext)) {
-                builder.AppendLine(FormatSpeciesLine(record, display, statusContext, otherContext));
+                builder.AppendLine(_lineFormatter.FormatSpeciesLine(record, display, statusContext, otherContext));
             }
             if (populations.Count >= 3) builder.AppendLine("{{div col end}}");
         }
@@ -1635,12 +1431,12 @@ internal sealed class WikipediaListGenerator {
 
         foreach (var record in species) {
             var speciesKey = GetParentSpeciesKey(record);
-            builder.AppendLine(FormatSpeciesLine(record, display, statusContext, otherContext));
+            builder.AppendLine(_lineFormatter.FormatSpeciesLine(record, display, statusContext, otherContext));
             
             // Check if this species has subspecies
             if (subspeciesGroups.TryGetValue(speciesKey, out var subs)) {
                 foreach (var sub in subs.OrderBy(s => s.InfraName, StringComparer.OrdinalIgnoreCase)) {
-                    builder.AppendLine(FormatSubspeciesLine(sub, display, statusContext, otherContext));
+                    builder.AppendLine(_lineFormatter.FormatSubspeciesLine(sub, display, statusContext, otherContext));
                 }
                 processedSubspeciesGroups.Add(speciesKey);
             }
@@ -1658,7 +1454,7 @@ internal sealed class WikipediaListGenerator {
             builder.AppendLine($"* {parentName}");
             
             foreach (var sub in subs.OrderBy(s => s.InfraName, StringComparer.OrdinalIgnoreCase)) {
-                builder.AppendLine(FormatSubspeciesLine(sub, display, statusContext, otherContext));
+                builder.AppendLine(_lineFormatter.FormatSubspeciesLine(sub, display, statusContext, otherContext));
             }
         }
     }
@@ -1677,7 +1473,7 @@ internal sealed class WikipediaListGenerator {
         } else {
             if (records.Count >= 3) builder.AppendLine("{{div col|colwidth=30em}}");
             foreach (var record in OrderRecordsForOutput(records, otherContext)) {
-                builder.AppendLine(FormatSpeciesLine(record, display, statusContext, otherContext));
+                builder.AppendLine(_lineFormatter.FormatSpeciesLine(record, display, statusContext, otherContext));
             }
             if (records.Count >= 3) builder.AppendLine("{{div col end}}");
         }
@@ -1736,7 +1532,7 @@ internal sealed class WikipediaListGenerator {
         var processedKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var record in OrderRecordsForOutput(species, otherContext)) {
             var speciesKey = GetParentSpeciesKey(record);
-            builder.AppendLine(FormatSpeciesLine(record, display, statusContext, otherContext));
+            builder.AppendLine(_lineFormatter.FormatSpeciesLine(record, display, statusContext, otherContext));
             AppendInfraspecificSubitems(builder, speciesKey, subspeciesGroups, varietyGroups, populationGroups, display, statusContext, otherContext);
             processedKeys.Add(speciesKey);
         }
@@ -1790,19 +1586,19 @@ internal sealed class WikipediaListGenerator {
         OtherBucketContext? otherContext) {
         if (subspeciesGroups.TryGetValue(speciesKey, out var subspecies)) {
             foreach (var sub in subspecies.OrderBy(s => ResolveScientificName(s) ?? string.Empty, StringComparer.OrdinalIgnoreCase)) {
-                builder.AppendLine(IndentSubBullet(FormatInfraspecificLine(sub, display, statusContext, otherContext)));
+                builder.AppendLine(IndentSubBullet(_lineFormatter.FormatInfraspecificLine(sub, display, statusContext, otherContext)));
             }
         }
 
         if (varietyGroups.TryGetValue(speciesKey, out var varieties)) {
             foreach (var variety in varieties.OrderBy(s => ResolveScientificName(s) ?? string.Empty, StringComparer.OrdinalIgnoreCase)) {
-                builder.AppendLine(IndentSubBullet(FormatInfraspecificLine(variety, display, statusContext, otherContext)));
+                builder.AppendLine(IndentSubBullet(_lineFormatter.FormatInfraspecificLine(variety, display, statusContext, otherContext)));
             }
         }
 
         if (populationGroups.TryGetValue(speciesKey, out var populations)) {
             foreach (var population in populations.OrderBy(s => ResolveScientificName(s) ?? string.Empty, StringComparer.OrdinalIgnoreCase)) {
-                builder.AppendLine(IndentSubBullet(FormatSpeciesLine(population, display, statusContext, otherContext)));
+                builder.AppendLine(IndentSubBullet(_lineFormatter.FormatSpeciesLine(population, display, statusContext, otherContext)));
             }
         }
     }
@@ -1820,56 +1616,6 @@ internal sealed class WikipediaListGenerator {
         var genus = ToTitleCase(parts[0]);
         var species = parts[1].ToLowerInvariant();
         return $"* ''[[{genus} {species}]]''";
-    }
-
-    private static bool IsSubspecies(IucnSpeciesRecord record) {
-        var infraType = record.InfraType?.Trim().ToLowerInvariant() ?? string.Empty;
-        return !string.IsNullOrWhiteSpace(record.InfraName) && (infraType.Contains("subsp") || infraType.Contains("ssp"));
-    }
-
-    private static bool IsVariety(IucnSpeciesRecord record) {
-        var infraType = record.InfraType?.Trim().ToLowerInvariant() ?? string.Empty;
-        return !string.IsNullOrWhiteSpace(record.InfraName) && infraType.Contains("var");
-    }
-
-    private static bool IsInfraspecific(IucnSpeciesRecord record) {
-        return !string.IsNullOrWhiteSpace(record.InfraName) && !string.IsNullOrWhiteSpace(record.InfraType);
-    }
-
-    private static bool IsRegionalAssessment(IucnSpeciesRecord record) {
-        if (!string.IsNullOrWhiteSpace(record.SubpopulationName)) {
-            return true;
-        }
-
-        var scopes = record.Scopes;
-        if (string.IsNullOrWhiteSpace(scopes)) {
-            return false;
-        }
-
-        var parts = scopes.Split(new[] { ',', ';', '&' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        var hasGlobalScope = parts.Any(part => part.Contains("global", StringComparison.OrdinalIgnoreCase));
-        if (hasGlobalScope) {
-            return false;
-        }
-
-        return parts.Length > 0;
-    }
-
-    private static string? GetRegionalScopeLabel(IucnSpeciesRecord record) {
-        if (!IsRegionalAssessment(record)) {
-            return null;
-        }
-
-        if (string.IsNullOrWhiteSpace(record.Scopes)) {
-            return null;
-        }
-
-        var parts = record.Scopes
-            .Split(new[] { ',', ';', '&' }, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .Where(part => !part.Contains("global", StringComparison.OrdinalIgnoreCase))
-            .ToList();
-
-        return parts.Count == 0 ? null : string.Join(", ", parts);
     }
 
     private static InfraspecificDisplayMode ResolveInfraspecificMode(DisplayPreferences display) {
@@ -1896,125 +1642,8 @@ internal sealed class WikipediaListGenerator {
         return ordered;
     }
 
-    private static string GetParentSpeciesKey(IucnSpeciesRecord record) {
-        return $"{record.GenusName?.ToLowerInvariant()}|{record.SpeciesName?.ToLowerInvariant()}";
-    }
-
-    private string FormatSubspeciesLine(IucnSpeciesRecord record, DisplayPreferences display, string? statusContext, OtherBucketContext? otherContext = null) {
-        // Indented subspecies line
-        var line = FormatSpeciesLine(record, display, statusContext, otherContext);
-        // Add extra indentation (** instead of *)
-        if (line.StartsWith("* ")) {
-            return "*" + line;
-        }
-        return line;
-    }
-
-    private string FormatInfraspecificLine(IucnSpeciesRecord record, DisplayPreferences display, string? listStatusContext, OtherBucketContext? otherContext = null) {
-        var descriptor = IucnRedlistStatus.Describe(record.StatusCode);
-        var builder = new StringBuilder();
-        builder.Append("* ");
-
-        var commonName = ResolveCommonName(record);
-        var articleTitle = ResolveWikipediaArticle(record);
-        var infraLink = BuildInfraspecificLink(record, articleTitle, abbreviateGenus: true);
-        if (!string.IsNullOrWhiteSpace(infraLink)) {
-            builder.Append(infraLink);
-            if (!string.IsNullOrWhiteSpace(commonName)) {
-                builder.Append(", ");
-                builder.Append(commonName);
-            }
-        } else {
-            builder.Append(BuildNameFragment(record, display));
-        }
-
-        var specialLabel = GetSpecialStatusLabel(record.StatusCode, listStatusContext);
-        if (!string.IsNullOrWhiteSpace(specialLabel)) {
-            builder.Append(" (");
-            builder.Append(specialLabel);
-            builder.Append(')');
-        }
-
-        var scopeLabel = GetRegionalScopeLabel(record);
-        if (!string.IsNullOrWhiteSpace(record.SubpopulationName) || !string.IsNullOrWhiteSpace(scopeLabel)) {
-            builder.Append(" (");
-            if (!string.IsNullOrWhiteSpace(record.SubpopulationName)) {
-                builder.Append(record.SubpopulationName);
-            }
-
-            if (!string.IsNullOrWhiteSpace(scopeLabel)) {
-                if (!string.IsNullOrWhiteSpace(record.SubpopulationName)) {
-                    builder.Append("; ");
-                }
-                builder.Append("scope: ");
-                builder.Append(scopeLabel);
-            }
-
-            builder.Append(')');
-        }
-
-        if (display.IncludeStatusTemplate) {
-            builder.Append(' ');
-            builder.Append(BuildIucnStatusTemplate(record, descriptor));
-        }
-
-        if (otherContext is { IsInOtherBucket: true }) {
-            var rankValue = otherContext.GetRankValue(record);
-            if (!string.IsNullOrWhiteSpace(rankValue)) {
-                var displayValue = ToTitleCase(rankValue);
-                var shouldLink = otherContext.ShouldLinkValue(displayValue);
-                if (shouldLink) {
-                    builder.Append($" ({otherContext.RankLabel}: [[{displayValue}]])");
-                } else {
-                    builder.Append($" ({otherContext.RankLabel}: {displayValue})");
-                }
-            }
-        }
-
-        return builder.ToString();
-    }
-
     private readonly record struct HeadingInfo(string Text, string? MainLink, string? CommonNameSentence = null, string? Description = null);
     
-    /// <summary>
-    /// Context for items within an "Other" bucket, tracking which rank values need annotation.
-    /// Stores the rank label (e.g., "Subfamily") and per-taxon rank values so that
-    /// parenthetical annotations reflect the actual grouping rank rather than always "Family".
-    /// </summary>
-    private sealed class OtherBucketContext {
-        private readonly HashSet<string> _linkedValues = new(StringComparer.OrdinalIgnoreCase);
-        private readonly Dictionary<long, string>? _valuesByTaxonId;
-
-        public bool IsInOtherBucket { get; }
-        public string RankLabel { get; }
-
-        public OtherBucketContext(bool isInOtherBucket, string rankLabel = "Family", Dictionary<long, string>? valuesByTaxonId = null) {
-            IsInOtherBucket = isInOtherBucket;
-            RankLabel = rankLabel;
-            _valuesByTaxonId = valuesByTaxonId;
-        }
-
-        /// <summary>
-        /// Gets the rank value for a record. Looks up the per-taxon map first,
-        /// then falls back to FamilyName only if the rank IS family.
-        /// Returns null if the rank-specific value is unknown (avoids redundant annotations).
-        /// </summary>
-        public string? GetRankValue(IucnSpeciesRecord record) {
-            if (_valuesByTaxonId != null && _valuesByTaxonId.TryGetValue(record.TaxonId, out var value)) {
-                return value;
-            }
-            return RankLabel.Equals("Family", StringComparison.OrdinalIgnoreCase) ? record.FamilyName : null;
-        }
-
-        /// <summary>
-        /// Returns true if this is the first occurrence of the value and it should be wiki-linked.
-        /// </summary>
-        public bool ShouldLinkValue(string value) {
-            if (string.IsNullOrWhiteSpace(value)) return false;
-            return _linkedValues.Add(value);
-        }
-    }
-
     private HeadingInfo FormatHeading(string? raw, string? rank = null, string? kingdom = null) {
         if (string.IsNullOrWhiteSpace(raw)) {
             return new HeadingInfo("Unassigned", null);
@@ -2185,534 +1814,6 @@ internal sealed class WikipediaListGenerator {
     }
 
     /// <summary>
-    /// Converts a taxonomic name to title case (e.g., "ARTIODACTYLA" → "Artiodactyla").
-    /// </summary>
-    private static string ToTitleCase(string value) {
-        if (string.IsNullOrWhiteSpace(value)) {
-            return value;
-        }
-
-        return char.ToUpperInvariant(value[0]) + value[1..].ToLowerInvariant();
-    }
-
-    private string FormatSpeciesLine(IucnSpeciesRecord record, DisplayPreferences display, string? listStatusContext, OtherBucketContext? otherContext = null) {
-        var descriptor = IucnRedlistStatus.Describe(record.StatusCode);
-        var builder = new StringBuilder();
-        builder.Append("* ");
-
-        builder.Append(BuildNameFragment(record, display));
-
-        // Add special indicator for PE/PEW if not redundant with list context
-        var specialLabel = GetSpecialStatusLabel(record.StatusCode, listStatusContext);
-        if (!string.IsNullOrWhiteSpace(specialLabel)) {
-            builder.Append(" (");
-            builder.Append(specialLabel);
-            builder.Append(')');
-        }
-
-        // Append subpopulation name if present
-        var scopeLabel = GetRegionalScopeLabel(record);
-        if (!string.IsNullOrWhiteSpace(record.SubpopulationName) || !string.IsNullOrWhiteSpace(scopeLabel)) {
-            builder.Append(" (");
-            if (!string.IsNullOrWhiteSpace(record.SubpopulationName)) {
-                builder.Append(record.SubpopulationName);
-            }
-
-            if (!string.IsNullOrWhiteSpace(scopeLabel)) {
-                if (!string.IsNullOrWhiteSpace(record.SubpopulationName)) {
-                    builder.Append("; ");
-                }
-                builder.Append("scope: ");
-                builder.Append(scopeLabel);
-            }
-
-            builder.Append(')');
-        }
-
-        // Add IUCN status template at end: {{IUCN status|XX|taxonId/assessmentId|1|year=YYYY}}
-        if (display.IncludeStatusTemplate) {
-            builder.Append(' ');
-            builder.Append(BuildIucnStatusTemplate(record, descriptor));
-        }
-        
-        // Add rank annotation for "Other" bucket items (e.g., Family, Subfamily, Tribe)
-        if (otherContext is { IsInOtherBucket: true }) {
-            var rankValue = otherContext.GetRankValue(record);
-            if (!string.IsNullOrWhiteSpace(rankValue)) {
-                var displayValue = ToTitleCase(rankValue);
-                var shouldLink = otherContext.ShouldLinkValue(displayValue);
-                if (shouldLink) {
-                    builder.Append($" ({otherContext.RankLabel}: [[{displayValue}]])");
-                } else {
-                    builder.Append($" ({otherContext.RankLabel}: {displayValue})");
-                }
-            }
-        }
-
-        return builder.ToString();
-    }
-
-    private static string BuildIucnStatusTemplate(IucnSpeciesRecord record, RedlistStatusDescriptor descriptor) {
-        // Build the status code, accounting for PE/PEW flags from database
-        var statusCode = GetWikipediaStatusCode(descriptor.Code, record.PossiblyExtinct, record.PossiblyExtinctInTheWild);
-        var builder = new StringBuilder();
-        builder.Append("{{IUCN status|");
-        builder.Append(statusCode);
-        builder.Append('|');
-        builder.Append(record.TaxonId);
-        builder.Append('/');
-        builder.Append(record.AssessmentId);
-        builder.Append("|1"); // 1 = make link visible
-
-        // Add year for non-extinct statuses
-        if (!IsExtinctStatus(descriptor.Code) && !string.IsNullOrWhiteSpace(record.YearPublished)) {
-            builder.Append("|year=");
-            builder.Append(record.YearPublished);
-        }
-
-        builder.Append("}}");
-        return builder.ToString();
-    }
-
-    /// <summary>
-    /// Maps IUCN status codes to Wikipedia template codes.
-    /// Uses PE/PEW database flags for CR species to produce CR(PE) or CR(PEW).
-    /// Maps legacy LR/* codes to their modern equivalents, except LR/cd which has no exact equivalent.
-    /// </summary>
-    private static string GetWikipediaStatusCode(string code, string? possiblyExtinct, string? possiblyExtinctInTheWild) {
-        var normalized = code.ToUpperInvariant();
-
-        // For CR species, check PE/PEW flags from database
-        if (normalized == "CR" || normalized == "CRITICALLY ENDANGERED") {
-            if (string.Equals(possiblyExtinct, "true", StringComparison.OrdinalIgnoreCase)) {
-                return "CR(PE)";
-            }
-            if (string.Equals(possiblyExtinctInTheWild, "true", StringComparison.OrdinalIgnoreCase)) {
-                return "CR(PEW)";
-            }
-            return "CR";
-        }
-
-        // Map legacy/alternative codes
-        // Note: LR/cd is a valid Wikipedia template code, don't map it to NT
-        return normalized switch {
-            "CR(PE)" or "PE" => "CR(PE)",
-            "CR(PEW)" or "PEW" => "CR(PEW)",
-            "LR/CD" or "CD" => "LR/cd",
-            "LR/NT" => "LR/nt", //"NT",
-            "LR/LC" => "LR/lc", //"LC"",
-            _ => normalized
-        };
-    }
-
-    private static bool IsExtinctStatus(string code) => code.ToUpperInvariant() switch {
-        "EX" or "EW" => true,
-        _ => false
-    };
-
-    private static string? GetSpecialStatusLabel(string statusCode, string? listStatusContext) {
-        // Don't add redundant labels when the list is specifically for that status
-        var code = statusCode.ToUpperInvariant();
-        var context = listStatusContext?.ToUpperInvariant() ?? string.Empty;
-
-        // PE/PEW always need indicator except on dedicated PE lists
-        if (code is "CR(PE)" or "PE") {
-            // If context contains CR(PE) or PE, suppress the label
-            if (context.Contains("CR(PE)") || (context.Contains("PE") && !context.Contains("PEW"))) return null;
-            return "possibly\u00A0extinct"; // non-breaking space
-        }
-
-        if (code is "CR(PEW)" or "PEW") {
-            if (context.Contains("CR(PEW)") || context.Contains("PEW")) return null;
-            return "possibly extinct in the wild";
-        }
-
-        // EW indicator only needed if not on an EW-specific list
-        if (code == "EW") {
-            if (context.Contains("EW")) return null;
-            return "extinct in the wild";
-        }
-
-        return null;
-    }
-
-    private string BuildNameFragment(IucnSpeciesRecord record, DisplayPreferences display) {
-        var commonName = ResolveCommonName(record);
-        var articleTitle = ResolveWikipediaArticle(record);
-        var rawScientific = ResolveScientificName(record);
-        var formattedScientific = FormatScientificNameForDisplay(record, display.ItalicizeScientific);
-
-        // For infraspecific taxa, use properly formatted name for link targets.
-        // This ensures animal subspecies omit "ssp." and plants include "subsp."/"var.".
-        var linkScientific = !string.IsNullOrWhiteSpace(record.InfraName)
-            ? BuildScientificNameForLink(record)
-            : rawScientific;
-
-        return display.ListingStyle switch {
-            ListingStyle.ScientificNameFocus => BuildScientificNameFocusFragment(commonName, articleTitle, linkScientific, formattedScientific, record),
-            ListingStyle.CommonNameOnly => BuildCommonNameOnlyFragment(commonName, articleTitle, linkScientific, formattedScientific, record),
-            _ => BuildCommonNameFocusFragment(commonName, articleTitle, linkScientific, formattedScientific, record),  // Default: CommonNameFocus
-        };
-    }
-
-    /// <summary>
-    /// Style A: Scientific name focus. Shows scientific name first, common name after comma.
-    /// Examples:
-    /// - ''[[Pinus radiata]]'', Monterey pine
-    /// - ''[[Scientific name]]''
-    /// - ''[[Wikilink|Scientific name]]'', Common name
-    /// </summary>
-    private string BuildScientificNameFocusFragment(string? commonName, string? articleTitle, string? rawScientific, string formattedScientific, IucnSpeciesRecord record) {
-        // For infraspecific taxa with var./subsp., use special formatting
-        var hasInfrarank = !string.IsNullOrWhiteSpace(record.InfraType) && !string.IsNullOrWhiteSpace(record.InfraName);
-        var infraLink = hasInfrarank ? BuildInfraspecificLink(record, articleTitle) : null;
-        
-        if (!string.IsNullOrWhiteSpace(infraLink)) {
-            if (!string.IsNullOrWhiteSpace(commonName)) {
-                return $"{infraLink}, {commonName}";
-            }
-            return infraLink;
-        }
-        
-        // Standard species formatting
-        var linkTarget = ResolveLinkTarget(record, articleTitle, rawScientific);
-        
-        if (string.IsNullOrWhiteSpace(linkTarget)) {
-            return formattedScientific;
-        }
-        
-        // Use ''[[X]]'' format when link target matches scientific name
-        if (string.Equals(linkTarget, rawScientific, StringComparison.OrdinalIgnoreCase)) {
-            var linkedScientific = $"''[[{rawScientific}]]''";
-            if (!string.IsNullOrWhiteSpace(commonName)) {
-                return $"{linkedScientific}, {commonName}";
-            }
-            return linkedScientific;
-        }
-        
-        // Article uses common name as title, so use [[Wikilink|Scientific name]]
-        var linkedWithPipe = $"[[{linkTarget}|{formattedScientific}]]";
-        if (!string.IsNullOrWhiteSpace(commonName)) {
-            return $"{linkedWithPipe}, {commonName}";
-        }
-        return linkedWithPipe;
-    }
-
-    /// <summary>
-    /// Style B: Common name focus (default). Shows common name first, scientific name in parentheses.
-    /// Scientific name must always be explicitly visible — never hidden inside a link.
-    /// Examples:
-    /// - [[Common name]] (''Scientific name'')
-    /// - [[Wikilink|Common name]] (''Scientific name'')
-    /// - [[Scientific name|Article title]] (''Scientific name'')  (fallback when no common name but article exists with different title)
-    /// - ''[[Scientific name]]'' (fallback when no common name and no distinct article)
-    /// </summary>
-    private string BuildCommonNameFocusFragment(string? commonName, string? articleTitle, string? rawScientific, string formattedScientific, IucnSpeciesRecord record) {
-        if (string.IsNullOrWhiteSpace(commonName)) {
-            // For infraspecific taxa, use specialized formatting with proper rank markers
-            var hasInfrarank = !string.IsNullOrWhiteSpace(record.InfraType) && !string.IsNullOrWhiteSpace(record.InfraName);
-            if (hasInfrarank) {
-                var infraLink = BuildInfraspecificLink(record, articleTitle);
-                if (!string.IsNullOrWhiteSpace(infraLink)) {
-                    return infraLink;
-                }
-            }
-
-            // Fallback: no common name resolved
-            var linkTarget = ResolveLinkTarget(record, articleTitle, rawScientific);
-            if (!string.IsNullOrWhiteSpace(linkTarget)) {
-                if (string.Equals(linkTarget, rawScientific, StringComparison.OrdinalIgnoreCase)) {
-                    return $"''[[{linkTarget}]]''";
-                }
-
-                if (!string.IsNullOrWhiteSpace(rawScientific)) {
-                    return $"[[{rawScientific}|{linkTarget}]] ({formattedScientific})";
-                }
-                return $"[[{linkTarget}]] ({formattedScientific})";
-            }
-            return formattedScientific;
-        }
-        
-        // We have a common name
-        var commonLinkTarget = ResolveLinkTargetForCommonName(articleTitle, rawScientific, commonName);
-        
-        if (string.IsNullOrWhiteSpace(commonLinkTarget)) {
-            // No link target available, just use common name
-            return $"[[{commonName}]] ({formattedScientific})";
-        }
-        
-        // Build the link
-        string linkedCommonName;
-        if (string.Equals(commonLinkTarget, commonName, StringComparison.Ordinal)) {
-            linkedCommonName = $"[[{commonName}]]";
-        } else {
-            linkedCommonName = $"[[{commonLinkTarget}|{commonName}]]";
-        }
-        
-        return $"{linkedCommonName} ({formattedScientific})";
-    }
-
-    /// <summary>
-    /// Style C: Common name only. Shows only common name (falls back to scientific if unavailable).
-    /// Examples:
-    /// - [[Common name]]
-    /// - [[Wikilink|Common name]]
-    /// - ''[[Scientific name]]'' (fallback when no common name)
-    /// </summary>
-    private string BuildCommonNameOnlyFragment(string? commonName, string? articleTitle, string? rawScientific, string formattedScientific, IucnSpeciesRecord record) {
-        if (string.IsNullOrWhiteSpace(commonName)) {
-            // For infraspecific taxa, use specialized formatting with proper rank markers
-            var hasInfrarank = !string.IsNullOrWhiteSpace(record.InfraType) && !string.IsNullOrWhiteSpace(record.InfraName);
-            if (hasInfrarank) {
-                var infraLink = BuildInfraspecificLink(record, articleTitle);
-                if (!string.IsNullOrWhiteSpace(infraLink)) {
-                    return infraLink;
-                }
-            }
-
-            // Fallback to scientific name
-            var linkTarget = ResolveLinkTarget(record, articleTitle, rawScientific);
-            if (!string.IsNullOrWhiteSpace(linkTarget)) {
-                if (string.Equals(linkTarget, rawScientific, StringComparison.OrdinalIgnoreCase)) {
-                    return $"''[[{linkTarget}]]''";
-                }
-                return $"[[{linkTarget}|{formattedScientific}]]";
-            }
-            return formattedScientific;
-        }
-        
-        // We have a common name - show only common name
-        var commonLinkTarget = ResolveLinkTargetForCommonName(articleTitle, rawScientific, commonName);
-        
-        if (string.IsNullOrWhiteSpace(commonLinkTarget)) {
-            return $"[[{commonName}]]";
-        }
-        
-        if (string.Equals(commonLinkTarget, commonName, StringComparison.Ordinal)) {
-            return $"[[{commonName}]]";
-        }
-        
-        return $"[[{commonLinkTarget}|{commonName}]]";
-    }
-
-    /// <summary>
-    /// Builds a properly formatted link for subspecies/varieties with correct italicization.
-    /// For infraspecific taxa, we need [[link|''Genus species'' subsp. ''subspecies'']] format.
-    /// For animals, the rank marker is hidden.
-    /// </summary>
-    private static string? BuildInfraspecificLink(IucnSpeciesRecord record, string? articleTitle, bool abbreviateGenus = false) {
-        if (string.IsNullOrWhiteSpace(record.InfraName)) {
-            return null;
-        }
-        
-        var displayText = BuildInfraspecificDisplayText(record, abbreviateGenus);
-        var fullScientific = BuildScientificNameForLink(record);
-        if (string.IsNullOrWhiteSpace(displayText) || string.IsNullOrWhiteSpace(fullScientific)) {
-            return null;
-        }
-
-        var linkTarget = !string.IsNullOrWhiteSpace(articleTitle) ? articleTitle : fullScientific;
-
-        if (!abbreviateGenus && string.Equals(linkTarget, fullScientific, StringComparison.OrdinalIgnoreCase) &&
-            !RequiresRankMarker(record)) {
-            return $"''[[{fullScientific}]]''";
-        }
-
-        return $"[[{linkTarget}|{displayText}]]";
-    }
-
-    /// <summary>
-    /// Format a scientific name for display (with italics if requested).
-    /// </summary>
-    private static string FormatScientificNameForDisplay(IucnSpeciesRecord record, bool italicize) {
-        if (!string.IsNullOrWhiteSpace(record.InfraName)) {
-            var formatted = BuildInfraspecificDisplayText(record, abbreviateGenus: false, stripItalics: !italicize);
-            if (!string.IsNullOrWhiteSpace(formatted)) {
-                return formatted;
-            }
-        }
-
-        var scientific = BuildScientificNameForDisplay(record);
-        if (string.IsNullOrWhiteSpace(scientific)) {
-            return record.GenusName ?? "";
-        }
-        
-        return italicize ? $"''{scientific}''" : scientific;
-    }
-
-    private static string? BuildScientificNameForDisplay(IucnSpeciesRecord record) {
-        if (!string.IsNullOrWhiteSpace(record.InfraName)) {
-            return BuildInfraspecificDisplayText(record, abbreviateGenus: false, stripItalics: true);
-        }
-
-        return ResolveScientificName(record);
-    }
-
-    private static string BuildScientificNameForLink(IucnSpeciesRecord record) {
-        var genus = record.GenusName?.Trim();
-        var species = record.SpeciesName?.Trim();
-        if (string.IsNullOrWhiteSpace(genus) || string.IsNullOrWhiteSpace(species)) {
-            return ResolveScientificName(record) ?? string.Empty;
-        }
-
-        if (string.IsNullOrWhiteSpace(record.InfraName)) {
-            return $"{genus} {species}";
-        }
-
-        var rankMarker = ResolveInfraspecificRankMarker(record);
-        if (!string.IsNullOrWhiteSpace(rankMarker)) {
-            return $"{genus} {species} {rankMarker} {record.InfraName?.Trim()}".Replace("  ", " ");
-        }
-
-        return $"{genus} {species} {record.InfraName?.Trim()}".Replace("  ", " ");
-    }
-
-    private static string? BuildInfraspecificDisplayText(
-        IucnSpeciesRecord record,
-        bool abbreviateGenus,
-        bool stripItalics = false) {
-        var genus = record.GenusName?.Trim();
-        var species = record.SpeciesName?.Trim();
-        var infraName = record.InfraName?.Trim();
-        if (string.IsNullOrWhiteSpace(genus) || string.IsNullOrWhiteSpace(species) || string.IsNullOrWhiteSpace(infraName)) {
-            return null;
-        }
-
-        if (abbreviateGenus) {
-            genus = genus.Length > 0 ? $"{genus[0]}." : genus;
-        }
-
-        var rankMarker = ResolveInfraspecificRankMarker(record);
-        if (!string.IsNullOrWhiteSpace(rankMarker)) {
-            var head = stripItalics ? $"{genus} {species}" : $"''{genus} {species}''";
-            var tail = stripItalics ? infraName : $"''{infraName}''";
-            return $"{head} {rankMarker} {tail}";
-        }
-
-        return stripItalics
-            ? $"{genus} {species} {infraName}"
-            : $"''{genus} {species} {infraName}''";
-    }
-
-    private static string? ResolveInfraspecificRankMarker(IucnSpeciesRecord record) {
-        var infraType = record.InfraType?.Trim().ToLowerInvariant() ?? string.Empty;
-        var kingdom = record.KingdomName?.ToUpperInvariant() ?? string.Empty;
-
-        if (infraType.Contains("var")) {
-            return "var.";
-        }
-
-        if (infraType.Contains("subsp") || infraType.Contains("ssp")) {
-            return kingdom == "ANIMALIA" ? null : "subsp.";
-        }
-
-        // Botanical "form" rank (IUCN/CoL spell it "forma"/"form"/"f."). Map to the
-        // canonical marker rather than fabricating "forma." in the fall-through below.
-        if (infraType.StartsWith("form") || infraType == "f." || infraType == "f") {
-            return "f.";
-        }
-
-        if (!string.IsNullOrWhiteSpace(infraType)) {
-            return infraType.EndsWith(".") ? infraType : infraType + ".";
-        }
-
-        return null;
-    }
-
-    private static bool RequiresRankMarker(IucnSpeciesRecord record) {
-        return !string.IsNullOrWhiteSpace(ResolveInfraspecificRankMarker(record));
-    }
-
-    /// <summary>
-    /// Resolve the Wikipedia article title for a record.
-    /// </summary>
-    private string? ResolveWikipediaArticle(IucnSpeciesRecord record) {
-        // Try store-backed provider first (has Wikipedia source data)
-        if (_storeBackedProvider is not null) {
-            return _storeBackedProvider.GetWikipediaArticleTitle(record);
-        }
-        
-        return null;
-    }
-
-    private string ResolveLinkTarget(IucnSpeciesRecord record, string? articleTitle, string? rawScientific) {
-        if (!string.IsNullOrWhiteSpace(articleTitle)) {
-            return articleTitle;
-        }
-
-        if (!string.IsNullOrWhiteSpace(rawScientific)) {
-            return rawScientific;
-        }
-
-        var built = BuildScientificNameForLink(record);
-        if (!string.IsNullOrWhiteSpace(built)) {
-            return built;
-        }
-
-        return record.GenusName ?? record.SpeciesName ?? string.Empty;
-    }
-
-    private static string ResolveLinkTargetForCommonName(string? articleTitle, string? rawScientific, string commonName) {
-        if (!string.IsNullOrWhiteSpace(articleTitle)) {
-            return articleTitle;
-        }
-
-        if (!string.IsNullOrWhiteSpace(rawScientific)) {
-            return rawScientific;
-        }
-
-        return commonName;
-    }
-
-    private string? ResolveCommonName(IucnSpeciesRecord record) {
-        // First check legacy rules (highest priority - manual overrides)
-        var taxaRules = _legacyRules.Get(record.ScientificNameTaxonomy ?? record.ScientificNameAssessments ?? string.Empty);
-        if (!string.IsNullOrWhiteSpace(taxaRules?.CommonName)) {
-            return Uppercase(taxaRules!.CommonName);
-        }
-
-        // Try the new store-backed provider if available
-        if (_storeBackedProvider is not null) {
-            return _storeBackedProvider.GetBestCommonName(record);
-        }
-
-        // Fall back to legacy provider
-        if (_commonNameProvider is null) {
-            return null;
-        }
-
-        var row = record.ToTaxonomyRow();
-        return _commonNameProvider.GetBestCommonName(row, entityIds: null);
-    }
-
-    private static string? ResolveScientificName(IucnSpeciesRecord record) {
-        if (!string.IsNullOrWhiteSpace(record.ScientificNameTaxonomy)) {
-            return record.ScientificNameTaxonomy;
-        }
-
-        if (!string.IsNullOrWhiteSpace(record.ScientificNameAssessments)) {
-            return record.ScientificNameAssessments;
-        }
-
-        var withRank = ScientificNameHelper.BuildWithRankLabel(record.GenusName, record.SpeciesName, record.InfraType, record.InfraName);
-        if (!string.IsNullOrWhiteSpace(withRank)) {
-            return withRank;
-        }
-
-        return ScientificNameHelper.BuildFromParts(record.GenusName, record.SpeciesName, record.InfraName);
-    }
-
-    private static string? Uppercase(string? value) {
-        if (string.IsNullOrWhiteSpace(value)) {
-            return value;
-        }
-
-        return value.Length == 1
-            ? value.ToUpperInvariant()
-            : char.ToUpperInvariant(value[0]) + value[1..];
-    }
-
-    /// <summary>
     /// Check if a record should be excluded based on taxon rules.
     /// </summary>
     private bool ShouldExcludeRecord(IucnSpeciesRecord record, string? listId) {
@@ -2784,113 +1885,6 @@ internal sealed class WikipediaListGenerator {
     }
 
     // ==================== Intro text helpers ====================
-
-    private static string NewspaperNumber(int number) {
-        var words = new[] { "zero", "one", "two", "three", "four", "five", "six", "seven", "eight", "nine", "ten" };
-        if (number >= 0 && number <= 10) return words[number];
-        if (number >= 10000) return number.ToString("N0");
-        return number.ToString();
-    }
-
-    private static string FormatPercentage(int count, int total) {
-        var ratio = (double)count / total;
-        if (ratio > 0.1) return ratio.ToString("P0");
-        if (ratio > 0.01) return ratio.ToString("P1");
-        return ratio.ToString("P2");
-    }
-
-    private static string? BuildSubspeciesParagraph(int subspeciesCount, int varietyCount, string? taxaAdj, string? statusText) {
-        if (subspeciesCount == 0 && varietyCount == 0) return null;
-        var total = subspeciesCount + varietyCount;
-        string what;
-        if (subspeciesCount > 0 && varietyCount > 0)
-            what = $"{NewspaperNumber(subspeciesCount)} subspecies and {NewspaperNumber(varietyCount)} varieties";
-        else if (varietyCount > 0)
-            what = $"{NewspaperNumber(varietyCount)} {taxaAdj} varieties";
-        else
-            what = $"{NewspaperNumber(subspeciesCount)} {taxaAdj} subspecies";
-
-        if (!string.IsNullOrEmpty(statusText))
-            return $"The IUCN also lists {what} as {statusText}.";
-        return $"The IUCN has also evaluated {what}.";
-    }
-
-    private static string? BuildSubpopulationParagraph(int subpopCount, string? taxaNameLower, string? statusText) {
-        if (subpopCount == 0) {
-            if (!string.IsNullOrEmpty(statusText))
-                return $"No subpopulations of {taxaNameLower} have been evaluated as {statusText} by the IUCN.";
-            return null;
-        }
-        var have = subpopCount == 1 ? "has" : "have";
-        var subpops = subpopCount == 1 ? "a subpopulation" : "subpopulations";
-        if (!string.IsNullOrEmpty(statusText))
-            return $"Of the subpopulations of {taxaNameLower} evaluated by the IUCN, {NewspaperNumber(subpopCount)} {have} been assessed as {statusText}.";
-        return $"Of the subpopulations of {taxaNameLower} evaluated by the IUCN, {NewspaperNumber(subpopCount)} {have} been assessed.";
-    }
-
-    private string? BuildThreatenedContext(WikipediaListDefinition definition, string? taxaAdj, string? taxaNameLower) {
-        var statusText = definition.StatusText;
-        if (statusText == "endangered") {
-            var crCount = _queryService.CountSpeciesByStatus(definition.Filters, "CR");
-            var enCount = _queryService.CountSpeciesByStatus(definition.Filters, "EN");
-            var combined = crCount + enCount;
-            var crListTitle = $"List of critically endangered {taxaNameLower}";
-            return "For a species to be considered endangered by the IUCN it must meet certain quantitative criteria which are designed to classify taxa facing \"a very high risk of extinction\". "
-                + "An even higher risk is faced by ''critically endangered'' species, which meet the quantitative criteria for endangered species. "
-                + $"[[{crListTitle}|Critically endangered {taxaNameLower}]] are listed separately. "
-                + $"There are {NewspaperNumber(combined)} {taxaAdj} species which are endangered or critically endangered.";
-        }
-
-        if (statusText == "vulnerable") {
-            var crListTitle = $"List of critically endangered {taxaNameLower}";
-            var enListTitle = $"List of endangered {taxaNameLower}";
-            return "For a species to be assessed as vulnerable to extinction the best available evidence must meet quantitative criteria set by the IUCN designed to reflect \"a high risk of extinction in the wild\". "
-                + $"''Endangered'' and ''critically endangered'' species also meet the quantitative criteria of ''vulnerable'' species, and are listed separately. See: [[{enListTitle}]], [[{crListTitle}]]. "
-                + "Vulnerable, endangered and critically endangered species are collectively referred to as ''[[threatened species]]'' by the IUCN.";
-        }
-
-        return null;
-    }
-
-    private string? BuildDataDeficientInfo(WikipediaListDefinition definition, string? taxaAdj) {
-        var statusText = definition.StatusText;
-        // Only show DD info for threatened statuses
-        if (statusText != "critically endangered" && statusText != "endangered" && statusText != "vulnerable" && statusText != "threatened")
-            return null;
-
-        var ddCount = _queryService.CountSpeciesByStatus(definition.Filters, "DD");
-        if (ddCount == 0) return null;
-
-        var evaluatedTotal = _queryService.CountEvaluatedSpecies(definition.Filters);
-        var ddPercent = evaluatedTotal > 0 ? FormatPercentage(ddCount, evaluatedTotal) : "";
-
-        return $"Additionally {NewspaperNumber(ddCount)} {taxaAdj} species ({ddPercent} of those evaluated) are listed as [[data deficient]], meaning there is insufficient information for a full assessment of conservation status. "
-            + "As these species typically have small distributions and/or populations, they are intrinsically likely to be threatened, according to the IUCN."
-            + "<ref>{{cite web|title=Limitations of the Data|url=http://www.iucnredlist.org/initiatives/mammals/description/limitations|website=The IUCN Red List of Threatened Species|publisher=Union for Conservation of Nature and Natural Resources (IUCN)|accessdate=11 January 2016|archive-date=7 October 2018|archive-url=https://web.archive.org/web/20181007170630/http://www.iucnredlist.org/initiatives/mammals/description/limitations|url-status=live}}</ref>"
-            + " While the category of ''data deficient'' indicates that no assessment of extinction risk has been made for the taxa, the IUCN notes that it may be appropriate to give them \"the same degree of attention as threatened taxa, at least until their status can be assessed.\""
-            + "<ref>{{cite web|title=2001 Categories & Criteria (version 3.1)|url=http://www.iucnredlist.org/static/categories_criteria_3_1|website=The IUCN Red List of Threatened Species|publisher=Union for Conservation of Nature and Natural Resources (IUCN)|accessdate=11 January 2016|archive-date=8 October 2008|archive-url=https://web.archive.org/web/20081008002903/http://www.iucnredlist.org/static/categories_criteria_3_1|url-status=live}}</ref>";
-    }
-
-    private static string BuildNotesParagraph(int speciesCount, int subspeciesCount, int varietyCount, int subpopCount, string? taxaAdj, string? statusText) {
-        var whats = "species";
-        if (subspeciesCount > 0 && varietyCount > 0)
-            whats = "species, subspecies and varieties";
-        else if (subspeciesCount > 0)
-            whats = "species and subspecies";
-
-        var statusPhrase = !string.IsNullOrEmpty(statusText) ? $"{statusText} " : "";
-        var note = $"This is a complete list of {statusPhrase}{taxaAdj} {whats} as evaluated by the IUCN.";
-
-        if (statusText == "critically endangered")
-            note += " Species considered possibly extinct by the IUCN are marked as such.";
-
-        if (subpopCount > 0 && !string.IsNullOrEmpty(statusText))
-            note += $" {char.ToUpperInvariant(whats[0])}{whats[1..]} which have {statusText} subpopulations (or stocks) are indicated.";
-
-        note += " Where possible common names for taxa are given while links point to the scientific name used by the IUCN.";
-
-        return note;
-    }
 
     private sealed class SectionRuntime {
         public SectionRuntime(WikipediaSectionDefinition definition, HashSet<string> statusSet) {
