@@ -6,11 +6,12 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ```bash
 dotnet build                                                         # build
+dotnet test                                                          # run the xUnit suite (BeastieBot3.Tests)
 dotnet run --project BeastieBot3/BeastieBot3.csproj -- [command]    # run a command
 dotnet run --project BeastieBot3/BeastieBot3.csproj -- show-paths   # verify INI config is loading correctly
 ```
 
-No unit-test suite exists — verify CLI changes by building and running the relevant command.
+The `BeastieBot3.Tests` xUnit project pins the pure count/status logic (TaxonFilterSql count scope, IUCN status mapping, prose/classification helpers) and the in-memory store seam. It's young — coverage is the pure logic + one store, not full CLI flows — so still verify behavioural CLI changes by building and running the relevant command. Internal types are visible to the test project via `<InternalsVisibleTo>`; a store can be exercised over `:memory:` through `SqliteStore.EnableForeignKeys` + a store's `OpenFromConnection`.
 
 For the local web UI (`serve`), read-only Playwright smoke tests live in `e2e/` (`cd e2e && npm install && npm test`). They launch `serve` on a throwaway port and only issue read-only GETs — a network guard aborts any `POST /api/jobs` so they never run a command, download, or mutate anything.
 
