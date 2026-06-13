@@ -13,6 +13,8 @@ using static BeastieBot3.WikipediaLists.RecordClassification;
 using static BeastieBot3.WikipediaLists.ProseFormat;
 using static BeastieBot3.WikipediaLists.ParentSummaryTableBuilder;
 using static BeastieBot3.WikipediaLists.SpeciesLineFormatter;
+using static BeastieBot3.WikipediaLists.HeadingFormatter;
+using static BeastieBot3.WikipediaLists.TaxonGroupingHelper;
 
 // Main engine for generating Wikipedia species list wikitext. Workflow:
 // 1. IucnListQueryService fetches matching species from IUCN database
@@ -40,6 +42,8 @@ internal sealed class WikipediaListGenerator {
     private readonly IntroProseBuilder _introProse;
     // Renders one record to a wikitext bullet line in the selected listing style (owns name resolution).
     private readonly SpeciesLineFormatter _lineFormatter;
+    // Builds section headings (scientific-name line + common-name sentence + main link + blurb).
+    private readonly HeadingFormatter _headingFormatter;
 
     public WikipediaListGenerator(
         IucnListQueryService queryService,
@@ -58,6 +62,7 @@ internal sealed class WikipediaListGenerator {
         _chartData = chartData;
         _introProse = new IntroProseBuilder(_queryService);
         _lineFormatter = new SpeciesLineFormatter(_legacyRules, _storeBackedProvider, _commonNameProvider);
+        _headingFormatter = new HeadingFormatter(_legacyRules, _taxonRules, _storeBackedProvider);
     }
 
     /// <summary>
@@ -81,6 +86,7 @@ internal sealed class WikipediaListGenerator {
         _chartData = chartData;
         _introProse = new IntroProseBuilder(_queryService);
         _lineFormatter = new SpeciesLineFormatter(_legacyRules, _storeBackedProvider, _commonNameProvider);
+        _headingFormatter = new HeadingFormatter(_legacyRules, _taxonRules, _storeBackedProvider);
     }
 
     public WikipediaListResult Generate(
@@ -599,13 +605,6 @@ internal sealed class WikipediaListGenerator {
         return false;
     }
 
-    private static readonly HashSet<string> ColEnrichedRanks = new(StringComparer.OrdinalIgnoreCase) {
-        "subkingdom", "subphylum", "superclass", "subclass", "infraclass",
-        "superorder", "suborder", "infraorder", "parvorder",
-        "superfamily", "subfamily", "tribe", "subtribe", "subgenus"
-    };
-
-    private static bool IsColEnrichedRank(string level) => ColEnrichedRanks.Contains(level);
 
     /// <summary>
     /// Build section body using custom family-based groups instead of taxonomic hierarchy.
@@ -793,7 +792,7 @@ internal sealed class WikipediaListGenerator {
             var currentGrouping = grouping != null && groupingIndex < grouping.Count
                 ? grouping[groupingIndex]
                 : null;
-            var heading = FormatHeading(taxonName, child.Label, GetKingdomName(child));
+            var heading = _headingFormatter.FormatHeading(taxonName, child.Label, GetKingdomName(child));
             var headingText = heading.Text;
             if (IsOtherOrUnknownHeading(taxonName ?? string.Empty) &&
                 currentGrouping?.Level.Equals("family", StringComparison.OrdinalIgnoreCase) == true &&
@@ -927,7 +926,7 @@ internal sealed class WikipediaListGenerator {
                     foreach (var familyGroup in recordsByFamily) {
                         var familyHeadingLevel = Math.Min(headingLevel + 1, 6);
                         var familyHeadingMarkup = new string('=', familyHeadingLevel);
-                        var familyHeading = FormatHeading(familyGroup.Key, "family", GetKingdomName(familyGroup));
+                        var familyHeading = _headingFormatter.FormatHeading(familyGroup.Key, "family", GetKingdomName(familyGroup));
                         builder.AppendLine($"{familyHeadingMarkup} {familyHeading.Text} {familyHeadingMarkup}");
                         headingCount++;
                         if (!string.IsNullOrWhiteSpace(familyHeading.CommonNameSentence)) {
@@ -1035,200 +1034,7 @@ internal sealed class WikipediaListGenerator {
         }
     }
 
-    /// <summary>
-    /// Format a virtual group heading.
-    /// </summary>
-    private static HeadingInfo FormatVirtualGroupHeading(VirtualGroup group) {
-        var displayName = !string.IsNullOrWhiteSpace(group.CommonPlural) 
-            ? Uppercase(group.CommonPlural) 
-            : !string.IsNullOrWhiteSpace(group.CommonName)
-                ? Uppercase(group.CommonName)
-                : group.Name;
-        
-        return new HeadingInfo(displayName!, group.MainArticle);
-    }
 
-    private static Func<IucnSpeciesRecord, string?> BuildSelector(string level) => level.ToLowerInvariant() switch {
-        "kingdom" => record => record.KingdomName,
-        "phylum" => record => record.PhylumName,
-        "class" => record => record.ClassName,
-        "order" => record => record.OrderName,
-        "family" => record => record.FamilyName,
-        "genus" => record => record.GenusName,
-        _ => _ => null
-    };
-
-    /// <summary>
-    /// Build a selector for enriched records that includes COL's additional ranks.
-    /// </summary>
-    private static Func<EnrichedSpeciesRecord, string?> BuildEnrichedSelector(string level) => level.ToLowerInvariant() switch {
-        // Standard IUCN ranks
-        "kingdom" => record => record.KingdomName,
-        "phylum" => record => record.PhylumName,
-        "class" => record => record.ClassName,
-        "order" => record => record.OrderName,
-        "family" => record => record.FamilyName,
-        "genus" => record => record.GenusName,
-        // COL-enriched intermediate ranks
-        "subkingdom" => record => record.Subkingdom,
-        "subphylum" => record => record.Subphylum,
-        "superclass" => record => record.Superclass,
-        "subclass" => record => record.Subclass,
-        "infraclass" => record => record.Infraclass,
-        "superorder" => record => record.Superorder,
-        "suborder" => record => record.Suborder,
-        "infraorder" => record => record.Infraorder,
-        "parvorder" => record => record.Parvorder,
-        "superfamily" => record => record.Superfamily,
-        "subfamily" => record => record.Subfamily,
-        "tribe" => record => record.Tribe,
-        "subtribe" => record => record.Subtribe,
-        "subgenus" => record => record.Subgenus,
-        _ => _ => null
-    };
-
-    // Rank hierarchy from broadest to narrowest, used for auto-split candidate selection.
-    // Only ranks that are useful for section splitting (not kingdom/phylum/class which are too broad).
-    private static readonly string[] RankHierarchy = {
-        "order", "suborder", "infraorder", "parvorder", "superfamily",
-        "family", "subfamily", "tribe", "subtribe", "subgenus", "genus"
-    };
-
-    /// <summary>
-    /// Resolve auto-split config: list-level overrides defaults.
-    /// </summary>
-    private static AutoSplitConfig? ResolveAutoSplitConfig(
-        WikipediaListDefinition definition, WikipediaListDefaults defaults) {
-        return definition.AutoSplit ?? defaults.AutoSplit;
-    }
-
-    /// <summary>
-    /// Build auto-split options for non-enriched (IUCN-only) records.
-    /// Candidates are limited to family and genus (the only ranks available without COL).
-    /// Each candidate level sets <c>UnknownLabel = OtherLabel</c> so that species missing
-    /// a rank value route into "Other {rank}" instead of "Unknown {rank}" — this prevents
-    /// the RejectUnknownGroups gate from blocking otherwise good splits.
-    /// </summary>
-    private static AutoSplitOptions<IucnSpeciesRecord>? BuildAutoSplitOptionsIucn(
-        AutoSplitConfig? config,
-        IReadOnlyList<GroupingLevelDefinition> definedLevels,
-        IAutoSplitDiagnostics? diagnostics = null) {
-        if (config == null || !config.Enabled) {
-            return null;
-        }
-
-        var definedRanks = new HashSet<string>(
-            definedLevels.Select(l => l.Level.ToLowerInvariant()),
-            StringComparer.OrdinalIgnoreCase);
-
-        var candidates = new List<TaxonomyTreeLevel<IucnSpeciesRecord>>();
-        var iucnRanks = new[] { "order", "family", "genus" };
-
-        var lastDefinedIndex = -1;
-        for (int i = 0; i < iucnRanks.Length; i++) {
-            if (definedRanks.Contains(iucnRanks[i])) {
-                lastDefinedIndex = i;
-            }
-        }
-
-        // Add ranks below the last defined rank that aren't already defined
-        for (int i = lastDefinedIndex + 1; i < iucnRanks.Length; i++) {
-            var rank = iucnRanks[i];
-            if (!definedRanks.Contains(rank)) {
-                var otherLabel = GetOtherLabel(rank);
-                candidates.Add(new TaxonomyTreeLevel<IucnSpeciesRecord>(
-                    rank, BuildSelector(rank),
-                    UnknownLabel: otherLabel,
-                    MinItems: config.MinItemsPerGroup,
-                    OtherLabel: otherLabel,
-                    MinGroupsForOther: 3));
-            }
-        }
-
-        if (candidates.Count == 0) {
-            return null;
-        }
-
-        return new AutoSplitOptions<IucnSpeciesRecord>(
-            config.Threshold, config.MinGroupSize, candidates,
-            MaxOtherFraction: config.MaxOtherFraction,
-            MaxGroups: config.MaxGroups,
-            MaxDepth: config.MaxDepth,
-            MinMeaningfulGroups: config.MinMeaningfulGroups,
-            RejectUnknownGroups: config.RejectUnknownGroups,
-            Diagnostics: diagnostics);
-    }
-
-    /// <summary>
-    /// Build auto-split options for COL-enriched records.
-    /// Candidates are all COL intermediate ranks below the last defined grouping level
-    /// (subfamily, tribe, subtribe, subgenus, genus).
-    /// Each candidate level sets <c>UnknownLabel = OtherLabel</c> so that species missing
-    /// a rank value route into "Other {rank}" instead of "Unknown {rank}".
-    /// </summary>
-    private static AutoSplitOptions<EnrichedSpeciesRecord>? BuildAutoSplitOptionsEnriched(
-        AutoSplitConfig? config,
-        IReadOnlyList<GroupingLevelDefinition> definedLevels,
-        IAutoSplitDiagnostics? diagnostics = null) {
-        if (config == null || !config.Enabled) {
-            return null;
-        }
-
-        var definedRanks = new HashSet<string>(
-            definedLevels.Select(l => l.Level.ToLowerInvariant()),
-            StringComparer.OrdinalIgnoreCase);
-
-        // Find the position of the last defined rank in the hierarchy
-        var lastDefinedIndex = -1;
-        for (int i = 0; i < RankHierarchy.Length; i++) {
-            if (definedRanks.Contains(RankHierarchy[i])) {
-                lastDefinedIndex = i;
-            }
-        }
-
-        // Add ranks below the last defined rank that aren't already defined
-        var candidates = new List<TaxonomyTreeLevel<EnrichedSpeciesRecord>>();
-        for (int i = lastDefinedIndex + 1; i < RankHierarchy.Length; i++) {
-            var rank = RankHierarchy[i];
-            if (!definedRanks.Contains(rank)) {
-                var otherLabel = GetOtherLabel(rank);
-                candidates.Add(new TaxonomyTreeLevel<EnrichedSpeciesRecord>(
-                    rank, BuildEnrichedSelector(rank),
-                    UnknownLabel: otherLabel,
-                    MinItems: config.MinItemsPerGroup,
-                    OtherLabel: otherLabel,
-                    MinGroupsForOther: 3));
-            }
-        }
-
-        if (candidates.Count == 0) {
-            return null;
-        }
-
-        return new AutoSplitOptions<EnrichedSpeciesRecord>(
-            config.Threshold, config.MinGroupSize, candidates,
-            MaxOtherFraction: config.MaxOtherFraction,
-            MaxGroups: config.MaxGroups,
-            MaxDepth: config.MaxDepth,
-            MinMeaningfulGroups: config.MinMeaningfulGroups,
-            RejectUnknownGroups: config.RejectUnknownGroups,
-            Diagnostics: diagnostics);
-    }
-
-    private static string GetOtherLabel(string rank) => rank.ToLowerInvariant() switch {
-        "subfamily" => "Other subfamilies",
-        "superfamily" => "Other superfamilies",
-        "family" => "Other families",
-        "subgenus" => "Other subgenera",
-        "genus" => "Other genera",
-        "tribe" => "Other tribes",
-        "subtribe" => "Other subtribes",
-        "suborder" => "Other suborders",
-        "infraorder" => "Other infraorders",
-        "parvorder" => "Other parvorders",
-        "order" => "Other orders",
-        _ => $"Other {rank}"
-    };
 
     private void AppendTree(StringBuilder builder, TaxonomyTreeNode<IucnSpeciesRecord> node, int startHeading, DisplayPreferences display, string? statusContext, ref int headingCount) {
         AppendTree(builder, node, startHeading, display, statusContext, ref headingCount, grouping: null, groupingIndex: 0, otherContext: null, parentTaxon: null);
@@ -1259,7 +1065,7 @@ internal sealed class WikipediaListGenerator {
             var currentGrouping = grouping != null && groupingIndex < grouping.Count
                 ? grouping[groupingIndex]
                 : null;
-            var heading = FormatHeading(child.Value, child.Label, GetKingdomName(child));
+            var heading = _headingFormatter.FormatHeading(child.Value, child.Label, GetKingdomName(child));
             var headingText = heading.Text;
             if (IsOtherOrUnknownHeading(child.Value ?? string.Empty) &&
                 currentGrouping?.Level.Equals("family", StringComparison.OrdinalIgnoreCase) == true &&
@@ -1642,141 +1448,6 @@ internal sealed class WikipediaListGenerator {
         return ordered;
     }
 
-    private readonly record struct HeadingInfo(string Text, string? MainLink, string? CommonNameSentence = null, string? Description = null);
-    
-    private HeadingInfo FormatHeading(string? raw, string? rank = null, string? kingdom = null) {
-        if (string.IsNullOrWhiteSpace(raw)) {
-            return new HeadingInfo("Unassigned", null);
-        }
-
-        if (IsOtherOrUnknownHeading(raw)) {
-            return new HeadingInfo(raw.Trim(), null);
-        }
-
-        // Apply title case to the raw taxon name for display
-        var displayName = ToTitleCase(raw);
-
-        // --- Heading text is always the scientific name with rank label ---
-        var headingText = FormatHeadingText(displayName, rank, showRankLabel: true, isScientificName: true);
-
-        // --- Resolve common name from all sources (for sentence, not heading) ---
-        string? commonName = null;
-        var yamlRule = _taxonRules?.GetRule(raw);
-        var legacyRules = _legacyRules.Get(raw);
-
-        // Priority: YAML CommonPlural > YAML CommonName > Legacy CommonPlural > Legacy CommonName
-        if (!string.IsNullOrWhiteSpace(yamlRule?.CommonPlural))
-            commonName = yamlRule.CommonPlural;
-        else if (!string.IsNullOrWhiteSpace(yamlRule?.CommonName))
-            commonName = yamlRule.CommonName;
-        else if (!string.IsNullOrWhiteSpace(legacyRules?.CommonPlural))
-            commonName = legacyRules.CommonPlural;
-        else if (!string.IsNullOrWhiteSpace(legacyRules?.CommonName))
-            commonName = legacyRules.CommonName;
-        else if (_storeBackedProvider is not null) {
-            // Store-backed common names for higher taxa
-            var storeName = _storeBackedProvider.GetBestCommonNameByScientificName(raw, kingdom);
-            if (!string.IsNullOrWhiteSpace(storeName)) {
-                commonName = storeName;
-            } else {
-                // Fallback: Wikipedia redirect target (e.g., Araneae -> Spider)
-                var redirectTitle = _storeBackedProvider.GetWikipediaRedirectTitleByScientificName(raw);
-                if (!string.IsNullOrWhiteSpace(redirectTitle) && !redirectTitle.Equals(raw, StringComparison.OrdinalIgnoreCase)) {
-                    var cleaned = CommonNameNormalizer.RemoveDisambiguationSuffix(redirectTitle);
-                    if (!CommonNameNormalizer.LooksLikeScientificName(cleaned, null, null)) {
-                        commonName = cleaned;
-                    }
-                }
-            }
-        }
-
-        // --- Resolve wikilink target for the sentence ---
-        string? wikilinkTarget = null;
-        if (!string.IsNullOrWhiteSpace(yamlRule?.Wikilink))
-            wikilinkTarget = yamlRule.Wikilink;
-        else if (!string.IsNullOrWhiteSpace(legacyRules?.Wikilink))
-            wikilinkTarget = legacyRules.Wikilink;
-        else {
-            var yamlMainArticle = _taxonRules?.GetMainArticle(raw);
-            if (!string.IsNullOrWhiteSpace(yamlMainArticle))
-                wikilinkTarget = yamlMainArticle;
-            else if (_storeBackedProvider is not null)
-                wikilinkTarget = _storeBackedProvider.GetWikipediaArticleTitleByScientificName(raw, kingdom);
-        }
-
-        // --- Build common name sentence ---
-        var sentence = BuildCommonNameSentence(displayName, rank, commonName, wikilinkTarget);
-
-        // --- Revived comprises/blurb grey-text line (legacy TaxonHeaderBlurb.GrayText) ---
-        var description = FormatTaxonDescription(yamlRule);
-
-        return new HeadingInfo(headingText, null, sentence, description);
-    }
-
-    /// <summary>
-    /// Build the optional descriptive line under a heading from a taxon rule's <c>blurb</c>/<c>comprises</c>.
-    /// <c>blurb</c> is emitted as authored (already a sentence, e.g. "Includes tree frogs and allies");
-    /// <c>comprises</c> becomes an italic "Comprises X." line. Returns null when neither is authored.
-    /// </summary>
-    private static string? FormatTaxonDescription(TaxonRule? rule) {
-        if (rule is null) return null;
-        if (!string.IsNullOrWhiteSpace(rule.Blurb)) {
-            return rule.Blurb.Trim();
-        }
-        if (!string.IsNullOrWhiteSpace(rule.Comprises)) {
-            return $"''Comprises {rule.Comprises.Trim()}.''";
-        }
-        return null;
-    }
-    
-    /// <summary>
-    /// Formats heading text, optionally adding rank label prefix.
-    /// </summary>
-    private static string FormatHeadingText(string displayName, string? rank, bool showRankLabel, bool isScientificName) {
-        if (!showRankLabel || string.IsNullOrWhiteSpace(rank) || !isScientificName) {
-            return displayName;
-        }
-        
-        // Capitalize the rank for display (e.g., "family" -> "Family")
-        var capitalizedRank = char.ToUpperInvariant(rank[0]) + rank.Substring(1).ToLowerInvariant();
-        return $"{capitalizedRank} {displayName}";
-    }
-
-    /// <summary>
-    /// Builds a descriptive sentence showing the common name for a taxon.
-    /// Example: "Members of the [[Sminthidae]] family are called birch mice."
-    /// </summary>
-    private static string? BuildCommonNameSentence(
-        string scientificName, string? rank, string? commonNameOrPlural, string? wikilinkOverride) {
-        if (string.IsNullOrWhiteSpace(commonNameOrPlural)) {
-            return null;
-        }
-
-        // Build wikilink expression
-        string wikilink;
-        if (!string.IsNullOrWhiteSpace(wikilinkOverride) &&
-            !wikilinkOverride.Equals(scientificName, StringComparison.OrdinalIgnoreCase)) {
-            wikilink = $"[[{wikilinkOverride}|{scientificName}]]";
-        } else {
-            wikilink = $"[[{scientificName}]]";
-        }
-
-        // Build sentence with or without rank
-        if (!string.IsNullOrWhiteSpace(rank)) {
-            var lowerRank = rank.ToLowerInvariant();
-            return $"Members of the {wikilink} {lowerRank} are called {commonNameOrPlural}.";
-        }
-
-        return $"Members of {wikilink} are called {commonNameOrPlural}.";
-    }
-
-    private static bool IsOtherOrUnknownHeading(string raw) {
-        var trimmed = raw.Trim();
-        return trimmed.StartsWith("Other ", StringComparison.OrdinalIgnoreCase)
-            || trimmed.StartsWith("Unknown ", StringComparison.OrdinalIgnoreCase)
-            || trimmed.Equals("Other", StringComparison.OrdinalIgnoreCase)
-            || trimmed.Equals("Unknown", StringComparison.OrdinalIgnoreCase);
-    }
 
     private static string? GetKingdomName(TaxonomyTreeNode<IucnSpeciesRecord> node) {
         if (node.Items.Count > 0) {
