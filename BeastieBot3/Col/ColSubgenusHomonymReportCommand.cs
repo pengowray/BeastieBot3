@@ -44,7 +44,7 @@ WITH subg AS (
             )
         ) AS canonical_name
     FROM nameusage
-    WHERE LOWER(rank) = 'subgenus'
+    WHERE rank = 'subgenus'
 ), genus AS (
     SELECT
         ID,
@@ -63,7 +63,7 @@ WITH subg AS (
             )
         ) AS canonical_name
     FROM nameusage
-    WHERE LOWER(rank) = 'genus'
+    WHERE rank = 'genus'
 )
 SELECT
     s.canonical_name AS shared_name,

@@ -9,7 +9,7 @@ using BeastieBot3.Taxonomy;
 // Enriches IUCN species with additional ranks from COL's NameUsage table.
 // IUCN has limited taxonomy (class/order/family); COL provides suborder,
 // superfamily, infraorder, etc. Enables list groupings like separating
-// snakes (Serpentes) from lizards within Squamata. Uses ColNameUsageRepository
+// snakes (Serpentes) from lizards within Squamata. Uses ColTaxonRepository
 // to query COL parent chain. Called by WikipediaListGenerator.
 
 namespace BeastieBot3.WikipediaLists;
