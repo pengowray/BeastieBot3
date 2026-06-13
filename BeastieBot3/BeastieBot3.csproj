@@ -13,6 +13,11 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- Expose internal types to the test project (R5 test seam). -->
+    <InternalsVisibleTo Include="BeastieBot3.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="CXuesong.MW.WikiClientLibrary" Version="0.8.0" />
     <PackageReference Include="CXuesong.MW.WikiClientLibrary.Wikibase" Version="0.8.0" />
     <PackageReference Include="CsvHelper" Version="32.0.2" />

@@ -32,6 +32,17 @@ internal sealed class CommonNameStore : SqliteStore {
         return store;
     }
 
+    /// <summary>
+    /// Test/advanced seam (R5): build a store over a caller-owned, already-open connection — e.g. a
+    /// shared <c>:memory:</c> SQLite connection — so the store can be exercised without a file.
+    /// </summary>
+    internal static CommonNameStore OpenFromConnection(SqliteConnection connection) {
+        EnableForeignKeys(connection);
+        var store = new CommonNameStore(connection);
+        store.EnsureSchema();
+        return store;
+    }
+
     protected override void EnsureSchema() {
         using var command = _connection.CreateCommand();
         command.CommandText =

@@ -51,6 +51,18 @@ internal abstract class SqliteStore : IDisposable {
         return connection;
     }
 
+    /// <summary>
+    /// Test/advanced seam: enable foreign keys on an already-open connection (e.g. a shared
+    /// in-memory SQLite connection) the caller owns. Concrete stores expose a static
+    /// <c>OpenFromConnection(SqliteConnection)</c> that calls this, constructs, and runs
+    /// <see cref="EnsureSchema"/> — letting a store be exercised over <c>:memory:</c> without a file.
+    /// </summary>
+    internal static void EnableForeignKeys(SqliteConnection connection) {
+        using var pragma = connection.CreateCommand();
+        pragma.CommandText = "PRAGMA foreign_keys = ON;";
+        pragma.ExecuteNonQuery();
+    }
+
     /// <summary>Creates the store's tables/indexes/views. Called once from the factory after open.</summary>
     protected abstract void EnsureSchema();
 
