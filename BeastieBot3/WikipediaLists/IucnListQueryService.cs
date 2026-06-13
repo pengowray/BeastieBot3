@@ -178,7 +178,7 @@ internal sealed class IucnListQueryService : IDisposable {
 
     /// <summary>
     /// Counts species-rank assessments matching the given taxonomic filters (all statuses).
-    /// Excludes infraspecific taxa and subpopulations.
+    /// Excludes infraspecific taxa, subpopulations, and non-global (regional) assessments.
     /// </summary>
     public int CountEvaluatedSpecies(List<TaxonFilterDefinition> filters) {
         return CountWithFilters(filters, statusCategory: null);
@@ -187,7 +187,7 @@ internal sealed class IucnListQueryService : IDisposable {
     /// <summary>
     /// Counts species-rank assessments matching the given taxonomic filters for a specific status code.
     /// Translates the short code (e.g., "CR") to the database category text (e.g., "Critically Endangered").
-    /// Excludes infraspecific taxa and subpopulations.
+    /// Excludes infraspecific taxa, subpopulations, and non-global (regional) assessments.
     /// </summary>
     public int CountSpeciesByStatus(List<TaxonFilterDefinition> filters, string statusCode) {
         var descriptor = IucnRedlistStatus.Describe(statusCode);
@@ -198,8 +198,9 @@ internal sealed class IucnListQueryService : IDisposable {
         var parameters = new List<SqliteParameter>();
         var builder = new StringBuilder();
         builder.AppendLine("SELECT COUNT(*) FROM view_assessments_html_taxonomy_html v");
-        builder.AppendLine("WHERE (v.infraType IS NULL OR v.infraType = '')");
-        builder.AppendLine("  AND (v.subpopulationName IS NULL OR v.subpopulationName = '')");
+        // Canonical global-species scope — same predicate the charts/breakdown use, so the
+        // headline count and DD/threatened percentages match the chart total (no regional inflation).
+        builder.AppendLine($"WHERE {TaxonFilterSql.GlobalSpeciesPredicate()}");
 
         if (!string.IsNullOrEmpty(statusCategory)) {
             var param = new SqliteParameter("@statusCat", statusCategory);

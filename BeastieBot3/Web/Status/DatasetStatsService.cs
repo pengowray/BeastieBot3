@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using Microsoft.Data.Sqlite;
+using BeastieBot3.WikipediaLists;
 
 // Computes a comparable statistics set for any CSV-shaped IUCN relational DB
 // (the CSV main DB *and* the API projection share view_assessments_html_taxonomy_html,
@@ -31,13 +32,6 @@ public sealed record DatasetStats {
 }
 
 public static class DatasetStatsService {
-    // Canonical species-scope predicate (mirrors IucnChartDataBuilder): species-rank,
-    // non-subpopulation, global. Identical to the chart/breakdown counts.
-    private const string GlobalSpeciesPredicate =
-        "(v.infraType IS NULL OR v.infraType = '') " +
-        "AND (v.subpopulationName IS NULL OR TRIM(v.subpopulationName) = '') " +
-        "AND (v.scopes IS NULL OR v.scopes = '' OR v.scopes LIKE '%Global%')";
-
     private static readonly ConcurrentDictionary<string, (string Key, DatasetStats Stats)> _cache = new();
 
     /// <summary>Compute (or return cached) stats for the given IUCN relational DB path.</summary>
@@ -90,7 +84,7 @@ public static class DatasetStatsService {
             using (var cmd = conn.CreateCommand()) {
                 cmd.CommandText =
                     "SELECT v.redlistCategory, COUNT(*) FROM view_assessments_html_taxonomy_html v " +
-                    $"WHERE {GlobalSpeciesPredicate} GROUP BY v.redlistCategory";
+                    $"WHERE {TaxonFilterSql.GlobalSpeciesPredicate()} GROUP BY v.redlistCategory";
                 using var reader = cmd.ExecuteReader();
                 while (reader.Read()) {
                     var cat = reader.IsDBNull(0) ? "(none)" : reader.GetString(0);

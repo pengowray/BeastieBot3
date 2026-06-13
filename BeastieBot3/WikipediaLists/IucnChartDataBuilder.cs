@@ -30,9 +30,12 @@ internal static class ChartStatusOrder {
         new("CR", "Critically Endangered", "Critically Endangered", PeFilter: "false", PewFilter: "false"),
         new("EN", "Endangered", "Endangered"),
         new("VU", "Vulnerable", "Vulnerable"),
-        // NT absorbs LR/cd — the count method handles both categories.
-        new("NT", "Near Threatened", "Near Threatened", MergesLrCd: true),
-        new("LC", "Least Concern", "Least Concern"),
+        // NT absorbs legacy LR/cd (footnoted) and LR/nt (silent direct equivalent).
+        new("NT", "Near Threatened", "Near Threatened", MergesLrCd: true,
+            ExtraCategories: new[] { "Lower Risk/near threatened" }),
+        // LC absorbs legacy LR/lc (silent direct equivalent).
+        new("LC", "Least Concern", "Least Concern",
+            ExtraCategories: new[] { "Lower Risk/least concern" }),
         new("DD", "Data Deficient", "Data Deficient"),
     };
 }
@@ -42,14 +45,19 @@ internal static class ChartStatusOrder {
 /// <param name="DbCategory">Value in redlistCategory column.</param>
 /// <param name="PeFilter">If set, filter possiblyExtinct to this value.</param>
 /// <param name="PewFilter">If set, filter possiblyExtinctInTheWild to this value.</param>
-/// <param name="MergesLrCd">When true, also count "Lower Risk/conservation dependent" rows.</param>
+/// <param name="MergesLrCd">When true, also count "Lower Risk/conservation dependent" rows (tracked
+/// separately for the LR/cd footnote).</param>
+/// <param name="ExtraCategories">Additional legacy redlistCategory values folded into this code with no
+/// footnote — direct equivalents of the modern category (e.g. "Lower Risk/near threatened" → NT,
+/// "Lower Risk/least concern" → LC), matching the Wikipedia list status mapping.</param>
 internal sealed record ChartStatusEntry(
     string Code,
     string Label,
     string DbCategory,
     string? PeFilter = null,
     string? PewFilter = null,
-    bool MergesLrCd = false);
+    bool MergesLrCd = false,
+    IReadOnlyList<string>? ExtraCategories = null);
 
 /// <summary>
 /// Result of counting species for one chart group.
@@ -143,13 +151,19 @@ internal sealed class IucnChartDataBuilder : IDisposable {
         var parameters = new List<SqliteParameter>();
         var sql = new StringBuilder();
         sql.AppendLine("SELECT COUNT(*) FROM view_assessments_html_taxonomy_html v");
-        sql.AppendLine("WHERE (v.infraType IS NULL OR v.infraType = '')");
-        sql.AppendLine("  AND (v.subpopulationName IS NULL OR TRIM(v.subpopulationName) = '')");
-        sql.AppendLine("  AND (v.scopes IS NULL OR v.scopes = '' OR v.scopes LIKE '%Global%')");
+        sql.AppendLine($"WHERE {TaxonFilterSql.GlobalSpeciesPredicate()}");
 
-        var catParam = new SqliteParameter("@category", entry.DbCategory);
-        sql.AppendLine($"  AND v.redlistCategory = @category");
-        parameters.Add(catParam);
+        // Main category plus any silently-folded legacy equivalents (LR/nt, LR/lc).
+        var catNames = new List<string> { "@category" };
+        parameters.Add(new SqliteParameter("@category", entry.DbCategory));
+        if (entry.ExtraCategories is { Count: > 0 }) {
+            for (var i = 0; i < entry.ExtraCategories.Count; i++) {
+                var name = $"@extracat{i}";
+                catNames.Add(name);
+                parameters.Add(new SqliteParameter(name, entry.ExtraCategories[i]));
+            }
+        }
+        sql.AppendLine($"  AND v.redlistCategory IN ({string.Join(", ", catNames)})");
 
         if (entry.PeFilter is not null) {
             var peParam = new SqliteParameter("@pe", entry.PeFilter);
@@ -172,9 +186,7 @@ internal sealed class IucnChartDataBuilder : IDisposable {
         var parameters = new List<SqliteParameter>();
         var sql = new StringBuilder();
         sql.AppendLine("SELECT COUNT(*) FROM view_assessments_html_taxonomy_html v");
-        sql.AppendLine("WHERE (v.infraType IS NULL OR v.infraType = '')");
-        sql.AppendLine("  AND (v.subpopulationName IS NULL OR TRIM(v.subpopulationName) = '')");
-        sql.AppendLine("  AND (v.scopes IS NULL OR v.scopes = '' OR v.scopes LIKE '%Global%')");
+        sql.AppendLine($"WHERE {TaxonFilterSql.GlobalSpeciesPredicate()}");
         sql.AppendLine("  AND v.redlistCategory = @category");
         parameters.Add(new SqliteParameter("@category", "Lower Risk/conservation dependent"));
 
@@ -220,9 +232,7 @@ internal sealed class IucnChartDataBuilder : IDisposable {
         var sql = new StringBuilder();
         sql.AppendLine($"SELECT v.{column} AS childVal, v.redlistCategory, v.possiblyExtinct, v.possiblyExtinctInTheWild, COUNT(*) AS n");
         sql.AppendLine("FROM view_assessments_html_taxonomy_html v");
-        sql.AppendLine("WHERE (v.infraType IS NULL OR v.infraType = '')");
-        sql.AppendLine("  AND (v.subpopulationName IS NULL OR TRIM(v.subpopulationName) = '')");
-        sql.AppendLine("  AND (v.scopes IS NULL OR v.scopes = '' OR v.scopes LIKE '%Global%')");
+        sql.AppendLine($"WHERE {TaxonFilterSql.GlobalSpeciesPredicate()}");
         if (parentFilters != null) {
             for (var i = 0; i < parentFilters.Count; i++) {
                 TaxonFilterSql.AppendFilter(sql, parameters, parentFilters[i], i, paramPrefix: "b");
@@ -279,7 +289,8 @@ internal sealed class IucnChartDataBuilder : IDisposable {
     /// <summary>
     /// Map a raw (category, possiblyExtinct, possiblyExtinctInTheWild) triple to its
     /// <see cref="ChartStatusOrder"/> code, mirroring CountSpecies/CountLrCd exactly (IFNULL-&gt;'false'
-    /// for the PE/PEW flags; LR/cd folds into NT). Returns null for categories outside the 10 bars.
+    /// for the PE/PEW flags; legacy LR/cd and LR/nt fold into NT, LR/lc into LC via each entry's
+    /// ExtraCategories). Returns null for categories outside the 10 bars.
     /// </summary>
     private static string? ResolveChartCode(string? category, string? pe, string? pew) {
         if (string.IsNullOrEmpty(category)) return null;
@@ -287,7 +298,9 @@ internal sealed class IucnChartDataBuilder : IDisposable {
         var peEff = string.IsNullOrEmpty(pe) ? "false" : pe;
         var pewEff = string.IsNullOrEmpty(pew) ? "false" : pew;
         foreach (var e in ChartStatusOrder.Entries) {
-            if (e.DbCategory != category) continue;
+            var matchesCategory = e.DbCategory == category
+                || (e.ExtraCategories?.Contains(category) ?? false);
+            if (!matchesCategory) continue;
             if (e.PeFilter != null && e.PeFilter != peEff) continue;
             if (e.PewFilter != null && e.PewFilter != pewEff) continue;
             return e.Code;

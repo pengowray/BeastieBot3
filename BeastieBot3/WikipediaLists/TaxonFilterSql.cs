@@ -13,6 +13,20 @@ using Microsoft.Data.Sqlite;
 namespace BeastieBot3.WikipediaLists;
 
 internal static class TaxonFilterSql {
+    /// <summary>
+    /// Canonical "one global, species-rank assessment" predicate — the single definition of what
+    /// the lists and charts count. Species rank (no <c>infraType</c>), not a subpopulation, and
+    /// global scope (or scope-less). Shared verbatim by the chart counts (<see cref="IucnChartDataBuilder"/>),
+    /// the parent breakdown, the dataset-stats compare card, AND the list headline / percentage
+    /// counts (<see cref="IucnListQueryService"/>) so the four can never drift — a list's prose count
+    /// equals its chart total by construction. <paramref name="alias"/> is the table alias in the
+    /// surrounding query. Emitted as a literal (no parameters) so it drops straight into a WHERE.
+    /// </summary>
+    public static string GlobalSpeciesPredicate(string alias = "v") =>
+        $"({alias}.infraType IS NULL OR {alias}.infraType = '') " +
+        $"AND ({alias}.subpopulationName IS NULL OR TRIM({alias}.subpopulationName) = '') " +
+        $"AND ({alias}.scopes IS NULL OR {alias}.scopes = '' OR {alias}.scopes LIKE '%Global%')";
+
     /// <summary>Map a YAML rank name to its denormalized column on the taxonomy view.</summary>
     public static string? ResolveColumn(string? rank) => rank?.Trim().ToLowerInvariant() switch {
         "kingdom" => "kingdomName",
