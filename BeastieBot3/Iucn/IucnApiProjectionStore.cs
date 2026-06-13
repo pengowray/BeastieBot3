@@ -2,6 +2,7 @@ using System;
 using System.Data;
 using System.IO;
 using Microsoft.Data.Sqlite;
+using BeastieBot3.Infrastructure;
 
 // Derived "projection" SQLite store that re-shapes the IUCN API cache (raw JSON)
 // into the same relational form as the CSV-imported main DB, so Wikipedia list /
@@ -14,36 +15,18 @@ using Microsoft.Data.Sqlite;
 
 namespace BeastieBot3.Iucn;
 
-internal sealed class IucnApiProjectionStore : IDisposable {
-    private readonly SqliteConnection _connection;
-
-    private IucnApiProjectionStore(SqliteConnection connection) {
-        _connection = connection;
+internal sealed class IucnApiProjectionStore : SqliteStore {
+    private IucnApiProjectionStore(SqliteConnection connection) : base(connection) {
     }
 
     public static IucnApiProjectionStore Open(string databasePath) {
-        var directory = Path.GetDirectoryName(databasePath);
-        if (!string.IsNullOrEmpty(directory)) {
-            Directory.CreateDirectory(directory);
-        }
-        var builder = new SqliteConnectionStringBuilder {
-            DataSource = databasePath,
-            Mode = SqliteOpenMode.ReadWriteCreate,
-        };
-        var connection = new SqliteConnection(builder.ConnectionString);
-        connection.Open();
-        using (var pragma = connection.CreateCommand()) {
-            pragma.CommandText = "PRAGMA journal_mode = WAL;";
-            pragma.ExecuteNonQuery();
-        }
+        var connection = OpenConnection(databasePath, foreignKeys: false);
         var store = new IucnApiProjectionStore(connection);
         store.EnsureSchema();
         return store;
     }
 
-    public void Dispose() => _connection.Dispose();
-
-    private void EnsureSchema() {
+    protected override void EnsureSchema() {
         using var cmd = _connection.CreateCommand();
         cmd.CommandText = @"
 CREATE TABLE IF NOT EXISTS import_metadata (

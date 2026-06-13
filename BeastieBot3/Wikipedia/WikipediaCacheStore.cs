@@ -15,57 +15,19 @@ using BeastieBot3.Infrastructure;
 
 namespace BeastieBot3.Wikipedia;
 
-internal sealed class WikipediaCacheStore : IDisposable {
-    private readonly SqliteConnection _connection;
-    private readonly ApiImportMetadataStore _importStore;
-
-    private WikipediaCacheStore(SqliteConnection connection) {
-        _connection = connection;
-        _importStore = new ApiImportMetadataStore(connection);
+internal sealed class WikipediaCacheStore : HttpCacheSqliteStore {
+    private WikipediaCacheStore(SqliteConnection connection) : base(connection) {
     }
 
     public static WikipediaCacheStore Open(string databasePath) {
-        if (string.IsNullOrWhiteSpace(databasePath)) {
-            throw new ArgumentException("Database path must be provided", nameof(databasePath));
-        }
-
-        var directory = Path.GetDirectoryName(databasePath);
-        if (!string.IsNullOrWhiteSpace(directory)) {
-            Directory.CreateDirectory(directory);
-        }
-
-        var builder = new SqliteConnectionStringBuilder {
-            DataSource = databasePath,
-            Mode = SqliteOpenMode.ReadWriteCreate
-        };
-
-        var connection = new SqliteConnection(builder.ConnectionString);
-        connection.Open();
-
-        using (var pragma = connection.CreateCommand()) {
-            pragma.CommandText = "PRAGMA journal_mode = WAL;";
-            pragma.ExecuteNonQuery();
-            pragma.CommandText = "PRAGMA foreign_keys = ON;";
-            pragma.ExecuteNonQuery();
-        }
-
+        var connection = OpenConnection(databasePath);
         var store = new WikipediaCacheStore(connection);
-        store._importStore.EnsureSchema();
+        store.EnsureImportSchema();
         store.EnsureSchema();
         return store;
     }
 
-    public void Dispose() => _connection.Dispose();
-
-    public long BeginImport(string url) => _importStore.BeginImport(url);
-
-    public void CompleteImportSuccess(long importId, int httpStatus, long payloadBytes, TimeSpan duration) =>
-        _importStore.CompleteImportSuccess(importId, httpStatus, payloadBytes, duration);
-
-    public void CompleteImportFailure(long importId, string errorMessage, int? statusCode, TimeSpan duration) =>
-        _importStore.CompleteImportFailure(importId, errorMessage, statusCode, duration);
-
-    private void EnsureSchema() {
+    protected override void EnsureSchema() {
         using var command = _connection.CreateCommand();
         command.CommandText =
             """

@@ -14,44 +14,19 @@ using BeastieBot3.Infrastructure;
 
 namespace BeastieBot3.Iucn;
 
-internal sealed class IucnApiCacheStore : IDisposable {
-    private readonly SqliteConnection _connection;
-    private readonly ApiImportMetadataStore _importStore;
-
-    private IucnApiCacheStore(SqliteConnection connection) {
-        _connection = connection;
-        _importStore = new ApiImportMetadataStore(connection);
+internal sealed class IucnApiCacheStore : HttpCacheSqliteStore {
+    private IucnApiCacheStore(SqliteConnection connection) : base(connection) {
     }
 
     public static IucnApiCacheStore Open(string databasePath) {
-        var directory = Path.GetDirectoryName(databasePath);
-        if (!string.IsNullOrEmpty(directory)) {
-            Directory.CreateDirectory(directory);
-        }
-        var builder = new SqliteConnectionStringBuilder {
-            DataSource = databasePath,
-            Mode = SqliteOpenMode.ReadWriteCreate
-        };
-
-        var connection = new SqliteConnection(builder.ConnectionString);
-        connection.Open();
-
-        using (var pragma = connection.CreateCommand()) {
-            pragma.CommandText = "PRAGMA journal_mode = WAL;";
-            pragma.ExecuteNonQuery();
-            pragma.CommandText = "PRAGMA foreign_keys = ON;";
-            pragma.ExecuteNonQuery();
-        }
-
+        var connection = OpenConnection(databasePath);
         var store = new IucnApiCacheStore(connection);
-        store._importStore.EnsureSchema();
+        store.EnsureImportSchema();
         store.EnsureSchema();
         return store;
     }
 
-    public void Dispose() => _connection.Dispose();
-
-    private void EnsureSchema() {
+    protected override void EnsureSchema() {
         using var command = _connection.CreateCommand();
         command.CommandText = @"
     CREATE TABLE IF NOT EXISTS taxa (
@@ -146,14 +121,6 @@ CREATE TABLE IF NOT EXISTS failed_requests (
         idx.CommandText = "CREATE INDEX IF NOT EXISTS idx_taxa_has_latest_flag ON taxa(has_latest_flag_in_assessments)";
         idx.ExecuteNonQuery();
     }
-
-    public long BeginImport(string url) => _importStore.BeginImport(url);
-
-    public void CompleteImportSuccess(long importId, int httpStatus, long payloadBytes, TimeSpan duration) =>
-        _importStore.CompleteImportSuccess(importId, httpStatus, payloadBytes, duration);
-
-    public void CompleteImportFailure(long importId, string errorMessage, int? statusCode, TimeSpan duration) =>
-        _importStore.CompleteImportFailure(importId, errorMessage, statusCode, duration);
 
     public DateTime? GetTaxaDownloadedAt(long sisId) {
         using var command = _connection.CreateCommand();

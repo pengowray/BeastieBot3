@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using Microsoft.Data.Sqlite;
+using BeastieBot3.Infrastructure;
 using BeastieBot3.Taxonomy;
 
 // Unified SQLite store aggregating vernacular names from IUCN, Wikidata, Wikipedia, and COL.
@@ -16,46 +17,22 @@ namespace BeastieBot3.CommonNames;
 /// SQLite store for unified common names from all sources (IUCN, Wikidata, Wikipedia, COL).
 /// Supports disambiguation, conflict detection, and capitalization rules.
 /// </summary>
-internal sealed class CommonNameStore : IDisposable {
-    private readonly SqliteConnection _connection;
-    
+internal sealed class CommonNameStore : SqliteStore {
     // Cache for ambiguous names set (expensive to compute, rarely changes)
     private HashSet<string>? _cachedAmbiguousNames;
     private string? _cachedAmbiguousNamesLanguage;
 
-    private CommonNameStore(SqliteConnection connection) {
-        _connection = connection;
+    private CommonNameStore(SqliteConnection connection) : base(connection) {
     }
 
     public static CommonNameStore Open(string databasePath) {
-        var directory = Path.GetDirectoryName(databasePath);
-        if (!string.IsNullOrWhiteSpace(directory)) {
-            Directory.CreateDirectory(directory);
-        }
-
-        var builder = new SqliteConnectionStringBuilder {
-            DataSource = databasePath,
-            Mode = SqliteOpenMode.ReadWriteCreate
-        };
-
-        var connection = new SqliteConnection(builder.ConnectionString);
-        connection.Open();
-
-        using (var pragma = connection.CreateCommand()) {
-            pragma.CommandText = "PRAGMA journal_mode = WAL;";
-            pragma.ExecuteNonQuery();
-            pragma.CommandText = "PRAGMA foreign_keys = ON;";
-            pragma.ExecuteNonQuery();
-        }
-
+        var connection = OpenConnection(databasePath);
         var store = new CommonNameStore(connection);
         store.EnsureSchema();
         return store;
     }
 
-    public void Dispose() => _connection.Dispose();
-
-    public void EnsureSchema() {
+    protected override void EnsureSchema() {
         using var command = _connection.CreateCommand();
         command.CommandText =
             """

@@ -1,5 +1,6 @@
 using System.Text.Json;
 using Microsoft.Data.Sqlite;
+using BeastieBot3.Infrastructure;
 
 namespace BeastieBot3.Web.Jobs;
 
@@ -14,6 +15,8 @@ namespace BeastieBot3.Web.Jobs;
 // static Open() factory + IDisposable. WAL mode so dashboard reads do not
 // block job inserts.
 
+// Web-layer type, kept public for the minimal-API DI graph (JobRegistry/FlowEvaluator), so it
+// reuses SqliteStore.OpenConnection as a helper rather than inheriting the internal base.
 public sealed class JobHistoryStore : IDisposable {
     private const int MaxStoredOutputBytes = 256 * 1024;
     private const string TruncationMarker = "\n\x1b[2m[output truncated; persisted up to 256 KB]\x1b[0m\n";
@@ -24,25 +27,7 @@ public sealed class JobHistoryStore : IDisposable {
     private JobHistoryStore(SqliteConnection connection) { _connection = connection; }
 
     public static JobHistoryStore Open(string databasePath) {
-        var directory = Path.GetDirectoryName(databasePath);
-        if (!string.IsNullOrWhiteSpace(directory)) {
-            Directory.CreateDirectory(directory);
-        }
-
-        var builder = new SqliteConnectionStringBuilder {
-            DataSource = databasePath,
-            Mode = SqliteOpenMode.ReadWriteCreate,
-        };
-        var connection = new SqliteConnection(builder.ConnectionString);
-        connection.Open();
-
-        using (var pragma = connection.CreateCommand()) {
-            pragma.CommandText = "PRAGMA journal_mode = WAL;";
-            pragma.ExecuteNonQuery();
-            pragma.CommandText = "PRAGMA foreign_keys = ON;";
-            pragma.ExecuteNonQuery();
-        }
-
+        var connection = SqliteStore.OpenConnection(databasePath);
         var store = new JobHistoryStore(connection);
         store.EnsureSchema();
         store.MarkOrphanedRunningJobs();

@@ -16,53 +16,19 @@ using BeastieBot3.Taxonomy;
 
 namespace BeastieBot3.Wikidata;
 
-internal sealed class WikidataCacheStore : IDisposable {
-    private readonly SqliteConnection _connection;
-    private readonly ApiImportMetadataStore _importStore;
-
-    private WikidataCacheStore(SqliteConnection connection) {
-        _connection = connection;
-        _importStore = new ApiImportMetadataStore(connection);
+internal sealed class WikidataCacheStore : HttpCacheSqliteStore {
+    private WikidataCacheStore(SqliteConnection connection) : base(connection) {
     }
 
     public static WikidataCacheStore Open(string databasePath) {
-        var directory = Path.GetDirectoryName(databasePath);
-        if (!string.IsNullOrWhiteSpace(directory)) {
-            Directory.CreateDirectory(directory);
-        }
-
-        var builder = new SqliteConnectionStringBuilder {
-            DataSource = databasePath,
-            Mode = SqliteOpenMode.ReadWriteCreate
-        };
-
-        var connection = new SqliteConnection(builder.ConnectionString);
-        connection.Open();
-
-        using (var pragma = connection.CreateCommand()) {
-            pragma.CommandText = "PRAGMA journal_mode = WAL;";
-            pragma.ExecuteNonQuery();
-            pragma.CommandText = "PRAGMA foreign_keys = ON;";
-            pragma.ExecuteNonQuery();
-        }
-
+        var connection = OpenConnection(databasePath);
         var store = new WikidataCacheStore(connection);
-        store._importStore.EnsureSchema();
+        store.EnsureImportSchema();
         store.EnsureSchema();
         return store;
     }
 
-    public void Dispose() => _connection.Dispose();
-
-    public long BeginImport(string url) => _importStore.BeginImport(url);
-
-    public void CompleteImportSuccess(long importId, int httpStatus, long payloadBytes, TimeSpan duration) =>
-        _importStore.CompleteImportSuccess(importId, httpStatus, payloadBytes, duration);
-
-    public void CompleteImportFailure(long importId, string errorMessage, int? statusCode, TimeSpan duration) =>
-        _importStore.CompleteImportFailure(importId, errorMessage, statusCode, duration);
-
-    public void EnsureSchema() {
+    protected override void EnsureSchema() {
         using var command = _connection.CreateCommand();
         command.CommandText =
             """
