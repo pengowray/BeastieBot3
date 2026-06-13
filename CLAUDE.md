@@ -22,7 +22,9 @@ For the local web UI (`serve`), read-only Playwright smoke tests live in `e2e/` 
 
 ### Command Tree
 
-All commands are registered in `BeastieBot3/Program.cs` under top-level branches: `col`, `iucn`, `iucn api`, `wikidata`, `wikipedia`, `common-names`. Each branch groups related subcommands and is wired up via `config.AddBranch()` / `config.AddCommand<T>()`.
+Commands **self-register via attributes** — `Program.cs` no longer hand-wires the tree (it configures only the error handler and the lone `ServeCommand`). Each command class carries a `[CommandInfo("branch sub", CommandKind.X, "description", ...)]` attribute; `CommandRegistry.ConfigureAll` (`Web/Commands/CommandRegistry.cs`) scans the assembly for these at startup and builds the entire Spectre.Console.Cli branch tree. Branches are declared once as assembly attributes in `CommandClassification.cs` (`[assembly: CommandBranch("iucn api", "...")]`). Top-level branches: `col`, `iucn`, `iucn api`, `wikidata`, `wikipedia`, `common-names`.
+
+`CommandClassification.cs` is the **single source of truth** for the command tree. The same attributes drive the web UI catalogue (`/api/commands`): `CommandKind` (`ReadOnly` | `Mutates` | `Destructive`) gates re-confirmation, and the orthogonal `RerunEffect` (`ReadOnly` | `IdempotentAdd` | `Discovers` | `Rebuilds` | `ClearsCache` | `FreshDataset`) tells the user what a re-run will do.
 
 ### Configuration Flow
 
@@ -42,9 +44,11 @@ All stores (`CommonNameStore`, `IucnApiCacheStore`, `WikidataCacheStore`, `Wikip
 
 1. Create a `sealed class` inheriting `Command<TSettings>` (sync) or `AsyncCommand<TSettings>` (async — use for HTTP/long-running work).
 2. Define a nested `Settings : CommonSettings` (`CommonSettings` provides `--settings-dir` and `--ini-file`).
-3. Register in `Program.cs` with `.WithDescription()` and `.WithExample()`.
+3. Annotate the class with `[CommandInfo("branch sub", CommandKind.X, "description", Rerun = RerunEffect.Y, Examples = new[]{ ... })]`. That attribute is the registration — `CommandRegistry` derives the path, description, and examples from it. If the command introduces a new branch, add a `[assembly: CommandBranch("branch", "...")]` line to `CommandClassification.cs`. Do **not** edit `Program.cs`.
 
 ```csharp
+[CommandInfo("iucn my-thing", CommandKind.Mutates, "Do the thing",
+    Rerun = RerunEffect.IdempotentAdd, Examples = new[] { "iucn my-thing --limit 100" })]
 internal sealed class MyCommand : AsyncCommand<MyCommand.Settings> {
     public sealed class Settings : CommonSettings {
         [CommandOption("-d|--database <PATH>")]

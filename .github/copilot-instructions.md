@@ -18,13 +18,13 @@ No test suite exists — verify changes by building and running the relevant CLI
 
 ### Command Tree
 
-Commands are registered in `Program.cs` under branches: `col`, `iucn`, `iucn api`, `wikidata`, `wikipedia`, `common-names`. Each branch groups related subcommands.
+Commands **self-register via `[CommandInfo("branch sub", CommandKind.X, "...")]` attributes** scanned by `CommandRegistry.ConfigureAll`; branches are declared as `[assembly: CommandBranch(...)]` in `CommandClassification.cs` (the single source of truth). `Program.cs` only wires the error handler and `ServeCommand`. Top-level branches: `col`, `iucn`, `iucn api`, `wikidata`, `wikipedia`, `common-names`.
 
 ### Adding a New Command
 
 1. Create a `sealed class` inheriting `Command<TSettings>` (sync) or `AsyncCommand<TSettings>` (async — use for HTTP/long-running work). The async signature includes `CancellationToken`.
 2. Define a nested `Settings` class inheriting `CommonSettings` (provides `--settings-dir` and `--ini-file`).
-3. Register in `Program.cs` via `config.AddBranch()`/`config.AddCommand<T>()` with `.WithDescription()` and `.WithExample()`.
+3. Annotate the class with `[CommandInfo("branch sub", CommandKind.X, "description", Examples = new[]{ ... })]` (add `[assembly: CommandBranch(...)]` in `CommandClassification.cs` for a new branch). The attribute *is* the registration — do not edit `Program.cs`.
 
 ```csharp
 internal sealed class MyCommand : AsyncCommand<MyCommand.Settings> {

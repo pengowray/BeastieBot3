@@ -69,7 +69,7 @@ There is currently no formal test suite (xUnit/NUnit) configured in the solution
 
 ## Architecture
 
-- **Commands**: Implemented using `Spectre.Console.Cli`. Commands are organized into branches (e.g., `iucn`, `wikidata`, `wikipedia`) in `Program.cs`.
+- **Commands**: Implemented using `Spectre.Console.Cli`. Commands **self-register via `[CommandInfo("branch sub", CommandKind.X, "...")]` attributes** scanned by `CommandRegistry.ConfigureAll` (`Web/Commands/CommandRegistry.cs`); branches are declared as `[assembly: CommandBranch(...)]` in `CommandClassification.cs` (the single source of truth for the command tree). `Program.cs` only wires the error handler and `ServeCommand`.
 - **Services/Repositories**: Encapsulate logic for specific domains (e.g., `IucnImporter`, `WikidataCacheStore`).
 - **Data Access**: Direct SQLite interactions or helper classes like `ApiImportMetadataStore`.
 - **Legacy Code**: The `BeastieBot3/BeastieLegacy/` directory contains older code (e.g., `LatinSpecies`, `DupeFinder`) that is not actively run but serves as a reference for logic and business rules.
@@ -79,7 +79,7 @@ There is currently no formal test suite (xUnit/NUnit) configured in the solution
 1. **Analysis**: Before editing, use `grep` and `glob` to find relevant files. Read surrounding code to match style.
 2. **Implementation**:
    - Create new commands by inheriting from `Command<TSettings>` or `AsyncCommand<TSettings>`.
-   - Register new commands in `Program.cs`.
+   - Register new commands by annotating the class with `[CommandInfo(...)]` (and adding `[assembly: CommandBranch(...)]` in `CommandClassification.cs` for a new branch). Do not edit `Program.cs`.
    - Use `ApiImportMetadataStore` or similar patterns for tracking data operations.
 3. **Verification**: Since there are no unit tests, verify your changes by:
    - Compiling: `dotnet build`

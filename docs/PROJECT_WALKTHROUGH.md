@@ -1,5 +1,7 @@
 # BeastieBot3 Project Walkthrough
 
+> ⚠️ **STALE (flagged 2026-06-13).** This walkthrough predates the move of source files into per-domain subdirectories (`Iucn/`, `Col/`, `Wikidata/`, …) and the switch to attribute-based command registration. Most `../BeastieBot3/X.cs` links are broken, several command names are outdated (`iucn api cache-full`→`cache-all`, `wikidata seed`→`seed-taxa`, `cache-items`→`cache-entities`; `wikipedia-list generate`→`wikipedia generate-lists`), and the "registered in Program.cs" description is obsolete — commands now self-register via `[CommandInfo]` attributes (see `CommandClassification.cs`). For a current data-structures/schema reference and architecture map, see the 2026-06-13 audit in `BeastieBot3-extras/audit-2026-06-13/`. This file is kept for narrative reference and should be regenerated.
+
 ## Overview
 
 BeastieBot3 is a .NET 9.0 CLI application designed to aggregate and process biological taxonomy data from multiple sources. It downloads, caches, cross-references, and analyzes species data from IUCN Red List, Catalogue of Life (COL), Wikidata, and Wikipedia to generate reports and Wikipedia species lists.
@@ -75,7 +77,6 @@ COL provides comprehensive taxonomic reference data.
 | File | Purpose |
 |------|---------|
 | [ColTaxonRepository.cs](../BeastieBot3/ColTaxonRepository.cs) | Query COL taxa |
-| [ColNameUsageRepository.cs](../BeastieBot3/ColNameUsageRepository.cs) | Query name usage records |
 
 ---
 
