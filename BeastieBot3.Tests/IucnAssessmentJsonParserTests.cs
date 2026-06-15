@@ -37,6 +37,20 @@ public class IucnAssessmentJsonParserTests {
     }
 
     [Fact]
+    public void Parse_PlantSubspecies_DerivesSubspeciesPlantae() {
+        // Matches the CSV's botanical label "subspecies (plantae)" for PLANTAE subspecies.
+        const string json = """
+        {"assessment_id": 4, "latest": true, "sis_taxon_id": 32874,
+         "taxon": {"scientific_name": "Warburgia ugandensis subsp. longifolia", "infrarank": true,
+                   "infra_name": "longifolia", "kingdom_name": "PLANTAE",
+                   "genus_name": "Warburgia", "species_name": "ugandensis"}}
+        """;
+        var a = IucnAssessmentJsonParser.Parse(json);
+        Assert.NotNull(a);
+        Assert.Equal("subspecies (plantae)", a!.InfraType);
+    }
+
+    [Fact]
     public void Parse_Variety_DerivesVarietyFromScientificNameMarker() {
         const string json = """
         {"assessment_id": 2, "latest": true, "sis_taxon_id": 300,

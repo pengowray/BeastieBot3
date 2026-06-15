@@ -129,9 +129,15 @@ beastiebot3 iucn api cache-infraranks --dry-run
 beastiebot3 iucn api cache-infraranks
 ```
 
-Each fetch stores a `taxa` row for the infra taxon and queues its assessment IDs, so a subsequent `cache-assessments` run downloads them and `iucn api project-view` then includes the subspecies/varieties (with `infraType` of `subspecies`/`variety`, mirroring the CSV). Options mirror `discover-by-family`: `--limit`, `--force`, `--dry-run`, `--sleep-ms`, `--max-age-hours`, `--cache`.
+Each fetch stores a `taxa` row for the infra taxon and queues its assessment IDs, so a subsequent `cache-assessments` run downloads them and `iucn api project-view` then includes the subspecies/varieties. `infraType` is reconstructed to mirror the CSV: `variety`, `subspecies (plantae)` for botanical subspecies (kingdom PLANTAE), else `subspecies` — the API only sends `infrarank=true` + `infra_name`, never the literal CSV string. Options mirror `discover-by-family`: `--limit`, `--force`, `--dry-run`, `--sleep-ms`, `--max-age-hours`, `--cache`.
 
 > Note: re-running is idempotent — once an infra taxon has its own `taxa` record it is skipped (its `taxa_lookup` scope flips from `infrarank` to `species`), so the "discovered" total shrinks as you download. Use `--force` to re-fetch.
+
+### Expected 404s, and a coverage blind spot
+
+Roughly **half** of the `infrarank_taxa` entries are *unassessed* subspecies/varieties listed only in their parent's taxonomy (including nominate subspecies). `/taxa/sis/{id}` returns **404** for these — that's expected, not an error: they have no standalone assessed record and aren't in the CSV either, so nothing is lost. Each 404 is **tombstoned** so it isn't re-probed on later runs (use `--force` to retry), reported as a "No record (404)" summary rather than per-id errors, and does **not** make the job fail.
+
+There is a structural blind spot this command **cannot** cover: an assessed subspecies whose **parent species is itself unassessed** (~0.2% of CSV taxa, mostly plants). Its parent appears in neither the CSV species list (so `cache-taxa` never queues it) nor the family-page listings (which only return assessed species, so `discover-by-family` never sees it), so its `infrarank_taxa` is never read. These orphan infraspecific taxa **are** retrievable from the API — but only by their `sis_id`, which only the CSV enumerates. So a 100% CSV-parity build needs a CSV-seeded fetch of infraspecific ids; the API-native discovery path (species → `infrarank_taxa`) reaches ~99.8%.
 
 ## Performance Notes
 

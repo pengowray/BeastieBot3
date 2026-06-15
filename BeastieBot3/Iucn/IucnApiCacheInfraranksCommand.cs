@@ -8,13 +8,18 @@ using Spectre.Console.Cli;
 using BeastieBot3.Configuration;
 using BeastieBot3.Infrastructure;
 
-// Fetches the infraspecific taxa (subspecies/varieties) discovered in cached species'
-// taxon.infrarank_taxa (recorded in taxa_lookup with scope='infrarank'). Their assessments
-// are NOT included in the parent species payload — each needs its own /api/v4/taxa/sis/{id}
-// fetch, which upserts the infra taxon and queues its assessments to the backlog. After this,
-// `iucn api cache-assessments` downloads those assessments and `iucn api project-view` includes
-// the subspecies/varieties in the --dataset api projection. Discovery is API-native: it works on
-// whatever species are cached (from cache-taxa or discover-by-family), no CSV reference needed.
+// Fetches the infraspecific taxa (subspecies/varieties) of the species already in the local
+// cache. The discovery source is each cached species' own /taxa/sis payload: its taxon.infrarank_taxa
+// array lists its subspecies/varieties (their sis_ids), which cache-taxa/discover-by-family recorded
+// in taxa_lookup with scope='infrarank'. An infraspecific taxon's *assessments* are NOT in the
+// parent payload, so each needs its own /api/v4/taxa/sis/{id} fetch — this command does that, upserts
+// the infra taxon, and queues its assessments to the backlog. Then `iucn api cache-assessments`
+// downloads them and `iucn api project-view` includes the subspecies/varieties in --dataset api.
+//
+// Discovery is API-native (no CSV) but only as complete as the cached species: it CANNOT find an
+// assessed subspecies whose parent species is itself unassessed (~0.2% of CSV taxa), because such a
+// parent appears in neither the CSV species list nor the family-page listings, so its infrarank_taxa
+// is never seen. Those are only reachable by their sis_id (which only the CSV enumerates).
 
 namespace BeastieBot3.Iucn;
 
@@ -45,10 +50,10 @@ public sealed class IucnApiCacheInfraranksSettings : CommonSettings {
 }
 
 [CommandInfo("iucn api cache-infraranks", CommandKind.Mutates,
-    "Fetch the subspecies/varieties (taxon.infrarank_taxa) discovered in cached species and queue their assessments, so the API projection (--dataset api) includes infraspecific taxa. Run after cache-taxa/discover-by-family, then cache-assessments + iucn api project-view.",
+    "Fetch the subspecies/varieties of cached species so the API projection (--dataset api) includes infraspecific taxa. The list comes from each cached species' taxon.infrarank_taxa (its subspecies/varieties), so run cache-taxa/discover-by-family first; then run cache-assessments + iucn api project-view. Note: an assessed subspecies whose parent species is unassessed can't be discovered this way (only via its CSV-known sis_id).",
     Reason = "Downloads infraspecific taxa + their assessment backlog into the API cache (idempotent additive).",
     Rerun = RerunEffect.Discovers,
-    RerunNote = "Fetches infraspecific taxa not yet cached (use --dry-run to preview, --force to re-download). Follow with cache-assessments + iucn api project-view.",
+    RerunNote = "Fetches infraspecific taxa not yet cached, read from cached species' infrarank_taxa (use --dry-run to preview, --force to re-download). Follow with cache-assessments + iucn api project-view. Skips ids previously 404'd (no standalone record).",
     Examples = new[] {
         "iucn api cache-infraranks --dry-run",
         "iucn api cache-infraranks",

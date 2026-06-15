@@ -78,10 +78,17 @@ internal static class IucnAssessmentJsonParser {
     // Derive the CSV-style infraType token for an assessment's taxon. The API marks an
     // infraspecific taxon with taxon.infrarank == true (a JSON *bool*, not a rank word) and
     // taxon.infra_name set; the rank itself only shows up as a marker in scientific_name
-    // ("… var. …" / "… ssp. …" / "… subsp. …"). We project to the same words the CSV import
-    // stores ("variety"/"subspecies") so GlobalSpeciesPredicate excludes these from species
-    // counts and SpeciesLineFormatter renders the right rank marker. A genuine string
-    // infra_type (should it ever appear) wins. Returns null for species (the common case).
+    // ("… var. …" / "… ssp. …" / "… subsp. …"). We project to the same tokens the CSV import
+    // stores so GlobalSpeciesPredicate excludes these from species counts, SpeciesLineFormatter
+    // renders the right rank marker, and the two datasets line up:
+    //   • "var."                       -> "variety"               (plants/fungi)
+    //   • subspecies, kingdom PLANTAE  -> "subspecies (plantae)"  (the CSV's botanical label)
+    //   • subspecies, otherwise        -> "subspecies"            (animals/fungi)
+    // The API never sends the literal CSV string in infra_type (it's always null + infrarank bool),
+    // so we reconstruct it from the marker + kingdom. Best-effort: a handful of CSV plant subspecies
+    // are labelled plain "subspecies" rather than "subspecies (plantae)" — the CSV itself isn't
+    // consistent there, and the API gives us no way to tell them apart. A genuine string infra_type
+    // (should it ever appear) still wins. Returns null for species (the common case).
     internal static string? ResolveInfraType(JsonElement taxon, string? scientificName) {
         var explicitType = TryGetString(taxon, "infra_type");
         if (!string.IsNullOrWhiteSpace(explicitType)) return explicitType;
@@ -90,8 +97,13 @@ internal static class IucnAssessmentJsonParser {
             || !string.IsNullOrWhiteSpace(TryGetString(taxon, "infra_name"));
         if (!isInfra) return null;
 
-        return (scientificName ?? string.Empty).Contains("var.", StringComparison.OrdinalIgnoreCase)
-            ? "variety"
+        if ((scientificName ?? string.Empty).Contains("var.", StringComparison.OrdinalIgnoreCase)) {
+            return "variety";
+        }
+
+        var kingdom = TryGetString(taxon, "kingdom_name");
+        return string.Equals(kingdom, "PLANTAE", StringComparison.OrdinalIgnoreCase)
+            ? "subspecies (plantae)"
             : "subspecies";
     }
 
