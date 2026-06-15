@@ -30,8 +30,6 @@ namespace BeastieBot3.Configuration;
 
         public string? GetDatastoreDir() => _reader.Get("Datastore:datastore_dir");
 
-        public string? GetMainDatabasePath() => _reader.Get("Datastore:MainDB");
-
         public string? GetColSqlitePath() => _reader.Get("Datastore:COL_sqlite");
 
         public string? GetIucnDatabasePath() => _reader.Get("Datastore:IUCN_sqlite_from_cvs");
