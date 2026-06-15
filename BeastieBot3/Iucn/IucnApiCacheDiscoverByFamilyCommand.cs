@@ -178,17 +178,17 @@ public sealed class IucnApiCacheDiscoverByFamilyCommand : AsyncCommand<IucnApiCa
 
         // Step 4: Download missing taxa
         var downloaded = 0;
+        var notFound = 0;
         var failures = 0;
 
         await ProgressConsole.RunAsync("Downloading missing taxa", downloadQueue.Count, async progress => {
             foreach (var sisId in downloadQueue) {
                 cancellationToken.ThrowIfCancellationRequested();
 
-                if (await IucnApiCacheTaxaCommand.DownloadSingleAsync(apiClient, cacheStore, sisId, cancellationToken).ConfigureAwait(false)) {
-                    downloaded++;
-                }
-                else {
-                    failures++;
+                switch (await IucnApiCacheTaxaCommand.DownloadSingleAsync(apiClient, cacheStore, sisId, cancellationToken).ConfigureAwait(false)) {
+                    case DownloadOutcome.Success: downloaded++; break;
+                    case DownloadOutcome.NotFound: notFound++; break;
+                    default: failures++; break;
                 }
 
                 if (sleep > 0) {
@@ -200,8 +200,12 @@ public sealed class IucnApiCacheDiscoverByFamilyCommand : AsyncCommand<IucnApiCa
         }, cancellationToken).ConfigureAwait(false);
 
         AnsiConsole.MarkupLine($"[green]Downloaded:[/] {downloaded}");
+        if (notFound > 0) {
+            AnsiConsole.MarkupLineInterpolated($"[grey]No record (404):[/] {notFound:N0} (removed/unassessed; tombstoned)");
+        }
         AnsiConsole.MarkupLine($"[red]Failed:[/] {failures}");
 
+        // 404s are expected here (discovery surfaces removed/historical taxa) — don't fail the run on them.
         return failures == 0 ? 0 : -1;
     }
 

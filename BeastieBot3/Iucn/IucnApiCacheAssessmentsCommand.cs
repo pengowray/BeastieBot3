@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Diagnostics;
+using System.Net;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
@@ -80,23 +81,26 @@ public sealed class IucnApiCacheAssessmentsCommand : AsyncCommand<IucnApiCacheAs
         var sleep = Math.Clamp(settings.SleepBetweenRequests, 0, 5_000);
         var downloaded = 0;
         var skipped = 0;
+        var notFound = 0;
         var failures = 0;
 
         await ProgressConsole.RunAsync("Downloading assessments", queue.Count, async progress => {
             foreach (var item in queue) {
                 cancellationToken.ThrowIfCancellationRequested();
 
-                if (!settings.Force && !ShouldDownload(item.DownloadedAt, refreshThreshold)) {
+                // Skip already-cached/fresh, and ids previously tombstoned as 404 (no record).
+                if (!settings.Force &&
+                    (!ShouldDownload(item.DownloadedAt, refreshThreshold)
+                     || cacheStore.HasPermanentFailure("assessment", item.AssessmentId))) {
                     skipped++;
                     progress.Increment(1);
                     continue;
                 }
 
-                if (await DownloadSingleAsync(apiClient, cacheStore, item.AssessmentId, cancellationToken).ConfigureAwait(false)) {
-                    downloaded++;
-                }
-                else {
-                    failures++;
+                switch (await DownloadSingleAsync(apiClient, cacheStore, item.AssessmentId, cancellationToken).ConfigureAwait(false)) {
+                    case DownloadOutcome.Success: downloaded++; break;
+                    case DownloadOutcome.NotFound: notFound++; break;
+                    default: failures++; break;
                 }
 
                 if (sleep > 0) {
@@ -109,6 +113,9 @@ public sealed class IucnApiCacheAssessmentsCommand : AsyncCommand<IucnApiCacheAs
 
         AnsiConsole.MarkupLine($"[green]Downloaded:[/] {downloaded}");
         AnsiConsole.MarkupLine($"[yellow]Skipped:[/] {skipped}");
+        if (notFound > 0) {
+            AnsiConsole.MarkupLineInterpolated($"[grey]No record (404):[/] {notFound:N0} (removed; tombstoned)");
+        }
         AnsiConsole.MarkupLine($"[red]Failed:[/] {failures}");
 
         return failures == 0 ? 0 : -1;
@@ -173,7 +180,7 @@ public sealed class IucnApiCacheAssessmentsCommand : AsyncCommand<IucnApiCacheAs
         return refreshThreshold.HasValue && downloadedAt.Value < refreshThreshold.Value;
     }
 
-    private static async Task<bool> DownloadSingleAsync(IucnApiClient apiClient, IucnApiCacheStore cacheStore, long assessmentId, CancellationToken cancellationToken) {
+    private static async Task<DownloadOutcome> DownloadSingleAsync(IucnApiClient apiClient, IucnApiCacheStore cacheStore, long assessmentId, CancellationToken cancellationToken) {
         var url = $"/api/v4/assessment/{assessmentId}";
         var importId = cacheStore.BeginImport(url);
         var stopwatch = Stopwatch.StartNew();
@@ -184,19 +191,25 @@ public sealed class IucnApiCacheAssessmentsCommand : AsyncCommand<IucnApiCacheAs
             cacheStore.UpsertAssessment(assessmentId, sisId, importId, response.Body, DateTime.UtcNow);
             cacheStore.ClearFailedRequest("assessment", assessmentId);
             cacheStore.CompleteImportSuccess(importId, (int)response.StatusCode, response.PayloadBytes, stopwatch.Elapsed);
-            return true;
+            return DownloadOutcome.Success;
+        }
+        catch (IucnApiException ex) when (ex.StatusCode == HttpStatusCode.NotFound) {
+            // Expected: the assessment was removed. Tombstone so it isn't re-requested every run.
+            cacheStore.RecordFailedRequest("assessment", assessmentId, ex.Message, (int?)ex.StatusCode, IucnApiCacheStore.PermanentRetryDelay);
+            cacheStore.CompleteImportFailure(importId, ex.Message, (int?)ex.StatusCode, stopwatch.Elapsed);
+            return DownloadOutcome.NotFound;
         }
         catch (IucnApiException ex) {
             cacheStore.RecordFailedRequest("assessment", assessmentId, ex.Message, (int?)ex.StatusCode);
             cacheStore.CompleteImportFailure(importId, ex.Message, (int?)ex.StatusCode, stopwatch.Elapsed);
             AnsiConsole.MarkupLineInterpolated($"[red]Failed to download assessment {assessmentId}: {Markup.Escape(ex.Message)}[/]");
-            return false;
+            return DownloadOutcome.Failed;
         }
         catch (Exception ex) {
             cacheStore.RecordFailedRequest("assessment", assessmentId, ex.Message, null);
             cacheStore.CompleteImportFailure(importId, ex.Message, null, stopwatch.Elapsed);
             AnsiConsole.MarkupLineInterpolated($"[red]Unexpected error for assessment {assessmentId}: {Markup.Escape(ex.Message)}[/]");
-            return false;
+            return DownloadOutcome.Failed;
         }
     }
 

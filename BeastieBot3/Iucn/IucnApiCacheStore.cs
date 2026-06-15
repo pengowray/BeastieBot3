@@ -15,11 +15,24 @@ using BeastieBot3.Infrastructure;
 namespace BeastieBot3.Iucn;
 
 internal sealed class IucnApiCacheStore : HttpCacheSqliteStore {
+    // Retry delay for a permanent failure (a 404): far enough out that GetFailedEntityIds and the
+    // ShouldDownload checks never re-queue it. --force still re-requests.
+    public static readonly TimeSpan PermanentRetryDelay = TimeSpan.FromDays(3650);
+
     private IucnApiCacheStore(SqliteConnection connection) : base(connection) {
     }
 
     public static IucnApiCacheStore Open(string databasePath) {
         var connection = OpenConnection(databasePath);
+        var store = new IucnApiCacheStore(connection);
+        store.EnsureImportSchema();
+        store.EnsureSchema();
+        return store;
+    }
+
+    /// <summary>Test/advanced seam: build the store over a caller-owned (e.g. <c>:memory:</c>) connection.</summary>
+    internal static IucnApiCacheStore OpenFromConnection(SqliteConnection connection) {
+        EnableForeignKeys(connection);
         var store = new IucnApiCacheStore(connection);
         store.EnsureImportSchema();
         store.EnsureSchema();
@@ -360,9 +373,25 @@ ORDER BY b.latest DESC, IFNULL(b.year_published, 0) DESC, b.assessment_id DESC";
         return list;
     }
 
+    /// <summary>
+    /// True if this entity previously failed with a permanent status (404/410) — i.e. it has no
+    /// standalone record and should not be re-requested (removed taxon / unassessed infraspecific
+    /// taxon). Callers gate downloads on this so a tombstoned id isn't re-probed every run.
+    /// </summary>
+    public bool HasPermanentFailure(string endpoint, long entityId) {
+        using var command = _connection.CreateCommand();
+        command.CommandText = "SELECT 1 FROM failed_requests WHERE endpoint=@endpoint AND entity_id=@entity AND last_status IN (404, 410) LIMIT 1";
+        command.Parameters.AddWithValue("@endpoint", endpoint);
+        command.Parameters.AddWithValue("@entity", entityId.ToString());
+        return command.ExecuteScalar() is not null;
+    }
+
     public IReadOnlyList<long> GetFailedEntityIds(string endpoint) {
         using var command = _connection.CreateCommand();
-        command.CommandText = "SELECT entity_id FROM failed_requests WHERE endpoint=@endpoint AND (next_attempt_after IS NULL OR next_attempt_after <= @now)";
+        // Skip permanent failures (404/410 — no standalone record): retrying never helps, and they'd
+        // otherwise be re-requested every run. HasPermanentFailure gates the main discovery path; this
+        // gates the failed-retry path (--failed-only / the failed-first queue).
+        command.CommandText = "SELECT entity_id FROM failed_requests WHERE endpoint=@endpoint AND (last_status IS NULL OR last_status NOT IN (404, 410)) AND (next_attempt_after IS NULL OR next_attempt_after <= @now)";
         command.Parameters.AddWithValue("@endpoint", endpoint);
         command.Parameters.AddWithValue("@now", DateTime.UtcNow.ToString("O"));
         var list = new List<long>();

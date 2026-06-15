@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Diagnostics;
+using System.Net;
 using System.Threading;
 using System.Threading.Tasks;
 using Spectre.Console;
@@ -88,6 +89,7 @@ public sealed class IucnApiCacheTaxaCommand : AsyncCommand<IucnApiCacheTaxaSetti
         var totalCount = ids.Count;
         var downloaded = 0;
         var skipped = 0;
+        var notFound = 0;
         var failures = 0;
 
         await ProgressConsole.RunAsync("Downloading taxa JSON", totalCount, async progress => {
@@ -100,11 +102,10 @@ public sealed class IucnApiCacheTaxaCommand : AsyncCommand<IucnApiCacheTaxaSetti
                     continue;
                 }
 
-                if (await DownloadSingleAsync(apiClient, cacheStore, sisId, cancellationToken).ConfigureAwait(false)) {
-                    downloaded++;
-                }
-                else {
-                    failures++;
+                switch (await DownloadSingleAsync(apiClient, cacheStore, sisId, cancellationToken).ConfigureAwait(false)) {
+                    case DownloadOutcome.Success: downloaded++; break;
+                    case DownloadOutcome.NotFound: notFound++; break;
+                    default: failures++; break;
                 }
 
                 if (sleep > 0) {
@@ -117,6 +118,9 @@ public sealed class IucnApiCacheTaxaCommand : AsyncCommand<IucnApiCacheTaxaSetti
 
         AnsiConsole.MarkupLine($"[green]Downloaded:[/] {downloaded}");
         AnsiConsole.MarkupLine($"[yellow]Skipped:[/] {skipped}");
+        if (notFound > 0) {
+            AnsiConsole.MarkupLineInterpolated($"[grey]No record (404):[/] {notFound:N0} (removed/unassessed; tombstoned)");
+        }
         AnsiConsole.MarkupLine($"[red]Failed:[/] {failures}");
 
         return failures == 0 ? 0 : -1;
@@ -164,6 +168,10 @@ public sealed class IucnApiCacheTaxaCommand : AsyncCommand<IucnApiCacheTaxaSetti
     }
 
     internal static bool ShouldDownload(IucnApiCacheStore cacheStore, long sisId, DateTime? refreshThreshold) {
+        // A prior 404 means this id has no standalone record — don't re-probe it (use --force to override).
+        if (cacheStore.HasPermanentFailure("taxa_sis", sisId)) {
+            return false;
+        }
         var downloadedAt = cacheStore.GetTaxaDownloadedAt(sisId);
         if (downloadedAt is null) {
             return true;
@@ -172,7 +180,7 @@ public sealed class IucnApiCacheTaxaCommand : AsyncCommand<IucnApiCacheTaxaSetti
         return refreshThreshold.HasValue && downloadedAt.Value < refreshThreshold.Value;
     }
 
-    internal static async Task<bool> DownloadSingleAsync(IucnApiClient apiClient, IucnApiCacheStore cacheStore, long sisId, CancellationToken cancellationToken) {
+    internal static async Task<DownloadOutcome> DownloadSingleAsync(IucnApiClient apiClient, IucnApiCacheStore cacheStore, long sisId, CancellationToken cancellationToken) {
         var url = $"/api/v4/taxa/sis/{sisId}";
         var importId = cacheStore.BeginImport(url);
         var stopwatch = Stopwatch.StartNew();
@@ -185,19 +193,36 @@ public sealed class IucnApiCacheTaxaCommand : AsyncCommand<IucnApiCacheTaxaSetti
             cacheStore.ReplaceAssessmentBacklog(taxaId, parsed.RootSisId, parsed.Assessments);
             cacheStore.ClearFailedRequest("taxa_sis", sisId);
             cacheStore.CompleteImportSuccess(importId, (int)response.StatusCode, response.PayloadBytes, stopwatch.Elapsed);
-            return true;
+            return DownloadOutcome.Success;
+        }
+        catch (IucnApiException ex) when (ex.StatusCode == HttpStatusCode.NotFound) {
+            // Expected: no standalone taxon record (an unassessed infraspecific taxon listed only in
+            // its parent's taxonomy, or a removed species). Tombstone with a far-future retry so it
+            // isn't re-probed every run; the caller summarises these rather than logging each.
+            cacheStore.RecordFailedRequest("taxa_sis", sisId, ex.Message, (int?)ex.StatusCode, IucnApiCacheStore.PermanentRetryDelay);
+            cacheStore.CompleteImportFailure(importId, ex.Message, (int?)ex.StatusCode, stopwatch.Elapsed);
+            return DownloadOutcome.NotFound;
         }
         catch (IucnApiException ex) {
             cacheStore.RecordFailedRequest("taxa_sis", sisId, ex.Message, (int?)ex.StatusCode);
             cacheStore.CompleteImportFailure(importId, ex.Message, (int?)ex.StatusCode, stopwatch.Elapsed);
             AnsiConsole.MarkupLineInterpolated($"[red]Failed to download SIS {sisId}: {Markup.Escape(ex.Message)}[/]");
-            return false;
+            return DownloadOutcome.Failed;
         }
         catch (Exception ex) {
             cacheStore.RecordFailedRequest("taxa_sis", sisId, ex.Message, null);
             cacheStore.CompleteImportFailure(importId, ex.Message, null, stopwatch.Elapsed);
             AnsiConsole.MarkupLineInterpolated($"[red]Unexpected error for SIS {sisId}: {Markup.Escape(ex.Message)}[/]");
-            return false;
+            return DownloadOutcome.Failed;
         }
     }
+}
+
+// Outcome of a single taxon/assessment download. NotFound (a 404) is treated as expected — the
+// SIS/assessment id has no standalone record (an unassessed infraspecific taxon, or a removed
+// taxon) — so it's tombstoned and reported separately from a real Failed.
+internal enum DownloadOutcome {
+    Success,
+    NotFound,
+    Failed,
 }

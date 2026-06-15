@@ -112,17 +112,17 @@ public sealed class IucnApiCacheInfraranksCommand : AsyncCommand<IucnApiCacheInf
         }
 
         var downloaded = 0;
+        var notFound = 0;
         var failures = 0;
 
         await ProgressConsole.RunAsync("Downloading infraspecific taxa", queue.Count, async progress => {
             foreach (var sisId in queue) {
                 cancellationToken.ThrowIfCancellationRequested();
 
-                if (await IucnApiCacheTaxaCommand.DownloadSingleAsync(apiClient, cacheStore, sisId, cancellationToken).ConfigureAwait(false)) {
-                    downloaded++;
-                }
-                else {
-                    failures++;
+                switch (await IucnApiCacheTaxaCommand.DownloadSingleAsync(apiClient, cacheStore, sisId, cancellationToken).ConfigureAwait(false)) {
+                    case DownloadOutcome.Success: downloaded++; break;
+                    case DownloadOutcome.NotFound: notFound++; break;
+                    default: failures++; break;
                 }
 
                 if (sleep > 0) {
@@ -134,16 +134,25 @@ public sealed class IucnApiCacheInfraranksCommand : AsyncCommand<IucnApiCacheInf
         }, cancellationToken).ConfigureAwait(false);
 
         AnsiConsole.MarkupLineInterpolated($"[green]Downloaded:[/] {downloaded:N0}");
+        if (notFound > 0) {
+            AnsiConsole.MarkupLineInterpolated(
+                $"[grey]No standalone record (404):[/] {notFound:N0} — these infraspecific taxa aren't independently assessed; tombstoned so they aren't re-probed.");
+        }
         AnsiConsole.MarkupLineInterpolated($"[red]Failed:[/] {failures:N0}");
         AnsiConsole.MarkupLine("[grey]Next:[/] [yellow]iucn api cache-assessments[/] to download their assessments, then [yellow]iucn api project-view[/].");
 
+        // 404s are expected (unassessed infraranks) — only genuine failures make the run non-zero.
         return failures == 0 ? 0 : -1;
     }
 
     // An infrarank sis_id maps through taxa_lookup to its PARENT species' taxa record, so the
     // shared (lookup-based) ShouldDownload would always see it as cached. Check the taxon's own
-    // record instead: do we have a taxa row whose root_sis_id is this infrarank sis_id?
+    // record instead: do we have a taxa row whose root_sis_id is this infrarank sis_id? Also skip
+    // ids previously tombstoned as 404 (no standalone record) so they aren't re-probed each run.
     private static bool ShouldDownloadInfrarank(IucnApiCacheStore cacheStore, long sisId, DateTime? refreshThreshold) {
+        if (cacheStore.HasPermanentFailure("taxa_sis", sisId)) {
+            return false;
+        }
         var downloadedAt = cacheStore.GetTaxaDownloadedAtByRoot(sisId);
         if (downloadedAt is null) {
             return true;
