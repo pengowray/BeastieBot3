@@ -964,6 +964,20 @@
     if (sidebar.children.length > 0) root.appendChild(sidebar);
   }
 
+  // Split a flow command string into its registered command (longest path prefix) + trailing args,
+  // so a step can carry args like "iucn api cache-infraranks --from-csv".
+  function splitFlowCommand(c) {
+    let best = null;
+    for (const cmd of allCommands) {
+      if (c === cmd.path || c.startsWith(cmd.path + ' ')) {
+        if (!best || cmd.path.length > best.path.length) best = cmd;
+      }
+    }
+    if (!best) return { meta: null, path: c, args: [] };
+    const rest = c.slice(best.path.length).trim();
+    return { meta: best, path: best.path, args: rest ? rest.split(/\s+/) : [] };
+  }
+
   function renderStep(step, snap) {
     const wrap = document.createElement('div');
     wrap.className = 'flow-step status-' + step.status + (step.optional ? ' optional' : '');
@@ -1096,8 +1110,10 @@
       lbl.textContent = 'Commands:';
       cmdRow.appendChild(lbl);
       for (const c of step.commands) {
+        // A flow command may carry trailing args (e.g. "iucn api cache-infraranks --from-csv").
+        // Match the longest registered command path that prefixes it; the rest are args.
+        const { meta: cmdMeta, path, args } = splitFlowCommand(c);
         const btn = document.createElement('button');
-        const cmdMeta = allCommands.find(x => x.path === c);
         btn.className = 'flow-cmd-btn ' + (cmdMeta ? cmdMeta.kind : 'mutates');
         btn.textContent = c;
         btn.addEventListener('click', (e) => {
@@ -1109,7 +1125,7 @@
           if (cmdMeta.kind === 'destructive' && cmdMeta.reason) {
             if (!confirm('Run "' + c + '"?\n\n' + cmdMeta.reason)) return;
           }
-          enqueue(c, []);
+          enqueue(path, args);
         });
         cmdRow.appendChild(btn);
       }
