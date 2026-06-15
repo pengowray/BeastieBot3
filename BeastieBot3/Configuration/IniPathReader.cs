@@ -22,9 +22,13 @@ namespace BeastieBot3.Configuration;
             BaseDirectory = baseDirectory ?? AppContext.BaseDirectory;
             var iniFile = fileName ?? "paths.ini";
 
+            // reloadOnChange:false — paths.ini is static for the process lifetime and no caller
+            // holds a long-lived PathsService expecting live updates (Get/GetAll re-read each call).
+            // reloadOnChange:true spins up an OS FileSystemWatcher per construction that is never
+            // disposed; in serve mode that leaked one watcher handle per API request.
             var builder = new ConfigurationBuilder()
             .SetBasePath(BaseDirectory)
-            .AddIniFile(iniFile, optional: true, reloadOnChange: true);
+            .AddIniFile(iniFile, optional: true, reloadOnChange: false);
 
             _config = builder.Build();
             SourceFilePath = Path.Combine(BaseDirectory, iniFile);
