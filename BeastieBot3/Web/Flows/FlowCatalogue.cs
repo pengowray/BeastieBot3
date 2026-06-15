@@ -425,6 +425,17 @@ public static class FlowCatalogue {
                         new FlowOutputPattern { Root = "reports", Pattern = "iucn-no-latest-assessment-*.csv", Label = "CSV" },
                     },
                 },
+                new FlowStep {
+                    Id = "orphan-infraranks",
+                    Title = "Orphan subspecies & varieties (not API-discoverable)",
+                    Description = "Assessed subspecies/varieties whose parent species is unassessed — reachable from the API only by their CSV sis_id, so they explain the small API-vs-CSV coverage gap. Grouped by taxonomy.",
+                    Commands = new[] { "iucn report-orphan-infraranks" },
+                    InputSourceIds = new[] { "iucn-main" },
+                    OutputPatterns = new[] {
+                        new FlowOutputPattern { Root = "reports", Pattern = "iucn-orphan-infraranks-*.md",  Label = "Markdown" },
+                        new FlowOutputPattern { Root = "reports", Pattern = "iucn-orphan-infraranks-*.csv", Label = "CSV" },
+                    },
+                },
                 // Building & projecting the IUCN API cache now lives in the "Import IUCN data"
                 // workflow (the first tab) — that's where the CSV vs API routes are laid out.
             },
