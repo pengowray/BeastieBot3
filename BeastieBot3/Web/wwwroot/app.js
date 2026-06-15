@@ -920,7 +920,20 @@
 
     const pipeline = document.createElement('div');
     pipeline.className = 'flow-pipeline';
-    for (const step of pipelineSteps) pipeline.appendChild(renderStep(step, snap));
+    // Steps may carry an optional `group` heading; emit a header whenever it changes so a
+    // single flow can present clearly-separated routes (e.g. CSV / API / Compare).
+    let lastGroup = null;
+    for (const step of pipelineSteps) {
+      const g = step.group || null;
+      if (g && g !== lastGroup) {
+        const h = document.createElement('div');
+        h.className = 'flow-group-header';
+        h.textContent = g;
+        pipeline.appendChild(h);
+      }
+      lastGroup = g;
+      pipeline.appendChild(renderStep(step, snap));
+    }
     root.appendChild(pipeline);
 
     if (maintenanceSteps.length > 0) {

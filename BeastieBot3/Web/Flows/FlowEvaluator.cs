@@ -143,6 +143,7 @@ public sealed class FlowEvaluator {
             OutputSourceIds = step.OutputSourceIds,
             Optional = step.Optional,
             Section = step.Section.ToString().ToLowerInvariant(),
+            Group = step.Group,
             Note = step.Note,
             Status = status,
             MissingInputs = missingInputs,
@@ -211,6 +212,7 @@ public sealed record FlowStepSnapshot {
     public required IReadOnlyList<string> OutputSourceIds { get; init; }
     public required bool Optional { get; init; }
     public required string Section { get; init; }            // "pipeline" | "maintenance"
+    public string? Group { get; init; }                       // optional sub-section heading within the pipeline
     public string? Note { get; init; }
     public required string Status { get; init; }              // "blocked" | "running" | "never-run" | "ok"
     public required IReadOnlyList<string> MissingInputs { get; init; }

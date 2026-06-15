@@ -681,6 +681,19 @@ td { word-break: break-all; font-family: ui-monospace, Menlo, monospace; }
   gap: 0;
   margin: 1rem 0;
 }
+/* Sub-section heading within a pipeline (e.g. "1 · From the CSV release"). */
+.flow-group-header {
+  margin: 1rem 0 0.25rem 0;
+  padding-bottom: 0.3rem;
+  border-bottom: 1px solid var(--border);
+  color: var(--accent);
+  text-transform: uppercase;
+  font-size: 0.8em;
+  letter-spacing: 0.06em;
+  font-weight: 600;
+  font-family: ui-monospace, Menlo, monospace;
+}
+.flow-group-header:first-child { margin-top: 0; }
 .flow-step {
   position: relative;
   padding: 0.5rem 0;

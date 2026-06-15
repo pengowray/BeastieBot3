@@ -1,8 +1,10 @@
 namespace BeastieBot3.Web.Flows;
 
 // Hand-maintained catalogue of "flows" — vertical pipelines that walk users
-// from inputs through processing steps to outputs. Three flows:
+// from inputs through processing steps to outputs. Flows (in display order):
 //
+//   iucn-import  — get the IUCN dataset in (CSV release vs API), the prerequisite
+//                  for everything else; grouped into CSV / API / Compare routes.
 //   wiki-reports — the full Wikipedia list/chart generation pipeline.
 //   wiki-quality — coverage and freshness reports on Wikipedia/Wikidata caches.
 //   iucn-quality — consistency and cleanup reports on the IUCN dataset.
@@ -36,6 +38,11 @@ public sealed record FlowStep {
     public string? Note { get; init; }
     public FlowSection Section { get; init; } = FlowSection.Pipeline;
 
+    // Optional sub-section heading within the pipeline. Consecutive steps sharing a Group are
+    // rendered under one header (e.g. "1 · From the CSV release"), letting a single flow present
+    // several clearly-separated routes. Null = no heading (the default flat timeline).
+    public string? Group { get; init; }
+
     // Glob patterns (under a named safe root) that match the step's output
     // files. The evaluator picks the most-recent matching file per pattern
     // and surfaces it in the snapshot so the UI can link "View latest" per
@@ -65,6 +72,93 @@ public static class FlowCatalogue {
     public static readonly IReadOnlyList<FlowDefinition> All = new[] {
 
         // ---------------------------------------------------------------
+        // Import IUCN: the prerequisite for everything else. Two routes to the
+        // IUCN dataset (CSV release vs the live API), plus an optional compare.
+        // Grouped so the choice and the API sub-steps are clearly separated.
+        // ---------------------------------------------------------------
+        new FlowDefinition {
+            Id = "iucn-import",
+            Title = "Import IUCN data",
+            Description = "Get the IUCN Red List into the local store — the base dataset every other workflow builds on. Pick one route: the CSV release (fast, the current published snapshot) or the live API (more complete: historical/delisted taxa, subspecies, synonyms). Optionally compare the two before generating lists/charts with --dataset csv|api.",
+            Steps = new[] {
+                // ===== 1 · From the CSV release =====
+                new FlowStep {
+                    Id = "csv-import",
+                    Title = "Import the IUCN CSV release",
+                    Description = "Load a downloaded IUCN CSV export (zip) into a local SQLite database. The fast path and the current published snapshot — most pipelines only need this.",
+                    Commands = new[] { "iucn import" },
+                    InputSourceIds = new[] { "iucn-csv-input" },
+                    OutputSourceIds = new[] { "iucn-main" },
+                    Group = "1 · From the CSV release",
+                    Note = "The zip is downloaded manually from iucnredlist.org. A new release belongs in a fresh database file (IUCN_<version>.sqlite) — `iucn import` refuses a zip whose release differs from what the DB already holds; use --force to wipe and rebuild as the new release. That's all you need for the CSV dataset — skip to the Wikipedia workflows, or build the API dataset below as an alternative.",
+                },
+
+                // ===== 2 · From the IUCN API =====
+                new FlowStep {
+                    Id = "api-cache-species",
+                    Title = "Cache species from the API (CSV-sourced)",
+                    Description = "Download /api/v4 taxa + assessment payloads for the species present in the imported CSV. The quickest way to seed the API cache once the CSV is imported.",
+                    Commands = new[] { "iucn api cache-all" },
+                    InputSourceIds = new[] { "iucn-main" },
+                    OutputSourceIds = new[] { "iucn-api-cache" },
+                    Group = "2 · From the IUCN API",
+                    Note = "Reads the SIS ids from the CSV database (so run step 1 first). cache-all = cache-taxa then cache-assessments in one job. Idempotent — re-running only fetches what's missing unless you pass --force-taxa / --force-assessments.",
+                },
+                new FlowStep {
+                    Id = "api-discover-by-family",
+                    Title = "Discover extra taxa by family (no CSV needed)",
+                    Description = "Page every family on the live API to also pick up taxa the CSV omits — removed/delisted, reclassified, or historical-only. API-native: doesn't rely on the CSV at all.",
+                    Commands = new[] { "iucn api discover-by-family" },
+                    InputSourceIds = new[] { "iucn-api-cache" },
+                    OutputSourceIds = new[] { "iucn-api-cache" },
+                    Optional = true,
+                    Group = "2 · From the IUCN API",
+                    Note = "Slower (pages ~800–1000 families on the live API). Use --dry-run to preview, --family Felidae,Canidae to target. Newly-discovered taxa still need their assessments downloaded — the next step's cache-assessments covers them.",
+                },
+                new FlowStep {
+                    Id = "api-infraranks",
+                    Title = "Add subspecies & varieties",
+                    Description = "Fetch the infraspecific taxa (subspecies/varieties) listed under each cached species and download their assessments. Without this the API dataset is species-only and under-counts versus the CSV.",
+                    Commands = new[] { "iucn api cache-infraranks", "iucn api cache-assessments" },
+                    InputSourceIds = new[] { "iucn-api-cache" },
+                    OutputSourceIds = new[] { "iucn-api-cache" },
+                    Optional = true,
+                    Group = "2 · From the IUCN API",
+                    Note = "Their assessments aren't in the parent species payload. cache-infraranks fetches each infrarank taxon (queuing its assessments); the following cache-assessments downloads them — and also any assessments queued by discover-by-family. API-native and idempotent.",
+                },
+                new FlowStep {
+                    Id = "api-project-view",
+                    Title = "Project the API cache for list/chart generation",
+                    Description = "Re-shape the latest cached assessments into the same CSV-compatible relational view the CSV import produces, so list/chart generation can read the API dataset via --dataset api.",
+                    Commands = new[] { "iucn api project-view" },
+                    InputSourceIds = new[] { "iucn-api-cache" },
+                    OutputSourceIds = new[] { "iucn-api-projected" },
+                    Group = "2 · From the IUCN API",
+                    Note = "Run last — after cache-all, discover-by-family, cache-infraranks and cache-assessments — so it isn't partial: project-view exits non-zero and flags the projection partial if any taxon's latest assessment isn't downloaded yet (pass --allow-partial to accept). Then generate with --dataset api.",
+                },
+
+                // ===== 3 · Compare CSV vs API =====
+                new FlowStep {
+                    Id = "compare-datasets",
+                    Title = "Compare CSV vs API (optional)",
+                    Description = "Check that the two datasets agree before choosing which to generate from. The Data sources page shows a side-by-side card (version, totals, per-category, coverage); the count-scopes audit diffs them on the command line.",
+                    Commands = new[] { "iucn count-scopes" },
+                    InputSourceIds = new[] { "iucn-main", "iucn-api-projected" },
+                    Optional = true,
+                    Group = "3 · Compare the two datasets",
+                    Note = "Run `iucn count-scopes --compare` to diff the CSV and API global-species counts (the button runs the single-dataset audit; add --compare via the command form). Small deltas are expected — the API has no taxa lacking a latest assessment, and the projection flags partial coverage. Open the Data sources tab for the visual comparison.",
+                    OutputPatterns = new[] {
+                        new FlowOutputPattern { Root = "reports", Pattern = "iucn-count-scopes-*.md", Label = "Count-scope audit" },
+                    },
+                },
+            },
+            Outputs = new[] {
+                new FlowResource { Label = "IUCN (CSV) database",     Root = "reports", Path = "", Kind = "directory",
+                    Description = "The CSV-imported and API-projected SQLite databases live under Datastore paths (see Data sources / show-paths)." },
+            },
+        },
+
+        // ---------------------------------------------------------------
         // Wiki Reports: the full pipeline that produces Wikipedia output.
         // ---------------------------------------------------------------
         new FlowDefinition {
@@ -80,8 +174,7 @@ public static class FlowCatalogue {
                     Commands = new[] { "iucn import" },
                     InputSourceIds = new[] { "iucn-csv-input" },
                     OutputSourceIds = new[] { "iucn-main" },
-                    Note = "This is the CSV path: fast and the current published snapshot, but the zip must be downloaded manually. " +
-                           "An alternative dataset comes from the IUCN API (see the IUCN data-quality workflow): build it with `iucn api cache-all` then `iucn api project-view`, and generate lists/charts from it with `--dataset api`. " +
+                    Note = "The starting point of this pipeline — see the dedicated \"Import IUCN data\" workflow (first tab) for the full picture: the CSV route shown here, the IUCN API route (--dataset api), and comparing the two. " +
                            "A new IUCN release belongs in a fresh database file (IUCN_<version>.sqlite) — importing into an existing DB double-counts.",
                 },
                 new FlowStep {
@@ -256,7 +349,7 @@ public static class FlowCatalogue {
         new FlowDefinition {
             Id = "iucn-quality",
             Title = "IUCN data quality",
-            Description = "Reports that surface formatting inconsistencies, name changes, synonym anomalies and missing assessments in the IUCN dataset.",
+            Description = "Reports that surface formatting inconsistencies, name changes, synonym anomalies and missing assessments in the IUCN dataset. Build the dataset first via the Import IUCN data workflow (CSV or API).",
             Steps = new[] {
                 new FlowStep {
                     Id = "html-consistency",
@@ -321,39 +414,8 @@ public static class FlowCatalogue {
                         new FlowOutputPattern { Root = "reports", Pattern = "iucn-no-latest-assessment-*.csv", Label = "CSV" },
                     },
                 },
-
-                // -------- Maintenance: building & projecting the IUCN API dataset --------
-                // Two ways to populate IUCN data, shown together so the trade-offs are clear.
-                new FlowStep {
-                    Id = "build-api-cache",
-                    Title = "Build / refresh the IUCN API cache",
-                    Description = "Populate the local API cache (the source for the reports above and for the optional API dataset). Two complementary commands: cache-all walks the SIS ids present in the imported CSV; discover-by-family pages every family on the live API to also pick up removed/historical/reclassified taxa the CSV omits.",
-                    Commands = new[] { "iucn api cache-all", "iucn api discover-by-family" },
-                    InputSourceIds = new[] { "iucn-main" },
-                    OutputSourceIds = new[] { "iucn-api-cache" },
-                    Section = FlowSection.Maintenance,
-                    Note = "CSV import vs API cache: the CSV path (iucn import, in the Wikipedia reports workflow) is faster and is the current published snapshot, but the zip is downloaded manually. The API cache is more complete (historical + delisted taxa via discover-by-family) and richer (synonyms, narratives), but is built incrementally over many HTTP calls. Both are idempotent — re-running only fetches what's missing unless you pass --force. Next, run 'Add subspecies & varieties' so the API dataset isn't species-only.",
-                },
-                new FlowStep {
-                    Id = "cache-infraranks",
-                    Title = "Add subspecies & varieties (infraspecific taxa)",
-                    Description = "Fetch the subspecies/varieties listed under each cached species (taxon.infrarank_taxa) and download their assessments. Their assessments are not in the parent species payload, so without this step the API dataset is species-only and under-counts versus the CSV.",
-                    Commands = new[] { "iucn api cache-infraranks", "iucn api cache-assessments" },
-                    InputSourceIds = new[] { "iucn-api-cache" },
-                    OutputSourceIds = new[] { "iucn-api-cache" },
-                    Section = FlowSection.Maintenance,
-                    Note = "Run after the species are cached (cache-all / discover-by-family). cache-infraranks fetches /taxa/sis/{id} for each discovered infrarank sis_id (queuing its assessments); the following cache-assessments downloads them. API-native (no CSV) and idempotent — only taxa not yet fetched are downloaded.",
-                },
-                new FlowStep {
-                    Id = "project-api-view",
-                    Title = "Project the API cache for list/chart generation",
-                    Description = "Re-shape the latest cached assessments into a CSV-compatible relational view so list/chart generation can read the API dataset via --dataset api. Compare the two datasets on the Data sources page.",
-                    Commands = new[] { "iucn api project-view" },
-                    InputSourceIds = new[] { "iucn-api-cache" },
-                    OutputSourceIds = new[] { "iucn-api-projected" },
-                    Section = FlowSection.Maintenance,
-                    Note = "Rebuilds the projection from whatever is currently cached (latest assessments only). Run last — after cache-all, cache-infraranks, and cache-assessments — so it isn't partial: project-view exits non-zero and flags the projection partial if any taxon's latest assessment isn't downloaded yet (pass --allow-partial to accept). Then: wikipedia generate-lists --dataset api / generate-charts --dataset api.",
-                },
+                // Building & projecting the IUCN API cache now lives in the "Import IUCN data"
+                // workflow (the first tab) — that's where the CSV vs API routes are laid out.
             },
             Outputs = new[] {
                 new FlowResource { Label = "Reports output", Root = "reports", Path = "", Kind = "directory",
