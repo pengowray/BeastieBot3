@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using Spectre.Console;
 using Spectre.Console.Cli;
 using BeastieBot3.Configuration;
+using BeastieBot3.Infrastructure;
 
 // Scans CommonNameStore to find vernacular names that refer to multiple distinct taxa
 // (e.g., "sea lion" used for different species). These ambiguous names need special
@@ -79,20 +80,11 @@ internal sealed class CommonNameDetectConflictsCommand : AsyncCommand<CommonName
             var normalizedNames = store.GetDistinctNormalizedCommonNames(language);
             AnsiConsole.MarkupLine($"[blue]Checking {normalizedNames.Count:N0} distinct common names...[/]");
 
-            AnsiConsole.Progress()
-                .AutoClear(false)
-                .Columns(
-                    new TaskDescriptionColumn(),
-                    new ProgressBarColumn(),
-                    new PercentageColumn(),
-                    new SpinnerColumn())
-                .Start(ctx => {
-                    var task = ctx.AddTask("[green]Checking for conflicts[/]", maxValue: normalizedNames.Count);
-
+            ProgressConsole.Run("[green]Checking for conflicts[/]", normalizedNames.Count, progress => {
                     foreach (var normalizedName in normalizedNames) {
                         cancellationToken.ThrowIfCancellationRequested();
                         namesChecked++;
-                        task.Increment(1);
+                        progress.Increment(1);
 
                         // Get all common name records for this normalized name
                         var records = store.GetCommonNamesByNormalized(normalizedName, language);

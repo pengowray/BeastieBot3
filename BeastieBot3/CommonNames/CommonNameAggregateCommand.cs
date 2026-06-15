@@ -10,6 +10,7 @@ using Microsoft.Data.Sqlite;
 using Spectre.Console;
 using Spectre.Console.Cli;
 using BeastieBot3.Configuration;
+using BeastieBot3.Infrastructure;
 using BeastieBot3.Taxonomy;
 using BeastieBot3.Wikidata;
 
@@ -163,23 +164,13 @@ internal sealed class CommonNameAggregateCommand : AsyncCommand<CommonNameAggreg
             // Track which taxa we've already processed to avoid duplicates
             var processedTaxa = new HashSet<long>();
 
-            AnsiConsole.Progress()
-                .AutoClear(false)
-                .Columns(
-                    new TaskDescriptionColumn(),
-                    new ProgressBarColumn(),
-                    new PercentageColumn(),
-                    new SpinnerColumn())
-                .Start(ctx => {
-                    var task = ctx.AddTask("[green]IUCN common names[/]", autoStart: true);
-                    task.IsIndeterminate = !limit.HasValue;
-                    if (limit.HasValue) task.MaxValue = limit.Value;
+            ProgressConsole.Run("[green]IUCN common names[/]", limit ?? 0, progress => {
 
                     using var reader = command.ExecuteReader();
                     while (reader.Read()) {
                         cancellationToken.ThrowIfCancellationRequested();
                         processed++;
-                        if (limit.HasValue) task.Increment(1);
+                        progress.Increment(1);
 
                         var sisId = reader.GetInt64(0);
                         var json = reader.IsDBNull(1) ? null : reader.GetString(1);
@@ -254,23 +245,13 @@ internal sealed class CommonNameAggregateCommand : AsyncCommand<CommonNameAggreg
 
             var processedTaxa = new HashSet<long>();
 
-            AnsiConsole.Progress()
-                .AutoClear(false)
-                .Columns(
-                    new TaskDescriptionColumn(),
-                    new ProgressBarColumn(),
-                    new PercentageColumn(),
-                    new SpinnerColumn())
-                .Start(ctx => {
-                    var task = ctx.AddTask("[green]IUCN synonyms[/]", autoStart: true);
-                    task.IsIndeterminate = !limit.HasValue;
-                    if (limit.HasValue) task.MaxValue = limit.Value;
+            ProgressConsole.Run("[green]IUCN synonyms[/]", limit ?? 0, progress => {
 
                     using var reader = command.ExecuteReader();
                     while (reader.Read()) {
                         cancellationToken.ThrowIfCancellationRequested();
                         processed++;
-                        if (limit.HasValue) task.Increment(1);
+                        progress.Increment(1);
 
                         var sisId = reader.GetInt64(0);
                         var json = reader.IsDBNull(1) ? null : reader.GetString(1);
@@ -515,23 +496,13 @@ internal sealed class CommonNameAggregateCommand : AsyncCommand<CommonNameAggreg
                 command.Parameters.AddWithValue("@limit", limit.Value);
             }
 
-            AnsiConsole.Progress()
-                .AutoClear(false)
-                .Columns(
-                    new TaskDescriptionColumn(),
-                    new ProgressBarColumn(),
-                    new PercentageColumn(),
-                    new SpinnerColumn())
-                .Start(ctx => {
-                    var task = ctx.AddTask("[green]Wikidata common names[/]", autoStart: true);
-                    task.IsIndeterminate = !limit.HasValue;
-                    if (limit.HasValue) task.MaxValue = limit.Value;
+            ProgressConsole.Run("[green]Wikidata common names[/]", limit ?? 0, progress => {
 
                     using var reader = command.ExecuteReader();
                     while (reader.Read()) {
                         cancellationToken.ThrowIfCancellationRequested();
                         processed++;
-                        if (limit.HasValue) task.Increment(1);
+                        progress.Increment(1);
 
                         var entityId = reader.GetString(0);
                         var json = reader.IsDBNull(1) ? null : reader.GetString(1);
@@ -693,23 +664,13 @@ internal sealed class CommonNameAggregateCommand : AsyncCommand<CommonNameAggreg
                 }
             }
 
-            AnsiConsole.Progress()
-                .AutoClear(false)
-                .Columns(
-                    new TaskDescriptionColumn(),
-                    new ProgressBarColumn(),
-                    new PercentageColumn(),
-                    new SpinnerColumn())
-                .Start(ctx => {
-                    var task = ctx.AddTask("[green]Wikipedia pages[/]", autoStart: true);
-                    task.IsIndeterminate = !limit.HasValue;
-                    if (limit.HasValue) task.MaxValue = limit.Value;
+            ProgressConsole.Run("[green]Wikipedia pages[/]", limit ?? 0, progress => {
 
                     using var reader = command.ExecuteReader();
                     while (reader.Read()) {
                         cancellationToken.ThrowIfCancellationRequested();
                         processed++;
-                        if (limit.HasValue) task.Increment(1);
+                        progress.Increment(1);
 
                         string? taxonIdentifier;
                         string pageTitle;
@@ -904,23 +865,13 @@ internal sealed class CommonNameAggregateCommand : AsyncCommand<CommonNameAggreg
             countCommand.CommandText = "SELECT COUNT(*) FROM vernacularname WHERE language LIKE 'en%'";
             var totalCount = limit.HasValue ? limit.Value : Convert.ToInt32(countCommand.ExecuteScalar() ?? 0);
 
-            AnsiConsole.Progress()
-                .AutoClear(true)
-                .HideCompleted(true)
-                .Columns(
-                    new TaskDescriptionColumn(),
-                    new ProgressBarColumn(),
-                    new PercentageColumn(),
-                    new SpinnerColumn())
-                .Start(ctx => {
-                    var task = ctx.AddTask("[green]COL vernacular names[/]", autoStart: true);
-                    task.MaxValue = totalCount;
+            ProgressConsole.Run("[green]COL vernacular names[/]", totalCount, progress => {
 
                     using var reader = command.ExecuteReader();
                     while (reader.Read()) {
                         cancellationToken.ThrowIfCancellationRequested();
                         processed++;
-                        task.Increment(1);
+                        progress.Increment(1);
 
                         var colTaxonId = reader.GetString(0);
                         var vernacularName = reader.GetString(1);
@@ -1042,23 +993,13 @@ internal sealed class CommonNameAggregateCommand : AsyncCommand<CommonNameAggreg
             countCommand.CommandText = "SELECT COUNT(*) FROM nameusage WHERE status IN ('synonym', 'ambiguous synonym')";
             var totalCount = limit.HasValue ? limit.Value : Convert.ToInt32(countCommand.ExecuteScalar() ?? 0);
 
-            AnsiConsole.Progress()
-                .AutoClear(true)
-                .HideCompleted(true)
-                .Columns(
-                    new TaskDescriptionColumn(),
-                    new ProgressBarColumn(),
-                    new PercentageColumn(),
-                    new SpinnerColumn())
-                .Start(ctx => {
-                    var task = ctx.AddTask("[green]COL synonyms[/]", autoStart: true);
-                    task.MaxValue = totalCount;
+            ProgressConsole.Run("[green]COL synonyms[/]", totalCount, progress => {
 
                     using var reader = command.ExecuteReader();
                     while (reader.Read()) {
                         cancellationToken.ThrowIfCancellationRequested();
                         processed++;
-                        task.Increment(1);
+                        progress.Increment(1);
 
                         var synonymId = reader.GetString(0);
                         var synonymName = reader.GetString(1);

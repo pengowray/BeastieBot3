@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using Spectre.Console;
 using Spectre.Console.Cli;
 using BeastieBot3.Configuration;
+using BeastieBot3.Infrastructure;
 using BeastieBot3.Iucn;
 using BeastieBot3.Taxonomy;
 
@@ -171,23 +172,8 @@ internal sealed class CommonNameInitCommand : AsyncCommand<CommonNameInitCommand
             // Get unique taxa from IUCN
             var seenTaxonIds = new HashSet<long>();
 
-            AnsiConsole.Progress()
-                .AutoClear(false)
-                .Columns(
-                    new TaskDescriptionColumn(),
-                    new ProgressBarColumn(),
-                    new PercentageColumn(),
-                    new SpinnerColumn())
-                .Start(ctx => {
-                    // We don't know total count upfront, use indeterminate progress
-                    var task = ctx.AddTask("[green]Importing taxa[/]", autoStart: true);
-                    task.IsIndeterminate = !limit.HasValue;
-
-                    if (limit.HasValue) {
-                        task.MaxValue = limit.Value;
-                        task.IsIndeterminate = false;
-                    }
-
+            // Total is unknown unless a limit is set (0 => indeterminate; the count still shows).
+            ProgressConsole.Run("[green]Importing taxa[/]", limit ?? 0, progress => {
                     foreach (var row in iucnRepo.ReadRows(0, System.Threading.CancellationToken.None)) {
                         if (limit.HasValue && added >= limit.Value) {
                             break;
@@ -200,9 +186,7 @@ internal sealed class CommonNameInitCommand : AsyncCommand<CommonNameInitCommand
 
                         try {
                             processed++;
-                            if (limit.HasValue) {
-                                task.Increment(1);
-                            }
+                            progress.Increment(1);
 
                             // Determine the canonical name and rank
                             var scientificName = row.ScientificNameTaxonomy ?? row.ScientificNameAssessments;

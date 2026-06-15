@@ -195,54 +195,39 @@ public sealed class IucnColCrosscheckCommand : Command<IucnColCrosscheckCommand.
         List<TaxonLadder> laddersBuffer,
         CancellationToken cancellationToken) {
 
-        var columns = new ProgressColumn[] {
-            new TaskDescriptionColumn(),
-            new ProgressBarColumn(),
-            new PercentageColumn(),
-            new RemainingTimeColumn(),
-            new SpinnerColumn()
-        };
-
         AnsiConsole.MarkupLineInterpolated($"[grey]Processing {rows.Count:N0} IUCN assessments against Catalogue of Life...[/]");
 
         var stopwatch = Stopwatch.StartNew();
         const int logInterval = 2000;
         const int descriptionInterval = 100;
 
-        AnsiConsole.Progress()
-            .AutoClear(false)
-            .HideCompleted(false)
-            .Columns(columns)
-            .Start(ctx => {
-                var task = ctx.AddTask("Crosschecking IUCN assessments", maxValue: rows.Count);
+        ProgressConsole.Run("Crosschecking IUCN assessments", rows.Count, progress => {
+            foreach (var row in rows) {
+                cancellationToken.ThrowIfCancellationRequested();
 
-                foreach (var row in rows) {
-                    cancellationToken.ThrowIfCancellationRequested();
+                ProcessRow(row, colRepository, writer, stats, laddersBuffer, cancellationToken);
 
-                    ProcessRow(row, colRepository, writer, stats, laddersBuffer, cancellationToken);
+                progress.Increment(1);
 
-                    task.Increment(1);
-
-                    var processed = stats.Total;
-                    if (processed % descriptionInterval == 0 || processed == rows.Count) {
-                        var rate = stopwatch.Elapsed.TotalSeconds > 0
-                            ? processed / stopwatch.Elapsed.TotalSeconds
-                            : 0d;
-                        var displayName = !string.IsNullOrWhiteSpace(row.ScientificNameTaxonomy)
-                            ? row.ScientificNameTaxonomy!
-                            : row.ScientificNameAssessments ?? string.Empty;
-                        task.Description = BuildTaskDescription(processed, rows.Count, rate, displayName);
-                    }
-
-                    if (processed % logInterval == 0) {
-                        ctx.Refresh();
-                        var rate = stopwatch.Elapsed.TotalSeconds > 0
-                            ? processed / stopwatch.Elapsed.TotalSeconds
-                            : 0d;
-                        AnsiConsole.MarkupLineInterpolated($"[grey]{processed:N0}/{rows.Count:N0} processed | matches {stats.Matched:N0} | not found {stats.NotFound:N0} | synonyms {stats.Synonyms:N0} | {rate:N1} rows/s[/]");
-                    }
+                var processed = stats.Total;
+                if (processed % descriptionInterval == 0 || processed == rows.Count) {
+                    var rate = stopwatch.Elapsed.TotalSeconds > 0
+                        ? processed / stopwatch.Elapsed.TotalSeconds
+                        : 0d;
+                    var displayName = !string.IsNullOrWhiteSpace(row.ScientificNameTaxonomy)
+                        ? row.ScientificNameTaxonomy!
+                        : row.ScientificNameAssessments ?? string.Empty;
+                    progress.Description = BuildTaskDescription(processed, rows.Count, rate, displayName);
                 }
-            });
+
+                if (processed % logInterval == 0) {
+                    var rate = stopwatch.Elapsed.TotalSeconds > 0
+                        ? processed / stopwatch.Elapsed.TotalSeconds
+                        : 0d;
+                    AnsiConsole.MarkupLineInterpolated($"[grey]{processed:N0}/{rows.Count:N0} processed | matches {stats.Matched:N0} | not found {stats.NotFound:N0} | synonyms {stats.Synonyms:N0} | {rate:N1} rows/s[/]");
+                }
+            }
+        });
 
         stopwatch.Stop();
         var totalRate = stopwatch.Elapsed.TotalSeconds > 0

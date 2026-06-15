@@ -5,6 +5,7 @@ using System.Threading.Tasks;
 using Spectre.Console;
 using Spectre.Console.Cli;
 using BeastieBot3.Configuration;
+using BeastieBot3.Infrastructure;
 
 // Step 2 of Wikidata caching: downloads full entity JSON for Q-IDs in
 // wikidata_items table that have status='pending'. Uses WikidataApiClient to
@@ -115,72 +116,63 @@ public sealed class WikidataCacheItemsCommand : AsyncCommand<WikidataCacheItemsS
         var failures = 0;
         var completed = 0;
 
-        await AnsiConsole.Progress()
-            .Columns(new ProgressColumn[] {
-                new TaskDescriptionColumn(),
-                new ProgressBarColumn(),
-                new PercentageColumn(),
-                new RemainingTimeColumn(),
-                new SpinnerColumn()
-            })
-            .StartAsync(async ctx => {
-                var task = ctx.AddTask("Caching Wikidata entities", maxValue: totalTarget);
-                UpdateTaskDescription(task, completed, totalTarget, downloaded, skipped, failures);
+        await ProgressConsole.RunAsync("Caching Wikidata entities", totalTarget, async progress => {
+            UpdateTaskDescription(progress, downloaded, skipped, failures);
 
-                while (completed < totalTarget) {
-                    var remainingBudget = Math.Min(batchSize, totalTarget - completed);
-                    if (remainingBudget <= 0) {
-                        break;
-                    }
-
-                    var queue = settings.FailedOnly
-                        ? store.GetFailedEntities(remainingBudget)
-                        : store.GetPendingEntities(remainingBudget, refreshThreshold);
-
-                    if (queue.Count == 0) {
-                        break;
-                    }
-
-                    foreach (var item in queue) {
-                        if (completed >= totalTarget) {
-                            break;
-                        }
-
-                        cancellationToken.ThrowIfCancellationRequested();
-
-                        if (!settings.Force && !ShouldDownload(item, refreshThreshold)) {
-                            skipped++;
-                            completed++;
-                            task.Increment(1);
-                            UpdateTaskDescription(task, completed, totalTarget, downloaded, skipped, failures);
-                            continue;
-                        }
-
-                        if (await WikidataEntityDownloader.DownloadSingleAsync(client, store, item, cancellationToken).ConfigureAwait(false)) {
-                            downloaded++;
-                        }
-                        else {
-                            failures++;
-                        }
-
-                        completed++;
-                        task.Increment(1);
-                        UpdateTaskDescription(task, completed, totalTarget, downloaded, skipped, failures);
-                    }
-
-                    if (queue.Count < remainingBudget) {
-                        // Queue exhausted sooner than the current budget.
-                        break;
-                    }
+            while (completed < totalTarget) {
+                var remainingBudget = Math.Min(batchSize, totalTarget - completed);
+                if (remainingBudget <= 0) {
+                    break;
                 }
-            });
+
+                var queue = settings.FailedOnly
+                    ? store.GetFailedEntities(remainingBudget)
+                    : store.GetPendingEntities(remainingBudget, refreshThreshold);
+
+                if (queue.Count == 0) {
+                    break;
+                }
+
+                foreach (var item in queue) {
+                    if (completed >= totalTarget) {
+                        break;
+                    }
+
+                    cancellationToken.ThrowIfCancellationRequested();
+
+                    if (!settings.Force && !ShouldDownload(item, refreshThreshold)) {
+                        skipped++;
+                        completed++;
+                        progress.Increment(1);
+                        UpdateTaskDescription(progress, downloaded, skipped, failures);
+                        continue;
+                    }
+
+                    if (await WikidataEntityDownloader.DownloadSingleAsync(client, store, item, cancellationToken).ConfigureAwait(false)) {
+                        downloaded++;
+                    }
+                    else {
+                        failures++;
+                    }
+
+                    completed++;
+                    progress.Increment(1);
+                    UpdateTaskDescription(progress, downloaded, skipped, failures);
+                }
+
+                if (queue.Count < remainingBudget) {
+                    // Queue exhausted sooner than the current budget.
+                    break;
+                }
+            }
+        }, cancellationToken).ConfigureAwait(false);
 
         return (downloaded, skipped, failures, completed);
     }
 
-    private static void UpdateTaskDescription(ProgressTask task, int completed, int total, int downloaded, int skipped, int failed) {
-        var totalText = total > 0 ? total.ToString() : "?";
-        task.Description = $"Caching Wikidata entities ({completed}/{totalText}) D:{downloaded} S:{skipped} F:{failed}";
+    // The N/total count is shown by ProgressConsole; here we add the live download/skip/fail breakdown.
+    private static void UpdateTaskDescription(IProgressHandle progress, int downloaded, int skipped, int failed) {
+        progress.Description = $"Caching Wikidata entities  D:{downloaded} S:{skipped} F:{failed}";
     }
 
     private static bool ShouldDownload(WikidataEntityWorkItem item, DateTime? refreshThreshold) {

@@ -144,14 +144,10 @@ internal sealed class CommonNameReportCommand : AsyncCommand<CommonNameReportCom
             var ambiguousNames = store.GetAmbiguousCommonNames(settings.Limit, settings.Kingdom);
             var conflictingNames = new List<(string NormalizedName, List<CommonNameRecord> Records)>();
 
-            AnsiConsole.Progress()
-                .AutoClear(true)
-                .Columns(new TaskDescriptionColumn(), new ProgressBarColumn(), new PercentageColumn())
-                .Start(ctx => {
-                    var task = ctx.AddTask("[green]Loading conflicts[/]", maxValue: ambiguousNames.Count);
+            ProgressConsole.Run("[green]Loading conflicts[/]", ambiguousNames.Count, progress => {
                     foreach (var normalizedName in ambiguousNames) {
                         cancellationToken.ThrowIfCancellationRequested();
-                        task.Increment(1);
+                        progress.Increment(1);
 
                         var records = store.GetCommonNamesByNormalized(normalizedName, "en")
                             .Where(r => r.TaxonValidityStatus == "valid" && !r.TaxonIsFossil)
@@ -224,12 +220,7 @@ internal sealed class CommonNameReportCommand : AsyncCommand<CommonNameReportCom
             var missingWords = new Dictionary<string, List<string>>(StringComparer.OrdinalIgnoreCase);
 
             // Process with progress bar
-            AnsiConsole.Progress()
-                .AutoClear(true)
-                .Columns(new TaskDescriptionColumn(), new ProgressBarColumn(), new PercentageColumn(), new SpinnerColumn())
-                .Start(ctx => {
-                    var task = ctx.AddTask("[green]Scanning for missing caps[/]", maxValue: rawNames.Count);
-
+            ProgressConsole.Run("[green]Scanning for missing caps[/]", rawNames.Count, progress => {
                     foreach (var rawName in rawNames) {
                         cancellationToken.ThrowIfCancellationRequested();
 
@@ -250,7 +241,7 @@ internal sealed class CommonNameReportCommand : AsyncCommand<CommonNameReportCom
                             }
                         }
 
-                        task.Increment(1);
+                        progress.Increment(1);
                     }
                 });
 
@@ -663,14 +654,10 @@ internal sealed class CommonNameReportCommand : AsyncCommand<CommonNameReportCom
             var ambiguousNames = store.GetAmbiguousCommonNames(settings.Limit, settings.Kingdom);
             var conflictingNames = new List<(string NormalizedName, List<CommonNameRecord> Records)>();
 
-            AnsiConsole.Progress()
-                .AutoClear(true)
-                .Columns(new TaskDescriptionColumn(), new ProgressBarColumn(), new PercentageColumn())
-                .Start(ctx => {
-                    var task = ctx.AddTask("[green]Loading conflicts[/]", maxValue: ambiguousNames.Count);
+            ProgressConsole.Run("[green]Loading conflicts[/]", ambiguousNames.Count, progress => {
                     foreach (var normalizedName in ambiguousNames) {
                         cancellationToken.ThrowIfCancellationRequested();
-                        task.Increment(1);
+                        progress.Increment(1);
 
                         var records = store.GetCommonNamesByNormalized(normalizedName, "en")
                             .Where(r => r.TaxonValidityStatus == "valid" && !r.TaxonIsFossil)
@@ -744,14 +731,10 @@ internal sealed class CommonNameReportCommand : AsyncCommand<CommonNameReportCom
             var wikiAmbiguousNames = store.GetWikipediaAmbiguousNames(settings.Limit, settings.Kingdom);
             var ambiguousWikiTitles = new List<(string NormalizedName, List<CommonNameRecord> Records)>();
 
-            AnsiConsole.Progress()
-                .AutoClear(true)
-                .Columns(new TaskDescriptionColumn(), new ProgressBarColumn(), new PercentageColumn())
-                .Start(ctx => {
-                    var task = ctx.AddTask("[green]Loading Wikipedia conflicts[/]", maxValue: wikiAmbiguousNames.Count);
+            ProgressConsole.Run("[green]Loading Wikipedia conflicts[/]", wikiAmbiguousNames.Count, progress => {
                     foreach (var normalizedName in wikiAmbiguousNames) {
                         cancellationToken.ThrowIfCancellationRequested();
-                        task.Increment(1);
+                        progress.Increment(1);
 
                         var records = store.GetCommonNamesByNormalized(normalizedName, "en")
                             .Where(r => r.TaxonValidityStatus == "valid" && !r.TaxonIsFossil)
