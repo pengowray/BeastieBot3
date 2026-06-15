@@ -89,6 +89,8 @@ dotnet run --project BeastieBot3/BeastieBot3.csproj -- iucn api discover-by-fami
 
 ## Recommended Workflow
 
+> **One-shot:** `iucn api cache-all --full` chains the whole API-dataset build in a single job — cache-taxa → cache-infraranks (`--from-csv`) → cache-assessments → project-view. Add `--skip-taxa` if species are already cached. The granular steps below are for running/inspecting each phase on its own (e.g. `discover-by-family`, which `--full` does not run).
+
 1. **Dry run** to see the scope of missing data:
    ```bash
    beastiebot3 iucn api discover-by-family --dry-run

@@ -69,8 +69,13 @@ public sealed class IucnApiCacheInfraranksSettings : CommonSettings {
         "iucn api cache-infraranks --limit 100 --force"
     })]
 public sealed class IucnApiCacheInfraranksCommand : AsyncCommand<IucnApiCacheInfraranksSettings> {
-    public override async Task<int> ExecuteAsync(CommandContext context, IucnApiCacheInfraranksSettings settings, CancellationToken cancellationToken) {
+    public override Task<int> ExecuteAsync(CommandContext context, IucnApiCacheInfraranksSettings settings, CancellationToken cancellationToken) {
         _ = context;
+        return RunAsync(settings, cancellationToken);
+    }
+
+    // Callable entry point so the cache-all wrapper can chain this phase.
+    internal static async Task<int> RunAsync(IucnApiCacheInfraranksSettings settings, CancellationToken cancellationToken) {
 
         var paths = settings.CreatePaths();
         var cachePath = paths.ResolveIucnApiCachePath(settings.CacheDatabase);

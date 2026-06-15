@@ -102,7 +102,7 @@ public static class FlowCatalogue {
                     InputSourceIds = new[] { "iucn-main" },
                     OutputSourceIds = new[] { "iucn-api-cache" },
                     Group = "2 · From the IUCN API",
-                    Note = "Reads the SIS ids from the CSV database (so run step 1 first). cache-all = cache-taxa then cache-assessments in one job. Idempotent — re-running only fetches what's missing unless you pass --force-taxa / --force-assessments.",
+                    Note = "Reads the SIS ids from the CSV database (so run step 1 first). cache-all = cache-taxa then cache-assessments in one job. Idempotent — re-running only fetches what's missing unless you pass --force-taxa / --force-assessments. Shortcut: `iucn api cache-all --full` chains ALL the API steps below in one command — cache-taxa → cache-infraranks (--from-csv) → cache-assessments → project-view.",
                 },
                 new FlowStep {
                     Id = "api-discover-by-family",

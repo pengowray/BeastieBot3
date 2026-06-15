@@ -53,6 +53,11 @@ public sealed class IucnApiProjectViewCommand : AsyncCommand<IucnApiProjectViewC
 
     public override Task<int> ExecuteAsync(CommandContext context, Settings settings, CancellationToken cancellationToken) {
         _ = context;
+        return RunAsync(settings, cancellationToken);
+    }
+
+    // Callable entry point so the cache-all wrapper can chain the projection step.
+    internal static Task<int> RunAsync(Settings settings, CancellationToken cancellationToken) {
         var paths = settings.CreatePaths();
         var cachePath = paths.ResolveIucnApiCachePath(settings.CachePath);
         if (!File.Exists(cachePath)) {
