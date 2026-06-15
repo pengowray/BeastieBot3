@@ -11,8 +11,7 @@ namespace BeastieBot3.Web.Endpoints;
 
 public static class StatusEndpoints {
     public static void MapStatusEndpoints(this IEndpointRouteBuilder app) {
-        app.MapGet("/api/status", () => {
-            var svc = new StatusService();
+        app.MapGet("/api/status", (StatusService svc) => {
             return Results.Json(new {
                 generatedAt = DateTimeOffset.UtcNow,
                 sources = svc.Collect(),

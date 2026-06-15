@@ -1,6 +1,8 @@
 using System.ComponentModel;
+using BeastieBot3.Configuration;
 using BeastieBot3.Web.Endpoints;
 using BeastieBot3.Web.Jobs;
+using BeastieBot3.Web.Status;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
 using Microsoft.Extensions.DependencyInjection;
@@ -73,6 +75,10 @@ internal sealed class ServeCommand : AsyncCommand<ServeCommand.Settings> {
             AnsiConsole.MarkupLine("[red]--max-concurrent must be at least 1.[/]");
             return -1;
         }
+        // One PathsService for the whole host: paths.ini is parsed once instead of
+        // per request, and every endpoint/service shares the same resolved config.
+        builder.Services.AddSingleton<PathsService>();
+        builder.Services.AddSingleton<StatusService>();
         builder.Services.AddSingleton(jobHistoryStore);
         builder.Services.AddSingleton(routing);
         builder.Services.AddSingleton(sp => new JobRegistry(sp.GetRequiredService<JobHistoryStore>()));

@@ -27,8 +27,7 @@ public static class IucnVersionEndpoints {
     private static DateTimeOffset _cachedAt = DateTimeOffset.MinValue;
 
     public static void MapIucnVersionEndpoints(this IEndpointRouteBuilder app) {
-        app.MapGet("/api/iucn-version", async (HttpContext ctx) => {
-            var paths = new PathsService();
+        app.MapGet("/api/iucn-version", async (HttpContext ctx, PathsService paths) => {
             var local = ReadLocalVersion(paths);
 
             var forceRefresh = ctx.Request.Query.TryGetValue("refresh", out var r) && r == "1";

@@ -14,8 +14,6 @@ public sealed class StatusService {
     private readonly PathsService _paths;
     public StatusService(PathsService paths) { _paths = paths; }
 
-    public StatusService() : this(new PathsService()) { }
-
     public IReadOnlyList<DataSourceStatus> Collect() {
         return DataSourceCatalogue.All
             .Select(Snapshot)

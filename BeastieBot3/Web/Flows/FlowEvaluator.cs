@@ -20,11 +20,11 @@ public sealed class FlowEvaluator {
     private readonly JobRegistry? _registry;
     private readonly PathsService _paths;
 
-    public FlowEvaluator(StatusService status, JobHistoryStore? history, JobRegistry? registry = null) {
+    public FlowEvaluator(StatusService status, JobHistoryStore? history, JobRegistry? registry = null, PathsService? paths = null) {
         _status = status;
         _history = history;
         _registry = registry;
-        _paths = new PathsService();
+        _paths = paths ?? new PathsService();
     }
 
     public FlowSnapshot Snapshot(FlowDefinition flow) {

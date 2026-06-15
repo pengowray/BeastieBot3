@@ -20,9 +20,7 @@ namespace BeastieBot3.Web.Endpoints;
 
 public static class DatasetCompareEndpoints {
     public static void MapDatasetCompareEndpoints(this IEndpointRouteBuilder app) {
-        app.MapGet("/api/dataset-compare", () => {
-            var paths = new PathsService();
-
+        app.MapGet("/api/dataset-compare", (PathsService paths) => {
             var csv = SafeCompute(() => paths.ResolveIucnDatabasePath(null));
             var apiPath = SafeResolve(() => paths.ResolveIucnApiProjectedPath(null));
             var api = apiPath is null

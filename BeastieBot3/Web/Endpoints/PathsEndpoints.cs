@@ -11,8 +11,7 @@ namespace BeastieBot3.Web.Endpoints;
 
 public static class PathsEndpoints {
     public static void MapPathsEndpoints(this IEndpointRouteBuilder app) {
-        app.MapGet("/api/paths", () => {
-            var svc = new PathsService();
+        app.MapGet("/api/paths", (PathsService svc) => {
             return Results.Json(new {
                 source = svc.SourceFilePath,
                 baseDirectory = svc.BaseDirectory,

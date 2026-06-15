@@ -1,3 +1,4 @@
+using BeastieBot3.Configuration;
 using BeastieBot3.Web.Flows;
 using BeastieBot3.Web.Jobs;
 using BeastieBot3.Web.Status;
@@ -23,10 +24,10 @@ public static class FlowsEndpoints {
             return Results.Json(list);
         });
 
-        app.MapGet("/api/flows/{id}", (string id, JobHistoryStore? history, JobRegistry? registry) => {
+        app.MapGet("/api/flows/{id}", (string id, JobHistoryStore? history, JobRegistry? registry, StatusService status, PathsService paths) => {
             var flow = FlowCatalogue.Find(id);
             if (flow is null) return Results.NotFound();
-            var evaluator = new FlowEvaluator(new StatusService(), history, registry);
+            var evaluator = new FlowEvaluator(status, history, registry, paths);
             return Results.Json(evaluator.Snapshot(flow));
         });
     }

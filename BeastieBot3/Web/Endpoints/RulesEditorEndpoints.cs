@@ -36,8 +36,8 @@ public static class RulesEditorEndpoints {
         new(JsonSerializerDefaults.Web) { WriteIndented = false };
 
     public static void MapRulesEditorEndpoints(this IEndpointRouteBuilder app) {
-        app.MapGet("/api/rules/locations", () => {
-            var loc = RulesPaths.Resolve();
+        app.MapGet("/api/rules/locations", (PathsService paths) => {
+            var loc = RulesPaths.Resolve(paths);
             return Results.Json(new {
                 sourceRulesDir = loc.SourceRulesDir,
                 draftRoot = loc.DraftRoot,
@@ -47,14 +47,14 @@ public static class RulesEditorEndpoints {
             }, JsonOpts);
         });
 
-        app.MapPost("/api/rules/draft/init", () => {
-            var loc = RulesPaths.Resolve();
+        app.MapPost("/api/rules/draft/init", (PathsService paths) => {
+            var loc = RulesPaths.Resolve(paths);
             var copied = SeedDraft(loc, overwrite: true);
             return Results.Json(new { draftRoot = loc.DraftRoot, filesCopied = copied }, JsonOpts);
         });
 
-        app.MapGet("/api/rules-draft/list", () => {
-            var loc = RulesPaths.Resolve();
+        app.MapGet("/api/rules-draft/list", (PathsService paths) => {
+            var loc = RulesPaths.Resolve(paths);
             EnsureSeeded(loc);
             if (!Directory.Exists(loc.DraftRoot)) {
                 return Results.Json(new { root = loc.DraftRoot, entries = Array.Empty<object>() }, JsonOpts);
@@ -71,8 +71,8 @@ public static class RulesEditorEndpoints {
             return Results.Json(new { root = loc.DraftRoot, entries }, JsonOpts);
         });
 
-        app.MapGet("/api/rules-draft/read", (string path) => {
-            var loc = RulesPaths.Resolve();
+        app.MapGet("/api/rules-draft/read", (string path, PathsService paths) => {
+            var loc = RulesPaths.Resolve(paths);
             EnsureSeeded(loc);
             if (!SafePaths.TryResolveUnder(loc.DraftRoot, path, out var target, out var err))
                 return Results.BadRequest(new { error = err });
@@ -89,14 +89,14 @@ public static class RulesEditorEndpoints {
             }, JsonOpts);
         });
 
-        app.MapPost("/api/rules-draft/write", async (HttpContext ctx) => {
+        app.MapPost("/api/rules-draft/write", async (HttpContext ctx, PathsService paths) => {
             var req = await JsonSerializer.DeserializeAsync<WriteRequest>(ctx.Request.Body, JsonOpts).ConfigureAwait(false);
             if (req is null || string.IsNullOrWhiteSpace(req.Path))
                 return Results.BadRequest(new { error = "path is required" });
             if (req.Content is null)
                 return Results.BadRequest(new { error = "content is required" });
 
-            var loc = RulesPaths.Resolve();
+            var loc = RulesPaths.Resolve(paths);
             EnsureSeeded(loc);
             if (!SafePaths.TryResolveUnder(loc.DraftRoot, req.Path, out var target, out var err))
                 return Results.BadRequest(new { error = err });
@@ -124,11 +124,11 @@ public static class RulesEditorEndpoints {
             return Results.Json(new { path = req.Path.Replace('\\', '/'), size = info.Length, modified = info.LastWriteTimeUtc }, JsonOpts);
         });
 
-        app.MapPost("/api/rules-draft/revert", async (HttpContext ctx) => {
+        app.MapPost("/api/rules-draft/revert", async (HttpContext ctx, PathsService paths) => {
             var req = await JsonSerializer.DeserializeAsync<PathRequest>(ctx.Request.Body, JsonOpts).ConfigureAwait(false);
             if (req is null || string.IsNullOrWhiteSpace(req.Path))
                 return Results.BadRequest(new { error = "path is required" });
-            var loc = RulesPaths.Resolve();
+            var loc = RulesPaths.Resolve(paths);
             if (!SafePaths.TryResolveUnder(loc.DraftRoot, req.Path, out var draftTarget, out var err))
                 return Results.BadRequest(new { error = err });
             if (!SafePaths.TryResolveUnder(loc.SourceRulesDir, req.Path, out var sourceTarget, out err))
@@ -140,8 +140,8 @@ public static class RulesEditorEndpoints {
             return Results.Json(new { path = req.Path.Replace('\\', '/'), reverted = true }, JsonOpts);
         });
 
-        app.MapGet("/api/rules/diff", () => {
-            var loc = RulesPaths.Resolve();
+        app.MapGet("/api/rules/diff", (PathsService paths) => {
+            var loc = RulesPaths.Resolve(paths);
             EnsureSeeded(loc);
             var files = new List<object>();
             foreach (var draftFile in EnumerateRelative(loc.DraftRoot)) {
@@ -161,18 +161,18 @@ public static class RulesEditorEndpoints {
             }, JsonOpts);
         });
 
-        app.MapPost("/api/rules/apply", async (HttpContext ctx) => {
+        app.MapPost("/api/rules/apply", async (HttpContext ctx, PathsService paths) => {
             var req = await JsonSerializer.DeserializeAsync<ApplyRequest>(ctx.Request.Body, JsonOpts).ConfigureAwait(false);
-            var loc = RulesPaths.Resolve();
+            var loc = RulesPaths.Resolve(paths);
             if (loc.IsBuildOutputFallback) {
                 return Results.Json(new {
                     error = "Refusing to apply: the source rules directory could not be located (it resolved to the build-output copy). Set [Dirs] rules_source_dir in paths.ini or BEASTIEBOT3_RULES_SOURCE.",
                 }, statusCode: 409);
             }
-            var paths = req?.Paths ?? Array.Empty<string>();
+            var relPaths = req?.Paths ?? Array.Empty<string>();
             var applied = new List<string>();
             var skipped = new List<object>();
-            foreach (var rel in paths) {
+            foreach (var rel in relPaths) {
                 if (!SafePaths.TryResolveUnder(loc.DraftRoot, rel, out var draftTarget, out var err1)) {
                     skipped.Add(new { path = rel, reason = err1 });
                     continue;

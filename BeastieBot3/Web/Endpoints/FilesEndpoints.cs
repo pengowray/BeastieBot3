@@ -26,8 +26,8 @@ public static class FilesEndpoints {
     private const long MaxReadBytes = 1024 * 1024;
 
     public static void MapFilesEndpoints(this IEndpointRouteBuilder app) {
-        app.MapGet("/api/files/roots", () => {
-            var roots = ResolveRoots();
+        app.MapGet("/api/files/roots", (PathsService paths) => {
+            var roots = ResolveRoots(paths);
             return Results.Json(roots.Select(kv => new {
                 root = kv.Key,
                 path = kv.Value,
@@ -35,8 +35,8 @@ public static class FilesEndpoints {
             }));
         });
 
-        app.MapGet("/api/files/list", (string root, string? subdir) => {
-            if (!TryResolveRoot(root, out var rootPath, out var err))
+        app.MapGet("/api/files/list", (string root, string? subdir, PathsService paths) => {
+            if (!TryResolveRoot(paths, root, out var rootPath, out var err))
                 return Results.BadRequest(new { error = err });
             if (!TryResolveTarget(rootPath, subdir ?? "", out var target, out err))
                 return Results.BadRequest(new { error = err });
@@ -57,8 +57,8 @@ public static class FilesEndpoints {
             return Results.Json(new { root, subdir = subdir ?? "", entries });
         });
 
-        app.MapGet("/api/files/read", (string root, string path) => {
-            if (!TryResolveRoot(root, out var rootPath, out var err))
+        app.MapGet("/api/files/read", (string root, string path, PathsService paths) => {
+            if (!TryResolveRoot(paths, root, out var rootPath, out var err))
                 return Results.BadRequest(new { error = err });
             if (!TryResolveTarget(rootPath, path, out var target, out err))
                 return Results.BadRequest(new { error = err });
@@ -84,8 +84,7 @@ public static class FilesEndpoints {
         });
     }
 
-    private static Dictionary<string, string> ResolveRoots() {
-        var paths = new PathsService();
+    private static Dictionary<string, string> ResolveRoots(PathsService paths) {
         var rules = Path.GetFullPath(Path.Combine(AppContext.BaseDirectory, "rules"));
         var roots = new Dictionary<string, string>(StringComparer.Ordinal) {
             ["rules"] = rules,
@@ -99,10 +98,10 @@ public static class FilesEndpoints {
         return roots;
     }
 
-    private static bool TryResolveRoot(string root, out string rootPath, out string error) {
+    private static bool TryResolveRoot(PathsService paths, string root, out string rootPath, out string error) {
         rootPath = "";
         error = "";
-        var roots = ResolveRoots();
+        var roots = ResolveRoots(paths);
         if (!roots.TryGetValue(root, out var r)) {
             error = $"Unknown root '{root}'. Allowed: {string.Join(", ", roots.Keys)}";
             return false;

@@ -29,8 +29,8 @@ public static class TaxaGroupingEndpoints {
         new(JsonSerializerDefaults.Web) { WriteIndented = false };
 
     public static void MapTaxaGroupingEndpoints(this IEndpointRouteBuilder app) {
-        app.MapGet("/api/grouping/groups", () => {
-            var groups = LoadDraftGroups(out _);
+        app.MapGet("/api/grouping/groups", (PathsService paths) => {
+            var groups = LoadDraftGroups(paths, out _);
             var result = groups.Select(kv => new {
                 name = kv.Key,
                 displayName = kv.Value.Name ?? kv.Key,
@@ -43,8 +43,8 @@ public static class TaxaGroupingEndpoints {
             return Results.Json(new { groups = result }, JsonOpts);
         });
 
-        app.MapGet("/api/grouping/children-counts", (string group, string? childRank) => {
-            var groups = LoadDraftGroups(out _);
+        app.MapGet("/api/grouping/children-counts", (string group, string? childRank, PathsService paths) => {
+            var groups = LoadDraftGroups(paths, out _);
             if (!groups.TryGetValue(group, out var def))
                 return Results.NotFound(new { error = $"Unknown group '{group}'" });
 
@@ -55,7 +55,7 @@ public static class TaxaGroupingEndpoints {
             // them and offer a "child" checkbox).
             var valueToGroup = BuildValueToGroupMap(groups, rank);
 
-            var dbPath = new PathsService().ResolveIucnDatabasePath(null);
+            var dbPath = paths.ResolveIucnDatabasePath(null);
             using var chart = new IucnChartDataBuilder(dbPath);
             var breakdown = chart.BuildChildBreakdown(def.Filters, rank);
 
@@ -79,12 +79,12 @@ public static class TaxaGroupingEndpoints {
             }, JsonOpts);
         });
 
-        app.MapPost("/api/grouping/children", async (HttpContext ctx) => {
+        app.MapPost("/api/grouping/children", async (HttpContext ctx, PathsService paths) => {
             var req = await JsonSerializer.DeserializeAsync<ChildrenRequest>(ctx.Request.Body, JsonOpts).ConfigureAwait(false);
             if (req is null || string.IsNullOrWhiteSpace(req.Group))
                 return Results.BadRequest(new { error = "group is required" });
 
-            var loc = RulesPaths.Resolve();
+            var loc = RulesPaths.Resolve(paths);
             EnsureSeeded(loc);
             var draftFile = Path.Combine(loc.DraftRoot, "taxa-groups.yml");
             if (!File.Exists(draftFile))
@@ -109,8 +109,8 @@ public static class TaxaGroupingEndpoints {
 
     // ---- group loading ----
 
-    private static Dictionary<string, TaxaGroupDefinition> LoadDraftGroups(out string path) {
-        var loc = RulesPaths.Resolve();
+    private static Dictionary<string, TaxaGroupDefinition> LoadDraftGroups(PathsService paths, out string path) {
+        var loc = RulesPaths.Resolve(paths);
         EnsureSeeded(loc);
         path = Path.Combine(loc.DraftRoot, "taxa-groups.yml");
         if (!File.Exists(path)) return new();
