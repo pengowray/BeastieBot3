@@ -362,6 +362,52 @@ table.compare-table tr.ct-cat td.ct-label { color: var(--muted); padding-left: 1
 .compare-table .agree.ok { color: var(--ok); }
 .compare-table .agree.warn { color: var(--warn); font-size: 0.92em; }
 
+/* --- Guides: feature-comparison ("product chart") tables --------------- */
+.feature-table-wrap { overflow-x: auto; margin: 0.5rem 0; }
+table.feature-table {
+  border-collapse: collapse;
+  width: 100%;
+  font-size: 0.84em;
+}
+table.feature-table th,
+table.feature-table td {
+  padding: 0.35rem 0.6rem;
+  border-bottom: 1px solid var(--border);
+  text-align: center;
+  white-space: nowrap;
+  vertical-align: top;
+}
+table.feature-table thead th {
+  color: var(--muted);
+  font-weight: 600;
+  vertical-align: bottom;
+  border-bottom: 2px solid var(--border);
+}
+table.feature-table th:first-child,
+table.feature-table td:first-child {
+  text-align: left;
+  white-space: normal;
+}
+table.feature-table tbody td:first-child { font-weight: 500; min-width: 14rem; }
+table.feature-table tbody tr:hover { background: #1b2027; }
+table.feature-table td.feat-req,
+table.feature-table th.feat-req {
+  text-align: left;
+  white-space: normal;
+  color: var(--muted);
+  font-size: 0.95em;
+  min-width: 12rem;
+}
+.feat-yes { color: var(--ok); font-weight: 700; }
+.feat-no { color: #3b434f; }
+.feat-partial { color: var(--warn); font-weight: 700; }
+.feature-note {
+  color: var(--muted);
+  font-size: 0.8em;
+  line-height: 1.5;
+  margin-top: 0.4rem;
+}
+
 .cmd-form {
   margin: 0.25rem 0 0.5rem 2rem;
   padding: 0.75rem 1rem;

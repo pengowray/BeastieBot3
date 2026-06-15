@@ -24,6 +24,7 @@
       <a class="nav-item" href="#/jobs"       data-view="jobs"><span class="nav-icon">≣</span> Jobs</a>
       <a class="nav-item" href="#/grouping"   data-view="grouping"><span class="nav-icon">⊞</span> Taxa grouping</a>
       <a class="nav-item" href="#/rules"      data-view="rules"><span class="nav-icon">✎</span> Rules editor</a>
+      <a class="nav-item" href="#/guides"     data-view="guides"><span class="nav-icon">📖</span> Guides</a>
       <a class="nav-item" href="#/settings"   data-view="settings"><span class="nav-icon">⚙</span> Settings</a>
     </nav>
   </aside>
@@ -164,6 +165,150 @@
           <button id="rules-run" class="ghost">Run generate-lists (from source)</button>
         </div>
         <div id="rules-diff-out"></div>
+      </section>
+    </section>
+
+    <!-- ============ Guides ============ -->
+    <section class="view" data-view="guides">
+      <div class="view-head"><h2 class="view-title">Guides</h2></div>
+
+      <section class="card">
+        <div class="card-head"><h3>Ways to get IUCN data — what each unlocks</h3></div>
+        <p class="muted small">
+          Each row is a download/build option. <span class="feat-yes">✓</span> = it adds that piece;
+          <span class="feat-no">·</span> = it doesn't; the last column lists extra requirements.
+          The API options are additive — typically cache-taxa → infraranks → cache-assessments → project-view,
+          or <code>iucn api cache-all --full</code> in one job.
+        </p>
+        <div class="feature-table-wrap">
+          <table class="feature-table">
+            <thead>
+              <tr>
+                <th>Option</th>
+                <th>Species</th>
+                <th>Subspecies&nbsp;&amp;&nbsp;varieties</th>
+                <th>Orphan&nbsp;subspecies&nbsp;†</th>
+                <th>Removed&nbsp;/&nbsp;historical</th>
+                <th>Rich&nbsp;content&nbsp;‡</th>
+                <th>Ready&nbsp;to&nbsp;generate&nbsp;lists</th>
+                <th class="feat-req">Requires</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><code>iucn import</code> <span class="muted small">(CSV release)</span></td>
+                <td class="feat-yes">✓</td><td class="feat-yes">✓</td><td class="feat-yes">✓</td>
+                <td class="feat-no">·</td><td class="feat-partial">~</td><td class="feat-yes">✓</td>
+                <td class="feat-req">manual zip download</td>
+              </tr>
+              <tr>
+                <td><code>iucn api cache-all</code> <span class="muted small">(taxa + assessments)</span></td>
+                <td class="feat-yes">✓</td><td class="feat-no">·</td><td class="feat-no">·</td>
+                <td class="feat-no">·</td><td class="feat-yes">✓</td><td class="feat-no">·</td>
+                <td class="feat-req">API token; CSV (species list)</td>
+              </tr>
+              <tr>
+                <td><code>iucn api discover-by-family</code></td>
+                <td class="feat-partial">+</td><td class="feat-no">·</td><td class="feat-no">·</td>
+                <td class="feat-yes">✓</td><td class="feat-yes">✓</td><td class="feat-no">·</td>
+                <td class="feat-req">API token</td>
+              </tr>
+              <tr>
+                <td><code>iucn api cache-infraranks</code> <span class="muted small">(cached/API-sourced)</span></td>
+                <td class="feat-no">·</td><td class="feat-yes">✓</td><td class="feat-no">·</td>
+                <td class="feat-no">·</td><td class="feat-yes">✓</td><td class="feat-no">·</td>
+                <td class="feat-req">API token; cached species</td>
+              </tr>
+              <tr>
+                <td><code>iucn api cache-infraranks --from-csv</code></td>
+                <td class="feat-no">·</td><td class="feat-yes">✓</td><td class="feat-yes">✓</td>
+                <td class="feat-no">·</td><td class="feat-yes">✓</td><td class="feat-no">·</td>
+                <td class="feat-req">API token; CSV</td>
+              </tr>
+              <tr>
+                <td><code>iucn api cache-assessments</code> <span class="muted small">(downloads queued payloads)</span></td>
+                <td class="feat-no">·</td><td class="feat-no">·</td><td class="feat-no">·</td>
+                <td class="feat-no">·</td><td class="feat-yes">✓</td><td class="feat-no">·</td>
+                <td class="feat-req">API token</td>
+              </tr>
+              <tr>
+                <td><code>iucn api project-view</code> <span class="muted small">(build projection)</span></td>
+                <td class="feat-no">·</td><td class="feat-no">·</td><td class="feat-no">·</td>
+                <td class="feat-no">·</td><td class="feat-no">·</td><td class="feat-yes">✓</td>
+                <td class="feat-req">— (local; needs the cache)</td>
+              </tr>
+              <tr>
+                <td><code>iucn api cache-all --full</code> <span class="muted small">(the chain)</span></td>
+                <td class="feat-yes">✓</td><td class="feat-yes">✓</td><td class="feat-yes">✓</td>
+                <td class="feat-no">·</td><td class="feat-yes">✓</td><td class="feat-yes">✓</td>
+                <td class="feat-req">API token; CSV</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="feature-note">
+          <strong>+</strong> discover-by-family adds species the CSV omits (removed/historical/reclassified).
+          <strong>†</strong> Orphan subspecies = an assessed subspecies whose parent species is <em>unassessed</em>; it appears
+          on no family page and in no cached species, so only the CSV's sis_id reaches it.
+          <strong>‡</strong> Rich content = synonyms, population narratives, trends and history the CSV doesn't carry.
+          "Ready to generate lists" means you can run generate-lists/charts afterwards (CSV via the default
+          <code>--dataset csv</code>; the API cache only after <code>project-view</code> via <code>--dataset api</code>).
+        </p>
+      </section>
+
+      <section class="card">
+        <div class="card-head"><h3>Data sources — what each contributes</h3></div>
+        <p class="muted small">
+          High-level overview of which features each source feeds into the aggregated data.
+          <span class="feat-yes">✓</span> primary&nbsp;·&nbsp;<span class="feat-partial">~</span> partial/secondary&nbsp;·&nbsp;<span class="feat-no">·</span> none.
+        </p>
+        <div class="feature-table-wrap">
+          <table class="feature-table">
+            <thead>
+              <tr>
+                <th>Source</th>
+                <th>Conservation&nbsp;status</th>
+                <th>Taxonomy&nbsp;/&nbsp;names</th>
+                <th>Synonyms</th>
+                <th>Common&nbsp;names</th>
+                <th>Wikipedia&nbsp;links</th>
+                <th class="feat-req">Primary role</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td>IUCN — CSV release</td>
+                <td class="feat-yes">✓</td><td class="feat-yes">✓</td><td class="feat-partial">~</td>
+                <td class="feat-partial">~</td><td class="feat-no">·</td>
+                <td class="feat-req">The published Red List snapshot — the assessments we list.</td>
+              </tr>
+              <tr>
+                <td>IUCN — API</td>
+                <td class="feat-yes">✓</td><td class="feat-yes">✓</td><td class="feat-yes">✓</td>
+                <td class="feat-yes">✓</td><td class="feat-no">·</td>
+                <td class="feat-req">Richer Red List: synonyms, narratives, trends, removed/historical taxa.</td>
+              </tr>
+              <tr>
+                <td>Catalogue of Life (CoL)</td>
+                <td class="feat-no">·</td><td class="feat-yes">✓</td><td class="feat-yes">✓</td>
+                <td class="feat-yes">✓</td><td class="feat-no">·</td>
+                <td class="feat-req">Authoritative taxonomy backbone; synonym &amp; vernacular-name enrichment and cross-check.</td>
+              </tr>
+              <tr>
+                <td>Wikidata</td>
+                <td class="feat-no">·</td><td class="feat-partial">~</td><td class="feat-partial">~</td>
+                <td class="feat-yes">✓</td><td class="feat-yes">✓</td>
+                <td class="feat-req">Links IUCN taxa to Wikipedia (P627 / enwiki sitelinks); common names (P1843).</td>
+              </tr>
+              <tr>
+                <td>Wikipedia</td>
+                <td class="feat-no">·</td><td class="feat-no">·</td><td class="feat-no">·</td>
+                <td class="feat-yes">✓</td><td class="feat-yes">✓</td>
+                <td class="feat-req">The target articles — page matching, vernacular names and prose.</td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
       </section>
     </section>
 

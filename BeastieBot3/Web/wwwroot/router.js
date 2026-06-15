@@ -15,7 +15,7 @@
   const B = () => window.Beastie || {};
 
   const VIEWS = new Set([
-    'dashboard', 'sources', 'run', 'workflows', 'jobs', 'grouping', 'rules', 'settings',
+    'dashboard', 'sources', 'run', 'workflows', 'jobs', 'grouping', 'rules', 'guides', 'settings',
   ]);
   const DEFAULT_VIEW = 'dashboard';
 
