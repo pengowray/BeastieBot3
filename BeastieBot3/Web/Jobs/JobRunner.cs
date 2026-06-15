@@ -71,6 +71,10 @@ public sealed class JobRunner {
             var teeAnsi = AnsiConsole.Create(new AnsiConsoleSettings {
                 Ansi = AnsiSupport.Yes,
                 ColorSystem = ColorSystemSupport.Standard,
+                // The output is captured to a buffer, not a live terminal: mark it
+                // non-interactive so Spectre live displays don't animate frame-by-frame
+                // into the log (ProgressConsole emits throttled text counts instead).
+                Interactive = InteractionSupport.No,
                 Out = new AnsiConsoleOutput(teeOut),
             });
 

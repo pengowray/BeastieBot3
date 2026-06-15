@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using Spectre.Console;
 using Spectre.Console.Cli;
 using BeastieBot3.Configuration;
+using BeastieBot3.Infrastructure;
 
 // Step 2 of API caching: downloads /api/v4/assessment/{id} for each assessment_id
 // found in previously cached taxa JSON. Stores responses in assessment_cache table.
@@ -81,39 +82,30 @@ public sealed class IucnApiCacheAssessmentsCommand : AsyncCommand<IucnApiCacheAs
         var skipped = 0;
         var failures = 0;
 
-        await AnsiConsole.Progress()
-            .Columns(new ProgressColumn[] {
-                new TaskDescriptionColumn(),
-                new ProgressBarColumn(),
-                new PercentageColumn(),
-                new RemainingTimeColumn(),
-                new SpinnerColumn()
-            })
-            .StartAsync(async ctx => {
-                var task = ctx.AddTask("Downloading assessments", maxValue: queue.Count);
-                foreach (var item in queue) {
-                    cancellationToken.ThrowIfCancellationRequested();
+        await ProgressConsole.RunAsync("Downloading assessments", queue.Count, async progress => {
+            foreach (var item in queue) {
+                cancellationToken.ThrowIfCancellationRequested();
 
-                    if (!settings.Force && !ShouldDownload(item.DownloadedAt, refreshThreshold)) {
-                        skipped++;
-                        task.Increment(1);
-                        continue;
-                    }
-
-                    if (await DownloadSingleAsync(apiClient, cacheStore, item.AssessmentId, cancellationToken).ConfigureAwait(false)) {
-                        downloaded++;
-                    }
-                    else {
-                        failures++;
-                    }
-
-                    if (sleep > 0) {
-                        await Task.Delay(sleep, cancellationToken).ConfigureAwait(false);
-                    }
-
-                    task.Increment(1);
+                if (!settings.Force && !ShouldDownload(item.DownloadedAt, refreshThreshold)) {
+                    skipped++;
+                    progress.Increment(1);
+                    continue;
                 }
-            });
+
+                if (await DownloadSingleAsync(apiClient, cacheStore, item.AssessmentId, cancellationToken).ConfigureAwait(false)) {
+                    downloaded++;
+                }
+                else {
+                    failures++;
+                }
+
+                if (sleep > 0) {
+                    await Task.Delay(sleep, cancellationToken).ConfigureAwait(false);
+                }
+
+                progress.Increment(1);
+            }
+        }, cancellationToken).ConfigureAwait(false);
 
         AnsiConsole.MarkupLine($"[green]Downloaded:[/] {downloaded}");
         AnsiConsole.MarkupLine($"[yellow]Skipped:[/] {skipped}");

@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using Spectre.Console;
 using Spectre.Console.Cli;
 using BeastieBot3.Configuration;
+using BeastieBot3.Infrastructure;
 
 // Step 1 of API caching: iterates SIS IDs from CSV-imported IUCN database,
 // fetches /api/v4/taxa/sis/{sisId} via IucnApiClient, stores JSON in taxa_cache.
@@ -89,39 +90,30 @@ public sealed class IucnApiCacheTaxaCommand : AsyncCommand<IucnApiCacheTaxaSetti
         var skipped = 0;
         var failures = 0;
 
-        await AnsiConsole.Progress()
-            .Columns(new ProgressColumn[] {
-                new TaskDescriptionColumn(),
-                new ProgressBarColumn(),
-                new PercentageColumn(),
-                new RemainingTimeColumn(),
-                new SpinnerColumn()
-            })
-            .StartAsync(async ctx => {
-                var task = ctx.AddTask("Downloading taxa JSON", maxValue: totalCount);
-                foreach (var sisId in ids) {
-                    cancellationToken.ThrowIfCancellationRequested();
+        await ProgressConsole.RunAsync("Downloading taxa JSON", totalCount, async progress => {
+            foreach (var sisId in ids) {
+                cancellationToken.ThrowIfCancellationRequested();
 
-                    if (!settings.Force && !ShouldDownload(cacheStore, sisId, refreshThreshold)) {
-                        skipped++;
-                        task.Increment(1);
-                        continue;
-                    }
-
-                    if (await DownloadSingleAsync(apiClient, cacheStore, sisId, cancellationToken).ConfigureAwait(false)) {
-                        downloaded++;
-                    }
-                    else {
-                        failures++;
-                    }
-
-                    if (sleep > 0) {
-                        await Task.Delay(sleep, cancellationToken).ConfigureAwait(false);
-                    }
-
-                    task.Increment(1);
+                if (!settings.Force && !ShouldDownload(cacheStore, sisId, refreshThreshold)) {
+                    skipped++;
+                    progress.Increment(1);
+                    continue;
                 }
-            });
+
+                if (await DownloadSingleAsync(apiClient, cacheStore, sisId, cancellationToken).ConfigureAwait(false)) {
+                    downloaded++;
+                }
+                else {
+                    failures++;
+                }
+
+                if (sleep > 0) {
+                    await Task.Delay(sleep, cancellationToken).ConfigureAwait(false);
+                }
+
+                progress.Increment(1);
+            }
+        }, cancellationToken).ConfigureAwait(false);
 
         AnsiConsole.MarkupLine($"[green]Downloaded:[/] {downloaded}");
         AnsiConsole.MarkupLine($"[yellow]Skipped:[/] {skipped}");

@@ -6,6 +6,7 @@ using System.Threading.Tasks;
 using Spectre.Console;
 using Spectre.Console.Cli;
 using BeastieBot3.Configuration;
+using BeastieBot3.Infrastructure;
 
 // Fetches the infraspecific taxa (subspecies/varieties) discovered in cached species'
 // taxon.infrarank_taxa (recorded in taxa_lookup with scope='infrarank'). Their assessments
@@ -113,34 +114,24 @@ public sealed class IucnApiCacheInfraranksCommand : AsyncCommand<IucnApiCacheInf
         var downloaded = 0;
         var failures = 0;
 
-        await AnsiConsole.Progress()
-            .Columns(new ProgressColumn[] {
-                new TaskDescriptionColumn(),
-                new ProgressBarColumn(),
-                new PercentageColumn(),
-                new RemainingTimeColumn(),
-                new SpinnerColumn()
-            })
-            .StartAsync(async ctx => {
-                var task = ctx.AddTask("Downloading infraspecific taxa", maxValue: queue.Count);
+        await ProgressConsole.RunAsync("Downloading infraspecific taxa", queue.Count, async progress => {
+            foreach (var sisId in queue) {
+                cancellationToken.ThrowIfCancellationRequested();
 
-                foreach (var sisId in queue) {
-                    cancellationToken.ThrowIfCancellationRequested();
-
-                    if (await IucnApiCacheTaxaCommand.DownloadSingleAsync(apiClient, cacheStore, sisId, cancellationToken).ConfigureAwait(false)) {
-                        downloaded++;
-                    }
-                    else {
-                        failures++;
-                    }
-
-                    if (sleep > 0) {
-                        await Task.Delay(sleep, cancellationToken).ConfigureAwait(false);
-                    }
-
-                    task.Increment(1);
+                if (await IucnApiCacheTaxaCommand.DownloadSingleAsync(apiClient, cacheStore, sisId, cancellationToken).ConfigureAwait(false)) {
+                    downloaded++;
                 }
-            });
+                else {
+                    failures++;
+                }
+
+                if (sleep > 0) {
+                    await Task.Delay(sleep, cancellationToken).ConfigureAwait(false);
+                }
+
+                progress.Increment(1);
+            }
+        }, cancellationToken).ConfigureAwait(false);
 
         AnsiConsole.MarkupLineInterpolated($"[green]Downloaded:[/] {downloaded:N0}");
         AnsiConsole.MarkupLineInterpolated($"[red]Failed:[/] {failures:N0}");

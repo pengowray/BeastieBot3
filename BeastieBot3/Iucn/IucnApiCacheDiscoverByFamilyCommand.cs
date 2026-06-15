@@ -7,6 +7,7 @@ using System.Threading.Tasks;
 using Spectre.Console;
 using Spectre.Console.Cli;
 using BeastieBot3.Configuration;
+using BeastieBot3.Infrastructure;
 
 // Discovers taxa missing from the API cache by iterating IUCN families via
 // /api/v4/taxa/family/ and /api/v4/taxa/family/{name}. Useful for finding
@@ -89,40 +90,30 @@ public sealed class IucnApiCacheDiscoverByFamilyCommand : AsyncCommand<IucnApiCa
             ? DateTime.UtcNow - TimeSpan.FromHours(hours)
             : (DateTime?)null;
 
-        await AnsiConsole.Progress()
-            .Columns(new ProgressColumn[] {
-                new TaskDescriptionColumn(),
-                new ProgressBarColumn(),
-                new PercentageColumn(),
-                new RemainingTimeColumn(),
-                new SpinnerColumn()
-            })
-            .StartAsync(async ctx => {
-                var familyTask = ctx.AddTask("Scanning families", maxValue: families.Count);
+        await ProgressConsole.RunAsync("Scanning families", families.Count, async progress => {
+            foreach (var family in families) {
+                cancellationToken.ThrowIfCancellationRequested();
+                progress.Description = $"Scanning {family}";
 
-                foreach (var family in families) {
-                    cancellationToken.ThrowIfCancellationRequested();
-                    familyTask.Description = $"Scanning [blue]{Markup.Escape(family)}[/]";
+                var familySisIds = await FetchFamilySisIdsAsync(apiClient, cacheStore, family, sleep, cancellationToken).ConfigureAwait(false);
 
-                    var familySisIds = await FetchFamilySisIdsAsync(apiClient, cacheStore, family, sleep, cancellationToken).ConfigureAwait(false);
-
-                    var missingCount = 0;
-                    foreach (var sisId in familySisIds) {
-                        if (allDiscoveredSisIds.Add(sisId)) {
-                            if (settings.Force || IucnApiCacheTaxaCommand.ShouldDownload(cacheStore, sisId, refreshThreshold)) {
-                                missingCount++;
-                            }
+                var missingCount = 0;
+                foreach (var sisId in familySisIds) {
+                    if (allDiscoveredSisIds.Add(sisId)) {
+                        if (settings.Force || IucnApiCacheTaxaCommand.ShouldDownload(cacheStore, sisId, refreshThreshold)) {
+                            missingCount++;
                         }
                     }
-
-                    familySummaries.Add((family, familySisIds.Count, missingCount));
-                    familyTask.Increment(1);
-
-                    if (settings.Limit.HasValue && allDiscoveredSisIds.Count >= settings.Limit.Value) {
-                        break;
-                    }
                 }
-            });
+
+                familySummaries.Add((family, familySisIds.Count, missingCount));
+                progress.Increment(1);
+
+                if (settings.Limit.HasValue && allDiscoveredSisIds.Count >= settings.Limit.Value) {
+                    break;
+                }
+            }
+        }, cancellationToken).ConfigureAwait(false);
 
         // Build the download queue — only SIS IDs that need downloading
         var downloadQueue = new List<long>();
@@ -189,34 +180,24 @@ public sealed class IucnApiCacheDiscoverByFamilyCommand : AsyncCommand<IucnApiCa
         var downloaded = 0;
         var failures = 0;
 
-        await AnsiConsole.Progress()
-            .Columns(new ProgressColumn[] {
-                new TaskDescriptionColumn(),
-                new ProgressBarColumn(),
-                new PercentageColumn(),
-                new RemainingTimeColumn(),
-                new SpinnerColumn()
-            })
-            .StartAsync(async ctx => {
-                var task = ctx.AddTask("Downloading missing taxa", maxValue: downloadQueue.Count);
+        await ProgressConsole.RunAsync("Downloading missing taxa", downloadQueue.Count, async progress => {
+            foreach (var sisId in downloadQueue) {
+                cancellationToken.ThrowIfCancellationRequested();
 
-                foreach (var sisId in downloadQueue) {
-                    cancellationToken.ThrowIfCancellationRequested();
-
-                    if (await IucnApiCacheTaxaCommand.DownloadSingleAsync(apiClient, cacheStore, sisId, cancellationToken).ConfigureAwait(false)) {
-                        downloaded++;
-                    }
-                    else {
-                        failures++;
-                    }
-
-                    if (sleep > 0) {
-                        await Task.Delay(sleep, cancellationToken).ConfigureAwait(false);
-                    }
-
-                    task.Increment(1);
+                if (await IucnApiCacheTaxaCommand.DownloadSingleAsync(apiClient, cacheStore, sisId, cancellationToken).ConfigureAwait(false)) {
+                    downloaded++;
                 }
-            });
+                else {
+                    failures++;
+                }
+
+                if (sleep > 0) {
+                    await Task.Delay(sleep, cancellationToken).ConfigureAwait(false);
+                }
+
+                progress.Increment(1);
+            }
+        }, cancellationToken).ConfigureAwait(false);
 
         AnsiConsole.MarkupLine($"[green]Downloaded:[/] {downloaded}");
         AnsiConsole.MarkupLine($"[red]Failed:[/] {failures}");
