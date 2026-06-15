@@ -85,7 +85,7 @@ public sealed class IucnImportCommand : Command<IucnImportCommand.Settings> {
 
         AnsiConsole.MarkupLine($"[grey]Importing into database:[/] {fullDbPath}");
 
-        var importer = new IucnImporter(AnsiConsole.Console, connection, cvsDir, settings.Force);
+        var importer = new IucnImporter(AnsiConsole.Console, connection, cvsDir, settings.Force, redlistVersionHint);
         var anyFailures = false;
 
         foreach (var zipPath in zipFiles) {

@@ -26,6 +26,7 @@ public sealed class IucnImporter {
     private readonly SqliteConnection _connection;
     private readonly string _rootDir;
     private readonly bool _force;
+    private readonly string _releaseVersionHint;
 
     private readonly ZipEntrySpec[] _expectedEntries = new[] {
         new ZipEntrySpec("assessments.csv", "assessments"),
@@ -34,11 +35,15 @@ public sealed class IucnImporter {
         new ZipEntrySpec("taxonomy_with_html.csv", "taxonomy_html"),
     };
 
-    public IucnImporter(IAnsiConsole console, SqliteConnection connection, string rootDir, bool force) {
+    public IucnImporter(IAnsiConsole console, SqliteConnection connection, string rootDir, bool force, string? releaseVersionHint = null) {
         _console = console;
         _connection = connection;
         _rootDir = Path.GetFullPath(rootDir);
         _force = force;
+        // The per-zip path often lacks the YYYY-N version (it lives on the CSV directory name);
+        // the command passes that directory-derived hint so recorded redlist_version — and the
+        // one-release-per-DB gate below — stay meaningful even for version-less zip filenames.
+        _releaseVersionHint = string.IsNullOrWhiteSpace(releaseVersionHint) ? "unknown" : releaseVersionHint;
         EnsureImportMetadataTable();
     }
 
@@ -47,11 +52,34 @@ public sealed class IucnImporter {
 
         var fullZipPath = Path.GetFullPath(zipPath);
         var relativeName = ToRelative(fullZipPath);
-        var redlistVersion = ExtractRedlistVersionFromPath(relativeName);
+        var perZipVersion = ExtractRedlistVersionFromPath(relativeName);
+        var redlistVersion = string.Equals(perZipVersion, "unknown", StringComparison.OrdinalIgnoreCase)
+            ? _releaseVersionHint
+            : perZipVersion;
+
+        // One release per database file. Importing a different release into a DB that already holds
+        // one accumulates rows and silently double-counts every COUNT(*)/DISTINCT redlist_version
+        // consumer downstream. Refuse a cross-release import (or, under --force, wipe and rebuild).
+        var conflict = FindReleaseConflict(GetCompletedReleaseVersions(), redlistVersion);
 
         if (_force) {
-            DeleteExistingImports(relativeName);
+            if (conflict is not null) {
+                _console.MarkupLine(
+                    $"[yellow]--force:[/] database already holds release [bold]{Markup.Escape(conflict)}[/]; wiping it to rebuild as [bold]{Markup.Escape(redlistVersion)}[/].");
+                WipeAllImports();
+            } else {
+                DeleteExistingImports(relativeName);
+            }
         } else {
+            // Cross-release conflict takes precedence over the per-filename idempotency skip: a new
+            // release packaged under a reused zip filename (e.g. always "redlist_export.zip") must be
+            // refused, not silently skipped as "already imported".
+            if (conflict is not null) {
+                throw new InvalidOperationException(
+                    $"Refusing to import release '{redlistVersion}' into a database that already contains release '{conflict}'. " +
+                    "Each IUCN release belongs in its own database file (e.g. IUCN_" + redlistVersion + ".sqlite): point " +
+                    "Datastore:IUCN_sqlite_from_cvs at a new file, or pass --force to wipe this database and rebuild it from the current CSV directory.");
+            }
             var existing = GetLatestImport(relativeName);
             if (existing is { Completed: true }) {
                 _console.MarkupLine($"[yellow]Skipping already imported zip:[/] {relativeName}");
@@ -135,6 +163,41 @@ public sealed class IucnImporter {
         if (toDelete.Count > 0) {
             _console.MarkupLine($"[grey]Removed {toDelete.Count} previous import metadata entries for[/] {filename}.");
         }
+    }
+
+    // Distinct redlist_version values across COMPLETED imports — i.e. "which release(s) does this DB
+    // actually hold". Open/aborted entries are ignored so a crashed run doesn't block a clean retry.
+    private List<string> GetCompletedReleaseVersions() {
+        var versions = new List<string>();
+        using var cmd = _connection.CreateCommand();
+        cmd.CommandText = "SELECT DISTINCT redlist_version FROM import_metadata WHERE ended_at IS NOT NULL;";
+        using var reader = cmd.ExecuteReader();
+        while (reader.Read()) {
+            if (!reader.IsDBNull(0)) {
+                versions.Add(reader.GetString(0));
+            }
+        }
+        return versions;
+    }
+
+    // Pure decision for the one-release-per-DB gate: returns the first already-present release version
+    // that differs from <paramref name="incomingVersion"/>, or null when the incoming release is
+    // compatible (same version, or the DB is empty). "unknown" only matches "unknown".
+    internal static string? FindReleaseConflict(IEnumerable<string> completedVersions, string incomingVersion) {
+        foreach (var existing in completedVersions) {
+            if (!string.Equals(existing, incomingVersion, StringComparison.OrdinalIgnoreCase)) {
+                return existing;
+            }
+        }
+        return null;
+    }
+
+    // Full rebuild: drop every import_metadata row; the data tables' ON DELETE CASCADE foreign key on
+    // import_id clears their rows too (requires PRAGMA foreign_keys=ON, which the command sets).
+    private void WipeAllImports() {
+        using var cmd = _connection.CreateCommand();
+        cmd.CommandText = "DELETE FROM import_metadata;";
+        cmd.ExecuteNonQuery();
     }
 
     private ImportInfo? GetLatestImport(string filename) {

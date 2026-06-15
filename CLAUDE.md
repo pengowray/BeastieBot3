@@ -98,7 +98,7 @@ Use `ReportPathResolver` to resolve output paths. Priority: explicit CLI `--outp
 
 ### Performance
 
-- **No extra CTEs** — we import one IUCN release at a time, so no `MAX(redlist_version)` needed.
+- **No extra CTEs** — one IUCN release per DB file, so no `MAX(redlist_version)` needed. This is **enforced**: `iucn import` refuses a zip whose release version differs from what the DB already holds (downstream `COUNT(*)` / `DISTINCT redlist_version` readers don't filter by `import_id`, so a mixed DB silently double-counts). Same-release multi-zip imports still accumulate; `--force` wipes the DB and rebuilds it as the new release. The release version is the zip path's `YYYY-N`, falling back to the CSV-directory name.
 - **Keep queries sargable** — never wrap columns in `LOWER()`, `UPPER()`, or `LIKE '%foo%'`. Normalize values before binding to parameters.
 - Stick to exact matches on indexed columns (`kingdomName`, `className`, `redlistCategory`).
 - Need a new filter? Add a matching index in the importer, don't bolt `ORDER BY` on a random column.
