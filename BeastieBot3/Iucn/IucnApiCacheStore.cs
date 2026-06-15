@@ -132,6 +132,20 @@ WHERE l.sis_id = @sisId LIMIT 1";
         return DateTime.TryParse(result, out var parsed) ? parsed : null;
     }
 
+    /// <summary>
+    /// When was the taxon with this <c>root_sis_id</c> fetched as its OWN record? Unlike
+    /// <see cref="GetTaxaDownloadedAt"/> (which resolves via <c>taxa_lookup</c> and so reports an
+    /// infrarank sis_id as "downloaded" via its parent species), this checks the taxon's own row —
+    /// the correct "have we fetched /taxa/sis/{id} for this taxon itself" test for the infrarank phase.
+    /// </summary>
+    public DateTime? GetTaxaDownloadedAtByRoot(long rootSisId) {
+        using var command = _connection.CreateCommand();
+        command.CommandText = "SELECT downloaded_at FROM taxa WHERE root_sis_id=@root LIMIT 1";
+        command.Parameters.AddWithValue("@root", rootSisId);
+        var result = command.ExecuteScalar() as string;
+        return DateTime.TryParse(result, out var parsed) ? parsed : null;
+    }
+
     public DateTime? GetAssessmentDownloadedAt(long assessmentId) {
         using var command = _connection.CreateCommand();
         command.CommandText = "SELECT downloaded_at FROM assessments WHERE assessment_id=@id LIMIT 1";
@@ -327,6 +341,23 @@ ORDER BY b.latest DESC, IFNULL(b.year_published, 0) DESC, b.assessment_id DESC";
         }
 
         tx.Commit();
+    }
+
+    /// <summary>
+    /// Infraspecific (subspecies/variety) SIS ids discovered from cached species' <c>taxon.infrarank_taxa</c>
+    /// (scope = "infrarank" in <c>taxa_lookup</c>), paired with their parent species' root SIS id. These have
+    /// a taxon record listed but their own assessments are NOT in the parent's payload — each needs its own
+    /// <c>/taxa/sis/{id}</c> fetch (see discover-by-family's infrarank phase) to queue its assessments.
+    /// </summary>
+    public IReadOnlyList<(long SisId, long RootSisId)> GetInfrarankSisIds() {
+        using var command = _connection.CreateCommand();
+        command.CommandText = "SELECT DISTINCT sis_id, root_sis_id FROM taxa_lookup WHERE scope='infrarank'";
+        var list = new List<(long, long)>();
+        using var reader = command.ExecuteReader();
+        while (reader.Read()) {
+            list.Add((reader.GetInt64(0), reader.GetInt64(1)));
+        }
+        return list;
     }
 
     public IReadOnlyList<long> GetFailedEntityIds(string endpoint) {

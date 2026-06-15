@@ -99,16 +99,39 @@ dotnet run --project BeastieBot3/BeastieBot3.csproj -- iucn api discover-by-fami
    beastiebot3 iucn api discover-by-family
    ```
 
-3. **Fetch assessments** for newly discovered taxa:
+3. **Fetch infraspecific taxa** (subspecies/varieties) discovered in the cached species:
+   ```bash
+   beastiebot3 iucn api cache-infraranks
+   ```
+
+4. **Fetch assessments** for newly discovered taxa (species + infraspecific):
    ```bash
    beastiebot3 iucn api cache-assessments
    ```
 
-4. **Report** taxa with no current assessment:
+5. **Report** taxa with no current assessment:
    ```bash
    beastiebot3 iucn api report-no-latest
    ```
    This generates a Markdown report (grouped by taxonomy) and a companion CSV listing every taxon that has no latest assessment — i.e. species that were removed, delisted, or reclassified.
+
+## Fetching Infraspecific Taxa (Subspecies & Varieties)
+
+The species payload (`/api/v4/taxa/sis/{id}`) lists a species' subspecies/varieties under `taxon.infrarank_taxa` (recorded in `taxa_lookup` with `scope='infrarank'`), **but it does not include their assessments** — the parent's `assessments[]` are all species-level. Each infraspecific taxon needs its own `/api/v4/taxa/sis/{id}` fetch to surface its assessments. Without this step the API projection (`--dataset api`) has no subspecies/varieties and under-counts versus the CSV.
+
+The `iucn api cache-infraranks` command does exactly that. It is API-native — it reads the infrarank SIS IDs already discovered in whatever species are cached (from `cache-taxa` or `discover-by-family`), so it needs no CSV reference:
+
+```bash
+# Preview how many infraspecific taxa will be fetched
+beastiebot3 iucn api cache-infraranks --dry-run
+
+# Fetch them (upserts each infra taxon + queues its assessments to the backlog)
+beastiebot3 iucn api cache-infraranks
+```
+
+Each fetch stores a `taxa` row for the infra taxon and queues its assessment IDs, so a subsequent `cache-assessments` run downloads them and `iucn api project-view` then includes the subspecies/varieties (with `infraType` of `subspecies`/`variety`, mirroring the CSV). Options mirror `discover-by-family`: `--limit`, `--force`, `--dry-run`, `--sleep-ms`, `--max-age-hours`, `--cache`.
+
+> Note: re-running is idempotent — once an infra taxon has its own `taxa` record it is skipped (its `taxa_lookup` scope flips from `infrarank` to `species`), so the "discovered" total shrinks as you download. Use `--force` to re-fetch.
 
 ## Performance Notes
 

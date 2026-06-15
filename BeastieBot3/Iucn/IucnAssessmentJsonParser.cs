@@ -46,6 +46,7 @@ internal static class IucnAssessmentJsonParser {
                 ?? (taxon is { } t1 ? TryGetLong(t1, "sis_id") : null);
 
             var (categoryCode, categoryEn) = ReadCategory(root);
+            var scientificName = taxon is { } ts ? TryGetString(ts, "scientific_name") ?? TryGetString(ts, "taxon_name") : null;
 
             return new ProjectedAssessment(
                 AssessmentId: assessmentId.Value,
@@ -58,7 +59,7 @@ internal static class IucnAssessmentJsonParser {
                 PossiblyExtinctInTheWild: BoolText(root, "possibly_extinct_in_the_wild"),
                 Scopes: JoinScopes(root, "scopes"),
                 Systems: JoinDescriptions(root, "systems", "|"),
-                ScientificName: taxon is { } t2 ? TryGetString(t2, "scientific_name") ?? TryGetString(t2, "taxon_name") : null,
+                ScientificName: scientificName,
                 Authority: taxon is { } t3 ? TryGetString(t3, "authority") : null,
                 KingdomName: taxon is { } t4 ? TryGetString(t4, "kingdom_name") : null,
                 PhylumName: taxon is { } t5 ? TryGetString(t5, "phylum_name") : null,
@@ -68,10 +69,30 @@ internal static class IucnAssessmentJsonParser {
                 GenusName: taxon is { } t9 ? TryGetString(t9, "genus_name") : null,
                 SpeciesName: taxon is { } t10 ? TryGetString(t10, "species_name") : null,
                 SubpopulationName: taxon is { } t11 ? TryGetString(t11, "subpopulation_name") : null,
-                InfraType: taxon is { } t12 ? TryGetString(t12, "infrarank") ?? TryGetString(t12, "infra_type") : null,
+                InfraType: taxon is { } t12 ? ResolveInfraType(t12, scientificName) : null,
                 InfraName: taxon is { } t13 ? TryGetString(t13, "infra_name") : null,
                 InfraAuthority: taxon is { } t14 ? TryGetString(t14, "infra_authority") : null);
         }
+    }
+
+    // Derive the CSV-style infraType token for an assessment's taxon. The API marks an
+    // infraspecific taxon with taxon.infrarank == true (a JSON *bool*, not a rank word) and
+    // taxon.infra_name set; the rank itself only shows up as a marker in scientific_name
+    // ("… var. …" / "… ssp. …" / "… subsp. …"). We project to the same words the CSV import
+    // stores ("variety"/"subspecies") so GlobalSpeciesPredicate excludes these from species
+    // counts and SpeciesLineFormatter renders the right rank marker. A genuine string
+    // infra_type (should it ever appear) wins. Returns null for species (the common case).
+    internal static string? ResolveInfraType(JsonElement taxon, string? scientificName) {
+        var explicitType = TryGetString(taxon, "infra_type");
+        if (!string.IsNullOrWhiteSpace(explicitType)) return explicitType;
+
+        var isInfra = ReadBool(taxon, "infrarank")
+            || !string.IsNullOrWhiteSpace(TryGetString(taxon, "infra_name"));
+        if (!isInfra) return null;
+
+        return (scientificName ?? string.Empty).Contains("var.", StringComparison.OrdinalIgnoreCase)
+            ? "variety"
+            : "subspecies";
     }
 
     private static (string? code, string? en) ReadCategory(JsonElement root) {
