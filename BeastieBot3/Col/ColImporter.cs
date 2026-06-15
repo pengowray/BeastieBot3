@@ -12,6 +12,7 @@ using CsvHelper;
 using CsvHelper.Configuration;
 using Microsoft.Data.Sqlite;
 using Spectre.Console;
+using BeastieBot3.Infrastructure;
 using YamlDotNet.Serialization;
 using YamlDotNet.Serialization.NamingConventions;
 
@@ -361,67 +362,23 @@ VALUES (@import_id, @label, @key, @title, @alias, @description, @issued, @versio
         }
 
         var columnInfos = BuildColumnInfos(headers);
-        var sanitizedHeaders = columnInfos.Select(ci => ci.Sanitized).ToList();
+        // CoL destination columns: sanitised + de-duplicated header names, all TEXT.
+        var columns = columnInfos.Select(ci => new DelimitedColumn(ci.Sanitized, "TEXT")).ToList();
 
         var tableName = SanitizeTableName(Path.GetFileNameWithoutExtension(entry.Name));
-        var existingColumns = EnsureDataTable(connection, tableName, sanitizedHeaders);
+        var existingColumns = DelimitedTableImporter.EnsureTable(
+            connection, tableName, columns,
+            indexImportIdColumn: false, requireImportIdOnExisting: false);
 
         using var transaction = connection.BeginTransaction();
-        using var insert = connection.CreateCommand();
-        insert.Transaction = transaction;
-        insert.CommandText = BuildInsertSql(tableName, sanitizedHeaders);
-
-        var importParam = insert.CreateParameter();
-        importParam.ParameterName = "@import_id";
-        importParam.Value = importId;
-        insert.Parameters.Add(importParam);
-
-        var parameters = new SqliteParameter[sanitizedHeaders.Count];
-        for (var i = 0; i < sanitizedHeaders.Count; i++) {
-            var param = insert.CreateParameter();
-            param.ParameterName = "@c" + i.ToString(CultureInfo.InvariantCulture);
-            insert.Parameters.Add(param);
-            parameters[i] = param;
-        }
-
-        insert.Prepare();
-
-        long inserted = 0;
-        while (csv.Read()) {
-            cancellationToken.ThrowIfCancellationRequested();
-            for (var i = 0; i < columnInfos.Count; i++) {
-                var raw = csv.GetField(i);
-                parameters[i].Value = string.IsNullOrEmpty(raw) ? DBNull.Value : raw;
-            }
-
-            inserted += insert.ExecuteNonQuery();
-        }
-
+        var (inserted, _) = DelimitedTableImporter.BulkInsert(
+            connection, transaction, tableName, columns, importId,
+            () => csv.Read(), i => csv.GetField(i),
+            insertOrIgnore: false, prepare: true, cancellationToken);
         transaction.Commit();
+
         RegisterTableColumns(tableName, existingColumns);
         _console.MarkupLine($"    {tableName}: inserted {inserted:N0} rows (columns: {existingColumns.Count}).");
-    }
-
-    private HashSet<string> EnsureDataTable(SqliteConnection connection, string tableName, IReadOnlyList<string> csvColumns) {
-        var existing = GetTableColumns(connection, tableName);
-        if (existing is null) {
-            CreateNewDataTable(connection, tableName, csvColumns);
-            existing = GetTableColumns(connection, tableName) ?? throw new InvalidOperationException($"Failed to create table {tableName}.");
-            return existing;
-        }
-
-        foreach (var column in csvColumns) {
-            if (existing.Contains(column)) {
-                continue;
-            }
-
-            using var alter = connection.CreateCommand();
-            alter.CommandText = $"ALTER TABLE {QuoteIdentifier(tableName)} ADD COLUMN {QuoteIdentifier(column)} TEXT;";
-            alter.ExecuteNonQuery();
-            existing.Add(column);
-        }
-
-        return existing;
     }
 
     private static List<ColumnInfo> BuildColumnInfos(IReadOnlyList<string> headers) {
@@ -489,49 +446,6 @@ VALUES (@import_id, @label, @key, @title, @alias, @description, @issued, @versio
         return sanitized;
     }
 
-    private static HashSet<string>? GetTableColumns(SqliteConnection connection, string tableName) {
-        using var pragma = connection.CreateCommand();
-        pragma.CommandText = $"PRAGMA table_info({QuoteIdentifier(tableName)});";
-        using var reader = pragma.ExecuteReader();
-        var result = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var any = false;
-        while (reader.Read()) {
-            any = true;
-            result.Add(reader.GetString(1));
-        }
-
-        return any ? result : null;
-    }
-
-    private static void CreateNewDataTable(SqliteConnection connection, string tableName, IReadOnlyList<string> csvColumns) {
-        var columns = new List<string> {
-            "\"import_id\" INTEGER NOT NULL"
-        };
-
-        foreach (var column in csvColumns) {
-            columns.Add($"{QuoteIdentifier(column)} TEXT");
-        }
-
-        columns.Add("FOREIGN KEY(\"import_id\") REFERENCES import_metadata(\"id\") ON DELETE CASCADE");
-
-        using var create = connection.CreateCommand();
-        create.CommandText = $"CREATE TABLE IF NOT EXISTS {QuoteIdentifier(tableName)} (\n    {string.Join(",\n    ", columns)}\n);";
-        create.ExecuteNonQuery();
-
-    }
-
-    private static string BuildInsertSql(string tableName, IReadOnlyList<string> csvColumns) {
-        var columns = new List<string> { "import_id" };
-        columns.AddRange(csvColumns);
-        var identifiers = string.Join(", ", columns.Select(QuoteIdentifier));
-
-        var parameters = new List<string> { "@import_id" };
-        for (var i = 0; i < csvColumns.Count; i++) {
-            parameters.Add("@c" + i.ToString(CultureInfo.InvariantCulture));
-        }
-
-        return $"INSERT INTO {QuoteIdentifier(tableName)} ({identifiers}) VALUES ({string.Join(", ", parameters)});";
-    }
 
     private void ProcessReferenceJsonl(SqliteConnection connection, long importId, ZipArchiveEntry entry, CancellationToken cancellationToken) {
         EnsureReferenceJsonTable(connection);
@@ -1051,7 +965,7 @@ VALUES (@import_id, @key, @title, @alias, @description, @issued, @version, @raw_
     }
 
     private void RegisterTableColumns(SqliteConnection connection, string tableName) {
-        var columns = GetTableColumns(connection, tableName);
+        var columns = DelimitedTableImporter.GetTableColumns(connection, tableName);
         if (columns is null) {
             return;
         }

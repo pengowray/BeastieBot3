@@ -11,6 +11,7 @@ using CsvHelper;
 using CsvHelper.Configuration;
 using Microsoft.Data.Sqlite;
 using Spectre.Console;
+using BeastieBot3.Infrastructure;
 
 // Core CSV import logic for IUCN Red List exports. Uses CsvHelper for parsing.
 // Creates tables: taxonomy (scientific_name, kingdom, class, order, family, etc.),
@@ -222,104 +223,23 @@ VALUES (@filename, @version, @started);";
         var headerRecord = csv.HeaderRecord ?? Array.Empty<string>();
         var headers = headerRecord.ToList();
 
-        var tableColumns = EnsureDataTable(spec.TableName, headers);
+        // IUCN destination columns: map header names (internalTaxonId -> taxonId) and resolve types
+        // (taxonId/assessmentId -> INTEGER NOT NULL, else TEXT), preserving CSV column order.
+        var columns = headers
+            .Select(h => { var name = MapColumnName(h); return new DelimitedColumn(name, GetColumnType(name)); })
+            .ToList();
+
+        var tableColumns = DelimitedTableImporter.EnsureTable(
+            _connection, spec.TableName, columns,
+            indexImportIdColumn: true, requireImportIdOnExisting: true);
         EnsureIndexes(spec.TableName, tableColumns);
 
-        using var insert = _connection.CreateCommand();
-        insert.Transaction = transaction;
-        insert.CommandText = BuildInsertSql(spec.TableName, headers);
-
-        var importParam = insert.CreateParameter();
-        importParam.ParameterName = "@import_id";
-        importParam.Value = importId;
-        insert.Parameters.Add(importParam);
-
-        var parameterMap = new Dictionary<string, SqliteParameter>(headers.Count, StringComparer.OrdinalIgnoreCase);
-        for (var i = 0; i < headers.Count; i++) {
-            var param = insert.CreateParameter();
-            param.ParameterName = "@c" + i.ToString(CultureInfo.InvariantCulture);
-            insert.Parameters.Add(param);
-            parameterMap[headers[i]] = param;
-        }
-
-        long insertedCount = 0;
-        long duplicateCount = 0;
-        while (csv.Read()) {
-            cancellationToken.ThrowIfCancellationRequested();
-            foreach (var header in headers) {
-                var raw = csv.GetField(header);
-                parameterMap[header].Value = string.IsNullOrEmpty(raw) ? DBNull.Value : raw;
-            }
-
-            var affected = insert.ExecuteNonQuery();
-            if (affected > 0) {
-                insertedCount += affected;
-            } else {
-                duplicateCount++;
-            }
-        }
+        var (insertedCount, duplicateCount) = DelimitedTableImporter.BulkInsert(
+            _connection, transaction, spec.TableName, columns, importId,
+            () => csv.Read(), i => csv.GetField(i),
+            insertOrIgnore: true, prepare: false, cancellationToken);
 
         _console.MarkupLine($"    {spec.TableName}: inserted {insertedCount:N0} rows (skipped {duplicateCount:N0} duplicates).");
-    }
-
-    private HashSet<string> EnsureDataTable(string tableName, IReadOnlyList<string> csvColumns) {
-        var existingColumns = GetTableColumns(tableName);
-        if (existingColumns is null) {
-            CreateNewDataTable(tableName, csvColumns);
-            return GetTableColumns(tableName) ?? throw new InvalidOperationException($"Table {tableName} was not created as expected.");
-        }
-
-        if (!existingColumns.Contains("import_id")) {
-            throw new InvalidOperationException($"Existing table {tableName} is missing required import_id column. Please migrate or drop the table.");
-        }
-
-        foreach (var column in csvColumns) {
-            var mappedName = MapColumnName(column);
-            if (existingColumns.Contains(mappedName)) continue;
-            var colType = GetColumnType(mappedName);
-            using var cmd = _connection.CreateCommand();
-            cmd.CommandText = $"ALTER TABLE {QuoteIdentifier(tableName)} ADD COLUMN {QuoteIdentifier(mappedName)} {colType};";
-            cmd.ExecuteNonQuery();
-            existingColumns.Add(mappedName);
-        }
-
-        return existingColumns;
-    }
-
-    private HashSet<string>? GetTableColumns(string tableName) {
-        using var cmd = _connection.CreateCommand();
-        cmd.CommandText = $"PRAGMA table_info({QuoteIdentifier(tableName)});";
-        using var reader = cmd.ExecuteReader();
-        var result = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        var any = false;
-        while (reader.Read()) {
-            any = true;
-            var name = reader.GetString(1);
-            result.Add(name);
-        }
-        return any ? result : null;
-    }
-
-    private void CreateNewDataTable(string tableName, IReadOnlyList<string> csvColumns) {
-        var columns = new List<string> {
-            "\"import_id\" INTEGER NOT NULL"
-        };
-        foreach (var column in csvColumns) {
-            var colName = MapColumnName(column);
-            var colType = GetColumnType(colName);
-            columns.Add($"{QuoteIdentifier(colName)} {colType}");
-        }
-        columns.Add("FOREIGN KEY(\"import_id\") REFERENCES import_metadata(\"id\") ON DELETE CASCADE");
-
-        using (var cmd = _connection.CreateCommand()) {
-            cmd.CommandText = $"CREATE TABLE IF NOT EXISTS {QuoteIdentifier(tableName)} (\n    {string.Join(",\n    ", columns)}\n);";
-            cmd.ExecuteNonQuery();
-        }
-
-        using (var idx = _connection.CreateCommand()) {
-            idx.CommandText = $"CREATE INDEX IF NOT EXISTS idx_{tableName}_import_id ON {QuoteIdentifier(tableName)}(import_id);";
-            idx.ExecuteNonQuery();
-        }
     }
 
     private void EnsureIndexes(string tableName, HashSet<string> columns) {
@@ -384,26 +304,13 @@ VALUES (@filename, @version, @started);";
         // The join view definition (and its collision-aliasing) lives in the shared
         // IucnViewBuilder so the CSV importer and the API-cache projection can never
         // produce divergent column sets.
-        if (GetTableColumns("assessments") is not null && GetTableColumns("taxonomy") is not null) {
+        if (DelimitedTableImporter.GetTableColumns(_connection, "assessments") is not null && DelimitedTableImporter.GetTableColumns(_connection, "taxonomy") is not null) {
             IucnViewBuilder.RecreateJoinView(_connection, "view_assessments_taxonomy", "assessments", "taxonomy");
         }
 
-        if (GetTableColumns("assessments_html") is not null && GetTableColumns("taxonomy_html") is not null) {
+        if (DelimitedTableImporter.GetTableColumns(_connection, "assessments_html") is not null && DelimitedTableImporter.GetTableColumns(_connection, "taxonomy_html") is not null) {
             IucnViewBuilder.RecreateJoinView(_connection, "view_assessments_html_taxonomy_html", "assessments_html", "taxonomy_html");
         }
-    }
-
-    private static string BuildInsertSql(string tableName, IReadOnlyList<string> csvColumns) {
-        var columns = new List<string> { "import_id" };
-        columns.AddRange(csvColumns.Select(MapColumnName));
-        var identifiers = string.Join(", ", columns.Select(QuoteIdentifier));
-
-        var parameters = new List<string> { "@import_id" };
-        for (var i = 0; i < csvColumns.Count; i++) {
-            parameters.Add("@c" + i.ToString(CultureInfo.InvariantCulture));
-        }
-
-        return $"INSERT OR IGNORE INTO {QuoteIdentifier(tableName)} ({identifiers}) VALUES ({string.Join(", ", parameters)});";
     }
 
     private static string MapColumnName(string csvColumn) =>
