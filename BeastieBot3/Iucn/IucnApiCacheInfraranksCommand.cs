@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using Spectre.Console;
@@ -35,6 +36,14 @@ public sealed class IucnApiCacheInfraranksSettings : CommonSettings {
     [CommandOption("--force")]
     [Description("Download all discovered infraspecific taxa, even those already cached.")]
     public bool Force { get; init; }
+
+    [CommandOption("--from-csv")]
+    [Description("Also seed infraspecific taxa from the CSV database, catching assessed subspecies/varieties whose parent species is unassessed (so they never surface via the API's infrarank_taxa). Needs the CSV import; this is the only way to reach those ~0.2% of taxa.")]
+    public bool FromCsv { get; init; }
+
+    [CommandOption("--source-db <PATH>")]
+    [Description("Override path to the CSV-derived IUCN SQLite database used by --from-csv (defaults to Datastore:IUCN_sqlite_from_cvs).")]
+    public string? SourceDatabase { get; init; }
 
     [CommandOption("--dry-run")]
     [Description("Report the infraspecific SIS IDs that would be downloaded without downloading anything.")]
@@ -77,17 +86,41 @@ public sealed class IucnApiCacheInfraranksCommand : AsyncCommand<IucnApiCacheInf
             ? DateTime.UtcNow - TimeSpan.FromHours(hours)
             : (DateTime?)null;
 
-        // Infraspecific SIS ids surfaced by cached species (taxon.infrarank_taxa).
-        var candidates = cacheStore.GetInfrarankSisIds();
-        if (candidates.Count == 0) {
-            AnsiConsole.MarkupLine("[yellow]No infraspecific taxa discovered.[/] Cache species first with [yellow]iucn api cache-taxa[/] or [yellow]iucn api discover-by-family[/] — their taxon.infrarank_taxa is the discovery source.");
+        // Discovery source 1 (API-native): infraspecific SIS ids surfaced by cached species'
+        // taxon.infrarank_taxa. Source 2 (--from-csv): infraspecific taxonIds from the CSV, which
+        // also reaches assessed subspecies whose parent species is unassessed (not API-discoverable).
+        var candidateIds = new List<long>();
+        var candidateSet = new HashSet<long>();
+        foreach (var (sisId, _) in cacheStore.GetInfrarankSisIds()) {
+            if (candidateSet.Add(sisId)) candidateIds.Add(sisId);
+        }
+        var apiDiscovered = candidateSet.Count;
+
+        var fromCsvCount = 0;
+        if (settings.FromCsv) {
+            var sourcePath = paths.ResolveIucnDatabasePath(settings.SourceDatabase);
+            if (!File.Exists(sourcePath)) {
+                AnsiConsole.MarkupLineInterpolated($"[red]CSV database not found for --from-csv:[/] {sourcePath}");
+                return 1;
+            }
+            AnsiConsole.MarkupLineInterpolated($"[grey]Seeding infraspecific taxa from CSV:[/] {sourcePath}");
+            var provider = new IucnSisIdProvider(sourcePath);
+            foreach (var sisId in provider.ReadInfraspecificSisIds(null, cancellationToken)) {
+                if (candidateSet.Add(sisId)) { candidateIds.Add(sisId); fromCsvCount++; }
+            }
+        }
+
+        if (candidateSet.Count == 0) {
+            AnsiConsole.MarkupLine("[yellow]No infraspecific taxa discovered.[/] Cache species first with [yellow]iucn api cache-taxa[/] or [yellow]iucn api discover-by-family[/] (their taxon.infrarank_taxa is the discovery source), or pass [yellow]--from-csv[/] to seed from the CSV import.");
             return 0;
+        }
+        if (settings.FromCsv) {
+            AnsiConsole.MarkupLineInterpolated($"[grey]Candidates:[/] {apiDiscovered:N0} from cached species + {fromCsvCount:N0} new from CSV = {candidateSet.Count:N0}");
         }
 
         var queue = new List<long>();
-        var seen = new HashSet<long>();
-        foreach (var (sisId, _) in candidates) {
-            if (!seen.Add(sisId)) continue;
+        var seen = candidateSet;
+        foreach (var sisId in candidateIds) {
             if (settings.Force || ShouldDownloadInfrarank(cacheStore, sisId, refreshThreshold)) {
                 queue.Add(sisId);
             }

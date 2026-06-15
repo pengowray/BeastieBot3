@@ -41,19 +41,53 @@ internal sealed class IucnSisIdProvider {
         }
     }
 
+    /// <summary>
+    /// Infraspecific (subspecies/variety) SIS ids from the CSV, in ascending order. Used to seed
+    /// <c>cache-infraranks --from-csv</c> so it can reach assessed subspecies whose parent species is
+    /// unassessed — those never surface via the API's species→infrarank_taxa path, and the CSV's
+    /// taxonId is the only place they're enumerated.
+    /// </summary>
+    public IEnumerable<long> ReadInfraspecificSisIds(long? limit, CancellationToken cancellationToken) {
+        var builder = new SqliteConnectionStringBuilder {
+            DataSource = _databasePath,
+            Mode = SqliteOpenMode.ReadOnly
+        };
+
+        using var connection = new SqliteConnection(builder.ConnectionString);
+        connection.Open();
+
+        var sql = BuildInfraspecificSql(connection);
+        using var command = connection.CreateCommand();
+        command.CommandText = limit.HasValue ? sql + " LIMIT @limit" : sql;
+        if (limit.HasValue) {
+            command.Parameters.AddWithValue("@limit", limit.Value);
+        }
+
+        using var reader = command.ExecuteReader();
+        while (reader.Read()) {
+            cancellationToken.ThrowIfCancellationRequested();
+            yield return reader.GetInt64(0);
+        }
+    }
+
     private static string BuildSql(SqliteConnection connection) {
-        if (ObjectExists(connection, "view_assessments_html_taxonomy_html")) {
-            return @"SELECT DISTINCT taxonId
-FROM view_assessments_html_taxonomy_html
+        var table = ObjectExists(connection, "view_assessments_html_taxonomy_html")
+            ? "view_assessments_html_taxonomy_html"
+            : "taxonomy";
+        return $@"SELECT DISTINCT taxonId
+FROM {table}
 WHERE (subpopulationName IS NULL OR TRIM(subpopulationName) = '')
   AND (infraType IS NULL OR TRIM(infraType) = '')
 ORDER BY taxonId";
-        }
+    }
 
-        return @"SELECT DISTINCT taxonId
-FROM taxonomy
-WHERE (subpopulationName IS NULL OR TRIM(subpopulationName) = '')
-  AND (infraType IS NULL OR TRIM(infraType) = '')
+    private static string BuildInfraspecificSql(SqliteConnection connection) {
+        var table = ObjectExists(connection, "view_assessments_html_taxonomy_html")
+            ? "view_assessments_html_taxonomy_html"
+            : "taxonomy";
+        return $@"SELECT DISTINCT taxonId
+FROM {table}
+WHERE infraType IS NOT NULL AND TRIM(infraType) <> ''
 ORDER BY taxonId";
     }
 
