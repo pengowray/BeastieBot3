@@ -58,6 +58,8 @@ public static class DatasetCompareEndpoints {
         byCategory = s.ByCategory.Select(c => new { category = c.Category, count = c.Count }),
         error = s.Error,
         built = s.Exists && s.Error is null,
+        partial = s.IsPartial,
+        latestNotDownloaded = s.LatestNotDownloaded,
     };
 
     // Flat, render-ready comparison rows: headline metrics then per-category counts.

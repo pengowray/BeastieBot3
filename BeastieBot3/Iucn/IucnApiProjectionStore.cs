@@ -26,6 +26,16 @@ internal sealed class IucnApiProjectionStore : SqliteStore {
         return store;
     }
 
+    /// <summary>
+    /// Test/advanced seam: build a store over a caller-owned, already-open connection — e.g. a
+    /// shared <c>:memory:</c> SQLite connection — so the projection can be exercised without a file.
+    /// </summary>
+    internal static IucnApiProjectionStore OpenFromConnection(SqliteConnection connection) {
+        var store = new IucnApiProjectionStore(connection);
+        store.EnsureSchema();
+        return store;
+    }
+
     protected override void EnsureSchema() {
         using var cmd = _connection.CreateCommand();
         cmd.CommandText = @"
@@ -34,7 +44,14 @@ CREATE TABLE IF NOT EXISTS import_metadata (
     filename TEXT NOT NULL,
     redlist_version TEXT NOT NULL,
     started_at TEXT NOT NULL,
-    ended_at TEXT
+    ended_at TEXT,
+    -- Coverage honesty: a projection is only complete when every taxon latest
+    -- assessment JSON was downloaded. These let downstream --dataset api consumers
+    -- (and humans) tell a partial projection from a full one.
+    projected_taxa INTEGER,
+    projected_assessments INTEGER,
+    latest_not_downloaded INTEGER,
+    is_partial INTEGER NOT NULL DEFAULT 0
 );
 CREATE TABLE IF NOT EXISTS taxonomy_html (
     import_id INTEGER NOT NULL,
@@ -65,6 +82,24 @@ CREATE INDEX IF NOT EXISTS idx_proj_assessments_category ON assessments_html(red
 CREATE INDEX IF NOT EXISTS idx_proj_assessments_scopes ON assessments_html(scopes);
 ";
         cmd.ExecuteNonQuery();
+
+        // Migrate pre-coverage projection DBs in place (CREATE TABLE IF NOT EXISTS
+        // won't add columns to an existing table).
+        AddColumnIfMissing("import_metadata", "projected_taxa", "INTEGER");
+        AddColumnIfMissing("import_metadata", "projected_assessments", "INTEGER");
+        AddColumnIfMissing("import_metadata", "latest_not_downloaded", "INTEGER");
+        AddColumnIfMissing("import_metadata", "is_partial", "INTEGER NOT NULL DEFAULT 0");
+    }
+
+    private void AddColumnIfMissing(string table, string column, string typeDecl) {
+        using (var check = _connection.CreateCommand()) {
+            check.CommandText = $"SELECT COUNT(*) FROM pragma_table_info('{table}') WHERE name = @c";
+            check.Parameters.AddWithValue("@c", column);
+            if (Convert.ToInt64(check.ExecuteScalar() ?? 0L) > 0) return;
+        }
+        using var alter = _connection.CreateCommand();
+        alter.CommandText = $"ALTER TABLE {table} ADD COLUMN {column} {typeDecl}";
+        alter.ExecuteNonQuery();
     }
 
     /// <summary>Clears all projected rows so a build starts from a clean slate.</summary>
@@ -83,12 +118,35 @@ CREATE INDEX IF NOT EXISTS idx_proj_assessments_scopes ON assessments_html(scope
         return (long)(cmd.ExecuteScalar() ?? 0L);
     }
 
-    public void CompleteImport(long importId) {
+    /// <summary>
+    /// Marks the projection finished and records its coverage. <paramref name="isPartial"/> is
+    /// true when one or more taxa had a latest assessment whose JSON wasn't downloaded yet, so
+    /// those taxa are missing from the projection entirely.
+    /// </summary>
+    public void CompleteImport(long importId, long projectedTaxa, long projectedAssessments, long latestNotDownloaded, bool isPartial) {
         using var cmd = _connection.CreateCommand();
-        cmd.CommandText = "UPDATE import_metadata SET ended_at=@e WHERE id=@id";
+        cmd.CommandText = @"UPDATE import_metadata
+SET ended_at=@e, projected_taxa=@taxa, projected_assessments=@assessments,
+    latest_not_downloaded=@missing, is_partial=@partial
+WHERE id=@id";
         cmd.Parameters.AddWithValue("@e", DateTime.UtcNow.ToString("O"));
+        cmd.Parameters.AddWithValue("@taxa", projectedTaxa);
+        cmd.Parameters.AddWithValue("@assessments", projectedAssessments);
+        cmd.Parameters.AddWithValue("@missing", latestNotDownloaded);
+        cmd.Parameters.AddWithValue("@partial", isPartial ? 1 : 0);
         cmd.Parameters.AddWithValue("@id", importId);
         cmd.ExecuteNonQuery();
+    }
+
+    /// <summary>COUNT(*) of a projected table (taxonomy_html / assessments_html).</summary>
+    public long CountRows(string table) {
+        using var cmd = _connection.CreateCommand();
+        cmd.CommandText = table switch {
+            "taxonomy_html" => "SELECT COUNT(*) FROM taxonomy_html",
+            "assessments_html" => "SELECT COUNT(*) FROM assessments_html",
+            _ => throw new ArgumentOutOfRangeException(nameof(table), table, "Unknown projection table")
+        };
+        return Convert.ToInt64(cmd.ExecuteScalar() ?? 0L);
     }
 
     public void BuildView() =>

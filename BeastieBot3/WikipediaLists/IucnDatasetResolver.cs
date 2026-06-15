@@ -1,6 +1,8 @@
 using System;
 using System.IO;
 using BeastieBot3.Configuration;
+using Microsoft.Data.Sqlite;
+using Spectre.Console;
 
 // Resolves which IUCN relational database `generate-lists` / `generate-charts`
 // should open, given a --dataset choice:
@@ -25,9 +27,30 @@ internal static class IucnDatasetResolver {
                         $"IUCN API projection not found at {path}.\n" +
                         "Build it first with:  iucn api project-view  (after caching via `iucn api cache-all`).");
                 }
+                WarnIfPartial(path);
                 return path;
             default:
                 throw new InvalidOperationException($"Unknown --dataset '{dataset}'. Use 'csv' (default) or 'api'.");
+        }
+    }
+
+    // The projection records is_partial / latest_not_downloaded in import_metadata when some
+    // taxa's latest assessment JSON wasn't downloaded. Warn so list/chart output isn't silently
+    // built from an incomplete dataset. Best-effort: a pre-coverage projection lacks the column.
+    private static void WarnIfPartial(string projectionPath) {
+        try {
+            var cs = new SqliteConnectionStringBuilder { DataSource = projectionPath, Mode = SqliteOpenMode.ReadOnly };
+            using var connection = new SqliteConnection(cs.ConnectionString);
+            connection.Open();
+            using var cmd = connection.CreateCommand();
+            cmd.CommandText = "SELECT COALESCE(latest_not_downloaded, 0) FROM import_metadata WHERE is_partial = 1 ORDER BY id DESC LIMIT 1";
+            var result = cmd.ExecuteScalar();
+            if (result is null || result is DBNull) return;
+            var missing = Convert.ToInt64(result);
+            AnsiConsole.MarkupLineInterpolated(
+                $"[yellow]Warning:[/] the API projection is partial — {missing:N0} taxa are missing (latest assessment not downloaded). Re-run [yellow]iucn api cache-assessments[/] then [yellow]iucn api project-view[/] for full coverage.");
+        } catch (SqliteException) {
+            // Pre-coverage projection (no is_partial column) or unreadable metadata — skip the warning.
         }
     }
 }

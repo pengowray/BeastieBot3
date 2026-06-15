@@ -45,6 +45,10 @@ public sealed class IucnApiProjectViewCommand : AsyncCommand<IucnApiProjectViewC
         [CommandOption("--limit <N>")]
         [Description("Process at most N cached assessments (for testing).")]
         public int? Limit { get; init; }
+
+        [CommandOption("--allow-partial")]
+        [Description("Build (and exit 0) even when some taxa have a latest assessment whose JSON isn't downloaded yet. Without this, a partial projection still builds but the command exits non-zero.")]
+        public bool AllowPartial { get; init; }
     }
 
     public override Task<int> ExecuteAsync(CommandContext context, Settings settings, CancellationToken cancellationToken) {
@@ -77,9 +81,11 @@ public sealed class IucnApiProjectViewCommand : AsyncCommand<IucnApiProjectViewC
         long processed = 0, latestRows = 0, skippedNoTaxon = 0, unknownCategory = 0;
 
         using (var cmd = source.CreateCommand()) {
+            // Deterministic order so a re-run projects identical rows and the INSERT OR IGNORE
+            // dedupe (taxonomy_html keyed on taxonId) picks a stable winner.
             cmd.CommandText = settings.Limit is > 0
-                ? $"SELECT json FROM assessments LIMIT {settings.Limit.Value}"
-                : "SELECT json FROM assessments";
+                ? $"SELECT json FROM assessments ORDER BY assessment_id LIMIT {settings.Limit.Value}"
+                : "SELECT json FROM assessments ORDER BY assessment_id";
 
             using var reader = cmd.ExecuteReader();
             using var writer = store.BeginWrite();
@@ -111,22 +117,33 @@ public sealed class IucnApiProjectViewCommand : AsyncCommand<IucnApiProjectViewC
         }
 
         store.BuildView();
-        store.CompleteImport(importId);
 
-        AnsiConsole.MarkupLine("[green]Projection built.[/]");
+        var projectedTaxa = store.CountRows("taxonomy_html");
+        var projectedAssessments = store.CountRows("assessments_html");
+        var isPartial = latestNotDownloaded > 0;
+        store.CompleteImport(importId, projectedTaxa, projectedAssessments, latestNotDownloaded, isPartial);
+
+        AnsiConsole.MarkupLine(isPartial ? "[yellow]Projection built (partial).[/]" : "[green]Projection built.[/]");
         var table = new Table().Border(TableBorder.Rounded);
         table.AddColumn("Metric");
         table.AddColumn(new TableColumn("Value").RightAligned());
         table.AddRow("Assessments scanned", $"{processed:N0}");
         table.AddRow("Latest rows projected", $"{latestRows:N0}");
+        table.AddRow("Taxa projected", $"{projectedTaxa:N0}");
+        table.AddRow("Latest not downloaded", $"{latestNotDownloaded:N0}");
         table.AddRow("Skipped (no taxon id)", $"{skippedNoTaxon:N0}");
         table.AddRow("Unknown category codes", $"{unknownCategory:N0}");
         table.AddRow("redlist_version", version);
+        table.AddRow("Coverage", isPartial ? "[yellow]partial[/]" : "[green]complete[/]");
         AnsiConsole.Write(table);
 
-        if (latestNotDownloaded > 0) {
+        if (isPartial) {
             AnsiConsole.MarkupLineInterpolated(
-                $"[yellow]Note:[/] {latestNotDownloaded:N0} taxa have a latest assessment whose JSON is not downloaded yet — run [yellow]iucn api cache-assessments[/] for fuller coverage.");
+                $"[yellow]Note:[/] {latestNotDownloaded:N0} taxa have a latest assessment whose JSON is not downloaded yet — those taxa are missing from the projection. Run [yellow]iucn api cache-assessments[/] for full coverage.");
+            if (!settings.AllowPartial) {
+                AnsiConsole.MarkupLine("[red]Projection is partial.[/] Re-run after caching, or pass [yellow]--allow-partial[/] to accept it. (The database was still written and is flagged partial in import_metadata.)");
+                return Task.FromResult(2);
+            }
         }
         return Task.FromResult(0);
     }

@@ -478,6 +478,14 @@
             '</td><td>' + escapeHtml(String(api.version || (api.exists ? '—' : 'not built'))) + '</td><td></td></tr>';
     html += '<tr><td class="ct-label">Updated</td><td>' + (csv.lastModified ? formatRelative(csv.lastModified) : '—') +
             '</td><td>' + (api.lastModified ? formatRelative(api.lastModified) : '—') + '</td><td></td></tr>';
+    // Coverage: the CSV release is always complete; the API projection may be partial
+    // when some taxa's latest assessment JSON wasn't downloaded before project-view ran.
+    const apiCoverage = !api.exists ? '—'
+      : api.partial === true
+        ? '<span class="agree warn">partial' + (api.latestNotDownloaded != null ? ' (−' + num(api.latestNotDownloaded) + ')' : '') + '</span>'
+        : api.partial === false ? '<span class="agree ok">complete</span>' : '—';
+    html += '<tr><td class="ct-label">Coverage</td><td>' + (csv.exists ? '<span class="agree ok">complete</span>' : '—') +
+            '</td><td>' + apiCoverage + '</td><td></td></tr>';
     for (const row of (d.comparison || [])) {
       let mark = '';
       if (row.csv != null && row.api != null) {
@@ -492,6 +500,10 @@
     if (!api.exists) {
       html += '<p class="small muted">API projection not built. Run <code>iucn api project-view</code> ' +
               '(after <code>iucn api cache-all</code>) to enable <code>--dataset api</code>.</p>';
+    } else if (api.partial === true) {
+      html += '<p class="small muted">API projection is <strong>partial</strong>' +
+              (api.latestNotDownloaded != null ? ' — ' + num(api.latestNotDownloaded) + ' taxa missing (latest assessment not downloaded)' : '') +
+              '. Run <code>iucn api cache-assessments</code> then <code>iucn api project-view</code> for full coverage.</p>';
     }
     body.innerHTML = html;
   }

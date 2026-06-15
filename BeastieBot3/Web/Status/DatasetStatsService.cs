@@ -29,6 +29,12 @@ public sealed record DatasetStats {
     public long? GlobalSpecies { get; init; }
     public IReadOnlyList<DatasetCategoryCount> ByCategory { get; init; } = Array.Empty<DatasetCategoryCount>();
     public string? Error { get; init; }
+
+    /// <summary>True for an API projection built while some taxa's latest assessment JSON
+    /// wasn't downloaded (so those taxa are missing). Null for the CSV DB / pre-coverage projections.</summary>
+    public bool? IsPartial { get; init; }
+    /// <summary>Count of taxa whose latest assessment wasn't downloaded when the projection was built.</summary>
+    public long? LatestNotDownloaded { get; init; }
 }
 
 public static class DatasetStatsService {
@@ -76,6 +82,7 @@ public static class DatasetStatsService {
             }
 
             var version = ScalarString(conn, "SELECT DISTINCT redlist_version FROM import_metadata LIMIT 1");
+            var (isPartial, latestNotDownloaded) = ReadCoverage(conn);
             var total = ScalarLong(conn, "SELECT COUNT(*) FROM view_assessments_html_taxonomy_html");
             var distinct = ScalarLong(conn, "SELECT COUNT(DISTINCT taxonId) FROM view_assessments_html_taxonomy_html");
 
@@ -105,6 +112,8 @@ public static class DatasetStatsService {
                 DistinctTaxa = distinct,
                 GlobalSpecies = globalSpecies,
                 ByCategory = byCategory,
+                IsPartial = isPartial,
+                LatestNotDownloaded = latestNotDownloaded,
             };
         }
         catch (Exception ex) {
@@ -141,5 +150,21 @@ public static class DatasetStatsService {
         using var cmd = conn.CreateCommand();
         cmd.CommandText = sql;
         try { return cmd.ExecuteScalar() as string; } catch { return null; }
+    }
+
+    // Best-effort: only the API projection's import_metadata carries coverage columns. The CSV DB
+    // (and pre-coverage projections) lack them, so the query throws and we report "unknown" (null).
+    private static (bool? IsPartial, long? LatestNotDownloaded) ReadCoverage(SqliteConnection conn) {
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "SELECT is_partial, latest_not_downloaded FROM import_metadata ORDER BY id DESC LIMIT 1";
+        try {
+            using var reader = cmd.ExecuteReader();
+            if (!reader.Read()) return (null, null);
+            bool? partial = reader.IsDBNull(0) ? null : reader.GetInt64(0) != 0;
+            long? missing = reader.IsDBNull(1) ? null : reader.GetInt64(1);
+            return (partial, missing);
+        } catch (SqliteException) {
+            return (null, null);
+        }
     }
 }
