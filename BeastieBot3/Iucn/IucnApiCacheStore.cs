@@ -405,25 +405,44 @@ ORDER BY b.latest DESC, IFNULL(b.year_published, 0) DESC, b.assessment_id DESC";
     }
 
     public void RecordFailedRequest(string endpoint, long entityId, string error, int? statusCode, TimeSpan? retryDelay = null) {
+        // Escalate the retry back-off with each prior failure so a persistently-broken entity
+        // (e.g. an assessment IUCN's API consistently 500s on) stops being retried at the front of
+        // every run. An explicit retryDelay (e.g. the permanent 404 tombstone) overrides this.
+        var priorAttempts = 0;
+        using (var read = _connection.CreateCommand()) {
+            read.CommandText = "SELECT attempt_count FROM failed_requests WHERE endpoint=@endpoint AND entity_id=@entity";
+            read.Parameters.AddWithValue("@endpoint", endpoint);
+            read.Parameters.AddWithValue("@entity", entityId.ToString());
+            priorAttempts = Convert.ToInt32(read.ExecuteScalar() ?? 0L);
+        }
+        var attempts = priorAttempts + 1;
+        var delay = retryDelay ?? EscalatingRetryDelay(attempts);
+
         using var command = _connection.CreateCommand();
         command.CommandText = @"INSERT INTO failed_requests(endpoint, entity_id, attempt_count, last_error, last_status, last_attempt_at, next_attempt_after)
 VALUES(@endpoint,@entity,@attempt,@error,@status,@attempted,@next)
 ON CONFLICT(endpoint, entity_id) DO UPDATE SET
-    attempt_count = failed_requests.attempt_count + 1,
+    attempt_count = @attempt,
     last_error = excluded.last_error,
     last_status = excluded.last_status,
     last_attempt_at = excluded.last_attempt_at,
     next_attempt_after = excluded.next_attempt_after";
         command.Parameters.AddWithValue("@endpoint", endpoint);
         command.Parameters.AddWithValue("@entity", entityId.ToString());
-        command.Parameters.AddWithValue("@attempt", 1);
+        command.Parameters.AddWithValue("@attempt", attempts);
         command.Parameters.AddWithValue("@error", error);
         command.Parameters.AddWithValue("@status", statusCode.HasValue ? statusCode : DBNull.Value);
         var attemptedAt = DateTime.UtcNow;
         command.Parameters.AddWithValue("@attempted", attemptedAt.ToString("O"));
-        var next = retryDelay.HasValue ? attemptedAt.Add(retryDelay.Value) : attemptedAt.AddMinutes(5);
-        command.Parameters.AddWithValue("@next", next.ToString("O"));
+        command.Parameters.AddWithValue("@next", attemptedAt.Add(delay).ToString("O"));
         command.ExecuteNonQuery();
+    }
+
+    // Exponential back-off capped at ~3 days: 5min, 10, 20, 40, 80, … so an entity that keeps
+    // failing is retried ever less often instead of at the start of every run.
+    private static TimeSpan EscalatingRetryDelay(int attempts) {
+        var minutes = 5.0 * Math.Pow(2, Math.Min(Math.Max(attempts, 1) - 1, 10));
+        return TimeSpan.FromMinutes(Math.Min(minutes, TimeSpan.FromDays(3).TotalMinutes));
     }
 
     public void ClearFailedRequest(string endpoint, long entityId) {
