@@ -58,7 +58,7 @@ internal sealed class CommonNameSourcesCommand : AsyncCommand<CommonNameSourcesC
     };
 
     public override Task<int> ExecuteAsync(CommandContext context, Settings settings, CancellationToken cancellationToken) {
-        var paths = new PathsService(settings.IniFile);
+        var paths = settings.CreatePaths();
         var commonNameDbPath = paths.ResolveCommonNameStorePath(settings.DatabasePath);
 
         AnsiConsole.MarkupLine($"[blue]Common name store:[/] {commonNameDbPath}");

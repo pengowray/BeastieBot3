@@ -38,7 +38,7 @@ public sealed class WikidataResetCacheCommand : AsyncCommand<WikidataResetCacheS
     }
 
     private static int Run(WikidataResetCacheSettings settings) {
-        var paths = new PathsService(settings.IniFile, settings.SettingsDir);
+        var paths = settings.CreatePaths();
         var cachePath = paths.ResolveWikidataCachePath(settings.CacheDatabase);
         AnsiConsole.MarkupLine($"[grey]Wikidata cache:[/] {Markup.Escape(cachePath)}");
 

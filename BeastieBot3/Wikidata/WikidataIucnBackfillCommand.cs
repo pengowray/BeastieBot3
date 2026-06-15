@@ -63,7 +63,7 @@ public sealed class WikidataIucnBackfillCommand : AsyncCommand<WikidataIucnBackf
             return -1;
         }
 
-        var paths = new PathsService(settings.IniFile, settings.SettingsDir);
+        var paths = settings.CreatePaths();
         string iucnPath;
         string wikidataCachePath;
         try {

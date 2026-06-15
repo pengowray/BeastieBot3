@@ -67,7 +67,7 @@ internal sealed class CommonNameReportCommand : AsyncCommand<CommonNameReportCom
     }
 
     public override async Task<int> ExecuteAsync(CommandContext context, Settings settings, CancellationToken cancellationToken) {
-        var paths = new PathsService(settings.IniFile);
+        var paths = settings.CreatePaths();
         var commonNameDbPath = paths.ResolveCommonNameStorePath(settings.DatabasePath);
 
         AnsiConsole.MarkupLine($"[blue]Common name store:[/] {commonNameDbPath}");

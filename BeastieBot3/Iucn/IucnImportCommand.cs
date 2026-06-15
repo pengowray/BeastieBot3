@@ -22,15 +22,7 @@ namespace BeastieBot3.Iucn;
     RerunNote = "A new IUCN release belongs in a fresh database file (IUCN_<version>.sqlite). Importing a different release into an existing DB accumulates rows and double-counts; re-importing the same zip is skipped unless --force.",
     Examples = new[] { "iucn import", "iucn import --force" })]
 public sealed class IucnImportCommand : Command<IucnImportCommand.Settings> {
-    public sealed class Settings : CommandSettings {
-        [CommandOption("-s|--settings-dir <DIR>")]
-        [Description("Directory containing settings files like paths.ini. Defaults to the app base directory.")]
-        public string? SettingsDir { get; init; }
-
-        [CommandOption("--ini-file <FILE>")]
-        [Description("INI filename to read. Defaults to paths.ini.")]
-        public string? IniFile { get; init; }
-
+    public sealed class Settings : CommonSettings {
         [CommandOption("--force")]
         [Description("Re-import zip files even if already imported; existing rows for that zip will be replaced.")]
         public bool Force { get; init; }
@@ -38,8 +30,7 @@ public sealed class IucnImportCommand : Command<IucnImportCommand.Settings> {
 
     public override int Execute(CommandContext context, Settings settings, CancellationToken cancellationToken) {
         var baseDir = settings.SettingsDir ?? AppContext.BaseDirectory;
-        var iniFile = settings.IniFile ?? "paths.ini";
-        var paths = new PathsService(iniFile, baseDir);
+        var paths = settings.CreatePaths();
 
         var cvsDir = paths.GetIucnCvsDir();
         if (string.IsNullOrWhiteSpace(cvsDir) || !Directory.Exists(cvsDir)) {

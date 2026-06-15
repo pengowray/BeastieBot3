@@ -16,9 +16,7 @@ namespace BeastieBot3.Infrastructure;
         Examples = new[] { "show-paths", "show-paths --settings-dir /config" })]
     public sealed class ShowPathsCommand : Command<CommonSettings> {
         public override int Execute(CommandContext context, CommonSettings settings, CancellationToken cancellationToken) {
-            var baseDir = settings.SettingsDir ?? AppContext.BaseDirectory;
-            var iniFile = settings.IniFile ?? "paths.ini";
-            var paths = new PathsService(iniFile, baseDir);
+            var paths = settings.CreatePaths();
 
             AnsiConsole.MarkupLine($"[grey]Reading paths from:[/] {paths.SourceFilePath}");
             var all = paths.GetAll();

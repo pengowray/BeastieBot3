@@ -21,15 +21,7 @@ namespace BeastieBot3.Col;
     RerunNote = "Each CoL archive imports into its own version-named DB (col_coldp_<label>.sqlite); an existing file is skipped unless --force. After a CoL update, point COL_dir at the new archive and re-run.",
     Examples = new[] { "col import", "col import --force" })]
 public sealed class ColImportCommand : Command<ColImportCommand.Settings> {
-    public sealed class Settings : CommandSettings {
-        [CommandOption("-s|--settings-dir <DIR>")]
-        [Description("Directory containing settings files like paths.ini. Defaults to the app base directory.")]
-        public string? SettingsDir { get; init; }
-
-        [CommandOption("--ini-file <FILE>")]
-        [Description("INI filename to read. Defaults to paths.ini.")]
-        public string? IniFile { get; init; }
-
+    public sealed class Settings : CommonSettings {
         [CommandOption("--force")]
         [Description("Re-import zip files even if the database already exists; existing files will be replaced.")]
         public bool Force { get; init; }
@@ -37,8 +29,7 @@ public sealed class ColImportCommand : Command<ColImportCommand.Settings> {
 
     public override int Execute(CommandContext context, Settings settings, CancellationToken cancellationToken) {
         var baseDir = settings.SettingsDir ?? AppContext.BaseDirectory;
-        var iniFile = settings.IniFile ?? "paths.ini";
-        var paths = new PathsService(iniFile, baseDir);
+        var paths = settings.CreatePaths();
 
         var colDir = paths.GetColDir();
         if (string.IsNullOrWhiteSpace(colDir) || !Directory.Exists(colDir)) {

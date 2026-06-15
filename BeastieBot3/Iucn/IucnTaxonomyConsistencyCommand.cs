@@ -26,15 +26,7 @@ namespace BeastieBot3.Iucn;
         "iucn report-taxonomy-consistency --limit 5000"
     })]
 public sealed class IucnTaxonomyConsistencyCommand : Command<IucnTaxonomyConsistencyCommand.Settings> {
-    public sealed class Settings : CommandSettings {
-        [CommandOption("-s|--settings-dir <DIR>")]
-        [Description("Directory containing settings files like paths.ini. Defaults to the app base directory.")]
-        public string? SettingsDir { get; init; }
-
-        [CommandOption("--ini-file <FILE>")]
-        [Description("INI filename to read. Defaults to paths.ini.")]
-        public string? IniFile { get; init; }
-
+    public sealed class Settings : CommonSettings {
         [CommandOption("--database <PATH>")]
         [Description("Explicit SQLite database path. Overrides paths.ini Datastore:IUCN_sqlite_from_cvs.")]
         public string? DatabasePath { get; init; }
@@ -54,9 +46,7 @@ public sealed class IucnTaxonomyConsistencyCommand : Command<IucnTaxonomyConsist
             return -1;
         }
 
-        var baseDir = settings.SettingsDir ?? AppContext.BaseDirectory;
-        var iniFile = settings.IniFile ?? "paths.ini";
-        var paths = new PathsService(iniFile, baseDir);
+        var paths = settings.CreatePaths();
 
         string databasePath;
         try {

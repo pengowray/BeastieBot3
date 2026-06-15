@@ -72,7 +72,7 @@ internal sealed class CountScopeAuditCommand : Command<CountScopeAuditCommand.Se
 
     public override int Execute(CommandContext context, Settings settings, CancellationToken cancellationToken) {
         _ = context;
-        var paths = new PathsService(settings.IniFile, settings.SettingsDir);
+        var paths = settings.CreatePaths();
 
         var taxaConfigPath = ResolveTaxaConfigPath(paths, settings.TaxaConfigPath);
         var taxaGroups = LoadTaxaGroups(taxaConfigPath);

@@ -61,7 +61,7 @@ public sealed class IucnApiCacheDiscoverByFamilyCommand : AsyncCommand<IucnApiCa
     public override async Task<int> ExecuteAsync(CommandContext context, IucnApiCacheDiscoverByFamilySettings settings, CancellationToken cancellationToken) {
         _ = context;
 
-        var paths = new PathsService(settings.IniFile, settings.SettingsDir);
+        var paths = settings.CreatePaths();
         var cachePath = paths.ResolveIucnApiCachePath(settings.CacheDatabase);
 
         AnsiConsole.MarkupLine($"[grey]API cache database:[/] {Markup.Escape(cachePath)}");

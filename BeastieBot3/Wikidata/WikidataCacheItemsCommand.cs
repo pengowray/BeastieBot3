@@ -55,7 +55,7 @@ public sealed class WikidataCacheItemsCommand : AsyncCommand<WikidataCacheItemsS
 
     internal static async Task<int> RunAsync(WikidataCacheItemsSettings settings, CancellationToken cancellationToken) {
         var configuration = WikidataConfiguration.FromEnvironment();
-        var paths = new PathsService(settings.IniFile, settings.SettingsDir);
+        var paths = settings.CreatePaths();
         var cachePath = paths.ResolveWikidataCachePath(settings.CacheDatabase);
         AnsiConsole.MarkupLine($"[grey]Wikidata cache:[/] {Markup.Escape(cachePath)}");
 

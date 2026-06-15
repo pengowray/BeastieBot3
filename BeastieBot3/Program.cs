@@ -22,6 +22,12 @@ public class CommonSettings : CommandSettings {
     [CommandOption("--ini-file <FILE>")]
     [Description("INI filename to read. Defaults to paths.ini.")]
     public string? IniFile { get; init; }
+
+    // Single construction point for the per-command PathsService. Passing the raw
+    // (possibly null) flags lets IniPathReader apply its own "paths.ini" /
+    // AppContext.BaseDirectory defaults, so every command resolves config the same
+    // way and honours --ini-file / --settings-dir uniformly.
+    public Configuration.PathsService CreatePaths() => new(IniFile, SettingsDir);
 }
 
 internal class Program {

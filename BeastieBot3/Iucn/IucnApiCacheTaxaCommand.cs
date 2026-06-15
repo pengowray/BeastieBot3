@@ -60,7 +60,7 @@ public sealed class IucnApiCacheTaxaCommand : AsyncCommand<IucnApiCacheTaxaSetti
     }
 
     internal static async Task<int> RunAsync(IucnApiCacheTaxaSettings settings, CancellationToken cancellationToken) {
-        var paths = new PathsService(settings.IniFile, settings.SettingsDir);
+        var paths = settings.CreatePaths();
         var sourcePath = paths.ResolveIucnDatabasePath(settings.SourceDatabase);
         var cachePath = paths.ResolveIucnApiCachePath(settings.CacheDatabase);
 

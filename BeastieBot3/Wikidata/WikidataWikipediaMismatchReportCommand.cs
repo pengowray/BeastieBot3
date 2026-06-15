@@ -58,9 +58,7 @@ public sealed class WikidataWikipediaMismatchReportCommand : Command<WikidataWik
         _ = context;
         _ = cancellationToken;
 
-        var baseDir = settings.SettingsDir ?? AppContext.BaseDirectory;
-        var iniFile = settings.IniFile ?? "paths.ini";
-        var paths = new PathsService(iniFile, baseDir);
+        var paths = settings.CreatePaths();
 
         string iucnPath;
         string wikidataCachePath;

@@ -27,9 +27,7 @@ public sealed class WikipediaCacheStatusCommand : Command<WikipediaCacheStatusCo
     }
 
     public override int Execute(CommandContext context, Settings settings, CancellationToken cancellationToken) {
-        var baseDir = settings.SettingsDir ?? AppContext.BaseDirectory;
-        var iniFile = settings.IniFile ?? "paths.ini";
-        var paths = new PathsService(iniFile, baseDir);
+        var paths = settings.CreatePaths();
         var cachePath = paths.ResolveWikipediaCachePath(settings.CachePath);
 
         using var store = WikipediaCacheStore.Open(cachePath);

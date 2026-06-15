@@ -49,7 +49,7 @@ public sealed class IucnNoCurrentAssessmentReportCommand : Command<IucnNoCurrent
 
     public override int Execute(CommandContext context, Settings settings, CancellationToken cancellationToken) {
         _ = context;
-        var paths = new PathsService(settings.IniFile, settings.SettingsDir);
+        var paths = settings.CreatePaths();
         var cachePath = paths.ResolveIucnApiCachePath(settings.CacheDatabase);
 
         AnsiConsole.MarkupLine($"[grey]API cache database:[/] {Markup.Escape(cachePath)}");

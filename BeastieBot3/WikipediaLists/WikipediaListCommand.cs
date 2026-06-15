@@ -82,7 +82,7 @@ public sealed class WikipediaListCommand : Command<WikipediaListCommand.Settings
     }
 
     public override int Execute(CommandContext context, Settings settings, System.Threading.CancellationToken cancellationToken) {
-        var paths = new PathsService(settings.IniFile, settings.SettingsDir);
+        var paths = settings.CreatePaths();
         var configPath = ResolveConfigPath(paths, settings.ConfigPath);
         var templatesDir = ResolveTemplatesDir(paths, settings.TemplatesDirectory);
         var rulesPath = ResolveRulesPath(paths, settings.RulesPath);

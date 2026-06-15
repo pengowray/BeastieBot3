@@ -49,7 +49,7 @@ public sealed class IucnApiProjectViewCommand : AsyncCommand<IucnApiProjectViewC
 
     public override Task<int> ExecuteAsync(CommandContext context, Settings settings, CancellationToken cancellationToken) {
         _ = context;
-        var paths = new PathsService(settings.IniFile);
+        var paths = settings.CreatePaths();
         var cachePath = paths.ResolveIucnApiCachePath(settings.CachePath);
         if (!File.Exists(cachePath)) {
             AnsiConsole.MarkupLineInterpolated($"[red]IUCN API cache not found:[/] {cachePath}");

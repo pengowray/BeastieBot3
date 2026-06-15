@@ -33,7 +33,7 @@ internal static class WikidataCoverageAnalysis {
             return -1;
         }
 
-        var paths = new PathsService(settings.IniFile, settings.SettingsDir);
+        var paths = settings.CreatePaths();
         string iucnDb;
         string wikidataDb;
         try {

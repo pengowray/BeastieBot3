@@ -38,7 +38,7 @@ public sealed class WikidataCoverageDetailsCommand : AsyncCommand<WikidataCovera
             return exitCode;
         }
 
-        var paths = new PathsService(settings.IniFile, settings.SettingsDir);
+        var paths = settings.CreatePaths();
         RenderDetails(paths, analysisResult, settings);
         return 0;
     }

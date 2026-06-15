@@ -59,7 +59,7 @@ internal sealed class ChartGeneratorCommand : Command<ChartGeneratorCommand.Sett
     }
 
     public override int Execute(CommandContext context, Settings settings, System.Threading.CancellationToken cancellationToken) {
-        var paths = new PathsService(settings.IniFile, settings.SettingsDir);
+        var paths = settings.CreatePaths();
         var databasePath = IucnDatasetResolver.Resolve(paths, settings.Dataset, settings.DatabasePath);
 
         var chartConfigPath = ResolveChartConfigPath(paths, settings.ChartConfigPath);

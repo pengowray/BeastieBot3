@@ -62,15 +62,7 @@ namespace BeastieBot3.Col;
         "col report-nameusage-fields --limit 100000"
     })]
 public sealed class ColNameUsageFieldProfileCommand : Command<ColNameUsageFieldProfileCommand.Settings> {
-    public sealed class Settings : CommandSettings {
-        [CommandOption("-s|--settings-dir <DIR>")]
-        [Description("Directory containing settings files like paths.ini. Defaults to the app base directory.")]
-        public string? SettingsDir { get; init; }
-
-        [CommandOption("--ini-file <FILE>")]
-        [Description("INI filename to read. Defaults to paths.ini.")]
-        public string? IniFile { get; init; }
-
+    public sealed class Settings : CommonSettings {
         [CommandOption("--database <PATH>")]
         [Description("Explicit SQLite database path to profile. Overrides dataset defaults.")]
         public string? DatabasePath { get; init; }
@@ -216,9 +208,7 @@ public sealed class ColNameUsageFieldProfileCommand : Command<ColNameUsageFieldP
     );
 
     public override int Execute(CommandContext context, Settings settings, CancellationToken cancellationToken) {
-        var baseDir = settings.SettingsDir ?? AppContext.BaseDirectory;
-        var iniFile = settings.IniFile ?? "paths.ini";
-        var paths = new PathsService(iniFile, baseDir);
+        var paths = settings.CreatePaths();
 
         var datasetLabel = settings.UseIucnDatabase ? "IUCN" : "Catalogue of Life";
         var configuredPath = !string.IsNullOrWhiteSpace(settings.DatabasePath)

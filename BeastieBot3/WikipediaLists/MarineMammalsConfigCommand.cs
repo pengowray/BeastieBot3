@@ -66,22 +66,16 @@ namespace BeastieBot3.WikipediaLists;
         "wikipedia marine-mammals-config --output marine-mammals.yml"
     })]
 internal sealed class MarineMammalsConfigCommand : Command<MarineMammalsConfigCommand.Settings> {
-    public sealed class Settings : CommandSettings {
+    public sealed class Settings : CommonSettings {
         [CommandOption("--database <PATH>")]
         public string? DatabasePath { get; init; }
 
         [CommandOption("--output <PATH>")]
         public string? OutputPath { get; init; }
-
-        [CommandOption("-s|--settings-dir <DIR>")]
-        public string? SettingsDirectory { get; init; }
-
-        [CommandOption("--ini-file <FILE>")]
-        public string? IniFile { get; init; }
     }
 
     public override int Execute(CommandContext context, Settings settings, CancellationToken cancellationToken) {
-        var paths = new PathsService(settings.SettingsDirectory, settings.IniFile);
+        var paths = settings.CreatePaths();
         var dbPath = paths.ResolveIucnDatabasePath(settings.DatabasePath);
 
         if (string.IsNullOrWhiteSpace(dbPath) || !File.Exists(dbPath)) {

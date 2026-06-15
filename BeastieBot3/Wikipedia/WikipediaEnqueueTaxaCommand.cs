@@ -53,9 +53,7 @@ public sealed class WikipediaEnqueueTaxaCommand : Command<WikipediaEnqueueTaxaCo
 
     public override int Execute(CommandContext context, Settings settings, System.Threading.CancellationToken cancellationToken) {
         _ = context;
-        var baseDir = settings.SettingsDir ?? AppContext.BaseDirectory;
-        var iniFile = settings.IniFile ?? "paths.ini";
-        var paths = new PathsService(iniFile, baseDir);
+        var paths = settings.CreatePaths();
 
         string iucnPath;
         string cachePath;

@@ -49,7 +49,7 @@ public sealed class WikidataIucnFreshnessReportCommand : AsyncCommand<WikidataIu
     }
 
     private static int Run(WikidataIucnFreshnessReportSettings settings, CancellationToken cancellationToken) {
-        var paths = new PathsService(settings.IniFile, settings.SettingsDir);
+        var paths = settings.CreatePaths();
 
         string iucnPath;
         string wikidataPath;

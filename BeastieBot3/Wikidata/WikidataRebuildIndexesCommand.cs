@@ -38,7 +38,7 @@ public sealed class WikidataRebuildIndexesSettings : CommonSettings {
 public sealed class WikidataRebuildIndexesCommand : AsyncCommand<WikidataRebuildIndexesSettings> {
     public override Task<int> ExecuteAsync(CommandContext context, WikidataRebuildIndexesSettings settings, CancellationToken cancellationToken) {
         _ = context;
-        var paths = new PathsService(settings.IniFile, settings.SettingsDir);
+        var paths = settings.CreatePaths();
 
         string cachePath;
         try {

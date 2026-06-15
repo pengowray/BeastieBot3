@@ -16,9 +16,7 @@ namespace BeastieBot3.Col;
     Examples = new[] { "col check" })]
 public sealed class CheckColCommand : Command<CommonSettings> {
     public override int Execute(CommandContext context, CommonSettings settings, CancellationToken cancellationToken) {
-        var baseDir = settings.SettingsDir ?? AppContext.BaseDirectory;
-        var iniFile = settings.IniFile ?? "paths.ini";
-        var paths = new PathsService(iniFile, baseDir);
+        var paths = settings.CreatePaths();
 
         var colPath = paths.GetColDir() ?? "/app/datasets/Catalogue_of_Life_2025-10-10_XR";
         if (Directory.Exists(colPath)) {
