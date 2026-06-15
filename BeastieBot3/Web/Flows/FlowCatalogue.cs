@@ -332,7 +332,17 @@ public static class FlowCatalogue {
                     InputSourceIds = new[] { "iucn-main" },
                     OutputSourceIds = new[] { "iucn-api-cache" },
                     Section = FlowSection.Maintenance,
-                    Note = "CSV import vs API cache: the CSV path (iucn import, in the Wikipedia reports workflow) is faster and is the current published snapshot, but the zip is downloaded manually. The API cache is more complete (historical + delisted taxa via discover-by-family) and richer (synonyms, narratives), but is built incrementally over many HTTP calls. Both are idempotent — re-running only fetches what's missing unless you pass --force.",
+                    Note = "CSV import vs API cache: the CSV path (iucn import, in the Wikipedia reports workflow) is faster and is the current published snapshot, but the zip is downloaded manually. The API cache is more complete (historical + delisted taxa via discover-by-family) and richer (synonyms, narratives), but is built incrementally over many HTTP calls. Both are idempotent — re-running only fetches what's missing unless you pass --force. Next, run 'Add subspecies & varieties' so the API dataset isn't species-only.",
+                },
+                new FlowStep {
+                    Id = "cache-infraranks",
+                    Title = "Add subspecies & varieties (infraspecific taxa)",
+                    Description = "Fetch the subspecies/varieties listed under each cached species (taxon.infrarank_taxa) and download their assessments. Their assessments are not in the parent species payload, so without this step the API dataset is species-only and under-counts versus the CSV.",
+                    Commands = new[] { "iucn api cache-infraranks", "iucn api cache-assessments" },
+                    InputSourceIds = new[] { "iucn-api-cache" },
+                    OutputSourceIds = new[] { "iucn-api-cache" },
+                    Section = FlowSection.Maintenance,
+                    Note = "Run after the species are cached (cache-all / discover-by-family). cache-infraranks fetches /taxa/sis/{id} for each discovered infrarank sis_id (queuing its assessments); the following cache-assessments downloads them. API-native (no CSV) and idempotent — only taxa not yet fetched are downloaded.",
                 },
                 new FlowStep {
                     Id = "project-api-view",
@@ -342,7 +352,7 @@ public static class FlowCatalogue {
                     InputSourceIds = new[] { "iucn-api-cache" },
                     OutputSourceIds = new[] { "iucn-api-projected" },
                     Section = FlowSection.Maintenance,
-                    Note = "Rebuilds the projection from whatever is currently cached (latest assessments only). Run after cache-all / cache-assessments. Then: wikipedia generate-lists --dataset api / generate-charts --dataset api.",
+                    Note = "Rebuilds the projection from whatever is currently cached (latest assessments only). Run last — after cache-all, cache-infraranks, and cache-assessments — so it isn't partial: project-view exits non-zero and flags the projection partial if any taxon's latest assessment isn't downloaded yet (pass --allow-partial to accept). Then: wikipedia generate-lists --dataset api / generate-charts --dataset api.",
                 },
             },
             Outputs = new[] {
