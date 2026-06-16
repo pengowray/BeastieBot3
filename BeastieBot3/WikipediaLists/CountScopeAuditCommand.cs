@@ -165,18 +165,21 @@ internal sealed class CountScopeAuditCommand : Command<CountScopeAuditCommand.Se
             .AddColumn(new TableColumn("CSV canon.").RightAligned())
             .AddColumn(new TableColumn("API canon.").RightAligned())
             .AddColumn(new TableColumn("Δ").RightAligned())
-            .AddColumn(new TableColumn("CSV infra").RightAligned());
+            .AddColumn(new TableColumn("CSV infra").RightAligned())
+            .AddColumn(new TableColumn("API infra").RightAligned())
+            .AddColumn(new TableColumn("Δ infra").RightAligned());
         foreach (var (target, csv, api) in rows) {
-            var delta = api.Canonical - csv.Canonical;
             table.AddRow(
                 Markup.Escape(target.Label),
                 csv.Canonical.ToString("N0"),
                 api.Canonical.ToString("N0"),
-                DeltaMarkup(delta),
-                Dim(csv.Infra));
+                DeltaMarkup(api.Canonical - csv.Canonical),
+                Dim(csv.Infra),
+                Dim(api.Infra),
+                DeltaMarkup(api.Infra - csv.Infra));
         }
         AnsiConsole.Write(table);
-        AnsiConsole.MarkupLine("[grey]Δ = API − CSV. API is species-only (no Infra) and omits delisted taxa with no current assessment — see [yellow]iucn api report-no-latest[/].[/]");
+        AnsiConsole.MarkupLine("[grey]Δ = API − CSV. The API projection now carries cached subspecies/varieties (see [yellow]iucn api cache-infraranks[/]), so Infra is compared too. A residual CSV-infra surplus is orphan infrataxa the API can't enumerate ([yellow]iucn report-orphan-infraranks[/]); the canonical Δ also reflects delisted taxa with no current assessment ([yellow]iucn api report-no-latest[/]).[/]");
 
         var md = BuildCompareMarkdown(csvPath, apiPath, rows);
         WriteReport(paths, settings.OutputPath, "iucn-count-scopes-compare", md);
@@ -257,12 +260,12 @@ internal sealed class CountScopeAuditCommand : Command<CountScopeAuditCommand.Se
         sb.AppendLine($"- **CSV:** `{csvPath}`");
         sb.AppendLine($"- **API projection:** `{apiPath}`");
         sb.AppendLine();
-        sb.AppendLine("`Canonical` = global species-rank count on each dataset. The API projection is species-only (no subspecies/varieties) and omits delisted taxa lacking a current assessment, so it normally runs slightly under CSV. `CSV infra` is the subspecies/variety count the API has none of.");
+        sb.AppendLine("`Canonical` = global species-rank count on each dataset. The API projection omits delisted taxa lacking a current assessment, so its canonical normally runs slightly under CSV. `Infra` = subspecies/variety count: the API projection now carries the infraspecific taxa cached via `iucn api cache-infraranks`, so it is compared too — a residual `CSV infra` surplus is the orphan infrataxa the API can't enumerate (assessed subspecies of unassessed species; see `iucn report-orphan-infraranks`).");
         sb.AppendLine();
-        sb.AppendLine("| Taxa group | CSV canonical | API canonical | Δ (API−CSV) | CSV infra |");
-        sb.AppendLine("| --- | ---: | ---: | ---: | ---: |");
+        sb.AppendLine("| Taxa group | CSV canonical | API canonical | Δ (API−CSV) | CSV infra | API infra | Δ infra |");
+        sb.AppendLine("| --- | ---: | ---: | ---: | ---: | ---: | ---: |");
         foreach (var (target, csv, api) in rows) {
-            sb.AppendLine($"| {Esc(target.Label)} | {csv.Canonical:N0} | {api.Canonical:N0} | {api.Canonical - csv.Canonical:+0;-0;0} | {csv.Infra:N0} |");
+            sb.AppendLine($"| {Esc(target.Label)} | {csv.Canonical:N0} | {api.Canonical:N0} | {api.Canonical - csv.Canonical:+0;-0;0} | {csv.Infra:N0} | {api.Infra:N0} | {api.Infra - csv.Infra:+0;-0;0} |");
         }
         sb.AppendLine();
         return sb.ToString();
