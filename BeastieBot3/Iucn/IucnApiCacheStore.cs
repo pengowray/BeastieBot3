@@ -404,6 +404,26 @@ ORDER BY b.latest DESC, IFNULL(b.year_published, 0) DESC, b.assessment_id DESC";
         return list;
     }
 
+    /// <summary>
+    /// Entity ids that should NOT be retried this run: a failure whose <c>next_attempt_after</c> is
+    /// still in the future (backed off) or that is permanent (404/410). The download queue excludes
+    /// these so a persistently-broken entity is skipped instantly instead of re-attempted every run.
+    /// </summary>
+    public IReadOnlyList<long> GetSuppressedEntityIds(string endpoint) {
+        using var command = _connection.CreateCommand();
+        command.CommandText = "SELECT entity_id FROM failed_requests WHERE endpoint=@endpoint AND ((next_attempt_after IS NOT NULL AND next_attempt_after > @now) OR last_status IN (404, 410))";
+        command.Parameters.AddWithValue("@endpoint", endpoint);
+        command.Parameters.AddWithValue("@now", DateTime.UtcNow.ToString("O"));
+        var list = new List<long>();
+        using var reader = command.ExecuteReader();
+        while (reader.Read()) {
+            if (long.TryParse(reader.GetString(0), out var id)) {
+                list.Add(id);
+            }
+        }
+        return list;
+    }
+
     public void RecordFailedRequest(string endpoint, long entityId, string error, int? statusCode, TimeSpan? retryDelay = null) {
         // Escalate the retry back-off with each prior failure so a persistently-broken entity
         // (e.g. an assessment IUCN's API consistently 500s on) stops being retried at the front of

@@ -40,6 +40,10 @@ public sealed class IucnApiCacheAssessmentsSettings : CommonSettings {
     [Description("Only retry items that previously failed (skip the backlog queue).")]
     public bool FailedOnly { get; init; }
 
+    [CommandOption("--latest-only")]
+    [Description("Download only the current (latest) assessment of each taxon — the only ones the --dataset api projection uses. Skips historical assessments (a much smaller queue; also sidesteps the handful of historical records IUCN's API errors on).")]
+    public bool LatestOnly { get; init; }
+
     [CommandOption("--sleep-ms <MS>")]
     [Description("Extra delay between API calls. Defaults to 250ms to avoid throttling.")]
     public int SleepBetweenRequests { get; init; } = 250;
@@ -48,9 +52,10 @@ public sealed class IucnApiCacheAssessmentsSettings : CommonSettings {
 [CommandInfo("iucn api cache-assessments", CommandKind.Mutates,
     "Download /api/v4/assessment/{assessment_id} payloads for assessments queued in the API cache's taxa-assessment backlog (the backlog is populated by cache-taxa or discover-by-family).",
     Reason = "Downloads IUCN /api/v4/assessment payloads into the local cache (idempotent additive; --force re-downloads already-cached assessments).",
-    RerunNote = "Skips assessments already downloaded; --force re-downloads everything in the backlog.",
+    RerunNote = "Skips assessments already downloaded; processes the latest assessments first and retries previously-failed ones last (backed-off failures are skipped). --latest-only downloads just current assessments; --force re-downloads everything.",
     Examples = new[] {
         "iucn api cache-assessments",
+        "iucn api cache-assessments --latest-only",
         "iucn api cache-assessments --limit 100",
         "iucn api cache-assessments --failed-only"
     })]
@@ -88,10 +93,9 @@ public sealed class IucnApiCacheAssessmentsCommand : AsyncCommand<IucnApiCacheAs
             foreach (var item in queue) {
                 cancellationToken.ThrowIfCancellationRequested();
 
-                // Skip already-cached/fresh, and ids previously tombstoned as 404 (no record).
-                if (!settings.Force &&
-                    (!ShouldDownload(item.DownloadedAt, refreshThreshold)
-                     || cacheStore.HasPermanentFailure("assessment", item.AssessmentId))) {
+                // Skip already-cached/fresh. (Backed-off / tombstoned failures were already excluded
+                // from the queue, so there's no per-item failed_requests lookup here.)
+                if (!settings.Force && !ShouldDownload(item.DownloadedAt, refreshThreshold)) {
                     skipped++;
                     progress.Increment(1);
                     continue;
@@ -122,45 +126,42 @@ public sealed class IucnApiCacheAssessmentsCommand : AsyncCommand<IucnApiCacheAs
     }
 
     private static List<AssessmentQueueRow> BuildAssessmentQueue(IucnApiCacheStore cacheStore, IucnApiCacheAssessmentsSettings settings) {
-        var queue = new List<AssessmentQueueRow>();
-        var seen = new HashSet<long>();
-        var snapshot = cacheStore.GetAssessmentBacklogOrdered();
-        var lookup = new Dictionary<long, AssessmentQueueRow>(snapshot.Count);
-        foreach (var row in snapshot) {
-            lookup[row.AssessmentId] = row;
-        }
+        var snapshot = cacheStore.GetAssessmentBacklogOrdered();   // latest DESC, year DESC; one row per assessment
+        var due = new HashSet<long>(cacheStore.GetFailedEntityIds("assessment"));         // failures due for retry now
+        var suppressed = new HashSet<long>(cacheStore.GetSuppressedEntityIds("assessment")); // backed-off / 404 — skip
 
-        var failed = cacheStore.GetFailedEntityIds("assessment");
-        foreach (var assessmentId in failed) {
-            if (!seen.Add(assessmentId)) {
-                continue;
-            }
-
-            if (lookup.TryGetValue(assessmentId, out var row)) {
-                queue.Add(row);
-            }
-            else {
-                var downloadedAt = cacheStore.GetAssessmentDownloadedAt(assessmentId);
-                queue.Add(new AssessmentQueueRow(assessmentId, 0, 0, false, null, downloadedAt));
-            }
-        }
+        bool PassesLatest(AssessmentQueueRow r) => !settings.LatestOnly || r.Latest;
 
         if (settings.FailedOnly) {
-            return ApplyLimit(queue, settings.Limit);
+            // Only the failures that are due for retry (in backlog order; stubs for any not in the backlog).
+            var lookup = new Dictionary<long, AssessmentQueueRow>(snapshot.Count);
+            foreach (var row in snapshot) lookup[row.AssessmentId] = row;
+
+            var failedQueue = new List<AssessmentQueueRow>();
+            foreach (var id in due) {
+                if (lookup.TryGetValue(id, out var row)) {
+                    if (PassesLatest(row)) failedQueue.Add(row);
+                }
+                else if (!settings.LatestOnly) {
+                    failedQueue.Add(new AssessmentQueueRow(id, 0, 0, false, null, cacheStore.GetAssessmentDownloadedAt(id)));
+                }
+            }
+            return ApplyLimit(failedQueue, settings.Limit);
         }
 
+        // Default: walk the backlog (latest-first); skip entities that are backed off (not yet due to
+        // retry), and defer the currently-due failures to the END so a persistently-broken record
+        // doesn't slow the start. --latest-only drops historical assessments entirely.
+        var main = new List<AssessmentQueueRow>();
+        var deferred = new List<AssessmentQueueRow>();
         foreach (var row in snapshot) {
-            if (!seen.Add(row.AssessmentId)) {
-                continue;
-            }
-
-            queue.Add(row);
-            if (settings.Limit.HasValue && queue.Count >= settings.Limit.Value) {
-                break;
-            }
+            if (!PassesLatest(row)) continue;
+            if (!settings.Force && suppressed.Contains(row.AssessmentId)) continue;
+            if (due.Contains(row.AssessmentId)) deferred.Add(row);
+            else main.Add(row);
         }
-
-        return ApplyLimit(queue, settings.Limit);
+        main.AddRange(deferred);
+        return ApplyLimit(main, settings.Limit);
     }
 
     private static List<AssessmentQueueRow> ApplyLimit(List<AssessmentQueueRow> queue, long? limit) {
