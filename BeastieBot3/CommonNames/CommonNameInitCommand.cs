@@ -10,6 +10,7 @@ using BeastieBot3.Configuration;
 using BeastieBot3.Infrastructure;
 using BeastieBot3.Iucn;
 using BeastieBot3.Taxonomy;
+using BeastieBot3.WikipediaLists;
 
 // First step in common-names workflow. Creates the CommonNameStore database schema,
 // imports all taxa from IUCN CSV database (sis_id, scientific_name, kingdom, etc.),
@@ -208,13 +209,21 @@ internal sealed class CommonNameInitCommand : AsyncCommand<CommonNameInitCommand
                             // Determine rank
                             var rank = DetermineRank(row);
 
+                            // Derive extinction from the IUCN category. The view stores the
+                            // full text ("Extinct" / "Extinct in the Wild"), so resolve it to
+                            // a code first; only the global EX/EW categories count as extinct
+                            // (RE is regionally extinct but globally extant). IUCN carries no
+                            // fossil signal, so is_fossil stays false (unknowable here).
+                            var status = IucnRedlistStatus.ResolveFromDatabase(row.RedlistCategory ?? string.Empty, null, null);
+                            var isExtinct = status.Code is "EX" or "EW";
+
                             // Insert or update the taxon
                             var taxonId = store.InsertOrUpdateTaxon(
                                 canonicalName: canonicalName,
                                 originalName: scientificName,
                                 rank: rank,
                                 kingdom: row.KingdomName,
-                                isExtinct: false, // IUCN doesn't have this directly; would need to check category
+                                isExtinct: isExtinct,
                                 isFossil: false,
                                 validityStatus: "valid",
                                 primarySource: "iucn",

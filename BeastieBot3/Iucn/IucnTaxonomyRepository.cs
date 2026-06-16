@@ -33,6 +33,7 @@ internal sealed class IucnTaxonomyRepository {
     v.taxonId,
     v.scientificName AS scientificName_assessments,
     v.scientificName_taxonomy,
+    v.redlistCategory,
     v.kingdomName,
     v.phylumName,
     v.className,
@@ -77,7 +78,8 @@ ORDER BY v.assessmentId";
                 GetNullableString(reader, ordinals.InfraName),
                 GetNullableString(reader, ordinals.SubpopulationName),
                 GetNullableString(reader, ordinals.Authority),
-                GetNullableString(reader, ordinals.InfraAuthority)
+                GetNullableString(reader, ordinals.InfraAuthority),
+                GetNullableString(reader, ordinals.RedlistCategory)
             );
         }
     }
@@ -92,6 +94,7 @@ ORDER BY v.assessmentId";
     v.taxonId,
     v.scientificName AS scientificName_assessments,
     v.scientificName_taxonomy,
+    v.redlistCategory,
     v.kingdomName,
     v.phylumName,
     v.className,
@@ -135,7 +138,8 @@ LIMIT 1";
             GetNullableString(reader, ordinals.InfraName),
             GetNullableString(reader, ordinals.SubpopulationName),
             GetNullableString(reader, ordinals.Authority),
-            GetNullableString(reader, ordinals.InfraAuthority));
+            GetNullableString(reader, ordinals.InfraAuthority),
+            GetNullableString(reader, ordinals.RedlistCategory));
     }
 
     private static string? GetNullableString(SqliteDataReader reader, int? ordinal) {
@@ -152,6 +156,7 @@ LIMIT 1";
             TaxonId = reader.GetOrdinal("taxonId");
             ScientificNameAssessments = reader.GetOrdinal("scientificName_assessments");
             ScientificNameTaxonomy = reader.GetOrdinal("scientificName_taxonomy");
+            RedlistCategory = reader.GetOrdinal("redlistCategory");
             KingdomName = reader.GetOrdinal("kingdomName");
             PhylumName = GetOptionalOrdinal(reader, "phylumName");
             ClassName = GetOptionalOrdinal(reader, "className");
@@ -170,6 +175,7 @@ LIMIT 1";
         public int TaxonId { get; }
         public int ScientificNameAssessments { get; }
         public int ScientificNameTaxonomy { get; }
+        public int RedlistCategory { get; }
         public int KingdomName { get; }
         public int? PhylumName { get; }
         public int? ClassName { get; }
@@ -209,5 +215,8 @@ internal sealed record IucnTaxonomyRow(
     string? InfraName,
     string? SubpopulationName,
     string? Authority,
-    string? InfraAuthority
+    string? InfraAuthority,
+    // Full IUCN category text from the view ("Extinct", "Vulnerable", ...). Optional:
+    // construction sites that map from list-body records (which don't carry it) omit it.
+    string? RedlistCategory = null
 );
