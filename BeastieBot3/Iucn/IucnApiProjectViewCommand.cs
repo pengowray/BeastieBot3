@@ -76,8 +76,28 @@ public sealed class IucnApiProjectViewCommand : AsyncCommand<IucnApiProjectViewC
         source.Open();
 
         long total = ScalarLong(source, "SELECT COUNT(*) FROM assessments");
-        long latestNotDownloaded = ScalarLong(source,
-            "SELECT COUNT(*) FROM taxa_assessment_backlog b WHERE b.latest = 1 AND NOT EXISTS (SELECT 1 FROM assessments a WHERE a.assessment_id = b.assessment_id)");
+
+        // A latest assessment can be "not downloaded" for two very different reasons:
+        //   pending     — we simply haven't fetched it yet (keep caching to close the gap)
+        //   unservable  — /api/v4/assessment/{id} keeps erroring on it (recorded in
+        //                 failed_requests), so it can never be cached. IUCN-side, not ours.
+        // Only pending gaps should make a projection "partial"; unservable ones are an
+        // accepted, permanent gap (a tiny handful of records the API 500s on). Without this
+        // split, those would force --allow-partial on every run forever.
+        var hasFailedRequests = ObjectExists(source, "failed_requests");
+        const string missingLatest =
+            "FROM taxa_assessment_backlog b WHERE b.latest = 1 " +
+            "AND NOT EXISTS (SELECT 1 FROM assessments a WHERE a.assessment_id = b.assessment_id)";
+        const string errored =
+            "EXISTS (SELECT 1 FROM failed_requests f WHERE f.endpoint = 'assessment' " +
+            "AND CAST(f.entity_id AS INTEGER) = b.assessment_id)";
+
+        long latestUnservable = hasFailedRequests
+            ? ScalarLong(source, $"SELECT COUNT(*) {missingLatest} AND {errored}")
+            : 0;
+        long latestPending = hasFailedRequests
+            ? ScalarLong(source, $"SELECT COUNT(*) {missingLatest} AND NOT {errored}")
+            : ScalarLong(source, $"SELECT COUNT(*) {missingLatest}");
 
         using var store = IucnApiProjectionStore.Open(outputPath);
         store.ResetData();
@@ -125,8 +145,11 @@ public sealed class IucnApiProjectViewCommand : AsyncCommand<IucnApiProjectViewC
 
         var projectedTaxa = store.CountRows("taxonomy_html");
         var projectedAssessments = store.CountRows("assessments_html");
-        var isPartial = latestNotDownloaded > 0;
-        store.CompleteImport(importId, projectedTaxa, projectedAssessments, latestNotDownloaded, isPartial);
+        // Only genuinely-pending downloads make the projection partial; assessments the API
+        // can't serve are an accepted permanent gap and don't block. Persist the pending count
+        // as latest_not_downloaded so import_metadata's is_partial matches what we report.
+        var isPartial = latestPending > 0;
+        store.CompleteImport(importId, projectedTaxa, projectedAssessments, latestPending, isPartial);
 
         AnsiConsole.MarkupLine(isPartial ? "[yellow]Projection built (partial).[/]" : "[green]Projection built.[/]");
         var table = new Table().Border(TableBorder.Rounded);
@@ -135,16 +158,21 @@ public sealed class IucnApiProjectViewCommand : AsyncCommand<IucnApiProjectViewC
         table.AddRow("Assessments scanned", $"{processed:N0}");
         table.AddRow("Latest rows projected", $"{latestRows:N0}");
         table.AddRow("Taxa projected", $"{projectedTaxa:N0}");
-        table.AddRow("Latest not downloaded", $"{latestNotDownloaded:N0}");
+        table.AddRow("Latest pending download", $"{latestPending:N0}");
+        table.AddRow("Latest unservable (API errors)", $"{latestUnservable:N0}");
         table.AddRow("Skipped (no taxon id)", $"{skippedNoTaxon:N0}");
         table.AddRow("Unknown category codes", $"{unknownCategory:N0}");
         table.AddRow("redlist_version", version);
         table.AddRow("Coverage", isPartial ? "[yellow]partial[/]" : "[green]complete[/]");
         AnsiConsole.Write(table);
 
+        if (latestUnservable > 0) {
+            AnsiConsole.MarkupLineInterpolated(
+                $"[grey]Note:[/] {latestUnservable:N0} taxa have a latest assessment the IUCN API keeps erroring on (e.g. HTTP 500) — an accepted permanent gap, so they don't make the projection partial. See [yellow]iucn api report-failed-assessments[/].");
+        }
         if (isPartial) {
             AnsiConsole.MarkupLineInterpolated(
-                $"[yellow]Note:[/] {latestNotDownloaded:N0} taxa have a latest assessment whose JSON is not downloaded yet — those taxa are missing from the projection. Run [yellow]iucn api cache-assessments[/] for full coverage.");
+                $"[yellow]Note:[/] {latestPending:N0} taxa have a latest assessment not downloaded yet — those taxa are missing from the projection. Run [yellow]iucn api cache-assessments[/] for full coverage.");
             if (!settings.AllowPartial) {
                 AnsiConsole.MarkupLine("[red]Projection is partial.[/] Re-run after caching, or pass [yellow]--allow-partial[/] to accept it. (The database was still written and is flagged partial in import_metadata.)");
                 return Task.FromResult(2);
@@ -169,5 +197,12 @@ public sealed class IucnApiProjectViewCommand : AsyncCommand<IucnApiProjectViewC
         cmd.CommandText = sql;
         try { return Convert.ToInt64(cmd.ExecuteScalar() ?? 0L); }
         catch { return 0L; }
+    }
+
+    private static bool ObjectExists(SqliteConnection connection, string name) {
+        using var cmd = connection.CreateCommand();
+        cmd.CommandText = "SELECT 1 FROM sqlite_master WHERE name = @name LIMIT 1";
+        cmd.Parameters.AddWithValue("@name", name);
+        return cmd.ExecuteScalar() is not null;
     }
 }
