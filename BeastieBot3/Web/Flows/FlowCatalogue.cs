@@ -436,6 +436,17 @@ public static class FlowCatalogue {
                         new FlowOutputPattern { Root = "reports", Pattern = "iucn-orphan-infraranks-*.csv", Label = "CSV" },
                     },
                 },
+                new FlowStep {
+                    Id = "failed-assessments",
+                    Title = "Assessments the API can't serve (HTTP 500)",
+                    Description = "Assessment downloads that keep failing on the IUCN API — mostly historical records it returns 500 for. Shows the latest-vs-historical split (historical don't affect the projection; any latest ones are a small genuine gap).",
+                    Commands = new[] { "iucn api report-failed-assessments" },
+                    InputSourceIds = new[] { "iucn-api-cache" },
+                    OutputPatterns = new[] {
+                        new FlowOutputPattern { Root = "reports", Pattern = "iucn-failed-assessments-*.md",  Label = "Markdown" },
+                        new FlowOutputPattern { Root = "reports", Pattern = "iucn-failed-assessments-*.csv", Label = "CSV" },
+                    },
+                },
                 // Building & projecting the IUCN API cache now lives in the "Import IUCN data"
                 // workflow (the first tab) — that's where the CSV vs API routes are laid out.
             },
