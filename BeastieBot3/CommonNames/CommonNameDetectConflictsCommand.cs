@@ -122,8 +122,10 @@ internal sealed class CommonNameDetectConflictsCommand : AsyncCommand<CommonName
                                     var a = distinctTaxa[i];
                                     var b = distinctTaxa[j];
 
-                                    // Check if these are synonyms of each other
-                                    if (AreSynonyms(store, a.TaxonId, b.TaxonId)) {
+                                    // Skip pairs that are really name-level synonyms of
+                                    // each other (same taxon under two names) — those aren't
+                                    // genuine ambiguous-name conflicts.
+                                    if (store.AreSynonyms(a.TaxonId, b.TaxonId)) {
                                         continue;
                                     }
 
@@ -144,12 +146,5 @@ internal sealed class CommonNameDetectConflictsCommand : AsyncCommand<CommonName
 
             AnsiConsole.MarkupLine($"[green]Found {conflictsFound:N0} conflicts among {namesChecked:N0} common names[/]");
         }, cancellationToken);
-    }
-
-    private static bool AreSynonyms(CommonNameStore store, long taxonIdA, long taxonIdB) {
-        // For now, we only consider taxa from the same source as potentially the same
-        // A more sophisticated check would look at cross-references
-        // This is a placeholder for future enhancement
-        return false;
     }
 }

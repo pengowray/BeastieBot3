@@ -625,8 +625,13 @@ internal sealed class CommonNameAggregateCommand : AsyncCommand<CommonNameAggreg
             using var wikiConnection = new SqliteConnection($"Data Source={wikipediaPath};Mode=ReadOnly");
             wikiConnection.Open();
 
-            // First, try to use taxon_wiki_matches if available
-            var useTaxonMatches = TableHasRows(wikiConnection, "taxon_wiki_matches", "match_status = 'matched'");
+            // First, try to use taxon_wiki_matches if available. The matcher records
+            // rows with taxon_source = TaxonSources.Iucn ("iucn", lowercase); SQLite '='
+            // on TEXT is case-sensitive, so both the gate and the query must use that exact
+            // value (previously a literal 'IUCN' here matched nothing — every Wikipedia
+            // common name was silently dropped while the run still reported success).
+            var useTaxonMatches = TableHasRows(wikiConnection, "taxon_wiki_matches",
+                $"match_status = 'matched' AND taxon_source = '{TaxonSources.Iucn}'");
 
             using var command = wikiConnection.CreateCommand();
             if (useTaxonMatches) {
@@ -636,13 +641,14 @@ internal sealed class CommonNameAggregateCommand : AsyncCommand<CommonNameAggreg
                         FROM taxon_wiki_matches m
                         JOIN wiki_pages p ON p.id = m.page_row_id
                         LEFT JOIN wiki_taxobox_data t ON t.page_row_id = p.id
-                        WHERE m.taxon_source = 'IUCN' AND m.match_status = 'matched'
+                        WHERE m.taxon_source = @source AND m.match_status = 'matched'
                         LIMIT @limit"
                     : @"SELECT m.taxon_identifier, p.page_title, p.normalized_title, t.data_json
                         FROM taxon_wiki_matches m
                         JOIN wiki_pages p ON p.id = m.page_row_id
                         LEFT JOIN wiki_taxobox_data t ON t.page_row_id = p.id
-                        WHERE m.taxon_source = 'IUCN' AND m.match_status = 'matched'";
+                        WHERE m.taxon_source = @source AND m.match_status = 'matched'";
+                command.Parameters.AddWithValue("@source", TaxonSources.Iucn);
                 if (limit.HasValue) {
                     command.Parameters.AddWithValue("@limit", limit.Value);
                 }

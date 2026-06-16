@@ -342,6 +342,39 @@ internal sealed class CommonNameStore : SqliteStore {
         return result == null || result == DBNull.Value ? null : (long)result;
     }
 
+    /// <summary>
+    /// Returns true when the two taxa share any scientific name — i.e. one's canonical
+    /// name or a recorded synonym matches the other's canonical name or a synonym. Both
+    /// <c>taxa.canonical_name</c> and <c>scientific_name_synonyms.normalized_name</c> are
+    /// stored already normalized (via <see cref="Taxonomy.ScientificNameNormalizer"/>), so
+    /// the equality join is consistent. Used by conflict detection to avoid recording two
+    /// rows that are really name-level synonyms of each other as an ambiguous-name conflict.
+    /// </summary>
+    public bool AreSynonyms(long taxonIdA, long taxonIdB) {
+        if (taxonIdA == taxonIdB) {
+            return true;
+        }
+
+        using var command = _connection.CreateCommand();
+        command.CommandText =
+            """
+            WITH names_a(name) AS (
+                SELECT canonical_name FROM taxa WHERE id = @a
+                UNION
+                SELECT normalized_name FROM scientific_name_synonyms WHERE taxon_id = @a
+            ),
+            names_b(name) AS (
+                SELECT canonical_name FROM taxa WHERE id = @b
+                UNION
+                SELECT normalized_name FROM scientific_name_synonyms WHERE taxon_id = @b
+            )
+            SELECT 1 FROM names_a JOIN names_b ON names_a.name = names_b.name LIMIT 1;
+            """;
+        command.Parameters.AddWithValue("@a", taxonIdA);
+        command.Parameters.AddWithValue("@b", taxonIdB);
+        return command.ExecuteScalar() != null;
+    }
+
     #endregion
 
     #region Common Name Operations
