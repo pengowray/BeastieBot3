@@ -12,16 +12,18 @@ using Spectre.Console.Cli;
 using BeastieBot3.Configuration;
 using BeastieBot3.Infrastructure;
 
-// Reports assessment downloads that the IUCN API consistently fails to serve — chiefly a handful
-// of historical (non-latest) assessments that return HTTP 500. They're referenced in a taxon's
-// payload but /api/v4/assessment/{id} errors on them, so they can't be cached. Being non-latest,
-// they don't affect the --dataset api projection. Reads the API cache's failed_requests joined
-// with the backlog; outputs Markdown + CSV. Run via: iucn api report-failed-assessments
+// Reports assessment downloads that the IUCN API consistently fails to serve. Root cause: each of
+// these assessments has an empty geographic-scope array (no scope/region attached), and
+// /api/v4/assessment/{id} returns HTTP 500 for exactly those — across the whole cache the split is
+// clean (assessments with a scope return 200, scope-less ones 500). They are phantom scope-less
+// duplicates of a taxon's real per-scope assessments (Global/Europe/Mediterranean), so they create
+// no projection gap. Reads the API cache's failed_requests joined with the backlog; outputs
+// Markdown + CSV. Run via: iucn api report-failed-assessments
 
 namespace BeastieBot3.Iucn;
 
 [CommandInfo("iucn api report-failed-assessments", CommandKind.ReadOnly,
-    "List assessment downloads that keep failing on the IUCN API (mostly historical records it returns HTTP 500 for), with their status, latest flag and SIS id. Outputs Markdown and CSV.",
+    "List assessment downloads that keep failing on the IUCN API (records with an empty geographic scope, which /api/v4/assessment/{id} returns HTTP 500 for), with their status, latest flag and SIS id. Outputs Markdown and CSV.",
     Examples = new[] {
         "iucn api report-failed-assessments",
         "iucn api report-failed-assessments -o failed.md --csv-output failed.csv"
@@ -124,9 +126,15 @@ ORDER BY (f.last_status IS NULL), f.last_status DESC, b.latest, b.sis_id";
         sb.AppendLine($"- **Cache database:** `{EscapeMd(cachePath)}`");
         sb.AppendLine($"- **Failed assessment downloads:** {rows.Count:N0}");
         sb.AppendLine();
-        sb.AppendLine("Assessments referenced in a taxon's payload that `/api/v4/assessment/{id}` keeps failing on —");
-        sb.AppendLine("mostly historical (non-latest) records IUCN's API returns HTTP 500 for. They can't be cached,");
-        sb.AppendLine("but as non-latest assessments they don't affect the `--dataset api` projection (which is latest-only).");
+        sb.AppendLine("Every assessment listed here shares one trait: an **empty geographic-scope array** (no scope/region attached).");
+        sb.AppendLine("`/api/v4/assessment/{id}` returns HTTP 500 for exactly these — across the whole cache the split is clean: assessments");
+        sb.AppendLine("with at least one scope return 200, scope-less ones 500. (Confirmed live against the IUCN API: a scoped sibling");
+        sb.AppendLine("assessment of the same taxon serialises fine.) On the IUCN website the same defect renders the region as a bare");
+        sb.AppendLine("\"&\" with no text — the empty scope list joined by a separator.");
+        sb.AppendLine();
+        sb.AppendLine("These are phantom scope-less duplicates of a taxon's real per-scope assessments (Global, Europe, Mediterranean, …),");
+        sb.AppendLine("so they create **no coverage gap**: each affected taxon is still projected via its valid scoped (Global) assessment —");
+        sb.AppendLine("including the few flagged `latest` below.");
         sb.AppendLine();
 
         if (rows.Count == 0) {

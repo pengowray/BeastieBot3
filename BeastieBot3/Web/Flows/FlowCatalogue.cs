@@ -439,7 +439,7 @@ public static class FlowCatalogue {
                 new FlowStep {
                     Id = "failed-assessments",
                     Title = "Assessments the API can't serve (HTTP 500)",
-                    Description = "Assessment downloads that keep failing on the IUCN API — mostly historical records it returns 500 for. Shows the latest-vs-historical split (historical don't affect the projection; any latest ones are a small genuine gap).",
+                    Description = "Assessment downloads the IUCN API keeps 500ing on. Root cause: each has an empty geographic scope (no region), and the API errors on exactly those. They're phantom scope-less duplicates of a taxon's real per-scope assessments, so they create no projection gap.",
                     Commands = new[] { "iucn api report-failed-assessments" },
                     InputSourceIds = new[] { "iucn-api-cache" },
                     OutputPatterns = new[] {
