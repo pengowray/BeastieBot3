@@ -30,8 +30,11 @@ internal sealed class IntroProseBuilder {
         string sectionSummary,
         string datasetVersion,
         string datasetYear) {
-        // Classify records by rank
-        var speciesCount = allRecords.Count(r => !IsInfraspecific(r) && string.IsNullOrWhiteSpace(r.SubpopulationName));
+        // Classify records by rank. Exclude regional assessments so the species count matches the
+        // global-only list body (SectionBodyRenderer drops regional) and the percentage denominator
+        // (CountEvaluatedSpecies is global-only) — otherwise the printed "% of evaluated species"
+        // divides a regional-inclusive numerator by a global denominator.
+        var speciesCount = allRecords.Count(r => !IsInfraspecific(r) && string.IsNullOrWhiteSpace(r.SubpopulationName) && !RecordClassification.IsRegionalAssessment(r));
         var subspeciesCount = allRecords.Count(IsSubspecies);
         var varietyCount = allRecords.Count(IsVariety);
         var subpopCount = allRecords.Count(r => !string.IsNullOrWhiteSpace(r.SubpopulationName));

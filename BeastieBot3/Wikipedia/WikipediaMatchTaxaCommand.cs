@@ -324,12 +324,12 @@ public sealed class WikipediaMatchTaxaCommand : AsyncCommand<WikipediaMatchTaxaC
             WikiPageDownloadStatus.Pending => CandidateEvaluation.Pending(effectiveSummary, "Page not downloaded yet"),
             WikiPageDownloadStatus.Failed => CandidateEvaluation.Failed(effectiveSummary, "Last fetch attempt failed"),
             WikiPageDownloadStatus.Missing => CandidateEvaluation.Missing(effectiveSummary, "Wikipedia reports the page as missing"),
-            WikiPageDownloadStatus.Cached => EvaluateCached(effectiveSummary),
+            WikiPageDownloadStatus.Cached => EvaluateCached(effectiveSummary, cacheStore),
             _ => CandidateEvaluation.Failed(effectiveSummary, $"Unknown status {effectiveSummary.DownloadStatus}")
         };
     }
 
-    private static CandidateEvaluation EvaluateCached(WikiPageSummary summary) {
+    private static CandidateEvaluation EvaluateCached(WikiPageSummary summary, WikipediaCacheStore cacheStore) {
         // A real cached page that is unusable as a taxon article is "rejected", distinct
         // from a page that genuinely doesn't exist ("missing") — so the taxon's match row
         // can record which it was.
@@ -341,13 +341,29 @@ public sealed class WikipediaMatchTaxaCommand : AsyncCommand<WikipediaMatchTaxaC
             return CandidateEvaluation.Rejected(summary, "Set index page");
         }
 
-        var finalTitle = summary.IsRedirect && !string.IsNullOrWhiteSpace(summary.RedirectTarget)
-            ? summary.RedirectTarget
-            : summary.PageTitle;
-        // Still a match, but flag in the attempt log that it resolved via a redirect.
-        return summary.IsRedirect
-            ? CandidateEvaluation.Redirected(summary, finalTitle)
-            : CandidateEvaluation.Matched(summary, finalTitle);
+        if (summary.IsRedirect && !string.IsNullOrWhiteSpace(summary.RedirectTarget)) {
+            // Re-validate the redirect DESTINATION: a scientific name that redirects to a
+            // disambiguation / set-index page is not a real match, and the recorded match must
+            // reference the target page, not the redirect stub (whose own flags say nothing about
+            // where it points).
+            var target = cacheStore.GetPageByNormalizedTitle(WikipediaTitleHelper.Normalize(summary.RedirectTarget));
+            if (target is null || target.DownloadStatus == WikiPageDownloadStatus.Pending) {
+                return CandidateEvaluation.Pending(summary, "Redirect target not downloaded yet");
+            }
+            if (target.DownloadStatus == WikiPageDownloadStatus.Missing) {
+                return CandidateEvaluation.Missing(summary, "Redirect target is missing");
+            }
+            if (target.IsDisambiguation) {
+                return CandidateEvaluation.Rejected(summary, "Redirects to a disambiguation page");
+            }
+            if (target.IsSetIndex) {
+                return CandidateEvaluation.Rejected(summary, "Redirects to a set-index page");
+            }
+            // Valid redirect: match the TARGET page (carry its PageRowId), flagged as redirect-resolved.
+            return CandidateEvaluation.Redirected(target, target.PageTitle);
+        }
+
+        return CandidateEvaluation.Matched(summary, summary.PageTitle);
     }
 
     private static IReadOnlyList<WikipediaMatchCandidate> BuildCandidates(
