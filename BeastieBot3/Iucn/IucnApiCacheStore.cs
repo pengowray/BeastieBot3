@@ -51,10 +51,11 @@ internal sealed class IucnApiCacheStore : HttpCacheSqliteStore {
     has_latest_flag_in_assessments INTEGER NOT NULL DEFAULT 1
 );
 CREATE TABLE IF NOT EXISTS taxa_lookup (
-    sis_id INTEGER PRIMARY KEY,
+    sis_id INTEGER NOT NULL,
     taxa_id INTEGER NOT NULL REFERENCES taxa(id) ON DELETE CASCADE,
     root_sis_id INTEGER NOT NULL,
-    scope TEXT NOT NULL
+    scope TEXT NOT NULL,
+    PRIMARY KEY(sis_id, taxa_id)
 );
 CREATE INDEX IF NOT EXISTS idx_taxa_lookup_taxa_id ON taxa_lookup(taxa_id);
 CREATE INDEX IF NOT EXISTS idx_taxa_downloaded_at ON taxa(downloaded_at);
@@ -92,6 +93,39 @@ CREATE TABLE IF NOT EXISTS failed_requests (
         command.ExecuteNonQuery();
 
         MigrateHasLatestFlag();
+        MigrateTaxaLookupCompositeKey();
+    }
+
+    // taxa_lookup used to key on sis_id alone, so a child SIS id that belongs to two roots
+    // (e.g. a subpopulation listed under two species) collided: INSERT OR REPLACE silently
+    // repointed it to the latter parent. Rebuild existing caches with the composite PK
+    // (sis_id, taxa_id) so both mappings coexist. taxa_lookup isn't referenced by any other
+    // table, so the create-copy-drop-rename is safe; INSERT OR IGNORE tolerates the rows that
+    // already collided (only one survived under the old PK).
+    private void MigrateTaxaLookupCompositeKey() {
+        using (var check = _connection.CreateCommand()) {
+            // If taxa_id is already part of the PK (pk > 0), the table is the new shape — nothing to do.
+            check.CommandText = "SELECT COUNT(*) FROM pragma_table_info('taxa_lookup') WHERE name='taxa_id' AND pk > 0";
+            if ((long)(check.ExecuteScalar() ?? 0L) > 0) {
+                return;
+            }
+        }
+
+        using var migrate = _connection.CreateCommand();
+        migrate.CommandText = @"
+CREATE TABLE taxa_lookup_new (
+    sis_id INTEGER NOT NULL,
+    taxa_id INTEGER NOT NULL REFERENCES taxa(id) ON DELETE CASCADE,
+    root_sis_id INTEGER NOT NULL,
+    scope TEXT NOT NULL,
+    PRIMARY KEY(sis_id, taxa_id)
+);
+INSERT OR IGNORE INTO taxa_lookup_new(sis_id, taxa_id, root_sis_id, scope)
+    SELECT sis_id, taxa_id, root_sis_id, scope FROM taxa_lookup;
+DROP TABLE taxa_lookup;
+ALTER TABLE taxa_lookup_new RENAME TO taxa_lookup;
+CREATE INDEX IF NOT EXISTS idx_taxa_lookup_taxa_id ON taxa_lookup(taxa_id);";
+        migrate.ExecuteNonQuery();
     }
 
     private void MigrateHasLatestFlag() {
