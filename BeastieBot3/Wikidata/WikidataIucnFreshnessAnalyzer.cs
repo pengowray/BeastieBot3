@@ -303,16 +303,23 @@ JOIN wikidata_entities e ON e.entity_numeric_id = r.entity_numeric_id";
             var statusEntityId = reader.IsDBNull(6) ? null : reader.GetString(6);
             var statementRank = reader.IsDBNull(7) ? null : reader.GetString(7);
 
-            if (string.IsNullOrWhiteSpace(taxonId) || string.IsNullOrWhiteSpace(statusEntityId)) {
+            if (string.IsNullOrWhiteSpace(statusEntityId)) {
                 continue;
             }
 
-            taxonId = taxonId.Trim();
-            if (!taxa.ContainsKey(taxonId)) {
-                continue;
+            // taxonId is empty for references stored without a P627 IUCN-taxon snak. They still
+            // feed the source/retrieved-year histograms (their P248/P813 data is real), but they
+            // have no taxon to gate on or to compare against — agreement is skipped downstream.
+            var hasTaxon = !string.IsNullOrWhiteSpace(taxonId);
+            if (hasTaxon) {
+                taxonId = taxonId!.Trim();
+                if (!taxa.ContainsKey(taxonId)) {
+                    continue;
+                }
+
+                stats.TaxaWithP141.Add(taxonId);
             }
 
-            stats.TaxaWithP141.Add(taxonId);
             stats.EntitiesWithP141.Add(entityNumericId);
             stats.TotalP141References++;
 
@@ -321,7 +328,7 @@ JOIN wikidata_entities e ON e.entity_numeric_id = r.entity_numeric_id";
             }
 
             entityIdsNeedingJson.Add(entityNumericId);
-            referenceRecords.Add(new P141ReferenceRecord(entityNumericId, statementId, referenceHash, sourceQid, taxonId, statusEntityId, statementRank));
+            referenceRecords.Add(new P141ReferenceRecord(entityNumericId, statementId, referenceHash, sourceQid, taxonId ?? string.Empty, statusEntityId, statementRank));
         }
 
         if (referenceRecords.Count == 0) {
@@ -484,6 +491,13 @@ JOIN wikidata_entities e ON e.entity_numeric_id = r.entity_numeric_id";
             }
             else {
                 stats.ReferencesMissingRetrievedYear++;
+            }
+
+            // A P627-less reference has its source/retrieved-year counted above (its provenance is
+            // real), but it has no taxon — so it takes no further part in the missing-P627 sampling,
+            // deprecated handling, or the status-agreement comparison.
+            if (string.IsNullOrEmpty(reference.IucnTaxonId)) {
+                continue;
             }
 
             if (!entitiesWithP627.Contains(reference.EntityNumericId)) {

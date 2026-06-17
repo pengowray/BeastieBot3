@@ -567,13 +567,21 @@ WHERE entity_numeric_id=@id";
             statementCount++;
 
             foreach (var reference in statement.References) {
-                if (reference.IucnTaxonIds.Count == 0) {
-                    continue;
-                }
-
                 refStatementParam.Value = statement.StatementId;
                 hashParam.Value = reference.ReferenceHash;
                 sourceParam.Value = reference.SourceQid.HasValue ? reference.SourceQid.Value : DBNull.Value;
+
+                if (reference.IucnTaxonIds.Count == 0) {
+                    // No P627 IUCN-taxon snak, but the reference may still carry a P248 source /
+                    // P813 retrieved date. Store it with an empty iucn_taxon_id sentinel so those
+                    // source/year stats aren't dropped; with no taxon it's excluded from the
+                    // status-agreement comparison downstream.
+                    iucnParam.Value = string.Empty;
+                    referenceCommand.ExecuteNonQuery();
+                    referenceCount++;
+                    continue;
+                }
+
                 var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
                 foreach (var value in reference.IucnTaxonIds) {
                     if (!seen.Add(value)) {
