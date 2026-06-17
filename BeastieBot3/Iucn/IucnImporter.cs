@@ -339,6 +339,13 @@ VALUES (@filename, @version, @started);";
                 if (HasColumn("scientificName")) {
                     CreateIndex(tableName, "scientificName", "scientificName");
                 }
+                // redlistCategory is equality-filtered by every status-scoped count/list/chart
+                // query; mirror the projection store's idx_proj_assessments_category so the CSV
+                // import path gets the same sargable lookup. (scopes is intentionally NOT indexed:
+                // the canonical predicate uses scopes LIKE '%Global%', which no index can serve.)
+                if (HasColumn("redlistCategory")) {
+                    CreateIndex(tableName, "redlistCategory", "redlistCategory");
+                }
                 break;
             case "taxonomy":
             case "taxonomy_html":
