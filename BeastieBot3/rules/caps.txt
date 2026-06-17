@@ -1416,7 +1416,8 @@ pincer // Canarian pincer grasshopper, Pacific pincer lobster
 pincer-tailed // Lesser pincer-tailed wisp
 pincushion // Nickels' pincushion cactus, Cochise pincushion cactus
 pincushion-cactus // Park pincushion-cactus
-pine // North pine river freshwater snail, Gaige's pine forest snake
+pine // Gaige's pine forest snake
+North Pine River // North pine river freshwater snail
 pineapple // Pima pineapple cactus
 pine-oak // Tearful pine-oak snake
 pink // Kaputar pink slug, Rayed pink fatmucket, Galápagos pink land iguana
