@@ -336,14 +336,15 @@ internal sealed class SpeciesLineFormatter {
             return null;
         }
 
-        var linkTarget = !string.IsNullOrWhiteSpace(articleTitle) ? articleTitle : fullScientific;
-
-        if (!abbreviateGenus && string.Equals(linkTarget, fullScientific, StringComparison.OrdinalIgnoreCase) &&
-            !RequiresRankMarker(record)) {
-            return $"''[[{fullScientific}]]''";
+        // Subspecies/variety articles rarely exist, so only link to a genuinely-known Wikipedia
+        // article. Without one, render the formatted name as plain (italic) text rather than a
+        // guaranteed redlink to a bare trinomial. (Species binomials keep their links elsewhere — a
+        // missing species page is a useful redlink, but an infrarank/subpopulation one is just noise.)
+        if (string.IsNullOrWhiteSpace(articleTitle)) {
+            return displayText;
         }
 
-        return $"[[{linkTarget}|{displayText}]]";
+        return $"[[{articleTitle}|{displayText}]]";
     }
 
     /// <summary>
