@@ -204,11 +204,20 @@ internal sealed class WikipediaListDefinitionLoader {
             ["taxa_name"] = taxaGroup.Name ?? raw.TaxaGroup!,
             ["taxa_name_lower"] = (taxaGroup.Name ?? raw.TaxaGroup!).ToLowerInvariant(),
             ["taxa_slug"] = ToSlug(taxaGroup.Name ?? raw.TaxaGroup!),
+            // Singular attributive form ("mammalian", "bird", "plant") so descriptions read
+            // "Mammalian taxa …" rather than the ungrammatical plural "Mammals taxa …".
+            ["taxa_adjective"] = taxaGroup.Adjective ?? (taxaGroup.Name ?? raw.TaxaGroup!).ToLowerInvariant(),
         };
 
         // Use explicit values from the list definition, or expand from templates
         var title = raw.Title ?? ExpandTemplate(preset.TitleTemplate, vars);
         var description = raw.Description ?? ExpandTemplate(preset.DescriptionTemplate, vars);
+        // Preset descriptions start with the (lowercase) singular adjective; capitalize the leading
+        // letter so the sentence reads "Plant taxa …" not "plant taxa …". Explicit raw descriptions
+        // are left as authored.
+        if (raw.Description is null && !string.IsNullOrEmpty(description)) {
+            description = char.ToUpperInvariant(description[0]) + description[1..];
+        }
         var outputFile = raw.OutputFile ?? ExpandTemplate(preset.OutputTemplate, vars);
 
         // Stack the layers low→high: preset (under) → taxa-group → list (over). Per-field nulls fall

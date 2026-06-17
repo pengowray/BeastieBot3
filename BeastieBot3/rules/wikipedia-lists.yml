@@ -128,7 +128,7 @@ lists:
 
   - id: ew-animals
     title: "List of animals that are extinct in the wild"
-    description: "Animal taxa with an EW status."
+    description: "Animal taxa assessed by the IUCN as extinct in the wild."
     output_file: "List_of_animals_that_are_extinct_in_the_wild.wikitext"
     filters:
       - rank: kingdom
@@ -143,7 +143,7 @@ lists:
 
   - id: ew-plants
     title: "List of plants that are extinct in the wild"
-    description: "Plant taxa with an EW assessment."
+    description: "Plant taxa assessed by the IUCN as extinct in the wild."
     output_file: "List_of_plants_that_are_extinct_in_the_wild.wikitext"
     filters:
       - rank: kingdom

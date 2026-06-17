@@ -266,56 +266,13 @@ internal sealed class StoreBackedCommonNameProvider : IDisposable {
             return name;
         }
 
-        // Split into words and apply rules
-        var words = name.Split(' ');
-        for (int i = 0; i < words.Length; i++) {
-            var word = words[i];
-            var lower = word.ToLowerInvariant();
-            
-            if (_capsRules.TryGetValue(lower, out var correctForm)) {
-                // Use the caps rule if we have one
-                words[i] = correctForm;
-            } else if (IsAllCaps(word) && word.Length > 1) {
-                // If word is ALL CAPS (more than 1 letter) and not in caps rules, apply default casing:
-                // - First word: Title Case
-                // - Other words: lowercase
-                words[i] = i == 0 ? ToTitleCase(word) : lower;
-            }
-            // Otherwise leave as-is (single letters or mixed case words are likely already correct)
-        }
-
-        // Ensure first letter is capitalized
-        var result = string.Join(' ', words);
-        if (result.Length > 0 && char.IsLower(result[0])) {
-            result = char.ToUpperInvariant(result[0]) + result[1..];
-        }
-
-        return result;
-    }
-
-    /// <summary>
-    /// Check if a word is entirely uppercase letters (ignoring non-letters).
-    /// </summary>
-    private static bool IsAllCaps(string word) {
-        if (string.IsNullOrEmpty(word)) return false;
-        
-        bool hasLetter = false;
-        foreach (var c in word) {
-            if (char.IsLetter(c)) {
-                hasLetter = true;
-                if (!char.IsUpper(c)) return false;
-            }
-        }
-        return hasLetter;
-    }
-
-    /// <summary>
-    /// Convert to title case (first letter upper, rest lower).
-    /// </summary>
-    private static string ToTitleCase(string word) {
-        if (string.IsNullOrEmpty(word)) return word;
-        if (word.Length == 1) return word.ToUpperInvariant();
-        return char.ToUpperInvariant(word[0]) + word[1..].ToLowerInvariant();
+        // Delegate to the shared caps.txt-driven normalizer (same path the common-names report uses):
+        // the first word is title-cased; subsequent words are lowercased unless caps.txt — including
+        // multi-word phrase rules like "guinea pig" — or an internal-caps / possessive signal keeps
+        // them capitalized. It also straightens apostrophes and collapses stray double-spaces. This
+        // replaces the old "leave mixed case alone" behaviour that leaked IUCN house-style
+        // capitalization such as "African banded Barb".
+        return CommonNameNormalizer.ApplyCapitalization(name, _capsRules);
     }
 
     public void Dispose() {

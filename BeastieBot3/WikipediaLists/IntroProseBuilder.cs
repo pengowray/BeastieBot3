@@ -87,13 +87,18 @@ internal sealed class IntroProseBuilder {
             }
         }
 
+        // Format the generation date as day-month-year ("18 June 2026") and a "Month yyyy" stamp so
+        // both the citation access-date and the {{Use dmy dates}} maintenance tag match the article's
+        // declared dmy style (MOS:DATEUNIFY) and reflect the real generation month.
+        var generatedNow = DateTimeOffset.UtcNow;
         return new Dictionary<string, object?> {
             ["title"] = definition.Title,
             ["description"] = definition.Description,
             ["scope_label"] = scopeLabel,
             ["dataset_version"] = datasetVersion,
             ["dataset_year"] = datasetYear,
-            ["generated_at"] = DateTimeOffset.UtcNow.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
+            ["generated_at"] = generatedNow.ToString("d MMMM yyyy", CultureInfo.InvariantCulture),
+            ["generated_month_year"] = generatedNow.ToString("MMMM yyyy", CultureInfo.InvariantCulture),
             ["total_entries"] = totalCount,
             ["sections_summary"] = sectionSummary,
             // Intro text variables
@@ -115,12 +120,12 @@ internal sealed class IntroProseBuilder {
 
     private static string? BuildSubspeciesParagraph(int subspeciesCount, int varietyCount, string? taxaAdj, string? statusText) {
         if (subspeciesCount == 0 && varietyCount == 0) return null;
-        var total = subspeciesCount + varietyCount;
+        var varietyNoun = varietyCount == 1 ? "variety" : "varieties";
         string what;
         if (subspeciesCount > 0 && varietyCount > 0)
-            what = $"{NewspaperNumber(subspeciesCount)} subspecies and {NewspaperNumber(varietyCount)} varieties";
+            what = $"{NewspaperNumber(subspeciesCount)} subspecies and {NewspaperNumber(varietyCount)} {varietyNoun}";
         else if (varietyCount > 0)
-            what = $"{NewspaperNumber(varietyCount)} {taxaAdj} varieties";
+            what = $"{NewspaperNumber(varietyCount)} {taxaAdj} {varietyNoun}";
         else
             what = $"{NewspaperNumber(subspeciesCount)} {taxaAdj} subspecies";
 
@@ -180,9 +185,9 @@ internal sealed class IntroProseBuilder {
 
         return $"Additionally {NewspaperNumber(ddCount)} {taxaAdj} species ({ddPercent} of those evaluated) are listed as [[data deficient]], meaning there is insufficient information for a full assessment of conservation status. "
             + "As these species typically have small distributions and/or populations, they are intrinsically likely to be threatened, according to the IUCN."
-            + "<ref>{{cite web|title=Limitations of the Data|url=http://www.iucnredlist.org/initiatives/mammals/description/limitations|website=The IUCN Red List of Threatened Species|publisher=Union for Conservation of Nature and Natural Resources (IUCN)|accessdate=11 January 2016|archive-date=7 October 2018|archive-url=https://web.archive.org/web/20181007170630/http://www.iucnredlist.org/initiatives/mammals/description/limitations|url-status=live}}</ref>"
+            + "<ref>{{cite web|title=Limitations of the Data|url=http://www.iucnredlist.org/initiatives/mammals/description/limitations|website=The IUCN Red List of Threatened Species|publisher=International Union for Conservation of Nature and Natural Resources (IUCN)|access-date=11 January 2016}}</ref>"
             + " While the category of ''data deficient'' indicates that no assessment of extinction risk has been made for the taxa, the IUCN notes that it may be appropriate to give them \"the same degree of attention as threatened taxa, at least until their status can be assessed.\""
-            + "<ref>{{cite web|title=2001 Categories & Criteria (version 3.1)|url=http://www.iucnredlist.org/static/categories_criteria_3_1|website=The IUCN Red List of Threatened Species|publisher=Union for Conservation of Nature and Natural Resources (IUCN)|accessdate=11 January 2016|archive-date=8 October 2008|archive-url=https://web.archive.org/web/20081008002903/http://www.iucnredlist.org/static/categories_criteria_3_1|url-status=live}}</ref>";
+            + "<ref>{{cite web|title=2001 Categories & Criteria (version 3.1)|url=http://www.iucnredlist.org/static/categories_criteria_3_1|website=The IUCN Red List of Threatened Species|publisher=International Union for Conservation of Nature and Natural Resources (IUCN)|access-date=11 January 2016}}</ref>";
     }
 
     private static string BuildNotesParagraph(int speciesCount, int subspeciesCount, int varietyCount, int subpopCount, string? taxaAdj, string? statusText) {

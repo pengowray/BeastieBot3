@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text;
 using System.Text.RegularExpressions;
 
@@ -24,6 +25,40 @@ internal static class CommonNameNormalizer {
 
     // Pattern for splitting on word boundaries (keeping hyphens with words)
     private static readonly Regex WordSplitPattern = new(@"[\s\-']+", RegexOptions.Compiled);
+
+    // Collapses runs of whitespace (incl. the stray double-spaces seen in source vernaculars).
+    private static readonly Regex WhitespaceRunPattern = new(@"\s+", RegexOptions.Compiled);
+
+    /// <summary>
+    /// Normalizes display typography in a name: straightens curly quotes/apostrophes to ASCII and
+    /// collapses internal whitespace runs to a single space. Applied before capitalization so the
+    /// common-names report and the Wikipedia list generator emit consistent, MoS-friendly text.
+    /// </summary>
+    public static string NormalizeDisplayTypography(string name) {
+        if (string.IsNullOrWhiteSpace(name)) {
+            return name;
+        }
+
+        var sb = new StringBuilder(name.Length);
+        foreach (var ch in name) {
+            switch (ch) {
+                case '‘': // left single quotation mark
+                case '’': // right single quotation mark (curly apostrophe)
+                case 'ʼ': // modifier letter apostrophe
+                    sb.Append('\'');
+                    break;
+                case '“': // left double quotation mark
+                case '”': // right double quotation mark
+                    sb.Append('"');
+                    break;
+                default:
+                    sb.Append(ch);
+                    break;
+            }
+        }
+
+        return WhitespaceRunPattern.Replace(sb.ToString().Trim(), " ");
+    }
 
     /// <summary>
     /// Normalizes a common name for comparison purposes.
@@ -55,45 +90,69 @@ internal static class CommonNameNormalizer {
         return DisambiguationSuffixPattern.Replace(name.Trim(), "").Trim();
     }
 
+    // Longest multi-word caps phrase we will try to match (e.g. "lesser bird of paradise").
+    private const int MaxPhraseWords = 5;
+
     /// <summary>
-    /// Applies capitalization rules to a common name for display.
-    /// First word is always title case, subsequent words follow caps rules.
+    /// Applies capitalization rules to a common name for display, driven by the caps.txt rule set.
+    /// The first word is title-cased; subsequent words are lowercased unless a rule keeps them
+    /// capitalized. Rules may be single words ("guinea" → "Guinea") or multi-word phrases
+    /// ("guinea pig" → "guinea pig"); a phrase rule wins over its constituent single-word rules, so
+    /// "Santa Catarina's guinea pig" lowercases "guinea pig" even though "guinea" alone is "Guinea".
+    /// Words with an internal capital ("McGregor") or a possessive proper noun ("Nordmann's") keep
+    /// their capitalization even without an explicit rule. Also straightens apostrophes/quotes and
+    /// collapses stray double-spaces.
     /// </summary>
-    public static string ApplyCapitalization(string name, Func<string, string?> capsLookup) {
+    public static string ApplyCapitalization(string name, IReadOnlyDictionary<string, string> capsRules) {
         if (string.IsNullOrWhiteSpace(name)) {
             return name;
         }
 
-        // Remove disambiguation suffix first
-        var cleaned = RemoveDisambiguationSuffix(name);
+        // Remove disambiguation suffix first, then straighten apostrophes/quotes and collapse
+        // stray double-spaces so the rendered name is typographically clean.
+        var cleaned = NormalizeDisplayTypography(RemoveDisambiguationSuffix(name));
 
-        // Split into words, preserving separators
+        // Word tokens, with positions preserved so the original separators are re-emitted verbatim.
+        var words = Regex.Matches(cleaned, @"[\w']+");
         var result = new StringBuilder();
-        var isFirstWord = true;
         var lastEnd = 0;
 
-        foreach (Match match in Regex.Matches(cleaned, @"[\w']+")) {
-            // Add any separator characters before this word
+        for (var i = 0; i < words.Count; i++) {
+            var match = words[i];
+
+            // Re-emit any separator characters before this word.
             if (match.Index > lastEnd) {
                 result.Append(cleaned.Substring(lastEnd, match.Index - lastEnd));
+            }
+
+            // Prefer the longest multi-word phrase rule that starts at this word.
+            var phraseWords = TryMatchPhraseRule(cleaned, words, i, capsRules, out var phraseForm);
+            if (phraseWords > 0) {
+                result.Append(phraseForm);
+                var last = words[i + phraseWords - 1];
+                lastEnd = last.Index + last.Length;
+                i += phraseWords - 1;
+                continue;
             }
 
             var word = match.Value;
             string capitalizedWord;
 
-            if (isFirstWord) {
-                // First word is always title case
-                capitalizedWord = ToTitleCase(word);
-                isFirstWord = false;
+            if (i == 0) {
+                // First word: a single-word rule may override, else preserve its own caps signal,
+                // else title-case it. The trailing EnsureFirstLetterUpper guarantees the leading cap.
+                capitalizedWord = LookupSingleWord(capsRules, word)
+                    ?? (PreservesOwnCapitalization(word) ? word : ToTitleCase(word));
+            } else if (LookupSingleWord(capsRules, word) is { } correctForm) {
+                capitalizedWord = correctForm;
+            } else if (PreservesOwnCapitalization(word)) {
+                // Keep words that carry their own capitalization signal even without an explicit
+                // caps.txt rule yet: internal capitals ("McGregor", "DNA") or a possessive proper
+                // noun ("Nordmann's"). This avoids over-lowercasing names caps.txt hasn't caught up to.
+                capitalizedWord = word;
             } else {
-                // Look up correct capitalization
-                var correctForm = capsLookup(word.ToLowerInvariant());
-                if (correctForm != null) {
-                    capitalizedWord = correctForm;
-                } else {
-                    // Default to lowercase for unknown words (common name convention)
-                    capitalizedWord = word.ToLowerInvariant();
-                }
+                // Default to lowercase for unknown words (common name convention).
+                capitalizedWord = word.ToLowerInvariant();
             }
 
             result.Append(capitalizedWord);
@@ -105,7 +164,62 @@ internal static class CommonNameNormalizer {
             result.Append(cleaned.Substring(lastEnd));
         }
 
-        return result.ToString();
+        // Common names are sentence-case: guarantee the first visible letter is capitalized.
+        return EnsureFirstLetterUpper(result.ToString());
+    }
+
+    private static string? LookupSingleWord(IReadOnlyDictionary<string, string> capsRules, string word) {
+        return capsRules.TryGetValue(word.ToLowerInvariant(), out var form) ? form : null;
+    }
+
+    /// <summary>
+    /// Greedily matches the longest multi-word caps phrase (2..MaxPhraseWords words) starting at
+    /// <paramref name="start"/>, requiring the words be separated by single spaces. Returns the word
+    /// count consumed (0 if no phrase rule matched) and the correctly-cased phrase via
+    /// <paramref name="phraseForm"/>.
+    /// </summary>
+    private static int TryMatchPhraseRule(string cleaned, MatchCollection words, int start,
+        IReadOnlyDictionary<string, string> capsRules, out string phraseForm) {
+        phraseForm = string.Empty;
+        var maxLen = Math.Min(MaxPhraseWords, words.Count - start);
+
+        for (var len = maxLen; len >= 2; len--) {
+            // Require single-space separators between every word in the candidate phrase.
+            var contiguous = true;
+            for (var k = start; k < start + len - 1; k++) {
+                var gapStart = words[k].Index + words[k].Length;
+                var gapEnd = words[k + 1].Index;
+                if (gapEnd - gapStart != 1 || cleaned[gapStart] != ' ') {
+                    contiguous = false;
+                    break;
+                }
+            }
+            if (!contiguous) {
+                continue;
+            }
+
+            var key = new StringBuilder();
+            for (var k = start; k < start + len; k++) {
+                if (k > start) {
+                    key.Append(' ');
+                }
+                key.Append(words[k].Value.ToLowerInvariant());
+            }
+
+            if (capsRules.TryGetValue(key.ToString(), out var form)) {
+                phraseForm = form;
+                return len;
+            }
+        }
+
+        return 0;
+    }
+
+    private static string EnsureFirstLetterUpper(string value) {
+        if (value.Length > 0 && char.IsLower(value[0])) {
+            return char.ToUpperInvariant(value[0]) + value[1..];
+        }
+        return value;
     }
 
     /// <summary>
@@ -167,6 +281,25 @@ internal static class CommonNameNormalizer {
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// True when a word should keep its existing capitalization rather than be lowercased:
+    /// it has an internal capital (e.g. "McGregor", "DNA") or is a possessive that is almost
+    /// always a proper noun (e.g. "Nordmann's", "Hales'"). Used as a fallback when caps.txt has
+    /// no explicit rule, so genuine proper nouns are not flattened to lowercase.
+    /// </summary>
+    private static bool PreservesOwnCapitalization(string word) {
+        if (string.IsNullOrEmpty(word) || word.Length < 2) {
+            return false;
+        }
+
+        if (word.Substring(1).Any(char.IsUpper)) {
+            return true;
+        }
+
+        return (word.EndsWith("'s", StringComparison.OrdinalIgnoreCase) || word.EndsWith("s'", StringComparison.Ordinal))
+            && char.IsUpper(word[0]);
     }
 
     /// <summary>

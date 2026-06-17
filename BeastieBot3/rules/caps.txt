@@ -824,7 +824,9 @@ ground-dove // Eastern bronze ground-dove
 ground-weaver // Horrid ground-weaver
 grove // Sacred grove bushfrog
 growing // Forest growing oncidium
-Guinea // Sacha Guinea pig, New Guinea free-tailed bat, New Guinea snake-eyed skink
+Guinea // New Guinea free-tailed bat, New Guinea snake-eyed skink
+guinea fowl // generic vernacular — lowercase, overrides the single-word Guinea rule
+guinea pig // generic vernacular — lowercase, overrides the single-word Guinea rule
 Guinean // Lesser Guinean devil ray
 gul // White gul mohur
 gulf // Northern gulf anchovy

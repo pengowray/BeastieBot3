@@ -17,9 +17,11 @@ public class ProseFormatTests {
     [InlineData(1, "one")]
     [InlineData(10, "ten")]
     [InlineData(11, "11")]
-    [InlineData(9999, "9999")]
-    public void NewspaperNumber_SmallSpelledLargeDigits(int n, string expected) {
-        Assert.Equal(expected, ProseFormat.NewspaperNumber(n));
+    [InlineData(999, "999")]
+    [InlineData(6445, "6,445")]
+    [InlineData(9999, "9,999")]
+    public void NewspaperNumber_SmallSpelledLargeGrouped(int n, string expected) {
+        WithEnUs(() => Assert.Equal(expected, ProseFormat.NewspaperNumber(n)));
     }
 
     [Fact]
@@ -30,8 +32,9 @@ public class ProseFormatTests {
     [Fact]
     public void FormatPercentage_AdaptivePrecision() {
         WithEnUs(() => {
-            Assert.Equal("50%", ProseFormat.FormatPercentage(1, 2));     // > 10% -> P0
-            Assert.Equal("5.0%", ProseFormat.FormatPercentage(5, 100));  // 1-10% -> P1
+            Assert.Equal("50.0%", ProseFormat.FormatPercentage(1, 2));     // 1-100% -> P1
+            Assert.Equal("10.0%", ProseFormat.FormatPercentage(10, 100));  // boundary stays one decimal
+            Assert.Equal("5.0%", ProseFormat.FormatPercentage(5, 100));    // 1-10% -> P1
             Assert.Equal("0.03%", ProseFormat.FormatPercentage(3, 10000)); // < 1% -> P2
         });
     }

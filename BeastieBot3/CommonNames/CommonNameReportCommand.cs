@@ -580,8 +580,7 @@ internal sealed class CommonNameReportCommand : AsyncCommand<CommonNameReportCom
 
     private static string GetDisplayName(CommonNameRecord record, IReadOnlyDictionary<string, string> capsRules) {
         var baseName = record.RawName;
-        return CommonNameNormalizer.ApplyCapitalization(baseName, word =>
-            capsRules.TryGetValue(word, out var value) ? value : null);
+        return CommonNameNormalizer.ApplyCapitalization(baseName, capsRules);
     }
 
     private static void AddTraceIssues(

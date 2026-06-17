@@ -1,5 +1,6 @@
 using System;
 using System.Text;
+using System.Text.RegularExpressions;
 using BeastieBot3.CommonNames;
 using BeastieBot3.Iucn;
 using BeastieBot3.Taxonomy;
@@ -489,6 +490,13 @@ internal sealed class SpeciesLineFormatter {
     }
 
     private string? ResolveCommonName(IucnSpeciesRecord record) {
+        var candidate = ResolveCommonNameCandidate(record);
+        // Drop candidates that are really the scientific name repeated, or carry working/authority
+        // strings ("sp. nov.", "(Author) 1993", " non ") — fall back to scientific-name styling instead.
+        return IsUnusableCommonName(candidate, record) ? null : candidate;
+    }
+
+    private string? ResolveCommonNameCandidate(IucnSpeciesRecord record) {
         // First check legacy rules (highest priority - manual overrides)
         var taxaRules = _legacyRules.Get(record.ScientificNameTaxonomy ?? record.ScientificNameAssessments ?? string.Empty);
         if (!string.IsNullOrWhiteSpace(taxaRules?.CommonName)) {
@@ -507,6 +515,54 @@ internal sealed class SpeciesLineFormatter {
 
         var row = record.ToTaxonomyRow();
         return _commonNameProvider.GetBestCommonName(row, entityIds: null);
+    }
+
+    // A 4-digit year (1600–2099) betrays a botanical/zoological authority citation rather than a
+    // vernacular name; common names effectively never contain one.
+    private static readonly Regex AuthorityYearPattern = new(@"\b(1[6-9]\d{2}|20\d{2})\b", RegexOptions.Compiled);
+
+    // Returns true when the resolved "common name" is not actually a usable vernacular: a working
+    // placeholder, an authority/homonym string, or simply the scientific name repeated.
+    private static bool IsUnusableCommonName(string? candidate, IucnSpeciesRecord record) {
+        if (string.IsNullOrWhiteSpace(candidate)) {
+            return true;
+        }
+
+        var name = candidate.Trim();
+
+        if (name.Contains("sp. nov", StringComparison.OrdinalIgnoreCase)) return true;
+        if (name.Contains(" spp.", StringComparison.OrdinalIgnoreCase)) return true;
+        if (name.Contains(" non ", StringComparison.Ordinal)) return true;
+        if (AuthorityYearPattern.IsMatch(name)) return true;
+
+        // A "common name" that is really just the scientific name repeated.
+        var scientific = ResolveScientificName(record);
+        if (!string.IsNullOrWhiteSpace(scientific) &&
+            string.Equals(name, scientific, StringComparison.OrdinalIgnoreCase)) {
+            return true;
+        }
+
+        var binomial = BuildBinomial(record);
+        if (!string.IsNullOrWhiteSpace(binomial) &&
+            string.Equals(FirstTwoTokens(name), binomial, StringComparison.OrdinalIgnoreCase)) {
+            return true;
+        }
+
+        return false;
+    }
+
+    private static string? BuildBinomial(IucnSpeciesRecord record) {
+        var genus = record.GenusName?.Trim();
+        var species = record.SpeciesName?.Trim();
+        if (string.IsNullOrWhiteSpace(genus) || string.IsNullOrWhiteSpace(species)) {
+            return null;
+        }
+        return $"{genus} {species}";
+    }
+
+    private static string FirstTwoTokens(string name) {
+        var parts = name.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
+        return parts.Length <= 2 ? string.Join(' ', parts) : parts[0] + " " + parts[1];
     }
 
     public static string? ResolveScientificName(IucnSpeciesRecord record) {
