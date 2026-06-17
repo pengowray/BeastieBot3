@@ -6,9 +6,12 @@ using Microsoft.Data.Sqlite;
 // Shared by IucnListQueryService (list body + counts) and IucnChartDataBuilder (chart/summary
 // counts) so include/exclude/System semantics can never drift between the three call sites.
 //
-// Sargability (CLAUDE.md rule): every clause is an exact-match equality or NOT IN on an indexed,
-// pre-normalized column value — never LOWER()/UPPER()/LIKE on the column. kingdom..family values
-// are upper-cased to match the denormalized UPPERCASE columns before binding.
+// Sargability (CLAUDE.md rule): include/exclude clauses are exact-match equality or NOT IN on an
+// indexed, pre-normalized column value — never LOWER()/UPPER()/LIKE on the column. kingdom..family
+// values are upper-cased to match the denormalized UPPERCASE columns before binding. The one
+// exception is the multi-valued `systems` tag, matched with a substring LIKE because the column
+// packs several tags in one string; it's used only by a handful of marine/terrestrial lists over an
+// already-scanned set, so the non-sargable LIKE is acceptable there.
 
 namespace BeastieBot3.WikipediaLists;
 

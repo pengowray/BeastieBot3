@@ -6,8 +6,9 @@ using Microsoft.Extensions.Configuration;
 // Reads paths.ini configuration using Microsoft.Extensions.Configuration.
 // Returns flattened keys like "Datastore:IUCN_sqlite_from_cvs" from [Datastore]
 // section. Paths are relative to the INI file location unless absolute.
-// Supports optional platform-specific files (paths-win.ini, paths-linux.ini)
-// which are tried first. Used by PathsService for centralized path resolution.
+// Loads a single INI (default paths.ini next to the app); paths-win.ini / paths-linux.ini
+// exist but are NOT auto-selected by OS — they load only when passed via --ini-file.
+// Used by PathsService for centralized path resolution.
 
 namespace BeastieBot3.Configuration;
     // Reads path values from an INI file (default: "paths.ini" next to the app).

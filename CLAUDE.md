@@ -29,7 +29,7 @@ Commands **self-register via attributes** — `Program.cs` no longer hand-wires 
 
 ### Configuration Flow
 
-`paths.ini` (sections: `[Datasets]`, `[Datastore]`, `[Reports]`) → `IniPathReader` → `PathsService` (typed facade with `Get*Path()` / `Resolve*()` methods) → commands. CLI flags `--settings-dir` / `--ini-file` override the default INI location. API keys (IUCN token, Wikidata user-agent) load from `.env` via `EnvFileLoader`.
+`paths.ini` (sections: `[General]`, `[Datasets]`, `[Datastore]`; `reports_dir` lives under `[Datastore]`) → `IniPathReader` → `PathsService` (typed facade with `Get*Path()` / `Resolve*()` methods) → commands. CLI flags `--settings-dir` / `--ini-file` override the default INI location. API keys (IUCN token, Wikidata user-agent) load from `.env` via `EnvFileLoader`.
 
 ### SQLite Store Pattern
 

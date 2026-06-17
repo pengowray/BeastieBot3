@@ -46,7 +46,7 @@ internal sealed class MyCommand : AsyncCommand<MyCommand.Settings> {
 
 ### Configuration Flow
 
-`paths.ini` (INI sections `[Datasets]`, `[Datastore]`, `[Reports]`) → `IniPathReader` → `PathsService` (typed facade with `Get*Path()` / `Resolve*()` methods) → commands. CLI `--settings-dir` / `--ini-file` options override defaults. API keys load from `.env` via `EnvFileLoader`.
+`paths.ini` (INI sections `[General]`, `[Datasets]`, `[Datastore]`; `reports_dir` is under `[Datastore]`) → `IniPathReader` → `PathsService` (typed facade with `Get*Path()` / `Resolve*()` methods) → commands. CLI `--settings-dir` / `--ini-file` options override defaults. API keys load from `.env` via `EnvFileLoader`.
 
 ### SQLite Store Pattern
 

@@ -46,8 +46,7 @@ namespace BeastieBot3.Configuration;
             _reader.Get("Datastore:enwiki_cache_sqlite") ?? _reader.Get("enwiki_cache_sqlite");
 
         public string? GetReportOutputDirectory() =>
-            _reader.Get("Reports:output_dir")
-            ?? _reader.Get("Datastore:reports_dir")
+            _reader.Get("Datastore:reports_dir")
             ?? _reader.Get("reports_dir")
             ?? _reader.Get("reports_output_dir");
 

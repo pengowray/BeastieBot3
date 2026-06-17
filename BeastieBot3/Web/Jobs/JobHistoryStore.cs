@@ -7,7 +7,7 @@ namespace BeastieBot3.Web.Jobs;
 // SQLite-backed persistence for the web job runner so the "Recent jobs" list
 // (and each job's captured output) survives server restarts.
 //
-// Schema: one row per job. Output is stored as TEXT and capped at 256 KB so a
+// Schema: one row per job. Output is stored as TEXT and capped at 256K characters so a
 // single runaway import doesn't bloat the DB. Past that, we append a
 // "[output truncated]" marker.
 //
@@ -18,8 +18,8 @@ namespace BeastieBot3.Web.Jobs;
 // Web-layer type, kept public for the minimal-API DI graph (JobRegistry/FlowEvaluator), so it
 // reuses SqliteStore.OpenConnection as a helper rather than inheriting the internal base.
 public sealed class JobHistoryStore : IDisposable {
-    private const int MaxStoredOutputBytes = 256 * 1024;
-    private const string TruncationMarker = "\n\x1b[2m[output truncated; persisted up to 256 KB]\x1b[0m\n";
+    private const int MaxStoredOutputChars = 256 * 1024;
+    private const string TruncationMarker = "\n\x1b[2m[output truncated; persisted up to 256K characters]\x1b[0m\n";
 
     private readonly SqliteConnection _connection;
     private readonly object _writeLock = new();
@@ -177,8 +177,8 @@ public sealed class JobHistoryStore : IDisposable {
     }
 
     private static string TruncateOutput(string output) {
-        if (output.Length <= MaxStoredOutputBytes) return output;
-        return output.Substring(0, MaxStoredOutputBytes) + TruncationMarker;
+        if (output.Length <= MaxStoredOutputChars) return output;
+        return output.Substring(0, MaxStoredOutputChars) + TruncationMarker;
     }
 
     private static string StatusText(JobStatus s) => s switch {
