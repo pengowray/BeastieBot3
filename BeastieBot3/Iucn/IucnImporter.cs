@@ -15,7 +15,7 @@ using BeastieBot3.Infrastructure;
 
 // Core CSV import logic for IUCN Red List exports. Uses CsvHelper for parsing.
 // Creates tables: taxonomy (scientific_name, kingdom, class, order, family, etc.),
-// assessments (red_list_category, population_trend, etc.), synonyms. Handles
+// assessments (red_list_category, population_trend, etc.). Handles
 // UTF-8/BOM encoding and normalizes whitespace. Called by IucnImportCommand.
 
 namespace BeastieBot3.Iucn;

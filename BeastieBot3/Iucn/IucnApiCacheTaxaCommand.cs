@@ -11,7 +11,7 @@ using BeastieBot3.Configuration;
 using BeastieBot3.Infrastructure;
 
 // Step 1 of API caching: iterates SIS IDs from CSV-imported IUCN database,
-// fetches /api/v4/taxa/sis/{sisId} via IucnApiClient, stores JSON in taxa_cache.
+// fetches /api/v4/taxa/sis/{sisId} via IucnApiClient, stores JSON in the taxa table.
 // Taxa JSON includes synonyms, common names, and assessment_id references.
 // Uses IucnSisIdProvider for ID enumeration. Run via: iucn api-cache taxa
 

@@ -15,7 +15,7 @@ using BeastieBot3.Infrastructure;
 
 // Detects species that have been renamed across IUCN assessment versions.
 // Compares taxon_scientific_name across assessments sharing the same sis_id.
-// Uses API cache (assessment_cache + taxa_cache). Note: As of 2025-02, found
+// Uses API cache (assessments + taxa tables). Note: As of 2025-02, found
 // zero name changes—IUCN may use new sis_id for renamed taxa instead.
 // Outputs Markdown to Dirs:output_reports.
 

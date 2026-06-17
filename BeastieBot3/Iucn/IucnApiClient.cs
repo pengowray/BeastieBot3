@@ -8,9 +8,9 @@ using System.Threading.Tasks;
 using BeastieBot3.Configuration;
 using Spectre.Console;
 
-// HTTP client for IUCN Red List API v4 (apiv4.iucnredlist.org). Configuration from
+// HTTP client for IUCN Red List API v4 (api.iucnredlist.org). Configuration from
 // IucnApiConfiguration (IUCN_API_TOKEN env var required). Implements concurrency
-// limiting via semaphore and exponential backoff (2s→90s) for 429/5xx responses.
+// limiting via semaphore and exponential backoff (2s→60s default) for 429/5xx responses.
 // Endpoints: /api/v4/taxa/sis/{sisId}, /api/v4/assessment/{assessmentId}.
 // Used by IucnApiCacheTaxaCommand and IucnApiCacheAssessmentsCommand.
 

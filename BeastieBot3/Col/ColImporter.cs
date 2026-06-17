@@ -270,7 +270,7 @@ public sealed class ColImporter {
         cmd.CommandText = @"CREATE TABLE IF NOT EXISTS import_metadata (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     filename TEXT NOT NULL,
-    redlist_version TEXT NOT NULL,
+    redlist_version TEXT NOT NULL, -- reused from the IUCN schema; for CoL this holds the dataset label/version (not a Red List version)
     started_at TEXT NOT NULL,
     ended_at TEXT
 );";

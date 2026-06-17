@@ -1,7 +1,7 @@
 using System;
 
 // Configuration record for IUCN API client. Environment variables:
-// - IUCN_API_TOKEN (required): Bearer token for apiv4.iucnredlist.org
+// - IUCN_API_TOKEN (required): Bearer token for api.iucnredlist.org
 // - IUCN_API_BASE_URL (default: https://api.iucnredlist.org)
 // - IUCN_API_TIMEOUT_SECONDS (default: 120)
 // - IUCN_API_MAX_CONCURRENCY (default: 1)

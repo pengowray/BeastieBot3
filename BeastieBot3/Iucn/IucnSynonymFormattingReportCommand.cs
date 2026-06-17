@@ -13,7 +13,7 @@ using Spectre.Console.Cli;
 using BeastieBot3.Configuration;
 using BeastieBot3.Infrastructure;
 
-// Analyzes synonym entries from IUCN API cache (taxa_cache JSON). Reports:
+// Analyzes synonym entries from IUCN API cache (taxa table JSON). Reports:
 // - Missing or malformed authority strings
 // - Inconsistent year formatting in authorities
 // - Duplicate synonym entries per taxon

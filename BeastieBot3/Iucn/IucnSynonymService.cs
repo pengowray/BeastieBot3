@@ -8,7 +8,7 @@ using Microsoft.Data.Sqlite;
 using BeastieBot3.Col;
 using BeastieBot3.Taxonomy;
 
-// Aggregates synonyms from two sources: IUCN API cache (taxa_cache.synonym array)
+// Aggregates synonyms from two sources: IUCN API cache (taxa.json synonym array)
 // and COL database (via ColTaxonRepository). Caches results in memory by sis_id.
 // Used by WikipediaListGenerator to include synonym redirects in species lists.
 // Opens both Datastore:IUCN_api_cache_sqlite and Datastore:COL_sqlite.

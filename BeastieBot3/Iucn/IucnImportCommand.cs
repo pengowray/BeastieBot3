@@ -9,7 +9,7 @@ using Spectre.Console.Cli;
 using BeastieBot3.Configuration;
 
 // CLI entry point for IUCN CSV import. Orchestrates IucnImporter to read
-// CSV exports (taxonomy, assessments, synonyms) into Datastore:IUCN_sqlite_from_cvs.
+// CSV exports (taxonomy, assessments) into Datastore:IUCN_sqlite_from_cvs.
 // Looks for CSV files in Dirs:iucn_csv_folder. First step in IUCN data pipeline.
 // Run via: iucn import
 

@@ -6,8 +6,8 @@ using Microsoft.Data.Sqlite;
 using BeastieBot3.Infrastructure;
 
 // SQLite store for IUCN API v4 responses (Datastore:IUCN_api_cache_sqlite).
-// Schema: taxa_cache (sis_id PK, json_response), assessment_cache (assessment_id PK,
-// json_response), plus api_import_metadata via ApiImportMetadataStore for tracking.
+// Schema: taxa (root_sis_id PK, json), taxa_lookup, assessments (assessment_id PK, sis_id, json),
+// taxa_assessment_backlog, failed_requests, plus the HTTP request log via ApiImportMetadataStore.
 // Separate from CSV-imported database; provides synonyms, population trends, HTML
 // narratives not in CSV exports. Consumed by IucnSynonymService, CommonNameAggregateCommand.
 // Created incrementally by IucnApiCacheTaxa/AssessmentsCommands.

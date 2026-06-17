@@ -12,7 +12,7 @@ using BeastieBot3.Configuration;
 using BeastieBot3.Infrastructure;
 
 // Step 2 of API caching: downloads /api/v4/assessment/{id} for each assessment_id
-// found in previously cached taxa JSON. Stores responses in assessment_cache table.
+// found in previously cached taxa JSON. Stores responses in the assessments table.
 // Taxa must be cached first (IucnApiCacheTaxaCommand). Assessment JSON includes
 // conservation measures, threats, habitat, and population trend details not in CSV.
 // Run via: iucn api-cache assessments
