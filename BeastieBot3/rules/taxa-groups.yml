@@ -13,6 +13,10 @@ groups:
   amphibians:
     name: "Amphibians"
     adjective: "amphibian"
+    categories:
+      kingdom_list: "Lists of animals by conservation status"
+      list: "Lists of amphibians"
+      conservation: "Amphibian conservation"
     filters:
       - rank: kingdom
         value: Animalia
@@ -22,6 +26,10 @@ groups:
   birds:
     name: "Birds"
     adjective: "bird"
+    categories:
+      kingdom_list: "Lists of animals by conservation status"
+      list: "Lists of birds"
+      conservation: "Bird conservation"
     display:
       listing_style: CommonNameOnly  # All birds have common names
     filters:
@@ -33,6 +41,10 @@ groups:
   reptiles:
     name: "Reptiles"
     adjective: "reptile"
+    categories:
+      kingdom_list: "Lists of animals by conservation status"
+      list: "Lists of reptiles"
+      conservation: "Reptile conservation"
     filters:
       - rank: kingdom
         value: Animalia
@@ -42,6 +54,10 @@ groups:
   mammals:
     name: "Mammals"
     adjective: "mammalian"
+    categories:
+      kingdom_list: "Lists of animals by conservation status"
+      list: "Lists of mammals"
+      conservation: "Mammal conservation"
     display:
       listing_style: CommonNameOnly  # All mammals have common names
     filters:

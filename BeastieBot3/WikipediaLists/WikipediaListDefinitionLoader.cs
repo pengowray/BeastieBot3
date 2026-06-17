@@ -246,7 +246,54 @@ internal sealed class WikipediaListDefinitionLoader {
             TaxaNameLower = vars["taxa_name_lower"],
             StatusText = preset.StatusText,
             StatusWikiLink = preset.StatusWikiLink,
+            Categories = BuildCategoryLines(taxaGroup, preset, vars),
         };
+    }
+
+    // IUCN statuses that have a "IUCN Red List <status> species" maintenance category on en-wiki.
+    // Combined ("threatened") and legacy ("conservation dependent") presets have no single such
+    // category, so they get no universal status category.
+    private static readonly HashSet<string> IucnStatusCategoryStatuses = new(StringComparer.OrdinalIgnoreCase) {
+        "critically endangered", "endangered", "vulnerable", "near threatened",
+        "least concern", "data deficient", "extinct",
+    };
+
+    /// <summary>
+    /// Builds the <c>[[Category:...]]</c> footer lines for a preset-expanded list, mirroring the
+    /// en-wikipedia convention: a universal "IUCN Red List {status} species" category plus whichever
+    /// curated taxa-group categories are configured, each with a per-category sort key (no DEFAULTSORT).
+    /// </summary>
+    private static List<string> BuildCategoryLines(
+        TaxaGroupDefinition taxaGroup, ListPresetDefinition preset, Dictionary<string, string> vars) {
+        var lines = new List<string>();
+        var statusText = preset.StatusText;
+        if (string.IsNullOrWhiteSpace(statusText)) {
+            return lines;
+        }
+
+        var taxaName = vars["taxa_name"];
+        var taxaLower = vars["taxa_name_lower"];
+        var statusCap = char.ToUpperInvariant(statusText[0]) + statusText[1..];
+
+        // Universal status category, sorted to the front of the category with "*<TaxaName>".
+        if (IucnStatusCategoryStatuses.Contains(statusText)) {
+            lines.Add($"[[Category:IUCN Red List {statusText} species|*{taxaName}]]");
+        }
+
+        var cats = taxaGroup.Categories;
+        if (cats is not null) {
+            if (!string.IsNullOrWhiteSpace(cats.KingdomList)) {
+                lines.Add($"[[Category:{cats.KingdomList}|{statusCap} {taxaLower}]]");
+            }
+            if (!string.IsNullOrWhiteSpace(cats.List)) {
+                lines.Add($"[[Category:{cats.List}|{statusCap} {taxaLower}]]");
+            }
+            if (!string.IsNullOrWhiteSpace(cats.Conservation)) {
+                lines.Add($"[[Category:{cats.Conservation}]]");
+            }
+        }
+
+        return lines;
     }
 
     private static WikipediaListDefinition ConvertToDefinition(WikipediaListDefinitionRaw raw) {
@@ -347,6 +394,26 @@ internal sealed class TaxaGroupDefinition {
     /// Can be overridden at the list level.
     /// </summary>
     public DisplayPreferencesConfig? Display { get; init; }
+
+    /// <summary>
+    /// Curated en-wikipedia category names for this group's list articles. Only the parts that exist
+    /// on en-wiki are filled in; lists still always get the universal "IUCN Red List {status} species"
+    /// category derived from the preset status.
+    /// </summary>
+    public TaxaCategoryDefinition? Categories { get; init; }
+}
+
+/// <summary>
+/// Curated en-wikipedia category base names for a taxa group, used to build the list-article footer.
+/// Each maps to one <c>[[Category:...]]</c> line; the loader appends the per-category sort key.
+/// </summary>
+internal sealed class TaxaCategoryDefinition {
+    /// <summary>e.g. "Lists of animals by conservation status" → sort key "{Status} {taxa}".</summary>
+    public string? KingdomList { get; init; }
+    /// <summary>e.g. "Lists of mammals" → sort key "{Status} {taxa}".</summary>
+    public string? List { get; init; }
+    /// <summary>e.g. "Mammal conservation" (no sort key).</summary>
+    public string? Conservation { get; init; }
 }
 
 internal sealed class ListPresetsFile {

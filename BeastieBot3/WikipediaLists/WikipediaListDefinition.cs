@@ -83,6 +83,13 @@ internal sealed class WikipediaListDefinition {
     public string? StatusWikiLink { get; init; }
 
     /// <summary>
+    /// Pre-rendered <c>[[Category:...]]</c> footer lines (with per-category sort keys), derived by the
+    /// loader from the list's status + the taxa group's curated category names. Empty for lists with
+    /// no resolvable categories.
+    /// </summary>
+    public List<string> Categories { get; init; } = new();
+
+    /// <summary>
     /// Custom family-based grouping that replaces the normal taxonomy grouping.
     /// Used for paraphyletic groups like marine mammals where the grouping
     /// doesn't follow normal taxonomic ranks.

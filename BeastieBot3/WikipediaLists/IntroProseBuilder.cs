@@ -94,6 +94,7 @@ internal sealed class IntroProseBuilder {
         return new Dictionary<string, object?> {
             ["title"] = definition.Title,
             ["description"] = definition.Description,
+            ["categories"] = definition.Categories.Count > 0 ? string.Join("\n", definition.Categories) : null,
             ["scope_label"] = scopeLabel,
             ["dataset_version"] = datasetVersion,
             ["dataset_year"] = datasetYear,
