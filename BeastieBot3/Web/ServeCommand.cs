@@ -5,6 +5,7 @@ using BeastieBot3.Web.Jobs;
 using BeastieBot3.Web.Status;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.FileProviders;
 using Microsoft.Extensions.Hosting;
@@ -15,8 +16,10 @@ using Spectre.Console.Cli;
 namespace BeastieBot3.Web;
 
 // Boots a local Kestrel host that exposes the web UI and REST/SSE endpoints.
-// Phase 1: localhost-only, no auth, single-process. The command blocks until
-// Ctrl+C; pressing Ctrl+C shuts the host down cleanly.
+// Localhost-only, single-process. No user auth (it's a personal tool bound to
+// loopback), but mutating requests are guarded against cross-origin/DNS-rebinding
+// abuse (see the Origin/Host middleware below). The command blocks until Ctrl+C;
+// pressing Ctrl+C shuts the host down cleanly.
 
 internal sealed class ServeCommand : AsyncCommand<ServeCommand.Settings> {
     public sealed class Settings : CommonSettings {
@@ -95,6 +98,38 @@ internal sealed class ServeCommand : AsyncCommand<ServeCommand.Settings> {
             Console.SetError(originalErr);
             AnsiConsole.Console = originalAnsi;
             jobHistoryStore.Dispose();
+        });
+
+        // Localhost-only hardening. The server binds to loopback, but a malicious web page in
+        // the user's browser could still try to drive it (CSRF / DNS-rebinding), and those POSTs
+        // would run real commands or rewrite rules/*. Reject mutating requests whose stated origin
+        // or Host header isn't a loopback host. Read-only GETs are unaffected (so the read-only
+        // Playwright smoke tests and normal browsing keep working).
+        var allowedHosts = new HashSet<string>(StringComparer.OrdinalIgnoreCase) {
+            settings.Host, "127.0.0.1", "localhost", "::1", "[::1]"
+        };
+        app.Use(async (httpContext, next) => {
+            var method = httpContext.Request.Method;
+            var isMutating = HttpMethods.IsPost(method) || HttpMethods.IsPut(method)
+                || HttpMethods.IsDelete(method) || HttpMethods.IsPatch(method);
+            if (isMutating) {
+                var origin = httpContext.Request.Headers["Origin"].ToString();
+                if (string.IsNullOrEmpty(origin)) {
+                    origin = httpContext.Request.Headers["Referer"].ToString();
+                }
+                if (!string.IsNullOrEmpty(origin)
+                    && (!Uri.TryCreate(origin, UriKind.Absolute, out var originUri) || !allowedHosts.Contains(originUri.Host))) {
+                    httpContext.Response.StatusCode = StatusCodes.Status403Forbidden;
+                    await httpContext.Response.WriteAsync("Cross-origin request rejected (localhost-only server).").ConfigureAwait(false);
+                    return;
+                }
+                if (!allowedHosts.Contains(httpContext.Request.Host.Host)) {
+                    httpContext.Response.StatusCode = StatusCodes.Status403Forbidden;
+                    await httpContext.Response.WriteAsync("Unexpected Host header (localhost-only server).").ConfigureAwait(false);
+                    return;
+                }
+            }
+            await next().ConfigureAwait(false);
         });
 
         var wwwroot = Path.Combine(AppContext.BaseDirectory, "Web", "wwwroot");

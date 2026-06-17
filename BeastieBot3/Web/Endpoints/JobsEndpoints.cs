@@ -1,4 +1,5 @@
 using System.Text.Json;
+using BeastieBot3.Web.Commands;
 using BeastieBot3.Web.Jobs;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -26,10 +27,17 @@ public static class JobsEndpoints {
             if (req is null || string.IsNullOrWhiteSpace(req.Command)) {
                 return Results.BadRequest(new { error = "command is required" });
             }
-            if (Forbidden.Contains(req.Command.Trim())) {
-                return Results.BadRequest(new { error = $"command '{req.Command}' cannot be invoked via the web UI" });
+            var command = req.Command.Trim();
+            if (Forbidden.Contains(command)) {
+                return Results.BadRequest(new { error = $"command '{command}' cannot be invoked via the web UI" });
             }
-            var job = runner.Enqueue(req.Command.Trim(), req.Args ?? Array.Empty<string>());
+            // Only dispatch commands that actually exist in the attribute-driven command tree;
+            // a typo or an injected garbage string returns 400 instead of being split and handed
+            // to Spectre to fail at runtime (and closes the door on non-tree input).
+            if (CommandRegistry.FindByPath(command) is null) {
+                return Results.BadRequest(new { error = $"unknown command '{command}'" });
+            }
+            var job = runner.Enqueue(command, req.Args ?? Array.Empty<string>());
             return Results.Json(Describe(job), JsonOpts);
         });
 
