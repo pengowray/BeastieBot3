@@ -76,6 +76,14 @@ internal sealed class CommonNameSourcesCommand : AsyncCommand<CommonNameSourcesC
             importRunsByType[run.ImportType] = run;
         }
 
+        // Actual row counts per source. Some sources (e.g. wikidata_label) are aggregated inside
+        // another source's import run, so they have no own run row — drive their status off the
+        // real common_names counts rather than import_runs alone.
+        var countsBySource = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        foreach (var (src, count) in store.GetCommonNameCountsBySource()) {
+            countsBySource[src] = count;
+        }
+
         // Build the table
         var table = new Table();
         table.AddColumn("Source");
@@ -91,8 +99,11 @@ internal sealed class CommonNameSourcesCommand : AsyncCommand<CommonNameSourcesC
             var availableText = isAvailable ? "[green]Yes[/]" : "[dim]No[/]";
 
             var hasRun = importRunsByType.TryGetValue(source.ImportType, out var runSummary) && runSummary.HasCompleted;
-            var aggregatedText = hasRun ? "[green]Yes[/]" : "[dim]No[/]";
-            var recordsText = hasRun && runSummary != null ? runSummary.TotalAdded.ToString("N0") : "-";
+            var rowCount = countsBySource.TryGetValue(source.Id, out var c) ? c : 0;
+            var aggregated = hasRun || rowCount > 0;
+            var aggregatedText = aggregated ? "[green]Yes[/]" : "[dim]No[/]";
+            var recordsText = rowCount > 0 ? rowCount.ToString("N0")
+                : (hasRun && runSummary != null ? runSummary.TotalAdded.ToString("N0") : "-");
             var lastRunText = hasRun && runSummary?.LastRun != null
                 ? runSummary.LastRun.Value.ToString("yyyy-MM-dd HH:mm")
                 : "-";
@@ -125,24 +136,6 @@ internal sealed class CommonNameSourcesCommand : AsyncCommand<CommonNameSourcesC
         return Task.FromResult(0);
     }
 
-    private static IReadOnlyList<(string Source, int Count)> GetSourceCounts(CommonNameStore store) {
-        // This queries the common_names table directly for counts by source
-        // We need to add this method to CommonNameStore or use reflection
-        // For now, use the statistics we can get
-        var results = new List<(string, int)>();
-
-        // Get the connection via reflection (not ideal, but works for now)
-        var connectionField = typeof(CommonNameStore).GetField("_connection",
-            System.Reflection.BindingFlags.NonPublic | System.Reflection.BindingFlags.Instance);
-        if (connectionField?.GetValue(store) is Microsoft.Data.Sqlite.SqliteConnection connection) {
-            using var command = connection.CreateCommand();
-            command.CommandText = "SELECT source, COUNT(*) FROM common_names GROUP BY source ORDER BY COUNT(*) DESC";
-            using var reader = command.ExecuteReader();
-            while (reader.Read()) {
-                results.Add((reader.GetString(0), reader.GetInt32(1)));
-            }
-        }
-
-        return results;
-    }
+    private static IReadOnlyList<(string Source, int Count)> GetSourceCounts(CommonNameStore store) =>
+        store.GetCommonNameCountsBySource();
 }

@@ -827,66 +827,6 @@ internal sealed class SectionBodyRenderer {
         }
     }
 
-    /// <summary>
-    /// Appends species with subspecies grouped under their parent species.
-    /// </summary>
-    private void AppendItemsWithSubspeciesGrouping(
-        StringBuilder builder,
-        IReadOnlyList<IucnSpeciesRecord> items,
-        DisplayPreferences display,
-        string? statusContext,
-        OtherBucketContext? otherContext = null) {
-        
-        // Separate species and subspecies
-        var species = new List<IucnSpeciesRecord>();
-        var subspeciesGroups = new Dictionary<string, List<IucnSpeciesRecord>>(StringComparer.OrdinalIgnoreCase);
-
-        foreach (var record in items) {
-            if (IsSubspecies(record)) {
-                var parentKey = GetParentSpeciesKey(record);
-                if (!subspeciesGroups.TryGetValue(parentKey, out var list)) {
-                    list = new List<IucnSpeciesRecord>();
-                    subspeciesGroups[parentKey] = list;
-                }
-                list.Add(record);
-            } else {
-                species.Add(record);
-            }
-        }
-
-        // Output species, inserting subspecies underneath if present
-        var processedSubspeciesGroups = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-
-        foreach (var record in species) {
-            var speciesKey = GetParentSpeciesKey(record);
-            builder.AppendLine(_lineFormatter.FormatSpeciesLine(record, display, statusContext, otherContext));
-            
-            // Check if this species has subspecies
-            if (subspeciesGroups.TryGetValue(speciesKey, out var subs)) {
-                foreach (var sub in subs.OrderBy(s => s.InfraName, StringComparer.OrdinalIgnoreCase)) {
-                    builder.AppendLine(_lineFormatter.FormatSubspeciesLine(sub, display, statusContext, otherContext));
-                }
-                processedSubspeciesGroups.Add(speciesKey);
-            }
-        }
-
-        // Output any subspecies whose parent species isn't in the list
-        foreach (var (key, subs) in subspeciesGroups) {
-            if (processedSubspeciesGroups.Contains(key)) {
-                continue;
-            }
-
-            // Create a parent species heading for orphan subspecies
-            var firstSub = subs[0];
-            var parentName = $"''{firstSub.GenusName} {firstSub.SpeciesName}''";
-            builder.AppendLine($"* {parentName}");
-            
-            foreach (var sub in subs.OrderBy(s => s.InfraName, StringComparer.OrdinalIgnoreCase)) {
-                builder.AppendLine(_lineFormatter.FormatSubspeciesLine(sub, display, statusContext, otherContext));
-            }
-        }
-    }
-
     private string BuildFlatListBody(
         IReadOnlyList<IucnSpeciesRecord> records,
         DisplayPreferences display,

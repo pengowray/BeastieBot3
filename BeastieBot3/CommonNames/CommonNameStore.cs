@@ -168,7 +168,7 @@ internal sealed class CommonNameStore : SqliteStore {
                 source TEXT NOT NULL DEFAULT 'caps_txt',
                 created_at TEXT NOT NULL
             );
-            CREATE INDEX IF NOT EXISTS idx_caps_lowercase ON caps_rules(lowercase_word);
+            -- (lowercase_word already has a UNIQUE index from the column constraint; no extra index needed.)
 
             -- Import tracking
             CREATE TABLE IF NOT EXISTS import_runs (
@@ -260,6 +260,19 @@ internal sealed class CommonNameStore : SqliteStore {
         using var command = _connection.CreateCommand();
         command.CommandText = "SELECT COUNT(*) FROM taxon_cross_references";
         return Convert.ToInt64(command.ExecuteScalar() ?? 0L);
+    }
+
+    /// <summary>Common-name row counts grouped by source (e.g. iucn, wikidata, wikidata_label,
+    /// wikipedia, col), ordered by count desc. Backs the <c>common-names sources</c> diagnostic.</summary>
+    public IReadOnlyList<(string Source, int Count)> GetCommonNameCountsBySource() {
+        using var command = _connection.CreateCommand();
+        command.CommandText = "SELECT source, COUNT(*) FROM common_names GROUP BY source ORDER BY COUNT(*) DESC";
+        using var reader = command.ExecuteReader();
+        var results = new List<(string, int)>();
+        while (reader.Read()) {
+            results.Add((reader.GetString(0), reader.GetInt32(1)));
+        }
+        return results;
     }
 
     public long? FindTaxonByCanonicalName(string canonicalName, string? kingdom = null) {

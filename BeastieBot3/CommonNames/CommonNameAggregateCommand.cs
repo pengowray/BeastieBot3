@@ -1169,36 +1169,4 @@ internal sealed class CommonNameAggregateCommand : AsyncCommand<CommonNameAggreg
         return false;
     }
 
-    /// <summary>
-    /// Checks if a single word looks like a species epithet (the second word of a binomial name).
-    /// Used to filter out IUCN data entry errors where only the epithet was entered as a "common name".
-    /// Examples: "afer", "affinis", "bilobatus", "zrmanjae"
-    /// </summary>
-    private static bool IsLikelySpeciesEpithet(string word) {
-        if (string.IsNullOrWhiteSpace(word)) return false;
-        if (word.Length < 3) return false;
-
-        // Must be all lowercase (or all uppercase which we'll normalize)
-        var lower = word.ToLowerInvariant();
-        if (word != lower && word != word.ToUpperInvariant()) {
-            // Mixed case is likely a real common name
-            return false;
-        }
-
-        // Check for common Latin/Greek species epithet endings
-        var latinEndings = new[] {
-            "ii", "ae", "is", "us", "um", "ensis", "oides", "ica", "icum", "icus",
-            "atus", "ata", "atum", "inus", "ina", "inum", "alis", "ale", "ilis", "ile",
-            "osus", "osa", "osum", "eus", "ea", "eum", "ifer", "ifera", "iferum",
-            "anus", "ana", "anum", "ensis", "ense"
-        };
-
-        if (latinEndings.Any(ending => lower.EndsWith(ending) && lower.Length > ending.Length + 2)) {
-            return true;
-        }
-
-        // Single lowercase word that's 4+ letters and looks Latin is suspicious
-        // But we need to avoid filtering real common names like "toad", "frog", etc.
-        // So we only flag words with clearly Latin patterns
-        return false;
-    }}
+}
