@@ -121,6 +121,13 @@ internal static class TaxonomyTreeBuilder {
 
         // Process normal groups with headings
         foreach (var group in normalGroups) {
+            // Collapse a single-item residual "Other"/"Unknown" bucket into a direct entry under the
+            // parent rather than emitting a pointless one-line section heading for it.
+            if (IsOtherOrUnknownLabel(group.DisplayValue) && group.Items.Count <= 1) {
+                BuildRecursive(parent, group.Items, levels, levelIndex + 1, shouldSkipGroup, autoSplit);
+                continue;
+            }
+
             var child = parent.AddChild(level.Label, group.DisplayValue);
             BuildRecursive(child, group.Items, levels, levelIndex + 1, shouldSkipGroup, autoSplit);
         }
@@ -265,6 +272,13 @@ internal static class TaxonomyTreeBuilder {
                 : null;
 
             foreach (var group in groups) {
+                // A residual "Other"/"Unknown" bucket that collapsed to a single item isn't worth a
+                // heading — render it directly under the parent instead of a one-line "Other X" section.
+                if (IsOtherOrUnknownLabel(group.DisplayValue) && group.Items.Count <= 1) {
+                    parent.AddItems(group.Items);
+                    continue;
+                }
+
                 var child = parent.AddChild(candidateLevel.Label, group.DisplayValue);
                 // Rule 6: Don't recursively auto-split Other/Unknown groups
                 if (remainingCandidates != null &&
