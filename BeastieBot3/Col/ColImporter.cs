@@ -101,12 +101,17 @@ public sealed class ColImporter {
         var databasePath = Path.Combine(_datastoreDir, databaseFileName);
 
         if (File.Exists(databasePath)) {
-            if (!_force) {
+            if (!_force && IsImportComplete(databasePath)) {
                 _console.MarkupLine($"[yellow]Skipping already processed zip:[/] {_zipPath}");
                 return;
             }
 
-            _console.MarkupLine($"[grey]Removing existing database:[/] {databasePath}");
+            // Either --force, or an existing file that is corrupt / left partial by a crashed
+            // import (bulk pragmas run synchronous=OFF). Don't trust a File.Exists check alone —
+            // rebuild from scratch rather than treating an unfinished DB as complete.
+            _console.MarkupLine(_force
+                ? $"[grey]Removing existing database:[/] {databasePath}"
+                : $"[yellow]Existing database is incomplete/corrupt; rebuilding:[/] {databasePath}");
             File.Delete(databasePath);
         }
 
@@ -244,6 +249,25 @@ public sealed class ColImporter {
             result = result[..128].Trim('_');
         }
         return result;
+    }
+
+    // A pre-existing DB counts as "already imported" only if it holds a finished import
+    // (import_metadata.ended_at set). A corrupt file (open/query throws) or one left partial by
+    // a crashed import (no ended_at row) returns false, so the caller rebuilds it from scratch.
+    private static bool IsImportComplete(string databasePath) {
+        try {
+            var connectionString = new SqliteConnectionStringBuilder {
+                DataSource = databasePath,
+                Mode = SqliteOpenMode.ReadOnly
+            }.ToString();
+            using var connection = new SqliteConnection(connectionString);
+            connection.Open();
+            using var command = connection.CreateCommand();
+            command.CommandText = "SELECT COUNT(*) FROM import_metadata WHERE ended_at IS NOT NULL";
+            return Convert.ToInt64(command.ExecuteScalar() ?? 0L) > 0;
+        } catch {
+            return false;
+        }
     }
 
     // Caches the ColDP Frictionless datapackage descriptor (per-table field types/constraints/FKs)

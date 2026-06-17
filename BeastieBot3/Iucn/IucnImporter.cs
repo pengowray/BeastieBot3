@@ -110,7 +110,9 @@ public sealed class IucnImporter {
 
             UpdateImportCompleted(importId, DateTimeOffset.UtcNow);
         } catch {
-            _console.MarkupLine($"[red]Import aborted for[/] {relativeName}; import_metadata entry will remain open.");
+            _console.MarkupLine($"[red]Import aborted for[/] {relativeName}; removing the dangling import_metadata entry.");
+            // Best-effort cleanup — never mask the original failure.
+            try { DeleteImportMetadataRow(importId); } catch { /* keep the original exception */ }
             throw;
         }
     }
@@ -243,6 +245,16 @@ VALUES (@filename, @version, @started);";
         cmd.ExecuteNonQuery();
     }
 
+    // Removes the metadata row for a failed import. The row was inserted before (and outside)
+    // the data transaction, so the rolled-back data leaves it dangling with ended_at NULL —
+    // pure noise. Deleting it keeps the metadata honest.
+    private void DeleteImportMetadataRow(long importId) {
+        using var cmd = _connection.CreateCommand();
+        cmd.CommandText = "DELETE FROM import_metadata WHERE id = @id;";
+        cmd.Parameters.AddWithValue("@id", importId);
+        cmd.ExecuteNonQuery();
+    }
+
     private Dictionary<string, ZipArchiveEntry?> BuildEntryLookup(ZipArchive archive) {
         var comparer = StringComparer.OrdinalIgnoreCase;
         var dict = new Dictionary<string, ZipArchiveEntry?>(comparer);
@@ -269,9 +281,13 @@ VALUES (@filename, @version, @started);";
     private void ImportCsv(long importId, ZipEntrySpec spec, ZipArchiveEntry entry, SqliteTransaction transaction, CancellationToken cancellationToken) {
         using var stream = entry.Open();
         using var reader = new StreamReader(stream, Encoding.UTF8, true);
+        // Don't throw on malformed/ragged rows (a single bad row shouldn't abort a release
+        // import), but count them so silent data loss is visible in the per-table summary.
+        var badDataCount = 0;
+        var missingFieldCount = 0;
         var config = new CsvConfiguration(CultureInfo.InvariantCulture) {
-            BadDataFound = null,
-            MissingFieldFound = null,
+            BadDataFound = _ => badDataCount++,
+            MissingFieldFound = _ => missingFieldCount++,
             DetectColumnCountChanges = false,
             TrimOptions = TrimOptions.None,
         };
@@ -303,6 +319,9 @@ VALUES (@filename, @version, @started);";
             insertOrIgnore: true, prepare: false, cancellationToken);
 
         _console.MarkupLine($"    {spec.TableName}: inserted {insertedCount:N0} rows (skipped {duplicateCount:N0} duplicates).");
+        if (badDataCount > 0 || missingFieldCount > 0) {
+            _console.MarkupLine($"    [yellow]{spec.TableName}: tolerated {badDataCount:N0} malformed field(s) and {missingFieldCount:N0} missing field(s) — inspect the source if unexpected.[/]");
+        }
     }
 
     private void EnsureIndexes(string tableName, HashSet<string> columns) {
