@@ -241,6 +241,27 @@ internal sealed class CommonNameStore : SqliteStore {
         return result == null || result == DBNull.Value ? null : (long)result;
     }
 
+    /// <summary>
+    /// Resolves a previously-recorded cross-source identity ((source, sourceIdentifier) →
+    /// taxon) via taxon_cross_references. This is the cheapest dedup probe: a source row
+    /// whose external id was matched on an earlier run maps straight back to its taxon
+    /// without re-running the name/synonym fan-out. Backed by idx_xref_source.
+    /// </summary>
+    public long? FindTaxonByCrossReference(string source, string sourceIdentifier) {
+        using var command = _connection.CreateCommand();
+        command.CommandText = "SELECT taxon_id FROM taxon_cross_references WHERE source=@source AND source_identifier=@id LIMIT 1";
+        command.Parameters.AddWithValue("@source", source);
+        command.Parameters.AddWithValue("@id", sourceIdentifier);
+        var result = command.ExecuteScalar();
+        return result == null || result == DBNull.Value ? null : (long)result;
+    }
+
+    public long GetCrossReferenceCount() {
+        using var command = _connection.CreateCommand();
+        command.CommandText = "SELECT COUNT(*) FROM taxon_cross_references";
+        return Convert.ToInt64(command.ExecuteScalar() ?? 0L);
+    }
+
     public long? FindTaxonByCanonicalName(string canonicalName, string? kingdom = null) {
         using var command = _connection.CreateCommand();
         if (kingdom != null) {

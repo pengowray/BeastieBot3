@@ -510,16 +510,19 @@ internal sealed class CommonNameAggregateCommand : AsyncCommand<CommonNameAggreg
 
                         if (string.IsNullOrWhiteSpace(json)) continue;
 
-                        // Try to find matching taxon via IUCN ID
-                        long? taxonId = null;
-                        if (!string.IsNullOrWhiteSpace(iucnIds)) {
+                        // Cheapest probe first: did an earlier run already resolve this entity?
+                        long? taxonId = store.FindTaxonByCrossReference("wikidata", entityId);
+                        var matchType = "exact";
+
+                        // Then via the linked IUCN SIS id(s).
+                        if (!taxonId.HasValue && !string.IsNullOrWhiteSpace(iucnIds)) {
                             foreach (var sisIdStr in iucnIds.Split(',')) {
                                 taxonId = store.FindTaxonBySourceId("iucn", sisIdStr.Trim());
                                 if (taxonId.HasValue) break;
                             }
                         }
 
-                        // If no match via IUCN ID, try to match via scientific name
+                        // Then via scientific name (canonical, then synonym).
                         if (!taxonId.HasValue) {
                             try {
                                 var record = WikidataEntityParser.Parse(json);
@@ -531,7 +534,7 @@ internal sealed class CommonNameAggregateCommand : AsyncCommand<CommonNameAggreg
                                     if (taxonId.HasValue) break;
 
                                     taxonId = store.FindTaxonBySynonym(normalized);
-                                    if (taxonId.HasValue) break;
+                                    if (taxonId.HasValue) { matchType = "synonym"; break; }
                                 }
                             } catch {
                                 // Continue without matching
@@ -540,6 +543,8 @@ internal sealed class CommonNameAggregateCommand : AsyncCommand<CommonNameAggreg
 
                         if (!taxonId.HasValue) continue;
                         matched++;
+                        // Record the cross-source identity so re-runs dedup straight onto this taxon.
+                        store.InsertCrossReference(taxonId.Value, "wikidata", entityId, matchType);
 
                         try {
                             var record = WikidataEntityParser.Parse(json);
@@ -697,17 +702,17 @@ internal sealed class CommonNameAggregateCommand : AsyncCommand<CommonNameAggreg
                             taxonIdentifier = scientificName; // Use as identifier for matching
                         }
 
-                        // Find the taxon
-                        long? taxonId;
-                        if (useTaxonMatches) {
-                            taxonId = store.FindTaxonBySourceId("iucn", taxonIdentifier!);
-                        } else {
-                            // Match by scientific name
-                            taxonId = store.FindTaxonByScientificName(taxonIdentifier!);
+                        // Find the taxon. Cheapest probe first: did an earlier run resolve this page?
+                        long? taxonId = store.FindTaxonByCrossReference("wikipedia", pageTitle);
+                        if (!taxonId.HasValue) {
+                            taxonId = useTaxonMatches
+                                ? store.FindTaxonBySourceId("iucn", taxonIdentifier!)
+                                : store.FindTaxonByScientificName(taxonIdentifier!);
                         }
 
                         if (!taxonId.HasValue) continue;
                         matched++;
+                        store.InsertCrossReference(taxonId.Value, "wikipedia", pageTitle, "exact");
 
                         // Add page title as common name (cleaned)
                         // BUT skip if the title looks like a scientific name
@@ -896,10 +901,15 @@ internal sealed class CommonNameAggregateCommand : AsyncCommand<CommonNameAggreg
                         var normalizedScientific = ScientificNameNormalizer.Normalize(scientificName);
                         if (normalizedScientific == null) continue;
 
-                        // Try to find the taxon by scientific name (COL uses different IDs than IUCN)
-                        var taxonId = store.FindTaxonByScientificName(normalizedScientific);
+                        // Cheapest probe first: did an earlier run already resolve this CoL id?
+                        var taxonId = store.FindTaxonByCrossReference("col", colTaxonId);
 
-                        // If not found, try by COL ID
+                        // Then by scientific name (canonical, then synonym -- CoL ids differ from IUCN).
+                        if (!taxonId.HasValue) {
+                            taxonId = store.FindTaxonByScientificName(normalizedScientific);
+                        }
+
+                        // Then by a recorded CoL primary-source id.
                         if (!taxonId.HasValue) {
                             taxonId = store.FindTaxonBySourceId("col", colTaxonId);
                         }
@@ -909,6 +919,7 @@ internal sealed class CommonNameAggregateCommand : AsyncCommand<CommonNameAggreg
                             continue;
                         }
                         matched++;
+                        store.InsertCrossReference(taxonId.Value, "col", colTaxonId, "exact");
 
                         // Normalize the vernacular name
                         var normalized = CommonNameNormalizer.NormalizeForMatching(vernacularName);
