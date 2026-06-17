@@ -100,6 +100,7 @@ These notes exist so the next AI (or human) that drops into this repo avoids the
   - `wikidata_p627_values`, `wikidata_p141_statements`, and `wikidata_p141_references` are flattened claim tables so downstream reports never parse JSON on the hot path.
   - `wikidata_taxon_name_index` plus `wikidata_scientific_names` power fast `normalized_name` lookups; rebuild them via `wikidata rebuild-indexes` when adding new normalization logic.
   - `wikidata_pending_iucn_matches` records provisional IUCN ↔ Wikidata matches discovered by the matcher so we can re-emit coverage reports without re-scanning everything.
+  - `wikidata_taxon_rank` (P105) and `wikidata_parent_taxa` (P171) are populated and indexed on every download but **currently written, not yet read** — reserved for rank-filtering (e.g. restricting coverage to species-rank entities) and taxonomic-hierarchy reconstruction. Keep them: the parse is free (same JSON pass as the consumed claims) and `ClearIndexes`/`ResetCachedPayloads` keep them consistent. Don't mistake them for dead code.
 - Long-running runs should respect `GetPendingEntities` ordering (new first, then refresh windows). If you need a one-off spot check, cap `--limit` instead of rewriting the queue logic.
 
 ## Wikipedia cache schema

@@ -246,6 +246,9 @@ public sealed class ColImporter {
         return result;
     }
 
+    // Caches the ColDP Frictionless datapackage descriptor (per-table field types/constraints/FKs)
+    // next to the archive. Intentionally NOT parsed today — all columns import as TEXT; it's kept as
+    // a provenance/spec snapshot and the seam for a future typed-import or TSV-schema-validation pass.
     private void EnsureDatapackage(string directory, CancellationToken cancellationToken) {
         var datapackagePath = Path.Combine(directory, "datapackage.json");
         if (File.Exists(datapackagePath)) {
