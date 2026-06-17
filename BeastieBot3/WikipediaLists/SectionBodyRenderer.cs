@@ -24,6 +24,10 @@ internal sealed class SectionBodyRenderer {
     private readonly SpeciesLineFormatter _lineFormatter;
     private readonly HeadingFormatter _headingFormatter;
 
+    // Minimum bullet count before a section is wrapped in {{div col}} columns. Two- to four-item
+    // families read better as a plain bulleted list than as a sparse multi-column block.
+    private const int DivColMinItems = 5;
+
     public SectionBodyRenderer(
         ColTaxonomyEnricher? colEnricher,
         TaxonRulesService? taxonRules,
@@ -459,11 +463,11 @@ internal sealed class SectionBodyRenderer {
         } else if (infraspecificMode == InfraspecificDisplayMode.SeparateSections) {
             AppendPartitionedItems(builder, iucnRecords, display, statusContext, otherContext);
         } else {
-            if (iucnRecords.Count >= 3) builder.AppendLine("{{div col|colwidth=30em}}");
-            foreach (var record in OrderRecordsForOutput(iucnRecords, otherContext)) {
+            if (iucnRecords.Count >= DivColMinItems) builder.AppendLine("{{div col|colwidth=30em}}");
+            foreach (var record in OrderRecordsForOutput(iucnRecords, display, otherContext)) {
                 builder.AppendLine(_lineFormatter.FormatSpeciesLine(record, display, statusContext, otherContext));
             }
-            if (iucnRecords.Count >= 3) builder.AppendLine("{{div col end}}");
+            if (iucnRecords.Count >= DivColMinItems) builder.AppendLine("{{div col end}}");
         }
     }
 
@@ -648,11 +652,11 @@ internal sealed class SectionBodyRenderer {
         } else if (infraspecificMode == InfraspecificDisplayMode.SeparateSections) {
             AppendPartitionedItems(builder, iucnRecords, display, statusContext, otherContext);
         } else {
-            if (iucnRecords.Count >= 3) builder.AppendLine("{{div col|colwidth=30em}}");
-            foreach (var record in OrderRecordsForOutput(iucnRecords, otherContext)) {
+            if (iucnRecords.Count >= DivColMinItems) builder.AppendLine("{{div col|colwidth=30em}}");
+            foreach (var record in OrderRecordsForOutput(iucnRecords, display, otherContext)) {
                 builder.AppendLine(_lineFormatter.FormatSpeciesLine(record, display, statusContext, otherContext));
             }
-            if (iucnRecords.Count >= 3) builder.AppendLine("{{div col end}}");
+            if (iucnRecords.Count >= DivColMinItems) builder.AppendLine("{{div col end}}");
         }
     }
 
@@ -725,11 +729,11 @@ internal sealed class SectionBodyRenderer {
         } else if (infraspecificMode == InfraspecificDisplayMode.SeparateSections) {
             AppendPartitionedItems(builder, node.Items, display, statusContext, otherContext);
         } else {
-            if (node.Items.Count >= 3) builder.AppendLine("{{div col|colwidth=30em}}");
-            foreach (var record in OrderRecordsForOutput(node.Items, otherContext)) {
+            if (node.Items.Count >= DivColMinItems) builder.AppendLine("{{div col|colwidth=30em}}");
+            foreach (var record in OrderRecordsForOutput(node.Items, display, otherContext)) {
                 builder.AppendLine(_lineFormatter.FormatSpeciesLine(record, display, statusContext, otherContext));
             }
-            if (node.Items.Count >= 3) builder.AppendLine("{{div col end}}");
+            if (node.Items.Count >= DivColMinItems) builder.AppendLine("{{div col end}}");
         }
     }
 
@@ -775,11 +779,11 @@ internal sealed class SectionBodyRenderer {
 
         // Species items
         if (species.Count > 0) {
-            if (species.Count >= 3) builder.AppendLine("{{div col|colwidth=30em}}");
-            foreach (var record in OrderRecordsForOutput(species, otherContext)) {
+            if (species.Count >= DivColMinItems) builder.AppendLine("{{div col|colwidth=30em}}");
+            foreach (var record in OrderRecordsForOutput(species, display, otherContext)) {
                 builder.AppendLine(_lineFormatter.FormatSpeciesLine(record, display, statusContext, otherContext));
             }
-            if (species.Count >= 3) builder.AppendLine("{{div col end}}");
+            if (species.Count >= DivColMinItems) builder.AppendLine("{{div col end}}");
         }
 
         // Subspecies
@@ -789,11 +793,11 @@ internal sealed class SectionBodyRenderer {
             }
             builder.AppendLine("'''Subspecies'''");
             builder.AppendLine();
-            if (subspecies.Count >= 3) builder.AppendLine("{{div col|colwidth=30em}}");
-            foreach (var record in OrderRecordsForOutput(subspecies, otherContext)) {
+            if (subspecies.Count >= DivColMinItems) builder.AppendLine("{{div col|colwidth=30em}}");
+            foreach (var record in OrderRecordsForOutput(subspecies, display, otherContext)) {
                 builder.AppendLine(_lineFormatter.FormatSpeciesLine(record, display, statusContext, otherContext));
             }
-            if (subspecies.Count >= 3) builder.AppendLine("{{div col end}}");
+            if (subspecies.Count >= DivColMinItems) builder.AppendLine("{{div col end}}");
         }
 
         // Varieties
@@ -801,11 +805,11 @@ internal sealed class SectionBodyRenderer {
             builder.AppendLine();
             builder.AppendLine("'''Varieties'''");
             builder.AppendLine();
-            if (varieties.Count >= 3) builder.AppendLine("{{div col|colwidth=30em}}");
-            foreach (var record in OrderRecordsForOutput(varieties, otherContext)) {
+            if (varieties.Count >= DivColMinItems) builder.AppendLine("{{div col|colwidth=30em}}");
+            foreach (var record in OrderRecordsForOutput(varieties, display, otherContext)) {
                 builder.AppendLine(_lineFormatter.FormatSpeciesLine(record, display, statusContext, otherContext));
             }
-            if (varieties.Count >= 3) builder.AppendLine("{{div col end}}");
+            if (varieties.Count >= DivColMinItems) builder.AppendLine("{{div col end}}");
         }
 
         // Stocks and populations
@@ -813,11 +817,11 @@ internal sealed class SectionBodyRenderer {
             builder.AppendLine();
             builder.AppendLine("'''Stocks and populations'''");
             builder.AppendLine();
-            if (populations.Count >= 3) builder.AppendLine("{{div col|colwidth=30em}}");
-            foreach (var record in OrderRecordsForOutput(populations, otherContext)) {
+            if (populations.Count >= DivColMinItems) builder.AppendLine("{{div col|colwidth=30em}}");
+            foreach (var record in OrderRecordsForOutput(populations, display, otherContext)) {
                 builder.AppendLine(_lineFormatter.FormatSpeciesLine(record, display, statusContext, otherContext));
             }
-            if (populations.Count >= 3) builder.AppendLine("{{div col end}}");
+            if (populations.Count >= DivColMinItems) builder.AppendLine("{{div col end}}");
         }
 
         // If only infraspecific taxa exist (no species), still render them
@@ -839,11 +843,11 @@ internal sealed class SectionBodyRenderer {
         } else if (infraspecificMode == InfraspecificDisplayMode.SeparateSections) {
             AppendPartitionedItems(builder, records, display, statusContext, otherContext);
         } else {
-            if (records.Count >= 3) builder.AppendLine("{{div col|colwidth=30em}}");
-            foreach (var record in OrderRecordsForOutput(records, otherContext)) {
+            if (records.Count >= DivColMinItems) builder.AppendLine("{{div col|colwidth=30em}}");
+            foreach (var record in OrderRecordsForOutput(records, display, otherContext)) {
                 builder.AppendLine(_lineFormatter.FormatSpeciesLine(record, display, statusContext, otherContext));
             }
-            if (records.Count >= 3) builder.AppendLine("{{div col end}}");
+            if (records.Count >= DivColMinItems) builder.AppendLine("{{div col end}}");
         }
         return builder.ToString().TrimEnd();
     }
@@ -895,10 +899,10 @@ internal sealed class SectionBodyRenderer {
             species.Add(record);
         }
 
-        if (items.Count >= 3) builder.AppendLine("{{div col|colwidth=30em}}");
+        if (items.Count >= DivColMinItems) builder.AppendLine("{{div col|colwidth=30em}}");
 
         var processedKeys = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        foreach (var record in OrderRecordsForOutput(species, otherContext)) {
+        foreach (var record in OrderRecordsForOutput(species, display, otherContext)) {
             var speciesKey = GetParentSpeciesKey(record);
             builder.AppendLine(_lineFormatter.FormatSpeciesLine(record, display, statusContext, otherContext));
             AppendInfraspecificSubitems(builder, speciesKey, subspeciesGroups, varietyGroups, populationGroups, display, statusContext, otherContext);
@@ -920,7 +924,7 @@ internal sealed class SectionBodyRenderer {
             AppendInfraspecificSubitems(builder, key, subspeciesGroups, varietyGroups, populationGroups, display, statusContext, otherContext);
         }
 
-        if (items.Count >= 3) builder.AppendLine("{{div col end}}");
+        if (items.Count >= DivColMinItems) builder.AppendLine("{{div col end}}");
     }
 
     private static string GetRepresentativeFamilyName(
@@ -998,16 +1002,44 @@ internal sealed class SectionBodyRenderer {
         return InfraspecificDisplayMode.SeparateSections;
     }
 
-    private static IEnumerable<IucnSpeciesRecord> OrderRecordsForOutput(
+    private IEnumerable<IucnSpeciesRecord> OrderRecordsForOutput(
         IEnumerable<IucnSpeciesRecord> records,
+        DisplayPreferences display,
         OtherBucketContext? otherContext) {
-        var ordered = records;
+        // Common-name-focused lists (Style B/C) are sorted by the visible vernacular label so the
+        // displayed order is alphabetical to the reader; scientific-focus lists (Style A) keep the
+        // incoming scientific-name order. The sort key is materialised once per record so the common
+        // name is resolved only once even though OrderBy compares it repeatedly.
+        var sortByCommonName = display.ListingStyle is ListingStyle.CommonNameOnly or ListingStyle.CommonNameFocus;
+
         if (otherContext is { IsInOtherBucket: true }) {
-            ordered = ordered
-                .OrderBy(r => otherContext.GetRankValue(r) ?? string.Empty, StringComparer.OrdinalIgnoreCase)
-                .ThenBy(r => ResolveScientificName(r) ?? string.Empty, StringComparer.OrdinalIgnoreCase);
+            return records
+                .Select(r => (record: r, rank: otherContext.GetRankValue(r) ?? string.Empty, label: SortLabel(r, sortByCommonName)))
+                .OrderBy(t => t.rank, StringComparer.OrdinalIgnoreCase)
+                .ThenBy(t => t.label, StringComparer.OrdinalIgnoreCase)
+                .Select(t => t.record);
         }
-        return ordered;
+
+        if (sortByCommonName) {
+            return records
+                .Select(r => (record: r, label: SortLabel(r, preferCommonName: true)))
+                .OrderBy(t => t.label, StringComparer.OrdinalIgnoreCase)
+                .Select(t => t.record);
+        }
+
+        return records;
+    }
+
+    // The label a record sorts under: the displayed vernacular name when requested and available,
+    // otherwise the scientific name (which is what the bullet falls back to showing).
+    private string SortLabel(IucnSpeciesRecord record, bool preferCommonName) {
+        if (preferCommonName) {
+            var common = _lineFormatter.ResolveDisplayCommonName(record);
+            if (!string.IsNullOrWhiteSpace(common)) {
+                return common;
+            }
+        }
+        return ResolveScientificName(record) ?? string.Empty;
     }
 
 

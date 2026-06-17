@@ -489,6 +489,13 @@ internal sealed class SpeciesLineFormatter {
         return commonName;
     }
 
+    /// <summary>
+    /// The vernacular name that would be shown for this record (after the junk/duplicate filter),
+    /// or null when none is usable. Used by the renderer to sort common-name-focused lists by the
+    /// label the reader actually sees.
+    /// </summary>
+    public string? ResolveDisplayCommonName(IucnSpeciesRecord record) => ResolveCommonName(record);
+
     private string? ResolveCommonName(IucnSpeciesRecord record) {
         var candidate = ResolveCommonNameCandidate(record);
         // Drop candidates that are really the scientific name repeated, or carry working/authority
