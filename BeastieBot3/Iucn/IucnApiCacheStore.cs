@@ -169,7 +169,12 @@ WHERE l.sis_id = @sisId LIMIT 1";
 
     public long UpsertTaxa(long rootSisId, long importId, string json, DateTime downloadedAt) {
         using var tx = _connection.BeginTransaction();
+        var taxaId = UpsertTaxaCore(tx, rootSisId, importId, json, downloadedAt);
+        tx.Commit();
+        return taxaId;
+    }
 
+    private long UpsertTaxaCore(SqliteTransaction tx, long rootSisId, long importId, string json, DateTime downloadedAt) {
         long taxaId;
         using (var command = _connection.CreateCommand()) {
             command.Transaction = tx;
@@ -197,13 +202,16 @@ WHERE l.sis_id = @sisId LIMIT 1";
             }
         }
 
-        tx.Commit();
         return taxaId;
     }
 
     public void ReplaceTaxaLookups(long taxaId, IEnumerable<TaxaLookupRow> mappings) {
         using var tx = _connection.BeginTransaction();
+        ReplaceTaxaLookupsCore(tx, taxaId, mappings);
+        tx.Commit();
+    }
 
+    private void ReplaceTaxaLookupsCore(SqliteTransaction tx, long taxaId, IEnumerable<TaxaLookupRow> mappings) {
         using (var delete = _connection.CreateCommand()) {
             delete.Transaction = tx;
             delete.CommandText = "DELETE FROM taxa_lookup WHERE taxa_id=@taxaId";
@@ -227,8 +235,6 @@ WHERE l.sis_id = @sisId LIMIT 1";
                 insert.ExecuteNonQuery();
             }
         }
-
-        tx.Commit();
     }
 
     public long UpsertAssessment(long assessmentId, long sisId, long importId, string json, DateTime downloadedAt) {
@@ -301,7 +307,26 @@ ORDER BY b.latest DESC, IFNULL(b.year_published, 0) DESC, b.assessment_id DESC";
 
     public void ReplaceAssessmentBacklog(long taxaId, long rootSisId, IReadOnlyList<IucnAssessmentHeader> assessments) {
         using var tx = _connection.BeginTransaction();
+        ReplaceAssessmentBacklogCore(tx, taxaId, rootSisId, assessments);
+        tx.Commit();
+    }
 
+    /// <summary>
+    /// Writes a downloaded taxon — its taxa row, taxa_lookup mappings, and assessment backlog —
+    /// in a single transaction, so a crash can't leave the taxa row written while its lookups and
+    /// backlog stay stale (the three were previously committed separately).
+    /// </summary>
+    public long WriteTaxonAtomic(long rootSisId, long importId, string json, DateTime downloadedAt,
+        IEnumerable<TaxaLookupRow> mappings, IReadOnlyList<IucnAssessmentHeader> assessments) {
+        using var tx = _connection.BeginTransaction();
+        var taxaId = UpsertTaxaCore(tx, rootSisId, importId, json, downloadedAt);
+        ReplaceTaxaLookupsCore(tx, taxaId, mappings);
+        ReplaceAssessmentBacklogCore(tx, taxaId, rootSisId, assessments);
+        tx.Commit();
+        return taxaId;
+    }
+
+    private void ReplaceAssessmentBacklogCore(SqliteTransaction tx, long taxaId, long rootSisId, IReadOnlyList<IucnAssessmentHeader> assessments) {
         using (var delete = _connection.CreateCommand()) {
             delete.Transaction = tx;
             delete.CommandText = "DELETE FROM taxa_assessment_backlog WHERE taxa_id=@taxaId";
@@ -352,8 +377,6 @@ ORDER BY b.latest DESC, IFNULL(b.year_published, 0) DESC, b.assessment_id DESC";
             update.Parameters.AddWithValue("@taxaId", taxaId);
             update.ExecuteNonQuery();
         }
-
-        tx.Commit();
     }
 
     /// <summary>

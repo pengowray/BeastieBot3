@@ -90,12 +90,16 @@ public sealed class IucnApiCacheDiscoverByFamilyCommand : AsyncCommand<IucnApiCa
             ? DateTime.UtcNow - TimeSpan.FromHours(hours)
             : (DateTime?)null;
 
+        var incompleteFamilies = new List<string>();
         await ProgressConsole.RunAsync("Scanning families", families.Count, async progress => {
             foreach (var family in families) {
                 cancellationToken.ThrowIfCancellationRequested();
                 progress.Description = $"Scanning {family}";
 
-                var familySisIds = await FetchFamilySisIdsAsync(apiClient, cacheStore, family, sleep, cancellationToken).ConfigureAwait(false);
+                var (familySisIds, incomplete) = await FetchFamilySisIdsAsync(apiClient, cacheStore, family, sleep, cancellationToken).ConfigureAwait(false);
+                if (incomplete) {
+                    incompleteFamilies.Add(family);
+                }
 
                 var missingCount = 0;
                 foreach (var sisId in familySisIds) {
@@ -114,6 +118,10 @@ public sealed class IucnApiCacheDiscoverByFamilyCommand : AsyncCommand<IucnApiCa
                 }
             }
         }, cancellationToken).ConfigureAwait(false);
+
+        if (incompleteFamilies.Count > 0) {
+            AnsiConsole.MarkupLineInterpolated($"[yellow]Warning:[/] {incompleteFamilies.Count} family/families were scanned incompletely due to fetch errors (e.g. {Markup.Escape(string.Join(", ", incompleteFamilies.Take(5)))}). Re-run discovery to complete them.");
+        }
 
         // Build the download queue — only SIS IDs that need downloading
         var downloadQueue = new List<long>();
@@ -241,7 +249,10 @@ public sealed class IucnApiCacheDiscoverByFamilyCommand : AsyncCommand<IucnApiCa
         }
     }
 
-    private static async Task<IReadOnlyList<long>> FetchFamilySisIdsAsync(
+    // Returns the discovered SIS ids and whether the family was left INCOMPLETE — pagination was
+    // cut short by a transient fetch error (not a clean "no more pages" / 404-not-found). Incomplete
+    // families are surfaced by the caller so a run can't silently report success on a partial scan.
+    private static async Task<(IReadOnlyList<long> SisIds, bool Incomplete)> FetchFamilySisIdsAsync(
         IucnApiClient apiClient,
         IucnApiCacheStore cacheStore,
         string familyName,
@@ -249,6 +260,7 @@ public sealed class IucnApiCacheDiscoverByFamilyCommand : AsyncCommand<IucnApiCa
         CancellationToken cancellationToken) {
 
         var allSisIds = new HashSet<long>();
+        var incomplete = false;
         var page = 1;
         var maxPages = 500; // safety limit
 
@@ -286,10 +298,13 @@ public sealed class IucnApiCacheDiscoverByFamilyCommand : AsyncCommand<IucnApiCa
             catch (Exception ex) {
                 cacheStore.CompleteImportFailure(importId, ex.Message, null, TimeSpan.Zero);
                 AnsiConsole.MarkupLineInterpolated($"[red]Error fetching {Markup.Escape(familyName)} page {page}: {Markup.Escape(ex.Message)}[/]");
+                // Transient failure after the HTTP client already retried: we can't safely paginate
+                // past the failed page, so stop but flag the family as incompletely scanned.
+                incomplete = true;
                 break;
             }
         }
 
-        return new List<long>(allSisIds);
+        return (new List<long>(allSisIds), incomplete);
     }
 }

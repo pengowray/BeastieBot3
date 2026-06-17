@@ -188,9 +188,8 @@ public sealed class IucnApiCacheTaxaCommand : AsyncCommand<IucnApiCacheTaxaSetti
         try {
             var response = await apiClient.GetTaxaSisAsync(sisId, cancellationToken).ConfigureAwait(false);
             var parsed = IucnTaxaJsonParser.Parse(response.Body);
-            var taxaId = cacheStore.UpsertTaxa(parsed.RootSisId, importId, response.Body, DateTime.UtcNow);
-            cacheStore.ReplaceTaxaLookups(taxaId, parsed.Mappings);
-            cacheStore.ReplaceAssessmentBacklog(taxaId, parsed.RootSisId, parsed.Assessments);
+            // Single transaction: a crash can't leave the taxa row written but its lookups/backlog stale.
+            cacheStore.WriteTaxonAtomic(parsed.RootSisId, importId, response.Body, DateTime.UtcNow, parsed.Mappings, parsed.Assessments);
             cacheStore.ClearFailedRequest("taxa_sis", sisId);
             cacheStore.CompleteImportSuccess(importId, (int)response.StatusCode, response.PayloadBytes, stopwatch.Elapsed);
             return DownloadOutcome.Success;
