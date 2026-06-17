@@ -39,7 +39,12 @@ internal sealed class WikipediaListDefinition {
     public List<TaxonFilterDefinition> Filters { get; init; } = new();
     public List<WikipediaSectionDefinition> Sections { get; init; } = new();
     public List<GroupingLevelDefinition>? Grouping { get; init; }
-    public DisplayPreferences? Display { get; init; }
+    /// <summary>
+    /// List-level display overrides, already merged from preset → taxa-group → list by the loader.
+    /// Nullable per field (see <see cref="DisplayPreferencesConfig"/>); resolved against the global
+    /// <see cref="WikipediaListDefaults.Display"/> baseline at generation time.
+    /// </summary>
+    public DisplayPreferencesConfig? Display { get; init; }
 
     /// <summary>
     /// Source taxa-group id this list was expanded from (e.g. "mammals", "marine-mammals").
@@ -328,6 +333,69 @@ internal sealed class DisplayPreferences {
     /// Default is false.
     /// </summary>
     public bool IncludeFamilyInOtherBucket { get; init; } = false;
+}
+
+/// <summary>
+/// Override-layer view of <see cref="DisplayPreferences"/> where every field is nullable, so an
+/// unset YAML key (null) is distinguishable from one explicitly set to its default value. The
+/// per-list / taxa-group / preset <c>display:</c> blocks deserialize into this. Layers are stacked
+/// with <see cref="Merge"/> (the upper layer wins per field) and then collapsed to a concrete
+/// <see cref="DisplayPreferences"/> by <see cref="ResolveAgainst"/> against the global baseline.
+/// Keeping these nullable is what lets a list override a global default of <c>true</c> back to
+/// <c>false</c> — the old non-nullable model could only ever OR booleans upward (so a base-true
+/// could never be turned off) and unconditionally clobbered the other half with the deserializer's
+/// own defaults (so a base value could never be inherited).
+/// </summary>
+internal sealed class DisplayPreferencesConfig {
+    public bool? PreferCommonNames { get; init; }
+    public bool? ItalicizeScientific { get; init; }
+    public bool? IncludeStatusTemplate { get; init; }
+    public bool? IncludeStatusLabel { get; init; }
+    public bool? GroupSubspecies { get; init; }
+    public ListingStyle? ListingStyle { get; init; }
+    public InfraspecificDisplayMode? InfraspecificDisplayMode { get; init; }
+    public bool? SeparateInfraspecificSections { get; init; }
+    public bool? ExcludeRegionalAssessments { get; init; }
+    public bool? IncludeFamilyInOtherBucket { get; init; }
+
+    /// <summary>
+    /// Stack <paramref name="over"/> on top of <paramref name="under"/>: each field set in
+    /// <paramref name="over"/> wins, otherwise the value falls through to <paramref name="under"/>.
+    /// Either side may be null (a missing layer); returns null only when both are null.
+    /// </summary>
+    public static DisplayPreferencesConfig? Merge(DisplayPreferencesConfig? under, DisplayPreferencesConfig? over) {
+        if (under is null) return over;
+        if (over is null) return under;
+        return new DisplayPreferencesConfig {
+            PreferCommonNames = over.PreferCommonNames ?? under.PreferCommonNames,
+            ItalicizeScientific = over.ItalicizeScientific ?? under.ItalicizeScientific,
+            IncludeStatusTemplate = over.IncludeStatusTemplate ?? under.IncludeStatusTemplate,
+            IncludeStatusLabel = over.IncludeStatusLabel ?? under.IncludeStatusLabel,
+            GroupSubspecies = over.GroupSubspecies ?? under.GroupSubspecies,
+            ListingStyle = over.ListingStyle ?? under.ListingStyle,
+            InfraspecificDisplayMode = over.InfraspecificDisplayMode ?? under.InfraspecificDisplayMode,
+            SeparateInfraspecificSections = over.SeparateInfraspecificSections ?? under.SeparateInfraspecificSections,
+            ExcludeRegionalAssessments = over.ExcludeRegionalAssessments ?? under.ExcludeRegionalAssessments,
+            IncludeFamilyInOtherBucket = over.IncludeFamilyInOtherBucket ?? under.IncludeFamilyInOtherBucket,
+        };
+    }
+
+    /// <summary>
+    /// Collapse to a concrete <see cref="DisplayPreferences"/>, taking each unset (null) field from
+    /// <paramref name="defaults"/> (the global resolved baseline). Fields set on this config win.
+    /// </summary>
+    public DisplayPreferences ResolveAgainst(DisplayPreferences defaults) => new DisplayPreferences {
+        PreferCommonNames = PreferCommonNames ?? defaults.PreferCommonNames,
+        ItalicizeScientific = ItalicizeScientific ?? defaults.ItalicizeScientific,
+        IncludeStatusTemplate = IncludeStatusTemplate ?? defaults.IncludeStatusTemplate,
+        IncludeStatusLabel = IncludeStatusLabel ?? defaults.IncludeStatusLabel,
+        GroupSubspecies = GroupSubspecies ?? defaults.GroupSubspecies,
+        ListingStyle = ListingStyle ?? defaults.ListingStyle,
+        InfraspecificDisplayMode = InfraspecificDisplayMode ?? defaults.InfraspecificDisplayMode,
+        SeparateInfraspecificSections = SeparateInfraspecificSections ?? defaults.SeparateInfraspecificSections,
+        ExcludeRegionalAssessments = ExcludeRegionalAssessments ?? defaults.ExcludeRegionalAssessments,
+        IncludeFamilyInOtherBucket = IncludeFamilyInOtherBucket ?? defaults.IncludeFamilyInOtherBucket,
+    };
 }
 
 /// <summary>

@@ -134,7 +134,8 @@ internal sealed class WikipediaListGenerator {
         var grouping = (IReadOnlyList<GroupingLevelDefinition>)(definition.Grouping
             ?? defaults.Grouping
             ?? new List<GroupingLevelDefinition>());
-        var display = MergeDisplayPreferences(defaults.Display, definition.Display);
+        // Resolve the list's per-field display overrides against the global defaults baseline.
+        var display = definition.Display?.ResolveAgainst(defaults.Display) ?? defaults.Display;
 
         // A parent list (one with resolved phylogenetic children) renders a summary table + bare-bones
         // child sections instead of the flat species body. Requires the count aggregator.
@@ -453,41 +454,6 @@ internal sealed class WikipediaListGenerator {
         }
 
         return false;
-    }
-
-    /// <summary>
-    /// Merges display preferences, with override values taking precedence over base values.
-    /// This allows taxa groups to specify just the settings they want to change while
-    /// inheriting all other settings from defaults.
-    /// </summary>
-    private static DisplayPreferences MergeDisplayPreferences(DisplayPreferences? basePrefs, DisplayPreferences? overridePrefs) {
-        // Start with defaults if no base
-        basePrefs ??= new DisplayPreferences();
-        
-        // If no override, just use base
-        if (overridePrefs == null) {
-            return basePrefs;
-        }
-
-        // Merge: override takes precedence for explicitly set values
-        // Since we can't tell if a value was explicitly set or just defaulted in YAML,
-        // we use a heuristic: non-default values in override take precedence
-        return new DisplayPreferences {
-            PreferCommonNames = overridePrefs.PreferCommonNames,
-            ItalicizeScientific = overridePrefs.ItalicizeScientific,
-            IncludeStatusTemplate = overridePrefs.IncludeStatusTemplate,
-            IncludeStatusLabel = overridePrefs.IncludeStatusLabel,
-            GroupSubspecies = overridePrefs.GroupSubspecies || basePrefs.GroupSubspecies,
-            ListingStyle = overridePrefs.ListingStyle != ListingStyle.CommonNameFocus 
-                ? overridePrefs.ListingStyle 
-                : basePrefs.ListingStyle,
-            InfraspecificDisplayMode = overridePrefs.InfraspecificDisplayMode != InfraspecificDisplayMode.SeparateSections
-                ? overridePrefs.InfraspecificDisplayMode
-                : basePrefs.InfraspecificDisplayMode,
-            SeparateInfraspecificSections = overridePrefs.SeparateInfraspecificSections || basePrefs.SeparateInfraspecificSections,
-            ExcludeRegionalAssessments = overridePrefs.ExcludeRegionalAssessments || basePrefs.ExcludeRegionalAssessments,
-            IncludeFamilyInOtherBucket = overridePrefs.IncludeFamilyInOtherBucket || basePrefs.IncludeFamilyInOtherBucket,
-        };
     }
 
     // ==================== Intro text helpers ====================

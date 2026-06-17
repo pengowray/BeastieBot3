@@ -211,8 +211,11 @@ internal sealed class WikipediaListDefinitionLoader {
         var description = raw.Description ?? ExpandTemplate(preset.DescriptionTemplate, vars);
         var outputFile = raw.OutputFile ?? ExpandTemplate(preset.OutputTemplate, vars);
 
-        var mergedDisplay = DisplayPreferenceMerger.Merge(preset.Display, taxaGroup.Display);
-        mergedDisplay = DisplayPreferenceMerger.Merge(mergedDisplay, raw.Display);
+        // Stack the layers low→high: preset (under) → taxa-group → list (over). Per-field nulls fall
+        // through, so each layer only overrides the keys it actually sets; the global defaults
+        // baseline is applied later in the generator (DisplayPreferencesConfig.ResolveAgainst).
+        var mergedDisplay = DisplayPreferencesConfig.Merge(preset.Display, taxaGroup.Display);
+        mergedDisplay = DisplayPreferencesConfig.Merge(mergedDisplay, raw.Display);
 
         return new WikipediaListDefinition {
             Id = raw.Id,
@@ -291,7 +294,7 @@ internal sealed class WikipediaListDefinitionRaw {
     public List<TaxonFilterDefinition>? Filters { get; init; }
     public List<WikipediaSectionDefinition>? Sections { get; init; }
     public List<GroupingLevelDefinition>? Grouping { get; init; }
-    public DisplayPreferences? Display { get; init; }
+    public DisplayPreferencesConfig? Display { get; init; }
     
     /// <summary>
     /// Custom family-based grouping (for paraphyletic groups like marine mammals).
@@ -334,7 +337,7 @@ internal sealed class TaxaGroupDefinition {
     /// Default display preferences for this taxa group.
     /// Can be overridden at the list level.
     /// </summary>
-    public DisplayPreferences? Display { get; init; }
+    public DisplayPreferencesConfig? Display { get; init; }
 }
 
 internal sealed class ListPresetsFile {
@@ -356,34 +359,8 @@ internal sealed class ListPresetDefinition {
     public string? OutputTemplate { get; init; }
     public TemplateSettings? Templates { get; init; }
     public List<WikipediaSectionDefinition>? Sections { get; init; }
-    public DisplayPreferences? Display { get; init; }
+    public DisplayPreferencesConfig? Display { get; init; }
 }
 
-internal static class DisplayPreferenceMerger {
-    public static DisplayPreferences? Merge(DisplayPreferences? basePrefs, DisplayPreferences? overridePrefs) {
-        if (basePrefs == null) {
-            return overridePrefs;
-        }
-
-        if (overridePrefs == null) {
-            return basePrefs;
-        }
-
-        return new DisplayPreferences {
-            PreferCommonNames = overridePrefs.PreferCommonNames,
-            ItalicizeScientific = overridePrefs.ItalicizeScientific,
-            IncludeStatusTemplate = overridePrefs.IncludeStatusTemplate,
-            IncludeStatusLabel = overridePrefs.IncludeStatusLabel,
-            GroupSubspecies = overridePrefs.GroupSubspecies || basePrefs.GroupSubspecies,
-            ListingStyle = overridePrefs.ListingStyle != ListingStyle.CommonNameFocus
-                ? overridePrefs.ListingStyle
-                : basePrefs.ListingStyle,
-            InfraspecificDisplayMode = overridePrefs.InfraspecificDisplayMode != InfraspecificDisplayMode.SeparateSections
-                ? overridePrefs.InfraspecificDisplayMode
-                : basePrefs.InfraspecificDisplayMode,
-            SeparateInfraspecificSections = overridePrefs.SeparateInfraspecificSections || basePrefs.SeparateInfraspecificSections,
-            ExcludeRegionalAssessments = overridePrefs.ExcludeRegionalAssessments || basePrefs.ExcludeRegionalAssessments,
-            IncludeFamilyInOtherBucket = overridePrefs.IncludeFamilyInOtherBucket || basePrefs.IncludeFamilyInOtherBucket,
-        };
-    }
-}
+// Display-preference layering now lives on DisplayPreferencesConfig (Merge + ResolveAgainst);
+// the old lossy OR/!=default heuristic merger was removed in favour of per-field null-coalescing.
