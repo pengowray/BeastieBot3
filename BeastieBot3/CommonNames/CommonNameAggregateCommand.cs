@@ -67,6 +67,14 @@ internal sealed class CommonNameAggregateCommand : AsyncCommand<CommonNameAggreg
         [CommandOption("--limit <N>")]
         [Description("Limit number of records to process per source.")]
         public int? Limit { get; init; }
+
+        [CommandOption("--create-missing")]
+        [Description("Build a cross-source union: when a Wikidata/CoL/Wikipedia row names a species " +
+                     "not in the IUCN hub (and matches no existing taxon by cross-reference, canonical " +
+                     "name, or synonym), create a new taxon for it instead of dropping it. Default off " +
+                     "(IUCN-anchored). Best run after IUCN/CoL synonyms are aggregated so synonym-named " +
+                     "rows attach to existing taxa rather than minting duplicates.")]
+        public bool CreateMissing { get; init; }
     }
 
     public override async Task<int> ExecuteAsync(CommandContext context, Settings settings, CancellationToken cancellationToken) {
@@ -96,7 +104,7 @@ internal sealed class CommonNameAggregateCommand : AsyncCommand<CommonNameAggreg
         if (source is "all" or "wikidata") {
             var wikidataPath = settings.WikidataCachePath ?? paths.GetWikidataCachePath();
             if (!string.IsNullOrWhiteSpace(wikidataPath) && File.Exists(wikidataPath)) {
-                await AggregateWikidataCommonNamesAsync(store, wikidataPath, settings.Limit, cancellationToken);
+                await AggregateWikidataCommonNamesAsync(store, wikidataPath, settings.Limit, settings.CreateMissing, cancellationToken);
             } else {
                 AnsiConsole.MarkupLine("[yellow]Skipping Wikidata:[/] cache not found");
             }
@@ -105,7 +113,7 @@ internal sealed class CommonNameAggregateCommand : AsyncCommand<CommonNameAggreg
         if (source is "all" or "wikipedia") {
             var wikipediaPath = settings.WikipediaCachePath ?? paths.GetWikipediaCachePath();
             if (!string.IsNullOrWhiteSpace(wikipediaPath) && File.Exists(wikipediaPath)) {
-                await AggregateWikipediaCommonNamesAsync(store, wikipediaPath, settings.Limit, cancellationToken);
+                await AggregateWikipediaCommonNamesAsync(store, wikipediaPath, settings.Limit, settings.CreateMissing, cancellationToken);
             } else {
                 AnsiConsole.MarkupLine("[yellow]Skipping Wikipedia:[/] cache not found");
             }
@@ -114,7 +122,7 @@ internal sealed class CommonNameAggregateCommand : AsyncCommand<CommonNameAggreg
         if (source is "all" or "col") {
             var colPath = settings.ColSqlitePath ?? paths.GetColSqlitePath();
             if (!string.IsNullOrWhiteSpace(colPath) && File.Exists(colPath)) {
-                await AggregateColVernacularNamesAsync(store, colPath, settings.Limit, cancellationToken);
+                await AggregateColVernacularNamesAsync(store, colPath, settings.Limit, settings.CreateMissing, cancellationToken);
                 await AggregateColSynonymsAsync(store, colPath, settings.Limit, cancellationToken);
             } else {
                 AnsiConsole.MarkupLine("[yellow]Skipping COL:[/] database not found");
@@ -464,7 +472,7 @@ internal sealed class CommonNameAggregateCommand : AsyncCommand<CommonNameAggreg
         };
     }
 
-    private static Task AggregateWikidataCommonNamesAsync(CommonNameStore store, string wikidataPath, int? limit, CancellationToken cancellationToken) {
+    private static Task AggregateWikidataCommonNamesAsync(CommonNameStore store, string wikidataPath, int? limit, bool createMissing, CancellationToken cancellationToken) {
         return Task.Run(() => {
             AnsiConsole.MarkupLine("[yellow]Aggregating Wikidata common names...[/]");
             AnsiConsole.MarkupLine($"[blue]Wikidata cache:[/] {wikidataPath}");
@@ -474,6 +482,7 @@ internal sealed class CommonNameAggregateCommand : AsyncCommand<CommonNameAggreg
             var added = 0;
             var errors = 0;
             var matched = 0;
+            var created = 0;
 
             using var wikidataConnection = new SqliteConnection($"Data Source={wikidataPath};Mode=ReadOnly");
             wikidataConnection.Open();
@@ -513,6 +522,7 @@ internal sealed class CommonNameAggregateCommand : AsyncCommand<CommonNameAggreg
                         // Cheapest probe first: did an earlier run already resolve this entity?
                         long? taxonId = store.FindTaxonByCrossReference("wikidata", entityId);
                         var matchType = "exact";
+                        string? createName = null;
 
                         // Then via the linked IUCN SIS id(s).
                         if (!taxonId.HasValue && !string.IsNullOrWhiteSpace(iucnIds)) {
@@ -529,6 +539,7 @@ internal sealed class CommonNameAggregateCommand : AsyncCommand<CommonNameAggreg
                                 foreach (var sciName in record.ScientificNames.Where(n => !string.IsNullOrWhiteSpace(n.Value))) {
                                     var normalized = ScientificNameNormalizer.Normalize(sciName.Value);
                                     if (normalized == null) continue;
+                                    createName ??= sciName.Value; // first usable name, for --create-missing
 
                                     taxonId = store.FindTaxonByCanonicalName(normalized);
                                     if (taxonId.HasValue) break;
@@ -541,10 +552,18 @@ internal sealed class CommonNameAggregateCommand : AsyncCommand<CommonNameAggreg
                             }
                         }
 
-                        if (!taxonId.HasValue) continue;
-                        matched++;
-                        // Record the cross-source identity so re-runs dedup straight onto this taxon.
-                        store.InsertCrossReference(taxonId.Value, "wikidata", entityId, matchType);
+                        if (!taxonId.HasValue) {
+                            // No existing taxon. Union mode mints one from the Wikidata scientific name;
+                            // otherwise this entity is IUCN-anchored-absent and is skipped.
+                            if (!createMissing || createName == null) continue;
+                            taxonId = CreateMissingTaxon(store, createName, "species", null, "wikidata", entityId);
+                            if (!taxonId.HasValue) continue;
+                            created++;
+                        } else {
+                            matched++;
+                            // Record the cross-source identity so re-runs dedup straight onto this taxon.
+                            store.InsertCrossReference(taxonId.Value, "wikidata", entityId, matchType);
+                        }
 
                         try {
                             var record = WikidataEntityParser.Parse(json);
@@ -611,12 +630,12 @@ internal sealed class CommonNameAggregateCommand : AsyncCommand<CommonNameAggreg
                 });
 
             store.CompleteImportRun(runId, processed, added, 0, errors,
-                $"Matched {matched} entities to taxa");
-            AnsiConsole.MarkupLine($"[green]Wikidata:[/] {added:N0} common names from {matched:N0} matched entities ({errors} errors)");
+                $"Matched {matched} entities to taxa, created {created}");
+            AnsiConsole.MarkupLine($"[green]Wikidata:[/] {added:N0} common names from {matched:N0} matched entities, [blue]{created:N0}[/] taxa created ({errors} errors)");
         }, cancellationToken);
     }
 
-    private static Task AggregateWikipediaCommonNamesAsync(CommonNameStore store, string wikipediaPath, int? limit, CancellationToken cancellationToken) {
+    private static Task AggregateWikipediaCommonNamesAsync(CommonNameStore store, string wikipediaPath, int? limit, bool createMissing, CancellationToken cancellationToken) {
         return Task.Run(() => {
             AnsiConsole.MarkupLine("[yellow]Aggregating Wikipedia common names...[/]");
             AnsiConsole.MarkupLine($"[blue]Wikipedia cache:[/] {wikipediaPath}");
@@ -626,6 +645,7 @@ internal sealed class CommonNameAggregateCommand : AsyncCommand<CommonNameAggreg
             var titleAdded = 0;
             var taxoboxAdded = 0;
             var matched = 0;
+            var created = 0;
 
             using var wikiConnection = new SqliteConnection($"Data Source={wikipediaPath};Mode=ReadOnly");
             wikiConnection.Open();
@@ -710,9 +730,18 @@ internal sealed class CommonNameAggregateCommand : AsyncCommand<CommonNameAggreg
                                 : store.FindTaxonByScientificName(taxonIdentifier!);
                         }
 
-                        if (!taxonId.HasValue) continue;
-                        matched++;
-                        store.InsertCrossReference(taxonId.Value, "wikipedia", pageTitle, "exact");
+                        if (!taxonId.HasValue) {
+                            // Union mode mints a taxon only from the taxobox-fallback branch, where
+                            // taxonIdentifier is a scientific name; the precomputed-match branch only
+                            // has an (unmatched) IUCN sis id, which isn't a name to create from.
+                            if (!createMissing || useTaxonMatches) continue;
+                            taxonId = CreateMissingTaxon(store, taxonIdentifier!, "species", null, "wikipedia", pageTitle);
+                            if (!taxonId.HasValue) continue;
+                            created++;
+                        } else {
+                            matched++;
+                            store.InsertCrossReference(taxonId.Value, "wikipedia", pageTitle, "exact");
+                        }
 
                         // Add page title as common name (cleaned)
                         // BUT skip if the title looks like a scientific name
@@ -762,8 +791,8 @@ internal sealed class CommonNameAggregateCommand : AsyncCommand<CommonNameAggreg
 
             var totalAdded = titleAdded + taxoboxAdded;
             store.CompleteImportRun(runId, processed, totalAdded, 0, 0,
-                $"Matched {matched} pages to taxa, {titleAdded} titles, {taxoboxAdded} taxobox names");
-            AnsiConsole.MarkupLine($"[green]Wikipedia:[/] {titleAdded:N0} titles + {taxoboxAdded:N0} taxobox names from {matched:N0} matched pages");
+                $"Matched {matched} pages to taxa, {titleAdded} titles, {taxoboxAdded} taxobox names, created {created}");
+            AnsiConsole.MarkupLine($"[green]Wikipedia:[/] {titleAdded:N0} titles + {taxoboxAdded:N0} taxobox names from {matched:N0} matched pages, [blue]{created:N0}[/] taxa created");
         }, cancellationToken);
     }
 
@@ -798,6 +827,30 @@ internal sealed class CommonNameAggregateCommand : AsyncCommand<CommonNameAggreg
         }
 
         return null;
+    }
+
+    // Creates a union taxon for a source row that matched no existing taxon (cross-reference,
+    // canonical name, or synonym all missed). primarySource records which source minted it;
+    // the cross-reference is recorded so the same external id dedups onto it on re-runs, and a
+    // later source naming the same species matches it by canonical name (so no duplicate).
+    private static long? CreateMissingTaxon(CommonNameStore store, string scientificName, string? rank, string? kingdom, string source, string sourceId) {
+        var normalized = ScientificNameNormalizer.Normalize(scientificName);
+        if (normalized == null) {
+            return null;
+        }
+
+        var taxonId = store.InsertOrUpdateTaxon(
+            canonicalName: normalized,
+            originalName: scientificName,
+            rank: string.IsNullOrWhiteSpace(rank) ? "species" : rank,
+            kingdom: kingdom,
+            isExtinct: false,
+            isFossil: false,
+            validityStatus: "valid",
+            primarySource: source,
+            primarySourceId: sourceId);
+        store.InsertCrossReference(taxonId, source, sourceId, "exact");
+        return taxonId;
     }
 
     private static bool TableHasRows(SqliteConnection connection, string tableName, string? whereClause = null) {
@@ -840,7 +893,7 @@ internal sealed class CommonNameAggregateCommand : AsyncCommand<CommonNameAggreg
     /// 3. Find matching taxon in our database by canonical name or synonym
     /// 4. Insert the vernacular name with source="col"
     /// </summary>
-    private static Task AggregateColVernacularNamesAsync(CommonNameStore store, string colPath, int? limit, CancellationToken cancellationToken) {
+    private static Task AggregateColVernacularNamesAsync(CommonNameStore store, string colPath, int? limit, bool createMissing, CancellationToken cancellationToken) {
         return Task.Run(() => {
             AnsiConsole.MarkupLine("[yellow]Aggregating COL vernacular names...[/]");
             AnsiConsole.MarkupLine($"[blue]COL database:[/] {colPath}");
@@ -849,6 +902,7 @@ internal sealed class CommonNameAggregateCommand : AsyncCommand<CommonNameAggreg
             var processed = 0;
             var added = 0;
             var matched = 0;
+            var created = 0;
             var skippedNoTaxon = 0;
 
             using var colConnection = new SqliteConnection($"Data Source={colPath};Mode=ReadOnly");
@@ -915,11 +969,21 @@ internal sealed class CommonNameAggregateCommand : AsyncCommand<CommonNameAggreg
                         }
 
                         if (!taxonId.HasValue) {
-                            skippedNoTaxon++;
-                            continue;
+                            // Union mode mints a taxon from the CoL scientific name + rank; otherwise the
+                            // species is absent from the IUCN hub and is skipped.
+                            if (createMissing) {
+                                var newRank = rank is "species" or "subspecies" or "variety" ? rank : "species";
+                                taxonId = CreateMissingTaxon(store, scientificName, newRank, null, "col", colTaxonId);
+                            }
+                            if (!taxonId.HasValue) {
+                                skippedNoTaxon++;
+                                continue;
+                            }
+                            created++;
+                        } else {
+                            matched++;
+                            store.InsertCrossReference(taxonId.Value, "col", colTaxonId, "exact");
                         }
-                        matched++;
-                        store.InsertCrossReference(taxonId.Value, "col", colTaxonId, "exact");
 
                         // Normalize the vernacular name
                         var normalized = CommonNameNormalizer.NormalizeForMatching(vernacularName);
@@ -946,8 +1010,8 @@ internal sealed class CommonNameAggregateCommand : AsyncCommand<CommonNameAggreg
                 });
 
             store.CompleteImportRun(runId, processed, added, 0, skippedNoTaxon,
-                $"Matched {matched} to existing taxa, {skippedNoTaxon} skipped (no matching taxon)");
-            AnsiConsole.MarkupLine($"[green]COL:[/] {added:N0} vernacular names from {matched:N0} matched taxa ({skippedNoTaxon:N0} skipped)");
+                $"Matched {matched} to existing taxa, created {created}, {skippedNoTaxon} skipped (no matching taxon)");
+            AnsiConsole.MarkupLine($"[green]COL:[/] {added:N0} vernacular names from {matched:N0} matched taxa, [blue]{created:N0}[/] taxa created ({skippedNoTaxon:N0} skipped)");
         }, cancellationToken);
     }
 
