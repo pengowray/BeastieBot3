@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.ComponentModel;
 using System.IO;
 using System.Text;
 using System.Threading;
@@ -8,20 +9,25 @@ using Spectre.Console;
 using Spectre.Console.Cli;
 using BeastieBot3.Configuration;
 
-// EXPERIMENTAL: Reports on subgenus names that collide with genus names in COL,
-// which can cause issues when matching Wikipedia articles (e.g., "Boa (Boa)" vs "Boa").
-// Currently too slow due to case-insensitive comparisons on large tables.
-// Needs index optimization before practical use.
+// Reports on subgenus names that collide with genus names in COL, which can cause
+// issues when matching Wikipedia articles (e.g., "Boa (Boa)" vs "Boa"). The genus/
+// subgenus rows are selected via an index on nameusage.rank, and the name match uses
+// COLLATE NOCASE instead of wrapping columns in LOWER() (which defeated indexes and
+// made this report impractically slow). Use --limit to cap the displayed rows.
 
 namespace BeastieBot3.Col;
 
-// test example report; doesn't work / runs too slow; probably the LOWER commands.
-
 [CommandInfo("col report-subgenus-homonyms", CommandKind.ReadOnly,
     "Report subgenus entries whose names collide with genus names in the COL database.",
-    Examples = new[] { "col report-subgenus-homonyms" })]
-public sealed class ColSubgenusHomonymReportCommand : Command<CommonSettings>
+    Examples = new[] { "col report-subgenus-homonyms", "col report-subgenus-homonyms --limit 100" })]
+public sealed class ColSubgenusHomonymReportCommand : Command<ColSubgenusHomonymReportCommand.Settings>
 {
+    public sealed class Settings : CommonSettings {
+        [CommandOption("--limit <COUNT>")]
+        [Description("Maximum number of homonym rows to display (0 = all). Default: 0.")]
+        public int Limit { get; init; }
+    }
+
     // Canonicalize genus and subgenus names and join on the cleaned value to locate potential homonyms.
     private const string ReportSql = @"
 WITH subg AS (
@@ -35,13 +41,11 @@ WITH subg AS (
         remarks,
         parentID,
         basionymID,
-        LOWER(
-            COALESCE(
-                infragenericEpithet,
-                subgenus,
-                uninomial,
-                genericName
-            )
+        COALESCE(
+            infragenericEpithet,
+            subgenus,
+            uninomial,
+            genericName
         ) AS canonical_name
     FROM nameusage
     WHERE rank = 'subgenus'
@@ -56,11 +60,9 @@ WITH subg AS (
         remarks,
         parentID,
         basionymID,
-        LOWER(
-            COALESCE(
-                uninomial,
-                genus
-            )
+        COALESCE(
+            uninomial,
+            genus
         ) AS canonical_name
     FROM nameusage
     WHERE rank = 'genus'
@@ -86,13 +88,13 @@ SELECT
     g.nameRemarks AS genus_name_remarks,
     g.remarks AS genus_remarks
 FROM subg s
-JOIN genus g ON s.canonical_name = g.canonical_name
+JOIN genus g ON s.canonical_name = g.canonical_name COLLATE NOCASE
 WHERE s.canonical_name IS NOT NULL
   AND g.canonical_name IS NOT NULL
   AND COALESCE(s.ID, '') <> COALESCE(g.ID, '')
-ORDER BY shared_name, subgenus_name, genus_name;";
+ORDER BY shared_name, subgenus_name, genus_name";
 
-    public override int Execute(CommandContext context, CommonSettings settings, CancellationToken cancellationToken)
+    public override int Execute(CommandContext context, Settings settings, CancellationToken cancellationToken)
     {
         var paths = settings.CreatePaths();
 
@@ -124,7 +126,10 @@ ORDER BY shared_name, subgenus_name, genus_name;";
         connection.Open();
 
         using var command = connection.CreateCommand();
-        command.CommandText = ReportSql;
+        command.CommandText = settings.Limit > 0 ? ReportSql + "\nLIMIT @limit" : ReportSql;
+        if (settings.Limit > 0) {
+            command.Parameters.AddWithValue("@limit", settings.Limit);
+        }
 
         using var reader = command.ExecuteReader();
         while (reader.Read())

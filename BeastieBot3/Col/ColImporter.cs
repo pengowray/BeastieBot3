@@ -64,6 +64,14 @@ public sealed class ColImporter {
 
     private static readonly HashSet<string> IndexedColumnNames = BuildIndexedColumnNames();
 
+    // Non-name filter columns that queries restrict on but which aren't part of the
+    // FTS/name mappings. `rank` is filtered by the subgenus/genus homonym report
+    // (WHERE rank = 'subgenus'/'genus'); without an index that report full-scans
+    // nameusage twice. The population-threshold guard in TryCreateColumnIndex still
+    // applies, so tiny tables are left unindexed.
+    private static readonly HashSet<string> FilterIndexColumnNames =
+        new(StringComparer.OrdinalIgnoreCase) { "rank" };
+
     private sealed record ColumnInfo(string Original, string Sanitized);
 
     public ColImporter(IAnsiConsole console, string zipPath, string rootDir, string datastoreDir, bool force) {
@@ -587,6 +595,10 @@ VALUES (@import_id, @key, @title, @alias, @description, @issued, @version, @raw_
         }
 
         if (IndexedColumnNames.Contains(columnName)) {
+            return true;
+        }
+
+        if (FilterIndexColumnNames.Contains(columnName)) {
             return true;
         }
 
