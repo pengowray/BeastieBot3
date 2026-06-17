@@ -443,6 +443,20 @@ WHERE id=@id
         command.ExecuteNonQuery();
     }
 
+    /// <summary>
+    /// Marks an existing page for re-download in place (reset to pending) without deleting the
+    /// row, so taxon matches that reference its page_row_id are preserved and the cached
+    /// taxobox/categories survive until the re-fetch overwrites them.
+    /// </summary>
+    public void MarkPageForRefresh(long pageRowId, DateTime now) {
+        using var command = _connection.CreateCommand();
+        command.CommandText = "UPDATE wiki_pages SET download_status=@pending, last_seen_at=@now WHERE id=@id";
+        command.Parameters.AddWithValue("@pending", WikiPageDownloadStatus.Pending);
+        command.Parameters.AddWithValue("@now", now.ToString("O"));
+        command.Parameters.AddWithValue("@id", pageRowId);
+        command.ExecuteNonQuery();
+    }
+
     public void MergePageRecords(long sourcePageRowId, long targetPageRowId) {
         if (sourcePageRowId == targetPageRowId) {
             return;
@@ -720,6 +734,19 @@ LIMIT 1
             reader.IsDBNull(8) ? null : reader.GetString(8),
             reader.IsDBNull(9) ? null : reader.GetString(9),
             matchedAt);
+    }
+
+    /// <summary>
+    /// Removes the prior attempt-log rows for a taxon before it is re-evaluated, so
+    /// taxon_wiki_match_attempts holds only the latest run's attempts instead of growing
+    /// without bound on every re-run.
+    /// </summary>
+    public void ClearTaxonAttempts(string taxonSource, string taxonIdentifier) {
+        using var command = _connection.CreateCommand();
+        command.CommandText = "DELETE FROM taxon_wiki_match_attempts WHERE taxon_source=@source AND taxon_identifier=@id";
+        command.Parameters.AddWithValue("@source", taxonSource);
+        command.Parameters.AddWithValue("@id", taxonIdentifier);
+        command.ExecuteNonQuery();
     }
 
     public int GetNextAttemptOrder(string taxonSource, string taxonIdentifier) {

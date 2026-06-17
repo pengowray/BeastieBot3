@@ -142,10 +142,12 @@ internal sealed class WikipediaPageFetcher {
             return false;
         }
 
+        // Iterate the parser's canonical template list so the has_taxobox heuristic and
+        // TaxoboxParser can't recognise different template sets (previously they diverged:
+        // plantbox/fishbox/birdbox were parsed but missing from this flag).
         var text = wikitext.AsSpan();
-        var templates = new[] { "{{taxobox", "{{speciesbox", "{{automatic taxobox", "{{insectbox", "{{subspeciesbox" };
-        foreach (var template in templates) {
-            if (text.IndexOf(template, StringComparison.OrdinalIgnoreCase) >= 0) {
+        foreach (var template in TaxoboxParser.TemplateNames) {
+            if (text.IndexOf(string.Concat("{{", template), StringComparison.OrdinalIgnoreCase) >= 0) {
                 return true;
             }
         }

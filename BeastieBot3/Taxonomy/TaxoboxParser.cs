@@ -7,9 +7,11 @@ using BeastieBot3.Wikipedia;
 
 // Extracts taxonomy data from Wikipedia wikitext taxobox templates. Supported
 // templates: {{Taxobox}}, {{Automatic taxobox}}, {{Speciesbox}}, {{Subspeciesbox}},
-// {{Insectbox}}, {{Infraspeciesbox}}, {{Virusbox}}. Extracts: taxon, name,
+// {{Insectbox}}, {{Plantbox}}, {{Fishbox}}, {{Birdbox}}. Extracts: taxon, name,
 // genus, species, binomial, parent, familia, classis. Used by Wikipedia cache
-// commands for matching species articles to IUCN taxa.
+// commands for matching species articles to IUCN taxa. TemplateNames is the single
+// source of truth -- WikipediaPageFetcher.HasTaxobox iterates the same list so the
+// has_taxobox flag and the parser can't drift apart.
 
 namespace BeastieBot3.Taxonomy;
 
@@ -24,6 +26,9 @@ internal static class TaxoboxParser {
         "fishbox",
         "birdbox"
     };
+
+    /// <summary>The taxobox template names this parser recognises (lowercase, no braces).</summary>
+    internal static IReadOnlyList<string> TemplateNames => TemplateCandidates;
 
     public static WikiTaxoboxData? TryParse(long pageRowId, string? wikitext) {
         if (string.IsNullOrWhiteSpace(wikitext)) {

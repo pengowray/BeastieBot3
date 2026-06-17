@@ -186,6 +186,10 @@ public sealed class WikipediaMatchTaxaCommand : AsyncCommand<WikipediaMatchTaxaC
             return TaxonProcessResult.AlreadyMatched;
         }
 
+        // Re-evaluating this taxon: drop its prior attempt rows so the attempt log holds
+        // only the latest run instead of appending unbounded history on every re-run.
+        cacheStore.ClearTaxonAttempts(TaxonSources.Iucn, taxonId);
+
         var candidates = BuildCandidates(row, wikidataLookup, synonymService, cancellationToken);
         if (candidates.Count == 0) {
             cacheStore.UpsertTaxonMatch(new TaxonWikiMatch(

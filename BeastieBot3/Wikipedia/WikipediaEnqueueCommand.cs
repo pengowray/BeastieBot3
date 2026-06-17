@@ -96,8 +96,11 @@ public sealed class WikipediaEnqueueCommand : Command<WikipediaEnqueueCommand.Se
                 continue;
             }
 
-            wikiStore.DeletePage(existing.PageRowId);
+            // Refresh in place: update the existing row and reset it to pending instead of
+            // deleting + re-inserting, so taxon matches (page_row_id) aren't orphaned and the
+            // cached taxobox/categories survive until the re-fetch overwrites them.
             wikiStore.UpsertPageCandidate(candidate);
+            wikiStore.MarkPageForRefresh(existing.PageRowId, now);
             refreshed++;
         }
 
