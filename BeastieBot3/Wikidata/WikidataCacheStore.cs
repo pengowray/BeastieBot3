@@ -271,6 +271,7 @@ ON CONFLICT(iucn_taxon_id) DO UPDATE SET
     match_method=excluded.match_method,
     is_synonym=excluded.is_synonym,
     last_seen_at=excluded.last_seen_at
+WHERE NOT (wikidata_pending_iucn_matches.is_synonym = 0 AND excluded.is_synonym = 1)
 """;
         var iucnParam = command.Parameters.Add("@iucn", SqliteType.Text);
         var idParam = command.Parameters.Add("@id", SqliteType.Integer);

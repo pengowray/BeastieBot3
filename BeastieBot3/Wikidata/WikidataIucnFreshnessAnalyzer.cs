@@ -283,7 +283,7 @@ internal sealed class WikidataIucnFreshnessAnalyzer {
         WikidataIucnFreshnessStats stats,
         CancellationToken cancellationToken) {
         using var command = _wikidataConnection.CreateCommand();
-        command.CommandText = @"SELECT r.entity_numeric_id, e.entity_id, r.statement_id, r.reference_hash, r.source_qid, r.iucn_taxon_id, s.status_entity_id
+        command.CommandText = @"SELECT r.entity_numeric_id, e.entity_id, r.statement_id, r.reference_hash, r.source_qid, r.iucn_taxon_id, s.status_entity_id, s.rank
 FROM wikidata_p141_references r
 JOIN wikidata_p141_statements s ON s.entity_numeric_id = r.entity_numeric_id AND s.statement_id = r.statement_id
 JOIN wikidata_entities e ON e.entity_numeric_id = r.entity_numeric_id";
@@ -301,6 +301,7 @@ JOIN wikidata_entities e ON e.entity_numeric_id = r.entity_numeric_id";
             long? sourceQid = reader.IsDBNull(4) ? null : reader.GetInt64(4);
             var taxonId = reader.IsDBNull(5) ? null : reader.GetString(5);
             var statusEntityId = reader.IsDBNull(6) ? null : reader.GetString(6);
+            var statementRank = reader.IsDBNull(7) ? null : reader.GetString(7);
 
             if (string.IsNullOrWhiteSpace(taxonId) || string.IsNullOrWhiteSpace(statusEntityId)) {
                 continue;
@@ -320,7 +321,7 @@ JOIN wikidata_entities e ON e.entity_numeric_id = r.entity_numeric_id";
             }
 
             entityIdsNeedingJson.Add(entityNumericId);
-            referenceRecords.Add(new P141ReferenceRecord(entityNumericId, statementId, referenceHash, sourceQid, taxonId, statusEntityId));
+            referenceRecords.Add(new P141ReferenceRecord(entityNumericId, statementId, referenceHash, sourceQid, taxonId, statusEntityId, statementRank));
         }
 
         if (referenceRecords.Count == 0) {
@@ -493,6 +494,14 @@ JOIN wikidata_entities e ON e.entity_numeric_id = r.entity_numeric_id";
                 }
 
                 builder.AddTaxon(reference.IucnTaxonId);
+            }
+
+            // A deprecated P141 statement is an outdated/superseded conservation status; it
+            // must not count toward the agreement rate (it still contributed to the source/
+            // retrieved-year provenance histograms above, which describe all references).
+            if (string.Equals(reference.StatementRank, "deprecated", StringComparison.OrdinalIgnoreCase)) {
+                stats.StatusAgreement.DeprecatedSkipped++;
+                continue;
             }
 
             if (!taxa.TryGetValue(reference.IucnTaxonId, out var taxon)) {
@@ -693,6 +702,9 @@ internal sealed class StatusAgreementStats {
     public long Mismatches { get; set; }
     public long UnknownIucnCategory { get; set; }
     public long UnmappedWikidataStatus { get; set; }
+    // P141 statements Wikidata marked deprecated -- excluded from the comparison so
+    // outdated conservation statuses don't skew the agreement rate.
+    public long DeprecatedSkipped { get; set; }
     public List<StatusMismatchSample> MismatchSamples { get; } = new();
 }
 
@@ -765,13 +777,14 @@ internal readonly record struct RedlistVersionKey(int Year, int Release, int Pub
 }
 
 internal sealed class P141ReferenceRecord {
-    public P141ReferenceRecord(long entityNumericId, string statementId, string referenceHash, long? sourceQid, string iucnTaxonId, string statusEntityId) {
+    public P141ReferenceRecord(long entityNumericId, string statementId, string referenceHash, long? sourceQid, string iucnTaxonId, string statusEntityId, string? statementRank = null) {
         EntityNumericId = entityNumericId;
         StatementId = statementId;
         ReferenceHash = referenceHash;
         SourceQid = sourceQid;
         IucnTaxonId = iucnTaxonId;
         StatusEntityId = statusEntityId;
+        StatementRank = statementRank;
     }
 
     public long EntityNumericId { get; }
@@ -780,6 +793,9 @@ internal sealed class P141ReferenceRecord {
     public long? SourceQid { get; }
     public string IucnTaxonId { get; }
     public string StatusEntityId { get; }
+    // Wikidata statement rank ('preferred'/'normal'/'deprecated'); deprecated statements
+    // are excluded from the status-agreement comparison.
+    public string? StatementRank { get; }
     public int? RetrievedYear { get; set; }
 
     public ReferenceKey Key => new(EntityNumericId, StatementId, ReferenceHash);

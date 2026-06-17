@@ -543,16 +543,19 @@ JOIN wikidata_entities e ON e.entity_numeric_id = n.entity_numeric_id");
             return (false, false);
         }
 
-        var indexCount = GetTableCount(connection, "wikidata_taxon_name_index");
-        var sourceCount = GetTableCount(connection, "wikidata_scientific_names");
+        // The two tables have different grains -- the index is one row per
+        // (entity, normalized_name) while scientific_names is one per (entity, language) --
+        // so compare distinct entities, not raw row counts, to judge completeness.
+        var indexCount = GetDistinctEntityCount(connection, "wikidata_taxon_name_index");
+        var sourceCount = GetDistinctEntityCount(connection, "wikidata_scientific_names");
         var isComplete = sourceCount == 0 || indexCount >= sourceCount;
         return (true, isComplete);
     }
 
-    private static long GetTableCount(SqliteConnection connection, string tableName) {
+    private static long GetDistinctEntityCount(SqliteConnection connection, string tableName) {
         using var count = connection.CreateCommand();
-        count.CommandText = $"SELECT COUNT(*) FROM {tableName}";
-        var result = count.ExecuteScalar();
-        return Convert.ToInt64(result ?? 0L);
+        count.CommandText = $"SELECT COUNT(DISTINCT entity_numeric_id) FROM {tableName}";
+        return Convert.ToInt64(count.ExecuteScalar() ?? 0L);
     }
+
 }

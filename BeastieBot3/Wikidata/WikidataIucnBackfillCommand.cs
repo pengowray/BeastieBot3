@@ -344,15 +344,17 @@ public sealed class WikidataIucnBackfillCommand : AsyncCommand<WikidataIucnBackf
             return (false, false);
         }
 
-        var indexCount = GetCount(connection, "wikidata_taxon_name_index");
-        var sourceCount = GetCount(connection, "wikidata_scientific_names");
+        // Compare distinct entities, not raw rows: the index is keyed (entity, normalized_name)
+        // and scientific_names is keyed (entity, language), so their row counts aren't comparable.
+        var indexCount = GetDistinctEntityCount(connection, "wikidata_taxon_name_index");
+        var sourceCount = GetDistinctEntityCount(connection, "wikidata_scientific_names");
         var isComplete = sourceCount == 0 || indexCount >= sourceCount;
         return (true, isComplete);
     }
 
-    private static long GetCount(SqliteConnection connection, string table) {
+    private static long GetDistinctEntityCount(SqliteConnection connection, string table) {
         using var command = connection.CreateCommand();
-        command.CommandText = $"SELECT COUNT(*) FROM {table}";
+        command.CommandText = $"SELECT COUNT(DISTINCT entity_numeric_id) FROM {table}";
         var result = command.ExecuteScalar();
         return Convert.ToInt64(result ?? 0L);
     }

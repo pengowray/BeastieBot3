@@ -277,6 +277,7 @@ internal static class WikidataIucnFreshnessReportBuilder {
         builder.AppendLine($"| Mismatches | {status.Mismatches:N0} | {FormatPercent(status.Mismatches, status.TotalComparisons)} |");
         builder.AppendLine($"| Missing IUCN category data | {status.UnknownIucnCategory:N0} | {FormatPercent(status.UnknownIucnCategory, totalReferences)} |");
         builder.AppendLine($"| Wikidata status outside allowed set | {status.UnmappedWikidataStatus:N0} | {FormatPercent(status.UnmappedWikidataStatus, totalReferences)} |");
+        builder.AppendLine($"| Deprecated statements (excluded) | {status.DeprecatedSkipped:N0} | {FormatPercent(status.DeprecatedSkipped, totalReferences)} |");
         builder.AppendLine();
 
         if (status.MismatchSamples.Count > 0) {
