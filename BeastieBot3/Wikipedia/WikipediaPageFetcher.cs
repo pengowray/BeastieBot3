@@ -63,7 +63,9 @@ internal sealed class WikipediaPageFetcher {
             _cache.ReplaceRedirectChain(pageRowId, BuildRedirectEdges(queryResult.Redirects));
 
             if (existingCanonical is not null && existingCanonical.DownloadStatus == WikiPageDownloadStatus.Cached) {
-                return WikipediaFetchOutcome.CreateSuccess(workItem.PageTitle, existingCanonical.PageTitle ?? canonicalTitle);
+                // The redirect target is already cached — nothing to download. Report this as
+                // skipped (a duplicate) rather than a fresh success, so the fetch counters are honest.
+                return WikipediaFetchOutcome.CreateSkipped(workItem.PageTitle, existingCanonical.PageTitle ?? canonicalTitle, "redirect target already cached");
             }
         }
 

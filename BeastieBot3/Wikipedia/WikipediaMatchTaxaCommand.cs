@@ -206,6 +206,7 @@ public sealed class WikipediaMatchTaxaCommand : AsyncCommand<WikipediaMatchTaxaC
 
         var attemptOrder = cacheStore.GetNextAttemptOrder(TaxonSources.Iucn, taxonId);
         PendingCandidate? pending = null;
+        var sawRejection = false;
 
         foreach (var candidate in candidates) {
             cancellationToken.ThrowIfCancellationRequested();
@@ -243,6 +244,10 @@ public sealed class WikipediaMatchTaxaCommand : AsyncCommand<WikipediaMatchTaxaC
             if (evaluation.Status == CandidateEvaluationStatus.Pending && pending is null) {
                 pending = new PendingCandidate(candidate, evaluation);
             }
+
+            if (evaluation.Status == CandidateEvaluationStatus.Rejected) {
+                sawRejection = true;
+            }
         }
 
         if (pending is not null) {
@@ -262,6 +267,25 @@ public sealed class WikipediaMatchTaxaCommand : AsyncCommand<WikipediaMatchTaxaC
                 DateTime.UtcNow));
             AnsiConsole.MarkupLineInterpolated($"[yellow]Pending[/] SIS {Markup.Escape(taxonId)} waiting on {Markup.Escape(pendingCandidate.DisplayTitle)}");
             return TaxonProcessResult.Pending;
+        }
+
+        if (sawRejection) {
+            // Every candidate that resolved to a real page was a disambiguation/set-index
+            // page — distinct from "no article exists at all".
+            cacheStore.UpsertTaxonMatch(new TaxonWikiMatch(
+                TaxonSources.Iucn,
+                taxonId,
+                TaxonWikiMatchStatus.Rejected,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                "All candidate pages were disambiguation or set-index pages",
+                DateTime.UtcNow));
+            AnsiConsole.MarkupLineInterpolated($"[yellow]Rejected[/] SIS {Markup.Escape(taxonId)} (disambiguation/set-index only)");
+            return TaxonProcessResult.Rejected;
         }
 
         cacheStore.UpsertTaxonMatch(new TaxonWikiMatch(
@@ -302,18 +326,24 @@ public sealed class WikipediaMatchTaxaCommand : AsyncCommand<WikipediaMatchTaxaC
     }
 
     private static CandidateEvaluation EvaluateCached(WikiPageSummary summary) {
+        // A real cached page that is unusable as a taxon article is "rejected", distinct
+        // from a page that genuinely doesn't exist ("missing") — so the taxon's match row
+        // can record which it was.
         if (summary.IsDisambiguation) {
-            return CandidateEvaluation.Failed(summary, "Disambiguation page");
+            return CandidateEvaluation.Rejected(summary, "Disambiguation page");
         }
 
         if (summary.IsSetIndex) {
-            return CandidateEvaluation.Failed(summary, "Set index page");
+            return CandidateEvaluation.Rejected(summary, "Set index page");
         }
 
         var finalTitle = summary.IsRedirect && !string.IsNullOrWhiteSpace(summary.RedirectTarget)
             ? summary.RedirectTarget
             : summary.PageTitle;
-        return CandidateEvaluation.Matched(summary, finalTitle);
+        // Still a match, but flag in the attempt log that it resolved via a redirect.
+        return summary.IsRedirect
+            ? CandidateEvaluation.Redirected(summary, finalTitle)
+            : CandidateEvaluation.Matched(summary, finalTitle);
     }
 
     private static IReadOnlyList<WikipediaMatchCandidate> BuildCandidates(
@@ -455,6 +485,7 @@ public sealed class WikipediaMatchTaxaCommand : AsyncCommand<WikipediaMatchTaxaC
         table.AddRow("Matched", stats.Matched.ToString("n0"));
         table.AddRow("Pending", stats.Pending.ToString("n0"));
         table.AddRow("Missing", stats.Missing.ToString("n0"));
+        table.AddRow("Rejected", stats.Rejected.ToString("n0"));
         table.AddRow("No candidates", stats.NoCandidates.ToString("n0"));
         table.AddRow("Skipped", stats.Skipped.ToString("n0"));
         table.AddRow("Already matched", stats.AlreadyMatched.ToString("n0"));
@@ -466,6 +497,7 @@ public sealed class WikipediaMatchTaxaCommand : AsyncCommand<WikipediaMatchTaxaC
         public long Matched { get; set; }
         public long Pending { get; set; }
         public long Missing { get; set; }
+        public long Rejected { get; set; }
         public long NoCandidates { get; set; }
         public long Skipped { get; set; }
         public long AlreadyMatched { get; set; }
@@ -480,6 +512,9 @@ public sealed class WikipediaMatchTaxaCommand : AsyncCommand<WikipediaMatchTaxaC
                     break;
                 case TaxonProcessResult.Missing:
                     Missing++;
+                    break;
+                case TaxonProcessResult.Rejected:
+                    Rejected++;
                     break;
                 case TaxonProcessResult.NoCandidates:
                     NoCandidates++;
@@ -498,6 +533,7 @@ public sealed class WikipediaMatchTaxaCommand : AsyncCommand<WikipediaMatchTaxaC
         Matched,
         Pending,
         Missing,
+        Rejected,
         NoCandidates,
         Skipped,
         AlreadyMatched
@@ -507,7 +543,8 @@ public sealed class WikipediaMatchTaxaCommand : AsyncCommand<WikipediaMatchTaxaC
         Matched,
         Pending,
         Failed,
-        Missing
+        Missing,
+        Rejected
     }
 
     private sealed record CandidateEvaluation(
@@ -518,9 +555,14 @@ public sealed class WikipediaMatchTaxaCommand : AsyncCommand<WikipediaMatchTaxaC
         string? FinalTitle
     ) {
         public static CandidateEvaluation Matched(WikiPageSummary summary, string? finalTitle) => new(CandidateEvaluationStatus.Matched, summary, TaxonWikiAttemptOutcome.Matched, null, finalTitle ?? summary.PageTitle);
+        // A match reached via a redirect: status is still Matched, but the per-attempt outcome records the redirect.
+        public static CandidateEvaluation Redirected(WikiPageSummary summary, string? finalTitle) => new(CandidateEvaluationStatus.Matched, summary, TaxonWikiAttemptOutcome.Redirected, null, finalTitle ?? summary.PageTitle);
         public static CandidateEvaluation Pending(WikiPageSummary summary, string notes) => new(CandidateEvaluationStatus.Pending, summary, TaxonWikiAttemptOutcome.PendingFetch, notes, summary.PageTitle);
         public static CandidateEvaluation Failed(WikiPageSummary summary, string notes) => new(CandidateEvaluationStatus.Failed, summary, TaxonWikiAttemptOutcome.Failed, notes, summary.PageTitle);
         public static CandidateEvaluation Missing(WikiPageSummary summary, string notes) => new(CandidateEvaluationStatus.Missing, summary, TaxonWikiAttemptOutcome.Missing, notes, summary.PageTitle);
+        // A real cached page deliberately rejected (disambiguation/set-index). Falls through like Failed in the
+        // candidate loop, but lets the taxon record 'rejected' rather than 'missing'.
+        public static CandidateEvaluation Rejected(WikiPageSummary summary, string notes) => new(CandidateEvaluationStatus.Rejected, summary, TaxonWikiAttemptOutcome.Failed, notes, summary.PageTitle);
     }
 
     private sealed record WikipediaMatchCandidate(

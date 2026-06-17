@@ -752,7 +752,6 @@ internal static class TaxonWikiAttemptOutcome {
     public const string Redirected = "redirected";
     public const string Missing = "missing";
     public const string Failed = "failed";
-    public const string Skipped = "skipped";
     public const string PendingFetch = "pending";
 }
 
