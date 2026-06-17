@@ -40,7 +40,7 @@ CREATE TABLE IF NOT EXISTS wiki_pages (
     last_seen_at TEXT NOT NULL,
     download_status TEXT NOT NULL DEFAULT 'pending',
     latest_revision_id INTEGER,
-    import_id INTEGER REFERENCES import_metadata(id) ON DELETE SET NULL,
+    import_id INTEGER REFERENCES http_request_log(id) ON DELETE SET NULL,
     downloaded_at TEXT,
     html_main TEXT,
     wikitext TEXT,

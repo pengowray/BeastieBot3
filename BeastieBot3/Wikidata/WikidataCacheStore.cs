@@ -41,7 +41,7 @@ internal sealed class WikidataCacheStore : HttpCacheSqliteStore {
     has_p627 INTEGER NOT NULL DEFAULT 0,
     json_downloaded INTEGER NOT NULL DEFAULT 0,
     downloaded_at TEXT,
-    import_id INTEGER REFERENCES import_metadata(id) ON DELETE SET NULL,
+    import_id INTEGER REFERENCES http_request_log(id) ON DELETE SET NULL,
     label_en TEXT,
     description_en TEXT,
     last_error TEXT,

@@ -8,7 +8,7 @@ namespace BeastieBot3.Infrastructure;
 /// <see cref="ApiImportMetadataStore"/> over the same connection and forwards the
 /// <c>BeginImport</c>/<c>CompleteImport*</c> request-tracking calls, so the concrete stores no
 /// longer hand-forward them. Factories must run <see cref="EnsureImportSchema"/> before their own
-/// <see cref="SqliteStore.EnsureSchema"/> so the <c>import_metadata</c> table the cache tables
+/// <see cref="SqliteStore.EnsureSchema"/> so the <c>http_request_log</c> table the cache tables
 /// reference already exists.
 /// </summary>
 internal abstract class HttpCacheSqliteStore : SqliteStore {
@@ -18,7 +18,7 @@ internal abstract class HttpCacheSqliteStore : SqliteStore {
         _importStore = new ApiImportMetadataStore(connection);
     }
 
-    /// <summary>Creates the shared <c>import_metadata</c> table. Call from the factory before <c>EnsureSchema()</c>.</summary>
+    /// <summary>Creates the shared <c>http_request_log</c> table. Call from the factory before <c>EnsureSchema()</c>.</summary>
     protected void EnsureImportSchema() => _importStore.EnsureSchema();
 
     public long BeginImport(string url) => _importStore.BeginImport(url);

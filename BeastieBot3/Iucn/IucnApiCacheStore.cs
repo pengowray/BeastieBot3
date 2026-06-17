@@ -45,7 +45,7 @@ internal sealed class IucnApiCacheStore : HttpCacheSqliteStore {
     CREATE TABLE IF NOT EXISTS taxa (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     root_sis_id INTEGER NOT NULL UNIQUE,
-    import_id INTEGER NOT NULL REFERENCES import_metadata(id) ON DELETE RESTRICT,
+    import_id INTEGER NOT NULL REFERENCES http_request_log(id) ON DELETE RESTRICT,
     downloaded_at TEXT NOT NULL,
     json TEXT NOT NULL,
     has_latest_flag_in_assessments INTEGER NOT NULL DEFAULT 1
@@ -73,7 +73,7 @@ CREATE TABLE IF NOT EXISTS assessments (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     assessment_id INTEGER NOT NULL UNIQUE,
     sis_id INTEGER NOT NULL,
-    import_id INTEGER NOT NULL REFERENCES import_metadata(id) ON DELETE RESTRICT,
+    import_id INTEGER NOT NULL REFERENCES http_request_log(id) ON DELETE RESTRICT,
     downloaded_at TEXT NOT NULL,
     json TEXT NOT NULL
 );
