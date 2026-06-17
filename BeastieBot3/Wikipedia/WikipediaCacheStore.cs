@@ -68,7 +68,6 @@ CREATE TABLE IF NOT EXISTS wiki_redirect_edges (
     page_row_id INTEGER NOT NULL REFERENCES wiki_pages(id) ON DELETE CASCADE,
     hop INTEGER NOT NULL,
     target_title TEXT NOT NULL,
-    target_page_row_id INTEGER REFERENCES wiki_pages(id) ON DELETE SET NULL,
     PRIMARY KEY(page_row_id, hop)
 );
 CREATE TABLE IF NOT EXISTS wiki_taxobox_data (
@@ -419,16 +418,14 @@ WHERE id=@id
             using var insert = _connection.CreateCommand();
             insert.Transaction = tx;
             insert.CommandText =
-                "INSERT INTO wiki_redirect_edges(page_row_id, hop, target_title, target_page_row_id) VALUES (@page,@hop,@title,@target)";
+                "INSERT INTO wiki_redirect_edges(page_row_id, hop, target_title) VALUES (@page,@hop,@title)";
             var pageParam = insert.Parameters.Add("@page", SqliteType.Integer);
             var hopParam = insert.Parameters.Add("@hop", SqliteType.Integer);
             var titleParam = insert.Parameters.Add("@title", SqliteType.Text);
-            var targetParam = insert.Parameters.Add("@target", SqliteType.Integer);
             pageParam.Value = pageRowId;
             foreach (var edge in edges) {
                 hopParam.Value = edge.Hop;
                 titleParam.Value = edge.TargetTitle;
-                targetParam.Value = edge.TargetPageRowId.HasValue ? edge.TargetPageRowId.Value : DBNull.Value;
                 insert.ExecuteNonQuery();
             }
         }
@@ -475,7 +472,6 @@ WHERE id=@id
 
         UpdateReference("UPDATE taxon_wiki_matches SET page_row_id=@target WHERE page_row_id=@source");
         UpdateReference("UPDATE taxon_wiki_match_attempts SET page_row_id=@target WHERE page_row_id=@source");
-        UpdateReference("UPDATE wiki_redirect_edges SET target_page_row_id=@target WHERE target_page_row_id=@source");
 
         using (var delete = _connection.CreateCommand()) {
             delete.Transaction = tx;
@@ -817,7 +813,7 @@ internal sealed record WikiPageContent(
     DateTime DownloadedAt
 );
 
-internal sealed record WikiRedirectEdge(string TargetTitle, long Hop, long? TargetPageRowId);
+internal sealed record WikiRedirectEdge(string TargetTitle, long Hop);
 
 internal sealed record WikiPageWorkItem(
     long PageRowId,

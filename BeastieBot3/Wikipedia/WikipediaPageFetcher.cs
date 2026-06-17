@@ -163,7 +163,7 @@ internal sealed class WikipediaPageFetcher {
         var edges = new List<WikiRedirectEdge>(steps.Count);
         var hop = 0L;
         foreach (var step in steps) {
-            edges.Add(new WikiRedirectEdge(step.ToTitle, hop++, null));
+            edges.Add(new WikiRedirectEdge(step.ToTitle, hop++));
         }
 
         return edges;

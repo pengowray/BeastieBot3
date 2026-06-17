@@ -59,6 +59,32 @@ public class CommonNameCrossReferenceTests {
     }
 
     [Fact]
+    public void GetCommonNamesByNormalized_ReadsEveryColumnAtTheRightOrdinal() {
+        // Guards the display_name removal: the SELECT/reader ordinals were shifted by hand, so
+        // assert every field round-trips (a wrong ordinal would surface as a mismatched value).
+        using var store = OpenInMemory();
+        var taxon = store.InsertOrUpdateTaxon(
+            canonicalName: "panthera leo", originalName: "Panthera leo", rank: "species", kingdom: "ANIMALIA",
+            isExtinct: true, isFossil: false, validityStatus: "valid", primarySource: "iucn", primarySourceId: "1");
+        store.InsertCommonName(taxon, "Lion", "lion", "en", "iucn", "src-1", isPreferred: true);
+
+        var records = store.GetCommonNamesByNormalized("lion", "en");
+        var r = Assert.Single(records);
+        Assert.Equal(taxon, r.TaxonId);
+        Assert.Equal("Lion", r.RawName);
+        Assert.Equal("lion", r.NormalizedName);
+        Assert.Equal("en", r.Language);
+        Assert.Equal("iucn", r.Source);
+        Assert.Equal("src-1", r.SourceIdentifier);
+        Assert.True(r.IsPreferred);
+        Assert.Equal("panthera leo", r.TaxonCanonicalName);
+        Assert.Equal("ANIMALIA", r.TaxonKingdom);
+        Assert.Equal("valid", r.TaxonValidityStatus);
+        Assert.True(r.TaxonIsExtinct);
+        Assert.False(r.TaxonIsFossil);
+    }
+
+    [Fact]
     public void CrossReference_DistinctPerSource() {
         using var store = OpenInMemory();
         var a = AddTaxon(store, "panthera leo", "1");

@@ -100,8 +100,6 @@ internal sealed class CommonNameStore : SqliteStore {
                 raw_name TEXT NOT NULL,
                 -- Normalized for comparison (lowercase, no punctuation except hyphens stripped too)
                 normalized_name TEXT NOT NULL,
-                -- Display name with corrected capitalization
-                display_name TEXT,
                 -- Language code (ISO 639-1)
                 language TEXT NOT NULL DEFAULT 'en',
                 -- Source: 'iucn', 'wikidata', 'wikipedia_title', 'wikipedia_taxobox', 'col'
@@ -145,15 +143,9 @@ internal sealed class CommonNameStore : SqliteStore {
                 -- Second taxon (NULL for caps_mismatch within same taxon)
                 taxon_id_b INTEGER REFERENCES taxa(id) ON DELETE CASCADE,
                 common_name_id_b INTEGER REFERENCES common_names(id) ON DELETE SET NULL,
-                -- Resolution: NULL (unresolved), 'prefer_a', 'prefer_b', 'reject_both', 'manual'
-                resolution TEXT,
-                resolution_notes TEXT,
-                -- Timestamps
-                detected_at TEXT NOT NULL,
-                resolved_at TEXT
+                detected_at TEXT NOT NULL
             );
             CREATE INDEX IF NOT EXISTS idx_conflicts_normalized ON common_name_conflicts(normalized_name);
-            CREATE INDEX IF NOT EXISTS idx_conflicts_unresolved ON common_name_conflicts(resolution) WHERE resolution IS NULL;
 
             -- Capitalization rules (from caps.txt)
             CREATE TABLE IF NOT EXISTS caps_rules (
@@ -417,7 +409,6 @@ internal sealed class CommonNameStore : SqliteStore {
         long taxonId,
         string rawName,
         string normalizedName,
-        string? displayName,
         string language,
         string source,
         string? sourceIdentifier,
@@ -425,19 +416,17 @@ internal sealed class CommonNameStore : SqliteStore {
         using var command = _connection.CreateCommand();
         command.CommandText =
             """
-            INSERT INTO common_names 
-                (taxon_id, raw_name, normalized_name, display_name, language, source, source_identifier, is_preferred, created_at)
-            VALUES (@taxonId, @raw, @normalized, @display, @lang, @source, @sourceId, @preferred, @now)
+            INSERT INTO common_names
+                (taxon_id, raw_name, normalized_name, language, source, source_identifier, is_preferred, created_at)
+            VALUES (@taxonId, @raw, @normalized, @lang, @source, @sourceId, @preferred, @now)
             ON CONFLICT(taxon_id, normalized_name, source, language) DO UPDATE SET
                 raw_name = excluded.raw_name,
-                display_name = COALESCE(excluded.display_name, common_names.display_name),
                 is_preferred = MAX(common_names.is_preferred, excluded.is_preferred)
             RETURNING id;
             """;
         command.Parameters.AddWithValue("@taxonId", taxonId);
         command.Parameters.AddWithValue("@raw", rawName);
         command.Parameters.AddWithValue("@normalized", normalizedName);
-        command.Parameters.AddWithValue("@display", displayName ?? (object)DBNull.Value);
         command.Parameters.AddWithValue("@lang", language);
         command.Parameters.AddWithValue("@source", source);
         command.Parameters.AddWithValue("@sourceId", sourceIdentifier ?? (object)DBNull.Value);
@@ -451,7 +440,7 @@ internal sealed class CommonNameStore : SqliteStore {
         if (language != null) {
             command.CommandText =
                 """
-                SELECT cn.id, cn.taxon_id, cn.raw_name, cn.normalized_name, cn.display_name, 
+                SELECT cn.id, cn.taxon_id, cn.raw_name, cn.normalized_name,
                        cn.language, cn.source, cn.source_identifier, cn.is_preferred,
                        t.canonical_name, t.kingdom, t.validity_status, t.is_extinct, t.is_fossil
                 FROM common_names cn
@@ -463,7 +452,7 @@ internal sealed class CommonNameStore : SqliteStore {
         } else {
             command.CommandText =
                 """
-                SELECT cn.id, cn.taxon_id, cn.raw_name, cn.normalized_name, cn.display_name, 
+                SELECT cn.id, cn.taxon_id, cn.raw_name, cn.normalized_name,
                        cn.language, cn.source, cn.source_identifier, cn.is_preferred,
                        t.canonical_name, t.kingdom, t.validity_status, t.is_extinct, t.is_fossil
                 FROM common_names cn
@@ -482,16 +471,15 @@ internal sealed class CommonNameStore : SqliteStore {
                 TaxonId: reader.GetInt64(1),
                 RawName: reader.GetString(2),
                 NormalizedName: reader.GetString(3),
-                DisplayName: reader.IsDBNull(4) ? null : reader.GetString(4),
-                Language: reader.GetString(5),
-                Source: reader.GetString(6),
-                SourceIdentifier: reader.IsDBNull(7) ? null : reader.GetString(7),
-                IsPreferred: reader.GetInt32(8) == 1,
-                TaxonCanonicalName: reader.GetString(9),
-                TaxonKingdom: reader.IsDBNull(10) ? null : reader.GetString(10),
-                TaxonValidityStatus: reader.GetString(11),
-                TaxonIsExtinct: reader.GetInt32(12) == 1,
-                TaxonIsFossil: reader.GetInt32(13) == 1
+                Language: reader.GetString(4),
+                Source: reader.GetString(5),
+                SourceIdentifier: reader.IsDBNull(6) ? null : reader.GetString(6),
+                IsPreferred: reader.GetInt32(7) == 1,
+                TaxonCanonicalName: reader.GetString(8),
+                TaxonKingdom: reader.IsDBNull(9) ? null : reader.GetString(9),
+                TaxonValidityStatus: reader.GetString(10),
+                TaxonIsExtinct: reader.GetInt32(11) == 1,
+                TaxonIsFossil: reader.GetInt32(12) == 1
             ));
         }
         return results;
@@ -577,7 +565,7 @@ internal sealed class CommonNameStore : SqliteStore {
             if (!isAmbiguous || allowAmbiguous) {
                 return new CommonNameResult(
                     RawName: candidate.RawName,
-                    DisplayName: candidate.DisplayName ?? candidate.RawName,
+                    DisplayName: candidate.RawName,
                     NormalizedName: candidate.NormalizedName,
                     Source: candidate.Source,
                     IsPreferred: candidate.IsPreferred,
@@ -596,7 +584,7 @@ internal sealed class CommonNameStore : SqliteStore {
         using var command = _connection.CreateCommand();
         command.CommandText =
             """
-            SELECT cn.id, cn.taxon_id, cn.raw_name, cn.normalized_name, cn.display_name, 
+            SELECT cn.id, cn.taxon_id, cn.raw_name, cn.normalized_name,
                    cn.language, cn.source, cn.source_identifier, cn.is_preferred,
                    t.canonical_name, t.kingdom, t.validity_status, t.is_extinct, t.is_fossil
             FROM common_names cn
@@ -615,16 +603,15 @@ internal sealed class CommonNameStore : SqliteStore {
                 TaxonId: reader.GetInt64(1),
                 RawName: reader.GetString(2),
                 NormalizedName: reader.GetString(3),
-                DisplayName: reader.IsDBNull(4) ? null : reader.GetString(4),
-                Language: reader.GetString(5),
-                Source: reader.GetString(6),
-                SourceIdentifier: reader.IsDBNull(7) ? null : reader.GetString(7),
-                IsPreferred: reader.GetInt32(8) == 1,
-                TaxonCanonicalName: reader.GetString(9),
-                TaxonKingdom: reader.IsDBNull(10) ? null : reader.GetString(10),
-                TaxonValidityStatus: reader.GetString(11),
-                TaxonIsExtinct: reader.GetInt32(12) == 1,
-                TaxonIsFossil: reader.GetInt32(13) == 1
+                Language: reader.GetString(4),
+                Source: reader.GetString(5),
+                SourceIdentifier: reader.IsDBNull(6) ? null : reader.GetString(6),
+                IsPreferred: reader.GetInt32(7) == 1,
+                TaxonCanonicalName: reader.GetString(8),
+                TaxonKingdom: reader.IsDBNull(9) ? null : reader.GetString(9),
+                TaxonValidityStatus: reader.GetString(10),
+                TaxonIsExtinct: reader.GetInt32(11) == 1,
+                TaxonIsFossil: reader.GetInt32(12) == 1
             ));
         }
         return results;
@@ -709,7 +696,7 @@ internal sealed class CommonNameStore : SqliteStore {
         using var command = _connection.CreateCommand();
         command.CommandText =
             """
-            SELECT cn.id, cn.taxon_id, cn.raw_name, cn.normalized_name, cn.display_name, 
+            SELECT cn.id, cn.taxon_id, cn.raw_name, cn.normalized_name,
                    cn.language, cn.source, cn.source_identifier, cn.is_preferred,
                    t.canonical_name, t.kingdom, t.validity_status, t.is_extinct, t.is_fossil
             FROM common_names cn
@@ -727,16 +714,15 @@ internal sealed class CommonNameStore : SqliteStore {
                 TaxonId: reader.GetInt64(1),
                 RawName: reader.GetString(2),
                 NormalizedName: reader.GetString(3),
-                DisplayName: reader.IsDBNull(4) ? null : reader.GetString(4),
-                Language: reader.GetString(5),
-                Source: reader.GetString(6),
-                SourceIdentifier: reader.IsDBNull(7) ? null : reader.GetString(7),
-                IsPreferred: reader.GetInt32(8) == 1,
-                TaxonCanonicalName: reader.GetString(9),
-                TaxonKingdom: reader.IsDBNull(10) ? null : reader.GetString(10),
-                TaxonValidityStatus: reader.GetString(11),
-                TaxonIsExtinct: reader.GetInt32(12) == 1,
-                TaxonIsFossil: reader.GetInt32(13) == 1
+                Language: reader.GetString(4),
+                Source: reader.GetString(5),
+                SourceIdentifier: reader.IsDBNull(6) ? null : reader.GetString(6),
+                IsPreferred: reader.GetInt32(7) == 1,
+                TaxonCanonicalName: reader.GetString(8),
+                TaxonKingdom: reader.IsDBNull(9) ? null : reader.GetString(9),
+                TaxonValidityStatus: reader.GetString(10),
+                TaxonIsExtinct: reader.GetInt32(11) == 1,
+                TaxonIsFossil: reader.GetInt32(12) == 1
             ));
         }
         return results;
@@ -771,7 +757,7 @@ internal sealed class CommonNameStore : SqliteStore {
         var placeholders = string.Join(",", idList.Select((_, i) => $"@id{i}"));
         using var command = _connection.CreateCommand();
         command.CommandText = $@"
-            SELECT cn.taxon_id, cn.raw_name, cn.normalized_name, cn.display_name, 
+            SELECT cn.taxon_id, cn.raw_name, cn.normalized_name,
                    cn.source, cn.is_preferred
             FROM common_names cn
             JOIN taxa t ON t.id = cn.taxon_id
@@ -786,20 +772,19 @@ internal sealed class CommonNameStore : SqliteStore {
         }
 
         // Group by taxon_id
-        var byTaxon = new Dictionary<long, List<(string RawName, string NormalizedName, string? DisplayName, string Source, bool IsPreferred)>>();
+        var byTaxon = new Dictionary<long, List<(string RawName, string NormalizedName, string Source, bool IsPreferred)>>();
         using var reader = command.ExecuteReader();
         while (reader.Read()) {
             var taxonId = reader.GetInt64(0);
             if (!byTaxon.TryGetValue(taxonId, out var list)) {
-                list = new List<(string, string, string?, string, bool)>();
+                list = new List<(string, string, string, bool)>();
                 byTaxon[taxonId] = list;
             }
             list.Add((
                 reader.GetString(1),
                 reader.GetString(2),
-                reader.IsDBNull(3) ? null : reader.GetString(3),
-                reader.GetString(4),
-                reader.GetInt32(5) == 1
+                reader.GetString(3),
+                reader.GetInt32(4) == 1
             ));
         }
 
@@ -817,7 +802,7 @@ internal sealed class CommonNameStore : SqliteStore {
                 if (!isAmbiguous || allowAmbiguous) {
                     results[taxonId] = new CommonNameResult(
                         RawName: candidate.RawName,
-                        DisplayName: candidate.DisplayName ?? candidate.RawName,
+                        DisplayName: candidate.RawName,
                         NormalizedName: candidate.NormalizedName,
                         Source: candidate.Source,
                         IsPreferred: candidate.IsPreferred,
@@ -1171,7 +1156,6 @@ public record CommonNameRecord(
     long TaxonId,
     string RawName,
     string NormalizedName,
-    string? DisplayName,
     string Language,
     string Source,
     string? SourceIdentifier,

@@ -93,8 +93,8 @@ beastiebot3 common-names aggregate --source iucn --limit 1000
 - Uses UPSERT on `(taxon_id, normalized_name, source, language)`
 - If the same common name from the same source already exists for a taxon, it updates:
   - `raw_name` - updated to new value
-  - `display_name` - updated only if new value is non-null (preserves existing)
   - `is_preferred` - keeps the maximum (true wins over false)
+  - (Display capitalization is applied at read time via the caps rules, not stored.)
 - **Safe to re-run**: Refreshes data without losing existing records or causing duplicates
 - Records are tracked in `import_runs` table (view with `common-names sources`)
 - Re-running a source takes approximately the same time as a fresh run
