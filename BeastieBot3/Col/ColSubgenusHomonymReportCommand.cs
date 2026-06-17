@@ -11,9 +11,12 @@ using BeastieBot3.Configuration;
 
 // Reports on subgenus names that collide with genus names in COL, which can cause
 // issues when matching Wikipedia articles (e.g., "Boa (Boa)" vs "Boa"). The genus/
-// subgenus rows are selected via an index on nameusage.rank, and the name match uses
-// COLLATE NOCASE instead of wrapping columns in LOWER() (which defeated indexes and
-// made this report impractically slow). Use --limit to cap the displayed rows.
+// subgenus rows are selected via an index on nameusage.rank; the larger genus set is
+// MATERIALIZED so the name join runs against an automatic covering index (~12s on the
+// full COL DB) rather than re-scanning per outer row. Genus/subgenus names are always
+// capitalized nomenclaturally, so a plain equality join is correct -- no LOWER()/COLLATE
+// needed (both of which defeated the index and made this report impractically slow).
+// Use --limit to cap the displayed rows.
 
 namespace BeastieBot3.Col;
 
@@ -49,7 +52,7 @@ WITH subg AS (
         ) AS canonical_name
     FROM nameusage
     WHERE rank = 'subgenus'
-), genus AS (
+), genus AS MATERIALIZED (
     SELECT
         ID,
         scientificName,
@@ -88,7 +91,7 @@ SELECT
     g.nameRemarks AS genus_name_remarks,
     g.remarks AS genus_remarks
 FROM subg s
-JOIN genus g ON s.canonical_name = g.canonical_name COLLATE NOCASE
+JOIN genus g ON s.canonical_name = g.canonical_name
 WHERE s.canonical_name IS NOT NULL
   AND g.canonical_name IS NOT NULL
   AND COALESCE(s.ID, '') <> COALESCE(g.ID, '')
