@@ -72,7 +72,8 @@ internal sealed class WikipediaPreviewImpactCommand : Command<WikipediaPreviewIm
         }
 
         if (settings.Json) {
-            AnsiConsole.WriteLine(JsonSerializer.Serialize(record, new JsonSerializerOptions { WriteIndented = true }));
+            AnsiConsole.WriteLine(JsonSerializer.Serialize(record,
+                new JsonSerializerOptions { WriteIndented = true, PropertyNamingPolicy = JsonNamingPolicy.CamelCase }));
             return 0;
         }
 
