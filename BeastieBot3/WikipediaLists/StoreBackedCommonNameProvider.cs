@@ -26,6 +26,15 @@ internal sealed class StoreBackedCommonNameProvider : IDisposable {
     private readonly Dictionary<string, string> _capsRules;
     private readonly bool _allowAmbiguous;
 
+    // Per-run memoization. Generation resolves the same taxon's id/name/article several times per
+    // record (Style B/C sort + line formatting + parent-species link) and again for the same taxon
+    // across multiple lists; caching makes each unique lookup happen once. The provider is created
+    // once per generate-lists invocation, so this spans the whole run. Single-threaded — no locking.
+    private readonly Dictionary<long, long?> _storeTaxonIdCache = new();
+    private readonly Dictionary<long, string?> _commonNameCache = new();
+    private readonly Dictionary<long, string?> _wikiArticleCache = new();
+    private readonly Dictionary<string, string?> _articleByScientificCache = new(StringComparer.OrdinalIgnoreCase);
+
     /// <summary>
     /// Creates a provider that owns and will dispose the store.
     /// </summary>
@@ -64,20 +73,22 @@ internal sealed class StoreBackedCommonNameProvider : IDisposable {
         if (record is null) {
             return null;
         }
+        if (_commonNameCache.TryGetValue(record.TaxonId, out var cached)) {
+            return cached;
+        }
 
         // Look up by taxon_id (which maps to IUCN sis_id as primary_source_id)
         var taxonId = FindTaxonId(record);
-        if (!taxonId.HasValue) {
-            return null;
+        string? resolved = null;
+        if (taxonId.HasValue) {
+            var result = _store.GetBestCommonNameForTaxon(taxonId.Value, "en", _allowAmbiguous);
+            if (result is not null) {
+                resolved = ApplyCapitalization(result.DisplayName);
+            }
         }
 
-        var result = _store.GetBestCommonNameForTaxon(taxonId.Value, "en", _allowAmbiguous);
-        if (result is null) {
-            return null;
-        }
-
-        // Apply capitalization rules and return
-        return ApplyCapitalization(result.DisplayName);
+        _commonNameCache[record.TaxonId] = resolved;
+        return resolved;
     }
 
     /// <summary>
@@ -150,13 +161,14 @@ internal sealed class StoreBackedCommonNameProvider : IDisposable {
         if (record is null) {
             return null;
         }
-
-        var taxonId = FindTaxonId(record);
-        if (!taxonId.HasValue) {
-            return null;
+        if (_wikiArticleCache.TryGetValue(record.TaxonId, out var cached)) {
+            return cached;
         }
 
-        return _store.GetWikipediaArticleTitle(taxonId.Value, "en");
+        var taxonId = FindTaxonId(record);
+        var resolved = taxonId.HasValue ? _store.GetWikipediaArticleTitle(taxonId.Value, "en") : null;
+        _wikiArticleCache[record.TaxonId] = resolved;
+        return resolved;
     }
 
     /// <summary>
@@ -166,13 +178,15 @@ internal sealed class StoreBackedCommonNameProvider : IDisposable {
         if (string.IsNullOrWhiteSpace(scientificName)) {
             return null;
         }
-
-        var taxonId = FindTaxonIdByScientificName(scientificName, kingdom);
-        if (!taxonId.HasValue) {
-            return null;
+        var cacheKey = $"{scientificName}{kingdom}";
+        if (_articleByScientificCache.TryGetValue(cacheKey, out var cached)) {
+            return cached;
         }
 
-        return _store.GetWikipediaArticleTitle(taxonId.Value, "en");
+        var taxonId = FindTaxonIdByScientificName(scientificName, kingdom);
+        var resolved = taxonId.HasValue ? _store.GetWikipediaArticleTitle(taxonId.Value, "en") : null;
+        _articleByScientificCache[cacheKey] = resolved;
+        return resolved;
     }
 
     /// <summary>
@@ -232,6 +246,15 @@ internal sealed class StoreBackedCommonNameProvider : IDisposable {
     }
 
     private long? FindTaxonId(IucnSpeciesRecord record) {
+        if (_storeTaxonIdCache.TryGetValue(record.TaxonId, out var cached)) {
+            return cached;
+        }
+        var resolved = FindTaxonIdUncached(record);
+        _storeTaxonIdCache[record.TaxonId] = resolved;
+        return resolved;
+    }
+
+    private long? FindTaxonIdUncached(IucnSpeciesRecord record) {
         // Try by IUCN taxon_id first (most reliable)
         var taxonId = _store.FindTaxonBySourceId("iucn", record.TaxonId.ToString());
         if (taxonId.HasValue) {
