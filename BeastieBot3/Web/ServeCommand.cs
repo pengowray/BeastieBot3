@@ -155,6 +155,7 @@ internal sealed class ServeCommand : AsyncCommand<ServeCommand.Settings> {
         app.MapPreviewEndpoints();
         app.MapRulesEditorEndpoints();
         app.MapTaxaGroupingEndpoints();
+        app.MapListImpactEndpoints();
 
         AnsiConsole.MarkupLine($"[green]BeastieBot3 web UI[/] listening on [cyan]{url}[/]");
         AnsiConsole.MarkupLine($"[grey]Job history:[/] {jobHistoryPath}");

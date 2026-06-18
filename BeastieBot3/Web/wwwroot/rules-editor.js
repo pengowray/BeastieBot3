@@ -51,9 +51,52 @@
       renderCounts(data);
       $('#grp-save').hidden = false;
       $('#grp-msg').textContent = `${data.rows.length} sub-taxa at rank '${data.childRank}', grand total ${data.grandTotal}. Tick existing groups to make them sub-lists.`;
+      loadImpact(group, rank);
     } catch (e) {
       $('#grp-msg').textContent = 'Failed: ' + e.message;
     }
+  }
+
+  // Counts-only page-size impact for the selected group (GET /api/lists/impact). Shows the cost of
+  // combining categories vs separate pages, and which sub-pages would bust the group's size budget.
+  async function loadImpact(group, rank) {
+    const el = $('#grp-impact');
+    if (!el) return;
+    el.innerHTML = '<p class="muted small">Sizing pages…</p>';
+    try {
+      const d = await getJson(
+        `/api/lists/impact?group=${encodeURIComponent(group)}&splitRank=${encodeURIComponent(rank)}`);
+      el.innerHTML = renderImpact(d, rank);
+    } catch (e) {
+      el.innerHTML = `<p class="muted small">No size impact for this group.</p>`;
+    }
+  }
+
+  function renderImpact(d, rank) {
+    const num = (n) => (n || 0).toLocaleString();
+    const verdict = (o) => o.overBudget == null ? ''
+      : (o.overBudget ? `<span class="feat-no">exceeds ${num(d.budget)}</span>` : `<span class="feat-yes">fits</span>`);
+    const opts = d.options.map((o) =>
+      `<tr><td class="wt-left">${esc(o.label)}</td><td>${num(o.bullets)}</td><td>${num(o.species)}</td><td>${verdict(o)}</td></tr>`).join('');
+
+    let sub = '';
+    if (d.subPages && d.subPages.length) {
+      const over = d.subPages.filter((s) => s.overBudget);
+      const offenders = over.slice(0, 8).map((s) => `${esc(titleCase(s.child))} (${num(s.total)})`).join(', ');
+      sub = `<p class="muted small">Split at ${esc(rank)}: ${d.subPages.length} sub-page(s)`
+        + (d.budget ? `, <strong>${over.length}</strong> exceed ${num(d.budget)} bullets${over.length ? ' — ' + offenders : ''}` : '')
+        + '.</p>';
+    }
+    const budgetNote = d.budget ? ` <span class="muted small">(budget ${num(d.budget)} bullets)</span>` : '';
+    return `<h4 class="grp-impact-title">Page-size impact${budgetNote}</h4>`
+      + `<p class="muted small">Bullets = species + subspecies/varieties rendered; species = the prose headline. Counts only — nothing is generated.</p>`
+      + `<div class="feature-table-wrap"><table class="feature-table"><thead><tr>`
+      + `<th class="wt-left">Page option</th><th>Bullets</th><th>Species</th><th>Verdict</th></tr></thead>`
+      + `<tbody>${opts}</tbody></table></div>${sub}`;
+  }
+
+  function titleCase(s) {
+    return s ? s.charAt(0).toUpperCase() + s.slice(1).toLowerCase() : s;
   }
 
   function renderCounts(data) {

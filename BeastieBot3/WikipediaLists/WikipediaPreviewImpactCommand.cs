@@ -1,10 +1,6 @@
-using System;
-using System.Collections.Generic;
 using System.ComponentModel;
-using System.Linq;
 using System.Text.Json;
 using BeastieBot3.Configuration;
-using BeastieBot3.Iucn;
 using Spectre.Console;
 using Spectre.Console.Cli;
 
@@ -15,12 +11,10 @@ namespace BeastieBot3.WikipediaLists;
 //   - how big is one combined "threatened" page (CR+EN+VU) vs separate CR / EN / VU pages?
 //   - if I split this group at class/order, how big is each sub-page (and which bust a budget)?
 //
-// It reports TWO counts per option: canonical species (the prose headline number) and renderable
-// rows (the actual bullet weight, which also counts subspecies/varieties) — because for taxa with
-// many subspecies the bullet count, not the species count, drives the "too big" decision.
-//
-// All numbers come from two GROUP BY scans (IucnChartDataBuilder.BuildChildBreakdown) under the
-// canonical / renderable predicates, so they match generated output by construction.
+// Each option reports TWO counts: renderable rows (the actual bullet weight, which also counts
+// subspecies/varieties) and canonical species (the prose headline) — because for taxa with many
+// subspecies the bullet count, not the species count, drives the "too big" decision. The
+// computation lives in ListImpactService and is shared with GET /api/lists/impact.
 
 [CommandInfo("wikipedia preview-impact", CommandKind.ReadOnly,
     "Preview list sizes for category-split / taxonomic-split choices without generating (counts only).",
@@ -51,17 +45,13 @@ internal sealed class WikipediaPreviewImpactCommand : Command<WikipediaPreviewIm
         public string? SplitRank { get; init; }
 
         [CommandOption("--budget-entries <N>")]
-        [Description("Flag any page/sub-page whose renderable-row count exceeds N.")]
+        [Description("Flag any page/sub-page whose renderable-row count exceeds N (else the group's size_budget).")]
         public int? BudgetEntries { get; init; }
 
         [CommandOption("--json")]
         [Description("Emit the impact record as JSON instead of a table.")]
         public bool Json { get; init; }
     }
-
-    // Chart codes that make up a "threatened" page.
-    private static readonly string[] ThreatenedCodes = { "CR(PE)", "CR(PEW)", "CR", "EN", "VU" };
-    private static readonly string[] AllCrCodes = { "CR(PE)", "CR(PEW)", "CR" };
 
     public override int Execute(CommandContext context, Settings settings, System.Threading.CancellationToken cancellationToken) {
         if (string.IsNullOrWhiteSpace(settings.TaxaGroup)) {
@@ -74,58 +64,47 @@ internal sealed class WikipediaPreviewImpactCommand : Command<WikipediaPreviewIm
             ?? System.IO.Path.Combine(paths.BaseDirectory, "rules", "wikipedia-lists.yml");
         var databasePath = IucnDatasetResolver.Resolve(paths, settings.Dataset, settings.DatabasePath);
 
-        var loader = new WikipediaListDefinitionLoader();
-        var config = loader.Load(configPath);
-        var groupLists = config.Lists
-            .Where(l => string.Equals(l.TaxaGroup, settings.TaxaGroup, StringComparison.OrdinalIgnoreCase))
-            .ToList();
-        if (groupLists.Count == 0) {
+        var record = ListImpactService.Compute(databasePath, configPath, settings.TaxaGroup!, settings.SplitRank, settings.BudgetEntries);
+        if (record is null) {
             AnsiConsole.MarkupLine($"[yellow]No taxa group '{settings.TaxaGroup}'.[/] Try [white]wikipedia show-lists[/].");
             return 1;
         }
 
-        var filters = groupLists[0].Filters;
-        var taxaName = groupLists[0].TaxaNameLower ?? settings.TaxaGroup;
-        // --budget-entries overrides; otherwise use the group's declared size_budget.max_entries.
-        var budget = settings.BudgetEntries ?? groupLists[0].SizeBudgetMaxEntries;
-
-        using var chart = new IucnChartDataBuilder(databasePath);
-        // Group total per status code, under both predicates.
-        var speciesTotal = TotalsByCode(chart.BuildChildBreakdown(filters, "kingdom"));
-        var renderTotal = TotalsByCode(chart.BuildChildBreakdown(filters, "kingdom",
-            wherePredicate: TaxonFilterSql.RenderablePredicate()));
-
         if (settings.Json) {
-            EmitJson(settings, taxaName, groupLists, speciesTotal, renderTotal, chart, filters);
+            AnsiConsole.WriteLine(JsonSerializer.Serialize(record, new JsonSerializerOptions { WriteIndented = true }));
             return 0;
         }
 
-        AnsiConsole.MarkupLine($"[bold]Impact preview — {settings.TaxaGroup}[/] [grey](renderable bullets / canonical species)[/]");
-        AnsiConsole.MarkupLine($"[grey]Currently generates {groupLists.Count} page(s): {string.Join(", ", groupLists.Select(l => l.Preset).Where(p => p != null))}[/]");
+        AnsiConsole.MarkupLine($"[bold]Impact preview — {record.TaxaGroup}[/] [grey](renderable bullets / canonical species)[/]");
+        AnsiConsole.MarkupLine($"[grey]Currently generates {record.CurrentPages.Count} page(s): {string.Join(", ", record.CurrentPages)}[/]"
+            + (record.Budget.HasValue ? $"  [grey]· budget {record.Budget:N0} bullets[/]" : ""));
         AnsiConsole.WriteLine();
 
-        // Page-option sizing.
-        var options = new Table().Border(TableBorder.Rounded);
-        options.AddColumn("Page option");
-        options.AddColumn(new TableColumn("Bullets").RightAligned());
-        options.AddColumn(new TableColumn("Species").RightAligned());
-        options.AddColumn("Verdict");
-        AddOption(options, "Combined threatened (CR+EN+VU)", ThreatenedCodes, renderTotal, speciesTotal, budget);
-        AddOption(options, "  — separately: Critically endangered", AllCrCodes, renderTotal, speciesTotal, budget);
-        AddOption(options, "  — separately: Endangered", new[] { "EN" }, renderTotal, speciesTotal, budget);
-        AddOption(options, "  — separately: Vulnerable", new[] { "VU" }, renderTotal, speciesTotal, budget);
-        AddOption(options, "Near threatened", new[] { "NT" }, renderTotal, speciesTotal, budget);
-        AddOption(options, "Data deficient", new[] { "DD" }, renderTotal, speciesTotal, budget);
-        AddOption(options, "Least concern", new[] { "LC" }, renderTotal, speciesTotal, budget);
-        AnsiConsole.Write(options);
+        var table = new Table().Border(TableBorder.Rounded);
+        table.AddColumn("Page option");
+        table.AddColumn(new TableColumn("Bullets").RightAligned());
+        table.AddColumn(new TableColumn("Species").RightAligned());
+        table.AddColumn("Verdict");
+        foreach (var o in record.Options) {
+            var indent = o.Key is "cr" or "en" or "vu" ? "  — separately: " : "";
+            table.AddRow(Markup.Escape(indent + o.Label), o.Bullets.ToString("N0"), o.Species.ToString("N0"), Verdict(o.OverBudget, record.Budget));
+        }
+        AnsiConsole.Write(table);
 
-        // Optional sub-page sizing by rank.
-        if (!string.IsNullOrWhiteSpace(settings.SplitRank)) {
-            if (TaxonFilterSql.ResolveColumn(settings.SplitRank) is null) {
-                AnsiConsole.MarkupLine($"[yellow]Unknown split rank '{settings.SplitRank}'.[/] Use class, order, or family.");
-            } else {
-                RenderSplit(chart, filters, settings.SplitRank!, budget);
+        if (record.SubPages is { Count: > 0 }) {
+            AnsiConsole.WriteLine();
+            AnsiConsole.MarkupLine($"[bold]If split at {record.SplitRank}[/] — {record.SubPages.Count} sub-page(s), renderable bullets:");
+            var t = new Table().Border(TableBorder.Rounded);
+            t.AddColumn(Cap(record.SplitRank!));
+            t.AddColumn(new TableColumn("Threatened").RightAligned());
+            t.AddColumn(new TableColumn("All statuses").RightAligned());
+            t.AddColumn("Verdict");
+            foreach (var s in record.SubPages) {
+                t.AddRow(Title(s.Child), s.Threatened.ToString("N0"), s.Total.ToString("N0"), Verdict(s.OverBudget, record.Budget));
             }
+            AnsiConsole.Write(t);
+        } else if (!string.IsNullOrWhiteSpace(settings.SplitRank)) {
+            AnsiConsole.MarkupLine($"[yellow]Unknown split rank '{settings.SplitRank}'.[/] Use class, order, or family.");
         }
 
         AnsiConsole.WriteLine();
@@ -133,83 +112,11 @@ internal sealed class WikipediaPreviewImpactCommand : Command<WikipediaPreviewIm
         return 0;
     }
 
-    private void RenderSplit(IucnChartDataBuilder chart, List<TaxonFilterDefinition>? filters, string rank, int? budget) {
-        var byChild = chart.BuildChildBreakdown(filters, rank, wherePredicate: TaxonFilterSql.RenderablePredicate());
-        var rows = byChild
-            .Select(kv => (Child: kv.Key, Codes: CodeMap(kv.Value)))
-            .Select(r => (r.Child, Threat: Sum(r.Codes, ThreatenedCodes), Total: r.Codes.Values.Sum()))
-            .Where(r => r.Total > 0)
-            .OrderByDescending(r => r.Total)
-            .ToList();
-
-        AnsiConsole.WriteLine();
-        AnsiConsole.MarkupLine($"[bold]If split at {rank}[/] — {rows.Count} sub-page(s), renderable bullets:");
-        var t = new Table().Border(TableBorder.Rounded);
-        t.AddColumn(CapFirst(rank));
-        t.AddColumn(new TableColumn("Threatened").RightAligned());
-        t.AddColumn(new TableColumn("All statuses").RightAligned());
-        if (budget.HasValue) t.AddColumn("Verdict");
-        foreach (var r in rows) {
-            var cells = new List<string> { Title(r.Child), r.Threat.ToString("N0"), r.Total.ToString("N0") };
-            if (budget.HasValue) cells.Add(r.Total > budget.Value ? $"[red]exceeds {budget:N0}[/]" : "[green]ok[/]");
-            t.AddRow(cells.ToArray());
-        }
-        AnsiConsole.Write(t);
-    }
-
-    private static void AddOption(Table table, string label, string[] codes,
-        Dictionary<string, int> render, Dictionary<string, int> species, int? budget) {
-        var bullets = Sum(render, codes);
-        var sp = Sum(species, codes);
-        var verdict = budget.HasValue
-            ? (bullets > budget.Value ? $"[red]exceeds {budget:N0}[/]" : "[green]fits[/]")
-            : "";
-        table.AddRow(Markup.Escape(label), bullets.ToString("N0"), sp.ToString("N0"), verdict);
-    }
-
-    private static Dictionary<string, int> TotalsByCode(Dictionary<string, IReadOnlyList<StatusCount>> breakdown) {
-        var totals = new Dictionary<string, int>(StringComparer.Ordinal);
-        foreach (var counts in breakdown.Values) {
-            foreach (var c in counts) {
-                totals[c.Code] = totals.GetValueOrDefault(c.Code) + c.Count;
-            }
-        }
-        return totals;
-    }
-
-    private static Dictionary<string, int> CodeMap(IReadOnlyList<StatusCount> counts) {
-        var m = new Dictionary<string, int>(StringComparer.Ordinal);
-        foreach (var c in counts) m[c.Code] = c.Count;
-        return m;
-    }
-
-    private static int Sum(Dictionary<string, int> totals, string[] codes) =>
-        codes.Sum(code => totals.GetValueOrDefault(code));
+    private static string Verdict(bool? over, int? budget) =>
+        over is null ? "" : over.Value ? $"[red]exceeds {budget:N0}[/]" : "[green]fits[/]";
 
     private static string Title(string raw) =>
         string.IsNullOrWhiteSpace(raw) ? "(unassigned)" : char.ToUpperInvariant(raw[0]) + raw[1..].ToLowerInvariant();
 
-    private static string CapFirst(string s) => string.IsNullOrEmpty(s) ? s : char.ToUpperInvariant(s[0]) + s[1..];
-
-    private void EmitJson(Settings settings, string taxaName, List<WikipediaListDefinition> groupLists,
-        Dictionary<string, int> species, Dictionary<string, int> render,
-        IucnChartDataBuilder chart, List<TaxonFilterDefinition>? filters) {
-        object? split = null;
-        if (!string.IsNullOrWhiteSpace(settings.SplitRank) && TaxonFilterSql.ResolveColumn(settings.SplitRank) is not null) {
-            split = chart.BuildChildBreakdown(filters, settings.SplitRank!, wherePredicate: TaxonFilterSql.RenderablePredicate())
-                .Select(kv => { var m = CodeMap(kv.Value); return new { child = kv.Key, threatened = Sum(m, ThreatenedCodes), total = m.Values.Sum() }; })
-                .Where(r => r.total > 0)
-                .OrderByDescending(r => r.total);
-        }
-        var record = new {
-            taxaGroup = settings.TaxaGroup,
-            pages = groupLists.Select(l => l.Preset).ToList(),
-            renderable = render,
-            species,
-            combinedThreatened = new { bullets = Sum(render, ThreatenedCodes), species = Sum(species, ThreatenedCodes) },
-            splitRank = settings.SplitRank,
-            subPages = split,
-        };
-        AnsiConsole.WriteLine(JsonSerializer.Serialize(record, new JsonSerializerOptions { WriteIndented = true }));
-    }
+    private static string Cap(string s) => string.IsNullOrEmpty(s) ? s : char.ToUpperInvariant(s[0]) + s[1..];
 }

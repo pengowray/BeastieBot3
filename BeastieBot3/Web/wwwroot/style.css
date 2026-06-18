@@ -998,6 +998,9 @@ td { word-break: break-all; font-family: ui-monospace, Menlo, monospace; }
 .wt-actions { white-space: nowrap; text-align: right; }
 .wt-actions button { margin-left: 0.4rem; }
 .wt-actions-col { width: 1%; }
+.grp-impact { margin-top: 1.25rem; border-top: 1px solid var(--border); padding-top: 0.5rem; }
+.grp-impact-title { margin: 0.5rem 0 0.25rem; }
+table.feature-table th.wt-left, table.feature-table td.wt-left { text-align: left; }
 button.ghost.small { padding: 0.2rem 0.55rem; font-size: 0.82em; }
 button.ghost.primary { color: #fff; background: var(--accent); border-color: var(--accent); }
 button.ghost.primary:hover { filter: brightness(1.1); background: var(--accent); }
