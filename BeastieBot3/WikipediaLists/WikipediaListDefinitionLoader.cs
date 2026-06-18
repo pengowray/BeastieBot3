@@ -79,9 +79,11 @@ internal sealed class WikipediaListDefinitionLoader {
         var groupPresetById = new Dictionary<string, (string Group, string Preset)>(StringComparer.OrdinalIgnoreCase);
 
         foreach (var rawList in raw.Lists) {
-            // Multi-preset syntax: taxa_group + presets array
-            if (!string.IsNullOrEmpty(rawList.TaxaGroup) && rawList.Presets is { Count: > 0 }) {
-                foreach (var presetName in rawList.Presets) {
+            // The category_split shorthand, when set, determines the preset fan-out (overriding `presets`).
+            var effectivePresets = ResolveEffectivePresets(rawList);
+            // Multi-preset syntax: taxa_group + presets array (or category_split)
+            if (!string.IsNullOrEmpty(rawList.TaxaGroup) && effectivePresets is { Count: > 0 }) {
+                foreach (var presetName in effectivePresets) {
                     var syntheticRaw = new WikipediaListDefinitionRaw {
                         Id = $"{rawList.TaxaGroup}-{presetName}",
                         TaxaGroup = rawList.TaxaGroup,
@@ -247,6 +249,7 @@ internal sealed class WikipediaListDefinitionLoader {
             StatusText = preset.StatusText,
             StatusWikiLink = preset.StatusWikiLink,
             Categories = BuildCategoryLines(taxaGroup, preset, vars),
+            SizeBudgetMaxEntries = taxaGroup.SizeBudget?.MaxEntries,
         };
     }
 
@@ -296,6 +299,27 @@ internal sealed class WikipediaListDefinitionLoader {
         return lines;
     }
 
+    // Resolve the effective preset list for a raw list entry: the category_split shorthand wins when
+    // set, otherwise the explicit `presets` array.
+    internal static List<string>? ResolveEffectivePresets(WikipediaListDefinitionRaw raw) {
+        if (string.IsNullOrWhiteSpace(raw.CategorySplit)) {
+            return raw.Presets;
+        }
+        switch (raw.CategorySplit.Trim().ToLowerInvariant()) {
+            case "separate":
+                return new List<string> { "cr", "en", "vu", "nt", "dd", "lc", "ew", "ex" };
+            case "combined-threatened":
+            case "combined":
+                return new List<string> { "threatened", "nt", "dd", "lc", "ew", "ex" };
+            case "all-status":
+            case "single":
+                return new List<string> { "all-status" };
+            default:
+                Console.Error.WriteLine($"Warning: unknown category_split '{raw.CategorySplit}' for taxa_group '{raw.TaxaGroup}'; using explicit presets.");
+                return raw.Presets;
+        }
+    }
+
     private static WikipediaListDefinition ConvertToDefinition(WikipediaListDefinitionRaw raw) {
         return new WikipediaListDefinition {
             Id = raw.Id,
@@ -341,6 +365,13 @@ internal sealed class WikipediaListDefinitionRaw {
     public string? TaxaGroup { get; init; }
     public string? Preset { get; init; }
     public List<string>? Presets { get; init; }  // Multiple presets: generates one list per preset
+
+    // Tuning shorthand: when set, determines which preset pages this group fans out to (overrides
+    // `presets`). Values: "separate" (one page per category: cr/en/vu/nt/dd/lc/ew/ex),
+    // "combined-threatened" (one "threatened" page instead of cr/en/vu, + nt/dd/lc/ew/ex),
+    // "all-status" (a single page covering all categories). Lets a group be retuned from
+    // thin per-category slices toward fewer combined pages without hand-editing the preset list.
+    public string? CategorySplit { get; init; }
 
     // Explicit values (override templates if provided)
     public string? Title { get; init; }
@@ -401,6 +432,20 @@ internal sealed class TaxaGroupDefinition {
     /// category derived from the preset status.
     /// </summary>
     public TaxaCategoryDefinition? Categories { get; init; }
+
+    /// <summary>
+    /// Optional "stay under this size" budget for this group's pages, used by the impact preview /
+    /// structure metrics to flag oversized lists (e.g. plants need splitting). Advisory only.
+    /// </summary>
+    public SizeBudgetDefinition? SizeBudget { get; init; }
+}
+
+/// <summary>Target size budget for a taxa group's list pages (advisory; drives the impact preview).</summary>
+internal sealed class SizeBudgetDefinition {
+    /// <summary>Flag a page whose renderable-row (bullet) count exceeds this.</summary>
+    public int? MaxEntries { get; init; }
+    /// <summary>Flag a page whose raw wikitext byte size exceeds this (en.wiki ~2,000,000).</summary>
+    public long? MaxBytes { get; init; }
 }
 
 /// <summary>

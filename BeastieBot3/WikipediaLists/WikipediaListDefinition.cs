@@ -90,6 +90,12 @@ internal sealed class WikipediaListDefinition {
     public List<string> Categories { get; init; } = new();
 
     /// <summary>
+    /// Advisory per-page renderable-row budget from the taxa group's <c>size_budget.max_entries</c>;
+    /// the impact preview flags pages over this. Null = no budget declared.
+    /// </summary>
+    public int? SizeBudgetMaxEntries { get; init; }
+
+    /// <summary>
     /// Custom family-based grouping that replaces the normal taxonomy grouping.
     /// Used for paraphyletic groups like marine mammals where the grouping
     /// doesn't follow normal taxonomic ranks.

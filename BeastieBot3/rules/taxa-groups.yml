@@ -291,6 +291,9 @@ groups:
     adjective: "plant"
     display:
       listing_style: ScientificNameFocus
+    # Advisory budget for the impact preview: plant pages this large should be split (taxonomically).
+    size_budget:
+      max_entries: 5000
     filters:
       - rank: kingdom
         value: Plantae

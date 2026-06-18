@@ -86,6 +86,8 @@ internal sealed class WikipediaPreviewImpactCommand : Command<WikipediaPreviewIm
 
         var filters = groupLists[0].Filters;
         var taxaName = groupLists[0].TaxaNameLower ?? settings.TaxaGroup;
+        // --budget-entries overrides; otherwise use the group's declared size_budget.max_entries.
+        var budget = settings.BudgetEntries ?? groupLists[0].SizeBudgetMaxEntries;
 
         using var chart = new IucnChartDataBuilder(databasePath);
         // Group total per status code, under both predicates.
@@ -108,13 +110,13 @@ internal sealed class WikipediaPreviewImpactCommand : Command<WikipediaPreviewIm
         options.AddColumn(new TableColumn("Bullets").RightAligned());
         options.AddColumn(new TableColumn("Species").RightAligned());
         options.AddColumn("Verdict");
-        AddOption(options, "Combined threatened (CR+EN+VU)", ThreatenedCodes, renderTotal, speciesTotal, settings.BudgetEntries);
-        AddOption(options, "  — separately: Critically endangered", AllCrCodes, renderTotal, speciesTotal, settings.BudgetEntries);
-        AddOption(options, "  — separately: Endangered", new[] { "EN" }, renderTotal, speciesTotal, settings.BudgetEntries);
-        AddOption(options, "  — separately: Vulnerable", new[] { "VU" }, renderTotal, speciesTotal, settings.BudgetEntries);
-        AddOption(options, "Near threatened", new[] { "NT" }, renderTotal, speciesTotal, settings.BudgetEntries);
-        AddOption(options, "Data deficient", new[] { "DD" }, renderTotal, speciesTotal, settings.BudgetEntries);
-        AddOption(options, "Least concern", new[] { "LC" }, renderTotal, speciesTotal, settings.BudgetEntries);
+        AddOption(options, "Combined threatened (CR+EN+VU)", ThreatenedCodes, renderTotal, speciesTotal, budget);
+        AddOption(options, "  — separately: Critically endangered", AllCrCodes, renderTotal, speciesTotal, budget);
+        AddOption(options, "  — separately: Endangered", new[] { "EN" }, renderTotal, speciesTotal, budget);
+        AddOption(options, "  — separately: Vulnerable", new[] { "VU" }, renderTotal, speciesTotal, budget);
+        AddOption(options, "Near threatened", new[] { "NT" }, renderTotal, speciesTotal, budget);
+        AddOption(options, "Data deficient", new[] { "DD" }, renderTotal, speciesTotal, budget);
+        AddOption(options, "Least concern", new[] { "LC" }, renderTotal, speciesTotal, budget);
         AnsiConsole.Write(options);
 
         // Optional sub-page sizing by rank.
@@ -122,7 +124,7 @@ internal sealed class WikipediaPreviewImpactCommand : Command<WikipediaPreviewIm
             if (TaxonFilterSql.ResolveColumn(settings.SplitRank) is null) {
                 AnsiConsole.MarkupLine($"[yellow]Unknown split rank '{settings.SplitRank}'.[/] Use class, order, or family.");
             } else {
-                RenderSplit(chart, filters, settings.SplitRank!, settings.BudgetEntries);
+                RenderSplit(chart, filters, settings.SplitRank!, budget);
             }
         }
 
