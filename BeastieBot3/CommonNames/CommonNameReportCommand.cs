@@ -4,6 +4,7 @@ using System.ComponentModel;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
 using Microsoft.Data.Sqlite;
@@ -46,7 +47,7 @@ internal sealed class CommonNameReportCommand : AsyncCommand<CommonNameReportCom
         public string? IucnDatabasePath { get; init; }
 
         [CommandOption("--report <TYPE>")]
-        [Description("Report type: ambiguous, ambiguous-iucn, caps, summary, wiki-disambig, iucn-preferred, trace, all (default: summary)")]
+        [Description("Report type: ambiguous, ambiguous-iucn, caps, unused-caps, summary, wiki-disambig, iucn-preferred, trace, all (default: summary)")]
         public string ReportType { get; init; } = "summary";
 
         [CommandOption("-o|--output <PATH>")]
@@ -80,6 +81,7 @@ internal sealed class CommonNameReportCommand : AsyncCommand<CommonNameReportCom
             "ambiguous" => await GenerateAmbiguousReportAsync(store, settings, paths, cancellationToken),
             "ambiguous-iucn" => await GenerateAmbiguousIucnReportAsync(store, settings, paths, cancellationToken),
             "caps" => await GenerateCapsReportAsync(store, settings, paths, cancellationToken),
+            "unused-caps" => await GenerateUnusedCapsReportAsync(store, settings, paths, cancellationToken),
             "wiki-disambig" => await GenerateWikiDisambigReportAsync(store, settings, paths, cancellationToken),
             "iucn-preferred" => await GenerateIucnPreferredConflictReportAsync(store, settings, paths, cancellationToken),
             "trace" => await GenerateCommonNameTraceReportAsync(store, settings, paths, cancellationToken),
@@ -283,6 +285,130 @@ internal sealed class CommonNameReportCommand : AsyncCommand<CommonNameReportCom
             File.WriteAllText(outputPath, sb.ToString());
             AnsiConsole.MarkupLine($"[green]Report written to:[/] {outputPath}");
             AnsiConsole.MarkupLine($"[green]Found {sortedMissing.Count} words missing caps rules[/]");
+            return 0;
+        }, cancellationToken);
+    }
+
+    // Tokenizes a name the way caps rules are applied: words of letters/digits/apostrophes.
+    private static readonly Regex CapsWordPattern = new(@"[\w']+", RegexOptions.Compiled);
+
+    // Reports caps.txt rules whose word/phrase never appears in any current common name — likely
+    // obsolete entries (e.g. left over from older datasets). Also writes an annotated copy of caps.txt
+    // with the unused lines prefixed "//UNUSED " so they can be reviewed/removed without losing them.
+    private static Task<int> GenerateUnusedCapsReportAsync(CommonNameStore store, Settings settings, PathsService paths, CancellationToken cancellationToken) {
+        return Task.Run(() => {
+            AnsiConsole.MarkupLine("[yellow]Finding caps rules that no current common name uses...[/]");
+
+            string capsPath;
+            try {
+                capsPath = CapsFileParser.GetDefaultCapsFilePath();
+            } catch (FileNotFoundException) {
+                AnsiConsole.MarkupLine("[red]Could not locate caps.txt to analyse.[/]");
+                return 1;
+            }
+            var capsLines = File.ReadAllLines(capsPath);
+
+            // The key of a caps.txt rule line is the text before "//", lowercased. Comment/blank => null.
+            static string? KeyOf(string line) {
+                var trimmed = line.TrimStart();
+                if (trimmed.Length == 0 || trimmed.StartsWith("//", StringComparison.Ordinal)) {
+                    return null;
+                }
+                var hash = line.IndexOf("//", StringComparison.Ordinal);
+                var word = (hash >= 0 ? line[..hash] : line).Trim();
+                return word.Length == 0 ? null : word.ToLowerInvariant();
+            }
+
+            var ruleKeys = capsLines.Select(KeyOf).Where(k => k != null).Select(k => k!).ToList();
+            var phraseLengths = ruleKeys.Where(k => k.Contains(' ')).Select(k => k.Split(' ').Length).Distinct().ToHashSet();
+            AnsiConsole.MarkupLine($"[grey]{ruleKeys.Count:N0} caps rules (phrase lengths: {(phraseLengths.Count == 0 ? "none" : string.Join(",", phraseLengths.OrderBy(n => n)))})[/]");
+
+            AnsiConsole.MarkupLine("[grey]Loading common names...[/]");
+            var rawNames = store.GetDistinctRawCommonNames("en", null);
+            AnsiConsole.MarkupLine($"[grey]Loaded {rawNames.Count:N0} distinct names[/]");
+
+            // Set of every word + relevant phrase n-gram that actually occurs in a common name.
+            var used = new HashSet<string>(StringComparer.Ordinal);
+            ProgressConsole.Run("[green]Indexing common-name tokens[/]", rawNames.Count, progress => {
+                foreach (var rawName in rawNames) {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    var normalized = CommonNameNormalizer.NormalizeDisplayTypography(rawName).ToLowerInvariant();
+                    var words = new List<string>();
+                    foreach (Match m in CapsWordPattern.Matches(normalized)) {
+                        words.Add(m.Value);
+                    }
+                    foreach (var w in words) {
+                        used.Add(w);
+                    }
+                    foreach (var len in phraseLengths) {
+                        for (var i = 0; i + len <= words.Count; i++) {
+                            used.Add(string.Join(' ', words.GetRange(i, len)));
+                        }
+                    }
+                    progress.Increment(1);
+                }
+            });
+
+            var unusedKeys = new HashSet<string>(ruleKeys.Where(k => !used.Contains(k)), StringComparer.Ordinal);
+
+            // Annotated caps.txt copy: prefix unused rule lines with "//UNUSED ". Split the unused
+            // rules into two reasons: (a) the key contains a hyphen, which the normalizer's [\w']+
+            // tokenizer can never match (so the rule is redundant — the default lowercasing already
+            // handles it); (b) the word/phrase is simply absent from current data (likely obsolete).
+            var annotated = new StringBuilder();
+            var unusedHyphenated = new List<string>();
+            var unusedAbsent = new List<string>();
+            foreach (var line in capsLines) {
+                var key = KeyOf(line);
+                if (key != null && unusedKeys.Contains(key)) {
+                    annotated.AppendLine("//UNUSED " + line);
+                    (key.Contains('-') ? unusedHyphenated : unusedAbsent).Add(line.Trim());
+                } else {
+                    annotated.AppendLine(line);
+                }
+            }
+
+            var timestamp = DateTime.UtcNow.ToString("yyyyMMdd-HHmmss");
+            var annotatedPath = ReportPathResolver.ResolveFilePath(paths, null, null, null, $"caps-annotated-{timestamp}.txt");
+            File.WriteAllText(annotatedPath, annotated.ToString());
+
+            var sb = new StringBuilder();
+            sb.AppendLine("# Unused Capitalization Rules Report");
+            sb.AppendLine();
+            sb.AppendLine($"Generated: {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss} UTC");
+            sb.AppendLine();
+            sb.AppendLine($"Scanned **{rawNames.Count:N0}** distinct common names against **{ruleKeys.Count:N0}** caps rules. **{unusedKeys.Count:N0}** never fire.");
+            sb.AppendLine();
+            sb.AppendLine("An annotated copy of caps.txt (unused lines prefixed `//UNUSED`, so they're skipped on re-import but preserved for review) was written to:");
+            sb.AppendLine();
+            sb.AppendLine($"`{annotatedPath}`");
+            sb.AppendLine();
+            sb.AppendLine($"## Absent from current data ({unusedAbsent.Count}) — likely obsolete, safe to remove");
+            sb.AppendLine();
+            sb.AppendLine("The word/phrase no longer appears in any common name (e.g. left over from an older dataset).");
+            sb.AppendLine();
+            sb.AppendLine("```");
+            foreach (var s in unusedAbsent) {
+                sb.AppendLine(s);
+            }
+            sb.AppendLine("```");
+            sb.AppendLine();
+            sb.AppendLine($"## Hyphenated keys ({unusedHyphenated.Count}) — never fire (redundant)");
+            sb.AppendLine();
+            sb.AppendLine("The capitalization normalizer tokenizes on `[\\w']+`, so a hyphenated key like `band-tailed` is never looked up (it's split into `band` + `tailed`). These are redundant — the default lowercasing already produces the same result — so they can be removed, OR the normalizer could be made hyphen-aware if any encode a needed capitalization.");
+            sb.AppendLine();
+            sb.AppendLine("```");
+            foreach (var s in unusedHyphenated) {
+                sb.AppendLine(s);
+            }
+            sb.AppendLine("```");
+
+            var reportPath = ReportPathResolver.ResolveFilePath(paths, settings.OutputPath, null, null, $"common-name-unused-caps-{timestamp}.md");
+            File.WriteAllText(reportPath, sb.ToString());
+
+            AnsiConsole.MarkupLine($"[green]Report written to:[/] {reportPath}");
+            AnsiConsole.MarkupLine($"[green]Annotated caps.txt written to:[/] {annotatedPath}");
+            AnsiConsole.MarkupLine($"[green]{unusedKeys.Count:N0} of {ruleKeys.Count:N0} caps rules are unused.[/]");
             return 0;
         }, cancellationToken);
     }
