@@ -203,7 +203,9 @@ internal sealed class SpeciesLineFormatter {
         var linkTarget = ResolveLinkTarget(record, articleTitle, rawScientific);
 
         if (string.IsNullOrWhiteSpace(linkTarget)) {
-            return formattedScientific;
+            // No linkable target (e.g. an undescribed "sp. nov." placeholder) — show plain italic,
+            // keeping the common name if there is one.
+            return !string.IsNullOrWhiteSpace(commonName) ? $"{formattedScientific}, {commonName}" : formattedScientific;
         }
 
         // Use ''[[X]]'' format when link target matches scientific name
@@ -385,8 +387,14 @@ internal sealed class SpeciesLineFormatter {
             return record.GenusName ?? "";
         }
 
-        return italicize ? $"''{scientific}''" : scientific;
+        return italicize ? ItalicizeSafe(scientific) : scientific;
     }
+
+    // Italicize a display string, guarding the MediaWiki quirk where ''X'' with X ending in an
+    // apostrophe (e.g. an undescribed epithet "sp. nov. 'loguerciae'") yields a stray ''' that renders
+    // as bold. Falls back to explicit <i></i> only in that case.
+    private static string ItalicizeSafe(string text) =>
+        text.EndsWith("'", StringComparison.Ordinal) ? $"<i>{text}</i>" : $"''{text}''";
 
     private static string? BuildScientificNameForDisplay(IucnSpeciesRecord record) {
         if (!string.IsNullOrWhiteSpace(record.InfraName)) {
@@ -483,9 +491,19 @@ internal sealed class SpeciesLineFormatter {
         return null;
     }
 
+    // Undescribed-species placeholders ("Genus sp. nov. 'x'") never have a Wikipedia article.
+    private static bool IsUndescribedName(string? name) =>
+        !string.IsNullOrWhiteSpace(name) && name.Contains("sp. nov", StringComparison.OrdinalIgnoreCase);
+
     private string ResolveLinkTarget(IucnSpeciesRecord record, string? articleTitle, string? rawScientific) {
         if (!string.IsNullOrWhiteSpace(articleTitle)) {
             return articleTitle;
+        }
+
+        // Don't emit a guaranteed redlink for an undescribed placeholder — callers fall back to plain
+        // italic text instead of ''[[Genus sp. nov. 'x']]''.
+        if (IsUndescribedName(rawScientific) || IsUndescribedName(ResolveScientificName(record))) {
+            return string.Empty;
         }
 
         if (!string.IsNullOrWhiteSpace(rawScientific)) {
