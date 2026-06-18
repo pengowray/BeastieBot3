@@ -325,7 +325,7 @@ internal sealed class SpeciesLineFormatter {
     /// For infraspecific taxa, we need [[link|''Genus species'' subsp. ''subspecies'']] format.
     /// For animals, the rank marker is hidden.
     /// </summary>
-    private static string? BuildInfraspecificLink(IucnSpeciesRecord record, string? articleTitle, bool abbreviateGenus = false) {
+    private string? BuildInfraspecificLink(IucnSpeciesRecord record, string? articleTitle, bool abbreviateGenus = false) {
         if (string.IsNullOrWhiteSpace(record.InfraName)) {
             return null;
         }
@@ -336,15 +336,37 @@ internal sealed class SpeciesLineFormatter {
             return null;
         }
 
-        // Subspecies/variety articles rarely exist, so only link to a genuinely-known Wikipedia
-        // article. Without one, render the formatted name as plain (italic) text rather than a
-        // guaranteed redlink to a bare trinomial. (Species binomials keep their links elsewhere — a
-        // missing species page is a useful redlink, but an infrarank/subpopulation one is just noise.)
-        if (string.IsNullOrWhiteSpace(articleTitle)) {
-            return displayText;
+        if (!string.IsNullOrWhiteSpace(articleTitle)) {
+            return $"[[{articleTitle}|{displayText}]]";
         }
 
-        return $"[[{articleTitle}|{displayText}]]";
+        // Subspecies/variety articles rarely exist. Rather than redlink a bare trinomial, link the
+        // formatted name to the PARENT SPECIES article when one is known (e.g. an Antarctic blue
+        // whale subspecies → the blue whale article); otherwise fall back to plain (italic) text.
+        var parentArticle = ResolveParentSpeciesArticle(record);
+        if (!string.IsNullOrWhiteSpace(parentArticle)) {
+            return $"[[{parentArticle}|{displayText}]]";
+        }
+
+        return displayText;
+    }
+
+    /// <summary>
+    /// Resolves the Wikipedia article for an infraspecific record's parent species (Genus species),
+    /// or null when no article is known — used so a subspecies/variety with no article of its own can
+    /// still bluelink to its species page instead of redlinking a trinomial.
+    /// </summary>
+    private string? ResolveParentSpeciesArticle(IucnSpeciesRecord record) {
+        if (_storeBackedProvider is null) {
+            return null;
+        }
+        var genus = record.GenusName?.Trim();
+        var species = record.SpeciesName?.Trim();
+        if (string.IsNullOrWhiteSpace(genus) || string.IsNullOrWhiteSpace(species)) {
+            return null;
+        }
+        var article = _storeBackedProvider.GetWikipediaArticleTitleByScientificName($"{genus} {species}", record.KingdomName);
+        return string.IsNullOrWhiteSpace(article) ? null : article;
     }
 
     /// <summary>
