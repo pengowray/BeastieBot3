@@ -1205,9 +1205,23 @@
   const viewerTitle = $('#file-viewer-title');
   const viewerMeta = $('#file-viewer-meta');
   const viewerBody = $('#file-viewer-body');
+  const viewerCopy = $('#file-viewer-copy');
+  let viewerContent = null;
 
   $('#file-viewer-close').addEventListener('click', closeViewer);
   $('#file-viewer .modal-backdrop').addEventListener('click', closeViewer);
+  viewerCopy.addEventListener('click', async () => {
+    if (viewerContent == null) return;
+    try {
+      await navigator.clipboard.writeText(viewerContent);
+      const prev = viewerCopy.textContent;
+      viewerCopy.textContent = 'Copied!';
+      setTimeout(() => { viewerCopy.textContent = prev; }, 1500);
+    } catch {
+      viewerCopy.textContent = 'Copy failed';
+      setTimeout(() => { viewerCopy.textContent = 'Copy all'; }, 1500);
+    }
+  });
   document.addEventListener('keydown', (e) => {
     if (e.key === 'Escape' && !viewer.hidden) closeViewer();
   });
@@ -1215,10 +1229,14 @@
   function closeViewer() {
     viewer.hidden = true;
     viewerBody.innerHTML = '';
+    viewerContent = null;
+    viewerCopy.hidden = true;
   }
 
   function showViewer() {
     viewer.hidden = false;
+    viewerContent = null;
+    viewerCopy.hidden = true;
   }
 
   async function openFile(root, path) {
@@ -1235,6 +1253,8 @@
       }
       const data = await res.json();
       viewerMeta.textContent = formatBytes(data.size) + ' · ' + formatRelative(data.modified);
+      viewerContent = data.content;
+      viewerCopy.hidden = false;
       renderFileContent(path, data.content);
     } catch (e) {
       viewerBody.innerHTML = '<p class="error">' + MarkdownRenderer.escape(e.message) + '</p>';
