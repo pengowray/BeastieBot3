@@ -1,7 +1,8 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using System.Linq;
-using BeastieBot3.WikipediaLists;
+using System.Text.Json;
 
 namespace BeastieBot3.WikipediaLists;
 
@@ -10,7 +11,12 @@ namespace BeastieBot3.WikipediaLists;
 // ("bullet") weight AND canonical species. Used by the `wikipedia preview-impact` CLI and the
 // GET /api/lists/impact endpoint so both report identical numbers. Never generates wikitext.
 
-internal sealed record ImpactPageOption(string Key, string Label, int Bullets, int Species, bool? OverBudget);
+// Real structure metrics for the page option's generated list, from the last generation's
+// structure-metrics.json (null when that list hasn't been generated yet).
+internal sealed record ImpactStructure(int Headings, int MaxDepth, int SingleItemHeadings, int MaxLeafSize, IReadOnlyList<string> Problems);
+
+internal sealed record ImpactPageOption(string Key, string Label, int Bullets, int Species, bool? OverBudget,
+    string? ListId = null, ImpactStructure? Structure = null);
 
 internal sealed record ImpactSubPage(string Child, int Threatened, int Total, bool? OverBudget);
 
@@ -44,7 +50,8 @@ internal static class ListImpactService {
     /// <paramref name="budgetOverride"/> takes precedence over the group's declared size_budget.
     /// </summary>
     public static ListImpactRecord? Compute(
-        string databasePath, string configPath, string group, string? splitRank, int? budgetOverride) {
+        string databasePath, string configPath, string group, string? splitRank, int? budgetOverride,
+        string? metricsDir = null) {
         var config = new WikipediaListDefinitionLoader().Load(configPath);
         var groupLists = config.Lists
             .Where(l => string.Equals(l.TaxaGroup, group, StringComparison.OrdinalIgnoreCase))
@@ -55,6 +62,7 @@ internal static class ListImpactService {
 
         var filters = groupLists[0].Filters;
         var budget = budgetOverride ?? groupLists[0].SizeBudgetMaxEntries;
+        var metrics = LoadMetrics(metricsDir);
 
         using var chart = new IucnChartDataBuilder(databasePath);
         var species = TotalsByCode(chart.BuildChildBreakdown(filters, "kingdom"));
@@ -63,8 +71,15 @@ internal static class ListImpactService {
 
         var options = OptionDefs.Select(o => {
             var bullets = Sum(render, o.Codes);
+            // Each option maps to a generated list id ({group}-{preset}); attach its real structure
+            // metrics from the last generation when present.
+            var preset = o.Key == "combined-threatened" ? "threatened" : o.Key;
+            var listId = $"{group}-{preset}";
+            var structure = metrics.TryGetValue(listId, out var m)
+                ? new ImpactStructure(m.HeadingCount, m.MaxHeadingDepth, m.SingleItemHeadings, m.MaxLeafSize, m.Problems)
+                : null;
             return new ImpactPageOption(o.Key, o.Label, bullets, Sum(species, o.Codes),
-                budget.HasValue ? bullets > budget.Value : (bool?)null);
+                budget.HasValue ? bullets > budget.Value : (bool?)null, listId, structure);
         }).ToList();
 
         List<ImpactSubPage>? subPages = null;
@@ -85,6 +100,29 @@ internal static class ListImpactService {
             group,
             groupLists.Select(l => l.Preset ?? l.Id).ToList(),
             budget, render, species, options, splitRank, subPages);
+    }
+
+    // Index the last generation's structure-metrics.json by list id (empty if absent/unreadable).
+    private static Dictionary<string, ListStructureMetrics> LoadMetrics(string? metricsDir) {
+        var map = new Dictionary<string, ListStructureMetrics>(StringComparer.OrdinalIgnoreCase);
+        if (string.IsNullOrWhiteSpace(metricsDir)) {
+            return map;
+        }
+        var path = Path.Combine(metricsDir, "structure-metrics.json");
+        if (!File.Exists(path)) {
+            return map;
+        }
+        try {
+            var report = JsonSerializer.Deserialize<GenerationMetricsReport>(File.ReadAllText(path));
+            if (report != null) {
+                foreach (var m in report.Lists) {
+                    map[m.ListId] = m;
+                }
+            }
+        } catch {
+            // Best-effort: a malformed/old metrics file just means no structure overlay.
+        }
+        return map;
     }
 
     private static Dictionary<string, int> TotalsByCode(Dictionary<string, IReadOnlyList<StatusCount>> breakdown) {

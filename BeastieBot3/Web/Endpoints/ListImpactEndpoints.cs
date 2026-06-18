@@ -29,7 +29,8 @@ public static class ListImpactEndpoints {
                 return Results.Json(new { error = "No IUCN database: " + ex.Message }, statusCode: 503);
             }
             try {
-                var record = ListImpactService.Compute(databasePath, configPath, group!, splitRank, budget);
+                var record = ListImpactService.Compute(databasePath, configPath, group!, splitRank, budget,
+                    paths.GetWikipediaOutputDirectory());
                 if (record is null) {
                     return Results.NotFound(new { error = $"Unknown taxa group '{group}'." });
                 }

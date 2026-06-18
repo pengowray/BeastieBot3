@@ -64,7 +64,8 @@ internal sealed class WikipediaPreviewImpactCommand : Command<WikipediaPreviewIm
             ?? System.IO.Path.Combine(paths.BaseDirectory, "rules", "wikipedia-lists.yml");
         var databasePath = IucnDatasetResolver.Resolve(paths, settings.Dataset, settings.DatabasePath);
 
-        var record = ListImpactService.Compute(databasePath, configPath, settings.TaxaGroup!, settings.SplitRank, settings.BudgetEntries);
+        var record = ListImpactService.Compute(databasePath, configPath, settings.TaxaGroup!, settings.SplitRank,
+            settings.BudgetEntries, paths.GetWikipediaOutputDirectory());
         if (record is null) {
             AnsiConsole.MarkupLine($"[yellow]No taxa group '{settings.TaxaGroup}'.[/] Try [white]wikipedia show-lists[/].");
             return 1;
@@ -85,9 +86,11 @@ internal sealed class WikipediaPreviewImpactCommand : Command<WikipediaPreviewIm
         table.AddColumn(new TableColumn("Bullets").RightAligned());
         table.AddColumn(new TableColumn("Species").RightAligned());
         table.AddColumn("Verdict");
+        table.AddColumn("Structure (last gen)");
         foreach (var o in record.Options) {
             var indent = o.Key is "cr" or "en" or "vu" ? "  — separately: " : "";
-            table.AddRow(Markup.Escape(indent + o.Label), o.Bullets.ToString("N0"), o.Species.ToString("N0"), Verdict(o.OverBudget, record.Budget));
+            table.AddRow(Markup.Escape(indent + o.Label), o.Bullets.ToString("N0"), o.Species.ToString("N0"),
+                Verdict(o.OverBudget, record.Budget), StructureCell(o.Structure));
         }
         AnsiConsole.Write(table);
 
@@ -114,6 +117,17 @@ internal sealed class WikipediaPreviewImpactCommand : Command<WikipediaPreviewIm
 
     private static string Verdict(bool? over, int? budget) =>
         over is null ? "" : over.Value ? $"[red]exceeds {budget:N0}[/]" : "[green]fits[/]";
+
+    private static string StructureCell(ImpactStructure? s) {
+        if (s is null) {
+            return "[grey]—[/]";
+        }
+        var bits = $"{s.Headings:N0} hd · depth {s.MaxDepth}";
+        if (s.SingleItemHeadings > 0) {
+            bits += $" · {s.SingleItemHeadings}× single";
+        }
+        return s.Problems.Count > 0 ? $"[yellow]{bits}[/]" : bits;
+    }
 
     private static string Title(string raw) =>
         string.IsNullOrWhiteSpace(raw) ? "(unassigned)" : char.ToUpperInvariant(raw[0]) + raw[1..].ToLowerInvariant();

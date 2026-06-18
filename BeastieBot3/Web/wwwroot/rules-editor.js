@@ -76,8 +76,17 @@
     const num = (n) => (n || 0).toLocaleString();
     const verdict = (o) => o.overBudget == null ? ''
       : (o.overBudget ? `<span class="feat-no">exceeds ${num(d.budget)}</span>` : `<span class="feat-yes">fits</span>`);
+    const struct = (o) => {
+      const s = o.structure;
+      if (!s) return '<span class="muted">—</span>';
+      let t = `${num(s.headings)} hd · depth ${s.maxDepth}`;
+      if (s.singleItemHeadings) t += ` · ${s.singleItemHeadings}&times; single`;
+      return (s.problems && s.problems.length)
+        ? `<span class="feat-no" title="${esc(s.problems.join('; '))}">${t}</span>` : t;
+    };
     const opts = d.options.map((o) =>
-      `<tr><td class="wt-left">${esc(o.label)}</td><td>${num(o.bullets)}</td><td>${num(o.species)}</td><td>${verdict(o)}</td></tr>`).join('');
+      `<tr><td class="wt-left">${esc(o.label)}</td><td>${num(o.bullets)}</td><td>${num(o.species)}</td>`
+      + `<td>${verdict(o)}</td><td class="wt-left">${struct(o)}</td></tr>`).join('');
 
     let sub = '';
     if (d.subPages && d.subPages.length) {
@@ -91,7 +100,8 @@
     return `<h4 class="grp-impact-title">Page-size impact${budgetNote}</h4>`
       + `<p class="muted small">Bullets = species + subspecies/varieties rendered; species = the prose headline. Counts only — nothing is generated.</p>`
       + `<div class="feature-table-wrap"><table class="feature-table"><thead><tr>`
-      + `<th class="wt-left">Page option</th><th>Bullets</th><th>Species</th><th>Verdict</th></tr></thead>`
+      + `<th class="wt-left">Page option</th><th>Bullets</th><th>Species</th><th>Verdict</th>`
+      + `<th class="wt-left">Structure (last gen)</th></tr></thead>`
       + `<tbody>${opts}</tbody></table></div>${sub}`;
   }
 
