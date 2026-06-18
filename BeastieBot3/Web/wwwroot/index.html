@@ -22,6 +22,7 @@
       <a class="nav-item" href="#/run"        data-view="run"><span class="nav-icon">▶</span> Run command</a>
       <a class="nav-item" href="#/workflows"  data-view="workflows"><span class="nav-icon">⇄</span> Workflows</a>
       <a class="nav-item" href="#/jobs"       data-view="jobs"><span class="nav-icon">≣</span> Jobs</a>
+      <a class="nav-item" href="#/outputs"    data-view="outputs"><span class="nav-icon">📄</span> Wikitext outputs</a>
       <a class="nav-item" href="#/grouping"   data-view="grouping"><span class="nav-icon">⊞</span> Taxa grouping</a>
       <a class="nav-item" href="#/rules"      data-view="rules"><span class="nav-icon">✎</span> Rules editor</a>
       <a class="nav-item" href="#/guides"     data-view="guides"><span class="nav-icon">📖</span> Guides</a>
@@ -116,6 +117,35 @@
       <section class="card">
         <p class="muted small">Click a job to open it in the dock below. Running jobs can be cancelled from there.</p>
         <ul id="job-list" class="job-list"><li class="muted">No jobs yet.</li></ul>
+      </section>
+    </section>
+
+    <!-- ============ Wikitext outputs ============ -->
+    <section class="view" data-view="outputs">
+      <div class="view-head">
+        <h2 class="view-title">Wikitext outputs</h2>
+        <span class="view-head-right">
+          <span class="muted small" id="wt-count"></span>
+          <button id="wt-refresh" class="ghost">Refresh</button>
+        </span>
+      </div>
+      <section class="card">
+        <p class="muted small">
+          Generated <code>.wikitext</code> lists. <strong>Preview</strong> renders the file through
+          Wikipedia's own parser (templates expanded, links live) — fetched on demand, one file at a
+          time, so Wikipedia is never bulk-hit. <strong>Source</strong> shows the raw wikitext.
+        </p>
+        <div class="filter-bar">
+          <input type="search" id="wt-search" placeholder="Filter outputs…" autocomplete="off">
+        </div>
+        <div class="feature-table-wrap">
+          <table class="feature-table" id="wt-table">
+            <thead>
+              <tr><th>Article</th><th>Size</th><th>Modified</th><th class="wt-actions-col"></th></tr>
+            </thead>
+            <tbody id="wt-tbody"><tr><td colspan="4" class="muted">Loading&hellip;</td></tr></tbody>
+          </table>
+        </div>
       </section>
     </section>
 
@@ -358,10 +388,25 @@
   </div>
 </div>
 
+<div id="wt-preview" class="modal" hidden>
+  <div class="modal-backdrop"></div>
+  <div class="modal-panel modal-wide">
+    <div class="modal-header">
+      <span id="wt-preview-title" class="path">&nbsp;</span>
+      <span class="modal-actions">
+        <a id="wt-preview-open" class="ghost" target="_blank" rel="noopener" hidden>Open article on Wikipedia ↗</a>
+        <button id="wt-preview-close" class="ghost">Close</button>
+      </span>
+    </div>
+    <iframe id="wt-preview-frame" class="wt-preview-frame" title="Wikipedia preview"></iframe>
+  </div>
+</div>
+
 <script src="/ansi.js"></script>
 <script src="/markdown.js"></script>
 <script src="/app.js"></script>
 <script src="/rules-editor.js"></script>
+<script src="/outputs.js"></script>
 <script src="/router.js"></script>
 </body>
 </html>

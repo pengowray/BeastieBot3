@@ -152,6 +152,7 @@ internal sealed class ServeCommand : AsyncCommand<ServeCommand.Settings> {
         app.MapCommandsEndpoints();
         app.MapFlowsEndpoints();
         app.MapFilesEndpoints();
+        app.MapPreviewEndpoints();
         app.MapRulesEditorEndpoints();
         app.MapTaxaGroupingEndpoints();
 

@@ -15,7 +15,7 @@
   const B = () => window.Beastie || {};
 
   const VIEWS = new Set([
-    'dashboard', 'sources', 'run', 'workflows', 'jobs', 'grouping', 'rules', 'guides', 'settings',
+    'dashboard', 'sources', 'run', 'workflows', 'jobs', 'outputs', 'grouping', 'rules', 'guides', 'settings',
   ]);
   const DEFAULT_VIEW = 'dashboard';
 
@@ -57,6 +57,7 @@
       case 'dashboard': renderDashboard(); break;
       case 'sources':   b.refreshStatus && b.refreshStatus(); break;
       case 'jobs':      b.refreshJobList && b.refreshJobList(); break;
+      case 'outputs':   window.BeastieOutputs && window.BeastieOutputs.load(); break;
       case 'workflows': b.refreshActiveFlow && b.refreshActiveFlow(); break;
     }
   }

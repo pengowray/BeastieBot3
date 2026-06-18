@@ -983,6 +983,24 @@ td { word-break: break-all; font-family: ui-monospace, Menlo, monospace; }
   display: flex;
   flex-direction: column;
 }
+.modal-panel.modal-wide {
+  width: min(96vw, 1400px);
+  height: 92vh;
+  max-height: 92vh;
+}
+.wt-preview-frame {
+  flex: 1;
+  width: 100%;
+  border: 0;
+  border-radius: 0 0 8px 8px;
+  background: #fff;
+}
+.wt-actions { white-space: nowrap; text-align: right; }
+.wt-actions button { margin-left: 0.4rem; }
+.wt-actions-col { width: 1%; }
+button.ghost.small { padding: 0.2rem 0.55rem; font-size: 0.82em; }
+button.ghost.primary { color: #fff; background: var(--accent); border-color: var(--accent); }
+button.ghost.primary:hover { filter: brightness(1.1); background: var(--accent); }
 .modal-header {
   display: flex;
   justify-content: space-between;
