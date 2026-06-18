@@ -1000,6 +1000,10 @@ td { word-break: break-all; font-family: ui-monospace, Menlo, monospace; }
 .wt-actions-col { width: 1%; }
 .grp-impact { margin-top: 1.25rem; border-top: 1px solid var(--border); padding-top: 0.5rem; }
 .grp-impact-title { margin: 0.5rem 0 0.25rem; }
+.imp-controls { display: flex; flex-wrap: wrap; align-items: end; gap: 0.5rem 1rem; margin: 0.5rem 0; }
+.imp-controls label { display: flex; flex-direction: column; font-size: 0.82em; color: var(--muted); gap: 0.2rem; }
+.imp-controls input[type=number] { width: 8rem; }
+button.ghost.xsmall { padding: 0.15rem 0.5rem; font-size: 0.78em; }
 table.feature-table th.wt-left, table.feature-table td.wt-left { text-align: left; }
 button.ghost.small { padding: 0.2rem 0.55rem; font-size: 0.82em; }
 button.ghost.primary { color: #fff; background: var(--accent); border-color: var(--accent); }

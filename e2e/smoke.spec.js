@@ -19,6 +19,7 @@ const MUTATING_ENDPOINTS = [
   '**/api/rules-draft/write',
   '**/api/rules-draft/revert',
   '**/api/grouping/children',    // write sub-groups into the draft yaml
+  '**/api/grouping/knobs',       // write size_budget / category_split into the draft yaml
 ];
 
 test.beforeEach(async ({ page }) => {
@@ -113,6 +114,22 @@ test('workflows view renders flow tabs and steps (read-only)', async ({ page }) 
   await page.goto('/#/workflows');
   await expect(page.locator('#flow-tabs .flow-tab').first()).toBeVisible({ timeout: 25_000 });
   await expect(page.locator('#flow-content .flow-step').first()).toBeVisible({ timeout: 25_000 });
+});
+
+test('grouping view shows the page-size impact panel with tuning controls (read-only GETs)', async ({ page }) => {
+  await page.goto('/#/grouping');
+  // Pick a known list group (small + fast) so the impact endpoint has options to size.
+  await page.locator('#grp-parent').selectOption('mammals');
+  // "Show counts" issues only GETs (children-counts + lists/impact); it never mutates.
+  await page.locator('#grp-load').click();
+  const impact = page.locator('#grp-impact');
+  // The impact table renders with the standard page options…
+  await expect(impact.locator('table.feature-table tbody tr').first()).toBeVisible({ timeout: 25_000 });
+  await expect(impact.getByText('Page-size impact')).toBeVisible();
+  // …and the new tuning controls are present (but we never click Generate / Save, which POST).
+  await expect(impact.locator('#imp-budget')).toBeVisible();
+  await expect(impact.locator('#imp-knob-split')).toBeVisible();
+  await expect(impact.locator('[data-gen-list]').first()).toBeVisible();
 });
 
 test('settings view loads resolved paths (read-only GET)', async ({ page }) => {

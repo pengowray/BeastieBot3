@@ -59,20 +59,72 @@
 
   // Counts-only page-size impact for the selected group (GET /api/lists/impact). Shows the cost of
   // combining categories vs separate pages, and which sub-pages would bust the group's size budget.
-  async function loadImpact(group, rank) {
+  // `candidateBudget` (optional) re-runs the verdicts against a what-if budget without saving anything.
+  async function loadImpact(group, rank, candidateBudget) {
     const el = $('#grp-impact');
     if (!el) return;
     el.innerHTML = '<p class="muted small">Sizing pages…</p>';
     try {
-      const d = await getJson(
-        `/api/lists/impact?group=${encodeURIComponent(group)}&splitRank=${encodeURIComponent(rank)}`);
-      el.innerHTML = renderImpact(d, rank);
+      let url = `/api/lists/impact?group=${encodeURIComponent(group)}&splitRank=${encodeURIComponent(rank)}`;
+      if (candidateBudget) url += `&budget=${encodeURIComponent(candidateBudget)}`;
+      const d = await getJson(url);
+      el.innerHTML = renderImpact(d, rank, candidateBudget);
     } catch (e) {
-      el.innerHTML = `<p class="muted small">No size impact for this group.</p>`;
+      el.innerHTML = `<p class="muted small">No size impact for this group — ${esc(e.message || e)}</p>`;
     }
   }
 
-  function renderImpact(d, rank) {
+  function setImpactMsg(text) {
+    const m = $('#imp-msg');
+    if (m) m.textContent = text;
+  }
+
+  // Generate a single list into the output dir (reuses the job runner). Reads SOURCE rules so any
+  // applied knob edits take effect without a rebuild. The file is then previewable in Wikitext outputs.
+  async function generateList(listId) {
+    setImpactMsg(`Starting generate-lists --list ${listId}…`);
+    const loc = await getJson('/api/rules/locations').catch(() => null);
+    const args = ['--list', listId];
+    if (loc && !loc.isBuildOutputFallback) {
+      args.push('--config', loc.sourceRulesDir + '/wikipedia-lists.yml', '--rules', loc.sourceRulesDir + '/rules-list.txt');
+    }
+    const { ok, data } = await postJson('/api/jobs', { command: 'wikipedia generate-lists', args });
+    setImpactMsg(ok
+      ? `Started generate-lists --list ${listId} (job ${data.id}). Watch the "Run a command" card, then preview it under "Wikitext outputs".`
+      : 'Failed to start: ' + (data.error || ''));
+  }
+
+  // Persist the tuning knobs to the draft rules (size_budget on the group, category_split on the list
+  // entry). The user then reviews via the Rules-editor diff and Applies to source.
+  async function saveKnobs() {
+    const group = $('#grp-parent').value;
+    const body = { group };
+    const budget = $('#imp-knob-budget') ? $('#imp-knob-budget').value.trim() : '';
+    if (budget) body.sizeBudgetMaxEntries = parseInt(budget, 10);
+    const split = $('#imp-knob-split') ? $('#imp-knob-split').value : '';
+    if (split) body.categorySplit = split;
+    if (body.sizeBudgetMaxEntries == null && !body.categorySplit) {
+      setImpactMsg('Nothing to save — set a budget and/or a category split first.');
+      return;
+    }
+    const { ok, data } = await postJson('/api/grouping/knobs', body);
+    setImpactMsg(ok
+      ? `Saved to draft: ${(data.changed || []).join(', ') || 'no change'}. Review in the Rules editor (Diff), then Apply to source.`
+      : 'Save failed: ' + (data.error || '') + (data.hint ? ' — ' + data.hint : ''));
+  }
+
+  function onImpactClick(ev) {
+    const gen = ev.target.closest('[data-gen-list]');
+    if (gen) { generateList(gen.getAttribute('data-gen-list')); return; }
+    if (ev.target.closest('[data-apply-budget]')) {
+      const v = $('#imp-budget') ? $('#imp-budget').value.trim() : '';
+      loadImpact($('#grp-parent').value, $('#grp-rank').value, v ? parseInt(v, 10) : null);
+      return;
+    }
+    if (ev.target.closest('[data-save-knobs]')) { saveKnobs(); }
+  }
+
+  function renderImpact(d, rank, candidateBudget) {
     const num = (n) => (n || 0).toLocaleString();
     const verdict = (o) => o.overBudget == null ? ''
       : (o.overBudget ? `<span class="feat-no">exceeds ${num(d.budget)}</span>` : `<span class="feat-yes">fits</span>`);
@@ -90,9 +142,12 @@
       }
       return t;
     };
+    const action = (o) => o.listId
+      ? `<button class="ghost xsmall" data-gen-list="${esc(o.listId)}" title="Generate ${esc(o.listId)} into the output dir">Generate</button>`
+      : '';
     const opts = d.options.map((o) =>
       `<tr><td class="wt-left">${esc(o.label)}</td><td>${num(o.bullets)}</td><td>${num(o.species)}</td>`
-      + `<td>${verdict(o)}</td><td class="wt-left">${struct(o)}</td></tr>`).join('');
+      + `<td>${verdict(o)}</td><td class="wt-left">${struct(o)}</td><td>${action(o)}</td></tr>`).join('');
 
     let sub = '';
     if (d.subPages && d.subPages.length) {
@@ -102,13 +157,35 @@
         + (d.budget ? `, <strong>${over.length}</strong> exceed ${num(d.budget)} bullets${over.length ? ' — ' + offenders : ''}` : '')
         + '.</p>';
     }
+
+    // Candidate-budget what-if (A/B): re-runs the verdicts against a trial budget without saving.
+    const candNote = candidateBudget
+      ? ` <span class="feat-no">— verdicts shown at candidate ${num(candidateBudget)}</span>` : '';
     const budgetNote = d.budget ? ` <span class="muted small">(budget ${num(d.budget)} bullets)</span>` : '';
-    return `<h4 class="grp-impact-title">Page-size impact${budgetNote}</h4>`
+    const whatIf = `<div class="imp-controls">`
+      + `<label>What-if budget <input id="imp-budget" type="number" min="0" step="500" `
+      + `value="${candidateBudget || ''}" placeholder="${d.budget || 'e.g. 5000'}"></label>`
+      + `<button class="ghost xsmall" data-apply-budget>Preview verdicts</button></div>`;
+
+    // Tuning knobs → draft rules (size_budget on the group, category_split on the list entry).
+    const knobs = `<div class="imp-controls">`
+      + `<label>Set budget <input id="imp-knob-budget" type="number" min="0" step="500" placeholder="${d.budget || 'max_entries'}"></label>`
+      + `<label>Category split <select id="imp-knob-split">`
+      + `<option value="">(keep current)</option>`
+      + `<option value="default">default (per-status pages)</option>`
+      + `<option value="separate">separate</option>`
+      + `<option value="combined-threatened">combined-threatened</option>`
+      + `<option value="all-status">all-status</option></select></label>`
+      + `<button class="ghost xsmall" data-save-knobs>Save knobs to draft</button></div>`;
+
+    return `<h4 class="grp-impact-title">Page-size impact${budgetNote}${candNote}</h4>`
       + `<p class="muted small">Bullets = species + subspecies/varieties rendered; species = the prose headline. Counts only — nothing is generated.</p>`
       + `<div class="feature-table-wrap"><table class="feature-table"><thead><tr>`
       + `<th class="wt-left">Page option</th><th>Bullets</th><th>Species</th><th>Verdict</th>`
-      + `<th class="wt-left">Structure (last gen)</th></tr></thead>`
-      + `<tbody>${opts}</tbody></table></div>${sub}`;
+      + `<th class="wt-left">Structure (last gen)</th><th></th></tr></thead>`
+      + `<tbody>${opts}</tbody></table></div>${sub}`
+      + whatIf + knobs
+      + `<p class="muted small" id="imp-msg"></p>`;
   }
 
   function titleCase(s) {
@@ -262,6 +339,9 @@
       loadGroups();
       $('#grp-load').addEventListener('click', loadCounts);
       $('#grp-save').addEventListener('click', saveChildren);
+      // Impact panel is re-rendered as innerHTML, so delegate its button clicks from the container.
+      const imp = $('#grp-impact');
+      if (imp) imp.addEventListener('click', onImpactClick);
     }
     if ($('#rules-file')) {
       loadLocations();

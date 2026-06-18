@@ -4,6 +4,7 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using BeastieBot3.Configuration;
 using BeastieBot3.WikipediaLists;
@@ -104,6 +105,58 @@ public static class TaxaGroupingEndpoints {
 
             File.WriteAllText(draftFile, updated);
             return Results.Json(new { group = req.Group, children, file = "taxa-groups.yml" }, JsonOpts);
+        });
+
+        // Set the per-group tuning knobs in the DRAFT rules: size_budget.max_entries on the group in
+        // taxa-groups.yml, and/or category_split on the group's list entry in wikipedia-lists.yml. Each
+        // edit is a conservative line rewrite guarded by a round-trip parse — never writes an unreadable
+        // file. The user reviews via the Rules-editor diff and Applies to source.
+        app.MapPost("/api/grouping/knobs", async (HttpContext ctx, PathsService paths) => {
+            var req = await JsonSerializer.DeserializeAsync<KnobsRequest>(ctx.Request.Body, JsonOpts).ConfigureAwait(false);
+            if (req is null || string.IsNullOrWhiteSpace(req.Group))
+                return Results.BadRequest(new { error = "group is required" });
+
+            var loc = RulesPaths.Resolve(paths);
+            EnsureSeeded(loc);
+            var changed = new List<string>();
+
+            if (req.SizeBudgetMaxEntries is { } maxEntries) {
+                if (maxEntries < 0)
+                    return Results.BadRequest(new { error = "sizeBudgetMaxEntries must be >= 0" });
+                var file = Path.Combine(loc.DraftRoot, "taxa-groups.yml");
+                if (!File.Exists(file))
+                    return Results.NotFound(new { error = "draft taxa-groups.yml not found" });
+                var original = File.ReadAllText(file);
+                if (!TryReplaceGroupKeyFlow(original, req.Group!, "size_budget", $"{{ max_entries: {maxEntries} }}", out var updated, out var err))
+                    return Results.BadRequest(new { error = err, hint = "Edit size_budget directly in the rules editor textarea instead." });
+                if (!GroupBudgetRoundTripOk(updated, req.Group!, maxEntries, out var rtErr))
+                    return Results.BadRequest(new { error = rtErr, hint = "Edit size_budget directly in the rules editor textarea instead." });
+                File.WriteAllText(file, updated);
+                changed.Add("taxa-groups.yml");
+            }
+
+            if (!string.IsNullOrWhiteSpace(req.CategorySplit)) {
+                var split = req.CategorySplit!.Trim();
+                var allowed = new[] { "default", "separate", "combined-threatened", "all-status" };
+                if (!allowed.Contains(split))
+                    return Results.BadRequest(new { error = $"categorySplit must be one of: {string.Join(", ", allowed)}" });
+                var file = Path.Combine(loc.DraftRoot, "wikipedia-lists.yml");
+                if (!File.Exists(file))
+                    return Results.NotFound(new { error = "draft wikipedia-lists.yml not found" });
+                var original = File.ReadAllText(file);
+                // "default" means remove the override (fall back to the entry's explicit presets).
+                var value = split == "default" ? null : split;
+                if (!TrySetListCategorySplit(original, req.Group!, value, out var updated, out var err))
+                    return Results.BadRequest(new { error = err, hint = "Edit category_split directly in the rules editor textarea instead." });
+                if (!YamlStillParses(updated, out var rtErr))
+                    return Results.BadRequest(new { error = rtErr, hint = "Edit category_split directly in the rules editor textarea instead." });
+                File.WriteAllText(file, updated);
+                changed.Add("wikipedia-lists.yml");
+            }
+
+            if (changed.Count == 0)
+                return Results.BadRequest(new { error = "Provide sizeBudgetMaxEntries and/or categorySplit." });
+            return Results.Json(new { group = req.Group, changed }, JsonOpts);
         });
     }
 
@@ -245,8 +298,143 @@ public static class TaxaGroupingEndpoints {
         }
     }
 
+    // ---- knob rewrites (size_budget, category_split) ----
+
+    // Replaces (or inserts) a single key on a group in taxa-groups.yml with a flow-style value line,
+    // removing any prior block-style nesting. Mirrors the children rewriter; leaves all else untouched.
+    internal static bool TryReplaceGroupKeyFlow(string yaml, string group, string key, string flowValue, out string updated, out string error) {
+        updated = yaml;
+        error = "";
+        var nl = yaml.Contains("\r\n") ? "\r\n" : "\n";
+        var lines = yaml.Replace("\r\n", "\n").Split('\n').ToList();
+
+        var headerIdx = -1;
+        var headerIndent = 0;
+        for (var i = 0; i < lines.Count; i++) {
+            var m = Regex.Match(lines[i], $"^(\\s+){Regex.Escape(group)}:\\s*$");
+            if (m.Success) { headerIdx = i; headerIndent = m.Groups[1].Value.Length; break; }
+        }
+        if (headerIdx < 0) { error = $"Group '{group}' not found in taxa-groups.yml."; return false; }
+
+        var indent = new string(' ', headerIndent + 2);
+        var flow = $"{indent}{key}: {flowValue}";
+
+        var blockEnd = lines.Count;
+        for (var i = headerIdx + 1; i < lines.Count; i++) {
+            if (string.IsNullOrWhiteSpace(lines[i])) continue;
+            var ind = lines[i].Length - lines[i].TrimStart().Length;
+            if (ind <= headerIndent) { blockEnd = i; break; }
+        }
+
+        var keyIdx = -1;
+        for (var i = headerIdx + 1; i < blockEnd; i++) {
+            if (Regex.IsMatch(lines[i], $"^{indent}{Regex.Escape(key)}:")) { keyIdx = i; break; }
+        }
+
+        if (keyIdx >= 0) {
+            // Remove the key line plus any deeper-indented nested block (e.g. a block-style max_entries).
+            var removeTo = keyIdx;
+            for (var i = keyIdx + 1; i < blockEnd; i++) {
+                if (string.IsNullOrWhiteSpace(lines[i])) break;
+                var ind = lines[i].Length - lines[i].TrimStart().Length;
+                if (ind > headerIndent + 2) removeTo = i; else break;
+            }
+            lines.RemoveRange(keyIdx, removeTo - keyIdx + 1);
+            lines.Insert(keyIdx, flow);
+        } else {
+            lines.Insert(headerIdx + 1, flow);
+        }
+
+        updated = string.Join(nl, lines);
+        return true;
+    }
+
+    // Sets (or, when value is null, removes) category_split on the `- taxa_group: <group>` list entry
+    // in wikipedia-lists.yml. Keys on the entry's `- taxa_group:` line + sibling indent.
+    internal static bool TrySetListCategorySplit(string yaml, string group, string? value, out string updated, out string error) {
+        updated = yaml;
+        error = "";
+        var nl = yaml.Contains("\r\n") ? "\r\n" : "\n";
+        var lines = yaml.Replace("\r\n", "\n").Split('\n').ToList();
+
+        var itemIdx = -1;
+        var itemIndent = 0;
+        for (var i = 0; i < lines.Count; i++) {
+            var m = Regex.Match(lines[i], $"^(\\s*)-\\s+taxa_group:\\s*{Regex.Escape(group)}\\s*$");
+            if (m.Success) { itemIdx = i; itemIndent = m.Groups[1].Value.Length; break; }
+        }
+        if (itemIdx < 0) { error = $"List entry for taxa_group '{group}' not found in wikipedia-lists.yml."; return false; }
+
+        var keyIndent = new string(' ', itemIndent + 2); // sibling keys align under `taxa_group`
+        var blockEnd = lines.Count;
+        for (var i = itemIdx + 1; i < lines.Count; i++) {
+            if (string.IsNullOrWhiteSpace(lines[i])) continue;
+            var ind = lines[i].Length - lines[i].TrimStart().Length;
+            if (ind <= itemIndent) { blockEnd = i; break; }
+        }
+
+        var csIdx = -1;
+        for (var i = itemIdx + 1; i < blockEnd; i++) {
+            if (Regex.IsMatch(lines[i], $"^{keyIndent}category_split:")) { csIdx = i; break; }
+        }
+
+        var remove = string.IsNullOrWhiteSpace(value);
+        if (csIdx >= 0) {
+            if (remove) lines.RemoveAt(csIdx);
+            else lines[csIdx] = $"{keyIndent}category_split: {value}";
+        } else if (!remove) {
+            lines.Insert(itemIdx + 1, $"{keyIndent}category_split: {value}");
+        }
+
+        updated = string.Join(nl, lines);
+        return true;
+    }
+
+    // Round-trip: the rewritten taxa-groups.yml must re-parse and yield exactly the requested budget.
+    private static bool GroupBudgetRoundTripOk(string updated, string group, int maxEntries, out string error) {
+        error = "";
+        try {
+            var deserializer = new DeserializerBuilder()
+                .IgnoreUnmatchedProperties()
+                .WithNamingConvention(UnderscoredNamingConvention.Instance)
+                .Build();
+            var file = deserializer.Deserialize<TaxaGroupsFile>(updated);
+            if (file?.Groups is null || !file.Groups.TryGetValue(group, out var def)) {
+                error = $"Group '{group}' missing after rewrite.";
+                return false;
+            }
+            if (def.SizeBudget?.MaxEntries != maxEntries) {
+                error = $"size_budget.max_entries mismatch after rewrite (got {def.SizeBudget?.MaxEntries?.ToString() ?? "null"}).";
+                return false;
+            }
+            return true;
+        } catch (Exception ex) {
+            error = $"Round-trip parse failed: {ex.Message}";
+            return false;
+        }
+    }
+
+    // Round-trip: the rewritten YAML must still parse as a document (catches indentation breakage).
+    private static bool YamlStillParses(string updated, out string error) {
+        error = "";
+        try {
+            var deserializer = new DeserializerBuilder().IgnoreUnmatchedProperties().Build();
+            deserializer.Deserialize<object>(updated);
+            return true;
+        } catch (Exception ex) {
+            error = $"Rewritten YAML did not parse: {ex.Message}";
+            return false;
+        }
+    }
+
     private sealed class ChildrenRequest {
         public string? Group { get; set; }
         public string[]? Children { get; set; }
+    }
+
+    private sealed class KnobsRequest {
+        public string? Group { get; set; }
+        public int? SizeBudgetMaxEntries { get; set; }
+        public string? CategorySplit { get; set; }
     }
 }
