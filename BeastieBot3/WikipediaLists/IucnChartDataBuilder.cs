@@ -223,7 +223,8 @@ internal sealed class IucnChartDataBuilder : IDisposable {
         List<TaxonFilterDefinition>? parentFilters,
         string childRank,
         IReadOnlyList<string>? curatedChildren = null,
-        IReadOnlyDictionary<string, string>? memberToGroup = null) {
+        IReadOnlyDictionary<string, string>? memberToGroup = null,
+        string? wherePredicate = null) {
 
         var column = TaxonFilterSql.ResolveColumn(childRank)
             ?? throw new ArgumentException($"Unknown child rank '{childRank}'.", nameof(childRank));
@@ -232,7 +233,9 @@ internal sealed class IucnChartDataBuilder : IDisposable {
         var sql = new StringBuilder();
         sql.AppendLine($"SELECT v.{column} AS childVal, v.redlistCategory, v.possiblyExtinct, v.possiblyExtinctInTheWild, COUNT(*) AS n");
         sql.AppendLine("FROM view_assessments_html_taxonomy_html v");
-        sql.AppendLine($"WHERE {TaxonFilterSql.GlobalSpeciesPredicate()}");
+        // Default = canonical species count (the prose headline); callers pass RenderablePredicate to
+        // get the renderable-row ("bullet") weight, which also counts subspecies/varieties.
+        sql.AppendLine($"WHERE {wherePredicate ?? TaxonFilterSql.GlobalSpeciesPredicate()}");
         if (parentFilters != null) {
             for (var i = 0; i < parentFilters.Count; i++) {
                 TaxonFilterSql.AppendFilter(sql, parameters, parentFilters[i], i, paramPrefix: "b");

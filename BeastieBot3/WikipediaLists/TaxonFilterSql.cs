@@ -27,7 +27,18 @@ internal static class TaxonFilterSql {
     /// </summary>
     public static string GlobalSpeciesPredicate(string alias = "v") =>
         $"({alias}.infraType IS NULL OR {alias}.infraType = '') " +
-        $"AND ({alias}.subpopulationName IS NULL OR TRIM({alias}.subpopulationName) = '') " +
+        $"AND {RenderablePredicate(alias)}";
+
+    /// <summary>
+    /// The predicate for rows that become a bullet in a list body: a global, non-subpopulation
+    /// assessment — but UNLIKE <see cref="GlobalSpeciesPredicate"/> it KEEPS infraspecific rows
+    /// (subspecies/varieties), because the body renders those as their own bullets. So the count of
+    /// rows matching this is the page's renderable-row ("bullet") weight, which for taxa with many
+    /// subspecies exceeds the canonical species count. Used by the impact preview to report page
+    /// weight, not just the headline species number.
+    /// </summary>
+    public static string RenderablePredicate(string alias = "v") =>
+        $"({alias}.subpopulationName IS NULL OR TRIM({alias}.subpopulationName) = '') " +
         $"AND ({alias}.scopes IS NULL OR {alias}.scopes = '' OR {alias}.scopes LIKE '%Global%')";
 
     /// <summary>Map a YAML rank name to its denormalized column on the taxonomy view.</summary>
