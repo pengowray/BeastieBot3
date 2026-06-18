@@ -198,7 +198,8 @@ internal sealed class WikipediaListGenerator {
             FileName = Path.GetFileName(outputPath),
             TotalTaxa = totalCount,
             HeadingCount = totalHeadingCount,
-            IsParent = isParent
+            IsParent = isParent,
+            FileBytes = System.Text.Encoding.UTF8.GetByteCount(content)
         };
         WikitextMetricsCollector.CollectFromWikitext(content, metrics);
         WikitextMetricsCollector.DetectProblems(metrics);

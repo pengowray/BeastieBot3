@@ -81,8 +81,14 @@
       if (!s) return '<span class="muted">—</span>';
       let t = `${num(s.headings)} hd · depth ${s.maxDepth}`;
       if (s.singleItemHeadings) t += ` · ${s.singleItemHeadings}&times; single`;
-      return (s.problems && s.problems.length)
-        ? `<span class="feat-no" title="${esc(s.problems.join('; '))}">${t}</span>` : t;
+      if (s.problems && s.problems.length) {
+        t = `<span class="feat-no" title="${esc(s.problems.join('; '))}">${t}</span>`;
+      }
+      if (s.fileBytes) {
+        const sz = s.fileBytes >= 1e6 ? (s.fileBytes / 1e6).toFixed(1) + ' MB' : (s.fileBytes / 1000).toFixed(0) + ' KB';
+        t += ` · <span class="${s.fileBytes > 2e6 ? 'feat-no' : 'muted'}">${sz}</span>`;
+      }
+      return t;
     };
     const opts = d.options.map((o) =>
       `<tr><td class="wt-left">${esc(o.label)}</td><td>${num(o.bullets)}</td><td>${num(o.species)}</td>`

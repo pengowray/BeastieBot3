@@ -122,11 +122,18 @@ internal sealed class WikipediaPreviewImpactCommand : Command<WikipediaPreviewIm
         if (s is null) {
             return "[grey]—[/]";
         }
-        var bits = $"{s.Headings:N0} hd · depth {s.MaxDepth}";
+        var core = $"{s.Headings:N0} hd · depth {s.MaxDepth}";
         if (s.SingleItemHeadings > 0) {
-            bits += $" · {s.SingleItemHeadings}× single";
+            core += $" · {s.SingleItemHeadings}× single";
         }
-        return s.Problems.Count > 0 ? $"[yellow]{bits}[/]" : bits;
+        if (s.Problems.Count > 0) {
+            core = $"[yellow]{core}[/]";
+        }
+        if (s.FileBytes > 0) {
+            var size = s.FileBytes >= 1_000_000 ? $"{s.FileBytes / 1_000_000.0:F1} MB" : $"{s.FileBytes / 1000.0:F0} KB";
+            core += s.FileBytes > 2_000_000 ? $" · [red]{size}[/]" : $" · [grey]{size}[/]";
+        }
+        return core;
     }
 
     private static string Title(string raw) =>

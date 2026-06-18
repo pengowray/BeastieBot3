@@ -46,6 +46,13 @@ internal sealed class ListStructureMetrics {
     [JsonPropertyName("max_leaf_size")]
     public int MaxLeafSize { get; set; }
 
+    /// <summary>
+    /// Exact UTF-8 byte size of the generated wikitext — what MediaWiki's ~2,000,000-byte article
+    /// size limit measures (raw wikitext, before template expansion). 0 if not captured.
+    /// </summary>
+    [JsonPropertyName("file_bytes")]
+    public long FileBytes { get; set; }
+
     [JsonPropertyName("max_heading_depth")]
     public int MaxHeadingDepth { get; set; }
 

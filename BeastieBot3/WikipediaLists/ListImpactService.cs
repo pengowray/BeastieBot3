@@ -13,7 +13,7 @@ namespace BeastieBot3.WikipediaLists;
 
 // Real structure metrics for the page option's generated list, from the last generation's
 // structure-metrics.json (null when that list hasn't been generated yet).
-internal sealed record ImpactStructure(int Headings, int MaxDepth, int SingleItemHeadings, int MaxLeafSize, IReadOnlyList<string> Problems);
+internal sealed record ImpactStructure(int Headings, int MaxDepth, int SingleItemHeadings, int MaxLeafSize, long FileBytes, IReadOnlyList<string> Problems);
 
 internal sealed record ImpactPageOption(string Key, string Label, int Bullets, int Species, bool? OverBudget,
     string? ListId = null, ImpactStructure? Structure = null);
@@ -76,7 +76,7 @@ internal static class ListImpactService {
             var preset = o.Key == "combined-threatened" ? "threatened" : o.Key;
             var listId = $"{group}-{preset}";
             var structure = metrics.TryGetValue(listId, out var m)
-                ? new ImpactStructure(m.HeadingCount, m.MaxHeadingDepth, m.SingleItemHeadings, m.MaxLeafSize, m.Problems)
+                ? new ImpactStructure(m.HeadingCount, m.MaxHeadingDepth, m.SingleItemHeadings, m.MaxLeafSize, m.FileBytes, m.Problems)
                 : null;
             return new ImpactPageOption(o.Key, o.Label, bullets, Sum(species, o.Codes),
                 budget.HasValue ? bullets > budget.Value : (bool?)null, listId, structure);
