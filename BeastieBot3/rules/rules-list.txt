@@ -31,6 +31,24 @@ Aves adj avian
 Gastropoda = gastropod ! gastropods
 // Magnoliopsida force-split true // try splitting for EW list?
 
+// Invertebrate class common plurals — used as section headings in the invertebrate parent lists
+// (e.g. "=== Millipedes ===" instead of the raw "=== Diplopoda ==="). Add more as needed.
+Diplopoda plural millipedes
+Chilopoda plural centipedes
+Merostomata plural horseshoe crabs
+Cephalopoda plural cephalopods
+Polyplacophora plural chitons
+Asteroidea plural starfish
+Holothuroidea plural sea cucumbers
+Echinoidea plural sea urchins
+Collembola plural springtails
+Nemertea plural ribbon worms
+Polychaeta plural polychaete worms
+Hydrozoa plural hydrozoans
+Demospongiae plural demosponges
+Ostracoda plural ostracods
+Branchiopoda plural branchiopods
+
 // wikilinks
 Anura = frog ! frogs
 Anura wikilink Anura (frog) // avoid disambig page, though could just link to Frog

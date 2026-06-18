@@ -534,7 +534,7 @@ internal sealed class SectionBodyRenderer {
                 }
 
                 var headingMarkup = new string('=', Math.Min(headingLevel, 6));
-                var groupHeading = FormatVirtualGroupHeading(vg);
+                var groupHeading = _headingFormatter.FormatVirtualGroupHeading(vg);
                 builder.AppendLine($"{headingMarkup} {groupHeading.Text} {headingMarkup}");
                 headingCount++;
                 if (!string.IsNullOrWhiteSpace(groupHeading.MainLink)) {

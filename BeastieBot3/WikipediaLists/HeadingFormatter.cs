@@ -100,14 +100,35 @@ internal sealed class HeadingFormatter {
         return new HeadingInfo(headingText, null, sentence, description);
     }
 
-    public static HeadingInfo FormatVirtualGroupHeading(VirtualGroup group) {
+    public HeadingInfo FormatVirtualGroupHeading(VirtualGroup group) {
+        // Prefer the group's own configured common plural/name; otherwise fall back to a common plural
+        // from the rule files (e.g. rules-list.txt "Diplopoda plural millipedes") so auto-discovered
+        // class groups read "Millipedes" rather than the raw scientific "Diplopoda".
         var displayName = !string.IsNullOrWhiteSpace(group.CommonPlural)
             ? Uppercase(group.CommonPlural)
             : !string.IsNullOrWhiteSpace(group.CommonName)
                 ? Uppercase(group.CommonName)
-                : group.Name;
+                : ResolveHigherTaxonCommonName(group.Name) ?? group.Name;
 
         return new HeadingInfo(displayName!, group.MainArticle);
+    }
+
+    /// <summary>
+    /// Resolves a common (plural) name for a higher taxon (e.g. an invertebrate class) from the rule
+    /// sources, capitalized for use as a section heading, or null if none is configured. Used for both
+    /// virtual-group headings and the orphan-class headings in the parent lists.
+    /// </summary>
+    public string? ResolveHigherTaxonCommonName(string? scientificName) {
+        if (string.IsNullOrWhiteSpace(scientificName)) {
+            return null;
+        }
+        var yamlRule = _taxonRules?.GetRule(scientificName);
+        if (!string.IsNullOrWhiteSpace(yamlRule?.CommonPlural)) return Uppercase(yamlRule.CommonPlural);
+        if (!string.IsNullOrWhiteSpace(yamlRule?.CommonName)) return Uppercase(yamlRule.CommonName);
+        var legacy = _legacyRules.Get(scientificName);
+        if (!string.IsNullOrWhiteSpace(legacy?.CommonPlural)) return Uppercase(legacy.CommonPlural);
+        if (!string.IsNullOrWhiteSpace(legacy?.CommonName)) return Uppercase(legacy.CommonName);
+        return null;
     }
 
     /// <summary>

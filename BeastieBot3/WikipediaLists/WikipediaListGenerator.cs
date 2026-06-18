@@ -375,7 +375,12 @@ internal sealed class WikipediaListGenerator {
 
             var markup = new string('=', Math.Min(startHeading, 6));
             foreach (var grp in orphanGroups) {
-                var heading = string.IsNullOrWhiteSpace(grp.Key) ? "Unassigned" : ToTitleCase(grp.Key);
+                // Use the common plural for the orphan class heading when a rule supplies one
+                // (e.g. Diplopoda → Millipedes), matching the curated child sections; otherwise the
+                // title-cased scientific name.
+                var heading = string.IsNullOrWhiteSpace(grp.Key)
+                    ? "Unassigned"
+                    : _headingFormatter.ResolveHigherTaxonCommonName(grp.Key) ?? ToTitleCase(grp.Key);
                 sb.AppendLine($"{markup} {heading} {markup}");
                 headingCount++;
                 // Reuse the standard list-generation path so an orphan class splits into orders/families
