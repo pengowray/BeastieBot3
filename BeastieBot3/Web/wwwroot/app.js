@@ -236,6 +236,7 @@
     for (const j of jobs.slice(0, 25)) {
       const li = document.createElement('li');
       const left = document.createElement('span');
+      left.className = 'job-cmd';
       const link = document.createElement('a');
       link.href = '#';
       link.textContent = j.commandLine;
@@ -244,13 +245,60 @@
         replayJob(j.id);
       });
       left.appendChild(link);
+
       const right = document.createElement('span');
-      right.className = 'status ' + j.status;
-      right.textContent = j.status + (j.exitCode != null ? ' (' + j.exitCode + ')' : '');
+      right.className = 'job-meta';
+
+      const time = document.createElement('time');
+      time.className = 'job-time muted small';
+      if (j.createdAt) {
+        time.dateTime = j.createdAt;
+        time.title = jobTimesTooltip(j);
+        const dur = jobDuration(j);
+        time.textContent = formatRelative(j.createdAt) + (dur ? ' · ' + dur : '');
+      }
+
+      const status = document.createElement('span');
+      status.className = 'status ' + j.status;
+      status.textContent = j.status + (j.exitCode != null ? ' (' + j.exitCode + ')' : '');
+
+      right.appendChild(time);
+      right.appendChild(status);
       li.appendChild(left);
       li.appendChild(right);
       ul.appendChild(li);
     }
+  }
+
+  // Wall-clock run time: started→completed, or started→now while running.
+  function jobDuration(j) {
+    if (!j.startedAt) return '';
+    const start = new Date(j.startedAt).getTime();
+    const end = j.completedAt ? new Date(j.completedAt).getTime() : Date.now();
+    return formatDuration(end - start);
+  }
+
+  function formatDuration(ms) {
+    if (ms == null || ms < 0) return '';
+    const s = ms / 1000;
+    if (s < 1) return Math.round(ms) + 'ms';
+    if (s < 60) return s.toFixed(s < 10 ? 1 : 0) + 's';
+    const m = Math.floor(s / 60);
+    if (m < 60) return m + 'm ' + Math.round(s % 60) + 's';
+    const h = Math.floor(m / 60);
+    return h + 'h ' + (m % 60) + 'm';
+  }
+
+  function formatAbsolute(isoDate) {
+    return isoDate ? new Date(isoDate).toLocaleString() : '';
+  }
+
+  function jobTimesTooltip(j) {
+    const lines = [];
+    if (j.createdAt) lines.push('enqueued ' + formatAbsolute(j.createdAt));
+    if (j.startedAt) lines.push('started ' + formatAbsolute(j.startedAt));
+    if (j.completedAt) lines.push('finished ' + formatAbsolute(j.completedAt));
+    return lines.join('\n');
   }
 
   function replayJob(id) {
@@ -1396,6 +1444,7 @@
     enqueue, replayJob, openFile, openDir,
     refreshStatus, refreshJobList, refreshActiveFlow, loadFlowsList, selectFlow,
     formatBytes, formatRelative, formatNumber, statusKind,
+    jobDuration, jobTimesTooltip,
     getFlows: () => allFlows,
     getCommands: () => allCommands,
   };

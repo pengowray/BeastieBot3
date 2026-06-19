@@ -580,6 +580,16 @@ td { word-break: break-all; font-family: ui-monospace, Menlo, monospace; }
   text-decoration: none;
 }
 .job-list a:hover { text-decoration: underline; }
+.job-list .job-cmd { min-width: 0; word-break: break-word; }
+.job-list .job-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.15rem;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.job-list .job-time { cursor: default; }
 
 .ansi-bold { font-weight: bold; }
 .ansi-dim { opacity: 0.6; }
@@ -1287,6 +1297,14 @@ button.ghost.primary:hover { filter: brightness(1.1); background: var(--accent);
   min-width: 0;
 }
 .dash-job-link:hover { text-decoration: underline; }
+.dash-job-meta {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 0.1rem;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
 
 .dash-progress {
   height: 8px;

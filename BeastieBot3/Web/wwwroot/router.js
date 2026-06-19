@@ -206,11 +206,26 @@
         e.preventDefault();
         if (b.replayJob) b.replayJob(j.id);
       });
+      const meta = document.createElement('span');
+      meta.className = 'dash-job-meta';
+
+      const time = document.createElement('time');
+      time.className = 'job-time muted small';
+      if (j.createdAt && b.formatRelative) {
+        time.dateTime = j.createdAt;
+        if (b.jobTimesTooltip) time.title = b.jobTimesTooltip(j);
+        const dur = b.jobDuration ? b.jobDuration(j) : '';
+        time.textContent = b.formatRelative(j.createdAt) + (dur ? ' · ' + dur : '');
+      }
+
       const st = document.createElement('span');
       st.className = 'status ' + j.status;
       st.textContent = j.status + (j.exitCode != null ? ' (' + j.exitCode + ')' : '');
+
+      meta.appendChild(time);
+      meta.appendChild(st);
       li.appendChild(a);
-      li.appendChild(st);
+      li.appendChild(meta);
       ul.appendChild(li);
     }
     card.appendChild(ul);
