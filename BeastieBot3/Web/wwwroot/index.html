@@ -134,18 +134,32 @@
           Generated <code>.wikitext</code> lists. <strong>Preview</strong> renders the file through
           Wikipedia's own parser (templates expanded, links live) — fetched on demand, one file at a
           time, so Wikipedia is never bulk-hit. <strong>Source</strong> shows the raw wikitext.
+          Taxa counts come from the generator's <code>structure-metrics.json</code> cache.
         </p>
         <div class="filter-bar">
           <input type="search" id="wt-search" placeholder="Filter outputs…" autocomplete="off">
+          <span class="seg" id="wt-view" role="radiogroup" aria-label="View">
+            <button class="seg-btn" data-view="table">Table</button>
+            <button class="seg-btn" data-view="taxa">By taxa</button>
+          </span>
+          <span class="seg" id="wt-stat" role="radiogroup" aria-label="Stat">
+            <button class="seg-btn" data-stat="count">Count</button>
+            <button class="seg-btn" data-stat="size">Size</button>
+            <button class="seg-btn" data-stat="off">Off</button>
+          </span>
         </div>
-        <div class="feature-table-wrap">
+        <p class="muted small" id="wt-cache-note" hidden></p>
+        <!-- Table view -->
+        <div class="feature-table-wrap" id="wt-table-wrap">
           <table class="feature-table" id="wt-table">
             <thead>
-              <tr><th>Article</th><th>Size</th><th>Modified</th><th class="wt-actions-col"></th></tr>
+              <tr><th>Article</th><th class="wt-num">Taxa</th><th>Size</th><th>Modified</th><th class="wt-actions-col"></th></tr>
             </thead>
-            <tbody id="wt-tbody"><tr><td colspan="4" class="muted">Loading&hellip;</td></tr></tbody>
+            <tbody id="wt-tbody"><tr><td colspan="5" class="muted">Loading&hellip;</td></tr></tbody>
           </table>
         </div>
+        <!-- By-taxa view -->
+        <div id="wt-taxa" hidden></div>
       </section>
     </section>
 

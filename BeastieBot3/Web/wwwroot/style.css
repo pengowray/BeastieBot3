@@ -1008,6 +1008,58 @@ td { word-break: break-all; font-family: ui-monospace, Menlo, monospace; }
 .wt-actions { white-space: nowrap; text-align: right; }
 .wt-actions button { margin-left: 0.4rem; }
 .wt-actions-col { width: 1%; }
+table.feature-table th.wt-num, table.feature-table td.wt-num { text-align: right; width: 1%; white-space: nowrap; }
+.wt-stale { color: var(--warn); margin-left: 1px; cursor: help; }
+
+/* --- Segmented (radio-style) toggle buttons ------------------- */
+.seg {
+  display: inline-flex;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  overflow: hidden;
+}
+.seg-btn {
+  background: #11141a;
+  color: var(--muted);
+  border: none;
+  border-left: 1px solid var(--border);
+  padding: 0.3rem 0.7rem;
+  font: inherit;
+  font-size: 0.82em;
+  cursor: pointer;
+}
+.seg-btn:first-child { border-left: none; }
+.seg-btn:hover { color: var(--fg); }
+.seg-btn.active { background: var(--accent); color: #fff; }
+
+/* --- By-taxa grouped outputs ---------------------------------- */
+#wt-taxa { margin: 0.5rem 0; }
+.wt-tg { margin: 0.15rem 0; }
+.wt-tg-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.5rem 0.75rem;
+  padding: 0.25rem 0;
+}
+.wt-tg-name { font-weight: 600; min-width: 9rem; }
+.wt-chips { display: inline-flex; flex-wrap: wrap; gap: 0.3rem; }
+.wt-chip {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 0.35rem;
+  background: #11141a;
+  color: var(--fg);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0.15rem 0.5rem;
+  font: inherit;
+  font-size: 0.82em;
+  cursor: pointer;
+}
+.wt-chip:hover { border-color: var(--accent); color: var(--accent-hover); }
+.wt-chip.parent { border-style: dashed; }
+.wt-chip-stat { color: var(--muted); font-size: 0.92em; }
 .grp-impact { margin-top: 1.25rem; border-top: 1px solid var(--border); padding-top: 0.5rem; }
 .grp-impact-title { margin: 0.5rem 0 0.25rem; }
 .imp-controls { display: flex; flex-wrap: wrap; align-items: end; gap: 0.5rem 1rem; margin: 0.5rem 0; }

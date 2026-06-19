@@ -1,38 +1,111 @@
-// Wikitext outputs view: a table of generated *.wikitext lists, with an on-demand Wikipedia
-// preview (server proxies the file through the MediaWiki action=parse API) and a raw-source view.
+// Wikitext outputs view: generated *.wikitext lists in two layouts —
+//   - Table:   one row per file, with a cached taxa count, byte size and mtime.
+//   - By taxa: lists grouped under their taxa group in hierarchy order (e.g. sharks/rays under
+//              fish), each status list shown as a chip ordered Extinct → … → DD.
+// Both offer an on-demand Wikipedia preview (server proxies the file through the MediaWiki
+// action=parse API) and a raw-source view. Taxa counts come from the generator's
+// structure-metrics.json cache (see /api/wikitext/list), never by parsing the files here.
 // Depends on window.Beastie (formatBytes / formatRelative / openFile) published by app.js.
 
 (function () {
   const $ = (sel) => document.querySelector(sel);
   let loaded = false;
   let allFiles = [];
+  let groups = [];            // [{name, displayName, children[], isParent}]
+  let groupById = new Map();
+  let childIds = new Set();   // group ids that are a child of some other group
+  let generatedAt = null;
+
+  // Status (preset) display order + labels for the by-taxa chips. Anything not listed sorts last.
+  const PRESET_ORDER = ['ex', 'ew', 'threatened', 'endangered-combined', 'cr', 'en', 'vu', 'nt', 'lc', 'dd', 'all-status', 'conservation-dependent'];
+  const PRESET_LABEL = {
+    ex: 'Extinct', ew: 'EW', threatened: 'Threatened', 'endangered-combined': 'EN+CR',
+    cr: 'CR', en: 'EN', vu: 'VU', nt: 'NT', lc: 'LC', dd: 'DD',
+    'all-status': 'By status', 'conservation-dependent': 'LR/cd',
+  };
+
+  // View + stat preferences persist so the user's chosen layout is the default next visit.
+  let view = localStorage.getItem('wt.view') || 'table';   // 'table' | 'taxa'
+  let stat = localStorage.getItem('wt.stat') || 'count';   // 'count' | 'size' | 'off'
 
   async function load() {
     const tbody = $('#wt-tbody');
     if (!tbody) return;
-    tbody.innerHTML = '<tr><td colspan="4" class="muted">Loading&hellip;</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="5" class="muted">Loading&hellip;</td></tr>';
     try {
-      const data = await fetch('/api/wikitext/list').then((r) => r.json());
-      allFiles = data.files || [];
+      const [list, grp] = await Promise.all([
+        fetch('/api/wikitext/list').then((r) => r.json()),
+        fetch('/api/grouping/groups').then((r) => r.json()).catch(() => ({ groups: [] })),
+      ]);
+      allFiles = list.files || [];
+      generatedAt = list.generatedAt || null;
+      groups = (grp && grp.groups) || [];
+      groupById = new Map(groups.map((g) => [g.name, g]));
+      childIds = new Set();
+      for (const g of groups) for (const c of (g.children || [])) childIds.add(c);
+
       const count = $('#wt-count');
       if (count) count.textContent = allFiles.length + ' files';
+      renderCacheNote();
       render();
       loaded = true;
     } catch (e) {
-      tbody.innerHTML = '<tr><td colspan="4" class="error">' + escapeHtml(e.message) + '</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="5" class="error">' + escapeHtml(e.message) + '</td></tr>';
     }
   }
 
+  function renderCacheNote() {
+    const note = $('#wt-cache-note');
+    if (!note) return;
+    const B = window.Beastie || {};
+    if (generatedAt) {
+      note.hidden = false;
+      note.textContent = 'Taxa counts cached from the last generation ' +
+        (B.formatRelative ? B.formatRelative(generatedAt) : '') +
+        '. A “~” marks a list rebuilt since then (count may be stale).';
+    } else {
+      note.hidden = false;
+      note.textContent = 'No structure-metrics.json cache found — run a generation to populate taxa counts.';
+    }
+  }
+
+  function currentFilter() {
+    return (($('#wt-search') || {}).value || '').toLowerCase();
+  }
+  function matches(f, q) {
+    return !q || f.title.toLowerCase().includes(q) || f.name.toLowerCase().includes(q);
+  }
+
   function render() {
+    // Toggle which layout is visible + which controls are relevant.
+    $('#wt-table-wrap').hidden = view !== 'table';
+    $('#wt-taxa').hidden = view !== 'taxa';
+    $('#wt-stat').style.display = view === 'taxa' ? '' : 'none';
+    syncSeg('#wt-view', 'view', view);
+    syncSeg('#wt-stat', 'stat', stat);
+    if (view === 'taxa') renderTaxa();
+    else renderTable();
+  }
+
+  function syncSeg(sel, attr, value) {
+    const seg = $(sel);
+    if (!seg) return;
+    for (const btn of seg.querySelectorAll('.seg-btn')) {
+      btn.classList.toggle('active', btn.dataset[attr] === value);
+    }
+  }
+
+  // --- Table layout ----------------------------------------------------
+
+  function renderTable() {
     const tbody = $('#wt-tbody');
     if (!tbody) return;
     const B = window.Beastie || {};
-    const q = (($('#wt-search') || {}).value || '').toLowerCase();
-    const rows = allFiles.filter(
-      (f) => !q || f.title.toLowerCase().includes(q) || f.name.toLowerCase().includes(q));
+    const q = currentFilter();
+    const rows = allFiles.filter((f) => matches(f, q));
 
     if (!rows.length) {
-      tbody.innerHTML = '<tr><td colspan="4" class="muted">No matching outputs.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="5" class="muted">No matching outputs.</td></tr>';
       return;
     }
     tbody.innerHTML = '';
@@ -41,6 +114,10 @@
 
       const title = document.createElement('td');
       title.textContent = f.title;
+
+      const taxa = document.createElement('td');
+      taxa.className = 'wt-num muted';
+      taxa.appendChild(taxaCountNode(f));
 
       const size = document.createElement('td');
       size.textContent = B.formatBytes ? B.formatBytes(f.size) : f.size + ' B';
@@ -51,17 +128,175 @@
 
       const act = document.createElement('td');
       act.className = 'wt-actions';
-      const prev = button('Preview', 'primary', () => preview(f));
-      const src = button('Source', '', () => { if (B.openFile) B.openFile('wikipedia-output', f.name); });
-      act.appendChild(prev);
-      act.appendChild(src);
+      act.appendChild(button('Preview', 'primary', () => preview(f)));
+      act.appendChild(button('Source', '', () => { if (B.openFile) B.openFile('wikipedia-output', f.name); }));
 
       tr.appendChild(title);
+      tr.appendChild(taxa);
       tr.appendChild(size);
       tr.appendChild(mod);
       tr.appendChild(act);
       tbody.appendChild(tr);
     }
+  }
+
+  // A taxa-count cell/inline node: the number, an em-dash when uncached, and a "~" stale marker.
+  function taxaCountNode(f) {
+    const span = document.createElement('span');
+    if (f.taxa == null) {
+      span.textContent = '—';
+      span.title = 'No cached count — regenerate this list.';
+      return span;
+    }
+    span.textContent = f.taxa.toLocaleString();
+    if (f.taxaStale) {
+      const s = document.createElement('span');
+      s.className = 'wt-stale';
+      s.textContent = '~';
+      s.title = 'Rebuilt since the cached count was taken — count may be out of date.';
+      span.appendChild(s);
+    }
+    return span;
+  }
+
+  // --- By-taxa layout --------------------------------------------------
+
+  function renderTaxa() {
+    const root = $('#wt-taxa');
+    if (!root) return;
+    const q = currentFilter();
+    const visible = allFiles.filter((f) => matches(f, q));
+
+    // Bucket files by taxa-group id; unmapped/explicit lists fall into the catch-all.
+    const byGroup = new Map();
+    const ungrouped = [];
+    for (const f of visible) {
+      if (f.taxaGroup && groupById.has(f.taxaGroup)) {
+        if (!byGroup.has(f.taxaGroup)) byGroup.set(f.taxaGroup, []);
+        byGroup.get(f.taxaGroup).push(f);
+      } else {
+        ungrouped.push(f);
+      }
+    }
+
+    root.innerHTML = '';
+    if (!visible.length) {
+      root.innerHTML = '<p class="muted">No matching outputs.</p>';
+      return;
+    }
+
+    const hasAny = (id) => {
+      if ((byGroup.get(id) || []).length) return true;
+      const g = groupById.get(id);
+      return g ? (g.children || []).some(hasAny) : false;
+    };
+
+    // Top-level groups = those that aren't nested under another group, in YAML order.
+    for (const g of groups) {
+      if (childIds.has(g.name)) continue;
+      if (!hasAny(g.name)) continue;
+      root.appendChild(renderGroupNode(g, byGroup, 0, hasAny));
+    }
+
+    if (ungrouped.length) {
+      const wrap = document.createElement('div');
+      wrap.className = 'wt-tg';
+      const head = document.createElement('div');
+      head.className = 'wt-tg-head';
+      const name = document.createElement('span');
+      name.className = 'wt-tg-name';
+      name.textContent = 'Other lists';
+      head.appendChild(name);
+      head.appendChild(chipRow(ungrouped));
+      wrap.appendChild(head);
+      root.appendChild(wrap);
+    }
+  }
+
+  function renderGroupNode(g, byGroup, depth, hasAny) {
+    const wrap = document.createElement('div');
+    wrap.className = 'wt-tg';
+    wrap.style.marginLeft = depth ? '1.25rem' : '0';
+
+    const head = document.createElement('div');
+    head.className = 'wt-tg-head';
+
+    const name = document.createElement('span');
+    name.className = 'wt-tg-name';
+    name.textContent = g.displayName || g.name;
+    head.appendChild(name);
+
+    const files = (byGroup.get(g.name) || []).slice().sort(presetCompare);
+    if (files.length) head.appendChild(chipRow(files));
+    wrap.appendChild(head);
+
+    for (const childId of (g.children || [])) {
+      const child = groupById.get(childId);
+      if (child && hasAny(childId)) {
+        wrap.appendChild(renderGroupNode(child, byGroup, depth + 1, hasAny));
+      }
+    }
+    return wrap;
+  }
+
+  function chipRow(files) {
+    const row = document.createElement('span');
+    row.className = 'wt-chips';
+    for (const f of files.slice().sort(presetCompare)) row.appendChild(chip(f));
+    return row;
+  }
+
+  function chip(f) {
+    const B = window.Beastie || {};
+    const b = document.createElement('button');
+    b.className = 'wt-chip';
+    if (f.isParent) b.classList.add('parent');
+
+    const label = document.createElement('span');
+    label.className = 'wt-chip-label';
+    label.textContent = chipLabel(f);
+    b.appendChild(label);
+
+    const s = statText(f);
+    if (s) {
+      const st = document.createElement('span');
+      st.className = 'wt-chip-stat';
+      st.textContent = s;
+      b.appendChild(st);
+    }
+
+    const bits = [f.title];
+    if (f.taxa != null) bits.push(f.taxa.toLocaleString() + ' taxa' + (f.taxaStale ? ' (stale)' : ''));
+    if (B.formatBytes) bits.push(B.formatBytes(f.size));
+    if (B.formatRelative) bits.push(B.formatRelative(f.modified));
+    b.title = bits.join('  ·  ');
+
+    b.addEventListener('click', () => preview(f));
+    return b;
+  }
+
+  function chipLabel(f) {
+    if (f.preset && PRESET_LABEL[f.preset]) return PRESET_LABEL[f.preset];
+    if (f.preset) return f.preset;
+    return f.title; // explicit/cross-taxa lists with no preset
+  }
+
+  function presetCompare(a, b) {
+    const ia = a.preset ? PRESET_ORDER.indexOf(a.preset) : -1;
+    const ib = b.preset ? PRESET_ORDER.indexOf(b.preset) : -1;
+    const ra = ia < 0 ? 999 : ia;
+    const rb = ib < 0 ? 999 : ib;
+    if (ra !== rb) return ra - rb;
+    return a.title.localeCompare(b.title);
+  }
+
+  function statText(f) {
+    const B = window.Beastie || {};
+    if (stat === 'off') return '';
+    if (stat === 'size') return B.formatBytes ? B.formatBytes(f.size) : f.size + ' B';
+    // count
+    if (f.taxa == null) return '';
+    return f.taxa.toLocaleString() + (f.taxaStale ? '~' : '');
   }
 
   function button(label, extra, onClick) {
@@ -148,6 +383,23 @@
   if (refreshBtn) refreshBtn.addEventListener('click', load);
   const search = $('#wt-search');
   if (search) search.addEventListener('input', render);
+
+  const viewSeg = $('#wt-view');
+  if (viewSeg) viewSeg.addEventListener('click', (e) => {
+    const btn = e.target.closest('.seg-btn');
+    if (!btn) return;
+    view = btn.dataset.view;
+    localStorage.setItem('wt.view', view);
+    render();
+  });
+  const statSeg = $('#wt-stat');
+  if (statSeg) statSeg.addEventListener('click', (e) => {
+    const btn = e.target.closest('.seg-btn');
+    if (!btn) return;
+    stat = btn.dataset.stat;
+    localStorage.setItem('wt.stat', stat);
+    render();
+  });
 
   // Router calls this when the view is shown; load once, then on explicit refresh.
   window.BeastieOutputs = {
