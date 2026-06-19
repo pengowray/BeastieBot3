@@ -92,10 +92,16 @@
     frame.srcdoc = '';
   }
 
+  function wikiUrl(title) {
+    return 'https://en.wikipedia.org/wiki/' + encodeURIComponent((title || '').replace(/ /g, '_'));
+  }
+
   async function preview(f) {
     modal.hidden = false;
     ptitle.textContent = f.title + ' — Wikipedia preview';
-    popen.hidden = true;
+    // Link to the same-named Wikipedia article up front, before the render lands.
+    popen.href = wikiUrl(f.title);
+    popen.hidden = false;
     frame.srcdoc = placeholderDoc('Rendering through Wikipedia&hellip;', '#555');
     try {
       const data = await fetch('/api/wikitext/preview?file=' + encodeURIComponent(f.name)).then(async (r) => {
@@ -106,8 +112,7 @@
         return r.json();
       });
       frame.srcdoc = buildDoc(data.title, data.html);
-      popen.href = 'https://en.wikipedia.org/wiki/' + encodeURIComponent((data.title || '').replace(/ /g, '_'));
-      popen.hidden = false;
+      if (data.title) popen.href = wikiUrl(data.title);
     } catch (e) {
       frame.srcdoc = placeholderDoc('Preview failed: ' + escapeHtml(e.message), '#b00');
     }
