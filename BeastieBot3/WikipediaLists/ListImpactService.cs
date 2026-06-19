@@ -28,7 +28,10 @@ internal sealed record ListImpactRecord(
     IReadOnlyDictionary<string, int> SpeciesByCode,
     IReadOnlyList<ImpactPageOption> Options,
     string? SplitRank,
-    IReadOnlyList<ImpactSubPage>? SubPages);
+    IReadOnlyList<ImpactSubPage>? SubPages,
+    // The group's current category_split setting ("default" when none is set), so the tuning UI can
+    // show what's in effect. Supplied by the caller (read from the draft rules).
+    string? CurrentSplit = null);
 
 internal static class ListImpactService {
     private static readonly string[] Threatened = { "CR(PE)", "CR(PEW)", "CR", "EN", "VU" };
@@ -51,7 +54,7 @@ internal static class ListImpactService {
     /// </summary>
     public static ListImpactRecord? Compute(
         string databasePath, string configPath, string group, string? splitRank, int? budgetOverride,
-        string? metricsDir = null) {
+        string? metricsDir = null, string? currentSplit = null) {
         var config = new WikipediaListDefinitionLoader().Load(configPath);
         var groupLists = config.Lists
             .Where(l => string.Equals(l.TaxaGroup, group, StringComparison.OrdinalIgnoreCase))
@@ -99,7 +102,7 @@ internal static class ListImpactService {
         return new ListImpactRecord(
             group,
             groupLists.Select(l => l.Preset ?? l.Id).ToList(),
-            budget, render, species, options, splitRank, subPages);
+            budget, render, species, options, splitRank, subPages, currentSplit);
     }
 
     // Index the last generation's structure-metrics.json by list id (empty if absent/unreadable).

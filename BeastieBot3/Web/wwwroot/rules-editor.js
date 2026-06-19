@@ -116,10 +116,14 @@
     const body = { group };
     const budget = $('#imp-knob-budget') ? $('#imp-knob-budget').value.trim() : '';
     if (budget) body.sizeBudgetMaxEntries = parseInt(budget, 10);
-    const split = $('#imp-knob-split') ? $('#imp-knob-split').value : '';
-    if (split) body.categorySplit = split;
+    // Only write category_split when the user actually changed it away from the current setting,
+    // so a budget-only save doesn't rewrite the (unchanged) split line.
+    const splitSel = $('#imp-knob-split');
+    const split = splitSel ? splitSel.value : '';
+    const curSplit = splitSel ? (splitSel.dataset.current || '') : '';
+    if (split && split !== curSplit) body.categorySplit = split;
     if (body.sizeBudgetMaxEntries == null && !body.categorySplit) {
-      setImpactMsg('Nothing to save — set a budget and/or a category split first.');
+      setImpactMsg('Nothing to save — change the category split and/or set a budget first.');
       return;
     }
     const { ok, data } = await postJson('/api/grouping/knobs', body);
@@ -200,14 +204,19 @@
       + `<button class="ghost xsmall" data-apply-budget>Preview verdicts</button></div>`;
 
     // Tuning knobs → draft rules (size_budget on the group, category_split on the list entry).
+    // The split <select> is pre-set to the group's current setting (from the draft), so it shows what's
+    // in effect; saveKnobs only writes it when the user changes it (see data-current).
+    const cur = d.currentSplit || '';
+    const splitOpt = (val, label) =>
+      `<option value="${val}"${val === cur ? ' selected' : ''}>${label}${val === cur ? ' — current' : ''}</option>`;
     const knobs = `<div class="imp-controls">`
       + `<label>Set budget <input id="imp-knob-budget" type="number" min="0" step="500" placeholder="${d.budget || 'max_entries'}"></label>`
-      + `<label>Category split <select id="imp-knob-split">`
-      + `<option value="">(keep current)</option>`
-      + `<option value="default">default (per-status pages)</option>`
-      + `<option value="separate">separate</option>`
-      + `<option value="combined-threatened">combined-threatened</option>`
-      + `<option value="all-status">all-status</option></select></label>`
+      + `<label>Category split <select id="imp-knob-split" data-current="${esc(cur)}">`
+      + (cur ? '' : `<option value="" selected>(keep current)</option>`)
+      + splitOpt('default', 'default (per-status pages)')
+      + splitOpt('separate', 'separate')
+      + splitOpt('combined-threatened', 'combined-threatened')
+      + splitOpt('all-status', 'all-status') + `</select></label>`
       + `<button class="ghost xsmall" data-save-knobs>Save knobs to draft</button>`
       + `<button class="ghost xsmall" data-regen-group title="Run generate-lists for this taxa group from source rules (Apply your draft first)">Regenerate group</button></div>`;
 
