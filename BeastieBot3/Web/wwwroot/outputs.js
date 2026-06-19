@@ -284,6 +284,23 @@
     name.textContent = g.displayName || g.name;
     head.appendChild(name);
 
+    // Deep-link to the Taxa-grouping editor focused on this group, where status lists can be
+    // combined (one "Threatened" page) or split (separate CR/EN/VU), then regenerated.
+    const sj = document.createElement('a');
+    sj.href = '#/grouping';
+    sj.className = 'wt-tg-edit';
+    sj.textContent = '⚙ split/join';
+    sj.title = 'Combine or split this group’s status lists in the Taxa-grouping editor';
+    sj.addEventListener('click', (e) => {
+      e.preventDefault();
+      if (window.BeastieRouter) {
+        window.BeastieRouter.navigate('grouping', () => {
+          if (window.BeastieGrouping) window.BeastieGrouping.focus(g.name);
+        });
+      }
+    });
+    head.appendChild(sj);
+
     const files = (byGroup.get(g.name) || []).slice().sort(presetCompare);
     if (files.length) head.appendChild(chipRow(files));
     wrap.appendChild(head);

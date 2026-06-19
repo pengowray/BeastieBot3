@@ -41,6 +41,21 @@
     }
   }
 
+  // Deep-link entry point: select a group and show its counts + impact/knobs panel. Called by the
+  // Wikitext-outputs "split/join" links via window.BeastieGrouping.focus(group).
+  async function focusGroup(groupId) {
+    const sel = $('#grp-parent');
+    if (!sel) return;
+    if (!sel.options.length) await loadGroups();
+    if (groupId && Array.from(sel.options).some((o) => o.value === groupId)) {
+      sel.value = groupId;
+    } else if (groupId) {
+      $('#grp-msg').textContent = `Group '${groupId}' is not a configured taxa group.`;
+      return;
+    }
+    await loadCounts();
+  }
+
   async function loadCounts() {
     const group = $('#grp-parent').value;
     const rank = $('#grp-rank').value;
@@ -109,8 +124,24 @@
     }
     const { ok, data } = await postJson('/api/grouping/knobs', body);
     setImpactMsg(ok
-      ? `Saved to draft: ${(data.changed || []).join(', ') || 'no change'}. Review in the Rules editor (Diff), then Apply to source.`
+      ? `Saved to draft: ${(data.changed || []).join(', ') || 'no change'}. Review in the Rules editor (Diff) → Apply to source → then "Regenerate group".`
       : 'Save failed: ' + (data.error || '') + (data.hint ? ' — ' + data.hint : ''));
+  }
+
+  // Regenerate every list for the selected taxa group from SOURCE rules (so an applied split/join takes
+  // effect without a rebuild). Apply the draft first — this does NOT read the draft.
+  async function regenerateGroup() {
+    const group = $('#grp-parent').value;
+    setImpactMsg(`Starting generate-lists --taxa-group ${group}…`);
+    const loc = await getJson('/api/rules/locations').catch(() => null);
+    const args = ['--taxa-group', group];
+    if (loc && !loc.isBuildOutputFallback) {
+      args.push('--config', loc.sourceRulesDir + '/wikipedia-lists.yml', '--rules', loc.sourceRulesDir + '/rules-list.txt');
+    }
+    const { ok, data } = await postJson('/api/jobs', { command: 'wikipedia generate-lists', args });
+    setImpactMsg(ok
+      ? `Started generate-lists --taxa-group ${group} (job ${data.id}). Reads SOURCE rules, so Apply your draft first if you changed the split. Watch "Run a command", then preview under "Wikitext outputs".`
+      : 'Failed to start: ' + (data.error || ''));
   }
 
   function onImpactClick(ev) {
@@ -121,7 +152,8 @@
       loadImpact($('#grp-parent').value, $('#grp-rank').value, v ? parseInt(v, 10) : null);
       return;
     }
-    if (ev.target.closest('[data-save-knobs]')) { saveKnobs(); }
+    if (ev.target.closest('[data-save-knobs]')) { saveKnobs(); return; }
+    if (ev.target.closest('[data-regen-group]')) { regenerateGroup(); }
   }
 
   function renderImpact(d, rank, candidateBudget) {
@@ -176,7 +208,8 @@
       + `<option value="separate">separate</option>`
       + `<option value="combined-threatened">combined-threatened</option>`
       + `<option value="all-status">all-status</option></select></label>`
-      + `<button class="ghost xsmall" data-save-knobs>Save knobs to draft</button></div>`;
+      + `<button class="ghost xsmall" data-save-knobs>Save knobs to draft</button>`
+      + `<button class="ghost xsmall" data-regen-group title="Run generate-lists for this taxa group from source rules (Apply your draft first)">Regenerate group</button></div>`;
 
     return `<h4 class="grp-impact-title">Page-size impact${budgetNote}${candNote}</h4>`
       + `<p class="muted small">Bullets = species + subspecies/varieties rendered; species = the prose headline. Counts only — nothing is generated.</p>`
@@ -355,6 +388,9 @@
       $('#rules-run').addEventListener('click', runGenerate);
     }
   }
+
+  // Public surface: the Wikitext-outputs view deep-links here to combine/split a group's status lists.
+  window.BeastieGrouping = { focus: focusGroup };
 
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', init);
