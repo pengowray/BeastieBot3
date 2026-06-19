@@ -11,10 +11,12 @@
   const $ = (sel) => document.querySelector(sel);
   let loaded = false;
   let allFiles = [];
-  let groups = [];            // [{name, displayName, children[], isParent}]
+  let groups = [];            // [{name, displayName, children[], filters[], isParent}]
   let groupById = new Map();
-  let childIds = new Set();   // group ids that are a child of some other group
+  let effChildren = new Map();   // group id -> effective child ids (explicit + filter-inferred)
+  let effChildIds = new Set();   // group ids that are nested under some other group
   let generatedAt = null;
+  let taxaMaxSize = 0;           // largest visible list size, for the by-taxa heat scale
 
   // Status (preset) display order + labels for the by-taxa chips. Anything not listed sorts last.
   const PRESET_ORDER = ['ex', 'ew', 'threatened', 'endangered-combined', 'cr', 'en', 'vu', 'nt', 'lc', 'dd', 'all-status', 'conservation-dependent'];
@@ -27,6 +29,7 @@
   // View + stat preferences persist so the user's chosen layout is the default next visit.
   let view = localStorage.getItem('wt.view') || 'table';   // 'table' | 'taxa'
   let stat = localStorage.getItem('wt.stat') || 'count';   // 'count' | 'size' | 'off'
+  let heat = localStorage.getItem('wt.heat') === '1';      // color-code largest lists by size
 
   async function load() {
     const tbody = $('#wt-tbody');
@@ -41,8 +44,7 @@
       generatedAt = list.generatedAt || null;
       groups = (grp && grp.groups) || [];
       groupById = new Map(groups.map((g) => [g.name, g]));
-      childIds = new Set();
-      for (const g of groups) for (const c of (g.children || [])) childIds.add(c);
+      buildTree();
 
       const count = $('#wt-count');
       if (count) count.textContent = allFiles.length + ' files';
@@ -80,17 +82,31 @@
     // Toggle which layout is visible + which controls are relevant.
     $('#wt-table-wrap').hidden = view !== 'table';
     $('#wt-taxa').hidden = view !== 'taxa';
-    $('#wt-stat').style.display = view === 'taxa' ? '' : 'none';
-    syncSeg('#wt-view', 'view', view);
-    syncSeg('#wt-stat', 'stat', stat);
+    // The per-list stat only applies to the by-taxa chips, so hide it on the table.
+    const statGroup = $('.wt-stat-group');
+    if (statGroup) statGroup.style.display = view === 'taxa' ? '' : 'none';
+    const heatBox = $('#wt-heat');
+    if (heatBox) heatBox.checked = heat;
+    syncActive('#wt-view', '.view-tab', 'view', view);
+    syncActive('#wt-stat', '.seg-btn', 'stat', stat);
     if (view === 'taxa') renderTaxa();
     else renderTable();
   }
 
-  function syncSeg(sel, attr, value) {
+  // Heat level 0–3 for a file's byte size relative to the largest list currently shown.
+  function heatLevel(size, max) {
+    if (!heat || !max) return 0;
+    const r = size / max;
+    if (r >= 0.66) return 3;
+    if (r >= 0.33) return 2;
+    if (r >= 0.12) return 1;
+    return 0;
+  }
+
+  function syncActive(sel, btnSel, attr, value) {
     const seg = $(sel);
     if (!seg) return;
-    for (const btn of seg.querySelectorAll('.seg-btn')) {
+    for (const btn of seg.querySelectorAll(btnSel)) {
       btn.classList.toggle('active', btn.dataset[attr] === value);
     }
   }
@@ -108,6 +124,7 @@
       tbody.innerHTML = '<tr><td colspan="5" class="muted">No matching outputs.</td></tr>';
       return;
     }
+    const maxSize = rows.reduce((m, f) => Math.max(m, f.size || 0), 0);
     tbody.innerHTML = '';
     for (const f of rows) {
       const tr = document.createElement('tr');
@@ -120,6 +137,8 @@
       taxa.appendChild(taxaCountNode(f));
 
       const size = document.createElement('td');
+      const lvl = heatLevel(f.size, maxSize);
+      if (lvl) size.className = 'heat-' + lvl;
       size.textContent = B.formatBytes ? B.formatBytes(f.size) : f.size + ' B';
 
       const mod = document.createElement('td');
@@ -159,6 +178,45 @@
     return span;
   }
 
+  // --- Taxa-group tree -------------------------------------------------
+  // The YAML only declares `children` for true parent lists (fish, invertebrates). To also nest
+  // display-only relationships (conifers/cycads under plants, marine-mammals under mammals) without
+  // changing what the generator produces, we infer extra parent→child links from filter containment:
+  // a group nests under the most-specific other group whose filters are a strict subset of its own
+  // and that itself has lists (or declared children).
+
+  function buildTree() {
+    effChildren = new Map(groups.map((g) => [g.name, (g.children || []).slice()]));
+    effChildIds = new Set();
+    for (const g of groups) for (const c of (g.children || [])) effChildIds.add(c);
+
+    const fileGroupIds = new Set(allFiles.map((f) => f.taxaGroup).filter(Boolean));
+    for (const c of groups) {
+      if (effChildIds.has(c.name)) continue;       // already nested via explicit children
+      const cSig = sigSet(c);
+      if (!cSig.size) continue;
+      let best = null, bestSize = -1;
+      for (const p of groups) {
+        if (p.name === c.name) continue;
+        const pSig = sigSet(p);
+        if (!pSig.size || pSig.size >= cSig.size) continue;  // parent must be strictly less specific
+        if (!isSubset(pSig, cSig)) continue;
+        const qualifies = (p.children && p.children.length) || fileGroupIds.has(p.name);
+        if (qualifies && pSig.size > bestSize) { best = p; bestSize = pSig.size; }
+      }
+      if (best) { effChildren.get(best.name).push(c.name); effChildIds.add(c.name); }
+    }
+  }
+
+  function filterSig(f) {
+    if (f.system) return 'system|' + f.system;
+    if (f.exclude && f.exclude.length) return f.rank + '|exclude=' + f.exclude.slice().sort().join(',');
+    if (f.values && f.values.length) return f.rank + '|values=' + f.values.slice().sort().join(',');
+    return f.rank + '|' + (f.value || '');
+  }
+  function sigSet(g) { return new Set((g.filters || []).map(filterSig)); }
+  function isSubset(a, b) { for (const x of a) if (!b.has(x)) return false; return true; }
+
   // --- By-taxa layout --------------------------------------------------
 
   function renderTaxa() {
@@ -166,6 +224,7 @@
     if (!root) return;
     const q = currentFilter();
     const visible = allFiles.filter((f) => matches(f, q));
+    taxaMaxSize = visible.reduce((m, f) => Math.max(m, f.size || 0), 0);
 
     // Bucket files by taxa-group id; unmapped/explicit lists fall into the catch-all.
     const byGroup = new Map();
@@ -187,13 +246,12 @@
 
     const hasAny = (id) => {
       if ((byGroup.get(id) || []).length) return true;
-      const g = groupById.get(id);
-      return g ? (g.children || []).some(hasAny) : false;
+      return (effChildren.get(id) || []).some(hasAny);
     };
 
     // Top-level groups = those that aren't nested under another group, in YAML order.
     for (const g of groups) {
-      if (childIds.has(g.name)) continue;
+      if (effChildIds.has(g.name)) continue;
       if (!hasAny(g.name)) continue;
       root.appendChild(renderGroupNode(g, byGroup, 0, hasAny));
     }
@@ -230,7 +288,7 @@
     if (files.length) head.appendChild(chipRow(files));
     wrap.appendChild(head);
 
-    for (const childId of (g.children || [])) {
+    for (const childId of (effChildren.get(g.name) || [])) {
       const child = groupById.get(childId);
       if (child && hasAny(childId)) {
         wrap.appendChild(renderGroupNode(child, byGroup, depth + 1, hasAny));
@@ -251,6 +309,8 @@
     const b = document.createElement('button');
     b.className = 'wt-chip';
     if (f.isParent) b.classList.add('parent');
+    const lvl = heatLevel(f.size, taxaMaxSize);
+    if (lvl) b.classList.add('heat-' + lvl);
 
     const label = document.createElement('span');
     label.className = 'wt-chip-label';
@@ -386,7 +446,7 @@
 
   const viewSeg = $('#wt-view');
   if (viewSeg) viewSeg.addEventListener('click', (e) => {
-    const btn = e.target.closest('.seg-btn');
+    const btn = e.target.closest('.view-tab');
     if (!btn) return;
     view = btn.dataset.view;
     localStorage.setItem('wt.view', view);
@@ -398,6 +458,12 @@
     if (!btn) return;
     stat = btn.dataset.stat;
     localStorage.setItem('wt.stat', stat);
+    render();
+  });
+  const heatBox = $('#wt-heat');
+  if (heatBox) heatBox.addEventListener('change', () => {
+    heat = heatBox.checked;
+    localStorage.setItem('wt.heat', heat ? '1' : '0');
     render();
   });
 

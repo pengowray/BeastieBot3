@@ -136,17 +136,25 @@
           time, so Wikipedia is never bulk-hit. <strong>Source</strong> shows the raw wikitext.
           Taxa counts come from the generator's <code>structure-metrics.json</code> cache.
         </p>
+        <div class="view-tabs wt-tabs" id="wt-view" role="tablist" aria-label="View">
+          <button class="view-tab" data-view="table" role="tab">Table</button>
+          <button class="view-tab" data-view="taxa" role="tab">By taxa</button>
+          <span class="wt-tabs-right">
+            <label class="wt-toggle small muted" title="Color-code lists by size — the largest highlighted (helps decide what to split).">
+              <input type="checkbox" id="wt-heat"> Highlight large
+            </label>
+            <span class="wt-stat-group">
+              <label class="wt-stat-label muted small">Stat</label>
+              <span class="seg" id="wt-stat" role="radiogroup" aria-label="Per-list stat">
+                <button class="seg-btn" data-stat="count">Count</button>
+                <button class="seg-btn" data-stat="size">Size</button>
+                <button class="seg-btn" data-stat="off">Off</button>
+              </span>
+            </span>
+          </span>
+        </div>
         <div class="filter-bar">
           <input type="search" id="wt-search" placeholder="Filter outputs…" autocomplete="off">
-          <span class="seg" id="wt-view" role="radiogroup" aria-label="View">
-            <button class="seg-btn" data-view="table">Table</button>
-            <button class="seg-btn" data-view="taxa">By taxa</button>
-          </span>
-          <span class="seg" id="wt-stat" role="radiogroup" aria-label="Stat">
-            <button class="seg-btn" data-stat="count">Count</button>
-            <button class="seg-btn" data-stat="size">Size</button>
-            <button class="seg-btn" data-stat="off">Off</button>
-          </span>
         </div>
         <p class="muted small" id="wt-cache-note" hidden></p>
         <!-- Table view -->
