@@ -275,19 +275,40 @@ public sealed class WikipediaListCommand : Command<WikipediaListCommand.Settings
             return;
         }
 
+        var datasetVersion = results[0].Result.DatasetVersion;
+        var jsonPath = Path.Combine(outputDir, "structure-metrics.json");
+
+        // Merge with any existing sidecar (keyed by output filename) so a partial run — `--list`,
+        // `--status`, `--taxa-group` — keeps the metrics for the lists it DIDN'T regenerate instead of
+        // wiping their cached taxa counts. Prior entries from a different dataset release are discarded:
+        // their counts would be misleading against the current DB.
+        var merged = new Dictionary<string, ListStructureMetrics>(StringComparer.OrdinalIgnoreCase);
+        if (File.Exists(jsonPath)) {
+            try {
+                var existing = JsonSerializer.Deserialize<GenerationMetricsReport>(File.ReadAllText(jsonPath));
+                if (existing != null && string.Equals(existing.DatasetVersion, datasetVersion, StringComparison.Ordinal)) {
+                    foreach (var m in existing.Lists) {
+                        if (!string.IsNullOrEmpty(m.FileName)) merged[m.FileName] = m;
+                    }
+                }
+            } catch {
+                // Unreadable/old sidecar — just start fresh from this run's results.
+            }
+        }
+
+        foreach (var r in results) {
+            if (r.Result.Metrics is { FileName.Length: > 0 } m) merged[m.FileName] = m;
+        }
+
         var report = new GenerationMetricsReport {
             GeneratedAt = DateTimeOffset.UtcNow.ToString("yyyy-MM-ddTHH:mm:ssZ", System.Globalization.CultureInfo.InvariantCulture),
-            DatasetVersion = results[0].Result.DatasetVersion,
-            Lists = results
-                .Where(r => r.Result.Metrics != null)
-                .Select(r => r.Result.Metrics!)
-                .ToList()
+            DatasetVersion = datasetVersion,
+            Lists = merged.Values.OrderBy(m => m.FileName, StringComparer.OrdinalIgnoreCase).ToList()
         };
 
-        var jsonPath = Path.Combine(outputDir, "structure-metrics.json");
         var options = new JsonSerializerOptions { WriteIndented = true };
         File.WriteAllText(jsonPath, JsonSerializer.Serialize(report, options));
-        AnsiConsole.MarkupLine($"[grey]Metrics saved to[/] {jsonPath}");
+        AnsiConsole.MarkupLine($"[grey]Metrics saved to[/] {jsonPath} [grey]({report.Lists.Count} lists)[/]");
     }
 
     /// <summary>
