@@ -198,10 +198,12 @@
         <details id="grp-create" class="grp-create">
           <summary>Define a new sub-group (e.g. a class like MAGNOLIOPSIDA)</summary>
           <p class="muted small">
-            Creates a new taxa-group scoped to one rank + value (inheriting the selected parent's
-            kingdom), plus a list entry so it generates pages. Written to the <strong>draft</strong> —
-            review the diff and Apply in the Rules editor. Tip: click <em>＋ define</em> on a sub-taxon
-            row above to pre-fill this from its name.
+            Creates a new taxa-group from one or more filters, plus a list entry so it generates pages.
+            Each filter is a taxonomic rank (<em>is</em> / <em>any of</em> / <em>not</em>) or a
+            <em>system</em> tag (e.g. <code>Marine, Freshwater</code> = aquatic). Filters are ANDed;
+            comma-separated system tags are OR'd. Written to the <strong>draft</strong> — review the
+            diff and Apply in the Rules editor. Tip: click <em>＋ define</em> on a sub-taxon row above
+            to pre-fill the first filter.
           </p>
           <div class="filter-bar">
             <label>Key <input id="cg-key" placeholder="magnoliopsida"></label>
@@ -209,17 +211,11 @@
             <label>Adjective <input id="cg-adj" placeholder="dicot"></label>
           </div>
           <div class="filter-bar">
-            <label>Rank
-              <select id="cg-rank">
-                <option value="class" selected>class</option>
-                <option value="order">order</option>
-                <option value="family">family</option>
-                <option value="genus">genus</option>
-                <option value="phylum">phylum</option>
-                <option value="kingdom">kingdom</option>
-              </select>
-            </label>
-            <label>Value <input id="cg-value" placeholder="MAGNOLIOPSIDA"></label>
+            <label><input type="checkbox" id="cg-inherit" checked> Inherit parent's filters</label>
+            <button id="cg-add-filter" class="ghost xsmall" type="button">＋ Add filter</button>
+          </div>
+          <div id="cg-filters"></div>
+          <div class="filter-bar">
             <label>Listing style
               <select id="cg-style">
                 <option value="" selected>(inherit default)</option>

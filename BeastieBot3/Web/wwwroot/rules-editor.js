@@ -252,14 +252,86 @@
       `<table><thead><tr>${head.map((h) => `<th>${esc(h)}</th>`).join('')}</tr></thead><tbody>${rows.join('')}</tbody></table>`;
   }
 
-  // Pre-fill the "Define a new sub-group" panel from a counts-table row (rank = current child rank,
-  // value = the sub-taxon name) and suggest a key/name. Opens the panel and focuses the key field.
+  // ---- create-group: dynamic filter rows (rank value/any-of/not, or system tags OR'd) ----
+
+  const RANK_OPTS = ['class', 'order', 'family', 'genus', 'phylum', 'kingdom'];
+
+  function filterRowEl() {
+    const row = document.createElement('div');
+    row.className = 'cg-filter-row filter-bar';
+    row.innerHTML =
+      `<select class="cgf-type"><option value="rank">rank</option><option value="system">system</option></select>`
+      + `<span class="cgf-rank-fields">`
+      + `<select class="cgf-rank">${RANK_OPTS.map((r) => `<option value="${r}">${r}</option>`).join('')}</select>`
+      + `<select class="cgf-op"><option value="is">is</option><option value="any">any of</option><option value="not">not</option></select>`
+      + `<input class="cgf-value" placeholder="MAGNOLIOPSIDA (comma-separate for any-of / not)">`
+      + `</span>`
+      + `<span class="cgf-system-fields" hidden><input class="cgf-systems" placeholder="Marine, Freshwater (comma = OR)"></span>`
+      + `<button class="cgf-remove ghost xsmall" type="button" title="Remove filter">×</button>`;
+    return row;
+  }
+
+  function syncRowType(row) {
+    const isSystem = row.querySelector('.cgf-type').value === 'system';
+    row.querySelector('.cgf-rank-fields').hidden = isSystem;
+    row.querySelector('.cgf-system-fields').hidden = !isSystem;
+  }
+
+  function addFilterRow(opts) {
+    const cont = $('#cg-filters');
+    if (!cont) return null;
+    const row = filterRowEl();
+    cont.appendChild(row);
+    if (opts) {
+      if (opts.type) row.querySelector('.cgf-type').value = opts.type;
+      if (opts.rank) row.querySelector('.cgf-rank').value = opts.rank;
+      if (opts.op) row.querySelector('.cgf-op').value = opts.op;
+      if (opts.value != null) row.querySelector('.cgf-value').value = opts.value;
+      if (opts.systems != null) row.querySelector('.cgf-systems').value = opts.systems;
+    }
+    syncRowType(row);
+    return row;
+  }
+
+  function onFiltersClick(ev) {
+    const rm = ev.target.closest('.cgf-remove');
+    if (rm) { const row = rm.closest('.cg-filter-row'); if (row) row.remove(); }
+  }
+  function onFiltersChange(ev) {
+    if (ev.target.classList.contains('cgf-type')) syncRowType(ev.target.closest('.cg-filter-row'));
+  }
+
+  // Read the filter rows into the API shape: {rank, value|values|exclude} or {system|systems}.
+  function collectFilters() {
+    const out = [];
+    for (const row of document.querySelectorAll('#cg-filters .cg-filter-row')) {
+      if (row.querySelector('.cgf-type').value === 'system') {
+        const tags = (row.querySelector('.cgf-systems').value || '').split(',').map((s) => s.trim()).filter(Boolean);
+        if (tags.length) out.push(tags.length === 1 ? { system: tags[0] } : { systems: tags });
+      } else {
+        const rank = row.querySelector('.cgf-rank').value;
+        const op = row.querySelector('.cgf-op').value;
+        const vals = (row.querySelector('.cgf-value').value || '').split(',').map((s) => s.trim()).filter(Boolean);
+        if (!vals.length) continue;
+        if (op === 'is') out.push({ rank, value: vals[0] });
+        else if (op === 'any') out.push({ rank, values: vals });
+        else out.push({ rank, exclude: vals });
+      }
+    }
+    return out;
+  }
+
+  // Pre-fill the create panel's FIRST filter row from a counts-table sub-taxon, and suggest key/name.
   function prefillCreate(value) {
     const panel = $('#grp-create');
     if (!panel) return;
     panel.open = true;
-    $('#cg-rank').value = $('#grp-rank').value;
-    $('#cg-value').value = value || '';
+    let row = document.querySelector('#cg-filters .cg-filter-row') || addFilterRow();
+    row.querySelector('.cgf-type').value = 'rank';
+    syncRowType(row);
+    row.querySelector('.cgf-rank').value = $('#grp-rank').value;
+    row.querySelector('.cgf-op').value = 'is';
+    row.querySelector('.cgf-value').value = value || '';
     const slug = (value || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
     if (!$('#cg-key').value) $('#cg-key').value = slug;
     if (!$('#cg-name').value && value) {
@@ -277,19 +349,20 @@
   // tickable sub-group of the selected parent.
   async function createGroup() {
     const key = $('#cg-key').value.trim();
-    const value = $('#cg-value').value.trim();
-    if (!key || !$('#cg-name').value.trim() || !value) {
-      $('#cg-msg').textContent = 'Key, Name and Value are required.';
+    const name = $('#cg-name').value.trim();
+    const filters = collectFilters();
+    if (!key || !name) { $('#cg-msg').textContent = 'Key and Name are required.'; return; }
+    if (!filters.length && !$('#cg-inherit').checked) {
+      $('#cg-msg').textContent = 'Add at least one filter, or tick "Inherit parent\'s filters".';
       return;
     }
     const body = {
-      key,
-      name: $('#cg-name').value.trim(),
+      key, name,
       adjective: $('#cg-adj').value.trim() || null,
       listingStyle: $('#cg-style').value || null,
       parentGroup: $('#grp-parent').value || null,
-      rank: $('#cg-rank').value,
-      value,
+      inheritFilters: $('#cg-inherit').checked,
+      filters,
       categorySplit: $('#cg-split').value || null,
     };
     $('#cg-msg').textContent = 'Creating…';
@@ -300,8 +373,10 @@
     }
     $('#cg-msg').textContent =
       `Created '${data.group}' → wrote ${(data.changed || []).join(', ')} (pages: ${data.pagePlan}). ${data.hint || ''}`;
-    // Clear the suggestion fields so the next create starts fresh.
-    ['#cg-key', '#cg-name', '#cg-adj', '#cg-value'].forEach((s) => { if ($(s)) $(s).value = ''; });
+    // Reset for the next create.
+    ['#cg-key', '#cg-name', '#cg-adj'].forEach((s) => { if ($(s)) $(s).value = ''; });
+    $('#cg-filters').innerHTML = '';
+    addFilterRow();
     const parent = body.parentGroup;
     await loadGroups();
     if (parent) $('#grp-parent').value = parent;
@@ -446,6 +521,12 @@
       const counts = $('#grp-counts');
       if (counts) counts.addEventListener('click', onCountsClick);
       if ($('#cg-create')) $('#cg-create').addEventListener('click', createGroup);
+      if ($('#cg-add-filter')) {
+        $('#cg-add-filter').addEventListener('click', () => addFilterRow());
+        $('#cg-filters').addEventListener('click', onFiltersClick);
+        $('#cg-filters').addEventListener('change', onFiltersChange);
+        if (!document.querySelector('#cg-filters .cg-filter-row')) addFilterRow(); // one default row
+      }
       // Impact panel is re-rendered as innerHTML, so delegate its button clicks from the container.
       const imp = $('#grp-impact');
       if (imp) imp.addEventListener('click', onImpactClick);

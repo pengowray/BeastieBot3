@@ -78,7 +78,21 @@ internal static class TaxonFilterSql {
         string paramPrefix = "",
         string alias = "v") {
 
-        // System tag (mutually exclusive with rank); LIKE on the systems field.
+        // System tags (mutually exclusive with rank); LIKE on the packed systems field. A `systems`
+        // list OR's its tags (aquatic = Marine OR Freshwater); a single `system` is one LIKE.
+        if (filter.Systems is { Count: > 0 }) {
+            var orClauses = new List<string>();
+            for (var j = 0; j < filter.Systems.Count; j++) {
+                var tag = filter.Systems[j]?.Trim();
+                if (string.IsNullOrWhiteSpace(tag)) continue;
+                var p = new SqliteParameter($"@{paramPrefix}sys_{index}_{j}", $"%{tag}%");
+                orClauses.Add($"{alias}.systems LIKE {p.ParameterName}");
+                parameters.Add(p);
+            }
+            if (orClauses.Count > 0)
+                sql.AppendLine($"  AND ({string.Join(" OR ", orClauses)})");
+            return;
+        }
         if (!string.IsNullOrWhiteSpace(filter.System)) {
             var p = new SqliteParameter($"@{paramPrefix}sys_{index}", $"%{filter.System}%");
             sql.AppendLine($"  AND {alias}.systems LIKE {p.ParameterName}");

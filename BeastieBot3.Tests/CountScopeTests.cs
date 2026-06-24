@@ -67,6 +67,31 @@ public class CountScopeTests {
     }
 
     [Fact]
+    public void AppendFilter_Systems_EmitsOrOfLikes() {
+        var sql = new StringBuilder();
+        var ps = new List<SqliteParameter>();
+        TaxonFilterSql.AppendFilter(sql, ps,
+            new TaxonFilterDefinition { Systems = new List<string> { "Marine", "Freshwater" } }, 0);
+
+        Assert.Contains("AND (v.systems LIKE @sys_0_0 OR v.systems LIKE @sys_0_1)", sql.ToString());
+        Assert.Equal("%Marine%", ps[0].Value);
+        Assert.Equal("%Freshwater%", ps[1].Value);
+    }
+
+    [Fact]
+    public void AppendFilter_Systems_TakesPrecedenceOverSingleSystem() {
+        var sql = new StringBuilder();
+        var ps = new List<SqliteParameter>();
+        TaxonFilterSql.AppendFilter(sql, ps,
+            new TaxonFilterDefinition { System = "Terrestrial", Systems = new List<string> { "Marine" } }, 0);
+
+        Assert.Contains("@sys_0_0", sql.ToString());
+        Assert.DoesNotContain("@sys_0 ", sql.ToString() + " "); // the single-System path did not run
+        Assert.Equal("%Marine%", ps[0].Value);
+        Assert.Single(ps);
+    }
+
+    [Fact]
     public void AppendFilter_SingleValueInclude_NormalizesAndBinds() {
         var sql = new StringBuilder();
         var ps = new List<SqliteParameter>();

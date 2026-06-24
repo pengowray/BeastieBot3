@@ -174,12 +174,6 @@ public static class TaxaGroupingEndpoints {
             var name = (req.Name ?? "").Trim();
             if (name.Length == 0)
                 return Results.BadRequest(new { error = "name is required" });
-            var rank = (req.Rank ?? "").Trim().ToLowerInvariant();
-            if (TaxonFilterSql.ResolveColumn(rank) is null)
-                return Results.BadRequest(new { error = "rank must be one of kingdom, phylum, class, order, family, genus" });
-            var value = (req.Value ?? "").Trim();
-            if (value.Length == 0)
-                return Results.BadRequest(new { error = "value is required (the taxon name at that rank, e.g. MAGNOLIOPSIDA)" });
 
             var listingStyle = string.IsNullOrWhiteSpace(req.ListingStyle) ? null : req.ListingStyle!.Trim();
             var allowedStyles = new[] { "CommonNameFocus", "ScientificNameFocus", "CommonNameOnly" };
@@ -206,21 +200,38 @@ public static class TaxaGroupingEndpoints {
             if (existing.ContainsKey(key))
                 return Results.Conflict(new { error = $"Group '{key}' already exists. Pick a different key, or edit it in the rules editor." });
 
-            // Inherit the parent's kingdom filter (so a class-level sub-taxon is scoped to its kingdom,
-            // exactly like conifers = Plantae + Pinopsida). Skip if the new filter IS the kingdom rank.
-            string? kingdom = null;
-            if (!string.IsNullOrWhiteSpace(req.ParentGroup)
-                && existing.TryGetValue(req.ParentGroup!.Trim(), out var parent) && rank != "kingdom") {
-                kingdom = parent.Filters?
-                    .FirstOrDefault(f => string.Equals(f.Rank?.Trim(), "kingdom", StringComparison.OrdinalIgnoreCase))?.Value;
+            // Build the user's filter list (multi-filter: rank value/values/exclude, or system/systems).
+            if (!TryBuildUserFilters(req, out var userFilters, out var fErr))
+                return Results.BadRequest(new { error = fErr });
+
+            // Inherit the parent's taxonomic (non-system) filters the user didn't re-specify — so a sub-
+            // group of mammals picks up kingdom Animalia + class Mammalia, and the user adds only the
+            // distinguishing filter (e.g. a system tag for aquatic mammals, or an order for bats).
+            var filters = new List<FilterSpec>();
+            if (req.InheritFilters != false && !string.IsNullOrWhiteSpace(req.ParentGroup)
+                && existing.TryGetValue(req.ParentGroup!.Trim(), out var parent) && parent.Filters is { Count: > 0 }) {
+                var userRanks = userFilters
+                    .Where(f => f.Rank != null)
+                    .Select(f => f.Rank!.ToLowerInvariant()).ToHashSet();
+                foreach (var pf in parent.Filters) {
+                    if (!string.IsNullOrWhiteSpace(pf.System) || pf.Systems is { Count: > 0 }) continue; // skip system filters
+                    if (string.IsNullOrWhiteSpace(pf.Rank)) continue;
+                    if (userRanks.Contains(pf.Rank.Trim().ToLowerInvariant())) continue; // user overrides this rank
+                    filters.Add(new FilterSpec(pf.Rank.Trim(),
+                        string.IsNullOrWhiteSpace(pf.Value) ? null : pf.Value.Trim(),
+                        pf.Values, pf.Exclude, null));
+                }
             }
-            var filterCount = (kingdom is null ? 0 : 1) + 1;
+            filters.AddRange(userFilters);
+            if (filters.Count == 0)
+                return Results.BadRequest(new { error = "At least one filter is required (a rank+value, or a system tag)." });
 
             var groupsOriginal = File.ReadAllText(groupsFile);
-            var block = BuildGroupBlock(groupsOriginal, key, name, req.Adjective, listingStyle, kingdom, rank, value);
+            var filtersYaml = RenderFiltersYaml(filters, groupsOriginal.Contains("\r\n") ? "\r\n" : "\n");
+            var block = BuildGroupBlock(groupsOriginal, key, name, req.Adjective, listingStyle, filtersYaml);
             if (!TryAppendGroupBlock(groupsOriginal, block, out var groupsUpdated, out var gErr))
                 return Results.BadRequest(new { error = gErr, hint = "Add the group directly in the rules editor textarea instead." });
-            if (!NewGroupRoundTripOk(groupsUpdated, key, name, filterCount, existing.Count + 1, out var gRt))
+            if (!NewGroupRoundTripOk(groupsUpdated, key, name, filters.Count, existing.Count + 1, out var gRt))
                 return Results.BadRequest(new { error = gRt, hint = "Add the group directly in the rules editor textarea instead." });
             File.WriteAllText(groupsFile, groupsUpdated);
             var changedFiles = new List<string> { "taxa-groups.yml" };
@@ -281,6 +292,7 @@ public static class TaxaGroupingEndpoints {
         values = f.Values,
         exclude = f.Exclude,
         system = f.System,
+        systems = f.Systems,
     };
 
     // Map a normalized child-rank value (e.g. "INSECTA") -> the taxa-group whose single-value filter
@@ -515,12 +527,39 @@ public static class TaxaGroupingEndpoints {
 
     // ---- create-group: new group block + list entry (conservative append + round-trip guard) ----
 
+    // A single parsed filter to emit: a rank filter (value / values OR / exclude NOT-IN) OR a system
+    // filter (one or more tags, OR'd). Systems non-empty => system filter; otherwise rank filter.
+    internal sealed record FilterSpec(
+        string? Rank, string? Value, IReadOnlyList<string>? Values, IReadOnlyList<string>? Exclude, IReadOnlyList<string>? Systems);
+
+    // Render the YAML lines that go under `filters:` for a list of FilterSpecs, matching the
+    // hand-authored block style (each filter as a `- rank:`/`- system:` item at 6-space indent).
+    internal static string RenderFiltersYaml(IReadOnlyList<FilterSpec> filters, string nl) {
+        var sb = new StringBuilder();
+        foreach (var f in filters) {
+            if (f.Systems is { Count: > 0 }) {
+                if (f.Systems.Count == 1)
+                    sb.Append("      - system: ").Append(f.Systems[0]).Append(nl);
+                else
+                    sb.Append("      - systems: [").Append(string.Join(", ", f.Systems)).Append(']').Append(nl);
+                continue;
+            }
+            sb.Append("      - rank: ").Append(f.Rank).Append(nl);
+            if (f.Values is { Count: > 0 })
+                sb.Append("        values: [").Append(string.Join(", ", f.Values)).Append(']').Append(nl);
+            else if (!string.IsNullOrWhiteSpace(f.Value))
+                sb.Append("        value: ").Append(f.Value).Append(nl);
+            if (f.Exclude is { Count: > 0 })
+                sb.Append("        exclude: [").Append(string.Join(", ", f.Exclude)).Append(']').Append(nl);
+        }
+        return sb.ToString();
+    }
+
     // Build a YAML group block matching the hand-authored style (see conifers/cycads): a 2-space
-    // group key, double-quoted name/adjective, optional display.listing_style, and a filters list
-    // (inherited kingdom first, then the chosen rank/value). Leads with a blank line for separation.
+    // group key, double-quoted name/adjective, optional display.listing_style, then a pre-rendered
+    // `filters:` body. Leads with a blank line for separation.
     internal static string BuildGroupBlock(
-        string yaml, string key, string name, string? adjective, string? listingStyle,
-        string? kingdom, string rank, string value) {
+        string yaml, string key, string name, string? adjective, string? listingStyle, string filtersYaml) {
         var nl = yaml.Contains("\r\n") ? "\r\n" : "\n";
         string Q(string s) => "\"" + s.Replace("\\", "\\\\").Replace("\"", "\\\"") + "\"";
         var sb = new StringBuilder();
@@ -534,13 +573,46 @@ public static class TaxaGroupingEndpoints {
             sb.Append("      listing_style: ").Append(listingStyle).Append(nl);
         }
         sb.Append("    filters:").Append(nl);
-        if (!string.IsNullOrWhiteSpace(kingdom)) {
-            sb.Append("      - rank: kingdom").Append(nl);
-            sb.Append("        value: ").Append(kingdom!.Trim()).Append(nl);
-        }
-        sb.Append("      - rank: ").Append(rank).Append(nl);
-        sb.Append("        value: ").Append(value).Append(nl);
+        sb.Append(filtersYaml);
         return sb.ToString();
+    }
+
+    // Parse + validate the request's user-supplied filters (or the legacy rank/value shorthand) into
+    // FilterSpecs. Each row is a rank filter (value/values/exclude) XOR a system filter (one+ tags).
+    private static bool TryBuildUserFilters(CreateGroupRequest req, out List<FilterSpec> filters, out string error) {
+        filters = new();
+        error = "";
+        var raw = req.Filters;
+        if ((raw == null || raw.Length == 0) && !string.IsNullOrWhiteSpace(req.Rank) && !string.IsNullOrWhiteSpace(req.Value))
+            raw = new[] { new FilterDto { Rank = req.Rank, Value = req.Value } }; // legacy single-filter shorthand
+        if (raw == null) return true; // inheritance may still supply filters; final count is checked by the caller
+
+        foreach (var f in raw) {
+            var systems = (f.Systems ?? Array.Empty<string>())
+                .Concat(string.IsNullOrWhiteSpace(f.System) ? Array.Empty<string>() : new[] { f.System! })
+                .Select(s => s.Trim()).Where(s => s.Length > 0).Distinct().ToList();
+            var rank = string.IsNullOrWhiteSpace(f.Rank) ? null : f.Rank!.Trim().ToLowerInvariant();
+
+            if (systems.Count > 0 && rank != null) {
+                error = "A filter row is a rank filter OR a system filter, not both.";
+                return false;
+            }
+            if (systems.Count > 0) { filters.Add(new FilterSpec(null, null, null, null, systems)); continue; }
+            if (rank == null) { error = "Each filter needs a rank (with value/values/exclude) or a system tag."; return false; }
+            if (TaxonFilterSql.ResolveColumn(rank) is null) {
+                error = $"Unknown rank '{f.Rank}'. Use kingdom, phylum, class, order, family, or genus.";
+                return false;
+            }
+            var value = string.IsNullOrWhiteSpace(f.Value) ? null : f.Value!.Trim();
+            var values = (f.Values ?? Array.Empty<string>()).Select(v => v.Trim()).Where(v => v.Length > 0).ToList();
+            var exclude = (f.Exclude ?? Array.Empty<string>()).Select(v => v.Trim()).Where(v => v.Length > 0).ToList();
+            if (value == null && values.Count == 0 && exclude.Count == 0) {
+                error = $"Filter on rank '{rank}' needs a value, values, or exclude.";
+                return false;
+            }
+            filters.Add(new FilterSpec(rank, value, values.Count > 0 ? values : null, exclude.Count > 0 ? exclude : null, null));
+        }
+        return true;
     }
 
     // Append a pre-built group block to the end of the groups map. Insertion only — never touches
@@ -622,16 +694,28 @@ public static class TaxaGroupingEndpoints {
         }
     }
 
+    private sealed class FilterDto {
+        public string? Rank { get; set; }
+        public string? Value { get; set; }
+        public string[]? Values { get; set; }
+        public string[]? Exclude { get; set; }
+        public string? System { get; set; }
+        public string[]? Systems { get; set; }
+    }
+
     private sealed class CreateGroupRequest {
         public string? Key { get; set; }
         public string? Name { get; set; }
         public string? Adjective { get; set; }
         public string? ListingStyle { get; set; }
         public string? ParentGroup { get; set; }
-        public string? Rank { get; set; }
-        public string? Value { get; set; }
+        public bool? InheritFilters { get; set; }      // default true: inherit parent's non-system filters
+        public FilterDto[]? Filters { get; set; }      // multi-filter (preferred)
         public string? CategorySplit { get; set; }
         public string[]? Presets { get; set; }
+        // Legacy single-filter shorthand — still accepted when Filters is empty.
+        public string? Rank { get; set; }
+        public string? Value { get; set; }
     }
 
     private sealed class ChildrenRequest {

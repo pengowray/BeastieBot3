@@ -225,6 +225,13 @@ internal sealed class TaxonFilterDefinition {
     /// Mutually exclusive with Rank filter.
     /// </summary>
     public string? System { get; init; }
+
+    /// <summary>
+    /// Multiple system tags matched with OR logic — e.g. aquatic mammals = {systems: [Marine,
+    /// Freshwater]}. Emits <c>(systems LIKE '%Marine%' OR systems LIKE '%Freshwater%')</c>. Takes
+    /// precedence over the single <see cref="System"/>. Mutually exclusive with Rank.
+    /// </summary>
+    public List<string>? Systems { get; init; }
 }
 
 internal sealed class WikipediaSectionDefinition {

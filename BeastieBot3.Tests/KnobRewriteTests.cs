@@ -108,11 +108,17 @@ public class KnobRewriteTests {
 
     // ---- create-group: BuildGroupBlock + TryAppendGroupBlock + NewGroupRoundTripOk ----
 
+    private static string Filters(params TaxaGroupingEndpoints.FilterSpec[] specs) =>
+        TaxaGroupingEndpoints.RenderFiltersYaml(specs, "\n");
+
+    private static TaxaGroupingEndpoints.FilterSpec Rank(string rank, string value) =>
+        new(rank, value, null, null, null);
+
     [Fact]
     public void NewGroup_AppendsBlockThatRoundTrips() {
         var block = TaxaGroupingEndpoints.BuildGroupBlock(
             GroupsYaml, "magnoliopsida", "Dicotyledons", "dicot", "ScientificNameFocus",
-            kingdom: "Plantae", rank: "class", value: "MAGNOLIOPSIDA");
+            Filters(Rank("kingdom", "Plantae"), Rank("class", "MAGNOLIOPSIDA")));
         var ok = TaxaGroupingEndpoints.TryAppendGroupBlock(GroupsYaml, block, out var updated, out var err);
         Assert.True(ok, err);
         Assert.Contains("  magnoliopsida:", updated);
@@ -131,7 +137,7 @@ public class KnobRewriteTests {
     public void NewGroup_WithoutKingdom_HasOneFilter() {
         var block = TaxaGroupingEndpoints.BuildGroupBlock(
             GroupsYaml, "bryopsida", "Mosses", adjective: null, listingStyle: null,
-            kingdom: null, rank: "class", value: "BRYOPSIDA");
+            Filters(Rank("class", "BRYOPSIDA")));
         TaxaGroupingEndpoints.TryAppendGroupBlock(GroupsYaml, block, out var updated, out _);
         Assert.DoesNotContain("display:", block); // no listing style → no display block
         Assert.True(TaxaGroupingEndpoints.NewGroupRoundTripOk(
@@ -141,12 +147,38 @@ public class KnobRewriteTests {
     [Fact]
     public void NewGroup_RoundTrip_FailsOnWrongGroupCount() {
         var block = TaxaGroupingEndpoints.BuildGroupBlock(
-            GroupsYaml, "cycads", "Cycads", null, null, "Plantae", "class", "CYCADOPSIDA");
+            GroupsYaml, "cycads", "Cycads", null, null, Filters(Rank("class", "CYCADOPSIDA")));
         TaxaGroupingEndpoints.TryAppendGroupBlock(GroupsYaml, block, out var updated, out _);
         // Expecting 4 groups when there are only 3 must fail (guards against silent collateral edits).
         Assert.False(TaxaGroupingEndpoints.NewGroupRoundTripOk(
             updated, "cycads", "Cycads", 2, expectedGroupCount: 4, out var err));
         Assert.Contains("count", err);
+    }
+
+    [Fact]
+    public void NewGroup_MultiFilter_WithSystemsOr_RoundTrips() {
+        // Aquatic mammals: kingdom + class + a systems OR (Marine OR Freshwater).
+        var filtersYaml = Filters(
+            Rank("kingdom", "Animalia"),
+            Rank("class", "Mammalia"),
+            new TaxaGroupingEndpoints.FilterSpec(null, null, null, null, new[] { "Marine", "Freshwater" }));
+        Assert.Contains("      - systems: [Marine, Freshwater]", filtersYaml);
+        var block = TaxaGroupingEndpoints.BuildGroupBlock(
+            GroupsYaml, "aquatic-mammals", "Aquatic mammals", "aquatic mammal", "CommonNameOnly", filtersYaml);
+        TaxaGroupingEndpoints.TryAppendGroupBlock(GroupsYaml, block, out var updated, out _);
+        Assert.True(TaxaGroupingEndpoints.NewGroupRoundTripOk(
+            updated, "aquatic-mammals", "Aquatic mammals", expectedFilterCount: 3, expectedGroupCount: 3, out var rt), rt);
+    }
+
+    [Fact]
+    public void RenderFilters_EmitsValuesAndExclude() {
+        var yaml = Filters(
+            new TaxaGroupingEndpoints.FilterSpec("class", null, new[] { "Actinopterygii", "Chondrichthyes" }, null, null),
+            new TaxaGroupingEndpoints.FilterSpec("phylum", null, null, new[] { "Chordata" }, null),
+            new TaxaGroupingEndpoints.FilterSpec(null, null, null, null, new[] { "Marine" }));
+        Assert.Contains("        values: [Actinopterygii, Chondrichthyes]", yaml);
+        Assert.Contains("        exclude: [Chordata]", yaml);
+        Assert.Contains("      - system: Marine", yaml); // single tag → singular `system:`
     }
 
     // ---- create-group: list entry append ----
