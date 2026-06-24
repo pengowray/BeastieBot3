@@ -311,6 +311,12 @@ internal sealed class WikipediaListDefinitionLoader {
             case "combined-threatened":
             case "combined":
                 return new List<string> { "threatened", "nt", "dd", "lc", "ew", "ex" };
+            // "merged" goes one step further than combined-threatened: it ALSO folds the two
+            // extinction pages (ex + ew) into a single "extinct-combined" page. Net: one threatened
+            // page, one extinction page, and separate nt/dd/lc. This is the "fewest reader-friendly
+            // pages" option (CR/EN/VU together, EX/EW/PE/PEW together).
+            case "merged":
+                return new List<string> { "extinct-combined", "threatened", "nt", "dd", "lc" };
             case "all-status":
             case "single":
                 return new List<string> { "all-status" };
@@ -369,6 +375,7 @@ internal sealed class WikipediaListDefinitionRaw {
     // Tuning shorthand: when set, determines which preset pages this group fans out to (overrides
     // `presets`). Values: "separate" (one page per category: cr/en/vu/nt/dd/lc/ew/ex),
     // "combined-threatened" (one "threatened" page instead of cr/en/vu, + nt/dd/lc/ew/ex),
+    // "merged" (threatened page + ONE extinct-combined page for ex/ew/pe/pew, + nt/dd/lc),
     // "all-status" (a single page covering all categories). Lets a group be retuned from
     // thin per-category slices toward fewer combined pages without hand-editing the preset list.
     public string? CategorySplit { get; init; }

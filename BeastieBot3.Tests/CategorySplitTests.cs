@@ -12,6 +12,13 @@ public class CategorySplitTests {
     }
 
     [Fact]
+    public void Merged_FoldsExtinctionIntoOneExtinctCombinedPage() {
+        var presets = WikipediaListDefinitionLoader.ResolveEffectivePresets(
+            new WikipediaListDefinitionRaw { TaxaGroup = "plants", CategorySplit = "merged" });
+        Assert.Equal(new[] { "extinct-combined", "threatened", "nt", "dd", "lc" }, presets);
+    }
+
+    [Fact]
     public void Separate_IsOnePagePerCategory() {
         var presets = WikipediaListDefinitionLoader.ResolveEffectivePresets(
             new WikipediaListDefinitionRaw { CategorySplit = "separate" });

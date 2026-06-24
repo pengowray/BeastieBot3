@@ -137,7 +137,7 @@ public static class TaxaGroupingEndpoints {
 
             if (!string.IsNullOrWhiteSpace(req.CategorySplit)) {
                 var split = req.CategorySplit!.Trim();
-                var allowed = new[] { "default", "separate", "combined-threatened", "all-status" };
+                var allowed = new[] { "default", "separate", "combined-threatened", "merged", "all-status" };
                 if (!allowed.Contains(split))
                     return Results.BadRequest(new { error = $"categorySplit must be one of: {string.Join(", ", allowed)}" });
                 var file = Path.Combine(loc.DraftRoot, "wikipedia-lists.yml");
@@ -157,6 +157,92 @@ public static class TaxaGroupingEndpoints {
             if (changed.Count == 0)
                 return Results.BadRequest(new { error = "Provide sizeBudgetMaxEntries and/or categorySplit." });
             return Results.Json(new { group = req.Group, changed }, JsonOpts);
+        });
+
+        // Create a brand-new taxa-group from a single taxonomic rank+value (e.g. a class like
+        // MAGNOLIOPSIDA), optionally inheriting the parent group's kingdom filter, and wire it up with
+        // a list entry so it actually generates pages. Two conservative draft writes (taxa-groups.yml
+        // group block + wikipedia-lists.yml list entry), each guarded by a round-trip parse — never
+        // writes a file it can't re-read. The user reviews via the Rules-editor diff and Applies.
+        app.MapPost("/api/grouping/create-group", async (HttpContext ctx, PathsService paths) => {
+            var req = await JsonSerializer.DeserializeAsync<CreateGroupRequest>(ctx.Request.Body, JsonOpts).ConfigureAwait(false);
+            if (req is null) return Results.BadRequest(new { error = "request body required" });
+
+            var key = (req.Key ?? "").Trim();
+            if (!Regex.IsMatch(key, "^[a-z0-9][a-z0-9-]*$"))
+                return Results.BadRequest(new { error = "key must be a lowercase slug (a-z, 0-9, hyphen), e.g. 'magnoliopsida'" });
+            var name = (req.Name ?? "").Trim();
+            if (name.Length == 0)
+                return Results.BadRequest(new { error = "name is required" });
+            var rank = (req.Rank ?? "").Trim().ToLowerInvariant();
+            if (TaxonFilterSql.ResolveColumn(rank) is null)
+                return Results.BadRequest(new { error = "rank must be one of kingdom, phylum, class, order, family, genus" });
+            var value = (req.Value ?? "").Trim();
+            if (value.Length == 0)
+                return Results.BadRequest(new { error = "value is required (the taxon name at that rank, e.g. MAGNOLIOPSIDA)" });
+
+            var listingStyle = string.IsNullOrWhiteSpace(req.ListingStyle) ? null : req.ListingStyle!.Trim();
+            var allowedStyles = new[] { "CommonNameFocus", "ScientificNameFocus", "CommonNameOnly" };
+            if (listingStyle != null && !allowedStyles.Contains(listingStyle))
+                return Results.BadRequest(new { error = $"listingStyle must be one of: {string.Join(", ", allowedStyles)}" });
+
+            // Page plan: an explicit presets array wins; otherwise a category_split bundle; default 'merged'.
+            var presets = (req.Presets ?? Array.Empty<string>())
+                .Select(p => p.Trim()).Where(p => p.Length > 0).ToList();
+            var split = string.IsNullOrWhiteSpace(req.CategorySplit) ? null : req.CategorySplit!.Trim().ToLowerInvariant();
+            var allowedSplits = new[] { "separate", "combined-threatened", "merged", "all-status" };
+            if (split != null && !allowedSplits.Contains(split))
+                return Results.BadRequest(new { error = $"categorySplit must be one of: {string.Join(", ", allowedSplits)}" });
+            if (presets.Count == 0 && split == null) split = "merged"; // sensible default → actually generates pages
+
+            var loc = RulesPaths.Resolve(paths);
+            EnsureSeeded(loc);
+            var groupsFile = Path.Combine(loc.DraftRoot, "taxa-groups.yml");
+            var listsFile = Path.Combine(loc.DraftRoot, "wikipedia-lists.yml");
+            if (!File.Exists(groupsFile))
+                return Results.NotFound(new { error = "draft taxa-groups.yml not found" });
+
+            var existing = LoadDraftGroups(paths, out _);
+            if (existing.ContainsKey(key))
+                return Results.Conflict(new { error = $"Group '{key}' already exists. Pick a different key, or edit it in the rules editor." });
+
+            // Inherit the parent's kingdom filter (so a class-level sub-taxon is scoped to its kingdom,
+            // exactly like conifers = Plantae + Pinopsida). Skip if the new filter IS the kingdom rank.
+            string? kingdom = null;
+            if (!string.IsNullOrWhiteSpace(req.ParentGroup)
+                && existing.TryGetValue(req.ParentGroup!.Trim(), out var parent) && rank != "kingdom") {
+                kingdom = parent.Filters?
+                    .FirstOrDefault(f => string.Equals(f.Rank?.Trim(), "kingdom", StringComparison.OrdinalIgnoreCase))?.Value;
+            }
+            var filterCount = (kingdom is null ? 0 : 1) + 1;
+
+            var groupsOriginal = File.ReadAllText(groupsFile);
+            var block = BuildGroupBlock(groupsOriginal, key, name, req.Adjective, listingStyle, kingdom, rank, value);
+            if (!TryAppendGroupBlock(groupsOriginal, block, out var groupsUpdated, out var gErr))
+                return Results.BadRequest(new { error = gErr, hint = "Add the group directly in the rules editor textarea instead." });
+            if (!NewGroupRoundTripOk(groupsUpdated, key, name, filterCount, existing.Count + 1, out var gRt))
+                return Results.BadRequest(new { error = gRt, hint = "Add the group directly in the rules editor textarea instead." });
+            File.WriteAllText(groupsFile, groupsUpdated);
+            var changedFiles = new List<string> { "taxa-groups.yml" };
+
+            // Wire a list entry so the new group actually fans out to pages.
+            if (File.Exists(listsFile)) {
+                var listsOriginal = File.ReadAllText(listsFile);
+                if (!ListEntryExists(listsOriginal, key)
+                    && TryAppendTaxaGroupListEntry(listsOriginal, key, split, presets, out var listsUpdated, out _)
+                    && ListEntryRoundTripOk(listsUpdated, key, split, presets)) {
+                    File.WriteAllText(listsFile, listsUpdated);
+                    changedFiles.Add("wikipedia-lists.yml");
+                }
+            }
+
+            return Results.Json(new {
+                group = key,
+                changed = changedFiles,
+                pagePlan = split ?? string.Join(", ", presets),
+                hint = "Review the diff in the Rules editor → Apply to source. To break this out from a parent list, "
+                     + "select the parent + this rank above, Show counts, tick it, and Save sub-groups.",
+            }, JsonOpts);
         });
     }
 
@@ -425,6 +511,127 @@ public static class TaxaGroupingEndpoints {
             error = $"Rewritten YAML did not parse: {ex.Message}";
             return false;
         }
+    }
+
+    // ---- create-group: new group block + list entry (conservative append + round-trip guard) ----
+
+    // Build a YAML group block matching the hand-authored style (see conifers/cycads): a 2-space
+    // group key, double-quoted name/adjective, optional display.listing_style, and a filters list
+    // (inherited kingdom first, then the chosen rank/value). Leads with a blank line for separation.
+    internal static string BuildGroupBlock(
+        string yaml, string key, string name, string? adjective, string? listingStyle,
+        string? kingdom, string rank, string value) {
+        var nl = yaml.Contains("\r\n") ? "\r\n" : "\n";
+        string Q(string s) => "\"" + s.Replace("\\", "\\\\").Replace("\"", "\\\"") + "\"";
+        var sb = new StringBuilder();
+        sb.Append(nl);
+        sb.Append("  ").Append(key).Append(':').Append(nl);
+        sb.Append("    name: ").Append(Q(name)).Append(nl);
+        if (!string.IsNullOrWhiteSpace(adjective))
+            sb.Append("    adjective: ").Append(Q(adjective!.Trim())).Append(nl);
+        if (!string.IsNullOrWhiteSpace(listingStyle)) {
+            sb.Append("    display:").Append(nl);
+            sb.Append("      listing_style: ").Append(listingStyle).Append(nl);
+        }
+        sb.Append("    filters:").Append(nl);
+        if (!string.IsNullOrWhiteSpace(kingdom)) {
+            sb.Append("      - rank: kingdom").Append(nl);
+            sb.Append("        value: ").Append(kingdom!.Trim()).Append(nl);
+        }
+        sb.Append("      - rank: ").Append(rank).Append(nl);
+        sb.Append("        value: ").Append(value).Append(nl);
+        return sb.ToString();
+    }
+
+    // Append a pre-built group block to the end of the groups map. Insertion only — never touches
+    // existing lines, so comments + custom_groups elsewhere are preserved byte-for-byte.
+    internal static bool TryAppendGroupBlock(string yaml, string block, out string updated, out string error) {
+        error = "";
+        var nl = yaml.Contains("\r\n") ? "\r\n" : "\n";
+        updated = (yaml.Length == 0 || yaml.EndsWith("\n") ? yaml : yaml + nl) + block;
+        if (!updated.EndsWith("\n")) updated += nl;
+        return true;
+    }
+
+    // Round-trip: the rewritten taxa-groups.yml must re-parse, contain exactly one MORE group (the new
+    // one) with the expected name + filter count, and lose none of the prior groups.
+    internal static bool NewGroupRoundTripOk(
+        string updated, string key, string expectedName, int expectedFilterCount, int expectedGroupCount, out string error) {
+        error = "";
+        try {
+            var de = new DeserializerBuilder()
+                .IgnoreUnmatchedProperties()
+                .WithNamingConvention(UnderscoredNamingConvention.Instance)
+                .Build();
+            var file = de.Deserialize<TaxaGroupsFile>(updated);
+            if (file?.Groups is null) { error = "Rewritten YAML did not parse."; return false; }
+            if (file.Groups.Count != expectedGroupCount) {
+                error = $"Group count changed unexpectedly (got {file.Groups.Count}, expected {expectedGroupCount}).";
+                return false;
+            }
+            if (!file.Groups.TryGetValue(key, out var g)) { error = $"New group '{key}' missing after write."; return false; }
+            if (!string.Equals(g.Name, expectedName, StringComparison.Ordinal)) {
+                error = $"New group name mismatch (got '{g.Name}').";
+                return false;
+            }
+            if ((g.Filters?.Count ?? 0) != expectedFilterCount) {
+                error = $"New group filter count mismatch (got {g.Filters?.Count ?? 0}, expected {expectedFilterCount}).";
+                return false;
+            }
+            return true;
+        } catch (Exception ex) {
+            error = $"Round-trip parse failed: {ex.Message}";
+            return false;
+        }
+    }
+
+    internal static bool ListEntryExists(string yaml, string key) =>
+        Regex.IsMatch(yaml, $@"^\s*-\s+taxa_group:\s*{Regex.Escape(key)}\s*$", RegexOptions.Multiline);
+
+    // Append a `- taxa_group: <key>` entry (with a category_split bundle OR an explicit presets array)
+    // to the end of the lists: sequence. Insertion only.
+    internal static bool TryAppendTaxaGroupListEntry(
+        string yaml, string key, string? categorySplit, List<string> presets, out string updated, out string error) {
+        error = "";
+        var nl = yaml.Contains("\r\n") ? "\r\n" : "\n";
+        var sb = new StringBuilder(yaml.Length == 0 || yaml.EndsWith("\n") ? yaml : yaml + nl);
+        sb.Append(nl);
+        sb.Append("  - taxa_group: ").Append(key).Append(nl);
+        if (!string.IsNullOrWhiteSpace(categorySplit))
+            sb.Append("    category_split: ").Append(categorySplit).Append(nl);
+        else
+            sb.Append("    presets: [").Append(string.Join(", ", presets)).Append(']').Append(nl);
+        updated = sb.ToString();
+        return true;
+    }
+
+    internal static bool ListEntryRoundTripOk(string updated, string key, string? categorySplit, List<string> presets) {
+        try {
+            var de = new DeserializerBuilder()
+                .IgnoreUnmatchedProperties()
+                .WithNamingConvention(UnderscoredNamingConvention.Instance)
+                .Build();
+            var raw = de.Deserialize<WikipediaListConfigRaw>(updated);
+            var entry = raw?.Lists?.FirstOrDefault(l => string.Equals(l.TaxaGroup, key, StringComparison.OrdinalIgnoreCase));
+            if (entry is null) return false;
+            if (!string.IsNullOrWhiteSpace(categorySplit))
+                return string.Equals(entry.CategorySplit?.Trim(), categorySplit, StringComparison.OrdinalIgnoreCase);
+            return entry.Presets != null && entry.Presets.SequenceEqual(presets);
+        } catch {
+            return false;
+        }
+    }
+
+    private sealed class CreateGroupRequest {
+        public string? Key { get; set; }
+        public string? Name { get; set; }
+        public string? Adjective { get; set; }
+        public string? ListingStyle { get; set; }
+        public string? ParentGroup { get; set; }
+        public string? Rank { get; set; }
+        public string? Value { get; set; }
+        public string? CategorySplit { get; set; }
+        public string[]? Presets { get; set; }
     }
 
     private sealed class ChildrenRequest {

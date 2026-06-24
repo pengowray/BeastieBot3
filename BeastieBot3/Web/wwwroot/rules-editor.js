@@ -216,6 +216,7 @@
       + splitOpt('default', 'default (per-status pages)')
       + splitOpt('separate', 'separate')
       + splitOpt('combined-threatened', 'combined-threatened')
+      + splitOpt('merged', 'merged (threatened + extinct combined)')
       + splitOpt('all-status', 'all-status') + `</select></label>`
       + `<button class="ghost xsmall" data-save-knobs>Save knobs to draft</button>`
       + `<button class="ghost xsmall" data-regen-group title="Run generate-lists for this taxa group from source rules (Apply your draft first)">Regenerate group</button></div>`;
@@ -240,11 +241,71 @@
       const cb = r.existingGroup
         ? `<input type="checkbox" class="grp-child" value="${esc(r.existingGroup)}" ${r.isChild ? 'checked' : ''}>`
         : '';
+      // Rows without a matching taxa-group get a "＋ define" button that pre-fills the create panel.
+      const grpCell = r.existingGroup
+        ? esc(r.existingGroup)
+        : `<button class="ghost xsmall" data-make-group="${esc(r.key)}" title="Define a new taxa-group for ${esc(r.key)}">＋ define</button>`;
       const cells = r.counts.map((c) => `<td>${c}</td>`).join('');
-      return `<tr><td>${cb}</td><td>${esc(r.key)}</td><td>${esc(r.existingGroup || '')}</td>${cells}<td><strong>${r.total}</strong></td></tr>`;
+      return `<tr><td>${cb}</td><td>${esc(r.key)}</td><td>${grpCell}</td>${cells}<td><strong>${r.total}</strong></td></tr>`;
     });
     $('#grp-counts').innerHTML =
       `<table><thead><tr>${head.map((h) => `<th>${esc(h)}</th>`).join('')}</tr></thead><tbody>${rows.join('')}</tbody></table>`;
+  }
+
+  // Pre-fill the "Define a new sub-group" panel from a counts-table row (rank = current child rank,
+  // value = the sub-taxon name) and suggest a key/name. Opens the panel and focuses the key field.
+  function prefillCreate(value) {
+    const panel = $('#grp-create');
+    if (!panel) return;
+    panel.open = true;
+    $('#cg-rank').value = $('#grp-rank').value;
+    $('#cg-value').value = value || '';
+    const slug = (value || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
+    if (!$('#cg-key').value) $('#cg-key').value = slug;
+    if (!$('#cg-name').value && value) {
+      $('#cg-name').value = value.charAt(0).toUpperCase() + value.slice(1).toLowerCase();
+    }
+    $('#cg-key').focus();
+  }
+
+  function onCountsClick(ev) {
+    const mk = ev.target.closest('[data-make-group]');
+    if (mk) prefillCreate(mk.getAttribute('data-make-group'));
+  }
+
+  // Create a brand-new taxa-group (+ its list entry) in the draft, then refresh so it shows up as a
+  // tickable sub-group of the selected parent.
+  async function createGroup() {
+    const key = $('#cg-key').value.trim();
+    const value = $('#cg-value').value.trim();
+    if (!key || !$('#cg-name').value.trim() || !value) {
+      $('#cg-msg').textContent = 'Key, Name and Value are required.';
+      return;
+    }
+    const body = {
+      key,
+      name: $('#cg-name').value.trim(),
+      adjective: $('#cg-adj').value.trim() || null,
+      listingStyle: $('#cg-style').value || null,
+      parentGroup: $('#grp-parent').value || null,
+      rank: $('#cg-rank').value,
+      value,
+      categorySplit: $('#cg-split').value || null,
+    };
+    $('#cg-msg').textContent = 'Creating…';
+    const { ok, data } = await postJson('/api/grouping/create-group', body);
+    if (!ok) {
+      $('#cg-msg').textContent = 'Failed: ' + (data.error || '') + (data.hint ? ' — ' + data.hint : '');
+      return;
+    }
+    $('#cg-msg').textContent =
+      `Created '${data.group}' → wrote ${(data.changed || []).join(', ')} (pages: ${data.pagePlan}). ${data.hint || ''}`;
+    // Clear the suggestion fields so the next create starts fresh.
+    ['#cg-key', '#cg-name', '#cg-adj', '#cg-value'].forEach((s) => { if ($(s)) $(s).value = ''; });
+    const parent = body.parentGroup;
+    await loadGroups();
+    if (parent) $('#grp-parent').value = parent;
+    await loadCounts();
   }
 
   async function saveChildren() {
@@ -381,6 +442,10 @@
       loadGroups();
       $('#grp-load').addEventListener('click', loadCounts);
       $('#grp-save').addEventListener('click', saveChildren);
+      // Counts table is re-rendered as innerHTML, so delegate its "＋ define" clicks from the container.
+      const counts = $('#grp-counts');
+      if (counts) counts.addEventListener('click', onCountsClick);
+      if ($('#cg-create')) $('#cg-create').addEventListener('click', createGroup);
       // Impact panel is re-rendered as innerHTML, so delegate its button clicks from the container.
       const imp = $('#grp-impact');
       if (imp) imp.addEventListener('click', onImpactClick);

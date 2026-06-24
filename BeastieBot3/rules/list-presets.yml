@@ -41,6 +41,36 @@ presets:
           - code: EW
           - code: "CR(PEW)"
 
+  # extinct-combined: ONE page covering every "gone or nearly gone" status — Extinct (EX),
+  # Extinct in the Wild (EW), and Possibly Extinct (CR(PE)/CR(PEW)) — in separate sections.
+  # Use this when you want a single extinction page instead of split `ex` + `ew` pages. The
+  # PE/PEW species here intentionally also appear on the group's threatened list (overlap is fine).
+  extinct-combined:
+    name: "Extinct and possibly extinct"
+    status_text: "extinct"
+    status_wiki_link: "[[Extinction|extinct]]"
+    description_template: "{taxa_adjective} species, subspecies, and subpopulations assessed as Extinct (EX), Extinct in the Wild (EW), or flagged as possibly extinct."
+    title_template: "List of recently extinct {taxa_name_lower}"
+    output_template: "List_of_recently_extinct_{taxa_slug}.wikitext"
+    templates:
+      header: status-ex
+      footer: references-short
+    sections:
+      - key: extinct
+        heading: "Extinct species and subspecies"
+        statuses:
+          - code: EX
+      - key: extinct-in-the-wild
+        heading: "Extinct in the wild"
+        statuses:
+          - code: EW
+      - key: possibly-extinct
+        heading: "Possibly extinct"
+        description: "Listed by the IUCN as Critically Endangered (Possibly Extinct)."
+        statuses:
+          - code: "CR(PE)"
+          - code: "CR(PEW)"
+
   # ==================== SINGLE STATUS LISTS ====================
   # These lists show only one status category
 

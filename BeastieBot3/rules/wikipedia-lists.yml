@@ -103,17 +103,24 @@ lists:
   - taxa_group: fish
     presets: [threatened, cr, en, vu, nt, dd, lc, ex]
 
-  # ==================== PLANTS ====================
+  # ==================== PLANTS (parent: merged top-level + per-class breakouts) ====================
+  # merged -> extinct-combined, threatened, nt, dd, lc (CR/EN/VU never split; EX/EW/PE/PEW on one page).
+  # plants-threatened / plants-lc become parent pages that break out the dicot/monocot sub-lists.
   - taxa_group: plants
-    presets: [threatened, cr, en, vu, nt, dd, lc, ew, ex]
+    category_split: merged
+  - taxa_group: magnoliopsida
+    presets: [threatened, lc]
+  - taxa_group: liliopsida
+    presets: [threatened]
+  - taxa_group: bryopsida
+    category_split: all-status
 
-  # ==================== CONIFERS ====================
+  # ==================== CONIFERS / CYCADS (complete-by-status pages) ====================
   - taxa_group: conifers
-    presets: [threatened, cr, en, vu, nt, dd, lc, ex]
+    category_split: all-status
 
-  # ==================== CYCADS ====================
   - taxa_group: cycads
-    presets: [threatened, cr, en, vu, nt, dd, lc, ex]
+    category_split: all-status
 
   # ==================== CHROMISTA ====================
   - taxa_group: chromista

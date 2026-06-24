@@ -194,6 +194,53 @@
         </div>
         <p class="muted small" id="grp-msg"></p>
         <div id="grp-counts"></div>
+
+        <details id="grp-create" class="grp-create">
+          <summary>Define a new sub-group (e.g. a class like MAGNOLIOPSIDA)</summary>
+          <p class="muted small">
+            Creates a new taxa-group scoped to one rank + value (inheriting the selected parent's
+            kingdom), plus a list entry so it generates pages. Written to the <strong>draft</strong> —
+            review the diff and Apply in the Rules editor. Tip: click <em>＋ define</em> on a sub-taxon
+            row above to pre-fill this from its name.
+          </p>
+          <div class="filter-bar">
+            <label>Key <input id="cg-key" placeholder="magnoliopsida"></label>
+            <label>Name <input id="cg-name" placeholder="Dicotyledons"></label>
+            <label>Adjective <input id="cg-adj" placeholder="dicot"></label>
+          </div>
+          <div class="filter-bar">
+            <label>Rank
+              <select id="cg-rank">
+                <option value="class" selected>class</option>
+                <option value="order">order</option>
+                <option value="family">family</option>
+                <option value="genus">genus</option>
+                <option value="phylum">phylum</option>
+                <option value="kingdom">kingdom</option>
+              </select>
+            </label>
+            <label>Value <input id="cg-value" placeholder="MAGNOLIOPSIDA"></label>
+            <label>Listing style
+              <select id="cg-style">
+                <option value="" selected>(inherit default)</option>
+                <option value="ScientificNameFocus">ScientificNameFocus</option>
+                <option value="CommonNameFocus">CommonNameFocus</option>
+                <option value="CommonNameOnly">CommonNameOnly</option>
+              </select>
+            </label>
+            <label>Pages
+              <select id="cg-split">
+                <option value="merged" selected>merged (threatened + extinct combined)</option>
+                <option value="combined-threatened">combined-threatened</option>
+                <option value="separate">separate (one page per status)</option>
+                <option value="all-status">all-status (single page)</option>
+              </select>
+            </label>
+            <button id="cg-create" class="ghost">Create sub-group</button>
+          </div>
+          <p class="muted small" id="cg-msg"></p>
+        </details>
+
         <div id="grp-impact" class="grp-impact"></div>
       </section>
     </section>

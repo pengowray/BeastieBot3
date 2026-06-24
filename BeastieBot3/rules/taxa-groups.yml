@@ -297,6 +297,42 @@ groups:
     filters:
       - rank: kingdom
         value: Plantae
+    # Parent breakouts: the threatened/lc plant pages link DOWN to the dicot/monocot sub-lists.
+    children: [magnoliopsida, liliopsida]
+
+  # Flowering plants split into the two big classes so the huge threatened list can break out by class.
+  magnoliopsida:
+    name: "Dicotyledons"
+    adjective: "dicot"
+    display:
+      listing_style: ScientificNameFocus
+    filters:
+      - rank: kingdom
+        value: Plantae
+      - rank: class
+        value: MAGNOLIOPSIDA
+
+  liliopsida:
+    name: "Monocotyledons"
+    adjective: "monocot"
+    display:
+      listing_style: ScientificNameFocus
+    filters:
+      - rank: kingdom
+        value: Plantae
+      - rank: class
+        value: LILIOPSIDA
+
+  bryopsida:
+    name: "Mosses"
+    adjective: "moss"
+    display:
+      listing_style: ScientificNameFocus
+    filters:
+      - rank: kingdom
+        value: Plantae
+      - rank: class
+        value: BRYOPSIDA
 
   conifers:
     name: "Conifers"
