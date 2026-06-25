@@ -36,6 +36,11 @@ namespace BeastieBot3.Configuration;
 
         public string? GetIucnApiCachePath() => _reader.Get("Datastore:IUCN_api_cache_sqlite");
 
+        // Australian SPRAT (EPBC) dataset: source report CSV and derived SQLite.
+        public string? GetSpratCsvPath() => _reader.Get("Datasets:SPRAT_csv");
+
+        public string? GetSpratDatabasePath() => _reader.Get("Datastore:SPRAT_sqlite");
+
         // Derived CSV-shaped projection of the API cache (built by `iucn api project-view`).
         public string? GetIucnApiProjectedPath() => _reader.Get("Datastore:IUCN_api_projected_sqlite");
 
@@ -84,6 +89,29 @@ namespace BeastieBot3.Configuration;
             }
             catch (Exception ex) {
                 throw new InvalidOperationException($"Failed to resolve database path {configuredPath}: {ex.Message}", ex);
+            }
+        }
+
+        public string ResolveSpratDatabasePath(string? overridePath) {
+            var configuredPath = !string.IsNullOrWhiteSpace(overridePath)
+                ? overridePath
+                : GetSpratDatabasePath();
+
+            if (string.IsNullOrWhiteSpace(configuredPath)) {
+                // Default to the datastore directory if not explicitly configured.
+                var datastoreDir = GetDatastoreDir();
+                if (!string.IsNullOrWhiteSpace(datastoreDir)) {
+                    configuredPath = Path.Combine(datastoreDir, "sprat.sqlite");
+                } else {
+                    throw new InvalidOperationException($"SPRAT SQLite database path is not configured. Set Datastore:SPRAT_sqlite or pass --database.\n[using ini-file: '{_reader.SourceFilePath}']");
+                }
+            }
+
+            try {
+                return Path.GetFullPath(configuredPath);
+            }
+            catch (Exception ex) {
+                throw new InvalidOperationException($"Failed to resolve SPRAT database path {configuredPath}: {ex.Message}", ex);
             }
         }
 
