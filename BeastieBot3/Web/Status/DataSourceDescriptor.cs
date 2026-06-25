@@ -43,6 +43,17 @@ public static class DataSourceCatalogue {
             ResolvePath = p => p.GetColDir(),
         },
         new DataSourceDescriptor {
+            Id = "sprat-input",
+            Name = "SPRAT (EPBC) input",
+            Kind = "directory",
+            Description = "Folder holding the Australian SPRAT report CSV that `sprat import` ingests.",
+            // SPRAT is configured as a single CSV file; show its containing folder (the status
+            // dashboard renders directories, not individual files).
+            ResolvePath = p => p.GetSpratCsvPath() is { Length: > 0 } csv
+                ? Path.GetDirectoryName(Path.GetFullPath(csv))
+                : null,
+        },
+        new DataSourceDescriptor {
             Id = "iucn-main",
             Name = "IUCN Red List database",
             Kind = "sqlite",
@@ -122,6 +133,20 @@ public static class DataSourceCatalogue {
             Metrics = new[] {
                 new MetricSpec { Label = "name usages",      Sql = "SELECT COUNT(*) FROM nameusage" },
                 new MetricSpec { Label = "vernacular names", Sql = "SELECT COUNT(*) FROM vernacularname" },
+            },
+        },
+        new DataSourceDescriptor {
+            Id = "sprat-sqlite",
+            Name = "SPRAT (EPBC) database",
+            Kind = "sqlite",
+            Description = "Australian EPBC + state/territory + IUCN species statuses, imported from the SPRAT report CSV via `sprat import`.",
+            ResolvePath = p => p.GetSpratDatabasePath(),
+            Metrics = new[] {
+                new MetricSpec { Label = "species", Sql = "SELECT COUNT(*) FROM sprat_species" },
+                new MetricSpec {
+                    Label = "EPBC threatened",
+                    Sql = "SELECT COUNT(*) FROM sprat_species WHERE epbc_status IN ('Critically Endangered','Endangered','Vulnerable')",
+                },
             },
         },
         new DataSourceDescriptor {

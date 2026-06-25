@@ -304,6 +304,42 @@ public static class FlowCatalogue {
         },
 
         // ---------------------------------------------------------------
+        // Australia (SPRAT): a self-contained pipeline — import the EPBC
+        // report CSV, then generate the "threatened <group> of Australia"
+        // lists. Independent of the IUCN dataset (SPRAT carries its own IUCN
+        // status column); the common-names hub is an optional enrichment.
+        // ---------------------------------------------------------------
+        new FlowDefinition {
+            Id = "sprat-australia",
+            Title = "Australian threatened-species lists (SPRAT)",
+            Description = "Import the Australian Government's SPRAT (Species Profile and Threats Database) report and generate \"List of threatened <group> of Australia\" wikitext pages. Membership spans the EPBC Act, the IUCN Red List, and the eight state/territory acts, and every entry shows its status under each system. A self-contained pipeline — it does not need the IUCN import.",
+            Steps = new[] {
+                new FlowStep {
+                    Id = "sprat-import",
+                    Title = "Import the SPRAT report CSV",
+                    Description = "Load the SPRAT \"Select All\" report CSV (EPBC + state/territory + IUCN statuses, taxonomy, presence) into a local SQLite database.",
+                    Commands = new[] { "sprat import" },
+                    InputSourceIds = new[] { "sprat-input" },
+                    OutputSourceIds = new[] { "sprat-sqlite" },
+                    Note = "The CSV is downloaded manually from environment.gov.au/sprat-public (Select All for every field). A completed database is skipped unless --force; after a fresh download, point Datasets:SPRAT_csv at it and re-run.",
+                },
+                new FlowStep {
+                    Id = "sprat-generate",
+                    Title = "Generate the Australia lists",
+                    Description = "Produce one \"List of threatened <group> of Australia\" wikitext page per major taxonomic group (mammals, birds, fish, invertebrates; dicots by order, monocots, ferns and other plants).",
+                    Commands = new[] { "sprat generate-lists" },
+                    InputSourceIds = new[] { "sprat-sqlite", "common-names", "wikipedia-cache" },
+                    OutputSourceIds = Array.Empty<string>(),
+                    Note = "SPRAT is the data source — no IUCN import required. The common-names hub and Wikipedia cache are optional: when present they supply real Wikipedia article links and conventionally-cased common names; otherwise SPRAT's own vernaculars are used. Output lands in the wikipedia output dir's australia/ subfolder.",
+                },
+            },
+            Outputs = new[] {
+                new FlowResource { Label = "Australia lists", Root = "wikipedia-output", Path = "australia", Kind = "directory",
+                    Description = "Generated \"List of threatened <group> of Australia\" wikitext files." },
+            },
+        },
+
+        // ---------------------------------------------------------------
         // Wiki/Wikidata Quality: curated grouping of report commands that
         // surface coverage gaps, freshness, sitelink mismatches.
         // ---------------------------------------------------------------
