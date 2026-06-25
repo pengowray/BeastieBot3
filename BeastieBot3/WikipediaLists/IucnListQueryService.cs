@@ -251,10 +251,12 @@ internal sealed record IucnSpeciesRecord(
     string? PossiblyExtinctInTheWild,
     string? YearPublished,
     // Optional display overrides used by non-IUCN sources (e.g. SPRAT/EPBC Australia lists) that
-    // flow records through the shared renderer. Both default to null, so IUCN-sourced records and
+    // flow records through the shared renderer. All default to null, so IUCN-sourced records and
     // every existing call site are unaffected. CommonNameOverride supplies a vernacular name when no
-    // provider resolves one; StatusAnnotation is appended verbatim to the bullet line (e.g. the
-    // multi-system "— EPBC: CR; IUCN: CR; WA: CR" annotation).
+    // provider resolves one; ArticleTitleOverride supplies the Wikipedia article link target when no
+    // provider is wired (e.g. a hub-resolved title for a SPRAT taxon); StatusAnnotation is appended
+    // verbatim to the bullet line (e.g. the multi-system "— EPBC: CR; IUCN: CR; WA: CR" annotation).
     string? CommonNameOverride = null,
-    string? StatusAnnotation = null
+    string? StatusAnnotation = null,
+    string? ArticleTitleOverride = null
 );

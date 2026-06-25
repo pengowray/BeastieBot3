@@ -497,6 +497,11 @@ internal sealed class SpeciesLineFormatter {
     /// Resolve the Wikipedia article title for a record.
     /// </summary>
     private string? ResolveWikipediaArticle(IucnSpeciesRecord record) {
+        // A title resolved by the source itself (e.g. a SPRAT taxon's hub-resolved article title).
+        if (!string.IsNullOrWhiteSpace(record.ArticleTitleOverride)) {
+            return record.ArticleTitleOverride;
+        }
+
         // Try store-backed provider first (has Wikipedia source data)
         if (_storeBackedProvider is not null) {
             return _storeBackedProvider.GetWikipediaArticleTitle(record);

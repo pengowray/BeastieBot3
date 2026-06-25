@@ -31,6 +31,22 @@ public class SpratListTests {
         Assert.Equal(threatened, AustralianStatus.IsThreatened(raw));
     }
 
+    [Theory]
+    // Title-case SPRAT vernaculars are sentence-cased; possessive proper nouns are preserved.
+    [InlineData("Gilbert's Potoroo", "Gilbert's potoroo")]
+    [InlineData("Southern Right Whale", "Southern right whale")]
+    [InlineData("Ploughshare Wattle", "Ploughshare wattle")]
+    // A trailing region qualifier that distinguishes SPRAT subspecies is kept verbatim (not stripped).
+    [InlineData("Nabarlek (Kimberley)", "Nabarlek (Kimberley)")]
+    [InlineData("Mala (Central Australia)", "Mala (Central Australia)")]
+    public void CaseVernacular_SentenceCasesAndPreservesQualifier(string raw, string expected) {
+        // Empty caps rules → baseline behaviour (no place-name overrides), which is enough to pin the
+        // first-word-cap / possessive-preservation / qualifier-preservation contract.
+        var result = BeastieBot3.Sprat.SpratListGenerator.CaseVernacular(
+            raw, new System.Collections.Generic.Dictionary<string, string>());
+        Assert.Equal(expected, result);
+    }
+
     private static IAnsiConsole Silent() =>
         AnsiConsole.Create(new AnsiConsoleSettings {
             Ansi = AnsiSupport.No, ColorSystem = ColorSystemSupport.NoColors,

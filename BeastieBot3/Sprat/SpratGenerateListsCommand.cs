@@ -3,9 +3,13 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Threading;
+using System.Collections.Generic;
 using Spectre.Console;
 using Spectre.Console.Cli;
+using BeastieBot3.CommonNames;
 using BeastieBot3.Configuration;
+using BeastieBot3.Wikipedia;
+using BeastieBot3.WikipediaLists;
 using BeastieBot3.WikipediaLists.Legacy;
 
 // CLI entry point for the Australia threatened-species lists. Generates one
@@ -69,7 +73,20 @@ public sealed class SpratGenerateListsCommand : Command<SpratGenerateListsComman
         }
 
         using var query = new SpratListQueryService(dbPath);
-        var generator = new SpratListGenerator(query, legacyRules);
+
+        // Optional aggregated-names hub: real Wikipedia article links (#3) + conventionally-cased
+        // names for the taxa it knows; SPRAT vernaculars (sentence-cased via the hub's caps rules, #1)
+        // fill the rest. Degrades gracefully when the hub isn't built.
+        var commonNamesPath = paths.ResolveCommonNameStorePath(null);
+        using var hub = File.Exists(commonNamesPath) ? CommonNameStore.Open(commonNamesPath) : null;
+        using var wikiCache = ResolveWikiCache(paths, hub);
+        using var provider = hub is not null ? new StoreBackedCommonNameProvider(hub, wikiCache) : null;
+        IReadOnlyDictionary<string, string> capsRules = hub?.GetAllCapsRules() ?? new Dictionary<string, string>();
+        AnsiConsole.MarkupLine(hub is not null
+            ? $"[grey]Aggregated-names hub:[/] {commonNamesPath}"
+            : "[yellow]Common-names hub not found; using SPRAT vernaculars only (some links may redlink).[/]");
+
+        var generator = new SpratListGenerator(query, legacyRules, provider, capsRules);
         var datasetVersion = query.GetDatasetVersion();
         AnsiConsole.MarkupLine($"[grey]SPRAT dataset:[/] {datasetVersion}");
 
@@ -84,6 +101,14 @@ public sealed class SpratGenerateListsCommand : Command<SpratGenerateListsComman
 
         AnsiConsole.MarkupLine($"[green]Generated {results.Count} Australia list(s),[/] {results.Sum(r => r.TotalEntries)} taxa total.");
         return 0;
+    }
+
+    private static WikipediaCacheStore? ResolveWikiCache(PathsService paths, CommonNameStore? hub) {
+        if (hub is null) {
+            return null;
+        }
+        var path = paths.GetWikipediaCachePath();
+        return !string.IsNullOrWhiteSpace(path) && File.Exists(path) ? WikipediaCacheStore.Open(path) : null;
     }
 
     private static string ResolveOutputDir(PathsService paths, string? overridePath) {

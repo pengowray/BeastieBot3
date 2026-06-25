@@ -4,6 +4,7 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text;
+using BeastieBot3.CommonNames;
 using BeastieBot3.WikipediaLists;
 using BeastieBot3.WikipediaLists.Legacy;
 
@@ -20,6 +21,11 @@ namespace BeastieBot3.Sprat;
 internal sealed class SpratListGenerator {
     private readonly SpratListQueryService _query;
     private readonly SectionBodyRenderer _renderer;
+    // Optional aggregated-names hub: resolves a Wikipedia article title (real bluelinks) and a
+    // conventionally-cased vernacular for taxa it knows (mostly the IUCN-assessed ones). When absent,
+    // SPRAT's own vernacular is used, sentence-cased via the caps rules.
+    private readonly StoreBackedCommonNameProvider? _hub;
+    private readonly IReadOnlyDictionary<string, string> _capsRules;
 
     // Status sections, most-severe first.
     private static readonly string[] SectionOrder = { "CR", "EN", "VU" };
@@ -32,15 +38,24 @@ internal sealed class SpratListGenerator {
         },
     };
 
-    public SpratListGenerator(SpratListQueryService query, LegacyTaxaRuleList legacyRules) {
+    public SpratListGenerator(
+        SpratListQueryService query,
+        LegacyTaxaRuleList legacyRules,
+        StoreBackedCommonNameProvider? hub = null,
+        IReadOnlyDictionary<string, string>? capsRules = null) {
         _query = query ?? throw new ArgumentNullException(nameof(query));
+        _hub = hub;
+        _capsRules = capsRules ?? new Dictionary<string, string>();
+        // The line formatter is intentionally provider-less: SPRAT taxa carry a SPRAT id (not an IUCN
+        // sis id), so the hub is consulted by scientific name during Enrich and baked into the record
+        // as overrides, rather than via the formatter's id-keyed lookups.
         var lineFormatter = new SpeciesLineFormatter(legacyRules, storeBackedProvider: null, commonNameProvider: null);
         var headingFormatter = new HeadingFormatter(legacyRules, taxonRules: null, storeBackedProvider: null);
         _renderer = new SectionBodyRenderer(colEnricher: null, taxonRules: null, lineFormatter, headingFormatter);
     }
 
     public SpratListResult Generate(SpratListGroup group, string outputDirectory, int? limit) {
-        var records = _query.Query(group.Filter, limit);
+        var records = _query.Query(group.Filter, limit).Select(Enrich).ToList();
         var display = BuildDisplay(group.Style);
 
         var body = new StringBuilder();
@@ -69,6 +84,68 @@ internal sealed class SpratListGenerator {
         File.WriteAllText(outputPath, content.ToString());
         return new SpratListResult(group, outputPath, total);
     }
+
+    /// <summary>
+    /// Resolves a conventionally-cased common name and a Wikipedia article link target for a SPRAT
+    /// record, via the aggregated-names hub (by scientific name, since SPRAT carries no IUCN id).
+    /// Falls back to a sentence-cased SPRAT vernacular and no link override when the hub is absent or
+    /// doesn't know the taxon.
+    /// </summary>
+    private IucnSpeciesRecord Enrich(IucnSpeciesRecord r) {
+        var kingdomUpper = string.IsNullOrWhiteSpace(r.KingdomName) ? null : r.KingdomName.ToUpperInvariant();
+        var fullSci = r.ScientificNameTaxonomy;
+        var genusSpecies = !string.IsNullOrWhiteSpace(r.GenusName) && !string.IsNullOrWhiteSpace(r.SpeciesName)
+            ? $"{r.GenusName} {r.SpeciesName}"
+            : null;
+
+        // Common name: for species, prefer the hub's (Wikipedia/IUCN-sourced, conventionally cased)
+        // name. NOT for infraspecific taxa — the hub only knows the species, so it would collapse two
+        // subspecies to one shared name; keep SPRAT's subspecies-specific vernacular there instead.
+        var isInfra = !string.IsNullOrWhiteSpace(r.InfraName);
+        string? hubName = null;
+        if (_hub is not null && !isInfra && !string.IsNullOrWhiteSpace(fullSci)) {
+            hubName = _hub.GetBestCommonNameByScientificName(fullSci, kingdomUpper);
+        }
+        var common = hubName ?? CaseSpratName(r.CommonNameOverride);
+
+        // Article link target: the taxon's own article, else its parent species' article (so a
+        // subspecies/variety bluelinks to the species page rather than redlinking a trinomial).
+        string? article = null;
+        if (_hub is not null) {
+            if (!string.IsNullOrWhiteSpace(fullSci)) {
+                article = _hub.GetWikipediaArticleTitleByScientificName(fullSci, kingdomUpper);
+            }
+            if (article is null && genusSpecies is not null
+                && !string.Equals(genusSpecies, fullSci, StringComparison.OrdinalIgnoreCase)) {
+                article = _hub.GetWikipediaArticleTitleByScientificName(genusSpecies, kingdomUpper);
+            }
+        }
+
+        return r with { CommonNameOverride = common, ArticleTitleOverride = article };
+    }
+
+    private string? CaseSpratName(string? raw) => CaseVernacular(raw, _capsRules);
+
+    /// <summary>
+    /// Sentence-cases a SPRAT vernacular for display (#1), preserving proper nouns. A trailing region
+    /// qualifier like " (Kimberley)" — which distinguishes SPRAT subspecies and is NOT a Wikipedia
+    /// disambiguation suffix — is split off, kept verbatim, and re-appended, since ApplyCapitalization
+    /// would otherwise strip it.
+    /// </summary>
+    internal static string? CaseVernacular(string? raw, IReadOnlyDictionary<string, string> capsRules) {
+        if (string.IsNullOrWhiteSpace(raw)) {
+            return null;
+        }
+        var match = QualifierSuffix.Match(raw);
+        if (match.Success) {
+            var head = CommonNameNormalizer.ApplyCapitalization(match.Groups[1].Value, capsRules);
+            return $"{head} {match.Groups[2].Value.Trim()}";
+        }
+        return CommonNameNormalizer.ApplyCapitalization(raw, capsRules);
+    }
+
+    private static readonly System.Text.RegularExpressions.Regex QualifierSuffix =
+        new(@"^(.*\S)\s*(\([^)]*\))\s*$", System.Text.RegularExpressions.RegexOptions.Compiled);
 
     private static DisplayPreferences BuildDisplay(ListingStyle style) => new() {
         PreferCommonNames = style != ListingStyle.ScientificNameFocus,
