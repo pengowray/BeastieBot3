@@ -17,7 +17,9 @@ internal sealed record SpratTaxonFilter(
     string? Kingdom = null,
     IReadOnlyList<string>? Classes = null,
     IReadOnlyList<string>? ExcludeClasses = null,
-    IReadOnlyList<string>? ExcludePhyla = null);
+    IReadOnlyList<string>? ExcludePhyla = null,
+    IReadOnlyList<string>? Orders = null,
+    IReadOnlyList<string>? ExcludeOrders = null);
 
 /// <summary>One Australia list page definition.</summary>
 internal sealed record SpratListGroup(
@@ -56,10 +58,24 @@ internal static class SpratListGroups {
         new SpratListGroup("invertebrates", "invertebrates", "invertebrate", ListingStyle.ScientificNameFocus,
             new SpratTaxonFilter(Kingdom: "Animalia", ExcludePhyla: new[] { "Chordata" })),
 
-        // Plants (~4,800 members) are broken out by class: the two big flowering-plant classes get
-        // their own lists, and a catch-all carries the ferns, conifers, cycads, mosses, etc.
-        new SpratListGroup("dicots", "dicots", "dicot", ListingStyle.ScientificNameFocus,
-            new SpratTaxonFilter(Kingdom: "Plantae", Classes: new[] { "Magnoliopsida" })),
+        // Plants (~4,800 members) are broken out by class, and the big dicot class (Magnoliopsida,
+        // ~3,300) is further split by its five largest orders — all valid current orders; the many
+        // smaller (some deprecated-name) orders stay together under "other dicots" so deprecated order
+        // names never appear in a page title. Monocots and the ferns/conifers/cycads/mosses catch-all
+        // are kept whole.
+        new SpratListGroup("dicots-myrtales", "Myrtales", "Myrtales", ListingStyle.ScientificNameFocus,
+            new SpratTaxonFilter(Kingdom: "Plantae", Classes: new[] { "Magnoliopsida" }, Orders: new[] { "Myrtales" })),
+        new SpratListGroup("dicots-fabales", "Fabales", "Fabales", ListingStyle.ScientificNameFocus,
+            new SpratTaxonFilter(Kingdom: "Plantae", Classes: new[] { "Magnoliopsida" }, Orders: new[] { "Fabales" })),
+        new SpratListGroup("dicots-asterales", "Asterales", "Asterales", ListingStyle.ScientificNameFocus,
+            new SpratTaxonFilter(Kingdom: "Plantae", Classes: new[] { "Magnoliopsida" }, Orders: new[] { "Asterales" })),
+        new SpratListGroup("dicots-sapindales", "Sapindales", "Sapindales", ListingStyle.ScientificNameFocus,
+            new SpratTaxonFilter(Kingdom: "Plantae", Classes: new[] { "Magnoliopsida" }, Orders: new[] { "Sapindales" })),
+        new SpratListGroup("dicots-proteales", "Proteales", "Proteales", ListingStyle.ScientificNameFocus,
+            new SpratTaxonFilter(Kingdom: "Plantae", Classes: new[] { "Magnoliopsida" }, Orders: new[] { "Proteales" })),
+        new SpratListGroup("dicots-other", "other dicots", "dicot", ListingStyle.ScientificNameFocus,
+            new SpratTaxonFilter(Kingdom: "Plantae", Classes: new[] { "Magnoliopsida" },
+                ExcludeOrders: new[] { "Myrtales", "Fabales", "Asterales", "Sapindales", "Proteales" })),
 
         new SpratListGroup("monocots", "monocots", "monocot", ListingStyle.ScientificNameFocus,
             new SpratTaxonFilter(Kingdom: "Plantae", Classes: new[] { "Liliopsida" })),

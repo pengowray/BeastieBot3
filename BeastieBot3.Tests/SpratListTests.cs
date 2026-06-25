@@ -207,5 +207,10 @@ public class SpratListTests {
         var turtle = reptiles.Single(r => r.GenusName == "Myuchelys");
         Assert.Equal("CR", turtle.StatusCode);
         Assert.Equal("IUCN: EN; Qld: CR", turtle.StatusAnnotation);
+
+        // Orders filter restricts to one order (the three Squamata members; the Testudines turtle drops).
+        var squamates = query.Query(new SpratTaxonFilter(Kingdom: "Animalia", Classes: new[] { "Reptilia" }, Orders: new[] { "Squamata" }));
+        Assert.Equal(3, squamates.Count);
+        Assert.DoesNotContain(squamates, r => r.GenusName == "Myuchelys");
     }
 }
