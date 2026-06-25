@@ -27,8 +27,9 @@ internal sealed class SpratListGenerator {
     private readonly StoreBackedCommonNameProvider? _hub;
     private readonly IReadOnlyDictionary<string, string> _capsRules;
 
-    // Status sections, most-severe first.
-    private static readonly string[] SectionOrder = { "CR", "EN", "VU" };
+    // Status sections, most-severe first. Mirrors AustralianStatus.QualifyingBySeverity: the three
+    // threatened categories, then Near Threatened, then the state "Rare" category.
+    private static readonly string[] SectionOrder = { "CR", "EN", "VU", "NT", "Rare" };
 
     private static readonly IReadOnlyList<GroupingLevelDefinition> Grouping = new[] {
         new GroupingLevelDefinition { Level = "order", Label = "Order", UnknownLabel = "Other orders" },
@@ -168,11 +169,11 @@ internal sealed class SpratListGenerator {
         sb.AppendLine($"{{{{Use dmy dates|date={month}}}}}");
         sb.AppendLine();
         sb.Append($"This is a list of the threatened {group.TaxaName} of [[Australia]]. ");
-        sb.Append($"It covers {group.Adjective} species and infraspecific taxa assessed as [[Threatened species|threatened]] — ");
-        sb.Append("[[Critically endangered species|critically endangered]], [[Endangered species|endangered]], or [[Vulnerable species|vulnerable]] — ");
+        sb.Append($"It covers {group.Adjective} species and infraspecific taxa listed as ");
+        sb.Append("[[Critically endangered species|critically endangered]], [[Endangered species|endangered]], [[Vulnerable species|vulnerable]], [[Near-threatened species|near threatened]], or rare ");
         sb.Append("under Australia's national [[Environment Protection and Biodiversity Conservation Act 1999]] (EPBC Act)");
         sb.Append(SpratReference);
-        sb.Append(" or assessed as globally threatened on the [[IUCN Red List]]. ");
+        sb.Append(", on the [[IUCN Red List]], or under the threatened-species legislation of any Australian state or territory. ");
         sb.Append("Each entry notes the taxon's status under the EPBC Act, the IUCN Red List, and the state and territory legislation under which it is listed.");
         sb.AppendLine();
         sb.AppendLine();

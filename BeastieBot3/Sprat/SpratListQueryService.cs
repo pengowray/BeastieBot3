@@ -91,21 +91,23 @@ internal sealed class SpratListQueryService : IDisposable {
         }
 
         var epbcIdx = IndexOfSystem("epbc");
-        var iucnIdx = IndexOfSystem("iucn");
 
         var results = new List<IucnSpeciesRecord>();
         using var reader = cmd.ExecuteReader();
         while (reader.Read()) {
-            var epbc = epbcIdx >= 0 ? GetString(reader, sysOffset + epbcIdx) : null;
-            var iucn = iucnIdx >= 0 ? GetString(reader, sysOffset + iucnIdx) : null;
-
-            // Phase-1 membership: threatened under EPBC OR IUCN. Section driven by EPBC, IUCN fallback.
-            var epbcThreatened = AustralianStatus.IsThreatened(epbc);
-            var iucnThreatened = AustralianStatus.IsThreatened(iucn);
-            if (!epbcThreatened && !iucnThreatened) {
-                continue;
+            // Short code per available system, in _systems order.
+            var codes = new string?[_systems.Count];
+            for (var i = 0; i < _systems.Count; i++) {
+                codes[i] = AustralianStatus.ShortCode(GetString(reader, sysOffset + i));
             }
-            var primaryCode = epbcThreatened ? AustralianStatus.ShortCode(epbc) : AustralianStatus.ShortCode(iucn);
+
+            // Section-driving status, which also decides membership (null = no qualifying status under
+            // any system). The EPBC threatened category takes priority (the national headline);
+            // otherwise the most-severe qualifying status across IUCN and the state/territory acts.
+            var epbcCode = epbcIdx >= 0 ? codes[epbcIdx] : null;
+            var primaryCode = epbcCode is "CR" or "EN" or "VU"
+                ? epbcCode
+                : AustralianStatus.MostSevereQualifyingCode(codes);
             if (primaryCode is null) {
                 continue;
             }

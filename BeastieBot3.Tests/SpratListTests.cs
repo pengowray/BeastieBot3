@@ -137,4 +137,71 @@ public class SpratListTests {
         Assert.Equal("var.", acacia.InfraType);
         Assert.Equal("EPBC: VU", acacia.StatusAnnotation);
     }
+
+    [Fact]
+    public void AustralianStatus_QualifyingSetAndSeverity() {
+        Assert.True(AustralianStatus.IsQualifyingCode("CR"));
+        Assert.True(AustralianStatus.IsQualifyingCode("NT"));
+        Assert.True(AustralianStatus.IsQualifyingCode("Rare"));
+        Assert.False(AustralianStatus.IsQualifyingCode("LC"));
+        Assert.False(AustralianStatus.IsQualifyingCode("EX"));
+        Assert.False(AustralianStatus.IsQualifyingCode(null));
+
+        Assert.True(AustralianStatus.Severity("CR") < AustralianStatus.Severity("VU"));
+        Assert.True(AustralianStatus.Severity("VU") < AustralianStatus.Severity("NT"));
+        Assert.True(AustralianStatus.Severity("NT") < AustralianStatus.Severity("Rare"));
+
+        Assert.Equal("CR", AustralianStatus.MostSevereQualifyingCode(new[] { "Rare", "CR", "VU", null, "LC" }));
+        Assert.Equal("Rare", AustralianStatus.MostSevereQualifyingCode(new[] { "Rare", "LC", null }));
+        Assert.Null(AustralianStatus.MostSevereQualifyingCode(new[] { "LC", "EX", null }));
+    }
+
+    // Seed with Qld (Near Threatened) + SA (Rare) columns to exercise state-act membership.
+    private static SqliteConnection SeedReptilesMultiSystem() {
+        var rows = new[] {
+            "\"id\",\"sci\",\"common\",\"epbc\",\"iucn\",\"kingdom\",\"class\",\"order\",\"family\",\"genus\",\"qld\",\"sa\"",
+            "\"Taxon ID\",\"Scientific Name\",\"Common Name\",\"EPBC Threat Status\",\"IUCN Red List\",\"Kingdom\",\"Class\",\"Order\",\"Family\",\"Genus\",\"Qld NC Act\",\"SA NPW Act\"",
+            // state-only Vulnerable (Qld) -> member, section VU
+            "\"1\",\"Egernia rugosa\",\"Yakka Skink\",\"\",\"\",\"Animalia\",\"Reptilia\",\"Squamata\",\"Scincidae\",\"Egernia\",\"Vulnerable\",\"\"",
+            // state-only Near Threatened (Qld) -> member, section NT
+            "\"2\",\"Anomalopus mackayi\",\"Long-legged Worm-skink\",\"\",\"\",\"Animalia\",\"Reptilia\",\"Squamata\",\"Scincidae\",\"Anomalopus\",\"Near Threatened\",\"\"",
+            // state-only Rare (SA) -> member, section Rare
+            "\"3\",\"Tympanocryptis lineata\",\"Lined Earless Dragon\",\"\",\"\",\"Animalia\",\"Reptilia\",\"Squamata\",\"Agamidae\",\"Tympanocryptis\",\"\",\"Rare\"",
+            // IUCN Endangered + Qld Critically Endangered, no EPBC -> most-severe drives -> CR
+            "\"4\",\"Myuchelys georgesi\",\"Bellinger River Turtle\",\"\",\"Endangered\",\"Animalia\",\"Reptilia\",\"Testudines\",\"Chelidae\",\"Myuchelys\",\"Critically Endangered\",\"\"",
+            // IUCN Least Concern only, nothing else -> NOT a member
+            "\"5\",\"Christinus marmoratus\",\"Marbled Gecko\",\"\",\"Least Concern\",\"Animalia\",\"Reptilia\",\"Squamata\",\"Gekkonidae\",\"Christinus\",\"\",\"\"",
+        };
+        var path = Path.Combine(Path.GetTempPath(), $"sprat_ms_{System.Guid.NewGuid():N}.csv");
+        File.WriteAllText(path, string.Join("\n", rows), new UTF8Encoding(false));
+        var conn = new SqliteConnection("Data Source=:memory:");
+        conn.Open();
+        var store = SpratStore.OpenFromConnection(conn);
+        try {
+            new SpratImporter(Silent(), store.Connection, path, "test").Run(CancellationToken.None);
+        } finally {
+            File.Delete(path);
+        }
+        return conn;
+    }
+
+    [Fact]
+    public void Query_StateActs_WidenMembership_AndDriveSection() {
+        using var conn = SeedReptilesMultiSystem();
+        using var query = SpratListQueryService.OpenFromConnection(conn);
+
+        var reptiles = query.Query(new SpratTaxonFilter(Kingdom: "Animalia", Classes: new[] { "Reptilia" }));
+
+        // Four qualify via state acts / IUCN; the IUCN-Least-Concern-only gecko is excluded.
+        Assert.Equal(4, reptiles.Count);
+        Assert.DoesNotContain(reptiles, r => r.GenusName == "Christinus");
+
+        Assert.Equal("VU", reptiles.Single(r => r.GenusName == "Egernia").StatusCode);     // state-only VU
+        Assert.Equal("NT", reptiles.Single(r => r.GenusName == "Anomalopus").StatusCode);  // state-only NT
+        Assert.Equal("Rare", reptiles.Single(r => r.GenusName == "Tympanocryptis").StatusCode); // state-only Rare
+        // No EPBC; most-severe of IUCN EN vs Qld CR drives the section.
+        var turtle = reptiles.Single(r => r.GenusName == "Myuchelys");
+        Assert.Equal("CR", turtle.StatusCode);
+        Assert.Equal("IUCN: EN; Qld: CR", turtle.StatusAnnotation);
+    }
 }

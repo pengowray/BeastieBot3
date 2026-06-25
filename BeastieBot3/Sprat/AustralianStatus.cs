@@ -40,13 +40,43 @@ internal static class AustralianStatus {
 
     /// <summary>
     /// True when the raw status is a threatened category — Critically Endangered, Endangered, or
-    /// Vulnerable. This is the Phase-1 "threatened" definition shared by every system that gates
-    /// list membership. (Extinct/EW and the state-specific "Rare"/"Near Threatened" are deliberately
-    /// excluded for now; widen here when those systems start qualifying species.)
+    /// Vulnerable (the strict IUCN-style sense; excludes Near Threatened / Rare).
     /// </summary>
     public static bool IsThreatened(string? raw) {
         var code = ShortCode(raw);
         return code is "CR" or "EN" or "VU";
+    }
+
+    // The short codes, most-severe first, that qualify a taxon for the Australia lists: the three
+    // threatened categories plus Near Threatened and the state "Rare" category. This is the single
+    // place that defines list membership across every system (EPBC, IUCN, and the state/territory acts).
+    private static readonly string[] QualifyingBySeverity = { "CR", "EN", "VU", "NT", "Rare" };
+
+    /// <summary>True when a short code qualifies a taxon for membership (CR/EN/VU/NT/Rare).</summary>
+    public static bool IsQualifyingCode(string? code) =>
+        code is not null && Array.IndexOf(QualifyingBySeverity, code) >= 0;
+
+    /// <summary>Severity rank of a qualifying code (0 = CR, most severe). Non-qualifying → int.MaxValue.</summary>
+    public static int Severity(string? code) {
+        var i = code is null ? -1 : Array.IndexOf(QualifyingBySeverity, code);
+        return i < 0 ? int.MaxValue : i;
+    }
+
+    /// <summary>The most-severe qualifying code among the given codes, or null if none qualify.</summary>
+    public static string? MostSevereQualifyingCode(IEnumerable<string?> codes) {
+        string? best = null;
+        var bestSeverity = int.MaxValue;
+        foreach (var code in codes) {
+            if (!IsQualifyingCode(code)) {
+                continue;
+            }
+            var severity = Severity(code);
+            if (severity < bestSeverity) {
+                bestSeverity = severity;
+                best = code;
+            }
+        }
+        return best;
     }
 
     // First non-blank, paren-stripped value of a possibly comma-joined status cell.
