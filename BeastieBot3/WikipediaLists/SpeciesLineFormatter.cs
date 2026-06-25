@@ -84,6 +84,13 @@ internal sealed class SpeciesLineFormatter {
             }
         }
 
+        // A source-supplied trailing annotation (e.g. the SPRAT multi-system status string). Appended
+        // verbatim with an em-dash separator; null for IUCN-sourced records, so the line is unchanged.
+        if (!string.IsNullOrWhiteSpace(record.StatusAnnotation)) {
+            builder.Append(" — ");
+            builder.Append(record.StatusAnnotation);
+        }
+
         return builder.ToString();
     }
 
@@ -156,6 +163,13 @@ internal sealed class SpeciesLineFormatter {
                     builder.Append($" ({otherContext.RankLabel}: {displayValue})");
                 }
             }
+        }
+
+        // A source-supplied trailing annotation (e.g. the SPRAT multi-system status string). Appended
+        // verbatim with an em-dash separator; null for IUCN-sourced records, so the line is unchanged.
+        if (!string.IsNullOrWhiteSpace(record.StatusAnnotation)) {
+            builder.Append(" — ");
+            builder.Append(record.StatusAnnotation);
         }
 
         return builder.ToString();
@@ -553,7 +567,17 @@ internal sealed class SpeciesLineFormatter {
 
         // Try the new store-backed provider if available
         if (_storeBackedProvider is not null) {
-            return _storeBackedProvider.GetBestCommonName(record);
+            var resolved = _storeBackedProvider.GetBestCommonName(record);
+            if (!string.IsNullOrWhiteSpace(resolved)) {
+                return resolved;
+            }
+            // else fall through to the record's own override / legacy provider
+        }
+
+        // A name carried on the record itself (e.g. SPRAT's vernacular for an Australia list) — used
+        // when no aggregated provider resolved one, so SPRAT-only taxa still get a common name.
+        if (!string.IsNullOrWhiteSpace(record.CommonNameOverride)) {
+            return record.CommonNameOverride;
         }
 
         // Fall back to legacy provider

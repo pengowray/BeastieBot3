@@ -1,0 +1,143 @@
+using System;
+using System.Collections.Generic;
+using System.Globalization;
+using System.IO;
+using System.Linq;
+using System.Text;
+using BeastieBot3.WikipediaLists;
+using BeastieBot3.WikipediaLists.Legacy;
+
+// Generates the "List of threatened <group> of Australia" wikitext pages from SPRAT. Reuses the
+// existing taxonomy-tree renderer (SectionBodyRenderer + SpeciesLineFormatter + HeadingFormatter)
+// for the species body — taxonomy grouping, infraspecific handling, and the three listing styles —
+// but owns its own SPRAT/EPBC-flavoured intro and footer prose (the IUCN generator's IntroProseBuilder
+// is hard-wired to IUCN wording). Records arrive pre-sectioned by primary Australian status with the
+// multi-system annotation already attached (see SpratListQueryService); the IUCN {{IUCN status}}
+// template is suppressed (IncludeStatusTemplate=false) since SPRAT carries no IUCN assessment id.
+
+namespace BeastieBot3.Sprat;
+
+internal sealed class SpratListGenerator {
+    private readonly SpratListQueryService _query;
+    private readonly SectionBodyRenderer _renderer;
+
+    // Status sections, most-severe first.
+    private static readonly string[] SectionOrder = { "CR", "EN", "VU" };
+
+    private static readonly IReadOnlyList<GroupingLevelDefinition> Grouping = new[] {
+        new GroupingLevelDefinition { Level = "order", Label = "Order", UnknownLabel = "Other orders" },
+        new GroupingLevelDefinition {
+            Level = "family", Label = "Family", UnknownLabel = "Unassigned families",
+            MinItems = 5, MinGroupsForOther = 3, ShowRankLabel = true,
+        },
+    };
+
+    public SpratListGenerator(SpratListQueryService query, LegacyTaxaRuleList legacyRules) {
+        _query = query ?? throw new ArgumentNullException(nameof(query));
+        var lineFormatter = new SpeciesLineFormatter(legacyRules, storeBackedProvider: null, commonNameProvider: null);
+        var headingFormatter = new HeadingFormatter(legacyRules, taxonRules: null, storeBackedProvider: null);
+        _renderer = new SectionBodyRenderer(colEnricher: null, taxonRules: null, lineFormatter, headingFormatter);
+    }
+
+    public SpratListResult Generate(SpratListGroup group, string outputDirectory, int? limit) {
+        var records = _query.Query(group.Filter, limit);
+        var display = BuildDisplay(group.Style);
+
+        var body = new StringBuilder();
+        var total = 0;
+        foreach (var code in SectionOrder) {
+            var sectionRecords = records.Where(r => string.Equals(r.StatusCode, code, StringComparison.OrdinalIgnoreCase)).ToList();
+            if (sectionRecords.Count == 0) {
+                continue;
+            }
+            total += sectionRecords.Count;
+            var heading = IucnRedlistStatus.Describe(code).Label ?? code;
+            body.AppendLine($"== {heading} ==");
+            var (sectionBody, _) = _renderer.BuildSectionBody(sectionRecords, Grouping, display, code, customGroups: null, startHeading: 3, autoSplit: null);
+            body.AppendLine(sectionBody);
+            body.AppendLine();
+        }
+
+        var content = new StringBuilder();
+        content.AppendLine(BuildIntro(group, records));
+        content.AppendLine();
+        content.Append(body);
+        content.AppendLine(BuildFooter(group));
+
+        Directory.CreateDirectory(outputDirectory);
+        var outputPath = Path.Combine(outputDirectory, group.OutputFile);
+        File.WriteAllText(outputPath, content.ToString());
+        return new SpratListResult(group, outputPath, total);
+    }
+
+    private static DisplayPreferences BuildDisplay(ListingStyle style) => new() {
+        PreferCommonNames = style != ListingStyle.ScientificNameFocus,
+        ItalicizeScientific = true,
+        IncludeStatusTemplate = false, // SPRAT lines carry the multi-system annotation, not {{IUCN status}}
+        IncludeStatusLabel = false,
+        GroupSubspecies = true,
+        ListingStyle = style,
+        InfraspecificDisplayMode = InfraspecificDisplayMode.SeparateSections,
+        SeparateInfraspecificSections = true,
+        ExcludeRegionalAssessments = true,
+    };
+
+    private string BuildIntro(SpratListGroup group, IReadOnlyList<IucnSpeciesRecord> records) {
+        var month = DateTimeOffset.UtcNow.ToString("MMMM yyyy", CultureInfo.InvariantCulture);
+        var n = records.Count;
+        var taxaWord = n == 1 ? "taxon" : "taxa";
+
+        var sb = new StringBuilder();
+        sb.AppendLine($"{{{{Use dmy dates|date={month}}}}}");
+        sb.AppendLine();
+        sb.Append($"This is a list of the threatened {group.TaxaName} of [[Australia]]. ");
+        sb.Append($"It covers {group.Adjective} species and infraspecific taxa assessed as [[Threatened species|threatened]] — ");
+        sb.Append("[[Critically endangered species|critically endangered]], [[Endangered species|endangered]], or [[Vulnerable species|vulnerable]] — ");
+        sb.Append("under Australia's national [[Environment Protection and Biodiversity Conservation Act 1999]] (EPBC Act)");
+        sb.Append(SpratReference);
+        sb.Append(" or assessed as globally threatened on the [[IUCN Red List]]. ");
+        sb.Append("Each entry notes the taxon's status under the EPBC Act, the IUCN Red List, and the state and territory legislation under which it is listed.");
+        sb.AppendLine();
+        sb.AppendLine();
+        sb.Append($"As of {month}, this list includes {NewspaperNumber(n)} {group.Adjective} {taxaWord}.");
+        return sb.ToString();
+    }
+
+    private static string BuildFooter(SpratListGroup group) {
+        var sb = new StringBuilder();
+        sb.AppendLine("== See also ==");
+        sb.AppendLine("* [[Environment Protection and Biodiversity Conservation Act 1999]]");
+        sb.AppendLine("* [[Conservation in Australia]]");
+        sb.AppendLine("* [[IUCN Red List]]");
+        sb.AppendLine();
+        sb.AppendLine("== References ==");
+        sb.AppendLine("{{reflist}}");
+        sb.AppendLine();
+        foreach (var category in BuildCategories(group)) {
+            sb.AppendLine(category);
+        }
+        return sb.ToString().TrimEnd();
+    }
+
+    private static IEnumerable<string> BuildCategories(SpratListGroup group) {
+        yield return "[[Category:Lists of threatened species]]";
+        yield return $"[[Category:{Capitalize(group.TaxaName)} of Australia]]";
+        yield return "[[Category:Environmental lists]]";
+    }
+
+    private const string SpratReference =
+        "<ref name=\"sprat\">{{cite web |title=Species Profile and Threats Database |publisher=Department of Climate Change, Energy, the Environment and Water, Australian Government |url=https://www.environment.gov.au/sprat-public/action/report |website=environment.gov.au}}</ref>";
+
+    private static string Capitalize(string s) =>
+        string.IsNullOrEmpty(s) ? s : char.ToUpperInvariant(s[0]) + s[1..];
+
+    // Whole numbers under ten are spelled out in running prose (MOS:NUMERAL); larger numbers grouped.
+    private static string NewspaperNumber(int n) => n switch {
+        0 => "no",
+        1 => "one", 2 => "two", 3 => "three", 4 => "four", 5 => "five",
+        6 => "six", 7 => "seven", 8 => "eight", 9 => "nine",
+        _ => n.ToString("N0", CultureInfo.InvariantCulture),
+    };
+}
+
+internal sealed record SpratListResult(SpratListGroup Group, string OutputPath, int TotalEntries);
