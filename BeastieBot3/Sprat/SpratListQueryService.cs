@@ -221,12 +221,43 @@ internal sealed class SpratListQueryService : IDisposable {
         token.Length > 1 && char.IsLower(token[0]) && !token.Contains('.') && !token.Contains('(');
 
     // SPRAT often lists several vernaculars ("Ploughshare Wattle, Dog's Tooth Wattle"); take the first.
+    // Generic group labels used in place of a true vernacular are rejected (see IsGenericDescriptor).
     private static string? CleanCommonName(string? raw) {
         if (string.IsNullOrWhiteSpace(raw)) {
             return null;
         }
         var first = raw.Split(',')[0].Trim();
-        return string.IsNullOrWhiteSpace(first) ? null : first;
+        return string.IsNullOrWhiteSpace(first) || IsGenericDescriptor(first) ? null : first;
+    }
+
+    private static readonly System.Text.RegularExpressions.Regex IndefiniteArticlePhrase =
+        new(@"^an?\s", System.Text.RegularExpressions.RegexOptions.Compiled | System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
+    /// <summary>
+    /// True when a SPRAT "common name" is really a generic group label rather than a true vernacular —
+    /// e.g. "a shrub", "an orchid", "fern", "land snail", "a camaenid land snail". SPRAT writes these
+    /// all-lower-case (real vernaculars are Title Case) or as an indefinite-article phrase, so taxa
+    /// carrying one should fall back to their scientific name (or a hub-resolved name).
+    /// </summary>
+    internal static bool IsGenericDescriptor(string name) {
+        var trimmed = name.Trim();
+        if (trimmed.Length == 0) {
+            return false;
+        }
+        if (IndefiniteArticlePhrase.IsMatch(trimmed)) {
+            return true;
+        }
+        // Entirely lower-case (has letters, none upper-case) → a descriptor, not a proper name.
+        var hasLetter = false;
+        foreach (var ch in trimmed) {
+            if (char.IsLetter(ch)) {
+                if (char.IsUpper(ch)) {
+                    return false;
+                }
+                hasLetter = true;
+            }
+        }
+        return hasLetter;
     }
 
     private static void AppendWhere(StringBuilder sql, SpratTaxonFilter filter, List<SqliteParameter> parameters) {

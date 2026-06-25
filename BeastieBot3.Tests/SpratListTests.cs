@@ -47,6 +47,23 @@ public class SpratListTests {
         Assert.Equal(expected, result);
     }
 
+    [Theory]
+    // Generic SPRAT group labels (all-lowercase, or an indefinite-article phrase) are rejected…
+    [InlineData("a shrub", true)]
+    [InlineData("an orchid", true)]
+    [InlineData("a camaenid land snail", true)]
+    [InlineData("fern", true)]
+    [InlineData("land snail", true)]
+    [InlineData("peacock spider", true)]
+    // …while true (Title-cased) vernaculars are kept, including mixed-case edge cases.
+    [InlineData("Spotted-tail Quoll", false)]
+    [InlineData("Gould's Petrel", false)]
+    [InlineData("Shade Tree", false)]
+    [InlineData("thorntail Pipefish", false)]
+    public void IsGenericDescriptor_RejectsGroupLabelsKeepsVernaculars(string name, bool generic) {
+        Assert.Equal(generic, BeastieBot3.Sprat.SpratListQueryService.IsGenericDescriptor(name));
+    }
+
     private static IAnsiConsole Silent() =>
         AnsiConsole.Create(new AnsiConsoleSettings {
             Ansi = AnsiSupport.No, ColorSystem = ColorSystemSupport.NoColors,
