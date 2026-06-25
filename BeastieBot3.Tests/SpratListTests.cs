@@ -136,6 +136,10 @@ public class SpratListTests {
         Assert.Equal("minor", acacia.InfraName);
         Assert.Equal("var.", acacia.InfraType);
         Assert.Equal("EPBC: VU", acacia.StatusAnnotation);
+
+        // ExcludeClasses drops the only (Magnoliopsida) plant member → the catch-all is empty here.
+        var nonFlowering = query.Query(new SpratTaxonFilter(Kingdom: "Plantae", ExcludeClasses: new[] { "Magnoliopsida" }));
+        Assert.Empty(nonFlowering);
     }
 
     [Fact]

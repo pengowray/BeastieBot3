@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Text.RegularExpressions;
 using BeastieBot3.WikipediaLists;
 
 // The taxonomic groups the Australia threatened-species lists are generated for, Phase 1. Each
@@ -15,6 +16,7 @@ namespace BeastieBot3.Sprat;
 internal sealed record SpratTaxonFilter(
     string? Kingdom = null,
     IReadOnlyList<string>? Classes = null,
+    IReadOnlyList<string>? ExcludeClasses = null,
     IReadOnlyList<string>? ExcludePhyla = null);
 
 /// <summary>One Australia list page definition.</summary>
@@ -26,7 +28,9 @@ internal sealed record SpratListGroup(
     SpratTaxonFilter Filter) {
 
     public string Title => $"List of threatened {TaxaName} of Australia";
-    public string OutputFile => $"List_of_threatened_{TaxaName.Replace(' ', '_')}_of_Australia.wikitext";
+    public string OutputFile => $"List_of_threatened_{Slug(TaxaName)}_of_Australia.wikitext";
+
+    private static string Slug(string s) => Regex.Replace(s, "[^A-Za-z0-9]+", "_").Trim('_');
 }
 
 internal static class SpratListGroups {
@@ -52,7 +56,15 @@ internal static class SpratListGroups {
         new SpratListGroup("invertebrates", "invertebrates", "invertebrate", ListingStyle.ScientificNameFocus,
             new SpratTaxonFilter(Kingdom: "Animalia", ExcludePhyla: new[] { "Chordata" })),
 
-        new SpratListGroup("plants", "plants", "plant", ListingStyle.ScientificNameFocus,
-            new SpratTaxonFilter(Kingdom: "Plantae")),
+        // Plants (~4,800 members) are broken out by class: the two big flowering-plant classes get
+        // their own lists, and a catch-all carries the ferns, conifers, cycads, mosses, etc.
+        new SpratListGroup("dicots", "dicots", "dicot", ListingStyle.ScientificNameFocus,
+            new SpratTaxonFilter(Kingdom: "Plantae", Classes: new[] { "Magnoliopsida" })),
+
+        new SpratListGroup("monocots", "monocots", "monocot", ListingStyle.ScientificNameFocus,
+            new SpratTaxonFilter(Kingdom: "Plantae", Classes: new[] { "Liliopsida" })),
+
+        new SpratListGroup("other-plants", "ferns and other plants", "plant", ListingStyle.ScientificNameFocus,
+            new SpratTaxonFilter(Kingdom: "Plantae", ExcludeClasses: new[] { "Magnoliopsida", "Liliopsida" })),
     };
 }

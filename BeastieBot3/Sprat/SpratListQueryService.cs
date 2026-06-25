@@ -278,6 +278,15 @@ internal sealed class SpratListQueryService : IDisposable {
             }
             clauses.Add($"{Quote(SpratColumns.ClassName)} IN ({string.Join(", ", names)})");
         }
+        if (filter.ExcludeClasses is { Count: > 0 }) {
+            var names = new List<string>();
+            for (var i = 0; i < filter.ExcludeClasses.Count; i++) {
+                var p = new SqliteParameter($"@xclass{i}", filter.ExcludeClasses[i]);
+                parameters.Add(p);
+                names.Add(p.ParameterName);
+            }
+            clauses.Add($"({Quote(SpratColumns.ClassName)} IS NULL OR {Quote(SpratColumns.ClassName)} NOT IN ({string.Join(", ", names)}))");
+        }
         if (filter.ExcludePhyla is { Count: > 0 }) {
             var names = new List<string>();
             for (var i = 0; i < filter.ExcludePhyla.Count; i++) {
