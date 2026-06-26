@@ -230,8 +230,13 @@ Santamartamys rufodorsalis = red-crested tree rat // Santamartamys is monotypic,
 // Monodelphis unistriatus = One-striped opossum  // temporary (new/missing redirect)
 // Neomonachus schauinslandi = Hawaiian monk seal  // temporary (new/missing redirect)
 // Monachus schauinslandi = Caribbean monk seal // temporary  (new/missing redirect) // aka West Indian seal, sea wolf
-// weirdness: [[Dingo]] and [[Canis lupus dingo]] are separate articles with the same taxobox
+// weirdness: [[Dingo]] and [[Canis lupus dingo]] are separate articles with the same taxobox.
+// SPRAT lists the dingo under Canis familiaris ("Domestic dog"); link/label it as the Dingo article.
+Canis familiaris = Dingo
+Canis familiaris wikilink Dingo
 Dugong dugon = dugong // genus is the name
+Pseudorca crassidens = False killer whale // hub picks a junk wikidata_label ("fake killer whale")
+Nyctophilus bifax = Eastern long-eared bat // hub picks the epithet-derived "Bifax long-eared bat"
 Lariscus hosei = four-striped ground squirrel  // no article
 Lariscus obscurus = Mentawai three-striped squirrel // no article
 Lariscus niobe = Niobe ground squirrel // no article
@@ -846,6 +851,7 @@ Janjucetidae below Cetacea : unranked
 Chiroptera = bat ! bats
 Nycteridae = slit-faced bat
 Hipposideridae = Old World leaf-nosed bat
+Hipposideridae plural Old World leaf-nosed bats
 Natalidae = funnel-eared bat
 Mormoopidae includes ghost-faced bats, moustached bats, and naked-backed bats // includes? or complete list? or are they synonyms?
 Mystacinidae = New Zealand short-tailed bat // only one genus, two species

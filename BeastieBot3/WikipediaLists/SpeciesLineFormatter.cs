@@ -497,6 +497,14 @@ internal sealed class SpeciesLineFormatter {
     /// Resolve the Wikipedia article title for a record.
     /// </summary>
     private string? ResolveWikipediaArticle(IucnSpeciesRecord record) {
+        // A curated per-taxon wikilink override (rules-list.txt "<sci> wikilink <Article>") wins over
+        // every data-derived title — it's the manual correction for cases the sources resolve wrongly
+        // (e.g. the Canis familiaris/Dingo taxobox split, where the hub has no usable article title).
+        var taxaRules = _legacyRules.Get(record.ScientificNameTaxonomy ?? record.ScientificNameAssessments ?? string.Empty);
+        if (!string.IsNullOrWhiteSpace(taxaRules?.Wikilink)) {
+            return taxaRules!.Wikilink;
+        }
+
         // A title resolved by the source itself (e.g. a SPRAT taxon's hub-resolved article title).
         if (!string.IsNullOrWhiteSpace(record.ArticleTitleOverride)) {
             return record.ArticleTitleOverride;

@@ -163,17 +163,28 @@ internal sealed class SpratListQueryService : IDisposable {
             StatusAnnotation: annotation);
     }
 
-    // "EPBC: CR; IUCN: CR; WA: CR" — every available system with a non-blank status, in order.
+    // "EPBC: CR; IUCN: {{IUCN status|CR}}; WA: CR" — every available system with a non-blank status,
+    // in order. The IUCN entry is wrapped in the {{IUCN status}} colour badge to match the other
+    // Wikipedia lists; SPRAT carries no IUCN assessment id, so the bare (citation-less) form is used.
     private string? BuildAnnotation(SqliteDataReader reader, int sysOffset) {
         var parts = new List<string>();
         for (var i = 0; i < _systems.Count; i++) {
             var code = AustralianStatus.ShortCode(GetString(reader, sysOffset + i));
-            if (code is not null) {
-                parts.Add($"{_systems[i].Label}: {code}");
+            if (code is null) {
+                continue;
             }
+            var rendered = _systems[i].Key == "iucn" && IucnTemplateCodes.Contains(code)
+                ? $"{{{{IUCN status|{code}}}}}"
+                : code;
+            parts.Add($"{_systems[i].Label}: {rendered}");
         }
         return parts.Count > 0 ? string.Join("; ", parts) : null;
     }
+
+    // IUCN categories the {{IUCN status}} template renders as a colour badge. Codes outside this set
+    // (e.g. the retired "CD") fall back to plain text rather than risk an unrecognised template arg.
+    private static readonly HashSet<string> IucnTemplateCodes =
+        new(StringComparer.Ordinal) { "EX", "EW", "CR", "EN", "VU", "NT", "LC", "DD" };
 
     /// <summary>
     /// Parses a SPRAT scientific name into (genus, species, infraType, infraName). Handles the
@@ -228,8 +239,23 @@ internal sealed class SpratListQueryService : IDisposable {
         if (string.IsNullOrWhiteSpace(raw)) {
             return null;
         }
-        var first = raw.Split(',')[0].Trim();
+        var first = FirstVernacular(raw).Trim();
         return string.IsNullOrWhiteSpace(first) || IsGenericDescriptor(first) ? null : first;
+    }
+
+    // The first comma-separated vernacular, ignoring commas inside parentheses so a single name whose
+    // parenthetical qualifier contains a comma ("Koala (combined populations of Queensland, New South
+    // Wales and the ACT)") is kept whole instead of truncated to "Koala (combined populations of …".
+    private static string FirstVernacular(string raw) {
+        var depth = 0;
+        for (var i = 0; i < raw.Length; i++) {
+            switch (raw[i]) {
+                case '(': depth++; break;
+                case ')': if (depth > 0) depth--; break;
+                case ',' when depth == 0: return raw[..i];
+            }
+        }
+        return raw;
     }
 
     private static readonly System.Text.RegularExpressions.Regex IndefiniteArticlePhrase =

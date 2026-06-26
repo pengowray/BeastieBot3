@@ -31,7 +31,7 @@ internal sealed class SpratListGenerator {
         new GroupingLevelDefinition { Level = "order", Label = "Order", UnknownLabel = "Other orders" },
         new GroupingLevelDefinition {
             Level = "family", Label = "Family", UnknownLabel = "Unassigned families",
-            MinItems = 5, MinGroupsForOther = 3, ShowRankLabel = true,
+            MinItems = 5, MinGroupsForOther = 3,
         },
     };
 
@@ -94,6 +94,12 @@ internal sealed class SpratListGenerator {
         string? hubName = null;
         if (_hub is not null && !isInfra && !string.IsNullOrWhiteSpace(fullSci)) {
             hubName = _hub.GetBestCommonNameByScientificName(fullSci, kingdomUpper);
+            // A monotypic species whose content lives on its genus page yields a Wikipedia title that
+            // is the genus ("Micronomus"), not a vernacular. Reject it so SPRAT's real common name is
+            // used (the genus still resolves as the article link below).
+            if (LooksLikeGenusName(hubName, r.GenusName)) {
+                hubName = null;
+            }
         }
         var common = hubName ?? CaseSpratName(r.CommonNameOverride);
 
@@ -114,6 +120,13 @@ internal sealed class SpratListGenerator {
     }
 
     private string? CaseSpratName(string? raw) => CaseVernacular(raw, _capsRules);
+
+    // True when a hub "common name" is really just the record's genus (a single word matching the
+    // genus) — e.g. a monotypic-genus Wikipedia article title mistaken for a vernacular.
+    private static bool LooksLikeGenusName(string? name, string? genus) =>
+        !string.IsNullOrWhiteSpace(name) && !string.IsNullOrWhiteSpace(genus)
+        && !name.Contains(' ')
+        && string.Equals(name.Trim(), genus.Trim(), StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
     /// Sentence-cases a SPRAT vernacular for display (#1), preserving proper nouns. A trailing region
@@ -146,6 +159,7 @@ internal sealed class SpratListGenerator {
         InfraspecificDisplayMode = InfraspecificDisplayMode.SeparateSections,
         SeparateInfraspecificSections = true,
         ExcludeRegionalAssessments = true,
+        IncludeFamilyInOtherBucket = true, // annotate "Other <order>" species with "(Family: ...)"
     };
 
     private string BuildIntro(SpratListGroup group, IReadOnlyList<IucnSpeciesRecord> records) {

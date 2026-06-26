@@ -71,19 +71,22 @@ public class SpratListTests {
         });
 
     // Builds a tiny SPRAT import: header (category row + column-name row) then four data rows.
-    private static SqliteConnection SeedSprat() {
+    private static SqliteConnection SeedSprat() => SeedSpratFrom(
+        // member via EPBC CR; subspecies (animal trinomial); multi-system annotation
+        "\"1\",\"Potorous gilbertii\",\"Gilbert's Potoroo\",\"Critically Endangered\",\"Critically Endangered\",\"Animalia\",\"Mammalia\",\"Diprotodontia\",\"Potoroidae\",\"Potorous\",\"\",\"Critically Endangered\"",
+        // member via IUCN only (EPBC blank) -> section falls back to IUCN status (EN)
+        "\"2\",\"Pseudomys fieldi\",\"Djoongari, Shark Bay Mouse\",\"\",\"Endangered\",\"Animalia\",\"Mammalia\",\"Rodentia\",\"Muridae\",\"Pseudomys\",\"Endangered\",\"\"",
+        // plant variety, member via EPBC EN
+        "\"3\",\"Acacia gunnii var. minor\",\"Ploughshare Wattle, Dog's Tooth Wattle\",\"Vulnerable\",\"\",\"Plantae\",\"Magnoliopsida\",\"Fabales\",\"Fabaceae\",\"Acacia\",\"\",\"\"",
+        // NOT a member: only state-listed (Rare), no EPBC/IUCN threatened status
+        "\"4\",\"Banksia nivea\",\"Honeypot Dryandra\",\"\",\"\",\"Plantae\",\"Magnoliopsida\",\"Proteales\",\"Proteaceae\",\"Banksia\",\"\",\"\"");
+
+    // Seeds an in-memory SPRAT import from the given data rows (the two header rows are prepended).
+    private static SqliteConnection SeedSpratFrom(params string[] dataRows) {
         var rows = new[] {
             "\"id\",\"sci\",\"common\",\"epbc\",\"iucn\",\"kingdom\",\"class\",\"order\",\"family\",\"genus\",\"nsw\",\"wa\"",
             "\"Taxon ID\",\"Scientific Name\",\"Common Name\",\"EPBC Threat Status\",\"IUCN Red List\",\"Kingdom\",\"Class\",\"Order\",\"Family\",\"Genus\",\"NSW TSC Act and FM Act\",\"WA WC Act\"",
-            // member via EPBC CR; subspecies (animal trinomial); multi-system annotation
-            "\"1\",\"Potorous gilbertii\",\"Gilbert's Potoroo\",\"Critically Endangered\",\"Critically Endangered\",\"Animalia\",\"Mammalia\",\"Diprotodontia\",\"Potoroidae\",\"Potorous\",\"\",\"Critically Endangered\"",
-            // member via IUCN only (EPBC blank) -> section falls back to IUCN status (EN)
-            "\"2\",\"Pseudomys fieldi\",\"Djoongari, Shark Bay Mouse\",\"\",\"Endangered\",\"Animalia\",\"Mammalia\",\"Rodentia\",\"Muridae\",\"Pseudomys\",\"Endangered\",\"\"",
-            // plant variety, member via EPBC EN
-            "\"3\",\"Acacia gunnii var. minor\",\"Ploughshare Wattle, Dog's Tooth Wattle\",\"Vulnerable\",\"\",\"Plantae\",\"Magnoliopsida\",\"Fabales\",\"Fabaceae\",\"Acacia\",\"\",\"\"",
-            // NOT a member: only state-listed (Rare), no EPBC/IUCN threatened status
-            "\"4\",\"Banksia nivea\",\"Honeypot Dryandra\",\"\",\"\",\"Plantae\",\"Magnoliopsida\",\"Proteales\",\"Proteaceae\",\"Banksia\",\"\",\"\"",
-        };
+        }.Concat(dataRows).ToArray();
         var path = Path.Combine(Path.GetTempPath(), $"sprat_q_{System.Guid.NewGuid():N}.csv");
         File.WriteAllText(path, string.Join("\n", rows), new UTF8Encoding(false));
 
@@ -110,15 +113,27 @@ public class SpratListTests {
 
         var gilbert = mammals.Single(r => r.GenusName == "Potorous");
         Assert.Equal("CR", gilbert.StatusCode);                       // EPBC drives the section
-        Assert.Equal("EPBC: CR; IUCN: CR; WA: CR", gilbert.StatusAnnotation);
+        Assert.Equal("EPBC: CR; IUCN: {{IUCN status|CR}}; WA: CR", gilbert.StatusAnnotation);
         Assert.Equal("Gilbert's Potoroo", gilbert.CommonNameOverride);
         Assert.Equal("Potorous", gilbert.GenusName);
         Assert.Equal("gilbertii", gilbert.SpeciesName);
 
         var mouse = mammals.Single(r => r.GenusName == "Pseudomys");
         Assert.Equal("EN", mouse.StatusCode);                          // EPBC blank -> IUCN fallback
-        Assert.Equal("IUCN: EN; NSW: EN", mouse.StatusAnnotation);
+        Assert.Equal("IUCN: {{IUCN status|EN}}; NSW: EN", mouse.StatusAnnotation);
         Assert.Equal("Djoongari", mouse.CommonNameOverride);           // first of the comma-joined names
+    }
+
+    [Fact]
+    public void CleanCommonName_KeepsParentheticalWithInnerCommasWhole() {
+        // Regression: a single vernacular whose parenthetical qualifier itself contains commas must
+        // not be truncated at the first comma (the EPBC "combined populations" Koala listing).
+        using var conn = SeedSpratFrom(
+            "\"1\",\"Phascolarctos cinereus\",\"Koala (combined populations of Queensland, New South Wales and the ACT)\",\"Endangered\",\"\",\"Animalia\",\"Mammalia\",\"Diprotodontia\",\"Phascolarctidae\",\"Phascolarctos\",\"\",\"\"");
+        using var query = SpratListQueryService.OpenFromConnection(conn);
+
+        var koala = query.Query(new SpratTaxonFilter(Kingdom: "Animalia", Classes: new[] { "Mammalia" })).Single();
+        Assert.Equal("Koala (combined populations of Queensland, New South Wales and the ACT)", koala.CommonNameOverride);
     }
 
     [Fact]
@@ -206,7 +221,7 @@ public class SpratListTests {
         // No EPBC; most-severe of IUCN EN vs Qld CR drives the section.
         var turtle = reptiles.Single(r => r.GenusName == "Myuchelys");
         Assert.Equal("CR", turtle.StatusCode);
-        Assert.Equal("IUCN: EN; Qld: CR", turtle.StatusAnnotation);
+        Assert.Equal("IUCN: {{IUCN status|EN}}; Qld: CR", turtle.StatusAnnotation);
 
         // Orders filter restricts to one order (the three Squamata members; the Testudines turtle drops).
         var squamates = query.Query(new SpratTaxonFilter(Kingdom: "Animalia", Classes: new[] { "Reptilia" }, Orders: new[] { "Squamata" }));
