@@ -10,11 +10,14 @@ folder, a static host, or an email attachment.
 dotnet run --project BeastieBot3/BeastieBot3.csproj -- redlist audit-site
 
 # Fast test build, capped rows per report
-dotnet run --project BeastieBot3/BeastieBot3.csproj -- redlist audit-site --limit 5000 --output ./reports/redlist-audit-2026
+dotnet run --project BeastieBot3/BeastieBot3.csproj -- redlist audit-site --limit 5000
 ```
 
-Default output directory is `./reports/redlist-audit-2026`. The release label comes from
-`import_metadata.redlist_version` in the IUCN CSV database (falling back to the dataset folder name).
+The default output directory is `<Datastore:reports_dir>/redlist-audit-2026` (the configured reports
+directory in `paths.ini`, e.g. `D:\datasets\beastiebot\reports\redlist-audit-2026`), falling back to
+`./reports/redlist-audit-2026` only when no reports directory is configured. Pass `--output` to
+override. The release label comes from `import_metadata.redlist_version` in the IUCN CSV database
+(falling back to the dataset folder name).
 
 ## Tone
 

@@ -26,13 +26,13 @@ namespace BeastieBot3.Audit;
     Rerun = RerunEffect.Rebuilds,
     Examples = new[] {
         "redlist audit-site",
-        "redlist audit-site --output ./reports/redlist-audit-2026",
         "redlist audit-site --limit 5000",
+        "redlist audit-site --output D:/datasets/beastiebot/reports/redlist-audit-2026",
     })]
 internal sealed class RedlistAuditSiteCommand : Command<RedlistAuditSiteCommand.Settings> {
     public sealed class Settings : CommonSettings {
         [CommandOption("-o|--output <DIR>")]
-        [Description("Output directory for the static bundle. Defaults to ./reports/redlist-audit-2026.")]
+        [Description("Output directory for the static bundle. Defaults to <Datastore:reports_dir>/redlist-audit-2026.")]
         public string? OutputDir { get; init; }
 
         [CommandOption("--limit <ROWS>")]
@@ -68,9 +68,7 @@ internal sealed class RedlistAuditSiteCommand : Command<RedlistAuditSiteCommand.
         var commentary = LoadCommentary(paths);
         AnsiConsole.MarkupLineInterpolated($"[grey]Release:[/] {release}    [grey]commentary:[/] {commentary.SourcePath ?? "(none)"}");
 
-        var outputDir = string.IsNullOrWhiteSpace(settings.OutputDir)
-            ? Path.Combine(Environment.CurrentDirectory, "reports", "redlist-audit-2026")
-            : Path.GetFullPath(settings.OutputDir);
+        var outputDir = ResolveOutputDir(paths, settings.OutputDir);
 
         var reports = new List<AuditReport>();
         using (var ctx = new AuditContext(paths, limit is null ? null : (int?)Math.Min(int.MaxValue, limit.Value), release, releaseYear, commentary, ct)) {
@@ -115,6 +113,20 @@ internal sealed class RedlistAuditSiteCommand : Command<RedlistAuditSiteCommand.
         AnsiConsole.MarkupLineInterpolated($"[green]Audit site written to:[/] {outputDir}");
         AnsiConsole.MarkupLineInterpolated($"[grey]Open:[/] {Path.Combine(outputDir, "index.html")}");
         return 0;
+    }
+
+    // Explicit --output wins. Otherwise default to a "redlist-audit-2026" subdirectory of the
+    // configured reports directory (Datastore:reports_dir), falling back to ./reports only when no
+    // reports directory is configured.
+    private static string ResolveOutputDir(PathsService paths, string? explicitDir) {
+        if (!string.IsNullOrWhiteSpace(explicitDir)) {
+            return Path.GetFullPath(explicitDir);
+        }
+        var reportsDir = paths.GetReportOutputDirectory();
+        var baseDir = !string.IsNullOrWhiteSpace(reportsDir)
+            ? reportsDir
+            : Path.Combine(Environment.CurrentDirectory, "reports");
+        return Path.Combine(Path.GetFullPath(baseDir), "redlist-audit-2026");
     }
 
     private static (string Release, int? Year) ResolveRelease(PathsService paths) {

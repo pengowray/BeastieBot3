@@ -371,3 +371,6 @@ FodyWeavers.xsd
 ## project specific additions
 run-log.txt
 run-single-log.txt
+
+# Generated audit-site bundles (default output is the configured reports_dir, but guard the fallback)
+/reports/
