@@ -60,6 +60,11 @@ orders:
     kind: typo
     fixed_elsewhere: true
     note: "Old sea-star order name; the modern ordinal ending is -ida (Forcipulatida)."
+  - from: Neoloricata
+    to: Chitonida
+    kind: obsolete
+    fixed_elsewhere: true
+    note: "Obsolete chiton order; the AFD places Acanthochitonidae in Chitonida."
 
 # --- Family-conditional splits (one obsolete order → several modern orders, keyed by family) -------
 order_by_family:
@@ -74,6 +79,17 @@ order_by_family:
   # moved Accipitridae to Accipitriformes (2026), leaving Falconiformes for the falcons.
   Falconiformes:
     Accipitridae: Accipitriformes
+  # SPRAT files the land snails under the informal "Pulmonata"; the AFD places these families in the
+  # order Stylommatophora (which SPRAT also uses separately). The two non-stylommatophoran families
+  # (Glacidorbidae, Smeagolidae) have no clean AFD order and are left under Pulmonata.
+  Pulmonata:
+    Camaenidae: Stylommatophora
+    Charopidae: Stylommatophora
+    Helicarionidae: Stylommatophora
+    Punctidae: Stylommatophora
+    Rhytididae: Stylommatophora
+    Trochomorphidae: Stylommatophora
+    Bulimulidae: Stylommatophora
 
 # --- Per-order notes + Wikipedia references emitted under a modernized order heading. -------------
 # A modernized heading carries a small note crediting the modern authority (the Australian Faunal
@@ -108,6 +124,14 @@ order_notes:
     ref_name: afd-accipitriformes
     note: "Hawks, eagles and kites are placed in Accipitriformes following the [[Australian Faunal Directory]]; the EPBC source data lists them under ''Falconiformes'', now restricted to the falcons."
     reference: "{{cite web |title=Order ACCIPITRIFORMES |website=Australian Faunal Directory |publisher=Australian Biological Resources Study |url=https://biodiversity.org.au/afd/taxa/ACCIPITRIFORMES |access-date=26 June 2026}}"
+  Stylommatophora:
+    ref_name: afd-stylommatophora
+    note: "The land snails are placed in the order Stylommatophora following the [[Australian Faunal Directory]]; the EPBC source data lists most of them under the informal grouping ''Pulmonata''."
+    reference: "{{cite web |title=Order STYLOMMATOPHORA |website=Australian Faunal Directory |publisher=Australian Biological Resources Study |url=https://biodiversity.org.au/afd/taxa/STYLOMMATOPHORA |access-date=26 June 2026}}"
+  Chitonida:
+    ref_name: afd-chitonida
+    note: "The chitons are placed in the order Chitonida following the [[Australian Faunal Directory]]; the EPBC source data uses the obsolete order ''Neoloricata''."
+    reference: "{{cite web |title=Order CHITONIDA |website=Australian Faunal Directory |publisher=Australian Biological Resources Study |url=https://biodiversity.org.au/afd/taxa/CHITONIDA |access-date=26 June 2026}}"
 
 # --- Orders deliberately NOT auto-changed: flagged for review in the CSV-recommendations report. ---
 # These are obsolete/non-standard but need judgement (a contested split, a name still in wide use, or a
@@ -115,16 +139,13 @@ order_notes:
 flag_orders:
   - order: Opisthobranchia
     suggest: (informal clade)
-    note: Obsolete gastropod grouping, now a paraphyletic informal clade rather than an order.
+    note: Obsolete gastropod grouping, now a paraphyletic informal clade; AFD spreads its taxa across several clades, so no single order applies.
   - order: Streptoneura
-    suggest: (informal clade)
-    note: Obsolete gastropod grouping (prosobranchs); not a modern order.
+    suggest: Hypsogastropoda
+    note: Obsolete prosobranch grouping; AFD places Assimineidae in the clade Hypsogastropoda (ranked there as an order, but a clade-rank elsewhere) — verify before adopting.
   - order: Hydroida
-    suggest: Anthoathecata / Leptothecata
-    note: Old hydrozoan order, split in modern classification.
-  - order: Pulmonata
-    suggest: (informal clade)
-    note: Traditional air-breathing snail grouping, now informal rather than a ranked order.
+    suggest: Anthoathecata
+    note: Old hydrozoan order; AFD places Tubulariidae/Australomedusidae under Anthoathecata (Filifera) — confirm the family-level placements before adopting.
   - order: Cetacea
     suggest: Cetacea (kept)
     note: Nested within Artiodactyla phylogenetically, but Cetacea is retained here as it remains near-universal.
