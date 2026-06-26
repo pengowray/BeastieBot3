@@ -1418,6 +1418,10 @@ pincushion // Nickels' pincushion cactus, Cochise pincushion cactus
 pincushion-cactus // Park pincushion-cactus
 pine // Gaige's pine forest snake
 North Pine River // North pine river freshwater snail
+Arnhem Land // Arnhem Land rock rat (Australian place name)
+Hastings River // Hastings River mouse (Australian place name)
+Julia Creek // Julia Creek dunnart (Australian place name)
+Tasman Peninsula // Tasman Peninsula dusky antechinus (Australian place name)
 pineapple // Pima pineapple cactus
 pine-oak // Tearful pine-oak snake
 pink // Kaputar pink slug, Rayed pink fatmucket, Galápagos pink land iguana
