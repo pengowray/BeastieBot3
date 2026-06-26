@@ -50,6 +50,16 @@ orders:
     kind: typo
     fixed_elsewhere: true
     note: "Misspelling of Cyclophyllidea (tapeworms); -ideae is a botanical subfamily ending."
+  - from: Ardeiformes
+    to: Ciconiiformes
+    kind: obsolete
+    fixed_elsewhere: true
+    note: "Non-standard order; the AFD places the herons and storks in Ciconiiformes."
+  - from: Forcipulata
+    to: Forcipulatida
+    kind: typo
+    fixed_elsewhere: true
+    note: "Old sea-star order name; the modern ordinal ending is -ida (Forcipulatida)."
 
 # --- Family-conditional splits (one obsolete order → several modern orders, keyed by family) -------
 order_by_family:
@@ -60,6 +70,10 @@ order_by_family:
     Peramelidae: Peramelemorphia
     Thylacomyidae: Peramelemorphia
     Notoryctidae: Notoryctemorphia
+  # SPRAT lumps hawks/eagles (Accipitridae) and falcons (Falconidae) under Falconiformes; the AFD
+  # moved Accipitridae to Accipitriformes (2026), leaving Falconiformes for the falcons.
+  Falconiformes:
+    Accipitridae: Accipitriformes
 
 # --- Per-order notes + Wikipedia references emitted under a modernized order heading. -------------
 # A modernized heading carries a small note crediting the modern authority (the Australian Faunal
@@ -86,14 +100,19 @@ order_notes:
     ref_name: afd-carnivora
     note: "The pinnipeds (seals and sea lions) are placed in Carnivora following the [[Australian Faunal Directory]]; the EPBC source data lists them under the separate order ''Pinnipedia''."
     reference: "{{cite web |title=Order CARNIVORA |website=Australian Faunal Directory |publisher=Australian Biological Resources Study |url=https://biodiversity.org.au/afd/taxa/CARNIVORA |access-date=26 June 2026}}"
+  Ciconiiformes:
+    ref_name: afd-ciconiiformes
+    note: "The herons and storks are placed in Ciconiiformes following the [[Australian Faunal Directory]]; the EPBC source data lists them under the non-standard order ''Ardeiformes''."
+    reference: "{{cite web |title=Order CICONIIFORMES |website=Australian Faunal Directory |publisher=Australian Biological Resources Study |url=https://biodiversity.org.au/afd/taxa/CICONIIFORMES |access-date=26 June 2026}}"
+  Accipitriformes:
+    ref_name: afd-accipitriformes
+    note: "Hawks, eagles and kites are placed in Accipitriformes following the [[Australian Faunal Directory]]; the EPBC source data lists them under ''Falconiformes'', now restricted to the falcons."
+    reference: "{{cite web |title=Order ACCIPITRIFORMES |website=Australian Faunal Directory |publisher=Australian Biological Resources Study |url=https://biodiversity.org.au/afd/taxa/ACCIPITRIFORMES |access-date=26 June 2026}}"
 
 # --- Orders deliberately NOT auto-changed: flagged for review in the CSV-recommendations report. ---
 # These are obsolete/non-standard but need judgement (a contested split, a name still in wide use, or a
 # group outside the current mammal focus). `suggest` is the likely modern name; refine before applying.
 flag_orders:
-  - order: Ardeiformes
-    suggest: Pelecaniformes
-    note: Non-standard ordinal name for herons/ibises; modern treatment places them in Pelecaniformes.
   - order: Opisthobranchia
     suggest: (informal clade)
     note: Obsolete gastropod grouping, now a paraphyletic informal clade rather than an order.
@@ -103,9 +122,6 @@ flag_orders:
   - order: Hydroida
     suggest: Anthoathecata / Leptothecata
     note: Old hydrozoan order, split in modern classification.
-  - order: Forcipulata
-    suggest: Forcipulatida
-    note: Old sea-star order name; modern ending is -ida.
   - order: Pulmonata
     suggest: (informal clade)
     note: Traditional air-breathing snail grouping, now informal rather than a ranked order.
