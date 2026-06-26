@@ -127,7 +127,10 @@ internal sealed class HtmlConsistencyProducer : IAuditReportProducer {
                 var htmlVal = S(reader, ord, field + "_html");
                 var plainVal = S(reader, ord, field + "_plain");
 
-                var htmlText = Canonical(IucnHtmlUtilities.ConvertHtmlToPlainTextNeater(htmlVal));
+                // Compare with the exact tag-stripping (which aligns with how the IUCN plain-text
+                // field is produced), then canonicalise both sides so only genuine readable-text
+                // differences remain. The friendly conversion is used only for the display column.
+                var htmlText = Canonical(IucnHtmlUtilities.ConvertHtmlToExactPlainText(htmlVal));
                 var plainText = Canonical(plainVal);
 
                 // Identical readable text (cosmetic-only differences) is not a finding.
