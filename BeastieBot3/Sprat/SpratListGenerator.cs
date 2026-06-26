@@ -118,13 +118,22 @@ internal sealed class SpratListGenerator {
         }
 
         // A descriptive non-trinomial name ("Bettongia lesueur Barrow and Boodie Islands subspecies"):
-        // ParseName found a rank marker but no clean epithet. These redlink the full phrase — record
-        // them and point the link at the binomial instead.
+        // ParseName found a rank marker but no clean epithet. Flag it for the report, then rewrite it
+        // like a population unit — base binomial (so it links to the species) with the descriptive words
+        // carried as a distinguishing qualifier, so it doesn't collapse onto the species or other units.
         if (!string.IsNullOrWhiteSpace(r.InfraType) && string.IsNullOrWhiteSpace(r.InfraName)
             && !string.IsNullOrWhiteSpace(r.GenusName) && !string.IsNullOrWhiteSpace(r.SpeciesName)) {
             var binomial = $"{r.GenusName} {r.SpeciesName}";
-            _redlinkNames.Add(new DescriptiveNameFinding(
-                group.Id, r.ScientificNameTaxonomy ?? "", binomial));
+            _redlinkNames.Add(new DescriptiveNameFinding(group.Id, r.ScientificNameTaxonomy ?? "", binomial));
+            var qualifier = ExtractDescriptiveQualifier(r.ScientificNameTaxonomy, binomial);
+            r = r with {
+                ScientificNameTaxonomy = binomial,
+                InfraType = null,
+                InfraName = null,
+                SubpopulationName = qualifier ?? r.SubpopulationName,
+                // Drop a trailing parenthetical from the SPRAT vernacular so the qualifier shows once.
+                CommonNameOverride = qualifier is not null ? StripTrailingParens(r.CommonNameOverride) : r.CommonNameOverride,
+            };
         }
 
         var kingdomUpper = string.IsNullOrWhiteSpace(r.KingdomName) ? null : r.KingdomName.ToUpperInvariant();
@@ -162,17 +171,41 @@ internal sealed class SpratListGenerator {
             }
         }
 
-        // For a descriptive non-trinomial that the hub couldn't resolve, point the link at the binomial
-        // (often a redirect to the taxon's article) rather than letting it redlink the whole phrase.
-        if (article is null && !string.IsNullOrWhiteSpace(r.InfraType) && string.IsNullOrWhiteSpace(r.InfraName)
-            && genusSpecies is not null && !string.Equals(genusSpecies, fullSci, StringComparison.OrdinalIgnoreCase)) {
-            article = genusSpecies;
-        }
-
         return r with { CommonNameOverride = common, ArticleTitleOverride = article };
     }
 
     private string? CaseSpratName(string? raw) => CaseVernacular(raw, _capsRules);
+
+    private static readonly System.Text.RegularExpressions.Regex TrailingParens =
+        new(@"^(.*\S)\s*\([^)]*\)\s*$", System.Text.RegularExpressions.RegexOptions.Compiled);
+
+    // Extracts the descriptive words from a non-trinomial "Genus species <words> subspecies/population"
+    // name (e.g. "Bettongia lesueur Barrow and Boodie Islands subspecies" → "Barrow and Boodie Islands").
+    private static string? ExtractDescriptiveQualifier(string? fullPhrase, string binomial) {
+        if (string.IsNullOrWhiteSpace(fullPhrase)) {
+            return null;
+        }
+        var phrase = fullPhrase.Trim();
+        if (!phrase.StartsWith(binomial + " ", StringComparison.OrdinalIgnoreCase)) {
+            return null;
+        }
+        var rest = phrase[binomial.Length..].Trim();
+        foreach (var suffix in new[] { " subspecies", " population", " form" }) {
+            if (rest.EndsWith(suffix, StringComparison.OrdinalIgnoreCase)) {
+                rest = rest[..^suffix.Length].Trim();
+                break;
+            }
+        }
+        return string.IsNullOrWhiteSpace(rest) ? null : rest;
+    }
+
+    private static string? StripTrailingParens(string? name) {
+        if (string.IsNullOrWhiteSpace(name)) {
+            return name;
+        }
+        var match = TrailingParens.Match(name.Trim());
+        return match.Success ? match.Groups[1].Value.Trim() : name.Trim();
+    }
 
     // True when a hub "common name" is really just the record's genus (a single word matching the
     // genus) — e.g. a monotypic-genus Wikipedia article title mistaken for a vernacular.

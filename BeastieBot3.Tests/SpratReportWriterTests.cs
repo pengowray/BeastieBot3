@@ -41,7 +41,7 @@ public class SpratReportWriterTests {
         Assert.Contains("## 1. Order names auto-modernized", report);
         Assert.Contains("## 2. Order names needing review", report);
         Assert.Contains("## 3. Non-standard status values", report);
-        Assert.Contains("## 4. Descriptive names that don't link", report);
+        Assert.Contains("## 4. Descriptive non-trinomial names", report);
         // fixed-elsewhere column reflects the change metadata
         Assert.Contains("| Insectivora | Eulipotyphla | obsolete | 1 | yes | abandoned order |", report);
         // only flag-orders present in the data are listed

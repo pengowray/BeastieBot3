@@ -137,7 +137,7 @@ internal static class SpratReportWriter {
     }
 
     private static void AppendRedlinks(StringBuilder sb, IReadOnlyList<DescriptiveNameFinding> redlinks) {
-        sb.AppendLine("## 4. Descriptive names that don't link");
+        sb.AppendLine("## 4. Descriptive non-trinomial names");
         sb.AppendLine();
         var distinct = redlinks
             .GroupBy(r => r.ScientificName, StringComparer.OrdinalIgnoreCase)
@@ -149,9 +149,9 @@ internal static class SpratReportWriter {
             sb.AppendLine();
             return;
         }
-        sb.AppendLine("Informal, non-trinomial EPBC names (e.g. a descriptive \"… subspecies\" phrase) that have no "
-            + "Wikipedia article. The list now points the link at the binomial instead; a proper trinomial or "
-            + "redirect at source would resolve them.");
+        sb.AppendLine("Informal EPBC names that aren't proper trinomials (e.g. a descriptive \"… subspecies\" phrase). "
+            + "The list now links them to the binomial and shows the descriptive words as a distinguishing qualifier; "
+            + "a proper trinomial at source would resolve them cleanly.");
         sb.AppendLine();
         sb.AppendLine("| SPRAT scientific name | Linked as | List |");
         sb.AppendLine("| --- | --- | --- |");
