@@ -18,10 +18,12 @@ namespace BeastieBot3.Sprat;
 // stays sargable on idx_taxonomy_html_scientificName. Unresolved taxa fall back to the bare badge.
 
 internal sealed record IucnAssessmentRef(
-    long TaxonId, long AssessmentId, string? YearPublished, string? PossiblyExtinct, string? PossiblyExtinctInTheWild);
+    long TaxonId, long AssessmentId, string? YearPublished, string? RedlistCategory,
+    string? PossiblyExtinct, string? PossiblyExtinctInTheWild);
 
 internal sealed class IucnAssessmentResolver : IDisposable {
     private readonly SqliteConnection _connection;
+    private readonly bool _ownsConnection;
     private readonly Dictionary<string, IucnAssessmentRef?> _cache = new(StringComparer.Ordinal);
 
     public IucnAssessmentResolver(string iucnDatabasePath) {
@@ -33,11 +35,13 @@ internal sealed class IucnAssessmentResolver : IDisposable {
         };
         _connection = new SqliteConnection(builder.ToString());
         _connection.Open();
+        _ownsConnection = true;
     }
 
     /// <summary>Test seam: resolve over a caller-owned connection (e.g. a shared <c>:memory:</c> DB).</summary>
     internal IucnAssessmentResolver(SqliteConnection connection) {
         _connection = connection;
+        _ownsConnection = false;
     }
 
     /// <summary>
@@ -49,7 +53,15 @@ internal sealed class IucnAssessmentResolver : IDisposable {
         if (_cache.TryGetValue(key, out var cached)) {
             return cached;
         }
-        var result = Lookup(scientificName) ?? Lookup(listedName);
+        var result = Lookup(scientificName);
+        if (result is null && !string.IsNullOrWhiteSpace(listedName)) {
+            foreach (var candidate in listedName.Split(',')) {
+                result = Lookup(candidate);
+                if (result is not null) {
+                    break;
+                }
+            }
+        }
         _cache[key] = result;
         return result;
     }
@@ -60,7 +72,8 @@ internal sealed class IucnAssessmentResolver : IDisposable {
         }
         using var cmd = _connection.CreateCommand();
         cmd.CommandText = @"
-            SELECT t.taxonId, a.assessmentId, a.yearPublished, a.possiblyExtinct, a.possiblyExtinctInTheWild
+            SELECT t.taxonId, a.assessmentId, a.yearPublished, a.redlistCategory,
+                   a.possiblyExtinct, a.possiblyExtinctInTheWild
             FROM taxonomy_html t
             JOIN assessments_html a ON a.taxonId = t.taxonId
             WHERE t.scientificName = @name AND a.scopes LIKE '%Global%'
@@ -76,8 +89,13 @@ internal sealed class IucnAssessmentResolver : IDisposable {
             reader.GetInt64(1),
             reader.IsDBNull(2) ? null : reader.GetString(2),
             reader.IsDBNull(3) ? null : reader.GetString(3),
-            reader.IsDBNull(4) ? null : reader.GetString(4));
+            reader.IsDBNull(4) ? null : reader.GetString(4),
+            reader.IsDBNull(5) ? null : reader.GetString(5));
     }
 
-    public void Dispose() => _connection.Dispose();
+    public void Dispose() {
+        if (_ownsConnection) {
+            _connection.Dispose();
+        }
+    }
 }

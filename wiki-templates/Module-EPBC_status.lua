@@ -9,7 +9,7 @@ local p = {}
 local status_data = {
     ex = { long = "Extinct", bg = "black", fg = "#CC3333", display = "EX", link = "Extinction" },
     ew = { long = "Extinct in the Wild", bg = "black", fg = "white", display = "EW", link = "Extinct in the Wild" },
-    cr = { long = "Critically Endangered", bg = "#CC3333", fg = "#FFCCCC", display = "CR", link = "Critically endangered species" },
+    cr = { long = "Critically Endangered", bg = "#CC3333", fg = "#FFCCCC", display = "CR", link = "Critically Endangered" },
     en = { long = "Endangered", bg = "#CC6633", fg = "#FFCC99", display = "EN", link = "Endangered species" },
     vu = { long = "Vulnerable", bg = "#CC9900", fg = "#FFFFCB", display = "VU", link = "Vulnerable species" },
     cd = { long = "Conservation Dependent", bg = "#006666", fg = "#99CC99", display = "CD", link = "Conservation Dependent" },

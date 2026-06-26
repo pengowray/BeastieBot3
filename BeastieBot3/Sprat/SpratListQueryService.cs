@@ -228,15 +228,24 @@ internal sealed class SpratListQueryService : IDisposable {
     private string RenderStatus(string systemKey, string code, string? scientific, string? listedName, string? spratTaxonId) {
         if (systemKey == "iucn" && IucnTemplateCodes.Contains(code)) {
             var resolved = _iucnResolver?.Resolve(scientific, listedName);
-            return resolved is not null
-                ? IucnRedlistStatus.BuildStatusTemplate(code, resolved.PossiblyExtinct, resolved.PossiblyExtinctInTheWild,
-                    resolved.TaxonId, resolved.AssessmentId, resolved.YearPublished)
-                : $"{{{{IUCN status|{code}}}}}";
+            if (resolved is not null) {
+                // Drive the badge code from the resolved assessment's OWN category so it always agrees with
+                // the assessment it links to: SPRAT's iucn_status can be population-specific or pick the
+                // wrong value from a multi-name cell. Falls back to SPRAT's code if the category is unmapped.
+                // year as a bare label ("2015") since the annotation already prints "IUCN:".
+                var iucnCode = AustralianStatus.ShortCode(resolved.RedlistCategory) ?? code;
+                return IucnRedlistStatus.BuildStatusTemplate(iucnCode,
+                    resolved.PossiblyExtinct, resolved.PossiblyExtinctInTheWild,
+                    resolved.TaxonId, resolved.AssessmentId, resolved.YearPublished, yearAsBareLabel: true);
+            }
+            return $"{{{{IUCN status|{code}}}}}";
         }
-        if (systemKey == "epbc" && AustralianStatus.IsKnownCode(code)) {
+        if (systemKey == "epbc" && EpbcTemplateCodes.Contains(code)) {
+            // label=SPRAT names the reference source (the annotation already prints "EPBC:", so the
+            // template's default "EPBC" link text would be redundant).
             return string.IsNullOrWhiteSpace(spratTaxonId)
                 ? $"{{{{EPBC status|{code}}}}}"
-                : $"{{{{EPBC status|{code}|{spratTaxonId}|1}}}}";
+                : $"{{{{EPBC status|{code}|{spratTaxonId}|1|label=SPRAT}}}}";
         }
         return code;
     }
@@ -245,6 +254,11 @@ internal sealed class SpratListQueryService : IDisposable {
     // (e.g. the retired "CD") fall back to plain text rather than risk an unrecognised template arg.
     private static readonly HashSet<string> IucnTemplateCodes =
         new(StringComparer.Ordinal) { "EX", "EW", "CR", "EN", "VU", "NT", "LC", "DD" };
+
+    // The six statutory EPBC categories the {{EPBC status}} module knows. Gating on these (rather than the
+    // broader AustralianStatus.IsKnownCode) keeps any stray value out of the module's invalid-params path.
+    private static readonly HashSet<string> EpbcTemplateCodes =
+        new(StringComparer.Ordinal) { "EX", "EW", "CR", "EN", "VU", "CD" };
 
     /// <summary>
     /// Parses a SPRAT scientific name into (genus, species, infraType, infraName). Handles the

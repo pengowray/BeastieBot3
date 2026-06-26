@@ -121,13 +121,16 @@ internal static class IucnRedlistStatus {
     /// byte-identical badge.
     /// </summary>
     public static string BuildStatusTemplate(string baseCode, string? possiblyExtinct, string? possiblyExtinctInTheWild,
-        long taxonId, long assessmentId, string? yearPublished) {
+        long taxonId, long assessmentId, string? yearPublished, bool yearAsBareLabel = false) {
         var statusCode = ToWikipediaTemplateCode(baseCode, possiblyExtinct, possiblyExtinctInTheWild);
         var sb = new StringBuilder();
         sb.Append("{{IUCN status|").Append(statusCode).Append('|')
           .Append(taxonId).Append('/').Append(assessmentId).Append("|1"); // 1 = make link visible
         if (!IsExtinctTemplateCode(statusCode) && !string.IsNullOrWhiteSpace(yearPublished)) {
-            sb.Append("|year=").Append(yearPublished);
+            // year= renders the link as "IUCN <year>"; label= renders just "<year>". The bare-label form
+            // is used where the surrounding text already says "IUCN:" (the SPRAT Australia lists), so the
+            // "IUCN" prefix would be redundant; the standalone IUCN lists keep "IUCN <year>".
+            sb.Append(yearAsBareLabel ? "|label=" : "|year=").Append(yearPublished);
         }
         sb.Append("}}");
         return sb.ToString();

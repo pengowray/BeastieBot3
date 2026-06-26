@@ -121,8 +121,8 @@ public class SpratListTests {
 
         var gilbert = mammals.Single(r => r.GenusName == "Potorous");
         Assert.Equal("CR", gilbert.StatusCode);                       // EPBC drives the section
-        // EPBC entry → {{EPBC status|CODE|<sprat id>|1}} (id "1"); IUCN bare (no resolver in this seam).
-        Assert.Equal("EPBC: {{EPBC status|CR|1|1}}; IUCN: {{IUCN status|CR}}; WA: CR", gilbert.StatusAnnotation);
+        // EPBC entry → {{EPBC status|CODE|<sprat id>|1|label=SPRAT}} (id "1"); IUCN bare (no resolver here).
+        Assert.Equal("EPBC: {{EPBC status|CR|1|1|label=SPRAT}}; IUCN: {{IUCN status|CR}}; WA: CR", gilbert.StatusAnnotation);
         Assert.Equal("Gilbert's Potoroo", gilbert.CommonNameOverride);
         Assert.Equal("Potorous", gilbert.GenusName);
         Assert.Equal("gilbertii", gilbert.SpeciesName);
@@ -162,10 +162,10 @@ public class SpratListTests {
         using (var cmd = iucnConn.CreateCommand()) {
             cmd.CommandText = @"
                 CREATE TABLE taxonomy_html (taxonId INTEGER, scientificName TEXT);
-                CREATE TABLE assessments_html (taxonId INTEGER, assessmentId INTEGER, yearPublished TEXT, scopes TEXT, possiblyExtinct TEXT, possiblyExtinctInTheWild TEXT);
+                CREATE TABLE assessments_html (taxonId INTEGER, assessmentId INTEGER, yearPublished TEXT, redlistCategory TEXT, scopes TEXT, possiblyExtinct TEXT, possiblyExtinctInTheWild TEXT);
                 INSERT INTO taxonomy_html VALUES (5112, 'Pseudomys fieldi');
-                INSERT INTO assessments_html VALUES (5112, 271898609, '2018', 'Europe', 'false', 'false');
-                INSERT INTO assessments_html VALUES (5112, 145357488, '2016', 'Global', 'false', 'false');";
+                INSERT INTO assessments_html VALUES (5112, 271898609, '2018', 'Data Deficient', 'Europe', 'false', 'false');
+                INSERT INTO assessments_html VALUES (5112, 145357488, '2016', 'Endangered', 'Global', 'false', 'false');";
             cmd.ExecuteNonQuery();
         }
         using var resolver = new IucnAssessmentResolver(iucnConn);
@@ -175,8 +175,34 @@ public class SpratListTests {
         using var query = SpratListQueryService.OpenFromConnection(conn, resolver);
 
         var mouse = query.Query(new SpratTaxonFilter(Kingdom: "Animalia", Classes: new[] { "Mammalia" })).Single();
-        // Full referenced form, using the GLOBAL assessment (145357488/2016), not the more-recent Europe one.
-        Assert.Equal("IUCN: {{IUCN status|EN|5112/145357488|1|year=2016}}", mouse.StatusAnnotation);
+        // Full referenced form, using the GLOBAL assessment (145357488/2016 Endangered), not the more-recent
+        // Europe one; the year is a bare label (the annotation already prints "IUCN:").
+        Assert.Equal("IUCN: {{IUCN status|EN|5112/145357488|1|label=2016}}", mouse.StatusAnnotation);
+    }
+
+    [Fact]
+    public void IucnResolver_BadgeCodeComesFromResolvedAssessment_NotSpratStatus() {
+        // SPRAT records Data Deficient (e.g. from a multi-name cell), but the resolved Global assessment
+        // for Myotis macropus is Least Concern. The badge must show LC so its code matches the assessment
+        // it links to — not the divergent SPRAT iucn_status.
+        var iucnConn = new SqliteConnection("Data Source=:memory:");
+        iucnConn.Open();
+        using (var cmd = iucnConn.CreateCommand()) {
+            cmd.CommandText = @"
+                CREATE TABLE taxonomy_html (taxonId INTEGER, scientificName TEXT);
+                CREATE TABLE assessments_html (taxonId INTEGER, assessmentId INTEGER, yearPublished TEXT, redlistCategory TEXT, scopes TEXT, possiblyExtinct TEXT, possiblyExtinctInTheWild TEXT);
+                INSERT INTO taxonomy_html VALUES (136697, 'Myotis macropus');
+                INSERT INTO assessments_html VALUES (136697, 22039960, '2021', 'Least Concern', 'Global', 'false', 'false');";
+            cmd.ExecuteNonQuery();
+        }
+        using var resolver = new IucnAssessmentResolver(iucnConn);
+
+        using var conn = SeedSpratFrom(
+            "\"10\",\"Myotis macropus\",\"Large-footed myotis\",\"\",\"Data Deficient\",\"Animalia\",\"Mammalia\",\"Chiroptera\",\"Vespertilionidae\",\"Myotis\",\"VU\",\"\"");
+        using var query = SpratListQueryService.OpenFromConnection(conn, resolver);
+
+        var bat = query.Query(new SpratTaxonFilter(Kingdom: "Animalia", Classes: new[] { "Mammalia" })).Single();
+        Assert.Equal("IUCN: {{IUCN status|LC|136697/22039960|1|label=2021}}; NSW: VU", bat.StatusAnnotation);
     }
 
     [Fact]
@@ -186,9 +212,9 @@ public class SpratListTests {
         using (var cmd = iucnConn.CreateCommand()) {
             cmd.CommandText = @"
                 CREATE TABLE taxonomy_html (taxonId INTEGER, scientificName TEXT);
-                CREATE TABLE assessments_html (taxonId INTEGER, assessmentId INTEGER, yearPublished TEXT, scopes TEXT, possiblyExtinct TEXT, possiblyExtinctInTheWild TEXT);
+                CREATE TABLE assessments_html (taxonId INTEGER, assessmentId INTEGER, yearPublished TEXT, redlistCategory TEXT, scopes TEXT, possiblyExtinct TEXT, possiblyExtinctInTheWild TEXT);
                 INSERT INTO taxonomy_html VALUES (2381, 'Litoria aurea');
-                INSERT INTO assessments_html VALUES (2381, 12143, '2019', 'Global', 'false', 'false');";
+                INSERT INTO assessments_html VALUES (2381, 12143, '2019', 'Vulnerable', 'Global', 'false', 'false');";
             cmd.ExecuteNonQuery();
         }
         using var resolver = new IucnAssessmentResolver(iucnConn);
@@ -203,7 +229,7 @@ public class SpratListTests {
 
         var records = query.Query(new SpratTaxonFilter(Kingdom: "Animalia"));
         var frog = records.Single(r => r.GenusName == "Ranoidea");
-        Assert.Equal("IUCN: {{IUCN status|VU|2381/12143|1|year=2019}}", frog.StatusAnnotation);   // via listed name
+        Assert.Equal("IUCN: {{IUCN status|VU|2381/12143|1|label=2019}}", frog.StatusAnnotation);   // via listed name
         var fish = records.Single(r => r.GenusName == "Gadopsis");
         Assert.Equal("IUCN: {{IUCN status|EN}}", fish.StatusAnnotation);                          // unresolved → bare
     }
@@ -234,7 +260,7 @@ public class SpratListTests {
         Assert.Equal("gunnii", acacia.SpeciesName);
         Assert.Equal("minor", acacia.InfraName);
         Assert.Equal("var.", acacia.InfraType);
-        Assert.Equal("EPBC: {{EPBC status|VU|3|1}}", acacia.StatusAnnotation);
+        Assert.Equal("EPBC: {{EPBC status|VU|3|1|label=SPRAT}}", acacia.StatusAnnotation);
 
         // ExcludeClasses drops the only (Magnoliopsida) plant member → the catch-all is empty here.
         var nonFlowering = query.Query(new SpratTaxonFilter(Kingdom: "Plantae", ExcludeClasses: new[] { "Magnoliopsida" }));
