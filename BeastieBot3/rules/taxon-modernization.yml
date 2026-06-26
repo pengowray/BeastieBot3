@@ -79,9 +79,9 @@ order_notes:
     note: "Order placement follows the [[Australian Faunal Directory]]; the EPBC source data groups these families under the obsolete order ''Polyprotodonta''."
     reference: "{{cite web |title=Order PERAMELEMORPHIA |website=Australian Faunal Directory |publisher=Australian Biological Resources Study |url=https://biodiversity.org.au/afd/taxa/PERAMELEMORPHIA |access-date=26 June 2026}}"
   Eulipotyphla:
-    ref_name: afd-eulipotyphla
-    note: "Order name follows the [[Australian Faunal Directory]]; the EPBC source data uses the obsolete order ''Insectivora''."
-    reference: "{{cite web |title=Order EULIPOTYPHLA |website=Australian Faunal Directory |publisher=Australian Biological Resources Study |url=https://biodiversity.org.au/afd/taxa/EULIPOTYPHLA |access-date=26 June 2026}}"
+    ref_name: mdd-eulipotyphla
+    note: "The order Eulipotyphla follows the [[American Society of Mammalogists]]' [[Mammal Diversity Database]]; the EPBC source data and the [[Australian Faunal Directory]] both retain the obsolete order ''Insectivora''."
+    reference: "{{cite web |title=Order Eulipotyphla |website=Mammal Diversity Database |publisher=American Society of Mammalogists |url=https://www.mammaldiversity.org/order/eulipotyphla/ |access-date=26 June 2026}}"
   Carnivora:
     ref_name: afd-carnivora
     note: "The pinnipeds (seals and sea lions) are placed in Carnivora following the [[Australian Faunal Directory]]; the EPBC source data lists them under the separate order ''Pinnipedia''."
