@@ -13,19 +13,19 @@ using BeastieBot3.WikipediaLists;
 using BeastieBot3.WikipediaLists.Legacy;
 
 // CLI entry point for the Australia threatened-species lists. Generates one
-// "List of threatened <group> of Australia" wikitext page per major taxonomic group from the
+// "List of rare and threatened <group> of Australia" wikitext page per major taxonomic group from the
 // imported SPRAT database, combining EPBC Act and IUCN threatened status (Phase 1) with the state /
 // territory statuses shown inline. Reuses the Wikipedia-list renderer via SpratListGenerator.
 
 namespace BeastieBot3.Sprat;
 
 [CommandInfo("sprat generate-lists", CommandKind.ReadOnly,
-    "Generate 'threatened <group> of Australia' wikitext lists from the SPRAT (EPBC) + IUCN data.",
+    "Generate 'rare and threatened <group> of Australia' wikitext lists from the SPRAT (EPBC) + IUCN data.",
     Reason = "Generates wikitext list output files only.",
     Examples = new[] {
         "sprat generate-lists",
         "sprat generate-lists --group mammals",
-        "sprat generate-lists --group plants --limit 100",
+        "sprat generate-lists --group dicots --limit 100",
     })]
 public sealed class SpratGenerateListsCommand : Command<SpratGenerateListsCommand.Settings> {
     public sealed class Settings : CommonSettings {
@@ -34,7 +34,7 @@ public sealed class SpratGenerateListsCommand : Command<SpratGenerateListsComman
         public string? DatabasePath { get; init; }
 
         [CommandOption("--group <ID>")]
-        [System.ComponentModel.Description("Filter to specific group ids (repeatable): mammals, birds, reptiles, amphibians, fish, invertebrates, plants.")]
+        [System.ComponentModel.Description("Filter to specific group ids (repeatable): mammals, birds, reptiles, amphibians, fish, invertebrates, dicots, monocots, ferns-conifers-allies.")]
         public string[]? Groups { get; init; }
 
         [CommandOption("--output-dir <DIR>")]

@@ -8,7 +8,7 @@ using BeastieBot3.CommonNames;
 using BeastieBot3.WikipediaLists;
 using BeastieBot3.WikipediaLists.Legacy;
 
-// Generates the "List of threatened <group> of Australia" wikitext pages from SPRAT. Reuses the
+// Generates the "List of rare and threatened <group> of Australia" wikitext pages from SPRAT. Reuses the
 // existing taxonomy-tree renderer (SectionBodyRenderer + SpeciesLineFormatter + HeadingFormatter)
 // for the species body — taxonomy grouping, infraspecific handling, and the three listing styles —
 // but owns its own SPRAT/EPBC-flavoured intro and footer prose (the IUCN generator's IntroProseBuilder
@@ -26,10 +26,6 @@ internal sealed class SpratListGenerator {
     // SPRAT's own vernacular is used, sentence-cased via the caps rules.
     private readonly StoreBackedCommonNameProvider? _hub;
     private readonly IReadOnlyDictionary<string, string> _capsRules;
-
-    // Status sections, most-severe first. Mirrors AustralianStatus.QualifyingBySeverity: the three
-    // threatened categories, then Near Threatened, then the state "Rare" category.
-    private static readonly string[] SectionOrder = { "CR", "EN", "VU", "NT", "Rare" };
 
     private static readonly IReadOnlyList<GroupingLevelDefinition> Grouping = new[] {
         new GroupingLevelDefinition { Level = "order", Label = "Order", UnknownLabel = "Other orders" },
@@ -59,31 +55,23 @@ internal sealed class SpratListGenerator {
         var records = _query.Query(group.Filter, limit).Select(Enrich).ToList();
         var display = BuildDisplay(group.Style);
 
-        var body = new StringBuilder();
-        var total = 0;
-        foreach (var code in SectionOrder) {
-            var sectionRecords = records.Where(r => string.Equals(r.StatusCode, code, StringComparison.OrdinalIgnoreCase)).ToList();
-            if (sectionRecords.Count == 0) {
-                continue;
-            }
-            total += sectionRecords.Count;
-            var heading = IucnRedlistStatus.Describe(code).Label ?? code;
-            body.AppendLine($"== {heading} ==");
-            var (sectionBody, _) = _renderer.BuildSectionBody(sectionRecords, Grouping, display, code, customGroups: null, startHeading: 3, autoSplit: null);
-            body.AppendLine(sectionBody);
-            body.AppendLine();
-        }
+        // One combined phylogenetic tree (grouped by order → family), not split by conservation
+        // status. Each taxon's CR/EN/VU/NT/Rare standing is carried inline in its multi-system status
+        // annotation, so no per-status sections are emitted.
+        var (body, _) = _renderer.BuildSectionBody(
+            records, Grouping, display, statusContext: null, customGroups: null, startHeading: 2, autoSplit: null);
 
         var content = new StringBuilder();
         content.AppendLine(BuildIntro(group, records));
         content.AppendLine();
-        content.Append(body);
+        content.AppendLine(body);
+        content.AppendLine();
         content.AppendLine(BuildFooter(group));
 
         Directory.CreateDirectory(outputDirectory);
         var outputPath = Path.Combine(outputDirectory, group.OutputFile);
         File.WriteAllText(outputPath, content.ToString());
-        return new SpratListResult(group, outputPath, total);
+        return new SpratListResult(group, outputPath, records.Count);
     }
 
     /// <summary>
@@ -168,7 +156,7 @@ internal sealed class SpratListGenerator {
         var sb = new StringBuilder();
         sb.AppendLine($"{{{{Use dmy dates|date={month}}}}}");
         sb.AppendLine();
-        sb.Append($"This is a list of the threatened {group.TaxaName} of [[Australia]]. ");
+        sb.Append($"This is a list of the rare and threatened {group.TaxaName} of [[Australia]]. ");
         sb.Append($"It covers {group.Adjective} species and infraspecific taxa listed as ");
         sb.Append("[[Critically endangered species|critically endangered]], [[Endangered species|endangered]], [[Vulnerable species|vulnerable]], [[Near-threatened species|near threatened]], or rare ");
         sb.Append("under Australia's national [[Environment Protection and Biodiversity Conservation Act 1999]] (EPBC Act)");

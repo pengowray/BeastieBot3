@@ -305,14 +305,14 @@ public static class FlowCatalogue {
 
         // ---------------------------------------------------------------
         // Australia (SPRAT): a self-contained pipeline — import the EPBC
-        // report CSV, then generate the "threatened <group> of Australia"
+        // report CSV, then generate the "rare and threatened <group> of Australia"
         // lists. Independent of the IUCN dataset (SPRAT carries its own IUCN
         // status column); the common-names hub is an optional enrichment.
         // ---------------------------------------------------------------
         new FlowDefinition {
             Id = "sprat-australia",
             Title = "Australian threatened-species lists (SPRAT)",
-            Description = "Import the Australian Government's SPRAT (Species Profile and Threats Database) report and generate \"List of threatened <group> of Australia\" wikitext pages. Membership spans the EPBC Act, the IUCN Red List, and the eight state/territory acts, and every entry shows its status under each system. A self-contained pipeline — it does not need the IUCN import.",
+            Description = "Import the Australian Government's SPRAT (Species Profile and Threats Database) report and generate \"List of rare and threatened <group> of Australia\" wikitext pages. Membership spans the EPBC Act, the IUCN Red List, and the eight state/territory acts, and every entry shows its status under each system. A self-contained pipeline — it does not need the IUCN import.",
             Steps = new[] {
                 new FlowStep {
                     Id = "sprat-import",
@@ -326,7 +326,7 @@ public static class FlowCatalogue {
                 new FlowStep {
                     Id = "sprat-generate",
                     Title = "Generate the Australia lists",
-                    Description = "Produce one \"List of threatened <group> of Australia\" wikitext page per major taxonomic group (mammals, birds, fish, invertebrates; dicots by order, monocots, ferns and other plants).",
+                    Description = "Produce one \"List of rare and threatened <group> of Australia\" wikitext page per major taxonomic group (mammals, birds, reptiles, amphibians, fish, invertebrates; dicots, monocots, ferns/conifers/allies).",
                     Commands = new[] { "sprat generate-lists" },
                     InputSourceIds = new[] { "sprat-sqlite", "common-names", "wikipedia-cache" },
                     OutputSourceIds = Array.Empty<string>(),
@@ -335,7 +335,7 @@ public static class FlowCatalogue {
             },
             Outputs = new[] {
                 new FlowResource { Label = "Australia lists", Root = "wikipedia-output", Path = "australia", Kind = "directory",
-                    Description = "Generated \"List of threatened <group> of Australia\" wikitext files." },
+                    Description = "Generated \"List of rare and threatened <group> of Australia\" wikitext files." },
             },
         },
 
