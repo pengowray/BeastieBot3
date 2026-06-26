@@ -71,8 +71,8 @@ internal sealed class HtmlConsistencyProducer : IAuditReportProducer {
                 AuditColumns.ScientificName("Species"),
                 AuditColumns.Status(),
                 AuditColumns.IssueType(),
-                AuditColumns.CurrentValue("Stored plain text", AuditColumnType.LongText),
-                AuditColumns.SuggestedValue("Recreated from HTML", AuditColumnType.LongText),
+                AuditColumns.CurrentValue("Plain text at difference", AuditColumnType.LongText),
+                AuditColumns.SuggestedValue("HTML text at difference", AuditColumnType.LongText),
                 AuditColumns.Detail(),
                 AuditColumns.Class(),
                 AuditColumns.TaxonId("Taxon id"),
@@ -138,6 +138,11 @@ internal sealed class HtmlConsistencyProducer : IAuditReportProducer {
                     continue;
                 }
 
+                // The two sides usually agree at the start (the plain field is often a truncated
+                // prefix), so show each column windowed around the first point of difference rather
+                // than the identical opening characters.
+                var diffAt = FirstDifference(plainText, htmlText);
+
                 var rawHtmlLen = htmlVal?.Length ?? 0;
                 var redundant = rawHtmlLen >= RedundantMinHtmlChars && htmlText.Length > 0 && rawHtmlLen >= htmlText.Length * RedundantRatio;
                 var ratio = htmlText.Length > 0 ? (double)rawHtmlLen / htmlText.Length : 0;
@@ -194,8 +199,8 @@ internal sealed class HtmlConsistencyProducer : IAuditReportProducer {
                     YearPublished = year,
                     DataSource = "iucn-csv",
                     Field = field,
-                    CurrentValue = IucnHtmlUtilities.ShortenForDisplay(plainVal),
-                    SuggestedValue = IucnHtmlUtilities.ShortenForDisplay(IucnHtmlUtilities.ConvertHtmlToPlainTextNeater(htmlVal)),
+                    CurrentValue = Window(plainText, diffAt),
+                    SuggestedValue = Window(htmlText, diffAt),
                     IssueType = issueType,
                     SeverityTier = severity,
                     Detail = detail,
@@ -213,6 +218,34 @@ internal sealed class HtmlConsistencyProducer : IAuditReportProducer {
             .ThenBy(f => f.Field, StringComparer.Ordinal)
             .ThenBy(f => f.AssessmentId)
             .ToList();
+    }
+
+    // Index of the first character where two strings differ (or the shorter length when one is a
+    // prefix of the other). Used to centre the display window on where the two versions diverge.
+    private static int FirstDifference(string a, string b) {
+        var n = Math.Min(a.Length, b.Length);
+        var i = 0;
+        while (i < n && a[i] == b[i]) {
+            i++;
+        }
+        return i;
+    }
+
+    // A readable window of text around a position, with leading/trailing ellipses when it is clipped.
+    private static string Window(string value, int center, int before = 40, int length = 200) {
+        if (string.IsNullOrEmpty(value)) {
+            return "";
+        }
+        var start = Math.Max(0, center - before);
+        var take = Math.Min(length, value.Length - start);
+        if (take <= 0) {
+            start = Math.Max(0, value.Length - length);
+            take = value.Length - start;
+        }
+        var slice = value.Substring(start, take);
+        var prefix = start > 0 ? "…" : "";
+        var suffix = start + take < value.Length ? "…" : "";
+        return prefix + slice + suffix;
     }
 
     // Reduces text to its readable form for comparison: decode entities, treat every whitespace and
