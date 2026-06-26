@@ -28,6 +28,9 @@ internal readonly record struct ModernizationChange(
 /// <summary>An obsolete/non-standard order left unchanged, to be flagged for manual review.</summary>
 internal sealed record FlagOrder(string Order, string? Suggest, string? Note);
 
+/// <summary>A curated note + Wikipedia reference emitted under a modernized order heading.</summary>
+internal sealed record OrderNote(string RefName, string Note, string Reference);
+
 /// <summary>A non-standard status value that passed through verbatim (e.g. "Other protected fauna").</summary>
 internal readonly record struct StatusFinding(string System, string Value, string ExampleTaxon);
 
@@ -55,20 +58,26 @@ internal sealed class TaxonModernizer {
     /// <summary>Obsolete/non-standard orders left unchanged, surfaced in the recommendations report.</summary>
     public IReadOnlyList<FlagOrder> FlagOrders { get; }
 
+    /// <summary>Modern order name → the note + reference to emit under its heading when modernized.</summary>
+    public IReadOnlyDictionary<string, OrderNote> OrderNotes { get; }
+
     private TaxonModernizer(
         IReadOnlyDictionary<string, OrderRule> orderRenames,
         IReadOnlyDictionary<string, IReadOnlyDictionary<string, string>> orderByFamily,
-        IReadOnlyList<FlagOrder> flagOrders) {
+        IReadOnlyList<FlagOrder> flagOrders,
+        IReadOnlyDictionary<string, OrderNote> orderNotes) {
         _orderRenames = orderRenames;
         _orderByFamily = orderByFamily;
         FlagOrders = flagOrders;
+        OrderNotes = orderNotes;
     }
 
     /// <summary>An engine that applies no changes (used when the config is absent).</summary>
     public static TaxonModernizer Empty() => new(
         new Dictionary<string, OrderRule>(StringComparer.OrdinalIgnoreCase),
         new Dictionary<string, IReadOnlyDictionary<string, string>>(StringComparer.OrdinalIgnoreCase),
-        new List<FlagOrder>());
+        new List<FlagOrder>(),
+        new Dictionary<string, OrderNote>(StringComparer.OrdinalIgnoreCase));
 
     public static TaxonModernizer Load(string path) {
         if (string.IsNullOrWhiteSpace(path) || !File.Exists(path)) {
@@ -111,7 +120,15 @@ internal sealed class TaxonModernizer {
             }
         }
 
-        return new TaxonModernizer(renames, byFamily, flags);
+        var notes = new Dictionary<string, OrderNote>(StringComparer.OrdinalIgnoreCase);
+        foreach (var (order, n) in root.OrderNotes ?? new Dictionary<string, NoteRule>()) {
+            if (!string.IsNullOrWhiteSpace(order) && !string.IsNullOrWhiteSpace(n.Note)
+                && !string.IsNullOrWhiteSpace(n.Reference) && !string.IsNullOrWhiteSpace(n.RefName)) {
+                notes[order.Trim()] = new OrderNote(n.RefName!.Trim(), n.Note!.Trim(), n.Reference!.Trim());
+            }
+        }
+
+        return new TaxonModernizer(renames, byFamily, flags, notes);
     }
 
     /// <summary>
@@ -145,6 +162,13 @@ internal sealed class TaxonModernizer {
         public List<OrderRule>? Orders { get; set; }
         public Dictionary<string, Dictionary<string, string>>? OrderByFamily { get; set; }
         public List<FlagRule>? FlagOrders { get; set; }
+        public Dictionary<string, NoteRule>? OrderNotes { get; set; }
+    }
+
+    private sealed class NoteRule {
+        public string? RefName { get; set; }
+        public string? Note { get; set; }
+        public string? Reference { get; set; }
     }
 
     internal sealed class OrderRule {

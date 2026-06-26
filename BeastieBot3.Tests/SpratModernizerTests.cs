@@ -54,6 +54,24 @@ public class SpratModernizerTests {
     }
 
     [Fact]
+    public void OrderNotes_LoadFromConfig() {
+        var m = LoadFrom("""
+            order_notes:
+              Diprotodontia:
+                ref_name: afd-diprotodontia
+                note: "Follows the [[Australian Faunal Directory]]."
+                reference: "{{cite web |title=Order DIPROTODONTIA |url=https://example.org}}"
+            """);
+        Assert.True(m.OrderNotes.ContainsKey("Diprotodontia"));
+        var note = m.OrderNotes["Diprotodontia"];
+        Assert.Equal("afd-diprotodontia", note.RefName);
+        Assert.Contains("Australian Faunal Directory", note.Note);
+        Assert.Contains("cite web", note.Reference);
+        // A note missing required fields is skipped.
+        Assert.Empty(TaxonModernizer.Empty().OrderNotes);
+    }
+
+    [Fact]
     public void NoRule_ReturnsNull() {
         var m = LoadFrom(Config);
         Assert.Null(m.ModernizeOrder("Rodentia", "Muridae"));   // valid order, no rule

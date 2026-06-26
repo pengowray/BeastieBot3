@@ -61,6 +61,32 @@ order_by_family:
     Thylacomyidae: Peramelemorphia
     Notoryctidae: Notoryctemorphia
 
+# --- Per-order notes + Wikipedia references emitted under a modernized order heading. -------------
+# A modernized heading carries a small note crediting the modern authority (the Australian Faunal
+# Directory) and naming the obsolete SPRAT/EPBC form. Only emitted when that order was actually a
+# modernization target in the list (so e.g. Carnivora is annotated only where pinnipeds were folded in).
+order_notes:
+  Diprotodontia:
+    ref_name: afd-diprotodontia
+    note: "Order name follows the [[Australian Faunal Directory]]; the EPBC source data uses the older spelling ''Diprotodonta''."
+    reference: "{{cite web |title=Order DIPROTODONTIA |website=Australian Faunal Directory |publisher=Australian Biological Resources Study |url=https://biodiversity.org.au/afd/taxa/DIPROTODONTIA |access-date=26 June 2026}}"
+  Dasyuromorphia:
+    ref_name: afd-dasyuromorphia
+    note: "Order placement follows the [[Australian Faunal Directory]]; the EPBC source data groups these families under the obsolete order ''Polyprotodonta''."
+    reference: "{{cite web |title=Order DASYUROMORPHIA |website=Australian Faunal Directory |publisher=Australian Biological Resources Study |url=https://biodiversity.org.au/afd/taxa/DASYUROMORPHIA |access-date=26 June 2026}}"
+  Peramelemorphia:
+    ref_name: afd-peramelemorphia
+    note: "Order placement follows the [[Australian Faunal Directory]]; the EPBC source data groups these families under the obsolete order ''Polyprotodonta''."
+    reference: "{{cite web |title=Order PERAMELEMORPHIA |website=Australian Faunal Directory |publisher=Australian Biological Resources Study |url=https://biodiversity.org.au/afd/taxa/PERAMELEMORPHIA |access-date=26 June 2026}}"
+  Eulipotyphla:
+    ref_name: afd-eulipotyphla
+    note: "Order name follows the [[Australian Faunal Directory]]; the EPBC source data uses the obsolete order ''Insectivora''."
+    reference: "{{cite web |title=Order EULIPOTYPHLA |website=Australian Faunal Directory |publisher=Australian Biological Resources Study |url=https://biodiversity.org.au/afd/taxa/EULIPOTYPHLA |access-date=26 June 2026}}"
+  Carnivora:
+    ref_name: afd-carnivora
+    note: "The pinnipeds (seals and sea lions) are placed in Carnivora following the [[Australian Faunal Directory]]; the EPBC source data lists them under the separate order ''Pinnipedia''."
+    reference: "{{cite web |title=Order CARNIVORA |website=Australian Faunal Directory |publisher=Australian Biological Resources Study |url=https://biodiversity.org.au/afd/taxa/CARNIVORA |access-date=26 June 2026}}"
+
 # --- Orders deliberately NOT auto-changed: flagged for review in the CSV-recommendations report. ---
 # These are obsolete/non-standard but need judgement (a contested split, a name still in wide use, or a
 # group outside the current mammal focus). `suggest` is the likely modern name; refine before applying.

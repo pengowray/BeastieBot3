@@ -80,6 +80,7 @@ internal sealed class SpratListGenerator {
         // annotation, so no per-status sections are emitted.
         var (body, _) = _renderer.BuildSectionBody(
             records, Grouping, display, statusContext: null, customGroups: null, startHeading: 2, autoSplit: null);
+        body = InjectOrderNotes(body, group);
 
         var content = new StringBuilder();
         content.AppendLine(BuildIntro(group, records));
@@ -92,6 +93,30 @@ internal sealed class SpratListGenerator {
         var outputPath = Path.Combine(outputDirectory, group.OutputFile);
         File.WriteAllText(outputPath, content.ToString());
         return new SpratListResult(group, outputPath, records.Count);
+    }
+
+    // Inserts a curated note + Australian Faunal Directory reference beneath each modernized order
+    // heading (e.g. "== Order Diprotodontia ==") — but only for orders that were actually a
+    // modernization target in THIS list, so a pre-existing heading like Carnivora is annotated only
+    // where the pinnipeds were folded into it.
+    private string InjectOrderNotes(string body, SpratListGroup group) {
+        if (_modernizer.OrderNotes.Count == 0) {
+            return body;
+        }
+        var targets = _modernizationLog.Changes
+            .Where(c => c.Group == group.Id && c.Field == "order")
+            .Select(c => c.To)
+            .Distinct(StringComparer.OrdinalIgnoreCase);
+
+        foreach (var to in targets) {
+            if (!_modernizer.OrderNotes.TryGetValue(to, out var note)) {
+                continue;
+            }
+            var heading = $"== Order {to} ==";
+            var noteLine = $"<small>{note.Note}<ref name=\"{note.RefName}\">{note.Reference}</ref></small>";
+            body = body.Replace(heading, heading + Environment.NewLine + noteLine);
+        }
+        return body;
     }
 
     /// <summary>
