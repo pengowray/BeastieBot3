@@ -28,6 +28,8 @@ internal sealed class SpratListGenerator {
     private readonly IReadOnlyDictionary<string, string> _capsRules;
     private readonly TaxonModernizer _modernizer;
     private readonly ModernizationLog _modernizationLog;
+    private readonly Dictionary<string, int> _orderCounts = new(StringComparer.OrdinalIgnoreCase);
+    private readonly List<DescriptiveNameFinding> _redlinkNames = new();
 
     private static readonly IReadOnlyList<GroupingLevelDefinition> Grouping = new[] {
         new GroupingLevelDefinition { Level = "order", Label = "Order", UnknownLabel = "Other orders" },
@@ -39,6 +41,15 @@ internal sealed class SpratListGenerator {
 
     /// <summary>The modernizations applied across every list this generator has produced.</summary>
     public ModernizationLog ModernizationLog => _modernizationLog;
+
+    /// <summary>The taxon-modernizer (exposes its curated flag-orders for the report).</summary>
+    public TaxonModernizer Modernizer => _modernizer;
+
+    /// <summary>Raw SPRAT order names seen (pre-modernization) → taxa count, for flag-order detection.</summary>
+    public IReadOnlyDictionary<string, int> OrderCounts => _orderCounts;
+
+    /// <summary>Descriptive non-trinomial names that redlink, with the binomial they should target.</summary>
+    public IReadOnlyList<DescriptiveNameFinding> RedlinkNames => _redlinkNames;
 
     public SpratListGenerator(
         SpratListQueryService query,
@@ -90,14 +101,30 @@ internal sealed class SpratListGenerator {
     /// doesn't know the taxon.
     /// </summary>
     private IucnSpeciesRecord Enrich(IucnSpeciesRecord r, SpratListGroup group) {
+        if (!string.IsNullOrWhiteSpace(r.OrderName)) {
+            var key = r.OrderName.Trim();
+            _orderCounts[key] = _orderCounts.TryGetValue(key, out var c) ? c + 1 : 1;
+        }
+
         // Modernize the order name (heading + grouping key + sort all see the corrected value, since
         // Enrich runs before BuildSectionBody). Every change is logged for the reports.
         var orderChange = _modernizer.ModernizeOrder(r.OrderName, r.FamilyName);
         if (orderChange is not null) {
             _modernizationLog.Record(new ModernizationChange(
                 group.Id, r.TaxonId, r.ScientificNameTaxonomy ?? r.ScientificNameAssessments ?? "",
-                "order", orderChange.From, orderChange.To, orderChange.Kind, orderChange.EpbcListedAs));
+                "order", orderChange.From, orderChange.To, orderChange.Kind, orderChange.EpbcListedAs,
+                orderChange.FixedElsewhere, orderChange.Note));
             r = r with { OrderName = orderChange.To };
+        }
+
+        // A descriptive non-trinomial name ("Bettongia lesueur Barrow and Boodie Islands subspecies"):
+        // ParseName found a rank marker but no clean epithet. These redlink the full phrase — record
+        // them and point the link at the binomial instead.
+        if (!string.IsNullOrWhiteSpace(r.InfraType) && string.IsNullOrWhiteSpace(r.InfraName)
+            && !string.IsNullOrWhiteSpace(r.GenusName) && !string.IsNullOrWhiteSpace(r.SpeciesName)) {
+            var binomial = $"{r.GenusName} {r.SpeciesName}";
+            _redlinkNames.Add(new DescriptiveNameFinding(
+                group.Id, r.ScientificNameTaxonomy ?? "", binomial));
         }
 
         var kingdomUpper = string.IsNullOrWhiteSpace(r.KingdomName) ? null : r.KingdomName.ToUpperInvariant();
@@ -133,6 +160,13 @@ internal sealed class SpratListGenerator {
                 && !string.Equals(genusSpecies, fullSci, StringComparison.OrdinalIgnoreCase)) {
                 article = _hub.GetWikipediaArticleTitleByScientificName(genusSpecies, kingdomUpper);
             }
+        }
+
+        // For a descriptive non-trinomial that the hub couldn't resolve, point the link at the binomial
+        // (often a redirect to the taxon's article) rather than letting it redlink the whole phrase.
+        if (article is null && !string.IsNullOrWhiteSpace(r.InfraType) && string.IsNullOrWhiteSpace(r.InfraName)
+            && genusSpecies is not null && !string.Equals(genusSpecies, fullSci, StringComparison.OrdinalIgnoreCase)) {
+            article = genusSpecies;
         }
 
         return r with { CommonNameOverride = common, ArticleTitleOverride = article };

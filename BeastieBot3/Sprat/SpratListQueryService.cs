@@ -24,6 +24,11 @@ internal sealed class SpratListQueryService : IDisposable {
     // double-quoted identifier that matches no column is silently treated as a string literal — a
     // missing/renamed status column would otherwise inject its own name into the annotation.
     private readonly IReadOnlyList<SpratColumns.ListingSystem> _systems;
+    // Non-standard status values seen across queries (system|value → finding), deduped by system+value.
+    private readonly Dictionary<string, StatusFinding> _unrecognizedStatuses = new(StringComparer.Ordinal);
+
+    /// <summary>Distinct non-standard status values that passed through verbatim, for the report.</summary>
+    public IReadOnlyCollection<StatusFinding> UnrecognizedStatuses => _unrecognizedStatuses.Values;
 
     public SpratListQueryService(string databasePath) {
         if (string.IsNullOrWhiteSpace(databasePath)) {
@@ -141,7 +146,7 @@ internal sealed class SpratListQueryService : IDisposable {
         if (popQualifier is not null) {
             common = StripTrailingParenthetical(common); // the qualifier is shown once, via the subpopulation
         }
-        var annotation = BuildAnnotation(reader, sysOffset);
+        var annotation = BuildAnnotation(reader, sysOffset, cleanSci);
         var descriptor = IucnRedlistStatus.Describe(primaryCode);
         long.TryParse(idRaw, out var taxonId);
 
@@ -175,12 +180,19 @@ internal sealed class SpratListQueryService : IDisposable {
     // "EPBC: CR; IUCN: {{IUCN status|CR}}; WA: CR" — every available system with a non-blank status,
     // in order. The IUCN entry is wrapped in the {{IUCN status}} colour badge to match the other
     // Wikipedia lists; SPRAT carries no IUCN assessment id, so the bare (citation-less) form is used.
-    private string? BuildAnnotation(SqliteDataReader reader, int sysOffset) {
+    private string? BuildAnnotation(SqliteDataReader reader, int sysOffset, string? scientific) {
         var parts = new List<string>();
         for (var i = 0; i < _systems.Count; i++) {
             var code = AustralianStatus.ShortCode(GetString(reader, sysOffset + i));
             if (code is null) {
                 continue;
+            }
+            if (!AustralianStatus.IsKnownCode(code)) {
+                // An unrecognised cell value passed through verbatim — flag it for the report.
+                var key = $"{_systems[i].Key}|{code}";
+                if (!_unrecognizedStatuses.ContainsKey(key)) {
+                    _unrecognizedStatuses[key] = new StatusFinding(_systems[i].Label, code, scientific ?? "");
+                }
             }
             var rendered = _systems[i].Key == "iucn" && IucnTemplateCodes.Contains(code)
                 ? $"{{{{IUCN status|{code}}}}}"

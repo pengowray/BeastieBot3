@@ -38,6 +38,14 @@ internal static class AustralianStatus {
         return head;
     }
 
+    // The short codes ShortCode produces for recognised statuses; anything else it returns is a
+    // verbatim pass-through (an unrecognised cell, e.g. "Other protected fauna") worth flagging.
+    private static readonly HashSet<string> KnownCodes =
+        new(StringComparer.Ordinal) { "CR", "EN", "VU", "EW", "EX", "NT", "CD", "LC", "DD", "Rare" };
+
+    /// <summary>True when <paramref name="code"/> is one of the recognised short codes (not a pass-through).</summary>
+    public static bool IsKnownCode(string? code) => code is not null && KnownCodes.Contains(code);
+
     /// <summary>
     /// True when the raw status is a threatened category — Critically Endangered, Endangered, or
     /// Vulnerable (the strict IUCN-style sense; excludes Near Threatened / Rare).

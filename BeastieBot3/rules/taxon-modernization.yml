@@ -13,6 +13,8 @@
 # epbc_listed_as: set when the original spelling appears in the official EPBC listing itself (i.e. a
 #        genuine "sic" worth a citation), as opposed to a CSV-only artefact corrected by every modern
 #        authority. Drives whether the list emits a referenced note vs. a silent correction.
+# fixed_elsewhere: true when modern authorities already use the corrected name (so the SPRAT spelling
+#        is a data artefact); false/absent when the official source still carries it. Reported per change.
 
 # --- Simple 1:1 order renames ---------------------------------------------------------------------
 orders:
@@ -20,22 +22,34 @@ orders:
     to: Diprotodontia
     kind: typo
     epbc_listed_as: Diprotodonta
+    fixed_elsewhere: true
+    note: Malformed ending; the valid ordinal name is Diprotodontia.
   - from: Insectivora
     to: Eulipotyphla
     kind: obsolete
+    fixed_elsewhere: true
+    note: Insectivora is an abandoned polyphyletic order; Australian shrews are Eulipotyphla.
   - from: Pinnipedia
     to: Carnivora
     kind: structural
+    fixed_elsewhere: true
+    note: Pinnipeds are a clade within Carnivora, not a separate order.
   - from: Sqaliformes
     to: Squaliformes
     kind: typo
     epbc_listed_as: Sqaliformes
+    fixed_elsewhere: true
+    note: Misspelling of Squaliformes (dogfish sharks).
   - from: Halociprida
     to: Halocyprida
     kind: typo
+    fixed_elsewhere: true
+    note: Misspelling of Halocyprida (ostracods).
   - from: Cyclophyllideae
     to: Cyclophyllidea
     kind: typo
+    fixed_elsewhere: true
+    note: "Misspelling of Cyclophyllidea (tapeworms); -ideae is a botanical subfamily ending."
 
 # --- Family-conditional splits (one obsolete order → several modern orders, keyed by family) -------
 order_by_family:
@@ -46,3 +60,29 @@ order_by_family:
     Peramelidae: Peramelemorphia
     Thylacomyidae: Peramelemorphia
     Notoryctidae: Notoryctemorphia
+
+# --- Orders deliberately NOT auto-changed: flagged for review in the CSV-recommendations report. ---
+# These are obsolete/non-standard but need judgement (a contested split, a name still in wide use, or a
+# group outside the current mammal focus). `suggest` is the likely modern name; refine before applying.
+flag_orders:
+  - order: Ardeiformes
+    suggest: Pelecaniformes
+    note: Non-standard ordinal name for herons/ibises; modern treatment places them in Pelecaniformes.
+  - order: Opisthobranchia
+    suggest: (informal clade)
+    note: Obsolete gastropod grouping, now a paraphyletic informal clade rather than an order.
+  - order: Streptoneura
+    suggest: (informal clade)
+    note: Obsolete gastropod grouping (prosobranchs); not a modern order.
+  - order: Hydroida
+    suggest: Anthoathecata / Leptothecata
+    note: Old hydrozoan order, split in modern classification.
+  - order: Forcipulata
+    suggest: Forcipulatida
+    note: Old sea-star order name; modern ending is -ida.
+  - order: Pulmonata
+    suggest: (informal clade)
+    note: Traditional air-breathing snail grouping, now informal rather than a ranked order.
+  - order: Cetacea
+    suggest: Cetacea (kept)
+    note: Nested within Artiodactyla phylogenetically, but Cetacea is retained here as it remains near-universal.

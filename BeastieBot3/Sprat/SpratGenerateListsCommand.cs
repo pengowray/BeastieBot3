@@ -1,13 +1,15 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Text;
 using System.Threading;
-using System.Collections.Generic;
 using Spectre.Console;
 using Spectre.Console.Cli;
 using BeastieBot3.CommonNames;
 using BeastieBot3.Configuration;
+using BeastieBot3.Infrastructure;
 using BeastieBot3.Wikipedia;
 using BeastieBot3.WikipediaLists;
 using BeastieBot3.WikipediaLists.Legacy;
@@ -110,7 +112,25 @@ public sealed class SpratGenerateListsCommand : Command<SpratGenerateListsComman
         if (modernizations > 0) {
             AnsiConsole.MarkupLine($"[grey]Applied[/] [cyan]{modernizations}[/] [grey]taxonomy modernization(s).[/]");
         }
+
+        WriteReports(paths, query, generator, datasetVersion);
         return 0;
+    }
+
+    private static void WriteReports(
+        PathsService paths, SpratListQueryService query, SpratListGenerator generator, string datasetVersion) {
+        var generatedOn = DateTimeOffset.Now.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture);
+        var applied = SpratReportWriter.BuildAppliedReport(generator.ModernizationLog, datasetVersion, generatedOn);
+        var recs = SpratReportWriter.BuildRecommendationsReport(
+            generator.ModernizationLog, generator.Modernizer.FlagOrders, generator.OrderCounts,
+            query.UnrecognizedStatuses, generator.RedlinkNames, datasetVersion, generatedOn);
+
+        var appliedPath = ReportPathResolver.ResolveFilePath(paths, null, null, null, "sprat-modernization-applied.md");
+        var recsPath = ReportPathResolver.ResolveFilePath(paths, null, null, null, "sprat-csv-recommendations.md");
+        File.WriteAllText(appliedPath, applied, Encoding.UTF8);
+        File.WriteAllText(recsPath, recs, Encoding.UTF8);
+        AnsiConsole.MarkupLine($"[grey]Reports:[/] {appliedPath}");
+        AnsiConsole.MarkupLine($"[grey]        [/] {recsPath}");
     }
 
     private static string ResolveModernizationPath(PathsService paths, string? overridePath) {

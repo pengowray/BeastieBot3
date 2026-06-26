@@ -21,7 +21,19 @@ internal readonly record struct ModernizationChange(
     string From,
     string To,
     string Kind,
-    string? EpbcListedAs);
+    string? EpbcListedAs,
+    bool? FixedElsewhere = null,
+    string? Note = null);
+
+/// <summary>An obsolete/non-standard order left unchanged, to be flagged for manual review.</summary>
+internal sealed record FlagOrder(string Order, string? Suggest, string? Note);
+
+/// <summary>A non-standard status value that passed through verbatim (e.g. "Other protected fauna").</summary>
+internal readonly record struct StatusFinding(string System, string Value, string ExampleTaxon);
+
+/// <summary>A descriptive non-trinomial SPRAT name that links to nothing (redlink), with the binomial
+/// it should point at instead.</summary>
+internal readonly record struct DescriptiveNameFinding(string Group, string ScientificName, string SuggestedLink);
 
 /// <summary>Accumulates every modernization applied across all generated lists in one run.</summary>
 internal sealed class ModernizationLog {
@@ -31,7 +43,8 @@ internal sealed class ModernizationLog {
 }
 
 /// <summary>The result of modernizing one order value: the new name plus the rule's provenance.</summary>
-internal sealed record OrderModernization(string From, string To, string Kind, string? EpbcListedAs);
+internal sealed record OrderModernization(
+    string From, string To, string Kind, string? EpbcListedAs, bool? FixedElsewhere = null, string? Note = null);
 
 internal sealed class TaxonModernizer {
     // from-name (trimmed, case-insensitive) → rename rule.
@@ -39,17 +52,23 @@ internal sealed class TaxonModernizer {
     // obsolete order (case-insensitive) → (family case-insensitive → modern order).
     private readonly IReadOnlyDictionary<string, IReadOnlyDictionary<string, string>> _orderByFamily;
 
+    /// <summary>Obsolete/non-standard orders left unchanged, surfaced in the recommendations report.</summary>
+    public IReadOnlyList<FlagOrder> FlagOrders { get; }
+
     private TaxonModernizer(
         IReadOnlyDictionary<string, OrderRule> orderRenames,
-        IReadOnlyDictionary<string, IReadOnlyDictionary<string, string>> orderByFamily) {
+        IReadOnlyDictionary<string, IReadOnlyDictionary<string, string>> orderByFamily,
+        IReadOnlyList<FlagOrder> flagOrders) {
         _orderRenames = orderRenames;
         _orderByFamily = orderByFamily;
+        FlagOrders = flagOrders;
     }
 
     /// <summary>An engine that applies no changes (used when the config is absent).</summary>
     public static TaxonModernizer Empty() => new(
         new Dictionary<string, OrderRule>(StringComparer.OrdinalIgnoreCase),
-        new Dictionary<string, IReadOnlyDictionary<string, string>>(StringComparer.OrdinalIgnoreCase));
+        new Dictionary<string, IReadOnlyDictionary<string, string>>(StringComparer.OrdinalIgnoreCase),
+        new List<FlagOrder>());
 
     public static TaxonModernizer Load(string path) {
         if (string.IsNullOrWhiteSpace(path) || !File.Exists(path)) {
@@ -85,7 +104,14 @@ internal sealed class TaxonModernizer {
             byFamily[order.Trim()] = map;
         }
 
-        return new TaxonModernizer(renames, byFamily);
+        var flags = new List<FlagOrder>();
+        foreach (var f in root.FlagOrders ?? new List<FlagRule>()) {
+            if (!string.IsNullOrWhiteSpace(f.Order)) {
+                flags.Add(new FlagOrder(f.Order!.Trim(), f.Suggest?.Trim(), f.Note?.Trim()));
+            }
+        }
+
+        return new TaxonModernizer(renames, byFamily, flags);
     }
 
     /// <summary>
@@ -108,7 +134,8 @@ internal sealed class TaxonModernizer {
 
         if (_orderRenames.TryGetValue(from, out var rule)
             && !string.Equals(rule.To, from, StringComparison.OrdinalIgnoreCase)) {
-            return new OrderModernization(from, rule.To!.Trim(), rule.Kind ?? "rename", rule.EpbcListedAs);
+            return new OrderModernization(
+                from, rule.To!.Trim(), rule.Kind ?? "rename", rule.EpbcListedAs, rule.FixedElsewhere, rule.Note);
         }
 
         return null;
@@ -117,6 +144,7 @@ internal sealed class TaxonModernizer {
     private sealed class Root {
         public List<OrderRule>? Orders { get; set; }
         public Dictionary<string, Dictionary<string, string>>? OrderByFamily { get; set; }
+        public List<FlagRule>? FlagOrders { get; set; }
     }
 
     internal sealed class OrderRule {
@@ -124,5 +152,13 @@ internal sealed class TaxonModernizer {
         public string? To { get; set; }
         public string? Kind { get; set; }
         public string? EpbcListedAs { get; set; }
+        public bool? FixedElsewhere { get; set; }
+        public string? Note { get; set; }
+    }
+
+    private sealed class FlagRule {
+        public string? Order { get; set; }
+        public string? Suggest { get; set; }
+        public string? Note { get; set; }
     }
 }
