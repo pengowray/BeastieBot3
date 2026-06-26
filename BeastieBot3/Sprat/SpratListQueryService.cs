@@ -131,7 +131,16 @@ internal sealed class SpratListQueryService : IDisposable {
         var family = GetString(reader, 7);
         var genusCol = GetString(reader, 8);
 
-        var (genus, species, infraType, infraName) = ParseName(scientific, genusCol, kingdom);
+        // SPRAT distinguishes EPBC population listings of the same taxon by a trailing parenthetical on
+        // the scientific name (e.g. "Dasyurus maculatus maculatus (SE mainland population)"). Split it
+        // off so the base name drives parsing/linking, and carry the qualifier as a subpopulation (which
+        // routes the entry to the "Populations" sub-section and displays the distinguishing qualifier).
+        var (cleanSci, popQualifier) = SplitPopulationQualifier(scientific);
+        var (genus, species, infraType, infraName) = ParseName(cleanSci, genusCol, kingdom);
+        var common = CleanCommonName(commonRaw);
+        if (popQualifier is not null) {
+            common = StripTrailingParenthetical(common); // the qualifier is shown once, via the subpopulation
+        }
         var annotation = BuildAnnotation(reader, sysOffset);
         var descriptor = IucnRedlistStatus.Describe(primaryCode);
         long.TryParse(idRaw, out var taxonId);
@@ -142,7 +151,7 @@ internal sealed class SpratListQueryService : IDisposable {
             RedlistCategory: descriptor.Category,
             StatusCode: primaryCode,
             ScientificNameAssessments: null,
-            ScientificNameTaxonomy: scientific,
+            ScientificNameTaxonomy: cleanSci,
             KingdomName: kingdom ?? string.Empty,
             PhylumName: phylum,
             ClassName: className,
@@ -152,14 +161,14 @@ internal sealed class SpratListQueryService : IDisposable {
             SpeciesName: species ?? string.Empty,
             InfraType: infraType,
             InfraName: infraName,
-            SubpopulationName: null,
+            SubpopulationName: popQualifier,
             Scopes: null,
             Authority: null,
             InfraAuthority: null,
             PossiblyExtinct: null,
             PossiblyExtinctInTheWild: null,
             YearPublished: null,
-            CommonNameOverride: CleanCommonName(commonRaw),
+            CommonNameOverride: common,
             StatusAnnotation: annotation);
     }
 
@@ -228,6 +237,45 @@ internal sealed class SpratListQueryService : IDisposable {
             "nothovar" => "nothovar.",
             _ => null,
         };
+    }
+
+    // Population-listing keywords: a trailing parenthetical containing one of these marks a distinct
+    // EPBC population/management unit (vs. a collector voucher like "(N.Gibson TOI345)", which has none).
+    private static readonly string[] PopulationQualifierKeywords =
+        { "population", "sensu lato", "sensu stricto", "form", "stock", " race", "race ", "subpopulation" };
+
+    private static readonly System.Text.RegularExpressions.Regex TrailingParenthetical =
+        new(@"^(.*\S)\s*\(([^)]+)\)\s*$", System.Text.RegularExpressions.RegexOptions.Compiled);
+
+    /// <summary>
+    /// Splits a trailing "(…population/form/sensu lato…)" qualifier off a SPRAT scientific name,
+    /// returning (baseName, qualifier). Returns (name, null) when there is no such qualifier — a plain
+    /// name, or a parenthetical that isn't a population marker (e.g. a herbarium voucher).
+    /// </summary>
+    private static (string Base, string? Qualifier) SplitPopulationQualifier(string? scientific) {
+        if (string.IsNullOrWhiteSpace(scientific)) {
+            return (scientific ?? string.Empty, null);
+        }
+        var match = TrailingParenthetical.Match(scientific.Trim());
+        if (!match.Success) {
+            return (scientific.Trim(), null);
+        }
+        var inner = match.Groups[2].Value;
+        var lower = inner.ToLowerInvariant();
+        if (!PopulationQualifierKeywords.Any(k => lower.Contains(k))) {
+            return (scientific.Trim(), null);
+        }
+        return (match.Groups[1].Value.Trim(), inner.Trim());
+    }
+
+    /// <summary>Removes a single trailing "(…)" from a common name (used to avoid showing the
+    /// population qualifier twice when it is already carried by the subpopulation field).</summary>
+    private static string? StripTrailingParenthetical(string? name) {
+        if (string.IsNullOrWhiteSpace(name)) {
+            return name;
+        }
+        var match = TrailingParenthetical.Match(name.Trim());
+        return match.Success ? match.Groups[1].Value.Trim() : name.Trim();
     }
 
     private static bool IsEpithet(string token) =>

@@ -336,7 +336,7 @@ internal sealed class DisplayPreferences {
     
     /// <summary>
     /// Whether to separate subspecies, varieties, and subpopulations into their own sections.
-    /// When true, adds "Species", "Subspecies", "Varieties", "Stocks and populations" subheadings.
+    /// When true, adds "Species", "Subspecies", "Varieties", "Populations" subheadings.
     /// Default is false for backward compatibility.
     /// </summary>
     public bool SeparateInfraspecificSections { get; init; } = false;

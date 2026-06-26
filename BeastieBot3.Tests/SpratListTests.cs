@@ -125,6 +125,27 @@ public class SpratListTests {
     }
 
     [Fact]
+    public void PopulationQualifier_SplitFromScientificName_RoutesToSubpopulation() {
+        // An EPBC population listing carries its qualifier as a trailing parenthetical on the scientific
+        // name; it must be split off (base name drives parsing/linking) and carried as a subpopulation.
+        using var conn = SeedSpratFrom(
+            "\"1\",\"Dasyurus maculatus maculatus (SE mainland population)\",\"Spotted-tail Quoll, Tiger Quoll (southeastern mainland population)\",\"Endangered\",\"\",\"Animalia\",\"Mammalia\",\"Dasyuromorphia\",\"Dasyuridae\",\"Dasyurus\",\"\",\"\"",
+            // a herbarium voucher parenthetical is NOT a population marker — left intact
+            "\"2\",\"Acacia sp. Castletower (N.Gibson TOI345)\",\"Castletower Wattle\",\"Vulnerable\",\"\",\"Plantae\",\"Magnoliopsida\",\"Fabales\",\"Fabaceae\",\"Acacia\",\"\",\"\"");
+        using var query = SpratListQueryService.OpenFromConnection(conn);
+
+        var quoll = query.Query(new SpratTaxonFilter(Kingdom: "Animalia", Classes: new[] { "Mammalia" })).Single();
+        Assert.Equal("Dasyurus maculatus maculatus", quoll.ScientificNameTaxonomy);
+        Assert.Equal("SE mainland population", quoll.SubpopulationName);
+        Assert.Equal("maculatus", quoll.InfraName);
+        Assert.Equal("Spotted-tail Quoll", quoll.CommonNameOverride);  // first synonym (raw case); qualifier not duplicated
+
+        var wattle = query.Query(new SpratTaxonFilter(Kingdom: "Plantae")).Single();
+        Assert.Equal("Acacia sp. Castletower (N.Gibson TOI345)", wattle.ScientificNameTaxonomy);  // voucher kept
+        Assert.Null(wattle.SubpopulationName);
+    }
+
+    [Fact]
     public void CleanCommonName_KeepsParentheticalWithInnerCommasWhole() {
         // Regression: a single vernacular whose parenthetical qualifier itself contains commas must
         // not be truncated at the first comma (the EPBC "combined populations" Koala listing).

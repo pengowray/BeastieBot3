@@ -177,7 +177,7 @@ internal sealed class SpratListGenerator {
         ListingStyle = style,
         InfraspecificDisplayMode = InfraspecificDisplayMode.SeparateSections,
         SeparateInfraspecificSections = true,
-        ExcludeRegionalAssessments = true,
+        ExcludeRegionalAssessments = false, // keep EPBC population listings → "Populations" sub-section
         IncludeFamilyInOtherBucket = true, // annotate "Other <order>" species with "(Family: ...)"
     };
 

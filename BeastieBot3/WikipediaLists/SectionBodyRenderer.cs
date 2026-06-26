@@ -52,9 +52,12 @@ internal sealed class SectionBodyRenderer {
             return ("''No taxa currently listable.''", 0);
         }
 
-        // Filter out regional assessments if requested
-        // Regional assessments are excluded from main lists to keep output global-only
-        var filteredRecords = records.Where(r => !IsRegionalAssessment(r)).ToList();
+        // Filter out regional assessments unless the list opts to keep them (e.g. the SPRAT Australia
+        // lists, which surface EPBC population listings under a "Populations" sub-section). IUCN lists
+        // default to ExcludeRegionalAssessments=true, so their output is unchanged.
+        var filteredRecords = display.ExcludeRegionalAssessments
+            ? records.Where(r => !IsRegionalAssessment(r)).ToList()
+            : records.ToList();
 
         if (filteredRecords.Count == 0) {
             return ("''No taxa currently listable (all filtered as regional assessments).''", 0);
@@ -812,10 +815,10 @@ internal sealed class SectionBodyRenderer {
             if (varieties.Count >= DivColMinItems) builder.AppendLine("{{div col end}}");
         }
 
-        // Stocks and populations
+        // Populations (EPBC population listings / IUCN subpopulations)
         if (populations.Count > 0) {
             builder.AppendLine();
-            builder.AppendLine("'''Stocks and populations'''");
+            builder.AppendLine("'''Populations'''");
             builder.AppendLine();
             if (populations.Count >= DivColMinItems) builder.AppendLine("{{div col|colwidth=30em}}");
             foreach (var record in OrderRecordsForOutput(populations, display, otherContext)) {
