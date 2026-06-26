@@ -43,6 +43,10 @@ public sealed class SpratGenerateListsCommand : Command<SpratGenerateListsComman
         [CommandOption("--rules <FILE>")]
         public string? RulesPath { get; init; }
 
+        [CommandOption("--modernization-rules <FILE>")]
+        [System.ComponentModel.Description("Override the taxon-modernization YAML (default: rules/taxon-modernization.yml).")]
+        public string? ModernizationRulesPath { get; init; }
+
         [CommandOption("--limit <N>")]
         [System.ComponentModel.Description("Cap the number of taxa per list (testing).")]
         public int? Limit { get; init; }
@@ -86,7 +90,8 @@ public sealed class SpratGenerateListsCommand : Command<SpratGenerateListsComman
             ? $"[grey]Aggregated-names hub:[/] {commonNamesPath}"
             : "[yellow]Common-names hub not found; using SPRAT vernaculars only (some links may redlink).[/]");
 
-        var generator = new SpratListGenerator(query, legacyRules, provider, capsRules);
+        var modernizer = TaxonModernizer.Load(ResolveModernizationPath(paths, settings.ModernizationRulesPath));
+        var generator = new SpratListGenerator(query, legacyRules, provider, capsRules, modernizer);
         var datasetVersion = query.GetDatasetVersion();
         AnsiConsole.MarkupLine($"[grey]SPRAT dataset:[/] {datasetVersion}");
 
@@ -100,7 +105,19 @@ public sealed class SpratGenerateListsCommand : Command<SpratGenerateListsComman
         }
 
         AnsiConsole.MarkupLine($"[green]Generated {results.Count} Australia list(s),[/] {results.Sum(r => r.TotalEntries)} taxa total.");
+
+        var modernizations = generator.ModernizationLog.Changes.Count;
+        if (modernizations > 0) {
+            AnsiConsole.MarkupLine($"[grey]Applied[/] [cyan]{modernizations}[/] [grey]taxonomy modernization(s).[/]");
+        }
         return 0;
+    }
+
+    private static string ResolveModernizationPath(PathsService paths, string? overridePath) {
+        if (!string.IsNullOrWhiteSpace(overridePath)) {
+            return Path.GetFullPath(overridePath);
+        }
+        return Path.Combine(paths.BaseDirectory, "rules", "taxon-modernization.yml");
     }
 
     private static WikipediaCacheStore? ResolveWikiCache(PathsService paths, CommonNameStore? hub) {

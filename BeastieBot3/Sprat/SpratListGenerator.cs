@@ -26,6 +26,8 @@ internal sealed class SpratListGenerator {
     // SPRAT's own vernacular is used, sentence-cased via the caps rules.
     private readonly StoreBackedCommonNameProvider? _hub;
     private readonly IReadOnlyDictionary<string, string> _capsRules;
+    private readonly TaxonModernizer _modernizer;
+    private readonly ModernizationLog _modernizationLog;
 
     private static readonly IReadOnlyList<GroupingLevelDefinition> Grouping = new[] {
         new GroupingLevelDefinition { Level = "order", Label = "Order", UnknownLabel = "Other orders" },
@@ -35,14 +37,21 @@ internal sealed class SpratListGenerator {
         },
     };
 
+    /// <summary>The modernizations applied across every list this generator has produced.</summary>
+    public ModernizationLog ModernizationLog => _modernizationLog;
+
     public SpratListGenerator(
         SpratListQueryService query,
         LegacyTaxaRuleList legacyRules,
         StoreBackedCommonNameProvider? hub = null,
-        IReadOnlyDictionary<string, string>? capsRules = null) {
+        IReadOnlyDictionary<string, string>? capsRules = null,
+        TaxonModernizer? modernizer = null,
+        ModernizationLog? modernizationLog = null) {
         _query = query ?? throw new ArgumentNullException(nameof(query));
         _hub = hub;
         _capsRules = capsRules ?? new Dictionary<string, string>();
+        _modernizer = modernizer ?? TaxonModernizer.Empty();
+        _modernizationLog = modernizationLog ?? new ModernizationLog();
         // The line formatter is intentionally provider-less: SPRAT taxa carry a SPRAT id (not an IUCN
         // sis id), so the hub is consulted by scientific name during Enrich and baked into the record
         // as overrides, rather than via the formatter's id-keyed lookups.
@@ -52,7 +61,7 @@ internal sealed class SpratListGenerator {
     }
 
     public SpratListResult Generate(SpratListGroup group, string outputDirectory, int? limit) {
-        var records = _query.Query(group.Filter, limit).Select(Enrich).ToList();
+        var records = _query.Query(group.Filter, limit).Select(r => Enrich(r, group)).ToList();
         var display = BuildDisplay(group.Style);
 
         // One combined phylogenetic tree (grouped by order → family), not split by conservation
@@ -80,7 +89,17 @@ internal sealed class SpratListGenerator {
     /// Falls back to a sentence-cased SPRAT vernacular and no link override when the hub is absent or
     /// doesn't know the taxon.
     /// </summary>
-    private IucnSpeciesRecord Enrich(IucnSpeciesRecord r) {
+    private IucnSpeciesRecord Enrich(IucnSpeciesRecord r, SpratListGroup group) {
+        // Modernize the order name (heading + grouping key + sort all see the corrected value, since
+        // Enrich runs before BuildSectionBody). Every change is logged for the reports.
+        var orderChange = _modernizer.ModernizeOrder(r.OrderName, r.FamilyName);
+        if (orderChange is not null) {
+            _modernizationLog.Record(new ModernizationChange(
+                group.Id, r.TaxonId, r.ScientificNameTaxonomy ?? r.ScientificNameAssessments ?? "",
+                "order", orderChange.From, orderChange.To, orderChange.Kind, orderChange.EpbcListedAs));
+            r = r with { OrderName = orderChange.To };
+        }
+
         var kingdomUpper = string.IsNullOrWhiteSpace(r.KingdomName) ? null : r.KingdomName.ToUpperInvariant();
         var fullSci = r.ScientificNameTaxonomy;
         var genusSpecies = !string.IsNullOrWhiteSpace(r.GenusName) && !string.IsNullOrWhiteSpace(r.SpeciesName)

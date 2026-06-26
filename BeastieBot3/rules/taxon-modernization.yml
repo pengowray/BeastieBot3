@@ -1,0 +1,48 @@
+# Taxonomy modernization for the SPRAT (EPBC) Australia lists.
+#
+# SPRAT carries some order names in an obsolete or misspelled form. This file lists ONLY the
+# high-confidence corrections that are auto-applied to the generated lists: safe 1:1 renames /
+# typos, plus the structural mammal fixes that are textbook (not judgement calls). Every change is
+# recorded and surfaced in the modernization report; debatable names (most bird/fish/gastropod
+# orders) are deliberately NOT here — they are flagged in the CSV-recommendations report instead.
+#
+# kind:  typo       — a misspelling of the same name (e.g. Sqaliformes → Squaliformes)
+#        obsolete   — a superseded name for the same circumscription (Insectivora → Eulipotyphla)
+#        structural — a real reclassification (Pinnipedia nested within Carnivora; a split by family)
+#
+# epbc_listed_as: set when the original spelling appears in the official EPBC listing itself (i.e. a
+#        genuine "sic" worth a citation), as opposed to a CSV-only artefact corrected by every modern
+#        authority. Drives whether the list emits a referenced note vs. a silent correction.
+
+# --- Simple 1:1 order renames ---------------------------------------------------------------------
+orders:
+  - from: Diprotodonta
+    to: Diprotodontia
+    kind: typo
+    epbc_listed_as: Diprotodonta
+  - from: Insectivora
+    to: Eulipotyphla
+    kind: obsolete
+  - from: Pinnipedia
+    to: Carnivora
+    kind: structural
+  - from: Sqaliformes
+    to: Squaliformes
+    kind: typo
+    epbc_listed_as: Sqaliformes
+  - from: Halociprida
+    to: Halocyprida
+    kind: typo
+  - from: Cyclophyllideae
+    to: Cyclophyllidea
+    kind: typo
+
+# --- Family-conditional splits (one obsolete order → several modern orders, keyed by family) -------
+order_by_family:
+  Polyprotodonta:
+    Dasyuridae: Dasyuromorphia
+    Myrmecobiidae: Dasyuromorphia
+    Thylacinidae: Dasyuromorphia
+    Peramelidae: Peramelemorphia
+    Thylacomyidae: Peramelemorphia
+    Notoryctidae: Notoryctemorphia
