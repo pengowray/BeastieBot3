@@ -47,6 +47,13 @@ internal sealed class NameChangesProducer : IAuditReportProducer {
             .Select(Build)
             .ToList();
 
+        // This report is only worth showing when the field-based check actually finds a name that
+        // changed across assessment versions. In current data it finds none, so it is omitted; it
+        // reappears automatically if a future release records a per-assessment name change.
+        if (findings.Count == 0) {
+            return null;
+        }
+
         return new AuditReport {
             Id = Id,
             Title = "Scientific name changes across assessment versions",

@@ -54,7 +54,6 @@ internal sealed class RedlistAuditSiteCommand : Command<RedlistAuditSiteCommand.
         new HtmlConsistencyProducer(),
         new TaxonomyConsistencyProducer(),
         new ColCrosscheckProducer(),
-        new CountScopesProducer(),
         new FieldHygieneProducer(),
         new NameChangesProducer(),
     };

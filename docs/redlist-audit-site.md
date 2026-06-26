@@ -56,10 +56,11 @@ The reusable seams already in the codebase that producers call directly: `IucnTa
 ## Reports
 
 IUCN-owned (the body): failed assessments (empty-scope HTTP 500), taxonomy field cleanup, synonym
-formatting, orphan subspecies/varieties, cached taxa with no current assessment, HTML vs plain-text
+formatting, orphan subspecies/varieties, taxa with no current assessment, HTML vs plain-text
 narrative fields, scientific name vs components, and differences from the Catalogue of Life.
-Methodology: count reconciliation by taxa group, text hygiene by field, and the (usually empty)
-name-change report.
+Methodology: text hygiene by field. The scientific-name-change report appears only when the
+field-based check finds a name that changed across assessment versions (it produces nothing in
+current data and is omitted, via the producer returning null when empty).
 
 The Catalogue of Life crosscheck is much higher volume than the others, so its HTML pages list only
 the higher-signal rows (a name with no exact CoL match, a name CoL treats as a synonym, and
