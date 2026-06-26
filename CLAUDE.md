@@ -23,7 +23,7 @@ For the local web UI (`serve`), read-only Playwright smoke tests live in `e2e/` 
 
 ### Command Tree
 
-Commands **self-register via attributes** — `Program.cs` no longer hand-wires the tree (it configures only the error handler and the lone `ServeCommand`). Each command class carries a `[CommandInfo("branch sub", CommandKind.X, "description", ...)]` attribute; `CommandRegistry.ConfigureAll` (`Web/Commands/CommandRegistry.cs`) scans the assembly for these at startup and builds the entire Spectre.Console.Cli branch tree. Branches are declared once as assembly attributes in `CommandClassification.cs` (`[assembly: CommandBranch("iucn api", "...")]`). Top-level branches: `col`, `iucn`, `iucn api`, `wikidata`, `wikipedia`, `common-names`.
+Commands **self-register via attributes** — `Program.cs` no longer hand-wires the tree (it configures only the error handler and the lone `ServeCommand`). Each command class carries a `[CommandInfo("branch sub", CommandKind.X, "description", ...)]` attribute; `CommandRegistry.ConfigureAll` (`Web/Commands/CommandRegistry.cs`) scans the assembly for these at startup and builds the entire Spectre.Console.Cli branch tree. Branches are declared once as assembly attributes in `CommandClassification.cs` (`[assembly: CommandBranch("iucn api", "...")]`). Top-level branches: `col`, `iucn`, `iucn api`, `wikidata`, `wikipedia`, `common-names`, `sprat`, `redlist`.
 
 `CommandClassification.cs` is the **single source of truth** for the command tree. The same attributes drive the web UI catalogue (`/api/commands`): `CommandKind` (`ReadOnly` | `Mutates` | `Destructive`) gates re-confirmation, and the orthogonal `RerunEffect` (`ReadOnly` | `IdempotentAdd` | `Discovers` | `Rebuilds` | `ClearsCache` | `FreshDataset`) tells the user what a re-run will do.
 
@@ -84,7 +84,8 @@ Use `ReportPathResolver` to resolve output paths. Priority: explicit CLI `--outp
 | `BeastieBot3/Taxonomy/` | Scientific name normalisation, authority parsing, `TaxonLadder` hierarchy |
 | `BeastieBot3/Configuration/` | INI reading, path resolution, `.env` loading |
 | `BeastieBot3/Infrastructure/` | `ApiImportMetadataStore`, `ReportPathResolver` |
-| `BeastieBot3/rules/` | YAML rule files and Mustache templates for list generation |
+| `BeastieBot3/Audit/` | `redlist audit-site` generator: unified `AuditFinding` model, per-report producers, shared `HtmlListRenderer`/CSV writer, release-pinned commentary |
+| `BeastieBot3/rules/` | YAML rule files and Mustache templates for list generation (`rules/audit/commentary.yml` for the audit site) |
 | `BeastieBot3/BeastieLegacy/` | Legacy code — read for output format reference only; do not reuse directly |
 
 ## IUCN SQLite Rules
@@ -203,6 +204,7 @@ A `taxa_group` of `~` (null) means no taxonomic filter — counts all species in
 | `docs/common-names.md` | Common names aggregation workflow |
 | `docs/iucn-api-discover-by-family.md` | IUCN API discovery strategy |
 | `docs/wikipedia-chart-generation.md` | Chart generation workflow, Extension:Chart format, output files |
+| `docs/redlist-audit-site.md` | `redlist audit-site` generator: producers, unified model, commentary mechanism, output structure |
 
 ## Code Conventions
 

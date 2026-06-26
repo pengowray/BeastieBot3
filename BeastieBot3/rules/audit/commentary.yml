@@ -1,0 +1,26 @@
+# One-time, human/LLM-written commentary for the unofficial Red List audit site.
+#
+# Each entry is pinned to a report id and a release. The generator shows an entry only when its
+# release matches the release being built (or when release is "any"). This keeps interpretive prose
+# written once for a specific release separate from the release-agnostic notes generated in code.
+#
+# Fields:
+#   report   the report id (failed-assessments, taxonomy-cleanup, synonym-formatting,
+#            orphan-infraranks, no-latest, html-consistency, taxonomy-consistency,
+#            col-crosscheck, count-scopes, field-hygiene, name-changes)
+#   release  "2025-2" for this release only, or "any" to carry forward to later releases
+#   scope    "report" (shown on the report page) or "finding" (matched to a row by key)
+#   key      required for scope: finding; the AuditFinding.Key, usually "{taxonId}:{issueType}"
+#   title    optional heading shown above the note
+#   markdown the note text (small markdown subset: paragraphs, **bold**, *italic*, `code`,
+#            [text](url), - lists, > quote, ## / ### headings)
+#
+# Examples are left commented out. Add observations here as they are confirmed by hand.
+
+# - report: failed-assessments
+#   release: 2025-2
+#   scope: report
+#   title: About this set
+#   markdown: |
+#     Every record here shares one trait: an empty geographic-scope array. Each affected taxon
+#     also has a valid scoped assessment, so coverage is unaffected.
