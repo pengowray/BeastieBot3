@@ -34,7 +34,7 @@ internal sealed class SynonymFormattingProducer : IAuditReportProducer {
             Title = "Synonym names with formatting irregularities",
             Tier = AuditReportTier.IucnCore,
             Breakage = BreakageClass.FixableData,
-            DataSourceLabel = "IUCN API cache (taxon synonyms)",
+            DataSourceLabel = "IUCN API (taxon synonyms)",
             Summary =
                 "Each row is a synonym name whose stored text carries a formatting irregularity, together with a whitespace-normalised suggestion. " +
                 "The current value shows otherwise-invisible characters as markers. The scientific name column is the accepted taxon the synonym belongs to. " +
@@ -117,7 +117,7 @@ internal sealed class SynonymFormattingProducer : IAuditReportProducer {
                         StatusCode = AuditMapping.CodeFromCode(code),
                         StatusCategory = AuditMapping.CategoryText(code),
                         YearPublished = year,
-                        DataSource = "iucn-api-cache",
+                        DataSource = "iucn-api",
                         Field = "synonym",
                         CurrentValue = synonym,
                         SuggestedValue = suggested,

@@ -30,14 +30,14 @@ internal sealed class NoLatestAssessmentProducer : IAuditReportProducer {
 
         return new AuditReport {
             Id = Id,
-            Title = "Cached taxa with no current assessment",
+            Title = "Taxa with no current assessment",
             Tier = AuditReportTier.IucnCore,
             Breakage = BreakageClass.Advisory,
-            DataSourceLabel = "IUCN API cache",
+            DataSourceLabel = "IUCN API",
             Summary =
-                "Each row is a taxon in the API cache where none of the cached assessments is flagged as the current (latest) one. " +
+                "Each row is a taxon from the IUCN API where none of its assessments is flagged as the current (latest) one. " +
                 "This commonly happens when a taxon was removed from the Red List, merged into another taxon, or reclassified, so only historical assessments remain. " +
-                "The most recent cached assessment is shown for context. The scope here is the cache, not the whole release.",
+                "The most recent assessment is shown for context. This covers the taxa retrieved from the API, which may not be every taxon in the release.",
             Columns = new List<AuditColumn> {
                 AuditColumns.ScientificName(),
                 AuditColumns.CommonName(),
@@ -105,11 +105,11 @@ ORDER BY t.root_sis_id";
                 StatusCategory = AuditMapping.CategoryText(code),
                 YearPublished = year,
                 Latest = false,
-                DataSource = "iucn-api-cache",
+                DataSource = "iucn-api",
                 Field = "latest",
                 CurrentValue = "no latest assessment",
                 IssueType = "no-latest-assessment",
-                Detail = $"No cached assessment is flagged current. Most recent cached assessment: {statusCode ?? "unknown"}{(string.IsNullOrEmpty(year) ? "" : $" ({year})")}.",
+                Detail = $"No assessment is flagged current. Most recent assessment: {statusCode ?? "unknown"}{(string.IsNullOrEmpty(year) ? "" : $" ({year})")}.",
             };
             finding.Notes.Add("The taxon may have been removed, merged, or reclassified.");
             findings.Add(finding);

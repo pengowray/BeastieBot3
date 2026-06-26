@@ -34,10 +34,10 @@ internal sealed class FailedAssessmentsProducer : IAuditReportProducer {
             Title = "Assessment records the API cannot serve (empty geographic scope)",
             Tier = AuditReportTier.IucnCore,
             Breakage = BreakageClass.Breaking,
-            DataSourceLabel = "IUCN API cache",
+            DataSourceLabel = "IUCN API",
             Summary =
                 "Each row is an assessment that the public API endpoint /api/v4/assessment/{id} returns HTTP 500 for. " +
-                "Across the cache the pattern is consistent: these records carry an empty geographic-scope array, while assessments that carry at least one scope serialise normally. " +
+                "The pattern is consistent: these records carry an empty geographic-scope array, while assessments that carry at least one scope serialise normally. " +
                 "On the website the region for these renders as a bare ampersand with no text. Each affected taxon also has a valid scoped assessment, so there is no coverage gap. " +
                 "Repairing or removing the empty-scope record would let the API and website serve it.",
             Columns = new List<AuditColumn> {
@@ -97,7 +97,7 @@ ORDER BY (f.last_status IS NULL), f.last_status DESC, b.latest, b.sis_id";
                 RedlistUrl = IucnUrls.Species(sisId, assessmentId),
                 YearPublished = year,
                 Latest = latest,
-                DataSource = "iucn-api-cache",
+                DataSource = "iucn-api",
                 Field = "assessment download",
                 CurrentValue = httpStatus?.ToString(CultureInfo.InvariantCulture),
                 IssueType = is500 ? "api-empty-scope-500" : "api-download-failure",

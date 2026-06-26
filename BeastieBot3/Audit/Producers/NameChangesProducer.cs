@@ -52,7 +52,7 @@ internal sealed class NameChangesProducer : IAuditReportProducer {
             Title = "Scientific name changes across assessment versions",
             Tier = AuditReportTier.Methodology,
             Breakage = BreakageClass.Advisory,
-            DataSourceLabel = "IUCN API cache (taxon assessment summaries)",
+            DataSourceLabel = "IUCN API (taxon assessment summaries)",
             Summary =
                 "This compares the scientific name recorded on each of a taxon's assessment summaries, grouped by SIS id, and lists any taxon whose assessments carry more than one distinct name. " +
                 "In current data this is usually empty: amended assessments keep the taxon's present name and record the former name in the errata text rather than in a dedicated field, so a name-field comparison finds little. " +
@@ -149,7 +149,7 @@ internal sealed class NameChangesProducer : IAuditReportProducer {
             StatusCode = code,
             StatusCategory = AuditMapping.CategoryText(latest?.Code),
             YearPublished = latest?.Year,
-            DataSource = "iucn-api-cache",
+            DataSource = "iucn-api",
             Field = "taxon_scientific_name",
             IssueType = "scientific-name-change",
             SeverityTier = h.DistinctNames.Count,
