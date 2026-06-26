@@ -49,6 +49,10 @@ public sealed class SpratGenerateListsCommand : Command<SpratGenerateListsComman
         [System.ComponentModel.Description("Override the taxon-modernization YAML (default: rules/taxon-modernization.yml).")]
         public string? ModernizationRulesPath { get; init; }
 
+        [CommandOption("--iucn-database <PATH>")]
+        [System.ComponentModel.Description("Override the IUCN release SQLite used to resolve IUCN ids/year (default: Datastore:IUCN_sqlite_from_cvs).")]
+        public string? IucnDatabasePath { get; init; }
+
         [CommandOption("--limit <N>")]
         [System.ComponentModel.Description("Cap the number of taxa per list (testing).")]
         public int? Limit { get; init; }
@@ -78,7 +82,20 @@ public sealed class SpratGenerateListsCommand : Command<SpratGenerateListsComman
             }
         }
 
-        using var query = new SpratListQueryService(dbPath);
+        // Optional IUCN release DB: resolves each taxon's internalTaxonId/assessmentId/year so the IUCN
+        // annotation entry can use the full referenced {{IUCN status|CODE|id|1|year=}} form (matching the
+        // non-Australia lists). Degrades to the bare {{IUCN status|CODE}} badge when absent.
+        var iucnDbPath = !string.IsNullOrWhiteSpace(settings.IucnDatabasePath)
+            ? Path.GetFullPath(settings.IucnDatabasePath)
+            : paths.GetIucnDatabasePath();
+        using var iucnResolver = !string.IsNullOrWhiteSpace(iucnDbPath) && File.Exists(iucnDbPath)
+            ? new IucnAssessmentResolver(iucnDbPath)
+            : null;
+        AnsiConsole.MarkupLine(iucnResolver is not null
+            ? $"[grey]IUCN release:[/] {iucnDbPath}"
+            : "[yellow]IUCN release DB not found; IUCN badges use the bare form (no id/year reference).[/]");
+
+        using var query = new SpratListQueryService(dbPath, iucnResolver);
 
         // Optional aggregated-names hub: real Wikipedia article links (#3) + conventionally-cased
         // names for the taxa it knows; SPRAT vernaculars (sentence-cased via the hub's caps rules, #1)

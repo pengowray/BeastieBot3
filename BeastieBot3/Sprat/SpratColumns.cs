@@ -26,6 +26,9 @@ internal static class SpratColumns {
     public const string Family = "family";
     public const string Genus = "genus";
     public const string TaxonGroup = "taxon_group";
+    /// <summary>The IUCN-side accepted name SPRAT carries, used to resolve an IUCN assessment id when the
+    /// SPRAT scientific name doesn't match the IUCN release directly (synonyms, spelling drift).</summary>
+    public const string IucnListedName = "IUCN_Red_List_Listed_Names";
 
     // Conservation status, one column per listing system. Each holds the system's own raw category
     // text (e.g. "Critically Endangered", "Rare", "Near Threatened") or NULL/empty when unlisted.

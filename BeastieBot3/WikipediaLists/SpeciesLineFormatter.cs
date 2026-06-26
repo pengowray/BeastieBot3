@@ -667,63 +667,9 @@ internal sealed class SpeciesLineFormatter {
         return ScientificNameHelper.BuildFromParts(record.GenusName, record.SpeciesName, record.InfraName);
     }
 
-    private static string BuildIucnStatusTemplate(IucnSpeciesRecord record, RedlistStatusDescriptor descriptor) {
-        // Build the status code, accounting for PE/PEW flags from database
-        var statusCode = GetWikipediaStatusCode(descriptor.Code, record.PossiblyExtinct, record.PossiblyExtinctInTheWild);
-        var builder = new StringBuilder();
-        builder.Append("{{IUCN status|");
-        builder.Append(statusCode);
-        builder.Append('|');
-        builder.Append(record.TaxonId);
-        builder.Append('/');
-        builder.Append(record.AssessmentId);
-        builder.Append("|1"); // 1 = make link visible
-
-        // Add year for non-extinct statuses
-        if (!IsExtinctStatus(descriptor.Code) && !string.IsNullOrWhiteSpace(record.YearPublished)) {
-            builder.Append("|year=");
-            builder.Append(record.YearPublished);
-        }
-
-        builder.Append("}}");
-        return builder.ToString();
-    }
-
-    /// <summary>
-    /// Maps IUCN status codes to Wikipedia template codes.
-    /// Uses PE/PEW database flags for CR species to produce CR(PE) or CR(PEW).
-    /// Maps legacy LR/* codes to their modern equivalents, except LR/cd which has no exact equivalent.
-    /// </summary>
-    private static string GetWikipediaStatusCode(string code, string? possiblyExtinct, string? possiblyExtinctInTheWild) {
-        var normalized = code.ToUpperInvariant();
-
-        // For CR species, check PE/PEW flags from database
-        if (normalized == "CR" || normalized == "CRITICALLY ENDANGERED") {
-            if (string.Equals(possiblyExtinct, "true", StringComparison.OrdinalIgnoreCase)) {
-                return "CR(PE)";
-            }
-            if (string.Equals(possiblyExtinctInTheWild, "true", StringComparison.OrdinalIgnoreCase)) {
-                return "CR(PEW)";
-            }
-            return "CR";
-        }
-
-        // Map legacy/alternative codes
-        // Note: LR/cd is a valid Wikipedia template code, don't map it to NT
-        return normalized switch {
-            "CR(PE)" or "PE" => "CR(PE)",
-            "CR(PEW)" or "PEW" => "CR(PEW)",
-            "LR/CD" or "CD" => "LR/cd",
-            "LR/NT" => "LR/nt", //"NT",
-            "LR/LC" => "LR/lc", //"LC"",
-            _ => normalized
-        };
-    }
-
-    private static bool IsExtinctStatus(string code) => code.ToUpperInvariant() switch {
-        "EX" or "EW" => true,
-        _ => false
-    };
+    private static string BuildIucnStatusTemplate(IucnSpeciesRecord record, RedlistStatusDescriptor descriptor) =>
+        IucnRedlistStatus.BuildStatusTemplate(descriptor.Code, record.PossiblyExtinct, record.PossiblyExtinctInTheWild,
+            record.TaxonId, record.AssessmentId, record.YearPublished);
 
     private static string? GetSpecialStatusLabel(string statusCode, string? listStatusContext) {
         // Don't add redundant labels when the list is specifically for that status

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
+using System.Text;
 
 // Maps IUCN Red List category codes to display names and sort order.
 // Categories: EX (Extinct), EW, CR, CR(PE), CR(PEW), EN, VU, NT, LC, DD, NE.
@@ -112,6 +113,54 @@ internal static class IucnRedlistStatus {
 
         return trimmed;
     }
+
+    /// <summary>
+    /// Builds the full <c>{{IUCN status|CODE|taxonId/assessmentId|1|year=YYYY}}</c> template, mapping the
+    /// base code + PE/PEW flags to the Wikipedia template code (CR → CR(PE)/CR(PEW)) and omitting the year
+    /// for extinct categories. Shared by the IUCN lists and the SPRAT Australia lists so both emit a
+    /// byte-identical badge.
+    /// </summary>
+    public static string BuildStatusTemplate(string baseCode, string? possiblyExtinct, string? possiblyExtinctInTheWild,
+        long taxonId, long assessmentId, string? yearPublished) {
+        var statusCode = ToWikipediaTemplateCode(baseCode, possiblyExtinct, possiblyExtinctInTheWild);
+        var sb = new StringBuilder();
+        sb.Append("{{IUCN status|").Append(statusCode).Append('|')
+          .Append(taxonId).Append('/').Append(assessmentId).Append("|1"); // 1 = make link visible
+        if (!IsExtinctTemplateCode(statusCode) && !string.IsNullOrWhiteSpace(yearPublished)) {
+            sb.Append("|year=").Append(yearPublished);
+        }
+        sb.Append("}}");
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// Maps an IUCN status code to its Wikipedia {{IUCN status}} template code. Uses the PE/PEW database
+    /// flags for CR species to produce CR(PE)/CR(PEW), and maps legacy LR/* codes (LR/cd stays LR/cd).
+    /// </summary>
+    public static string ToWikipediaTemplateCode(string code, string? possiblyExtinct, string? possiblyExtinctInTheWild) {
+        var normalized = code.ToUpperInvariant();
+
+        if (normalized == "CR" || normalized == "CRITICALLY ENDANGERED") {
+            if (string.Equals(possiblyExtinct, "true", StringComparison.OrdinalIgnoreCase)) {
+                return "CR(PE)";
+            }
+            if (string.Equals(possiblyExtinctInTheWild, "true", StringComparison.OrdinalIgnoreCase)) {
+                return "CR(PEW)";
+            }
+            return "CR";
+        }
+
+        return normalized switch {
+            "CR(PE)" or "PE" => "CR(PE)",
+            "CR(PEW)" or "PEW" => "CR(PEW)",
+            "LR/CD" or "CD" => "LR/cd",
+            "LR/NT" => "LR/nt",
+            "LR/LC" => "LR/lc",
+            _ => normalized
+        };
+    }
+
+    private static bool IsExtinctTemplateCode(string code) => code.ToUpperInvariant() is "EX" or "EW";
 }
 
 internal sealed record RedlistStatusDescriptor(

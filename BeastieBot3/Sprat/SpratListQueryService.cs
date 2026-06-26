@@ -26,11 +26,17 @@ internal sealed class SpratListQueryService : IDisposable {
     private readonly IReadOnlyList<SpratColumns.ListingSystem> _systems;
     // Non-standard status values seen across queries (system|value → finding), deduped by system+value.
     private readonly Dictionary<string, StatusFinding> _unrecognizedStatuses = new(StringComparer.Ordinal);
+    // Optional IUCN release resolver: upgrades the IUCN annotation entry from the bare {{IUCN status|CODE}}
+    // to the full referenced {{IUCN status|CODE|taxonId/assessmentId|1|year=}} form. Null → bare form.
+    private readonly IucnAssessmentResolver? _iucnResolver;
+    // Whether the SPRAT table carries the IUCN listed-name column (the real import does; minimal test
+    // fixtures may not). Guards the SELECT so a missing column isn't silently read as a string literal.
+    private readonly bool _hasIucnListedName;
 
     /// <summary>Distinct non-standard status values that passed through verbatim, for the report.</summary>
     public IReadOnlyCollection<StatusFinding> UnrecognizedStatuses => _unrecognizedStatuses.Values;
 
-    public SpratListQueryService(string databasePath) {
+    public SpratListQueryService(string databasePath, IucnAssessmentResolver? iucnResolver = null) {
         if (string.IsNullOrWhiteSpace(databasePath)) {
             throw new ArgumentException("SPRAT database path was not provided.", nameof(databasePath));
         }
@@ -43,15 +49,23 @@ internal sealed class SpratListQueryService : IDisposable {
         _connection.Open();
         _ownsConnection = true;
         _systems = ResolveAvailableSystems(_connection);
+        _iucnResolver = iucnResolver;
+        _hasIucnListedName = HasColumn(_connection, SpratColumns.IucnListedName);
     }
 
-    private SpratListQueryService(SqliteConnection connection) {
+    private SpratListQueryService(SqliteConnection connection, IucnAssessmentResolver? iucnResolver = null) {
         _connection = connection;
         _systems = ResolveAvailableSystems(connection);
+        _iucnResolver = iucnResolver;
+        _hasIucnListedName = HasColumn(connection, SpratColumns.IucnListedName);
     }
 
+    private static bool HasColumn(SqliteConnection connection, string column) =>
+        DelimitedTableImporter.GetTableColumns(connection, SpratColumns.Table)?.Contains(column) ?? false;
+
     /// <summary>Test seam: query over a caller-owned connection (e.g. a shared <c>:memory:</c> DB).</summary>
-    internal static SpratListQueryService OpenFromConnection(SqliteConnection connection) => new(connection);
+    internal static SpratListQueryService OpenFromConnection(SqliteConnection connection, IucnAssessmentResolver? iucnResolver = null)
+        => new(connection, iucnResolver);
 
     private static IReadOnlyList<SpratColumns.ListingSystem> ResolveAvailableSystems(SqliteConnection connection) {
         var existing = DelimitedTableImporter.GetTableColumns(connection, SpratColumns.Table)
@@ -79,7 +93,12 @@ internal sealed class SpratListQueryService : IDisposable {
             SpratColumns.OrderName, SpratColumns.Family, SpratColumns.Genus,
         };
         const int sysOffset = 9;
+        // The IUCN listed-name column is appended last (ordinal sysOffset + _systems.Count) so the
+        // taxonomy/system ordinals above are unaffected. Only selected when the column exists.
         var selectCols = taxonomyCols.Concat(_systems.Select(s => s.Column)).ToList();
+        if (_hasIucnListedName) {
+            selectCols.Add(SpratColumns.IucnListedName);
+        }
 
         var sql = new StringBuilder();
         sql.Append("SELECT ").Append(string.Join(", ", selectCols.Select(Quote)));
@@ -146,7 +165,8 @@ internal sealed class SpratListQueryService : IDisposable {
         if (popQualifier is not null) {
             common = StripTrailingParenthetical(common); // the qualifier is shown once, via the subpopulation
         }
-        var annotation = BuildAnnotation(reader, sysOffset, cleanSci);
+        var iucnListedName = _hasIucnListedName ? GetString(reader, sysOffset + _systems.Count) : null;
+        var annotation = BuildAnnotation(reader, sysOffset, cleanSci, iucnListedName, idRaw);
         var descriptor = IucnRedlistStatus.Describe(primaryCode);
         long.TryParse(idRaw, out var taxonId);
 
@@ -177,29 +197,48 @@ internal sealed class SpratListQueryService : IDisposable {
             StatusAnnotation: annotation);
     }
 
-    // "EPBC: CR; IUCN: {{IUCN status|CR}}; WA: CR" — every available system with a non-blank status,
-    // in order. The IUCN entry is wrapped in the {{IUCN status}} colour badge to match the other
-    // Wikipedia lists; SPRAT carries no IUCN assessment id, so the bare (citation-less) form is used.
-    private string? BuildAnnotation(SqliteDataReader reader, int sysOffset, string? scientific) {
+    // "EPBC: {{EPBC status|CR|1234|1}}; IUCN: {{IUCN status|CR|5112/271898609|1|year=2024}}; WA: CR" —
+    // every available system with a non-blank status, in order. The EPBC and IUCN entries are wrapped in
+    // their colour-badge templates (referenced to the SPRAT profile and iucnredlist.org respectively); the
+    // state/territory entries are plain code text.
+    private string? BuildAnnotation(
+        SqliteDataReader reader, int sysOffset, string? scientific, string? listedName, string? spratTaxonId) {
         var parts = new List<string>();
         for (var i = 0; i < _systems.Count; i++) {
+            var system = _systems[i];
             var code = AustralianStatus.ShortCode(GetString(reader, sysOffset + i));
             if (code is null) {
                 continue;
             }
             if (!AustralianStatus.IsKnownCode(code)) {
                 // An unrecognised cell value passed through verbatim — flag it for the report.
-                var key = $"{_systems[i].Key}|{code}";
+                var key = $"{system.Key}|{code}";
                 if (!_unrecognizedStatuses.ContainsKey(key)) {
-                    _unrecognizedStatuses[key] = new StatusFinding(_systems[i].Label, code, scientific ?? "");
+                    _unrecognizedStatuses[key] = new StatusFinding(system.Label, code, scientific ?? "");
                 }
             }
-            var rendered = _systems[i].Key == "iucn" && IucnTemplateCodes.Contains(code)
-                ? $"{{{{IUCN status|{code}}}}}"
-                : code;
-            parts.Add($"{_systems[i].Label}: {rendered}");
+            parts.Add($"{system.Label}: {RenderStatus(system.Key, code, scientific, listedName, spratTaxonId)}");
         }
         return parts.Count > 0 ? string.Join("; ", parts) : null;
+    }
+
+    // Renders one system's status: the IUCN entry as a {{IUCN status}} badge (the full referenced form
+    // when its Global assessment resolves in the IUCN release, else the bare badge); the EPBC entry as an
+    // {{EPBC status}} badge linking the SPRAT profile by taxon id; every other system as plain code text.
+    private string RenderStatus(string systemKey, string code, string? scientific, string? listedName, string? spratTaxonId) {
+        if (systemKey == "iucn" && IucnTemplateCodes.Contains(code)) {
+            var resolved = _iucnResolver?.Resolve(scientific, listedName);
+            return resolved is not null
+                ? IucnRedlistStatus.BuildStatusTemplate(code, resolved.PossiblyExtinct, resolved.PossiblyExtinctInTheWild,
+                    resolved.TaxonId, resolved.AssessmentId, resolved.YearPublished)
+                : $"{{{{IUCN status|{code}}}}}";
+        }
+        if (systemKey == "epbc" && AustralianStatus.IsKnownCode(code)) {
+            return string.IsNullOrWhiteSpace(spratTaxonId)
+                ? $"{{{{EPBC status|{code}}}}}"
+                : $"{{{{EPBC status|{code}|{spratTaxonId}|1}}}}";
+        }
+        return code;
     }
 
     // IUCN categories the {{IUCN status}} template renders as a colour badge. Codes outside this set

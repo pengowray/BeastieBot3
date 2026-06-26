@@ -1,0 +1,71 @@
+{{Documentation subpage}}
+<!-- Please place categories where indicated at the bottom of this page and interwikis at Wikidata (see [[Wikipedia:Wikidata]]) -->
+{{Lua|Module:EPBC status}}
+
+== Usage ==
+
+To show a species' conservation status under Australia's [[Environment Protection and Biodiversity Conservation Act 1999]] (EPBC Act), as an inline coloured badge with an optional reference link to the [[Species Profile and Threats Database]] (SPRAT).
+
+* {{tlx|EPBC status|{{var|status}}|{{var|sprat_taxon_id}}|{{var|option}}}}
+
+This is the EPBC analogue of {{tl|IUCN status}}. The EPBC Act ({{EPBC Act 1999 section|178|s178}}) lists threatened species in exactly six categories, which deliberately mirror the [[IUCN Red List]] categories; this template reuses the {{tl|IUCN status}} colour palette for visual consistency.
+
+== Parameters ==
+* {{var|status}} is the only required parameter — one of the six EPBC categories: '''EX''', '''EW''', '''CR''', '''EN''', '''VU''', '''CD''' (case-insensitive). '''DL''' (Delisted) is also accepted as a display state.
+* {{var|sprat_taxon_id}} is the species' SPRAT Taxon ID, found in the profile URL <nowiki>https://www.environment.gov.au/cgi-bin/sprat/public/publicspecies.pl?taxon_id=</nowiki>'''86568'''
+* If {{var|option}} is set to
+:'''1''' or '''12''' (and a SPRAT Taxon ID is given), an external reference link to the SPRAT species profile is appended.
+:'''2''' or '''12''', an internal link to the article about the given category is provided.
+* {{para|year}} sets the year shown in the external link label (e.g. "EPBC 2024"); {{para|label}} overrides the link text entirely.
+
+== Examples ==
+{| class="wikitable"
+! style="width: 240pt;" | Code
+! Output
+|-
+| <code><nowiki>{{EPBC status|EX}}</nowiki></code>
+| {{EPBC status|EX}}
+|-
+| <code><nowiki>{{EPBC status|EW}}</nowiki></code>
+| {{EPBC status|EW}}
+|-
+| <code><nowiki>{{EPBC status|CR}}</nowiki></code>
+| {{EPBC status|CR}}
+|-
+| <code><nowiki>{{EPBC status|EN}}</nowiki></code>
+| {{EPBC status|EN}}
+|-
+| <code><nowiki>{{EPBC status|VU}}</nowiki></code>
+| {{EPBC status|VU}}
+|-
+| <code><nowiki>{{EPBC status|CD}}</nowiki></code>
+| {{EPBC status|CD}}
+|-
+| <code><nowiki>{{EPBC status|EN||2}}</nowiki></code> (internal category link)
+| {{EPBC status|EN||2}}
+|-
+| <code><nowiki>{{EPBC status|VU|86568|1}}</nowiki></code> (SPRAT reference link)
+| {{EPBC status|VU|86568|1}}
+|-
+| <code><nowiki>{{EPBC status|CR|86568|12|year=2024}}</nowiki></code>
+| {{EPBC status|CR|86568|12|year=2024}}
+|}
+
+== Notes ==
+* '''Colours''' are borrowed from {{tl|IUCN status}} (CR&nbsp;{{nowrap|#CC3333}}, EN&nbsp;#CC6633, VU&nbsp;#CC9900, EX&nbsp;black, CD&nbsp;#006666); there is no official EPBC colour scheme, and the taxobox path ({{tl|Species conservation status}} via [[Module:Conservation status]]) uses greyscale ladder icons rather than coloured badges. Always show the text code alongside the badge for accessibility.
+* The external link targets the SPRAT species profile (the same URL pattern as {{tl|SPRAT}}). SPRAT can lag the legislative [[Federal Register of Legislation|List of Threatened Species]] slightly.
+* Invalid codes are placed in [[:Category:EPBC status templates with invalid parameters]].
+
+== See also ==
+* {{tl|IUCN status}} — the IUCN Red List analogue
+* {{tl|ESA status}} — the US Endangered Species Act analogue
+* {{tl|Species conservation status}} — taxobox conservation-status icons (incl. EPBC)
+* {{tl|SPRAT}} — external-link/reference template for the SPRAT profile
+
+<includeonly>{{sandbox other||
+<!-- Categories below this line, please; interwikis at Wikidata -->
+[[Category:Wikipedia formatting templates]]
+[[Category:Typing-aid templates]]
+[[Category:Biology source templates]]
+[[Category:Conservation templates]]
+}}</includeonly>

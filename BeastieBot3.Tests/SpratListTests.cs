@@ -82,11 +82,19 @@ public class SpratListTests {
         "\"4\",\"Banksia nivea\",\"Honeypot Dryandra\",\"\",\"\",\"Plantae\",\"Magnoliopsida\",\"Proteales\",\"Proteaceae\",\"Banksia\",\"\",\"\"");
 
     // Seeds an in-memory SPRAT import from the given data rows (the two header rows are prepended).
-    private static SqliteConnection SeedSpratFrom(params string[] dataRows) {
-        var rows = new[] {
-            "\"id\",\"sci\",\"common\",\"epbc\",\"iucn\",\"kingdom\",\"class\",\"order\",\"family\",\"genus\",\"nsw\",\"wa\"",
-            "\"Taxon ID\",\"Scientific Name\",\"Common Name\",\"EPBC Threat Status\",\"IUCN Red List\",\"Kingdom\",\"Class\",\"Order\",\"Family\",\"Genus\",\"NSW TSC Act and FM Act\",\"WA WC Act\"",
-        }.Concat(dataRows).ToArray();
+    private static SqliteConnection SeedSpratFrom(params string[] dataRows) => ImportSprat(new[] {
+        "\"id\",\"sci\",\"common\",\"epbc\",\"iucn\",\"kingdom\",\"class\",\"order\",\"family\",\"genus\",\"nsw\",\"wa\"",
+        "\"Taxon ID\",\"Scientific Name\",\"Common Name\",\"EPBC Threat Status\",\"IUCN Red List\",\"Kingdom\",\"Class\",\"Order\",\"Family\",\"Genus\",\"NSW TSC Act and FM Act\",\"WA WC Act\"",
+    }.Concat(dataRows).ToArray());
+
+    // Variant whose 13th column is the IUCN listed-name (for the IUCN-resolver fallback test). Rows must
+    // supply all 13 fields.
+    private static SqliteConnection SeedSpratListed(params string[] dataRows) => ImportSprat(new[] {
+        "\"id\",\"sci\",\"common\",\"epbc\",\"iucn\",\"kingdom\",\"class\",\"order\",\"family\",\"genus\",\"nsw\",\"wa\",\"listed\"",
+        "\"Taxon ID\",\"Scientific Name\",\"Common Name\",\"EPBC Threat Status\",\"IUCN Red List\",\"Kingdom\",\"Class\",\"Order\",\"Family\",\"Genus\",\"NSW TSC Act and FM Act\",\"WA WC Act\",\"IUCN Red List Listed Names\"",
+    }.Concat(dataRows).ToArray());
+
+    private static SqliteConnection ImportSprat(string[] rows) {
         var path = Path.Combine(Path.GetTempPath(), $"sprat_q_{System.Guid.NewGuid():N}.csv");
         File.WriteAllText(path, string.Join("\n", rows), new UTF8Encoding(false));
 
@@ -113,7 +121,8 @@ public class SpratListTests {
 
         var gilbert = mammals.Single(r => r.GenusName == "Potorous");
         Assert.Equal("CR", gilbert.StatusCode);                       // EPBC drives the section
-        Assert.Equal("EPBC: CR; IUCN: {{IUCN status|CR}}; WA: CR", gilbert.StatusAnnotation);
+        // EPBC entry → {{EPBC status|CODE|<sprat id>|1}} (id "1"); IUCN bare (no resolver in this seam).
+        Assert.Equal("EPBC: {{EPBC status|CR|1|1}}; IUCN: {{IUCN status|CR}}; WA: CR", gilbert.StatusAnnotation);
         Assert.Equal("Gilbert's Potoroo", gilbert.CommonNameOverride);
         Assert.Equal("Potorous", gilbert.GenusName);
         Assert.Equal("gilbertii", gilbert.SpeciesName);
@@ -146,6 +155,60 @@ public class SpratListTests {
     }
 
     [Fact]
+    public void IucnResolver_FillsFullStatusTemplate_UsingGlobalAssessment() {
+        // In-memory IUCN release DB: the taxon has a Global assessment and a (more recent) Europe one.
+        var iucnConn = new SqliteConnection("Data Source=:memory:");
+        iucnConn.Open();
+        using (var cmd = iucnConn.CreateCommand()) {
+            cmd.CommandText = @"
+                CREATE TABLE taxonomy_html (taxonId INTEGER, scientificName TEXT);
+                CREATE TABLE assessments_html (taxonId INTEGER, assessmentId INTEGER, yearPublished TEXT, scopes TEXT, possiblyExtinct TEXT, possiblyExtinctInTheWild TEXT);
+                INSERT INTO taxonomy_html VALUES (5112, 'Pseudomys fieldi');
+                INSERT INTO assessments_html VALUES (5112, 271898609, '2018', 'Europe', 'false', 'false');
+                INSERT INTO assessments_html VALUES (5112, 145357488, '2016', 'Global', 'false', 'false');";
+            cmd.ExecuteNonQuery();
+        }
+        using var resolver = new IucnAssessmentResolver(iucnConn);
+
+        using var conn = SeedSpratFrom(
+            "\"7\",\"Pseudomys fieldi\",\"Shark Bay Mouse\",\"\",\"Endangered\",\"Animalia\",\"Mammalia\",\"Rodentia\",\"Muridae\",\"Pseudomys\",\"\",\"\"");
+        using var query = SpratListQueryService.OpenFromConnection(conn, resolver);
+
+        var mouse = query.Query(new SpratTaxonFilter(Kingdom: "Animalia", Classes: new[] { "Mammalia" })).Single();
+        // Full referenced form, using the GLOBAL assessment (145357488/2016), not the more-recent Europe one.
+        Assert.Equal("IUCN: {{IUCN status|EN|5112/145357488|1|year=2016}}", mouse.StatusAnnotation);
+    }
+
+    [Fact]
+    public void IucnResolver_FallsBackToListedName_ThenBareForm() {
+        var iucnConn = new SqliteConnection("Data Source=:memory:");
+        iucnConn.Open();
+        using (var cmd = iucnConn.CreateCommand()) {
+            cmd.CommandText = @"
+                CREATE TABLE taxonomy_html (taxonId INTEGER, scientificName TEXT);
+                CREATE TABLE assessments_html (taxonId INTEGER, assessmentId INTEGER, yearPublished TEXT, scopes TEXT, possiblyExtinct TEXT, possiblyExtinctInTheWild TEXT);
+                INSERT INTO taxonomy_html VALUES (2381, 'Litoria aurea');
+                INSERT INTO assessments_html VALUES (2381, 12143, '2019', 'Global', 'false', 'false');";
+            cmd.ExecuteNonQuery();
+        }
+        using var resolver = new IucnAssessmentResolver(iucnConn);
+
+        // The SPRAT scientific name is a synonym (Ranoidea aurea); the IUCN_Red_List_Listed_Names column
+        // (last field) carries the IUCN accepted name "Litoria aurea", which the resolver falls back to.
+        // The second taxon resolves to nothing → bare badge.
+        using var conn = SeedSpratListed(
+            "\"8\",\"Ranoidea aurea\",\"Green and Golden Bell Frog\",\"\",\"Vulnerable\",\"Animalia\",\"Amphibia\",\"Anura\",\"Hylidae\",\"Ranoidea\",\"\",\"\",\"Litoria aurea\"",
+            "\"9\",\"Gadopsis sp. SWV\",\"Blackfish\",\"\",\"Endangered\",\"Animalia\",\"Actinopterygii\",\"Perciformes\",\"Percichthyidae\",\"Gadopsis\",\"\",\"\",\"\"");
+        using var query = SpratListQueryService.OpenFromConnection(conn, resolver);
+
+        var records = query.Query(new SpratTaxonFilter(Kingdom: "Animalia"));
+        var frog = records.Single(r => r.GenusName == "Ranoidea");
+        Assert.Equal("IUCN: {{IUCN status|VU|2381/12143|1|year=2019}}", frog.StatusAnnotation);   // via listed name
+        var fish = records.Single(r => r.GenusName == "Gadopsis");
+        Assert.Equal("IUCN: {{IUCN status|EN}}", fish.StatusAnnotation);                          // unresolved → bare
+    }
+
+    [Fact]
     public void CleanCommonName_KeepsParentheticalWithInnerCommasWhole() {
         // Regression: a single vernacular whose parenthetical qualifier itself contains commas must
         // not be truncated at the first comma (the EPBC "combined populations" Koala listing).
@@ -171,7 +234,7 @@ public class SpratListTests {
         Assert.Equal("gunnii", acacia.SpeciesName);
         Assert.Equal("minor", acacia.InfraName);
         Assert.Equal("var.", acacia.InfraType);
-        Assert.Equal("EPBC: VU", acacia.StatusAnnotation);
+        Assert.Equal("EPBC: {{EPBC status|VU|3|1}}", acacia.StatusAnnotation);
 
         // ExcludeClasses drops the only (Magnoliopsida) plant member → the catch-all is empty here.
         var nonFlowering = query.Query(new SpratTaxonFilter(Kingdom: "Plantae", ExcludeClasses: new[] { "Magnoliopsida" }));
