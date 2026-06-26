@@ -8,7 +8,7 @@ To show a species' conservation status under Australia's [[Environment Protectio
 
 * {{tlx|EPBC status|{{var|status}}|{{var|sprat_taxon_id}}|{{var|option}}}}
 
-This is the EPBC analogue of {{tl|IUCN status}}. The EPBC Act ({{EPBC Act 1999 section|178|s178}}) lists threatened species in exactly six categories, which deliberately mirror the [[IUCN Red List]] categories; this template reuses the {{tl|IUCN status}} colour palette for visual consistency.
+This is the EPBC analogue of {{tl|IUCN status}}. The EPBC Act (s.&nbsp;178) lists threatened species in exactly six categories, which deliberately mirror the [[IUCN Red List]] categories; this template reuses the {{tl|IUCN status}} colour palette for visual consistency.
 
 == Parameters ==
 * {{var|status}} is the only required parameter — one of the six EPBC categories: '''EX''', '''EW''', '''CR''', '''EN''', '''VU''', '''CD''' (case-insensitive). '''DL''' (Delisted) is also accepted as a display state.

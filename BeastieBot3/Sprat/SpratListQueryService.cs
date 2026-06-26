@@ -29,9 +29,11 @@ internal sealed class SpratListQueryService : IDisposable {
     // Optional IUCN release resolver: upgrades the IUCN annotation entry from the bare {{IUCN status|CODE}}
     // to the full referenced {{IUCN status|CODE|taxonId/assessmentId|1|year=}} form. Null → bare form.
     private readonly IucnAssessmentResolver? _iucnResolver;
-    // Whether the SPRAT table carries the IUCN listed-name column (the real import does; minimal test
-    // fixtures may not). Guards the SELECT so a missing column isn't silently read as a string literal.
+    // Whether the SPRAT table carries the IUCN listed-name and EPBC date-effective columns (the real
+    // import does; minimal test fixtures may not). Guards the SELECT so a missing column isn't silently
+    // read as a string literal.
     private readonly bool _hasIucnListedName;
+    private readonly bool _hasEpbcDate;
 
     /// <summary>Distinct non-standard status values that passed through verbatim, for the report.</summary>
     public IReadOnlyCollection<StatusFinding> UnrecognizedStatuses => _unrecognizedStatuses.Values;
@@ -51,6 +53,7 @@ internal sealed class SpratListQueryService : IDisposable {
         _systems = ResolveAvailableSystems(_connection);
         _iucnResolver = iucnResolver;
         _hasIucnListedName = HasColumn(_connection, SpratColumns.IucnListedName);
+        _hasEpbcDate = HasColumn(_connection, SpratColumns.EpbcDateEffective);
     }
 
     private SpratListQueryService(SqliteConnection connection, IucnAssessmentResolver? iucnResolver = null) {
@@ -58,6 +61,7 @@ internal sealed class SpratListQueryService : IDisposable {
         _systems = ResolveAvailableSystems(connection);
         _iucnResolver = iucnResolver;
         _hasIucnListedName = HasColumn(connection, SpratColumns.IucnListedName);
+        _hasEpbcDate = HasColumn(connection, SpratColumns.EpbcDateEffective);
     }
 
     private static bool HasColumn(SqliteConnection connection, string column) =>
@@ -98,6 +102,9 @@ internal sealed class SpratListQueryService : IDisposable {
         var selectCols = taxonomyCols.Concat(_systems.Select(s => s.Column)).ToList();
         if (_hasIucnListedName) {
             selectCols.Add(SpratColumns.IucnListedName);
+        }
+        if (_hasEpbcDate) {
+            selectCols.Add(SpratColumns.EpbcDateEffective);
         }
 
         var sql = new StringBuilder();
@@ -165,8 +172,12 @@ internal sealed class SpratListQueryService : IDisposable {
         if (popQualifier is not null) {
             common = StripTrailingParenthetical(common); // the qualifier is shown once, via the subpopulation
         }
-        var iucnListedName = _hasIucnListedName ? GetString(reader, sysOffset + _systems.Count) : null;
-        var annotation = BuildAnnotation(reader, sysOffset, cleanSci, iucnListedName, idRaw);
+        // Optional trailing columns are appended to the SELECT in this fixed order: listed-name, then
+        // EPBC date-effective — so each one's ordinal accounts for the presence of those before it.
+        var optionalOrdinal = sysOffset + _systems.Count;
+        var iucnListedName = _hasIucnListedName ? GetString(reader, optionalOrdinal++) : null;
+        var epbcYear = _hasEpbcDate ? ExtractYear(GetString(reader, optionalOrdinal)) : null;
+        var annotation = BuildAnnotation(reader, sysOffset, cleanSci, iucnListedName, idRaw, epbcYear);
         var descriptor = IucnRedlistStatus.Describe(primaryCode);
         long.TryParse(idRaw, out var taxonId);
 
@@ -202,7 +213,7 @@ internal sealed class SpratListQueryService : IDisposable {
     // their colour-badge templates (referenced to the SPRAT profile and iucnredlist.org respectively); the
     // state/territory entries are plain code text.
     private string? BuildAnnotation(
-        SqliteDataReader reader, int sysOffset, string? scientific, string? listedName, string? spratTaxonId) {
+        SqliteDataReader reader, int sysOffset, string? scientific, string? listedName, string? spratTaxonId, string? epbcYear) {
         var parts = new List<string>();
         for (var i = 0; i < _systems.Count; i++) {
             var system = _systems[i];
@@ -217,7 +228,7 @@ internal sealed class SpratListQueryService : IDisposable {
                     _unrecognizedStatuses[key] = new StatusFinding(system.Label, code, scientific ?? "");
                 }
             }
-            parts.Add($"{system.Label}: {RenderStatus(system.Key, code, scientific, listedName, spratTaxonId)}");
+            parts.Add($"{system.Label}: {RenderStatus(system.Key, code, scientific, listedName, spratTaxonId, epbcYear)}");
         }
         return parts.Count > 0 ? string.Join("; ", parts) : null;
     }
@@ -225,7 +236,7 @@ internal sealed class SpratListQueryService : IDisposable {
     // Renders one system's status: the IUCN entry as a {{IUCN status}} badge (the full referenced form
     // when its Global assessment resolves in the IUCN release, else the bare badge); the EPBC entry as an
     // {{EPBC status}} badge linking the SPRAT profile by taxon id; every other system as plain code text.
-    private string RenderStatus(string systemKey, string code, string? scientific, string? listedName, string? spratTaxonId) {
+    private string RenderStatus(string systemKey, string code, string? scientific, string? listedName, string? spratTaxonId, string? epbcYear) {
         if (systemKey == "iucn" && IucnTemplateCodes.Contains(code)) {
             var resolved = _iucnResolver?.Resolve(scientific, listedName);
             if (resolved is not null) {
@@ -241,13 +252,24 @@ internal sealed class SpratListQueryService : IDisposable {
             return $"{{{{IUCN status|{code}}}}}";
         }
         if (systemKey == "epbc" && EpbcTemplateCodes.Contains(code)) {
-            // label=SPRAT names the reference source (the annotation already prints "EPBC:", so the
-            // template's default "EPBC" link text would be redundant).
+            // The reference label is the listing-effective year (parallel to the IUCN assessment year),
+            // falling back to "SPRAT" when no date is available; the annotation already prints "EPBC:",
+            // so the template's default "EPBC" link text would be redundant.
+            var label = string.IsNullOrWhiteSpace(epbcYear) ? "SPRAT" : epbcYear;
             return string.IsNullOrWhiteSpace(spratTaxonId)
                 ? $"{{{{EPBC status|{code}}}}}"
-                : $"{{{{EPBC status|{code}|{spratTaxonId}|1|label=SPRAT}}}}";
+                : $"{{{{EPBC status|{code}|{spratTaxonId}|1|label={label}}}}}";
         }
         return code;
+    }
+
+    // The 4-digit year from a SPRAT "DD-MON-YYYY" date-effective value (the trailing token), or null.
+    private static string? ExtractYear(string? dateEffective) {
+        if (string.IsNullOrWhiteSpace(dateEffective)) {
+            return null;
+        }
+        var last = dateEffective.Trim().Split('-')[^1].Trim();
+        return last.Length == 4 && last.All(char.IsDigit) ? last : null;
     }
 
     // IUCN categories the {{IUCN status}} template renders as a colour badge. Codes outside this set

@@ -30,6 +30,10 @@ internal static class SpratColumns {
     /// SPRAT scientific name doesn't match the IUCN release directly (synonyms, spelling drift).</summary>
     public const string IucnListedName = "IUCN_Red_List_Listed_Names";
 
+    /// <summary>The date the taxon's EPBC threatened-category listing took effect ("DD-MON-YYYY"); the
+    /// year is used as the {{EPBC status}} reference label.</summary>
+    public const string EpbcDateEffective = "EPBC_Threatened_Species_Date_Effective";
+
     // Conservation status, one column per listing system. Each holds the system's own raw category
     // text (e.g. "Critically Endangered", "Rare", "Near Threatened") or NULL/empty when unlisted.
     public const string EpbcStatus = "epbc_status";

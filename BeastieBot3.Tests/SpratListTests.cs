@@ -87,11 +87,11 @@ public class SpratListTests {
         "\"Taxon ID\",\"Scientific Name\",\"Common Name\",\"EPBC Threat Status\",\"IUCN Red List\",\"Kingdom\",\"Class\",\"Order\",\"Family\",\"Genus\",\"NSW TSC Act and FM Act\",\"WA WC Act\"",
     }.Concat(dataRows).ToArray());
 
-    // Variant whose 13th column is the IUCN listed-name (for the IUCN-resolver fallback test). Rows must
-    // supply all 13 fields.
+    // Variant adding the two optional trailing columns — IUCN listed-name (13th) and EPBC date-effective
+    // (14th) — for the resolver and EPBC-year tests. Rows must supply all 14 fields.
     private static SqliteConnection SeedSpratListed(params string[] dataRows) => ImportSprat(new[] {
-        "\"id\",\"sci\",\"common\",\"epbc\",\"iucn\",\"kingdom\",\"class\",\"order\",\"family\",\"genus\",\"nsw\",\"wa\",\"listed\"",
-        "\"Taxon ID\",\"Scientific Name\",\"Common Name\",\"EPBC Threat Status\",\"IUCN Red List\",\"Kingdom\",\"Class\",\"Order\",\"Family\",\"Genus\",\"NSW TSC Act and FM Act\",\"WA WC Act\",\"IUCN Red List Listed Names\"",
+        "\"id\",\"sci\",\"common\",\"epbc\",\"iucn\",\"kingdom\",\"class\",\"order\",\"family\",\"genus\",\"nsw\",\"wa\",\"listed\",\"epbcdate\"",
+        "\"Taxon ID\",\"Scientific Name\",\"Common Name\",\"EPBC Threat Status\",\"IUCN Red List\",\"Kingdom\",\"Class\",\"Order\",\"Family\",\"Genus\",\"NSW TSC Act and FM Act\",\"WA WC Act\",\"IUCN Red List Listed Names\",\"EPBC Threatened Species Date Effective\"",
     }.Concat(dataRows).ToArray());
 
     private static SqliteConnection ImportSprat(string[] rows) {
@@ -223,8 +223,8 @@ public class SpratListTests {
         // (last field) carries the IUCN accepted name "Litoria aurea", which the resolver falls back to.
         // The second taxon resolves to nothing → bare badge.
         using var conn = SeedSpratListed(
-            "\"8\",\"Ranoidea aurea\",\"Green and Golden Bell Frog\",\"\",\"Vulnerable\",\"Animalia\",\"Amphibia\",\"Anura\",\"Hylidae\",\"Ranoidea\",\"\",\"\",\"Litoria aurea\"",
-            "\"9\",\"Gadopsis sp. SWV\",\"Blackfish\",\"\",\"Endangered\",\"Animalia\",\"Actinopterygii\",\"Perciformes\",\"Percichthyidae\",\"Gadopsis\",\"\",\"\",\"\"");
+            "\"8\",\"Ranoidea aurea\",\"Green and Golden Bell Frog\",\"\",\"Vulnerable\",\"Animalia\",\"Amphibia\",\"Anura\",\"Hylidae\",\"Ranoidea\",\"\",\"\",\"Litoria aurea\",\"\"",
+            "\"9\",\"Gadopsis sp. SWV\",\"Blackfish\",\"\",\"Endangered\",\"Animalia\",\"Actinopterygii\",\"Perciformes\",\"Percichthyidae\",\"Gadopsis\",\"\",\"\",\"\",\"\"");
         using var query = SpratListQueryService.OpenFromConnection(conn, resolver);
 
         var records = query.Query(new SpratTaxonFilter(Kingdom: "Animalia"));
@@ -232,6 +232,17 @@ public class SpratListTests {
         Assert.Equal("IUCN: {{IUCN status|VU|2381/12143|1|label=2019}}", frog.StatusAnnotation);   // via listed name
         var fish = records.Single(r => r.GenusName == "Gadopsis");
         Assert.Equal("IUCN: {{IUCN status|EN}}", fish.StatusAnnotation);                          // unresolved → bare
+    }
+
+    [Fact]
+    public void Epbc_UsesListingYearLabel_FromDateEffective() {
+        // The EPBC reference label is the year of the listing's date-effective ("16-JUL-2000" → 2000).
+        using var conn = SeedSpratListed(
+            "\"5\",\"Acacia aprica\",\"Blunt Wattle\",\"Endangered\",\"\",\"Plantae\",\"Magnoliopsida\",\"Fabales\",\"Fabaceae\",\"Acacia\",\"\",\"\",\"\",\"16-JUL-2000\"");
+        using var query = SpratListQueryService.OpenFromConnection(conn);
+
+        var wattle = query.Query(new SpratTaxonFilter(Kingdom: "Plantae")).Single();
+        Assert.Equal("EPBC: {{EPBC status|EN|5|1|label=2000}}", wattle.StatusAnnotation);
     }
 
     [Fact]
