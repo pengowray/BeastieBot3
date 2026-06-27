@@ -62,7 +62,14 @@ differences from the Catalogue of Life. The two synonym reports share one scan
 (`SynonymFormattingScan`, memoised per connection): one lists whitespace problems (each kind counted
 separately, including spaces inside parentheses or before a comma), the other lists markup, stray
 HTML entities, curly quotes, and encoding artefacts with per-kind percentages and a with/without-HTML
-consistency table. Plain non-ASCII letters are never flagged on their own.
+consistency table. Plain non-ASCII letters are never flagged on their own. The English common name
+report (`CommonNameIssuesProducer`) refreshes a hand-compiled 2016 review of Red List common-name
+oddities against the current release: species codes in the name field, all-capitals names, stray
+whitespace, an acute accent or backtick used as an apostrophe, a leading "The", a "(FB)" FishBase
+marker, ampersand/slash separators, non-English-script (Greek/Cyrillic) characters, and the curated
+"likely plural" endings; checks that now find nothing (comma inside parentheses, literal question
+marks) are still listed at zero. Low-value 2016 checks are dropped on purpose (abbreviation dots,
+spelling, and the broad "possible plural" sweep).
 Methodology: text hygiene by field. The scientific-name-change report appears only when the
 field-based check finds a name that changed across assessment versions (it produces nothing in
 current data and is omitted, via the producer returning null when empty).

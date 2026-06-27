@@ -45,7 +45,7 @@ internal sealed class HtmlConsistencyProducer : IAuditReportProducer {
             .ToList();
 
         var summary =
-            "For each assessment, the HTML version of six narrative fields (rationale, habitat, threats, population, range, use and trade) is reduced to plain text and compared against the stored plain-text version of the same field. " +
+            "For each assessment, the HTML CSV export of six narrative fields (rationale, habitat, threats, population, range, use and trade) is reduced to plain text and compared against the CSV plain-text export of the same field. " +
             "Differences that are only whitespace, non-breaking spaces, or entity encoding are treated as a match and not listed, so a row here means the readable text genuinely differs. The comparison is about text serialisation only and says nothing about the scientific content.";
 
         // A common cause is heavy redundant markup: some fields carry a large amount of repeated empty
@@ -54,7 +54,7 @@ internal sealed class HtmlConsistencyProducer : IAuditReportProducer {
         var example = findings.FirstOrDefault(f => f.IssueType is "plain-text-empty-redundant-markup" or "plain-text-truncated-redundant-markup");
         if (example is not null) {
             var ratio = example.Get("markupRatio");
-            summary += $" A recurring pattern is heavy redundant markup: the HTML carries long runs of repeated empty tags and the plain-text version then comes out empty or truncated. " +
+            summary += $"<br><br> A recurring pattern is heavy redundant markup: the HTML carries long runs of repeated empty tags and the plain-text version then comes out empty or truncated. " +
                        $"For example {example.ScientificName} ({example.Field}) has HTML about {ratio} times the size of its readable text, and its plain-text version did not get past the markup. " +
                        $"These rows are marked redundant-markup and explained in the detail column.";
         }

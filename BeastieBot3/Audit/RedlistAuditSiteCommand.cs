@@ -50,6 +50,7 @@ internal sealed class RedlistAuditSiteCommand : Command<RedlistAuditSiteCommand.
         new TaxonomyCleanupProducer(),
         new SynonymWhitespaceProducer(),
         new SynonymOtherFormattingProducer(),
+        new CommonNameIssuesProducer(),
         new OrphanInfraranksProducer(),
         new NoLatestAssessmentProducer(),
         new HtmlConsistencyProducer(),
