@@ -53,6 +53,27 @@ internal sealed class CommonNameIssuesProducer : IAuditReportProducer {
         "toads", "treefrogs", "wrasses",
     };
 
+    // What the hand-compiled 2016 review (IUCN 2016-2) recorded for the nearest matching category,
+    // for a bit of fun side-by-side. Several 2016 sections listed only examples, so these are a floor
+    // rather than an exhaustive count; species codes and all-capitals read as full enumerations, and
+    // dot/double-space were explicitly "no issues found". A missing entry means 2016 had no comparable
+    // check (leading and trailing whitespace were never measured separately; only double spaces were).
+    private static readonly IReadOnlyDictionary<CommonNameIssue, int> Counts2016 = new Dictionary<CommonNameIssue, int> {
+        [CommonNameIssue.SpeciesCode] = 71,
+        [CommonNameIssue.AllCaps] = 27,
+        [CommonNameIssue.QuestionMark] = 13,
+        [CommonNameIssue.AcuteApostrophe] = 1,
+        [CommonNameIssue.CommaInParentheses] = 1,
+        [CommonNameIssue.Ampersand] = 2,
+        [CommonNameIssue.Slash] = 4,
+        [CommonNameIssue.ControlCharacter] = 1,
+        [CommonNameIssue.FishbaseMarker] = 1,
+        [CommonNameIssue.RedundantThe] = 1,
+        [CommonNameIssue.LikelyPlural] = 2,
+        [CommonNameIssue.ContainsNumber] = 3,
+        [CommonNameIssue.DoubleSpace] = 0,
+    };
+
     private static readonly Regex NonEnglishScript = new(@"[Ͱ-ϿЀ-ӿ]", RegexOptions.Compiled);
     private static readonly Regex CommaInParens = new(@"\([^)]*,[^)]*\)", RegexOptions.Compiled);
     private static readonly Regex FishbaseTag = new(@"\(fb\)\s*$", RegexOptions.Compiled | RegexOptions.IgnoreCase);
@@ -291,13 +312,15 @@ internal sealed class CommonNameIssuesProducer : IAuditReportProducer {
             .Select(issue => new[] {
                 Label(issue),
                 perName.Count(list => list.Contains(issue)).ToString("N0", CultureInfo.InvariantCulture),
+                Counts2016.TryGetValue(issue, out var c) ? c.ToString("N0", CultureInfo.InvariantCulture) : "—",
             } as IReadOnlyList<string>)
             .ToList();
-        rows.Add(new[] { "Total (distinct names)", perName.Count.ToString("N0", CultureInfo.InvariantCulture) });
+        rows.Add(new[] { "Total (distinct names)", perName.Count.ToString("N0", CultureInfo.InvariantCulture), "—" });
         return new AuditSummaryTable {
-            Title = "Issues by kind",
-            Note = "Each kind is counted once per name; because a name can carry several, the kinds add up to more than the distinct total. Kinds listed at 0 were checked and found nothing this release.",
-            Headers = new[] { "Issue", "Names" }, Rows = rows, NumericColumns = new[] { 1 },
+            Title = "Issues by kind, 2025-2 versus 2016",
+            Note = "Each kind is counted once per name; because a name can carry several, the kinds add up to more than the distinct total. Kinds listed at 0 were checked and found nothing this release. " +
+                   "The 2016 column is what a hand-compiled review of the 2016-2 release recorded for the nearest matching category: several of those sections listed only examples, so treat them as a floor rather than an exhaustive count, while species codes and all-capitals read as full lists. A dash means 2016 had no comparable check (only double spaces were measured among whitespace kinds).",
+            Headers = new[] { "Issue", "2025-2", "2016" }, Rows = rows, NumericColumns = new[] { 1, 2 },
         };
     }
 
