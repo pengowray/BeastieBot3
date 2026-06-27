@@ -87,7 +87,7 @@ internal sealed class ColCrosscheckProducer : IAuditReportProducer {
             DataSourceLabel = $"IUCN Red List {ctx.Release} vs Catalogue of Life",
             Summary =
                 "Each row pairs an IUCN assessment with its best Catalogue of Life match and records where the two independent catalogues differ. " +
-                "These describe divergence between two catalogues rather than a defect in either. CoL matching is exact, so a spelling or spacing difference can show as no match. " +
+                "These describe divergence between two catalogues rather than a defect in either. The primary match is exact, but when it fails a fuzzy pass looks for near matches and the row names the closest CoL candidate and how it differs (punctuation, diacritics, Unicode encoding, or a spelling variant). " +
                 "The lists below show the higher-signal rows: a name with no exact CoL match, a name CoL treats as a synonym, and placement differences above genus. " +
                 "Authority differences and genus or species level placement differences are summarised by class here and are included in full in the CSV download.",
             Columns = new List<AuditColumn> {
@@ -173,8 +173,8 @@ internal sealed class ColCrosscheckProducer : IAuditReportProducer {
         };
 
         if (primary is null) {
-            yield return Make("missing-from-col", "scientificName", name, null, 4,
-                "No exact Catalogue of Life match for this name (CoL matching is exact, so a spelling or spacing difference can cause this).");
+            var (suggested, detail) = SuggestNearMatches(row, colRepo, name, ct);
+            yield return Make("missing-from-col", "scientificName", name, suggested, 4, detail);
             yield break;
         }
 
@@ -195,6 +195,65 @@ internal sealed class ColCrosscheckProducer : IAuditReportProducer {
             yield return Make("classification-difference", diff.Rank, diff.Iucn, diff.Col, severity,
                 $"{Capitalise(diff.Rank)} placement differs between IUCN and Catalogue of Life.");
         }
+    }
+
+    // When no exact CoL match exists, look for near matches: names in the same genus or sharing the
+    // same epithet, ranked by how they differ. A formatting-equivalent name (punctuation, diacritics,
+    // Unicode encoding, ...) is reported as the likely same name; otherwise the closest spelling
+    // variants are offered as possible alternatives. Returns the best CoL name for the suggested
+    // column plus a human-readable detail line.
+    private static (string? Suggested, string Detail) SuggestNearMatches(
+        IucnTaxonomyRow row, ColTaxonRepository colRepo, string? iucnName, CancellationToken ct) {
+        const string noneDetail = "No Catalogue of Life match for this name, and no close candidate found by fuzzy search.";
+        if (string.IsNullOrWhiteSpace(iucnName)) {
+            return (null, noneDetail);
+        }
+
+        var pool = new List<ColTaxonRecord>();
+        if (!string.IsNullOrWhiteSpace(row.GenusName)) {
+            pool.AddRange(colRepo.FindByGenericName(row.GenusName!, ct));
+        }
+        if (!string.IsNullOrWhiteSpace(row.SpeciesName)) {
+            pool.AddRange(colRepo.FindBySpecificEpithet(row.SpeciesName!, ct));
+        }
+
+        var scored = new List<(string Name, ScientificNameDifference.Result Diff)>();
+        var seenNames = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var c in pool.GroupBy(c => c.Id, StringComparer.Ordinal).Select(g => g.First())) {
+            ct.ThrowIfCancellationRequested();
+            var colName = AuditMapping.Decode(c.ScientificName);
+            if (string.IsNullOrWhiteSpace(colName) || !seenNames.Add(colName!)) {
+                continue;
+            }
+            var diff = ScientificNameDifference.Classify(iucnName!, colName!);
+            if (diff.Kind is ScientificNameDifference.Kind.Exact or ScientificNameDifference.Kind.Unrelated) {
+                continue;
+            }
+            scored.Add((colName!, diff));
+        }
+
+        if (scored.Count == 0) {
+            return (null, noneDetail);
+        }
+
+        // Formatting-equivalent matches first (these are very likely the same name), then by edit
+        // distance, then alphabetically for a stable order.
+        scored.Sort((x, y) => {
+            var byKind = (x.Diff.IsFormattingEquivalent ? 0 : 1).CompareTo(y.Diff.IsFormattingEquivalent ? 0 : 1);
+            if (byKind != 0) return byKind;
+            var byDistance = x.Diff.Distance.CompareTo(y.Diff.Distance);
+            return byDistance != 0 ? byDistance : string.Compare(x.Name, y.Name, StringComparison.OrdinalIgnoreCase);
+        });
+
+        var best = scored[0];
+        if (best.Diff.IsFormattingEquivalent) {
+            return (best.Name, $"No exact Catalogue of Life match. CoL has '{best.Name}', which {best.Diff.Description} — likely the same name.");
+        }
+
+        var alternatives = scored.Take(3).Select(s => $"'{s.Name}'").ToList();
+        var list = alternatives.Count == 1 ? alternatives[0] : string.Join(", ", alternatives);
+        return (best.Name,
+            $"No exact Catalogue of Life match. Closest CoL {(alternatives.Count == 1 ? "name is" : "names are")} {list} ({best.Diff.Description}); may be a spelling variant or a different taxon.");
     }
 
     private static IEnumerable<(string Rank, string Iucn, string Col)> ClassificationDifferences(

@@ -69,6 +69,14 @@ class. The CSV download still carries every row (`AuditReport.CsvFindings` holds
 while `Findings` holds the HTML subset). Authority comparison and display decode HTML entities first
 (the `_html` view stores `&` as `&amp;`), so they do not report spurious differences.
 
+The primary CoL match is exact, but when it fails a fuzzy pass (`ScientificNameDifference` +
+`ColTaxonRepository.FindByGenericName`/`FindBySpecificEpithet`) looks for near matches among names in
+the same genus or sharing the epithet. A formatting-equivalent candidate is reported as the likely
+same name with the reason it differs (spacing, punctuation, Unicode encoding, diacritics, case, or a
+combination); otherwise the closest spelling variants are offered as possible alternatives with their
+edit distance. The best candidate fills the "CoL value" column; the detail line carries the
+explanation.
+
 Very large full lists split into a recursive taxonomic tree (class, then order, then family) so no
 single page exceeds the row threshold; the CSV still holds the whole report.
 

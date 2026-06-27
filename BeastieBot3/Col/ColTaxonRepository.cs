@@ -88,6 +88,38 @@ internal sealed class ColTaxonRepository {
         return readOnly;
     }
 
+    // Near-match candidate pools for fuzzy suggestions when no exact match exists. Both restrict on
+    // an indexed column (genericName / specificEpithet) so the scan stays cheap, and both cap the
+    // result set: a missing-name suggestion only needs a handful of nearby names, and a few epithets
+    // ("elegans", "gracilis") are shared by thousands of taxa.
+    private const int NearMatchCandidateCap = 400;
+
+    public IReadOnlyList<ColTaxonRecord> FindByGenericName(string genus, CancellationToken cancellationToken) =>
+        FindCappedByColumn("genericName", "@genus", genus, "genus:", cancellationToken);
+
+    public IReadOnlyList<ColTaxonRecord> FindBySpecificEpithet(string species, CancellationToken cancellationToken) =>
+        FindCappedByColumn("specificEpithet", "@species", species, "epithet:", cancellationToken);
+
+    private IReadOnlyList<ColTaxonRecord> FindCappedByColumn(string column, string parameter, string value, string cachePrefix, CancellationToken cancellationToken) {
+        if (string.IsNullOrWhiteSpace(value)) {
+            return Array.Empty<ColTaxonRecord>();
+        }
+
+        var trimmed = value.Trim();
+        var key = cachePrefix + trimmed;
+        if (_componentsCache.TryGetValue(key, out var cached)) {
+            return cached;
+        }
+
+        using var command = _connection.CreateCommand();
+        command.CommandText = $"{_selectClause}\nFROM nameusage\nWHERE \"{column}\" = {parameter}\n  AND scientificName IS NOT NULL\nLIMIT {NearMatchCandidateCap}";
+        command.Parameters.AddWithValue(parameter, trimmed);
+        command.CommandTimeout = 0;
+        var readOnly = ToReadOnly(Execute(command, cancellationToken));
+        _componentsCache[key] = readOnly;
+        return readOnly;
+    }
+
     public ColTaxonRecord? GetById(string? id, CancellationToken cancellationToken) {
         if (string.IsNullOrWhiteSpace(id)) {
             return null;
