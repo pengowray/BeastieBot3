@@ -5,8 +5,8 @@
 # written once for a specific release separate from the release-agnostic notes generated in code.
 #
 # Fields:
-#   report   the report id (failed-assessments, taxonomy-cleanup, synonym-formatting,
-#            orphan-infraranks, no-latest, html-consistency, taxonomy-consistency,
+#   report   the report id (failed-assessments, taxonomy-cleanup, synonym-whitespace,
+#            synonym-markup, orphan-infraranks, no-latest, html-consistency, taxonomy-consistency,
 #            col-crosscheck, count-scopes, field-hygiene, name-changes)
 #   release  "2025-2" for this release only, or "any" to carry forward to later releases
 #   scope    "report" (shown on the report page) or "finding" (matched to a row by key)

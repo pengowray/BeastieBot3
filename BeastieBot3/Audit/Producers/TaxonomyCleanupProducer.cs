@@ -47,9 +47,14 @@ internal sealed class TaxonomyCleanupProducer : IAuditReportProducer {
             .ThenBy(f => f.ScientificName, System.StringComparer.OrdinalIgnoreCase)
             .ToList();
 
-        // Count the rows actually listed (one per affected field) so the summary reconciles with
-        // the full list, including the disagreement kind which contributes two fields per record.
-        var summary = ordered
+        // Granular breakdown: separate leading from trailing whitespace, double spaces, non-breaking
+        // or control whitespace, the marker prefix, and the name-field disagreement. One field row can
+        // carry several whitespace problems, so the kinds add up to more than the distinct row total.
+        var issueTypeSummary = BuildIssueTypeSummary(ordered);
+
+        // Secondary view: which field each row belongs to (one per affected field, so it reconciles
+        // with the full list, including the disagreement kind that contributes two fields per record).
+        var byField = ordered
             .GroupBy(f => f.IssueType ?? "")
             .OrderByDescending(g => g.Count())
             .Select(g => new[] { g.Key, g.Count().ToString("N0") } as IReadOnlyList<string>)
@@ -63,7 +68,8 @@ internal sealed class TaxonomyCleanupProducer : IAuditReportProducer {
             DataSourceLabel = $"IUCN Red List {ctx.Release} (CSV export)",
             Summary =
                 "Each row reports a taxonomy field whose stored text carries a whitespace irregularity (leading or trailing spaces, repeated spaces, non-breaking or tab characters) or an infrarank marker that belongs in the name fields, together with a suggested normalised value. " +
-                "Current values show otherwise-invisible characters as markers so the difference is visible. These are low-risk, concrete tidy-ups.",
+                "Current values show otherwise-invisible characters as markers so the difference is visible. " +
+                "The first summary separates each kind of problem (leading versus trailing whitespace, and so on) with a distinct row total; because one field can carry several, the kinds add up to more than the total. These are low-risk, concrete tidy-ups.",
             Columns = new List<AuditColumn> {
                 AuditColumns.ScientificName(),
                 AuditColumns.Field(),
@@ -80,10 +86,56 @@ internal sealed class TaxonomyCleanupProducer : IAuditReportProducer {
             },
             Findings = ordered,
             SummaryTables = new List<AuditSummaryTable> {
-                new() { Title = "By cleanup kind", Headers = new[] { "Kind", "Count" }, Rows = summary, NumericColumns = new[] { 1 } },
+                issueTypeSummary,
+                new() { Title = "By field", Note = "Rows grouped by the field and check that flagged them (one row per affected field).", Headers = new[] { "Kind", "Count" }, Rows = byField, NumericColumns = new[] { 1 } },
             },
             GroupLevels = AuditGroups.ByClass,
         };
+    }
+
+    // Candidate issue types in display order. Whitespace kinds are classified from the stored value;
+    // the marker prefix and name-field disagreement are identified from the row's own issue label.
+    private static readonly string MarkerPrefix = "infrarank marker prefix";
+    private static readonly string Disagreement = "scientificName / scientificName:1 disagreement";
+    private static readonly string[] IssueTypeOrder = {
+        "leading whitespace", "trailing whitespace", "double spaces", "non-breaking or control whitespace",
+        "infrarank marker prefix", "scientificName / scientificName:1 disagreement",
+    };
+
+    private static AuditSummaryTable BuildIssueTypeSummary(IReadOnlyList<AuditFinding> findings) {
+        var counts = IssueTypeOrder.ToDictionary(k => k, _ => 0, System.StringComparer.Ordinal);
+        foreach (var f in findings) {
+            foreach (var category in Categories(f)) {
+                counts.TryGetValue(category, out var c);
+                counts[category] = c + 1;
+            }
+        }
+        var rows = IssueTypeOrder
+            .Select(k => new[] { k, counts[k].ToString("N0") } as IReadOnlyList<string>)
+            .ToList();
+        rows.Add(new[] { "Total (distinct rows)", findings.Count.ToString("N0") });
+        return new AuditSummaryTable {
+            Title = "Issues by type",
+            Note = "Each kind is counted once per field row; because one field can carry several, the kinds add up to more than the distinct total.",
+            Headers = new[] { "Issue", "Rows" }, Rows = rows, NumericColumns = new[] { 1 },
+        };
+    }
+
+    private static IEnumerable<string> Categories(AuditFinding f) {
+        var label = f.IssueType ?? "";
+        if (label.Contains("marker prefix", System.StringComparison.Ordinal)) {
+            return new[] { MarkerPrefix };
+        }
+        if (label.Contains("disagreement", System.StringComparison.Ordinal)) {
+            return new[] { Disagreement };
+        }
+        var v = f.CurrentValue ?? "";
+        var cats = new List<string>();
+        if (TextIrregularities.HasLeadingWhitespace(v)) cats.Add("leading whitespace");
+        if (TextIrregularities.HasTrailingWhitespace(v)) cats.Add("trailing whitespace");
+        if (TextIrregularities.HasDoubleSpace(v)) cats.Add("double spaces");
+        if (TextIrregularities.HasSpecialWhitespace(v)) cats.Add("non-breaking or control whitespace");
+        return cats;
     }
 
     private static AuditFinding Build(DataCleanupIssueKind kind, DataCleanupIssueSample sample, DataCleanupFieldSuggestion field, IucnTaxonomyRow? row) {

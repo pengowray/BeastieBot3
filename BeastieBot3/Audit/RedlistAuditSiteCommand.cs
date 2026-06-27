@@ -48,7 +48,8 @@ internal sealed class RedlistAuditSiteCommand : Command<RedlistAuditSiteCommand.
     private static IReadOnlyList<IAuditReportProducer> Producers() => new IAuditReportProducer[] {
         new FailedAssessmentsProducer(),
         new TaxonomyCleanupProducer(),
-        new SynonymFormattingProducer(),
+        new SynonymWhitespaceProducer(),
+        new SynonymOtherFormattingProducer(),
         new OrphanInfraranksProducer(),
         new NoLatestAssessmentProducer(),
         new HtmlConsistencyProducer(),

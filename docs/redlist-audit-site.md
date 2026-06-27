@@ -31,8 +31,8 @@ incomplete or mistaken. When editing copy, avoid em-dashes and "not X but Y" phr
   ladder, status, field/current/suggested, issueType, detail, notes, plus `Extra` for
   report-specific columns). `Key` (`"{taxonId}:{issueType}"`) pins one-time commentary to a row.
 - **`Model/AuditReport`** — a report: neutral `Summary`, optional `SummaryTables`, a column list,
-  and findings pre-sorted by importance. `GroupBy`/`GroupLabel` drive the per-group tree split on
-  very large full-list pages.
+  and findings pre-sorted by importance. The full-list page always shows every row on one page
+  (filter box + click-to-sort), never split into per-group pages.
 - **`Model/AuditColumn` + `AuditColumns`** — column definitions and a factory of reusable columns
   (scientific name, status badge, taxonomy, ids, Red List link, field/current/suggested). Defined
   once, rendered identically in HTML and CSV.
@@ -56,8 +56,13 @@ The reusable seams already in the codebase that producers call directly: `IucnTa
 ## Reports
 
 IUCN-owned (the body): failed assessments (empty-scope HTTP 500), taxonomy field cleanup, synonym
-formatting, orphan subspecies/varieties, taxa with no current assessment, HTML vs plain-text
-narrative fields, scientific name vs components, and differences from the Catalogue of Life.
+whitespace irregularities, synonym markup/unusual characters, orphan subspecies/varieties, taxa
+with no current assessment, HTML vs plain-text narrative fields, scientific name vs components, and
+differences from the Catalogue of Life. The two synonym reports share one scan
+(`SynonymFormattingScan`, memoised per connection): one lists whitespace problems (each kind counted
+separately, including spaces inside parentheses or before a comma), the other lists markup, stray
+HTML entities, curly quotes, and encoding artefacts with per-kind percentages and a with/without-HTML
+consistency table. Plain non-ASCII letters are never flagged on their own.
 Methodology: text hygiene by field. The scientific-name-change report appears only when the
 field-based check finds a name that changed across assessment versions (it produces nothing in
 current data and is omitted, via the producer returning null when empty).
