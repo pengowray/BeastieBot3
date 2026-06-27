@@ -235,8 +235,7 @@ internal static class AuditSiteRenderer {
 
         sb.Append("<h3>What this does not cover</h3>\n");
         sb.Append("<ul>\n");
-        sb.Append("<li>Grouping by assessing body (a specialist group or Red List Authority) is not available, because that field is not present in the public export used here.</li>\n");
-        sb.Append("<li>Counts are taken from one local import of the public release and may differ slightly from figures published elsewhere.</li>\n");
+        sb.Append("<li>Counts are taken from local imports of the public release and may differ slightly from figures published elsewhere.</li>\n");
         sb.Append("<li>Every observation is automated and may be incomplete or mistaken.</li>\n");
         sb.Append("</ul>\n");
         sb.Append("</section>\n");
