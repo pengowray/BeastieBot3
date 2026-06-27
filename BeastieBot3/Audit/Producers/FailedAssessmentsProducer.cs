@@ -45,6 +45,7 @@ internal sealed class FailedAssessmentsProducer : IAuditReportProducer {
             Title = "Assessment records the API cannot serve (empty geographic scope)",
             Tier = AuditReportTier.IucnCore,
             Breakage = BreakageClass.Breaking,
+            KindLabel = "API errors",
             DataSourceLabel = "IUCN API, with species and taxonomy from the CSV export",
             Summary =
                 "Each row is an assessment that the public API endpoint /api/v4/assessment/{id} returns HTTP 500 for. " +

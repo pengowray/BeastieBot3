@@ -48,7 +48,8 @@ internal sealed class OrphanInfraranksProducer : IAuditReportProducer {
             Id = Id,
             Title = "Subspecies and varieties with no assessed parent species",
             Tier = AuditReportTier.IucnCore,
-            Breakage = BreakageClass.Advisory,
+            Breakage = BreakageClass.Breaking,
+            KindLabel = "Undiscoverable",
             DataSourceLabel = $"IUCN Red List {ctx.Release} (CSV export)",
             Summary =
                 "These are assessed subspecies and varieties whose parent species has no species-level assessment in the current release. " +

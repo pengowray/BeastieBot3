@@ -60,9 +60,12 @@ internal static class AuditPageLayout {
         return sb.ToString();
     }
 
-    public static string BreakageBadge(BreakageClass breakage) => breakage switch {
-        BreakageClass.Breaking => "<span class=\"badge breaking\">site or API affected</span>",
-        BreakageClass.FixableData => "<span class=\"badge fixable\">value to tidy</span>",
-        _ => "<span class=\"badge advisory\">to consider</span>",
-    };
+    public static string BreakageBadge(BreakageClass breakage, string? label = null) {
+        var (cls, text) = breakage switch {
+            BreakageClass.Breaking => ("breaking", "site or API affected"),
+            BreakageClass.FixableData => ("fixable", "value to tidy"),
+            _ => ("advisory", "to consider"),
+        };
+        return $"<span class=\"badge {cls}\">{HtmlText.Escape(label ?? text)}</span>";
+    }
 }

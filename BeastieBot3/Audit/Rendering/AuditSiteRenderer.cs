@@ -92,7 +92,7 @@ internal static class AuditSiteRenderer {
             sb.Append("<tr>\n");
             sb.Append($"<td><div class=\"report-title\"><a href=\"{r.Id}.html\">{HtmlText.Escape(r.Title)}</a></div>");
             sb.Append($"<div class=\"report-desc\">{HtmlText.Escape(FirstSentence(r.Summary))}</div></td>\n");
-            sb.Append($"<td>{AuditPageLayout.BreakageBadge(r.Breakage)}</td>\n");
+            sb.Append($"<td>{AuditPageLayout.BreakageBadge(r.Breakage, r.KindLabel)}</td>\n");
             sb.Append($"<td class=\"count\">{r.Count:N0}</td>\n");
             sb.Append("<td class=\"links\">");
             sb.Append($"<a href=\"{r.Id}.html\">details</a>");
@@ -109,7 +109,7 @@ internal static class AuditSiteRenderer {
     private static void WriteReportPage(AuditDocument doc, AuditReport report, string outputDir) {
         var sb = new StringBuilder();
         sb.Append("<section>\n");
-        sb.Append($"<h2>{HtmlText.Escape(report.Title)} {AuditPageLayout.BreakageBadge(report.Breakage)}</h2>\n");
+        sb.Append($"<h2>{HtmlText.Escape(report.Title)} {AuditPageLayout.BreakageBadge(report.Breakage, report.KindLabel)}</h2>\n");
         sb.Append($"<p class=\"report-desc\"><small>Source: {HtmlText.Escape(report.DataSourceLabel)}");
         if (report.Findings.Count > 0) {
             sb.Append($" · {report.Findings.Count:N0} rows");

@@ -54,11 +54,16 @@ internal sealed class TaxonomyConsistencyProducer : IAuditReportProducer {
             new[] { "subpopulation token mismatch", result.SubpopulationMismatchCount.ToString("N0") },
         };
 
+        // With nothing to flag, the recorded names and the structured components agree throughout,
+        // so the report reads as a clean "OK" rather than a list of value tidy-ups.
+        var isClean = ordered.Count == 0;
+
         return new AuditReport {
             Id = Id,
             Title = "Scientific name fields versus taxonomy components",
             Tier = AuditReportTier.IucnCore,
-            Breakage = BreakageClass.FixableData,
+            Breakage = isClean ? BreakageClass.Advisory : BreakageClass.FixableData,
+            KindLabel = isClean ? "OK" : null,
             DataSourceLabel = $"IUCN Red List {ctx.Release} (CSV export)",
             Summary =
                 "Each row rebuilds an assessment's scientific name from its genus, species, infra rank, and subpopulation fields and compares it against the recorded scientificName values. " +
