@@ -68,7 +68,7 @@ internal sealed class SynonymOtherFormattingProducer : IAuditReportProducer {
             Findings = ordered,
             SummaryTables = new List<AuditSummaryTable> {
                 SynonymSummary.ByIssueTypeWithPercent("Issues by kind", SynonymIssues.Other, perSynonym, scan.TotalSynonyms,
-                    "Each kind is counted once per synonym and shown as a share of every synonym examined. Because one synonym can carry several, the kinds add up to more than the distinct total."),
+                    "Each kind is counted once per synonym and shown as a share of every synonym examined. Because one synonym can have several types of issue, the kinds may add up to more than the distinct total."),
                 SynonymSummary.HtmlPresence(scan.TotalSynonyms, htmlCount),
             },
         };

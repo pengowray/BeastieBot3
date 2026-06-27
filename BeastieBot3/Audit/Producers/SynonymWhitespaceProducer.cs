@@ -47,7 +47,7 @@ internal sealed class SynonymWhitespaceProducer : IAuditReportProducer {
             Summary =
                 "Each row is a synonym name whose stored text carries a whitespace irregularity, together with a whitespace-normalised suggestion. " +
                 "The current value shows otherwise-invisible characters as markers, so the difference is visible. The scientific name column is the accepted taxon the synonym belongs to. " +
-                "The summary below counts each kind of whitespace problem separately; because one synonym can carry several, the kinds add up to more than the distinct total. " +
+                "The summary below counts each kind of whitespace problem separately. Because one synonym can have several types of issue, the kinds add up to more than the distinct total. " +
                 "Tidier synonym strings help name matching and search.",
             Columns = new List<AuditColumn> {
                 AuditColumns.ScientificName("Accepted taxon"),

@@ -51,8 +51,9 @@ internal sealed class OrphanInfraranksProducer : IAuditReportProducer {
             Breakage = BreakageClass.Advisory,
             DataSourceLabel = $"IUCN Red List {ctx.Release} (CSV export)",
             Summary =
-                "These are assessed subspecies and varieties whose parent species has no species-level assessment in the release. " +
-                "The IUCN API discovers infraspecific taxa through an assessed parent species, so a taxon in this list is reachable only by its own SIS id and is missed by tools that follow the API discovery path. " +
+                "These are assessed subspecies and varieties whose parent species has no species-level assessment in the current release. " +
+                "These assessments cannot be discovered through the API so are easily be missed. " +
+                "Discovery of infraspecific taxa is through an assessed parent species, so a taxon in this list is reachable only by its own SIS id and is missed by tools that follow the API. " +
                 "Each row links to its Red List page. One way to close the gap is to add a species-level assessment for the parent.",
             Columns = columns,
             Findings = findings,
