@@ -40,7 +40,7 @@ internal sealed class NoLatestAssessmentProducer : IAuditReportProducer {
                 "The most recent assessment is shown for context. This covers the taxa retrieved from the API, which may not be every taxon in the release. " +
                 "The point of interest for these records is how they appear on the Red List website rather than the missing current flag on its own. " +
                 "Many do not come up through search on iucnredlist.org, yet each remains reachable through its direct species URL. " +
-                "Some of these assessment pages carry a note such as \"(This concept is no longer recognised)\", but it is easy to overlook, and other pages carry no such note at all.",
+                "Some of these assessment pages carry a note such as \"(This concept is no longer recognised)\", but it is easy to overlook, and some pages carry no such note at all, so if their page is discovered it's easy to mistake for a current assessment. ",
             Columns = new List<AuditColumn> {
                 AuditColumns.ScientificName(),
                 AuditColumns.CommonName(),
