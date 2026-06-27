@@ -19,6 +19,7 @@ internal static class AuditAssets {
   --fixable: #b5862a;
   --advisory: #3a7a4a;
   --max: 1180px;
+  --max-wide: 1680px;
 }
 * { box-sizing: border-box; }
 html { -webkit-text-size-adjust: 100%; }
@@ -33,6 +34,8 @@ a:hover { text-decoration: underline; }
 code { font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace; font-size: 0.88em; }
 
 .wrap { max-width: var(--max); margin: 0 auto; padding: 0 20px; }
+/* Full-list pages opt into the wider measure so dense tables can use the page width. */
+body.wide .wrap { max-width: var(--max-wide); }
 header.site { background: var(--bg); border-bottom: 1px solid var(--line); }
 header.site .wrap { padding-top: 22px; padding-bottom: 18px; }
 header.site h1 { margin: 0 0 4px; font-size: 1.5rem; letter-spacing: -0.01em; }
@@ -96,7 +99,9 @@ table.audit-table.sortable thead th[aria-sort="ascending"]::after { content: " â
 table.audit-table.sortable thead th[aria-sort="descending"]::after { content: " â–¼"; font-size: 0.7em; }
 table.audit-table td.num, table.audit-table th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
 table.audit-table tbody tr:hover { background: var(--accent-soft); }
-table.audit-table td.longtext { max-width: 460px; }
+/* Narrative cells stay on one line (ellipsis + full text on hover) so a long detail never
+   stretches its row and leaves giant gaps beside the short rows around it. */
+table.audit-table td.longtext { max-width: 620px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 table.audit-table td.ws-cell { font-family: "SFMono-Regular", Consolas, monospace; font-size: 0.82rem; white-space: pre-wrap; word-break: break-word; }
 .ws { color: #b9c1c9; }
 .ws-bad { color: var(--breaking); font-weight: 700; }

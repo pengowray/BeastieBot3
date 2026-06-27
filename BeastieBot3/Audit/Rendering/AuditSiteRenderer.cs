@@ -16,7 +16,6 @@ namespace BeastieBot3.Audit.Rendering;
 
 internal static class AuditSiteRenderer {
     private const int PreviewRows = 15;
-    private const int TreeSplitThreshold = 2500;
 
     private static readonly Encoding Utf8NoBom = new UTF8Encoding(false);
     private static readonly Encoding Utf8Bom = new UTF8Encoding(true);
@@ -183,78 +182,31 @@ internal static class AuditSiteRenderer {
         sb.Append("</tbody>\n</table>\n");
     }
 
-    // -- full list (with optional recursive per-group tree) --------------------------------
+    // -- full list -------------------------------------------------------------------------
 
+    // The full list is always one page that shows every row — it is never cut into per-group
+    // pages. Long lists rely on the filter box and click-to-sort instead, and the page opts into
+    // the wide layout so the table can use the full page width.
     private static void WriteFullListPages(AuditDocument doc, AuditReport report, string outputDir) {
         if (report.Findings.Count == 0) {
             return;
         }
-        var rootCrumbs = new List<(string, string?)> {
-            ("Home", "index.html"),
-            (report.Title, $"{report.Id}.html"),
-        };
-        WriteListNode(doc, report, outputDir, report.Findings, levelIndex: 0,
-            fileName: $"{report.Id}-list.html", nodeLabel: "Full list", parentCrumbs: rootCrumbs, tableId: report.Id);
-    }
-
-    // Renders one node of the full-list tree. A node is either a leaf (a single filterable table)
-    // or, when it is over the size threshold and another grouping level remains, an index page that
-    // links to one child node per group value. Children recurse to the next level.
-    private static void WriteListNode(
-        AuditDocument doc, AuditReport report, string outputDir,
-        IReadOnlyList<AuditFinding> findings, int levelIndex,
-        string fileName, string nodeLabel, List<(string Label, string? Href)> parentCrumbs, string tableId) {
-
-        var crumbs = new List<(string, string?)>(parentCrumbs) { (nodeLabel, null) };
-        var heading = nodeLabel == "Full list" ? $"{report.Title}: full list" : $"{report.Title}: {nodeLabel}";
+        var heading = $"{report.Title}: full list";
 
         var body = new StringBuilder();
         body.Append("<section>\n");
         body.Append($"<h2>{HtmlText.Escape(heading)}</h2>\n");
         body.Append($"<p><a href=\"{report.Id}.html\">Back to the description</a> &nbsp; ");
         body.Append($"<a href=\"csv/{report.Id}.csv\">Download CSV ({report.CsvRows.Count:N0} rows)</a></p>\n");
+        body.Append(HtmlListRenderer.FilterableTable(report, report.Findings, $"tbl-{report.Id}"));
+        body.Append("</section>\n");
 
-        var canSplit = levelIndex < report.GroupLevels.Count && findings.Count > TreeSplitThreshold;
-        if (!canSplit) {
-            body.Append(HtmlListRenderer.FilterableTable(report, findings, $"tbl-{tableId}"));
-            body.Append("</section>\n");
-            WritePage(doc, outputDir, fileName, heading, crumbs, body.ToString());
-            return;
-        }
-
-        var level = report.GroupLevels[levelIndex];
-        var groups = findings
-            .GroupBy(f => GroupKey(level, f))
-            .OrderByDescending(g => g.Count())
-            .ToList();
-
-        body.Append($"<p>This list is large, so it is grouped by {HtmlText.Escape(level.Label)}. ");
-        body.Append("Each group below is a sortable, filterable table; the CSV above covers every row.</p>\n");
-        body.Append($"<table class=\"index\">\n<thead><tr><th>{HtmlText.Escape(Capitalise(level.Label))}</th><th class=\"count\">Rows</th></tr></thead>\n<tbody>\n");
-        var stem = fileName.EndsWith(".html", StringComparison.Ordinal) ? fileName[..^5] : fileName;
-        foreach (var g in groups) {
-            var childFile = $"{stem}-{Slug(g.Key)}.html";
-            body.Append($"<tr><td><a href=\"{childFile}\">{HtmlText.Escape(g.Key)}</a></td>");
-            body.Append($"<td class=\"count\">{g.Count():N0}</td></tr>\n");
-        }
-        body.Append("</tbody>\n</table>\n</section>\n");
-        WritePage(doc, outputDir, fileName, heading, crumbs, body.ToString());
-
-        var childCrumbs = new List<(string, string?)>(parentCrumbs) { (nodeLabel, fileName) };
-        foreach (var g in groups) {
-            var childFile = $"{stem}-{Slug(g.Key)}.html";
-            WriteListNode(doc, report, outputDir, g.ToList(), levelIndex + 1, childFile, g.Key, childCrumbs, $"{tableId}-{Slug(g.Key)}");
-        }
-    }
-
-    private static string GroupKey(AuditGroupLevel level, AuditFinding f) {
-        var g = level.Selector(f);
-        return string.IsNullOrWhiteSpace(g) ? "(unspecified)" : g!;
-    }
-
-    private static void WritePage(AuditDocument doc, string outputDir, string fileName, string pageTitle, List<(string, string?)> crumbs, string body) {
-        var html = AuditPageLayout.Page(doc, pageTitle, AuditPageLayout.Crumbs(crumbs.ToArray()), body);
-        File.WriteAllText(Path.Combine(outputDir, fileName), html, Utf8NoBom);
+        var crumbs = AuditPageLayout.Crumbs(
+            ("Home", "index.html"),
+            (report.Title, $"{report.Id}.html"),
+            ("Full list", null));
+        var html = AuditPageLayout.Page(doc, heading, crumbs, body.ToString(), wide: true);
+        File.WriteAllText(Path.Combine(outputDir, $"{report.Id}-list.html"), html, Utf8NoBom);
     }
 
     // -- methodology -----------------------------------------------------------------------
@@ -308,24 +260,5 @@ internal static class AuditSiteRenderer {
         var trimmed = text.Trim();
         var idx = trimmed.IndexOf(". ", StringComparison.Ordinal);
         return idx > 0 ? trimmed[..(idx + 1)] : trimmed;
-    }
-
-    private static string Capitalise(string s) =>
-        string.IsNullOrEmpty(s) ? s : char.ToUpperInvariant(s[0]) + s[1..];
-
-    private static string Slug(string value) {
-        var sb = new StringBuilder(value.Length);
-        var lastDash = false;
-        foreach (var c in value.ToLowerInvariant()) {
-            if (char.IsLetterOrDigit(c)) {
-                sb.Append(c);
-                lastDash = false;
-            } else if (!lastDash) {
-                sb.Append('-');
-                lastDash = true;
-            }
-        }
-        var slug = sb.ToString().Trim('-');
-        return slug.Length == 0 ? "none" : slug;
     }
 }

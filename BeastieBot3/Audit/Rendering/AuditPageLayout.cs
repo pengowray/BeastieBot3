@@ -9,7 +9,7 @@ using BeastieBot3.Audit.Model;
 namespace BeastieBot3.Audit.Rendering;
 
 internal static class AuditPageLayout {
-    public static string Page(AuditDocument doc, string pageTitle, string? crumbsHtml, string bodyHtml) {
+    public static string Page(AuditDocument doc, string pageTitle, string? crumbsHtml, string bodyHtml, bool wide = false) {
         var cfg = doc.Config;
         var fullTitle = pageTitle.Length == 0 ? cfg.SiteTitle : $"{pageTitle} · {cfg.SiteTitle}";
         var sb = new StringBuilder();
@@ -19,7 +19,7 @@ internal static class AuditPageLayout {
         sb.Append("<meta name=\"robots\" content=\"noindex\">\n");
         sb.Append($"<title>{HtmlText.Escape(fullTitle)}</title>\n");
         sb.Append("<link rel=\"stylesheet\" href=\"assets/audit.css\">\n");
-        sb.Append("</head>\n<body>\n");
+        sb.Append(wide ? "</head>\n<body class=\"wide\">\n" : "</head>\n<body>\n");
 
         sb.Append("<header class=\"site\">\n<div class=\"wrap\">\n");
         sb.Append($"<h1><a href=\"index.html\" style=\"color:inherit\">{HtmlText.Escape(cfg.SiteTitle)}</a></h1>\n");

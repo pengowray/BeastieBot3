@@ -12,8 +12,6 @@ using BeastieBot3.Audit.Model;
 namespace BeastieBot3.Audit.Rendering;
 
 internal static class HtmlListRenderer {
-    private const int LongTextPreview = 140;
-
     // A table with no surrounding controls (used for the short embedded preview).
     public static string Table(AuditReport report, IEnumerable<AuditFinding> findings) =>
         TableHtml(report.Columns, findings);
@@ -94,12 +92,13 @@ internal static class HtmlListRenderer {
             case AuditColumnType.Whitespace:
                 return $"<td class=\"ws-cell\"{sortAttr}>{HtmlText.Visualise(raw)}</td>";
             case AuditColumnType.LongText: {
-                if (raw.Length <= LongTextPreview) {
-                    return $"<td class=\"longtext\"{sortAttr}>{HtmlText.Escape(raw)}</td>";
+                if (string.IsNullOrEmpty(raw)) {
+                    return $"<td class=\"longtext\"{sortAttr}></td>";
                 }
-                var preview = HtmlText.Escape(HtmlText.Truncate(raw, LongTextPreview));
+                // The full text is emitted; the cell clamps it to one line in CSS and shows the
+                // whole value on hover. The CSV carries the untruncated text either way.
                 var full = HtmlText.Escape(raw);
-                return $"<td class=\"longtext\"{sortAttr}><span title=\"{full}\">{preview}</span></td>";
+                return $"<td class=\"longtext\"{sortAttr} title=\"{full}\">{full}</td>";
             }
             default:
                 return $"<td{sortAttr}>{HtmlText.Escape(raw)}</td>";
