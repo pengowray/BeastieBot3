@@ -87,9 +87,13 @@ internal sealed class ColCrosscheckProducer : IAuditReportProducer {
             DataSourceLabel = $"IUCN Red List {ctx.Release} vs Catalogue of Life",
             Summary =
                 "Each row pairs an IUCN assessment with its best Catalogue of Life match and records where the two independent catalogues differ. " +
-                "These describe divergence between two catalogues rather than a defect in either. The primary match is exact, but when it fails a fuzzy pass looks for near matches and the row names the closest CoL candidate and how it differs (punctuation, diacritics, Unicode encoding, or a spelling variant). " +
+                "The primary match is exact; when it fails, a fuzzy pass looks for near matches and the row names the closest CoL candidate and how it differs (punctuation, diacritics, Unicode encoding, or a spelling variant). " +
                 "The lists below show the higher-signal rows: a name with no exact CoL match, a name CoL treats as a synonym, and placement differences above genus. " +
-                "Authority differences and genus or species level placement differences are summarised by class here and are included in full in the CSV download.",
+                "Authority differences and genus or species level placement differences are summarised by class here and are included in full in the CSV download.\n\n" +
+                "### Why it matters\n\n" +
+                "These are differences between two independent catalogues, and neither is necessarily wrong. Where they disagree, names can fail to match across the two systems, and a placement or synonymy difference can point to a name that is out of date on one side.\n\n" +
+                "### Suggestion\n\n" +
+                "Treat each row as a prompt to check the name against current taxonomy. A no-match or synonym row is worth confirming first; the by-class authority and placement summaries show where the two catalogues drift apart the most.",
             Columns = new List<AuditColumn> {
                 AuditColumns.ScientificName("IUCN name"),
                 AuditColumns.Rank(),
@@ -247,7 +251,7 @@ internal sealed class ColCrosscheckProducer : IAuditReportProducer {
 
         var best = scored[0];
         if (best.Diff.IsFormattingEquivalent) {
-            return (best.Name, $"No exact Catalogue of Life match. CoL has '{best.Name}', which {best.Diff.Description} — likely the same name.");
+            return (best.Name, $"No exact Catalogue of Life match. CoL has '{best.Name}', which {best.Diff.Description}; likely the same name.");
         }
 
         var alternatives = scored.Take(3).Select(s => $"'{s.Name}'").ToList();

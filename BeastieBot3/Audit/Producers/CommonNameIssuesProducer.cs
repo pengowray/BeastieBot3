@@ -101,10 +101,14 @@ internal sealed class CommonNameIssuesProducer : IAuditReportProducer {
             Breakage = BreakageClass.FixableData,
             DataSourceLabel = "IUCN API (English common names)",
             Summary =
-                "Each row is an English common name that carries a likely error or a formatting choice worth knowing about, with a tidied suggestion where one is clear. " +
+                "Each row is an English common name that carries a likely error or a formatting choice worth checking, with a tidied suggestion where one is clear. " +
                 "The current value shows otherwise-invisible characters as markers. The scientific name column is the taxon the name belongs to. " +
                 "This refreshes a hand-compiled 2016 review against the current release. Several of the original checks now find nothing, because the move to a Unicode API removed the question-mark and broken-separator artefacts; those checks are still listed at zero. " +
-                "The summary counts each kind separately, so they add up to more than the distinct total when a name has several.",
+                "The summary counts each kind separately, so they add up to more than the distinct total when a name has several.\n\n" +
+                "### Why it matters\n\n" +
+                "The English common name is the label most people see first. Stray whitespace, species codes, all-capitals text, or a stray marker in that field show up directly in search results, lists, and exports.\n\n" +
+                "### Suggestion\n\n" +
+                "Trim the whitespace cases, which are unambiguous. The other kinds include false positives and stylistic choices, so review them case by case.",
             Columns = new List<AuditColumn> {
                 AuditColumns.ScientificName("Taxon"),
                 AuditColumns.CurrentValue("Common name (English)", AuditColumnType.Whitespace),
@@ -312,10 +316,10 @@ internal sealed class CommonNameIssuesProducer : IAuditReportProducer {
             .Select(issue => new[] {
                 Label(issue),
                 perName.Count(list => list.Contains(issue)).ToString("N0", CultureInfo.InvariantCulture),
-                Counts2016.TryGetValue(issue, out var c) ? c.ToString("N0", CultureInfo.InvariantCulture) : "—",
+                Counts2016.TryGetValue(issue, out var c) ? c.ToString("N0", CultureInfo.InvariantCulture) : "-",
             } as IReadOnlyList<string>)
             .ToList();
-        rows.Add(new[] { "Total (distinct names)", perName.Count.ToString("N0", CultureInfo.InvariantCulture), "—" });
+        rows.Add(new[] { "Total (distinct names)", perName.Count.ToString("N0", CultureInfo.InvariantCulture), "-" });
         return new AuditSummaryTable {
             Title = "Issues by kind, 2025-2 versus 2016",
             Note = "Each kind is counted once per name; because a name can carry several, the kinds add up to more than the distinct total. Kinds listed at 0 were checked and found nothing this release. " +

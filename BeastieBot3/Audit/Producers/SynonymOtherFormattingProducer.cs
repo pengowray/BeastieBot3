@@ -50,9 +50,13 @@ internal sealed class SynonymOtherFormattingProducer : IAuditReportProducer {
             Breakage = BreakageClass.FixableData,
             DataSourceLabel = "IUCN API (taxon synonyms)",
             Summary =
-                "Each row is a synonym name whose stored text carries a non-whitespace formatting irregularity — embedded HTML markup, a stray HTML entity, curly or typographic quotes where straight quotes are the norm, or an unusual character or encoding artefact — together with a cleaned suggestion. " +
+                "Each row is a synonym name whose stored text carries a non-whitespace formatting irregularity: embedded HTML markup, a stray HTML entity, curly or typographic quotes where straight quotes are the norm, or an unusual character or encoding artefact, together with a cleaned suggestion. " +
                 "Ordinary accented letters are not treated as a problem; only characters that look like markup or an encoding mistake are flagged. The scientific name column is the accepted taxon the synonym belongs to. " +
-                "The summary gives each kind as a share of all synonyms examined and sets out whether HTML use is consistent.",
+                "The summary gives each kind as a share of all synonyms examined and sets out whether HTML use is consistent.\n\n" +
+                "### Why it matters\n\n" +
+                "Markup and encoding artefacts in a synonym string leak into search results and exports, and they stop the synonym from matching the clean text other databases hold. The with-and-without-HTML breakdown shows whether the markup is applied consistently.\n\n" +
+                "### Suggestion\n\n" +
+                "Apply the cleaned suggestion: strip the markup, decode the stray entity, and replace typographic quotes with straight ones. Review case by case where a character may be intentional.",
             Columns = new List<AuditColumn> {
                 AuditColumns.ScientificName("Accepted taxon"),
                 AuditColumns.CurrentValue("Synonym (current)", AuditColumnType.Whitespace),

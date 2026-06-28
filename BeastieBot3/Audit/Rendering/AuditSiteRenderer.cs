@@ -184,7 +184,7 @@ internal static class AuditSiteRenderer {
 
     // -- full list -------------------------------------------------------------------------
 
-    // The full list is always one page that shows every row — it is never cut into per-group
+    // The full list is always one page that shows every row; it is never cut into per-group
     // pages. Long lists rely on the filter box and click-to-sort instead, and the page opts into
     // the wide layout so the table can use the full page width.
     private static void WriteFullListPages(AuditDocument doc, AuditReport report, string outputDir) {

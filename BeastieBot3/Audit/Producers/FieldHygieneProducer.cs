@@ -88,7 +88,11 @@ internal sealed class FieldHygieneProducer : IAuditReportProducer {
             DataSourceLabel = $"IUCN Red List {ctx.Release} (CSV export, taxonomy table)",
             Summary =
                 "Each row describes one text characteristic of one taxonomy column: the share of values with surrounding whitespace, repeated spaces, non-breaking or control characters, non-ASCII content, or non-NFC normalisation. " +
-                "Counts are exact over the whole table. Non-ASCII content is often expected for names and authorities and is listed for completeness.",
+                "Counts are exact over the whole table. Non-ASCII content is often expected for names and authorities and is listed for completeness.\n\n" +
+                "### Why it matters\n\n" +
+                "This is a column-level profile of the whole table. It shows which columns carry the most text irregularities, so cleanup effort can be aimed where it has the most effect.\n\n" +
+                "### Suggestion\n\n" +
+                "Use the percentages to prioritise. Columns with a high share of surrounding whitespace, repeated spaces, or non-NFC values are the best candidates for a normalisation pass; non-ASCII content usually needs no action.",
             Columns = new List<AuditColumn> {
                 AuditColumns.Field(),
                 AuditColumns.IssueType("Characteristic"),

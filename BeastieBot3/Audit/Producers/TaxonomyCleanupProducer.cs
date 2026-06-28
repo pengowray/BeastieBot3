@@ -69,7 +69,11 @@ internal sealed class TaxonomyCleanupProducer : IAuditReportProducer {
             Summary =
                 "Each row reports a taxonomy field whose stored text carries a whitespace irregularity (leading or trailing spaces, repeated spaces, non-breaking or tab characters) or an infrarank marker that belongs in the name fields, together with a suggested normalised value. " +
                 "Current values show otherwise-invisible characters as markers so the difference is visible. " +
-                "The first summary separates each kind of problem (leading versus trailing whitespace, and so on) with a distinct row total; because one field can carry several, the kinds add up to more than the total. These are low-risk, concrete tidy-ups.",
+                "The first summary separates each kind of problem (leading versus trailing whitespace, and so on) with a distinct row total; because one field can carry several, the kinds add up to more than the total.\n\n" +
+                "### Why it matters\n\n" +
+                "Stray whitespace and misplaced markers break exact-match joins, sort order, and search, and they can surface as visible gaps on the website. Each one is small, but they add up across the release.\n\n" +
+                "### Suggestion\n\n" +
+                "Apply the suggested normalised value. These are low-risk, concrete tidy-ups.",
             Columns = new List<AuditColumn> {
                 AuditColumns.ScientificName(),
                 AuditColumns.Field(),

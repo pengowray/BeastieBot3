@@ -54,10 +54,17 @@ internal sealed class HtmlConsistencyProducer : IAuditReportProducer {
         var example = findings.FirstOrDefault(f => f.IssueType is "plain-text-empty-redundant-markup" or "plain-text-truncated-redundant-markup");
         if (example is not null) {
             var ratio = example.Get("markupRatio");
-            summary += $"<br><br> A recurring pattern is heavy redundant markup: the HTML carries long runs of repeated empty tags and the plain-text version then comes out empty or truncated. " +
+            summary += "\n\n" +
+                       $"A recurring pattern is heavy redundant markup: the HTML carries long runs of repeated empty tags and the plain-text version then comes out empty or truncated. " +
                        $"For example {example.ScientificName} ({example.Field}) has HTML about {ratio} times the size of its readable text, and its plain-text version did not get past the markup. " +
                        $"These rows are marked redundant-markup and explained in the detail column.";
         }
+
+        summary +=
+            "\n\n### Why it matters\n\n" +
+            "When the HTML and plain-text versions of a field disagree, readers see different content depending on which export or view they use, and a field that comes out empty or truncated drops information the HTML still holds.\n\n" +
+            "### Suggestion\n\n" +
+            "Regenerate the plain-text export from the HTML so the two agree, and clean up the redundant empty markup that causes the empty and truncated cases.";
 
         return new AuditReport {
             Id = Id,

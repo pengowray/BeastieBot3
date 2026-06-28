@@ -51,8 +51,11 @@ internal sealed class FailedAssessmentsProducer : IAuditReportProducer {
                 "Each row is an assessment that the public API endpoint /api/v4/assessment/{id} returns HTTP 500 for. " +
                 "The pattern is consistent: these records carry an empty geographic-scope array, while assessments that carry at least one scope serialise normally. " +
                 "On the website the region for these renders as a bare ampersand with no text. Each affected taxon also has a valid scoped assessment, so there is no coverage gap. " +
-                "The API has no usable payload for these records, so the species name, taxonomy, and assessed category shown here come from the offline CSV export (matched on the taxon's SIS id), which still carries each taxon and its real scoped assessment. " +
-                "Repairing or removing the empty-scope record would let the API and website serve it.",
+                "The API has no usable payload for these records, so the species name, taxonomy, and assessed category shown here come from the offline CSV export (matched on the taxon's SIS id), which still carries each taxon and its real scoped assessment.\n\n" +
+                "### Why it matters\n\n" +
+                "The taxon stays reachable through its scoped assessment, but the broken record returns a server error to anyone who requests it through the API and shows an empty region on the website. It is a small, well-defined data fault with a clear signature.\n\n" +
+                "### Suggestion\n\n" +
+                "Repair or remove the empty-scope assessment record so the API and website can serve it.",
             Columns = new List<AuditColumn> {
                 new() {
                     Key = "scientificName", Header = "Scientific name", Type = AuditColumnType.Taxon,

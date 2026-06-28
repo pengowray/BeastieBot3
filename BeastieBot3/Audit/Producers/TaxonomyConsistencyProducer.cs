@@ -68,7 +68,11 @@ internal sealed class TaxonomyConsistencyProducer : IAuditReportProducer {
             Summary =
                 "Each row rebuilds an assessment's scientific name from its genus, species, infra rank, and subpopulation fields and compares it against the recorded scientificName values. " +
                 "Rows appear where the two scientificName fields disagree, where the name cannot be rebuilt from the components, or where an expected genus, species, infra-name, or subpopulation token is absent from the recorded name. " +
-                "Comparisons are exact after whitespace normalisation, so some token-presence rows can be benign for hybrids or unusual formatting.",
+                "Comparisons are exact after whitespace normalisation, so some token-presence rows can be benign for hybrids or unusual formatting.\n\n" +
+                "### Why it matters\n\n" +
+                "The recorded name and the component fields are two representations of the same taxon. When they disagree, it is unclear which is authoritative, and anything built from the components (sort keys, rebuilt names, joins) diverges from the displayed name.\n\n" +
+                "### Suggestion\n\n" +
+                "Check each row against the source assessment and bring the recorded name and the component fields into agreement. Hybrids and deliberately unusual formatting can be left as they are.",
             Columns = new List<AuditColumn> {
                 AuditColumns.ScientificName("Recorded name"),
                 AuditColumns.Rank(),

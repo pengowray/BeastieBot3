@@ -62,8 +62,11 @@ internal sealed class NameChangesProducer : IAuditReportProducer {
             DataSourceLabel = "IUCN API (taxon assessment summaries)",
             Summary =
                 "This compares the scientific name recorded on each of a taxon's assessment summaries, grouped by SIS id, and lists any taxon whose assessments carry more than one distinct name. " +
-                "In current data this is usually empty: amended assessments keep the taxon's present name and record the former name in the errata text rather than in a dedicated field, so a name-field comparison finds little. " +
-                "The report documents the coverage of this approach and gives a place to track future divergence.",
+                "In current data this is usually empty: amended assessments keep the taxon's present name and record the former name in the errata text rather than in a dedicated field, so a name-field comparison finds little.\n\n" +
+                "### Why it matters\n\n" +
+                "A taxon whose assessments disagree on the scientific name is ambiguous to anything that keys on that field. The check also documents how much a name-field comparison can catch, given that historical names live in errata text.\n\n" +
+                "### Suggestion\n\n" +
+                "Where a row appears, reconcile the assessments onto the taxon's current name. To track renames more completely, a dedicated former-name field would catch what the errata text currently hides.",
             Columns = new List<AuditColumn> {
                 AuditColumns.TaxonId(),
                 AuditColumns.ScientificName("Current name"),

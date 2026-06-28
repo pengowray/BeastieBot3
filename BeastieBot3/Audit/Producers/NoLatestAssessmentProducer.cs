@@ -37,12 +37,13 @@ internal sealed class NoLatestAssessmentProducer : IAuditReportProducer {
             Summary =
                 "Each row is a taxon from the IUCN API where none of its assessments is flagged as the current (latest) one. " +
                 "This commonly happens when a taxon was removed from the Red List, merged into another taxon, or reclassified, so only historical assessments remain. " +
-                "The most recent assessment is shown for context. This covers the taxa retrieved from the API, which may not be every taxon in the release. " +
-                "The point of interest for these records is how they appear on the Red List website rather than the missing current flag on its own. " +
-                "Many do not come up through search on iucnredlist.org, yet each remains reachable through its direct species URL. " +
-                "Some of these assessment pages carry a note such as \"(This concept is no longer recognised)\", but it is easy to overlook, and many pages carry no such note at all. If the red list pages is discovered, it's easy to mistake for a current assessment. " +
-                "\n\n Suggestion: If the taxon is still valid, flag its most recent assessment as current. If the taxon was removed, merged, or reclassified, then add a final 'Not Evaluated' assessment. " +
-                "Improve the display of old assessments on the Red List website so that they cannot be mistaken for current assessments. ",
+                "The most recent assessment is shown for context. This covers the taxa retrieved from the API, which may not be every taxon in the release.\n\n" +
+                "### Why it matters\n\n" +
+                "The point of interest is how these records appear on the Red List website, not the missing flag on its own. " +
+                "Many do not come up through search on iucnredlist.org, yet each stays reachable through its direct species URL. " +
+                "Some of these pages carry a note such as \"(This concept is no longer recognised)\", but it is easy to overlook, and many pages carry no such note at all. A page reached this way is easy to mistake for a current assessment.\n\n" +
+                "### Suggestion\n\n" +
+                "If the taxon is still valid, flag its most recent assessment as current. If it was removed, merged, or reclassified, add a final 'Not Evaluated' assessment. Either way, adjust how old assessments display on the website so they cannot be mistaken for current ones.",
             Columns = new List<AuditColumn> {
                 AuditColumns.ScientificName(),
                 AuditColumns.CommonName(),
