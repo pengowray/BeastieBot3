@@ -57,7 +57,7 @@ internal sealed class OrphanInfraranksProducer : IAuditReportProducer {
                 "### Why it matters\n\n" +
                 "An assessed subspecies or variety with no assessed parent is effectively undiscoverable: it does not surface through normal API traversal, so downstream tools and users never reach it even though the assessment exists.\n\n" +
                 "### Suggestion\n\n" +
-                "Add a species-level assessment for the parent so the infraspecific taxa become reachable, or provide another discovery route to them.",
+                "Add a species-level assessment for the parent (e.g., 'Not Evaluated') so the infraspecific taxa become reachable, or provide another discovery route to them.",
             Columns = columns,
             Findings = findings,
             SummaryTables = new List<AuditSummaryTable> {
