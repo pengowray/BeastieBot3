@@ -27,6 +27,10 @@ internal sealed class HtmlConsistencyProducer : IAuditReportProducer {
     private const double RedundantRatio = 3.0;
     private const int RedundantMinHtmlChars = 1000;
 
+    // Each side of the modal viewer is capped so the embedded payload stays bounded (the report is
+    // meant to be a small, emailable bundle). The redundant-markup runs are visible well within this.
+    private const int ViewCap = 8000;
+
     public AuditReport? Produce(AuditContext ctx) {
         var conn = ctx.IucnCsvOrNull();
         if (conn is null || !AuditContext.ObjectExists(conn, "view_assessments_html_taxonomy_html") || !AuditContext.ObjectExists(conn, "assessments")) {
@@ -50,15 +54,22 @@ internal sealed class HtmlConsistencyProducer : IAuditReportProducer {
 
         // A common cause is heavy redundant markup: some fields carry a large amount of repeated empty
         // tags (for example long runs of nested empty spans from a rich-text editor), and the
-        // plain-text version then comes out empty or truncated. Name a live example when present.
-        var example = findings.FirstOrDefault(f => f.IssueType is "plain-text-empty-redundant-markup" or "plain-text-truncated-redundant-markup");
-        if (example is not null) {
-            var ratio = example.Get("markupRatio");
+        // plain-text version then comes out empty or truncated. Call out the worst case when present.
+        var worst = findings
+            .Where(f => f.IssueType is "plain-text-empty-redundant-markup" or "plain-text-truncated-redundant-markup")
+            .OrderByDescending(f => double.TryParse((f.Get("markupRatio") ?? "").Replace(",", ""), NumberStyles.Any, CultureInfo.InvariantCulture, out var r) ? r : 0)
+            .FirstOrDefault();
+        if (worst is not null) {
+            var ratio = worst.Get("markupRatio");
+            var len = worst.Get("htmlLen");
             summary += "\n\n" +
-                       $"A recurring pattern is heavy redundant markup: the HTML carries long runs of repeated empty tags and the plain-text version then comes out empty or truncated. " +
-                       $"For example {example.ScientificName} ({example.Field}) has HTML about {ratio} times the size of its readable text, and its plain-text version did not get past the markup. " +
+                       $"A recurring pattern is heavy redundant markup: the HTML carries long runs of repeated empty tags, and the plain-text version then comes out empty or truncated. " +
+                       $"The most extreme case here is {worst.ScientificName} ({worst.Field}), whose HTML runs to about {len} characters, roughly {ratio} times its readable text, and whose plain-text export does not get past the markup. " +
                        $"These rows are marked redundant-markup and explained in the detail column.";
         }
+
+        summary += "\n\n" +
+            "Use the View button on any row to open a side-by-side comparison of the plain text and the text extracted from the HTML, with the HTML source shown colour-coded so the empty-tag runs are visible.";
 
         summary +=
             "\n\n### Why it matters\n\n" +
@@ -80,6 +91,21 @@ internal sealed class HtmlConsistencyProducer : IAuditReportProducer {
                 AuditColumns.IssueType(),
                 AuditColumns.CurrentValue("Plain text at difference", AuditColumnType.LongText),
                 AuditColumns.SuggestedValue("HTML text at difference", AuditColumnType.LongText),
+                new AuditColumn {
+                    Key = "view", Header = "Compare", Type = AuditColumnType.Viewer, HtmlOnly = true,
+                    Value = _ => "View",
+                    Help = "Open a side-by-side view of the plain text, the text from the HTML, and the colour-coded HTML source.",
+                    Data = new Dictionary<string, Func<AuditFinding, string?>> {
+                        ["view-name"] = f => f.ScientificName,
+                        ["view-field"] = f => f.Field,
+                        ["view-issue"] = f => f.IssueType,
+                        ["view-ratio"] = f => f.Get("viewRatio"),
+                        ["view-htmllen"] = f => f.Get("htmlLen"),
+                        ["view-plain"] = f => f.Get("viewPlain"),
+                        ["view-readable"] = f => f.Get("viewReadable"),
+                        ["view-html"] = f => f.Get("viewHtml"),
+                    },
+                },
                 AuditColumns.Detail(),
                 AuditColumns.Class(),
                 AuditColumns.TaxonId("Taxon id"),
@@ -215,6 +241,15 @@ internal sealed class HtmlConsistencyProducer : IAuditReportProducer {
                 if (redundant) {
                     finding.Extra["markupRatio"] = ratio.ToString("N0", CultureInfo.InvariantCulture);
                 }
+
+                // Full (capped) payload for the modal viewer: the normalised readable text of each
+                // side, plus the raw HTML source so the cause (long runs of empty markup) is visible.
+                finding.Extra["viewPlain"] = Cap(plainText);
+                finding.Extra["viewReadable"] = Cap(htmlText);
+                finding.Extra["viewHtml"] = Cap(htmlVal ?? "");
+                finding.Extra["htmlLen"] = rawHtmlLen.ToString("N0", CultureInfo.InvariantCulture);
+                finding.Extra["viewRatio"] = ratio > 0 ? ratio.ToString("N0", CultureInfo.InvariantCulture) : "";
+
                 findings.Add(finding);
             }
         }
@@ -237,6 +272,10 @@ internal sealed class HtmlConsistencyProducer : IAuditReportProducer {
         }
         return i;
     }
+
+    // Caps a string for embedding in the modal viewer's data attributes, noting when it was clipped.
+    private static string Cap(string value) =>
+        value.Length <= ViewCap ? value : value.Substring(0, ViewCap) + " … (truncated for display)";
 
     // A readable window of text around a position, with leading/trailing ellipses when it is clipped.
     private static string Window(string value, int center, int before = 40, int length = 200) {

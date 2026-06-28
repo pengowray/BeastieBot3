@@ -124,6 +124,27 @@ blockquote { margin: 10px 0; padding: 2px 14px; border-left: 3px solid var(--lin
 .group-nav { display: flex; flex-wrap: wrap; gap: 6px 8px; margin: 10px 0 4px; font-size: 0.9rem; }
 .group-nav a { background: var(--bg-soft); border: 1px solid var(--line); border-radius: 6px; padding: 3px 9px; }
 
+/* Modal viewer (HTML vs plain-text comparison) */
+.view-cell { font: inherit; font-size: 0.82rem; padding: 2px 11px; border: 1px solid var(--line); border-radius: 6px; background: var(--bg-soft); color: var(--accent); cursor: pointer; white-space: nowrap; }
+.view-cell:hover { background: var(--accent-soft); border-color: var(--accent); }
+.audit-modal { position: fixed; inset: 0; z-index: 60; display: flex; align-items: center; justify-content: center; padding: 22px; }
+.audit-modal[hidden] { display: none; }
+.audit-modal-backdrop { position: absolute; inset: 0; background: rgba(20, 25, 30, 0.55); }
+.audit-modal-card { position: relative; background: var(--bg); border-radius: 10px; width: 100%; max-width: 1040px; max-height: 88vh; overflow: auto; padding: 20px 24px 26px; box-shadow: 0 12px 44px rgba(0, 0, 0, 0.32); }
+.audit-modal-x { position: absolute; top: 8px; right: 12px; border: none; background: none; font-size: 1.6rem; line-height: 1; color: var(--ink-soft); cursor: pointer; }
+.audit-modal-x:hover { color: var(--ink); }
+.audit-modal-title { margin: 0 30px 4px 0; font-size: 1.05rem; }
+.audit-modal-title em { font-style: italic; }
+.audit-modal-meta { margin: 0 0 14px; color: var(--ink-soft); font-size: 0.88rem; }
+.audit-modal-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+.audit-modal h4 { margin: 12px 0 6px; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.03em; color: var(--ink-soft); }
+.audit-pane { background: var(--bg-soft); border: 1px solid var(--line); border-radius: 7px; padding: 10px 12px; margin: 0; max-height: 40vh; overflow: auto; white-space: pre-wrap; word-break: break-word; font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace; font-size: 0.8rem; line-height: 1.5; }
+.audit-pane.html { max-height: 46vh; }
+.audit-pane mark { background: #fde7c2; color: #5b4a25; border-radius: 2px; }
+.audit-pane .tok-tag { color: var(--accent); }
+.audit-pane .audit-empty { color: var(--ink-soft); font-style: italic; }
+@media (max-width: 720px) { .audit-modal-grid { grid-template-columns: 1fr; } }
+
 footer.site { border-top: 1px solid var(--line); background: var(--bg); color: var(--ink-soft); font-size: 0.88rem; }
 footer.site .wrap { padding: 22px 20px 40px; }
 footer.site a { color: var(--accent); }
@@ -134,7 +155,7 @@ footer.site a { color: var(--accent); }
 }
 @media print {
   body { background: #fff; }
-  .table-controls, .group-nav, nav.crumbs { display: none; }
+  .table-controls, .group-nav, nav.crumbs, .view-cell, .audit-modal { display: none; }
   section { border: none; padding: 0; }
   .table-wrap { overflow: visible; }
 }
@@ -201,6 +222,82 @@ footer.site a { color: var(--accent); }
       }
       if (counter) counter.textContent = shown.toLocaleString() + " rows";
     });
+  });
+
+  // Modal viewer: compares a narrative field's plain-text export with the text from its HTML,
+  // and shows the raw HTML source colour-coded so empty-tag runs are obvious. Built lazily.
+  function escapeHtml(s) {
+    return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+  }
+  function commonPrefixLen(a, b) {
+    var n = Math.min(a.length, b.length), i = 0;
+    while (i < n && a[i] === b[i]) i++;
+    return i;
+  }
+  function splitHighlight(text, cut) {
+    if (!text) return '<span class="audit-empty">(empty)</span>';
+    var shared = escapeHtml(text.slice(0, cut));
+    var rest = escapeHtml(text.slice(cut));
+    return shared + (rest ? '<mark>' + rest + '</mark>' : '');
+  }
+  function highlightHtml(src) {
+    if (!src) return '<span class="audit-empty">(empty)</span>';
+    // Escape first, then wrap each tag (lazily, up to the first &gt;) so runs of empty markup show
+    // up as coloured tokens. The lookahead lets attribute values that contain entities still match.
+    return escapeHtml(src).replace(/&lt;(\/?[a-zA-Z](?:(?!&gt;)[\s\S])*?)&gt;/g, '<span class="tok-tag">&lt;$1&gt;</span>');
+  }
+
+  var modal = null;
+  function ensureModal() {
+    if (modal) return modal;
+    modal = document.createElement("div");
+    modal.className = "audit-modal";
+    modal.setAttribute("hidden", "");
+    modal.innerHTML =
+      '<div class="audit-modal-backdrop" data-close></div>' +
+      '<div class="audit-modal-card" role="dialog" aria-modal="true" aria-label="Field comparison">' +
+        '<button type="button" class="audit-modal-x" data-close aria-label="Close">×</button>' +
+        '<h3 class="audit-modal-title"></h3>' +
+        '<p class="audit-modal-meta"></p>' +
+        '<div class="audit-modal-grid">' +
+          '<section><h4>Plain-text field (normalised)</h4><pre class="audit-pane plain"></pre></section>' +
+          '<section><h4>Text from HTML (normalised)</h4><pre class="audit-pane readable"></pre></section>' +
+        '</div>' +
+        '<section><h4>HTML source</h4><pre class="audit-pane html"></pre></section>' +
+      '</div>';
+    document.body.appendChild(modal);
+    modal.querySelectorAll("[data-close]").forEach(function (el) {
+      el.addEventListener("click", closeModal);
+    });
+    return modal;
+  }
+  function closeModal() {
+    if (modal) modal.setAttribute("hidden", "");
+  }
+  function openModal(btn) {
+    var m = ensureModal();
+    var d = btn.dataset;
+    var plain = d.viewPlain || "", readable = d.viewReadable || "";
+    var cut = commonPrefixLen(plain, readable);
+    var name = d.viewName || "(unnamed)";
+    m.querySelector(".audit-modal-title").innerHTML =
+      '<em>' + escapeHtml(name) + '</em>' + (d.viewField ? ' · ' + escapeHtml(d.viewField) : '');
+    var meta = [];
+    if (d.viewIssue) meta.push(escapeHtml(d.viewIssue));
+    if (d.viewHtmllen) meta.push("HTML " + escapeHtml(d.viewHtmllen) + " chars");
+    if (d.viewRatio) meta.push(escapeHtml(d.viewRatio) + "× readable size");
+    m.querySelector(".audit-modal-meta").innerHTML = meta.join(" · ");
+    m.querySelector(".audit-pane.plain").innerHTML = splitHighlight(plain, cut);
+    m.querySelector(".audit-pane.readable").innerHTML = splitHighlight(readable, cut);
+    m.querySelector(".audit-pane.html").innerHTML = highlightHtml(d.viewHtml || "");
+    m.removeAttribute("hidden");
+  }
+
+  document.querySelectorAll(".view-cell").forEach(function (btn) {
+    btn.addEventListener("click", function () { openModal(btn); });
+  });
+  document.addEventListener("keydown", function (e) {
+    if (e.key === "Escape") closeModal();
   });
 })();
 """;

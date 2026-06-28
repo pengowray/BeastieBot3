@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 
 // A column definition shared by the HTML renderer and the CSV writer, so a report is
 // described once and rendered consistently in both places. Value() returns the raw string
@@ -18,6 +19,7 @@ internal enum AuditColumnType {
     LongText,    // narrative text, truncated in the cell with the full text on hover
     Whitespace,  // shows otherwise-invisible characters (spaces, tabs, NBSP) as markers
     Boolean,
+    Viewer,      // a button that opens the shared modal viewer, carrying Data as data-* attributes
 }
 
 internal sealed class AuditColumn {
@@ -37,6 +39,15 @@ internal sealed class AuditColumn {
 
     // Short help shown under the header on the full-list page.
     public string? Help { get; init; }
+
+    // When true, the column renders only in HTML and is skipped by the CSV writer. Used by
+    // interactive columns (a Viewer button) whose payload would not make sense in a flat CSV.
+    public bool HtmlOnly { get; init; }
+
+    // For a Viewer column: the data-* attributes attached to the button, each derived from the
+    // finding. The key is the attribute name without the "data-" prefix (e.g. "view-html" emits
+    // data-view-html); values are HTML-escaped by the renderer. Null values are omitted.
+    public IReadOnlyDictionary<string, Func<AuditFinding, string?>>? Data { get; init; }
 
     public bool IsNumeric => Type == AuditColumnType.Number;
 }

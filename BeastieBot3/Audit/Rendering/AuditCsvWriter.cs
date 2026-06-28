@@ -1,4 +1,5 @@
 using System.Collections.Generic;
+using System.Linq;
 using System.Text;
 using BeastieBot3.Audit.Model;
 
@@ -11,7 +12,9 @@ namespace BeastieBot3.Audit.Rendering;
 internal static class AuditCsvWriter {
     public static string Write(AuditReport report) => Write(report.Columns, report.CsvRows);
 
-    public static string Write(IReadOnlyList<AuditColumn> columns, IEnumerable<AuditFinding> findings) {
+    public static string Write(IReadOnlyList<AuditColumn> allColumns, IEnumerable<AuditFinding> findings) {
+        // HTML-only columns (e.g. a modal-viewer button) have no meaningful flat-CSV value.
+        var columns = allColumns.Where(c => !c.HtmlOnly).ToList();
         var sb = new StringBuilder();
         for (var i = 0; i < columns.Count; i++) {
             if (i > 0) {

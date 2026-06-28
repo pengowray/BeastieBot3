@@ -85,6 +85,20 @@ internal static class HtmlListRenderer {
                 var label = raw.StartsWith("http", System.StringComparison.OrdinalIgnoreCase) || string.IsNullOrEmpty(raw) ? "view" : raw;
                 return $"<td{sortAttr}><a href=\"{HtmlText.Escape(href!)}\" rel=\"noopener\" target=\"_blank\">{HtmlText.Escape(label)}</a></td>";
             }
+            case AuditColumnType.Viewer: {
+                var label = string.IsNullOrEmpty(raw) ? "View" : raw;
+                var attrs = new StringBuilder();
+                if (col.Data is not null) {
+                    foreach (var kv in col.Data) {
+                        var v = kv.Value(f);
+                        if (v is null) {
+                            continue;
+                        }
+                        attrs.Append($" data-{kv.Key}=\"{HtmlText.Escape(v)}\"");
+                    }
+                }
+                return $"<td><button type=\"button\" class=\"view-cell\"{attrs}>{HtmlText.Escape(label)}</button></td>";
+            }
             case AuditColumnType.Code:
                 return $"<td{sortAttr}><code>{HtmlText.Escape(raw)}</code></td>";
             case AuditColumnType.Number:
