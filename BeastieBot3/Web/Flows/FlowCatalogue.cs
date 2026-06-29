@@ -5,6 +5,8 @@ namespace BeastieBot3.Web.Flows;
 //
 //   iucn-import  — get the IUCN dataset in (CSV release vs API), the prerequisite
 //                  for everything else; grouped into CSV / API / Compare routes.
+//   col-update   — bring in a new Catalogue of Life release and refresh everything
+//                  downstream that reads it (a step-by-step guide for non-experts).
 //   wiki-reports — the full Wikipedia list/chart generation pipeline.
 //   wiki-quality — coverage and freshness reports on Wikipedia/Wikidata caches.
 //   iucn-quality — consistency and cleanup reports on the IUCN dataset.
@@ -166,6 +168,173 @@ public static class FlowCatalogue {
             Outputs = new[] {
                 new FlowResource { Label = "IUCN (CSV) database",     Root = "reports", Path = "", Kind = "directory",
                     Description = "The CSV-imported and API-projected SQLite databases live under Datastore paths (see Data sources / show-paths)." },
+            },
+        },
+
+        // ---------------------------------------------------------------
+        // Update Catalogue of Life: import a new CoL release, repoint config,
+        // then refresh every local store/output that reads CoL. Written as a
+        // guide for someone with little background: each step says why it's
+        // needed, whether it downloads pages, and what is left stale if you
+        // skip it. CoL is enrichment, not a hard dependency — most steps
+        // degrade gracefully, but their *outputs* freeze on the old release
+        // until re-run. Grouped: import & repoint → refresh derived data →
+        // discover new matches (downloads) → regenerate outputs, plus a
+        // Maintenance panel for cleanup and a full from-scratch rebuild.
+        // ---------------------------------------------------------------
+        new FlowDefinition {
+            Id = "col-update",
+            Title = "Update Catalogue of Life",
+            Description = "Bring in a new Catalogue of Life (CoL) release and refresh everything that reads it: the common-name hub, the Red List audit site, Wikidata/Wikipedia synonym discovery, and the Wikipedia lists' sub-rank grouping. The flow can't change paths.ini for you, so one step is a manual config edit + serve restart. CoL is taxonomy enrichment, not a hard dependency — most consumers keep working without it, but their generated output stays frozen on the previous release until you re-run the step that produces it.",
+            Steps = new[] {
+                // ===== 1 · Import & repoint =====
+                new FlowStep {
+                    Id = "col-import",
+                    Title = "Import the new CoL release",
+                    Description = "Load the new ColDP zip from the CoL input folder into a version-named SQLite database. The starting point — everything below reads this file.",
+                    Commands = new[] { "col import" },
+                    InputSourceIds = new[] { "col-input" },
+                    OutputSourceIds = new[] { "col-sqlite" },
+                    Group = "1 · Import & repoint",
+                    Note = "Reads the ColDP zip(s) from Datasets:COL_dir and builds col_coldp_<label>.sqlite, where <label> is the alias inside the zip's metadata.yaml (e.g. \"COL26.5 XR\" -> col_coldp_COL26.5_XR.sqlite) — NOT the zip filename. A new release gets a new filename, so it imports ALONGSIDE the old DB (the old one is left on disk; remove it in Maintenance below). Listed as Destructive only because --force wipes and rebuilds; without --force a finished DB is skipped and a half-written/corrupt one is rebuilt. The import is multi-GB and slow. It downloads datapackage.json from the CoL API once, only if the input folder doesn't already contain one (a provenance snapshot that is never parsed).",
+                },
+                new FlowStep {
+                    Id = "repoint-paths",
+                    Title = "Repoint paths.ini & restart serve (manual)",
+                    Description = "Point the config at the new file, then restart the web server so it picks up the change. No command — you edit paths.ini by hand.",
+                    Commands = Array.Empty<string>(),
+                    InputSourceIds = new[] { "col-sqlite" },
+                    OutputSourceIds = new[] { "col-sqlite" },
+                    Group = "1 · Import & repoint",
+                    Note = "The importer never edits paths.ini. Set [Datastore] COL_sqlite to the new col_coldp_<label>.sqlite AND [Datasets] COL_dir to the new folder — set BOTH, they can drift independently and nothing warns you if they disagree. Then RESTART serve: it loads paths.ini once into a singleton with no hot-reload, so until you restart, every page (including this flow) keeps resolving the OLD CoL file. Confirm with `show-paths` or the Data sources tab. Important: there is no CoL version/freshness check anywhere — a database from the previous release looks perfectly healthy — so confirming the dataset label in the next step is your only safeguard against silently running on the old release.",
+                },
+                new FlowStep {
+                    Id = "verify-col",
+                    Title = "Verify the new database",
+                    Description = "Confirm the new DB opens, is fully populated, and is the release you expect.",
+                    Commands = new[] { "col report-nameusage-fields", "col report-subgenus-homonyms" },
+                    InputSourceIds = new[] { "col-sqlite" },
+                    OutputSourceIds = new[] { "reports" },
+                    Optional = true,
+                    Group = "1 · Import & repoint",
+                    Note = "`col report-nameusage-fields` opens the new COL_sqlite, confirms the nameusage table is populated, and prints the dataset label + row counts — proving the repoint reached the intended release. `col report-subgenus-homonyms` is a heavier query that exercises the indexes and confirms the DB is fully queryable. (`col check` only checks that the source folder is mounted; it never opens the database, so it can't confirm the import. Also note nothing detects a half-written import — the success signal is internal — so a clean profile is reassuring but not a guarantee.)",
+                },
+
+                // ===== 2 · Refresh derived data =====
+                new FlowStep {
+                    Id = "common-names",
+                    Title = "Re-aggregate common names",
+                    Description = "Pull the new release's English vernacular names and synonyms into the common-name hub.",
+                    Commands = new[] { "common-names aggregate" },
+                    InputSourceIds = new[] { "col-sqlite", "iucn-main" },
+                    OutputSourceIds = new[] { "common-names" },
+                    Group = "2 · Refresh derived data",
+                    Note = "Adds the new release's English vernaculars and scientific-name synonyms to the hub (stored as source='col'). Run `common-names init` first ONLY if the hub doesn't exist yet or you want a full rebuild — init seeds hub taxa from IUCN + caps.txt and does not read CoL, so `aggregate` is the actual CoL step. aggregate is idempotent and downloads nothing, but it only upserts: names dropped or renamed in the new release are NOT purged, so a plain re-run leaves a UNION of old + new CoL data plus stale CoL taxon-id cross-references (CoL renumbers ids between releases). To mirror the new release exactly, use the full rebuild in Maintenance below.",
+                },
+                new FlowStep {
+                    Id = "redlist-audit",
+                    Title = "Rebuild the Red List audit site",
+                    Description = "Regenerate the audit site so its Catalogue-of-Life crosscheck page reflects the new release.",
+                    Commands = new[] { "redlist audit-site" },
+                    InputSourceIds = new[] { "col-sqlite", "iucn-main" },
+                    OutputSourceIds = new[] { "reports" },
+                    Group = "2 · Refresh derived data",
+                    Note = "The audit site's CoL-crosscheck page reads CoL live, so re-running reflects the new release. It internally replicates the `iucn report-col-crosscheck` logic, so you do NOT need to run that command first. Output: <reports_dir>/redlist-audit-2026/ (open index.html). If COL_sqlite is missing or has no nameusage table the CoL page is silently skipped (exit 0) — so verify the repoint first. The rendered site records no CoL version label; it always shows whatever COL_sqlite currently points at.",
+                },
+                new FlowStep {
+                    Id = "iucn-crosscheck",
+                    Title = "IUCN ↔ CoL crosscheck report",
+                    Description = "Optional standalone crosscheck text report (the audit site above already covers this).",
+                    Commands = new[] { "iucn report-col-crosscheck" },
+                    InputSourceIds = new[] { "iucn-main", "col-sqlite" },
+                    OutputSourceIds = new[] { "reports" },
+                    Optional = true,
+                    Group = "2 · Refresh derived data",
+                    Note = "Produces a timestamped iucn-col-crosscheck-*.txt (presence, accepted-vs-synonym status, authority alignment, and rank-ladder alignment) whose header records the exact CoL path used. Redundant with the audit site for the web view — run it for the standalone file. Tip: glance at the authority-match counts; if the new release renamed a CoL column outside the reader's known names it is silently read as NULL, which can inflate apparent authority mismatches.",
+                    OutputPatterns = new[] {
+                        new FlowOutputPattern { Root = "reports", Pattern = "iucn-col-crosscheck-*.txt", Label = "Crosscheck report" },
+                    },
+                },
+
+                // ===== 3 · Discover new matches (downloads) =====
+                new FlowStep {
+                    Id = "wikidata-discover",
+                    Title = "Discover new Wikidata matches",
+                    Description = "Use the new CoL synonyms as extra alt-names to find Wikidata Q-ids for previously-unmatched taxa, then download + reindex them.",
+                    Commands = new[] { "wikidata backfill-iucn", "wikidata cache-entities", "wikidata rebuild-indexes" },
+                    InputSourceIds = new[] { "col-sqlite", "iucn-main", "wikidata-cache" },
+                    OutputSourceIds = new[] { "wikidata-cache" },
+                    Optional = true,
+                    Group = "3 · Discover new matches (downloads)",
+                    Note = "Worthwhile only if the new release actually added taxa/synonyms. New CoL synonyms become extra alternate scientific names that can link previously-unmatched IUCN taxa to a Wikidata Q-id. `backfill-iucn` searches Wikidata and only QUEUES new Q-ids; `cache-entities` (or `cache-all`) does the heavy entity-JSON download; `rebuild-indexes` refreshes the name lookup index. Downloads from Wikidata (needs WIKIDATA_USER_AGENT in .env). Skipping only means you miss newly-discoverable matches — nothing already cached breaks.",
+                },
+                new FlowStep {
+                    Id = "wikipedia-discover",
+                    Title = "Discover new Wikipedia pages",
+                    Description = "Use the new CoL synonyms as extra candidate page titles, fetch them, then re-match.",
+                    Commands = new[] { "wikipedia match-taxa", "wikipedia fetch-pages", "wikipedia match-taxa" },
+                    InputSourceIds = new[] { "col-sqlite", "iucn-main", "wikidata-cache", "wikipedia-cache" },
+                    OutputSourceIds = new[] { "wikipedia-cache" },
+                    Optional = true,
+                    Group = "3 · Discover new matches (downloads)",
+                    Note = "Same rationale: new CoL synonyms propose new candidate page titles. The first `match-taxa` makes no network calls — it only enqueues PENDING titles; `fetch-pages` downloads them from Wikipedia; the second `match-taxa` binds the freshly-fetched pages. Downloads from Wikipedia. Run the Wikidata discovery step first, since match-taxa also resolves via Wikidata sitelinks.",
+                },
+
+                // ===== 4 · Regenerate outputs =====
+                new FlowStep {
+                    Id = "generate-lists",
+                    Title = "Regenerate Wikipedia lists",
+                    Description = "Bake the new CoL sub-rank grouping, refreshed common names, and new article links into the wikitext lists.",
+                    Commands = new[] { "wikipedia generate-lists" },
+                    InputSourceIds = new[] { "iucn-main", "col-sqlite", "common-names", "wikipedia-cache" },
+                    OutputSourceIds = Array.Empty<string>(),
+                    Group = "4 · Regenerate outputs",
+                    Note = "Regenerate the FULL set — do NOT pass --list/--status/--taxa-group for a CoL update. CoL only changes the section grouping of lists that split on CoL-only ranks (suborder/superfamily/subfamily/tribe/subgenus), virtual groups, or auto-split; but structure-metrics.json is keyed to the IUCN release only, so a partial regenerate leaves stale CoL-grouped metrics behind (visible in `wikipedia preview-impact`). Run the common-names and discovery steps first so new vernaculars and article links are included. The first run is slower: the new CoL enrich-cache sidecar (col_coldp_<label>.sqlite.enrich-cache.sqlite, created next to the CoL DB) starts empty and rebuilds once. Charts (`wikipedia generate-charts`) don't read CoL — skip them for a CoL-only update.",
+                    OutputPatterns = new[] {
+                        new FlowOutputPattern { Root = "wikipedia-output", Pattern = "*.wikitext", Label = "Lists" },
+                    },
+                },
+
+                // -------- Maintenance (only when needed) --------
+                new FlowStep {
+                    Id = "coverage-check",
+                    Title = "Check Wikidata coverage",
+                    Description = "Read-only summary of how many IUCN taxa now have a matching Wikidata entity (reads CoL live).",
+                    Commands = new[] { "wikidata report-coverage" },
+                    InputSourceIds = new[] { "iucn-main", "wikidata-cache" },
+                    Optional = true,
+                    Section = FlowSection.Maintenance,
+                    Note = "Reads CoL live, so it always reflects the current COL_sqlite. Run after the discovery steps to confirm the new release improved coverage. No downloads.",
+                },
+                new FlowStep {
+                    Id = "cleanup-orphans",
+                    Title = "Delete old CoL leftovers (manual)",
+                    Description = "Remove the previous release's database and its orphaned enrich-cache to reclaim disk.",
+                    Commands = Array.Empty<string>(),
+                    InputSourceIds = new[] { "col-sqlite" },
+                    Optional = true,
+                    Section = FlowSection.Maintenance,
+                    Note = "Manual — no command. After the repoint, the old col_coldp_<oldlabel>.sqlite and its sidecar col_coldp_<oldlabel>.sqlite.enrich-cache.sqlite (plus any -wal/-shm companions) are left on disk and never read again. Each CoL DB is multi-GB, so deleting the previous release reclaims significant space. The new enrich-cache rebuilds itself automatically on the next generate-lists — there is no cache to clear by hand.",
+                },
+                new FlowStep {
+                    Id = "full-rebuild-names",
+                    Title = "Full common-names rebuild (manual + command)",
+                    Description = "Delete the common-names store and rebuild from scratch to drop rows orphaned by the new release.",
+                    Commands = new[] { "common-names init", "common-names aggregate" },
+                    InputSourceIds = new[] { "iucn-main", "col-sqlite" },
+                    OutputSourceIds = new[] { "common-names" },
+                    Optional = true,
+                    Section = FlowSection.Maintenance,
+                    Note = "Because `common-names aggregate` only upserts, the only way to drop hub rows for vernaculars/synonyms the new release removed (and to clear stale (\"col\", oldTaxonId) cross-references) is to delete the common-names SQLite file first, then run init then aggregate. Use this when you want the hub to mirror the new release exactly rather than a union of old + new. The normal Re-aggregate step above is enough for day-to-day updates.",
+                },
+            },
+            Outputs = new[] {
+                new FlowResource { Label = "Red List audit site", Root = "reports", Path = "redlist-audit-2026", Kind = "directory",
+                    Description = "The rebuilt static audit site (open index.html); its CoL-crosscheck page reflects the new release." },
+                new FlowResource { Label = "Wikipedia lists", Root = "wikipedia-output", Path = "", Kind = "directory",
+                    Description = "Regenerated wikitext lists with the new CoL sub-rank grouping." },
+                new FlowResource { Label = "Reports output", Root = "reports", Path = "", Kind = "directory",
+                    Description = "Crosscheck and CoL profile reports land here as text/CSV." },
             },
         },
 
