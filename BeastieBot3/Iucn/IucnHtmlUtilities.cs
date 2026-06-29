@@ -54,6 +54,58 @@ internal static class IucnHtmlUtilities {
         ['i'] = 'ⁱ'
     };
 
+    // Inline elements that carry no text on their own. Two forms of these are redundant markup that
+    // can be dropped without changing the rendered text: an instance wrapping only whitespace, and a
+    // run of identical instances nested or repeated back-to-back. The rich-text editor that produced
+    // these narratives emits both — long runs of empty <span>s and deep stacks of identical <span>s.
+    private const string InlineTagNames = "span|b|i|em|strong|u|s|strike|font|sub|sup|small|big|mark|a|label|abbr|acronym|cite|q|tt|ins|del|var|kbd|samp|o:p";
+    private static readonly Regex EmptyInlineTagRegex = new(
+        "<(" + InlineTagNames + ")\\b" + AttributeFragment + ">((?:\\s|&nbsp;|&#160;|&#xA0;|\\u00A0|\\u200B|\\u200C|\\uFEFF)*)</\\1>",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Singleline);
+    // A run of byte-identical adjacent opening inline tags (and likewise closing tags) collapses to a
+    // single tag: the duplicates only deepen the nesting, they add no text and no distinct styling.
+    private static readonly Regex DuplicateOpenTagRegex = new(
+        "(<(?:" + InlineTagNames + ")\\b" + AttributeFragment + ">)\\1+",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Singleline);
+    private static readonly Regex DuplicateCloseTagRegex = new(
+        "(</(?:" + InlineTagNames + ")>)\\1+",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+    private static readonly Regex MultipleSpacesRegex = new("[ \\t]{2,}", RegexOptions.Compiled);
+    private static readonly Regex BlankLineRunRegex = new("(?:\\n[ \\t]*){3,}", RegexOptions.Compiled);
+
+    // Produces a suggested tidy of a narrative HTML field by removing redundant empty inline markup
+    // and collapsing runs of identical adjacent inline tags (the nested empty/duplicate <span> stacks
+    // that swamp some fields), then tidying the whitespace left behind. Structural tags (<p>, <br>,
+    // <li>, …) are left intact, and the removed markup carries no text, so the readable content is
+    // unchanged. It is still a best-effort suggestion: callers should verify the extracted text still
+    // matches and note that identical rendering has not been double-checked.
+    public static string? CleanRedundantMarkup(string? html) {
+        if (string.IsNullOrEmpty(html)) {
+            return html;
+        }
+
+        var working = NormalizeLineEndings(html);
+        working = CommentRegex.Replace(working, string.Empty);
+
+        // Each collapse can expose a newly-redundant tag (an emptied parent, or opens/closes that
+        // become adjacent once an inner layer is gone), so repeat until stable, bounded for safety.
+        // An empty tag that wrapped whitespace is replaced with a single space, not nothing, so it
+        // cannot silently fuse the words on either side.
+        for (var pass = 0; pass < 200; pass++) {
+            var next = EmptyInlineTagRegex.Replace(working, m => m.Groups[2].Value.Length == 0 ? string.Empty : " ");
+            next = DuplicateOpenTagRegex.Replace(next, "$1");
+            next = DuplicateCloseTagRegex.Replace(next, "$1");
+            if (string.Equals(next, working, StringComparison.Ordinal)) {
+                break;
+            }
+            working = next;
+        }
+
+        working = MultipleSpacesRegex.Replace(working, " ");
+        working = BlankLineRunRegex.Replace(working, "\n\n");
+        return working.Trim();
+    }
+
     public static string? ConvertHtmlToPlainTextNeater(string? html) => ConvertHtmlToPlain(html, PlainTextFlavor.Friendly);
 
     public static string? ConvertHtmlToExactPlainText(string? html) => ConvertHtmlToPlain(html, PlainTextFlavor.Exact);

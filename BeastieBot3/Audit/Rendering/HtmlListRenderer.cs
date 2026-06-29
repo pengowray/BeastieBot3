@@ -28,7 +28,10 @@ internal static class HtmlListRenderer {
         return sb.ToString();
     }
 
-    private static string TableHtml(IReadOnlyList<AuditColumn> columns, IEnumerable<AuditFinding> findings, string? tableId = null) {
+    private static string TableHtml(IReadOnlyList<AuditColumn> allColumns, IEnumerable<AuditFinding> findings, string? tableId = null) {
+        // CSV-only columns (bulky narrative values surfaced through the modal viewer instead) are
+        // dropped from the on-screen table but still carried by AuditCsvWriter.
+        var columns = allColumns.Where(c => !c.CsvOnly).ToList();
         var sb = new StringBuilder();
         sb.Append("<div class=\"table-wrap\">\n");
         sb.Append(tableId is null ? "<table class=\"audit-table\">\n" : $"<table class=\"audit-table sortable\" id=\"{tableId}\">\n");
@@ -86,7 +89,7 @@ internal static class HtmlListRenderer {
                 return $"<td{sortAttr}><a href=\"{HtmlText.Escape(href!)}\" rel=\"noopener\" target=\"_blank\">{HtmlText.Escape(label)}</a></td>";
             }
             case AuditColumnType.Viewer: {
-                var label = string.IsNullOrEmpty(raw) ? "View" : raw;
+                var label = string.IsNullOrEmpty(raw) ? "Compare" : raw;
                 var attrs = new StringBuilder();
                 if (col.Data is not null) {
                     foreach (var kv in col.Data) {

@@ -140,6 +140,8 @@ blockquote { margin: 10px 0; padding: 2px 14px; border-left: 3px solid var(--lin
 .audit-modal h4 { margin: 12px 0 6px; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.03em; color: var(--ink-soft); }
 .audit-pane { background: var(--bg-soft); border: 1px solid var(--line); border-radius: 7px; padding: 10px 12px; margin: 0; max-height: 40vh; overflow: auto; white-space: pre-wrap; word-break: break-word; font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace; font-size: 0.8rem; line-height: 1.5; }
 .audit-pane.html { max-height: 46vh; }
+.audit-clean-note { margin: 0 0 8px; font-size: 0.82rem; color: var(--ink-soft); }
+.audit-clean-note.warn { color: var(--breaking); }
 .audit-pane mark { background: #fde7c2; color: #5b4a25; border-radius: 2px; }
 .audit-pane .tok-tag { color: var(--accent); }
 .audit-pane .audit-empty { color: var(--ink-soft); font-style: italic; }
@@ -260,10 +262,12 @@ footer.site a { color: var(--accent); }
         '<h3 class="audit-modal-title"></h3>' +
         '<p class="audit-modal-meta"></p>' +
         '<div class="audit-modal-grid">' +
-          '<section><h4>Plain-text field (normalised)</h4><pre class="audit-pane plain"></pre></section>' +
-          '<section><h4>Text from HTML (normalised)</h4><pre class="audit-pane readable"></pre></section>' +
+          '<section><h4>assessments.csv (plain text, normalised)</h4><pre class="audit-pane plain"></pre></section>' +
+          '<section><h4>Suggested plain text — extracted from assessments_with_html.csv</h4><pre class="audit-pane readable"></pre></section>' +
         '</div>' +
-        '<section><h4>HTML source</h4><pre class="audit-pane html"></pre></section>' +
+        '<section><h4>HTML source — assessments_with_html.csv</h4><pre class="audit-pane html"></pre></section>' +
+        '<section class="audit-clean" hidden><h4>Suggested cleaned-up HTML</h4>' +
+          '<p class="audit-clean-note"></p><pre class="audit-pane clean"></pre></section>' +
       '</div>';
     document.body.appendChild(modal);
     modal.querySelectorAll("[data-close]").forEach(function (el) {
@@ -290,6 +294,25 @@ footer.site a { color: var(--accent); }
     m.querySelector(".audit-pane.plain").innerHTML = splitHighlight(plain, cut);
     m.querySelector(".audit-pane.readable").innerHTML = splitHighlight(readable, cut);
     m.querySelector(".audit-pane.html").innerHTML = highlightHtml(d.viewHtml || "");
+
+    // Suggested cleaned-up HTML, shown only when a tidy was produced. The note states plainly that
+    // it is a suggestion; when the cleaned text could not be confirmed to match, the note warns.
+    var cleanSection = m.querySelector(".audit-clean");
+    var clean = d.viewClean || "";
+    if (clean) {
+      m.querySelector(".audit-pane.clean").innerHTML = highlightHtml(clean);
+      var note = m.querySelector(".audit-clean-note");
+      if (d.viewCleanVerified === "yes") {
+        note.className = "audit-clean-note";
+        note.textContent = "Suggestion only — redundant empty markup removed. The text extracted from this cleaned HTML matches the original, but it has not been double-checked to render identically.";
+      } else {
+        note.className = "audit-clean-note warn";
+        note.textContent = "Suggestion only — redundant empty markup removed. This has not been verified to be identical: the text extracted from the cleaned HTML does not exactly match the original, so review before use.";
+      }
+      cleanSection.removeAttribute("hidden");
+    } else {
+      cleanSection.setAttribute("hidden", "");
+    }
     m.removeAttribute("hidden");
   }
 

@@ -44,6 +44,10 @@ internal sealed class AuditColumn {
     // interactive columns (a Viewer button) whose payload would not make sense in a flat CSV.
     public bool HtmlOnly { get; init; }
 
+    // When true, the column is written to the CSV but omitted from the on-screen HTML table. Used
+    // for bulky narrative values that are kept in the download but shown via the modal viewer instead.
+    public bool CsvOnly { get; init; }
+
     // For a Viewer column: the data-* attributes attached to the button, each derived from the
     // finding. The key is the attribute name without the "data-" prefix (e.g. "view-html" emits
     // data-view-html); values are HTML-escaped by the renderer. Null values are omitted.
