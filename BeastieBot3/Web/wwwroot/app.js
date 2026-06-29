@@ -470,6 +470,7 @@
     // IUCN version (local-only, no live call) + dataset comparison ride along
     // with the sources refresh.
     refreshIucnVersion();
+    refreshColVersion();
     refreshDatasetCompare();
   }
 
@@ -558,6 +559,51 @@
 
   const iucnVersionCheck = $('#iucn-version-check');
   if (iucnVersionCheck) iucnVersionCheck.addEventListener('click', () => refreshIucnVersion({ refresh: true }));
+
+  // --- Catalogue of Life version freshness (offline: loaded DB vs input folder) ---
+
+  function colVersionPill(d) {
+    switch (d.status) {
+      case 'fresh':            return { cls: 'ok',      text: 'up to date' };
+      case 'update-available': return { cls: 'warn',    text: 'update available' };
+      case 'not-imported':     return { cls: 'missing', text: 'not imported' };
+      case 'incomplete':       return { cls: 'err',     text: 'import incomplete' };
+      case 'no-input':         return { cls: 'missing', text: 'input folder missing' };
+      default:                 return { cls: 'missing', text: 'unknown' };
+    }
+  }
+
+  // Shared markup for both the Data sources card and the col-update flow banner.
+  function colVersionHtml(d) {
+    const p = colVersionPill(d);
+    const bits = [];
+    bits.push('<span>Loaded: <strong>' + escapeHtml(String(d.loaded || '(none imported)')) + '</strong></span>');
+    if (d.input) bits.push('<span class="sep">·</span><span>Input folder: <strong>' + escapeHtml(String(d.input)) + '</strong></span>');
+    bits.push('<span class="status-pill ' + p.cls + '">' + p.text + '</span>');
+    let html = '<div class="iucn-version-row">' + bits.join(' ') + '</div>';
+    if (d.message) html += '<p class="small ' + (d.fresh === false ? 'reason' : 'muted') + '">' + escapeHtml(d.message) + '</p>';
+    return html;
+  }
+
+  function renderColVersion(d) {
+    const body = $('#col-version-body');
+    if (body) body.innerHTML = colVersionHtml(d);
+  }
+
+  async function refreshColVersion(opts) {
+    const body = $('#col-version-body');
+    if (!body) return;
+    const refresh = opts && opts.refresh;
+    if (refresh) body.textContent = 'Re-reading input folder…';
+    try {
+      const res = await fetch('/api/col-version' + (refresh ? '?refresh=1' : ''));
+      if (!res.ok) { body.textContent = 'Failed: ' + res.status; return; }
+      renderColVersion(await res.json());
+    } catch (e) { body.textContent = 'Error: ' + e.message; }
+  }
+
+  const colVersionCheck = $('#col-version-check');
+  if (colVersionCheck) colVersionCheck.addEventListener('click', () => refreshColVersion({ refresh: true }));
 
   $('#refresh-status').addEventListener('click', refreshStatus);
   refreshStatus();
@@ -961,6 +1007,20 @@
     desc.className = 'muted';
     desc.textContent = snap.description;
     root.appendChild(desc);
+
+    // For the CoL-update flow, show a live freshness banner up top so the operator
+    // immediately sees whether the imported CoL release matches the input folder
+    // (i.e. whether a re-import + repoint is still pending). Offline check.
+    if (snap.id === 'col-update') {
+      const banner = document.createElement('div');
+      banner.className = 'flow-col-version';
+      banner.textContent = 'Checking Catalogue of Life freshness…';
+      root.appendChild(banner);
+      fetch('/api/col-version')
+        .then(r => r.ok ? r.json() : null)
+        .then(d => { if (d) banner.innerHTML = colVersionHtml(d); else banner.remove(); })
+        .catch(() => banner.remove());
+    }
 
     // Split steps into pipeline (core path) and maintenance (only-when-needed).
     const pipelineSteps = snap.steps.filter(s => (s.section || 'pipeline') === 'pipeline');

@@ -181,21 +181,30 @@ public sealed class ColImporter {
         var yamlText = reader.ReadToEnd();
         cancellationToken.ThrowIfCancellationRequested();
 
+        // Identifying fields (key/title/alias/issued/version) come from the shared
+        // ColDatasetInfo parser so the importer and the web col-version endpoint
+        // read them identically. Description stays local — only the importer stores it.
+        var info = ColDatasetInfo.Parse(yamlText);
+        var description = ParseDescription(yamlText);
+        return new DatasetMetadata {
+            RawYaml = yamlText,
+            Key = info.Key,
+            Title = info.Title,
+            Alias = info.Alias,
+            Description = description,
+            Issued = info.Issued,
+            Version = info.Version
+        };
+    }
+
+    private static string? ParseDescription(string yamlText) {
         var deserializer = new DeserializerBuilder()
             .WithNamingConvention(CamelCaseNamingConvention.Instance)
             .IgnoreUnmatchedProperties()
             .Build();
 
         var map = deserializer.Deserialize<Dictionary<string, object?>>(yamlText) ?? new Dictionary<string, object?>();
-        return new DatasetMetadata {
-            RawYaml = yamlText,
-            Key = ExtractString(map, "key"),
-            Title = ExtractString(map, "title"),
-            Alias = ExtractString(map, "alias"),
-            Description = ExtractString(map, "description"),
-            Issued = ExtractString(map, "issued"),
-            Version = ExtractString(map, "version")
-        };
+        return ExtractString(map, "description");
     }
 
     private static string? ExtractString(IDictionary<string, object?> map, string key) {
