@@ -98,25 +98,28 @@ public sealed class WikipediaFetchCommand : AsyncCommand<WikipediaFetchCommand.S
             var item = workItems[0];
             workItems.RemoveAt(0);
 
-            AnsiConsole.MarkupLine($"[grey]Fetching[/] {item.PageTitle}...");
+            // Escape the dynamic title/message: a scientific name or synonym can contain
+            // '[' (e.g. "[junior synonym]"), which MarkupLine would otherwise parse as a
+            // style tag and throw "Could not find color or style ...", aborting the fetch.
+            AnsiConsole.MarkupLine($"[grey]Fetching[/] {Markup.Escape(item.PageTitle)}...");
             var outcome = await fetcher.FetchAsync(item, cancellationToken).ConfigureAwait(false);
             processed++;
 
             if (outcome.Success) {
                 success++;
-                AnsiConsole.MarkupLine($"[green]✓[/] {outcome.FinalTitle ?? outcome.RequestedTitle}");
+                AnsiConsole.MarkupLine($"[green]✓[/] {Markup.Escape(outcome.FinalTitle ?? outcome.RequestedTitle)}");
             }
             else if (outcome.Missing) {
                 missing++;
-                AnsiConsole.MarkupLine($"[yellow]![/] Missing {outcome.RequestedTitle} ({outcome.Message ?? "not found"})");
+                AnsiConsole.MarkupLine($"[yellow]![/] Missing {Markup.Escape(outcome.RequestedTitle)} ({Markup.Escape(outcome.Message ?? "not found")})");
             }
             else if (outcome.Skipped) {
                 skipped++;
-                AnsiConsole.MarkupLine($"[grey]-[/] Skipped {outcome.RequestedTitle} ({outcome.Message ?? "duplicate"})");
+                AnsiConsole.MarkupLine($"[grey]-[/] Skipped {Markup.Escape(outcome.RequestedTitle)} ({Markup.Escape(outcome.Message ?? "duplicate")})");
             }
             else {
                 failed++;
-                AnsiConsole.MarkupLine($"[red]x[/] Failed {outcome.RequestedTitle}: {outcome.Message}");
+                AnsiConsole.MarkupLine($"[red]x[/] Failed {Markup.Escape(outcome.RequestedTitle)}: {Markup.Escape(outcome.Message ?? "(error)")}");
             }
         }
 
