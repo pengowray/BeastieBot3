@@ -135,7 +135,13 @@ blockquote { margin: 10px 0; padding: 2px 14px; border-left: 3px solid var(--lin
 .audit-modal-x:hover { color: var(--ink); }
 .audit-modal-title { margin: 0 30px 4px 0; font-size: 1.05rem; }
 .audit-modal-title em { font-style: italic; }
-.audit-modal-meta { margin: 0 0 14px; color: var(--ink-soft); font-size: 0.88rem; }
+.audit-modal-meta { margin: 0 0 12px; color: var(--ink-soft); font-size: 0.88rem; }
+/* Plain-language notes shown above the panes: what changed, and how the field compares with the API. */
+.audit-modal-notes { margin: 0 0 16px; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 6px; }
+.audit-modal-notes[hidden] { display: none; }
+.audit-modal-notes li { position: relative; padding: 8px 12px 8px 28px; font-size: 0.88rem; line-height: 1.45; border-radius: 7px; background: var(--accent-soft); color: var(--ink); }
+.audit-modal-notes li::before { content: "•"; position: absolute; left: 11px; color: var(--accent); font-weight: 700; }
+.audit-modal-notes li.audit-note-api { background: var(--bg-soft); color: var(--ink-soft); }
 .audit-modal-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
 .audit-modal h4 { margin: 12px 0 6px; font-size: 0.8rem; text-transform: uppercase; letter-spacing: 0.03em; color: var(--ink-soft); }
 .audit-pane { background: var(--bg-soft); border: 1px solid var(--line); border-radius: 7px; padding: 10px 12px; margin: 0; max-height: 40vh; overflow: auto; white-space: pre-wrap; word-break: break-word; font-family: "SFMono-Regular", Consolas, "Liberation Mono", Menlo, monospace; font-size: 0.8rem; line-height: 1.5; }
@@ -261,6 +267,7 @@ footer.site a { color: var(--accent); }
         '<button type="button" class="audit-modal-x" data-close aria-label="Close">×</button>' +
         '<h3 class="audit-modal-title"></h3>' +
         '<p class="audit-modal-meta"></p>' +
+        '<ul class="audit-modal-notes" hidden></ul>' +
         '<div class="audit-modal-grid">' +
           '<section><h4>assessments.csv (plain text, normalised)</h4><pre class="audit-pane plain"></pre></section>' +
           '<section><h4>Suggested plain text — extracted from assessments_with_html.csv</h4><pre class="audit-pane readable"></pre></section>' +
@@ -291,6 +298,22 @@ footer.site a { color: var(--accent); }
     if (d.viewHtmllen) meta.push("HTML " + escapeHtml(d.viewHtmllen) + " chars");
     if (d.viewRatio) meta.push(escapeHtml(d.viewRatio) + "× readable size");
     m.querySelector(".audit-modal-meta").innerHTML = meta.join(" · ");
+
+    // Plain-language notes above the panes: a one-line "what changed", then how the field compares
+    // with the IUCN API. They save the reader from hunting through the diff for an invisible change.
+    var notes = m.querySelector(".audit-modal-notes");
+    notes.innerHTML = "";
+    function addNote(text, cls) {
+      if (!text) return;
+      var li = document.createElement("li");
+      if (cls) li.className = cls;
+      li.textContent = text;
+      notes.appendChild(li);
+    }
+    addNote(d.viewChangeNote, "audit-note-change");
+    addNote(d.viewApi, "audit-note-api");
+    if (notes.children.length) notes.removeAttribute("hidden"); else notes.setAttribute("hidden", "");
+
     m.querySelector(".audit-pane.plain").innerHTML = splitHighlight(plain, cut);
     m.querySelector(".audit-pane.readable").innerHTML = splitHighlight(readable, cut);
     m.querySelector(".audit-pane.html").innerHTML = highlightHtml(d.viewHtml || "");
@@ -304,10 +327,10 @@ footer.site a { color: var(--accent); }
       var note = m.querySelector(".audit-clean-note");
       if (d.viewCleanVerified === "yes") {
         note.className = "audit-clean-note";
-        note.textContent = "Suggestion only — redundant empty markup removed. The text extracted from this cleaned HTML matches the original, but it has not been double-checked to render identically.";
+        note.textContent = "Suggested change (not reviewed): Redundant empty markup removed. The text extracted from this cleaned HTML matches the original, but it has not been reviewed.";
       } else {
         note.className = "audit-clean-note warn";
-        note.textContent = "Suggestion only — redundant empty markup removed. This has not been verified to be identical: the text extracted from the cleaned HTML does not exactly match the original, so review before use.";
+        note.textContent = "Suggested change (not reviewed; text possibly differs): Redundant empty markup removed. The text extracted from the cleaned HTML does not exactly match the original. Human review recommended before use.";
       }
       cleanSection.removeAttribute("hidden");
     } else {

@@ -4,6 +4,7 @@ using System.Globalization;
 using System.Linq;
 using System.Net;
 using System.Text;
+using System.Text.Json;
 using Microsoft.Data.Sqlite;
 using BeastieBot3.Audit.Model;
 using BeastieBot3.Infrastructure;
@@ -27,9 +28,26 @@ internal sealed class HtmlConsistencyProducer : IAuditReportProducer {
     private const double RedundantRatio = 3.0;
     private const int RedundantMinHtmlChars = 1000;
 
-    // Each side of the modal viewer is capped so the embedded payload stays bounded (the report is
-    // meant to be a small, emailable bundle). The redundant-markup runs are visible well within this.
-    private const int ViewCap = 8000;
+    // The IUCN API stores the same six narrative fields under its documentation object; the keys
+    // differ from the CSV column names for two of them. Used to cross-check the CSV HTML against the
+    // API for each flagged row, so the report can say whether a difference is in the source data.
+    private static readonly IReadOnlyDictionary<string, string> ApiDocKeys = new Dictionary<string, string> {
+        ["rationale"] = "rationale", ["habitat"] = "habitats", ["threats"] = "threats",
+        ["population"] = "population", ["range"] = "range", ["useTrade"] = "use_trade",
+    };
+
+    // Zero-width and soft-hyphen characters: invisible on screen but counted as text differences.
+    // Named so the modal can say exactly which one accounts for an otherwise-invisible difference.
+    private static readonly IReadOnlyDictionary<char, string> InvisibleNames = new Dictionary<char, string> {
+        ['­'] = "soft hyphen",
+        ['​'] = "zero-width space",
+        ['‌'] = "zero-width non-joiner",
+        ['‍'] = "zero-width joiner",
+        ['‎'] = "left-to-right mark",
+        ['‏'] = "right-to-left mark",
+        ['⁠'] = "word joiner",
+        ['﻿'] = "zero-width no-break space",
+    };
 
     public AuditReport? Produce(AuditContext ctx) {
         var conn = ctx.IucnCsvOrNull();
@@ -70,7 +88,8 @@ internal sealed class HtmlConsistencyProducer : IAuditReportProducer {
         }
 
         summary += "\n\n" +
-            "Use the Compare button on any row to open a side-by-side view of the assessments.csv plain text and the suggested plain text extracted from assessments_with_html.csv, with the HTML source shown colour-coded so the empty-tag runs are visible, plus a suggested cleaned-up HTML with the redundant markup removed.";
+            "Use the Compare button on any row to open a side-by-side view of the assessments.csv plain text and the suggested plain text extracted from assessments_with_html.csv, with the HTML source shown colour-coded so the empty-tag runs are visible, plus a suggested cleaned-up HTML with the redundant markup removed. " +
+            "Each view opens with a short note on what changed (for example, an invisible character that accounts for an otherwise hidden difference) and, where the IUCN API copy is cached, a note on whether the field matches the API.";
 
         summary +=
             "\n\n### Why it matters\n\n" +
@@ -104,13 +123,15 @@ internal sealed class HtmlConsistencyProducer : IAuditReportProducer {
                 new AuditColumn {
                     Key = "view", Header = "Compare", Type = AuditColumnType.Viewer, HtmlOnly = true,
                     Value = _ => "Compare",
-                    Help = "Open a side-by-side view of the assessments.csv plain text, the suggested plain text extracted from the HTML, the assessments_with_html.csv HTML source, and a suggested cleaned-up HTML.",
+                    Help = "Open a side-by-side view of the assessments.csv plain text, the suggested plain text extracted from the HTML, the assessments_with_html.csv HTML source, and a suggested cleaned-up HTML, with a note on what changed and how it compares with the IUCN API.",
                     Data = new Dictionary<string, Func<AuditFinding, string?>> {
                         ["view-name"] = f => f.ScientificName,
                         ["view-field"] = f => f.Field,
                         ["view-issue"] = f => f.IssueType,
                         ["view-ratio"] = f => f.Get("viewRatio"),
                         ["view-htmllen"] = f => f.Get("htmlLen"),
+                        ["view-change-note"] = f => f.Get("viewChangeNote"),
+                        ["view-api"] = f => f.Get("viewApi"),
                         ["view-plain"] = f => f.Get("viewPlain"),
                         ["view-readable"] = f => f.Get("viewReadable"),
                         ["view-html"] = f => f.Get("viewHtml"),
@@ -146,6 +167,24 @@ internal sealed class HtmlConsistencyProducer : IAuditReportProducer {
         using var command = connection.CreateCommand();
         command.CommandText = ctx.Limit is > 0 ? sql + " LIMIT " + ctx.Limit.Value : sql;
         command.CommandTimeout = 0;
+
+        // The IUCN API cache (when present) lets each flagged field be compared against the API copy,
+        // so the modal can say whether a difference is in the source data. Looked up lazily and
+        // memoised on the last assessment, since a row's fields are processed together.
+        var apiConn = ctx.IucnApiCacheOrNull();
+        var hasApi = apiConn is not null && AuditContext.ObjectExists(apiConn, "assessments");
+        var apiCacheId = -1L;
+        IReadOnlyDictionary<string, string?>? apiCacheDoc = null;
+        IReadOnlyDictionary<string, string?>? GetApiDoc(long id) {
+            if (!hasApi) {
+                return null;
+            }
+            if (id != apiCacheId) {
+                apiCacheId = id;
+                apiCacheDoc = FetchApiDoc(apiConn!, id);
+            }
+            return apiCacheDoc;
+        }
 
         var findings = new List<AuditFinding>();
         using var reader = command.ExecuteReader();
@@ -254,16 +293,22 @@ internal sealed class HtmlConsistencyProducer : IAuditReportProducer {
                     finding.Extra["markupRatio"] = ratio.ToString("N0", CultureInfo.InvariantCulture);
                 }
 
-                // Payload for the modal viewer: the normalised readable text of each side, plus the
-                // raw HTML source (shown in full — the long empty-markup runs are the point) and a
-                // suggested cleaned-up HTML. The cleaned suggestion is only attached when it actually
-                // removed something, and is flagged "yes"/"no" by whether its extracted text still
-                // matches the original so the modal can say whether it has been verified identical.
-                finding.Extra["viewPlain"] = Cap(plainText);
-                finding.Extra["viewReadable"] = Cap(htmlText);
+                // Payload for the modal viewer: the normalised readable text of each side (shown in
+                // full — the scroll boxes handle the length), the raw HTML source, and a suggested
+                // cleaned-up HTML. The cleaned suggestion is only attached when it actually removed
+                // something, and is flagged "yes"/"no" by whether its extracted text still matches the
+                // original so the modal can say whether it has been verified identical. A short
+                // "what changed" note and, when the API cache is present, an API-comparison note are
+                // attached so the reader does not have to hunt through the panes.
+                finding.Extra["viewPlain"] = plainText;
+                finding.Extra["viewReadable"] = htmlText;
                 finding.Extra["viewHtml"] = htmlVal ?? "";
                 finding.Extra["htmlLen"] = rawHtmlLen.ToString("N0", CultureInfo.InvariantCulture);
                 finding.Extra["viewRatio"] = ratio > 0 ? ratio.ToString("N0", CultureInfo.InvariantCulture) : "";
+                finding.Extra["viewChangeNote"] = DescribeChange(plainVal, htmlVal, plainText, htmlText, redundant, ratio);
+                if (hasApi) {
+                    finding.Extra["viewApi"] = DescribeApiComparison(GetApiDoc(assessmentId), field, htmlVal, htmlText);
+                }
 
                 var cleaned = IucnHtmlUtilities.CleanRedundantMarkup(htmlVal) ?? "";
                 if (cleaned.Length > 0 && !string.Equals(cleaned, htmlVal, StringComparison.Ordinal)) {
@@ -295,9 +340,139 @@ internal sealed class HtmlConsistencyProducer : IAuditReportProducer {
         return i;
     }
 
-    // Caps a string for embedding in the modal viewer's data attributes, noting when it was clipped.
-    private static string Cap(string value) =>
-        value.Length <= ViewCap ? value : value.Substring(0, ViewCap) + " … (truncated for display)";
+    // A one-line summary of how the two versions differ, shown above the panes so the reader does not
+    // have to hunt for it. The most useful case is an invisible character: the panes look identical
+    // except for a gap, so the note names the exact character and the word it sits in.
+    private static string DescribeChange(string? rawPlain, string? rawHtml, string plainText, string htmlText, bool redundant, double ratio) {
+        if (redundant) {
+            return $"Heavy redundant markup: the HTML is about {ratio:N0} times the size of its readable text, and the assessments.csv plain text does not get past it. The suggested cleaned-up HTML below restores the readable text.";
+        }
+        if (plainText.Length == 0) {
+            return "The assessments.csv field is empty; the assessments_with_html.csv version carries the text shown below.";
+        }
+        if (htmlText.Length == 0) {
+            return "The assessments_with_html.csv version is empty; the assessments.csv field carries the text shown below.";
+        }
+        if (TryDescribeInvisibleDifference(rawPlain, rawHtml, htmlText, out var note)) {
+            return note;
+        }
+        if (htmlText.StartsWith(plainText, StringComparison.Ordinal)) {
+            return "The assessments.csv field stops early; the assessments_with_html.csv version continues. The point where it stops is highlighted below.";
+        }
+        return "The readable text differs between the two versions. The first difference is highlighted below.";
+    }
+
+    // When the two readable texts match once zero-width / soft-hyphen characters are removed, the only
+    // difference is one of those invisible characters. Names it and the word it sits in, and notes
+    // that it shows in the assessments.csv pane as a gap while the HTML drops it.
+    private static bool TryDescribeInvisibleDifference(string? rawPlain, string? rawHtml, string htmlText, out string note) {
+        note = "";
+        // htmlText already has invisibles removed (ConvertHtmlToExactPlainText drops them); compare
+        // against the plain side with the same characters removed.
+        var plainNoInvisible = Canonical(DeleteInvisibles(WebUtility.HtmlDecode(rawPlain ?? "")));
+        if (!string.Equals(plainNoInvisible, htmlText, StringComparison.Ordinal)) {
+            return false;
+        }
+        var found = FirstInvisible(rawPlain) ?? FirstInvisible(StripTagsLoose(rawHtml));
+        if (found is null) {
+            return false;
+        }
+        var (ch, word) = found.Value;
+        var name = InvisibleNames.TryGetValue(ch, out var n) ? n : "zero-width character";
+        var inWord = string.IsNullOrEmpty(word) ? "" : $" inside “{word}”";
+        note = $"The only difference is an invisible {name} (U+{(int)ch:X4}){inWord}: assessments.csv keeps it (it shows here as a gap), while the HTML drops it. Recommend deleting the character.";
+        return true;
+    }
+
+    // Compares the field's CSV HTML against the same field in the IUCN API. doc is the API's
+    // documentation object for this assessment, or null when the assessment is not cached.
+    private static string DescribeApiComparison(IReadOnlyDictionary<string, string?>? doc, string field, string? rawHtml, string htmlText) {
+        if (doc is null) {
+            return "This assessment is not in the IUCN API cache, so no comparison against the API was made.";
+        }
+        if (!doc.TryGetValue(field, out var apiVal) || apiVal is null) {
+            return "The IUCN API has no value for this field, so no comparison was made.";
+        }
+        if (string.Equals(rawHtml ?? "", apiVal, StringComparison.Ordinal)) {
+            return "The assessments_with_html.csv HTML for this field is identical to the IUCN API, so it is present in the source data, not introduced by the CSV export.";
+        }
+        var apiText = Canonical(IucnHtmlUtilities.ConvertHtmlToExactPlainText(apiVal));
+        if (string.Equals(apiText, htmlText, StringComparison.Ordinal)) {
+            return "The assessments_with_html.csv HTML matches the IUCN API in readable text for this field (markup or encoding aside).";
+        }
+        return "The assessments_with_html.csv HTML differs from the IUCN API for this field, so the difference may have appeared after the API export.";
+    }
+
+    // Reads the IUCN API's documentation object for one assessment from the API cache and maps the six
+    // narrative fields to their CSV column names. Returns null when the assessment is not cached.
+    private static IReadOnlyDictionary<string, string?>? FetchApiDoc(SqliteConnection conn, long assessmentId) {
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "SELECT json FROM assessments WHERE assessment_id = @a ORDER BY id DESC LIMIT 1";
+        cmd.Parameters.AddWithValue("@a", assessmentId);
+        if (cmd.ExecuteScalar() is not string json || json.Length == 0) {
+            return null;
+        }
+        try {
+            using var doc = JsonDocument.Parse(json);
+            var map = new Dictionary<string, string?>(StringComparer.Ordinal);
+            if (doc.RootElement.TryGetProperty("documentation", out var d) && d.ValueKind == JsonValueKind.Object) {
+                foreach (var kv in ApiDocKeys) {
+                    map[kv.Key] = d.TryGetProperty(kv.Value, out var v) && v.ValueKind == JsonValueKind.String ? v.GetString() : null;
+                }
+            }
+            return map;
+        } catch (JsonException) {
+            return null;
+        }
+    }
+
+    private static string DeleteInvisibles(string s) {
+        var hit = false;
+        foreach (var c in s) {
+            if (InvisibleNames.ContainsKey(c)) { hit = true; break; }
+        }
+        if (!hit) {
+            return s;
+        }
+        var sb = new StringBuilder(s.Length);
+        foreach (var c in s) {
+            if (!InvisibleNames.ContainsKey(c)) {
+                sb.Append(c);
+            }
+        }
+        return sb.ToString();
+    }
+
+    // The first invisible character in a string and the (cleaned) word it sits in, or null.
+    private static (char Ch, string Word)? FirstInvisible(string? s) {
+        if (string.IsNullOrEmpty(s)) {
+            return null;
+        }
+        var decoded = WebUtility.HtmlDecode(s);
+        for (var i = 0; i < decoded.Length; i++) {
+            if (InvisibleNames.ContainsKey(decoded[i])) {
+                return (decoded[i], WordAround(decoded, i));
+            }
+        }
+        return null;
+    }
+
+    private static string WordAround(string s, int index) {
+        var start = index;
+        var end = index;
+        while (start > 0 && !char.IsWhiteSpace(s[start - 1])) {
+            start--;
+        }
+        while (end < s.Length - 1 && !char.IsWhiteSpace(s[end + 1])) {
+            end++;
+        }
+        var word = DeleteInvisibles(s.Substring(start, end - start + 1)).Trim();
+        return word.Length <= 40 ? word : word.Substring(0, 40) + "…";
+    }
+
+    private static readonly System.Text.RegularExpressions.Regex TagLoose =
+        new("<[^>]+>", System.Text.RegularExpressions.RegexOptions.Compiled);
+    private static string StripTagsLoose(string? html) => html is null ? "" : TagLoose.Replace(html, " ");
 
     // A readable window of text around a position, with leading/trailing ellipses when it is clipped.
     private static string Window(string value, int center, int before = 40, int length = 200) {

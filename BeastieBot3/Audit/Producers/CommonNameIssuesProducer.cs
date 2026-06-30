@@ -13,12 +13,13 @@ using BeastieBot3.Iucn;
 // English common names in the cached IUCN taxa records that carry a likely error or a formatting
 // choice third parties should be aware of. This is a refresh, against the current release, of a
 // hand-compiled 2016 list of Red List common-name oddities: species codes sitting in the name field,
-// all-capitals names, stray whitespace, an acute accent or backtick used as an apostrophe, a leading
-// "The", a "(FB)" FishBase marker, ampersand/slash separators, non-English-script characters, and the
-// curated set of likely plurals. Checks that found nothing this release (comma inside parentheses, a
-// literal question mark) are still listed at zero so it is clear they ran. Low-value 2016 checks are
-// intentionally dropped: abbreviation dots (St., Mt.) are legitimate, spelling needs a dictionary, and
-// the broad "possible plural" sweep was almost all false positives.
+// all-capitals names, stray whitespace, an acute accent or backtick used as an apostrophe, a backtick
+// standing in for the Hawaiian ʻokina, a leading "The", a "(FB)" FishBase marker, ampersand/slash
+// separators, non-English-script characters, and the curated set of likely plurals. Checks that found
+// nothing this release (comma inside parentheses, a literal question mark) are still listed at zero so
+// it is clear they ran. Low-value 2016 checks are intentionally dropped: abbreviation dots (St., Mt.)
+// are legitimate, spelling needs a dictionary, and the broad "possible plural" sweep was almost all
+// false positives.
 
 namespace BeastieBot3.Audit.Producers;
 
@@ -30,6 +31,7 @@ internal enum CommonNameIssue {
     QuestionMark,
     AllCaps,
     AcuteApostrophe,
+    HawaiianOkina,
     CommaInParentheses,
     Ampersand,
     Slash,
@@ -108,7 +110,7 @@ internal sealed class CommonNameIssuesProducer : IAuditReportProducer {
                 "### Why it matters\n\n" +
                 "The English common name is the label most people see first. Stray whitespace, species codes, all-capitals text, or a stray marker in that field show up directly in search results, lists, and exports.\n\n" +
                 "### Suggestion\n\n" +
-                "Trim the whitespace cases, which are unambiguous. The other kinds include false positives and stylistic choices, so review them case by case.",
+                "Trim the whitespace cases, which are unambiguous. For the Hawaiian names, the suggested form replaces a backtick that stands in for the ʻokina with the ʻokina character itself (U+02BB), so “Hawai`i `Elepaio” becomes “Hawaiʻi ʻElepaio”; a backtick used as a possessive apostrophe (“Law`s”) becomes a plain apostrophe instead. Missing kahakō (macron) vowels are not added automatically. The other kinds include false positives and stylistic choices, so review them case by case.",
             Columns = new List<AuditColumn> {
                 AuditColumns.ScientificName("Taxon"),
                 AuditColumns.CurrentValue("Common name (English)", AuditColumnType.Whitespace),
@@ -215,7 +217,7 @@ internal sealed class CommonNameIssuesProducer : IAuditReportProducer {
         }
     }
 
-    private static IReadOnlyList<CommonNameIssue> Classify(string name) {
+    internal static IReadOnlyList<CommonNameIssue> Classify(string name) {
         var issues = new List<CommonNameIssue>();
         var lower = name.ToLowerInvariant();
 
@@ -224,7 +226,11 @@ internal sealed class CommonNameIssuesProducer : IAuditReportProducer {
         if (TextIrregularities.HasUnusualCharacter(name)) issues.Add(CommonNameIssue.ControlCharacter);
         if (name.Contains('?')) issues.Add(CommonNameIssue.QuestionMark);
         if (IsAllCaps(name)) issues.Add(CommonNameIssue.AllCaps);
-        if (name.Contains('´') || name.Contains('`')) issues.Add(CommonNameIssue.AcuteApostrophe);
+        // A backtick before a vowel is the Hawaiian ʻokina (a glottal-stop consonant), e.g. "Hawai`i
+        // `Elepaio"; a backtick before "s" or other consonants is a possessive apostrophe ("Law`s").
+        // The ʻokina is never followed by an s in Hawaiian, so the next letter cleanly separates them.
+        if (HasOkinaBacktick(name)) issues.Add(CommonNameIssue.HawaiianOkina);
+        if (name.Contains('´') || HasApostropheBacktick(name)) issues.Add(CommonNameIssue.AcuteApostrophe);
         if (CommaInParens.IsMatch(name)) issues.Add(CommonNameIssue.CommaInParentheses);
         if (name.Contains('&')) issues.Add(CommonNameIssue.Ampersand);
         if (name.Contains('/')) issues.Add(CommonNameIssue.Slash);
@@ -264,14 +270,59 @@ internal sealed class CommonNameIssuesProducer : IAuditReportProducer {
         return PluralEndings.Contains(last);
     }
 
-    private static string? CleanedSuggestion(string name, IReadOnlyList<CommonNameIssue> issues) {
-        var s = name.Replace('´', '\'').Replace('`', '\'');
+    private const string Vowels = "aeiouAEIOU";
+    private static bool IsVowel(char c) => Vowels.IndexOf(c) >= 0;
+
+    // A backtick immediately before a vowel: the Hawaiian ʻokina written as ASCII (e.g. "Ko`olau").
+    private static bool HasOkinaBacktick(string name) {
+        for (var i = 0; i < name.Length - 1; i++) {
+            if (name[i] == '`' && IsVowel(name[i + 1])) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // A backtick that is not an ʻokina (not before a vowel): a possessive apostrophe, e.g. "Law`s".
+    private static bool HasApostropheBacktick(string name) {
+        for (var i = 0; i < name.Length; i++) {
+            if (name[i] == '`' && (i + 1 >= name.Length || !IsVowel(name[i + 1]))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    internal static string? CleanedSuggestion(string name, IReadOnlyList<CommonNameIssue> issues) {
+        var s = NormalizeApostrophes(name);
         s = StripControl(s);
         s = CollapseWhitespace(s);
         if (issues.Contains(CommonNameIssue.AllCaps)) {
             s = TitleCase(s);
         }
         return s.Length == 0 || string.Equals(s, name, StringComparison.Ordinal) ? null : s;
+    }
+
+    // Backticks/acute accents standing in for apostrophes or for the Hawaiian ʻokina are normalised
+    // per position: a backtick before a vowel becomes the ʻokina (U+02BB), every other backtick and
+    // every acute accent becomes a straight apostrophe. So "Hawai`i `Elepaio" → "Hawaiʻi ʻElepaio",
+    // while "Law`s" → "Law's" and "Castelnau´s" → "Castelnau's".
+    private static string NormalizeApostrophes(string name) {
+        if (!name.Contains('`') && !name.Contains('´')) {
+            return name;
+        }
+        var sb = new StringBuilder(name.Length);
+        for (var i = 0; i < name.Length; i++) {
+            var c = name[i];
+            if (c == '`') {
+                sb.Append(i + 1 < name.Length && IsVowel(name[i + 1]) ? 'ʻ' : '\'');
+            } else if (c == '´') {
+                sb.Append('\'');
+            } else {
+                sb.Append(c);
+            }
+        }
+        return sb.ToString();
     }
 
     private static string StripControl(string s) {
@@ -335,6 +386,7 @@ internal sealed class CommonNameIssuesProducer : IAuditReportProducer {
         CommonNameIssue.QuestionMark => "question mark or replacement character",
         CommonNameIssue.AllCaps => "all capitals",
         CommonNameIssue.AcuteApostrophe => "acute accent or backtick for an apostrophe",
+        CommonNameIssue.HawaiianOkina => "backtick for the Hawaiian ʻokina",
         CommonNameIssue.CommaInParentheses => "comma inside parentheses",
         CommonNameIssue.Ampersand => "ampersand",
         CommonNameIssue.Slash => "slash separating alternatives",

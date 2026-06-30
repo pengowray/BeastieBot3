@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using System.Net;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -54,31 +55,45 @@ internal static class IucnHtmlUtilities {
         ['i'] = 'ⁱ'
     };
 
-    // Inline elements that carry no text on their own. Two forms of these are redundant markup that
-    // can be dropped without changing the rendered text: an instance wrapping only whitespace, and a
-    // run of identical instances nested or repeated back-to-back. The rich-text editor that produced
-    // these narratives emits both — long runs of empty <span>s and deep stacks of identical <span>s.
+    // Inline elements that carry no text on their own. Several forms of these are redundant markup
+    // that can be dropped without changing the rendered text: an instance wrapping only whitespace, a
+    // run of identical instances nested inside one another, and a <span> that carries no styling at
+    // all (bare, or only editor-noise attributes like tabindex/lang). The rich-text editor that
+    // produced these narratives emits all of them — long runs of empty <span>s, deep stacks of
+    // identical <span>s, and thousands of `<span tabindex="0" lang="en">` wrappers around every word.
     private const string InlineTagNames = "span|b|i|em|strong|u|s|strike|font|sub|sup|small|big|mark|a|label|abbr|acronym|cite|q|tt|ins|del|var|kbd|samp|o:p";
+    private static readonly HashSet<string> InlineTagSet = new(
+        InlineTagNames.Split('|'), StringComparer.OrdinalIgnoreCase);
     private static readonly Regex EmptyInlineTagRegex = new(
         "<(" + InlineTagNames + ")\\b" + AttributeFragment + ">((?:\\s|&nbsp;|&#160;|&#xA0;|\\u00A0|\\u200B|\\u200C|\\uFEFF)*)</\\1>",
         RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Singleline);
-    // A run of byte-identical adjacent opening inline tags (and likewise closing tags) collapses to a
-    // single tag: the duplicates only deepen the nesting, they add no text and no distinct styling.
-    private static readonly Regex DuplicateOpenTagRegex = new(
-        "(<(?:" + InlineTagNames + ")\\b" + AttributeFragment + ">)\\1+",
+    // A single tag, split into close-marker, name, attributes and self-closing marker, used to walk
+    // the markup and unwrap redundant inline nesting with a stack (regex alone cannot pair tags).
+    private static readonly Regex TagRegex = new(
+        "<(?<close>/?)(?<name>" + TagNamePattern + ")(?<attrs>" + AttributeFragment + ")>",
         RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Singleline);
-    private static readonly Regex DuplicateCloseTagRegex = new(
-        "(</(?:" + InlineTagNames + ")>)\\1+",
-        RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+    private static readonly Regex AttrNameRegex = new(
+        "(?<name>[A-Za-z_:][-\\w:.]*)\\s*(?:=\\s*(?:\"[^\"]*\"|'[^']*'|[^\\s\"'>]*))?",
+        RegexOptions.Compiled | RegexOptions.CultureInvariant);
+    private static readonly Regex AnyWhitespaceRegex = new("\\s+", RegexOptions.Compiled);
     private static readonly Regex MultipleSpacesRegex = new("[ \\t]{2,}", RegexOptions.Compiled);
     private static readonly Regex BlankLineRunRegex = new("(?:\\n[ \\t]*){3,}", RegexOptions.Compiled);
 
-    // Produces a suggested tidy of a narrative HTML field by removing redundant empty inline markup
-    // and collapsing runs of identical adjacent inline tags (the nested empty/duplicate <span> stacks
-    // that swamp some fields), then tidying the whitespace left behind. Structural tags (<p>, <br>,
-    // <li>, …) are left intact, and the removed markup carries no text, so the readable content is
-    // unchanged. It is still a best-effort suggestion: callers should verify the extracted text still
-    // matches and note that identical rendering has not been double-checked.
+    // <span> attributes that carry no rendered styling, so a span whose attributes are only these
+    // (or none at all) can be unwrapped entirely. tabindex/lang/dir are accessibility/locale hints
+    // the editor sprays onto every wrapper; dropping them leaves the readable text untouched.
+    private static readonly HashSet<string> ValuelessSpanAttributes = new(StringComparer.OrdinalIgnoreCase) {
+        "tabindex", "lang", "dir", "xml:lang", "role",
+    };
+
+    // Produces a suggested tidy of a narrative HTML field by removing redundant inline markup, then
+    // tidying the whitespace left behind. Three kinds of redundancy are removed, none of which change
+    // the rendered text: empty inline tags; inline tags nested inside an identical one (same name and
+    // attributes, so the inner adds nothing); and <span>s that carry no styling at all (bare, or only
+    // editor-noise attributes such as tabindex/lang). Stray zero-width and soft-hyphen characters are
+    // deleted as well, so the suggestion does not leave invisible artefacts behind. Structural tags
+    // (<p>, <br>, <li>, …) are left intact. It is still a best-effort suggestion: callers should
+    // verify the extracted text still matches and note that identical rendering has not been checked.
     public static string? CleanRedundantMarkup(string? html) {
         if (string.IsNullOrEmpty(html)) {
             return html;
@@ -86,24 +101,128 @@ internal static class IucnHtmlUtilities {
 
         var working = NormalizeLineEndings(html);
         working = CommentRegex.Replace(working, string.Empty);
+        working = RemoveInvisibleCharacters(working);
 
-        // Each collapse can expose a newly-redundant tag (an emptied parent, or opens/closes that
-        // become adjacent once an inner layer is gone), so repeat until stable, bounded for safety.
-        // An empty tag that wrapped whitespace is replaced with a single space, not nothing, so it
-        // cannot silently fuse the words on either side.
-        for (var pass = 0; pass < 200; pass++) {
-            var next = EmptyInlineTagRegex.Replace(working, m => m.Groups[2].Value.Length == 0 ? string.Empty : " ");
-            next = DuplicateOpenTagRegex.Replace(next, "$1");
-            next = DuplicateCloseTagRegex.Replace(next, "$1");
-            if (string.Equals(next, working, StringComparison.Ordinal)) {
-                break;
-            }
-            working = next;
-        }
+        // Empty-tag removal can expose a newly-empty parent (an emptied wrapper), so repeat until
+        // stable, bounded for safety. An empty tag that wrapped whitespace is replaced with a single
+        // space, not nothing, so it cannot silently fuse the words on either side.
+        working = RemoveEmptyInlineTags(working);
+
+        // One stack walk unwraps redundant nesting at any depth: a duplicate-of-ancestor inline tag
+        // and a styling-free <span> are dropped together with their matching close tag.
+        working = UnwrapRedundantInlineTags(working);
+
+        // The unwrap can leave a kept wrapper around nothing; sweep empties once more.
+        working = RemoveEmptyInlineTags(working);
 
         working = MultipleSpacesRegex.Replace(working, " ");
         working = BlankLineRunRegex.Replace(working, "\n\n");
         return working.Trim();
+    }
+
+    private static string RemoveEmptyInlineTags(string html) {
+        // An empty tag is replaced by its own inner whitespace (group 2) rather than a generic space:
+        // that still keeps any words on either side apart, but preserves the exact character — a
+        // non-breaking or narrow space stays itself instead of silently becoming an ASCII space.
+        for (var pass = 0; pass < 200; pass++) {
+            var next = EmptyInlineTagRegex.Replace(html, m => m.Groups[2].Value);
+            if (string.Equals(next, html, StringComparison.Ordinal)) {
+                break;
+            }
+            html = next;
+        }
+        return html;
+    }
+
+    // Walks the markup keeping a stack of open inline tags. An inline open tag is dropped when an
+    // identical one (same name and attributes) is already open above it, or when it is a styling-free
+    // <span>; in either case its matching close tag is dropped too. Everything else — text, structural
+    // tags, and inline tags that do carry styling — is passed through unchanged, so only tags that add
+    // no rendered effect are removed. Malformed input (more opens than closes) is mirrored, not
+    // "repaired": a kept tag whose close never arrives simply stays open, as it did in the source.
+    private static string UnwrapRedundantInlineTags(string html) {
+        var sb = new StringBuilder(html.Length);
+        var stack = new List<(string Name, string Key, bool Dropped)>();
+        var pos = 0;
+
+        foreach (Match m in TagRegex.Matches(html)) {
+            if (m.Index > pos) {
+                sb.Append(html, pos, m.Index - pos);
+            }
+            pos = m.Index + m.Length;
+
+            var name = m.Groups["name"].Value;
+            var raw = m.Value;
+            var isClose = m.Groups["close"].Value.Length > 0;
+            var isSelfClose = raw.EndsWith("/>", StringComparison.Ordinal);
+
+            if (!InlineTagSet.Contains(name) || isSelfClose) {
+                // Structural/unknown tags and inline self-closing tags are not tracked; pass through.
+                sb.Append(raw);
+                continue;
+            }
+
+            if (!isClose) {
+                var key = NormalizeTagKey(name, m.Groups["attrs"].Value);
+                var drop = IsValuelessSpan(name, m.Groups["attrs"].Value);
+                if (!drop) {
+                    foreach (var fr in stack) {
+                        if (string.Equals(fr.Key, key, StringComparison.Ordinal)) { drop = true; break; }
+                    }
+                }
+                stack.Add((name.ToLowerInvariant(), key, drop));
+                if (!drop) {
+                    sb.Append(raw);
+                }
+                continue;
+            }
+
+            // Close tag: pop down to the nearest open of the same name. Any inner tags left unclosed
+            // are discarded from tracking; their kept opens stay in the output (mirroring the source).
+            var idx = -1;
+            for (var k = stack.Count - 1; k >= 0; k--) {
+                if (string.Equals(stack[k].Name, name, StringComparison.OrdinalIgnoreCase)) { idx = k; break; }
+            }
+            if (idx < 0) {
+                sb.Append(raw); // stray close with no matching open: keep as-is
+                continue;
+            }
+            var dropped = stack[idx].Dropped;
+            stack.RemoveRange(idx, stack.Count - idx);
+            if (!dropped) {
+                sb.Append(raw);
+            }
+        }
+
+        if (pos < html.Length) {
+            sb.Append(html, pos, html.Length - pos);
+        }
+        return sb.ToString();
+    }
+
+    // A stable identity for an inline tag: lowercased name plus its attributes with runs of
+    // whitespace collapsed, so cosmetic spacing differences do not defeat the duplicate-nesting check.
+    private static string NormalizeTagKey(string name, string attributes) =>
+        name.ToLowerInvariant() + "|" + AnyWhitespaceRegex.Replace(attributes.Trim(), " ");
+
+    // True for a <span> that applies no styling: no attributes at all, or only attributes that have
+    // no rendered effect (tabindex/lang/dir/role). Other inline tags (b, i, a, …) are never valueless.
+    private static bool IsValuelessSpan(string name, string attributes) {
+        if (!name.Equals("span", StringComparison.OrdinalIgnoreCase)) {
+            return false;
+        }
+        var trimmed = attributes.Trim();
+        if (trimmed.Length == 0) {
+            return true;
+        }
+        var any = false;
+        foreach (Match a in AttrNameRegex.Matches(trimmed)) {
+            any = true;
+            if (!ValuelessSpanAttributes.Contains(a.Groups["name"].Value)) {
+                return false;
+            }
+        }
+        return any;
     }
 
     public static string? ConvertHtmlToPlainTextNeater(string? html) => ConvertHtmlToPlain(html, PlainTextFlavor.Friendly);
