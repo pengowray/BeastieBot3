@@ -99,6 +99,11 @@ table.audit-table.sortable thead th[aria-sort="ascending"]::after { content: " â
 table.audit-table.sortable thead th[aria-sort="descending"]::after { content: " â–¼"; font-size: 0.7em; }
 table.audit-table td.num, table.audit-table th.num { text-align: right; font-variant-numeric: tabular-nums; white-space: nowrap; }
 table.audit-table tbody tr:hover { background: var(--accent-soft); }
+/* Large full lists: let the browser skip layout and paint for off-screen rows so big sortable
+   tables stay responsive (a full list can run to many thousands of rows). Scoped to the sortable
+   full-list tables; the short preview tables are left alone. contain-intrinsic-size supplies an
+   approximate row height so the scrollbar and page length stay sensible before a row is rendered. */
+table.audit-table.sortable tbody tr { content-visibility: auto; contain-intrinsic-size: auto 40px; }
 /* Narrative cells stay on one line (ellipsis + full text on hover) so a long detail never
    stretches its row and leaves giant gaps beside the short rows around it. */
 table.audit-table td.longtext { max-width: 620px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }

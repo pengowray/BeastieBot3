@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Text;
 using System.Threading;
 using BeastieBot3.Audit;
 using BeastieBot3.Audit.Model;
@@ -73,8 +74,10 @@ internal sealed class ColCrosscheckEngine {
                 var detail = near.Diff.IsFormattingEquivalent
                     ? $"No exact Catalogue of Life match. CoL has '{colName}', which {near.Diff.Description}; likely the same name."
                     : $"No exact Catalogue of Life match. Closest CoL name is '{colName}' ({near.Diff.Description}); may be a spelling variant or a different taxon.";
-                data.CloseMatch.Add(SpeciesFinding(ColCrosscheckProducer.CloseMatchId, row, rank, isFull, name,
-                    "close-col-match", "scientificName", name, colName, near.Best.Id, severity, detail));
+                var closeFinding = SpeciesFinding(ColCrosscheckProducer.CloseMatchId, row, rank, isFull, name,
+                    "close-col-match", "scientificName", name, colName, near.Best.Id, severity, detail);
+                SetExtra(closeFinding, "colYear", ColYear(near.Best));
+                data.CloseMatch.Add(closeFinding);
             }
             return;
         }
@@ -93,6 +96,7 @@ internal sealed class ColCrosscheckEngine {
             var finding = SpeciesFinding(ColCrosscheckProducer.SynonymId, row, rank, isFull, name,
                 "synonym-in-col", "scientificName", name, acceptedName, linkId, severity, detail);
             SetExtra(finding, "colAuthority", AuditMapping.Decode(accepted?.Authorship));
+            SetExtra(finding, "colYear", ColYear(accepted));
             SetExtra(finding, "iucnSynonym", IucnSynonymLabel(match));
             data.Synonym.Add(finding);
             return;
@@ -110,17 +114,20 @@ internal sealed class ColCrosscheckEngine {
         var iucnAuthority = AuditMapping.Decode(GetIucnAuthority(row));
         var colAuthority = AuditMapping.Decode(primary.Authorship);
         if (!string.IsNullOrWhiteSpace(iucnAuthority) && !string.IsNullOrWhiteSpace(colAuthority)) {
-            // Author citations are compared with spacing removed, so "A.J. Wagner" and
-            // "A. J. Wagner" are treated as equal (spacing is covered elsewhere); what remains is a
-            // genuine typo, an encoding difference, or a year difference.
-            var compareIucn = StripSpaces(AuthorityNormalizer.Normalize(iucnAuthority));
-            var compareCol = StripSpaces(AuthorityNormalizer.Normalize(colAuthority));
-            if (!string.Equals(compareIucn, compareCol, StringComparison.OrdinalIgnoreCase)) {
-                var diff = ScientificNameDifference.Classify(compareIucn, compareCol);
+            // Compare only the author-name letters: strip commas, brackets, digits (years), and
+            // spacing. A difference that is purely one of those is dropped, so what remains is a real
+            // difference in the author name itself (a spelling, diacritic, or encoding slip).
+            var iucnLetters = AuthorLetters(iucnAuthority);
+            var colLetters = AuthorLetters(colAuthority);
+            if (iucnLetters.Length > 0 && colLetters.Length > 0 &&
+                !string.Equals(iucnLetters, colLetters, StringComparison.OrdinalIgnoreCase)) {
+                var diff = ScientificNameDifference.Classify(iucnLetters, colLetters);
                 if (ColDifference.Classify(diff) == ColDifference.Bucket.Typo) {
-                    data.Authority.Add(SpeciesFinding(ColCrosscheckProducer.AuthorityId, row, rank, isFull, name,
+                    var authFinding = SpeciesFinding(ColCrosscheckProducer.AuthorityId, row, rank, isFull, name,
                         "authority-difference", "authority", iucnAuthority, colAuthority, primary.Id, 1,
-                        $"Naming authority differs and {diff.Description}: IUCN '{iucnAuthority}' versus CoL '{colAuthority}'."));
+                        $"Naming authority differs in the author name ({diff.Description}): IUCN '{iucnAuthority}' versus CoL '{colAuthority}'.");
+                    SetExtra(authFinding, "colYear", ColYear(primary));
+                    data.Authority.Add(authFinding);
                 }
             }
         }
@@ -190,6 +197,7 @@ internal sealed class ColCrosscheckEngine {
         var finding = HigherFinding(ColCrosscheckProducer.SynonymHigherId, taxon,
             "synonym-in-col", "scientificName", taxon.Name, targetName, linkId, detail);
         SetExtra(finding, "colAuthority", AuditMapping.Decode(acceptedTarget?.Authorship));
+        SetExtra(finding, "colYear", ColYear(acceptedTarget));
         data.SynonymHigher.Add(finding);
     }
 
@@ -358,6 +366,7 @@ internal sealed class ColCrosscheckEngine {
             Species = row.SpeciesName,
             StatusCode = AuditMapping.CodeFromCategory(row.RedlistCategory),
             StatusCategory = row.RedlistCategory,
+            YearPublished = row.YearPublished,
             DataSource = "iucn-csv+col",
             Field = field,
             CurrentValue = current,
@@ -439,8 +448,42 @@ internal sealed class ColCrosscheckEngine {
         return trimmed.Length == 0 ? trimmed : char.ToUpperInvariant(trimmed[0]) + trimmed[1..].ToLowerInvariant();
     }
 
-    private static string StripSpaces(string value) =>
-        new(value.Where(c => !char.IsWhiteSpace(c)).ToArray());
+    // The author-name letters of an authority string: everything except commas, brackets, digits
+    // (years), and whitespace. Two authorities with the same letters differ only in punctuation or
+    // year, which the "minor authority differences" report deliberately ignores.
+    private static string AuthorLetters(string value) {
+        var sb = new StringBuilder(value.Length);
+        foreach (var ch in value) {
+            if (char.IsWhiteSpace(ch) || char.IsDigit(ch) || ch is ',' or '(' or ')' or '[' or ']') {
+                continue;
+            }
+            sb.Append(ch);
+        }
+        return sb.ToString();
+    }
+
+    // The year to show for a CoL name: its recorded name-published year when present, otherwise the
+    // year embedded in the authorship string (author citations usually carry it).
+    private static string? ColYear(ColTaxonRecord? record) {
+        if (record is null) {
+            return null;
+        }
+        if (!string.IsNullOrWhiteSpace(record.NamePublishedInYear)) {
+            return record.NamePublishedInYear!.Trim();
+        }
+        return ExtractYear(record.Authorship);
+    }
+
+    private static string? ExtractYear(string? text) {
+        if (string.IsNullOrWhiteSpace(text)) {
+            return null;
+        }
+        var match = YearPattern.Match(text);
+        return match.Success ? match.Value : null;
+    }
+
+    private static readonly System.Text.RegularExpressions.Regex YearPattern =
+        new(@"1[5-9]\d\d|20\d\d", System.Text.RegularExpressions.RegexOptions.Compiled);
 
     private static void SetExtra(AuditFinding finding, string key, string? value) {
         if (!string.IsNullOrWhiteSpace(value)) {

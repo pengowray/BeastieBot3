@@ -49,6 +49,8 @@ public class ColCrosscheckTests {
         var syn = Assert.Single(data.Synonym, f => f.ScientificName == "Felis leo");
         Assert.Equal("Panthera leo", syn.SuggestedValue);
         Assert.Equal("(Linnaeus, 1758)", syn.Get("colAuthority")); // CoL accepted name's authority + year
+        Assert.Equal("1998", syn.YearPublished);                   // IUCN assessment year
+        Assert.Equal("1758", syn.Get("colYear"));                  // CoL year, from the accepted name's authority
         Assert.Equal("of same taxon", syn.Get("iucnSynonym"));     // reversed-direction disagreement
 
         // Higher-rank synonym: a genus CoL records only as a synonym, with the accepted spelling and its authority.
@@ -76,9 +78,12 @@ public class ColCrosscheckTests {
         Assert.Equal("order", reorg.Field);
         Assert.Equal("Omega", reorg.SuggestedValue);
 
-        // Authority difference that looks like an encoding slip; the exact-match control is silent.
-        Assert.Contains(data.Authority, f => f.ScientificName == "Panthera onca");
+        // Author-name difference (diacritic) is kept, with the CoL year; the exact-match control is
+        // silent, and an authority differing only by the year is dropped.
+        var authOnca = Assert.Single(data.Authority, f => f.ScientificName == "Panthera onca");
+        Assert.Equal("1776", authOnca.Get("colYear"));
         Assert.DoesNotContain(data.Authority, f => f.ScientificName == "Panthera leo");
+        Assert.DoesNotContain(data.Authority, f => f.ScientificName == "Yearus changeus");
         Assert.DoesNotContain(data.Synonym, f => f.ScientificName == "Panthera leo");
 
         // Class-rank placement surfaces: the same-phylum gate steps up to kingdom for class rank,
@@ -100,7 +105,7 @@ public class ColCrosscheckTests {
     private static IReadOnlyList<IucnTaxonomyRow> IucnRows() => new[] {
         Row(1, 101, "Panthera leo", "ANIMALIA", "CHORDATA", "MAMMALIA", "CARNIVORA", "FELIDAE", "Panthera", "leo", "(Linnaeus, 1758)"),
         Row(2, 102, "Panthera onca", "ANIMALIA", "CHORDATA", "MAMMALIA", "CARNIVORA", "FELIDAE", "Panthera", "onca", "Müller, 1776"),
-        Row(3, 103, "Felis leo", "ANIMALIA", "CHORDATA", "MAMMALIA", "CARNIVORA", "FELIDAE", "Felis", "leo"),
+        Row(3, 103, "Felis leo", "ANIMALIA", "CHORDATA", "MAMMALIA", "CARNIVORA", "FELIDAE", "Felis", "leo", yearPublished: "1998"),
         Row(4, 104, "Zzzus nonexistus", "ANIMALIA", "ARTHROPODA", "INSECTA", "DIPTERA", "ZZZIDAE", "Zzzus", "nonexistus"),
         Row(5, 105, "Panthera leoo", "ANIMALIA", "CHORDATA", "MAMMALIA", "CARNIVORA", "FELIDAE", "Panthera", "leoo"),
         Row(6, 106, "Muricidus testus", "ANIMALIA", "MOLLUSCA", "GASTROPODA", "NEOGASTROPODAA", "MURICIDAE", "Muricidus", "testus"),
@@ -112,12 +117,15 @@ public class ColCrosscheckTests {
         Row(10, 110, "Testagenus testsp", "KDOM", "BETA", "TESTACLASS", "TESTAORD", "TESTAFAM", "Testagenus", "testsp"),
         // A name CoL records only as "misapplied", with an authority that would otherwise look like a typo.
         Row(11, 111, "Misapplia namus", "ANIMALIA", "CHORDATA", "MAMMALIA", "CARNIVORA", "FELIDAE", "Misapplia", "namus", "Foo, 1901"),
+        // Exact match whose authority differs only by the year -> dropped from the authority report.
+        Row(12, 112, "Yearus changeus", "ANIMALIA", "ARTHROPODA", "INSECTA", "COLEOPTERA", "YEARIDAE", "Yearus", "changeus", "(Smith, 1900)"),
     };
 
     private static IucnTaxonomyRow Row(long assessmentId, long taxonId, string name, string kingdom, string phylum,
-        string klass, string order, string family, string genus, string species, string? authority = null) =>
+        string klass, string order, string family, string genus, string species, string? authority = null,
+        string? yearPublished = null) =>
         new(assessmentId, taxonId, name, name, kingdom, phylum, klass, order, family, genus, species,
-            null, null, null, authority, null, "Least Concern");
+            null, null, null, authority, null, "Least Concern", yearPublished);
 
     private static SqliteConnection BuildCol() {
         // Pooling off so each test gets a private in-memory database (a pooled :memory: connection
@@ -172,6 +180,11 @@ public class ColCrosscheckTests {
         // A name CoL keeps only as a misapplied usage (neither accepted nor synonym).
         AddCol(conn, "MISAPP", "species", "misapplied", "Misapplia namus", authorship: "Foo, 1900", parentId: "P_LEO",
             genericName: "Misapplia", specificEpithet: "namus");
+
+        // Exact match whose authority differs only by the year -> dropped from the authority report.
+        AddCol(conn, "YEARUS", "species", "accepted", "Yearus changeus", authorship: "(Smith, 1902)",
+            kingdom: "Animalia", phylum: "Arthropoda", klass: "Insecta", order: "Coleoptera",
+            genericName: "Yearus", specificEpithet: "changeus");
 
         return conn;
     }

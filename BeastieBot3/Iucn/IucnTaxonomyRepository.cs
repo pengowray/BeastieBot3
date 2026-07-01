@@ -45,7 +45,8 @@ internal sealed class IucnTaxonomyRepository {
     v.infraName,
     v.subpopulationName,
     v.authority,
-    v.infraAuthority
+    v.infraAuthority,
+    v.yearPublished
 FROM view_assessments_html_taxonomy_html v
 ORDER BY v.assessmentId";
 
@@ -79,7 +80,8 @@ ORDER BY v.assessmentId";
                 GetNullableString(reader, ordinals.SubpopulationName),
                 GetNullableString(reader, ordinals.Authority),
                 GetNullableString(reader, ordinals.InfraAuthority),
-                GetNullableString(reader, ordinals.RedlistCategory)
+                GetNullableString(reader, ordinals.RedlistCategory),
+                GetNullableString(reader, ordinals.YearPublished)
             );
         }
     }
@@ -106,7 +108,8 @@ ORDER BY v.assessmentId";
     v.infraName,
     v.subpopulationName,
     v.authority,
-    v.infraAuthority
+    v.infraAuthority,
+    v.yearPublished
 FROM view_assessments_html_taxonomy_html v
 WHERE v.taxonId = @id
 LIMIT 1";
@@ -139,7 +142,8 @@ LIMIT 1";
             GetNullableString(reader, ordinals.SubpopulationName),
             GetNullableString(reader, ordinals.Authority),
             GetNullableString(reader, ordinals.InfraAuthority),
-            GetNullableString(reader, ordinals.RedlistCategory));
+            GetNullableString(reader, ordinals.RedlistCategory),
+            GetNullableString(reader, ordinals.YearPublished));
     }
 
     private static string? GetNullableString(SqliteDataReader reader, int? ordinal) {
@@ -169,6 +173,7 @@ LIMIT 1";
             SubpopulationName = reader.GetOrdinal("subpopulationName");
             Authority = reader.GetOrdinal("authority");
             InfraAuthority = reader.GetOrdinal("infraAuthority");
+            YearPublished = GetOptionalOrdinal(reader, "yearPublished");
         }
 
         public int AssessmentId { get; }
@@ -188,6 +193,7 @@ LIMIT 1";
         public int SubpopulationName { get; }
         public int Authority { get; }
         public int InfraAuthority { get; }
+        public int? YearPublished { get; }
     }
 
     private static int? GetOptionalOrdinal(SqliteDataReader reader, string columnName) {
@@ -218,5 +224,7 @@ internal sealed record IucnTaxonomyRow(
     string? InfraAuthority,
     // Full IUCN category text from the view ("Extinct", "Vulnerable", ...). Optional:
     // construction sites that map from list-body records (which don't carry it) omit it.
-    string? RedlistCategory = null
+    string? RedlistCategory = null,
+    // Year the assessment was published (view column yearPublished). Optional for the same reason.
+    string? YearPublished = null
 );

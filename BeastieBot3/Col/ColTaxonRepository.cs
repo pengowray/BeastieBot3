@@ -220,7 +220,8 @@ internal sealed class ColTaxonRepository {
                 ReadString(reader, ordinals.Genus),
                 ReadString(reader, ordinals.Subgenus),
                 ReadString(reader, ordinals.SpecificEpithet),
-                ReadString(reader, ordinals.InfraspecificEpithet)
+                ReadString(reader, ordinals.InfraspecificEpithet),
+                ReadString(reader, ordinals.NamePublishedInYear)
             );
 
             results.Add(record);
@@ -327,6 +328,7 @@ internal sealed class ColTaxonRepository {
     columns.Add(MapColumn("subgenus", "subgenus", "infragenericEpithet"));
     columns.Add(MapColumn("specificEpithet", "specificEpithet", "species"));
     columns.Add(MapColumn("infraspecificEpithet", "infraspecificEpithet", "infraspecies"));
+    columns.Add(MapColumn("namePublishedInYear", "namePublishedInYear"));
 
         return "SELECT\n  " + string.Join(",\n  ", columns);
     }
@@ -375,6 +377,7 @@ internal sealed class ColTaxonRepository {
             Subgenus = TryGetOrdinal(reader, "subgenus");
             SpecificEpithet = TryGetOrdinal(reader, "specificEpithet");
             InfraspecificEpithet = TryGetOrdinal(reader, "infraspecificEpithet");
+            NamePublishedInYear = TryGetOrdinal(reader, "namePublishedInYear");
         }
 
         public int Id { get; }
@@ -401,6 +404,7 @@ internal sealed class ColTaxonRepository {
         public int? Subgenus { get; }
         public int? SpecificEpithet { get; }
         public int? InfraspecificEpithet { get; }
+        public int? NamePublishedInYear { get; }
 
         private static int? TryGetOrdinal(SqliteDataReader reader, string column) {
             try {
@@ -436,5 +440,6 @@ internal sealed record ColTaxonRecord(
     string? Genus,
     string? Subgenus,
     string? SpecificEpithet,
-    string? InfraspecificEpithet
+    string? InfraspecificEpithet,
+    string? NamePublishedInYear
 );

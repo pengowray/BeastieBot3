@@ -86,7 +86,7 @@ internal sealed class ColCrosscheckProducer : IAuditReportSetProducer {
             "A name absent from the Catalogue of Life cannot be cross-referenced there. This may point to a very recent name, a name from a source CoL does not yet cover, or a spelling that has drifted far from the CoL form.\n\n" +
             "### Suggestion\n\n" +
             "Use this as a list to spot-check against current literature. Many entries are expected to be legitimately newer than the Catalogue of Life snapshot.",
-        Columns = SpeciesColumns(includeColName: false, colNameHeader: null, includeAuthority: false),
+        Columns = NotFoundColumns(),
         Findings = OrderSpecies(findings),
         HeadlineCount = findings.Count,
         SummaryTables = new[] { ByClassSummary("By class", findings, assessed) },
@@ -105,7 +105,7 @@ internal sealed class ColCrosscheckProducer : IAuditReportSetProducer {
             "When the two catalogues spell a name slightly differently, an exact join between them fails even though the same taxon is almost certainly meant.\n\n" +
             "### Suggestion\n\n" +
             "Check each pair. Where it is the same name spelled differently, aligning the spelling lets the two catalogues match.",
-        Columns = SpeciesColumns(includeColName: true, colNameHeader: "Closest CoL name", includeAuthority: false),
+        Columns = CloseMatchColumns(),
         Findings = OrderSpecies(findings),
         HeadlineCount = findings.Count,
         SummaryTables = new[] { ByClassSummary("By class", findings, assessed) },
@@ -133,17 +133,17 @@ internal sealed class ColCrosscheckProducer : IAuditReportSetProducer {
 
     private static AuditReport Authority(string source, int assessed, List<AuditFinding> findings) => new() {
         Id = AuthorityId,
-        Title = "Naming authority differences that look like typos",
+        Title = "Minor naming authority differences",
         Tier = AuditReportTier.IucnCore,
         Breakage = BreakageClass.Advisory,
         DataSourceLabel = source,
         Summary =
-            "Each row is an IUCN name that matches the Catalogue of Life exactly but whose naming authority differs in a way that looks like a typo or an encoding difference (a diacritic, a Unicode-encoding difference, punctuation, or a short spelling difference). Authorities that differ only in spacing are left out, as are genuinely different authorities.\n\n" +
+            "Each row is an IUCN name that matches the Catalogue of Life exactly but whose naming authority differs in the author name itself (a diacritic, a Unicode-encoding difference, or a short spelling difference). Differences that are only in spacing, punctuation (commas or brackets), or the year are left out, as are genuinely different authorities.\n\n" +
             "### Why it matters\n\n" +
-            "When the same name carries slightly different authority strings, an author-aware comparison between the catalogues fails, and the difference is usually a small data slip.\n\n" +
+            "When the same name carries a slightly different author name, an author-aware comparison between the catalogues fails, and the difference is usually a small data slip.\n\n" +
             "### Suggestion\n\n" +
             "Check each authority pair against the original publication and align the spelling or encoding.",
-        Columns = SpeciesColumns(includeColName: false, colNameHeader: null, includeAuthority: true),
+        Columns = AuthorityColumns(),
         Findings = OrderSpecies(findings),
         HeadlineCount = findings.Count,
         SummaryTables = new[] { ByClassSummary("By class", findings, assessed) },
@@ -164,7 +164,7 @@ internal sealed class ColCrosscheckProducer : IAuditReportSetProducer {
             "A genus or family name that CoL treats entirely as a synonym is often an older spelling or a superseded name, and it affects every assessed taxon placed under it.\n\n" +
             "### Suggestion\n\n" +
             "Check the accepted CoL name. Where it is a corrected spelling or an accepted replacement, updating the higher-rank name aligns the whole group.",
-        Columns = HigherColumns(includePlacement: false, includeColAuthority: true),
+        Columns = SynonymHigherColumns(),
         Findings = OrderHigher(findings),
         HeadlineCount = findings.Count,
         SummaryTables = new[] { ByRankSummary("By rank", findings) },
@@ -182,7 +182,7 @@ internal sealed class ColCrosscheckProducer : IAuditReportSetProducer {
             "A near-identical parent name usually means the same placement recorded two ways. Aligning the spelling makes the two classifications join cleanly.\n\n" +
             "### Suggestion\n\n" +
             "Confirm the intended spelling of the parent name in each row.",
-        Columns = HigherColumns(includePlacement: true),
+        Columns = PlacementColumns(),
         Findings = OrderHigher(findings),
         HeadlineCount = findings.Count,
         SummaryTables = new[] { ByRankSummary("By rank", findings) },
@@ -200,51 +200,32 @@ internal sealed class ColCrosscheckProducer : IAuditReportSetProducer {
             "A different parent placement reflects a different higher classification between the two catalogues. Neither is necessarily wrong, but anything grouped by higher rank will differ between them.\n\n" +
             "### Suggestion\n\n" +
             "Where the placement matters for grouping, note which classification each downstream use should follow.",
-        Columns = HigherColumns(includePlacement: true),
+        Columns = PlacementColumns(),
         Findings = OrderHigher(findings),
         HeadlineCount = findings.Count,
         SummaryTables = new[] { ByRankSummary("By rank", findings) },
     };
 
     // --- column sets ------------------------------------------------------------------------
+    //
+    // Column order across the species-level reports: the IUCN side first (name, rank, status, year),
+    // then the CoL side (matched value, authority/year, link, cross-checks), then taxonomy context
+    // and the detail. The higher-rank reports drop the per-assessment status/year.
 
-    private static IReadOnlyList<AuditColumn> SpeciesColumns(bool includeColName, string? colNameHeader, bool includeAuthority) {
-        var columns = new List<AuditColumn> {
-            AuditColumns.ScientificName("IUCN name"),
-            AuditColumns.Rank(),
-        };
-        if (includeAuthority) {
-            columns.Add(AuditColumns.CurrentValue("IUCN authority", AuditColumnType.Text));
-            columns.Add(AuditColumns.SuggestedValue("CoL authority", AuditColumnType.Text));
-        }
-        if (includeColName) {
-            columns.Add(AuditColumns.SuggestedValue(colNameHeader!, AuditColumnType.Text));
-        }
-        if (includeColName || includeAuthority) {
-            columns.Add(AuditColumns.ColLink());
-        }
-        columns.Add(AuditColumns.Status("IUCN status"));
-        columns.Add(AuditColumns.Class());
-        columns.Add(AuditColumns.Family());
-        columns.Add(AuditColumns.TaxonId("Taxon id"));
-        columns.Add(AuditColumns.RedlistLink());
-        columns.Add(AuditColumns.Detail());
-        return columns;
-    }
+    private static AuditColumn ColYearColumn() => AuditColumns.Custom("colYear", "CoL year", AuditColumnType.Number,
+        "Year of the Catalogue of Life name: its name-published year, or the year in its authority.");
 
-    // Columns for the species/subspecies synonym report: the CoL accepted name, its authority (with
-    // the year, showing when that name was established), the CoL link, and whether IUCN already
-    // records the CoL accepted name as a synonym.
-    private static IReadOnlyList<AuditColumn> SynonymColumns() => new List<AuditColumn> {
+    private static AuditColumn ColAuthorityColumn() => AuditColumns.Custom("colAuthority", "CoL authority", AuditColumnType.Text,
+        "Authorship (with year) of the Catalogue of Life accepted name, indicating when that name was established.");
+
+    private static IEnumerable<AuditColumn> IucnHead() => new[] {
         AuditColumns.ScientificName("IUCN name"),
         AuditColumns.Rank(),
-        AuditColumns.SuggestedValue("CoL accepted name", AuditColumnType.Text),
-        AuditColumns.Custom("colAuthority", "CoL authority", AuditColumnType.Text,
-            "Authorship (with year) of the Catalogue of Life accepted name, indicating when that name was established."),
-        AuditColumns.ColLink(),
-        AuditColumns.Custom("iucnSynonym", "CoL name in IUCN synonyms", AuditColumnType.Text,
-            "Whether IUCN already records the CoL accepted name as a synonym. \"of same taxon\" means the two catalogues disagree on which name is accepted. Blank when the IUCN API cache is unavailable."),
         AuditColumns.Status("IUCN status"),
+        AuditColumns.Year("IUCN year"),
+    };
+
+    private static IEnumerable<AuditColumn> SpeciesTail() => new[] {
         AuditColumns.Class(),
         AuditColumns.Family(),
         AuditColumns.TaxonId("Taxon id"),
@@ -252,30 +233,61 @@ internal sealed class ColCrosscheckProducer : IAuditReportSetProducer {
         AuditColumns.Detail(),
     };
 
-    private static IReadOnlyList<AuditColumn> HigherColumns(bool includePlacement, bool includeColAuthority = false) {
-        var columns = new List<AuditColumn> {
-            AuditColumns.ScientificName("IUCN name"),
-            AuditColumns.Rank(),
-        };
-        if (includePlacement) {
-            columns.Add(AuditColumns.Field("Rank compared"));
-            columns.Add(AuditColumns.CurrentValue("IUCN placement", AuditColumnType.Text));
-            columns.Add(AuditColumns.SuggestedValue("CoL placement", AuditColumnType.Text));
-        } else {
-            columns.Add(AuditColumns.SuggestedValue("CoL accepted name", AuditColumnType.Text));
-        }
-        if (includeColAuthority) {
-            columns.Add(AuditColumns.Custom("colAuthority", "CoL authority", AuditColumnType.Text,
-                "Authorship (with year) of the Catalogue of Life accepted name."));
-        }
-        columns.Add(AuditColumns.ColLink());
-        columns.Add(AuditColumns.Kingdom());
-        columns.Add(AuditColumns.Phylum());
-        columns.Add(AuditColumns.Custom("iucnSpecies", "IUCN taxa", AuditColumnType.Number,
-            "Number of assessed IUCN taxa placed under this name."));
-        columns.Add(AuditColumns.Detail());
-        return columns;
-    }
+    private static IReadOnlyList<AuditColumn> NotFoundColumns() =>
+        IucnHead().Concat(SpeciesTail()).ToList();
+
+    private static IReadOnlyList<AuditColumn> CloseMatchColumns() =>
+        IucnHead().Concat(new[] {
+            AuditColumns.SuggestedValue("Closest CoL name", AuditColumnType.Text),
+            ColYearColumn(),
+            AuditColumns.ColLink(),
+        }).Concat(SpeciesTail()).ToList();
+
+    // Synonym report: the CoL accepted name, its authority/year (when it was established), the link,
+    // and whether IUCN already records the CoL accepted name as a synonym.
+    private static IReadOnlyList<AuditColumn> SynonymColumns() =>
+        IucnHead().Concat(new[] {
+            AuditColumns.SuggestedValue("CoL accepted name", AuditColumnType.Text),
+            ColAuthorityColumn(),
+            ColYearColumn(),
+            AuditColumns.ColLink(),
+            AuditColumns.Custom("iucnSynonym", "CoL name in IUCN synonyms", AuditColumnType.Text,
+                "Whether IUCN already records the CoL accepted name as a synonym. \"of same taxon\" means the two catalogues disagree on which name is accepted. Blank when the IUCN API cache is unavailable."),
+        }).Concat(SpeciesTail()).ToList();
+
+    private static IReadOnlyList<AuditColumn> AuthorityColumns() =>
+        IucnHead().Concat(new[] {
+            AuditColumns.CurrentValue("IUCN authority", AuditColumnType.Text),
+            AuditColumns.SuggestedValue("CoL authority", AuditColumnType.Text),
+            ColYearColumn(),
+            AuditColumns.ColLink(),
+        }).Concat(SpeciesTail()).ToList();
+
+    private static IEnumerable<AuditColumn> HigherTail() => new[] {
+        AuditColumns.Kingdom(),
+        AuditColumns.Phylum(),
+        AuditColumns.Custom("iucnSpecies", "IUCN taxa", AuditColumnType.Number,
+            "Number of assessed IUCN taxa placed under this name."),
+        AuditColumns.Detail(),
+    };
+
+    private static IReadOnlyList<AuditColumn> SynonymHigherColumns() => new[] {
+        AuditColumns.ScientificName("IUCN name"),
+        AuditColumns.Rank(),
+        AuditColumns.SuggestedValue("CoL accepted name", AuditColumnType.Text),
+        ColAuthorityColumn(),
+        ColYearColumn(),
+        AuditColumns.ColLink(),
+    }.Concat(HigherTail()).ToList();
+
+    private static IReadOnlyList<AuditColumn> PlacementColumns() => new[] {
+        AuditColumns.ScientificName("IUCN name"),
+        AuditColumns.Rank(),
+        AuditColumns.Field("Rank compared"),
+        AuditColumns.CurrentValue("IUCN placement", AuditColumnType.Text),
+        AuditColumns.SuggestedValue("CoL placement", AuditColumnType.Text),
+        AuditColumns.ColLink(),
+    }.Concat(HigherTail()).ToList();
 
     // --- ordering + summaries ---------------------------------------------------------------
 

@@ -90,12 +90,15 @@ findings into seven separate report pages (most actionable first, noisiest last)
 | `col-synonym-higher` | Higher-rank names CoL treats as a synonym | a genus/family/order/class name CoL records only as a synonym (with the accepted name's authority/year) |
 | `col-classification` | Higher-rank placement differences that look like spelling variants | a higher taxon whose parent differs like a typo (fuzzy/encoding), same phylum only |
 | `col-reorg` | Higher-rank names placed differently in CoL | a higher taxon under a genuinely different parent (not a typo), same phylum only |
-| `col-authority` | Naming authority differences that look like typos | an exact name match whose authority differs like a typo/encoding (spacing ignored) |
+| `col-authority` | Minor naming authority differences | an exact name match whose author name differs like a typo (spelling/diacritic/encoding); differences only in spacing, commas, brackets, or the year are dropped |
 | `col-not-found` | Names not found in CoL | no exact match and no near candidate |
 
 Each report carries every one of its rows on the full-list page and the CSV (there is no
 HTML-subset / CSV-superset split), shows the IUCN status badge like the other reports, and links each
-row to its Catalogue of Life entry (`ColUrls.Taxon`, `catalogueoflife.org/data/taxon/{id}`).
+row to its Catalogue of Life entry (`ColUrls.Taxon`, `catalogueoflife.org/data/taxon/{id}`). Columns
+are ordered IUCN side first (name, rank, status, assessment year), then the CoL side (matched value,
+authority, `CoL year`, link, cross-checks), then taxonomy context. The `CoL year` is the name's
+`namePublishedInYear` when present, otherwise the year parsed from its authority string.
 
 **Synonym reports.** Both synonym reports show the CoL accepted name's authority (which carries the
 year, a hint at when the name was established). `col-synonym` also cross-references the CoL accepted
@@ -125,10 +128,15 @@ CoL's Linnaean capitalisation for the exact, index-backed lookup.
 **Difference buckets.** `ColDifference` decides what the placement and authority reports keep from a
 `ScientificNameDifference`: a spelling/encoding/diacritic/punctuation difference is a typo, an
 unrelated value is a genuine difference, and identical/whitespace/letter-case is dropped (IUCN's
-upper-case house style is not a data slip). Authorities are compared with spacing removed, so
-`A.J. Wagner` and `A. J. Wagner` are equal and only real differences (a year, an added initial, an
-encoding) remain. All comparison and display decode HTML entities first (the `_html` view stores `&`
-as `&amp;`).
+upper-case house style is not a data slip). For authorities the comparison is on the author-name
+letters only: commas, brackets, digits (years), and whitespace are stripped first, so a difference
+that is purely one of those is dropped and only a real author-name difference (a spelling, diacritic,
+or encoding slip) is kept. All comparison and display decode HTML entities first (the `_html` view
+stores `&` as `&amp;`).
+
+**Big lists.** The full-list pages can run to many thousands of rows; `content-visibility: auto` on
+the sortable table rows lets the browser skip layout and paint for off-screen rows so the page stays
+responsive.
 
 ## Output structure
 
