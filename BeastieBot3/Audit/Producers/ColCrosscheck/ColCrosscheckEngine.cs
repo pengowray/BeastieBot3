@@ -448,16 +448,17 @@ internal sealed class ColCrosscheckEngine {
         return trimmed.Length == 0 ? trimmed : char.ToUpperInvariant(trimmed[0]) + trimmed[1..].ToLowerInvariant();
     }
 
-    // The author-name letters of an authority string: everything except commas, brackets, digits
-    // (years), and whitespace. Two authorities with the same letters differ only in punctuation or
-    // year, which the "minor authority differences" report deliberately ignores.
+    // The letters of an authority string: only alphabetic characters (accented letters kept, so a
+    // diacritic still counts as a difference). Everything else — spacing, digits (years), and all
+    // punctuation (commas, brackets, periods, apostrophes, hyphens, ampersands) — is dropped, so two
+    // authorities with the same letters differ only in formatting or year, which the "minor authority
+    // differences" report deliberately ignores.
     private static string AuthorLetters(string value) {
         var sb = new StringBuilder(value.Length);
         foreach (var ch in value) {
-            if (char.IsWhiteSpace(ch) || char.IsDigit(ch) || ch is ',' or '(' or ')' or '[' or ']') {
-                continue;
+            if (char.IsLetter(ch)) {
+                sb.Append(ch);
             }
-            sb.Append(ch);
         }
         return sb.ToString();
     }

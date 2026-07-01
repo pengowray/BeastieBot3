@@ -138,7 +138,7 @@ internal sealed class ColCrosscheckProducer : IAuditReportSetProducer {
         Breakage = BreakageClass.Advisory,
         DataSourceLabel = source,
         Summary =
-            "Each row is an IUCN name that matches the Catalogue of Life exactly but whose naming authority differs in the author name itself (a diacritic, a Unicode-encoding difference, or a short spelling difference). Differences that are only in spacing, punctuation (commas or brackets), or the year are left out, as are genuinely different authorities.\n\n" +
+            "Each row is an IUCN name that matches the Catalogue of Life exactly but whose naming authority differs in the author name itself (a diacritic, a Unicode-encoding difference, or a short spelling difference). Differences only in the letters count; spacing, punctuation, and the year are ignored, as are genuinely different authorities.\n\n" +
             "### Why it matters\n\n" +
             "When the same name carries a slightly different author name, an author-aware comparison between the catalogues fails, and the difference is usually a small data slip.\n\n" +
             "### Suggestion\n\n" +

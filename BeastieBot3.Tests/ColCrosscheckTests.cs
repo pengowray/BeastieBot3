@@ -84,6 +84,7 @@ public class ColCrosscheckTests {
         Assert.Equal("1776", authOnca.Get("colYear"));
         Assert.DoesNotContain(data.Authority, f => f.ScientificName == "Panthera leo");
         Assert.DoesNotContain(data.Authority, f => f.ScientificName == "Yearus changeus");
+        Assert.DoesNotContain(data.Authority, f => f.ScientificName == "Punctus namus"); // punctuation-only
         Assert.DoesNotContain(data.Synonym, f => f.ScientificName == "Panthera leo");
 
         // Class-rank placement surfaces: the same-phylum gate steps up to kingdom for class rank,
@@ -119,6 +120,8 @@ public class ColCrosscheckTests {
         Row(11, 111, "Misapplia namus", "ANIMALIA", "CHORDATA", "MAMMALIA", "CARNIVORA", "FELIDAE", "Misapplia", "namus", "Foo, 1901"),
         // Exact match whose authority differs only by the year -> dropped from the authority report.
         Row(12, 112, "Yearus changeus", "ANIMALIA", "ARTHROPODA", "INSECTA", "COLEOPTERA", "YEARIDAE", "Yearus", "changeus", "(Smith, 1900)"),
+        // Exact match whose authority differs only by punctuation (an apostrophe) -> also dropped.
+        Row(13, 113, "Punctus namus", "ANIMALIA", "MOLLUSCA", "GASTROPODA", "LITTORINIMORPHA", "PUNCTIDAE", "Punctus", "namus", "(dOrbigny, 1835)"),
     };
 
     private static IucnTaxonomyRow Row(long assessmentId, long taxonId, string name, string kingdom, string phylum,
@@ -185,6 +188,11 @@ public class ColCrosscheckTests {
         AddCol(conn, "YEARUS", "species", "accepted", "Yearus changeus", authorship: "(Smith, 1902)",
             kingdom: "Animalia", phylum: "Arthropoda", klass: "Insecta", order: "Coleoptera",
             genericName: "Yearus", specificEpithet: "changeus");
+
+        // Exact match whose authority differs only by punctuation (apostrophe) -> dropped.
+        AddCol(conn, "PUNCTUS", "species", "accepted", "Punctus namus", authorship: "(d'Orbigny, 1835)",
+            kingdom: "Animalia", phylum: "Mollusca", klass: "Gastropoda", order: "Littorinimorpha",
+            genericName: "Punctus", specificEpithet: "namus");
 
         return conn;
     }
