@@ -86,8 +86,8 @@ findings into seven separate report pages (most actionable first, noisiest last)
 | Report id | Page | What it lists |
 | --- | --- | --- |
 | `col-close-match` | Names with a close CoL match | no exact match, but a near CoL name (likely spelling/encoding) |
-| `col-synonym` | Species/subspecies CoL treats as a synonym | an assessed taxon whose name CoL records as a synonym of another accepted name |
-| `col-synonym-higher` | Higher-rank names CoL treats as a synonym | a genus/family/order/class name CoL records only as a synonym |
+| `col-synonym` | Species/subspecies CoL treats as a synonym | an assessed taxon whose name CoL records as a synonym of another accepted name (with the accepted name's authority/year, and whether IUCN already records that name as a synonym) |
+| `col-synonym-higher` | Higher-rank names CoL treats as a synonym | a genus/family/order/class name CoL records only as a synonym (with the accepted name's authority/year) |
 | `col-classification` | Higher-rank placement differences that look like spelling variants | a higher taxon whose parent differs like a typo (fuzzy/encoding), same phylum only |
 | `col-reorg` | Higher-rank names placed differently in CoL | a higher taxon under a genuinely different parent (not a typo), same phylum only |
 | `col-authority` | Naming authority differences that look like typos | an exact name match whose authority differs like a typo/encoding (spacing ignored) |
@@ -96,6 +96,15 @@ findings into seven separate report pages (most actionable first, noisiest last)
 Each report carries every one of its rows on the full-list page and the CSV (there is no
 HTML-subset / CSV-superset split), shows the IUCN status badge like the other reports, and links each
 row to its Catalogue of Life entry (`ColUrls.Taxon`, `catalogueoflife.org/data/taxon/{id}`).
+
+**Synonym reports.** Both synonym reports show the CoL accepted name's authority (which carries the
+year, a hint at when the name was established). `col-synonym` also cross-references the CoL accepted
+name against IUCN's own synonyms: `IucnSynonymIndex` scans the IUCN API cache once (the only place
+IUCN carries synonyms, `taxon.synonyms[]`, reconstructing the bare name from the structured fields)
+and the report flags whether IUCN already records that name as a synonym "of same taxon" (the
+catalogues are reversed on which name is accepted) or "of other taxon". The column is blank when the
+API cache is unavailable; under `--limit` the index is partial, so run without a limit for a complete
+answer.
 
 **ColDP shape.** This ColDP `nameusage` table has no `acceptedNameUsageID` column; a synonym's
 `parentID` points at its accepted taxon, and every accepted name carries its higher-rank ancestors

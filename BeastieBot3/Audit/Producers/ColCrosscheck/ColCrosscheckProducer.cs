@@ -51,7 +51,12 @@ internal sealed class ColCrosscheckProducer : IAuditReportSetProducer {
             rows = rows.Take((int)ctx.Limit.Value).ToList();
         }
 
-        var data = new ColCrosscheckEngine(colRepo).Run(rows, ctx.Ct);
+        // IUCN carries synonyms only in the API cache; when it is present, index it so the synonym
+        // report can flag CoL accepted names that IUCN already records as synonyms.
+        var apiCache = ctx.IucnApiCacheOrNull();
+        var iucnSynonyms = apiCache is null ? null : IucnSynonymIndex.Build(apiCache, ctx.Limit, ctx.Ct);
+
+        var data = new ColCrosscheckEngine(colRepo, iucnSynonyms).Run(rows, ctx.Ct);
         var source = $"IUCN Red List {ctx.Release} vs Catalogue of Life";
         var assessed = data.AssessedCompared;
         var higher = data.HigherTaxaCompared;
@@ -119,7 +124,7 @@ internal sealed class ColCrosscheckProducer : IAuditReportSetProducer {
             "Where CoL has moved a name into synonymy, the IUCN name may be an earlier combination or a lumped taxon. The accepted name is what a CoL-based system will use.\n\n" +
             "### Suggestion\n\n" +
             "Compare each IUCN name with the CoL accepted name and confirm which reflects current taxonomy.",
-        Columns = SpeciesColumns(includeColName: true, colNameHeader: "CoL accepted name", includeAuthority: false),
+        Columns = SynonymColumns(),
         Findings = OrderSpecies(findings),
         HeadlineCount = findings.Count,
         SummaryTables = new[] { ByRankSummary("By rank", findings), ByClassSummary("By class", findings, assessed) },
@@ -159,7 +164,7 @@ internal sealed class ColCrosscheckProducer : IAuditReportSetProducer {
             "A genus or family name that CoL treats entirely as a synonym is often an older spelling or a superseded name, and it affects every assessed taxon placed under it.\n\n" +
             "### Suggestion\n\n" +
             "Check the accepted CoL name. Where it is a corrected spelling or an accepted replacement, updating the higher-rank name aligns the whole group.",
-        Columns = HigherColumns(includePlacement: false),
+        Columns = HigherColumns(includePlacement: false, includeColAuthority: true),
         Findings = OrderHigher(findings),
         HeadlineCount = findings.Count,
         SummaryTables = new[] { ByRankSummary("By rank", findings) },
@@ -227,7 +232,27 @@ internal sealed class ColCrosscheckProducer : IAuditReportSetProducer {
         return columns;
     }
 
-    private static IReadOnlyList<AuditColumn> HigherColumns(bool includePlacement) {
+    // Columns for the species/subspecies synonym report: the CoL accepted name, its authority (with
+    // the year, showing when that name was established), the CoL link, and whether IUCN already
+    // records the CoL accepted name as a synonym.
+    private static IReadOnlyList<AuditColumn> SynonymColumns() => new List<AuditColumn> {
+        AuditColumns.ScientificName("IUCN name"),
+        AuditColumns.Rank(),
+        AuditColumns.SuggestedValue("CoL accepted name", AuditColumnType.Text),
+        AuditColumns.Custom("colAuthority", "CoL authority", AuditColumnType.Text,
+            "Authorship (with year) of the Catalogue of Life accepted name, indicating when that name was established."),
+        AuditColumns.ColLink(),
+        AuditColumns.Custom("iucnSynonym", "CoL name in IUCN synonyms", AuditColumnType.Text,
+            "Whether IUCN already records the CoL accepted name as a synonym. \"of same taxon\" means the two catalogues disagree on which name is accepted. Blank when the IUCN API cache is unavailable."),
+        AuditColumns.Status("IUCN status"),
+        AuditColumns.Class(),
+        AuditColumns.Family(),
+        AuditColumns.TaxonId("Taxon id"),
+        AuditColumns.RedlistLink(),
+        AuditColumns.Detail(),
+    };
+
+    private static IReadOnlyList<AuditColumn> HigherColumns(bool includePlacement, bool includeColAuthority = false) {
         var columns = new List<AuditColumn> {
             AuditColumns.ScientificName("IUCN name"),
             AuditColumns.Rank(),
@@ -238,6 +263,10 @@ internal sealed class ColCrosscheckProducer : IAuditReportSetProducer {
             columns.Add(AuditColumns.SuggestedValue("CoL placement", AuditColumnType.Text));
         } else {
             columns.Add(AuditColumns.SuggestedValue("CoL accepted name", AuditColumnType.Text));
+        }
+        if (includeColAuthority) {
+            columns.Add(AuditColumns.Custom("colAuthority", "CoL authority", AuditColumnType.Text,
+                "Authorship (with year) of the Catalogue of Life accepted name."));
         }
         columns.Add(AuditColumns.ColLink());
         columns.Add(AuditColumns.Kingdom());

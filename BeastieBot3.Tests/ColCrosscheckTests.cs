@@ -40,16 +40,22 @@ public class ColCrosscheckTests {
     public void Engine_SortsFindingsIntoTheRightBuckets() {
         using var col = BuildCol();
         var repo = new ColTaxonRepository(col);
-        var data = new ColCrosscheckEngine(repo).Run(IucnRows(), CancellationToken.None);
+        // IUCN records "Panthera leo" as a synonym of taxon 103 (the Felis leo assessment), so the
+        // two catalogues are reversed for that pair.
+        var iucnSynonyms = IucnSynonymIndex.FromEntries(new[] { ("Panthera leo", 103L) });
+        var data = new ColCrosscheckEngine(repo, iucnSynonyms).Run(IucnRows(), CancellationToken.None);
 
         // Synonym at species level, resolved through parentID (this used to return zero).
         var syn = Assert.Single(data.Synonym, f => f.ScientificName == "Felis leo");
         Assert.Equal("Panthera leo", syn.SuggestedValue);
+        Assert.Equal("(Linnaeus, 1758)", syn.Get("colAuthority")); // CoL accepted name's authority + year
+        Assert.Equal("of same taxon", syn.Get("iucnSynonym"));     // reversed-direction disagreement
 
-        // Higher-rank synonym: a genus CoL records only as a synonym, with the accepted spelling.
+        // Higher-rank synonym: a genus CoL records only as a synonym, with the accepted spelling and its authority.
         var higherSyn = Assert.Single(data.SynonymHigher, f => f.ScientificName == "Bofonaria");
         Assert.Equal("genus", higherSyn.Rank);
         Assert.Equal("Bufonaria", higherSyn.SuggestedValue);
+        Assert.Equal("(Schumacher, 1817)", higherSyn.Get("colAuthority"));
 
         // Homonym suppression: Anemone is a synonym AND an accepted genus, so it is not reported.
         Assert.DoesNotContain(data.SynonymHigher, f => f.ScientificName == "Anemone");
@@ -151,7 +157,7 @@ public class ColCrosscheckTests {
             kingdom: "Animalia", phylum: "Zeta", klass: "Gamma", order: "Omega");
 
         // Higher-rank synonym (no accepted usage anywhere) -> reported.
-        AddCol(conn, "BUFONARIA", "genus", "accepted", "Bufonaria",
+        AddCol(conn, "BUFONARIA", "genus", "accepted", "Bufonaria", authorship: "(Schumacher, 1817)",
             kingdom: "Animalia", phylum: "Mollusca", klass: "Gastropoda", family: "Bursidae");
         AddCol(conn, "BOFONARIA", "genus", "synonym", "Bofonaria", parentId: "BUFONARIA");
 

@@ -25,9 +25,11 @@ namespace BeastieBot3.Audit.Producers.ColCrosscheck;
 
 internal sealed class ColCrosscheckEngine {
     private readonly ColTaxonRepository _col;
+    private readonly IucnSynonymIndex? _iucnSynonyms;
 
-    public ColCrosscheckEngine(ColTaxonRepository col) {
+    public ColCrosscheckEngine(ColTaxonRepository col, IucnSynonymIndex? iucnSynonyms = null) {
         _col = col ?? throw new ArgumentNullException(nameof(col));
+        _iucnSynonyms = iucnSynonyms;
     }
 
     public ColCrosscheckData Run(IReadOnlyList<IucnTaxonomyRow> rows, CancellationToken ct) {
@@ -81,11 +83,18 @@ internal sealed class ColCrosscheckEngine {
             var accepted = string.IsNullOrWhiteSpace(primary.ParentId) ? null : _col.GetById(primary.ParentId, CancellationToken.None);
             var acceptedName = AuditMapping.Decode(accepted?.ScientificName);
             var linkId = accepted?.Id ?? primary.Id;
+            var match = _iucnSynonyms?.Lookup(acceptedName, row.TaxonId) ?? IucnSynonymMatch.Unknown;
             var detail = acceptedName is null
                 ? "Catalogue of Life treats this name as a synonym."
                 : $"Catalogue of Life treats this name as a synonym of {acceptedName}.";
-            data.Synonym.Add(SpeciesFinding(ColCrosscheckProducer.SynonymId, row, rank, isFull, name,
-                "synonym-in-col", "scientificName", name, acceptedName, linkId, severity, detail));
+            if (match == IucnSynonymMatch.SameTaxon) {
+                detail += " IUCN already lists that name as a synonym of this same taxon, so the two catalogues disagree on which name is accepted.";
+            }
+            var finding = SpeciesFinding(ColCrosscheckProducer.SynonymId, row, rank, isFull, name,
+                "synonym-in-col", "scientificName", name, acceptedName, linkId, severity, detail);
+            SetExtra(finding, "colAuthority", AuditMapping.Decode(accepted?.Authorship));
+            SetExtra(finding, "iucnSynonym", IucnSynonymLabel(match));
+            data.Synonym.Add(finding);
             return;
         }
 
@@ -178,8 +187,10 @@ internal sealed class ColCrosscheckEngine {
         var detail = targetName is null
             ? $"Catalogue of Life treats this {taxon.Rank} name as a synonym."
             : $"Catalogue of Life treats this {taxon.Rank} name as a synonym of {targetName}.";
-        data.SynonymHigher.Add(HigherFinding(ColCrosscheckProducer.SynonymHigherId, taxon,
-            "synonym-in-col", "scientificName", taxon.Name, targetName, linkId, detail));
+        var finding = HigherFinding(ColCrosscheckProducer.SynonymHigherId, taxon,
+            "synonym-in-col", "scientificName", taxon.Name, targetName, linkId, detail);
+        SetExtra(finding, "colAuthority", AuditMapping.Decode(acceptedTarget?.Authorship));
+        data.SynonymHigher.Add(finding);
     }
 
     private static void CompareHigherPlacement(HigherTaxon taxon, ColTaxonRecord best, ColCrosscheckData data) {
@@ -430,6 +441,21 @@ internal sealed class ColCrosscheckEngine {
 
     private static string StripSpaces(string value) =>
         new(value.Where(c => !char.IsWhiteSpace(c)).ToArray());
+
+    private static void SetExtra(AuditFinding finding, string key, string? value) {
+        if (!string.IsNullOrWhiteSpace(value)) {
+            finding.Extra[key] = value!;
+        }
+    }
+
+    // Column text for whether the CoL accepted name is already an IUCN synonym. Unknown (no API
+    // cache) leaves the cell blank rather than asserting "no".
+    private static string? IucnSynonymLabel(IucnSynonymMatch match) => match switch {
+        IucnSynonymMatch.SameTaxon => "of same taxon",
+        IucnSynonymMatch.OtherTaxon => "of other taxon",
+        IucnSynonymMatch.None => "no",
+        _ => null,
+    };
 
     private static string? GetIucnAuthority(IucnTaxonomyRow row) =>
         !string.IsNullOrWhiteSpace(row.InfraName) && !string.IsNullOrWhiteSpace(row.InfraAuthority)
