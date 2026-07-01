@@ -79,15 +79,27 @@ internal sealed class ColNameResolver : IDisposable {
             .Where(c => KingdomMatches(c, kingdom))
             .ToList();
 
-        var primary = ChoosePrimary(unique);
-        if (primary is not null) {
-            // An exact match: the only correction on offer is the accepted name when CoL treats the
-            // IUCN name as a synonym of something else.
-            if (IsSynonymStatus(primary.Status) && !string.IsNullOrWhiteSpace(primary.ParentId)) {
-                var accepted = _repo.GetById(primary.ParentId, ct);
-                var acceptedName = Decode(accepted?.ScientificName);
+        if (unique.Count > 0) {
+            // The IUCN name is accepted in CoL for this kingdom: nothing to correct.
+            if (unique.Any(c => IsAcceptedStatus(c.Status))) {
+                return ColNameResolution.None;
+            }
+            // Otherwise CoL treats the name as a synonym. Return the accepted name only when the
+            // accepted taxon is in the same kingdom. The kingdom guard is applied to the accepted
+            // target rather than the synonym, because CoL synonym rows carry a blank kingdom (so the
+            // filter above never excludes them). Every synonym is tried so the result does not depend
+            // on row order when a name has synonyms pointing to more than one kingdom.
+            foreach (var synonym in unique.Where(c => IsSynonymStatus(c.Status))) {
+                if (string.IsNullOrWhiteSpace(synonym.ParentId)) {
+                    continue;
+                }
+                var accepted = _repo.GetById(synonym.ParentId, ct);
+                if (accepted is null || !KingdomMatches(accepted, kingdom)) {
+                    continue;
+                }
+                var acceptedName = Decode(accepted.ScientificName);
                 if (!string.IsNullOrWhiteSpace(acceptedName) && !NamesEqual(acceptedName!, name)) {
-                    return new ColNameResolution(acceptedName, accepted!.Id, null, null);
+                    return new ColNameResolution(acceptedName, accepted.Id, null, null);
                 }
             }
             return ColNameResolution.None;
@@ -133,15 +145,6 @@ internal sealed class ColNameResolver : IDisposable {
             }
         }
         return best;
-    }
-
-    private static ColTaxonRecord? ChoosePrimary(IReadOnlyList<ColTaxonRecord> candidates) {
-        if (candidates.Count == 0) {
-            return null;
-        }
-        return candidates.FirstOrDefault(c => IsAcceptedStatus(c.Status))
-            ?? candidates.FirstOrDefault(c => IsSynonymStatus(c.Status))
-            ?? candidates[0];
     }
 
     private static bool IsAcceptedStatus(string? status) =>

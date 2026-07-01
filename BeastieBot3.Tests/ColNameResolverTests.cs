@@ -49,6 +49,17 @@ public class ColNameResolverTests {
     }
 
     [Fact]
+    public void SynonymPointingToOtherKingdom_IsNotResolved() {
+        using var col = BuildCol();
+        var resolver = new ColNameResolver(new ColTaxonRepository(col));
+        // CoL has "Crosskingdom testus" only as a (blank-kingdom) synonym whose accepted taxon is a
+        // Plantae name; an Animalia taxon of that name must not be resolved to the plant.
+        var r = resolver.Resolve("Crosskingdom", "testus", null, "Crosskingdom testus", "Animalia", CancellationToken.None);
+        Assert.False(r.HasAcceptedName);
+        Assert.False(r.HasCorrectedSpelling);
+    }
+
+    [Fact]
     public void CrossKingdomHomonym_IsNotMatched() {
         using var col = BuildCol();
         var resolver = new ColNameResolver(new ColTaxonRepository(col));
@@ -72,6 +83,9 @@ public class ColNameResolverTests {
         Add(conn, "FELIS_LEO", "species", "synonym", "Felis leo", "Animalia", "Felis", "leo", parentId: "P_LEO");
         Add(conn, "NAJA", "species", "accepted", "Naja haje", "Animalia", "Naja", "haje");
         Add(conn, "HOMO_PLANT", "species", "accepted", "Homonymus testus", "Plantae", "Homonymus", "testus");
+        // A synonym with a blank kingdom (as real CoL synonyms have) whose accepted taxon is a plant.
+        Add(conn, "XK_ACC", "species", "accepted", "Crosskingdom acceptus", "Plantae", "Crosskingdom", "acceptus");
+        Add(conn, "XK_SYN", "species", "synonym", "Crosskingdom testus", "", "Crosskingdom", "testus", parentId: "XK_ACC");
         return conn;
     }
 
