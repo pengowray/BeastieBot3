@@ -400,6 +400,8 @@ public sealed class WikipediaMatchTaxaCommand : AsyncCommand<WikipediaMatchTaxaC
                 TaxonNameSource.IucnInfraRanked => "iucn-infra-rank",
                 TaxonNameSource.IucnSynonym => "iucn-synonym",
                 TaxonNameSource.ColSynonym => "col-synonym",
+                TaxonNameSource.ColAccepted => "col-accepted",
+                TaxonNameSource.ColCorrected => "col-corrected",
                 _ => "scientific-name"
             };
             AddCandidate(candidate.Name, method, method, candidate.IsSynonym, candidate.Name);

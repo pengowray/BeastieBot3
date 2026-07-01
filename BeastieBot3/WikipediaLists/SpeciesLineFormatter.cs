@@ -651,6 +651,12 @@ internal sealed class SpeciesLineFormatter {
     }
 
     public static string? ResolveScientificName(IucnSpeciesRecord record) {
+        // A cleaned CoL spelling (set only for a formatting-equivalent slip in the IUCN name) is the
+        // name of record for display, links, sorting, and exclusion matching.
+        if (!string.IsNullOrWhiteSpace(record.ScientificNameOverride)) {
+            return record.ScientificNameOverride;
+        }
+
         if (!string.IsNullOrWhiteSpace(record.ScientificNameTaxonomy)) {
             return record.ScientificNameTaxonomy;
         }

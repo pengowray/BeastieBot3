@@ -6,6 +6,7 @@ using System.Linq;
 using System.Text;
 using System.Threading;
 using BeastieBot3.WikipediaLists.Legacy;
+using BeastieBot3.Col;
 using BeastieBot3.CommonNames;
 using BeastieBot3.Iucn;
 using BeastieBot3.Taxonomy;
@@ -35,6 +36,9 @@ internal sealed class WikipediaListGenerator {
     private readonly CommonNameProvider? _commonNameProvider;
     private readonly StoreBackedCommonNameProvider? _storeBackedProvider;
     private readonly ColTaxonomyEnricher? _colEnricher;
+    // Resolves a cleaned CoL spelling for a formatting-equivalent (mojibake/diacritic/encoding) slip
+    // in an IUCN name, so the list can display the clean binomial. Optional; null = no correction.
+    private readonly ColNameResolver? _colNameResolver;
     // Per-child status-count aggregator for parent lists (summary table + count sentences).
     // Optional: when null, parent lists degrade gracefully (no summary table).
     private readonly IucnChartDataBuilder? _chartData;
@@ -60,6 +64,7 @@ internal sealed class WikipediaListGenerator {
         _commonNameProvider = commonNameProvider;
         _storeBackedProvider = null;
         _colEnricher = null;
+        _colNameResolver = null;
         _taxonRules = taxonRules;
         _chartData = chartData;
         _introProse = new IntroProseBuilder(_queryService);
@@ -78,13 +83,15 @@ internal sealed class WikipediaListGenerator {
         StoreBackedCommonNameProvider? storeBackedProvider,
         ColTaxonomyEnricher? colEnricher = null,
         TaxonRulesService? taxonRules = null,
-        IucnChartDataBuilder? chartData = null) {
+        IucnChartDataBuilder? chartData = null,
+        ColNameResolver? colNameResolver = null) {
         _queryService = queryService ?? throw new ArgumentNullException(nameof(queryService));
         _templateRenderer = templateRenderer ?? throw new ArgumentNullException(nameof(templateRenderer));
         _legacyRules = legacyRules ?? throw new ArgumentNullException(nameof(legacyRules));
         _commonNameProvider = null;
         _storeBackedProvider = storeBackedProvider;
         _colEnricher = colEnricher;
+        _colNameResolver = colNameResolver;
         _taxonRules = taxonRules;
         _chartData = chartData;
         _introProse = new IntroProseBuilder(_queryService);
@@ -100,7 +107,13 @@ internal sealed class WikipediaListGenerator {
         int? limit) {
         var statusDescriptors = CollectStatusDescriptors(definition);
         var records = _queryService.QuerySpecies(definition, statusDescriptors, limit);
-        
+
+        // Clean garbled scientific names against the Catalogue of Life (formatting-equivalent slips
+        // only) before anything reads the name, so exclusion, sorting, and display all use the fix.
+        if (_colNameResolver != null) {
+            records = records.Select(StampColNameCorrection).ToList();
+        }
+
         // Apply exclusion rules if taxon rules are configured
         if (_taxonRules != null) {
             records = records.Where(r => !ShouldExcludeRecord(r, definition.Id)).ToList();
@@ -425,6 +438,26 @@ internal sealed class WikipediaListGenerator {
         return null;
     }
 
+
+    /// <summary>
+    /// Replace the displayed scientific name with the Catalogue of Life spelling only when the
+    /// recorded IUCN name is a formatting-equivalent slip (mojibake, a diacritic, encoding, or
+    /// spacing). Limited to full species: infraspecific display is built from components, so a
+    /// whole-name override would not apply cleanly there. IUCN remains the name of record otherwise.
+    /// </summary>
+    private IucnSpeciesRecord StampColNameCorrection(IucnSpeciesRecord record) {
+        if (_colNameResolver == null || !string.IsNullOrWhiteSpace(record.InfraName)) {
+            return record;
+        }
+        var primaryName = !string.IsNullOrWhiteSpace(record.ScientificNameTaxonomy)
+            ? record.ScientificNameTaxonomy
+            : record.ScientificNameAssessments;
+        var resolution = _colNameResolver.Resolve(
+            record.GenusName, record.SpeciesName, record.InfraName, primaryName, record.KingdomName, CancellationToken.None);
+        return resolution.HasCorrectedSpelling
+            ? record with { ScientificNameOverride = resolution.CorrectedSpelling }
+            : record;
+    }
 
     /// <summary>
     /// Check if a record should be excluded based on taxon rules.

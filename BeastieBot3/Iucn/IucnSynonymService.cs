@@ -19,6 +19,7 @@ internal sealed class IucnSynonymService : IDisposable {
     private readonly SqliteConnection? _iucnApiConnection;
     private readonly SqliteConnection? _colConnection;
     private readonly ColTaxonRepository? _colRepository;
+    private readonly ColNameResolver? _colNameResolver;
     private readonly Dictionary<long, IReadOnlyList<string>> _iucnSynonymCache = new();
 
     public IucnSynonymService(string? iucnApiCachePath, string? colDatabasePath) {
@@ -41,6 +42,7 @@ internal sealed class IucnSynonymService : IDisposable {
             _colConnection = new SqliteConnection(builder.ConnectionString);
             _colConnection.Open();
             _colRepository = new ColTaxonRepository(_colConnection);
+            _colNameResolver = new ColNameResolver(_colRepository);
         }
     }
 
@@ -85,6 +87,19 @@ internal sealed class IucnSynonymService : IDisposable {
             foreach (var synonym in GetColSynonyms(row, cancellationToken)) {
                 AddCandidate(synonym, TaxonNameSource.ColSynonym);
             }
+        }
+
+        // The article overwhelmingly lives at the CoL ACCEPTED name (when the IUCN name is a CoL
+        // synonym) or at the clean spelling (when the IUCN name is a formatting slip). Offer both as
+        // candidates; the matcher validates each against the enwiki cache, so a wrong guess simply
+        // fails to match rather than corrupting anything.
+        if (_colNameResolver is not null) {
+            var primaryName = !string.IsNullOrWhiteSpace(row.ScientificNameTaxonomy)
+                ? row.ScientificNameTaxonomy
+                : row.ScientificNameAssessments;
+            var resolution = _colNameResolver.Resolve(row.GenusName, row.SpeciesName, row.InfraName, primaryName, row.KingdomName, cancellationToken);
+            AddCandidate(resolution.AcceptedName, TaxonNameSource.ColAccepted);
+            AddCandidate(resolution.CorrectedSpelling, TaxonNameSource.ColCorrected);
         }
 
         return results;
@@ -193,7 +208,8 @@ internal sealed class IucnSynonymService : IDisposable {
 }
 
 internal sealed record TaxonNameCandidate(string Name, TaxonNameSource Source) {
-    public bool IsSynonym => Source is TaxonNameSource.IucnSynonym or TaxonNameSource.ColSynonym;
+    public bool IsSynonym => Source is TaxonNameSource.IucnSynonym or TaxonNameSource.ColSynonym
+        or TaxonNameSource.ColAccepted or TaxonNameSource.ColCorrected;
     public bool IsAlternateMatch => IsSynonym || Source is TaxonNameSource.IucnInfraRanked;
 };
 
@@ -203,5 +219,9 @@ internal enum TaxonNameSource {
     IucnConstructed,
     IucnInfraRanked,
     IucnSynonym,
-    ColSynonym
+    ColSynonym,
+    // The CoL accepted name (the IUCN name is a CoL synonym of it) and the clean CoL spelling (the
+    // IUCN name is a formatting-equivalent slip). Both are resolved by ColNameResolver.
+    ColAccepted,
+    ColCorrected
 }

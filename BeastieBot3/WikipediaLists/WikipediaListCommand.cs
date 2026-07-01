@@ -126,10 +126,13 @@ public sealed class WikipediaListCommand : Command<WikipediaListCommand.Settings
         var colDbPath = settings.ColDatabasePath ?? paths.GetColSqlitePath();
         var useColEnrichment = !settings.NoColEnrichment && !string.IsNullOrWhiteSpace(colDbPath) && File.Exists(colDbPath);
         ColTaxonomyEnricher? colEnricher = null;
+        Col.ColNameResolver? colNameResolver = null;
 
         if (useColEnrichment) {
             AnsiConsole.MarkupLine($"[grey]Using COL taxonomy enrichment from:[/] {colDbPath}");
             colEnricher = new ColTaxonomyEnricher(colDbPath!);
+            // Same CoL DB, used to clean formatting-equivalent slips in the displayed scientific name.
+            colNameResolver = new Col.ColNameResolver(colDbPath!);
         }
 
         WikipediaListGenerator generator;
@@ -144,7 +147,7 @@ public sealed class WikipediaListCommand : Command<WikipediaListCommand.Settings
                 }
                 var storeProvider = new StoreBackedCommonNameProvider(commonNamesDbPath, wikipediaCachePath);
                 providerToDispose = storeProvider;
-                generator = new WikipediaListGenerator(query, templates, rules, storeProvider, colEnricher, taxonRules, chartData);
+                generator = new WikipediaListGenerator(query, templates, rules, storeProvider, colEnricher, taxonRules, chartData, colNameResolver);
             } else {
                 if (!settings.UseLegacyNames) {
                     AnsiConsole.MarkupLine("[yellow]Common names store not found, using legacy provider.[/]");
@@ -180,6 +183,7 @@ public sealed class WikipediaListCommand : Command<WikipediaListCommand.Settings
         finally {
             providerToDispose?.Dispose();
             colEnricher?.Dispose();
+            colNameResolver?.Dispose();
         }
     }
 

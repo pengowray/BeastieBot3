@@ -278,6 +278,22 @@ display:
   include_family_in_other_bucket: true
 ```
 
+### Catalogue of Life name feedback
+
+The Catalogue of Life is used to fix two name problems in list output (`BeastieBot3/Col/ColNameResolver.cs`,
+the shared per-taxon resolver; IUCN stays the name of record throughout):
+
+- **Article links (offline, `wikipedia match-taxa`):** when an IUCN name is a CoL synonym of an
+  accepted name, or a formatting-equivalent slip, the accepted name / clean spelling is added as a
+  candidate article title (`IucnSynonymService`, match methods `col-accepted` / `col-corrected`). Each
+  candidate is validated against the enwiki cache before it is recorded, so a wrong guess just fails to
+  match. This fixes redlinks where the article lives at the accepted/current name. Re-run `match-taxa`
+  (part of the col-update flow) for it to take effect.
+- **Displayed name (generation):** a garbled scientific name is replaced with the CoL spelling only
+  when the difference is formatting-equivalent (mojibake, a diacritic, encoding, or spacing), via
+  `IucnSpeciesRecord.ScientificNameOverride`, for full species only. A genuine spelling difference is
+  left as IUCN records it. Disabled by `--no-col-enrichment`.
+
 ### Pending Features
 
 - Integration of COL-enriched hierarchy with rank labels

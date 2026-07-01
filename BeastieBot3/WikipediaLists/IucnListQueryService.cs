@@ -258,5 +258,9 @@ internal sealed record IucnSpeciesRecord(
     // verbatim to the bullet line (e.g. the multi-system "— EPBC: CR; IUCN: CR; WA: CR" annotation).
     string? CommonNameOverride = null,
     string? StatusAnnotation = null,
-    string? ArticleTitleOverride = null
+    string? ArticleTitleOverride = null,
+    // Corrected scientific name for display/link, set only when the recorded IUCN name is a
+    // formatting-equivalent slip (mojibake, a diacritic, encoding, or spacing) that the Catalogue of
+    // Life spells cleanly. Null for everything else, so IUCN stays the name of record.
+    string? ScientificNameOverride = null
 );
