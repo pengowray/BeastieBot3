@@ -39,9 +39,12 @@ incomplete or mistaken. When editing copy, avoid em-dashes and "not X but Y" phr
 - **`AuditMapping`** — rank/full-species derivation, status-code normalisation, threat-order sort key.
 - **`IucnStatusVisuals`** — status badge colour (ported from the legacy palette; a reading aid, not
   the official IUCN colours).
-- **`Producers/`** — one `IAuditReportProducer` per report. Each opens what it needs through
-  `AuditContext`, reuses the existing analyzers where they are already callable, and maps results to
-  `AuditFinding`. Returns `null` when its data source is unavailable so the command skips it.
+- **`Producers/`** — most reports are one `IAuditReportProducer` (returns `null` when its data source
+  is unavailable so the command skips it). A producer that needs one pass over the data to emit
+  several related pages implements `IAuditReportSetProducer` instead (returns an empty list when
+  unavailable); `SingleReportProducer` adapts the ordinary producers so the command iterates one
+  uniform list. Each opens what it needs through `AuditContext` and maps results to `AuditFinding`.
+  The Catalogue of Life crosscheck (`Producers/ColCrosscheck/`) is the set producer.
 - **`Rendering/`** — `HtmlListRenderer` (the one sortable/filterable table renderer), `AuditCsvWriter`
   (same columns to CSV), `AuditPageLayout` (page chrome + disclaimer), `AuditSiteRenderer`
   (orchestrates index, per-report detail pages, full-list pages, methodology, assets), `HtmlText`
@@ -51,14 +54,15 @@ incomplete or mistaken. When editing copy, avoid em-dashes and "not X but Y" phr
 The reusable seams already in the codebase that producers call directly: `IucnTaxonomyRepository`,
 `IucnDataCleanupAnalyzer`, `IucnScientificNameVerifier`, `IucnHtmlUtilities`,
 `IucnTaxaTaxonomyExtractor`, `IucnRedlistStatus`, `TaxonFilterSql`, `ColTaxonRepository`,
-`AuthorityNormalizer`, `TaxonLadder*`, and the shared `Infrastructure/IucnUrls.Species(...)` helper.
+`ScientificNameDifference`, `AuthorityNormalizer`, and the shared `Infrastructure/IucnUrls.Species(...)`
+and `Infrastructure/ColUrls.Taxon(...)` link helpers.
 
 ## Reports
 
 IUCN-owned (the body): failed assessments (empty-scope HTTP 500), taxonomy field cleanup, synonym
 whitespace irregularities, synonym markup/unusual characters, orphan subspecies/varieties, taxa
 with no current assessment, HTML vs plain-text narrative fields, scientific name vs components, and
-differences from the Catalogue of Life. The two synonym reports share one scan
+the seven Catalogue of Life crosscheck pages (see below). The two synonym reports share one scan
 (`SynonymFormattingScan`, memoised per connection): one lists whitespace problems (each kind counted
 separately, including spaces inside parentheses or before a comma), the other lists markup, stray
 HTML entities, curly quotes, and encoding artefacts with per-kind percentages and a with/without-HTML
@@ -74,23 +78,48 @@ Methodology: text hygiene by field. The scientific-name-change report appears on
 field-based check finds a name that changed across assessment versions (it produces nothing in
 current data and is omitted, via the producer returning null when empty).
 
-The Catalogue of Life crosscheck is much higher volume than the others, so its HTML pages list only
-the higher-signal rows (a name with no exact CoL match, a name CoL treats as a synonym, and
-placement differences above genus); authority and genus/species-level differences are summarised by
-class. The CSV download still carries every row (`AuditReport.CsvFindings` holds the complete set
-while `Findings` holds the HTML subset). Authority comparison and display decode HTML entities first
-(the `_html` view stores `&` as `&amp;`), so they do not report spurious differences.
+### Catalogue of Life crosscheck (`Producers/ColCrosscheck/`)
 
-The primary CoL match is exact, but when it fails a fuzzy pass (`ScientificNameDifference` +
-`ColTaxonRepository.FindByGenericName`/`FindBySpecificEpithet`) looks for near matches among names in
-the same genus or sharing the epithet. A formatting-equivalent candidate is reported as the likely
-same name with the reason it differs (spacing, punctuation, Unicode encoding, diacritics, case, or a
-combination); otherwise the closest spelling variants are offered as possible alternatives with their
-edit distance. The best candidate fills the "CoL value" column; the detail line carries the
-explanation.
+`ColCrosscheckEngine` matches the release against the Catalogue of Life in one scan and sorts the
+findings into seven separate report pages (most actionable first, noisiest last):
 
-Very large full lists split into a recursive taxonomic tree (class, then order, then family) so no
-single page exceeds the row threshold; the CSV still holds the whole report.
+| Report id | Page | What it lists |
+| --- | --- | --- |
+| `col-close-match` | Names with a close CoL match | no exact match, but a near CoL name (likely spelling/encoding) |
+| `col-synonym` | Species/subspecies CoL treats as a synonym | an assessed taxon whose name CoL records as a synonym of another accepted name |
+| `col-synonym-higher` | Higher-rank names CoL treats as a synonym | a genus/family/order/class name CoL records only as a synonym |
+| `col-classification` | Higher-rank placement differences that look like spelling variants | a higher taxon whose parent differs like a typo (fuzzy/encoding), same phylum only |
+| `col-reorg` | Higher-rank names placed differently in CoL | a higher taxon under a genuinely different parent (not a typo), same phylum only |
+| `col-authority` | Naming authority differences that look like typos | an exact name match whose authority differs like a typo/encoding (spacing ignored) |
+| `col-not-found` | Names not found in CoL | no exact match and no near candidate |
+
+Each report carries every one of its rows on the full-list page and the CSV (there is no
+HTML-subset / CSV-superset split), shows the IUCN status badge like the other reports, and links each
+row to its Catalogue of Life entry (`ColUrls.Taxon`, `catalogueoflife.org/data/taxon/{id}`).
+
+**ColDP shape.** This ColDP `nameusage` table has no `acceptedNameUsageID` column; a synonym's
+`parentID` points at its accepted taxon, and every accepted name carries its higher-rank ancestors
+(kingdom..family) inline. So synonymy is resolved through `parentID` (this fixed a silent zero-count
+bug where the missing column always read NULL), and the higher-rank placement comparison reads the
+inline ancestor columns instead of walking the tree.
+
+**Two passes.** The first pass matches each assessed taxon (exact name, then genus/species/infra
+components): no match becomes `col-not-found` or, via a fuzzy pass over the same genus and epithet
+(`ScientificNameDifference` + `FindByGenericName`/`FindBySpecificEpithet`), `col-close-match`; a
+synonym match becomes `col-synonym`; an accepted match has its authority compared for `col-authority`.
+The second pass compares the distinct higher-rank names IUCN uses (genus, family, order, class):
+names CoL records only as synonyms (zero accepted usages anywhere, so homonyms are not misreported)
+become `col-synonym-higher`, and a differing parent placement becomes `col-classification` (typo) or
+`col-reorg` (genuine), gated to the same phylum. IUCN's upper-case higher-rank names are folded to
+CoL's Linnaean capitalisation for the exact, index-backed lookup.
+
+**Difference buckets.** `ColDifference` decides what the placement and authority reports keep from a
+`ScientificNameDifference`: a spelling/encoding/diacritic/punctuation difference is a typo, an
+unrelated value is a genuine difference, and identical/whitespace/letter-case is dropped (IUCN's
+upper-case house style is not a data slip). Authorities are compared with spacing removed, so
+`A.J. Wagner` and `A. J. Wagner` are equal and only real differences (a year, an added initial, an
+encoding) remain. All comparison and display decode HTML entities first (the `_html` view stores `&`
+as `&amp;`).
 
 ## Output structure
 

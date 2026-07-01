@@ -35,6 +35,10 @@ internal static class AuditColumns {
         Key = "kingdom", Header = header, Type = AuditColumnType.Text, Value = f => f.Kingdom,
     };
 
+    public static AuditColumn Phylum(string header = "Phylum") => new() {
+        Key = "phylum", Header = header, Type = AuditColumnType.Text, Value = f => f.Phylum,
+    };
+
     public static AuditColumn Class(string header = "Class") => new() {
         Key = "class", Header = header, Type = AuditColumnType.Text, Value = f => f.Class,
     };
@@ -67,6 +71,12 @@ internal static class AuditColumns {
     public static AuditColumn RedlistLink(string header = "Red List") => new() {
         Key = "redlistUrl", Header = header, Type = AuditColumnType.Url,
         Value = f => f.RedlistUrl, Href = f => f.RedlistUrl,
+    };
+
+    // Link to the matched Catalogue of Life entry, backed by AuditFinding.Extra["colUrl"].
+    public static AuditColumn ColLink(string header = "CoL entry") => new() {
+        Key = "colUrl", Header = header, Type = AuditColumnType.Url,
+        Value = f => f.Get("colUrl"), Href = f => f.Get("colUrl"),
     };
 
     public static AuditColumn Field(string header = "Field") => new() {

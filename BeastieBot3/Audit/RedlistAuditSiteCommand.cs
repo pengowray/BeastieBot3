@@ -11,6 +11,7 @@ using Spectre.Console.Cli;
 using BeastieBot3.Audit.Commentary;
 using BeastieBot3.Audit.Model;
 using BeastieBot3.Audit.Producers;
+using BeastieBot3.Audit.Producers.ColCrosscheck;
 using BeastieBot3.Audit.Rendering;
 using BeastieBot3.Configuration;
 using BeastieBot3.Web.Endpoints;
@@ -44,20 +45,22 @@ internal sealed class RedlistAuditSiteCommand : Command<RedlistAuditSiteCommand.
         public string? Contact { get; init; }
     }
 
-    // Display order: IUCN-owned first (most actionable first), methodology after.
-    private static IReadOnlyList<IAuditReportProducer> Producers() => new IAuditReportProducer[] {
-        new FailedAssessmentsProducer(),
-        new TaxonomyCleanupProducer(),
-        new SynonymWhitespaceProducer(),
-        new SynonymOtherFormattingProducer(),
-        new CommonNameIssuesProducer(),
-        new OrphanInfraranksProducer(),
-        new NoLatestAssessmentProducer(),
-        new HtmlConsistencyProducer(),
-        new TaxonomyConsistencyProducer(),
+    // Display order: IUCN-owned first (most actionable first), methodology after. Most producers
+    // emit one report; ColCrosscheckProducer emits several from one pass, so everything is wrapped
+    // to the set-producer contract and iterated uniformly.
+    private static IReadOnlyList<IAuditReportSetProducer> Producers() => new IAuditReportSetProducer[] {
+        new SingleReportProducer(new FailedAssessmentsProducer()),
+        new SingleReportProducer(new TaxonomyCleanupProducer()),
+        new SingleReportProducer(new SynonymWhitespaceProducer()),
+        new SingleReportProducer(new SynonymOtherFormattingProducer()),
+        new SingleReportProducer(new CommonNameIssuesProducer()),
+        new SingleReportProducer(new OrphanInfraranksProducer()),
+        new SingleReportProducer(new NoLatestAssessmentProducer()),
+        new SingleReportProducer(new HtmlConsistencyProducer()),
+        new SingleReportProducer(new TaxonomyConsistencyProducer()),
         new ColCrosscheckProducer(),
-        new FieldHygieneProducer(),
-        new NameChangesProducer(),
+        new SingleReportProducer(new FieldHygieneProducer()),
+        new SingleReportProducer(new NameChangesProducer()),
     };
 
     public override int Execute(CommandContext context, Settings settings, CancellationToken ct) {
@@ -76,13 +79,15 @@ internal sealed class RedlistAuditSiteCommand : Command<RedlistAuditSiteCommand.
             foreach (var producer in Producers()) {
                 ct.ThrowIfCancellationRequested();
                 try {
-                    var report = producer.Produce(ctx);
-                    if (report is null) {
+                    var produced = producer.Produce(ctx);
+                    if (produced.Count == 0) {
                         AnsiConsole.MarkupLineInterpolated($"[yellow]skipped[/] {producer.Id} (data source unavailable)");
                         continue;
                     }
-                    reports.Add(report);
-                    AnsiConsole.MarkupLineInterpolated($"[green]built[/] {producer.Id}: {report.Count:N0}");
+                    foreach (var report in produced) {
+                        reports.Add(report);
+                        AnsiConsole.MarkupLineInterpolated($"[green]built[/] {report.Id}: {report.Count:N0}");
+                    }
                 } catch (OperationCanceledException) {
                     throw;
                 } catch (Exception ex) {
