@@ -1144,6 +1144,23 @@
       body.appendChild(n);
     }
 
+    // Collapsible numbered walkthrough for steps done by hand (downloads, config edits).
+    if (step.guideSteps && step.guideSteps.length > 0) {
+      const g = document.createElement('details');
+      g.className = 'flow-step-guide';
+      const sum = document.createElement('summary');
+      sum.textContent = step.guideTitle || 'Step by step';
+      g.appendChild(sum);
+      const ol = document.createElement('ol');
+      for (const line of step.guideSteps) {
+        const li = document.createElement('li');
+        li.textContent = line;
+        ol.appendChild(li);
+      }
+      g.appendChild(ol);
+      body.appendChild(g);
+    }
+
     if (step.missingInputs && step.missingInputs.length > 0) {
       const m = document.createElement('p');
       m.className = 'flow-step-missing';
@@ -1265,7 +1282,7 @@
         meta.textContent = info.headline;
         chip.appendChild(meta);
       }
-      chip.title = id + (info && !info.exists ? '  (missing)' : '');
+      chip.title = (info && info.path ? info.path : id) + (info && !info.exists ? '  (missing)' : '');
       wrap.appendChild(chip);
     }
     return wrap;

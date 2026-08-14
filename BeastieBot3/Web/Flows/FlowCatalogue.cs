@@ -40,6 +40,12 @@ public sealed record FlowStep {
     public string? Note { get; init; }
     public FlowSection Section { get; init; } = FlowSection.Pipeline;
 
+    // Optional numbered walkthrough for steps the user performs by hand (downloading a
+    // release, editing config). Rendered collapsed under GuideTitle so the long procedure
+    // doesn't crowd the timeline. Plain text, one instruction per entry.
+    public string? GuideTitle { get; init; }
+    public IReadOnlyList<string> GuideSteps { get; init; } = Array.Empty<string>();
+
     // Optional sub-section heading within the pipeline. Consecutive steps sharing a Group are
     // rendered under one header (e.g. "1 · From the CSV release"), letting a single flow present
     // several clearly-separated routes. Null = no heading (the default flat timeline).
@@ -85,14 +91,48 @@ public static class FlowCatalogue {
             Steps = new[] {
                 // ===== 1 · From the CSV release =====
                 new FlowStep {
+                    Id = "csv-download",
+                    Title = "Download the release from iucnredlist.org (manual)",
+                    Description = "Two searches on the Red List website, downloaded as zips and saved into the IUCN CSV input folder. There is no command for this: the software never downloads the release for you.",
+                    Commands = Array.Empty<string>(),
+                    OutputSourceIds = new[] { "iucn-csv-input" },
+                    Group = "1 · From the CSV release",
+                    Note = "You need a free iucnredlist.org account to download search results. It takes two downloads because the site limits how much bird data one download may contain, so perching birds (Passeriformes) are fetched separately from everything else. The website changes from time to time; if the filters no longer look like this, aim for the same end result: all four kingdoms, and nothing ticked under Geographical Scope or Include.",
+                    GuideTitle = "How to download the two zips",
+                    GuideSteps = new[] {
+                        "Create a free account on iucnredlist.org and sign in. Only a signed-in user can download search results, and the finished file appears on your account page.",
+                        "Open iucnredlist.org/search and clear the two default filters: under Geographical Scope remove Global, under Include remove Species. Leave both empty.",
+                        "Empty is not the same as all. An empty filter places no restriction, whereas ticking every geographic scope quietly drops the assessments that have no scope recorded (28 of them in the 2026-1 release).",
+                        "Under Taxonomy, tick all four kingdoms: Animalia, Plantae, Fungi and Chromista.",
+                        "Still under Taxonomy, open Animalia > Chordata > Aves and untick Passeriformes. This first download is everything except perching birds.",
+                        "Press Download at the top right of the search page and choose Search Results.",
+                        "Fill in the three-page form: what you intend to use the data for, whether the use is academic, research or educational, and the terms of use.",
+                        "The download is listed on your account page. It says Preparing until the zip is ready to fetch.",
+                        "Run the second search: leave Geographical Scope and Include empty as before, but under Taxonomy tick only Animalia > Chordata > Aves > Passeriformes. Download it the same way.",
+                        "Save both zips, still zipped, in a folder named for the release, for example D:\\datasets\\IUCN_CVS_2026-1. Give each download its own subfolder inside it.",
+                        "The release version has to appear somewhere in that path. The import reads \"2026-1\" from the folder name, not from the zip, and files the rows under that release.",
+                        "Keep one release per folder. The import picks up every zip anywhere below the folder, and refuses to mix two releases in one database.",
+                    },
+                },
+                new FlowStep {
+                    Id = "csv-repoint",
+                    Title = "Point paths.ini at the new release (manual)",
+                    Description = "Set the input folder and the database filename for the new release, then restart the web server so it reads them. No command: you edit paths.ini by hand. Skip this when re-importing the release the config already points at.",
+                    Commands = Array.Empty<string>(),
+                    InputSourceIds = new[] { "iucn-csv-input" },
+                    Optional = true,
+                    Group = "1 · From the CSV release",
+                    Note = "Set both keys: [Datasets] IUCN_CVS_dir to the folder holding the new zips, and [Datastore] IUCN_sqlite_from_cvs to a new file named for the release (IUCN_2026-1.sqlite). One release per database file. The import refuses a zip whose release differs from what the database already holds, and a forgotten IUCN_sqlite_from_cvs is the usual reason it happens. Then restart serve: paths.ini is read once at startup, so until you restart, this page and everything launched from it still use the old paths. Confirm with `show-paths` or the Data sources tab.",
+                },
+                new FlowStep {
                     Id = "csv-import",
                     Title = "Import the IUCN CSV release",
-                    Description = "Load a downloaded IUCN CSV export (zip) into a local SQLite database. The fast path and the current published snapshot — most pipelines only need this.",
+                    Description = "Load the downloaded zips into the release's SQLite database. The fast path and the current published snapshot: most pipelines need nothing else.",
                     Commands = new[] { "iucn import" },
                     InputSourceIds = new[] { "iucn-csv-input" },
                     OutputSourceIds = new[] { "iucn-main" },
                     Group = "1 · From the CSV release",
-                    Note = "The zip is downloaded manually from iucnredlist.org. A new release belongs in a fresh database file (IUCN_<version>.sqlite) — `iucn import` refuses a zip whose release differs from what the DB already holds; use --force to wipe and rebuild as the new release. That's all you need for the CSV dataset — skip to the Wikipedia workflows, or build the API dataset below as an alternative.",
+                    Note = "One run imports every zip below Datasets:IUCN_CVS_dir, so both downloads go in together. Zips already imported are skipped on a re-run; --force wipes the database and rebuilds it from all of them. Afterwards the Data sources tab shows the row counts, which you can compare against the result figures shown on the search page. That is all you need for the CSV dataset: skip to the Wikipedia workflows, or build the API dataset below as an alternative.",
                 },
 
                 // ===== 2 · From the IUCN API =====

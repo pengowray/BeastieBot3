@@ -848,6 +848,21 @@ td { word-break: break-all; font-family: ui-monospace, Menlo, monospace; }
   border-left: 2px solid var(--accent);
   padding-left: 0.5em;
 }
+.flow-step-guide {
+  margin: 0.4rem 0;
+  font-size: 0.85em;
+}
+.flow-step-guide > summary {
+  cursor: pointer;
+  color: var(--accent);
+  user-select: none;
+}
+.flow-step-guide > ol {
+  margin: 0.4rem 0 0;
+  padding-left: 1.6em;
+  color: var(--fg);
+}
+.flow-step-guide > ol > li { margin: 0.3rem 0; }
 .flow-step-missing {
   color: var(--err);
   font-size: 0.85em;

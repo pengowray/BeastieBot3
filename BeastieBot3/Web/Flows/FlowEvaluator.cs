@@ -54,6 +54,7 @@ public sealed class FlowEvaluator {
                 Name = s.Name,
                 Kind = s.Kind,
                 Exists = s.Exists,
+                Path = s.Path,
                 Headline = SummariseHeadline(s),
             };
         }
@@ -145,6 +146,8 @@ public sealed class FlowEvaluator {
             Section = step.Section.ToString().ToLowerInvariant(),
             Group = step.Group,
             Note = step.Note,
+            GuideTitle = step.GuideTitle,
+            GuideSteps = step.GuideSteps,
             Status = status,
             MissingInputs = missingInputs,
             LastRunAt = lastRun,
@@ -200,6 +203,7 @@ public sealed record FlowSourceInfo {
     public required string Name { get; init; }
     public required string Kind { get; init; }     // "sqlite" | "directory"
     public required bool Exists { get; init; }
+    public string? Path { get; init; }              // resolved on-disk path, shown as the chip tooltip
     public string? Headline { get; init; }          // e.g. "191,472 assessments"
 }
 
@@ -214,6 +218,8 @@ public sealed record FlowStepSnapshot {
     public required string Section { get; init; }            // "pipeline" | "maintenance"
     public string? Group { get; init; }                       // optional sub-section heading within the pipeline
     public string? Note { get; init; }
+    public string? GuideTitle { get; init; }                  // heading for the collapsible manual walkthrough
+    public IReadOnlyList<string> GuideSteps { get; init; } = Array.Empty<string>();
     public required string Status { get; init; }              // "blocked" | "running" | "never-run" | "ok"
     public required IReadOnlyList<string> MissingInputs { get; init; }
     public DateTimeOffset? LastRunAt { get; init; }
