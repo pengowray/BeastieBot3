@@ -43,11 +43,12 @@ public sealed class FlowEvaluator {
             .ToDictionary(g => g.Key, g => g.ToList())
             ?? new Dictionary<string, List<Job>>();
 
-        // Read once per snapshot, and only for a flow that asks: two small SQLite reads plus a
-        // zip listing, shared by every probed step in the flow.
+        // Read once per snapshot, and only for a flow that asks: small SQLite reads plus a zip
+        // listing, shared by every probed step in the flow.
         var iucnState = new Lazy<IucnReleaseState>(() => IucnReleaseStateReader.Read(_paths));
+        var apiState = new Lazy<IucnApiCacheState>(() => IucnApiCacheStateReader.Read(_paths));
 
-        var steps = flow.Steps.Select(s => Evaluate(s, sourceStatusById, runningJobsByCommand, iucnState)).ToList();
+        var steps = flow.Steps.Select(s => Evaluate(s, sourceStatusById, runningJobsByCommand, iucnState, apiState)).ToList();
 
         // Collect the subset of data sources actually referenced by this flow,
         // so the UI can render input/output chips with their existence and
@@ -95,7 +96,8 @@ public sealed class FlowEvaluator {
     private FlowStepSnapshot Evaluate(FlowStep step,
                                       IReadOnlyDictionary<string, DataSourceStatus> sources,
                                       IReadOnlyDictionary<string, List<Job>> runningJobsByCommand,
-                                      Lazy<IucnReleaseState> iucnState) {
+                                      Lazy<IucnReleaseState> iucnState,
+                                      Lazy<IucnApiCacheState> apiState) {
         // Block status: any required input data source missing.
         // (Optional steps still report block info; the UI styles them differently.)
         var missingInputs = step.InputSourceIds
@@ -136,7 +138,7 @@ public sealed class FlowEvaluator {
 
         // What the on-disk state says about this step, if it carries a probe. Kept separate from
         // the status so its explanation still shows while the step is blocked or running.
-        var probe = RunProbe(step, iucnState);
+        var probe = RunProbe(step, iucnState, apiState);
 
         string status;
         if (missingInputs.Count > 0) {
@@ -181,12 +183,12 @@ public sealed class FlowEvaluator {
 
     // A probe reads real files, so anything unexpected there must not take the whole page down:
     // an unreadable folder or database just leaves the step on its usual status.
-    private static FlowProbeResult? RunProbe(FlowStep step, Lazy<IucnReleaseState> iucnState) {
+    private static FlowProbeResult? RunProbe(FlowStep step, Lazy<IucnReleaseState> iucnState, Lazy<IucnApiCacheState> apiState) {
         if (step.Probe is null) return null;
         try {
-            return FlowStepProbes.IsIucnCsvProbe(step.Probe)
-                ? FlowStepProbes.Evaluate(step.Probe, iucnState.Value)
-                : null;
+            if (FlowStepProbes.IsIucnCsvProbe(step.Probe)) return FlowStepProbes.Evaluate(step.Probe, iucnState.Value);
+            if (FlowStepProbes.IsIucnApiProbe(step.Probe)) return FlowStepProbes.EvaluateApi(step.Probe, apiState.Value);
+            return null;
         } catch {
             return null;
         }

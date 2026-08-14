@@ -30,6 +30,28 @@ internal sealed class IucnApiCacheStore : HttpCacheSqliteStore {
         return store;
     }
 
+    /// <summary>
+    /// Open for reading only, without creating or migrating anything. The workflow page reads this
+    /// store every few seconds; running EnsureSchema (and taking a write lock) on each poll would be
+    /// wasteful, and could collide with a download in progress. Reads on tables an older cache
+    /// doesn't have yet return empty rather than throwing.
+    /// </summary>
+    internal static IucnApiCacheStore? OpenReadOnly(string databasePath) {
+        if (!File.Exists(databasePath)) return null;
+        var csb = new SqliteConnectionStringBuilder {
+            DataSource = databasePath,
+            Mode = SqliteOpenMode.ReadOnly,
+        };
+        var connection = new SqliteConnection(csb.ConnectionString);
+        try {
+            connection.Open();
+        } catch (SqliteException) {
+            connection.Dispose();
+            return null;
+        }
+        return new IucnApiCacheStore(connection);
+    }
+
     /// <summary>Test/advanced seam: build the store over a caller-owned (e.g. <c>:memory:</c>) connection.</summary>
     internal static IucnApiCacheStore OpenFromConnection(SqliteConnection connection) {
         EnableForeignKeys(connection);
@@ -598,7 +620,15 @@ SELECT last_insert_rowid();";
         command.CommandText = $@"SELECT id, cutoff_utc, started_at, label, include_tombstones, include_discovery,
        start_taxa_remaining, start_assessments_remaining, tombstones_done_at, discovery_done_at, completed_at
 FROM refresh_sessions WHERE {where} ORDER BY id DESC LIMIT 1";
-        using var reader = command.ExecuteReader();
+
+        SqliteDataReader reader;
+        try {
+            reader = command.ExecuteReader();
+        } catch (SqliteException) {
+            return null;   // a cache opened read-only that predates the table
+        }
+
+        using (reader) {
         if (!reader.Read()) return null;
 
         var cutoff = ParseStoredUtc(reader.GetString(1));
@@ -618,6 +648,7 @@ FROM refresh_sessions WHERE {where} ORDER BY id DESC LIMIT 1";
             DiscoveryDoneAt = reader.IsDBNull(9) ? null : ParseStoredUtc(reader.GetString(9)),
             CompletedAt = reader.IsDBNull(10) ? null : ParseStoredUtc(reader.GetString(10)),
         };
+        }
     }
 
     public void MarkRefreshPhaseDone(long sessionId, string column) {

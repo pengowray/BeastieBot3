@@ -18,15 +18,32 @@ public static class FlowStepProbes {
     public const string IucnCsvDownload = "iucn-csv-download";
     public const string IucnCsvImport = "iucn-csv-import";
     public const string IucnCsvRepoint = "iucn-csv-repoint";
+    public const string IucnApiRefresh = "iucn-api-refresh";
+    public const string IucnApiTaxa = "iucn-api-taxa";
+    public const string IucnApiDiscovery = "iucn-api-discovery";
+    public const string IucnApiInfraranks = "iucn-api-infraranks";
+    public const string IucnApiProjection = "iucn-api-projection";
 
     public static bool IsIucnCsvProbe(string probe) =>
         probe is IucnCsvDownload or IucnCsvImport or IucnCsvRepoint;
+
+    public static bool IsIucnApiProbe(string probe) =>
+        probe is IucnApiRefresh or IucnApiTaxa or IucnApiDiscovery or IucnApiInfraranks or IucnApiProjection;
 
     // Null = this probe has nothing to say; the caller falls back to its usual status.
     public static FlowProbeResult? Evaluate(string probe, IucnReleaseState state) => probe switch {
         IucnCsvDownload => Download(state),
         IucnCsvImport => Import(state),
         IucnCsvRepoint => Repoint(state),
+        _ => null,
+    };
+
+    public static FlowProbeResult? EvaluateApi(string probe, IucnApiCacheState state) => probe switch {
+        IucnApiRefresh => ApiRefresh(state),
+        IucnApiTaxa => ApiTaxa(state),
+        IucnApiDiscovery => ApiDiscovery(state),
+        IucnApiInfraranks => ApiInfraranks(state),
+        IucnApiProjection => ApiProjection(state),
         _ => null,
     };
 
@@ -100,6 +117,113 @@ public static class FlowStepProbes {
             + (stale is null ? "." : $" (release {stale}).")
             + " Point [Datastore] IUCN_sqlite_from_cvs at the new file and restart serve.");
     }
+
+    // ---- the API route --------------------------------------------------------------------
+    // A refresh is one job across several steps, so while one is running every download step
+    // reports against it. With no refresh in progress each step reports its own coverage.
+
+    // Is a re-import under way, and does it still need starting?
+    internal static FlowProbeResult? ApiRefresh(IucnApiCacheState s) {
+        if (!s.CacheExists) return null;   // nothing cached yet, so there is nothing to re-import
+
+        if (s.ActiveSession is not { } session) {
+            var age = s.OldestTaxaDownloadedAt is { } oldest
+                ? $" The oldest payload was fetched {IucnRefreshMath.Stamp(oldest)}."
+                : "";
+            return new FlowProbeResult("ok",
+                $"No re-import in progress, so the steps below only fetch what is missing.{age}");
+        }
+
+        var progress = s.RefreshProgress!;
+        return new FlowProbeResult("ok",
+            $"Re-import {session.DisplayLabel} is running: everything fetched before {IucnRefreshMath.Stamp(session.CutoffUtc)}, {progress.PercentDone}% done. The steps below use this date on their own.");
+    }
+
+    // Species and their assessments: the two long download phases.
+    internal static FlowProbeResult? ApiTaxa(IucnApiCacheState s) {
+        if (!s.CacheExists) {
+            return new FlowProbeResult("todo", "No API cache yet. This step creates it.");
+        }
+
+        if (s.RefreshProgress is { } refresh) {
+            var session = refresh.Session;
+            if (refresh.TaxaRemaining == 0 && refresh.AssessmentsRemaining == 0) {
+                return new FlowProbeResult("ok",
+                    $"Refresh {session.DisplayLabel}: everything re-downloaded ({s.TaxaCached:N0} taxa, {s.AssessmentsCached:N0} assessments).");
+            }
+            return new FlowProbeResult("todo",
+                $"Refresh {session.DisplayLabel} is {refresh.PercentDone}% done: "
+                + $"{refresh.TaxaRemaining:N0} taxa and {refresh.AssessmentsRemaining:N0} assessments still to re-download. "
+                + "Re-run to carry on; the cutoff date is remembered.");
+        }
+
+        if (s.TaxaCached == 0) {
+            return new FlowProbeResult("todo", "Nothing cached from the API yet.");
+        }
+
+        var age = s.OldestTaxaDownloadedAt is { } oldest
+            ? $" · oldest fetched {IucnRefreshMath.Stamp(oldest)}"
+            : "";
+        return new FlowProbeResult("ok",
+            $"{s.TaxaCached:N0} taxa and {s.AssessmentsCached:N0} assessments cached{age}");
+    }
+
+    // Family paging: only meaningful as part of a refresh, since on its own it is a discovery
+    // sweep you run when you feel like it.
+    internal static FlowProbeResult? ApiDiscovery(IucnApiCacheState s) {
+        if (s.ActiveSession is not { IncludeDiscovery: true } session) return null;
+
+        return session.DiscoveryDoneAt is null
+            ? new FlowProbeResult("todo",
+                $"Refresh {session.DisplayLabel} includes the family sweep and it has not run yet. It runs itself as part of the next full API run.")
+            : new FlowProbeResult("ok",
+                $"Refresh {session.DisplayLabel}: family sweep done {IucnRefreshMath.Stamp(session.DiscoveryDoneAt.Value)}.");
+    }
+
+    // Subspecies and varieties queue assessments of their own, so the honest signal for these
+    // steps is how much of the assessment backlog is still undownloaded.
+    internal static FlowProbeResult? ApiInfraranks(IucnApiCacheState s) {
+        if (!s.CacheExists || s.TaxaCached == 0) return null;
+
+        if (s.BacklogOutstanding == 0) {
+            return new FlowProbeResult("ok", $"Every queued assessment is downloaded ({s.AssessmentsCached:N0} in the cache).");
+        }
+
+        // The handful the API answers with a server error never come down; they are not work left.
+        if (s.BacklogOutstanding <= s.ServerErrorAssessments) {
+            return new FlowProbeResult("ok",
+                $"{s.BacklogOutstanding:N0} queued assessments are still missing, and all of them are ones the API answers with a server error. Nothing left to fetch.");
+        }
+
+        return new FlowProbeResult("todo",
+            $"{s.BacklogOutstanding:N0} queued assessments are not downloaded yet.");
+    }
+
+    // The projection is what --dataset api actually reads, so "is it built from what is in the
+    // cache now" is the question, not "did the command run".
+    internal static FlowProbeResult? ApiProjection(IucnApiCacheState s) {
+        var projection = s.Projection;
+        if (projection is null) return null;
+
+        if (!projection.Exists) {
+            return new FlowProbeResult("todo", "Not built yet, so --dataset api has nothing to read.");
+        }
+
+        if (s.ActiveSession is { } session) {
+            return new FlowProbeResult("todo",
+                $"Built {Stamp(projection.BuiltAt)} — before refresh {session.DisplayLabel} finished, so it still holds the old download. Re-build it at the end.");
+        }
+
+        if (projection.IsPartial) {
+            return new FlowProbeResult("todo",
+                $"Built {Stamp(projection.BuiltAt)} but incomplete: {projection.LatestNotDownloaded:N0} taxa have a current assessment that was not downloaded. Download them, then build it again.");
+        }
+
+        return new FlowProbeResult("ok",
+            $"Built {Stamp(projection.BuiltAt)} · {projection.ProjectedTaxa:N0} taxa, complete");
+    }
+
+    private static string Stamp(DateTime? utc) => utc is null ? "at some point" : IucnRefreshMath.Stamp(utc.Value);
 
     private static string Zips(int count) => count == 1 ? "1 zip file" : $"{count} zip files";
 }
