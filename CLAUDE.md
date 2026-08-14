@@ -104,6 +104,20 @@ Use `ReportPathResolver` to resolve output paths. Priority: explicit CLI `--outp
 - Stick to exact matches on indexed columns (`kingdomName`, `className`, `redlistCategory`).
 - Need a new filter? Add a matching index in the importer, don't bolt `ORDER BY` on a random column.
 
+### Re-importing the API cache for a new release
+
+The API cache (`IUCN_api_cache_sqlite`) carries **no release version** — a payload downloaded during 2025-2 is indistinguishable from one downloaded today — so it is exempt from the one-release-per-DB rule and a re-import means "fetch everything again that is older than a date". `iucn api refresh-start` records that date as a **session** (`refresh_sessions` table in the cache); every download command falls back to the active session's cutoff when given no threshold flag of its own, so resuming is a plain `iucn api cache-all --full` and the date is never retyped. The cutoff is fixed, not a rolling window: `--max-age-hours` recomputes from "now" on each run, so a multi-day refresh re-fetches its own work — use `--refresh-before` or a session. `--force` re-downloads everything but ignores `downloaded_at`, so an interrupted force run restarts from the first item; prefer a session for anything long.
+
+A session also drives the family-paging sweep and a final `--retry-tombstones` pass (404/410 tombstones are permanent and invisible to every normal run, but that verdict is only true of the release it was recorded against). It closes itself once nothing predates the cutoff and every requested phase has run. `iucn api refresh-status` reports progress between runs; `refresh-abandon` exits without losing downloads. Decision logic is pure in `IucnRefreshMath` and pinned by `IucnRefreshSessionTests`.
+
+`downloaded_at` is stored as a UTC `"O"` string. Read it with `IucnApiCacheStore.ParseStoredUtc`, never plain `DateTime.TryParse`, which converts the trailing `Z` to local time and shifts every refresh boundary by the machine's offset.
+
+### Workflow step state (the web UI's lights)
+
+A `FlowStep` in `Web/Flows/FlowCatalogue.cs` may carry `Probe = FlowStepProbes.X`. Without one a step can only report when its command last ran — which answers a different question, and says nothing at all for a step done by hand. Probes read the real files (`IucnReleaseStateReader`, `IucnApiCacheStateReader`) and return `("ok" | "todo", detail)`; `todo` renders amber with the detail line under the step title. Status precedence in `FlowEvaluator`: blocked > running > probe > job history. Probes are polled every ~10s across every flow, so they must stay offline, cheap, and open databases **read-only with no schema work**. Decisions are pure functions over a state record — add cases to `FlowStepProbeTests` / `FlowApiProbeTests`.
+
+Steps also expose their command's full option form (the same one the Run command page generates), pre-filled from the args the step declares.
+
 ### Assessment Types
 
 - **Species**: `infraType` and `infraName` are both NULL/empty.
