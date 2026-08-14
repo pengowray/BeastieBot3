@@ -1,3 +1,5 @@
+using System;
+using BeastieBot3.Col;
 using BeastieBot3.Iucn;
 
 namespace BeastieBot3.Web.Flows;
@@ -27,8 +29,29 @@ public static class FlowStepProbes {
     public static bool IsIucnCsvProbe(string probe) =>
         probe is IucnCsvDownload or IucnCsvImport or IucnCsvRepoint;
 
+    public const string ColImport = "col-import";
+    public const string ColRepoint = "col-repoint";
+    public const string ColCleanup = "col-cleanup";
+    public const string ColRebuildNames = "col-rebuild-names";
+    public const string ColRebuildAudit = "col-rebuild-audit";
+    public const string ColRebuildLists = "col-rebuild-lists";
+
     public static bool IsIucnApiProbe(string probe) =>
         probe is IucnApiRefresh or IucnApiTaxa or IucnApiDiscovery or IucnApiInfraranks or IucnApiProjection;
+
+    public static bool IsColProbe(string probe) =>
+        probe is ColImport or ColRepoint or ColCleanup
+            or ColRebuildNames or ColRebuildAudit or ColRebuildLists;
+
+    public static FlowProbeResult? EvaluateCol(string probe, ColUpdateState state, ColArtifacts artifacts) => probe switch {
+        ColImport => ColImportStep(state),
+        ColRepoint => ColRepointStep(state),
+        ColCleanup => ColCleanupStep(state),
+        ColRebuildNames => ColRebuild(state, artifacts.CommonNamesModified),
+        ColRebuildAudit => ColRebuild(state, artifacts.AuditSiteModified),
+        ColRebuildLists => ColRebuild(state, artifacts.WikipediaListsModified),
+        _ => null,
+    };
 
     // Null = this probe has nothing to say; the caller falls back to its usual status.
     public static FlowProbeResult? Evaluate(string probe, IucnReleaseState state) => probe switch {
@@ -221,6 +244,85 @@ public static class FlowStepProbes {
 
         return new FlowProbeResult("ok",
             $"Built {Stamp(projection.BuiltAt)} · {projection.ProjectedTaxa:N0} taxa, complete");
+    }
+
+    // ---- Catalogue of Life ------------------------------------------------------------------
+    // Nothing else anywhere checks the CoL version: a database from the previous release looks
+    // perfectly healthy, and its consumers degrade quietly rather than failing, so their output
+    // just stays frozen on the old release. These steps say which.
+
+    internal static FlowProbeResult? ColImportStep(ColUpdateState s) => s.Status switch {
+        "not-imported" => new FlowProbeResult("todo", s.Message),
+        "incomplete" => new FlowProbeResult("todo", s.Message),
+        "update-available" => new FlowProbeResult("todo",
+            $"The input folder has a newer release ({Release(s.Input?.Label, s.Input?.Issued)}) than the imported database ({Release(s.Loaded?.Label, s.Loaded?.Issued)})."),
+        "fresh" => new FlowProbeResult("ok",
+            $"{Release(s.Loaded?.Label, s.Loaded?.Issued)} is imported into {s.Loaded?.FileName}."),
+        "no-input" => new FlowProbeResult("ok",
+            $"{Release(s.Loaded?.Label, s.Loaded?.Issued)} is imported. No ColDP zip in the input folder, so a newer release can't be spotted."),
+        // Reading the input archive for the first time takes a while; say what is imported and
+        // leave the comparison to the next poll rather than claiming there is nothing newer.
+        "input-pending" => new FlowProbeResult("ok",
+            $"{Release(s.Loaded?.Label, s.Loaded?.Issued)} is imported into {s.Loaded?.FileName}. Still checking the input folder for anything newer."),
+        _ => null,
+    };
+
+    internal static FlowProbeResult? ColRepointStep(ColUpdateState s) {
+        if (s.Loaded is not { Exists: true } loaded) {
+            return new FlowProbeResult("todo", "Datastore:COL_sqlite does not point at a file that exists.");
+        }
+
+        // Both keys have to move together and nothing else notices when only one does.
+        if (s.ConfigDisagrees) {
+            return new FlowProbeResult("todo",
+                $"paths.ini disagrees with itself: COL_sqlite reads {loaded.FileName} ({loaded.Label}) while COL_dir holds {s.Input?.Label}. Set both to the new release and restart serve.");
+        }
+
+        if (s.Status == "update-available") {
+            return new FlowProbeResult("todo",
+                $"Still reading {loaded.FileName} ({Release(loaded.Label, loaded.Issued)}). Import the newer release first, then point COL_sqlite and COL_dir at it and restart serve.");
+        }
+
+        return new FlowProbeResult("ok",
+            $"paths.ini already points at {loaded.FileName}, which holds {Release(loaded.Label, loaded.Issued)}.");
+    }
+
+    internal static FlowProbeResult? ColCleanupStep(ColUpdateState s) {
+        if (s.Leftovers.Count == 0) return null;
+
+        var biggest = s.Leftovers[0];
+        return new FlowProbeResult("todo",
+            s.Leftovers.Count == 1
+                ? $"{biggest.FileName} ({Bytes(biggest.Bytes)}) is left over from an earlier release and is never read again."
+                : $"{s.Leftovers.Count} files from earlier releases are left on disk and never read again, {Bytes(s.LeftoverBytes)} in total (largest: {biggest.FileName}).");
+    }
+
+    // Was this output written since the release now being read was imported? Nothing else notices
+    // when it wasn't: CoL consumers degrade quietly, so the output simply stays on the old release.
+    internal static FlowProbeResult? ColRebuild(ColUpdateState s, DateTime? artifactModified) {
+        if (s.Loaded is not { Exists: true }) return null;
+        if (s.CurrentSince is not { } since) return null;
+
+        if (artifactModified is null) {
+            return new FlowProbeResult("todo", "Not built yet.");
+        }
+        if (artifactModified.Value < since) {
+            return new FlowProbeResult("todo",
+                $"Last built {Stamp(artifactModified)}, before Catalogue of Life {s.Loaded.Label} was imported ({Stamp(since)}), so it still reflects the previous release.");
+        }
+        return new FlowProbeResult("ok",
+            $"Last built {Stamp(artifactModified)}, after Catalogue of Life {s.Loaded.Label} was imported.");
+    }
+
+    private static string Release(string? label, string? issued) =>
+        ColUpdateStateReader.Describe(label, issued);
+
+    private static string Bytes(long bytes) {
+        string[] units = { "bytes", "KB", "MB", "GB", "TB" };
+        double value = bytes;
+        var unit = 0;
+        while (value >= 1024 && unit < units.Length - 1) { value /= 1024; unit++; }
+        return unit == 0 ? $"{bytes:N0} bytes" : $"{value:0.#} {units[unit]}";
     }
 
     private static string Stamp(DateTime? utc) => utc is null ? "at some point" : IucnRefreshMath.Stamp(utc.Value);

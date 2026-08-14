@@ -262,6 +262,7 @@ public static class FlowCatalogue {
                     InputSourceIds = new[] { "col-input" },
                     OutputSourceIds = new[] { "col-sqlite" },
                     Group = "1 · Import & repoint",
+                    Probe = FlowStepProbes.ColImport,
                     Note = "Reads the ColDP zip(s) from Datasets:COL_dir and builds col_coldp_<label>.sqlite, where <label> is the alias inside the zip's metadata.yaml (e.g. \"COL26.5 XR\" -> col_coldp_COL26.5_XR.sqlite) — NOT the zip filename. A new release gets a new filename, so it imports ALONGSIDE the old DB (the old one is left on disk; remove it in Maintenance below). Listed as Destructive only because --force wipes and rebuilds; without --force a finished DB is skipped and a half-written/corrupt one is rebuilt. The import is multi-GB and slow. It downloads datapackage.json from the CoL API once, only if the input folder doesn't already contain one (a provenance snapshot that is never parsed).",
                 },
                 new FlowStep {
@@ -272,6 +273,7 @@ public static class FlowCatalogue {
                     InputSourceIds = new[] { "col-sqlite" },
                     OutputSourceIds = new[] { "col-sqlite" },
                     Group = "1 · Import & repoint",
+                    Probe = FlowStepProbes.ColRepoint,
                     Note = "The importer never edits paths.ini. Set [Datastore] COL_sqlite to the new col_coldp_<label>.sqlite AND [Datasets] COL_dir to the new folder — set BOTH, they can drift independently and nothing warns you if they disagree. Then RESTART serve: it loads paths.ini once into a singleton with no hot-reload, so until you restart, every page (including this flow) keeps resolving the OLD CoL file. Confirm with `show-paths` or the Data sources tab. Important: there is no CoL version/freshness check anywhere — a database from the previous release looks perfectly healthy — so confirming the dataset label in the next step is your only safeguard against silently running on the old release.",
                 },
                 new FlowStep {
@@ -295,6 +297,7 @@ public static class FlowCatalogue {
                     InputSourceIds = new[] { "col-sqlite", "iucn-main" },
                     OutputSourceIds = new[] { "common-names" },
                     Group = "2 · Refresh derived data",
+                    Probe = FlowStepProbes.ColRebuildNames,
                     Note = "Adds the new release's English vernaculars and scientific-name synonyms to the hub (stored as source='col'). Run `common-names init` first ONLY if the hub doesn't exist yet or you want a full rebuild — init seeds hub taxa from IUCN + caps.txt and does not read CoL, so `aggregate` is the actual CoL step. aggregate is idempotent and downloads nothing, but it only upserts: names dropped or renamed in the new release are NOT purged, so a plain re-run leaves a UNION of old + new CoL data plus stale CoL taxon-id cross-references (CoL renumbers ids between releases). To mirror the new release exactly, use the full rebuild in Maintenance below.",
                 },
                 new FlowStep {
@@ -305,6 +308,7 @@ public static class FlowCatalogue {
                     InputSourceIds = new[] { "col-sqlite", "iucn-main" },
                     OutputSourceIds = new[] { "reports" },
                     Group = "2 · Refresh derived data",
+                    Probe = FlowStepProbes.ColRebuildAudit,
                     Note = "The audit site's CoL-crosscheck page reads CoL live, so re-running reflects the new release. It internally replicates the `iucn report-col-crosscheck` logic, so you do NOT need to run that command first. Output: <reports_dir>/redlist-audit-2026/ (open index.html). If COL_sqlite is missing or has no nameusage table the CoL page is silently skipped (exit 0) — so verify the repoint first. The rendered site records no CoL version label; it always shows whatever COL_sqlite currently points at.",
                 },
                 new FlowStep {
@@ -355,6 +359,7 @@ public static class FlowCatalogue {
                     InputSourceIds = new[] { "iucn-main", "col-sqlite", "common-names", "wikipedia-cache" },
                     OutputSourceIds = Array.Empty<string>(),
                     Group = "4 · Regenerate outputs",
+                    Probe = FlowStepProbes.ColRebuildLists,
                     Note = "Regenerate the FULL set — do NOT pass --list/--status/--taxa-group for a CoL update. CoL only changes the section grouping of lists that split on CoL-only ranks (suborder/superfamily/subfamily/tribe/subgenus), virtual groups, or auto-split; but structure-metrics.json is keyed to the IUCN release only, so a partial regenerate leaves stale CoL-grouped metrics behind (visible in `wikipedia preview-impact`). Run the common-names and discovery steps first so new vernaculars and article links are included. The first run is slower: the new CoL enrich-cache sidecar (col_coldp_<label>.sqlite.enrich-cache.sqlite, created next to the CoL DB) starts empty and rebuilds once. Charts (`wikipedia generate-charts`) don't read CoL — skip them for a CoL-only update.",
                     OutputPatterns = new[] {
                         new FlowOutputPattern { Root = "wikipedia-output", Pattern = "*.wikitext", Label = "Lists" },
@@ -374,6 +379,7 @@ public static class FlowCatalogue {
                 },
                 new FlowStep {
                     Id = "cleanup-orphans",
+                    Probe = FlowStepProbes.ColCleanup,
                     Title = "Delete old CoL leftovers (manual)",
                     Description = "Remove the previous release's database and its orphaned enrich-cache to reclaim disk.",
                     Commands = Array.Empty<string>(),

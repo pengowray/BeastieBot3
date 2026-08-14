@@ -1,3 +1,4 @@
+using BeastieBot3.Col;
 using BeastieBot3.Configuration;
 using BeastieBot3.Iucn;
 using BeastieBot3.Web.Jobs;
@@ -47,8 +48,14 @@ public sealed class FlowEvaluator {
         // listing, shared by every probed step in the flow.
         var iucnState = new Lazy<IucnReleaseState>(() => IucnReleaseStateReader.Read(_paths));
         var apiState = new Lazy<IucnApiCacheState>(() => IucnApiCacheStateReader.Read(_paths));
+        // readArchives:false — this path is polled, and the first read of a multi-GB ColDP archive
+        // takes around twenty seconds. It is warmed in the background instead.
+        var colState = new Lazy<ColUpdateState>(() => ColUpdateStateReader.Read(_paths, readArchives: false));
+        var colArtifacts = new Lazy<ColArtifacts>(() => ColArtifacts.Read(_paths));
 
-        var steps = flow.Steps.Select(s => Evaluate(s, sourceStatusById, runningJobsByCommand, iucnState, apiState)).ToList();
+        var steps = flow.Steps
+            .Select(s => Evaluate(s, sourceStatusById, runningJobsByCommand, iucnState, apiState, colState, colArtifacts))
+            .ToList();
 
         // Collect the subset of data sources actually referenced by this flow,
         // so the UI can render input/output chips with their existence and
@@ -97,7 +104,9 @@ public sealed class FlowEvaluator {
                                       IReadOnlyDictionary<string, DataSourceStatus> sources,
                                       IReadOnlyDictionary<string, List<Job>> runningJobsByCommand,
                                       Lazy<IucnReleaseState> iucnState,
-                                      Lazy<IucnApiCacheState> apiState) {
+                                      Lazy<IucnApiCacheState> apiState,
+                                      Lazy<ColUpdateState> colState,
+                                      Lazy<ColArtifacts> colArtifacts) {
         // Block status: any required input data source missing.
         // (Optional steps still report block info; the UI styles them differently.)
         var missingInputs = step.InputSourceIds
@@ -138,7 +147,7 @@ public sealed class FlowEvaluator {
 
         // What the on-disk state says about this step, if it carries a probe. Kept separate from
         // the status so its explanation still shows while the step is blocked or running.
-        var probe = RunProbe(step, iucnState, apiState);
+        var probe = RunProbe(step, iucnState, apiState, colState, colArtifacts);
 
         string status;
         if (missingInputs.Count > 0) {
@@ -183,11 +192,16 @@ public sealed class FlowEvaluator {
 
     // A probe reads real files, so anything unexpected there must not take the whole page down:
     // an unreadable folder or database just leaves the step on its usual status.
-    private static FlowProbeResult? RunProbe(FlowStep step, Lazy<IucnReleaseState> iucnState, Lazy<IucnApiCacheState> apiState) {
+    private static FlowProbeResult? RunProbe(FlowStep step,
+                                             Lazy<IucnReleaseState> iucnState,
+                                             Lazy<IucnApiCacheState> apiState,
+                                             Lazy<ColUpdateState> colState,
+                                             Lazy<ColArtifacts> colArtifacts) {
         if (step.Probe is null) return null;
         try {
             if (FlowStepProbes.IsIucnCsvProbe(step.Probe)) return FlowStepProbes.Evaluate(step.Probe, iucnState.Value);
             if (FlowStepProbes.IsIucnApiProbe(step.Probe)) return FlowStepProbes.EvaluateApi(step.Probe, apiState.Value);
+            if (FlowStepProbes.IsColProbe(step.Probe)) return FlowStepProbes.EvaluateCol(step.Probe, colState.Value, colArtifacts.Value);
             return null;
         } catch {
             return null;
