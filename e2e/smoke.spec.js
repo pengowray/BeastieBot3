@@ -92,10 +92,14 @@ test('run view loads the command tree and the filter narrows it', async ({ page 
 test('expanding a command shows its auto-generated form without running it', async ({ page }) => {
   await page.goto('/#/run');
   await page.locator('#cmd-search').fill('generate-lists');
-  const row = page.locator('#command-tree .cmd-row', { hasText: 'generate-lists' }).first();
+  // Rows show only the last path segment, and both `wikipedia generate-lists` and
+  // `sprat generate-lists` match — so pick the row inside the wikipedia branch.
+  const branch = page.locator('#command-tree .cmd-branch')
+    .filter({ has: page.locator('.cmd-branch-name', { hasText: /^wikipedia$/ }) });
+  const row = branch.locator('.cmd-row', { hasText: 'generate-lists' }).first();
   await row.click();
   // The form renders with a Run button — but we never click it.
-  const form = page.locator('#command-tree .cmd-form').first();
+  const form = branch.locator('.cmd-form').first();
   await expect(form).toBeVisible();
   await expect(form.locator('button.run-btn')).toBeVisible();
   // The new --status / --taxa-group filters surface as labelled fields in the
