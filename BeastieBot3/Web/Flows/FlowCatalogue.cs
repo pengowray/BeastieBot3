@@ -438,6 +438,7 @@ public static class FlowCatalogue {
                     InputSourceIds = new[] { "col-input" },
                     OutputSourceIds = new[] { "col-sqlite" },
                     Optional = true,
+                    Probe = FlowStepProbes.ColImport,
                 },
                 new FlowStep {
                     Id = "wikidata-cache",

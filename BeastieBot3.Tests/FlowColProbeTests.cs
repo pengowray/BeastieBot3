@@ -87,10 +87,12 @@ public class FlowColProbeTests {
     }
 
     // COL_dir and COL_sqlite move independently and nothing else warns when only one changes.
+    // Here COL_sqlite is on the current release while COL_dir was left on the previous one, so
+    // there is nothing newer to import and the drift is the only thing to report.
     [Fact]
     public void Repoint_ConfigKeysDisagree_IsTodo() {
         var r = FlowStepProbes.ColRepointStep(State(
-            input: Input("COL26.9 XR", "26.9", "2026-09-01"), configDisagrees: true))!;
+            input: Input("COL25.10 XR", "25.10", "2025-10-01"), configDisagrees: true))!;
         Assert.Equal("todo", r.Status);
         Assert.Contains("disagrees with itself", r.Detail);
     }
@@ -162,6 +164,40 @@ public class FlowColProbeTests {
         var builtJustAfterImport = Imported.AddMinutes(30);
         var r = FlowStepProbes.ColRebuild(State(), builtJustAfterImport)!;
         Assert.Equal("ok", r.Status);
+    }
+
+    // ---- the two config keys drifting apart ----
+    // COL_sqlite and COL_dir move independently and nothing else in the project notices when only
+    // one of them has been changed.
+
+    [Fact]
+    public void ConfigDisagrees_FalseWhenBothNameTheSameRelease() =>
+        Assert.False(ColUpdateStateReader.ConfigDisagrees(Loaded(), Input()));
+
+    [Fact]
+    public void ConfigDisagrees_TrueWhenTheyNameDifferentReleases() =>
+        Assert.True(ColUpdateStateReader.ConfigDisagrees(Loaded(), Input("COL25.10 XR", "25.10", "2025-10-01")));
+
+    // The importer turns the alias into a filename, so the two are compared loosely rather than
+    // by exact text.
+    [Fact]
+    public void ConfigDisagrees_IgnoresHowTheAliasBecomesAFilename() =>
+        Assert.False(ColUpdateStateReader.ConfigDisagrees(Loaded(label: "COL26.5 XR"), Input("COL26_5_XR")));
+
+    [Fact]
+    public void ConfigDisagrees_FalseWhenEitherSideIsUnknown() {
+        Assert.False(ColUpdateStateReader.ConfigDisagrees(Loaded(exists: false), Input()));
+        Assert.False(ColUpdateStateReader.ConfigDisagrees(Loaded(), null));
+    }
+
+    // While a newer release is still waiting to be imported there is nothing to repoint at yet,
+    // so the import advice has to come before the "set both keys" advice.
+    [Fact]
+    public void Repoint_NewerReleaseWaiting_SaysImportFirstNotSetBothKeys() {
+        var r = FlowStepProbes.ColRepointStep(State(
+            input: Input("COL26.9 XR", "26.9", "2026-09-01"), configDisagrees: true))!;
+        Assert.Equal("todo", r.Status);
+        Assert.Contains("Import the newer release first", r.Detail);
     }
 
     // ---- the shared version comparison ----

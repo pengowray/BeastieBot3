@@ -272,15 +272,18 @@ public static class FlowStepProbes {
             return new FlowProbeResult("todo", "Datastore:COL_sqlite does not point at a file that exists.");
         }
 
-        // Both keys have to move together and nothing else notices when only one does.
-        if (s.ConfigDisagrees) {
-            return new FlowProbeResult("todo",
-                $"paths.ini disagrees with itself: COL_sqlite reads {loaded.FileName} ({loaded.Label}) while COL_dir holds {s.Input?.Label}. Set both to the new release and restart serve.");
-        }
-
+        // Order matters: while a newer release is still waiting to be imported there is nothing
+        // to repoint at yet, so say that rather than "set both keys" — which is the right advice
+        // only once the import has run.
         if (s.Status == "update-available") {
             return new FlowProbeResult("todo",
                 $"Still reading {loaded.FileName} ({Release(loaded.Label, loaded.Issued)}). Import the newer release first, then point COL_sqlite and COL_dir at it and restart serve.");
+        }
+
+        // Both keys have to move together and nothing else notices when only one does.
+        if (s.ConfigDisagrees) {
+            return new FlowProbeResult("todo",
+                $"paths.ini disagrees with itself: COL_sqlite reads {loaded.FileName} ({loaded.Label}) while COL_dir holds {s.Input?.Label}. Set both to the same release and restart serve.");
         }
 
         return new FlowProbeResult("ok",

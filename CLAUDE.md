@@ -114,7 +114,11 @@ A session also drives the family-paging sweep and a final `--retry-tombstones` p
 
 ### Workflow step state (the web UI's lights)
 
-A `FlowStep` in `Web/Flows/FlowCatalogue.cs` may carry `Probe = FlowStepProbes.X`. Without one a step can only report when its command last ran — which answers a different question, and says nothing at all for a step done by hand. Probes read the real files (`IucnReleaseStateReader`, `IucnApiCacheStateReader`) and return `("ok" | "todo", detail)`; `todo` renders amber with the detail line under the step title. Status precedence in `FlowEvaluator`: blocked > running > probe > job history. Probes are polled every ~10s across every flow, so they must stay offline, cheap, and open databases **read-only with no schema work**. Decisions are pure functions over a state record — add cases to `FlowStepProbeTests` / `FlowApiProbeTests`.
+A `FlowStep` in `Web/Flows/FlowCatalogue.cs` may carry `Probe = FlowStepProbes.X`. Without one a step can only report when its command last ran — which answers a different question, and says nothing at all for a step done by hand. Probes read the real files (`IucnReleaseStateReader`, `IucnApiCacheStateReader`, `ColUpdateStateReader` + `ColArtifacts`) and return `("ok" | "todo", detail)`; `todo` renders amber with the detail line under the step title. Status precedence in `FlowEvaluator`: blocked > running > probe > job history. Decisions are pure functions over a state record — add cases to `FlowStepProbeTests` / `FlowApiProbeTests` / `FlowColProbeTests`.
+
+Probes are polled every ~10s across every flow, so they must stay offline, cheap, and open databases **read-only with no schema work**. Anything that can be slow belongs behind a cache the polled path only reads: `ColUpdateStateReader.Read(paths, readArchives: false)` takes what is already cached and warms the rest on a background task, because the first read of a ColDP archive takes ~20 seconds and blocked the dashboard. A probe that can't answer yet must say so rather than assert the negative.
+
+CoL staleness (`ColRebuild`) is measured against the CoL import time, **not** against paths.ini's mtime — paths.ini changes for unrelated reasons, and using it marked every CoL-derived output stale forever.
 
 Steps also expose their command's full option form (the same one the Run command page generates), pre-filled from the args the step declares.
 

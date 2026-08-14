@@ -118,7 +118,7 @@ public static class ColUpdateStateReader {
     // The importer names the file after the alias inside the zip, so a database whose name doesn't
     // match the folder it was built from is the usual sign that only one of the two config keys was
     // changed. Compared loosely — the alias is turned into a filename by replacing spaces.
-    private static bool ConfigDisagrees(ColLoadedRelease? loaded, ColInputRelease? input) {
+    internal static bool ConfigDisagrees(ColLoadedRelease? loaded, ColInputRelease? input) {
         if (loaded is not { Exists: true, Label: { Length: > 0 } loadedLabel }) return false;
         if (input?.Label is not { Length: > 0 } inputLabel) return false;
         return !string.Equals(Slug(loadedLabel), Slug(inputLabel), StringComparison.OrdinalIgnoreCase);
