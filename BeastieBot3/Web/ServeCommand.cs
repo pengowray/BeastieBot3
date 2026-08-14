@@ -141,6 +141,14 @@ internal sealed class ServeCommand : AsyncCommand<ServeCommand.Settings> {
             });
             app.UseStaticFiles(new StaticFileOptions {
                 FileProvider = new PhysicalFileProvider(wwwroot),
+                // Without an explicit Cache-Control the browser is free to guess how long these
+                // are good for, and it guesses generously: after a rebuild you would keep getting
+                // the old page until you cleared the cache by hand. "no-cache" doesn't mean don't
+                // store it, it means ask first — the browser still caches, but revalidates every
+                // time and gets a 304 when nothing changed, which over localhost costs nothing.
+                OnPrepareResponse = ctx => {
+                    ctx.Context.Response.Headers.CacheControl = "no-cache, must-revalidate";
+                },
             });
         } else {
             AnsiConsole.MarkupLine($"[yellow]Warning:[/] wwwroot directory not found at [grey]{wwwroot}[/]");

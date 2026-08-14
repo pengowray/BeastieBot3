@@ -76,7 +76,7 @@ internal sealed class IucnApiRefreshStartCommand : AsyncCommand<IucnApiRefreshSt
         public string? Cutoff { get; init; }
 
         [CommandOption("--label <NAME>")]
-        [Description("What you are refreshing to, shown wherever the refresh is reported (e.g. 2026-1).")]
+        [Description("What you are refreshing to, shown wherever the refresh is reported. Defaults to the release the imported CSV database holds, so there is normally nothing to type here.")]
         public string? Label { get; init; }
 
         [CommandOption("--no-tombstones")]
@@ -124,7 +124,12 @@ internal sealed class IucnApiRefreshStartCommand : AsyncCommand<IucnApiRefreshSt
             AnsiConsole.MarkupLineInterpolated($"[yellow]Abandoned the refresh in progress:[/] {active.DisplayLabel}.");
         }
 
-        var session = store.StartRefreshSession(cutoff, settings.Label, !settings.NoTombstones, !settings.NoDiscovery);
+        // The release being refreshed to is already known: it is whatever the CSV import put in
+        // the configured database. Asking for it again would be asking the operator to retype
+        // something the program can read.
+        var label = string.IsNullOrWhiteSpace(settings.Label) ? ReadCsvRelease(paths) : settings.Label!.Trim();
+
+        var session = store.StartRefreshSession(cutoff, label, !settings.NoTombstones, !settings.NoDiscovery);
 
         AnsiConsole.MarkupLineInterpolated(
             $"[green]Refresh started:[/] {session.DisplayLabel}, re-downloading everything fetched before {IucnRefreshMath.Stamp(cutoff)}.");
@@ -138,6 +143,18 @@ internal sealed class IucnApiRefreshStartCommand : AsyncCommand<IucnApiRefreshSt
         }
         AnsiConsole.MarkupLine("Now run [bold]iucn api cache-all --full[/]. Stop it whenever you like: re-running carries on from where it stopped, and you never re-enter the date.");
         return Task.FromResult(0);
+    }
+
+    // The release name the CSV import recorded, or null when there is no CSV database to read
+    // (the API route can be built without one, in which case the session goes unlabelled).
+    private static string? ReadCsvRelease(PathsService paths) {
+        try {
+            var dbPath = IucnReleaseStateReader.ResolveConfiguredDbPath(paths, null);
+            if (dbPath is null) return null;
+            return IucnReleaseStateReader.ReadDatabase(dbPath).HeldRelease;
+        } catch {
+            return null;
+        }
     }
 
     internal static void ReportProgress(IucnApiCacheStore store, IucnRefreshSession session) {
