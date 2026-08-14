@@ -111,17 +111,8 @@ public static class FlowCatalogue {
                         "Save both zips, still zipped, under a folder for the release, for example D:\\datasets\\IUCN_CVS_2026-1. Give each download its own subfolder, and start that subfolder's name with the release version: \"2026-1 non-passerines\" and \"2026-1 passerines\".",
                         "Starting the subfolder name with the version is not decoration. It is where the import reads the release from, and IUCN names the zips with a random id that contains number pairs like 1373-414. Miss the version out and the import mistakes one of those for the release, filing the two downloads as different releases.",
                         "Keep one release per folder. The import picks up every zip anywhere below the folder, and refuses to mix two releases in one database.",
+                        "Last, set [Datasets] IUCN_CVS_dir in paths.ini to that release folder. If you launch commands from these web pages rather than the command line, restart serve afterwards, because paths.ini is only read at startup.",
                     },
-                },
-                new FlowStep {
-                    Id = "csv-repoint",
-                    Title = "Point paths.ini at the new release & restart serve (manual)",
-                    Description = "Set the input folder and the database filename for the new release, then restart the web server so it reads them. No command: you edit paths.ini by hand. Skip this when re-importing the release the config already points at.",
-                    Commands = Array.Empty<string>(),
-                    InputSourceIds = new[] { "iucn-csv-input" },
-                    Optional = true,
-                    Group = "1 · From the CSV release",
-                    Note = "Set both keys: [Datasets] IUCN_CVS_dir to the folder holding the new zips, and [Datastore] IUCN_sqlite_from_cvs to a new file named for the release (e.g. IUCN_2026-1.sqlite). One release per database file: the import refuses a zip whose release differs from what the database already holds, and forgetting to change IUCN_sqlite_from_cvs is the usual cause of that error. Then restart serve: paths.ini is read once at startup, so until you restart, this page and everything launched from it still use the old paths. Confirm with `show-paths` or the Data sources tab.",
                 },
                 new FlowStep {
                     Id = "csv-import",
@@ -131,7 +122,17 @@ public static class FlowCatalogue {
                     InputSourceIds = new[] { "iucn-csv-input" },
                     OutputSourceIds = new[] { "iucn-main" },
                     Group = "1 · From the CSV release",
-                    Note = "One run imports every zip below [Datasets] IUCN_CVS_dir, so both downloads go in together. Zips already imported are skipped on a re-run; --force wipes the database and rebuilds it from all of them. Afterwards the Data sources tab shows the row counts, which you can compare against the result counts iucnredlist.org showed for each search. That is all you need for the CSV dataset: skip to the Wikipedia workflows, or build the API dataset below as an alternative.",
+                    Note = "One run imports every zip below [Datasets] IUCN_CVS_dir, so both downloads go in together. When those zips are a newer release than the configured database holds, the import creates a new file for them (IUCN_2026-1.sqlite, alongside the old one) and prints the paths.ini line to change; the previous release is never overwritten unless you ask for that with --force --replace-release. Zips already imported are skipped on a re-run. Afterwards the Data sources tab shows the row counts, which you can compare against the result counts iucnredlist.org showed for each search.",
+                },
+                new FlowStep {
+                    Id = "csv-repoint",
+                    Title = "Point paths.ini at the new database & restart serve (manual)",
+                    Description = "Tell everything else to read the database the import just created, then restart the web server. No command: you edit paths.ini by hand. Skip this when the import went into the file paths.ini already names.",
+                    Commands = Array.Empty<string>(),
+                    InputSourceIds = new[] { "iucn-main" },
+                    Optional = true,
+                    Group = "1 · From the CSV release",
+                    Note = "Set [Datastore] IUCN_sqlite_from_cvs to the file the import reported, then restart serve. Until you do, every other command and every page here still reads the previous release, and nothing warns you: a database from the old release looks perfectly healthy. paths.ini is only read at startup, so the restart is what makes the change take effect. Confirm with `show-paths` or the Data sources tab, which shows the imported version. That is all you need for the CSV dataset: skip to the Wikipedia workflows, or build the API dataset below as an alternative.",
                 },
 
                 // ===== 2 · From the IUCN API =====
