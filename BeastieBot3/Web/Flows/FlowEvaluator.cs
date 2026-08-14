@@ -129,6 +129,9 @@ public sealed class FlowEvaluator {
             status = "blocked";
         } else if (running.Count > 0) {
             status = "running";
+        } else if (step.Commands.Count == 0) {
+            // Nothing to launch, so "not run" would be wrong: the user does this one by hand.
+            status = "manual";
         } else if (lastRun is null) {
             status = "never-run";
         } else {
@@ -220,7 +223,7 @@ public sealed record FlowStepSnapshot {
     public string? Note { get; init; }
     public string? GuideTitle { get; init; }                  // heading for the collapsible manual walkthrough
     public IReadOnlyList<string> GuideSteps { get; init; } = Array.Empty<string>();
-    public required string Status { get; init; }              // "blocked" | "running" | "never-run" | "ok"
+    public required string Status { get; init; }              // "blocked" | "running" | "manual" | "never-run" | "ok"
     public required IReadOnlyList<string> MissingInputs { get; init; }
     public DateTimeOffset? LastRunAt { get; init; }
     public string? LastRunCommand { get; init; }

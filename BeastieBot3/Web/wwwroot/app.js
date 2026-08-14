@@ -1108,6 +1108,8 @@
       status.textContent = 'blocked';
     } else if (step.status === 'running') {
       status.textContent = '● running';
+    } else if (step.status === 'manual') {
+      status.textContent = 'by hand';
     } else if (step.status === 'never-run') {
       status.textContent = 'not run';
     } else if (step.lastRunAt) {

@@ -789,6 +789,7 @@ td { word-break: break-all; font-family: ui-monospace, Menlo, monospace; }
 }
 .flow-step.status-blocked { border-left-color: var(--err); }
 .flow-step.status-never-run { border-left-color: var(--muted); }
+.flow-step.status-manual { border-left-color: var(--muted); }
 .flow-step.status-ok { border-left-color: var(--ok); }
 .flow-step.status-running { border-left-color: var(--accent); }
 .flow-step.optional { opacity: 0.85; }
@@ -815,6 +816,7 @@ td { word-break: break-all; font-family: ui-monospace, Menlo, monospace; }
 }
 .flow-step-dot.status-blocked { background: var(--err); }
 .flow-step-dot.status-never-run { background: var(--muted); }
+.flow-step-dot.status-manual { background: var(--muted); }
 .flow-step-dot.status-ok { background: var(--ok); }
 .flow-step-dot.status-running {
   background: var(--accent);
@@ -835,6 +837,7 @@ td { word-break: break-all; font-family: ui-monospace, Menlo, monospace; }
 }
 .flow-step-status.status-blocked { color: var(--err); }
 .flow-step-status.status-never-run { color: var(--muted); }
+.flow-step-status.status-manual { color: var(--muted); }
 .flow-step-status.status-ok { color: var(--ok); }
 .flow-step-status.status-running { color: var(--accent); }
 
