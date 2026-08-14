@@ -68,11 +68,9 @@ internal static class IucnRefreshRun {
         "iucn api refresh-start --label 2026-1 --no-tombstones",
     })]
 internal sealed class IucnApiRefreshStartCommand : AsyncCommand<IucnApiRefreshStartCommand.Settings> {
+    // Option order is the order the web UI shows the fields in, so the ones an operator actually
+    // sets come before the path override.
     public sealed class Settings : CommonSettings {
-        [CommandOption("--cache <PATH>")]
-        [Description("Override path to the API cache SQLite database (defaults to Datastore:IUCN_api_cache_sqlite).")]
-        public string? CacheDatabase { get; init; }
-
         [CommandOption("--cutoff <DATE>")]
         [Description("Re-download everything fetched before this date (UTC, e.g. 2026-06-16). Defaults to now, which refreshes the whole cache.")]
         public string? Cutoff { get; init; }
@@ -92,6 +90,10 @@ internal sealed class IucnApiRefreshStartCommand : AsyncCommand<IucnApiRefreshSt
         [CommandOption("--replace")]
         [Description("Abandon the refresh already in progress and start this one instead.")]
         public bool Replace { get; init; }
+
+        [CommandOption("--cache <PATH>")]
+        [Description("Override path to the API cache SQLite database (defaults to Datastore:IUCN_api_cache_sqlite).")]
+        public string? CacheDatabase { get; init; }
     }
 
     public override Task<int> ExecuteAsync(CommandContext context, Settings settings, CancellationToken cancellationToken) {

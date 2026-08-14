@@ -993,6 +993,22 @@
       ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   }
 
+  // Fill a generated form from an args[] — used to open a workflow step's options already
+  // set to what that step would run, so changing one setting doesn't mean retyping the rest.
+  function applyArgsToForm(formEl, args) {
+    if (!args || args.length === 0) return;
+    const byName = {};
+    formEl.querySelectorAll('[data-field-name]').forEach(i => { byName[i.dataset.fieldName] = i; });
+    for (let i = 0; i < args.length; i++) {
+      const inp = byName[args[i]];
+      if (!inp) continue;
+      if (inp.dataset.fieldKind === 'Flag') { inp.checked = true; continue; }
+      const v = args[i + 1];
+      if (v !== undefined && v.slice(0, 2) !== '--') { inp.value = v; i++; }
+    }
+    formEl.dispatchEvent(new Event('input', { bubbles: true }));
+  }
+
   // Build a CLI args[] from the current form values. We never emit empty
   // strings — empty input means "use the command's default".
   function readForm(formEl, cmd) {
@@ -1341,6 +1357,33 @@
           confirmRun(path, args, cmdMeta).then((ok) => { if (ok) enqueue(path, args); });
         });
         cmdRow.appendChild(btn);
+
+        // One click stays the normal way to run a step, but some of them genuinely have a
+        // setting worth changing here — a cutoff date, a limit — and sending people to a
+        // different page to set it makes the workflow the long way round. Same form the Run
+        // command page generates, opened with this step's own settings already in it.
+        const optionCount = cmdMeta && cmdMeta.form && cmdMeta.form.fields ? cmdMeta.form.fields.length : 0;
+        if (optionCount > 0) {
+          const toggle = document.createElement('button');
+          toggle.className = 'flow-cmd-options';
+          toggle.textContent = 'Options';
+          toggle.title = 'Change the settings for this run';
+          let form = null;
+          toggle.addEventListener('click', (e) => {
+            e.stopPropagation();
+            if (form) {
+              form.hidden = !form.hidden;
+              toggle.classList.toggle('open', !form.hidden);
+              return;
+            }
+            form = buildForm(cmdMeta);
+            form.classList.add('flow-cmd-form');
+            applyArgsToForm(form, args);
+            cmdRow.insertAdjacentElement('afterend', form);
+            toggle.classList.add('open');
+          });
+          cmdRow.appendChild(toggle);
+        }
       }
       body.appendChild(cmdRow);
     }

@@ -963,6 +963,23 @@ td { word-break: break-all; font-family: ui-monospace, Menlo, monospace; }
 }
 .flow-cmd-btn.readonly { background: #18211a; }
 
+/* "Options" next to a step's Run button: the same generated form as the Run command page,
+   opened with this step's own settings already filled in. */
+.flow-cmd-options {
+  font-size: 0.8em;
+  padding: 0.25rem 0.6rem;
+  background: transparent;
+  color: var(--muted);
+  border: 1px solid var(--border);
+}
+.flow-cmd-options:hover { background: #1f242c; color: var(--fg); }
+.flow-cmd-options.open { color: var(--accent); border-color: var(--accent); }
+.flow-cmd-form {
+  margin-top: 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+}
+
 .flow-step-running, .flow-step-outputs {
   margin-top: 0.5rem;
   display: flex;
