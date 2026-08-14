@@ -56,6 +56,10 @@ public sealed class IucnApiCacheInfraranksSettings : CommonSettings {
     [CommandOption("--max-age-hours <HOURS>")]
     [Description("Refresh cache entries older than the supplied age (forces download for stale entries).")]
     public double? MaxAgeHours { get; init; }
+
+    [CommandOption("--refresh-before <DATE>")]
+    [Description("Re-download anything fetched before this fixed date (UTC, e.g. 2026-06-16). Taken from the refresh in progress when omitted.")]
+    public string? RefreshBefore { get; init; }
 }
 
 [CommandInfo("iucn api cache-infraranks", CommandKind.Mutates,
@@ -87,9 +91,11 @@ public sealed class IucnApiCacheInfraranksCommand : AsyncCommand<IucnApiCacheInf
         using var cacheStore = IucnApiCacheStore.Open(cachePath);
 
         var sleep = Math.Clamp(settings.SleepBetweenRequests, 0, 5_000);
-        var refreshThreshold = settings.MaxAgeHours is { } hours && hours > 0
-            ? DateTime.UtcNow - TimeSpan.FromHours(hours)
-            : (DateTime?)null;
+
+        // The cutoff comes from this run's flags, or from the refresh in progress.
+        var plan = IucnRefreshRun.Begin(cacheStore, settings.RefreshBefore, settings.MaxAgeHours);
+        if (plan is null) return -1;
+        var refreshThreshold = plan.Threshold;
 
         // Discovery source 1 (API-native): infraspecific SIS ids surfaced by cached species'
         // taxon.infrarank_taxa. Source 2 (--from-csv): infraspecific taxonIds from the CSV, which

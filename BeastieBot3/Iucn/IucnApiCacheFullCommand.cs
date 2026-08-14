@@ -39,6 +39,14 @@ public sealed class IucnApiCacheFullSettings : CommonSettings {
     [CommandOption("--assessment-max-age-hours <HOURS>")]
     public double? AssessmentMaxAgeHours { get; init; }
 
+    [CommandOption("--refresh-before <DATE>")]
+    [Description("Re-download anything fetched before this fixed date (UTC, e.g. 2026-06-16), in every phase. Normally left off: a refresh started with `iucn api refresh-start` supplies the date, so re-runs carry on without you entering it again.")]
+    public string? RefreshBefore { get; init; }
+
+    [CommandOption("--skip-tombstones")]
+    [Description("Skip the final pass that re-checks taxa and assessments the API previously said were gone. That pass only runs as part of a refresh that asked for it.")]
+    public bool SkipTombstones { get; init; }
+
     [CommandOption("--taxa-failed-only")]
     public bool TaxaFailedOnly { get; init; }
 
@@ -112,6 +120,25 @@ public sealed class IucnApiCacheFullCommand : AsyncCommand<IucnApiCacheFullSetti
             return 0;
         }
 
+        // Read the refresh in progress once, up front: it decides whether the family sweep and the
+        // tombstone pass run at all, and it is what gets closed when everything is downloaded.
+        var paths = settings.CreatePaths();
+        var cachePath = paths.ResolveIucnApiCachePath(settings.CacheDatabase);
+        IucnRefreshSession? session;
+        using (var store = IucnApiCacheStore.Open(cachePath)) {
+            session = store.GetActiveRefreshSession();
+            if (session is not null) {
+                var progress = IucnApiRefreshStartCommand.ReadProgress(store, session);
+                AnsiConsole.MarkupLineInterpolated(
+                    $"[yellow]Refresh in progress:[/] {session.DisplayLabel}, cutoff {IucnRefreshMath.Stamp(session.CutoffUtc)}. Still to re-download: {progress.TaxaRemaining:N0} taxa, {progress.AssessmentsRemaining:N0} assessments.");
+            }
+        }
+
+        // The family sweep is part of a refresh, not of an ordinary top-up, so it runs when the
+        // refresh asked for it and has not done it yet.
+        var runDiscovery = session is { IncludeDiscovery: true, DiscoveryDoneAt: null };
+        var runTombstones = !settings.SkipTombstones && session is { IncludeTombstones: true, TombstonesDoneAt: null };
+
         // Pipeline order: taxa -> infraranks -> assessments -> project. Assessments runs after
         // infraranks so the single download pass picks up the infra taxa's queued assessments too.
         var taxaResult = 0;
@@ -125,11 +152,31 @@ public sealed class IucnApiCacheFullCommand : AsyncCommand<IucnApiCacheFullSetti
                 Limit = settings.TaxaLimit,
                 Force = settings.ForceTaxa,
                 MaxAgeHours = settings.TaxaMaxAgeHours,
+                RefreshBefore = settings.RefreshBefore,
                 FailedOnly = settings.TaxaFailedOnly,
                 SleepBetweenRequests = settings.TaxaSleepMs
             }, cancellationToken).ConfigureAwait(false);
             if (taxaResult != 0 && !settings.ContinueOnTaxaFailure) {
                 return taxaResult;
+            }
+        }
+
+        // Family paging finds taxa the CSV export omits (removed, reclassified, historical-only).
+        // Before infraranks, so their infraspecific taxa are reachable in the same run.
+        var discoveryResult = 0;
+        if (runDiscovery) {
+            AnsiConsole.MarkupLine("[grey]== Phase: discover-by-family ==[/]");
+            discoveryResult = await new IucnApiCacheDiscoverByFamilyCommand().ExecuteAsync(context, new IucnApiCacheDiscoverByFamilySettings {
+                IniFile = settings.IniFile,
+                SettingsDir = settings.SettingsDir,
+                CacheDatabase = settings.CacheDatabase,
+                RefreshBefore = settings.RefreshBefore,
+                SleepBetweenRequests = settings.TaxaSleepMs
+            }, cancellationToken).ConfigureAwait(false);
+
+            if (discoveryResult == 0 && session is not null) {
+                using var store = IucnApiCacheStore.Open(cachePath);
+                store.MarkRefreshPhaseDone(session.Id, "discovery_done_at");
             }
         }
 
@@ -145,6 +192,7 @@ public sealed class IucnApiCacheFullCommand : AsyncCommand<IucnApiCacheFullSetti
                 Limit = settings.TaxaLimit,
                 Force = settings.ForceTaxa,
                 MaxAgeHours = settings.TaxaMaxAgeHours,
+                RefreshBefore = settings.RefreshBefore,
                 SleepBetweenRequests = settings.TaxaSleepMs
             }, cancellationToken).ConfigureAwait(false);
         }
@@ -159,9 +207,50 @@ public sealed class IucnApiCacheFullCommand : AsyncCommand<IucnApiCacheFullSetti
                 Limit = settings.AssessmentLimit,
                 Force = settings.ForceAssessments,
                 MaxAgeHours = settings.AssessmentMaxAgeHours,
+                RefreshBefore = settings.RefreshBefore,
                 FailedOnly = settings.AssessmentFailedOnly,
                 SleepBetweenRequests = settings.AssessmentSleepMs
             }, cancellationToken).ConfigureAwait(false);
+        }
+
+        // Last, and only once the rest is downloaded: re-check what the API said was gone. A taxon
+        // absent from the previous release can exist in the new one, and nothing else ever looks at
+        // those ids again. Small enough (a few thousand) that an interrupted pass just re-runs.
+        if (runTombstones) {
+            AnsiConsole.MarkupLine("[grey]== Phase: re-check taxa and assessments previously reported gone ==[/]");
+            await IucnApiCacheTaxaCommand.RunAsync(new IucnApiCacheTaxaSettings {
+                IniFile = settings.IniFile,
+                SettingsDir = settings.SettingsDir,
+                SourceDatabase = settings.SourceDatabase,
+                CacheDatabase = settings.CacheDatabase,
+                RetryTombstones = true,
+                RefreshBefore = settings.RefreshBefore,
+                SleepBetweenRequests = settings.TaxaSleepMs
+            }, cancellationToken).ConfigureAwait(false);
+
+            await IucnApiCacheAssessmentsCommand.RunAsync(new IucnApiCacheAssessmentsSettings {
+                IniFile = settings.IniFile,
+                SettingsDir = settings.SettingsDir,
+                CacheDatabase = settings.CacheDatabase,
+                RetryTombstones = true,
+                RefreshBefore = settings.RefreshBefore,
+                SleepBetweenRequests = settings.AssessmentSleepMs
+            }, cancellationToken).ConfigureAwait(false);
+
+            // Most of these are expected to fail again — that is the answer, not an error — so the
+            // pass is marked done regardless of exit code, or it would repeat on every run forever.
+            if (session is not null) {
+                using var store = IucnApiCacheStore.Open(cachePath);
+                store.MarkRefreshPhaseDone(session.Id, "tombstones_done_at");
+            }
+            AnsiConsole.MarkupLine("[grey]Ones that failed again are still recorded as gone. The handful of assessments the API answers with a server error are a known fault, not a new problem: see[/] [yellow]iucn api report-failed-assessments[/][grey].[/]");
+        }
+
+        // Close the refresh once nothing is left older than its cutoff and every phase has run,
+        // so later runs go back to fetching only what is missing.
+        if (session is not null) {
+            using var store = IucnApiCacheStore.Open(cachePath);
+            IucnRefreshRun.CloseIfFinished(store, store.GetActiveRefreshSession());
         }
 
         var projectResult = 0;
@@ -178,6 +267,7 @@ public sealed class IucnApiCacheFullCommand : AsyncCommand<IucnApiCacheFullSetti
 
         // Surface the first non-zero result in pipeline order (project-view returns 2 when partial).
         return taxaResult != 0 ? taxaResult
+            : discoveryResult != 0 ? discoveryResult
             : infraResult != 0 ? infraResult
             : assessmentResult != 0 ? assessmentResult
             : projectResult;

@@ -33,8 +33,16 @@ public sealed class IucnApiCacheAssessmentsSettings : CommonSettings {
     public bool Force { get; init; }
 
     [CommandOption("--max-age-hours <HOURS>")]
-    [Description("Refresh cache entries older than the supplied age (forces download for stale entries).")]
+    [Description("Refresh cache entries older than the supplied age. A rolling window measured from now, so it moves between runs — prefer --refresh-before, or a refresh started with `iucn api refresh-start`, for anything that takes more than one sitting.")]
     public double? MaxAgeHours { get; init; }
+
+    [CommandOption("--refresh-before <DATE>")]
+    [Description("Re-download anything fetched before this fixed date (UTC, e.g. 2026-06-16). Unlike --max-age-hours the date does not move, so stopping and re-running carries on rather than repeating work. Taken from the refresh in progress when omitted.")]
+    public string? RefreshBefore { get; init; }
+
+    [CommandOption("--retry-tombstones")]
+    [Description("Also re-check assessments the API previously said were gone (404), and the ones it keeps erroring on. Skipped by default.")]
+    public bool RetryTombstones { get; init; }
 
     [CommandOption("--failed-only")]
     [Description("Only retry items that previously failed (skip the backlog queue).")]
@@ -74,15 +82,17 @@ public sealed class IucnApiCacheAssessmentsCommand : AsyncCommand<IucnApiCacheAs
         var configuration = IucnApiConfiguration.FromEnvironment();
         using var apiClient = new IucnApiClient(configuration);
 
+        // The cutoff comes from this run's flags, or from the refresh in progress.
+        var plan = IucnRefreshRun.Begin(cacheStore, settings.RefreshBefore, settings.MaxAgeHours);
+        if (plan is null) return -1;
+        var refreshThreshold = plan.Threshold;
+
         var queue = BuildAssessmentQueue(cacheStore, settings);
         if (queue.Count == 0) {
             AnsiConsole.MarkupLine("[green]Nothing to do. Assessment backlog is empty or all entries are up to date.[/]");
             return 0;
         }
 
-        var refreshThreshold = settings.MaxAgeHours is { } hours && hours > 0
-            ? DateTime.UtcNow - TimeSpan.FromHours(hours)
-            : (DateTime?)null;
         var sleep = Math.Clamp(settings.SleepBetweenRequests, 0, 5_000);
         var downloaded = 0;
         var skipped = 0;
@@ -156,7 +166,7 @@ public sealed class IucnApiCacheAssessmentsCommand : AsyncCommand<IucnApiCacheAs
         var deferred = new List<AssessmentQueueRow>();
         foreach (var row in snapshot) {
             if (!PassesLatest(row)) continue;
-            if (!settings.Force && suppressed.Contains(row.AssessmentId)) continue;
+            if (!settings.Force && !settings.RetryTombstones && suppressed.Contains(row.AssessmentId)) continue;
             if (due.Contains(row.AssessmentId)) deferred.Add(row);
             else main.Add(row);
         }

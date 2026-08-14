@@ -42,6 +42,10 @@ public sealed class IucnApiCacheDiscoverByFamilySettings : CommonSettings {
     [Description("Extra delay between API calls. Defaults to 250ms to avoid throttling.")]
     public int SleepBetweenRequests { get; init; } = 250;
 
+    [CommandOption("--refresh-before <DATE>")]
+    [Description("Re-download anything fetched before this fixed date (UTC, e.g. 2026-06-16). Taken from the refresh in progress when omitted.")]
+    public string? RefreshBefore { get; init; }
+
     [CommandOption("--max-age-hours <HOURS>")]
     [Description("Refresh cache entries older than the supplied age (forces download for stale entries).")]
     public double? MaxAgeHours { get; init; }
@@ -73,6 +77,11 @@ public sealed class IucnApiCacheDiscoverByFamilyCommand : AsyncCommand<IucnApiCa
 
         var sleep = Math.Clamp(settings.SleepBetweenRequests, 0, 5_000);
 
+        // The cutoff comes from this run's flags, or from the refresh in progress, so a discovery
+        // sweep during a refresh re-downloads the stale taxa it walks past rather than skipping them.
+        var plan = IucnRefreshRun.Begin(cacheStore, settings.RefreshBefore, settings.MaxAgeHours);
+        if (plan is null) return -1;
+
         // Step 1: Fetch the family list
         var families = await FetchFamilyListAsync(apiClient, cacheStore, settings, cancellationToken).ConfigureAwait(false);
         if (families.Count == 0) {
@@ -86,9 +95,7 @@ public sealed class IucnApiCacheDiscoverByFamilyCommand : AsyncCommand<IucnApiCa
         var allDiscoveredSisIds = new HashSet<long>();
         var familySummaries = new List<(string Family, int Count, int Missing)>();
 
-        var refreshThreshold = settings.MaxAgeHours is { } hours && hours > 0
-            ? DateTime.UtcNow - TimeSpan.FromHours(hours)
-            : (DateTime?)null;
+        var refreshThreshold = plan.Threshold;
 
         var incompleteFamilies = new List<string>();
         await ProgressConsole.RunAsync("Scanning families", families.Count, async progress => {

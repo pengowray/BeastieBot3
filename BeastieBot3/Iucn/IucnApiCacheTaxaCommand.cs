@@ -35,8 +35,16 @@ public sealed class IucnApiCacheTaxaSettings : CommonSettings {
     public bool Force { get; init; }
 
     [CommandOption("--max-age-hours <HOURS>")]
-    [Description("Refresh cache entries older than the supplied age (forces download for stale entries).")]
+    [Description("Refresh cache entries older than the supplied age. A rolling window measured from now, so it moves between runs — prefer --refresh-before, or a refresh started with `iucn api refresh-start`, for anything that takes more than one sitting.")]
     public double? MaxAgeHours { get; init; }
+
+    [CommandOption("--refresh-before <DATE>")]
+    [Description("Re-download anything fetched before this fixed date (UTC, e.g. 2026-06-16). Unlike --max-age-hours the date does not move, so stopping and re-running carries on rather than repeating work. Taken from the refresh in progress when omitted.")]
+    public string? RefreshBefore { get; init; }
+
+    [CommandOption("--retry-tombstones")]
+    [Description("Also re-check the taxa the API previously said were gone (404). Skipped by default; worth doing once per release, because a taxon absent from the last one can exist in the new one.")]
+    public bool RetryTombstones { get; init; }
 
     [CommandOption("--failed-only")]
     [Description("Only retry items that previously failed (skip the main SIS id list).")]
@@ -75,15 +83,17 @@ public sealed class IucnApiCacheTaxaCommand : AsyncCommand<IucnApiCacheTaxaSetti
         var configuration = IucnApiConfiguration.FromEnvironment();
         using var apiClient = new IucnApiClient(configuration);
 
+        // The cutoff comes from this run's flags, or from the refresh in progress. Resolved before
+        // the queue is built so the tombstone pass and the skip test agree about what is stale.
+        var plan = IucnRefreshRun.Begin(cacheStore, settings.RefreshBefore, settings.MaxAgeHours);
+        if (plan is null) return -1;
+        var refreshThreshold = plan.Threshold;
+
         var ids = BuildSisQueue(cacheStore, provider, settings, cancellationToken);
         if (ids.Count == 0) {
             AnsiConsole.MarkupLine("[green]Nothing to do. Cache is already populated or only failed ids exist but were not requested.[/]");
             return 0;
         }
-
-        var refreshThreshold = settings.MaxAgeHours is { } hours && hours > 0
-            ? DateTime.UtcNow - TimeSpan.FromHours(hours)
-            : (DateTime?)null;
 
         var sleep = Math.Clamp(settings.SleepBetweenRequests, 0, 5_000);
         var totalCount = ids.Count;
@@ -96,7 +106,7 @@ public sealed class IucnApiCacheTaxaCommand : AsyncCommand<IucnApiCacheTaxaSetti
             foreach (var sisId in ids) {
                 cancellationToken.ThrowIfCancellationRequested();
 
-                if (!settings.Force && !ShouldDownload(cacheStore, sisId, refreshThreshold)) {
+                if (!settings.Force && !ShouldDownload(cacheStore, sisId, refreshThreshold, settings.RetryTombstones)) {
                     skipped++;
                     progress.Increment(1);
                     continue;
@@ -142,6 +152,20 @@ public sealed class IucnApiCacheTaxaCommand : AsyncCommand<IucnApiCacheTaxaSetti
             }
         }
 
+        // Tombstoned ids are excluded from the failed list on purpose, so the pass that re-checks
+        // them has to put them back. Ones only ever seen as an infrarank aren't in the CSV list
+        // below, so without this they would never be looked at again.
+        if (settings.RetryTombstones) {
+            foreach (var sisId in cacheStore.GetTombstonedEntityIds("taxa_sis")) {
+                if (seen.Add(sisId)) {
+                    queue.Add(sisId);
+                    if (totalLimit.HasValue && queue.Count >= totalLimit.Value) {
+                        return TrimToLimit(queue, totalLimit.Value);
+                    }
+                }
+            }
+        }
+
         if (settings.FailedOnly) {
             return totalLimit.HasValue ? TrimToLimit(queue, totalLimit.Value) : queue;
         }
@@ -167,9 +191,11 @@ public sealed class IucnApiCacheTaxaCommand : AsyncCommand<IucnApiCacheTaxaSetti
         return queue.GetRange(0, count);
     }
 
-    internal static bool ShouldDownload(IucnApiCacheStore cacheStore, long sisId, DateTime? refreshThreshold) {
-        // A prior 404 means this id has no standalone record — don't re-probe it (use --force to override).
-        if (cacheStore.HasPermanentFailure("taxa_sis", sisId)) {
+    internal static bool ShouldDownload(IucnApiCacheStore cacheStore, long sisId, DateTime? refreshThreshold, bool retryTombstones = false) {
+        // A prior 404 means this id had no standalone record — don't re-probe it every run. That
+        // verdict is only true of the release it was recorded against, so --retry-tombstones (and
+        // --force) look again.
+        if (!retryTombstones && cacheStore.HasPermanentFailure("taxa_sis", sisId)) {
             return false;
         }
         var downloadedAt = cacheStore.GetTaxaDownloadedAt(sisId);

@@ -89,6 +89,24 @@ CREATE TABLE IF NOT EXISTS failed_requests (
     next_attempt_after TEXT,
     UNIQUE(endpoint, entity_id)
 );
+-- Counting what is left to refresh is a range scan over downloaded_at; taxa already had its index.
+CREATE INDEX IF NOT EXISTS idx_assessments_downloaded_at ON assessments(downloaded_at);
+-- A refresh session: re-download everything fetched before cutoff_utc. See IucnRefreshSession.
+-- The starting counts are snapshotted so progress has a denominator that doesn't move as new
+-- SIS ids arrive from a fresh CSV import. At most one row has completed_at IS NULL.
+CREATE TABLE IF NOT EXISTS refresh_sessions (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    cutoff_utc TEXT NOT NULL,
+    started_at TEXT NOT NULL,
+    label TEXT,
+    include_tombstones INTEGER NOT NULL DEFAULT 0,
+    include_discovery INTEGER NOT NULL DEFAULT 0,
+    start_taxa_remaining INTEGER NOT NULL DEFAULT 0,
+    start_assessments_remaining INTEGER NOT NULL DEFAULT 0,
+    tombstones_done_at TEXT,
+    discovery_done_at TEXT,
+    completed_at TEXT
+);
 ";
         command.ExecuteNonQuery();
 
@@ -169,14 +187,23 @@ CREATE INDEX IF NOT EXISTS idx_taxa_lookup_taxa_id ON taxa_lookup(taxa_id);";
         idx.ExecuteNonQuery();
     }
 
+    // downloaded_at is written as a UTC "O" string. Plain DateTime.TryParse converts the trailing Z
+    // to LOCAL time, so the result would be compared against a UTC refresh cutoff and shift the
+    // boundary by the machine's offset — ten hours in Australia. Read it back as UTC.
+    internal static DateTime? ParseStoredUtc(string? text) =>
+        DateTime.TryParse(text, System.Globalization.CultureInfo.InvariantCulture,
+            System.Globalization.DateTimeStyles.AssumeUniversal | System.Globalization.DateTimeStyles.AdjustToUniversal,
+            out var parsed)
+            ? parsed
+            : null;
+
     public DateTime? GetTaxaDownloadedAt(long sisId) {
         using var command = _connection.CreateCommand();
         command.CommandText = @"SELECT t.downloaded_at FROM taxa t
 JOIN taxa_lookup l ON l.taxa_id = t.id
 WHERE l.sis_id = @sisId LIMIT 1";
         command.Parameters.AddWithValue("@sisId", sisId);
-        var result = command.ExecuteScalar() as string;
-        return DateTime.TryParse(result, out var parsed) ? parsed : null;
+        return ParseStoredUtc(command.ExecuteScalar() as string);
     }
 
     /// <summary>
@@ -189,16 +216,14 @@ WHERE l.sis_id = @sisId LIMIT 1";
         using var command = _connection.CreateCommand();
         command.CommandText = "SELECT downloaded_at FROM taxa WHERE root_sis_id=@root LIMIT 1";
         command.Parameters.AddWithValue("@root", rootSisId);
-        var result = command.ExecuteScalar() as string;
-        return DateTime.TryParse(result, out var parsed) ? parsed : null;
+        return ParseStoredUtc(command.ExecuteScalar() as string);
     }
 
     public DateTime? GetAssessmentDownloadedAt(long assessmentId) {
         using var command = _connection.CreateCommand();
         command.CommandText = "SELECT downloaded_at FROM assessments WHERE assessment_id=@id LIMIT 1";
         command.Parameters.AddWithValue("@id", assessmentId);
-        var result = command.ExecuteScalar() as string;
-        return DateTime.TryParse(result, out var parsed) ? parsed : null;
+        return ParseStoredUtc(command.ExecuteScalar() as string);
     }
 
     public long UpsertTaxa(long rootSisId, long importId, string json, DateTime downloadedAt) {
@@ -528,6 +553,154 @@ ON CONFLICT(endpoint, entity_id) DO UPDATE SET
         command.Parameters.AddWithValue("@endpoint", endpoint);
         command.Parameters.AddWithValue("@entity", entityId.ToString());
         command.ExecuteNonQuery();
+    }
+
+    // ---- refresh sessions ----------------------------------------------------------------
+    // See IucnRefreshSession for why the cutoff is stored rather than recomputed per run.
+
+    public IucnRefreshSession StartRefreshSession(DateTime cutoffUtc, string? label, bool includeTombstones, bool includeDiscovery) {
+        var startedAt = DateTime.UtcNow;
+        var taxaRemaining = CountTaxaDownloadedBefore(cutoffUtc);
+        var assessmentsRemaining = CountAssessmentsDownloadedBefore(cutoffUtc);
+
+        using var command = _connection.CreateCommand();
+        command.CommandText = @"INSERT INTO refresh_sessions
+(cutoff_utc, started_at, label, include_tombstones, include_discovery, start_taxa_remaining, start_assessments_remaining)
+VALUES (@cutoff, @started, @label, @tombstones, @discovery, @taxa, @assessments);
+SELECT last_insert_rowid();";
+        command.Parameters.AddWithValue("@cutoff", cutoffUtc.ToString("O"));
+        command.Parameters.AddWithValue("@started", startedAt.ToString("O"));
+        command.Parameters.AddWithValue("@label", (object?)label ?? DBNull.Value);
+        command.Parameters.AddWithValue("@tombstones", includeTombstones ? 1 : 0);
+        command.Parameters.AddWithValue("@discovery", includeDiscovery ? 1 : 0);
+        command.Parameters.AddWithValue("@taxa", taxaRemaining);
+        command.Parameters.AddWithValue("@assessments", assessmentsRemaining);
+        var id = Convert.ToInt64(command.ExecuteScalar() ?? 0L);
+
+        return new IucnRefreshSession {
+            Id = id,
+            CutoffUtc = cutoffUtc,
+            StartedAt = startedAt,
+            Label = label,
+            IncludeTombstones = includeTombstones,
+            IncludeDiscovery = includeDiscovery,
+            StartTaxaRemaining = taxaRemaining,
+            StartAssessmentsRemaining = assessmentsRemaining,
+        };
+    }
+
+    public IucnRefreshSession? GetActiveRefreshSession() => ReadSession("completed_at IS NULL");
+
+    public IucnRefreshSession? GetLastRefreshSession() => ReadSession("1=1");
+
+    private IucnRefreshSession? ReadSession(string where) {
+        using var command = _connection.CreateCommand();
+        command.CommandText = $@"SELECT id, cutoff_utc, started_at, label, include_tombstones, include_discovery,
+       start_taxa_remaining, start_assessments_remaining, tombstones_done_at, discovery_done_at, completed_at
+FROM refresh_sessions WHERE {where} ORDER BY id DESC LIMIT 1";
+        using var reader = command.ExecuteReader();
+        if (!reader.Read()) return null;
+
+        var cutoff = ParseStoredUtc(reader.GetString(1));
+        var started = ParseStoredUtc(reader.GetString(2));
+        if (cutoff is null || started is null) return null;
+
+        return new IucnRefreshSession {
+            Id = reader.GetInt64(0),
+            CutoffUtc = cutoff.Value,
+            StartedAt = started.Value,
+            Label = reader.IsDBNull(3) ? null : reader.GetString(3),
+            IncludeTombstones = reader.GetInt64(4) != 0,
+            IncludeDiscovery = reader.GetInt64(5) != 0,
+            StartTaxaRemaining = reader.GetInt64(6),
+            StartAssessmentsRemaining = reader.GetInt64(7),
+            TombstonesDoneAt = reader.IsDBNull(8) ? null : ParseStoredUtc(reader.GetString(8)),
+            DiscoveryDoneAt = reader.IsDBNull(9) ? null : ParseStoredUtc(reader.GetString(9)),
+            CompletedAt = reader.IsDBNull(10) ? null : ParseStoredUtc(reader.GetString(10)),
+        };
+    }
+
+    public void MarkRefreshPhaseDone(long sessionId, string column) {
+        if (column is not ("tombstones_done_at" or "discovery_done_at")) {
+            throw new ArgumentException($"Unknown refresh phase column '{column}'.", nameof(column));
+        }
+        using var command = _connection.CreateCommand();
+        command.CommandText = $"UPDATE refresh_sessions SET {column}=@now WHERE id=@id AND {column} IS NULL";
+        command.Parameters.AddWithValue("@now", DateTime.UtcNow.ToString("O"));
+        command.Parameters.AddWithValue("@id", sessionId);
+        command.ExecuteNonQuery();
+    }
+
+    public void CloseRefreshSession(long sessionId) {
+        using var command = _connection.CreateCommand();
+        command.CommandText = "UPDATE refresh_sessions SET completed_at=@now WHERE id=@id AND completed_at IS NULL";
+        command.Parameters.AddWithValue("@now", DateTime.UtcNow.ToString("O"));
+        command.Parameters.AddWithValue("@id", sessionId);
+        command.ExecuteNonQuery();
+    }
+
+    // How much of the cache still predates a cutoff. downloaded_at is a UTC "O" string, so the
+    // text comparison is chronological and uses the downloaded_at indexes.
+    public long CountTaxaDownloadedBefore(DateTime cutoffUtc) =>
+        CountBefore("SELECT COUNT(*) FROM taxa WHERE downloaded_at < @cutoff", cutoffUtc);
+
+    public long CountAssessmentsDownloadedBefore(DateTime cutoffUtc) =>
+        CountBefore("SELECT COUNT(*) FROM assessments WHERE downloaded_at < @cutoff", cutoffUtc);
+
+    private long CountBefore(string sql, DateTime cutoffUtc) {
+        using var command = _connection.CreateCommand();
+        command.CommandText = sql;
+        command.Parameters.AddWithValue("@cutoff", cutoffUtc.ToString("O"));
+        return Convert.ToInt64(command.ExecuteScalar() ?? 0L);
+    }
+
+    public long CountTaxa() => Scalar("SELECT COUNT(*) FROM taxa");
+    public long CountAssessments() => Scalar("SELECT COUNT(*) FROM assessments");
+    public long CountBacklogOutstanding() => Scalar(
+        @"SELECT COUNT(*) FROM taxa_assessment_backlog b
+          WHERE NOT EXISTS (SELECT 1 FROM assessments a WHERE a.assessment_id = b.assessment_id)");
+
+    public DateTime? GetOldestTaxaDownloadedAt() =>
+        ParseStoredUtc(ScalarString("SELECT MIN(downloaded_at) FROM taxa"));
+
+    private long Scalar(string sql) {
+        using var command = _connection.CreateCommand();
+        command.CommandText = sql;
+        return Convert.ToInt64(command.ExecuteScalar() ?? 0L);
+    }
+
+    private string? ScalarString(string sql) {
+        using var command = _connection.CreateCommand();
+        command.CommandText = sql;
+        return command.ExecuteScalar() as string;
+    }
+
+    // Ids tombstoned as gone (404/410). They are excluded from every normal run, so a taxon that
+    // did not exist in the previous release is never re-checked against a new one — that is what
+    // the tombstone pass is for.
+    public IReadOnlyList<long> GetTombstonedEntityIds(string endpoint) {
+        using var command = _connection.CreateCommand();
+        command.CommandText = "SELECT entity_id FROM failed_requests WHERE endpoint=@endpoint AND last_status IN (404, 410)";
+        command.Parameters.AddWithValue("@endpoint", endpoint);
+        var list = new List<long>();
+        using var reader = command.ExecuteReader();
+        while (reader.Read()) {
+            if (long.TryParse(reader.GetString(0), out var id)) list.Add(id);
+        }
+        return list;
+    }
+
+    // Ids the API keeps erroring on with a server fault (the known empty-scope HTTP 500s).
+    public IReadOnlyList<long> GetServerErrorEntityIds(string endpoint) {
+        using var command = _connection.CreateCommand();
+        command.CommandText = "SELECT entity_id FROM failed_requests WHERE endpoint=@endpoint AND last_status >= 500";
+        command.Parameters.AddWithValue("@endpoint", endpoint);
+        var list = new List<long>();
+        using var reader = command.ExecuteReader();
+        while (reader.Read()) {
+            if (long.TryParse(reader.GetString(0), out var id)) list.Add(id);
+        }
+        return list;
     }
 }
 
