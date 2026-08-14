@@ -30,6 +30,10 @@ public sealed class IucnImportCommand : Command<IucnImportCommand.Settings> {
         [CommandOption("--replace-release")]
         [Description("With --force, allow wiping a database that holds a different release instead of importing into a new file.")]
         public bool ReplaceRelease { get; init; }
+
+        [CommandOption("--release <VERSION>")]
+        [Description("Which Red List release these zips are, e.g. 2026-1. Taken from the folder name when not given; the zips themselves do not record it.")]
+        public string? Release { get; init; }
     }
 
     public override int Execute(CommandContext context, Settings settings, CancellationToken cancellationToken) {
@@ -42,7 +46,12 @@ public sealed class IucnImportCommand : Command<IucnImportCommand.Settings> {
             return -1;
         }
 
-        var redlistVersionHint = IucnImporter.ExtractRedlistVersionFromPath(cvsDir);
+        // IUCN's export carries no release version anywhere inside the zip (the CSVs have no
+        // version column and the bundled ReadMe is generic), so it comes from the folder name
+        // unless the caller states it outright.
+        var redlistVersionHint = string.IsNullOrWhiteSpace(settings.Release)
+            ? IucnImporter.ExtractRedlistVersionFromPath(cvsDir)
+            : settings.Release!.Trim();
 
         var zipFiles = Directory.EnumerateFiles(cvsDir, "*.zip", SearchOption.AllDirectories)
             .OrderBy(path => path, StringComparer.OrdinalIgnoreCase)
@@ -97,7 +106,7 @@ public sealed class IucnImportCommand : Command<IucnImportCommand.Settings> {
         // send this release to its own file rather than refusing (or, under --force, destroying the
         // previous release). paths.ini is never edited here, so say plainly that it still points at
         // the old file and everything else keeps reading that until the user changes it.
-        var existingRelease = IucnImporter.FindReleaseConflict(ReadCompletedReleases(fullDbPath), redlistVersionHint);
+        var existingRelease = IucnImporter.FindReleaseConflict(IucnImportPreflight.ReadCompletedReleases(fullDbPath), redlistVersionHint);
         if (existingRelease is not null) {
             var knownVersion = !string.Equals(redlistVersionHint, "unknown", StringComparison.OrdinalIgnoreCase);
 
@@ -184,36 +193,5 @@ public sealed class IucnImportCommand : Command<IucnImportCommand.Settings> {
 
         AnsiConsole.MarkupLine("[green]Import complete.[/]");
         return 0;
-    }
-
-    // Which release(s) a database file already holds, read before anything is opened for writing so
-    // the command can pick a different target file. Mirrors IucnImporter's own completed-imports
-    // query; a file with no import_metadata table yet counts as empty.
-    private static IReadOnlyList<string> ReadCompletedReleases(string databasePath) {
-        if (!File.Exists(databasePath)) {
-            return Array.Empty<string>();
-        }
-
-        var connectionString = new SqliteConnectionStringBuilder {
-            DataSource = databasePath,
-            Mode = SqliteOpenMode.ReadOnly,
-        }.ToString();
-
-        try {
-            using var connection = new SqliteConnection(connectionString);
-            connection.Open();
-            using var cmd = connection.CreateCommand();
-            cmd.CommandText = "SELECT DISTINCT redlist_version FROM import_metadata WHERE ended_at IS NOT NULL;";
-            using var reader = cmd.ExecuteReader();
-            var versions = new List<string>();
-            while (reader.Read()) {
-                if (!reader.IsDBNull(0)) {
-                    versions.Add(reader.GetString(0));
-                }
-            }
-            return versions;
-        } catch (SqliteException) {
-            return Array.Empty<string>();
-        }
     }
 }

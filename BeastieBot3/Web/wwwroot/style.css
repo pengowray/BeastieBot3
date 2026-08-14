@@ -851,6 +851,26 @@ td { word-break: break-all; font-family: ui-monospace, Menlo, monospace; }
   border-left: 2px solid var(--accent);
   padding-left: 0.5em;
 }
+/* --- Preflight: what a command would do to the files as they stand now --- */
+.preflight {
+  margin: 0.6rem 0;
+  padding: 0.5rem 0.7rem;
+  border-left: 3px solid var(--ok);
+  background: #161a21;
+  border-radius: 4px;
+}
+.preflight.at-risk { border-left-color: var(--err); }
+.preflight p { margin: 0.15rem 0; }
+.preflight-headline { font-weight: 600; }
+.preflight.at-risk .preflight-headline { color: var(--err); }
+.preflight-detail {
+  font-size: 0.85em;
+  color: var(--muted);
+  font-family: ui-monospace, Menlo, monospace;
+  overflow-wrap: anywhere;
+}
+.preflight-warning { font-size: 0.9em; color: var(--accent); }
+
 .flow-step-guide {
   margin: 0.4rem 0;
   font-size: 0.85em;

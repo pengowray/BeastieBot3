@@ -827,27 +827,99 @@
     actions.appendChild(preview);
     form.appendChild(actions);
 
+    // What this run would do to the files as they are right now, refreshed as options change.
+    // Commands without a preflight leave the box hidden and fall back to the fixed warning.
+    const preflight = document.createElement('div');
+    preflight.className = 'preflight';
+    preflight.hidden = true;
+    form.insertBefore(preflight, actions);
+    let preflightSeq = 0;
+    const updatePreflight = async () => {
+      const seq = ++preflightSeq;
+      const data = await fetchPreflight(cmd.path, readForm(form, cmd));
+      if (seq !== preflightSeq) return;
+      renderPreflight(preflight, data);
+    };
+
     const updatePreview = () => {
       const args = readForm(form, cmd);
       preview.textContent = '$ beastiebot3 ' + cmd.path + (args.length ? ' ' + args.join(' ') : '');
     };
     updatePreview();
     updateForceWarn();
-    form.addEventListener('input', () => { updatePreview(); updateForceWarn(); });
-    form.addEventListener('change', () => { updatePreview(); updateForceWarn(); });
+    updatePreflight();
+    form.addEventListener('input', () => { updatePreview(); updateForceWarn(); updatePreflight(); });
+    form.addEventListener('change', () => { updatePreview(); updateForceWarn(); updatePreflight(); });
 
-    form.addEventListener('submit', (e) => {
+    form.addEventListener('submit', async (e) => {
       e.preventDefault();
       const args = readForm(form, cmd);
-      if (cmd.kind === 'destructive') {
-        const msg = 'Run "' + cmd.path + (args.length ? ' ' + args.join(' ') : '') + '"?\n\n' +
-                    (cmd.reason || 'This command makes destructive changes.');
-        if (!confirm(msg)) return;
-      }
+      if (!await confirmRun(cmd.path, args, cmd)) return;
       enqueue(cmd.path, args);
     });
 
     return form;
+  }
+
+  // --- Preflight: what a command would actually do, given the current files ----
+  // The command catalogue's warning text is fixed at build time, so on its own it can
+  // claim data will be dropped when there is none. Where the server can inspect the
+  // real state, it says so instead, and we only interrupt when something is at risk.
+
+  async function fetchPreflight(path, args) {
+    try {
+      const url = '/api/commands/preflight?path=' + encodeURIComponent(path) +
+                  '&args=' + encodeURIComponent(args.join(' '));
+      const r = await fetch(url);
+      if (!r.ok) return null;
+      const d = await r.json();
+      return d && d.supported ? d : null;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function renderPreflight(box, data) {
+    if (!data) { box.hidden = true; box.textContent = ''; return; }
+    box.hidden = false;
+    box.className = 'preflight' + (data.confirm ? ' at-risk' : '');
+    box.textContent = '';
+
+    const head = document.createElement('p');
+    head.className = 'preflight-headline';
+    head.textContent = (data.confirm ? '⚠ ' : '') + data.headline;
+    box.appendChild(head);
+
+    for (const line of (data.details || [])) {
+      const p = document.createElement('p');
+      p.className = 'preflight-detail';
+      p.textContent = line;
+      box.appendChild(p);
+    }
+    if (data.warning) {
+      const w = document.createElement('p');
+      w.className = 'preflight-warning';
+      w.textContent = data.warning;
+      box.appendChild(w);
+    }
+  }
+
+  async function confirmRun(path, args, meta) {
+    const label = 'Run "' + path + (args.length ? ' ' + args.join(' ') : '') + '"?';
+    const pre = await fetchPreflight(path, args);
+
+    if (pre) {
+      if (!pre.confirm) return true;
+      const lines = [label, '', pre.headline];
+      if (pre.details && pre.details.length) lines.push('', pre.details.join('\n'));
+      if (pre.warning) lines.push('', pre.warning);
+      return confirm(lines.join('\n'));
+    }
+
+    if (meta && meta.kind === 'destructive') {
+      return confirm(label + '\n\n' + (meta.reason || 'This command makes destructive changes.'));
+    }
+    return true;
   }
 
   function renderField(grid, f) {
@@ -1249,10 +1321,7 @@
             alert('Unknown command: ' + c);
             return;
           }
-          if (cmdMeta.kind === 'destructive' && cmdMeta.reason) {
-            if (!confirm('Run "' + c + '"?\n\n' + cmdMeta.reason)) return;
-          }
-          enqueue(path, args);
+          confirmRun(path, args, cmdMeta).then((ok) => { if (ok) enqueue(path, args); });
         });
         cmdRow.appendChild(btn);
       }

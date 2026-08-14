@@ -80,7 +80,9 @@ internal sealed class ServeCommand : AsyncCommand<ServeCommand.Settings> {
         }
         // One PathsService for the whole host: paths.ini is parsed once instead of
         // per request, and every endpoint/service shares the same resolved config.
-        builder.Services.AddSingleton<PathsService>();
+        // Built from the command's own settings so --ini-file / --settings-dir apply;
+        // the default constructor would silently ignore both.
+        builder.Services.AddSingleton(_ => settings.CreatePaths());
         builder.Services.AddSingleton<StatusService>();
         builder.Services.AddSingleton(jobHistoryStore);
         builder.Services.AddSingleton(routing);
