@@ -1,4 +1,5 @@
 using BeastieBot3.Configuration;
+using BeastieBot3.Iucn;
 using BeastieBot3.Web.Jobs;
 using BeastieBot3.Web.Status;
 
@@ -7,6 +8,10 @@ namespace BeastieBot3.Web.Flows;
 // Resolves a FlowDefinition into a runtime snapshot the UI can render:
 //   - each step gets a status (ready / ok / blocked) derived from data-source
 //     presence, plus a "last run" timestamp from the job history store
+//   - a step carrying a Probe gets its status from the actual on-disk state
+//     instead (see FlowStepProbes), which is the only way a step done by hand
+//     can report anything, and the only way a step with a command can say
+//     "this release went in" rather than "the command ran at some point"
 //   - each step's OutputPatterns are matched against the safe-root dirs; the
 //     newest matching file per pattern is surfaced as a "View latest" link
 //   - any currently-running job whose command matches the step's commands is
@@ -38,7 +43,11 @@ public sealed class FlowEvaluator {
             .ToDictionary(g => g.Key, g => g.ToList())
             ?? new Dictionary<string, List<Job>>();
 
-        var steps = flow.Steps.Select(s => Evaluate(s, sourceStatusById, runningJobsByCommand)).ToList();
+        // Read once per snapshot, and only for a flow that asks: two small SQLite reads plus a
+        // zip listing, shared by every probed step in the flow.
+        var iucnState = new Lazy<IucnReleaseState>(() => IucnReleaseStateReader.Read(_paths));
+
+        var steps = flow.Steps.Select(s => Evaluate(s, sourceStatusById, runningJobsByCommand, iucnState)).ToList();
 
         // Collect the subset of data sources actually referenced by this flow,
         // so the UI can render input/output chips with their existence and
@@ -85,7 +94,8 @@ public sealed class FlowEvaluator {
 
     private FlowStepSnapshot Evaluate(FlowStep step,
                                       IReadOnlyDictionary<string, DataSourceStatus> sources,
-                                      IReadOnlyDictionary<string, List<Job>> runningJobsByCommand) {
+                                      IReadOnlyDictionary<string, List<Job>> runningJobsByCommand,
+                                      Lazy<IucnReleaseState> iucnState) {
         // Block status: any required input data source missing.
         // (Optional steps still report block info; the UI styles them differently.)
         var missingInputs = step.InputSourceIds
@@ -124,11 +134,19 @@ public sealed class FlowEvaluator {
             if (match is not null) latestOutputs.Add(match);
         }
 
+        // What the on-disk state says about this step, if it carries a probe. Kept separate from
+        // the status so its explanation still shows while the step is blocked or running.
+        var probe = RunProbe(step, iucnState);
+
         string status;
         if (missingInputs.Count > 0) {
             status = "blocked";
         } else if (running.Count > 0) {
             status = "running";
+        } else if (probe is not null) {
+            // The on-disk state outranks run history: `iucn import` succeeding last month says
+            // nothing about the release sitting in the folder today.
+            status = probe.Status;
         } else if (step.Commands.Count == 0) {
             // Nothing to launch, so "not run" would be wrong: the user does this one by hand.
             status = "manual";
@@ -152,12 +170,26 @@ public sealed class FlowEvaluator {
             GuideTitle = step.GuideTitle,
             GuideSteps = step.GuideSteps,
             Status = status,
+            Detail = probe?.Detail,
             MissingInputs = missingInputs,
             LastRunAt = lastRun,
             LastRunCommand = lastRunCommand,
             RunningJobs = running,
             LatestOutputs = latestOutputs,
         };
+    }
+
+    // A probe reads real files, so anything unexpected there must not take the whole page down:
+    // an unreadable folder or database just leaves the step on its usual status.
+    private static FlowProbeResult? RunProbe(FlowStep step, Lazy<IucnReleaseState> iucnState) {
+        if (step.Probe is null) return null;
+        try {
+            return FlowStepProbes.IsIucnCsvProbe(step.Probe)
+                ? FlowStepProbes.Evaluate(step.Probe, iucnState.Value)
+                : null;
+        } catch {
+            return null;
+        }
     }
 
     // Resolves a FlowOutputPattern against the matching safe-root directory
@@ -223,7 +255,8 @@ public sealed record FlowStepSnapshot {
     public string? Note { get; init; }
     public string? GuideTitle { get; init; }                  // heading for the collapsible manual walkthrough
     public IReadOnlyList<string> GuideSteps { get; init; } = Array.Empty<string>();
-    public required string Status { get; init; }              // "blocked" | "running" | "manual" | "never-run" | "ok"
+    public required string Status { get; init; }              // "blocked" | "running" | "todo" | "manual" | "never-run" | "ok"
+    public string? Detail { get; init; }                      // one line of on-disk state from the step's probe
     public required IReadOnlyList<string> MissingInputs { get; init; }
     public DateTimeOffset? LastRunAt { get; init; }
     public string? LastRunCommand { get; init; }

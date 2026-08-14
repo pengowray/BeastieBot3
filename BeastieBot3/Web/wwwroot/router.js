@@ -238,6 +238,7 @@
     const ok = pipeline.filter((s) => s.status === 'ok').length;
     const blocked = pipeline.filter((s) => s.status === 'blocked').length;
     const running = pipeline.filter((s) => s.status === 'running').length;
+    const todo = pipeline.filter((s) => s.status === 'todo').length;
     const pct = total ? Math.round((ok / total) * 100) : 0;
 
     const right = jumpLink('Open →', 'workflows', () => {
@@ -255,12 +256,14 @@
 
     const meta = document.createElement('div');
     meta.className = 'dash-flow-meta small';
-    const bits = [ok + '/' + total + ' steps ready'];
+    const bits = [ok + ' of ' + total + ' steps done'];
     if (running) bits.push(running + ' running');
+    if (todo) bits.push(todo + ' to do');
     if (blocked) bits.push(blocked + ' blocked');
     meta.textContent = bits.join(' · ');
     if (running) meta.classList.add('running-accent');
     else if (blocked) meta.classList.add('blocked-accent');
+    else if (todo) meta.classList.add('todo-accent');
     card.appendChild(meta);
     return card;
   }

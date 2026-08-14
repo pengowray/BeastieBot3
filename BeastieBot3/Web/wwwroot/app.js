@@ -1159,8 +1159,12 @@
   }
 
   function renderStep(step, snap) {
+    // A step marked optional but reported as still to do is not optional today — show it at
+    // full strength and drop the "(optional)" suffix, or the two readings contradict each other.
+    const optional = step.optional && step.status !== 'todo';
+
     const wrap = document.createElement('div');
-    wrap.className = 'flow-step status-' + step.status + (step.optional ? ' optional' : '');
+    wrap.className = 'flow-step status-' + step.status + (optional ? ' optional' : '');
 
     const head = document.createElement('div');
     head.className = 'flow-step-head';
@@ -1169,10 +1173,21 @@
     dot.className = 'flow-step-dot status-' + step.status;
     head.appendChild(dot);
 
+    // Title, plus the one-line on-disk state from the step's probe (release found, imported,
+    // pointed at) so it reads without expanding the step.
+    const titles = document.createElement('div');
+    titles.className = 'flow-step-titles';
     const title = document.createElement('span');
     title.className = 'flow-step-title';
-    title.textContent = step.title + (step.optional ? '  (optional)' : '');
-    head.appendChild(title);
+    title.textContent = step.title + (optional ? '  (optional)' : '');
+    titles.appendChild(title);
+    if (step.detail) {
+      const detail = document.createElement('div');
+      detail.className = 'flow-step-detail status-' + step.status;
+      detail.textContent = step.detail;
+      titles.appendChild(detail);
+    }
+    head.appendChild(titles);
 
     const status = document.createElement('span');
     status.className = 'flow-step-status status-' + step.status;
@@ -1180,6 +1195,8 @@
       status.textContent = 'blocked';
     } else if (step.status === 'running') {
       status.textContent = '● running';
+    } else if (step.status === 'todo') {
+      status.textContent = 'to do';
     } else if (step.status === 'manual') {
       status.textContent = 'by hand';
     } else if (step.status === 'never-run') {
@@ -1188,7 +1205,7 @@
       status.textContent = formatRelative(step.lastRunAt);
       status.title = new Date(step.lastRunAt).toLocaleString();
     } else {
-      status.textContent = 'ready';
+      status.textContent = 'done';
     }
     head.appendChild(status);
 

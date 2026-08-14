@@ -46,6 +46,12 @@ public sealed record FlowStep {
     public string? GuideTitle { get; init; }
     public IReadOnlyList<string> GuideSteps { get; init; } = Array.Empty<string>();
 
+    // Optional on-disk state check (a FlowStepProbes key). Without one, a step can only report
+    // when its command last ran — or, with no command at all, nothing. A probe answers whether
+    // the step's result is actually in place right now: the release downloaded, imported, and
+    // being the one everything reads. See FlowStepProbes.
+    public string? Probe { get; init; }
+
     // Optional sub-section heading within the pipeline. Consecutive steps sharing a Group are
     // rendered under one header (e.g. "1 · From the CSV release"), letting a single flow present
     // several clearly-separated routes. Null = no heading (the default flat timeline).
@@ -96,6 +102,7 @@ public static class FlowCatalogue {
                     Description = "Two searches on the Red List website, each result downloaded as a zip and saved into the IUCN CSV input folder. There is no command for this: the software never downloads the release for you.",
                     Commands = Array.Empty<string>(),
                     OutputSourceIds = new[] { "iucn-csv-input" },
+                    Probe = FlowStepProbes.IucnCsvDownload,
                     Group = "1 · From the CSV release",
                     Note = "You need a free iucnredlist.org account to download search results. It takes two downloads because the site limits how much bird data one download may contain (ask for the lot in one go and it refuses, saying the search exceeded a limit on bird data), so perching birds (Passeriformes) are downloaded separately from everything else. The website changes from time to time; if the filters no longer match the guide below, aim for the same end result: all four kingdoms, and nothing ticked under Geographical Scope or Include.",
                     GuideTitle = "How to download the two zips",
@@ -121,6 +128,7 @@ public static class FlowCatalogue {
                     Commands = new[] { "iucn import" },
                     InputSourceIds = new[] { "iucn-csv-input" },
                     OutputSourceIds = new[] { "iucn-main" },
+                    Probe = FlowStepProbes.IucnCsvImport,
                     Group = "1 · From the CSV release",
                     Note = "One run imports every zip below [Datasets] IUCN_CVS_dir, so both downloads go in together. When those zips are a newer release than the configured database holds, the import creates a new file for them (IUCN_2026-1.sqlite, alongside the old one) and prints the paths.ini line to change; the previous release is never overwritten unless you ask for that with --force --replace-release. Zips already imported are skipped on a re-run. Afterwards the Data sources tab shows the row counts, which you can compare against the result counts iucnredlist.org showed for each search.",
                 },
@@ -131,6 +139,7 @@ public static class FlowCatalogue {
                     Commands = Array.Empty<string>(),
                     InputSourceIds = new[] { "iucn-main" },
                     Optional = true,
+                    Probe = FlowStepProbes.IucnCsvRepoint,
                     Group = "1 · From the CSV release",
                     Note = "Set [Datastore] IUCN_sqlite_from_cvs to the file the import reported, then restart serve. Until you do, every other command and every page here still reads the previous release, and nothing warns you: a database from the old release looks perfectly healthy. paths.ini is only read at startup, so the restart is what makes the change take effect. Confirm with `show-paths` or the Data sources tab, which shows the imported version. That is all you need for the CSV dataset: skip to the Wikipedia workflows, or build the API dataset below as an alternative.",
                 },
@@ -193,7 +202,7 @@ public static class FlowCatalogue {
                 // ===== 3 · Compare CSV vs API =====
                 new FlowStep {
                     Id = "compare-datasets",
-                    Title = "Compare CSV vs API (optional)",
+                    Title = "Compare CSV vs API",
                     Description = "Check that the two datasets agree before choosing which to generate from. The Data sources page shows a side-by-side card (version, totals, per-category, coverage); the count-scopes audit diffs them on the command line.",
                     Commands = new[] { "iucn count-scopes --compare" },
                     InputSourceIds = new[] { "iucn-main", "iucn-api-projected" },
@@ -394,6 +403,7 @@ public static class FlowCatalogue {
                     Commands = new[] { "iucn import" },
                     InputSourceIds = new[] { "iucn-csv-input" },
                     OutputSourceIds = new[] { "iucn-main" },
+                    Probe = FlowStepProbes.IucnCsvImport,
                     Note = "The starting point of this pipeline — see the dedicated \"Import IUCN data\" workflow (first tab) for the full picture: the CSV route shown here, the IUCN API route (--dataset api), and comparing the two. " +
                            "A new IUCN release belongs in a fresh database file (IUCN_<version>.sqlite) — importing into an existing DB double-counts.",
                 },

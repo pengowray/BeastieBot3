@@ -790,6 +790,7 @@ td { word-break: break-all; font-family: ui-monospace, Menlo, monospace; }
 .flow-step.status-blocked { border-left-color: var(--err); }
 .flow-step.status-never-run { border-left-color: var(--muted); }
 .flow-step.status-manual { border-left-color: var(--muted); }
+.flow-step.status-todo { border-left-color: var(--warn); }
 .flow-step.status-ok { border-left-color: var(--ok); }
 .flow-step.status-running { border-left-color: var(--accent); }
 .flow-step.optional { opacity: 0.85; }
@@ -817,6 +818,7 @@ td { word-break: break-all; font-family: ui-monospace, Menlo, monospace; }
 .flow-step-dot.status-blocked { background: var(--err); }
 .flow-step-dot.status-never-run { background: var(--muted); }
 .flow-step-dot.status-manual { background: var(--muted); }
+.flow-step-dot.status-todo { background: var(--warn); }
 .flow-step-dot.status-ok { background: var(--ok); }
 .flow-step-dot.status-running {
   background: var(--accent);
@@ -827,17 +829,32 @@ td { word-break: break-all; font-family: ui-monospace, Menlo, monospace; }
   50%      { box-shadow: 0 0 0 6px rgba(122,162,247,0); }
 }
 
+.flow-step-titles {
+  min-width: 0;
+}
 .flow-step-title {
   color: var(--fg);
   font-weight: 500;
 }
+/* One line of on-disk state under the step title: which release is there, whether it is
+   imported, whether it is the one being read. Always visible — it is the point of the row. */
+.flow-step-detail {
+  font-size: 0.85em;
+  color: var(--muted);
+  margin-top: 0.15rem;
+  overflow-wrap: anywhere;
+}
+.flow-step-detail.status-todo { color: var(--warn); }
+
 .flow-step-status {
   font-size: 0.78em;
   font-family: ui-monospace, Menlo, monospace;
+  white-space: nowrap;
 }
 .flow-step-status.status-blocked { color: var(--err); }
 .flow-step-status.status-never-run { color: var(--muted); }
 .flow-step-status.status-manual { color: var(--muted); }
+.flow-step-status.status-todo { color: var(--warn); }
 .flow-step-status.status-ok { color: var(--ok); }
 .flow-step-status.status-running { color: var(--accent); }
 
@@ -1449,5 +1466,6 @@ button.ghost.primary:hover { filter: brightness(1.1); background: var(--accent);
 .dash-flow-meta { color: var(--muted); }
 .dash-flow-meta.running-accent { color: var(--accent); }
 .dash-flow-meta.blocked-accent { color: var(--err); }
+.dash-flow-meta.todo-accent { color: var(--warn); }
 
 .dash-quick { display: flex; flex-wrap: wrap; gap: 0.5rem; }

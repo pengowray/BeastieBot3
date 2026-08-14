@@ -136,48 +136,13 @@ public static class IucnImportPreflight {
 
     // The database the import would write to: the configured path, or the release-named default
     // when none is set. Mirrors IucnImportCommand's own resolution.
-    private static string? ResolveTargetPath(PathsService paths, string release) {
-        var configured = paths.GetIucnDatabasePath();
-        if (!string.IsNullOrWhiteSpace(configured)) {
-            return Path.GetFullPath(configured);
-        }
-
-        var datastore = paths.GetDatastoreDir();
-        if (string.IsNullOrWhiteSpace(datastore)) {
-            return null;
-        }
-
-        var stem = string.Equals(release, "unknown", StringComparison.OrdinalIgnoreCase) ? "IUCN" : "IUCN_" + release;
-        return Path.GetFullPath(Path.Combine(datastore, stem + ".sqlite"));
-    }
+    private static string? ResolveTargetPath(PathsService paths, string release) =>
+        IucnReleaseStateReader.ResolveConfiguredDbPath(
+            paths,
+            string.Equals(release, "unknown", StringComparison.OrdinalIgnoreCase) ? null : release);
 
     // Which release(s) a database file already holds, read without opening it for writing.
-    // Mirrors IucnImporter's completed-imports query; no import_metadata table yet counts as empty.
-    internal static IReadOnlyList<string> ReadCompletedReleases(string databasePath) {
-        if (!File.Exists(databasePath)) {
-            return Array.Empty<string>();
-        }
-
-        var connectionString = new SqliteConnectionStringBuilder {
-            DataSource = databasePath,
-            Mode = SqliteOpenMode.ReadOnly,
-        }.ToString();
-
-        try {
-            using var connection = new SqliteConnection(connectionString);
-            connection.Open();
-            using var cmd = connection.CreateCommand();
-            cmd.CommandText = "SELECT DISTINCT redlist_version FROM import_metadata WHERE ended_at IS NOT NULL;";
-            using var reader = cmd.ExecuteReader();
-            var versions = new List<string>();
-            while (reader.Read()) {
-                if (!reader.IsDBNull(0)) {
-                    versions.Add(reader.GetString(0));
-                }
-            }
-            return versions;
-        } catch (SqliteException) {
-            return Array.Empty<string>();
-        }
-    }
+    // No import_metadata table yet counts as empty.
+    internal static IReadOnlyList<string> ReadCompletedReleases(string databasePath) =>
+        IucnReleaseStateReader.ReadDatabase(databasePath).Releases;
 }
