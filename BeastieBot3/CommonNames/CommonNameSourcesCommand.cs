@@ -142,7 +142,10 @@ internal sealed class CommonNameSourcesCommand : AsyncCommand<CommonNameSourcesC
             AnsiConsole.MarkupLine(
                 "A source that has never been replaced still holds every name it has ever contributed, " +
                 "including names its upstream data has dropped since. To re-import one from scratch:");
-            AnsiConsole.MarkupLine($"  [grey]common-names aggregate --source {neverReplaced[0]} --replace[/]");
+            // IUCN is the least likely one to need replacing, so lead with a source whose upstream
+            // data actually changes between imports.
+            var example = neverReplaced.Find(s => s is "col" or "wikidata" or "wikipedia") ?? neverReplaced[0];
+            AnsiConsole.MarkupLine($"  [grey]common-names aggregate --source {example} --replace[/]");
             AnsiConsole.WriteLine();
         }
 

@@ -992,6 +992,8 @@ internal sealed class CommonNameStore : SqliteStore {
                     System.Globalization.DateTimeStyles.RoundtripKind, out var replacedAt)) {
                 continue;
             }
+            // Conflicts are not stored per replacement (they are cleared wholesale, not per
+            // source), so this count is always 0 here — read the individual fields, not Total.
             results[reader.GetString(0)] = new SourceReplacement(
                 reader.GetString(0), replacedAt,
                 new PurgeCounts(reader.GetInt32(2), reader.GetInt32(3), reader.GetInt32(4), reader.GetInt32(5), 0));
