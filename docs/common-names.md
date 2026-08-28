@@ -78,8 +78,8 @@ beastiebot3 common-names init --limit 1000
 - IUCN synonyms are only purged when `--include-synonyms` is also given, since that is the only
   flag that re-imports them.
 - Rejected with `--limit`, which would delete a source and re-import only part of it.
-- Run `detect-conflicts` afterwards: conflict rows still describe the names that were there
-  before.
+- Clears the conflict list (its rows point at individual common-name rows), so run
+  `detect-conflicts` afterwards to rebuild it.
 - Re-running takes approximately the same time as a fresh run (~5-6 minutes)
 
 **Options:**
