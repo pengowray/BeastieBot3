@@ -51,7 +51,24 @@
 
   // --- Per-view refresh + polling ------------------------------------
 
-  function refreshView(name) {
+  // An auto (polled) refresh must never yank the page out from under someone mid-edit:
+  // every view rebuilds its DOM wholesale, so a refresh closes any open options form and
+  // throws away whatever was typed into it. Manual refreshes (navigation, refresh buttons,
+  // returning to the tab) always run; polled ones stand down while the view is in use.
+  function viewInUse(name) {
+    const root = document.querySelector('.view[data-view="' + name + '"]');
+    if (!root) return false;
+    // An open modal (e.g. the wikitext preview) counts wherever it lives in the DOM.
+    if (document.querySelector('.modal:not([hidden])')) return true;
+    const focused = document.activeElement;
+    if (focused && root.contains(focused) && focused.matches('input, textarea, select')) return true;
+    // An open command-options form holds unsaved settings for a run.
+    if (root.querySelector('.flow-cmd-form:not([hidden]), .cmd-form:not([hidden])')) return true;
+    return false;
+  }
+
+  function refreshView(name, opts) {
+    if (opts && opts.auto && viewInUse(name)) return;
     const b = B();
     switch (name) {
       case 'dashboard': renderDashboard(); break;
@@ -66,7 +83,7 @@
   const POLL_MS = 10000;
   setInterval(() => {
     if (document.hidden) return;
-    refreshView(currentView());
+    refreshView(currentView(), { auto: true });
   }, POLL_MS);
   document.addEventListener('visibilitychange', () => {
     if (!document.hidden) refreshView(currentView());
@@ -305,7 +322,7 @@
   // --- Boot -----------------------------------------------------------
 
   // Expose navigate so flows/jobs deep-links can use it if needed later.
-  window.BeastieRouter = { navigate, showView };
+  window.BeastieRouter = { navigate, showView, refreshView, viewInUse };
 
   showView(currentView());
 })();

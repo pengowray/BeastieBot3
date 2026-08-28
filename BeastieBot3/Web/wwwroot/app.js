@@ -1089,6 +1089,12 @@
 
   function renderFlow(snap) {
     const root = $('#flow-content');
+    // A poll re-renders the whole flow, which would silently fold away every section the
+    // user had opened (Maintenance, a step's walkthrough). Remember which were open by key
+    // and reopen them below, so live updates never cost the reader their place.
+    const openDetails = new Set(
+      Array.from(root.querySelectorAll('details[open][data-key]')).map(d => d.dataset.key)
+    );
     root.innerHTML = '';
 
     const desc = document.createElement('p');
@@ -1128,13 +1134,15 @@
         pipeline.appendChild(h);
       }
       lastGroup = g;
-      pipeline.appendChild(renderStep(step, snap));
+      pipeline.appendChild(renderStep(step, snap, openDetails));
     }
     root.appendChild(pipeline);
 
     if (maintenanceSteps.length > 0) {
       const wrap = document.createElement('details');
       wrap.className = 'flow-maintenance';
+      wrap.dataset.key = 'maintenance';
+      wrap.open = openDetails.has('maintenance');
       const summary = document.createElement('summary');
       summary.innerHTML = '<span class="flow-maintenance-title">Maintenance</span> ' +
                           '<span class="small muted">' + maintenanceSteps.length + ' step' +
@@ -1143,7 +1151,7 @@
       wrap.appendChild(summary);
       const pipe = document.createElement('div');
       pipe.className = 'flow-pipeline';
-      for (const step of maintenanceSteps) pipe.appendChild(renderStep(step, snap));
+      for (const step of maintenanceSteps) pipe.appendChild(renderStep(step, snap, openDetails));
       wrap.appendChild(pipe);
       root.appendChild(wrap);
     }
@@ -1174,7 +1182,7 @@
     return { meta: best, path: best.path, args: rest ? rest.split(/\s+/) : [] };
   }
 
-  function renderStep(step, snap) {
+  function renderStep(step, snap, openDetails) {
     // A step marked optional but reported as still to do is not optional today — show it at
     // full strength and drop the "(optional)" suffix, or the two readings contradict each other.
     const optional = step.optional && step.status !== 'todo';
@@ -1255,6 +1263,8 @@
     if (step.guideSteps && step.guideSteps.length > 0) {
       const g = document.createElement('details');
       g.className = 'flow-step-guide';
+      g.dataset.key = 'guide:' + step.id;
+      g.open = !!(openDetails && openDetails.has('guide:' + step.id));
       const sum = document.createElement('summary');
       sum.textContent = step.guideTitle || 'Step by step';
       g.appendChild(sum);
