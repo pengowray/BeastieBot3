@@ -63,6 +63,23 @@ beastiebot3 common-names init --limit 1000
 - **Taxa**: Uses UPSERT - existing taxa with the same `(primary_source, primary_source_id)` are updated, new taxa are inserted
 - **Caps rules**: Uses UPSERT - existing rules for the same word are updated with new correct form
 - **Safe to re-run**: Refreshes data without losing existing records or causing duplicates
+- Nothing is deleted, so a source whose upstream data dropped or renamed a name leaves the old
+  row behind: the store ends up holding the union of every release ever aggregated
+
+**`--replace`:**
+- Deletes what the named source contributed last time, then imports it again, so the store
+  matches that source's current contents. Other sources are untouched.
+- Removes that source's rows from `common_names`, `scientific_name_synonyms` and
+  `taxon_cross_references`, plus any taxon it created (`--create-missing`) that no source
+  refers to any more. Never removes taxa seeded by `init`.
+- Matters most for CoL: its taxon ids are reissued between releases, so a stale
+  `("col", oldId)` cross-reference (checked first when matching) can attach a new name to the
+  wrong taxon.
+- IUCN synonyms are only purged when `--include-synonyms` is also given, since that is the only
+  flag that re-imports them.
+- Rejected with `--limit`, which would delete a source and re-import only part of it.
+- Run `detect-conflicts` afterwards: conflict rows still describe the names that were there
+  before.
 - Re-running takes approximately the same time as a fresh run (~5-6 minutes)
 
 **Options:**
@@ -87,6 +104,9 @@ beastiebot3 common-names aggregate --source col
 
 # Limit records for testing
 beastiebot3 common-names aggregate --source iucn --limit 1000
+
+# Replace one source instead of adding to it (e.g. after a new CoL release)
+beastiebot3 common-names aggregate --source col --replace
 ```
 
 **Behavior with existing data:**
@@ -189,6 +209,9 @@ beastiebot3 common-names aggregate --source iucn
 
 # Or refresh everything
 beastiebot3 common-names aggregate
+
+# Mirror a source exactly after an upstream release, dropping what it no longer lists
+beastiebot3 common-names aggregate --source col --replace
 
 # Re-run conflict detection
 beastiebot3 common-names detect-conflicts --clear-existing

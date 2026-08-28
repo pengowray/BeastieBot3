@@ -146,6 +146,13 @@ internal sealed class CommonNameStore : SqliteStore {
                 detected_at TEXT NOT NULL
             );
             CREATE INDEX IF NOT EXISTS idx_conflicts_normalized ON common_name_conflicts(normalized_name);
+            -- SQLite scans a child table once per parent row deleted unless the foreign-key column
+            -- is indexed. Without these, deleting names or taxa (see PurgeSource) scans the whole
+            -- conflict table for every single row removed.
+            CREATE INDEX IF NOT EXISTS idx_conflicts_name_a ON common_name_conflicts(common_name_id_a);
+            CREATE INDEX IF NOT EXISTS idx_conflicts_name_b ON common_name_conflicts(common_name_id_b);
+            CREATE INDEX IF NOT EXISTS idx_conflicts_taxon_a ON common_name_conflicts(taxon_id_a);
+            CREATE INDEX IF NOT EXISTS idx_conflicts_taxon_b ON common_name_conflicts(taxon_id_b);
 
             -- Capitalization rules (from caps.txt)
             CREATE TABLE IF NOT EXISTS caps_rules (
@@ -862,6 +869,109 @@ internal sealed class CommonNameStore : SqliteStore {
         command.Parameters.AddWithValue("@matchType", matchType);
         command.Parameters.AddWithValue("@now", DateTime.UtcNow.ToString("O"));
         command.ExecuteNonQuery();
+    }
+
+    #endregion
+
+    #region Source Purge
+
+    /// <summary>
+    /// Every row a given aggregation source writes, by table. `common-names aggregate --replace`
+    /// deletes exactly these before re-importing that source, so the hub mirrors the current
+    /// release instead of a union of every release ever aggregated. Wikipedia and Wikidata write
+    /// their common names under more specific tags than the source name, which is why this is an
+    /// explicit map rather than a match on the source string.
+    /// `constructed` synonyms are deliberately absent: `common-names init` mints those from the
+    /// hub's own names, so no aggregation source owns them.
+    /// </summary>
+    internal static readonly IReadOnlyDictionary<string, SourceRowTags> PurgeableSources =
+        new Dictionary<string, SourceRowTags>(StringComparer.OrdinalIgnoreCase) {
+            ["iucn"] = new(CommonNames: new[] { "iucn" }, Synonyms: new[] { "iucn" }, CrossReferences: new[] { "iucn" }),
+            ["wikidata"] = new(CommonNames: new[] { "wikidata", "wikidata_label" }, Synonyms: Array.Empty<string>(), CrossReferences: new[] { "wikidata" }),
+            ["wikipedia"] = new(CommonNames: new[] { "wikipedia_title", "wikipedia_taxobox" }, Synonyms: Array.Empty<string>(), CrossReferences: new[] { "wikipedia" }),
+            ["col"] = new(CommonNames: new[] { "col" }, Synonyms: new[] { "col" }, CrossReferences: new[] { "col" }),
+        };
+
+    internal readonly record struct SourceRowTags(
+        IReadOnlyList<string> CommonNames,
+        IReadOnlyList<string> Synonyms,
+        IReadOnlyList<string> CrossReferences);
+
+    /// <summary>Counts removed by <see cref="PurgeSource"/>.</summary>
+    public readonly record struct PurgeCounts(int CommonNames, int Synonyms, int CrossReferences, int Taxa, int Conflicts) {
+        public int Total => CommonNames + Synonyms + CrossReferences + Taxa + Conflicts;
+    }
+
+    /// <summary>
+    /// Removes everything one aggregation source contributed, so the next import of that source
+    /// leaves the hub matching the source's current contents. Taxa are only removed when the
+    /// purged source both minted them (--create-missing) and nothing else references them any
+    /// more; the IUCN-anchored skeleton and any taxon another source still names is untouched.
+    /// </summary>
+    /// <param name="includeSynonyms">
+    /// False leaves the source's synonyms in place. IUCN synonyms are only re-imported when
+    /// `aggregate --include-synonyms` is given, so purging them on a run that will not rewrite
+    /// them would drop them for good.
+    /// </param>
+    public PurgeCounts PurgeSource(string source, bool includeSynonyms = true) {
+        if (!PurgeableSources.TryGetValue(source, out var tags)) {
+            throw new ArgumentException($"Unknown aggregation source '{source}'.", nameof(source));
+        }
+
+        using var transaction = _connection.BeginTransaction();
+        // Conflicts point at individual common-name rows, so every one of them is about to be
+        // stale or half-empty. detect-conflicts rebuilds the list from whatever the hub holds.
+        var conflicts = DeleteAll(transaction, "common_name_conflicts");
+        var names = DeleteByTag(transaction, "common_names", "source", tags.CommonNames);
+        var synonyms = includeSynonyms
+            ? DeleteByTag(transaction, "scientific_name_synonyms", "source", tags.Synonyms)
+            : 0;
+        var xrefs = DeleteByTag(transaction, "taxon_cross_references", "source", tags.CrossReferences);
+        var taxa = DeleteOrphanedTaxa(transaction, source);
+        transaction.Commit();
+
+        InvalidateAmbiguousNamesCache();
+        return new PurgeCounts(names, synonyms, xrefs, taxa, conflicts);
+    }
+
+    private int DeleteAll(SqliteTransaction transaction, string table) {
+        using var command = _connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = $"DELETE FROM {table};";
+        return command.ExecuteNonQuery();
+    }
+
+    private int DeleteByTag(SqliteTransaction transaction, string table, string column, IReadOnlyList<string> tags) {
+        if (tags.Count == 0) {
+            return 0;
+        }
+        using var command = _connection.CreateCommand();
+        command.Transaction = transaction;
+        var placeholders = new List<string>(tags.Count);
+        for (var i = 0; i < tags.Count; i++) {
+            placeholders.Add("@t" + i);
+            command.Parameters.AddWithValue("@t" + i, tags[i]);
+        }
+        command.CommandText = $"DELETE FROM {table} WHERE {column} IN ({string.Join(", ", placeholders)});";
+        return command.ExecuteNonQuery();
+    }
+
+    // A taxon this source minted is dead weight once the purge leaves it with no names, no
+    // synonyms and no cross-references from any source. Anything another source still points at
+    // survives, so this can never thin the hub below what the other sources describe.
+    private int DeleteOrphanedTaxa(SqliteTransaction transaction, string source) {
+        using var command = _connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText =
+            """
+            DELETE FROM taxa
+            WHERE primary_source = @source
+              AND id NOT IN (SELECT taxon_id FROM common_names)
+              AND id NOT IN (SELECT taxon_id FROM scientific_name_synonyms)
+              AND id NOT IN (SELECT taxon_id FROM taxon_cross_references);
+            """;
+        command.Parameters.AddWithValue("@source", source);
+        return command.ExecuteNonQuery();
     }
 
     #endregion

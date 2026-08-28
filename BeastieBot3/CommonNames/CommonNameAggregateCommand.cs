@@ -27,11 +27,12 @@ namespace BeastieBot3.CommonNames;
 /// Aggregates common names from all sources (IUCN API, Wikidata, Wikipedia) into the common name store.
 /// </summary>
 [CommandInfo("common-names aggregate", CommandKind.Mutates,
-    "Aggregate common names from sources (IUCN, Wikidata, Wikipedia, COL). Safe to re-run (uses upsert).",
-    Reason = "Aggregates common names from sources via upsert (idempotent).",
+    "Aggregate common names from sources (IUCN, Wikidata, Wikipedia, COL). Safe to re-run: adds and updates, never removes, unless --replace is given.",
+    Reason = "Aggregates common names from sources via upsert (idempotent). With --replace it first deletes the rows the named source contributed.",
     Examples = new[] {
         "common-names aggregate",
         "common-names aggregate --source iucn",
+        "common-names aggregate --source col --replace",
         "common-names aggregate --limit 1000"
     })]
 internal sealed class CommonNameAggregateCommand : AsyncCommand<CommonNameAggregateCommand.Settings> {
@@ -68,6 +69,14 @@ internal sealed class CommonNameAggregateCommand : AsyncCommand<CommonNameAggreg
         [Description("Limit number of records to process per source.")]
         public int? Limit { get; init; }
 
+        [CommandOption("--replace")]
+        [Description("Drop what this source contributed last time before importing it again, so the " +
+                     "hub matches the source's current contents instead of a union of every past " +
+                     "release. Removes that source's common names, synonyms and cross-references, " +
+                     "plus any taxon it created that nothing else refers to any more. Other sources " +
+                     "are untouched. Cannot be combined with --limit.")]
+        public bool Replace { get; init; }
+
         [CommandOption("--create-missing")]
         [Description("Build a cross-source union: when a Wikidata/CoL/Wikipedia row names a species " +
                      "not in the IUCN hub (and matches no existing taxon by cross-reference, canonical " +
@@ -87,9 +96,21 @@ internal sealed class CommonNameAggregateCommand : AsyncCommand<CommonNameAggreg
 
         var source = settings.Source.ToLowerInvariant();
 
+        // A purge followed by a truncated import would leave the hub holding only the first N rows
+        // of the source, which looks like a successful run and quietly loses the rest.
+        if (settings.Replace && settings.Limit.HasValue) {
+            AnsiConsole.MarkupLine("[red]--replace cannot be combined with --limit:[/] it would delete the source's names and then re-import only the first {0:N0}.", settings.Limit.Value);
+            return 1;
+        }
+
         if (source is "all" or "iucn") {
             var iucnApiPath = settings.IucnApiCachePath ?? paths.GetIucnApiCachePath();
             if (!string.IsNullOrWhiteSpace(iucnApiPath) && File.Exists(iucnApiPath)) {
+                if (settings.Replace) {
+                    // IUCN synonyms are only re-imported with --include-synonyms; without it,
+                    // purging them would drop names nothing is going to put back.
+                    ReplaceSource(store, "iucn", settings.IncludeSynonyms);
+                }
                 await AggregateIucnCommonNamesAsync(store, iucnApiPath, settings.Limit, cancellationToken);
 
                 // Also import IUCN synonyms if requested
@@ -104,6 +125,9 @@ internal sealed class CommonNameAggregateCommand : AsyncCommand<CommonNameAggreg
         if (source is "all" or "wikidata") {
             var wikidataPath = settings.WikidataCachePath ?? paths.GetWikidataCachePath();
             if (!string.IsNullOrWhiteSpace(wikidataPath) && File.Exists(wikidataPath)) {
+                if (settings.Replace) {
+                    ReplaceSource(store, "wikidata");
+                }
                 await AggregateWikidataCommonNamesAsync(store, wikidataPath, settings.Limit, settings.CreateMissing, cancellationToken);
             } else {
                 AnsiConsole.MarkupLine("[yellow]Skipping Wikidata:[/] cache not found");
@@ -113,6 +137,9 @@ internal sealed class CommonNameAggregateCommand : AsyncCommand<CommonNameAggreg
         if (source is "all" or "wikipedia") {
             var wikipediaPath = settings.WikipediaCachePath ?? paths.GetWikipediaCachePath();
             if (!string.IsNullOrWhiteSpace(wikipediaPath) && File.Exists(wikipediaPath)) {
+                if (settings.Replace) {
+                    ReplaceSource(store, "wikipedia");
+                }
                 await AggregateWikipediaCommonNamesAsync(store, wikipediaPath, settings.Limit, settings.CreateMissing, cancellationToken);
             } else {
                 AnsiConsole.MarkupLine("[yellow]Skipping Wikipedia:[/] cache not found");
@@ -122,6 +149,9 @@ internal sealed class CommonNameAggregateCommand : AsyncCommand<CommonNameAggreg
         if (source is "all" or "col") {
             var colPath = settings.ColSqlitePath ?? paths.GetColSqlitePath();
             if (!string.IsNullOrWhiteSpace(colPath) && File.Exists(colPath)) {
+                if (settings.Replace) {
+                    ReplaceSource(store, "col");
+                }
                 await AggregateColVernacularNamesAsync(store, colPath, settings.Limit, settings.CreateMissing, cancellationToken);
                 await AggregateColSynonymsAsync(store, colPath, settings.Limit, cancellationToken);
             } else {
@@ -142,7 +172,23 @@ internal sealed class CommonNameAggregateCommand : AsyncCommand<CommonNameAggreg
         table.AddRow("Conflicts", stats.ConflictCount.ToString("N0"));
         AnsiConsole.Write(table);
 
+        if (settings.Replace) {
+            // The purge clears the conflict list, since every row in it points at names that may
+            // no longer exist.
+            AnsiConsole.MarkupLine("[yellow]Run `common-names detect-conflicts` next[/] to rebuild the conflict list from the names now in the hub.");
+        }
+
         return 0;
+    }
+
+    // Deletes one source's previous contribution so the import that follows leaves the hub
+    // matching that source's current contents.
+    private static void ReplaceSource(CommonNameStore store, string source, bool includeSynonyms = true) {
+        var removed = store.PurgeSource(source, includeSynonyms);
+        AnsiConsole.MarkupLine(
+            $"[yellow]Replacing {source}:[/] removed {removed.CommonNames:N0} common names, " +
+            $"{removed.Synonyms:N0} synonyms, {removed.CrossReferences:N0} cross-references" +
+            (removed.Taxa > 0 ? $", {removed.Taxa:N0} taxa left with nothing referring to them" : string.Empty) + ".");
     }
 
     private static Task AggregateIucnCommonNamesAsync(CommonNameStore store, string iucnApiPath, int? limit, CancellationToken cancellationToken) {

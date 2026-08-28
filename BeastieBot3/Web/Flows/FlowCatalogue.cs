@@ -293,12 +293,12 @@ public static class FlowCatalogue {
                     Id = "common-names",
                     Title = "Re-aggregate common names",
                     Description = "Pull the new release's English vernacular names and synonyms into the common-name hub.",
-                    Commands = new[] { "common-names aggregate" },
+                    Commands = new[] { "common-names aggregate", "common-names aggregate --source col --replace" },
                     InputSourceIds = new[] { "col-sqlite", "iucn-main" },
                     OutputSourceIds = new[] { "common-names" },
                     Group = "2 · Refresh derived data",
                     Probe = FlowStepProbes.ColRebuildNames,
-                    Note = "Adds the new release's English vernaculars and scientific-name synonyms to the hub (stored as source='col'). Run `common-names init` first ONLY if the hub doesn't exist yet or you want a full rebuild — init seeds hub taxa from IUCN + caps.txt and does not read CoL, so `aggregate` is the actual CoL step. aggregate is idempotent and downloads nothing, but it only upserts: names dropped or renamed in the new release are NOT purged, so a plain re-run leaves a UNION of old + new CoL data plus stale CoL taxon-id cross-references (CoL renumbers ids between releases). To mirror the new release exactly, use the full rebuild in Maintenance below.",
+                    Note = "Imports the new release's English vernacular names and scientific-name synonyms from Catalogue of Life into the common-name hub. It downloads nothing and is safe to run twice. By default it only adds and updates: names this release dropped stay in the hub, and the old release's Catalogue of Life ids stay attached to their species. Catalogue of Life reissues those ids between releases, so a leftover id can attach one of the new names to the wrong species. To avoid that, run it with --replace (the second command button below): that deletes the Catalogue of Life names, synonyms and ids already in the hub before importing, leaving the hub matching this release exactly. Names from IUCN, Wikidata and Wikipedia are kept either way. `common-names init` is only needed when the hub database does not exist yet; it seeds species from IUCN and caps.txt and never reads Catalogue of Life.",
                 },
                 new FlowStep {
                     Id = "redlist-audit",
@@ -390,14 +390,14 @@ public static class FlowCatalogue {
                 },
                 new FlowStep {
                     Id = "full-rebuild-names",
-                    Title = "Full common-names rebuild (manual + command)",
-                    Description = "Delete the common-names store and rebuild from scratch to drop rows orphaned by the new release.",
+                    Title = "Rebuild the common-name hub from scratch (manual + command)",
+                    Description = "Delete the common-name database and build it again from every source.",
                     Commands = new[] { "common-names init", "common-names aggregate" },
                     InputSourceIds = new[] { "iucn-main", "col-sqlite" },
                     OutputSourceIds = new[] { "common-names" },
                     Optional = true,
                     Section = FlowSection.Maintenance,
-                    Note = "Because `common-names aggregate` only upserts, the only way to drop hub rows for vernaculars/synonyms the new release removed (and to clear stale (\"col\", oldTaxonId) cross-references) is to delete the common-names SQLite file first, then run init then aggregate. Use this when you want the hub to mirror the new release exactly rather than a union of old + new. The normal Re-aggregate step above is enough for day-to-day updates.",
+                    Note = "Not part of a normal release update: `common-names aggregate --source col --replace` in the Re-aggregate step above already makes the hub match the new Catalogue of Life release. Use this only when the hub itself looks wrong (for example after an interrupted import, or when several sources need clearing at once): delete the common-names SQLite file by hand, then run init, then aggregate. Rebuilding takes far longer than a re-aggregate, and any hand edits made to the hub are lost."
                 },
             },
             Outputs = new[] {
