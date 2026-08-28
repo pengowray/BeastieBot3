@@ -169,6 +169,18 @@ internal sealed class CommonNameStore : SqliteStore {
             );
             -- (lowercase_word already has a UNIQUE index from the column constraint; no extra index needed.)
 
+            -- When each source was last re-imported from scratch (aggregate --replace), so
+            -- `common-names sources` can say which sources still hold names their upstream
+            -- data has dropped since.
+            CREATE TABLE IF NOT EXISTS source_replacements (
+                source TEXT PRIMARY KEY,
+                replaced_at TEXT NOT NULL,
+                removed_common_names INTEGER NOT NULL DEFAULT 0,
+                removed_synonyms INTEGER NOT NULL DEFAULT 0,
+                removed_cross_references INTEGER NOT NULL DEFAULT 0,
+                removed_taxa INTEGER NOT NULL DEFAULT 0
+            );
+
             -- Import tracking
             CREATE TABLE IF NOT EXISTS import_runs (
                 id INTEGER PRIMARY KEY,
@@ -928,11 +940,66 @@ internal sealed class CommonNameStore : SqliteStore {
             : 0;
         var xrefs = DeleteByTag(transaction, "taxon_cross_references", "source", tags.CrossReferences);
         var taxa = DeleteOrphanedTaxa(transaction, source);
+        RecordReplacement(transaction, source, names, synonyms, xrefs, taxa);
         transaction.Commit();
 
         InvalidateAmbiguousNamesCache();
         return new PurgeCounts(names, synonyms, xrefs, taxa, conflicts);
     }
+
+    private void RecordReplacement(SqliteTransaction transaction, string source, int names, int synonyms, int xrefs, int taxa) {
+        using var command = _connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText =
+            """
+            INSERT INTO source_replacements
+                (source, replaced_at, removed_common_names, removed_synonyms, removed_cross_references, removed_taxa)
+            VALUES (@source, @now, @names, @synonyms, @xrefs, @taxa)
+            ON CONFLICT(source) DO UPDATE SET
+                replaced_at = excluded.replaced_at,
+                removed_common_names = excluded.removed_common_names,
+                removed_synonyms = excluded.removed_synonyms,
+                removed_cross_references = excluded.removed_cross_references,
+                removed_taxa = excluded.removed_taxa;
+            """;
+        command.Parameters.AddWithValue("@source", source);
+        command.Parameters.AddWithValue("@now", DateTime.UtcNow.ToString("O"));
+        command.Parameters.AddWithValue("@names", names);
+        command.Parameters.AddWithValue("@synonyms", synonyms);
+        command.Parameters.AddWithValue("@xrefs", xrefs);
+        command.Parameters.AddWithValue("@taxa", taxa);
+        command.ExecuteNonQuery();
+    }
+
+    /// <summary>
+    /// When each source was last re-imported from scratch, keyed by the aggregate --source name.
+    /// A source that is absent has only ever been added to.
+    /// </summary>
+    public IReadOnlyDictionary<string, SourceReplacement> GetSourceReplacements() {
+        var results = new Dictionary<string, SourceReplacement>(StringComparer.OrdinalIgnoreCase);
+        using var command = _connection.CreateCommand();
+        command.CommandText =
+            """
+            SELECT source, replaced_at, removed_common_names, removed_synonyms,
+                   removed_cross_references, removed_taxa
+            FROM source_replacements;
+            """;
+        using var reader = command.ExecuteReader();
+        while (reader.Read()) {
+            // Stored as a UTC "O" string; RoundtripKind keeps it UTC instead of shifting it by
+            // the machine's offset.
+            if (!DateTime.TryParse(reader.GetString(1), null,
+                    System.Globalization.DateTimeStyles.RoundtripKind, out var replacedAt)) {
+                continue;
+            }
+            results[reader.GetString(0)] = new SourceReplacement(
+                reader.GetString(0), replacedAt,
+                new PurgeCounts(reader.GetInt32(2), reader.GetInt32(3), reader.GetInt32(4), reader.GetInt32(5), 0));
+        }
+        return results;
+    }
+
+    public readonly record struct SourceReplacement(string Source, DateTime ReplacedAt, PurgeCounts Removed);
 
     private int DeleteAll(SqliteTransaction transaction, string table) {
         using var command = _connection.CreateCommand();

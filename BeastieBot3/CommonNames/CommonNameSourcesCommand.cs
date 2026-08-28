@@ -31,30 +31,30 @@ internal sealed class CommonNameSourcesCommand : AsyncCommand<CommonNameSourcesC
     /// <summary>
     /// Defines a data source for common names.
     /// </summary>
+    /// <param name="AggregateSource">
+    /// The `aggregate --source` name that imports this row. Several display rows can share one
+    /// (Wikidata labels arrive with the rest of Wikidata), and a replacement is recorded against
+    /// that name.
+    /// </param>
     private sealed record SourceDefinition(
         string Id,
         string Name,
         string ImportType,
-        Func<PathsService, string?> GetPath,
-        string? Description = null
+        string AggregateSource,
+        Func<PathsService, string?> GetPath
     );
 
     private static readonly SourceDefinition[] Sources = {
-        new("iucn", "IUCN Red List", "common_names_iucn",
-            paths => paths.GetIucnApiCachePath(),
-            "Common names from IUCN API assessments"),
-        new("wikidata", "Wikidata", "common_names_wikidata",
-            paths => paths.GetWikidataCachePath(),
-            "P1843 taxon common names from Wikidata entities"),
-        new("wikidata_label", "Wikidata Labels", "common_names_wikidata_labels",
-            paths => paths.GetWikidataCachePath(),
-            "Item labels from Wikidata (filtered for common names)"),
-        new("wikipedia", "Wikipedia", "common_names_wikipedia",
-            paths => paths.GetWikipediaCachePath(),
-            "Article titles and taxobox names matched to taxa"),
-        new("col", "Catalogue of Life", "common_names_col",
-            paths => paths.GetColSqlitePath(),
-            "English vernacular names from COL database"),
+        new("iucn", "IUCN Red List", "common_names_iucn", "iucn",
+            paths => paths.GetIucnApiCachePath()),
+        new("wikidata", "Wikidata", "common_names_wikidata", "wikidata",
+            paths => paths.GetWikidataCachePath()),
+        new("wikidata_label", "Wikidata item labels", "common_names_wikidata_labels", "wikidata",
+            paths => paths.GetWikidataCachePath()),
+        new("wikipedia", "Wikipedia", "common_names_wikipedia", "wikipedia",
+            paths => paths.GetWikipediaCachePath()),
+        new("col", "Catalogue of Life", "common_names_col", "col",
+            paths => paths.GetColSqlitePath()),
     };
 
     public override Task<int> ExecuteAsync(CommandContext context, Settings settings, CancellationToken cancellationToken) {
@@ -84,14 +84,19 @@ internal sealed class CommonNameSourcesCommand : AsyncCommand<CommonNameSourcesC
             countsBySource[src] = count;
         }
 
+        var replacements = store.GetSourceReplacements();
+
         // Build the table
         var table = new Table();
         table.AddColumn("Source");
         table.AddColumn("Available");
         table.AddColumn("Aggregated");
-        table.AddColumn("Records");
-        table.AddColumn("Last Run");
-        table.AddColumn("Description");
+        table.AddColumn(new TableColumn("Records").RightAligned());
+        table.AddColumn(new TableColumn("Last run").NoWrap());
+        table.AddColumn(new TableColumn("Replaced").NoWrap());
+
+        // Sources that hold names their upstream data may have dropped since.
+        var neverReplaced = new List<string>();
 
         foreach (var source in Sources) {
             var sourcePath = source.GetPath(paths);
@@ -108,18 +113,38 @@ internal sealed class CommonNameSourcesCommand : AsyncCommand<CommonNameSourcesC
                 ? runSummary.LastRun.Value.ToString("yyyy-MM-dd HH:mm")
                 : "-";
 
+            string replacedText;
+            if (!aggregated) {
+                replacedText = "-";
+            } else if (replacements.TryGetValue(source.AggregateSource, out var replacement)) {
+                replacedText = replacement.ReplacedAt.ToLocalTime().ToString("yyyy-MM-dd HH:mm");
+            } else {
+                replacedText = "[yellow]never[/]";
+                if (!neverReplaced.Contains(source.AggregateSource)) {
+                    neverReplaced.Add(source.AggregateSource);
+                }
+            }
+
             table.AddRow(
                 source.Name,
                 availableText,
                 aggregatedText,
                 recordsText,
                 lastRunText,
-                source.Description ?? ""
+                replacedText
             );
         }
 
         AnsiConsole.Write(table);
         AnsiConsole.WriteLine();
+
+        if (neverReplaced.Count > 0) {
+            AnsiConsole.MarkupLine(
+                "A source that has never been replaced still holds every name it has ever contributed, " +
+                "including names its upstream data has dropped since. To re-import one from scratch:");
+            AnsiConsole.MarkupLine($"  [grey]common-names aggregate --source {neverReplaced[0]} --replace[/]");
+            AnsiConsole.WriteLine();
+        }
 
         // Show counts by source from common_names table
         AnsiConsole.MarkupLine("[yellow]Current common name counts by source:[/]");

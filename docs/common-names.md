@@ -80,6 +80,8 @@ beastiebot3 common-names init --limit 1000
 - Rejected with `--limit`, which would delete a source and re-import only part of it.
 - Clears the conflict list (its rows point at individual common-name rows), so run
   `detect-conflicts` afterwards to rebuild it.
+- Recorded per source, and shown in the `Replaced` column of `common-names sources`. A source
+  reading `never` there still holds everything it has ever contributed.
 - Re-running takes approximately the same time as a fresh run (~5-6 minutes)
 
 **Options:**

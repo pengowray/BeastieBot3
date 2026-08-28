@@ -473,6 +473,7 @@ public static class FlowCatalogue {
                     Commands = new[] { "common-names init", "common-names aggregate" },
                     InputSourceIds = new[] { "iucn-main", "wikidata-cache", "wikipedia-cache", "col-sqlite" },
                     OutputSourceIds = new[] { "common-names" },
+                    Note = "`init` seeds the store's species from IUCN and rules/caps.txt; `aggregate` then reads the IUCN, Wikidata, Wikipedia and Catalogue of Life caches and fills in the names. Both are safe to re-run and download nothing. Re-running only adds and updates, so a name a source has since dropped or renamed stays in the store. After a cache has been refreshed or rebuilt, re-import that one source from scratch instead: `common-names aggregate --source wikidata --replace` (or wikipedia, col, iucn), which clears what that source contributed before importing it again and leaves the others alone. `common-names sources` lists when each source was last aggregated and last replaced.",
                 },
                 new FlowStep {
                     Id = "refresh-caps",

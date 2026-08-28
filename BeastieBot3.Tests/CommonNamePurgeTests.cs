@@ -128,6 +128,31 @@ public class CommonNamePurgeTests {
     }
 
     [Fact]
+    public void PurgeSource_RecordsWhenTheSourceWasReplaced() {
+        using var store = OpenInMemory();
+        var taxon = AddTaxon(store, "panthera leo", "iucn", "15951");
+        AddName(store, taxon, "African Lion", "col");
+
+        Assert.Empty(store.GetSourceReplacements());
+        var before = DateTime.UtcNow.AddSeconds(-1);
+
+        store.PurgeSource("col");
+
+        var replacements = store.GetSourceReplacements();
+        Assert.True(replacements.ContainsKey("col"));
+        Assert.False(replacements.ContainsKey("iucn"));
+        var col = replacements["col"];
+        Assert.Equal(DateTimeKind.Utc, col.ReplacedAt.Kind);
+        Assert.True(col.ReplacedAt >= before);
+        Assert.Equal(1, col.Removed.CommonNames);
+
+        // A second replacement overwrites the first rather than accumulating rows.
+        store.PurgeSource("col");
+        Assert.Single(store.GetSourceReplacements());
+        Assert.Equal(0, store.GetSourceReplacements()["col"].Removed.CommonNames);
+    }
+
+    [Fact]
     public void PurgeSource_RejectsUnknownSource() {
         using var store = OpenInMemory();
         Assert.Throws<ArgumentException>(() => store.PurgeSource("sprat"));
