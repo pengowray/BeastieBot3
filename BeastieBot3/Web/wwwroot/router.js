@@ -86,7 +86,9 @@
     refreshView(currentView(), { auto: true });
   }, POLL_MS);
   document.addEventListener('visibilitychange', () => {
-    if (!document.hidden) refreshView(currentView());
+    // Coming back to the tab is not a request to refresh: someone who alt-tabbed away
+    // mid-edit expects their open form to still be there.
+    if (!document.hidden) refreshView(currentView(), { auto: true });
   });
 
   // --- Header clock ---------------------------------------------------
