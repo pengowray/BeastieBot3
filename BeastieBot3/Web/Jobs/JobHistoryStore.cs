@@ -22,7 +22,13 @@ public sealed class JobHistoryStore : IDisposable {
     private const string TruncationMarker = "\n\x1b[2m[output truncated; persisted up to 256K characters]\x1b[0m\n";
 
     private readonly SqliteConnection _connection;
-    private readonly object _writeLock = new();
+    // SqliteConnection is not thread-safe: it tracks its live commands in a plain
+    // List, so two threads calling CreateCommand()/Dispose() at once corrupt it
+    // (RemoveCommand throws ArgumentOutOfRangeException). The dashboard polls the
+    // flow probes from several requests at once while jobs write from their own
+    // threads, so *every* use of _connection goes through this lock, reads included.
+    private readonly object _lock = new();
+    private bool _disposed;
 
     private JobHistoryStore(SqliteConnection connection) { _connection = connection; }
 
@@ -34,46 +40,56 @@ public sealed class JobHistoryStore : IDisposable {
         return store;
     }
 
-    public void Dispose() => _connection.Dispose();
+    public void Dispose() {
+        lock (_lock) {
+            if (_disposed) return;
+            _disposed = true;
+            _connection.Dispose();
+        }
+    }
 
     private void EnsureSchema() {
-        using var cmd = _connection.CreateCommand();
-        cmd.CommandText = """
-            CREATE TABLE IF NOT EXISTS jobs (
-                id TEXT PRIMARY KEY,
-                command TEXT NOT NULL,
-                args_json TEXT NOT NULL,
-                status TEXT NOT NULL,
-                exit_code INTEGER,
-                error TEXT,
-                created_at TEXT NOT NULL,
-                started_at TEXT,
-                completed_at TEXT,
-                output TEXT NOT NULL DEFAULT ''
-            );
-            CREATE INDEX IF NOT EXISTS ix_jobs_created_at ON jobs (created_at DESC);
-            """;
-        cmd.ExecuteNonQuery();
+        lock (_lock) {
+            using var cmd = _connection.CreateCommand();
+            cmd.CommandText = """
+                CREATE TABLE IF NOT EXISTS jobs (
+                    id TEXT PRIMARY KEY,
+                    command TEXT NOT NULL,
+                    args_json TEXT NOT NULL,
+                    status TEXT NOT NULL,
+                    exit_code INTEGER,
+                    error TEXT,
+                    created_at TEXT NOT NULL,
+                    started_at TEXT,
+                    completed_at TEXT,
+                    output TEXT NOT NULL DEFAULT ''
+                );
+                CREATE INDEX IF NOT EXISTS ix_jobs_created_at ON jobs (created_at DESC);
+                """;
+            cmd.ExecuteNonQuery();
+        }
     }
 
     // Any job that was Running when the server stopped is orphaned — its
     // process never reached the completion path. Surface that explicitly so
     // the UI doesn't show it as still in-flight.
     private void MarkOrphanedRunningJobs() {
-        using var cmd = _connection.CreateCommand();
-        cmd.CommandText = """
-            UPDATE jobs
-            SET status = 'failed',
-                error = COALESCE(error, '') || '[interrupted by server restart]',
-                completed_at = COALESCE(completed_at, @now)
-            WHERE status IN ('pending', 'running');
-            """;
-        cmd.Parameters.AddWithValue("@now", DateTimeOffset.UtcNow.ToString("O"));
-        cmd.ExecuteNonQuery();
+        lock (_lock) {
+            using var cmd = _connection.CreateCommand();
+            cmd.CommandText = """
+                UPDATE jobs
+                SET status = 'failed',
+                    error = COALESCE(error, '') || '[interrupted by server restart]',
+                    completed_at = COALESCE(completed_at, @now)
+                WHERE status IN ('pending', 'running');
+                """;
+            cmd.Parameters.AddWithValue("@now", DateTimeOffset.UtcNow.ToString("O"));
+            cmd.ExecuteNonQuery();
+        }
     }
 
     public void Insert(Job job) {
-        lock (_writeLock) {
+        lock (_lock) {
             using var cmd = _connection.CreateCommand();
             cmd.CommandText = """
                 INSERT INTO jobs (id, command, args_json, status, created_at)
@@ -89,7 +105,7 @@ public sealed class JobHistoryStore : IDisposable {
     }
 
     public void RecordStarted(Job job) {
-        lock (_writeLock) {
+        lock (_lock) {
             using var cmd = _connection.CreateCommand();
             cmd.CommandText = "UPDATE jobs SET status = @status, started_at = @started_at WHERE id = @id;";
             cmd.Parameters.AddWithValue("@id", job.Id);
@@ -100,7 +116,7 @@ public sealed class JobHistoryStore : IDisposable {
     }
 
     public void RecordCompleted(Job job, string output) {
-        lock (_writeLock) {
+        lock (_lock) {
             using var cmd = _connection.CreateCommand();
             cmd.CommandText = """
                 UPDATE jobs
@@ -124,56 +140,62 @@ public sealed class JobHistoryStore : IDisposable {
     // Pull recent jobs into memory so the dashboard can render them after a
     // restart. Returns most-recent-first; limit caps memory + UI clutter.
     public IReadOnlyList<PersistedJob> LoadRecent(int limit = 100) {
-        using var cmd = _connection.CreateCommand();
-        cmd.CommandText = """
-            SELECT id, command, args_json, status, exit_code, error,
-                   created_at, started_at, completed_at, output
-            FROM jobs
-            ORDER BY created_at DESC
-            LIMIT @limit;
-            """;
-        cmd.Parameters.AddWithValue("@limit", limit);
+        lock (_lock) {
+            if (_disposed) return Array.Empty<PersistedJob>();
+            using var cmd = _connection.CreateCommand();
+            cmd.CommandText = """
+                SELECT id, command, args_json, status, exit_code, error,
+                       created_at, started_at, completed_at, output
+                FROM jobs
+                ORDER BY created_at DESC
+                LIMIT @limit;
+                """;
+            cmd.Parameters.AddWithValue("@limit", limit);
 
-        var result = new List<PersistedJob>();
-        using var reader = cmd.ExecuteReader();
-        while (reader.Read()) {
-            var argsJson = reader.GetString(2);
-            string[] args;
-            try {
-                args = JsonSerializer.Deserialize<string[]>(argsJson) ?? Array.Empty<string>();
-            } catch {
-                args = Array.Empty<string>();
+            var result = new List<PersistedJob>();
+            using var reader = cmd.ExecuteReader();
+            while (reader.Read()) {
+                var argsJson = reader.GetString(2);
+                string[] args;
+                try {
+                    args = JsonSerializer.Deserialize<string[]>(argsJson) ?? Array.Empty<string>();
+                } catch {
+                    args = Array.Empty<string>();
+                }
+                result.Add(new PersistedJob {
+                    Id = reader.GetString(0),
+                    Command = reader.GetString(1),
+                    Args = args,
+                    Status = ParseStatus(reader.GetString(3)),
+                    ExitCode = reader.IsDBNull(4) ? null : reader.GetInt32(4),
+                    Error = reader.IsDBNull(5) ? null : reader.GetString(5),
+                    CreatedAt = DateTimeOffset.Parse(reader.GetString(6)),
+                    StartedAt = reader.IsDBNull(7) ? null : DateTimeOffset.Parse(reader.GetString(7)),
+                    CompletedAt = reader.IsDBNull(8) ? null : DateTimeOffset.Parse(reader.GetString(8)),
+                    Output = reader.GetString(9),
+                });
             }
-            result.Add(new PersistedJob {
-                Id = reader.GetString(0),
-                Command = reader.GetString(1),
-                Args = args,
-                Status = ParseStatus(reader.GetString(3)),
-                ExitCode = reader.IsDBNull(4) ? null : reader.GetInt32(4),
-                Error = reader.IsDBNull(5) ? null : reader.GetString(5),
-                CreatedAt = DateTimeOffset.Parse(reader.GetString(6)),
-                StartedAt = reader.IsDBNull(7) ? null : DateTimeOffset.Parse(reader.GetString(7)),
-                CompletedAt = reader.IsDBNull(8) ? null : DateTimeOffset.Parse(reader.GetString(8)),
-                Output = reader.GetString(9),
-            });
+            return result;
         }
-        return result;
     }
 
     // Most recent successful completion of `commandPath`. Used by the Workflows
     // page to show "when was this step last refreshed?" alongside each step.
     public DateTimeOffset? GetLastSuccessfulRun(string commandPath) {
-        using var cmd = _connection.CreateCommand();
-        cmd.CommandText = """
-            SELECT completed_at FROM jobs
-            WHERE command = @cmd AND status = 'succeeded' AND completed_at IS NOT NULL
-            ORDER BY completed_at DESC
-            LIMIT 1;
-            """;
-        cmd.Parameters.AddWithValue("@cmd", commandPath);
-        var raw = cmd.ExecuteScalar();
-        if (raw is null || raw is DBNull) return null;
-        return DateTimeOffset.Parse((string)raw);
+        lock (_lock) {
+            if (_disposed) return null;
+            using var cmd = _connection.CreateCommand();
+            cmd.CommandText = """
+                SELECT completed_at FROM jobs
+                WHERE command = @cmd AND status = 'succeeded' AND completed_at IS NOT NULL
+                ORDER BY completed_at DESC
+                LIMIT 1;
+                """;
+            cmd.Parameters.AddWithValue("@cmd", commandPath);
+            var raw = cmd.ExecuteScalar();
+            if (raw is null || raw is DBNull) return null;
+            return DateTimeOffset.Parse((string)raw);
+        }
     }
 
     private static string TruncateOutput(string output) {
