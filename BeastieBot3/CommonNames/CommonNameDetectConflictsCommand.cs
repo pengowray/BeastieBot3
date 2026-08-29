@@ -58,7 +58,16 @@ internal sealed class CommonNameDetectConflictsCommand : AsyncCommand<CommonName
             store.ClearConflicts();
         }
 
-        await DetectAmbiguousNamesAsync(store, settings.Language, settings.IncludeFossil, cancellationToken);
+        // Recorded as an import run so the workflow page can tell whether this list is older
+        // than the names it was built from; an interrupted run is never marked completed, so a
+        // half-built list is not mistaken for a current one.
+        var runId = store.BeginImportRun("detect_conflicts");
+        var (namesChecked, conflictsFound) =
+            await DetectAmbiguousNamesAsync(store, settings.Language, settings.IncludeFossil, cancellationToken);
+        store.CompleteImportRun(runId, namesChecked, conflictsFound, 0, 0,
+            $"language={settings.Language}"
+            + (settings.ClearExisting ? "; cleared first" : "")
+            + (settings.IncludeFossil ? "; fossils included" : ""));
 
         // Show statistics
         var stats = store.GetStatistics();
@@ -69,7 +78,7 @@ internal sealed class CommonNameDetectConflictsCommand : AsyncCommand<CommonName
         return 0;
     }
 
-    private static Task DetectAmbiguousNamesAsync(CommonNameStore store, string language, bool includeFossil, CancellationToken cancellationToken) {
+    private static Task<(int NamesChecked, int ConflictsFound)> DetectAmbiguousNamesAsync(CommonNameStore store, string language, bool includeFossil, CancellationToken cancellationToken) {
         return Task.Run(() => {
             AnsiConsole.MarkupLine("[yellow]Detecting ambiguous common names...[/]");
 
@@ -145,6 +154,7 @@ internal sealed class CommonNameDetectConflictsCommand : AsyncCommand<CommonName
                 });
 
             AnsiConsole.MarkupLine($"[green]Found {conflictsFound:N0} conflicts among {namesChecked:N0} common names[/]");
+            return (namesChecked, conflictsFound);
         }, cancellationToken);
     }
 }

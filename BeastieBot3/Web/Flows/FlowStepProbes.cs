@@ -1,5 +1,6 @@
 using System;
 using BeastieBot3.Col;
+using BeastieBot3.CommonNames;
 using BeastieBot3.Iucn;
 
 namespace BeastieBot3.Web.Flows;
@@ -36,12 +37,21 @@ public static class FlowStepProbes {
     public const string ColRebuildAudit = "col-rebuild-audit";
     public const string ColRebuildLists = "col-rebuild-lists";
 
+    public const string CommonNameConflicts = "common-name-conflicts";
+
+    public static bool IsCommonNameProbe(string probe) => probe is CommonNameConflicts;
+
     public static bool IsIucnApiProbe(string probe) =>
         probe is IucnApiRefresh or IucnApiTaxa or IucnApiDiscovery or IucnApiInfraranks or IucnApiProjection;
 
     public static bool IsColProbe(string probe) =>
         probe is ColImport or ColRepoint or ColCleanup
             or ColRebuildNames or ColRebuildAudit or ColRebuildLists;
+
+    public static FlowProbeResult? EvaluateCommonNames(string probe, CommonNameHubState state) => probe switch {
+        CommonNameConflicts => Conflicts(state),
+        _ => null,
+    };
 
     public static FlowProbeResult? EvaluateCol(string probe, ColUpdateState state, ColArtifacts artifacts) => probe switch {
         ColImport => ColImportStep(state),
@@ -315,6 +325,29 @@ public static class FlowStepProbes {
         }
         return new FlowProbeResult("ok",
             $"Last built {Stamp(artifactModified)}, after Catalogue of Life {s.Loaded.Label} was imported.");
+    }
+
+    // ---- the common-name hub ----------------------------------------------------------------
+    // The ambiguous-name list is derived from the names in the hub, so aggregating again leaves
+    // it out of date, and nothing downstream complains: generation just treats a name that has
+    // since become ambiguous as if it were unique.
+    internal static FlowProbeResult? Conflicts(CommonNameHubState s) {
+        if (!s.HubExists || !s.Readable) return null;
+
+        if (s.ConflictsBuiltAt is null) {
+            return s.ConflictCount == 0
+                ? new FlowProbeResult("todo", "Not built yet, so no common name is treated as ambiguous.")
+                : null;   // rows but no date to judge them by — leave the step on its run history
+        }
+
+        var built = s.ConflictsBuiltAt.Value;
+        if (s.NamesChangedAt is { } changed && changed > built) {
+            return new FlowProbeResult("todo",
+                $"Last built {Stamp(built)}, before the names were last aggregated ({Stamp(changed)}), so names that have become ambiguous since are not flagged.");
+        }
+
+        return new FlowProbeResult("ok",
+            $"Last built {Stamp(built)} · {s.ConflictCount:N0} ambiguous names");
     }
 
     private static string Release(string? label, string? issued) =>

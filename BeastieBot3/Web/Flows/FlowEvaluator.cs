@@ -1,4 +1,5 @@
 using BeastieBot3.Col;
+using BeastieBot3.CommonNames;
 using BeastieBot3.Configuration;
 using BeastieBot3.Iucn;
 using BeastieBot3.Web.Jobs;
@@ -52,9 +53,10 @@ public sealed class FlowEvaluator {
         // takes around twenty seconds. It is warmed in the background instead.
         var colState = new Lazy<ColUpdateState>(() => ColUpdateStateReader.Read(_paths, readArchives: false));
         var colArtifacts = new Lazy<ColArtifacts>(() => ColArtifacts.Read(_paths));
+        var hubState = new Lazy<CommonNameHubState>(() => CommonNameHubStateReader.Read(_paths));
 
         var steps = flow.Steps
-            .Select(s => Evaluate(s, sourceStatusById, runningJobsByCommand, iucnState, apiState, colState, colArtifacts))
+            .Select(s => Evaluate(s, sourceStatusById, runningJobsByCommand, iucnState, apiState, colState, colArtifacts, hubState))
             .ToList();
 
         // Collect the subset of data sources actually referenced by this flow,
@@ -106,7 +108,8 @@ public sealed class FlowEvaluator {
                                       Lazy<IucnReleaseState> iucnState,
                                       Lazy<IucnApiCacheState> apiState,
                                       Lazy<ColUpdateState> colState,
-                                      Lazy<ColArtifacts> colArtifacts) {
+                                      Lazy<ColArtifacts> colArtifacts,
+                                      Lazy<CommonNameHubState> hubState) {
         // Block status: any required input data source missing.
         // (Optional steps still report block info; the UI styles them differently.)
         var missingInputs = step.InputSourceIds
@@ -147,7 +150,7 @@ public sealed class FlowEvaluator {
 
         // What the on-disk state says about this step, if it carries a probe. Kept separate from
         // the status so its explanation still shows while the step is blocked or running.
-        var probe = RunProbe(step, iucnState, apiState, colState, colArtifacts);
+        var probe = RunProbe(step, iucnState, apiState, colState, colArtifacts, hubState);
 
         string status;
         if (missingInputs.Count > 0) {
@@ -196,12 +199,14 @@ public sealed class FlowEvaluator {
                                              Lazy<IucnReleaseState> iucnState,
                                              Lazy<IucnApiCacheState> apiState,
                                              Lazy<ColUpdateState> colState,
-                                             Lazy<ColArtifacts> colArtifacts) {
+                                             Lazy<ColArtifacts> colArtifacts,
+                                             Lazy<CommonNameHubState> hubState) {
         if (step.Probe is null) return null;
         try {
             if (FlowStepProbes.IsIucnCsvProbe(step.Probe)) return FlowStepProbes.Evaluate(step.Probe, iucnState.Value);
             if (FlowStepProbes.IsIucnApiProbe(step.Probe)) return FlowStepProbes.EvaluateApi(step.Probe, apiState.Value);
             if (FlowStepProbes.IsColProbe(step.Probe)) return FlowStepProbes.EvaluateCol(step.Probe, colState.Value, colArtifacts.Value);
+            if (FlowStepProbes.IsCommonNameProbe(step.Probe)) return FlowStepProbes.EvaluateCommonNames(step.Probe, hubState.Value);
             return null;
         } catch {
             return null;

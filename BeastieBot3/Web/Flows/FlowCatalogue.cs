@@ -308,6 +308,7 @@ public static class FlowCatalogue {
                     InputSourceIds = new[] { "common-names" },
                     OutputSourceIds = new[] { "common-names" },
                     Group = "2 · Refresh derived data",
+                    Probe = FlowStepProbes.CommonNameConflicts,
                     Note = "Run this after the re-aggregate above: a name shared by two species is only found by comparing the names now in the hub, and aggregating does not redo that comparison. `--replace` empties the list first, so after the second aggregate button the plain command rebuilds it. After a plain aggregate, use `--clear-existing` (the second button) instead: without it, old rows stay behind for pairs that are no longer ambiguous. Wikipedia list generation reads the result: it passes over an ambiguous name in favour of the taxon's next-best common name, and falls back to the scientific name when every candidate is ambiguous.",
                 },
                 new FlowStep {
@@ -492,6 +493,7 @@ public static class FlowCatalogue {
                     Commands = new[] { "common-names detect-conflicts", "common-names detect-conflicts --clear-existing" },
                     InputSourceIds = new[] { "common-names" },
                     OutputSourceIds = new[] { "common-names" },
+                    Probe = FlowStepProbes.CommonNameConflicts,
                     Note = "Run after aggregating: a name shared by two species is only found by comparing the names now in the hub, and aggregating does not redo that comparison. Generation reads the result: it passes over an ambiguous name in favour of the taxon's next-best common name, and falls back to the scientific name when every candidate is ambiguous. Use `--clear-existing` (the second button) to rebuild the list from scratch; without it, old rows stay behind for pairs that are no longer ambiguous.",
                 },
                 new FlowStep {
