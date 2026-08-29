@@ -301,6 +301,16 @@ public static class FlowCatalogue {
                     Note = "Imports the new release's English vernacular names and scientific-name synonyms from Catalogue of Life into the common-name hub. It downloads nothing and is safe to run twice. By default it only adds and updates: names this release dropped stay in the hub, and the old release's Catalogue of Life ids stay attached to their species. Catalogue of Life reissues those ids between releases, so a leftover id can attach one of the new names to the wrong species. To avoid that, run it with --replace (the second command button below): that deletes the Catalogue of Life names, synonyms and ids already in the hub before importing, leaving the hub matching this release exactly. Names from IUCN, Wikidata and Wikipedia are kept either way. `common-names init` is only needed when the hub database does not exist yet; it seeds species from IUCN and caps.txt and never reads Catalogue of Life.",
                 },
                 new FlowStep {
+                    Id = "detect-conflicts",
+                    Title = "Rebuild the ambiguous-name list",
+                    Description = "Work out which common names now point at more than one species, so the Wikipedia lists know not to use them on their own.",
+                    Commands = new[] { "common-names detect-conflicts", "common-names detect-conflicts --clear-existing" },
+                    InputSourceIds = new[] { "common-names" },
+                    OutputSourceIds = new[] { "common-names" },
+                    Group = "2 · Refresh derived data",
+                    Note = "Run this after the re-aggregate above: a name shared by two species is only found by comparing the names now in the hub, and aggregating does not redo that comparison. `--replace` empties the list first, so after the second aggregate button the plain command rebuilds it. After a plain aggregate, use `--clear-existing` (the second button) instead: without it, old rows stay behind for pairs that are no longer ambiguous. Wikipedia list generation reads the result: it passes over an ambiguous name in favour of the taxon's next-best common name, and falls back to the scientific name when every candidate is ambiguous.",
+                },
+                new FlowStep {
                     Id = "redlist-audit",
                     Title = "Rebuild the Red List audit site",
                     Description = "Regenerate the audit site so its Catalogue-of-Life crosscheck page reflects the new release.",
@@ -474,6 +484,15 @@ public static class FlowCatalogue {
                     InputSourceIds = new[] { "iucn-main", "wikidata-cache", "wikipedia-cache", "col-sqlite" },
                     OutputSourceIds = new[] { "common-names" },
                     Note = "`init` seeds the store's species from IUCN and rules/caps.txt; `aggregate` then reads the IUCN, Wikidata, Wikipedia and Catalogue of Life caches and fills in the names. Both are safe to re-run and download nothing. Re-running only adds and updates, so a name a source has since dropped or renamed stays in the store. After a cache has been refreshed or rebuilt, re-import that one source from scratch instead: `common-names aggregate --source wikidata --replace` (or wikipedia, col, iucn), which clears what that source contributed before importing it again and leaves the others alone. `common-names sources` lists when each source was last aggregated and last replaced.",
+                },
+                new FlowStep {
+                    Id = "detect-conflicts",
+                    Title = "Find ambiguous common names",
+                    Description = "Work out which common names point at more than one species, so the lists know not to use them on their own.",
+                    Commands = new[] { "common-names detect-conflicts", "common-names detect-conflicts --clear-existing" },
+                    InputSourceIds = new[] { "common-names" },
+                    OutputSourceIds = new[] { "common-names" },
+                    Note = "Run after aggregating: a name shared by two species is only found by comparing the names now in the hub, and aggregating does not redo that comparison. Generation reads the result: it passes over an ambiguous name in favour of the taxon's next-best common name, and falls back to the scientific name when every candidate is ambiguous. Use `--clear-existing` (the second button) to rebuild the list from scratch; without it, old rows stay behind for pairs that are no longer ambiguous.",
                 },
                 new FlowStep {
                     Id = "refresh-caps",
