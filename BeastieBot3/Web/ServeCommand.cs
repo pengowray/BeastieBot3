@@ -24,9 +24,9 @@ namespace BeastieBot3.Web;
 internal sealed class ServeCommand : AsyncCommand<ServeCommand.Settings> {
     public sealed class Settings : CommonSettings {
         [CommandOption("-p|--port <PORT>")]
-        [Description("Port to listen on. Defaults to 8080.")]
-        [DefaultValue(8080)]
-        public int Port { get; init; } = 8080;
+        [Description("Port to listen on. Defaults to 20121.")]
+        [DefaultValue(20121)]
+        public int Port { get; init; } = 20121;
 
         [CommandOption("--host <HOST>")]
         [Description("Host/IP to bind to. Defaults to 127.0.0.1 (localhost-only).")]
