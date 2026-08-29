@@ -614,7 +614,7 @@
   async function refreshActiveFlow() {
     // Re-fetch the snapshot for the currently-selected flow tab so step
     // timestamps, running indicators and latest-output links stay live.
-    // expandedStepId is preserved across re-renders so an open drawer
+    // Expanded steps are preserved across re-renders so an open drawer
     // does not flicker shut underneath the user.
     if (!activeFlowId) return;
     try {
@@ -1043,7 +1043,7 @@
 
   let allFlows = [];
   let activeFlowId = null;
-  let expandedStepId = null;
+  const expandedStepIds = new Set();
 
   async function loadFlowsList() {
     try {
@@ -1071,7 +1071,7 @@
 
   async function selectFlow(id) {
     activeFlowId = id;
-    expandedStepId = null;
+    expandedStepIds.clear();
     renderFlowTabs();
     $('#flow-content').innerHTML = '<p class="muted">Loading…</p>';
     try {
@@ -1235,17 +1235,22 @@
 
     wrap.appendChild(head);
 
+    // Any number of steps may be open at once, and the set survives a re-render: a poll
+    // that folded away what the reader had opened is the whole reason this is a Set.
     head.addEventListener('click', () => {
-      expandedStepId = expandedStepId === step.id ? null : step.id;
+      const open = !expandedStepIds.has(step.id);
+      if (open) expandedStepIds.add(step.id); else expandedStepIds.delete(step.id);
       // Avoid a full reflow — just toggle this step's body.
       const body = wrap.querySelector('.flow-step-body');
-      if (body) body.hidden = expandedStepId !== step.id;
-      wrap.classList.toggle('expanded', expandedStepId === step.id);
+      if (body) body.hidden = !open;
+      wrap.classList.toggle('expanded', open);
     });
 
     const body = document.createElement('div');
     body.className = 'flow-step-body';
-    body.hidden = expandedStepId !== step.id;
+    const isOpen = expandedStepIds.has(step.id);
+    wrap.classList.toggle('expanded', isOpen);
+    body.hidden = !isOpen;
 
     const d = document.createElement('p');
     d.className = 'muted small';
