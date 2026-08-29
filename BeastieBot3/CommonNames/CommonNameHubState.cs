@@ -6,7 +6,7 @@ using Microsoft.Data.Sqlite;
 // What the common-name hub looks like on disk right now, for the workflow page's lights.
 //
 // The one question a step's run history cannot answer: the ambiguous-name list is derived from
-// the names in the hub, so it goes stale the moment names are aggregated again â€” and nothing
+// the names in the hub, so it goes stale the moment names are aggregated again — and nothing
 // downstream notices. A list built before the last aggregate silently un-flags names that have
 // become ambiguous since, and Wikipedia list generation then uses them as if they were unique.
 //
@@ -33,7 +33,7 @@ public sealed record CommonNameHubState {
 public static class CommonNameHubStateReader {
     public static CommonNameHubState Read(PathsService paths) {
         string? hubPath = null;
-        try { hubPath = paths.ResolveCommonNameStorePath(null); } catch { /* unset â€” reported as no hub */ }
+        try { hubPath = paths.ResolveCommonNameStorePath(null); } catch { /* unset — reported as no hub */ }
 
         var full = string.IsNullOrWhiteSpace(hubPath) ? null : Path.GetFullPath(hubPath);
         var state = new CommonNameHubState {
