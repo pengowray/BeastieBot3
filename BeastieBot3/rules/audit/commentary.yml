@@ -54,11 +54,11 @@
 - report: taxonomy-consistency
   release: 2026-1
   scope: report
-  title: New in 2026-1
+  title: About the four rows
   markdown: |
-    Release 2025-2 had no rows here. The four rows in 2026-1 all come from one typo new in this
-    release: two sea snake species whose scientificName is written *MIcrocephalophis* (extra
-    capital I) while the genus field correctly reads *Microcephalophis*.
+    All four rows come from one typo: two sea snake species whose scientificName is written
+    *MIcrocephalophis* (extra capital I) while the genus field correctly reads
+    *Microcephalophis*. The same typo is present in release 2025-2.
 
 - report: taxonomy-cleanup
   release: 2026-1

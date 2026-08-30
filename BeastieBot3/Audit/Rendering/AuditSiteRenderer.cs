@@ -55,8 +55,8 @@ internal static class AuditSiteRenderer {
 
         sb.Append("<section>\n");
         sb.Append("<p class=\"lede\">This page collects observations about the data in IUCN Red List version ");
-        sb.Append($"{HtmlText.Escape(doc.Release)}. Each section describes one kind of observation, shows a short preview, ");
-        sb.Append("and links to a full sortable list and a CSV download. The intent is to help with data review for the next release. ");
+        sb.Append($"{HtmlText.Escape(doc.Release)}. Each row below is one kind of observation, linking to a description with a short preview, ");
+        sb.Append("a full sortable list, and a CSV download. The intent is to help with data review for the next release. ");
         sb.Append("Every observation may be incomplete or mistaken.</p>\n");
 
         sb.Append("<dl class=\"meta-grid\">\n");
