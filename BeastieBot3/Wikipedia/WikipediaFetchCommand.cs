@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.ComponentModel;
 using System.Threading;
 using System.Threading.Tasks;
@@ -14,11 +14,14 @@ using BeastieBot3.Configuration;
 namespace BeastieBot3.Wikipedia;
 
 [CommandInfo("wikipedia fetch-pages", CommandKind.Mutates,
-    "Download pending Wikipedia pages (HTML plus wikitext) into the local cache.",
-    Reason = "Downloads pending Wikipedia pages into the local cache.",
+    "Download queued Wikipedia pages (HTML plus wikitext) into the local cache. --awaited-only narrows the queue to pages a taxon has no article without; --newest-first takes a new release's taxa before the older backlog.",
+    Reason = "Downloads queued Wikipedia pages into the local cache.",
+    Rerun = RerunEffect.IdempotentAdd,
     Examples = new[] {
         "wikipedia fetch-pages",
+        "wikipedia fetch-pages --awaited-only --newest-first --limit 2000",
         "wikipedia fetch-pages --limit 25",
+        "wikipedia fetch-pages --refresh-only --refresh-days 365",
         "wikipedia fetch-pages --title \"Ursus maritimus\""
     })]
 public sealed class WikipediaFetchCommand : AsyncCommand<WikipediaFetchCommand.Settings> {
@@ -39,6 +42,18 @@ public sealed class WikipediaFetchCommand : AsyncCommand<WikipediaFetchCommand.S
         [CommandOption("--title <TITLE>")]
         [Description("Explicit Wikipedia titles to fetch immediately (can be specified multiple times).")]
         public string[] Titles { get; init; } = Array.Empty<string>();
+
+        [CommandOption("--awaited-only")]
+        [Description("Only fetch pages a taxon is waiting on: queued titles that an IUCN taxon with no article yet is pointing at. Skips higher-taxon, synonym and redirect titles nothing is blocked on.")]
+        public bool AwaitedOnly { get; init; }
+
+        [CommandOption("--newest-first")]
+        [Description("Work through the newest queued titles first (a new release's taxa) instead of the oldest.")]
+        public bool NewestFirst { get; init; }
+
+        [CommandOption("--refresh-only")]
+        [Description("Re-download cached pages only, ignoring everything never fetched. Needs --refresh-days.")]
+        public bool RefreshOnly { get; init; }
     }
 
     public override async Task<int> ExecuteAsync(CommandContext context, Settings settings, CancellationToken cancellationToken) {
@@ -66,6 +81,30 @@ public sealed class WikipediaFetchCommand : AsyncCommand<WikipediaFetchCommand.S
             refreshThreshold = DateTime.UtcNow.AddDays(-settings.RefreshDays.Value);
         }
 
+        if (settings.RefreshOnly && refreshThreshold is null) {
+            AnsiConsole.MarkupLine("[red]--refresh-only needs --refresh-days to say how old a cached page has to be.[/]");
+            return -1;
+        }
+
+        var scope = new WikipediaCacheStore.WikiFetchScope {
+            RefreshThreshold = refreshThreshold,
+            AwaitedOnly = settings.AwaitedOnly,
+            RefreshOnly = settings.RefreshOnly,
+            NewestFirst = settings.NewestFirst,
+        };
+
+        // The queue holds six figures of titles, so say up front how many this run's scope
+        // covers -- otherwise "--limit 500" gives no sense of what fraction is left.
+        if (settings.Titles.Length == 0) {
+            var queued = cacheStore.CountPendingPages(scope);
+            var everything = cacheStore.CountPendingPages(new WikipediaCacheStore.WikiFetchScope { RefreshThreshold = refreshThreshold });
+            if (queued == everything) {
+                AnsiConsole.MarkupLineInterpolated($"[grey]Queue:[/] {queued:n0} pages to fetch.");
+            } else {
+                AnsiConsole.MarkupLineInterpolated($"[grey]Queue:[/] {queued:n0} pages in scope, of {everything:n0} queued in total.");
+            }
+        }
+
         var totalLimit = settings.Limit > 0 ? settings.Limit : int.MaxValue;
         var processed = 0;
 
@@ -87,7 +126,7 @@ public sealed class WikipediaFetchCommand : AsyncCommand<WikipediaFetchCommand.S
                     break;
                 }
 
-                var pending = cacheStore.GetPendingPages(needed, refreshThreshold);
+                var pending = cacheStore.GetPendingPages(needed, scope);
                 if (pending.Count == 0) {
                     break;
                 }

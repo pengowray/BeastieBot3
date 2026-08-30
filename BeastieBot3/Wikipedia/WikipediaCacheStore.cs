@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Data;
 using System.Globalization;
@@ -164,27 +164,77 @@ SELECT
             GetValue(6));
     }
 
-    public IReadOnlyList<WikiPageWorkItem> GetPendingPages(int limit, DateTime? refreshThreshold) {
+    // Which queued pages this run is for, and in what order. The queue routinely holds
+    // six figures of titles, so "fetch the next N" is only useful if the caller can say
+    // which N matter: the pages a taxon is actually waiting on, the ones queued most
+    // recently (a new release's taxa), or only re-downloads of pages already cached.
+    public sealed record WikiFetchScope {
+        public DateTime? RefreshThreshold { get; init; }
+        public bool AwaitedOnly { get; init; }   // only pages a taxon with no article yet points at
+        public bool RefreshOnly { get; init; }   // skip the never-fetched queue; re-download cached pages only
+        public bool NewestFirst { get; init; }   // most recently queued first, instead of oldest first
+
+        public static readonly WikiFetchScope All = new();
+    }
+
+    // WHERE/ORDER BY shared by the queue count and the queue read, so the number the command
+    // reports up front is the number of pages it will actually work through.
+    private static string PendingPagesSql(WikiFetchScope scope, bool forCount) {
+        var select = forCount
+            ? "SELECT COUNT(*)"
+            : "SELECT id, IFNULL(page_title, normalized_title), normalized_title, download_status, downloaded_at, attempt_count";
+
+        var where = scope.RefreshOnly
+            ? "(@refresh IS NOT NULL AND downloaded_at IS NOT NULL AND downloaded_at < @refresh)"
+            : """
+              (download_status IN (@pending, @failed)
+                  OR (@refresh IS NOT NULL AND downloaded_at IS NOT NULL AND downloaded_at < @refresh))
+              """;
+
+        if (scope.AwaitedOnly) {
+            where += """
+
+                AND EXISTS (SELECT 1 FROM taxon_wiki_matches m
+                            WHERE m.page_row_id = wiki_pages.id AND m.match_status = 'pending')
+                """;
+        }
+
+        if (forCount) {
+            return $"{select}\nFROM wiki_pages\nWHERE {where}";
+        }
+
+        var order = scope.NewestFirst
+            ? "ORDER BY discovered_at DESC, id DESC"
+            : """
+              ORDER BY CASE download_status WHEN @pending THEN 0 WHEN @failed THEN 1 ELSE 2 END,
+                       IFNULL(downloaded_at, '0000-01-01T00:00:00Z'),
+                       id
+              """;
+
+        return $"{select}\nFROM wiki_pages\nWHERE {where}\n{order}\nLIMIT @limit";
+    }
+
+    private static void BindScope(SqliteCommand command, WikiFetchScope scope) {
+        command.Parameters.AddWithValue("@pending", WikiPageDownloadStatus.Pending);
+        command.Parameters.AddWithValue("@failed", WikiPageDownloadStatus.Failed);
+        command.Parameters.AddWithValue("@refresh", scope.RefreshThreshold?.ToString("O") ?? (object)DBNull.Value);
+    }
+
+    public long CountPendingPages(WikiFetchScope scope) {
+        using var command = _connection.CreateCommand();
+        command.CommandText = PendingPagesSql(scope, forCount: true);
+        BindScope(command, scope);
+        return command.ExecuteScalar() is long n ? n : 0;
+    }
+
+    public IReadOnlyList<WikiPageWorkItem> GetPendingPages(int limit, WikiFetchScope scope) {
         if (limit <= 0) {
             return Array.Empty<WikiPageWorkItem>();
         }
 
         using var command = _connection.CreateCommand();
-          command.CommandText =
-                """
-SELECT id, IFNULL(page_title, normalized_title), normalized_title, download_status, downloaded_at, attempt_count
-FROM wiki_pages
-WHERE download_status IN (@pending, @failed)
-    OR (@refresh IS NOT NULL AND downloaded_at IS NOT NULL AND downloaded_at < @refresh)
-ORDER BY CASE download_status WHEN @pending THEN 0 WHEN @failed THEN 1 ELSE 2 END,
-            IFNULL(downloaded_at, '0000-01-01T00:00:00Z'),
-            id
-LIMIT @limit
-""";
-        command.Parameters.AddWithValue("@pending", WikiPageDownloadStatus.Pending);
-        command.Parameters.AddWithValue("@failed", WikiPageDownloadStatus.Failed);
-        command.Parameters.AddWithValue("@missing", WikiPageDownloadStatus.Missing);
-        command.Parameters.AddWithValue("@refresh", refreshThreshold?.ToString("O") ?? (object)DBNull.Value);
+        command.CommandText = PendingPagesSql(scope, forCount: false);
+        BindScope(command, scope);
         command.Parameters.AddWithValue("@limit", limit);
 
         var list = new List<WikiPageWorkItem>();

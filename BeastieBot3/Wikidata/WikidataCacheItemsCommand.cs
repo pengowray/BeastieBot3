@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.ComponentModel;
 using System.Threading;
 using System.Threading.Tasks;
@@ -39,6 +39,10 @@ public sealed class WikidataCacheItemsSettings : CommonSettings {
     [CommandOption("--failed-only")]
     [Description("Only retry entities that previously failed to download.")]
     public bool FailedOnly { get; init; }
+
+    [CommandOption("--refresh-only")]
+    [Description("Re-download cached entities only, ignoring everything never downloaded. Needs --max-age-hours.")]
+    public bool RefreshOnly { get; init; }
 }
 
 [CommandInfo("wikidata cache-entities", CommandKind.Mutates,
@@ -67,12 +71,17 @@ public sealed class WikidataCacheItemsCommand : AsyncCommand<WikidataCacheItemsS
             ? DateTime.UtcNow - TimeSpan.FromHours(hours)
             : (DateTime?)null;
 
+        if (settings.RefreshOnly && refreshThreshold is null) {
+            AnsiConsole.MarkupLine("[red]--refresh-only needs --max-age-hours to say how old a cached entity has to be.[/]");
+            return -1;
+        }
+
         var limit = settings.Limit is { } l && l > 0 ? l : int.MaxValue;
         var batchSize = Math.Clamp(settings.BatchSize ?? 250, 25, 2_000);
 
         var totalCandidates = settings.FailedOnly
             ? store.CountFailedEntities()
-            : store.CountPendingEntities(refreshThreshold);
+            : store.CountPendingEntities(refreshThreshold, settings.RefreshOnly);
 
         if (totalCandidates == 0) {
             var message = settings.FailedOnly
@@ -127,7 +136,7 @@ public sealed class WikidataCacheItemsCommand : AsyncCommand<WikidataCacheItemsS
 
                 var queue = settings.FailedOnly
                     ? store.GetFailedEntities(remainingBudget)
-                    : store.GetPendingEntities(remainingBudget, refreshThreshold);
+                    : store.GetPendingEntities(remainingBudget, refreshThreshold, settings.RefreshOnly);
 
                 if (queue.Count == 0) {
                     break;

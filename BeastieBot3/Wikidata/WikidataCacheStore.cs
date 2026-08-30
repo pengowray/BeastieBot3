@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Data;
 using System.IO;
@@ -116,9 +116,63 @@ CREATE TABLE IF NOT EXISTS wikidata_pending_iucn_matches (
     last_seen_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_pending_iucn_entity ON wikidata_pending_iucn_matches(entity_numeric_id);
+-- Taxa the backfill searched Wikidata for and found nothing. Without this every run
+-- re-searches the whole permanently-unmatchable tail, so a run after a new IUCN release
+-- spends its time on the same names as last time instead of on the new taxa.
+CREATE TABLE IF NOT EXISTS wikidata_backfill_misses (
+    iucn_taxon_id TEXT PRIMARY KEY,
+    searched_at TEXT NOT NULL,
+    names_tried INTEGER NOT NULL DEFAULT 0,
+    reason TEXT NOT NULL
+);
 """;
         command.ExecuteNonQuery();
     BackfillTaxonNameIndex();
+    }
+
+    /// SIS ids the backfill has already searched for and not found, so a later run can skip them.
+    public HashSet<string> LoadBackfillMisses(DateTime? searchedAfter = null) {
+        var set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        using var command = _connection.CreateCommand();
+        command.CommandText = searchedAfter is null
+            ? "SELECT iucn_taxon_id FROM wikidata_backfill_misses"
+            : "SELECT iucn_taxon_id FROM wikidata_backfill_misses WHERE searched_at >= @after";
+        if (searchedAfter is not null) {
+            command.Parameters.AddWithValue("@after", searchedAfter.Value.ToString("O"));
+        }
+        using var reader = command.ExecuteReader();
+        while (reader.Read()) {
+            if (!reader.IsDBNull(0)) set.Add(reader.GetString(0));
+        }
+        return set;
+    }
+
+    public void RecordBackfillMisses(IReadOnlyList<WikidataBackfillMiss> misses) {
+        if (misses.Count == 0) return;
+        using var tx = _connection.BeginTransaction();
+        using (var command = _connection.CreateCommand()) {
+            command.Transaction = tx;
+            command.CommandText = """
+INSERT INTO wikidata_backfill_misses(iucn_taxon_id, searched_at, names_tried, reason)
+VALUES (@id, @at, @tried, @reason)
+ON CONFLICT(iucn_taxon_id) DO UPDATE SET
+    searched_at = excluded.searched_at,
+    names_tried = excluded.names_tried,
+    reason      = excluded.reason
+""";
+            var id = command.Parameters.Add("@id", Microsoft.Data.Sqlite.SqliteType.Text);
+            var at = command.Parameters.Add("@at", Microsoft.Data.Sqlite.SqliteType.Text);
+            var tried = command.Parameters.Add("@tried", Microsoft.Data.Sqlite.SqliteType.Integer);
+            var reason = command.Parameters.Add("@reason", Microsoft.Data.Sqlite.SqliteType.Text);
+            foreach (var miss in misses) {
+                id.Value = miss.IucnTaxonId;
+                at.Value = miss.SearchedAt.ToString("O");
+                tried.Value = miss.NamesTried;
+                reason.Value = miss.Reason;
+                command.ExecuteNonQuery();
+            }
+        }
+        tx.Commit();
     }
 
     public SeedUpsertResult UpsertSeeds(IReadOnlyList<WikidataSeedRow> seeds) {
@@ -312,18 +366,29 @@ ON CONFLICT(key) DO UPDATE SET value=excluded.value";
         command.ExecuteNonQuery();
     }
 
-    public IReadOnlyList<WikidataEntityWorkItem> GetPendingEntities(int limit, DateTime? refreshThreshold) {
+    // refreshOnly skips everything never downloaded and re-fetches only what is already cached
+    // and older than the threshold. Without it a refresh pass also drags the whole never-fetched
+    // queue along, which is the opposite of what a "leave the new work alone" run is for.
+    private static string PendingEntitiesWhere(bool refreshOnly) => refreshOnly
+        ? "json_downloaded = 1 AND @refresh IS NOT NULL AND downloaded_at IS NOT NULL AND downloaded_at < @refresh"
+        : """
+          json_downloaded = 0
+             OR (@refresh IS NOT NULL AND downloaded_at IS NOT NULL AND downloaded_at < @refresh)
+          """;
+
+    public IReadOnlyList<WikidataEntityWorkItem> GetPendingEntities(int limit, DateTime? refreshThreshold, bool refreshOnly = false) {
         if (limit <= 0) {
             return Array.Empty<WikidataEntityWorkItem>();
         }
 
         using var command = _connection.CreateCommand();
-        command.CommandText = @"SELECT entity_numeric_id, entity_id, downloaded_at, attempt_count
+        command.CommandText = $"""
+SELECT entity_numeric_id, entity_id, downloaded_at, attempt_count
 FROM wikidata_entities
-WHERE json_downloaded = 0
-   OR (@refresh IS NOT NULL AND downloaded_at IS NOT NULL AND downloaded_at < @refresh)
+WHERE {PendingEntitiesWhere(refreshOnly)}
 ORDER BY json_downloaded ASC, entity_numeric_id
-LIMIT @limit";
+LIMIT @limit
+""";
         command.Parameters.AddWithValue("@refresh", refreshThreshold?.ToString("O") ?? (object)DBNull.Value);
         command.Parameters.AddWithValue("@limit", limit);
 
@@ -376,12 +441,9 @@ LIMIT @limit";
         return list;
     }
 
-    public int CountPendingEntities(DateTime? refreshThreshold) {
+    public int CountPendingEntities(DateTime? refreshThreshold, bool refreshOnly = false) {
         using var command = _connection.CreateCommand();
-        command.CommandText = @"SELECT COUNT(*)
-FROM wikidata_entities
-WHERE json_downloaded = 0
-   OR (@refresh IS NOT NULL AND downloaded_at IS NOT NULL AND downloaded_at < @refresh)";
+        command.CommandText = $"SELECT COUNT(*) FROM wikidata_entities WHERE {PendingEntitiesWhere(refreshOnly)}";
         command.Parameters.AddWithValue("@refresh", refreshThreshold?.ToString("O") ?? (object)DBNull.Value);
         var result = command.ExecuteScalar();
         return Convert.ToInt32(result ?? 0);
@@ -922,3 +984,9 @@ internal sealed record P141RebuildResult(
     bool WasSkipped);
 
 internal sealed record WikidataEnwikiSitelink(long EntityNumericId, string EntityId, string Title);
+
+internal sealed record WikidataBackfillMiss(
+    string IucnTaxonId,
+    DateTime SearchedAt,
+    int NamesTried,
+    string Reason);

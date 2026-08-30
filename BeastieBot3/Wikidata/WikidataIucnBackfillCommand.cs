@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Globalization;
@@ -44,15 +44,24 @@ public sealed class WikidataIucnBackfillSettings : CommonSettings {
     [CommandOption("--queue-all-synonyms")]
     [Description("When supplied, queue/download matches for every synonym even if the primary name matched.")]
     public bool QueueAllSynonyms { get; init; }
+
+    [CommandOption("--retry-missing")]
+    [Description("Search again for taxa a previous run searched for and did not find. Off by default, so a run after a new release spends its time on taxa never searched.")]
+    public bool RetryMissing { get; init; }
+
+    [CommandOption("--retry-missing-after <DAYS>")]
+    [Description("Search again only for taxa last searched more than this many days ago. Implies --retry-missing.")]
+    public int? RetryMissingAfterDays { get; init; }
 }
 
 [CommandInfo("wikidata backfill-iucn", CommandKind.Mutates,
-    "Search Wikidata for IUCN taxa lacking cached entities and download them using taxon names and synonyms.",
-    Reason = "Searches Wikidata for IUCN taxa without cached entities and downloads them.",
+    "Search Wikidata by scientific name and synonyms for IUCN taxa that have no Wikidata entity, and queue what it finds. Taxa searched before with no match are skipped, so a run after a new release works on taxa never searched.",
+    Reason = "Searches Wikidata for IUCN taxa without cached entities and queues what it finds.",
     Rerun = RerunEffect.Discovers,
     Examples = new[] {
         "wikidata backfill-iucn",
-        "wikidata backfill-iucn --limit 500 --queue-all-synonyms"
+        "wikidata backfill-iucn --limit 500 --queue-all-synonyms",
+        "wikidata backfill-iucn --retry-missing-after 180"
     })]
 public sealed class WikidataIucnBackfillCommand : AsyncCommand<WikidataIucnBackfillSettings> {
     public override async Task<int> ExecuteAsync(CommandContext context, WikidataIucnBackfillSettings settings, CancellationToken cancellationToken) {
@@ -123,14 +132,31 @@ public sealed class WikidataIucnBackfillCommand : AsyncCommand<WikidataIucnBackf
             AnsiConsole.MarkupLine("[yellow]COL SQLite database not available; COL synonyms will be skipped.[/]");
         }
 
+        // Taxa a previous run searched for and did not find. Wikidata does not gain an item for
+        // most of them between releases, so re-searching the whole tail every run buries the new
+        // taxa behind hours of repeat work. They are skipped unless asked for.
+        var retryCutoff = settings.RetryMissingAfterDays is { } days && days > 0
+            ? DateTime.UtcNow.AddDays(-days)
+            : (DateTime?)null;
+        var retryMissing = settings.RetryMissing || retryCutoff is not null;
+        var previousMisses = retryMissing
+            ? (retryCutoff is null ? new HashSet<string>(StringComparer.OrdinalIgnoreCase) : store.LoadBackfillMisses(retryCutoff))
+            : store.LoadBackfillMisses();
+
         var repository = new IucnTaxonomyRepository(iucnConnection);
         var existingTaxonIds = LoadCachedTaxonIds(wikidataIndexConnection);
         var existingNames = LoadScientificNames(wikidataIndexConnection);
         var knownEntities = LoadKnownEntityIds(wikidataIndexConnection);
         var stats = new BackfillStats();
+        var newMisses = new List<WikidataBackfillMiss>();
         var rowLimit = settings.Limit > 0 ? settings.Limit : int.MaxValue;
         AnsiConsole.MarkupLineInterpolated($"[grey]Loaded {existingTaxonIds.Count:n0} cached IUCN ids, {existingNames.Count:n0} normalized names, {knownEntities.Count:n0} known entities.[/]");
         AnsiConsole.MarkupLineInterpolated($"[grey]Queue all synonyms:[/] {(settings.QueueAllSynonyms ? "yes" : "no")}, limit: {(rowLimit == int.MaxValue ? "all" : rowLimit.ToString())}.");
+        if (previousMisses.Count > 0) {
+            AnsiConsole.MarkupLineInterpolated($"[grey]Skipping {previousMisses.Count:n0} taxa searched before with no match. Use --retry-missing to search for them again.[/]");
+        } else if (retryMissing) {
+            AnsiConsole.MarkupLine("[grey]Searching again for taxa previously searched with no match.[/]");
+        }
 
         const int progressInterval = 250;
         var nextProgress = progressInterval;
@@ -145,6 +171,11 @@ public sealed class WikidataIucnBackfillCommand : AsyncCommand<WikidataIucnBackf
             var sisId = row.TaxonId.ToString(CultureInfo.InvariantCulture);
 
             if (existingTaxonIds.Contains(sisId)) {
+                continue;
+            }
+
+            if (previousMisses.Contains(sisId)) {
+                stats.SkippedPreviousMiss++;
                 continue;
             }
 
@@ -165,12 +196,14 @@ public sealed class WikidataIucnBackfillCommand : AsyncCommand<WikidataIucnBackf
             var candidates = synonymService.GetCandidates(row, cancellationToken);
             if (candidates.Count == 0) {
                 stats.Missing++;
+                newMisses.Add(new WikidataBackfillMiss(sisId, DateTime.UtcNow, 0, "no-names-to-search"));
                 continue;
             }
 
             var matches = await FindMatchesAsync(candidates, settings.QueueAllSynonyms, wikidataClient, cancellationToken).ConfigureAwait(false);
             if (matches.Count == 0) {
                 stats.Missing++;
+                newMisses.Add(new WikidataBackfillMiss(sisId, DateTime.UtcNow, candidates.Count, "no-match"));
                 continue;
             }
 
@@ -205,6 +238,10 @@ public sealed class WikidataIucnBackfillCommand : AsyncCommand<WikidataIucnBackf
                 break;
             }
         }
+
+        // Recorded at the end rather than per taxon: a cancelled run then leaves the record
+        // untouched instead of half-marking taxa it never really finished with.
+        store.RecordBackfillMisses(newMisses);
 
         RenderSummary(stats, iucnPath, wikidataCachePath, iucnApiCachePath, colPath, settings.QueueAllSynonyms);
         return 0;
@@ -452,12 +489,13 @@ public sealed class WikidataIucnBackfillCommand : AsyncCommand<WikidataIucnBackf
         var table = new Table().Border(TableBorder.Minimal);
         table.AddColumn("Metric");
         table.AddColumn("Value");
-        table.AddRow("Eligible taxa", stats.Evaluated.ToString());
-        table.AddRow("Matches", stats.Matches.ToString());
-        table.AddRow("Synonym matches", stats.SynonymMatches.ToString());
-        table.AddRow("Already known", stats.AlreadyKnown.ToString());
-        table.AddRow("Queued", stats.Queued.ToString());
-        table.AddRow("Missing", stats.Missing.ToString());
+        table.AddRow("Eligible taxa", stats.Evaluated.ToString("n0"));
+        table.AddRow("Matches", stats.Matches.ToString("n0"));
+        table.AddRow("Synonym matches", stats.SynonymMatches.ToString("n0"));
+        table.AddRow("Already known", stats.AlreadyKnown.ToString("n0"));
+        table.AddRow("Queued", stats.Queued.ToString("n0"));
+        table.AddRow("Searched, not found", stats.Missing.ToString("n0"));
+        table.AddRow("Skipped (searched before, not found)", stats.SkippedPreviousMiss.ToString("n0"));
         AnsiConsole.Write(table);
     }
 
@@ -468,6 +506,7 @@ public sealed class WikidataIucnBackfillCommand : AsyncCommand<WikidataIucnBackf
         public long AlreadyKnown { get; set; }
         public long Queued { get; set; }
         public long Missing { get; set; }
+        public long SkippedPreviousMiss { get; set; }
 
         public void RecordMatch(WikidataMatch match) {
             Matches++;
