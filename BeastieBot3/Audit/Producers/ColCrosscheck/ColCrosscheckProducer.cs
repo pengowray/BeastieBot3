@@ -252,7 +252,7 @@ internal sealed class ColCrosscheckProducer : IAuditReportSetProducer {
             ColYearColumn(),
             AuditColumns.ColLink(),
             AuditColumns.Custom("iucnSynonym", "CoL name in IUCN synonyms", AuditColumnType.Text,
-                "Whether IUCN already records the CoL accepted name as a synonym. \"of same taxon\" means the two catalogues disagree on which name is accepted. Blank when the IUCN API cache is unavailable."),
+                "Whether IUCN already records the CoL accepted name as a synonym. \"of same taxon\" means the two catalogues disagree on which name is accepted. Blank when IUCN synonym data from the IUCN API is unavailable."),
         }).Concat(SpeciesTail()).ToList();
 
     private static IReadOnlyList<AuditColumn> AuthorityColumns() =>

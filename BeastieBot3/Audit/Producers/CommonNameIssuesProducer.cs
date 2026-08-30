@@ -125,7 +125,7 @@ internal sealed class CommonNameIssuesProducer : IAuditReportProducer {
             },
             Findings = ordered,
             SummaryTables = new List<AuditSummaryTable> {
-                BuildSummary(perName),
+                BuildSummary(perName, ctx.Release),
             },
         };
     }
@@ -362,7 +362,7 @@ internal sealed class CommonNameIssuesProducer : IAuditReportProducer {
         return string.Join(' ', parts);
     }
 
-    private static AuditSummaryTable BuildSummary(IReadOnlyList<IReadOnlyList<CommonNameIssue>> perName) {
+    private static AuditSummaryTable BuildSummary(IReadOnlyList<IReadOnlyList<CommonNameIssue>> perName, string release) {
         var rows = Enum.GetValues<CommonNameIssue>()
             .Select(issue => new[] {
                 Label(issue),
@@ -372,10 +372,10 @@ internal sealed class CommonNameIssuesProducer : IAuditReportProducer {
             .ToList();
         rows.Add(new[] { "Total (distinct names)", perName.Count.ToString("N0", CultureInfo.InvariantCulture), "-" });
         return new AuditSummaryTable {
-            Title = "Issues by kind, 2025-2 versus 2016",
+            Title = $"Issues by kind, {release} versus 2016",
             Note = "Each kind is counted once per name; because a name can carry several, the kinds add up to more than the distinct total. Kinds listed at 0 were checked and found nothing this release. " +
                    "The 2016 column is what a hand-compiled review of the 2016-2 release recorded for the nearest matching category: several of those sections listed only examples, so treat them as a floor rather than an exhaustive count, while species codes and all-capitals read as full lists. A dash means 2016 had no comparable check (only double spaces were measured among whitespace kinds).",
-            Headers = new[] { "Issue", "2025-2", "2016" }, Rows = rows, NumericColumns = new[] { 1, 2 },
+            Headers = new[] { "Issue", release, "2016" }, Rows = rows, NumericColumns = new[] { 1, 2 },
         };
     }
 

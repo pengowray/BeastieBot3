@@ -89,7 +89,7 @@ internal sealed class HtmlConsistencyProducer : IAuditReportProducer {
 
         summary += "\n\n" +
             "Use the Compare button on any row to open a side-by-side view of the assessments.csv plain text and the suggested plain text extracted from assessments_with_html.csv, with the HTML source shown colour-coded so the empty-tag runs are visible, plus a suggested cleaned-up HTML with the redundant markup removed. " +
-            "Each view opens with a short note on what changed (for example, an invisible character that accounts for an otherwise hidden difference) and, where the IUCN API copy is cached, a note on whether the field matches the API.";
+            "Each view opens with a short note on what changed (for example, an invisible character that accounts for an otherwise hidden difference) and, where the same assessment was retrieved from the IUCN API, a note on whether the field matches the API.";
 
         summary +=
             "\n\n### Why it matters\n\n" +
@@ -388,7 +388,7 @@ internal sealed class HtmlConsistencyProducer : IAuditReportProducer {
     // documentation object for this assessment, or null when the assessment is not cached.
     private static string DescribeApiComparison(IReadOnlyDictionary<string, string?>? doc, string field, string? rawHtml, string htmlText) {
         if (doc is null) {
-            return "This assessment is not in the IUCN API cache, so no comparison against the API was made.";
+            return "This assessment was not retrieved from the IUCN API, so no comparison against the API was made.";
         }
         if (!doc.TryGetValue(field, out var apiVal) || apiVal is null) {
             return "The IUCN API has no value for this field, so no comparison was made.";

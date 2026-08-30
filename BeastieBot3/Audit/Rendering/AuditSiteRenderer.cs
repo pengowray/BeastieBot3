@@ -91,7 +91,7 @@ internal static class AuditSiteRenderer {
         foreach (var r in reports) {
             sb.Append("<tr>\n");
             sb.Append($"<td><div class=\"report-title\"><a href=\"{r.Id}.html\">{HtmlText.Escape(r.Title)}</a></div>");
-            sb.Append($"<div class=\"report-desc\">{HtmlText.Escape(FirstSentence(r.Summary))}</div></td>\n");
+            sb.Append($"<div class=\"report-desc\">{HtmlText.Escape(IndexBlurb(r))}</div></td>\n");
             sb.Append($"<td>{AuditPageLayout.BreakageBadge(r.Breakage, r.KindLabel)}</td>\n");
             sb.Append($"<td class=\"count\">{r.Count:N0}</td>\n");
             sb.Append("<td class=\"links\">");
@@ -244,7 +244,7 @@ internal static class AuditSiteRenderer {
         if (methodologyReports.Count > 0) {
             sb.Append("<section>\n<h2>Methodology reports</h2>\n<ul>\n");
             foreach (var r in methodologyReports) {
-                sb.Append($"<li><a href=\"{r.Id}.html\">{HtmlText.Escape(r.Title)}</a>: {HtmlText.Escape(FirstSentence(r.Summary))}</li>\n");
+                sb.Append($"<li><a href=\"{r.Id}.html\">{HtmlText.Escape(r.Title)}</a>: {HtmlText.Escape(IndexBlurb(r))}</li>\n");
             }
             sb.Append("</ul>\n</section>\n");
         }
@@ -255,9 +255,26 @@ internal static class AuditSiteRenderer {
 
     // -- helpers ---------------------------------------------------------------------------
 
-    private static string FirstSentence(string text) {
-        var trimmed = text.Trim();
-        var idx = trimmed.IndexOf(". ", StringComparison.Ordinal);
-        return idx > 0 ? trimmed[..(idx + 1)] : trimmed;
+    // The one-line description under a report title on the index and methodology pages.
+    // Prefers the purpose-written Blurb; otherwise falls back to the Summary's first
+    // paragraph (stopping before any markdown heading), so headings and later sections
+    // never leak into the listing.
+    private static string IndexBlurb(AuditReport report) {
+        if (!string.IsNullOrWhiteSpace(report.Blurb)) {
+            return report.Blurb.Trim();
+        }
+        var lines = report.Summary.Trim().Replace("\r\n", "\n").Split('\n');
+        var paragraph = new StringBuilder();
+        foreach (var line in lines) {
+            var t = line.Trim();
+            if (t.Length == 0 || t.StartsWith('#')) {
+                break;
+            }
+            if (paragraph.Length > 0) {
+                paragraph.Append(' ');
+            }
+            paragraph.Append(t);
+        }
+        return paragraph.ToString();
     }
 }

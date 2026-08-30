@@ -103,7 +103,7 @@ internal sealed class RedlistAuditSiteCommand : Command<RedlistAuditSiteCommand.
         }
 
         var config = new AuditSiteConfig {
-            Contact = string.IsNullOrWhiteSpace(settings.Contact) ? "pengowray@gmail.com" : settings.Contact!,
+            Contact = string.IsNullOrWhiteSpace(settings.Contact) ? "feedback@pengowray.com" : settings.Contact!,
         };
         var document = new AuditDocument {
             Release = release,

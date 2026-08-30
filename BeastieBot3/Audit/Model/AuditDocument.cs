@@ -11,7 +11,7 @@ internal sealed class AuditSiteConfig {
     public string SiteTitle { get; init; } = "IUCN Red List data observations";
     public string Subtitle { get; init; } = "An unofficial, independent review to support data improvement";
     public string ContactName { get; init; } = "Pengo Wray";
-    public string Contact { get; init; } = "pengowray@gmail.com";
+    public string Contact { get; init; } = "feedback@pengowray.com";
     public string CsvLicence { get; init; } = "CC0 1.0 (public domain dedication)";
 }
 
