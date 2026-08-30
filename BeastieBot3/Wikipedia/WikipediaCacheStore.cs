@@ -27,6 +27,15 @@ internal sealed class WikipediaCacheStore : HttpCacheSqliteStore {
         return store;
     }
 
+    /// Test seam: build the schema on a connection the caller owns (see SqliteStore).
+    internal static WikipediaCacheStore OpenFromConnection(SqliteConnection connection) {
+        EnableForeignKeys(connection);
+        var store = new WikipediaCacheStore(connection);
+        store.EnsureImportSchema();
+        store.EnsureSchema();
+        return store;
+    }
+
     protected override void EnsureSchema() {
         using var command = _connection.CreateCommand();
         command.CommandText =
@@ -172,6 +181,7 @@ SELECT
         public DateTime? RefreshThreshold { get; init; }
         public bool AwaitedOnly { get; init; }   // only pages a taxon with no article yet points at
         public bool RefreshOnly { get; init; }   // skip the never-fetched queue; re-download cached pages only
+        public bool FailedOnly { get; init; }    // only titles whose last download attempt failed
         public bool NewestFirst { get; init; }   // most recently queued first, instead of oldest first
 
         public static readonly WikiFetchScope All = new();
@@ -184,12 +194,14 @@ SELECT
             ? "SELECT COUNT(*)"
             : "SELECT id, IFNULL(page_title, normalized_title), normalized_title, download_status, downloaded_at, attempt_count";
 
-        var where = scope.RefreshOnly
-            ? "(@refresh IS NOT NULL AND downloaded_at IS NOT NULL AND downloaded_at < @refresh)"
-            : """
-              (download_status IN (@pending, @failed)
-                  OR (@refresh IS NOT NULL AND downloaded_at IS NOT NULL AND downloaded_at < @refresh))
-              """;
+        var where = scope switch {
+            { FailedOnly: true } => "download_status = @failed",
+            { RefreshOnly: true } => "(@refresh IS NOT NULL AND downloaded_at IS NOT NULL AND downloaded_at < @refresh)",
+            _ => """
+                 (download_status IN (@pending, @failed)
+                     OR (@refresh IS NOT NULL AND downloaded_at IS NOT NULL AND downloaded_at < @refresh))
+                 """,
+        };
 
         if (scope.AwaitedOnly) {
             where += """
@@ -203,8 +215,15 @@ SELECT
             return $"{select}\nFROM wiki_pages\nWHERE {where}";
         }
 
+        // The status precedence stays first in either order. Without it, --newest-first would put
+        // a page that has just failed back at the front of the next batch, and with no attempt
+        // cap anywhere that is a retry loop against Wikipedia.
         var order = scope.NewestFirst
-            ? "ORDER BY discovered_at DESC, id DESC"
+            ? """
+              ORDER BY CASE download_status WHEN @pending THEN 0 WHEN @failed THEN 1 ELSE 2 END,
+                       discovered_at DESC,
+                       id DESC
+              """
             : """
               ORDER BY CASE download_status WHEN @pending THEN 0 WHEN @failed THEN 1 ELSE 2 END,
                        IFNULL(downloaded_at, '0000-01-01T00:00:00Z'),

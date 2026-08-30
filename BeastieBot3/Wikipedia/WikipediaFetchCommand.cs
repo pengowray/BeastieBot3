@@ -20,6 +20,7 @@ namespace BeastieBot3.Wikipedia;
     Examples = new[] {
         "wikipedia fetch-pages",
         "wikipedia fetch-pages --awaited-only --newest-first --limit 2000",
+        "wikipedia fetch-pages --failed-only",
         "wikipedia fetch-pages --limit 25",
         "wikipedia fetch-pages --refresh-only --refresh-days 365",
         "wikipedia fetch-pages --title \"Ursus maritimus\""
@@ -54,6 +55,10 @@ public sealed class WikipediaFetchCommand : AsyncCommand<WikipediaFetchCommand.S
         [CommandOption("--refresh-only")]
         [Description("Re-download cached pages only, ignoring everything never fetched. Needs --refresh-days.")]
         public bool RefreshOnly { get; init; }
+
+        [CommandOption("--failed-only")]
+        [Description("Only retry titles whose last download attempt failed. They sit behind the whole queue otherwise.")]
+        public bool FailedOnly { get; init; }
     }
 
     public override async Task<int> ExecuteAsync(CommandContext context, Settings settings, CancellationToken cancellationToken) {
@@ -81,6 +86,11 @@ public sealed class WikipediaFetchCommand : AsyncCommand<WikipediaFetchCommand.S
             refreshThreshold = DateTime.UtcNow.AddDays(-settings.RefreshDays.Value);
         }
 
+        if (settings.RefreshOnly && settings.FailedOnly) {
+            AnsiConsole.MarkupLine("[red]--refresh-only and --failed-only ask for different pages. Use one or the other.[/]");
+            return -1;
+        }
+
         if (settings.RefreshOnly && refreshThreshold is null) {
             AnsiConsole.MarkupLine("[red]--refresh-only needs --refresh-days to say how old a cached page has to be.[/]");
             return -1;
@@ -90,6 +100,7 @@ public sealed class WikipediaFetchCommand : AsyncCommand<WikipediaFetchCommand.S
             RefreshThreshold = refreshThreshold,
             AwaitedOnly = settings.AwaitedOnly,
             RefreshOnly = settings.RefreshOnly,
+            FailedOnly = settings.FailedOnly,
             NewestFirst = settings.NewestFirst,
         };
 

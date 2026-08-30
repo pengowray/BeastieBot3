@@ -19,11 +19,14 @@ public class FlowWikiProbeTests {
         public bool Known = true;
         public long IucnTaxa = 188_485;
         public long TaxaWithoutWikidata;
+        public long SweepCursor = 136_591_620;
         public long BackfillMisses;
         public long EntitiesCached = 181_294;
         public long EntitiesQueued;
         public long EntitiesFailed;
+        public long PagesKnown = 334_925;
         public long PagesCached = 99_689;
+        public long PagesMissing = 45_024;
         public long PagesQueued;
         public long PagesQueuedAwaited;
         public long PagesFailed;
@@ -35,11 +38,14 @@ public class FlowWikiProbeTests {
             Known = Known,
             IucnTaxa = IucnTaxa,
             TaxaWithoutWikidata = TaxaWithoutWikidata,
+            WikidataSweepCursor = SweepCursor,
             WikidataBackfillMisses = BackfillMisses,
             WikidataEntitiesCached = EntitiesCached,
             WikidataEntitiesQueued = EntitiesQueued,
             WikidataEntitiesFailed = EntitiesFailed,
+            PagesKnown = PagesKnown,
             PagesCached = PagesCached,
+            PagesMissing = PagesMissing,
             PagesQueued = PagesQueued,
             PagesQueuedAwaited = PagesQueuedAwaited,
             PagesFailed = PagesFailed,
@@ -55,12 +61,53 @@ public class FlowWikiProbeTests {
     public void Every_probe_is_silent_until_the_counts_have_been_taken() {
         var unknown = State(s => s.Known = false);
         foreach (var probe in new[] {
-                     FlowStepProbes.WikidataSearch, FlowStepProbes.WikidataDownload,
+                     FlowStepProbes.WikidataSweep, FlowStepProbes.WikidataSearch,
+                     FlowStepProbes.WikidataDownload, FlowStepProbes.WikipediaQueue,
                      FlowStepProbes.WikipediaMatch, FlowStepProbes.WikipediaFetchAwaited,
                      FlowStepProbes.WikipediaFetchRest, FlowStepProbes.WikiRetryFailed,
                      FlowStepProbes.WikiRefresh }) {
             Assert.Null(FlowStepProbes.EvaluateWiki(probe, unknown));
         }
+    }
+
+    // Without this the step could only say when `seed-taxa` last ran, which for anyone who ran
+    // `cache-all` or the CLI is never, next to 181,294 downloaded items.
+    [Fact]
+    public void The_sweep_reports_what_it_found_and_how_far_it_read() {
+        var r = FlowStepProbes.WikiWikidataSweep(State(s => s.EntitiesQueued = 312));
+        Assert.Equal("ok", r.Status);
+        Assert.Contains("181,606 Wikidata items found", r.Detail);
+        Assert.Contains("Q136,591,620", r.Detail);
+    }
+
+    [Fact]
+    public void The_sweep_is_todo_when_nothing_has_been_found_yet() {
+        var r = FlowStepProbes.WikiWikidataSweep(State(s => { s.EntitiesCached = 0; s.SweepCursor = 0; }));
+        Assert.Equal("todo", r.Status);
+        Assert.Contains("No Wikidata items found yet", r.Detail);
+    }
+
+    [Fact]
+    public void The_sweep_leaves_the_cursor_out_before_the_first_run() {
+        var r = FlowStepProbes.WikiWikidataSweep(State(s => s.SweepCursor = 0));
+        Assert.Equal("181,294 Wikidata items found.", r.Detail);
+    }
+
+    [Fact]
+    public void The_title_queue_splits_into_downloaded_to_do_and_no_article() {
+        var r = FlowStepProbes.WikiWikipediaQueue(State(s => s.PagesQueued = 189_813));
+        Assert.Equal("ok", r.Status);
+        Assert.Contains("334,925 titles", r.Detail);
+        Assert.Contains("99,689 downloaded", r.Detail);
+        Assert.Contains("189,813 to download", r.Detail);
+        Assert.Contains("45,024 with no article", r.Detail);
+    }
+
+    [Fact]
+    public void The_title_queue_is_todo_when_nothing_has_been_queued() {
+        var r = FlowStepProbes.WikiWikipediaQueue(State(s => s.PagesKnown = 0));
+        Assert.Equal("todo", r.Status);
+        Assert.Contains("No titles queued yet", r.Detail);
     }
 
     [Fact]
