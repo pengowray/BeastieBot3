@@ -429,7 +429,7 @@ public static class FlowCatalogue {
         new FlowDefinition {
             Id = "wiki-reports",
             Title = "Wikipedia reports pipeline",
-            Description = "Generate wikitext lists and IUCN charts for Wikipedia. The steps are in priority order: find the taxa nothing has looked at yet, download what those taxa are waiting on, then work down the rest. Every download step adds only, so any of them can be stopped and picked up later, and each says how much it has left. Re-downloading copies you already have is the last step of all, under Maintenance.",
+            Description = "The steps are in priority order: catch up on a new release first, then work down the standing download queues, which are never finished in one sitting. Every download step only adds, so it can be stopped and picked up later, and each shows how much work it has left. Re-downloading copies you already have is the lowest priority and sits under Maintenance.",
             Steps = new[] {
                 // -------- Pipeline (core path) --------
                 new FlowStep {
@@ -532,7 +532,7 @@ public static class FlowCatalogue {
                     Optional = true,
                     Probe = FlowStepProbes.WikipediaFetchRest,
                     Group = "3 \u00b7 Wikipedia",
-                    Note = "The lists do not need these pages, but they improve redirect and synonym resolution for the taxa that do. There can be hundreds of thousands of them, so this is a job of days: use --limit to work through it in sessions. It downloads only what is missing, so stopping and re-running continues where it stopped.",
+                    Note = "The lists do not need these pages, but they improve redirect and synonym resolution for the taxa that do. There can be hundreds of thousands of them, so this is a job of days: use --limit to work through it in sessions. It downloads only what is missing, so stopping and re-running continues where it stopped. Run \"Remove titles that cannot be articles\" under Maintenance first: a queue built before that step existed is around a third titles carrying an authority, which no article has.",
                 },
                 new FlowStep {
                     Id = "common-names",
@@ -593,6 +593,17 @@ public static class FlowCatalogue {
                     Section = FlowSection.Maintenance,
                     Probe = FlowStepProbes.WikiRetryFailed,
                     Note = "A failed download is retried after everything never tried, so with a queue this size an ordinary fetch would not reach one for days. --failed-only goes straight to them, in both caches. A page recorded as missing is a different thing: English Wikipedia has no article under that title, and re-running will not change that.",
+                },
+                new FlowStep {
+                    Id = "wikipedia-prune-queue",
+                    Title = "Remove titles that cannot be articles",
+                    Description = "Take the queued titles that carry a taxonomic authority or a nomenclatural note out of the queue. No Wikipedia article is titled that way.",
+                    Commands = new[] { "wikipedia prune-queue", "wikipedia prune-queue --apply" },
+                    InputSourceIds = new[] { "wikipedia-cache" },
+                    OutputSourceIds = new[] { "wikipedia-cache" },
+                    Optional = true,
+                    Section = FlowSection.Maintenance,
+                    Note = "IUCN stores a synonym complete with its authority and any note, for example `Eumeces schneideri (Daudin, 1802) [orth. error]`, and earlier runs queued those strings as article titles. In the 2026-1 cache that is 73,144 of the 190,212 titles waiting to be downloaded, and not one of them can exist. The matcher no longer makes them, so this is a one-off tidy of what is already queued. The first button reports what it would remove and changes nothing; the second removes them. Cached pages and settled matches are left alone, and a taxon that was waiting on a removed title is picked up again by the next `wikipedia match-taxa` run.",
                 },
                 new FlowStep {
                     Id = "wiki-refresh",

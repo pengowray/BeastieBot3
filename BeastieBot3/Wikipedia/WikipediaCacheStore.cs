@@ -277,6 +277,49 @@ SELECT
         return list;
     }
 
+    /// Every queued title that has not been downloaded, for callers that need to inspect the text
+    /// itself rather than filter in SQL.
+    public IReadOnlyList<(long Id, string Title)> ReadQueuedTitles() {
+        using var command = _connection.CreateCommand();
+        command.CommandText = """
+            SELECT id, IFNULL(page_title, normalized_title)
+            FROM wiki_pages
+            WHERE download_status IN (@pending, @failed)
+            ORDER BY id
+            """;
+        command.Parameters.AddWithValue("@pending", WikiPageDownloadStatus.Pending);
+        command.Parameters.AddWithValue("@failed", WikiPageDownloadStatus.Failed);
+
+        var list = new List<(long, string)>();
+        using var reader = command.ExecuteReader();
+        while (reader.Read()) {
+            list.Add((reader.GetInt64(0), reader.GetString(1)));
+        }
+        return list;
+    }
+
+    /// Removes queued titles. A taxon match pointing at one is left in place with its page cleared
+    /// (ON DELETE SET NULL), so the next match-taxa run picks the taxon up again.
+    public int DeletePages(IReadOnlyList<long> pageRowIds) {
+        if (pageRowIds.Count == 0) {
+            return 0;
+        }
+
+        var deleted = 0;
+        using var tx = _connection.BeginTransaction();
+        using (var command = _connection.CreateCommand()) {
+            command.Transaction = tx;
+            command.CommandText = "DELETE FROM wiki_pages WHERE id = @id";
+            var id = command.Parameters.Add("@id", SqliteType.Integer);
+            foreach (var rowId in pageRowIds) {
+                id.Value = rowId;
+                deleted += command.ExecuteNonQuery();
+            }
+        }
+        tx.Commit();
+        return deleted;
+    }
+
     public WikiPageUpsertResult UpsertPageCandidate(WikiPageCandidate candidate) {
         if (candidate is null) {
             throw new ArgumentNullException(nameof(candidate));

@@ -60,13 +60,19 @@ and `Infrastructure/ColUrls.Taxon(...)` link helpers.
 ## Reports
 
 IUCN-owned (the body): failed assessments (empty-scope HTTP 500), taxonomy field cleanup, synonym
-whitespace irregularities, synonym markup/unusual characters, orphan subspecies/varieties, taxa
+whitespace irregularities, synonym markup/unusual characters, nomenclatural notes written inside
+synonym names, orphan subspecies/varieties, taxa
 with no current assessment, HTML vs plain-text narrative fields, scientific name vs components, and
-the seven Catalogue of Life crosscheck pages (see below). The two synonym reports share one scan
+the seven Catalogue of Life crosscheck pages (see below). The three synonym reports share one scan
 (`SynonymFormattingScan`, memoised per connection): one lists whitespace problems (each kind counted
-separately, including spaces inside parentheses or before a comma), the other lists markup, stray
+separately, including spaces inside parentheses or before a comma), the second lists markup, stray
 HTML entities, curly quotes, and encoding artefacts with per-kind percentages and a with/without-HTML
-consistency table. Plain non-ASCII letters are never flagged on their own. The English common name
+consistency table, and the third (`SynonymNameNotesProducer`) lists synonyms whose name field also
+carries a bracketed nomenclatural note such as `[orth. error]`. Plain non-ASCII letters are never
+flagged on their own. The notes report's second summary table is the one that carries it: notes are
+grouped by wording with punctuation, spacing and case set aside, which is what shows `orth. error`
+being written five ways. A bracketed publication year (`[1803]`) is counted but not listed, being
+standard nomenclature. The English common name
 report (`CommonNameIssuesProducer`) refreshes a hand-compiled 2016 review of Red List common-name
 oddities against the current release: species codes in the name field, all-capitals names, stray
 whitespace, an acute accent or backtick used as an apostrophe, a leading "The", a "(FB)" FishBase

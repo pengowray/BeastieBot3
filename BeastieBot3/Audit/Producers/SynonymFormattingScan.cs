@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Runtime.CompilerServices;
@@ -88,8 +88,16 @@ internal sealed class SynonymRecord {
     public required IReadOnlyList<SynonymIssue> Issues { get; init; }
 }
 
+// A synonym whose name field carries a nomenclatural note, with the notes found in it.
+internal sealed record SynonymNoteRecord(SynonymRecord Record, IReadOnlyList<SynonymNameNote> Notes);
+
 internal sealed class SynonymScanResult {
     public required IReadOnlyList<SynonymRecord> Records { get; init; }
+    /// Synonyms whose name carries a note such as "[orth. error]". Independent of Records: a
+    /// synonym can be in both, or in this list alone when its text is otherwise clean.
+    public IReadOnlyList<SynonymNoteRecord> NoteRecords { get; init; } = Array.Empty<SynonymNoteRecord>();
+    /// Bracketed publication years, e.g. "[1803]", counted but not reported: standard nomenclature.
+    public long DateBracketCount { get; init; }
     public long TotalSynonyms { get; init; }   // every synonym examined, flagged or not
 }
 
@@ -112,7 +120,9 @@ internal static class SynonymFormattingScan {
         command.CommandTimeout = 0;
 
         var records = new List<SynonymRecord>();
+        var noteRecords = new List<SynonymNoteRecord>();
         long total = 0;
+        long dateBrackets = 0;
 
         using var reader = command.ExecuteReader();
         while (reader.Read()) {
@@ -145,6 +155,36 @@ internal static class SynonymFormattingScan {
                     }
                     total++;
 
+                    // Context is the same whichever list the synonym lands in, so build it once.
+                    SynonymRecord Build(string? suggestedValue, IReadOnlyList<SynonymIssue> issueList) => new() {
+                        RootSisId = rootSisId,
+                        AssessmentId = assessmentId,
+                        Url = url,
+                        AcceptedName = taxonName ?? taxonomy?.ScientificName ?? $"SIS {rootSisId}",
+                        CommonName = taxonomy?.CommonName,
+                        Kingdom = taxonomy?.KingdomName,
+                        Phylum = taxonomy?.PhylumName,
+                        Class = taxonomy?.ClassName,
+                        Order = taxonomy?.OrderName,
+                        Family = taxonomy?.FamilyName,
+                        StatusCode = AuditMapping.CodeFromCode(code),
+                        StatusCategory = AuditMapping.CategoryText(code),
+                        Year = year,
+                        Synonym = synonym,
+                        Suggested = suggestedValue,
+                        Issues = issueList,
+                    };
+
+                    var notes = SynonymNameNotes.Find(synonym);
+                    dateBrackets += notes.Count(n => n.IsDate);
+                    var wordNotes = notes.Where(n => !n.IsDate).ToList();
+                    if (wordNotes.Count > 0) {
+                        var withoutNotes = TextIrregularities.Clean(SynonymNameNotes.StripNotes(synonym));
+                        noteRecords.Add(new SynonymNoteRecord(
+                            Build(withoutNotes.Length == 0 ? null : withoutNotes, Array.Empty<SynonymIssue>()),
+                            wordNotes));
+                    }
+
                     var issues = Classify(synonym);
                     if (issues.Count == 0) {
                         continue;
@@ -174,7 +214,12 @@ internal static class SynonymFormattingScan {
             }
         }
 
-        return new SynonymScanResult { Records = records, TotalSynonyms = total };
+        return new SynonymScanResult {
+            Records = records,
+            NoteRecords = noteRecords,
+            DateBracketCount = dateBrackets,
+            TotalSynonyms = total,
+        };
     }
 
     private static IReadOnlyList<SynonymIssue> Classify(string value) {

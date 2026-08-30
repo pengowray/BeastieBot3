@@ -6,7 +6,8 @@
 #
 # Fields:
 #   report   the report id (failed-assessments, taxonomy-cleanup, synonym-whitespace,
-#            synonym-markup, common-name-issues, orphan-infraranks, no-latest, html-consistency,
+#            synonym-markup, synonym-name-notes, common-name-issues, orphan-infraranks, no-latest,
+#            html-consistency,
 #            taxonomy-consistency, count-scopes, field-hygiene, name-changes; and the Catalogue of
 #            Life crosscheck pages col-close-match, col-synonym, col-synonym-higher,
 #            col-classification, col-reorg, col-authority, col-not-found)

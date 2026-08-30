@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -57,17 +57,33 @@ internal sealed class IucnSynonymService : IDisposable {
         var results = new List<TaxonNameCandidate>();
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
+        // Candidates are looked up by name: as a Wikipedia article title, and as a Wikidata taxon
+        // name. Neither carries the authority IUCN stores with a synonym ("Eumeces schneideri
+        // (Daudin, 1802) [orth. error]"), so the stored form is offered as the bare name instead.
+        // Names that are already bare, higher taxa included, come through unchanged.
         void AddCandidate(string? value, TaxonNameSource source) {
             if (string.IsNullOrWhiteSpace(value)) {
                 return;
             }
 
             var trimmed = value.Trim();
-            if (trimmed.Length == 0 || !seen.Add(trimmed)) {
+            var bare = BareScientificName.Strip(trimmed);
+            if (bare.Length == 0) {
                 return;
             }
 
-            results.Add(new TaxonNameCandidate(trimmed, source));
+            // Stripping down to the genus alone would offer the genus article for a species, so a
+            // name that loses everything below the genus is dropped rather than guessed at.
+            if (!string.Equals(bare, trimmed, StringComparison.Ordinal)
+                && bare.IndexOf(' ') < 0 && trimmed.IndexOf(' ') >= 0) {
+                return;
+            }
+
+            if (!seen.Add(bare)) {
+                return;
+            }
+
+            results.Add(new TaxonNameCandidate(bare, source));
         }
 
         AddCandidate(row.ScientificNameTaxonomy, TaxonNameSource.IucnTaxonomy);

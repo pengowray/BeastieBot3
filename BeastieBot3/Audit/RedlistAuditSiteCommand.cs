@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Globalization;
@@ -53,6 +53,7 @@ internal sealed class RedlistAuditSiteCommand : Command<RedlistAuditSiteCommand.
         new SingleReportProducer(new TaxonomyCleanupProducer()),
         new SingleReportProducer(new SynonymWhitespaceProducer()),
         new SingleReportProducer(new SynonymOtherFormattingProducer()),
+        new SingleReportProducer(new SynonymNameNotesProducer()),
         new SingleReportProducer(new CommonNameIssuesProducer()),
         new SingleReportProducer(new OrphanInfraranksProducer()),
         new SingleReportProducer(new NoLatestAssessmentProducer()),
