@@ -187,6 +187,12 @@ public sealed class WikidataIucnBackfillCommand : AsyncCommand<WikidataIucnBackf
                 continue;
             }
 
+            // Checked here rather than after a match: taxa with no match used to skip the check
+            // entirely, so --limit 3 could search hundreds of taxa before the third match.
+            if (stats.Evaluated >= rowLimit) {
+                break;
+            }
+
             stats.Evaluated++;
             if (stats.Evaluated >= nextProgress) {
                 AnsiConsole.MarkupLineInterpolated($"[grey]Evaluated {stats.Evaluated:n0} taxa ({stats.Matches:n0} matches, {stats.Queued:n0} queued)...[/]");
@@ -233,10 +239,6 @@ public sealed class WikidataIucnBackfillCommand : AsyncCommand<WikidataIucnBackf
             }
 
             existingTaxonIds.Add(sisId);
-
-            if (stats.Evaluated >= rowLimit) {
-                break;
-            }
         }
 
         // Recorded at the end rather than per taxon: a cancelled run then leaves the record
