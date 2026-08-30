@@ -1304,6 +1304,10 @@
       status.textContent = '● running';
     } else if (step.status === 'todo') {
       status.textContent = 'to do';
+    } else if (step.status === 'backlog') {
+      // A queue worked down over time rather than something overdue; the count is in the
+      // detail line under the title.
+      status.textContent = 'more to do';
     } else if (step.status === 'manual') {
       status.textContent = 'by hand';
     } else if (step.status === 'never-run') {
@@ -1455,6 +1459,18 @@
           confirmRun(path, args, cmdMeta).then((ok) => { if (ok) enqueue(path, args); });
         });
         cmdRow.appendChild(btn);
+
+        // What a re-run of this command does (adds / discovers / rebuilds / clears), from the
+        // same metadata the Run command page shows. Answers "will this replace what I have?"
+        // without opening the step's options.
+        const cmdEff = cmdMeta ? effectInfo(cmdMeta) : null;
+        if (cmdEff && cmdMeta.rerun !== 'readonly') {
+          const pill = document.createElement('span');
+          pill.className = 'effect-badge ' + cmdEff.cls;
+          pill.textContent = cmdEff.label;
+          pill.title = cmdEff.hint + (cmdMeta.rerunNote ? ' ' + cmdMeta.rerunNote : '');
+          cmdRow.appendChild(pill);
+        }
 
         // One click stays the normal way to run a step, but some of them genuinely have a
         // setting worth changing here — a cutoff date, a limit — and sending people to a

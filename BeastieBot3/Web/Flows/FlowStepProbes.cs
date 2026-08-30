@@ -1,4 +1,6 @@
-using System;
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
 using BeastieBot3.Col;
 using BeastieBot3.CommonNames;
 using BeastieBot3.Iucn;
@@ -40,6 +42,114 @@ public static class FlowStepProbes {
     public const string CommonNameConflicts = "common-name-conflicts";
 
     public static bool IsCommonNameProbe(string probe) => probe is CommonNameConflicts;
+
+    // The Wikidata/Wikipedia ladder: how much work each priority step has left.
+    public const string WikidataSweep = "wiki-wd-sweep";
+    public const string WikidataSearch = "wiki-wd-search";
+    public const string WikidataDownload = "wiki-wd-download";
+    public const string WikipediaQueue = "wiki-wp-queue";
+    public const string WikipediaMatch = "wiki-wp-match";
+    public const string WikipediaFetchAwaited = "wiki-wp-fetch-awaited";
+    public const string WikipediaFetchRest = "wiki-wp-fetch-rest";
+    public const string WikiRetryFailed = "wiki-retry-failed";
+    public const string WikiRefresh = "wiki-refresh";
+
+    public static bool IsWikiProbe(string probe) =>
+        probe is WikidataSweep or WikidataSearch or WikidataDownload or WikipediaQueue or WikipediaMatch
+            or WikipediaFetchAwaited or WikipediaFetchRest or WikiRetryFailed or WikiRefresh;
+
+    public static FlowProbeResult? EvaluateWiki(string probe, WikiCoverageState s) {
+        // Nothing measured yet (first poll after startup, or a cache missing): say nothing
+        // rather than report gaps of zero that were never counted.
+        if (!s.Known) return null;
+        return probe switch {
+            WikidataSweep => WikiWikidataSweep(s),
+            WikidataSearch => WikiWikidataSearch(s),
+            WikidataDownload => WikiWikidataDownload(s),
+            WikipediaQueue => WikiWikipediaQueue(s),
+            WikipediaMatch => WikiWikipediaMatch(s),
+            WikipediaFetchAwaited => WikiFetchAwaited(s),
+            WikipediaFetchRest => WikiFetchRest(s),
+            WikiRetryFailed => WikiFailures(s),
+            WikiRefresh => WikiRefreshAge(s),
+            _ => null,
+        };
+    }
+
+    internal static FlowProbeResult WikiWikidataSweep(WikiCoverageState s) {
+        var known = s.WikidataEntitiesCached + s.WikidataEntitiesQueued;
+        if (known == 0) {
+            return new FlowProbeResult("todo", "No Wikidata items found yet.");
+        }
+        return new FlowProbeResult("ok", s.WikidataSweepCursor > 0
+            ? $"{known:n0} Wikidata items found. The last sweep read as far as Q{s.WikidataSweepCursor:n0}."
+            : $"{known:n0} Wikidata items found.");
+    }
+
+    internal static FlowProbeResult WikiWikipediaQueue(WikiCoverageState s) {
+        if (s.PagesKnown == 0) {
+            return new FlowProbeResult("todo", "No titles queued yet.");
+        }
+        return new FlowProbeResult("ok",
+            $"{s.PagesKnown:n0} titles: {s.PagesCached:n0} downloaded, {s.PagesQueued:n0} to download, {s.PagesMissing:n0} with no article.");
+    }
+
+    // "backlog" is a queue worked down over time, not something overdue: it shows the count
+    // without the amber a genuinely-unfinished step gets.
+    internal static FlowProbeResult WikiWikidataSearch(WikiCoverageState s) {
+        if (s.TaxaWithoutWikidata == 0) {
+            return new FlowProbeResult("ok", "Every IUCN taxon has a Wikidata item.");
+        }
+
+        var unsearched = Math.Max(0, s.TaxaWithoutWikidata - s.WikidataBackfillMisses);
+        if (unsearched == 0) {
+            return new FlowProbeResult("ok",
+                $"{s.TaxaWithoutWikidata:n0} IUCN taxa have no Wikidata item, all searched for already without a match.");
+        }
+
+        return new FlowProbeResult("todo", s.WikidataBackfillMisses == 0
+            ? $"{unsearched:n0} IUCN taxa have no Wikidata item and have not been searched for."
+            : $"{s.TaxaWithoutWikidata:n0} IUCN taxa have no Wikidata item: {unsearched:n0} not searched for yet, {s.WikidataBackfillMisses:n0} searched before with no match.");
+    }
+
+    internal static FlowProbeResult WikiWikidataDownload(WikiCoverageState s) =>
+        s.WikidataEntitiesQueued == 0
+            ? new FlowProbeResult("ok", $"All {s.WikidataEntitiesCached:n0} Wikidata items downloaded.")
+            : new FlowProbeResult("backlog", $"{s.WikidataEntitiesQueued:n0} Wikidata items to download. {s.WikidataEntitiesCached:n0} already downloaded.");
+
+    internal static FlowProbeResult WikiWikipediaMatch(WikiCoverageState s) =>
+        s.TaxaNeverMatched == 0
+            ? new FlowProbeResult("ok", $"All {s.IucnTaxa:n0} IUCN taxa have been checked for an article.")
+            : new FlowProbeResult("todo", $"{s.TaxaNeverMatched:n0} IUCN taxa have never been checked for an article.");
+
+    internal static FlowProbeResult WikiFetchAwaited(WikiCoverageState s) =>
+        s.PagesQueuedAwaited == 0
+            ? new FlowProbeResult("ok", $"No taxon is waiting on a page. {s.TaxaWithArticle:n0} taxa have an article.")
+            : new FlowProbeResult("backlog", $"{s.PagesQueuedAwaited:n0} pages to download for taxa with no article yet.");
+
+    internal static FlowProbeResult WikiFetchRest(WikiCoverageState s) {
+        var rest = Math.Max(0, s.PagesQueued - s.PagesQueuedAwaited);
+        return rest == 0
+            ? new FlowProbeResult("ok", "Nothing else queued.")
+            : new FlowProbeResult("backlog", $"{rest:n0} other pages queued: higher taxa, synonyms and redirects no taxon is waiting on.");
+    }
+
+    internal static FlowProbeResult WikiFailures(WikiCoverageState s) {
+        if (s.PagesFailed == 0 && s.WikidataEntitiesFailed == 0) {
+            return new FlowProbeResult("ok", "No downloads failed.");
+        }
+        var parts = new List<string>();
+        if (s.PagesFailed > 0) parts.Add($"{s.PagesFailed:n0} Wikipedia pages");
+        if (s.WikidataEntitiesFailed > 0) parts.Add($"{s.WikidataEntitiesFailed:n0} Wikidata items");
+        return new FlowProbeResult("todo", $"{string.Join(" and ", parts)} failed to download.");
+    }
+
+    internal static FlowProbeResult WikiRefreshAge(WikiCoverageState s) =>
+        s.PagesCached == 0
+            ? new FlowProbeResult("ok", "No pages cached yet.")
+            : new FlowProbeResult("ok", s.OldestCachedPageAt is { } oldest
+                ? $"{s.PagesCached:n0} pages cached, oldest downloaded {oldest:d MMM yyyy}."
+                : $"{s.PagesCached:n0} pages cached.");
 
     public static bool IsIucnApiProbe(string probe) =>
         probe is IucnApiRefresh or IucnApiTaxa or IucnApiDiscovery or IucnApiInfraranks or IucnApiProjection;

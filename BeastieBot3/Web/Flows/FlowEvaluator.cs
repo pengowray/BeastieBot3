@@ -1,4 +1,4 @@
-using BeastieBot3.Col;
+﻿using BeastieBot3.Col;
 using BeastieBot3.CommonNames;
 using BeastieBot3.Configuration;
 using BeastieBot3.Iucn;
@@ -54,9 +54,12 @@ public sealed class FlowEvaluator {
         var colState = new Lazy<ColUpdateState>(() => ColUpdateStateReader.Read(_paths, readArchives: false));
         var colArtifacts = new Lazy<ColArtifacts>(() => ColArtifacts.Read(_paths));
         var hubState = new Lazy<CommonNameHubState>(() => CommonNameHubStateReader.Read(_paths));
+        // Cross-database counts (IUCN taxa vs the two caches) take about a second, so this
+        // returns the last background snapshot and never blocks the poll.
+        var wikiState = new Lazy<WikiCoverageState>(() => WikiCoverageStateReader.Read(_paths));
 
         var steps = flow.Steps
-            .Select(s => Evaluate(s, sourceStatusById, runningJobsByCommand, iucnState, apiState, colState, colArtifacts, hubState))
+            .Select(s => Evaluate(s, sourceStatusById, runningJobsByCommand, iucnState, apiState, colState, colArtifacts, hubState, wikiState))
             .ToList();
 
         // Collect the subset of data sources actually referenced by this flow,
@@ -109,7 +112,8 @@ public sealed class FlowEvaluator {
                                       Lazy<IucnApiCacheState> apiState,
                                       Lazy<ColUpdateState> colState,
                                       Lazy<ColArtifacts> colArtifacts,
-                                      Lazy<CommonNameHubState> hubState) {
+                                      Lazy<CommonNameHubState> hubState,
+                                      Lazy<WikiCoverageState> wikiState) {
         // Block status: any required input data source missing.
         // (Optional steps still report block info; the UI styles them differently.)
         var missingInputs = step.InputSourceIds
@@ -150,7 +154,7 @@ public sealed class FlowEvaluator {
 
         // What the on-disk state says about this step, if it carries a probe. Kept separate from
         // the status so its explanation still shows while the step is blocked or running.
-        var probe = RunProbe(step, iucnState, apiState, colState, colArtifacts, hubState);
+        var probe = RunProbe(step, iucnState, apiState, colState, colArtifacts, hubState, wikiState);
 
         string status;
         if (missingInputs.Count > 0) {
@@ -200,13 +204,15 @@ public sealed class FlowEvaluator {
                                              Lazy<IucnApiCacheState> apiState,
                                              Lazy<ColUpdateState> colState,
                                              Lazy<ColArtifacts> colArtifacts,
-                                             Lazy<CommonNameHubState> hubState) {
+                                             Lazy<CommonNameHubState> hubState,
+                                      Lazy<WikiCoverageState> wikiState) {
         if (step.Probe is null) return null;
         try {
             if (FlowStepProbes.IsIucnCsvProbe(step.Probe)) return FlowStepProbes.Evaluate(step.Probe, iucnState.Value);
             if (FlowStepProbes.IsIucnApiProbe(step.Probe)) return FlowStepProbes.EvaluateApi(step.Probe, apiState.Value);
             if (FlowStepProbes.IsColProbe(step.Probe)) return FlowStepProbes.EvaluateCol(step.Probe, colState.Value, colArtifacts.Value);
             if (FlowStepProbes.IsCommonNameProbe(step.Probe)) return FlowStepProbes.EvaluateCommonNames(step.Probe, hubState.Value);
+            if (FlowStepProbes.IsWikiProbe(step.Probe)) return FlowStepProbes.EvaluateWiki(step.Probe, wikiState.Value);
             return null;
         } catch {
             return null;
@@ -276,7 +282,7 @@ public sealed record FlowStepSnapshot {
     public string? Note { get; init; }
     public string? GuideTitle { get; init; }                  // heading for the collapsible manual walkthrough
     public IReadOnlyList<string> GuideSteps { get; init; } = Array.Empty<string>();
-    public required string Status { get; init; }              // "blocked" | "running" | "todo" | "manual" | "never-run" | "ok"
+    public required string Status { get; init; }              // "blocked" | "running" | "todo" | "backlog" | "manual" | "never-run" | "ok"
     public string? Detail { get; init; }                      // one line of on-disk state from the step's probe
     public required IReadOnlyList<string> MissingInputs { get; init; }
     public DateTimeOffset? LastRunAt { get; init; }

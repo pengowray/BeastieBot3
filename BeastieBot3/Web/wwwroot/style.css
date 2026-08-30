@@ -310,7 +310,8 @@ a.ghost:hover { background: #1f242c; color: var(--accent-hover); }
 .kind-badge.destructive { color: var(--warn); border: 1px solid rgba(224,175,104,0.4); }
 
 /* Secondary "what happens on (re-)run" pill — orthogonal to kind, muted by default. */
-.cmd-row .effect-badge {
+.cmd-row .effect-badge,
+.flow-step-cmds .effect-badge {
   font-size: 0.68em;
   letter-spacing: 0.03em;
   padding: 0.08rem 0.4rem;
@@ -791,6 +792,7 @@ td { word-break: break-all; font-family: ui-monospace, Menlo, monospace; }
 .flow-step.status-never-run { border-left-color: var(--muted); }
 .flow-step.status-manual { border-left-color: var(--muted); }
 .flow-step.status-todo { border-left-color: var(--warn); }
+.flow-step.status-backlog { border-left-color: var(--accent); }
 .flow-step.status-ok { border-left-color: var(--ok); }
 .flow-step.status-running { border-left-color: var(--accent); }
 .flow-step.optional { opacity: 0.85; }
@@ -819,6 +821,7 @@ td { word-break: break-all; font-family: ui-monospace, Menlo, monospace; }
 .flow-step-dot.status-never-run { background: var(--muted); }
 .flow-step-dot.status-manual { background: var(--muted); }
 .flow-step-dot.status-todo { background: var(--warn); }
+.flow-step-dot.status-backlog { background: var(--accent); }
 .flow-step-dot.status-ok { background: var(--ok); }
 .flow-step-dot.status-running {
   background: var(--accent);
@@ -845,6 +848,7 @@ td { word-break: break-all; font-family: ui-monospace, Menlo, monospace; }
   overflow-wrap: anywhere;
 }
 .flow-step-detail.status-todo { color: var(--warn); }
+.flow-step-detail.status-backlog { color: var(--accent); }
 
 .flow-step-status {
   font-size: 0.78em;
@@ -855,6 +859,7 @@ td { word-break: break-all; font-family: ui-monospace, Menlo, monospace; }
 .flow-step-status.status-never-run { color: var(--muted); }
 .flow-step-status.status-manual { color: var(--muted); }
 .flow-step-status.status-todo { color: var(--warn); }
+.flow-step-status.status-backlog { color: var(--accent); }
 .flow-step-status.status-ok { color: var(--ok); }
 .flow-step-status.status-running { color: var(--accent); }
 
