@@ -8,8 +8,9 @@ namespace BeastieBot3.Web.Jobs;
 // (and each job's captured output) survives server restarts.
 //
 // Schema: one row per job. Output is stored as TEXT and capped at 256K characters so a
-// single runaway import doesn't bloat the DB. Past that, we append a
-// "[output truncated]" marker.
+// single runaway import doesn't bloat the DB. Past that we keep the *last* 256K
+// and mark the head, matching what the live broadcaster keeps: the end of a log
+// carries the errors and the exit status, the head carries argument echo.
 //
 // Lifecycle matches every other store in the project: private ctor +
 // static Open() factory + IDisposable. WAL mode so dashboard reads do not
@@ -19,7 +20,7 @@ namespace BeastieBot3.Web.Jobs;
 // reuses SqliteStore.OpenConnection as a helper rather than inheriting the internal base.
 public sealed class JobHistoryStore : IDisposable {
     private const int MaxStoredOutputChars = 256 * 1024;
-    private const string TruncationMarker = "\n\x1b[2m[output truncated; persisted up to 256K characters]\x1b[0m\n";
+    private const string TruncationMarker = "\x1b[2m[earlier output trimmed; last 256K characters kept]\x1b[0m\n";
 
     private readonly SqliteConnection _connection;
     // SqliteConnection is not thread-safe: it tracks its live commands in a plain
@@ -200,7 +201,10 @@ public sealed class JobHistoryStore : IDisposable {
 
     private static string TruncateOutput(string output) {
         if (output.Length <= MaxStoredOutputChars) return output;
-        return output.Substring(0, MaxStoredOutputChars) + TruncationMarker;
+        var start = output.Length - MaxStoredOutputChars;
+        var newline = output.IndexOf('\n', start);
+        if (newline >= 0) start = newline + 1;
+        return TruncationMarker + output.Substring(start);
     }
 
     private static string StatusText(JobStatus s) => s switch {

@@ -8,6 +8,14 @@ namespace BeastieBot3.Web.Jobs;
 // by the live stream until the job completes.
 
 public sealed class JobOutputBroadcaster {
+    // A multi-hour download emits far more text than anyone reads back. Keep a
+    // bounded tail: the end of a log is where the errors and the exit status
+    // are, and an unbounded buffer both grew the serve process without limit
+    // and handed a reconnecting browser a replay it could not render.
+    private const int MaxHistoryChars = 1_000_000;
+    private const int HistoryTrimSliceChars = 256_000;
+    private const string TrimMarker = "\x1b[2m[earlier output trimmed]\x1b[0m\n";
+
     private readonly object _lock = new();
     private readonly StringBuilder _history = new();
     private readonly List<Channel<string>> _subscribers = new();
@@ -37,11 +45,24 @@ public sealed class JobOutputBroadcaster {
         lock (_lock) {
             if (_completed) return;
             _history.Append(chunk);
+            TrimHistoryLocked();
             snapshot = _subscribers.ToList();
         }
         foreach (var ch in snapshot) {
             ch.Writer.TryWrite(chunk);
         }
+    }
+
+    // Drops whole lines off the front once the buffer passes its cap. Trimming a
+    // large slice at a time keeps this O(n) per slice rather than per append.
+    private void TrimHistoryLocked() {
+        if (_history.Length <= MaxHistoryChars) return;
+        var text = _history.ToString();
+        var target = text.Length - (MaxHistoryChars - HistoryTrimSliceChars);
+        var newline = text.IndexOf('\n', target);
+        var cut = newline >= 0 ? newline + 1 : target;
+        _history.Clear();
+        _history.Append(TrimMarker).Append(text, cut, text.Length - cut);
     }
 
     public void Complete() {

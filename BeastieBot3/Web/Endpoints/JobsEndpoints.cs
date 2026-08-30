@@ -77,12 +77,22 @@ public static class JobsEndpoints {
 
             var (history, reader) = job.Output.Subscribe();
             if (!string.IsNullOrEmpty(history)) {
-                await WriteSseEvent(ctx, "chunk", history).ConfigureAwait(false);
+                await WriteSseChunk(ctx, history).ConfigureAwait(false);
             }
             if (reader is not null) {
+                var buffer = new System.Text.StringBuilder();
                 try {
                     await foreach (var chunk in reader.ReadAllAsync(ctx.RequestAborted)) {
-                        await WriteSseEvent(ctx, "chunk", chunk).ConfigureAwait(false);
+                        // Spectre writes through TextWriter.Write(char) in places, so one
+                        // chunk can be one character. Drain whatever else is already queued
+                        // and send it as a single event -- otherwise the browser does a full
+                        // render pass per character.
+                        buffer.Clear();
+                        buffer.Append(chunk);
+                        while (buffer.Length < MaxCoalescedChunkChars && reader.TryRead(out var more)) {
+                            buffer.Append(more);
+                        }
+                        await WriteSseChunk(ctx, buffer.ToString()).ConfigureAwait(false);
                     }
                 } catch (OperationCanceledException) {
                     // Client disconnected. Nothing to do.
@@ -93,6 +103,15 @@ public static class JobsEndpoints {
             await WriteSseEvent(ctx, "done", "").ConfigureAwait(false);
         });
     }
+
+    // Cap on how much output one SSE event carries when draining the queue.
+    private const int MaxCoalescedChunkChars = 64 * 1024;
+
+    // Output chunks travel as a JSON string. SSE treats a bare \r as a line
+    // terminator, so a raw progress-bar redraw ("\rProgress 40%") lost everything
+    // after the \r and the client's overwrite path never fired.
+    private static Task WriteSseChunk(HttpContext ctx, string chunk) =>
+        WriteSseEvent(ctx, "chunk", JsonSerializer.Serialize(chunk, JsonOpts));
 
     private static async Task WriteSseEvent(HttpContext ctx, string eventName, string data) {
         // SSE requires every line of data prefixed with "data: ". Split on \n and

@@ -66,6 +66,78 @@
   // Accumulated text for the line currently being built (so \r overwrites work).
   let pendingLine = '';
 
+  // The terminal keeps only the last MAX_TERMINAL_LINES committed lines. A long
+  // download emits hundreds of thousands of lines, and keeping every one alive
+  // as a DOM node killed the browser outright on multi-hour jobs. Older lines
+  // are dropped from the top and replaced by a single notice.
+  const MAX_TERMINAL_LINES = 5000;
+  const TERMINAL_TRIM_SLACK = 500;   // trim in batches rather than on every line
+  const MAX_PENDING_CHARS = 16384;   // force-commit output that never sends \n
+  let committedLines = 0;
+
+  function resetTerminal() {
+    jobOutput.innerHTML = '';
+    pendingLine = '';
+    committedLines = 0;
+  }
+
+  function showTrimNotice() {
+    if (jobOutput.querySelector('span[data-trimmed="1"]')) return;
+    const el = document.createElement('span');
+    el.dataset.trimmed = '1';
+    el.className = 'ansi-dim';
+    el.textContent = '[earlier output trimmed]\n';
+    jobOutput.insertBefore(el, jobOutput.firstChild);
+  }
+
+  // Each committed line is a <span> followed by a "\n" text node; drop whole
+  // pairs from the top. The in-progress preview span is always last, so it is
+  // never at risk here.
+  function trimTerminal() {
+    if (committedLines <= MAX_TERMINAL_LINES + TERMINAL_TRIM_SLACK) return;
+    let toRemove = committedLines - MAX_TERMINAL_LINES;
+    while (toRemove > 0) {
+      let node = jobOutput.firstChild;
+      if (node && node.nodeType === 1 && node.dataset && node.dataset.trimmed === '1') {
+        node = node.nextSibling;
+      }
+      if (!node) break;
+      const newline = node.nextSibling;
+      jobOutput.removeChild(node);
+      if (newline && newline.nodeType === 3) jobOutput.removeChild(newline);
+      committedLines--;
+      toRemove--;
+    }
+    showTrimNotice();
+  }
+
+  // Reattaching to a job replays its whole history as one chunk. Rendering 200k
+  // lines and *then* trimming still hangs the browser, so cut the chunk first.
+  function clampChunk(text) {
+    let lines = 0;
+    for (let i = 0; i < text.length; i++) {
+      if (text.charCodeAt(i) === 10) lines++;
+    }
+    if (lines <= MAX_TERMINAL_LINES) return text;
+    let pos = -1;
+    for (let i = lines - MAX_TERMINAL_LINES; i > 0; i--) pos = text.indexOf('\n', pos + 1);
+    showTrimNotice();
+    return text.substring(pos + 1);
+  }
+
+  function commitLine(html) {
+    const span = document.createElement('span');
+    span.innerHTML = html;
+    jobOutput.appendChild(span);
+    jobOutput.appendChild(document.createTextNode('\n'));
+    committedLines++;
+  }
+
+  function dropPreview() {
+    const preview = jobOutput.querySelector('span[data-preview="1"]');
+    if (preview) jobOutput.removeChild(preview);
+  }
+
   function setStatus(status) {
     jobStatus.textContent = status;
     jobStatus.className = 'status ' + status;
@@ -95,7 +167,11 @@
     // Drop \x1b]2;...title... OSC sequences before splitting, they would
     // otherwise leave artefacts the SGR parser doesn't strip.
     // (Already handled by ansi.js but a defensive guard is cheap.)
-    let text = chunk;
+    let text = clampChunk(chunk);
+
+    // Follow the tail only when the user is already there, so scrolling back
+    // through a running job's log isn't yanked to the bottom by every chunk.
+    const pinned = jobOutput.scrollHeight - jobOutput.scrollTop - jobOutput.clientHeight < 40;
 
     // Split into segments by \r and \n. Each \n flushes pendingLine as a new
     // permanent line; \r without \n replaces pendingLine in place. This
@@ -125,23 +201,29 @@
         }
       }
       if (kind === 'newline') {
-        // Emit pendingLine permanently followed by a real <br>.
-        const rendered = AnsiRenderer.toHtml(pendingLine).html;
-        const span = document.createElement('span');
-        span.innerHTML = rendered;
-        jobOutput.appendChild(span);
-        jobOutput.appendChild(document.createTextNode('\n'));
+        // pendingLine holds everything that survived the last \r, so the preview
+        // span is superseded: drop it, or it lingers above the committed line as
+        // a duplicate.
+        dropPreview();
+        commitLine(AnsiRenderer.toHtml(pendingLine).html);
         pendingLine = '';
       } else if (kind === 'cr') {
         // Replace the in-progress line (overwrite preview span).
         renderPreview();
         pendingLine = '';
+      } else if (pendingLine.length > MAX_PENDING_CHARS) {
+        // A line that never ends re-renders the whole preview on every chunk,
+        // which is quadratic. Cut it loose once it gets long.
+        dropPreview();
+        commitLine(AnsiRenderer.toHtml(pendingLine).html);
+        pendingLine = '';
       } else {
-        // append mode — update preview only.
+        // append mode: update preview only.
         renderPreview();
       }
     }
-    jobOutput.scrollTop = jobOutput.scrollHeight;
+    trimTerminal();
+    if (pinned) jobOutput.scrollTop = jobOutput.scrollHeight;
   }
 
   // The last child of jobOutput, when in 'preview' state, is the not-yet-
@@ -170,8 +252,7 @@
     }
     showDock(true);
     jobTitle.textContent = '$ beastiebot3 ' + command + (args && args.length ? ' ' + args.join(' ') : '');
-    jobOutput.innerHTML = '';
-    pendingLine = '';
+    resetTerminal();
     setStatus('pending');
 
     const res = await fetch('/api/jobs', {
@@ -195,7 +276,10 @@
     currentJobId = jobId;
     const es = new EventSource('/api/jobs/' + jobId + '/stream');
     currentEventSource = es;
-    es.addEventListener('chunk', (e) => appendChunk(e.data));
+    // Chunks arrive JSON-encoded so \r survives SSE's own line framing.
+    es.addEventListener('chunk', (e) => {
+      try { appendChunk(JSON.parse(e.data)); } catch (_) { appendChunk(e.data); }
+    });
     es.addEventListener('status', (e) => {
       try {
         const j = JSON.parse(e.data);
@@ -307,8 +391,7 @@
       currentEventSource = null;
     }
     showDock(true);
-    jobOutput.innerHTML = '';
-    pendingLine = '';
+    resetTerminal();
     setStatus('running');
     attachStream(id);
     fetch('/api/jobs/' + id).then(r => r.json()).then(j => {
