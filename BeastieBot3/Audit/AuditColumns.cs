@@ -95,8 +95,17 @@ internal static class AuditColumns {
         Key = "suggestedValue", Header = header, Type = type, Value = f => f.SuggestedValue,
     };
 
+    // Detail plus any per-row notes the producer added; without this the Notes list is never shown.
     public static AuditColumn Detail(string header = "Detail") => new() {
-        Key = "detail", Header = header, Type = AuditColumnType.LongText, Value = f => f.Detail,
+        Key = "detail", Header = header, Type = AuditColumnType.LongText,
+        Value = f => {
+            var detail = f.Detail;
+            if (f.Notes.Count == 0) {
+                return detail;
+            }
+            var notes = string.Join(" ", f.Notes);
+            return string.IsNullOrWhiteSpace(detail) ? notes : $"{detail} {notes}";
+        },
     };
 
     // A column backed by AuditFinding.Extra (report-specific values not in the canonical set).
