@@ -532,7 +532,7 @@ public static class FlowCatalogue {
                     Optional = true,
                     Probe = FlowStepProbes.WikipediaFetchRest,
                     Group = "3 \u00b7 Wikipedia",
-                    Note = "The lists do not need these pages, but they improve redirect and synonym resolution for the taxa that do. There can be hundreds of thousands of them, so this is a job of days: use --limit to work through it in sessions. It downloads only what is missing, so stopping and re-running continues where it stopped. Run \"Remove titles that cannot be articles\" under Maintenance first: a queue built before that step existed is around a third titles carrying an authority, which no article has.",
+                    Note = "The lists do not need these pages, but they improve redirect and synonym resolution for the taxa that do. There can be hundreds of thousands of them, so this is a job of days: use --limit to work through it in sessions. It downloads only what is missing, so stopping and re-running continues where it stopped. Run \"Remove titles that cannot be articles\" under Maintenance first: in August 2026, 38% of the queue was titles carrying an authority, which no article has.",
                 },
                 new FlowStep {
                     Id = "common-names",
@@ -603,7 +603,7 @@ public static class FlowCatalogue {
                     OutputSourceIds = new[] { "wikipedia-cache" },
                     Optional = true,
                     Section = FlowSection.Maintenance,
-                    Note = "IUCN stores a synonym complete with its authority and any note, for example `Eumeces schneideri (Daudin, 1802) [orth. error]`, and earlier runs queued those strings as article titles. In the 2026-1 cache that is 73,144 of the 190,212 titles waiting to be downloaded, and not one of them can exist. The matcher no longer makes them, so this is a one-off tidy of what is already queued. The first button reports what it would remove and changes nothing; the second removes them. Cached pages and settled matches are left alone, and a taxon that was waiting on a removed title is picked up again by the next `wikipedia match-taxa` run.",
+                    Note = "IUCN stores a synonym complete with its authority and any note, for example `Eumeces schneideri (Daudin, 1802) [orth. error]`, and earlier runs queued those strings as article titles. In the 2026-1 cache in August 2026 that was 73,144 of the 190,212 titles waiting to be downloaded, and not one of them can exist. The matcher no longer makes them, so this is a one-off tidy of what is already queued. The first button reports what it would remove and changes nothing; the second removes them. Cached pages and settled matches are left alone, and a taxon that was waiting on a removed title is picked up again by the next `wikipedia match-taxa` run.",
                 },
                 new FlowStep {
                     Id = "wiki-refresh",

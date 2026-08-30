@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using BeastieBot3.Wikipedia;
 using Microsoft.Data.Sqlite;
 
@@ -117,6 +118,37 @@ public class WikipediaFetchScopeTests {
 
         Assert.Equal(new[] { "Failed" },
             Titles(f.Store, new WikipediaCacheStore.WikiFetchScope { FailedOnly = true }));
+    }
+
+    // prune-queue tells the user a taxon waiting on a removed title keeps its place. That rests on
+    // the match row surviving the delete with its page cleared, which only happens with foreign
+    // keys on; without it the delete fails and the promise is false.
+    [Fact]
+    public void Removing_a_queued_title_leaves_the_taxon_waiting_on_it_in_place() {
+        using var f = new Fixture();
+        var page = f.AddPage("Eumeces schneideri (Daudin, 1802) [orth. error]", "pending", Now);
+        f.AwaitPage(page, "1234");
+
+        Assert.Equal(1, f.Store.DeletePages(new[] { page }));
+
+        using var cmd = f.Connection.CreateCommand();
+        cmd.CommandText = "SELECT match_status, page_row_id FROM taxon_wiki_matches WHERE taxon_identifier = '1234'";
+        using var reader = cmd.ExecuteReader();
+        Assert.True(reader.Read());
+        Assert.Equal("pending", reader.GetString(0));
+        Assert.True(reader.IsDBNull(1));       // the page is gone, the taxon is still waiting
+    }
+
+    [Fact]
+    public void Only_queued_titles_are_read_for_pruning() {
+        using var f = new Fixture();
+        f.AddPage("Queued", "pending", Now);
+        f.AddPage("Failed", "failed", Now);
+        f.AddPage("Cached", "cached", Now, downloaded: Now);
+        f.AddPage("No article", "missing", Now);
+
+        var titles = f.Store.ReadQueuedTitles().Select(t => t.Title).OrderBy(t => t).ToArray();
+        Assert.Equal(new[] { "Failed", "Queued" }, titles);
     }
 
     // Without --refresh-only, a refresh run drags the entire never-fetched queue along with it,
