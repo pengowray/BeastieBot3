@@ -41,17 +41,20 @@ internal sealed class SynonymNameNotesProducer : IAuditReportProducer {
             Tier = AuditReportTier.IucnCore,
             Breakage = BreakageClass.FixableData,
             DataSourceLabel = "IUCN API (taxon synonyms)",
+            Blurb = "Synonyms whose name field carries a bracketed nomenclatural note, such as [orth. error], alongside the name itself.",
             Summary =
                 "Each row is a synonym whose name field also carries a nomenclatural note in square brackets, such as " +
                 "`Eumeces schneideri (Daudin, 1802) [orth. error]`, together with the name on its own. " +
                 "The scientific name column is the accepted taxon the synonym belongs to.\n\n" +
-                "Square-bracketed publication years, such as `[1803]`, are counted in the summary but not listed here: recording an inferred date that way is standard practice and it belongs to the authority.\n\n" +
+                "Not every square bracket is treated as a note. Three standard uses of brackets are counted in the summary but not listed: " +
+                "an inferred publication year (`[1803]`), an inferred or attributed author (`Anonymous [Bennett], 1830`), " +
+                "and an expansion of an abbreviated name (`S[imia] erythropyga`). Those are conventional nomenclature and belong where they are.\n\n" +
                 "### Why it matters\n\n" +
-                "The note is useful information, but while it sits in the name field the field does not hold a name. " +
-                "Anything reading it, a search index, an export, or another database matching on the name, takes the note as part of the text and finds nothing. " +
-                "The second table below lists the notes that are written more than one way, which is only visible once they are gathered together.\n\n" +
+                "While a note sits in the name field, the field holds more than a name. " +
+                "A search index, an export, or another database that matches on the name treats the note as part of the text, so the lookup fails. " +
+                "Listing the notes together also shows a second problem: the same note is spelled several ways (the second table below).\n\n" +
                 "### Suggestion\n\n" +
-                "Keep the note, and hold it in a field of its own so the name field holds only the name. " +
+                "Keep the note, but hold it in a field of its own so the name field holds only the name. " +
                 "Settle on one spelling per note: the variants table shows which ones currently have several.",
             Columns = new List<AuditColumn> {
                 AuditColumns.ScientificName("Accepted taxon"),
@@ -120,7 +123,8 @@ internal sealed class SynonymNameNotesProducer : IAuditReportProducer {
         return new AuditSummaryTable {
             Title = "Notes by text",
             Note = $"{distinct:N0} distinct notes across {notes.Count:N0} occurrences, out of {scan.TotalSynonyms:N0} synonym names examined. " +
-                   $"A further {scan.DateBracketCount:N0} bracketed publication years are not counted here.",
+                   "Occurrences can outnumber the rows above because a synonym can carry more than one note. " +
+                   $"Standard bracket uses are not counted here: {scan.DateBracketCount:N0} bracketed publication years and {scan.AuthorBracketCount:N0} bracketed author attributions or in-name expansions.",
             Headers = new[] { "Note", "Occurrences" },
             Rows = rows,
             NumericColumns = new[] { 1 },

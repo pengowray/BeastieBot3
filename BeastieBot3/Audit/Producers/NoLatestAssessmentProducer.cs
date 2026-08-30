@@ -34,14 +34,15 @@ internal sealed class NoLatestAssessmentProducer : IAuditReportProducer {
             Tier = AuditReportTier.IucnCore,
             Breakage = BreakageClass.Advisory,
             DataSourceLabel = "IUCN API",
+            Blurb = "Taxa whose assessments are all historical: none is flagged as current, usually because the taxon was removed, merged, or reclassified.",
             Summary =
                 "Each row is a taxon from the IUCN API where none of its assessments is flagged as the current (latest) one. " +
                 "This commonly happens when a taxon was removed from the Red List, merged into another taxon, or reclassified, so only historical assessments remain. " +
-                "The most recent assessment is shown for context. This covers the taxa retrieved from the API, which may not be every taxon in the release.\n\n" +
+                "The most recent assessment is shown for context. The count is a minimum: it covers the taxa retrieved from the API, which may not be every taxon in the release.\n\n" +
                 "### Why it matters\n\n" +
-                "The point of interest is how these records appear on the Red List website, not the missing flag on its own. " +
+                "These pages are easy to mistake for current assessments on the Red List website. " +
                 "Many do not come up through search on iucnredlist.org, yet each stays reachable through its direct species URL. " +
-                "Some of these pages carry a note such as \"(This concept is no longer recognised)\", but it is easy to overlook, and many pages carry no such note at all. A page reached this way is easy to mistake for a current assessment.\n\n" +
+                "Some of the pages carry a note such as \"(This concept is no longer recognised)\", but it is easy to overlook, and many carry no such note at all.\n\n" +
                 "### Suggestion\n\n" +
                 "If the taxon is still valid, flag its most recent assessment as current. If it was removed, merged, or reclassified, add a final 'Not Evaluated' assessment. Either way, adjust how old assessments display on the website so they cannot be mistaken for current ones.",
             Columns = new List<AuditColumn> {

@@ -49,12 +49,14 @@ internal sealed class SynonymOtherFormattingProducer : IAuditReportProducer {
             Tier = AuditReportTier.IucnCore,
             Breakage = BreakageClass.FixableData,
             DataSourceLabel = "IUCN API (taxon synonyms)",
+            Blurb = "Synonym names containing HTML markup, stray HTML entities, or typographic quotes, each with a cleaned plain-text suggestion.",
             Summary =
-                "Each row is a synonym name whose stored text carries a non-whitespace formatting irregularity: embedded HTML markup, a stray HTML entity, curly or typographic quotes where straight quotes are the norm, or an unusual character or encoding artefact, together with a cleaned suggestion. " +
-                "Ordinary accented letters are not treated as a problem; only characters that look like markup or an encoding mistake are flagged. The scientific name column is the accepted taxon the synonym belongs to. " +
-                "The summary gives each kind as a share of all synonyms examined and sets out whether HTML use is consistent.\n\n" +
+                "Each row is a synonym name whose stored text carries a formatting irregularity other than whitespace: embedded HTML markup, a stray HTML entity, or curly quotes where straight quotes are the norm, together with a cleaned suggestion. " +
+                "Ordinary accented letters are not treated as a problem; only characters that look like markup or an encoding mistake are flagged, and the summary keeps every check visible, including any that found nothing. " +
+                "The scientific name column is the accepted taxon the synonym belongs to.\n\n" +
                 "### Why it matters\n\n" +
-                "Markup and encoding artefacts in a synonym string leak into search results and exports, and they stop the synonym from matching the clean text other databases hold. The with-and-without-HTML breakdown shows whether the markup is applied consistently.\n\n" +
+                "Markup and encoding artefacts in a synonym appear verbatim in search results and exports, and they stop the synonym from matching the clean text other databases hold. " +
+                "The second table shows how rare HTML is in this field, which is what makes the HTML-bearing names stand out as candidates to normalise.\n\n" +
                 "### Suggestion\n\n" +
                 "Apply the cleaned suggestion: strip the markup, decode the stray entity, and replace typographic quotes with straight ones. Review case by case where a character may be intentional.",
             Columns = new List<AuditColumn> {

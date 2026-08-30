@@ -98,6 +98,9 @@ internal sealed class SynonymScanResult {
     public IReadOnlyList<SynonymNoteRecord> NoteRecords { get; init; } = Array.Empty<SynonymNoteRecord>();
     /// Bracketed publication years, e.g. "[1803]", counted but not reported: standard nomenclature.
     public long DateBracketCount { get; init; }
+    /// Bracketed author attributions and in-name expansions, e.g. "[Bennett]", "S[imia]", also
+    /// standard nomenclature and not reported.
+    public long AuthorBracketCount { get; init; }
     public long TotalSynonyms { get; init; }   // every synonym examined, flagged or not
 }
 
@@ -123,6 +126,7 @@ internal static class SynonymFormattingScan {
         var noteRecords = new List<SynonymNoteRecord>();
         long total = 0;
         long dateBrackets = 0;
+        long authorBrackets = 0;
 
         using var reader = command.ExecuteReader();
         while (reader.Read()) {
@@ -176,8 +180,9 @@ internal static class SynonymFormattingScan {
                     };
 
                     var notes = SynonymNameNotes.Find(synonym);
-                    dateBrackets += notes.Count(n => n.IsDate);
-                    var wordNotes = notes.Where(n => !n.IsDate).ToList();
+                    dateBrackets += notes.Count(n => n.Kind == SynonymNoteKind.Year);
+                    authorBrackets += notes.Count(n => n.Kind is SynonymNoteKind.Author or SynonymNoteKind.Expansion);
+                    var wordNotes = notes.Where(n => n.IsWordNote).ToList();
                     if (wordNotes.Count > 0) {
                         var withoutNotes = TextIrregularities.Clean(SynonymNameNotes.StripNotes(synonym));
                         noteRecords.Add(new SynonymNoteRecord(
@@ -218,6 +223,7 @@ internal static class SynonymFormattingScan {
             Records = records,
             NoteRecords = noteRecords,
             DateBracketCount = dateBrackets,
+            AuthorBracketCount = authorBrackets,
             TotalSynonyms = total,
         };
     }

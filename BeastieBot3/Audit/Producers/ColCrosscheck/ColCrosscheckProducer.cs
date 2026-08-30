@@ -57,7 +57,10 @@ internal sealed class ColCrosscheckProducer : IAuditReportSetProducer {
         var iucnSynonyms = apiCache is null ? null : IucnSynonymIndex.Build(apiCache, ctx.Limit, ctx.Ct);
 
         var data = new ColCrosscheckEngine(colRepo, iucnSynonyms).Run(rows, ctx.Ct);
-        var source = $"IUCN Red List {ctx.Release} vs Catalogue of Life";
+        var colRelease = ctx.ColReleaseLabel();
+        var source = colRelease is null
+            ? $"IUCN Red List {ctx.Release} vs Catalogue of Life"
+            : $"IUCN Red List {ctx.Release} vs Catalogue of Life {colRelease}";
         var assessed = data.AssessedCompared;
         var higher = data.HigherTaxaCompared;
 
@@ -80,12 +83,13 @@ internal sealed class ColCrosscheckProducer : IAuditReportSetProducer {
         Tier = AuditReportTier.IucnCore,
         Breakage = BreakageClass.Advisory,
         DataSourceLabel = source,
+        Blurb = "IUCN names with no Catalogue of Life match, exact or approximate.",
         Summary =
-            "Each row is an IUCN name with no exact Catalogue of Life match and no close candidate from a fuzzy search over the same genus and epithet.\n\n" +
+            "Each row is an IUCN name that the Catalogue of Life does not contain: there is no exact match, and a search for similar spellings within the same genus and species epithet found no close candidate either.\n\n" +
             "### Why it matters\n\n" +
-            "A name absent from the Catalogue of Life cannot be cross-referenced there. This may point to a very recent name, a name from a source CoL does not yet cover, or a spelling that has drifted far from the CoL form.\n\n" +
+            "A name absent from the Catalogue of Life cannot be cross-referenced there. The likely reasons vary: the name may be newer than the Catalogue of Life release compared against, may come from a source CoL does not yet cover, or may be spelled differently enough that no match is found.\n\n" +
             "### Suggestion\n\n" +
-            "Use this as a list to spot-check against current literature. Many entries are expected to be legitimately newer than the Catalogue of Life snapshot.",
+            "Use this as a list to spot-check against current literature. Many entries are expected to be legitimately newer than the Catalogue of Life release compared against (its version is given above under Source).",
         Columns = NotFoundColumns(),
         Findings = OrderSpecies(findings),
         HeadlineCount = findings.Count,
@@ -99,8 +103,9 @@ internal sealed class ColCrosscheckProducer : IAuditReportSetProducer {
         Tier = AuditReportTier.IucnCore,
         Breakage = BreakageClass.Advisory,
         DataSourceLabel = source,
+        Blurb = "IUCN names with no exact Catalogue of Life match, each paired with the most similar CoL name in the same genus, and a note on how the two spellings differ.",
         Summary =
-            "Each row is an IUCN name with no exact Catalogue of Life match, paired with the closest Catalogue of Life name found by a fuzzy search over the same genus and epithet. The detail column names how they differ (punctuation, diacritics, Unicode encoding, or a short spelling variant).\n\n" +
+            "Each row is an IUCN name with no exact Catalogue of Life match, paired with the most similar Catalogue of Life name found within the same genus and species epithet. The detail column names how they differ (punctuation, diacritics, Unicode encoding, or a short spelling variant).\n\n" +
             "### Why it matters\n\n" +
             "When the two catalogues spell a name slightly differently, an exact join between them fails even though the same taxon is almost certainly meant.\n\n" +
             "### Suggestion\n\n" +
@@ -118,10 +123,11 @@ internal sealed class ColCrosscheckProducer : IAuditReportSetProducer {
         Tier = AuditReportTier.IucnCore,
         Breakage = BreakageClass.Advisory,
         DataSourceLabel = source,
+        Blurb = "Assessed IUCN taxa whose name the Catalogue of Life records as a synonym of a different accepted name.",
         Summary =
             "Each row is an IUCN species, subspecies, or variety whose name the Catalogue of Life records as a synonym of a different accepted name, shown in the CoL accepted name column.\n\n" +
             "### Why it matters\n\n" +
-            "Where CoL has moved a name into synonymy, the IUCN name may be an earlier combination or a lumped taxon. The accepted name is what a CoL-based system will use.\n\n" +
+            "Where CoL has moved a name into synonymy, the IUCN name may be an earlier combination of the same species, or a taxon that has since been merged into another. Databases that follow the Catalogue of Life file the taxon under the accepted name, not the IUCN one.\n\n" +
             "### Suggestion\n\n" +
             "Compare each IUCN name with the CoL accepted name and confirm which reflects current taxonomy.",
         Columns = SynonymColumns(),
@@ -137,10 +143,11 @@ internal sealed class ColCrosscheckProducer : IAuditReportSetProducer {
         Tier = AuditReportTier.IucnCore,
         Breakage = BreakageClass.Advisory,
         DataSourceLabel = source,
+        Blurb = "Names that match the Catalogue of Life exactly but whose author attribution is spelled slightly differently in the two catalogues.",
         Summary =
-            "Each row is an IUCN name that matches the Catalogue of Life exactly but whose naming authority differs in the author name itself (a diacritic, a Unicode-encoding difference, or a short spelling difference). Differences only in the letters count; spacing, punctuation, and the year are ignored, as are genuinely different authorities.\n\n" +
+            "Each row is an IUCN name that matches the Catalogue of Life exactly but whose naming authority is spelled slightly differently in the two catalogues (a diacritic, a Unicode-encoding difference, or a short spelling difference in the author name). Only differences in the letters of the author name are listed; differences in spacing, punctuation, or the year are ignored, as are authorities that are different outright.\n\n" +
             "### Why it matters\n\n" +
-            "When the same name carries a slightly different author name, an author-aware comparison between the catalogues fails, and the difference is usually a small data slip.\n\n" +
+            "When the same name carries a slightly different author spelling in each catalogue, a comparison that includes the author fails to match them, and the difference is usually a small transcription error on one side.\n\n" +
             "### Suggestion\n\n" +
             "Check each authority pair against the original publication and align the spelling or encoding.",
         Columns = AuthorityColumns(),
@@ -158,12 +165,13 @@ internal sealed class ColCrosscheckProducer : IAuditReportSetProducer {
         Tier = AuditReportTier.IucnCore,
         Breakage = BreakageClass.Advisory,
         DataSourceLabel = source,
+        Blurb = "Genus, family, order, and class names used in the IUCN classification that the Catalogue of Life records only as synonyms.",
         Summary =
             "Each row is a higher-rank name (genus, family, order, or class) used in the IUCN classification that the Catalogue of Life records only as a synonym, never as an accepted name. The accepted name CoL uses is shown alongside, and the IUCN taxa column counts how many assessed taxa sit under the name.\n\n" +
             "### Why it matters\n\n" +
             "A genus or family name that CoL treats entirely as a synonym is often an older spelling or a superseded name, and it affects every assessed taxon placed under it.\n\n" +
             "### Suggestion\n\n" +
-            "Check the accepted CoL name. Where it is a corrected spelling or an accepted replacement, updating the higher-rank name aligns the whole group.",
+            "Check the accepted CoL name. Where it is a corrected spelling or an accepted replacement, one change to the higher-rank name updates the whole group at once.",
         Columns = SynonymHigherColumns(),
         Findings = OrderHigher(findings),
         HeadlineCount = findings.Count,
@@ -176,10 +184,11 @@ internal sealed class ColCrosscheckProducer : IAuditReportSetProducer {
         Tier = AuditReportTier.IucnCore,
         Breakage = BreakageClass.Advisory,
         DataSourceLabel = source,
+        Blurb = "Names whose parent taxon is spelled slightly differently in IUCN and the Catalogue of Life, suggesting the same placement written two ways.",
         Summary =
             "Each row is a higher-rank name whose parent placement differs between IUCN and the Catalogue of Life in a way that looks like a spelling variant (a typo, a diacritic, a Unicode-encoding difference, or a short spelling difference). Only names within the same phylum are compared.\n\n" +
             "### Why it matters\n\n" +
-            "A near-identical parent name usually means the same placement recorded two ways. Aligning the spelling makes the two classifications join cleanly.\n\n" +
+            "A near-identical parent name usually means the same placement recorded two ways. Aligning the spelling lets the two classifications match up.\n\n" +
             "### Suggestion\n\n" +
             "Confirm the intended spelling of the parent name in each row.",
         Columns = PlacementColumns(),
@@ -194,12 +203,13 @@ internal sealed class ColCrosscheckProducer : IAuditReportSetProducer {
         Tier = AuditReportTier.IucnCore,
         Breakage = BreakageClass.Advisory,
         DataSourceLabel = source,
+        Blurb = "Names the Catalogue of Life places under a genuinely different parent taxon (not just a different spelling of the same one).",
         Summary =
             "Each row is a higher-rank name that the Catalogue of Life places under a genuinely different parent (a different order, class, or family), rather than a spelling variant. Only names within the same phylum are compared.\n\n" +
             "### Why it matters\n\n" +
-            "A different parent placement reflects a different higher classification between the two catalogues. Neither is necessarily wrong, but anything grouped by higher rank will differ between them.\n\n" +
+            "A different parent placement reflects a different higher classification between the two catalogues. Neither is necessarily wrong, but any grouping by order, class, or family will come out differently depending on which catalogue is followed.\n\n" +
             "### Suggestion\n\n" +
-            "Where the placement matters for grouping, note which classification each downstream use should follow.",
+            "Treat these as classification differences to be aware of rather than errors. Where a placement looks out of date, the CoL entry linked in each row shows the classification it currently uses.",
         Columns = PlacementColumns(),
         Findings = OrderHigher(findings),
         HeadlineCount = findings.Count,
@@ -325,7 +335,7 @@ internal sealed class ColCrosscheckProducer : IAuditReportSetProducer {
         }
         return new AuditSummaryTable {
             Title = title,
-            Note = $"Over {compared:N0} assessments compared. Top classes shown; every row is in the CSV download.",
+            Note = $"{compared:N0} assessments compared. Top classes shown; every row is in the CSV download.",
             Headers = new[] { "Class", "Count" }, Rows = rows, NumericColumns = new[] { 1 },
         };
     }

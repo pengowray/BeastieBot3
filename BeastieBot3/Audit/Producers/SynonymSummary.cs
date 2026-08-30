@@ -84,7 +84,7 @@ internal static class SynonymSummary {
         var pctText = Percent(html, total);
         if (pct < 5) {
             return $"Only {html:N0} of {total:N0} synonym names ({pctText}) contain HTML; the field is overwhelmingly plain text. " +
-                   "That makes the HTML-bearing names inconsistent outliers, most likely pasted from a rendered page, and good candidates to normalise to plain text.";
+                   "The HTML-bearing names are the outliers (the markup suggests text pasted from a formatted page) and are good candidates to normalise to plain text.";
         }
         return $"{html:N0} of {total:N0} synonym names ({pctText}) contain HTML while the rest are plain text. " +
                "The field mixes the two conventions, so HTML use is inconsistent across the synonym set.";

@@ -60,12 +60,16 @@ internal static class AuditPageLayout {
         return sb.ToString();
     }
 
-    public static string BreakageBadge(BreakageClass breakage, string? label = null) {
+    // The kind chip. When it sits inside a heading, aria-hidden keeps it out of the accessible
+    // heading text, so a title such as "English common name issues" is never read as one run-on
+    // string with the chip label appended.
+    public static string BreakageBadge(BreakageClass breakage, string? label = null, bool inHeading = false) {
         var (cls, text) = breakage switch {
-            BreakageClass.Breaking => ("breaking", "site or API affected"),
-            BreakageClass.FixableData => ("fixable", "value to tidy"),
-            _ => ("advisory", "to consider"),
+            BreakageClass.Breaking => ("breaking", "Site or API affected"),
+            BreakageClass.FixableData => ("fixable", "Data cleanup"),
+            _ => ("advisory", "For review"),
         };
-        return $"<span class=\"badge {cls}\">{HtmlText.Escape(label ?? text)}</span>";
+        var hidden = inHeading ? " aria-hidden=\"true\"" : "";
+        return $"<span class=\"badge {cls}\"{hidden}>{HtmlText.Escape(label ?? text)}</span>";
     }
 }

@@ -69,13 +69,13 @@ internal sealed class HtmlConsistencyProducer : IAuditReportProducer {
         var summary =
             "Six narrative fields (rationale, habitat, threats, population, range, use and trade) appear in two of the IUCN CSV exports: assessments_with_html.csv carries them with HTML markup, and assessments.csv carries a plain-text version of the same field. " +
             "For each assessment the assessments_with_html.csv value is reduced to plain text and compared against the assessments.csv value. " +
-            "Differences that are only whitespace, non-breaking spaces, or entity encoding are treated as a match and not listed, so a row here means the readable text genuinely differs. The comparison is about text serialisation only and says nothing about the scientific content.";
+            "Differences that are only whitespace, non-breaking spaces, or entity encoding are treated as a match and not listed, so a row here means the readable text genuinely differs. The comparison is about the formatting and encoding of the text only and says nothing about the scientific content.";
 
         // A common cause is heavy redundant markup: some fields carry a large amount of repeated empty
         // tags (for example long runs of nested empty spans from a rich-text editor), and the
         // plain-text version then comes out empty or truncated. Call out the worst case when present.
         var worst = findings
-            .Where(f => f.IssueType is "plain-text-empty, redundant-markup" or "plain-text-truncated, redundant-markup")
+            .Where(f => f.IssueType is "plain text empty (redundant markup)" or "plain text truncated (redundant markup)")
             .OrderByDescending(f => double.TryParse((f.Get("markupRatio") ?? "").Replace(",", ""), NumberStyles.Any, CultureInfo.InvariantCulture, out var r) ? r : 0)
             .FirstOrDefault();
         if (worst is not null) {
@@ -83,8 +83,8 @@ internal sealed class HtmlConsistencyProducer : IAuditReportProducer {
             var len = worst.Get("htmlLen");
             summary += "\n\n" +
                        $"A recurring pattern is heavy redundant markup: the HTML carries long runs of repeated empty tags, and the plain-text version then comes out empty or truncated. " +
-                       $"The most extreme case here is {worst.ScientificName} ({worst.Field}), whose HTML runs to about {len} characters, roughly {ratio} times its readable text, and whose plain-text export does not get past the markup. " +
-                       $"These rows are marked redundant-markup and explained in the detail column.";
+                       $"The most extreme case here is {worst.ScientificName} ({worst.Field}), whose HTML runs to about {len} characters, roughly {ratio} times its readable text, while its plain-text version is cut off inside that markup. " +
+                       $"These rows are marked \"redundant markup\" and explained in the detail column.";
         }
 
         summary += "\n\n" +
@@ -100,6 +100,7 @@ internal sealed class HtmlConsistencyProducer : IAuditReportProducer {
         return new AuditReport {
             Id = Id,
             Title = "HTML and plain-text narrative fields that differ",
+            Blurb = "Assessments whose narrative text differs between the HTML and plain-text CSV exports, often because heavy redundant markup left the plain-text version empty or truncated.",
             Tier = AuditReportTier.IucnCore,
             Breakage = BreakageClass.FixableData,
             DataSourceLabel = $"IUCN Red List {ctx.Release} (CSV export)",
@@ -237,25 +238,25 @@ internal sealed class HtmlConsistencyProducer : IAuditReportProducer {
 
                 if (plainText.Length == 0 && htmlText.Length > 0) {
                     if (redundant) {
-                        issueType = "plain-text-empty, redundant-markup"; severity = 5;
-                        detail = $"The assessments.csv field is empty while assessments_with_html.csv carries text. The HTML is about {ratio:N0} times the size of its readable text, with a large amount of redundant markup that the plain-text version appears not to get past.";
+                        issueType = "plain text empty (redundant markup)"; severity = 5;
+                        detail = $"The assessments.csv field is empty while assessments_with_html.csv carries text. The HTML is about {ratio:N0} times the size of its readable text, and the plain-text version appears to have been cut off inside the redundant markup.";
                     } else {
-                        issueType = "plain-text-empty"; severity = 3;
+                        issueType = "plain text empty"; severity = 3;
                         detail = "The assessments.csv field is empty while the assessments_with_html.csv version carries text.";
                     }
                 } else if (htmlText.Length == 0 && plainText.Length > 0) {
-                    issueType = "html-text-empty"; severity = 3;
+                    issueType = "HTML version empty"; severity = 3;
                     detail = "The assessments_with_html.csv version is empty while the assessments.csv field has text.";
                 } else if (htmlText.StartsWith(plainText, StringComparison.Ordinal) && plainText.Length < htmlText.Length) {
                     if (redundant) {
-                        issueType = "plain-text-truncated, redundant-markup"; severity = 5;
-                        detail = $"The assessments.csv field stops early. The HTML is about {ratio:N0} times the size of its readable text, with a large amount of redundant markup that the plain-text version appears not to get past.";
+                        issueType = "plain text truncated (redundant markup)"; severity = 5;
+                        detail = $"The assessments.csv field stops early. The HTML is about {ratio:N0} times the size of its readable text, and the plain-text version appears to have been cut off inside the redundant markup.";
                     } else {
-                        issueType = "plain-text-truncated"; severity = 3;
+                        issueType = "plain text truncated"; severity = 3;
                         detail = "The assessments.csv field stops early relative to the assessments_with_html.csv version.";
                     }
                 } else {
-                    issueType = "text-differs"; severity = 4;
+                    issueType = "text differs"; severity = 4;
                     detail = $"The {field} field differs between its assessments_with_html.csv and assessments.csv versions.";
                 }
 

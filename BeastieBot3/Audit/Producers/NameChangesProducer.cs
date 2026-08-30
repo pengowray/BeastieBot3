@@ -60,6 +60,7 @@ internal sealed class NameChangesProducer : IAuditReportProducer {
             Tier = AuditReportTier.Methodology,
             Breakage = BreakageClass.Advisory,
             DataSourceLabel = "IUCN API (taxon assessment summaries)",
+            Blurb = "Taxa whose assessments record more than one distinct scientific name.",
             Summary =
                 "This compares the scientific name recorded on each of a taxon's assessment summaries, grouped by SIS id, and lists any taxon whose assessments carry more than one distinct name. " +
                 "In current data this is usually empty: amended assessments keep the taxon's present name and record the former name in the errata text rather than in a dedicated field, so a name-field comparison finds little.\n\n" +

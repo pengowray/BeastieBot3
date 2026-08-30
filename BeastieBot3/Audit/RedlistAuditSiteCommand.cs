@@ -76,7 +76,9 @@ internal sealed class RedlistAuditSiteCommand : Command<RedlistAuditSiteCommand.
         var outputDir = ResolveOutputDir(paths, settings.OutputDir);
 
         var reports = new List<AuditReport>();
+        string? colRelease;
         using (var ctx = new AuditContext(paths, limit is null ? null : (int?)Math.Min(int.MaxValue, limit.Value), release, releaseYear, commentary, ct)) {
+            colRelease = ctx.ColReleaseLabel();
             foreach (var producer in Producers()) {
                 ct.ThrowIfCancellationRequested();
                 try {
@@ -109,7 +111,7 @@ internal sealed class RedlistAuditSiteCommand : Command<RedlistAuditSiteCommand.
             Release = release,
             ReleaseYear = releaseYear,
             GeneratedAt = DateTimeOffset.Now.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture),
-            DataSources = BuildDataSources(paths, release),
+            DataSources = BuildDataSources(colRelease),
             Reports = reports,
             Config = config,
             CommentarySource = commentary,
@@ -185,10 +187,12 @@ internal sealed class RedlistAuditSiteCommand : Command<RedlistAuditSiteCommand.
         }
     }
 
-    private static IReadOnlyList<AuditDataSource> BuildDataSources(PathsService paths, string release) {
-        var sources = new List<AuditDataSource> {
-            new("Catalogue of Life reference", "Used as a taxonomic comparison in the crosscheck report"),
+    private static IReadOnlyList<AuditDataSource> BuildDataSources(string? colRelease) {
+        var detail = colRelease is null
+            ? "Used as a taxonomic comparison in the Catalogue of Life reports"
+            : $"{colRelease}, used as a taxonomic comparison in the Catalogue of Life reports";
+        return new List<AuditDataSource> {
+            new("Catalogue of Life reference", detail),
         };
-        return sources;
     }
 }

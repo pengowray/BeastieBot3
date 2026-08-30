@@ -85,14 +85,15 @@ internal sealed class FieldHygieneProducer : IAuditReportProducer {
             Title = "Text hygiene by taxonomy field",
             Tier = AuditReportTier.Methodology,
             Breakage = BreakageClass.Advisory,
-            DataSourceLabel = $"IUCN Red List {ctx.Release} (CSV export, taxonomy table)",
+            DataSourceLabel = $"IUCN Red List {ctx.Release} (CSV export, taxonomy file)",
+            Blurb = "A field-by-field profile of text irregularities in the taxonomy data, showing which fields carry the most stray whitespace or unusual characters.",
             Summary =
-                "Each row describes one text characteristic of one taxonomy column: the share of values with surrounding whitespace, repeated spaces, non-breaking or control characters, non-ASCII content, or non-NFC normalisation. " +
-                "Counts are exact over the whole table. Non-ASCII content is often expected for names and authorities and is listed for completeness.\n\n" +
+                "Each row describes one text characteristic of one taxonomy field: the share of values with surrounding whitespace, repeated spaces, non-breaking or control characters, non-ASCII content, or non-NFC Unicode normalisation. " +
+                "Counts cover every value in the field. Non-ASCII content is often expected in names and authorities and is listed for completeness, not as a problem.\n\n" +
                 "### Why it matters\n\n" +
-                "This is a column-level profile of the whole table. It shows which columns carry the most text irregularities, so cleanup effort can be aimed where it has the most effect.\n\n" +
+                "This profile shows which fields carry the most text irregularities, so cleanup effort can be aimed where it has the most effect.\n\n" +
                 "### Suggestion\n\n" +
-                "Use the percentages to prioritise. Columns with a high share of surrounding whitespace, repeated spaces, or non-NFC values are the best candidates for a normalisation pass; non-ASCII content usually needs no action.",
+                "Use the percentages to prioritise. Fields with a high share of surrounding whitespace, repeated spaces, or non-NFC values are the best candidates for a normalisation pass.",
             Columns = new List<AuditColumn> {
                 AuditColumns.Field(),
                 AuditColumns.IssueType("Characteristic"),

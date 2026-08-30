@@ -66,7 +66,7 @@ internal static class AuditSiteRenderer {
             sb.Append($"<dt>{HtmlText.Escape(src.Name)}</dt><dd>{HtmlText.Escape(src.Detail)}</dd>\n");
         }
         sb.Append("</dl>\n");
-        sb.Append("<p><a href=\"methodology.html\">How this was put together, and what it does and does not cover →</a></p>\n");
+        sb.Append("<p><a href=\"methodology.html\">How this was put together, how to read the lists, and its caveats →</a></p>\n");
         sb.Append("</section>\n");
 
         AppendReportTable(sb, doc, AuditReportTier.IucnCore,
@@ -74,7 +74,7 @@ internal static class AuditSiteRenderer {
             "These concern records in the Red List itself.");
         AppendReportTable(sb, doc, AuditReportTier.Methodology,
             "Methodology and coverage",
-            "Count reconciliation and field-level summaries that give context to the lists above.");
+            "Field-level summaries that give context to the lists above.");
 
         return AuditPageLayout.Page(doc, "", null, sb.ToString());
     }
@@ -109,7 +109,7 @@ internal static class AuditSiteRenderer {
     private static void WriteReportPage(AuditDocument doc, AuditReport report, string outputDir) {
         var sb = new StringBuilder();
         sb.Append("<section>\n");
-        sb.Append($"<h2>{HtmlText.Escape(report.Title)} {AuditPageLayout.BreakageBadge(report.Breakage, report.KindLabel)}</h2>\n");
+        sb.Append($"<h2>{HtmlText.Escape(report.Title)} {AuditPageLayout.BreakageBadge(report.Breakage, report.KindLabel, inHeading: true)}</h2>\n");
         sb.Append($"<p class=\"report-desc\"><small>Source: {HtmlText.Escape(report.DataSourceLabel)}");
         if (report.Findings.Count > 0) {
             sb.Append($" · {report.Findings.Count:N0} rows");
@@ -214,11 +214,12 @@ internal static class AuditSiteRenderer {
     private static string BuildMethodology(AuditDocument doc) {
         var sb = new StringBuilder();
         sb.Append("<section>\n<h2>How this was put together</h2>\n");
-        sb.Append("<p>The observations here come from a local copy of the public IUCN Red List ");
-        sb.Append($"version {HtmlText.Escape(doc.Release)} export, compared in some sections against the ");
-        sb.Append("Catalogue of Life as a taxonomic reference. They were gathered while preparing Red List ");
-        sb.Append("data for use on Wikipedia and Wikidata, where small differences in names, formatting, and ");
-        sb.Append("coverage surface naturally.</p>\n");
+        sb.Append("<p>The observations here come from two public IUCN sources: the CSV export of IUCN Red List ");
+        sb.Append($"version {HtmlText.Escape(doc.Release)} downloaded from iucnredlist.org, and the public IUCN API (api.iucnredlist.org). ");
+        sb.Append("Each report names which of the two it reads under <em>Source</em>. Some reports compare the Red List against the ");
+        sb.Append("Catalogue of Life as a taxonomic reference; the Catalogue of Life release used is named on those pages. ");
+        sb.Append("The observations were gathered while preparing Red List data for use on Wikipedia and Wikidata, ");
+        sb.Append("where small differences in names, formatting, and coverage surface naturally.</p>\n");
 
         sb.Append("<h3>How to read the lists</h3>\n");
         sb.Append("<ul>\n");
@@ -233,10 +234,11 @@ internal static class AuditSiteRenderer {
         sb.Append("rank (subspecies or variety) and no subpopulation or regional scope. Subspecies, varieties, ");
         sb.Append("subpopulations, and regional assessments are listed separately where relevant.</p>\n");
 
-        sb.Append("<h3>What this does not cover</h3>\n");
+        sb.Append("<h3>Caveats</h3>\n");
         sb.Append("<ul>\n");
-        sb.Append("<li>Counts are taken from local imports of the public release and may differ slightly from figures published elsewhere.</li>\n");
+        sb.Append("<li>Counts are computed from the public CSV export and API data and may differ slightly from figures published elsewhere.</li>\n");
         sb.Append("<li>Every observation is automated and may be incomplete or mistaken.</li>\n");
+        sb.Append("<li>Only names, classification, formatting, and coverage are examined. The scientific content of assessments (categories, criteria, narratives, ranges, maps, citations) is out of scope.</li>\n");
         sb.Append("</ul>\n");
         sb.Append("</section>\n");
 

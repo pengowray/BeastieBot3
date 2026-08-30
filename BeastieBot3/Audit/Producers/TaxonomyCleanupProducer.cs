@@ -55,7 +55,7 @@ internal sealed class TaxonomyCleanupProducer : IAuditReportProducer {
         // Secondary view: which field each row belongs to (one per affected field, so it reconciles
         // with the full list, including the disagreement kind that contributes two fields per record).
         var byField = ordered
-            .GroupBy(f => f.IssueType ?? "")
+            .GroupBy(f => f.Field ?? "")
             .OrderByDescending(g => g.Count())
             .Select(g => new[] { g.Key, g.Count().ToString("N0") } as IReadOnlyList<string>)
             .ToList();
@@ -66,12 +66,13 @@ internal sealed class TaxonomyCleanupProducer : IAuditReportProducer {
             Tier = AuditReportTier.IucnCore,
             Breakage = BreakageClass.FixableData,
             DataSourceLabel = $"IUCN Red List {ctx.Release} (CSV export)",
+            Blurb = "Taxonomy field values with stray whitespace (leading, trailing, doubled, or non-breaking), each with a suggested cleaned-up value.",
             Summary =
-                "Each row reports a taxonomy field whose stored text carries a whitespace irregularity (leading or trailing spaces, repeated spaces, non-breaking or tab characters) or an infrarank marker that belongs in the name fields, together with a suggested normalised value. " +
-                "Current values show otherwise-invisible characters as markers so the difference is visible. " +
-                "The first summary separates each kind of problem (leading versus trailing whitespace, and so on) with a distinct row total; because one field can carry several, the kinds add up to more than the total.\n\n" +
+                "Each row reports a taxonomy field whose stored text carries a whitespace irregularity: leading or trailing spaces, repeated spaces, or non-breaking and tab characters. Every row includes a suggested normalised value. " +
+                "The same scan also checks for infrarank markers written into the wrong field and for the scientificName column disagreeing between the assessments and taxonomy files of the CSV export; the summary below shows what each check found, including checks that found nothing. " +
+                "Current values show otherwise-invisible characters as visible markers so the difference can be seen.\n\n" +
                 "### Why it matters\n\n" +
-                "Stray whitespace and misplaced markers break exact-match joins, sort order, and search, and they can surface as visible gaps on the website. Each one is small, but they add up across the release.\n\n" +
+                "Stray whitespace breaks exact-match comparisons, sort order, and search, and can appear as visible gaps on the website. Each case is small, but they add up across the release.\n\n" +
                 "### Suggestion\n\n" +
                 "Apply the suggested normalised value. These are low-risk, concrete tidy-ups.",
             Columns = new List<AuditColumn> {
@@ -91,7 +92,7 @@ internal sealed class TaxonomyCleanupProducer : IAuditReportProducer {
             Findings = ordered,
             SummaryTables = new List<AuditSummaryTable> {
                 issueTypeSummary,
-                new() { Title = "By field", Note = "Rows grouped by the field and check that flagged them (one row per affected field).", Headers = new[] { "Kind", "Count" }, Rows = byField, NumericColumns = new[] { 1 } },
+                new() { Title = "By field", Note = "Which taxonomy field each flagged value sits in.", Headers = new[] { "Field", "Rows" }, Rows = byField, NumericColumns = new[] { 1 } },
             },
             GroupLevels = AuditGroups.ByClass,
         };
@@ -100,10 +101,10 @@ internal sealed class TaxonomyCleanupProducer : IAuditReportProducer {
     // Candidate issue types in display order. Whitespace kinds are classified from the stored value;
     // the marker prefix and name-field disagreement are identified from the row's own issue label.
     private static readonly string MarkerPrefix = "infrarank marker prefix";
-    private static readonly string Disagreement = "scientificName / scientificName:1 disagreement";
+    private static readonly string Disagreement = "scientificName differs between the assessments and taxonomy files";
     private static readonly string[] IssueTypeOrder = {
         "leading whitespace", "trailing whitespace", "double spaces", "non-breaking or control whitespace",
-        "infrarank marker prefix", "scientificName / scientificName:1 disagreement",
+        "infrarank marker prefix", "scientificName differs between the assessments and taxonomy files",
     };
 
     private static AuditSummaryTable BuildIssueTypeSummary(IReadOnlyList<AuditFinding> findings) {
@@ -168,7 +169,7 @@ internal sealed class TaxonomyCleanupProducer : IAuditReportProducer {
             StatusCode = code,
             StatusCategory = row?.RedlistCategory,
             DataSource = "iucn-csv",
-            Field = field.FieldName,
+            Field = PrettyField(field.FieldName),
             CurrentValue = AuditMapping.Decode(field.CurrentValue),
             SuggestedValue = AuditMapping.Decode(field.SuggestedValue),
             IssueType = Label(kind),
@@ -177,16 +178,24 @@ internal sealed class TaxonomyCleanupProducer : IAuditReportProducer {
     }
 
     private static int Priority(string? label) => label switch {
-        "scientificName vs scientificName:1 disagreement" => 5,
+        "scientificName differs between the assessments and taxonomy files" => 5,
         "infraName marker prefix" => 4,
-        "scientificName whitespace" or "scientificName:1 whitespace" => 3,
+        "scientificName whitespace (assessments file)" or "scientificName whitespace (taxonomy file)" => 3,
         _ => 2,
     };
 
+    // The CSV export carries scientificName in both the assessments and taxonomy files; the
+    // duplicate is shown by file rather than by the ":1" suffix the import gives the second column.
+    private static string PrettyField(string fieldName) => fieldName switch {
+        "scientificName" => "scientificName (assessments)",
+        "scientificName:1" => "scientificName (taxonomy)",
+        _ => fieldName,
+    };
+
     private static string Label(DataCleanupIssueKind kind) => kind switch {
-        DataCleanupIssueKind.ScientificNameWhitespace => "scientificName whitespace",
-        DataCleanupIssueKind.TaxonomyScientificNameWhitespace => "scientificName:1 whitespace",
-        DataCleanupIssueKind.ScientificNameDisagreement => "scientificName vs scientificName:1 disagreement",
+        DataCleanupIssueKind.ScientificNameWhitespace => "scientificName whitespace (assessments file)",
+        DataCleanupIssueKind.TaxonomyScientificNameWhitespace => "scientificName whitespace (taxonomy file)",
+        DataCleanupIssueKind.ScientificNameDisagreement => "scientificName differs between the assessments and taxonomy files",
         DataCleanupIssueKind.InfraNameWhitespace => "infraName whitespace",
         DataCleanupIssueKind.InfraNameMarkerPrefix => "infraName marker prefix",
         DataCleanupIssueKind.SubpopulationWhitespace => "subpopulationName whitespace",

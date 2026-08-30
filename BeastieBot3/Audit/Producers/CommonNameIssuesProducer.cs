@@ -102,11 +102,12 @@ internal sealed class CommonNameIssuesProducer : IAuditReportProducer {
             Tier = AuditReportTier.IucnCore,
             Breakage = BreakageClass.FixableData,
             DataSourceLabel = "IUCN API (English common names)",
+            Blurb = "English common names carrying a likely error or a formatting choice worth checking (species codes, all-capitals text, stray whitespace, backticks standing in for apostrophes), with a tidied suggestion where one is clear.",
             Summary =
                 "Each row is an English common name that carries a likely error or a formatting choice worth checking, with a tidied suggestion where one is clear. " +
                 "The current value shows otherwise-invisible characters as markers. The scientific name column is the taxon the name belongs to. " +
-                "This refreshes a hand-compiled 2016 review against the current release. Several of the original checks now find nothing, because the move to a Unicode API removed the question-mark and broken-separator artefacts; those checks are still listed at zero. " +
-                "The summary counts each kind separately, so they add up to more than the distinct total when a name has several.\n\n" +
+                "This re-runs a review of common-name oddities that was hand-compiled against the 2016-2 release, so the two releases can be compared side by side in the summary. " +
+                "Checks that no longer find anything (for example the question marks that once stood in for unsupported characters) are still listed, at zero, so it is clear they ran.\n\n" +
                 "### Why it matters\n\n" +
                 "The English common name is the label most people see first. Stray whitespace, species codes, all-capitals text, or a stray marker in that field show up directly in search results, lists, and exports.\n\n" +
                 "### Suggestion\n\n" +

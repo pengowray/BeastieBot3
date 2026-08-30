@@ -27,3 +27,50 @@
 #   markdown: |
 #     Every record here shares one trait: an empty geographic-scope array. Each affected taxon
 #     also has a valid scoped assessment, so coverage is unaffected.
+
+- report: failed-assessments
+  release: 2026-1
+  scope: report
+  title: Change since 2025-2
+  markdown: |
+    The number of assessments the API returns HTTP 500 for grew from 23 in release 2025-2 to 52
+    in 2026-1, so new empty-scope records are still being introduced.
+
+- report: no-latest
+  release: 2026-1
+  scope: report
+  title: Change since 2025-2
+  markdown: |
+    In release 2025-2 this list held 3,898 taxa; in 2026-1 it holds 4,218 (up 320). Both figures
+    are minimums, covering the taxa retrieved from the API at the time.
+
+- report: orphan-infraranks
+  release: 2026-1
+  scope: report
+  title: Change since 2025-2
+  markdown: |
+    Down from 383 in release 2025-2 to 358 in 2026-1.
+
+- report: taxonomy-consistency
+  release: 2026-1
+  scope: report
+  title: New in 2026-1
+  markdown: |
+    Release 2025-2 had no rows here. The four rows in 2026-1 all come from one typo new in this
+    release: two sea snake species whose scientificName is written *MIcrocephalophis* (extra
+    capital I) while the genus field correctly reads *Microcephalophis*.
+
+- report: taxonomy-cleanup
+  release: 2026-1
+  scope: report
+  title: Change since 2025-2
+  markdown: |
+    Essentially unchanged from release 2025-2 (1,095 rows then, 1,099 now).
+
+- report: synonym-whitespace
+  release: 2026-1
+  scope: report
+  title: Change since 2025-2
+  markdown: |
+    Release 2025-2 had 11,578 rows; 2026-1 has slightly more. The earlier observations remain in
+    the data, with new ones added alongside.

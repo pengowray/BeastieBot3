@@ -4,6 +4,8 @@ using BeastieBot3.Taxonomy;
 
 namespace BeastieBot3.Tests;
 
+using SynonymNoteKind = BeastieBot3.Audit.Producers.SynonymNoteKind;
+
 // Pins the two halves of the "notes inside synonym names" work: what the audit reports, and what
 // the Wikipedia/Wikidata matcher does with the same strings. Real values from IUCN 2026-1.
 public class SynonymNameNotesTests {
@@ -22,7 +24,36 @@ public class SynonymNameNotesTests {
     [InlineData("Helix modesta A. Ferussac [1821]")]
     public void A_bracketed_publication_year_is_not_a_note(string name) {
         Assert.Empty(SynonymNameNotes.FindWordNotes(name));
-        Assert.True(Assert.Single(SynonymNameNotes.Find(name)).IsDate);
+        Assert.Equal(SynonymNoteKind.Year, Assert.Single(SynonymNameNotes.Find(name)).Kind);
+    }
+
+    // Bracketed author attributions and in-name expansions are standard nomenclature, not notes.
+    [Theory]
+    [InlineData("Scyllium marmoratum Anonymous [Bennett], 1830", "Author")]
+    [InlineData("Papilio manto [Denis & Schiffermüller], 1775", "Author")]
+    [InlineData("Myliobatis cornuta Günther [A.] 1870", "Author")]
+    [InlineData("Leptoconus mappa ([Lightfoot], 1786)", "Author")]
+    [InlineData("S[imia] erythropyga G. Cuvier, 1829", "Expansion")]
+    public void A_bracketed_author_or_expansion_is_not_a_note(string name, string expected) {
+        Assert.Empty(SynonymNameNotes.FindWordNotes(name));
+        Assert.Equal(expected, Assert.Single(SynonymNameNotes.Find(name)).Kind.ToString());
+    }
+
+    // A capitalised note is still a note, and odd bracket content stays visible as one.
+    [Theory]
+    [InlineData("Cervus hippelaphus G.Q. Cuvier, 1825 [preoccupied)]", "preoccupied)")]
+    [InlineData("Pronolagus lebomboensis A. Roberts, 1936 [(apsus]", "(apsus")]
+    [InlineData("Anas oustaleti Salvadori, 1894 [Illegitimate]", "Illegitimate")]
+    public void Odd_or_capitalised_bracket_content_is_still_a_note(string name, string expected) {
+        Assert.Equal(expected, Assert.Single(SynonymNameNotes.FindWordNotes(name)).Text);
+    }
+
+    // Only the note comes out of the suggested name; standard brackets stay.
+    [Theory]
+    [InlineData("Chaetodon rafflesi [Bennett], 1830 [orth. error]", "Chaetodon rafflesi [Bennett], 1830")]
+    [InlineData("Vespertilio murinus Schreber [1803]", "Vespertilio murinus Schreber [1803]")]
+    public void Stripping_removes_only_worded_notes(string name, string expected) {
+        Assert.Equal(expected, SynonymNameNotes.StripNotes(name).Trim());
     }
 
     [Fact]

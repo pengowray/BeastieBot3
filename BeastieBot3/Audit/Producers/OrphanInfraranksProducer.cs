@@ -49,13 +49,14 @@ internal sealed class OrphanInfraranksProducer : IAuditReportProducer {
             Title = "Subspecies and varieties with no assessed parent species",
             Tier = AuditReportTier.IucnCore,
             Breakage = BreakageClass.Breaking,
-            KindLabel = "Undiscoverable",
+            KindLabel = "Hard to find",
             DataSourceLabel = $"IUCN Red List {ctx.Release} (CSV export)",
+            Blurb = "Assessed subspecies and varieties whose parent species has no assessment of its own, leaving them reachable only by their SIS id.",
             Summary =
                 "These are assessed subspecies and varieties whose parent species has no species-level assessment in the current release. " +
-                "Discovery of infraspecific taxa runs through an assessed parent species, so a taxon in this list is reachable only by its own SIS id and is missed by tools that follow the API. Each row links to its Red List page.\n\n" +
+                "The IUCN API lists subspecies and varieties under their parent species, so when the parent has no assessment, the only way to reach these taxa is by already knowing their SIS id. Each row links to its Red List page.\n\n" +
                 "### Why it matters\n\n" +
-                "An assessed subspecies or variety with no assessed parent is effectively undiscoverable: it does not surface through normal API traversal, so downstream tools and users never reach it even though the assessment exists.\n\n" +
+                "Tools and users browsing through the API never encounter these taxa, even though their assessments exist and are published.\n\n" +
                 "### Suggestion\n\n" +
                 "Add a species-level assessment for the parent (e.g., 'Not Evaluated') so the infraspecific taxa become reachable, or provide another discovery route to them.",
             Columns = columns,
