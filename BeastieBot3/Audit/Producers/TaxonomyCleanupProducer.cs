@@ -62,6 +62,7 @@ internal sealed class TaxonomyCleanupProducer : IAuditReportProducer {
 
         return new AuditReport {
             Id = Id,
+            SectionId = "text",
             Title = "Whitespace and marker cleanup in taxonomy fields",
             Breakage = BreakageClass.FixableData,
             DataSourceLabel = $"IUCN Red List {ctx.Release} (CSV export)",

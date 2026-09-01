@@ -98,6 +98,7 @@ internal sealed class CommonNameIssuesProducer : IAuditReportProducer {
 
         return new AuditReport {
             Id = Id,
+            SectionId = "text",
             Title = "English common name issues",
             Breakage = BreakageClass.FixableData,
             DataSourceLabel = "IUCN API (English common names)",

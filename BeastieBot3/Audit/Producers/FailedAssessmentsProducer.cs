@@ -48,6 +48,7 @@ internal sealed class FailedAssessmentsProducer : IAuditReportProducer {
 
         return new AuditReport {
             Id = Id,
+            SectionId = "records",
             Title = only404 ? "Historical assessments missing from the API" : "Assessment ids that return an error",
             Breakage = BreakageClass.Breaking,
             DataSourceLabel = "IUCN API, with species and taxonomy from the CSV export",

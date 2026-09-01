@@ -56,6 +56,7 @@ internal sealed class NameChangesProducer : IAuditReportProducer {
 
         return new AuditReport {
             Id = Id,
+            SectionId = "text",
             Title = "Scientific name changes across assessment versions",
             Breakage = BreakageClass.Advisory,
             DataSourceLabel = "IUCN API (taxon assessment summaries)",

@@ -36,6 +36,11 @@ internal sealed class AuditReport {
     public required string Title { get; init; }
     public BreakageClass Breakage { get; init; } = BreakageClass.Advisory;
 
+    // Which block of the index the report is listed under. AuditSiteRenderer.IndexSections declares
+    // the blocks and their order; a report naming none of them is listed in the last block rather
+    // than dropped.
+    public string? SectionId { get; init; }
+
     // Reports that partition one comparison name the same family and give a one-line scope. The
     // renderer then prints the whole family as a short "you are here" table on each member page, with
     // the row counts read from the document so they cannot drift from the pages themselves.

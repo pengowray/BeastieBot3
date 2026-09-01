@@ -79,6 +79,7 @@ internal sealed class FieldHygieneProducer : IAuditReportProducer {
 
         return new AuditReport {
             Id = Id,
+            SectionId = "text",
             Title = "Text hygiene by taxonomy field",
             Breakage = BreakageClass.Advisory,
             DataSourceLabel = $"IUCN Red List {ctx.Release} (CSV export, taxonomy file)",

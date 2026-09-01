@@ -100,6 +100,7 @@ internal sealed class HtmlConsistencyProducer : IAuditReportProducer {
 
         return new AuditReport {
             Id = Id,
+            SectionId = "text",
             Title = "HTML and plain-text narrative fields that differ",
             Blurb = "Assessments whose narrative text differs between the HTML and plain-text CSV exports, often because heavy redundant markup left the plain-text version empty or truncated.",
             Breakage = BreakageClass.FixableData,

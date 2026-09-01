@@ -55,7 +55,7 @@ internal static class AuditSiteRenderer {
 
         sb.Append("<section>\n");
         sb.Append("<p class=\"lede\">This page collects observations about the data in IUCN Red List version ");
-        sb.Append($"{HtmlText.Escape(doc.Release)}. The tables below list the observations by type; each links to a description with a short preview, ");
+        sb.Append($"{HtmlText.Escape(doc.Release)}. The tables below group the observations; each links to a description with a short preview, ");
         sb.Append("a full sortable list, and a CSV download. The intent is to help with data review for the next release. ");
         sb.Append("Every observation may be incomplete or mistaken.</p>\n");
 
@@ -67,35 +67,60 @@ internal static class AuditSiteRenderer {
         }
         sb.Append("</dl>\n");
         sb.Append("<p><a href=\"methodology.html\">How this was put together, how to read the lists, and its caveats →</a></p>\n");
+        sb.Append($"<p class=\"legend\">{HtmlText.Escape(TypeLegend)}</p>\n");
         sb.Append("</section>\n");
 
-        AppendReportTable(sb, doc,
-            "Observations in the Red List data",
-            "These concern records in the Red List itself.",
-            TypeLegend);
+        AppendIndexSections(sb, doc);
 
         return AuditPageLayout.Page(doc, "", null, sb.ToString());
     }
 
-    // Spells out the three Type values, once, where every row below inherits it. The last clause is
-    // the one the CoL crosscheck rows need most: a difference between two catalogues is usually a
-    // considered decision on one side, not a mistake.
-    private const string TypeLegend =
-        "Missing data: something is absent from the published dataset. " +
-        "Text cleanup: stray characters, or text fields that disagree. " +
-        "For review: a difference from another source or from expectation, and many will be intentional.";
+    // The index in three blocks, in this order. Boundaries follow what the observation is about, not
+    // what the Type chip says, because that is what tells a reader whether a block is theirs. The
+    // crosscheck block repeats the order of the "you are here" table on each of its nine pages, so
+    // the reader learns one order and meets it twice.
+    private static readonly (string Id, string Heading, string Blurb)[] IndexSections = {
+        ("records", "Missing and outdated records",
+            "Assessments and taxa that are absent, unreachable in the API, or without a current assessment."),
+        ("text", "Text cleanup",
+            "Stray whitespace, markup, and values that disagree with each other in name, synonym, and narrative fields."),
+        ("col", "Catalogue of Life crosscheck",
+            "How each assessed name lines up with the Catalogue of Life; a name with any mismatch lands on exactly one of these pages."),
+    };
 
-    private static void AppendReportTable(StringBuilder sb, AuditDocument doc, string heading, string blurb, string? legend) {
-        var reports = doc.Reports;
+    // The chip is also the status light: any report can drop to "Nothing found" in a release, so it
+    // stays on every row even in blocks where today's values happen to be uniform.
+    private const string TypeLegend =
+        "Missing data: a record is absent or incomplete. " +
+        "Text cleanup: stray characters or markup in a field. " +
+        "For review: a difference worth a look, not an error. " +
+        "Nothing found: the check found nothing in this release.";
+
+    private static void AppendIndexSections(StringBuilder sb, AuditDocument doc) {
+        for (var i = 0; i < IndexSections.Length; i++) {
+            var (id, heading, blurb) = IndexSections[i];
+            var last = i == IndexSections.Length - 1;
+            var reports = doc.Reports.Where(r => r.SectionId == id).ToList();
+            // A report naming no block, or an unknown one, is listed in the last block rather than
+            // disappearing from the index.
+            if (last) {
+                reports.AddRange(doc.Reports.Where(r =>
+                    r.SectionId is null || !IndexSections.Any(sec => sec.Id == r.SectionId)));
+            }
+            if (string.Equals(id, "col", StringComparison.Ordinal)) {
+                reports = reports.OrderBy(r => r.FamilyRank).ToList();
+            }
+            AppendReportTable(sb, reports, heading, blurb);
+        }
+    }
+
+    private static void AppendReportTable(StringBuilder sb, IReadOnlyList<AuditReport> reports, string heading, string blurb) {
         if (reports.Count == 0) {
             return;
         }
         sb.Append("<section>\n");
         sb.Append($"<h2>{HtmlText.Escape(heading)}</h2>\n");
         sb.Append($"<p>{HtmlText.Escape(blurb)}</p>\n");
-        if (legend is not null) {
-            sb.Append($"<p class=\"legend\">{HtmlText.Escape(legend)}</p>\n");
-        }
         sb.Append("<table class=\"index\">\n<thead><tr><th>Observation</th><th class=\"kind\">Type</th><th class=\"count\">Rows</th><th>Open</th></tr></thead>\n<tbody>\n");
         foreach (var r in reports) {
             sb.Append("<tr>\n");

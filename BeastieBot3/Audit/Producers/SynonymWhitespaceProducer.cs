@@ -40,6 +40,7 @@ internal sealed class SynonymWhitespaceProducer : IAuditReportProducer {
 
         return new AuditReport {
             Id = Id,
+            SectionId = "text",
             Title = "Synonym names with whitespace irregularities",
             Breakage = BreakageClass.FixableData,
             DataSourceLabel = "IUCN API (taxon synonyms)",

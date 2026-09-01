@@ -79,6 +79,7 @@ internal sealed class EmptyScopeProducer : IAuditReportProducer {
 
         return new AuditReport {
             Id = Id,
+            SectionId = "records",
             Title = "Assessments with no geographic scope",
             Breakage = BreakageClass.Breaking,
             DataSourceLabel = haveApi && haveCsv

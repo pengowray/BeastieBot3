@@ -45,6 +45,7 @@ internal sealed class SynonymOtherFormattingProducer : IAuditReportProducer {
 
         return new AuditReport {
             Id = Id,
+            SectionId = "text",
             Title = "Synonym names with markup or unusual characters",
             Breakage = BreakageClass.FixableData,
             DataSourceLabel = "IUCN API (taxon synonyms)",

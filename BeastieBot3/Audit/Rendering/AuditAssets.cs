@@ -63,9 +63,11 @@ section p:first-child { margin-top: 0; }
 h2, h3, h4 { line-height: 1.3; }
 .lede { font-size: 1.02rem; color: var(--ink-soft); }
 
-.meta-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 10px 24px; font-size: 0.92rem; }
+/* Label/value pairs, one per row. An auto-fit track count let a long value (the CoL release line)
+   spill onto its own row in a 190px column and wrap to four lines. */
+.meta-grid { display: grid; grid-template-columns: max-content minmax(0, 1fr); gap: 7px 22px; font-size: 0.92rem; align-items: baseline; }
 .meta-grid dt { color: var(--ink-soft); }
-.meta-grid dd { margin: 0 0 8px; }
+.meta-grid dd { margin: 0; }
 
 /* Report index cards */
 .report-grid { display: grid; grid-template-columns: 1fr; gap: 0; }
@@ -77,7 +79,7 @@ table.index .report-title { font-weight: 600; }
 table.index .report-desc { color: var(--ink-soft); font-size: 0.9rem; margin-top: 2px; }
 table.index .links { white-space: nowrap; font-size: 0.88rem; }
 table.index td.kind, table.index th.kind { white-space: nowrap; width: 1%; }
-p.legend { color: var(--ink-soft); font-size: 0.9rem; margin-top: -6px; }
+p.legend { color: var(--ink-soft); font-size: 0.9rem; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line-soft); }
 
 .badge { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 0.74rem; font-weight: 600; letter-spacing: 0.02em; vertical-align: middle; white-space: nowrap; }
 .badge.breaking { background: #f7e4e1; color: var(--breaking); }

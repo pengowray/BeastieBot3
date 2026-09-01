@@ -33,6 +33,17 @@ incomplete or mistaken. When editing copy, avoid em-dashes and "not X but Y" phr
 - **`Model/AuditReport`** — a report: neutral `Summary`, optional `SummaryTables`, a column list,
   and findings pre-sorted by importance. The full-list page always shows every row on one page
   (filter box + click-to-sort), never split into per-group pages.
+**The index is three sections**, declared once in `AuditSiteRenderer.IndexSections` and selected by
+each report's `SectionId`: `records` (absent, unreachable, or not current), `text` (stray characters,
+markup, fields that disagree), `col` (the crosscheck). Boundaries follow what the observation is
+about, not what the Type chip says, because that is what tells a reader whether a block is theirs.
+The `col` block is ordered by `FamilyRank`, the same order as the you-are-here table on each of its
+nine pages, so the reader learns one order and meets it twice; the other two use document order,
+which is `Producers()` order. A report naming no section, or an unknown one, is listed in the last
+section rather than dropped. The Type chip stays on every row even where a section's values are
+uniform today: it doubles as the status light, and any report can fall to `Nothing found` in a given
+release. The legend sits at the foot of the intro card, above all three sections, since it describes
+a column they share.
 - **`BreakageClass`** — the `Type` chip on the index and on each report heading. Four values, no
   per-report overrides, so the column can be skimmed: `Breaking` → "Missing data" (red),
   `FixableData` → "Text cleanup" (amber), `Advisory` → "For review" (blue), `Clear` → "Nothing

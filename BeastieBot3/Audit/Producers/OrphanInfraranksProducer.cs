@@ -46,6 +46,7 @@ internal sealed class OrphanInfraranksProducer : IAuditReportProducer {
 
         return new AuditReport {
             Id = Id,
+            SectionId = "records",
             Title = "Subspecies and varieties with no assessed parent species",
             Breakage = BreakageClass.Breaking,
             DataSourceLabel = $"IUCN Red List {ctx.Release} (CSV export)",

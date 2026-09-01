@@ -30,6 +30,7 @@ internal sealed class NoLatestAssessmentProducer : IAuditReportProducer {
 
         return new AuditReport {
             Id = Id,
+            SectionId = "records",
             Title = "Taxa with no current assessment",
             Breakage = BreakageClass.Advisory,
             DataSourceLabel = "IUCN API",

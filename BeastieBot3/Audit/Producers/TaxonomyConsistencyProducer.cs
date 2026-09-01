@@ -60,6 +60,7 @@ internal sealed class TaxonomyConsistencyProducer : IAuditReportProducer {
 
         return new AuditReport {
             Id = Id,
+            SectionId = "text",
             Title = "Scientific name fields versus taxonomy components",
             Breakage = isClean ? BreakageClass.Clear : BreakageClass.FixableData,
             DataSourceLabel = $"IUCN Red List {ctx.Release} (CSV export)",

@@ -37,6 +37,7 @@ internal sealed class SynonymNameNotesProducer : IAuditReportProducer {
 
         return new AuditReport {
             Id = Id,
+            SectionId = "text",
             Title = "Notes written inside synonym names",
             Breakage = BreakageClass.FixableData,
             DataSourceLabel = "IUCN API (taxon synonyms)",
