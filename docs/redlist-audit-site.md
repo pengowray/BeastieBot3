@@ -59,7 +59,8 @@ and `Infrastructure/ColUrls.Taxon(...)` link helpers.
 
 ## Reports
 
-IUCN-owned (the body): failed assessments (empty-scope HTTP 500), taxonomy field cleanup, synonym
+IUCN-owned (the body): assessments with no geographic scope, historical assessments missing from the
+API, taxonomy field cleanup, synonym
 whitespace irregularities, synonym markup/unusual characters, nomenclatural notes written inside
 synonym names, orphan subspecies/varieties, taxa
 with no current assessment, HTML vs plain-text narrative fields, scientific name vs components, and
@@ -80,6 +81,17 @@ marker, ampersand/slash separators, non-English-script (Greek/Cyrillic) characte
 "likely plural" endings; checks that now find nothing (comma inside parentheses, literal question
 marks) are still listed at zero. Low-value 2016 checks are dropped on purpose (abbreviation dots,
 spelling, and the broad "possible plural" sweep).
+`EmptyScopeProducer` and `FailedAssessmentsProducer` split what used to be one page. Until August
+2026 the API answered HTTP 500 for every assessment carrying an empty `scopes` array, so those
+records could only be seen as download failures in `failed_requests`; that server fault was fixed
+without the scope being filled in, the downloads then succeeded, and the rows vanished from
+`failed_requests` along with the observation. `EmptyScopeProducer` therefore reads the condition
+itself rather than the symptom: an empty `scopes` array in the API cache (a ~10 second JSON scan of
+the whole cache, so API-cache-optional and build-time only) unioned with blank `scopes` rows in the
+CSV export, which is where the taxon's *current* blank-scope assessments show up. `failed-assessments`
+keeps its id and URL but now reports only ids a taxon lists that return HTTP 404; its title and
+summary widen automatically if a non-404 status ever returns.
+
 Methodology: text hygiene by field. The scientific-name-change report appears only when the
 field-based check finds a name that changed across assessment versions (it produces nothing in
 current data and is omitted, via the producer returning null when empty).
@@ -92,8 +104,8 @@ findings into seven separate report pages (most actionable first, noisiest last)
 | Report id | Page | What it lists |
 | --- | --- | --- |
 | `col-close-match` | Names with a close CoL match | no exact match, but a near CoL name (likely spelling/encoding) |
-| `col-synonym` | Species/subspecies CoL treats as a synonym | an assessed taxon whose name CoL records as a synonym of another accepted name (with the accepted name's authority/year, and whether IUCN already records that name as a synonym) |
-| `col-synonym-higher` | Higher-rank names CoL treats as a synonym | a genus/family/order/class name CoL records only as a synonym (with the accepted name's authority/year) |
+| `col-synonym` | Species and subspecies treated as synonyms in CoL | an assessed taxon whose name CoL records as a synonym of another accepted name (with the accepted name's authority/year, and whether IUCN already records that name as a synonym) |
+| `col-synonym-higher` | Higher-rank names treated as synonyms in CoL | a genus/family/order/class name CoL records only as a synonym (with the accepted name's authority/year) |
 | `col-classification` | Higher-rank placement differences that look like spelling variants | a higher taxon whose parent differs like a typo (fuzzy/encoding), same phylum only |
 | `col-reorg` | Higher-rank names placed differently in CoL | a higher taxon under a genuinely different parent (not a typo), same phylum only |
 | `col-authority` | Minor naming authority differences | an exact name match whose author name differs like a typo (spelling/diacritic/encoding); differences only in spacing, punctuation, or the year are dropped |

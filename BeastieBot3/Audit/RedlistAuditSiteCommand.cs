@@ -49,6 +49,7 @@ internal sealed class RedlistAuditSiteCommand : Command<RedlistAuditSiteCommand.
     // emit one report; ColCrosscheckProducer emits several from one pass, so everything is wrapped
     // to the set-producer contract and iterated uniformly.
     private static IReadOnlyList<IAuditReportSetProducer> Producers() => new IAuditReportSetProducer[] {
+        new SingleReportProducer(new EmptyScopeProducer()),
         new SingleReportProducer(new FailedAssessmentsProducer()),
         new SingleReportProducer(new TaxonomyCleanupProducer()),
         new SingleReportProducer(new SynonymWhitespaceProducer()),

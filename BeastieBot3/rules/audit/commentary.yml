@@ -5,7 +5,7 @@
 # written once for a specific release separate from the release-agnostic notes generated in code.
 #
 # Fields:
-#   report   the report id (failed-assessments, taxonomy-cleanup, synonym-whitespace,
+#   report   the report id (failed-assessments, empty-scope, taxonomy-cleanup, synonym-whitespace,
 #            synonym-markup, synonym-name-notes, common-name-issues, orphan-infraranks, no-latest,
 #            html-consistency,
 #            taxonomy-consistency, count-scopes, field-hygiene, name-changes; and the Catalogue of
@@ -28,13 +28,26 @@
 #     Every record here shares one trait: an empty geographic-scope array. Each affected taxon
 #     also has a valid scoped assessment, so coverage is unaffected.
 
+- report: empty-scope
+  release: 2026-1
+  scope: report
+  title: Changes since 2025-2
+  markdown: |
+    Release 2025-2 had 23 of these records; 2026-1 has 52, so new ones are still being created.
+    Until late August 2026 the API returned HTTP 500 for every one of them, and earlier versions
+    of this site listed them as records the API could not serve. Between 24 August and
+    1 September 2026 the API began serving them normally, but the scope is still blank: the
+    symptom is gone, the data problem is unchanged.
+
 - report: failed-assessments
   release: 2026-1
   scope: report
-  title: Change since 2025-2
+  title: Changes since 2025-2
   markdown: |
-    The number of assessments the API returns HTTP 500 for grew from 23 in release 2025-2 to 52
-    in 2026-1, so new empty-scope records are still being introduced.
+    Blank-scope assessments, which the API used to answer HTTP 500 for, were listed on this page
+    in earlier releases. The API now serves them, so they have moved to
+    [Assessments with no geographic scope](empty-scope.html), where the blank scope itself is the
+    observation.
 
 - report: no-latest
   release: 2026-1

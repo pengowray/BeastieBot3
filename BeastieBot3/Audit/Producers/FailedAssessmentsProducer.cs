@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -6,12 +6,14 @@ using Microsoft.Data.Sqlite;
 using BeastieBot3.Audit.Model;
 using BeastieBot3.Infrastructure;
 
-// Assessment downloads the IUCN API consistently returns HTTP 500 for. Mirrors the query in
-// IucnFailedAssessmentsReportCommand. These all carry an empty geographic-scope array; each taxon
-// still has a valid scoped assessment, so there is no coverage gap, but the API and website cannot
-// serve these particular records. The API has no usable payload for them, so the species name and
-// taxonomy shown here are filled in from the offline CSV export (joined by taxonId), which still
-// carries each taxon and its real scoped assessment.
+// Assessment ids listed in a taxon's API record that error out when requested directly. Mirrors the
+// query in IucnFailedAssessmentsReportCommand. Since 2026-08 that is HTTP 404 only: the empty-scope
+// records the API used to answer HTTP 500 for now serve normally and are reported, still scope-less,
+// by EmptyScopeProducer. The API has no payload for a 404 id, so the species name and taxonomy shown
+// here are filled in from the offline CSV export (joined by taxonId).
+//
+// The HTTP 500 handling below is kept: the fault was fixed server-side without the underlying data
+// changing, so it can return, and a future release may error on other ids for other reasons.
 
 namespace BeastieBot3.Audit.Producers;
 
@@ -40,31 +42,39 @@ internal sealed class FailedAssessmentsProducer : IAuditReportProducer {
             .Select(g => new[] { g.Key, g.Count(x => x.Latest == true).ToString("N0"), g.Count().ToString("N0") } as IReadOnlyList<string>)
             .ToList();
 
+        // Every id currently in this set 404s, and the page says so plainly. Should other statuses
+        // return (the empty-scope HTTP 500s did for a year), the wording widens to match.
+        var only404 = findings.Count > 0 && findings.All(f => f.Get("httpStatus") == "404");
+
         return new AuditReport {
             Id = Id,
-            Title = "Assessment records the API cannot serve",
+            Title = only404 ? "Historical assessments missing from the API" : "Assessment ids that return an error",
             Tier = AuditReportTier.IucnCore,
             Breakage = BreakageClass.Breaking,
             KindLabel = "API error",
             DataSourceLabel = "IUCN API, with species and taxonomy from the CSV export",
-            Blurb = "Assessment ids that the public IUCN API returns an error for: most return HTTP 500 and share one trait (an empty geographic-scope list), and a few return HTTP 404 despite being listed by their taxon.",
+            Blurb = only404
+                ? "Historical assessment ids that appear in a taxon's API record but return HTTP 404 (not found) when requested directly."
+                : "Assessment ids that appear in a taxon's API record but return an error when requested directly.",
             Summary =
-                "Each row is an assessment id that the public API endpoint /api/v4/assessment/{id} returns an error for.\n\n" +
-                "Most rows return HTTP 500, and those all share one trait: the assessment record carries an empty geographic-scope list, " +
-                "where every assessment that serves normally carries at least one scope. On the website, the region line of these assessments shows a bare ampersand with no text. " +
-                "Each affected taxon also has a separate, valid scoped assessment, so no taxon is missing coverage.\n\n" +
-                "A few rows return HTTP 404 instead: the taxon's own assessment list includes the assessment id, but requesting that id returns \"not found\". " +
-                "These are historical (non-current) assessments, so the taxon's current assessment is unaffected.\n\n" +
-                "The API returns no data for any of these records, so the species name, taxonomy, and category shown here come from the CSV export on iucnredlist.org (matched on the taxon's SIS id).\n\n" +
+                "Each taxon record on the IUCN API carries a list of its assessments, current and historical. " +
+                (only404
+                    ? "The assessment ids in this report appear in a taxon's list, but a direct request to /api/v4/assessment/{id} returns HTTP 404 (not found).\n\n" +
+                      "Every affected id is a historical (superseded) assessment; each taxon's current assessment loads normally. "
+                    : "The assessment ids in this report appear in a taxon's list, but a direct request to /api/v4/assessment/{id} returns an error. " +
+                      "The HTTP status of each is in the table, and the summary below counts how many are the taxon's current assessment.\n\n") +
+                "Because the API returns no data for these records, the species name and taxonomy in the table below are taken from the offline CSV export on iucnredlist.org, matched on the taxon's SIS id.\n\n" +
                 "### Why it matters\n\n" +
-                "Anyone who requests one of these assessments through the API gets a server error or \"not found\", and the empty-scope records also display a blank region on the website.\n\n" +
+                "Anyone retrieving a taxon's assessment history through the API will request these ids and get " +
+                (only404 ? "404 errors" : "errors") +
+                ", even though the taxon's own record lists them as assessments that exist.\n\n" +
                 "### Suggestion\n\n" +
-                "For the HTTP 500 rows, repair or remove the empty-scope assessment record. For the HTTP 404 rows, either restore the assessment or remove its id from the taxon's assessment list.",
+                "Either restore the assessment record so the id can be requested, or remove the id from the taxon's assessment list so the two agree.",
             Columns = new List<AuditColumn> {
                 new() {
                     Key = "scientificName", Header = "Scientific name", Type = AuditColumnType.Taxon,
                     Value = f => f.ScientificName, Href = f => f.Get("realUrl") ?? f.RedlistUrl,
-                    Help = "Filled in from the offline CSV export, since the API cannot serve the record.",
+                    Help = "Filled in from the offline CSV export, since the API returns no data for the record.",
                 },
                 AuditColumns.Custom("authority", "Authority", AuditColumnType.Code),
                 AuditColumns.Class(),
@@ -72,7 +82,7 @@ internal sealed class FailedAssessmentsProducer : IAuditReportProducer {
                 AuditColumns.Family(),
                 AuditColumns.Status("Assessed as"),
                 AuditColumns.Custom("realScope", "Assessed scope", AuditColumnType.Text,
-                    "The geographic scope of the taxon's real (servable) assessment in the CSV export."),
+                    "The geographic scope of the taxon's current assessment in the CSV export."),
                 AuditColumns.AssessmentId("Failed assessment"),
                 AuditColumns.Custom("httpStatus", "HTTP status", AuditColumnType.Number),
                 AuditColumns.Latest(),
@@ -163,9 +173,9 @@ ORDER BY (f.last_status IS NULL), f.last_status DESC, b.latest, b.sis_id";
             IssueType = is500 ? "api-empty-scope-500" : "api-download-failure",
             SeverityTier = (r.Latest == true ? 10 : 0) + (is500 ? 5 : 3),
             Detail = is500
-                ? "Empty geographic-scope list. /api/v4/assessment/{id} returns HTTP 500 and the website shows the region as a bare ampersand."
+                ? "The API returns HTTP 500 for this assessment. Records with a blank geographic scope answered this way until August 2026; those are listed under \"Assessments with no geographic scope\"."
                 : r.HttpStatus == 404
-                    ? "Listed in the taxon's assessments, but requesting the assessment id returns HTTP 404 (not found)."
+                    ? "Listed in the taxon's assessments, but a direct request for this assessment id returns HTTP 404 (not found)."
                     : $"Requesting the assessment returned HTTP {(r.HttpStatus?.ToString(CultureInfo.InvariantCulture) ?? "no response")}.",
         };
         finding.Extra["httpStatus"] = r.HttpStatus?.ToString(CultureInfo.InvariantCulture);
@@ -178,9 +188,6 @@ ORDER BY (f.last_status IS NULL), f.last_status DESC, b.latest, b.sis_id";
         if (real is not null) {
             finding.Extra["realScope"] = real.Scope;
             finding.Extra["realUrl"] = IucnUrls.Species(r.SisId, real.AssessmentId);
-        }
-        if (is500) {
-            finding.Notes.Add("Phantom scope-less duplicate of the taxon's real per-scope assessments, so no coverage gap.");
         }
         return finding;
     }

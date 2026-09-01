@@ -887,8 +887,8 @@ public static class FlowCatalogue {
                 },
                 new FlowStep {
                     Id = "failed-assessments",
-                    Title = "Assessments the API can't serve (HTTP 500)",
-                    Description = "Assessment downloads the IUCN API keeps 500ing on. Root cause: each has an empty geographic scope (no region), and the API errors on exactly those. They're phantom scope-less duplicates of a taxon's real per-scope assessments, so they create no projection gap.",
+                    Title = "Assessment downloads that keep failing",
+                    Description = "Assessment ids the IUCN API errors on and hasn't served since. Now HTTP 404 only: ids a taxon's own assessment list carries that the API says don't exist (all historical so far). Until Aug 2026 this was mostly HTTP 500 on empty-scope records; IUCN fixed the error without filling the scope in, so those now download fine and the blank scope is reported by the audit site instead.",
                     Commands = new[] { "iucn api report-failed-assessments" },
                     InputSourceIds = new[] { "iucn-api-cache" },
                     OutputPatterns = new[] {

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Globalization;
@@ -12,18 +12,20 @@ using Spectre.Console.Cli;
 using BeastieBot3.Configuration;
 using BeastieBot3.Infrastructure;
 
-// Reports assessment downloads that the IUCN API consistently fails to serve. Root cause: each of
-// these assessments has an empty geographic-scope array (no scope/region attached), and
-// /api/v4/assessment/{id} returns HTTP 500 for exactly those — across the whole cache the split is
-// clean (assessments with a scope return 200, scope-less ones 500). They are phantom scope-less
-// duplicates of a taxon's real per-scope assessments (Global/Europe/Mediterranean), so they create
-// no projection gap. Reads the API cache's failed_requests joined with the backlog; outputs
-// Markdown + CSV. Run via: iucn api report-failed-assessments
+// Reports assessment ids the IUCN API errored on and has not served since. Reads the API cache's
+// failed_requests joined with the backlog; outputs Markdown + CSV.
+//
+// Until August 2026 this was dominated by HTTP 500 on assessments with an empty geographic-scope
+// array: across the whole cache the split was clean (scoped 200, scope-less 500). IUCN fixed that
+// server-side without filling the scope in, so those ids now download and leave failed_requests,
+// and the blank scope itself is reported by the audit site's empty-scope page. What remains here is
+// HTTP 404: ids a taxon's own assessment list carries that the API says do not exist.
+// Run via: iucn api report-failed-assessments
 
 namespace BeastieBot3.Iucn;
 
 [CommandInfo("iucn api report-failed-assessments", CommandKind.ReadOnly,
-    "List assessment downloads that keep failing on the IUCN API (records with an empty geographic scope, which /api/v4/assessment/{id} returns HTTP 500 for), with their status, latest flag and SIS id. Outputs Markdown and CSV.",
+    "List assessment ids /api/v4/assessment/{id} keeps failing on, with their HTTP status, latest flag and SIS id. Outputs Markdown and CSV.",
     Examples = new[] {
         "iucn api report-failed-assessments",
         "iucn api report-failed-assessments -o failed.md --csv-output failed.csv"
@@ -126,15 +128,14 @@ ORDER BY (f.last_status IS NULL), f.last_status DESC, b.latest, b.sis_id";
         sb.AppendLine($"- **Cache database:** `{EscapeMd(cachePath)}`");
         sb.AppendLine($"- **Failed assessment downloads:** {rows.Count:N0}");
         sb.AppendLine();
-        sb.AppendLine("Every assessment listed here shares one trait: an **empty geographic-scope array** (no scope/region attached).");
-        sb.AppendLine("`/api/v4/assessment/{id}` returns HTTP 500 for exactly these — across the whole cache the split is clean: assessments");
-        sb.AppendLine("with at least one scope return 200, scope-less ones 500. (Confirmed live against the IUCN API: a scoped sibling");
-        sb.AppendLine("assessment of the same taxon serialises fine.) On the IUCN website the same defect renders the region as a bare");
-        sb.AppendLine("\"&\" with no text — the empty scope list joined by a separator.");
+        sb.AppendLine("Assessment ids `/api/v4/assessment/{id}` errored on and has not served since. **HTTP 404** means the id appears in");
+        sb.AppendLine("the taxon's own assessment list but the API reports it as not found; those seen so far are historical assessments,");
+        sb.AppendLine("so the taxon's current assessment is unaffected.");
         sb.AppendLine();
-        sb.AppendLine("These are phantom scope-less duplicates of a taxon's real per-scope assessments (Global, Europe, Mediterranean, …),");
-        sb.AppendLine("so they create **no coverage gap**: each affected taxon is still projected via its valid scoped (Global) assessment —");
-        sb.AppendLine("including the few flagged `latest` below.");
+        sb.AppendLine("**HTTP 500** used to dominate this list: until August 2026 the API errored on every assessment with an empty");
+        sb.AppendLine("geographic-scope array, and across the whole cache the split was clean (assessments with a scope returned 200,");
+        sb.AppendLine("scope-less ones 500). That fault was fixed without the scope being filled in, so those ids now download and drop off");
+        sb.AppendLine("this list; the blank scope itself is reported by `redlist audit-site` on its empty-scope page.");
         sb.AppendLine();
 
         if (rows.Count == 0) {

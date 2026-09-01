@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using BeastieBot3.Audit.Model;
@@ -119,7 +119,7 @@ internal sealed class ColCrosscheckProducer : IAuditReportSetProducer {
 
     private static AuditReport Synonym(string source, int assessed, List<AuditFinding> findings) => new() {
         Id = SynonymId,
-        Title = "Species and subspecies the Catalogue of Life treats as a synonym",
+        Title = "Species and subspecies treated as synonyms in the Catalogue of Life",
         Tier = AuditReportTier.IucnCore,
         Breakage = BreakageClass.Advisory,
         DataSourceLabel = source,
@@ -161,7 +161,7 @@ internal sealed class ColCrosscheckProducer : IAuditReportSetProducer {
 
     private static AuditReport SynonymHigher(string source, int higher, List<AuditFinding> findings) => new() {
         Id = SynonymHigherId,
-        Title = "Higher-rank names the Catalogue of Life treats as a synonym",
+        Title = "Higher-rank names treated as synonyms in the Catalogue of Life",
         Tier = AuditReportTier.IucnCore,
         Breakage = BreakageClass.Advisory,
         DataSourceLabel = source,
