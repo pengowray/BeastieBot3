@@ -107,7 +107,7 @@ internal sealed class ColCrosscheckProducer : IAuditReportSetProducer {
         Summary =
             "The table below lists IUCN scientific names with no exact match in the Catalogue of Life, each paired with the most similar CoL name found within the same genus and species epithet. The detail column says how the two spellings differ (punctuation, diacritics, Unicode encoding, or a short spelling variant).\n\n" +
             "### Why it matters\n\n" +
-            "When the two catalogues spell a name slightly differently, an exact join between them fails even though the same taxon is almost certainly meant.\n\n" +
+            "When the two catalogues spell a name slightly differently, cross referencing fails, even though they are almost certainly the same taxon. This matters for both automated tools and manual searches.\n\n" +
             "### Suggestion\n\n" +
             "Check each pair. Where it is the same name spelled differently, aligning the spelling lets the two catalogues match.",
         Columns = CloseMatchColumns(),

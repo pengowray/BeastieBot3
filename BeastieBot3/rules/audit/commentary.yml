@@ -33,11 +33,19 @@
   scope: report
   title: Changes since 2025-2
   markdown: |
-    Release 2025-2 had 23 of these records; 2026-1 has 52, so new ones are still being created.
-    Until late August 2026 the API returned HTTP 500 for every one of them, and earlier versions
-    of this site listed them as records the API could not serve. Between 24 August and
-    1 September 2026 the API began serving them normally, but the scope is still blank: the
-    symptom is gone, the data problem is unchanged.
+    The scope for these assessments is not global or local, but an empty list.
+    
+    This was previously a larger problem as the records caused IUCN's API to return an HTTP 500 (Internal
+    Server Error) when one of these assessments was requested. The API now serves them normally, which 
+    resolves a major issue, but the data for these assessments still includes a blank scope, indicating
+    some other underlying problem and causing other issues.
+
+    IUCN's 2025-2 release had 23 of these records; 2026-1 has 52, so new ones are still being created.
+    Until late August 2026 the API returned HTTP 500 for every one of them. Between 24 August and
+    1 September 2026 the API began serving them normally, which is great news. The underlying data 
+    issue remains though, the scope for these assessments is still empty, possibly indiciating some 
+    other issue. The assessments may be hidden from some searches, but are available via the API 
+    or by direct link.
 
 - report: failed-assessments
   release: 2026-1
