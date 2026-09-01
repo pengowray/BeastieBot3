@@ -122,6 +122,8 @@ CoL staleness (`ColRebuild`) is measured against the CoL import time, **not** ag
 
 ### Wikidata / Wikipedia cache priority
 
+`wikipedia update` is the one-button form: it runs the whole ladder below in order (in-process via `Program.BuildApp()`, the same way the web job runner launches commands), measures `WikiCoverageStateReader` before each rung to skip rungs with nothing to do, caps downloads at `--limit` (default 2000) per rung, and prints where things stand at the start and end. `--status` prints the plan without running anything; `--include-rest` adds failed retries and the low-priority queue. In the web UI it is the "Update the caches" step of `wiki-reports`; the individual ladder steps live in the collapsed "Step by step" panel (`FlowSection.StepByStep`).
+
 The `wiki-reports` flow orders this work by priority rather than by pipeline stage, because the queues are far larger than any one session: bulk Wikidata sweep (`seed-taxa`, one SPARQL query) → download queued items → per-taxon search for the rest (`backfill-iucn`, slow) → queue Wikipedia titles → match → fetch what taxa are waiting on → fetch the rest; retrying failures and re-downloading old copies sit in Maintenance. The levers that make that order enforceable:
 
 - `wikipedia fetch-pages --awaited-only` — only pages a taxon with no article points at (about half the queue); `--newest-first` takes the titles queued most recently, i.e. a new release's taxa, since the default order is oldest-first.

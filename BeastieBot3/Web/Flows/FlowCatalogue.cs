@@ -26,6 +26,7 @@ public sealed record FlowDefinition {
 
 public enum FlowSection {
     Pipeline,     // core path through the flow; rendered as a vertical timeline
+    StepByStep,   // the same work as a one-button pipeline step, one command at a time; collapsed panel
     Maintenance,  // repair/coverage steps not normally needed; rendered in a separate panel
 }
 
@@ -429,7 +430,7 @@ public static class FlowCatalogue {
         new FlowDefinition {
             Id = "wiki-reports",
             Title = "Wikipedia reports pipeline",
-            Description = "The steps are in priority order: catch up on a new release first, then work down the standing download queues, which are never finished in one sitting. Every download step only adds, so it can be stopped and picked up later, and each shows how much work it has left. Re-downloading copies you already have is the lowest priority and sits under Maintenance.",
+            Description = "Import the source data, press Update, then generate. The Update step runs every Wikidata and Wikipedia cache command in priority order, skips what is already done, and can be stopped and re-run at any time without losing work. The same commands are also available one at a time under \"Step by step\". Re-downloading copies you already have is the lowest priority and sits under Maintenance.",
             Steps = new[] {
                 // -------- Pipeline (core path) --------
                 new FlowStep {
@@ -456,6 +457,17 @@ public static class FlowCatalogue {
                     Group = "1 \u00b7 Source data",
                 },
                 new FlowStep {
+                    Id = "wiki-update",
+                    Title = "Update the Wikidata and Wikipedia caches",
+                    Description = "One command for the whole ladder: sweep Wikidata, download items, search for the taxa the sweep missed, queue and match Wikipedia titles, and download the pages taxa are waiting on. Steps with nothing to do are skipped.",
+                    Commands = new[] { "wikipedia update", "wikipedia update --status", "wikipedia update --include-rest" },
+                    InputSourceIds = new[] { "iucn-main" },
+                    OutputSourceIds = new[] { "wikidata-cache", "wikipedia-cache" },
+                    Probe = FlowStepProbes.WikiUpdateAll,
+                    Group = "2 · Update the caches",
+                    Note = "Safe to run whenever: every step only adds what is missing, so nothing is redone and stopping midway loses nothing — the next run continues from wherever this one got to. Downloads are capped at 2,000 per step per run so a run has a foreseeable end; run it again (or raise --limit) to keep going. --status (the second button) prints the same step-by-step plan and counts without downloading anything, which is the quickest answer to \"where am I up to?\". --include-rest (the third) also retries failed downloads and works the low-priority queue of higher taxa, synonyms and redirects. To run or tune one piece on its own, open \"Step by step\" below — the Update command runs exactly those steps in that order.",
+                },
+                new FlowStep {
                     Id = "wikidata-seed",
                     Title = "Find Wikidata items for IUCN taxa",
                     Description = "One sweep of Wikidata for every item that carries an IUCN Red List id, adding each to the download queue. Downloads no entity data itself.",
@@ -463,7 +475,8 @@ public static class FlowCatalogue {
                     InputSourceIds = new[] { "iucn-main" },
                     OutputSourceIds = new[] { "wikidata-cache" },
                     Probe = FlowStepProbes.WikidataSweep,
-                    Group = "2 \u00b7 Wikidata",
+                    Section = FlowSection.StepByStep,
+                    Group = "Wikidata",
                     Note = "The cheap way to find items: one query returns everything Wikidata already tags with an IUCN id, instead of searching for taxa one at a time. It queues ids and stops there; the next step downloads them. Safe to re-run, and it continues from where the last sweep stopped, so it only adds ids it has not seen. It never goes back over items it has already passed, which means an item that gained an IUCN id since your last sweep is only picked up by starting the sweep again with --reset-cursor (see Re-download old copies, under Maintenance). `wikidata cache-all` runs this sweep and the download step below as one job. Needs WIKIDATA_USER_AGENT in .env.",
                 },
                 new FlowStep {
@@ -474,7 +487,8 @@ public static class FlowCatalogue {
                     InputSourceIds = new[] { "wikidata-cache" },
                     OutputSourceIds = new[] { "wikidata-cache" },
                     Probe = FlowStepProbes.WikidataDownload,
-                    Group = "2 \u00b7 Wikidata",
+                    Section = FlowSection.StepByStep,
+                    Group = "Wikidata",
                     Note = "Adds only: an item already downloaded is skipped, so stopping and re-running loses nothing. The name index the Wikipedia matcher reads is built during the download, so there is no separate rebuild step to run. --failed-only retries just the failures; --refresh-only with --max-age-hours re-downloads old copies without pulling in anything never downloaded.",
                 },
                 new FlowStep {
@@ -486,7 +500,8 @@ public static class FlowCatalogue {
                     OutputSourceIds = new[] { "wikidata-cache" },
                     Optional = true,
                     Probe = FlowStepProbes.WikidataSearch,
-                    Group = "2 \u00b7 Wikidata",
+                    Section = FlowSection.StepByStep,
+                    Group = "Wikidata",
                     Note = "Much slower than the sweep because it searches one taxon at a time, so run it after the sweep rather than instead of it. It only adds links: taxa that already have an item are not searched again, and no existing match is changed, so every match it reports is new. Taxa searched before with no match are skipped, so a run after a new release spends its time on taxa never searched; --retry-missing searches for those again, and --retry-missing-after <DAYS> only for the ones searched longest ago. Synonyms come from the IUCN API cache and Catalogue of Life, so importing those first finds more matches. Ids it finds are queued, not downloaded, so run the download step after it.",
                 },
                 new FlowStep {
@@ -497,7 +512,8 @@ public static class FlowCatalogue {
                     InputSourceIds = new[] { "iucn-main", "wikidata-cache" },
                     OutputSourceIds = new[] { "wikipedia-cache" },
                     Probe = FlowStepProbes.WikipediaQueue,
-                    Group = "3 \u00b7 Wikipedia",
+                    Section = FlowSection.StepByStep,
+                    Group = "Wikipedia",
                     Note = "Both commands only add titles; nothing is downloaded here. Re-running skips titles already queued unless you pass --force-refresh or --refresh-days, and a refreshed title keeps its existing match and cached page until the new copy arrives. Run the Wikidata steps first, because the article titles come from the cached items.",
                 },
                 new FlowStep {
@@ -508,7 +524,8 @@ public static class FlowCatalogue {
                     InputSourceIds = new[] { "iucn-main", "wikidata-cache", "wikipedia-cache" },
                     OutputSourceIds = new[] { "wikipedia-cache" },
                     Probe = FlowStepProbes.WikipediaMatch,
-                    Group = "3 \u00b7 Wikipedia",
+                    Section = FlowSection.StepByStep,
+                    Group = "Wikipedia",
                     Note = "Match, download, match again. The first run picks candidate titles and queues them without making any network calls; the download step below fetches them; the second run reads the fetched pages and settles the matches. Taxa already matched are left alone unless you pass --reprocess-matched. Candidates come from Wikidata site links, IUCN and Catalogue of Life synonyms, scientific names in cached taxoboxes, and redirects.",
                 },
                 new FlowStep {
@@ -520,7 +537,8 @@ public static class FlowCatalogue {
                     OutputSourceIds = new[] { "wikipedia-cache" },
                     Optional = true,
                     Probe = FlowStepProbes.WikipediaTitlesDump,
-                    Group = "3 · Wikipedia",
+                    Section = FlowSection.StepByStep,
+                    Group = "Wikipedia",
                     Note = "One download (about 90 MB) instead of one API call per queued title. A queued title absent from the list is almost certainly a redlink, so the download steps below can take the real pages first: add --exists-first to fetch-pages. The list is titles only — it says a page exists, not what it holds, and it includes redirects — so it changes no matches and downloads no pages. Re-running checks for a newer dump and re-imports only when there is one; an interrupted download resumes where it stopped.",
                 },
                 new FlowStep {
@@ -531,7 +549,8 @@ public static class FlowCatalogue {
                     InputSourceIds = new[] { "wikipedia-cache" },
                     OutputSourceIds = new[] { "wikipedia-cache" },
                     Probe = FlowStepProbes.WikipediaFetchAwaited,
-                    Group = "3 \u00b7 Wikipedia",
+                    Section = FlowSection.StepByStep,
+                    Group = "Wikipedia",
                     Note = "The queue holds far more titles than the taxa themselves need, because higher taxa, synonyms and redirect targets are queued too. --awaited-only narrows it to pages a taxon is waiting on, and --newest-first takes the titles queued most recently, which after a release update are the new taxa. It downloads only what has not been downloaded, so it can be stopped and resumed; add --limit to stop after a set number. Run match-taxa again afterwards (the second button) to settle the matches for the pages that arrived.",
                 },
                 new FlowStep {
@@ -543,7 +562,8 @@ public static class FlowCatalogue {
                     OutputSourceIds = new[] { "wikipedia-cache" },
                     Optional = true,
                     Probe = FlowStepProbes.WikipediaFetchRest,
-                    Group = "3 \u00b7 Wikipedia",
+                    Section = FlowSection.StepByStep,
+                    Group = "Wikipedia",
                     Note = "The lists do not need these pages, but they improve redirect and synonym resolution for the taxa that do. There can be hundreds of thousands of them, so this is a job of days: use --limit to work through it in sessions. It downloads only what is missing, so stopping and re-running continues where it stopped. Run \"Remove titles that cannot be articles\" under Maintenance first: in August 2026, 38% of the queue was titles carrying an authority, which no article has. With the all-titles dump imported (the \"Import the all-titles dump\" step), --exists-first (the second button) downloads the titles that exist before spending API calls on likely redlinks.",
                 },
                 new FlowStep {
@@ -553,7 +573,7 @@ public static class FlowCatalogue {
                     Commands = new[] { "common-names init", "common-names aggregate" },
                     InputSourceIds = new[] { "iucn-main", "wikidata-cache", "wikipedia-cache", "col-sqlite" },
                     OutputSourceIds = new[] { "common-names" },
-                    Group = "4 \u00b7 Common names",
+                    Group = "3 \u00b7 Common names",
                     Note = "`init` seeds the store's species from IUCN and rules/caps.txt; `aggregate` then reads the IUCN, Wikidata, Wikipedia and Catalogue of Life caches and fills in the names. Both are safe to re-run and download nothing. Re-running only adds and updates, so a name a source has since dropped or renamed stays in the store. After a cache has been refreshed or rebuilt, re-import that one source from scratch instead: `common-names aggregate --source wikidata --replace` (or wikipedia, col, iucn), which clears what that source contributed before importing it again and leaves the others alone. `common-names sources` lists when each source was last aggregated and last replaced.",
                 },
                 new FlowStep {
@@ -564,7 +584,7 @@ public static class FlowCatalogue {
                     InputSourceIds = new[] { "common-names" },
                     OutputSourceIds = new[] { "common-names" },
                     Probe = FlowStepProbes.CommonNameConflicts,
-                    Group = "4 \u00b7 Common names",
+                    Group = "3 \u00b7 Common names",
                     Note = "Run after aggregating: a name shared by two species is only found by comparing the names now in the hub, and aggregating does not redo that comparison. Generation reads the result: it passes over an ambiguous name in favour of the taxon's next-best common name, and falls back to the scientific name when every candidate is ambiguous. Use `--clear-existing` (the second button) to rebuild the list from scratch; without it, old rows stay behind for pairs that are no longer ambiguous.",
                 },
                 new FlowStep {
@@ -575,7 +595,7 @@ public static class FlowCatalogue {
                     InputSourceIds = new[] { "common-names" },
                     OutputSourceIds = new[] { "common-names" },
                     Optional = true,
-                    Group = "4 \u00b7 Common names",
+                    Group = "3 \u00b7 Common names",
                     Note = "Only needed when you've edited rules/caps.txt since the last full \"Aggregate common names\" run — `--skip-taxa` reimports just the caps rules (fast, idempotent), because the generator reads them from the common-names DB, not the file. The other rule files — taxon-rules.yml, rules/rules-list.txt, and the list/preset/group YAML — are read directly at generation time, so they need no import: edit them and re-run Generate.",
                 },
                 new FlowStep {
@@ -585,7 +605,7 @@ public static class FlowCatalogue {
                     Commands = new[] { "wikipedia generate-lists", "wikipedia generate-charts" },
                     InputSourceIds = new[] { "iucn-main", "wikipedia-cache", "common-names", "col-sqlite" },
                     OutputSourceIds = Array.Empty<string>(),
-                    Group = "5 \u00b7 Generate",
+                    Group = "4 \u00b7 Generate",
                     Note = "Uses rules/wikipedia-lists.yml, rules/chart-groups.yml, rules/rules-list.txt, and templates under rules/wikipedia/templates/. These (and taxon-rules.yml) are read fresh each run — no import step. Edited caps.txt? Run \"Refresh capitalization rules\" above first.",
                     OutputPatterns = new[] {
                         new FlowOutputPattern { Root = "wikipedia-output", Pattern = "*.wikitext", Label = "Lists" },

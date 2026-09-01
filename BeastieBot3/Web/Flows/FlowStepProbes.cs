@@ -54,10 +54,12 @@ public static class FlowStepProbes {
     public const string WikipediaTitlesDump = "wiki-wp-titles-dump";
     public const string WikiRetryFailed = "wiki-retry-failed";
     public const string WikiRefresh = "wiki-refresh";
+    public const string WikiUpdateAll = "wiki-update-all";
 
     public static bool IsWikiProbe(string probe) =>
         probe is WikidataSweep or WikidataSearch or WikidataDownload or WikipediaQueue or WikipediaMatch
-            or WikipediaFetchAwaited or WikipediaFetchRest or WikipediaTitlesDump or WikiRetryFailed or WikiRefresh;
+            or WikipediaFetchAwaited or WikipediaFetchRest or WikipediaTitlesDump or WikiRetryFailed or WikiRefresh
+            or WikiUpdateAll;
 
     public static FlowProbeResult? EvaluateWiki(string probe, WikiCoverageState s) {
         // Nothing measured yet (first poll after startup, or a cache missing): say nothing
@@ -74,8 +76,34 @@ public static class FlowStepProbes {
             WikipediaTitlesDump => WikiTitlesDump(s),
             WikiRetryFailed => WikiFailures(s),
             WikiRefresh => WikiRefreshAge(s),
+            WikiUpdateAll => WikiUpdate(s),
             _ => null,
         };
+    }
+
+    // The one light for the "Update" button: everything the individual steps below would find,
+    // in one line, most valuable work first. "backlog" not "todo" when only the standing download
+    // queues remain: never finished in one sitting is not the same as overdue.
+    internal static FlowProbeResult WikiUpdate(WikiCoverageState s) {
+        var unsearched = Math.Max(0, s.TaxaWithoutWikidata - s.WikidataBackfillMisses);
+        var parts = new List<string>();
+        if (unsearched > 0) parts.Add($"{unsearched:n0} taxa never searched for on Wikidata");
+        if (s.TaxaNeverMatched > 0) parts.Add($"{s.TaxaNeverMatched:n0} taxa never checked for an article");
+        if (s.WikidataEntitiesQueued > 0) parts.Add($"{s.WikidataEntitiesQueued:n0} Wikidata items to download");
+        if (s.PagesQueuedAwaited > 0) parts.Add($"{s.PagesQueuedAwaited:n0} pages to download for taxa with no article yet");
+
+        if (parts.Count > 0) {
+            var status = unsearched > 0 || s.TaxaNeverMatched > 0 ? "todo" : "backlog";
+            return new FlowProbeResult(status, $"To do: {string.Join(" · ", parts)}.");
+        }
+
+        var rest = Math.Max(0, s.PagesQueued - s.PagesQueuedAwaited);
+        var failed = s.WikidataEntitiesFailed + s.PagesFailed;
+        if (rest == 0 && failed == 0) {
+            return new FlowProbeResult("ok", $"Caught up. {s.TaxaWithArticle:n0} taxa have an article; nothing is queued.");
+        }
+        return new FlowProbeResult("ok",
+            $"Caught up on everything the lists need ({s.TaxaWithArticle:n0} taxa have an article). Low priority: {rest:n0} other titles queued, {failed:n0} failed downloads — --include-rest works through those.");
     }
 
     internal static FlowProbeResult WikiWikidataSweep(WikiCoverageState s) {

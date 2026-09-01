@@ -230,6 +230,42 @@ public class FlowWikiProbeTests {
         Assert.Contains("No pages cached", r.Detail);
     }
 
+    // The Update button's one light. Amber only for finishable work (new taxa unsearched or
+    // unmatched); a standing download queue alone is "backlog"; and when the lists' needs are
+    // met it stays green even with a six-figure low-priority queue.
+    [Fact]
+    public void Update_light_lists_the_outstanding_work_most_valuable_first() {
+        var r = FlowStepProbes.WikiUpdate(State(s => {
+            s.TaxaWithoutWikidata = 8_000; s.BackfillMisses = 5_000;
+            s.TaxaNeverMatched = 2_340;
+            s.EntitiesQueued = 4_120;
+            s.PagesQueuedAwaited = 61_000;
+        }));
+        Assert.Equal("todo", r.Status);
+        Assert.Contains("3,000 taxa never searched for on Wikidata", r.Detail);
+        Assert.Contains("2,340 taxa never checked for an article", r.Detail);
+        Assert.Contains("4,120 Wikidata items to download", r.Detail);
+        Assert.Contains("61,000 pages to download", r.Detail);
+    }
+
+    [Fact]
+    public void Update_light_shows_queues_alone_as_backlog_not_overdue() {
+        var r = FlowStepProbes.WikiUpdate(State(s => { s.EntitiesQueued = 4_120; s.PagesQueuedAwaited = 61_000; }));
+        Assert.Equal("backlog", r.Status);
+    }
+
+    [Fact]
+    public void Update_light_is_green_when_only_low_priority_work_remains() {
+        var r = FlowStepProbes.WikiUpdate(State(s => { s.PagesQueued = 129_000; s.PagesFailed = 399; }));
+        Assert.Equal("ok", r.Status);
+        Assert.Contains("129,000 other titles queued", r.Detail);
+        Assert.Contains("399 failed downloads", r.Detail);
+
+        var done = FlowStepProbes.WikiUpdate(State());
+        Assert.Equal("ok", done.Status);
+        Assert.Contains("nothing is queued", done.Detail);
+    }
+
     // Without the dump the fetch queue cannot tell a redlink from a real page; with it the light
     // reports the dump's date and how the queue splits, and stays green (importing again before
     // a new dump exists would change nothing).

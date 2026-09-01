@@ -1199,8 +1199,10 @@
         .catch(() => banner.remove());
     }
 
-    // Split steps into pipeline (core path) and maintenance (only-when-needed).
+    // Split steps into pipeline (core path), step-by-step (the pieces a one-button pipeline
+    // step runs, for running one at a time) and maintenance (only-when-needed).
     const pipelineSteps = snap.steps.filter(s => (s.section || 'pipeline') === 'pipeline');
+    const stepByStepSteps = snap.steps.filter(s => s.section === 'stepbystep');
     const maintenanceSteps = snap.steps.filter(s => s.section === 'maintenance');
 
     const pipeline = document.createElement('div');
@@ -1220,6 +1222,40 @@
       pipeline.appendChild(renderStep(step, snap, openDetails));
     }
     root.appendChild(pipeline);
+
+    if (stepByStepSteps.length > 0) {
+      // Same fold as Maintenance, but these are not repairs: they are the pieces the Update
+      // step runs, kept for running or tuning one at a time. The summary says how many have
+      // work left so a closed fold still answers "is anything outstanding in here".
+      const withWork = stepByStepSteps.filter(s => s.status === 'todo' || s.status === 'backlog').length;
+      const wrap = document.createElement('details');
+      wrap.className = 'flow-maintenance';
+      wrap.dataset.key = 'stepbystep';
+      wrap.open = openDetails.has('stepbystep');
+      const summary = document.createElement('summary');
+      summary.innerHTML = '<span class="flow-maintenance-title">Step by step</span> ' +
+                          '<span class="small muted">what Update runs, as ' + stepByStepSteps.length +
+                          ' separate steps' +
+                          (withWork > 0 ? ' — ' + withWork + ' with work left' : ' — all caught up') +
+                          '</span>';
+      wrap.appendChild(summary);
+      const pipe = document.createElement('div');
+      pipe.className = 'flow-pipeline';
+      let lastSbsGroup = null;
+      for (const step of stepByStepSteps) {
+        const g = step.group || null;
+        if (g && g !== lastSbsGroup) {
+          const h = document.createElement('div');
+          h.className = 'flow-group-header';
+          h.textContent = g;
+          pipe.appendChild(h);
+        }
+        lastSbsGroup = g;
+        pipe.appendChild(renderStep(step, snap, openDetails));
+      }
+      wrap.appendChild(pipe);
+      root.appendChild(wrap);
+    }
 
     if (maintenanceSteps.length > 0) {
       const wrap = document.createElement('details');
