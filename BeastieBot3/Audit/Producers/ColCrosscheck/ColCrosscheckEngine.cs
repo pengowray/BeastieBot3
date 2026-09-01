@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -71,12 +71,35 @@ internal sealed class ColCrosscheckEngine {
                     "No Catalogue of Life match for this name, and no close candidate from fuzzy search."));
             } else {
                 var colName = AuditMapping.Decode(near.Best.ScientificName);
+                // Two follow-up checks on the suggested name, one lookup each. Both change what the
+                // row means: a CoL synonym points at a different accepted name, and a name IUCN
+                // already lists as a synonym of this taxon is a recorded pair, not a spelling slip.
+                var colIsSynonym = IsSynonymStatus(near.Best.Status);
+                var colAccepted = colIsSynonym && !string.IsNullOrWhiteSpace(near.Best.ParentId)
+                    ? _col.GetById(near.Best.ParentId!, CancellationToken.None)
+                    : null;
+                var colAcceptedName = AuditMapping.Decode(colAccepted?.ScientificName);
+                var iucnMatch = _iucnSynonyms?.Lookup(colName, row.TaxonId) ?? IucnSynonymMatch.Unknown;
+
                 var detail = near.Diff.IsFormattingEquivalent
-                    ? $"No exact Catalogue of Life match. CoL has '{colName}', which {near.Diff.Description}; likely the same name."
-                    : $"No exact Catalogue of Life match. Closest CoL name is '{colName}' ({near.Diff.Description}); may be a spelling variant or a different taxon.";
+                    ? $"Absent from the Catalogue of Life, as an accepted name and as a synonym. CoL has '{colName}', which {near.Diff.Description}; likely the same name."
+                    : $"Absent from the Catalogue of Life, as an accepted name and as a synonym. Closest CoL name is '{colName}' ({near.Diff.Description}); may be a spelling variant or a different taxon.";
+                if (colIsSynonym) {
+                    detail += colAcceptedName is null
+                        ? $" CoL records '{colName}' as a synonym."
+                        : $" CoL records '{colName}' as a synonym of {colAcceptedName}.";
+                }
+                if (iucnMatch == IucnSynonymMatch.SameTaxon) {
+                    detail += $" IUCN already lists '{colName}' as a synonym of this taxon, so the two names are a recorded pair rather than a spelling difference.";
+                } else if (iucnMatch == IucnSynonymMatch.OtherTaxon) {
+                    detail += $" IUCN lists '{colName}' as a synonym of a different taxon.";
+                }
+
                 var closeFinding = SpeciesFinding(ColCrosscheckProducer.CloseMatchId, row, rank, isFull, name,
                     "close-col-match", "scientificName", name, colName, near.Best.Id, severity, detail);
+                SetExtra(closeFinding, "colStatus", ColStatusLabel(near.Best.Status));
                 SetExtra(closeFinding, "colYear", ColYear(near.Best));
+                SetExtra(closeFinding, "iucnSynonym", IucnSynonymLabel(iucnMatch));
                 data.CloseMatch.Add(closeFinding);
             }
             return;
@@ -494,6 +517,11 @@ internal sealed class ColCrosscheckEngine {
 
     // Column text for whether the CoL accepted name is already an IUCN synonym. Unknown (no API
     // cache) leaves the cell blank rather than asserting "no".
+    // What the Catalogue of Life itself makes of a matched name. "other" covers the rarer usage
+    // states (misapplied, ambiguous), which are neither an accepted name nor a plain synonym.
+    private static string ColStatusLabel(string? status) =>
+        IsAcceptedStatus(status) ? "accepted" : IsSynonymStatus(status) ? "synonym" : "other";
+
     private static string? IucnSynonymLabel(IucnSynonymMatch match) => match switch {
         IucnSynonymMatch.SameTaxon => "of same taxon",
         IucnSynonymMatch.OtherTaxon => "of other taxon",

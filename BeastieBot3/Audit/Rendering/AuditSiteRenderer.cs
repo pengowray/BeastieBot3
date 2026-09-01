@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -55,7 +55,7 @@ internal static class AuditSiteRenderer {
 
         sb.Append("<section>\n");
         sb.Append("<p class=\"lede\">This page collects observations about the data in IUCN Red List version ");
-        sb.Append($"{HtmlText.Escape(doc.Release)}. The tables below list the observations by kind; each links to a description with a short preview, ");
+        sb.Append($"{HtmlText.Escape(doc.Release)}. The tables below list the observations by type; each links to a description with a short preview, ");
         sb.Append("a full sortable list, and a CSV download. The intent is to help with data review for the next release. ");
         sb.Append("Every observation may be incomplete or mistaken.</p>\n");
 
@@ -69,30 +69,39 @@ internal static class AuditSiteRenderer {
         sb.Append("<p><a href=\"methodology.html\">How this was put together, how to read the lists, and its caveats →</a></p>\n");
         sb.Append("</section>\n");
 
-        AppendReportTable(sb, doc, AuditReportTier.IucnCore,
+        AppendReportTable(sb, doc,
             "Observations in the Red List data",
-            "These concern records in the Red List itself.");
-        AppendReportTable(sb, doc, AuditReportTier.Methodology,
-            "Methodology and coverage",
-            "Field-level summaries that give context to the lists above.");
+            "These concern records in the Red List itself.",
+            TypeLegend);
 
         return AuditPageLayout.Page(doc, "", null, sb.ToString());
     }
 
-    private static void AppendReportTable(StringBuilder sb, AuditDocument doc, AuditReportTier tier, string heading, string blurb) {
-        var reports = doc.Reports.Where(r => r.Tier == tier).ToList();
+    // Spells out the three Type values, once, where every row below inherits it. The last clause is
+    // the one the CoL crosscheck rows need most: a difference between two catalogues is usually a
+    // considered decision on one side, not a mistake.
+    private const string TypeLegend =
+        "Missing data: something is absent from the published dataset. " +
+        "Text cleanup: stray characters, or text fields that disagree. " +
+        "For review: a difference from another source or from expectation, and many will be intentional.";
+
+    private static void AppendReportTable(StringBuilder sb, AuditDocument doc, string heading, string blurb, string? legend) {
+        var reports = doc.Reports;
         if (reports.Count == 0) {
             return;
         }
         sb.Append("<section>\n");
         sb.Append($"<h2>{HtmlText.Escape(heading)}</h2>\n");
         sb.Append($"<p>{HtmlText.Escape(blurb)}</p>\n");
-        sb.Append("<table class=\"index\">\n<thead><tr><th>Observation</th><th>Kind</th><th class=\"count\">Rows</th><th>Open</th></tr></thead>\n<tbody>\n");
+        if (legend is not null) {
+            sb.Append($"<p class=\"legend\">{HtmlText.Escape(legend)}</p>\n");
+        }
+        sb.Append("<table class=\"index\">\n<thead><tr><th>Observation</th><th class=\"kind\">Type</th><th class=\"count\">Rows</th><th>Open</th></tr></thead>\n<tbody>\n");
         foreach (var r in reports) {
             sb.Append("<tr>\n");
             sb.Append($"<td><div class=\"report-title\"><a href=\"{r.Id}.html\">{HtmlText.Escape(r.Title)}</a></div>");
             sb.Append($"<div class=\"report-desc\">{HtmlText.Escape(IndexBlurb(r))}</div></td>\n");
-            sb.Append($"<td>{AuditPageLayout.BreakageBadge(r.Breakage, r.KindLabel)}</td>\n");
+            sb.Append($"<td class=\"kind\">{AuditPageLayout.BreakageBadge(r.Breakage)}</td>\n");
             sb.Append($"<td class=\"count\">{r.Count:N0}</td>\n");
             sb.Append("<td class=\"links\">");
             sb.Append($"<a href=\"{r.Id}.html\">details</a>");
@@ -109,7 +118,7 @@ internal static class AuditSiteRenderer {
     private static void WriteReportPage(AuditDocument doc, AuditReport report, string outputDir) {
         var sb = new StringBuilder();
         sb.Append("<section>\n");
-        sb.Append($"<h2>{HtmlText.Escape(report.Title)} {AuditPageLayout.BreakageBadge(report.Breakage, report.KindLabel, inHeading: true)}</h2>\n");
+        sb.Append($"<h2>{HtmlText.Escape(report.Title)} {AuditPageLayout.BreakageBadge(report.Breakage, inHeading: true)}</h2>\n");
         sb.Append($"<p class=\"report-desc\"><small>Source: {HtmlText.Escape(report.DataSourceLabel)}");
         if (report.Findings.Count > 0) {
             sb.Append($" · {report.Findings.Count:N0} rows");
@@ -157,13 +166,20 @@ internal static class AuditSiteRenderer {
         }
     }
 
+    // A class breakdown runs to 15 rows and pushes the findings preview off the screen, so a long
+    // aggregate table is clamped to its first few rows by audit.js (fade plus a toggle). Every row is
+    // written into the HTML, so the table is complete with JS off.
+    private const int SummaryCollapseOver = 8;
+    private const int SummaryCollapseKeep = 6;
+
     private static void AppendSummaryTable(StringBuilder sb, AuditSummaryTable table) {
         sb.Append($"<h3>{HtmlText.Escape(table.Title)}</h3>\n");
         if (!string.IsNullOrWhiteSpace(table.Note)) {
             sb.Append($"<p>{HtmlText.Markdown(table.Note!)}</p>\n");
         }
         var numeric = new HashSet<int>(table.NumericColumns);
-        sb.Append("<table class=\"summary\">\n<thead><tr>");
+        var collapse = table.Rows.Count > SummaryCollapseOver ? $" data-collapse=\"{SummaryCollapseKeep}\"" : "";
+        sb.Append($"<table class=\"summary\"{collapse}>\n<thead><tr>");
         for (var i = 0; i < table.Headers.Count; i++) {
             sb.Append(numeric.Contains(i) ? "<th class=\"num\">" : "<th>");
             sb.Append(HtmlText.Escape(table.Headers[i]));
@@ -241,15 +257,6 @@ internal static class AuditSiteRenderer {
         sb.Append("<li>Only names, classification, formatting, and coverage are examined. The scientific content of assessments (categories, criteria, narratives, ranges, maps, citations) is out of scope.</li>\n");
         sb.Append("</ul>\n");
         sb.Append("</section>\n");
-
-        var methodologyReports = doc.Reports.Where(r => r.Tier == AuditReportTier.Methodology).ToList();
-        if (methodologyReports.Count > 0) {
-            sb.Append("<section>\n<h2>Methodology reports</h2>\n<ul>\n");
-            foreach (var r in methodologyReports) {
-                sb.Append($"<li><a href=\"{r.Id}.html\">{HtmlText.Escape(r.Title)}</a>: {HtmlText.Escape(IndexBlurb(r))}</li>\n");
-            }
-            sb.Append("</ul>\n</section>\n");
-        }
 
         var crumbs = AuditPageLayout.Crumbs(("Home", "index.html"), ("Methodology", null));
         return AuditPageLayout.Page(doc, "Methodology", crumbs, sb.ToString());

@@ -1,4 +1,4 @@
-// The CSS and JS for the static audit bundle, embedded so the generator emits a self-contained
+﻿// The CSS and JS for the static audit bundle, embedded so the generator emits a self-contained
 // site (no build step, no external assets). audit.css is a clean light theme suited to a formal
 // document; audit.js gives every table click-to-sort and a filter box with no dependencies.
 
@@ -17,7 +17,8 @@ internal static class AuditAssets {
   --accent-soft: #e7f0f5;
   --breaking: #b54034;
   --fixable: #b5862a;
-  --advisory: #3a7a4a;
+  --advisory: #2a6f97;
+  --clear: #3a7a4a;
   --max: 1180px;
   --max-wide: 1680px;
 }
@@ -75,11 +76,14 @@ table.index td.count, table.index th.count { text-align: right; white-space: now
 table.index .report-title { font-weight: 600; }
 table.index .report-desc { color: var(--ink-soft); font-size: 0.9rem; margin-top: 2px; }
 table.index .links { white-space: nowrap; font-size: 0.88rem; }
+table.index td.kind, table.index th.kind { white-space: nowrap; width: 1%; }
+p.legend { color: var(--ink-soft); font-size: 0.9rem; margin-top: -6px; }
 
-.badge { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 0.74rem; font-weight: 600; letter-spacing: 0.02em; vertical-align: middle; }
+.badge { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 0.74rem; font-weight: 600; letter-spacing: 0.02em; vertical-align: middle; white-space: nowrap; }
 .badge.breaking { background: #f7e4e1; color: var(--breaking); }
 .badge.fixable { background: #f6ecd6; color: var(--fixable); }
-.badge.advisory { background: #e2f0e6; color: var(--advisory); }
+.badge.advisory { background: #e3eef5; color: var(--advisory); }
+.badge.clear { background: #e2f0e6; color: var(--clear); }
 .badge.tier { background: var(--accent-soft); color: var(--accent); }
 
 .status-badge { display: inline-block; min-width: 2.6em; text-align: center; padding: 1px 7px; border-radius: 5px; font-size: 0.78rem; font-weight: 600; }
@@ -116,6 +120,15 @@ table.summary { border-collapse: collapse; width: 100%; font-size: 0.9rem; margi
 table.summary th, table.summary td { padding: 6px 11px; border-bottom: 1px solid var(--line-soft); text-align: left; }
 table.summary td.num, table.summary th.num { text-align: right; font-variant-numeric: tabular-nums; }
 table.summary thead th { color: var(--ink-soft); font-size: 0.82rem; text-transform: uppercase; letter-spacing: 0.03em; }
+
+/* Long aggregate tables are clamped to their first few rows by audit.js; the gradient over the
+   cut-off row shows there is more, and the toggle button below opens it. */
+.collapsible { position: relative; }
+.collapsible.collapsed { overflow: hidden; }
+/* Stops short of solid white so the clipped row stays faintly readable: a ghost row reads as cut off, a blank strip reads as the end of the table. The page is light-only, so white is safe here. */
+.collapsible.collapsed::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 46px; background: linear-gradient(to bottom, rgba(255, 255, 255, 0), rgba(255, 255, 255, 0.88)); pointer-events: none; }
+.collapse-toggle { margin: 8px 0 4px; padding: 4px 11px; font: inherit; font-size: 0.86rem; color: var(--accent); background: var(--bg); border: 1px solid var(--line); border-radius: 7px; cursor: pointer; }
+.collapse-toggle:hover { background: var(--bg-soft); }
 
 .commentary { background: var(--accent-soft); border-left: 3px solid var(--accent); border-radius: 0 8px 8px 0; padding: 12px 16px; margin: 16px 0; }
 .commentary h3 { margin-top: 0; font-size: 0.95rem; color: var(--accent); }
@@ -234,6 +247,43 @@ footer.site a { color: var(--accent); }
         if (match) shown++;
       }
       if (counter) counter.textContent = shown.toLocaleString() + " rows";
+    });
+  });
+
+  // Long aggregate tables (a class breakdown runs to 15 rows) are clamped to their first few rows
+  // with a fade and a toggle. The HTML carries every row, so with JS off the whole table shows.
+  document.querySelectorAll("table.summary[data-collapse]").forEach(function (table) {
+    var keep = parseInt(table.getAttribute("data-collapse"), 10);
+    var body = table.tBodies[0];
+    if (!body || !keep || body.rows.length <= keep) return;
+    var cut = body.rows[keep];
+
+    var wrap = document.createElement("div");
+    wrap.className = "collapsible collapsed";
+    table.parentNode.insertBefore(wrap, table);
+    wrap.appendChild(table);
+
+    var button = document.createElement("button");
+    button.type = "button";
+    button.className = "collapse-toggle";
+    var openText = "Show all " + body.rows.length.toLocaleString() + " rows";
+    var closeText = "Show fewer rows";
+    button.textContent = openText;
+    button.setAttribute("aria-expanded", "false");
+    wrap.parentNode.insertBefore(button, wrap.nextSibling);
+
+    // Half a row is left peeking under the gradient, so the cut is visibly a cut.
+    function clamp() { wrap.style.maxHeight = (cut.offsetTop + 20) + "px"; }
+    clamp();
+
+    button.addEventListener("click", function () {
+      var collapsed = wrap.classList.toggle("collapsed");
+      button.textContent = collapsed ? openText : closeText;
+      button.setAttribute("aria-expanded", collapsed ? "false" : "true");
+      if (collapsed) { clamp(); } else { wrap.style.maxHeight = ""; }
+    });
+    window.addEventListener("resize", function () {
+      if (wrap.classList.contains("collapsed")) clamp();
     });
   });
 

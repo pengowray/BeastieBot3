@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -9,19 +9,15 @@ using System.Linq;
 
 namespace BeastieBot3.Audit.Model;
 
-// Where a report sits in the document. IUCN-owned data first, methodology/coverage after.
-internal enum AuditReportTier {
-    IucnCore,
-    Methodology,
-}
-
-// Coarse "kind of opportunity" used only to order and badge reports neutrally. Breaking =
-// affects what the public site or API can currently serve; FixableData = a concrete value to
-// tidy; Advisory = a divergence or coverage observation to consider.
+// The one-word "type" badge shown against each report. Exactly four values, so the column can be
+// skimmed: Breaking = something is absent from the published dataset; FixableData = stray characters
+// or text fields that disagree; Advisory = a difference from another source or from expectation,
+// often intentional; Clear = the report ran and found nothing.
 internal enum BreakageClass {
     Breaking,
     FixableData,
     Advisory,
+    Clear,
 }
 
 // A small aggregate table (counts by class, by issue kind, reconciliation, etc.).
@@ -38,12 +34,7 @@ internal sealed class AuditSummaryTable {
 internal sealed class AuditReport {
     public required string Id { get; init; }              // kebab id, also the page/file stem
     public required string Title { get; init; }
-    public AuditReportTier Tier { get; init; } = AuditReportTier.IucnCore;
     public BreakageClass Breakage { get; init; } = BreakageClass.Advisory;
-
-    // Optional override for the "kind" badge text. The colour still comes from Breakage; only the
-    // label changes (e.g. "API errors", "Undiscoverable", "OK"). Null uses the default per-class text.
-    public string? KindLabel { get; init; }
 
     // One-sentence plain-text description for the index table and the methodology listing.
     // When unset, the renderer falls back to the first paragraph of Summary.

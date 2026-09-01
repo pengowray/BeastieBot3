@@ -49,9 +49,7 @@ internal sealed class FailedAssessmentsProducer : IAuditReportProducer {
         return new AuditReport {
             Id = Id,
             Title = only404 ? "Historical assessments missing from the API" : "Assessment ids that return an error",
-            Tier = AuditReportTier.IucnCore,
             Breakage = BreakageClass.Breaking,
-            KindLabel = "API error",
             DataSourceLabel = "IUCN API, with species and taxonomy from the CSV export",
             Blurb = only404
                 ? "Historical assessment ids that appear in a taxon's API record but return HTTP 404 (not found) when requested directly."

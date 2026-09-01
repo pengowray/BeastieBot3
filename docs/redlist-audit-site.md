@@ -33,6 +33,14 @@ incomplete or mistaken. When editing copy, avoid em-dashes and "not X but Y" phr
 - **`Model/AuditReport`** — a report: neutral `Summary`, optional `SummaryTables`, a column list,
   and findings pre-sorted by importance. The full-list page always shows every row on one page
   (filter box + click-to-sort), never split into per-group pages.
+- **`BreakageClass`** — the `Type` chip on the index and on each report heading. Four values, no
+  per-report overrides, so the column can be skimmed: `Breaking` → "Missing data" (red),
+  `FixableData` → "Text cleanup" (amber), `Advisory` → "For review" (blue), `Clear` → "Nothing
+  found" (green). Green is reserved for `Clear`, where it genuinely means good; the advisory class
+  is blue because most of its rows are CoL differences that need judgment, not reassurance. The
+  index table prints `TypeLegend` (in `AuditSiteRenderer`) under the heading, since an unexplained
+  chip is not a label. Adding a fifth label is almost always the wrong fix: a report that does not
+  fit belongs in a clearer existing class, or its title should say more.
 - **`Model/AuditColumn` + `AuditColumns`** — column definitions and a factory of reusable columns
   (scientific name, status badge, taxonomy, ids, Red List link, field/current/suggested). Defined
   once, rendered identically in HTML and CSV.
@@ -49,6 +57,10 @@ incomplete or mistaken. When editing copy, avoid em-dashes and "not X but Y" phr
   (same columns to CSV), `AuditPageLayout` (page chrome + disclaimer), `AuditSiteRenderer`
   (orchestrates index, per-report detail pages, full-list pages, methodology, assets), `HtmlText`
   (escaping, a whitespace visualiser, a tiny Markdown subset), `AuditAssets` (embedded CSS + JS).
+  A summary table with more than 8 rows is written in full but carries `data-collapse="6"`; `audit.js`
+  clamps it to 6 rows with a fade over the clipped row and a "Show all N rows" toggle, so a 15-row
+  class breakdown no longer pushes the findings preview off the screen. With JS off the whole table
+  shows.
 - **`RedlistAuditSiteCommand`** — the `redlist audit-site` command; runs the producers and writes the bundle.
 
 The reusable seams already in the codebase that producers call directly: `IucnTaxonomyRepository`,
@@ -92,9 +104,22 @@ CSV export, which is where the taxon's *current* blank-scope assessments show up
 keeps its id and URL but now reports only ids a taxon lists that return HTTP 404; its title and
 summary widen automatically if a non-404 status ever returns.
 
-Methodology: text hygiene by field. The scientific-name-change report appears only when the
-field-based check finds a name that changed across assessment versions (it produces nothing in
-current data and is omitted, via the producer returning null when empty).
+`FieldHygieneProducer` profiles the taxonomy table column by column: for each text column, the share
+of values with surrounding whitespace, repeated spaces, non-breaking or control characters, or non-NFC
+normalisation. Plain non-ASCII content is deliberately not counted. Names, authorities, and place
+names are expected to carry accented letters, so that count is large, uniform, and nothing can be done
+with it; the page does not mention the omission, because a reader who never sees the row has no
+question to answer.
+
+The scientific-name-change report appears only when the field-based check finds a name that changed
+across assessment versions (it produces nothing in current data and is omitted, via the producer
+returning null when empty).
+
+**Page order.** The index is one table, in the order `Producers()` declares, with one exception the
+list cannot express: `col-not-found` comes out of the middle of the CoL set and is the longest, least
+actionable list, so `Execute` sorts it to the end (a stable `OrderBy`, so nothing else moves). There
+is no separate methodology section; a report that gives context rather than rows sits near the end of
+the same table.
 
 ### Catalogue of Life crosscheck (`Producers/ColCrosscheck/`)
 
@@ -103,7 +128,7 @@ findings into seven separate report pages (most actionable first, noisiest last)
 
 | Report id | Page | What it lists |
 | --- | --- | --- |
-| `col-close-match` | Names with a close CoL match | no exact match, but a near CoL name (likely spelling/encoding) |
+| `col-close-match` | Names with a close CoL match | the IUCN name is in no CoL usage at all (accepted or synonym), but a near CoL name exists (likely spelling/encoding), with that near name checked against CoL's own status and IUCN's synonym list |
 | `col-synonym` | Species and subspecies treated as synonyms in CoL | an assessed taxon whose name CoL records as a synonym of another accepted name (with the accepted name's authority/year, and whether IUCN already records that name as a synonym) |
 | `col-synonym-higher` | Higher-rank names treated as synonyms in CoL | a genus/family/order/class name CoL records only as a synonym (with the accepted name's authority/year) |
 | `col-classification` | Higher-rank placement differences that look like spelling variants | a higher taxon whose parent differs like a typo (fuzzy/encoding), same phylum only |
@@ -118,14 +143,23 @@ are ordered IUCN side first (name, rank, status, assessment year), then the CoL 
 authority, `CoL year`, link, cross-checks), then taxonomy context. The `CoL year` is the name's
 `namePublishedInYear` when present, otherwise the year parsed from its authority string.
 
-**Synonym reports.** Both synonym reports show the CoL accepted name's authority (which carries the
-year, a hint at when the name was established). `col-synonym` also cross-references the CoL accepted
-name against IUCN's own synonyms: `IucnSynonymIndex` scans the IUCN API cache once (the only place
-IUCN carries synonyms, `taxon.synonyms[]`, reconstructing the bare name from the structured fields)
-and the report flags whether IUCN already records that name as a synonym "of same taxon" (the
-catalogues are reversed on which name is accepted) or "of other taxon". The column is blank when the
-API cache is unavailable; under `--limit` the index is partial, so run without a limit for a complete
-answer.
+**Synonym cross-check.** `IucnSynonymIndex` scans the IUCN API cache once (the only place IUCN
+carries synonyms, `taxon.synonyms[]`, reconstructing the bare name from the structured fields) and
+answers, for a given CoL name, whether IUCN already records it as a synonym "of same taxon" (the
+catalogues are reversed on which name is accepted) or "of other taxon". Two reports use it. The
+column is blank when the API cache is unavailable; under `--limit` the index is partial, so run
+without a limit for a complete answer.
+
+Both synonym reports show the CoL accepted name's authority (which carries the year, a hint at when
+the name was established). `col-synonym` runs the synonym cross-check on the CoL accepted name.
+
+`col-close-match` runs two checks on the near name it suggests, one lookup each, because both change
+what the row means: whether CoL itself treats that name as accepted or as a synonym of something else
+(`CoL status` column), and whether IUCN already lists it as a synonym (`Closest name in IUCN synonyms`
+column). A pair IUCN already records is a known relationship, not a spelling slip, so "align the
+spelling" would be the wrong suggestion for it. On 2026-1 about a fifth of the suggested near names
+are CoL synonyms, so the checks are not hypothetical. Note what the report does *not* claim: the near
+name is chosen by spelling similarity, and a row is a candidate for review, not a confirmed pair.
 
 **ColDP shape.** This ColDP `nameusage` table has no `acceptedNameUsageID` column; a synonym's
 `parentID` points at its accepted taxon, and every accepted name carries its higher-rank ancestors

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
@@ -57,7 +57,6 @@ internal sealed class NameChangesProducer : IAuditReportProducer {
         return new AuditReport {
             Id = Id,
             Title = "Scientific name changes across assessment versions",
-            Tier = AuditReportTier.Methodology,
             Breakage = BreakageClass.Advisory,
             DataSourceLabel = "IUCN API (taxon assessment summaries)",
             Blurb = "Taxa whose assessments record more than one distinct scientific name.",

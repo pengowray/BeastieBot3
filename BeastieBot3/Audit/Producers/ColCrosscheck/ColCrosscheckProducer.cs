@@ -80,12 +80,11 @@ internal sealed class ColCrosscheckProducer : IAuditReportSetProducer {
     private static AuditReport NotFound(string source, int assessed, List<AuditFinding> findings) => new() {
         Id = NotFoundId,
         Title = "Names not found in the Catalogue of Life",
-        Tier = AuditReportTier.IucnCore,
         Breakage = BreakageClass.Advisory,
         DataSourceLabel = source,
-        Blurb = "IUCN names with no Catalogue of Life match, exact or approximate.",
+        Blurb = "IUCN names that appear nowhere in the Catalogue of Life, with no close spelling match there either.",
         Summary =
-            "The table below lists IUCN scientific names that the Catalogue of Life does not contain. For each name there is no exact match in CoL, and a search for similar spellings within the same genus and species epithet found no close candidate either.\n\n" +
+            "The IUCN names below appear nowhere in the Catalogue of Life, neither as accepted names nor as synonyms. A search for similar spellings within the same genus and species epithet found no close candidate either.\n\n" +
             "### Why it matters\n\n" +
             "A name absent from the Catalogue of Life cannot be cross-referenced there. The likely reasons vary: the name may be newer than the Catalogue of Life release compared against, may come from a source CoL does not yet cover, or may be spelled differently enough that no match is found.\n\n" +
             "### Suggestion\n\n" +
@@ -100,16 +99,16 @@ internal sealed class ColCrosscheckProducer : IAuditReportSetProducer {
     private static AuditReport CloseMatch(string source, int assessed, List<AuditFinding> findings) => new() {
         Id = CloseMatchId,
         Title = "Names with a close Catalogue of Life match",
-        Tier = AuditReportTier.IucnCore,
         Breakage = BreakageClass.Advisory,
         DataSourceLabel = source,
-        Blurb = "IUCN names with no exact Catalogue of Life match, each paired with the most similar CoL name in the same genus, and a note on how the two spellings differ.",
+        Blurb = "IUCN names that appear nowhere in the Catalogue of Life, each paired with the most similar CoL spelling and a note on how the two differ.",
         Summary =
-            "The table below lists IUCN scientific names with no exact match in the Catalogue of Life, each paired with the most similar CoL name found within the same genus and species epithet. The detail column says how the two spellings differ (punctuation, diacritics, Unicode encoding, or a short spelling variant).\n\n" +
+            "The IUCN names below appear nowhere in the Catalogue of Life, neither as accepted names nor as synonyms. Each is paired with the most similar CoL spelling in the same genus or with the same species epithet. The detail column says how the two spellings differ (punctuation, diacritics, Unicode encoding, or a small spelling change).\n\n" +
+            "Two checks run on each suggested match: whether CoL treats it as an accepted name or as a synonym, and whether IUCN already lists it as a synonym of the taxon. Both are shown as columns. A pair IUCN already records as a synonym is a known relationship rather than a spelling slip.\n\n" +
             "### Why it matters\n\n" +
-            "When the two catalogues spell a name slightly differently, cross referencing fails, even though they are almost certainly the same taxon. This matters for both automated tools and manual searches.\n\n" +
+            "A name spelled slightly differently in the two catalogues will not cross reference, even when both records describe the same taxon. Automated matching fails and manual searches come up empty.\n\n" +
             "### Suggestion\n\n" +
-            "Check each pair. Where it is the same name spelled differently, aligning the spelling lets the two catalogues match.",
+            "Check each pair. Where the two spellings are the same name, aligning them lets the catalogues match. Where the closest CoL name is a synonym, the CoL accepted name is the better one to compare against.",
         Columns = CloseMatchColumns(),
         Findings = OrderSpecies(findings),
         HeadlineCount = findings.Count,
@@ -120,7 +119,6 @@ internal sealed class ColCrosscheckProducer : IAuditReportSetProducer {
     private static AuditReport Synonym(string source, int assessed, List<AuditFinding> findings) => new() {
         Id = SynonymId,
         Title = "Species and subspecies treated as synonyms in the Catalogue of Life",
-        Tier = AuditReportTier.IucnCore,
         Breakage = BreakageClass.Advisory,
         DataSourceLabel = source,
         Blurb = "Assessed IUCN taxa whose name the Catalogue of Life records as a synonym of a different accepted name.",
@@ -140,7 +138,6 @@ internal sealed class ColCrosscheckProducer : IAuditReportSetProducer {
     private static AuditReport Authority(string source, int assessed, List<AuditFinding> findings) => new() {
         Id = AuthorityId,
         Title = "Minor naming authority differences",
-        Tier = AuditReportTier.IucnCore,
         Breakage = BreakageClass.Advisory,
         DataSourceLabel = source,
         Blurb = "Names that match the Catalogue of Life exactly but whose author attribution is spelled slightly differently in the two catalogues.",
@@ -162,7 +159,6 @@ internal sealed class ColCrosscheckProducer : IAuditReportSetProducer {
     private static AuditReport SynonymHigher(string source, int higher, List<AuditFinding> findings) => new() {
         Id = SynonymHigherId,
         Title = "Higher-rank names treated as synonyms in the Catalogue of Life",
-        Tier = AuditReportTier.IucnCore,
         Breakage = BreakageClass.Advisory,
         DataSourceLabel = source,
         Blurb = "Genus, family, order, and class names used in the IUCN classification that the Catalogue of Life records only as synonyms.",
@@ -181,7 +177,6 @@ internal sealed class ColCrosscheckProducer : IAuditReportSetProducer {
     private static AuditReport Classification(string source, int higher, List<AuditFinding> findings) => new() {
         Id = ClassificationId,
         Title = "Higher-rank placement differences that look like spelling variants",
-        Tier = AuditReportTier.IucnCore,
         Breakage = BreakageClass.Advisory,
         DataSourceLabel = source,
         Blurb = "Names whose parent taxon is spelled slightly differently in IUCN and the Catalogue of Life, suggesting the same placement written two ways.",
@@ -200,7 +195,6 @@ internal sealed class ColCrosscheckProducer : IAuditReportSetProducer {
     private static AuditReport Reorg(string source, int higher, List<AuditFinding> findings) => new() {
         Id = ReorgId,
         Title = "Higher-rank names placed differently in the Catalogue of Life",
-        Tier = AuditReportTier.IucnCore,
         Breakage = BreakageClass.Advisory,
         DataSourceLabel = source,
         Blurb = "Names the Catalogue of Life places under a genuinely different parent taxon (not just a different spelling of the same one).",
@@ -246,9 +240,15 @@ internal sealed class ColCrosscheckProducer : IAuditReportSetProducer {
     private static IReadOnlyList<AuditColumn> NotFoundColumns() =>
         IucnHead().Concat(SpeciesTail()).ToList();
 
+    // Close-match report: the suggested CoL name, then the two checks run on it (what CoL itself
+    // calls that name, and whether IUCN already lists it as a synonym), then its year and link.
     private static IReadOnlyList<AuditColumn> CloseMatchColumns() =>
         IucnHead().Concat(new[] {
             AuditColumns.SuggestedValue("Closest CoL name", AuditColumnType.Text),
+            AuditColumns.Custom("colStatus", "CoL status", AuditColumnType.Text,
+                "What the Catalogue of Life calls the closest name: an accepted name, or a synonym of some other accepted name."),
+            AuditColumns.Custom("iucnSynonym", "Closest name in IUCN synonyms", AuditColumnType.Text,
+                "Whether IUCN already records the closest CoL name as a synonym. \"of same taxon\" means the pair is already recorded and is not a spelling difference. Blank when IUCN synonym data from the IUCN API is unavailable."),
             ColYearColumn(),
             AuditColumns.ColLink(),
         }).Concat(SpeciesTail()).ToList();

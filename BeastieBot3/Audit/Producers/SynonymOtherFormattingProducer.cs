@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Linq;
 using BeastieBot3.Audit.Model;
 
@@ -46,7 +46,6 @@ internal sealed class SynonymOtherFormattingProducer : IAuditReportProducer {
         return new AuditReport {
             Id = Id,
             Title = "Synonym names with markup or unusual characters",
-            Tier = AuditReportTier.IucnCore,
             Breakage = BreakageClass.FixableData,
             DataSourceLabel = "IUCN API (taxon synonyms)",
             Blurb = "Synonym names containing HTML markup, stray HTML entities, or typographic quotes, each with a cleaned plain-text suggestion.",

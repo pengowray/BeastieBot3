@@ -45,9 +45,11 @@ internal sealed class RedlistAuditSiteCommand : Command<RedlistAuditSiteCommand.
         public string? Contact { get; init; }
     }
 
-    // Display order: IUCN-owned first (most actionable first), methodology after. Most producers
-    // emit one report; ColCrosscheckProducer emits several from one pass, so everything is wrapped
-    // to the set-producer contract and iterated uniformly.
+    // Page order on the index is the order below, most actionable first. Most producers emit one
+    // report; ColCrosscheckProducer emits several from one pass, so everything is wrapped to the
+    // set-producer contract and iterated uniformly. The one report whose position this list cannot
+    // express is "names not found in CoL", which comes out of the middle of the CoL set and belongs
+    // last; Execute moves it there.
     private static IReadOnlyList<IAuditReportSetProducer> Producers() => new IAuditReportSetProducer[] {
         new SingleReportProducer(new EmptyScopeProducer()),
         new SingleReportProducer(new FailedAssessmentsProducer()),
@@ -61,8 +63,8 @@ internal sealed class RedlistAuditSiteCommand : Command<RedlistAuditSiteCommand.
         new SingleReportProducer(new HtmlConsistencyProducer()),
         new SingleReportProducer(new TaxonomyConsistencyProducer()),
         new ColCrosscheckProducer(),
-        new SingleReportProducer(new FieldHygieneProducer()),
         new SingleReportProducer(new NameChangesProducer()),
+        new SingleReportProducer(new FieldHygieneProducer()),
     };
 
     public override int Execute(CommandContext context, Settings settings, CancellationToken ct) {
@@ -104,6 +106,10 @@ internal sealed class RedlistAuditSiteCommand : Command<RedlistAuditSiteCommand.
             AnsiConsole.MarkupLine("[red]No reports produced. Check that the IUCN databases are imported and configured.[/]");
             return -1;
         }
+
+        // "Names not found in CoL" is the longest and least actionable list, so it goes last. OrderBy
+        // is stable, so everything else keeps the order Producers() declares.
+        reports = reports.OrderBy(r => r.Id == ColCrosscheckProducer.NotFoundId ? 1 : 0).ToList();
 
         var config = new AuditSiteConfig {
             Contact = string.IsNullOrWhiteSpace(settings.Contact) ? "feedback@pengowray.com" : settings.Contact!,

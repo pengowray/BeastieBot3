@@ -1,4 +1,4 @@
-using System.Text;
+﻿using System.Text;
 using BeastieBot3.Audit.Model;
 
 // Shared page chrome for every page in the bundle: head, header with the site title, the
@@ -60,16 +60,18 @@ internal static class AuditPageLayout {
         return sb.ToString();
     }
 
-    // The kind chip. When it sits inside a heading, aria-hidden keeps it out of the accessible
-    // heading text, so a title such as "English common name issues" is never read as one run-on
-    // string with the chip label appended.
-    public static string BreakageBadge(BreakageClass breakage, string? label = null, bool inHeading = false) {
+    // The type chip. Four labels site-wide, so the column reads at a glance; the legend under each
+    // index table spells them out. When the chip sits inside a heading, aria-hidden keeps it out of
+    // the accessible heading text, so a title such as "English common name issues" is never read as
+    // one run-on string with the chip label appended.
+    public static string BreakageBadge(BreakageClass breakage, bool inHeading = false) {
         var (cls, text) = breakage switch {
-            BreakageClass.Breaking => ("breaking", "Site or API affected"),
-            BreakageClass.FixableData => ("fixable", "Data cleanup"),
+            BreakageClass.Breaking => ("breaking", "Missing data"),
+            BreakageClass.FixableData => ("fixable", "Text cleanup"),
+            BreakageClass.Clear => ("clear", "Nothing found"),
             _ => ("advisory", "For review"),
         };
         var hidden = inHeading ? " aria-hidden=\"true\"" : "";
-        return $"<span class=\"badge {cls}\"{hidden}>{HtmlText.Escape(label ?? text)}</span>";
+        return $"<span class=\"badge {cls}\"{hidden}>{HtmlText.Escape(text)}</span>";
     }
 }

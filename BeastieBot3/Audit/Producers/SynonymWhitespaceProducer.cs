@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Linq;
 using BeastieBot3.Audit.Model;
 
@@ -41,7 +41,6 @@ internal sealed class SynonymWhitespaceProducer : IAuditReportProducer {
         return new AuditReport {
             Id = Id,
             Title = "Synonym names with whitespace irregularities",
-            Tier = AuditReportTier.IucnCore,
             Breakage = BreakageClass.FixableData,
             DataSourceLabel = "IUCN API (taxon synonyms)",
             Blurb = "Synonym names with stray whitespace (leading, trailing, doubled, or non-breaking), each with a whitespace-normalised suggestion.",

@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Linq;
 using Microsoft.Data.Sqlite;
 using BeastieBot3.Audit.Model;
@@ -47,9 +47,7 @@ internal sealed class OrphanInfraranksProducer : IAuditReportProducer {
         return new AuditReport {
             Id = Id,
             Title = "Subspecies and varieties with no assessed parent species",
-            Tier = AuditReportTier.IucnCore,
             Breakage = BreakageClass.Breaking,
-            KindLabel = "Hard to find",
             DataSourceLabel = $"IUCN Red List {ctx.Release} (CSV export)",
             Blurb = "Assessed subspecies and varieties whose parent species has no assessment of its own, leaving them reachable only by their SIS id.",
             Summary =

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -38,7 +38,6 @@ internal sealed class SynonymNameNotesProducer : IAuditReportProducer {
         return new AuditReport {
             Id = Id,
             Title = "Notes written inside synonym names",
-            Tier = AuditReportTier.IucnCore,
             Breakage = BreakageClass.FixableData,
             DataSourceLabel = "IUCN API (taxon synonyms)",
             Blurb = "Synonyms whose name field contains a bracketed nomenclatural note, such as [orth. error], alongside the name itself.",

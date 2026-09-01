@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -102,7 +102,6 @@ internal sealed class HtmlConsistencyProducer : IAuditReportProducer {
             Id = Id,
             Title = "HTML and plain-text narrative fields that differ",
             Blurb = "Assessments whose narrative text differs between the HTML and plain-text CSV exports, often because heavy redundant markup left the plain-text version empty or truncated.",
-            Tier = AuditReportTier.IucnCore,
             Breakage = BreakageClass.FixableData,
             DataSourceLabel = $"IUCN Red List {ctx.Release} (CSV export)",
             Summary = summary,

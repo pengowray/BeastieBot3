@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -80,9 +80,7 @@ internal sealed class EmptyScopeProducer : IAuditReportProducer {
         return new AuditReport {
             Id = Id,
             Title = "Assessments with no geographic scope",
-            Tier = AuditReportTier.IucnCore,
             Breakage = BreakageClass.Breaking,
-            KindLabel = "Missing data",
             DataSourceLabel = haveApi && haveCsv
                 ? "IUCN API and CSV export"
                 : haveApi ? "IUCN API" : "IUCN CSV export",

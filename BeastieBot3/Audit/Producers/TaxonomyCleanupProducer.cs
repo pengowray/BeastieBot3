@@ -1,4 +1,4 @@
-using System.Collections.Generic;
+﻿using System.Collections.Generic;
 using System.Linq;
 using BeastieBot3.Audit.Model;
 using BeastieBot3.Infrastructure;
@@ -63,7 +63,6 @@ internal sealed class TaxonomyCleanupProducer : IAuditReportProducer {
         return new AuditReport {
             Id = Id,
             Title = "Whitespace and marker cleanup in taxonomy fields",
-            Tier = AuditReportTier.IucnCore,
             Breakage = BreakageClass.FixableData,
             DataSourceLabel = $"IUCN Red List {ctx.Release} (CSV export)",
             Blurb = "Taxonomy field values with stray whitespace (leading, trailing, doubled, or non-breaking), each with a suggested cleaned-up value.",

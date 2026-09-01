@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -7,9 +7,11 @@ using Microsoft.Data.Sqlite;
 using BeastieBot3.Audit.Model;
 
 // Column-level text-hygiene profile of the IUCN taxonomy table: for each text column, the share of
-// values with surrounding whitespace, repeated spaces, non-breaking or control characters, non-ASCII
-// content, or non-NFC normalisation. A focused profiler (counts are exact over the table) rather than
-// a per-taxon list.
+// values with surrounding whitespace, repeated spaces, non-breaking or control characters, or non-NFC
+// normalisation. A focused profiler (counts are exact over the table) rather than a per-taxon list.
+//
+// Plain non-ASCII content is deliberately not counted. Names, authorities, and place names are
+// expected to carry accented letters, so the count is large, uniform, and nothing can be done with it.
 
 namespace BeastieBot3.Audit.Producers;
 
@@ -32,12 +34,10 @@ internal sealed class FieldHygieneProducer : IAuditReportProducer {
         public long LeadingTrailing;
         public long Repeated;
         public long Special;
-        public long NonAscii;
         public long NotNfc;
         public string? ExampleTrim;
         public string? ExampleSpecial;
         public string? ExampleNotNfc;
-        public string? ExampleNonAscii;
     }
 
     public AuditReport? Produce(AuditContext ctx) {
@@ -70,9 +70,6 @@ internal sealed class FieldHygieneProducer : IAuditReportProducer {
             if (s.NotNfc > 0) {
                 findings.Add(Make(s, "not-nfc-normalised", s.NotNfc, s.ExampleNotNfc, s.ExampleNotNfc?.Normalize(NormalizationForm.FormC), "Some values are not in NFC normalisation form."));
             }
-            if (s.NonAscii > 0) {
-                findings.Add(Make(s, "non-ascii-content", s.NonAscii, s.ExampleNonAscii, null, "Values contain non-ASCII characters (often expected for names and authorities)."));
-            }
         }
 
         var ordered = findings
@@ -83,13 +80,12 @@ internal sealed class FieldHygieneProducer : IAuditReportProducer {
         return new AuditReport {
             Id = Id,
             Title = "Text hygiene by taxonomy field",
-            Tier = AuditReportTier.Methodology,
             Breakage = BreakageClass.Advisory,
             DataSourceLabel = $"IUCN Red List {ctx.Release} (CSV export, taxonomy file)",
             Blurb = "A field-by-field profile of text irregularities in the taxonomy data, showing which fields have the most stray whitespace or unusual characters.",
             Summary =
-                "The table below profiles the text of each taxonomy field, one row per field and characteristic: what share of the field's values have surrounding whitespace, repeated spaces, non-breaking or control characters, non-ASCII content, or non-NFC Unicode normalisation. " +
-                "Counts cover every value in the field. Non-ASCII content is often expected in names and authorities and is listed for completeness, not as a problem.\n\n" +
+                "The table below profiles the text of each taxonomy field, one row per field and characteristic: what share of the field's values have surrounding whitespace, repeated spaces, non-breaking or control characters, or non-NFC Unicode normalisation. " +
+                "Counts cover every value in the field.\n\n" +
                 "### Why it matters\n\n" +
                 "This profile shows which fields have the most text irregularities, so cleanup effort can be aimed where it has the most effect.\n\n" +
                 "### Suggestion\n\n" +
@@ -174,10 +170,6 @@ internal sealed class FieldHygieneProducer : IAuditReportProducer {
                 if (value.Any(IsSpecialWhitespace)) {
                     s.Special++;
                     s.ExampleSpecial ??= value;
-                }
-                if (value.Any(c => c > 127)) {
-                    s.NonAscii++;
-                    s.ExampleNonAscii ??= value;
                 }
                 if (!value.IsNormalized(NormalizationForm.FormC)) {
                     s.NotNfc++;
