@@ -86,11 +86,11 @@ internal sealed class ColCrosscheckProducer : IAuditReportSetProducer {
         DataSourceLabel = source,
         Blurb = "IUCN names that appear nowhere in the Catalogue of Life, with no close spelling match there either.",
         Summary =
-            "The IUCN names below appear nowhere in the Catalogue of Life, neither as accepted names nor as synonyms. A search for similar spellings within the same genus and species epithet found no close candidate either.\n\n" +
+            "The IUCN names below appear nowhere in the Catalogue of Life, neither as accepted names nor as synonyms, and a search for similar spellings within the same genus and species epithet found no close candidate either. A third check looks up each taxon's own IUCN-listed synonyms in CoL. For most rows those are absent too. Where one is found, it is shown in the IUCN synonym in CoL column, with the accepted name CoL gives for it where that link resolves. CoL holds these only as synonyms, and the chain can end at a name that is not the same taxon, so treat a filled row as a lead rather than a match.\n\n" +
             "### Why it matters\n\n" +
-            "A name absent from the Catalogue of Life cannot be cross-referenced there. The likely reasons vary: the name may be newer than the Catalogue of Life release compared against, may come from a source CoL does not yet cover, or may be spelled differently enough that no match is found.\n\n" +
+            "For most of these rows there is no route into the Catalogue of Life at all: neither the name nor any IUCN synonym of the taxon is there. The likely reasons vary: the name may be newer than the CoL release compared against, may come from a source CoL does not yet cover, or may be spelled differently enough that no match is found. The rows with a filled IUCN synonym in CoL column are different: the taxon can be reached, but only through a CoL synonym record, and the accepted name it leads to needs checking before being read as the same taxon.\n\n" +
             "### Suggestion\n\n" +
-            "Use this as a list to spot-check against current literature. Many entries are expected to be legitimately newer than the Catalogue of Life release compared against (its version is given above under Source).",
+            "Use this as a list to spot-check against current literature. Many entries are expected to be legitimately newer than the Catalogue of Life release compared against (its version is given above under Source). Where the IUCN synonym in CoL column is filled, start the check there: CoL knows the synonym, and where it resolves one, the accepted name it points to.",
         Columns = NotFoundColumns(),
         Findings = OrderSpecies(findings),
         HeadlineCount = findings.Count,
@@ -146,7 +146,7 @@ internal sealed class ColCrosscheckProducer : IAuditReportSetProducer {
         DataSourceLabel = source,
         Blurb = "The two catalogues accept different names for the same taxon; IUCN's synonym list already links the pair.",
         Summary =
-            "IUCN and the Catalogue of Life accept different names for each taxon on this page, and the IUCN record already lists the name CoL accepts among its synonyms. Some rows are mutual: CoL likewise treats the IUCN name as a synonym of its accepted name. In the others the IUCN spelling appears nowhere in CoL, and the pairing rests on the IUCN synonym list alone. Either way the two records can be cross referenced, so nothing on this page is a missing name or a broken link.\n\n" +
+            "IUCN and the Catalogue of Life accept different names for each taxon on this page, and the IUCN record already lists the name CoL accepts among its synonyms. Some rows are mutual: CoL likewise treats the IUCN name as a synonym of its accepted name. In the others the name IUCN accepts appears nowhere in CoL, and the pairing rests on the IUCN synonym list alone. Either way the two records can be cross referenced, so nothing on this page is a missing name or a broken link.\n\n" +
             "### Why it matters\n\n" +
             "Not much is at stake: nothing on either side is wrong, and nothing here needs fixing. Two details are still worth knowing. The link between the pairs lives in the IUCN synonym list, which is published through the Red List API but not in the CSV export, so a match run against the export alone misses it. And a small number of rows give the same author two different publication years, one per catalogue; that can be a real bibliographic difference, as with a work issued in parts, or a transcription error, and those rows sort to the top of the table.\n\n" +
             "### Suggestion\n\n" +
@@ -260,8 +260,16 @@ internal sealed class ColCrosscheckProducer : IAuditReportSetProducer {
         AuditColumns.Detail(),
     };
 
+    // Not-found report: the IUCN side, then the third check (a synonym IUCN lists for the taxon that
+    // does turn up in CoL, and where CoL takes it). Both are blank on most rows.
     private static IReadOnlyList<AuditColumn> NotFoundColumns() =>
-        IucnHead().Concat(SpeciesTail()).ToList();
+        IucnHead().Concat(new[] {
+            AuditColumns.Custom("iucnSynonymInCol", "IUCN synonym in CoL", AuditColumnType.Text,
+                "An IUCN-listed synonym of this taxon that does appear in the Catalogue of Life. Blank when none does."),
+            AuditColumns.Custom("colAcceptedForSynonym", "CoL accepted name", AuditColumnType.Text,
+                "The accepted name CoL gives for that synonym. Blank when CoL does not link it to one."),
+            AuditColumns.ColLink(),
+        }).Concat(SpeciesTail()).ToList();
 
     // Close-match report: the suggested CoL name, then the two checks run on it (what CoL itself
     // calls that name, and whether IUCN already lists it as a synonym), then its year and link.

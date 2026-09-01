@@ -66,9 +66,30 @@ internal sealed class ColCrosscheckEngine {
         if (primary is null) {
             var near = SuggestNearMatch(row, name);
             if (near.Best is null) {
-                data.NotFound.Add(SpeciesFinding(ColCrosscheckProducer.NotFoundId, row, rank, isFull, name,
-                    "missing-from-col", "scientificName", name, null, colId: null, severity,
-                    "No Catalogue of Life match for this name, and no close candidate from fuzzy search."));
+                // The IUCN name is in no CoL usage and no near spelling exists, but the taxon may
+                // still be in CoL under one of the names IUCN itself files as a synonym. That is a
+                // different lookup from the one the close-match path does, which only asks about the
+                // near name, and it finds the cases where the two catalogues use different genera.
+                var viaSynonym = FindViaIucnSynonym(row);
+                if (viaSynonym.Accepted is not null) {
+                    data.AcceptedDiffers.Add(AcceptedDiffersFinding(row, rank, isFull, name,
+                        AuditMapping.Decode(viaSynonym.Accepted.ScientificName),
+                        AuditMapping.Decode(viaSynonym.Accepted.Authorship),
+                        viaSynonym.Accepted.Id, severity, Origin.IucnSynonym));
+                    return;
+                }
+
+                var detail = "No Catalogue of Life match for this name, and no close candidate from fuzzy search.";
+                if (viaSynonym.SynonymUsage is not null) {
+                    detail += viaSynonym.SynonymAcceptedName is null
+                        ? $" IUCN also lists {viaSynonym.Name} as a synonym of this taxon; the Catalogue of Life has {viaSynonym.Name} as a synonym but does not link it to an accepted name."
+                        : $" IUCN also lists {viaSynonym.Name} as a synonym of this taxon; the Catalogue of Life holds {viaSynonym.Name} as a synonym of {viaSynonym.SynonymAcceptedName}.";
+                }
+                var notFound = SpeciesFinding(ColCrosscheckProducer.NotFoundId, row, rank, isFull, name,
+                    "missing-from-col", "scientificName", name, null, viaSynonym.SynonymUsage?.Id, severity, detail);
+                SetExtra(notFound, "iucnSynonymInCol", viaSynonym.Name);
+                SetExtra(notFound, "colAcceptedForSynonym", viaSynonym.SynonymAcceptedName);
+                data.NotFound.Add(notFound);
             } else {
                 var colName = AuditMapping.Decode(near.Best.ScientificName);
                 // Two follow-up checks on the suggested name, one lookup each. Both change what the
@@ -93,7 +114,7 @@ internal sealed class ColCrosscheckEngine {
                     // IUCN's own synonym list already links the two names, so the pair can be joined
                     // and "align the spelling" is the wrong suggestion for it. Reported separately.
                     data.AcceptedDiffers.Add(AcceptedDiffersFinding(row, rank, isFull, name, colName,
-                        AuditMapping.Decode(near.Best.Authorship), near.Best.Id, severity, mutual: false));
+                        AuditMapping.Decode(near.Best.Authorship), near.Best.Id, severity, Origin.CloseSpelling));
                     return;
                 }
                 if (iucnMatch == IucnSynonymMatch.OtherTaxon) {
@@ -120,7 +141,7 @@ internal sealed class ColCrosscheckEngine {
                 // synonym list. That is a different observation from a name CoL has moved into
                 // synonymy while IUCN carries no pointer to the replacement, so it gets its own page.
                 data.AcceptedDiffers.Add(AcceptedDiffersFinding(row, rank, isFull, name, acceptedName,
-                    AuditMapping.Decode(accepted?.Authorship), linkId, severity, mutual: true));
+                    AuditMapping.Decode(accepted?.Authorship), linkId, severity, Origin.Mutual));
                 return;
             }
             var detail = acceptedName is null
@@ -166,18 +187,60 @@ internal sealed class ColCrosscheckEngine {
         }
     }
 
-    // One row of the accepted-name-differs report. `mutual` is true when CoL also records the IUCN
-    // name as a synonym of its accepted name, false when CoL holds no entry for the IUCN spelling and
-    // the pairing rests on IUCN's synonym list alone. Rows whose two authorities credit the same
-    // author but a different year are lifted above the rest by their severity tier.
+    // How a row reached the accepted-name-differs report, which is only used to word its detail line.
+    private enum Origin {
+        Mutual,        // CoL records the IUCN name as a synonym of its accepted name
+        CloseSpelling, // CoL has no entry for the IUCN name; the pair was found by spelling
+        IucnSynonym,   // CoL has no entry for the IUCN name; the pair came from IUCN's synonym list
+    }
+
+    // Looks the taxon's own IUCN synonyms up in CoL. An accepted hit means CoL holds the taxon under
+    // a name IUCN files as a synonym, which is a name disagreement rather than a missing taxon. A
+    // synonym-only hit is a lead, not a match: the chain sometimes lands on an unrelated name, so it
+    // is reported as what it is and left on the not-found page.
+    private ViaSynonym FindViaIucnSynonym(IucnTaxonomyRow row) {
+        if (_iucnSynonyms is null) {
+            return default;
+        }
+        ColTaxonRecord? firstSynonym = null;
+        string? firstSynonymName = null;
+        foreach (var candidate in _iucnSynonyms.SynonymsOf(row.TaxonId)) {
+            var usages = _col.FindByScientificName(candidate, CancellationToken.None);
+            foreach (var usage in usages) {
+                if (IsAcceptedStatus(usage.Status)) {
+                    return new ViaSynonym(candidate, usage, null, null);
+                }
+                if (firstSynonym is null && IsSynonymStatus(usage.Status)) {
+                    firstSynonym = usage;
+                    firstSynonymName = candidate;
+                }
+            }
+        }
+        if (firstSynonym is null) {
+            return default;
+        }
+        var parent = string.IsNullOrWhiteSpace(firstSynonym.ParentId)
+            ? null
+            : _col.GetById(firstSynonym.ParentId!, CancellationToken.None);
+        return new ViaSynonym(firstSynonymName, null, firstSynonym, AuditMapping.Decode(parent?.ScientificName));
+    }
+
+    private readonly record struct ViaSynonym(string? Name, ColTaxonRecord? Accepted,
+        ColTaxonRecord? SynonymUsage, string? SynonymAcceptedName);
+
+    // One row of the accepted-name-differs report. The three origins differ only in how the pair was
+    // found, which the detail line states. Rows whose two authorities credit the same author but a
+    // different year are lifted above the rest by their severity tier.
     private AuditFinding AcceptedDiffersFinding(IucnTaxonomyRow row, string rank, bool isFull, string? name,
-        string? colName, string? colAuthority, string? colId, int severity, bool mutual) {
+        string? colName, string? colAuthority, string? colId, int severity, Origin origin) {
         var iucnAuthority = AuditMapping.Decode(GetIucnAuthority(row));
         var clash = AuthorityYearClash(iucnAuthority, colAuthority);
 
-        var detail = mutual
-            ? $"The Catalogue of Life treats {name} as a synonym of {colName}; IUCN treats {colName} as a synonym of {name}."
-            : $"IUCN treats {colName} as a synonym of {name}; the Catalogue of Life has no entry for the spelling {name}.";
+        var detail = origin switch {
+            Origin.Mutual => $"The Catalogue of Life treats {name} as a synonym of {colName}; IUCN treats {colName} as a synonym of {name}.",
+            Origin.CloseSpelling => $"IUCN treats {colName} as a synonym of {name}; the Catalogue of Life has no entry for the spelling {name}.",
+            _ => $"IUCN treats {colName} as a synonym of {name}; the Catalogue of Life has no entry for {name} under any spelling.",
+        };
         if (clash is not null) {
             detail += $" Both credit {clash.Value.Author}, but the years differ: {clash.Value.IucnYear} in IUCN, {clash.Value.ColYear} in the Catalogue of Life.";
         }

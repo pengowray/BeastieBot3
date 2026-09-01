@@ -1,5 +1,6 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Text;
 using System.Text.Json;
 using System.Threading;
@@ -22,10 +23,20 @@ internal enum IucnSynonymMatch {
 
 internal sealed class IucnSynonymIndex {
     private readonly Dictionary<string, HashSet<long>> _byName;
+    private readonly Dictionary<long, List<string>> _byTaxon;
 
     public int SynonymNameCount => _byName.Count;
 
-    private IucnSynonymIndex(Dictionary<string, HashSet<long>> byName) => _byName = byName;
+    private IucnSynonymIndex(Dictionary<string, HashSet<long>> byName, Dictionary<long, List<string>> byTaxon) {
+        _byName = byName;
+        _byTaxon = byTaxon;
+    }
+
+    // The taxon's own synonyms, as IUCN records them. Read the other way round from Lookup: used to
+    // ask whether a taxon whose accepted name is missing from CoL is nevertheless in CoL under one of
+    // the names IUCN files as a synonym.
+    public IReadOnlyList<string> SynonymsOf(long taxonId) =>
+        _byTaxon.TryGetValue(taxonId, out var names) ? names : Array.Empty<string>();
 
     // Does the CoL accepted name appear among IUCN's synonyms, and if so is it a synonym of this same
     // IUCN taxon (the reversed-direction case) or of a different one?
@@ -40,14 +51,16 @@ internal sealed class IucnSynonymIndex {
     // Test seam: build directly from (synonym name, accepted taxon id) pairs.
     public static IucnSynonymIndex FromEntries(IEnumerable<(string Name, long TaxonId)> entries) {
         var map = new Dictionary<string, HashSet<long>>(StringComparer.Ordinal);
+        var byTaxon = new Dictionary<long, List<string>>();
         foreach (var (name, taxonId) in entries) {
-            Add(map, name, taxonId);
+            Add(map, byTaxon, name, taxonId);
         }
-        return new IucnSynonymIndex(map);
+        return new IucnSynonymIndex(map, byTaxon);
     }
 
     public static IucnSynonymIndex Build(SqliteConnection apiCache, int? limit, CancellationToken ct) {
         var map = new Dictionary<string, HashSet<long>>(StringComparer.Ordinal);
+        var byTaxon = new Dictionary<long, List<string>>();
         const string sql = "SELECT root_sis_id, json FROM taxa";
         using var command = apiCache.CreateCommand();
         command.CommandText = limit is > 0 ? sql + " LIMIT " + limit.Value : sql;
@@ -73,15 +86,16 @@ internal sealed class IucnSynonymIndex {
                 foreach (var synonym in synonyms.EnumerateArray()) {
                     var bare = BareName(synonym);
                     if (bare is not null) {
-                        Add(map, bare, rootSisId);
+                        Add(map, byTaxon, bare, rootSisId);
                     }
                 }
             }
         }
-        return new IucnSynonymIndex(map);
+        return new IucnSynonymIndex(map, byTaxon);
     }
 
-    private static void Add(Dictionary<string, HashSet<long>> map, string name, long taxonId) {
+    private static void Add(Dictionary<string, HashSet<long>> map, Dictionary<long, List<string>> byTaxon,
+        string name, long taxonId) {
         var key = Normalize(name);
         if (key.Length == 0) {
             return;
@@ -91,6 +105,17 @@ internal sealed class IucnSynonymIndex {
             map[key] = set;
         }
         set.Add(taxonId);
+
+        // The reverse map keeps the name as written, not the normalised key, because it is looked up
+        // in CoL and shown to the reader.
+        if (!byTaxon.TryGetValue(taxonId, out var names)) {
+            names = new List<string>();
+            byTaxon[taxonId] = names;
+        }
+        var trimmed = name.Trim();
+        if (!names.Contains(trimmed, StringComparer.OrdinalIgnoreCase)) {
+            names.Add(trimmed);
+        }
     }
 
     // Reconstruct the bare binomial/trinomial from the structured fields (which exclude authorship),
