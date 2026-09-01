@@ -47,18 +47,14 @@ internal sealed class NameChangesProducer : IAuditReportProducer {
             .Select(Build)
             .ToList();
 
-        // This report is only worth showing when the field-based check actually finds a name that
-        // changed across assessment versions. In current data it finds none, so it is omitted; it
-        // reappears automatically if a future release records a per-assessment name change.
-        if (findings.Count == 0) {
-            return null;
-        }
-
         return new AuditReport {
             Id = Id,
             SectionId = "text",
+            // Finding nothing is the finding here: former names live in the errata text, not in a
+            // field, so a field comparison cannot see them. Reported as a clean check rather than
+            // returned as null, which the producer contract reserves for a missing data source.
+            Breakage = findings.Count == 0 ? BreakageClass.Clear : BreakageClass.Advisory,
             Title = "Scientific name changes across assessment versions",
-            Breakage = BreakageClass.Advisory,
             DataSourceLabel = "IUCN API (taxon assessment summaries)",
             Blurb = "Taxa whose assessments record more than one distinct scientific name.",
             Summary =

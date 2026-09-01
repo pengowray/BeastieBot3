@@ -91,7 +91,7 @@ internal sealed class ColCrosscheckProducer : IAuditReportSetProducer {
         DataSourceLabel = source,
         SectionId = ColFamily,
         FamilyId = ColFamily,
-        FamilyRank = 6,
+        FamilyRank = 1,
         FamilyScope = "The name is absent from CoL: no near spelling, and no other name for the taxon either.",
         Blurb = "IUCN names that appear nowhere in the Catalogue of Life, with no close spelling match and no other name for the taxon there either.",
         Summary =
@@ -114,7 +114,7 @@ internal sealed class ColCrosscheckProducer : IAuditReportSetProducer {
         DataSourceLabel = source,
         SectionId = ColFamily,
         FamilyId = ColFamily,
-        FamilyRank = 4,
+        FamilyRank = 2,
         FamilyScope = "The name is absent from CoL; a near spelling exists in the same genus or epithet.",
         Blurb = "IUCN names that appear nowhere in the Catalogue of Life, each paired with the most similar CoL spelling and a note on how the two differ.",
         Summary =
@@ -138,7 +138,7 @@ internal sealed class ColCrosscheckProducer : IAuditReportSetProducer {
         DataSourceLabel = source,
         SectionId = ColFamily,
         FamilyId = ColFamily,
-        FamilyRank = 3,
+        FamilyRank = 4,
         FamilyScope = "CoL treats the name as a synonym of an accepted name IUCN does not list.",
         Blurb = "Assessed IUCN taxa whose name the Catalogue of Life records as a synonym of a different accepted name.",
         Summary =
@@ -163,7 +163,7 @@ internal sealed class ColCrosscheckProducer : IAuditReportSetProducer {
         DataSourceLabel = source,
         SectionId = ColFamily,
         FamilyId = ColFamily,
-        FamilyRank = 2,
+        FamilyRank = 8,
         FamilyScope = "Both catalogues hold both names and disagree only on which is accepted.",
         Blurb = "The two catalogues accept different names for the same taxon; IUCN's synonym list already links the pair.",
         Summary =
@@ -189,7 +189,7 @@ internal sealed class ColCrosscheckProducer : IAuditReportSetProducer {
         DataSourceLabel = source,
         SectionId = ColFamily,
         FamilyId = ColFamily,
-        FamilyRank = 5,
+        FamilyRank = 3,
         FamilyScope = "The name is absent from CoL; another IUCN-listed name for the taxon is there as a synonym.",
         Blurb = "The IUCN name is not in CoL, but one of the taxon's other IUCN-listed names is there as a synonym; a lead to check, not a confirmed match.",
         Summary =
@@ -221,7 +221,7 @@ internal sealed class ColCrosscheckProducer : IAuditReportSetProducer {
         DataSourceLabel = source,
         SectionId = ColFamily,
         FamilyId = ColFamily,
-        FamilyRank = 1,
+        FamilyRank = 7,
         FamilyScope = "Exact name match; the author is spelled differently.",
         Blurb = "Names that match the Catalogue of Life exactly but whose author attribution is spelled slightly differently in the two catalogues.",
         Summary =
@@ -246,7 +246,7 @@ internal sealed class ColCrosscheckProducer : IAuditReportSetProducer {
         DataSourceLabel = source,
         SectionId = ColFamily,
         FamilyId = ColFamily,
-        FamilyRank = 7,
+        FamilyRank = 5,
         FamilyScope = "A genus or higher name CoL records only as a synonym.",
         Blurb = "Genus, family, order, and class names used in the IUCN classification that the Catalogue of Life records only as synonyms.",
         Summary =
@@ -268,7 +268,7 @@ internal sealed class ColCrosscheckProducer : IAuditReportSetProducer {
         DataSourceLabel = source,
         SectionId = ColFamily,
         FamilyId = ColFamily,
-        FamilyRank = 8,
+        FamilyRank = 6,
         FamilyScope = "A higher taxon whose CoL parent name looks like a spelling variant of IUCN's.",
         Blurb = "Names whose parent taxon is spelled slightly differently in IUCN and the Catalogue of Life, suggesting the same placement written two ways.",
         Summary =

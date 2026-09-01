@@ -78,14 +78,16 @@ internal static class AuditSiteRenderer {
     // The index in three blocks, in this order. Boundaries follow what the observation is about, not
     // what the Type chip says, because that is what tells a reader whether a block is theirs. The
     // crosscheck block repeats the order of the "you are here" table on each of its nine pages, so
-    // the reader learns one order and meets it twice.
+    // the reader learns one order and meets it twice. That order is FamilyRank, by how likely a row is
+    // to need a change, not by how close it is to a clean match: leading with the page whose own title
+    // says "minor" buried the ones worth opening.
     private static readonly (string Id, string Heading, string Blurb)[] IndexSections = {
         ("records", "Missing and outdated records",
             "Assessments and taxa that are absent, unreachable in the API, or without a current assessment."),
         ("text", "Text cleanup",
             "Stray whitespace, markup, and values that disagree with each other in name, synonym, and narrative fields."),
         ("col", "Catalogue of Life crosscheck",
-            "How each assessed name lines up with the Catalogue of Life; a name with any mismatch lands on exactly one of these pages."),
+            "Differences found when checking every assessed name against the Catalogue of Life; each is on exactly one of these pages."),
     };
 
     // The chip is also the status light: any report can drop to "Nothing found" in a release, so it
@@ -185,7 +187,7 @@ internal static class AuditSiteRenderer {
     // description, where it reads as the expansion of the sibling pages the description names.
     private static readonly Dictionary<string, (string Heading, string Intro)> FamilyHeadings = new() {
         ["col"] = ("The Catalogue of Life crosscheck",
-            "Every assessed name is compared once against the Catalogue of Life. A name that matches cleanly appears on none of the pages below; every other outcome lands on exactly one of them."),
+            "Every assessed name is checked against the Catalogue of Life; each difference found is listed on exactly one of the pages below."),
     };
 
     private static void AppendFamilyTable(StringBuilder sb, AuditDocument doc, AuditReport report) {

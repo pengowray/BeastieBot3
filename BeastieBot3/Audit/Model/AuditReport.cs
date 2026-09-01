@@ -47,8 +47,10 @@ internal sealed class AuditReport {
     public string? FamilyId { get; init; }
     public string? FamilyScope { get; init; }
 
-    // Position in that table, ordered from the closest thing to a clean match to the furthest, which
-    // is the question a reader arrives with. Independent of the order the pages appear on the index.
+    // Position in that table. Ordered by how likely a row is to need a change: genuine gaps first,
+    // then probable fixes, then bulk review, then cleanup; pages that list differences needing no
+    // action come last. Ranked by what the reader does, not by taxonomic level, so a species-level
+    // page and its higher-rank twin sit together.
     public int FamilyRank { get; init; }
 
     // One-sentence plain-text description for the index table and the methodology listing.

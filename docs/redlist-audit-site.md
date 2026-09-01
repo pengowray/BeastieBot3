@@ -122,9 +122,12 @@ names are expected to carry accented letters, so that count is large, uniform, a
 with it; the page does not mention the omission, because a reader who never sees the row has no
 question to answer.
 
-The scientific-name-change report appears only when the field-based check finds a name that changed
-across assessment versions (it produces nothing in current data and is omitted, via the producer
-returning null when empty).
+`NameChangesProducer` finds nothing in current data, and that is the finding: amended assessments keep
+the taxon's present name and record the former name in the errata text rather than in a field, so a
+field comparison cannot see a rename. It used to return null when empty, which made the command print
+"skipped name-changes (data source unavailable)" and claim a cause that was not true. Null is reserved
+for a genuinely missing data source; a check that ran and found nothing publishes its page with zero
+rows and `BreakageClass.Clear`, the same as `taxonomy-consistency`.
 
 **Page order.** The index is one table, in the order `Producers()` declares, with one exception the
 list cannot express: `col-not-found` comes out of the middle of the CoL set and is the longest, least
@@ -201,8 +204,12 @@ publication year of one author's name, which is what `Authority years` reports.
 pages, or on none of them when it matches cleanly. Nothing on the site used to say that, so a reader
 on `col-not-found` could not tell what the other eight covered. Each report carries `FamilyId = "col"`,
 a one-line `FamilyScope`, and a `FamilyRank`; `AuditSiteRenderer.AppendFamilyTable` prints the whole
-family as a "you are here" table under each member's description, ordered by rank from the closest
-thing to a clean match to the furthest, with the current row marked. Counts come from the document,
+family as a "you are here" table under each member's description, with the current row marked.
+`FamilyRank` orders by **how likely a row is to need a change**: genuine gaps first, then probable
+fixes, then bulk review, then cleanup, with the pages that list differences needing no action last.
+It ranks by what the reader does, not by taxonomic level, so a species-level page and its higher-rank
+twin sit together. An earlier version ordered by closeness to a clean match, which opened with a page
+whose own title says "minor" and buried "names not found" in sixth place. Counts come from the document,
 so they cannot drift from the pages they link to. Heading and intro live in `FamilyHeadings`, keyed by
 family id; add a second family there rather than special-casing the renderer.
 
