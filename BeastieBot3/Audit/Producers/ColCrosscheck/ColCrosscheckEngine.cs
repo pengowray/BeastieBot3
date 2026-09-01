@@ -634,17 +634,19 @@ internal sealed class ColCrosscheckEngine {
     private static bool IsAcceptedStatus(string? status) => Looks(status, "accepted");
     private static bool IsSynonymStatus(string? status) => Looks(status, "synonym");
 
+    // OrdinalIgnoreCase rather than lowercasing first: this runs for every CoL candidate of every
+    // assessed taxon, and Trim().ToLowerInvariant() allocated two strings per call to answer a
+    // question neither trimming nor case can change.
     private static bool Looks(string? status, string token) =>
-        !string.IsNullOrWhiteSpace(status) && status.Trim().ToLowerInvariant().Contains(token, StringComparison.Ordinal);
+        !string.IsNullOrWhiteSpace(status) && status.Contains(token, StringComparison.OrdinalIgnoreCase);
 
     private static bool LooksInfraRank(string? rank) {
         if (string.IsNullOrWhiteSpace(rank)) {
             return false;
         }
-        var n = rank.Trim().ToLowerInvariant();
-        return n.Contains("subspecies", StringComparison.Ordinal)
-            || n.Contains("variety", StringComparison.Ordinal)
-            || n.Contains("form", StringComparison.Ordinal);
+        return rank.Contains("subspecies", StringComparison.OrdinalIgnoreCase)
+            || rank.Contains("variety", StringComparison.OrdinalIgnoreCase)
+            || rank.Contains("form", StringComparison.OrdinalIgnoreCase);
     }
 
     private static bool RankMatches(string? colRank, string wanted) =>

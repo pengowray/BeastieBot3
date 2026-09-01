@@ -600,14 +600,18 @@ internal sealed class CommonNameReportCommand : AsyncCommand<CommonNameReportCom
             "(subpopulationName IS NULL OR subpopulationName = '')"
         };
 
+        // Normalise the value, not the column. IUCN stores these upper-case, so TRIM(col) COLLATE
+        // NOCASE compared against a config string turned an index seek on
+        // idx_taxonomy_html_hierarchy into a full scan of the assessments table (0.36s vs 0.04s on
+        // 2026-1, same rows). Matches what TaxonFilterSql does for the same two columns.
         if (!string.IsNullOrWhiteSpace(group.ClassName)) {
-            whereClause.Add("TRIM(className) = @class COLLATE NOCASE");
-            command.Parameters.AddWithValue("@class", group.ClassName);
+            whereClause.Add("className = @class");
+            command.Parameters.AddWithValue("@class", group.ClassName.Trim().ToUpperInvariant());
         }
 
         if (!string.IsNullOrWhiteSpace(group.Kingdom)) {
-            whereClause.Add("TRIM(kingdomName) = @kingdom COLLATE NOCASE");
-            command.Parameters.AddWithValue("@kingdom", group.Kingdom);
+            whereClause.Add("kingdomName = @kingdom");
+            command.Parameters.AddWithValue("@kingdom", group.Kingdom.Trim().ToUpperInvariant());
         }
 
         var where = string.Join(" AND ", whereClause);

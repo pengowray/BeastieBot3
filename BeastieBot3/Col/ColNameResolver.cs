@@ -214,11 +214,13 @@ internal sealed class ColNameResolver : IDisposable {
         return best;
     }
 
+    // OrdinalIgnoreCase rather than lowercasing first: called once per CoL candidate per taxon, and
+    // neither trimming nor case changes whether the word is present.
     private static bool IsAcceptedStatus(string? status) =>
-        string.IsNullOrWhiteSpace(status) || status.Trim().ToLowerInvariant().Contains("accepted", StringComparison.Ordinal);
+        string.IsNullOrWhiteSpace(status) || status.Contains("accepted", StringComparison.OrdinalIgnoreCase);
 
     private static bool IsSynonymStatus(string? status) =>
-        !string.IsNullOrWhiteSpace(status) && status.Trim().ToLowerInvariant().Contains("synonym", StringComparison.Ordinal);
+        !string.IsNullOrWhiteSpace(status) && status.Contains("synonym", StringComparison.OrdinalIgnoreCase);
 
     private static bool KingdomMatches(ColTaxonRecord record, string? kingdom) {
         if (string.IsNullOrWhiteSpace(record.Kingdom) || string.IsNullOrWhiteSpace(kingdom)) {
