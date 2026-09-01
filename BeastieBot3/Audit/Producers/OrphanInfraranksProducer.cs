@@ -53,8 +53,8 @@ internal sealed class OrphanInfraranksProducer : IAuditReportProducer {
             DataSourceLabel = $"IUCN Red List {ctx.Release} (CSV export)",
             Blurb = "Assessed subspecies and varieties whose parent species has no assessment of its own, leaving them reachable only by their SIS id.",
             Summary =
-                "These are assessed subspecies and varieties whose parent species has no species-level assessment in the current release. " +
-                "The IUCN API lists subspecies and varieties under their parent species, so when the parent has no assessment, the only way to reach these taxa is by already knowing their SIS id. Each row links to its Red List page.\n\n" +
+                "The table below lists assessed subspecies and varieties whose parent species has no species-level assessment in the current release. " +
+                "The IUCN API lists subspecies and varieties under their parent species, so when the parent has no assessment, the only way to reach these taxa through the API is by already knowing their SIS id. Each row links to the taxon's Red List page.\n\n" +
                 "### Why it matters\n\n" +
                 "Tools and users browsing through the API never encounter these taxa, even though their assessments exist and are published.\n\n" +
                 "### Suggestion\n\n" +

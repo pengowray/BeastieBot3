@@ -62,8 +62,8 @@ internal sealed class NameChangesProducer : IAuditReportProducer {
             DataSourceLabel = "IUCN API (taxon assessment summaries)",
             Blurb = "Taxa whose assessments record more than one distinct scientific name.",
             Summary =
-                "This compares the scientific name recorded on each of a taxon's assessment summaries, grouped by SIS id, and lists any taxon whose assessments carry more than one distinct name. " +
-                "In current data this is usually empty: amended assessments keep the taxon's present name and record the former name in the errata text rather than in a dedicated field, so a name-field comparison finds little.\n\n" +
+                "The table below lists taxa whose assessments record more than one distinct scientific name. It is built by comparing the scientific name on each of a taxon's assessment summaries, grouped by SIS id. " +
+                "In current data the table is usually empty: amended assessments keep the taxon's present name and record the former name in the errata text rather than in a dedicated field, so a name-field comparison finds little.\n\n" +
                 "### Why it matters\n\n" +
                 "A taxon whose assessments disagree on the scientific name is ambiguous to anything that keys on that field. The check also documents how much a name-field comparison can catch, given that historical names live in errata text.\n\n" +
                 "### Suggestion\n\n" +

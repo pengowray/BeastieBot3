@@ -68,9 +68,9 @@ internal sealed class TaxonomyCleanupProducer : IAuditReportProducer {
             DataSourceLabel = $"IUCN Red List {ctx.Release} (CSV export)",
             Blurb = "Taxonomy field values with stray whitespace (leading, trailing, doubled, or non-breaking), each with a suggested cleaned-up value.",
             Summary =
-                "Each row reports a taxonomy field whose stored text carries a whitespace irregularity: leading or trailing spaces, repeated spaces, or non-breaking and tab characters. Every row includes a suggested normalised value. " +
+                "The table below lists taxonomy field values with a whitespace problem: leading or trailing spaces, repeated spaces, or non-breaking and tab characters. Every row includes a suggested normalised value. " +
                 "The same scan also checks for infrarank markers written into the wrong field and for the scientificName column disagreeing between the assessments and taxonomy files of the CSV export; the summary below shows what each check found, including checks that found nothing. " +
-                "Current values show otherwise-invisible characters as visible markers so the difference can be seen.\n\n" +
+                "Otherwise-invisible characters in the current value are shown as visible markers, so the difference can be seen.\n\n" +
                 "### Why it matters\n\n" +
                 "Stray whitespace breaks exact-match comparisons, sort order, and search, and can appear as visible gaps on the website. Each case is small, but they add up across the release.\n\n" +
                 "### Suggestion\n\n" +
@@ -121,7 +121,7 @@ internal sealed class TaxonomyCleanupProducer : IAuditReportProducer {
         rows.Add(new[] { "Total (distinct rows)", findings.Count.ToString("N0") });
         return new AuditSummaryTable {
             Title = "Issues by type",
-            Note = "Each kind is counted once per field row; because one field can carry several, the kinds add up to more than the distinct total.",
+            Note = "Each kind is counted once per field row; because one field can have several, the kinds add up to more than the distinct total.",
             Headers = new[] { "Issue", "Rows" }, Rows = rows, NumericColumns = new[] { 1 },
         };
     }

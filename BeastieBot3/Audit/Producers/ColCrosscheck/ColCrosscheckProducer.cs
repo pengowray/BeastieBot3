@@ -85,7 +85,7 @@ internal sealed class ColCrosscheckProducer : IAuditReportSetProducer {
         DataSourceLabel = source,
         Blurb = "IUCN names with no Catalogue of Life match, exact or approximate.",
         Summary =
-            "Each row is an IUCN name that the Catalogue of Life does not contain: there is no exact match, and a search for similar spellings within the same genus and species epithet found no close candidate either.\n\n" +
+            "The table below lists IUCN scientific names that the Catalogue of Life does not contain. For each name there is no exact match in CoL, and a search for similar spellings within the same genus and species epithet found no close candidate either.\n\n" +
             "### Why it matters\n\n" +
             "A name absent from the Catalogue of Life cannot be cross-referenced there. The likely reasons vary: the name may be newer than the Catalogue of Life release compared against, may come from a source CoL does not yet cover, or may be spelled differently enough that no match is found.\n\n" +
             "### Suggestion\n\n" +
@@ -105,7 +105,7 @@ internal sealed class ColCrosscheckProducer : IAuditReportSetProducer {
         DataSourceLabel = source,
         Blurb = "IUCN names with no exact Catalogue of Life match, each paired with the most similar CoL name in the same genus, and a note on how the two spellings differ.",
         Summary =
-            "Each row is an IUCN name with no exact Catalogue of Life match, paired with the most similar Catalogue of Life name found within the same genus and species epithet. The detail column names how they differ (punctuation, diacritics, Unicode encoding, or a short spelling variant).\n\n" +
+            "The table below lists IUCN scientific names with no exact match in the Catalogue of Life, each paired with the most similar CoL name found within the same genus and species epithet. The detail column says how the two spellings differ (punctuation, diacritics, Unicode encoding, or a short spelling variant).\n\n" +
             "### Why it matters\n\n" +
             "When the two catalogues spell a name slightly differently, an exact join between them fails even though the same taxon is almost certainly meant.\n\n" +
             "### Suggestion\n\n" +
@@ -125,7 +125,7 @@ internal sealed class ColCrosscheckProducer : IAuditReportSetProducer {
         DataSourceLabel = source,
         Blurb = "Assessed IUCN taxa whose name the Catalogue of Life records as a synonym of a different accepted name.",
         Summary =
-            "Each row is an IUCN species, subspecies, or variety whose name the Catalogue of Life records as a synonym of a different accepted name, shown in the CoL accepted name column.\n\n" +
+            "The table below lists IUCN species, subspecies, and varieties whose scientific name the Catalogue of Life records as a synonym of a different accepted name. That accepted name is shown in the CoL accepted name column.\n\n" +
             "### Why it matters\n\n" +
             "Where CoL has moved a name into synonymy, the IUCN name may be an earlier combination of the same species, or a taxon that has since been merged into another. Databases that follow the Catalogue of Life file the taxon under the accepted name, not the IUCN one.\n\n" +
             "### Suggestion\n\n" +
@@ -145,9 +145,9 @@ internal sealed class ColCrosscheckProducer : IAuditReportSetProducer {
         DataSourceLabel = source,
         Blurb = "Names that match the Catalogue of Life exactly but whose author attribution is spelled slightly differently in the two catalogues.",
         Summary =
-            "Each row is an IUCN name that matches the Catalogue of Life exactly but whose naming authority is spelled slightly differently in the two catalogues (a diacritic, a Unicode-encoding difference, or a short spelling difference in the author name). Only differences in the letters of the author name are listed; differences in spacing, punctuation, or the year are ignored, as are authorities that are different outright.\n\n" +
+            "The table below lists IUCN names that match the Catalogue of Life exactly, except that the two catalogues spell the naming authority slightly differently (a diacritic, a Unicode-encoding difference, or a short spelling difference in the author name). Only differences in the letters of the author name are listed; differences in spacing, punctuation, or the year are ignored, as are authorities that are different outright.\n\n" +
             "### Why it matters\n\n" +
-            "When the same name carries a slightly different author spelling in each catalogue, a comparison that includes the author fails to match them, and the difference is usually a small transcription error on one side.\n\n" +
+            "When the two catalogues spell the author name slightly differently, a comparison that includes the author fails to match the records, and the difference is usually a small transcription error on one side.\n\n" +
             "### Suggestion\n\n" +
             "Check each authority pair against the original publication and align the spelling or encoding.",
         Columns = AuthorityColumns(),
@@ -167,7 +167,7 @@ internal sealed class ColCrosscheckProducer : IAuditReportSetProducer {
         DataSourceLabel = source,
         Blurb = "Genus, family, order, and class names used in the IUCN classification that the Catalogue of Life records only as synonyms.",
         Summary =
-            "Each row is a higher-rank name (genus, family, order, or class) used in the IUCN classification that the Catalogue of Life records only as a synonym, never as an accepted name. The accepted name CoL uses is shown alongside, and the IUCN taxa column counts how many assessed taxa sit under the name.\n\n" +
+            "The table below lists higher-rank names (genus, family, order, or class) used in the IUCN classification that the Catalogue of Life records only as a synonym, never as an accepted name. The name CoL accepts instead is shown alongside, and the IUCN taxa column counts how many assessed taxa sit under the name.\n\n" +
             "### Why it matters\n\n" +
             "A genus or family name that CoL treats entirely as a synonym is often an older spelling or a superseded name, and it affects every assessed taxon placed under it.\n\n" +
             "### Suggestion\n\n" +
@@ -186,7 +186,7 @@ internal sealed class ColCrosscheckProducer : IAuditReportSetProducer {
         DataSourceLabel = source,
         Blurb = "Names whose parent taxon is spelled slightly differently in IUCN and the Catalogue of Life, suggesting the same placement written two ways.",
         Summary =
-            "Each row is a higher-rank name whose parent placement differs between IUCN and the Catalogue of Life in a way that looks like a spelling variant (a typo, a diacritic, a Unicode-encoding difference, or a short spelling difference). Only names within the same phylum are compared.\n\n" +
+            "The table below lists higher-rank names whose parent taxon is spelled slightly differently in IUCN and the Catalogue of Life (a typo, a diacritic, a Unicode-encoding difference, or a short spelling difference), which suggests the same placement written two ways. Only names within the same phylum are compared.\n\n" +
             "### Why it matters\n\n" +
             "A near-identical parent name usually means the same placement recorded two ways. Aligning the spelling lets the two classifications match up.\n\n" +
             "### Suggestion\n\n" +
@@ -205,7 +205,7 @@ internal sealed class ColCrosscheckProducer : IAuditReportSetProducer {
         DataSourceLabel = source,
         Blurb = "Names the Catalogue of Life places under a genuinely different parent taxon (not just a different spelling of the same one).",
         Summary =
-            "Each row is a higher-rank name that the Catalogue of Life places under a genuinely different parent (a different order, class, or family), rather than a spelling variant. Only names within the same phylum are compared.\n\n" +
+            "The table below lists higher-rank names that the Catalogue of Life places under a genuinely different parent (a different order, class, or family), not just a different spelling of the same one. Only names within the same phylum are compared.\n\n" +
             "### Why it matters\n\n" +
             "A different parent placement reflects a different higher classification between the two catalogues. Neither is necessarily wrong, but any grouping by order, class, or family will come out differently depending on which catalogue is followed.\n\n" +
             "### Suggestion\n\n" +

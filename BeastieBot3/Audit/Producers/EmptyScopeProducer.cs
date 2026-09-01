@@ -88,10 +88,10 @@ internal sealed class EmptyScopeProducer : IAuditReportProducer {
                 : haveApi ? "IUCN API" : "IUCN CSV export",
             Blurb = "Assessments whose geographic scope is blank, so any scope filter, including the usual \"Global\" filter, silently drops them.",
             Summary =
-                "Every assessment is expected to carry at least one geographic scope, the region it covers: Global, Europe, Mediterranean, Persian Gulf, and so on. " +
-                "The assessments in this report have no scope at all.\n\n" +
+                "Every assessment is expected to record at least one geographic scope, the region it covers: Global, Europe, Mediterranean, Persian Gulf, and so on. " +
+                "The assessments listed below have no scope at all.\n\n" +
                 "Some are the taxon's current assessment. Those also appear in the downloadable CSV export with an empty `scopes` column, so the gap is in the underlying data rather than in one delivery format; " +
-                "every other assessment row in the export carries a scope. The rest are historical assessments, which the export does not include, so they are visible only through the API.\n\n" +
+                "every other assessment row in the export has a scope. The rest are historical assessments, which the export does not include, so they are visible only through the API.\n\n" +
                 "Until shortly before this site release, the API returned HTTP 500 (a server error) for every one of these records, and they could not be read at all. " +
                 "They now return normally, with the scope still blank. On the species page at iucnredlist.org, the region line for these assessments displays as a bare \"&\" with no region text.\n\n" +
                 "A few of the affected taxa have a scientific name ending in \"_new\" (Balaenoptera edeni_new, for example), which suggests working or draft records were published by accident.\n\n" +
@@ -112,7 +112,7 @@ internal sealed class EmptyScopeProducer : IAuditReportProducer {
                 AuditColumns.Latest("Current"),
                 AuditColumns.Year(),
                 AuditColumns.Custom("inCsvExport", "In CSV export", AuditColumnType.Text,
-                    "Whether the downloadable CSV export also carries this assessment with a blank scope. Historical assessments are not in the export at all."),
+                    "Whether the downloadable CSV export also includes this assessment with a blank scope. Historical assessments are not in the export at all."),
                 AuditColumns.Custom("otherScopes", "Other scopes for this taxon", AuditColumnType.Text,
                     "Scopes on the taxon's other assessments in the CSV export. Blank means the taxon has no scoped assessment anywhere."),
                 AuditColumns.TaxonId(),
@@ -123,7 +123,7 @@ internal sealed class EmptyScopeProducer : IAuditReportProducer {
             SummaryTables = new List<AuditSummaryTable> {
                 new() {
                     Title = "By assessment version",
-                    Note = "The CSV export carries current assessments only, so historical rows can only be seen through the API.",
+                    Note = "The CSV export includes current assessments only, so historical rows can only be seen through the API.",
                     Headers = new[] { "Assessment", "Rows", "Also blank in the CSV export" },
                     Rows = byLatest, NumericColumns = new[] { 1, 2 },
                 },
@@ -316,7 +316,7 @@ WHERE a.scopes IS NULL OR TRIM(a.scopes) = ''";
         finding.Extra["inCsvExport"] = haveCsv ? (inCsv ? "yes" : "no") : null;
         finding.Extra["otherScopes"] = haveCsv ? string.Join(", ", others) : null;
         if (isolated) {
-            finding.Notes.Add("The taxon has no other assessment carrying a scope.");
+            finding.Notes.Add("The taxon has no other assessment with a scope.");
         }
         if (r.ScientificName?.EndsWith("_new", StringComparison.Ordinal) == true) {
             finding.Notes.Add("The scientific name ends in \"_new\", which reads like a working record.");

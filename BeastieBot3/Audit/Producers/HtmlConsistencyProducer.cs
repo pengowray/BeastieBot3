@@ -67,9 +67,10 @@ internal sealed class HtmlConsistencyProducer : IAuditReportProducer {
             .ToList();
 
         var summary =
-            "Six narrative fields (rationale, habitat, threats, population, range, use and trade) appear in two of the IUCN CSV exports: assessments_with_html.csv carries them with HTML markup, and assessments.csv carries a plain-text version of the same field. " +
-            "For each assessment the assessments_with_html.csv value is reduced to plain text and compared against the assessments.csv value. " +
-            "Differences that are only whitespace, non-breaking spaces, or entity encoding are treated as a match and not listed, so a row here means the readable text genuinely differs. The comparison is about the formatting and encoding of the text only and says nothing about the scientific content.";
+            "The table below lists assessments where the plain-text version of a narrative field does not match the HTML version. " +
+            "Six narrative fields (rationale, habitat, threats, population, range, use and trade) appear in two of the IUCN CSV exports: assessments_with_html.csv contains them with HTML markup, and assessments.csv contains a plain-text version of the same text. " +
+            "To compare the two, the HTML version is reduced to plain text and checked against the plain-text version for each assessment. " +
+            "Differences that are only whitespace, non-breaking spaces, or entity encoding are not listed, so every row here is a genuine difference in the readable text. Only the formatting and encoding of the text is compared; nothing here comments on the scientific content.";
 
         // A common cause is heavy redundant markup: some fields carry a large amount of repeated empty
         // tags (for example long runs of nested empty spans from a rich-text editor), and the
@@ -82,7 +83,7 @@ internal sealed class HtmlConsistencyProducer : IAuditReportProducer {
             var ratio = worst.Get("markupRatio");
             var len = worst.Get("htmlLen");
             summary += "\n\n" +
-                       $"A recurring pattern is heavy redundant markup: the HTML carries long runs of repeated empty tags, and the plain-text version then comes out empty or truncated. " +
+                       $"A recurring pattern is heavy redundant markup: the HTML contains long runs of repeated empty tags, and the plain-text version then comes out empty or truncated. " +
                        $"The most extreme case here is {worst.ScientificName} ({worst.Field}), whose HTML runs to about {len} characters, roughly {ratio} times its readable text, while its plain-text version is cut off inside that markup. " +
                        $"These rows are marked \"redundant markup\" and explained in the detail column.";
         }
@@ -239,10 +240,10 @@ internal sealed class HtmlConsistencyProducer : IAuditReportProducer {
                 if (plainText.Length == 0 && htmlText.Length > 0) {
                     if (redundant) {
                         issueType = "plain text empty (redundant markup)"; severity = 5;
-                        detail = $"The assessments.csv field is empty while assessments_with_html.csv carries text. The HTML is about {ratio:N0} times the size of its readable text, and the plain-text version appears to have been cut off inside the redundant markup.";
+                        detail = $"The assessments.csv field is empty while assessments_with_html.csv contains text. The HTML is about {ratio:N0} times the size of its readable text, and the plain-text version appears to have been cut off inside the redundant markup.";
                     } else {
                         issueType = "plain text empty"; severity = 3;
-                        detail = "The assessments.csv field is empty while the assessments_with_html.csv version carries text.";
+                        detail = "The assessments.csv field is empty while the assessments_with_html.csv version contains text.";
                     }
                 } else if (htmlText.Length == 0 && plainText.Length > 0) {
                     issueType = "HTML version empty"; severity = 3;
@@ -349,10 +350,10 @@ internal sealed class HtmlConsistencyProducer : IAuditReportProducer {
             return $"Heavy redundant markup: the HTML is about {ratio:N0} times the size of its readable text, and the assessments.csv plain text does not get past it. The suggested cleaned-up HTML below restores the readable text.";
         }
         if (plainText.Length == 0) {
-            return "The assessments.csv field is empty; the assessments_with_html.csv version carries the text shown below.";
+            return "The assessments.csv field is empty; the assessments_with_html.csv version contains the text shown below.";
         }
         if (htmlText.Length == 0) {
-            return "The assessments_with_html.csv version is empty; the assessments.csv field carries the text shown below.";
+            return "The assessments_with_html.csv version is empty; the assessments.csv field contains the text shown below.";
         }
         if (TryDescribeInvisibleDifference(rawPlain, rawHtml, htmlText, out var note)) {
             return note;
@@ -395,7 +396,7 @@ internal sealed class HtmlConsistencyProducer : IAuditReportProducer {
             return "The IUCN API has no value for this field, so no comparison was made.";
         }
         if (string.Equals(rawHtml ?? "", apiVal, StringComparison.Ordinal)) {
-            return "The assessments_with_html.csv HTML for this field is identical to the IUCN API, so it is present in the source data, not introduced by the CSV export.";
+            return "The assessments_with_html.csv HTML for this field is identical to what the IUCN API returns, so the markup comes from the source data and was not introduced by the CSV export.";
         }
         var apiText = Canonical(IucnHtmlUtilities.ConvertHtmlToExactPlainText(apiVal));
         if (string.Equals(apiText, htmlText, StringComparison.Ordinal)) {

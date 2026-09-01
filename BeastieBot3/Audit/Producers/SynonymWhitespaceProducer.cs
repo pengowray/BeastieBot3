@@ -44,10 +44,10 @@ internal sealed class SynonymWhitespaceProducer : IAuditReportProducer {
             Tier = AuditReportTier.IucnCore,
             Breakage = BreakageClass.FixableData,
             DataSourceLabel = "IUCN API (taxon synonyms)",
-            Blurb = "Synonym names carrying stray whitespace (leading, trailing, doubled, or non-breaking), each with a whitespace-normalised suggestion.",
+            Blurb = "Synonym names with stray whitespace (leading, trailing, doubled, or non-breaking), each with a whitespace-normalised suggestion.",
             Summary =
-                "Each row is a synonym name whose stored text carries a whitespace irregularity, together with a whitespace-normalised suggestion. " +
-                "The current value shows otherwise-invisible characters as markers, so the difference is visible. The scientific name column is the accepted taxon the synonym belongs to.\n\n" +
+                "The table below lists synonym names with a whitespace problem, each with a whitespace-normalised suggestion. " +
+                "Otherwise-invisible characters in the current value are shown as visible markers, so the difference can be seen. The scientific name column shows the accepted taxon the synonym belongs to.\n\n" +
                 "### Why it matters\n\n" +
                 "Synonyms are a main route by which users and other databases reach the accepted name. Stray whitespace in a synonym breaks exact-match lookups and search, so a lookup that should succeed comes back empty.\n\n" +
                 "### Suggestion\n\n" +

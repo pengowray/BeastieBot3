@@ -102,10 +102,10 @@ internal sealed class CommonNameIssuesProducer : IAuditReportProducer {
             Tier = AuditReportTier.IucnCore,
             Breakage = BreakageClass.FixableData,
             DataSourceLabel = "IUCN API (English common names)",
-            Blurb = "English common names carrying a likely error or a formatting choice worth checking (species codes, all-capitals text, stray whitespace, backticks standing in for apostrophes), with a tidied suggestion where one is clear.",
+            Blurb = "English common names with a likely error or a formatting choice worth checking (species codes, all-capitals text, stray whitespace, backticks standing in for apostrophes), with a tidied suggestion where one is clear.",
             Summary =
-                "Each row is an English common name that carries a likely error or a formatting choice worth checking, with a tidied suggestion where one is clear. " +
-                "The current value shows otherwise-invisible characters as markers. The scientific name column is the taxon the name belongs to. " +
+                "The table below lists English common names with a likely error or a formatting choice worth checking, with a tidied suggestion where one is clear. " +
+                "Otherwise-invisible characters in the current value are shown as visible markers, and the Taxon column shows which species or other taxon each name belongs to. " +
                 "This re-runs a review of common-name oddities that was hand-compiled against the 2016-2 release, so the two releases can be compared side by side in the summary. " +
                 "Checks that no longer find anything (for example the question marks that once stood in for unsupported characters) are still listed, at zero, so it is clear they ran.\n\n" +
                 "### Why it matters\n\n" +
@@ -374,7 +374,7 @@ internal sealed class CommonNameIssuesProducer : IAuditReportProducer {
         rows.Add(new[] { "Total (distinct names)", perName.Count.ToString("N0", CultureInfo.InvariantCulture), "-" });
         return new AuditSummaryTable {
             Title = $"Issues by kind, {release} versus 2016",
-            Note = "Each kind is counted once per name; because a name can carry several, the kinds add up to more than the distinct total. Kinds listed at 0 were checked and found nothing this release. " +
+            Note = "Each kind is counted once per name; because a name can have several, the kinds add up to more than the distinct total. Kinds listed at 0 were checked and found nothing this release. " +
                    "The 2016 column is what a hand-compiled review of the 2016-2 release recorded for the nearest matching category: several of those sections listed only examples, so treat them as a floor rather than an exhaustive count, while species codes and all-capitals read as full lists. A dash means 2016 had no comparable check (only double spaces were measured among whitespace kinds).",
             Headers = new[] { "Issue", release, "2016" }, Rows = rows, NumericColumns = new[] { 1, 2 },
         };

@@ -59,7 +59,7 @@ internal sealed class FieldHygieneProducer : IAuditReportProducer {
                 continue;
             }
             if (s.LeadingTrailing > 0) {
-                findings.Add(Make(s, "leading-or-trailing-whitespace", s.LeadingTrailing, s.ExampleTrim, s.ExampleTrim?.Trim(), "Values carry surrounding whitespace that the suggested value trims."));
+                findings.Add(Make(s, "leading-or-trailing-whitespace", s.LeadingTrailing, s.ExampleTrim, s.ExampleTrim?.Trim(), "Values have surrounding whitespace; the suggested value trims it."));
             }
             if (s.Repeated > 0) {
                 findings.Add(Make(s, "repeated-spaces", s.Repeated, null, null, "Values contain repeated spaces."));
@@ -86,12 +86,12 @@ internal sealed class FieldHygieneProducer : IAuditReportProducer {
             Tier = AuditReportTier.Methodology,
             Breakage = BreakageClass.Advisory,
             DataSourceLabel = $"IUCN Red List {ctx.Release} (CSV export, taxonomy file)",
-            Blurb = "A field-by-field profile of text irregularities in the taxonomy data, showing which fields carry the most stray whitespace or unusual characters.",
+            Blurb = "A field-by-field profile of text irregularities in the taxonomy data, showing which fields have the most stray whitespace or unusual characters.",
             Summary =
-                "Each row describes one text characteristic of one taxonomy field: the share of values with surrounding whitespace, repeated spaces, non-breaking or control characters, non-ASCII content, or non-NFC Unicode normalisation. " +
+                "The table below profiles the text of each taxonomy field, one row per field and characteristic: what share of the field's values have surrounding whitespace, repeated spaces, non-breaking or control characters, non-ASCII content, or non-NFC Unicode normalisation. " +
                 "Counts cover every value in the field. Non-ASCII content is often expected in names and authorities and is listed for completeness, not as a problem.\n\n" +
                 "### Why it matters\n\n" +
-                "This profile shows which fields carry the most text irregularities, so cleanup effort can be aimed where it has the most effect.\n\n" +
+                "This profile shows which fields have the most text irregularities, so cleanup effort can be aimed where it has the most effect.\n\n" +
                 "### Suggestion\n\n" +
                 "Use the percentages to prioritise. Fields with a high share of surrounding whitespace, repeated spaces, or non-NFC values are the best candidates for a normalisation pass.",
             Columns = new List<AuditColumn> {

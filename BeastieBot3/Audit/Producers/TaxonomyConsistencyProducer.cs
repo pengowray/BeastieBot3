@@ -67,9 +67,10 @@ internal sealed class TaxonomyConsistencyProducer : IAuditReportProducer {
             DataSourceLabel = $"IUCN Red List {ctx.Release} (CSV export)",
             Blurb = "Assessments whose recorded scientific name does not agree with the separate genus, species, and infrarank fields it should be built from.",
             Summary =
-                "Each row rebuilds an assessment's scientific name from its genus, species, infra rank, and subpopulation fields and compares it against the recorded scientificName. " +
-                "The CSV export carries the scientificName in both its assessments and taxonomy files, and those two copies are compared as well. " +
-                "Rows appear where the two copies disagree, where the name cannot be rebuilt from the component fields, or where an expected genus, species, infra-name, or subpopulation word is absent from the recorded name. " +
+                "The table below lists assessments whose recorded scientific name does not agree with the separate fields it should be built from. " +
+                "For each assessment, a name is rebuilt from the genus, species, infra rank, and subpopulation fields and compared against the recorded scientificName. " +
+                "The CSV export also records the scientificName in two places, its assessments and taxonomy files, and those two copies are compared as well. " +
+                "A row appears where the two copies disagree, where the name cannot be rebuilt from the component fields, or where an expected genus, species, infra-name, or subpopulation word is missing from the recorded name. " +
                 "Comparisons are exact after whitespace normalisation. A hybrid marker (×) or deliberately unusual formatting can make a name fail the rebuild without anything being wrong.\n\n" +
                 "### Why it matters\n\n" +
                 "The recorded name and the component fields are two representations of the same taxon. When they disagree, it is unclear which is authoritative, and anything built from the components (sort keys, rebuilt names, joins) diverges from the displayed name.\n\n" +
