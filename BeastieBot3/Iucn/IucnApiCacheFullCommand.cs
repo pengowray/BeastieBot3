@@ -1,3 +1,4 @@
+using System;
 using System.ComponentModel;
 using System.Threading;
 using System.Threading.Tasks;
@@ -94,6 +95,10 @@ public sealed class IucnApiCacheFullSettings : CommonSettings {
     [CommandOption("--redlist-version <VERSION>")]
     [Description("Label stored as the projection's redlist_version in the --project phase. Defaults to 'api-cache'.")]
     public string? RedlistVersion { get; init; }
+
+    [CommandOption("--status")]
+    [Description("Show what each phase has left to do and what a run would do, then exit without downloading anything.")]
+    public bool StatusOnly { get; init; }
 }
 
 [CommandInfo("iucn api cache-all", CommandKind.Mutates,
@@ -103,6 +108,7 @@ public sealed class IucnApiCacheFullSettings : CommonSettings {
     Examples = new[] {
         "iucn api cache-all",
         "iucn api cache-all --full",
+        "iucn api cache-all --full --status",
         "iucn api cache-all --full --skip-taxa",
         "iucn api cache-all --taxa-limit 100 --assessment-limit 200"
     })]
@@ -138,6 +144,14 @@ public sealed class IucnApiCacheFullCommand : AsyncCommand<IucnApiCacheFullSetti
         // refresh asked for it and has not done it yet.
         var runDiscovery = session is { IncludeDiscovery: true, DiscoveryDoneAt: null };
         var runTombstones = !settings.SkipTombstones && session is { IncludeTombstones: true, TombstonesDoneAt: null };
+
+        // The plan up front (and nothing but the plan with --status): each phase with what it has
+        // left, so "which phase am I up to" is answered before anything downloads.
+        var state = IucnApiCacheStateReader.Read(paths);
+        PrintPlan(state, settings, runDiscovery, runInfraranks, runTombstones, runProject, settings.StatusOnly);
+        if (settings.StatusOnly) {
+            return 0;
+        }
 
         // Pipeline order: taxa -> infraranks -> assessments -> project. Assessments runs after
         // infraranks so the single download pass picks up the infra taxa's queued assessments too.
@@ -265,11 +279,117 @@ public sealed class IucnApiCacheFullCommand : AsyncCommand<IucnApiCacheFullSetti
             }, cancellationToken).ConfigureAwait(false);
         }
 
+        // Where things stand now, and what a re-run would still find. Without this, a run that
+        // hit its limits or was stopped reads as finished.
+        AnsiConsole.WriteLine();
+        PrintTotals(IucnApiCacheStateReader.Read(paths), finishing: true);
+
         // Surface the first non-zero result in pipeline order (project-view returns 2 when partial).
         return taxaResult != 0 ? taxaResult
             : discoveryResult != 0 ? discoveryResult
             : infraResult != 0 ? infraResult
             : assessmentResult != 0 ? assessmentResult
             : projectResult;
+    }
+
+    private static void PrintPlan(IucnApiCacheState s, IucnApiCacheFullSettings settings,
+                                  bool runDiscovery, bool runInfraranks, bool runTombstones, bool runProject,
+                                  bool statusOnly) {
+        var refresh = s.RefreshProgress;
+
+        var table = new Table().Border(TableBorder.Simple);
+        table.AddColumn("#");
+        table.AddColumn("Phase");
+        table.AddColumn(statusOnly ? "What a run would do" : "This run");
+
+        var n = 0;
+        void Row(string phase, bool runs, string text) =>
+            table.AddRow((++n).ToString(), phase, runs ? text : $"[grey]skip — {text}[/]");
+
+        Row("Download species records (cache-taxa)",
+            runs: !settings.SkipTaxa,
+            settings.SkipTaxa ? "--skip-taxa"
+                : refresh is { TaxaRemaining: > 0 } ? $"{refresh.TaxaRemaining:N0} taxa to re-download for re-import {refresh.Session.DisplayLabel}"
+                : "adds only species not cached yet");
+
+        Row("Family sweep for taxa the CSV omits (discover-by-family)",
+            runs: runDiscovery,
+            runDiscovery ? "this re-import asked for it and it has not run yet"
+                : s.ActiveSession is { IncludeDiscovery: true } ? "already done for this re-import"
+                : "only runs as part of a re-import that asks for it");
+
+        Row("Download subspecies and varieties (cache-infraranks)",
+            runs: runInfraranks,
+            runInfraranks ? "adds only infraspecific taxa not cached yet" : "add --full to include it");
+
+        Row("Download assessments (cache-assessments)",
+            runs: !settings.SkipAssessments,
+            settings.SkipAssessments ? "--skip-assessments"
+                : BuildAssessmentPlanText(s, refresh));
+
+        Row("Re-check taxa the API previously said were gone",
+            runs: runTombstones,
+            runTombstones ? $"{s.TombstonedTaxa:N0} ids to re-check against the new release"
+                : settings.SkipTombstones ? "--skip-tombstones"
+                : s.ActiveSession is { IncludeTombstones: true } ? "already done for this re-import"
+                : "only runs as part of a re-import that asks for it");
+
+        Row("Rebuild the projection --dataset api reads (project-view)",
+            runs: runProject,
+            runProject ? ProjectionPlanText(s.Projection) : "add --full to include it");
+
+        AnsiConsole.Write(table);
+        PrintTotals(s, finishing: false);
+    }
+
+    private static string BuildAssessmentPlanText(IucnApiCacheState s, IucnRefreshProgress? refresh) {
+        var backlog = Math.Max(0, s.BacklogOutstanding - s.ServerErrorAssessments);
+        var parts = new System.Collections.Generic.List<string>();
+        if (backlog > 0) parts.Add($"{backlog:N0} queued assessments to download");
+        if (refresh is { AssessmentsRemaining: > 0 }) parts.Add($"{refresh.AssessmentsRemaining:N0} to re-download for the re-import");
+        if (s.ServerErrorAssessments > 0) parts.Add($"{s.ServerErrorAssessments:N0} the API answers with a server error are left alone");
+        return parts.Count == 0 ? "adds only assessments not cached yet" : string.Join(" · ", parts);
+    }
+
+    private static string ProjectionPlanText(IucnProjectionState? p) {
+        if (p is null || !p.Exists) return "not built yet";
+        if (p.IsPartial) return $"currently incomplete ({p.LatestNotDownloaded:N0} taxa missing their latest assessment); rebuilt at the end of this run";
+        return $"rebuilt from whatever this run finishes with (currently {p.ProjectedTaxa:N0} taxa)";
+    }
+
+    // The standing counts, so the plan and the finish line both say where the dataset stands
+    // overall, not just what one run touched.
+    private static void PrintTotals(IucnApiCacheState s, bool finishing) {
+        if (!s.CacheExists) {
+            AnsiConsole.MarkupLine("[grey]No API cache on disk yet; the first run creates it.[/]");
+            return;
+        }
+
+        var age = s.OldestTaxaDownloadedAt is { } oldest ? $" · oldest fetched {IucnRefreshMath.Stamp(oldest)}" : "";
+        AnsiConsole.MarkupLineInterpolated(
+            $"[grey]API cache:[/] {s.TaxaCached:N0} taxa · {s.AssessmentsCached:N0} assessments{age} · {s.TombstonedTaxa:N0} ids recorded as gone");
+
+        var p = s.Projection;
+        var projection = p is null || !p.Exists ? "not built yet"
+            : p.IsPartial ? $"incomplete ({p.LatestNotDownloaded:N0} taxa missing their latest assessment)"
+            : $"complete · {p.ProjectedTaxa:N0} taxa · built {IucnRefreshMath.Stamp(p.BuiltAt ?? DateTime.MinValue)}";
+        AnsiConsole.MarkupLineInterpolated($"[grey]Projection:[/] {projection}");
+
+        if (!finishing) return;
+
+        if (s.RefreshProgress is { } refresh && (refresh.TaxaRemaining > 0 || refresh.AssessmentsRemaining > 0)) {
+            AnsiConsole.MarkupLineInterpolated(
+                $"[yellow]Still to do:[/] re-import {refresh.Session.DisplayLabel} is {refresh.PercentDone}% done — {refresh.TaxaRemaining:N0} taxa and {refresh.AssessmentsRemaining:N0} assessments to re-download. Run `iucn api cache-all --full` again to carry on; the cutoff date is remembered.");
+            return;
+        }
+        var backlog = Math.Max(0, s.BacklogOutstanding - s.ServerErrorAssessments);
+        if (backlog > 0) {
+            AnsiConsole.MarkupLineInterpolated(
+                $"[yellow]Still to do:[/] {backlog:N0} queued assessments are not downloaded yet. Run `iucn api cache-all --full` again to fetch them.");
+            return;
+        }
+        AnsiConsole.MarkupLine(s.Projection is { Exists: true, IsPartial: false }
+            ? "[green]The API dataset is complete and the projection is current.[/]"
+            : "[green]All downloads are done.[/] Rebuild the projection (`iucn api project-view`, or re-run with --full) so --dataset api reads the new data.");
     }
 }

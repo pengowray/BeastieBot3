@@ -94,7 +94,7 @@ public static class FlowCatalogue {
         new FlowDefinition {
             Id = "iucn-import",
             Title = "Import IUCN data",
-            Description = "Get the IUCN Red List into the local store — the base dataset every other workflow builds on. Pick one route: the CSV release (fast, the current published snapshot) or the live API (more complete: historical/delisted taxa, subspecies, synonyms). Optionally compare the two before generating lists/charts with --dataset csv|api.",
+            Description = "Get the IUCN Red List into the local store — the base dataset every other workflow builds on. Pick one route: the CSV release (fast, the current published snapshot) or the live API (more complete: historical/delisted taxa, subspecies, synonyms; one command builds or updates the whole dataset). Optionally compare the two before generating lists/charts with --dataset csv|api.",
             Steps = new[] {
                 // ===== 1 · From the CSV release =====
                 new FlowStep {
@@ -159,6 +159,17 @@ public static class FlowCatalogue {
                     Note = "The API data carries no release version — a payload downloaded during the last release looks exactly like one downloaded today — so a re-import means \"fetch everything again that is older than this date\". The date is stored, so the steps below pick it up on their own and you never type it twice. Stop the download whenever you like: re-running carries on from where it stopped rather than starting over. The whole re-import is roughly 37 hours of downloading, and it also re-checks the taxa the API previously said were gone, because that answer was only ever true of the release it was recorded against. Set the date to just before the new release was published, or leave it at now to re-fetch the lot.",
                 },
                 new FlowStep {
+                    Id = "api-update",
+                    Title = "Build or update the API dataset",
+                    Description = "One command for the whole API route: download species, the family sweep and subspecies, then assessments, re-check ids previously reported gone, and rebuild the projection. Phases with nothing to do are skipped.",
+                    Commands = new[] { "iucn api cache-all --full", "iucn api cache-all --full --status" },
+                    InputSourceIds = new[] { "iucn-main" },
+                    OutputSourceIds = new[] { "iucn-api-cache", "iucn-api-projected" },
+                    Probe = FlowStepProbes.IucnApiUpdateAll,
+                    Group = "2 · From the IUCN API",
+                    Note = "Safe to run whenever: every phase only fetches what is missing, so stopping midway loses nothing and re-running carries on from wherever it got to. It prints a phase-by-phase plan before downloading and where things stand after. --status (the second button) prints just that plan and the counts, which is the quickest answer to \"which phase am I up to?\". During a re-import (the step above) the stored cutoff date is picked up on its own, and the family sweep and gone-id re-check run once each as part of it. To run or tune one phase on its own, open \"Step by step\" below — this command runs exactly those phases in that order.",
+                },
+                new FlowStep {
                     Id = "api-cache-species",
                     Title = "Cache species from the API (CSV-sourced)",
                     Description = "Download /api/v4 taxa + assessment payloads for the species present in the imported CSV. The quickest way to seed the API cache once the CSV is imported.",
@@ -166,7 +177,8 @@ public static class FlowCatalogue {
                     Probe = FlowStepProbes.IucnApiTaxa,
                     InputSourceIds = new[] { "iucn-main" },
                     OutputSourceIds = new[] { "iucn-api-cache" },
-                    Group = "2 · From the IUCN API",
+                    Section = FlowSection.StepByStep,
+                    Group = "From the IUCN API",
                     Note = "Reads the SIS ids from the CSV database (so run step 1 first). cache-all = cache-taxa then cache-assessments in one job. Idempotent — re-running only fetches what's missing unless you pass --force-taxa / --force-assessments. Shortcut: `iucn api cache-all --full` chains ALL the API steps below in one command — cache-taxa → cache-infraranks (--from-csv) → cache-assessments → project-view.",
                 },
                 new FlowStep {
@@ -178,7 +190,8 @@ public static class FlowCatalogue {
                     InputSourceIds = new[] { "iucn-api-cache" },
                     OutputSourceIds = new[] { "iucn-api-cache" },
                     Optional = true,
-                    Group = "2 · From the IUCN API",
+                    Section = FlowSection.StepByStep,
+                    Group = "From the IUCN API",
                     Note = "Slower (pages ~800–1000 families on the live API). Use --dry-run to preview, --family Felidae,Canidae to target. Newly-discovered taxa still need their assessments downloaded — the next step's cache-assessments covers them.",
                 },
                 new FlowStep {
@@ -190,7 +203,8 @@ public static class FlowCatalogue {
                     InputSourceIds = new[] { "iucn-api-cache" },
                     OutputSourceIds = new[] { "iucn-api-cache" },
                     Optional = true,
-                    Group = "2 · From the IUCN API",
+                    Section = FlowSection.StepByStep,
+                    Group = "From the IUCN API",
                     Note = "Subspecies' assessments aren't in the parent payload. cache-infraranks fetches each infrarank taxon (queuing its assessments); the following cache-assessments downloads them — and any queued by discover-by-family. Idempotent; ids previously 404'd (no standalone record) are skipped. Reaches subspecies of assessed species only — for the rest, run the CSV-sourced step.",
                 },
                 new FlowStep {
@@ -202,7 +216,8 @@ public static class FlowCatalogue {
                     InputSourceIds = new[] { "iucn-api-cache", "iucn-main" },
                     OutputSourceIds = new[] { "iucn-api-cache" },
                     Optional = true,
-                    Group = "2 · From the IUCN API",
+                    Section = FlowSection.StepByStep,
+                    Group = "From the IUCN API",
                     Note = "Needs the CSV import (iucn-main). --from-csv unions the CSV's infraspecific taxonIds with the API discovery; the superset is filtered the same way (skips already-cached + 404-tombstoned). This is the only way to reach orphan subspecies of unassessed species. Supersedes the cached-API-sourced step, so you can run just this one if you want full coverage.",
                 },
                 new FlowStep {
@@ -213,7 +228,8 @@ public static class FlowCatalogue {
                     Probe = FlowStepProbes.IucnApiProjection,
                     InputSourceIds = new[] { "iucn-api-cache" },
                     OutputSourceIds = new[] { "iucn-api-projected" },
-                    Group = "2 · From the IUCN API",
+                    Section = FlowSection.StepByStep,
+                    Group = "From the IUCN API",
                     Note = "Run last — after cache-all, discover-by-family, cache-infraranks and cache-assessments — so it isn't partial: project-view exits non-zero and flags the projection partial if any taxon's latest assessment isn't downloaded yet (pass --allow-partial to accept). Then generate with --dataset api.",
                 },
 

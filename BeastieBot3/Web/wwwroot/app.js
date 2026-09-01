@@ -1234,7 +1234,7 @@
       wrap.open = openDetails.has('stepbystep');
       const summary = document.createElement('summary');
       summary.innerHTML = '<span class="flow-maintenance-title">Step by step</span> ' +
-                          '<span class="small muted">what Update runs, as ' + stepByStepSteps.length +
+                          '<span class="small muted">the same work as the one-command step above, as ' + stepByStepSteps.length +
                           ' separate steps' +
                           (withWork > 0 ? ' — ' + withWork + ' with work left' : ' — all caught up') +
                           '</span>';

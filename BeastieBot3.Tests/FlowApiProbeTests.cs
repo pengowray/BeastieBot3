@@ -182,4 +182,46 @@ public class FlowApiProbeTests {
         Assert.Equal("todo", r.Status);
         Assert.Contains("still holds the old download", r.Detail);
     }
+
+    // ---- the one-button light (cache-all --full) ----
+    // One decisive fact at a time, in run order: nothing yet, re-import mid-flight, assessment
+    // backlog, stale projection, done.
+
+    [Fact]
+    public void UpdateLight_NothingCached_SaysTheFirstBuildIsLongButResumable() {
+        var r = FlowStepProbes.ApiUpdate(State(cacheExists: false));
+        Assert.Equal("todo", r.Status);
+        Assert.Contains("Nothing cached from the API yet", r.Detail);
+        Assert.Contains("continues where it stopped", r.Detail);
+    }
+
+    [Fact]
+    public void UpdateLight_MidReimport_ShowsPercentAndRemainingCounts() {
+        var r = FlowStepProbes.ApiUpdate(State(session: Session(), taxaRemaining: 50_000, assessmentsRemaining: 100_000));
+        Assert.Equal("todo", r.Status);
+        Assert.Contains("50% done", r.Detail);
+        Assert.Contains("50,000 taxa and 100,000 assessments", r.Detail);
+    }
+
+    [Fact]
+    public void UpdateLight_BacklogBeyondServerErrors_IsTodo() {
+        var r = FlowStepProbes.ApiUpdate(State(backlogOutstanding: 900, serverErrors: 100));
+        Assert.Equal("todo", r.Status);
+        Assert.Contains("800 queued assessments", r.Detail);
+    }
+
+    [Fact]
+    public void UpdateLight_PartialProjection_IsTodo() {
+        var r = FlowStepProbes.ApiUpdate(State(projection: Projection(partial: true, missing: 512)));
+        Assert.Equal("todo", r.Status);
+        Assert.Contains("512", r.Detail);
+    }
+
+    [Fact]
+    public void UpdateLight_Complete_IsOkAndPointsANewReleaseAtTheReimportStep() {
+        var r = FlowStepProbes.ApiUpdate(State(projection: Projection()));
+        Assert.Equal("ok", r.Status);
+        Assert.Contains("186,236 taxa", r.Detail);
+        Assert.Contains("start a re-import first", r.Detail);
+    }
 }

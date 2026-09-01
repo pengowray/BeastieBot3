@@ -28,6 +28,7 @@ public static class FlowStepProbes {
     public const string IucnApiDiscovery = "iucn-api-discovery";
     public const string IucnApiInfraranks = "iucn-api-infraranks";
     public const string IucnApiProjection = "iucn-api-projection";
+    public const string IucnApiUpdateAll = "iucn-api-update-all";
 
     public static bool IsIucnCsvProbe(string probe) =>
         probe is IucnCsvDownload or IucnCsvImport or IucnCsvRepoint;
@@ -196,7 +197,8 @@ public static class FlowStepProbes {
                 : $"{s.PagesCached:n0} pages cached.");
 
     public static bool IsIucnApiProbe(string probe) =>
-        probe is IucnApiRefresh or IucnApiTaxa or IucnApiDiscovery or IucnApiInfraranks or IucnApiProjection;
+        probe is IucnApiRefresh or IucnApiTaxa or IucnApiDiscovery or IucnApiInfraranks or IucnApiProjection
+            or IucnApiUpdateAll;
 
     public static bool IsColProbe(string probe) =>
         probe is ColImport or ColRepoint or ColCleanup
@@ -231,8 +233,49 @@ public static class FlowStepProbes {
         IucnApiDiscovery => ApiDiscovery(state),
         IucnApiInfraranks => ApiInfraranks(state),
         IucnApiProjection => ApiProjection(state),
+        IucnApiUpdateAll => ApiUpdate(state),
         _ => null,
     };
+
+    // The one light for the "cache-all --full" button: the single most decisive fact about the
+    // API dataset, in the order a run works through them — nothing yet, a re-import mid-flight,
+    // an assessment backlog, a stale projection, or done.
+    internal static FlowProbeResult ApiUpdate(IucnApiCacheState s) {
+        if (!s.CacheExists || s.TaxaCached == 0) {
+            return new FlowProbeResult("todo",
+                "Nothing cached from the API yet. The first build downloads everything (roughly 37 hours); stop and re-run whenever — it continues where it stopped.");
+        }
+
+        if (s.RefreshProgress is { } refresh) {
+            var session = refresh.Session;
+            if (refresh.TaxaRemaining > 0 || refresh.AssessmentsRemaining > 0) {
+                return new FlowProbeResult("todo",
+                    $"Re-import {session.DisplayLabel} is {refresh.PercentDone}% done: {refresh.TaxaRemaining:N0} taxa and {refresh.AssessmentsRemaining:N0} assessments still to re-download. Re-run to carry on; the cutoff date is remembered.");
+            }
+            return new FlowProbeResult("todo",
+                $"Re-import {session.DisplayLabel}: everything is re-downloaded. One more run finishes the remaining checks and closes it.");
+        }
+
+        var backlog = Math.Max(0, s.BacklogOutstanding - s.ServerErrorAssessments);
+        if (backlog > 0) {
+            return new FlowProbeResult("todo", $"{backlog:N0} queued assessments are not downloaded yet.");
+        }
+
+        if (s.Projection is { } p) {
+            if (!p.Exists) {
+                return new FlowProbeResult("todo",
+                    $"{s.TaxaCached:N0} taxa and {s.AssessmentsCached:N0} assessments cached, but the projection --dataset api reads is not built yet.");
+            }
+            if (p.IsPartial) {
+                return new FlowProbeResult("todo",
+                    $"The projection is incomplete: {p.LatestNotDownloaded:N0} taxa have a current assessment that was not downloaded. Re-run to fetch them and rebuild it.");
+            }
+        }
+
+        var age = s.OldestTaxaDownloadedAt is { } oldest ? $" · oldest fetched {IucnRefreshMath.Stamp(oldest)}" : "";
+        return new FlowProbeResult("ok",
+            $"{s.TaxaCached:N0} taxa and {s.AssessmentsCached:N0} assessments cached{age}. For a new release, start a re-import first (the step above).");
+    }
 
     // Are the release's zip files where the import will look for them?
     internal static FlowProbeResult Download(IucnReleaseState s) {
