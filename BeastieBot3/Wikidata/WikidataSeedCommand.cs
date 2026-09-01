@@ -43,7 +43,18 @@ public sealed class WikidataSeedSettings : CommonSettings {
         "wikidata seed-taxa --limit 1000"
     })]
 public sealed class WikidataSeedCommand : AsyncCommand<WikidataSeedSettings> {
-    private const string CursorKey = "wikidata_taxa_cursor";
+    // One cursor per property now that the sweep runs a pass each. Both start from the cursor the
+    // single combined sweep left behind, which covered both properties up to that point, so an
+    // existing cache carries on rather than re-reading 150,000 items it already has.
+    private const string LegacyCursorKey = "wikidata_taxa_cursor";
+
+    internal sealed record Pass(WikidataSeedProperty Property, string CursorKey, string Label);
+
+    internal static readonly Pass[] Passes = {
+        new(WikidataSeedProperty.IucnTaxonId, "wikidata_taxa_cursor_p627", "IUCN taxon id (P627)"),
+        new(WikidataSeedProperty.ConservationStatus, "wikidata_taxa_cursor_p141", "IUCN conservation status (P141)"),
+    };
+
     private const int MinBatchSize = 50;
     // Waits between retries once the batch is as small as it goes. Roughly seven minutes in all,
     // which rides out the query service's usual bad patches without stalling a workflow run.
@@ -65,13 +76,39 @@ public sealed class WikidataSeedCommand : AsyncCommand<WikidataSeedSettings> {
         using var store = WikidataCacheStore.Open(cachePath);
         using var client = new WikidataApiClient(configuration);
 
-        var startCursor = DetermineCursor(settings, store);
         var batchSize = Math.Clamp(settings.BatchSize ?? configuration.SparqlBatchSize, 5, 2_000);
-        var dynamicBatchSize = batchSize;
         var totalGoal = settings.Limit.HasValue && settings.Limit.Value > 0 ? settings.Limit.Value : int.MaxValue;
 
+        var totalNew = 0;
+        var totalTouched = 0;
+        var anyRows = false;
+        WikidataApiException? outage = null;
+
+        foreach (var pass in Passes) {
+            if (cancellationToken.IsCancellationRequested || outage is not null) {
+                break;
+            }
+            AnsiConsole.MarkupLineInterpolated($"[grey]Sweeping by[/] {pass.Label}");
+            var passResult = await SweepAsync(pass, store, client, settings, batchSize,
+                totalGoal - totalTouched, cancellationToken).ConfigureAwait(false);
+            totalNew += passResult.New;
+            totalTouched += passResult.Touched;
+            anyRows |= passResult.AnyRows;
+            outage = passResult.Outage;
+        }
+
+        return Report(outage, anyRows, store, totalNew, totalTouched);
+    }
+
+    private readonly record struct PassResult(int New, int Touched, bool AnyRows, WikidataApiException? Outage);
+
+    private static async Task<PassResult> SweepAsync(Pass pass, WikidataCacheStore store, WikidataApiClient client,
+        WikidataSeedSettings settings, int batchSize, int totalGoal, CancellationToken cancellationToken) {
+        var startCursor = DetermineCursor(settings, store, pass.CursorKey);
+        var dynamicBatchSize = batchSize;
+
         if (settings.ResetCursor && settings.Cursor is null) {
-            store.SetSyncCursor(CursorKey, startCursor);
+            store.SetSyncCursor(pass.CursorKey, startCursor);
         }
 
         var cursor = startCursor;
@@ -90,7 +127,7 @@ public sealed class WikidataSeedCommand : AsyncCommand<WikidataSeedSettings> {
             var requestSize = Math.Min(dynamicBatchSize, remaining);
             IReadOnlyList<WikidataSeedRow> seeds;
             try {
-                seeds = await client.QueryTaxonSeedsAsync(cursor, requestSize, cancellationToken).ConfigureAwait(false);
+                seeds = await client.QueryTaxonSeedsAsync(pass.Property, cursor, requestSize, cancellationToken).ConfigureAwait(false);
             }
             catch (WikidataApiException ex) when (IsServerSideFailure(ex)) {
                 // The query service goes down, or slows past its own timeout, for minutes at a
@@ -122,7 +159,7 @@ public sealed class WikidataSeedCommand : AsyncCommand<WikidataSeedSettings> {
 
             var result = store.UpsertSeeds(seeds);
             cursor = seeds[^1].NumericId;
-            store.SetSyncCursor(CursorKey, cursor);
+            store.SetSyncCursor(pass.CursorKey, cursor);
 
             totalNew += result.NewCount;
             totalTouched += result.NewCount + result.UpdatedCount;
@@ -139,24 +176,31 @@ public sealed class WikidataSeedCommand : AsyncCommand<WikidataSeedSettings> {
             }
         }
 
+        return new PassResult(totalNew, totalTouched, lastBatch > 0, outage);
+    }
+
+    private static int Report(WikidataApiException? outage, bool anyRows, WikidataCacheStore store,
+        int totalNew, int totalTouched) {
         if (outage is not null) {
             AnsiConsole.MarkupLineInterpolated(
                 $"[yellow]Wikidata Query Service is not responding ({Describe(outage)}).[/] Stopping this step; everything fetched so far is saved.");
             AnsiConsole.MarkupLine(
-                "Run `wikipedia update` again later to continue from the cursor below. The remaining steps do not use this service and will run now.");
+                "Run `wikipedia update` again later to continue from the cursors below. The remaining steps do not use this service and will run now.");
         }
         else {
-            AnsiConsole.MarkupLine(lastBatch == 0
-                ? "[yellow]No additional Wikidata taxa found for the given cursor.[/]"
-                : "[green]Finished fetching Wikidata taxon ids.[/]");
+            AnsiConsole.MarkupLine(anyRows
+                ? "[green]Finished fetching Wikidata taxon ids.[/]"
+                : "[yellow]No additional Wikidata taxa found for the given cursor.[/]");
         }
-        AnsiConsole.MarkupLine($"[yellow]Cursor persisted at:[/] Q{cursor}");
+        foreach (var pass in Passes) {
+            AnsiConsole.MarkupLineInterpolated($"[yellow]Cursor persisted at:[/] Q{ReadCursor(store, pass.CursorKey)} [grey]({pass.Label})[/]");
+        }
         AnsiConsole.MarkupLine($"[green]New rows:[/] {totalNew}");
         AnsiConsole.MarkupLine($"[grey]Touched rows (new + existing):[/] {totalTouched}");
         return 0;
     }
 
-    private static long DetermineCursor(WikidataSeedSettings settings, WikidataCacheStore store) {
+    private static long DetermineCursor(WikidataSeedSettings settings, WikidataCacheStore store, string cursorKey) {
         if (!string.IsNullOrWhiteSpace(settings.Cursor)) {
             if (TryParseCursor(settings.Cursor, out var explicitCursor)) {
                 return explicitCursor;
@@ -169,7 +213,14 @@ public sealed class WikidataSeedCommand : AsyncCommand<WikidataSeedSettings> {
             return 0;
         }
 
-        return store.GetSyncCursor(CursorKey);
+        return ReadCursor(store, cursorKey);
+    }
+
+    // A cache written before the sweep was split has only the combined cursor. That one sweep read
+    // both properties together, so its position is a valid starting point for either pass.
+    internal static long ReadCursor(WikidataCacheStore store, string cursorKey) {
+        var cursor = store.GetSyncCursor(cursorKey);
+        return cursor > 0 ? cursor : store.GetSyncCursor(LegacyCursorKey);
     }
 
     private static bool TryParseCursor(string text, out long cursor) {

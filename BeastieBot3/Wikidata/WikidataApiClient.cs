@@ -63,18 +63,18 @@ internal sealed class WikidataApiClient : IDisposable {
         }
     }
 
-    public async Task<IReadOnlyList<WikidataSeedRow>> QueryTaxonSeedsAsync(long cursor, int limit, CancellationToken cancellationToken) {
+    public async Task<IReadOnlyList<WikidataSeedRow>> QueryTaxonSeedsAsync(WikidataSeedProperty property, long cursor, int limit, CancellationToken cancellationToken) {
         await _sparqlSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
         try {
             _nextSparqlAllowed = await EnforceRateLimitAsync(_nextSparqlAllowed, _configuration.SparqlDelay, cancellationToken).ConfigureAwait(false);
-            var query = BuildTaxonQuery(cursor, limit);
+            var query = BuildTaxonQuery(property, cursor, limit);
             var response = await SendWithRetryAsync(
                 _sparqlClient,
                 HttpMethod.Post,
                 string.Empty,
                 () => new FormUrlEncodedContent(new[] { new KeyValuePair<string, string>("query", query) }),
                 cancellationToken).ConfigureAwait(false);
-            return ParseSeedResponse(response.Body);
+            return ParseSeedResponse(response.Body, property);
         }
         finally {
             _sparqlSemaphore.Release();
@@ -213,32 +213,35 @@ internal sealed class WikidataApiClient : IDisposable {
         headers.UserAgent.ParseAdd(userAgent);
     }
 
-    private static string BuildTaxonQuery(long cursor, int limit) {
-        return $@"PREFIX wd: <http://www.wikidata.org/entity/>
-PREFIX wdt: <http://www.wikidata.org/prop/direct/>
+    // One property per query, and nothing else in the WHERE clause.
+    //
+    // This used to be a single query: a UNION of P141 and P627, joined to `instance of: taxon`,
+    // grouped and summed into two flags. The query service stopped being able to run it inside its
+    // 60-second limit, and no batch size helped, because the whole cost came before the LIMIT: the
+    // numeric id is computed with STRAFTER for every item in both sets (about 300,000), and only
+    // then can the cursor filter and the sort run. It failed identically at 250, 125, 62 and 50.
+    //
+    // Split by property it is a single indexed scan: P627 answers in about 2 seconds and P141 in
+    // about 5. Dropping the `instance of: taxon` join is not just a saving. It cost 6x the time and
+    // excluded 852 items that carry an IUCN taxon id but are typed as something other than a plain
+    // taxon (monotypic taxa, clades), which the sweep should have been finding all along. An item
+    // with an IUCN taxon id is an IUCN taxon; the property is the filter.
+    internal static string BuildTaxonQuery(WikidataSeedProperty property, long cursor, int limit) {
+        return $@"PREFIX wdt: <http://www.wikidata.org/prop/direct/>
 PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
 
-SELECT ?item ?qid (SUM(?flag141) AS ?hasP141) (SUM(?flag627) AS ?hasP627)
+SELECT ?item ?qid
 WHERE {{
-  {{
-    ?item wdt:P141 ?status .
-    BIND(1 AS ?flag141)
-    BIND(0 AS ?flag627)
-  }}
-  UNION
-  {{
-    ?item wdt:P627 ?taxonId .
-    BIND(0 AS ?flag141)
-    BIND(1 AS ?flag627)
-  }}
-  ?item wdt:P31 wd:Q16521 .
-    BIND(xsd:integer(STRAFTER(STR(?item), ""http://www.wikidata.org/entity/Q"")) AS ?qid)
+  ?item wdt:{PropertyId(property)} ?value .
+  BIND(xsd:integer(STRAFTER(STR(?item), ""http://www.wikidata.org/entity/Q"")) AS ?qid)
   FILTER(?qid > {cursor})
 }}
-GROUP BY ?item ?qid
 ORDER BY ?qid
 LIMIT {limit}";
     }
+
+    private static string PropertyId(WikidataSeedProperty property) =>
+        property == WikidataSeedProperty.IucnTaxonId ? "P627" : "P141";
 
     private static string BuildTaxonNameSearchQuery(string scientificName) {
         var literal = EscapeSparqlLiteral(scientificName);
@@ -276,7 +279,7 @@ WHERE {{
 LIMIT 10";
     }
 
-    private static IReadOnlyList<WikidataSeedRow> ParseSeedResponse(string json) {
+    private static IReadOnlyList<WikidataSeedRow> ParseSeedResponse(string json, WikidataSeedProperty property) {
         var list = new List<WikidataSeedRow>();
         using var document = JsonDocument.Parse(json);
         if (!document.RootElement.TryGetProperty("results", out var results)) {
@@ -292,10 +295,13 @@ LIMIT 10";
                 continue;
             }
 
+            // The query asked about one property, so only that flag is known here. The other is
+            // left false and never clears an existing one: UpsertSeeds keeps a flag once set, and
+            // both flags are rewritten from the entity JSON once it is downloaded.
             var entityId = "Q" + numericId;
-            var hasP141 = TryReadBinding(binding, "hasP141", out long p141) && p141 > 0;
-            var hasP627 = TryReadBinding(binding, "hasP627", out long p627) && p627 > 0;
-            list.Add(new WikidataSeedRow(numericId, entityId, hasP141, hasP627));
+            list.Add(new WikidataSeedRow(numericId, entityId,
+                HasP141: property == WikidataSeedProperty.ConservationStatus,
+                HasP627: property == WikidataSeedProperty.IucnTaxonId));
         }
 
         return list;
@@ -396,6 +402,13 @@ LIMIT 10";
 internal sealed record WikidataApiResponse(string Url, string Body, HttpStatusCode StatusCode, long PayloadBytes);
 
 internal sealed record WikidataSeedRow(long NumericId, string EntityId, bool HasP141, bool HasP627);
+
+/// The Wikidata property a sweep pass discovers items by. P627 is the IUCN taxon id, P141 the IUCN
+/// conservation status; roughly 152,000 items carry each, overlapping heavily but not completely.
+internal enum WikidataSeedProperty {
+    IucnTaxonId,
+    ConservationStatus,
+}
 
 internal sealed record WikidataSearchResult(long NumericId, string EntityId, string? Label);
 
