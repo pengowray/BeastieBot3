@@ -120,6 +120,10 @@ table.summary { border-collapse: collapse; width: 100%; font-size: 0.9rem; margi
 table.summary th, table.summary td { padding: 6px 11px; border-bottom: 1px solid var(--line-soft); text-align: left; }
 table.summary td.num, table.summary th.num { text-align: right; font-variant-numeric: tabular-nums; }
 table.summary thead th { color: var(--ink-soft); font-size: 0.82rem; text-transform: uppercase; letter-spacing: 0.03em; }
+table.summary.family td:first-child { white-space: normal; }
+table.summary.family tr.here { background: var(--bg-soft); }
+table.summary.family tr.here td:first-child { font-weight: 600; }
+.here-tag { color: var(--ink-soft); font-weight: 400; font-size: 0.82rem; }
 
 /* Long aggregate tables are clamped to their first few rows by audit.js; the gradient over the
    cut-off row shows there is more, and the toggle button below opens it. */

@@ -36,6 +36,16 @@ internal sealed class AuditReport {
     public required string Title { get; init; }
     public BreakageClass Breakage { get; init; } = BreakageClass.Advisory;
 
+    // Reports that partition one comparison name the same family and give a one-line scope. The
+    // renderer then prints the whole family as a short "you are here" table on each member page, with
+    // the row counts read from the document so they cannot drift from the pages themselves.
+    public string? FamilyId { get; init; }
+    public string? FamilyScope { get; init; }
+
+    // Position in that table, ordered from the closest thing to a clean match to the furthest, which
+    // is the question a reader arrives with. Independent of the order the pages appear on the index.
+    public int FamilyRank { get; init; }
+
     // One-sentence plain-text description for the index table and the methodology listing.
     // When unset, the renderer falls back to the first paragraph of Summary.
     public string? Blurb { get; init; }

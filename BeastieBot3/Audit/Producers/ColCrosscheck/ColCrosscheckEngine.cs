@@ -79,17 +79,22 @@ internal sealed class ColCrosscheckEngine {
                     return;
                 }
 
-                var detail = "No Catalogue of Life match for this name, and no close candidate from fuzzy search.";
                 if (viaSynonym.SynonymUsage is not null) {
-                    detail += viaSynonym.SynonymAcceptedName is null
-                        ? $" IUCN also lists {viaSynonym.Name} as a synonym of this taxon; the Catalogue of Life has {viaSynonym.Name} as a synonym but does not link it to an accepted name."
-                        : $" IUCN also lists {viaSynonym.Name} as a synonym of this taxon; the Catalogue of Life holds {viaSynonym.Name} as a synonym of {viaSynonym.SynonymAcceptedName}.";
+                    var leadDetail = viaSynonym.SynonymAcceptedName is null
+                        ? $"IUCN also lists {viaSynonym.Name} as a synonym of this taxon; the Catalogue of Life has {viaSynonym.Name} as a synonym but does not link it to an accepted name."
+                        : $"IUCN also lists {viaSynonym.Name} as a synonym of this taxon; the Catalogue of Life holds {viaSynonym.Name} as a synonym of {viaSynonym.SynonymAcceptedName}.";
+                    var lead = SpeciesFinding(ColCrosscheckProducer.SynonymLeadId, row, rank, isFull, name,
+                        "col-under-other-name", "scientificName", name, viaSynonym.SynonymAcceptedName,
+                        viaSynonym.SynonymUsage.Id, severity, leadDetail);
+                    SetExtra(lead, "iucnSynonymInCol", viaSynonym.Name);
+                    SetExtra(lead, "colAcceptedForSynonym", viaSynonym.SynonymAcceptedName);
+                    data.SynonymLead.Add(lead);
+                    return;
                 }
-                var notFound = SpeciesFinding(ColCrosscheckProducer.NotFoundId, row, rank, isFull, name,
-                    "missing-from-col", "scientificName", name, null, viaSynonym.SynonymUsage?.Id, severity, detail);
-                SetExtra(notFound, "iucnSynonymInCol", viaSynonym.Name);
-                SetExtra(notFound, "colAcceptedForSynonym", viaSynonym.SynonymAcceptedName);
-                data.NotFound.Add(notFound);
+
+                data.NotFound.Add(SpeciesFinding(ColCrosscheckProducer.NotFoundId, row, rank, isFull, name,
+                    "missing-from-col", "scientificName", name, null, colId: null, severity,
+                    "No Catalogue of Life match for this name, no close candidate from fuzzy search, and no other IUCN-listed name for the taxon is in CoL either."));
             } else {
                 var colName = AuditMapping.Decode(near.Best.ScientificName);
                 // Two follow-up checks on the suggested name, one lookup each. Both change what the
@@ -681,6 +686,7 @@ internal sealed class ColCrosscheckEngine {
 // non-empty bucket into an AuditReport page.
 internal sealed class ColCrosscheckData {
     public List<AuditFinding> NotFound { get; } = new();
+    public List<AuditFinding> SynonymLead { get; } = new();
     public List<AuditFinding> CloseMatch { get; } = new();
     public List<AuditFinding> Synonym { get; } = new();
     public List<AuditFinding> AcceptedDiffers { get; } = new();

@@ -126,6 +126,7 @@ internal static class AuditSiteRenderer {
         sb.Append("</small></p>\n");
         sb.Append($"<div class=\"description\">{HtmlText.Markdown(report.Summary)}</div>\n");
 
+        AppendFamilyTable(sb, doc, report);
         AppendCommentary(sb, doc, report);
 
         foreach (var table in report.SummaryTables) {
@@ -152,6 +153,38 @@ internal static class AuditSiteRenderer {
         var crumbs = AuditPageLayout.Crumbs(("Home", "index.html"), (report.Title, null));
         var html = AuditPageLayout.Page(doc, report.Title, crumbs, sb.ToString());
         File.WriteAllText(Path.Combine(outputDir, $"{report.Id}.html"), html, Utf8NoBom);
+    }
+
+    // A "you are here" table for a group of reports that partition one comparison. Its counts come
+    // from the document, so they always match the pages they link to. Placed after the report's own
+    // description, where it reads as the expansion of the sibling pages the description names.
+    private static readonly Dictionary<string, (string Heading, string Intro)> FamilyHeadings = new() {
+        ["col"] = ("The Catalogue of Life crosscheck",
+            "Every assessed name is compared once against the Catalogue of Life. A name that matches cleanly appears on none of the pages below; every other outcome lands on exactly one of them."),
+    };
+
+    private static void AppendFamilyTable(StringBuilder sb, AuditDocument doc, AuditReport report) {
+        if (report.FamilyId is null || !FamilyHeadings.TryGetValue(report.FamilyId, out var heading)) {
+            return;
+        }
+        var family = doc.Reports.Where(r => r.FamilyId == report.FamilyId).OrderBy(r => r.FamilyRank).ToList();
+        if (family.Count < 2) {
+            return;
+        }
+        sb.Append($"<h3>{HtmlText.Escape(heading.Heading)}</h3>\n");
+        sb.Append($"<p>{HtmlText.Escape(heading.Intro)}</p>\n");
+        sb.Append("<table class=\"summary family\">\n<thead><tr><th>Page</th><th class=\"num\">Names</th><th>What it lists</th></tr></thead>\n<tbody>\n");
+        foreach (var r in family) {
+            var here = r.Id == report.Id;
+            sb.Append(here ? "<tr class=\"here\">" : "<tr>");
+            sb.Append(here
+                ? $"<td>{HtmlText.Escape(r.Title)} <span class=\"here-tag\">this page</span></td>"
+                : $"<td><a href=\"{r.Id}.html\">{HtmlText.Escape(r.Title)}</a></td>");
+            sb.Append($"<td class=\"num\">{r.Count:N0}</td>");
+            sb.Append($"<td>{HtmlText.Escape(r.FamilyScope ?? string.Empty)}</td>");
+            sb.Append("</tr>\n");
+        }
+        sb.Append("</tbody>\n</table>\n");
     }
 
     private static void AppendCommentary(StringBuilder sb, AuditDocument doc, AuditReport report) {

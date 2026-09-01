@@ -124,7 +124,7 @@ the same table.
 ### Catalogue of Life crosscheck (`Producers/ColCrosscheck/`)
 
 `ColCrosscheckEngine` matches the release against the Catalogue of Life in one scan and sorts the
-findings into eight separate report pages (most actionable first, noisiest last):
+findings into nine separate report pages (most actionable first, noisiest last):
 
 | Report id | Page | What it lists |
 | --- | --- | --- |
@@ -135,7 +135,8 @@ findings into eight separate report pages (most actionable first, noisiest last)
 | `col-classification` | Higher-rank placement differences that look like spelling variants | a higher taxon whose parent differs like a typo (fuzzy/encoding), same phylum only |
 | `col-reorg` | Higher-rank names placed differently in CoL | a higher taxon under a genuinely different parent (not a typo), same phylum only |
 | `col-authority` | Minor naming authority differences | an exact name match whose author name differs like a typo (spelling/diacritic/encoding); differences only in spacing, punctuation, or the year are dropped |
-| `col-not-found` | Names not found in CoL | no exact match and no near candidate |
+| `col-other-name` | Names absent from CoL where another name for the taxon is present | the IUCN name is in no CoL usage and has no near spelling, but another name IUCN records for the taxon is in CoL as a synonym. A lead, not a match: the chain can end on an unrelated name |
+| `col-not-found` | Names not found in CoL | no exact match, no near candidate, and no other IUCN-listed name for the taxon in CoL either |
 
 Each report carries every one of its rows on the full-list page and the CSV (there is no
 HTML-subset / CSV-superset split), shows the IUCN status badge like the other reports, and links each
@@ -185,6 +186,22 @@ carries the original author and year over), and of the rest the split is roughly
 directions. The differences that do exist are mostly the two catalogues disagreeing on the
 publication year of one author's name, which is what `Authority years` reports.
 
+**The crosscheck is a partition, and says so.** Every assessed name lands on exactly one of the nine
+pages, or on none of them when it matches cleanly. Nothing on the site used to say that, so a reader
+on `col-not-found` could not tell what the other eight covered. Each report carries `FamilyId = "col"`,
+a one-line `FamilyScope`, and a `FamilyRank`; `AuditSiteRenderer.AppendFamilyTable` prints the whole
+family as a "you are here" table under each member's description, ordered by rank from the closest
+thing to a clean match to the furthest, with the current row marked. Counts come from the document,
+so they cannot drift from the pages they link to. Heading and intro live in `FamilyHeadings`, keyed by
+family id; add a second family there rather than special-casing the renderer.
+
+**Three "not in CoL" outcomes, three pages.** They share a headline fact and differ in what lead was
+found, which is a different job each time, so they are not merged: `col-close-match` (a near spelling
+exists, so align it), `col-other-name` (another IUCN-listed name for the taxon is in CoL as a synonym,
+so follow the chain and confirm), `col-not-found` (no route at all, so spot-check against literature).
+Merging them would put three suggestions on one page. `col-classification` and `col-reorg` are left
+split for the same reason: one says confirm a spelling, the other says be aware of a difference.
+
 **ColDP shape.** This ColDP `nameusage` table has no `acceptedNameUsageID` column; a synonym's
 `parentID` points at its accepted taxon, and every accepted name carries its higher-rank ancestors
 (kingdom..family) inline. So synonymy is resolved through `parentID` (this fixed a silent zero-count
@@ -192,8 +209,12 @@ bug where the missing column always read NULL), and the higher-rank placement co
 inline ancestor columns instead of walking the tree.
 
 **Two passes.** The first pass matches each assessed taxon (exact name, then genus/species/infra
-components): no match becomes `col-not-found` or, via a fuzzy pass over the same genus and epithet
-(`ScientificNameDifference` + `FindByGenericName`/`FindBySpecificEpithet`), `col-close-match`; a
+components). No match runs two further checks in order: a fuzzy pass over the same genus and epithet
+(`ScientificNameDifference` + `FindByGenericName`/`FindBySpecificEpithet`) gives `col-close-match`,
+and failing that the taxon's own IUCN synonyms (`IucnSynonymIndex.SynonymsOf`) are looked up in CoL:
+an accepted hit is `col-accepted-differs`, a synonym-only hit is `col-other-name`, nothing is
+`col-not-found`. That third check is what catches a taxon CoL holds under a different genus, which no
+amount of fuzzy spelling can reach (`Aethalodelphis obliquidens` / `Lagenorhynchus obliquidens`); a
 synonym match becomes `col-synonym`; an accepted match has its authority compared for `col-authority`.
 The second pass compares the distinct higher-rank names IUCN uses (genus, family, order, class):
 names CoL records only as synonyms (zero accepted usages anywhere, so homonyms are not misreported)

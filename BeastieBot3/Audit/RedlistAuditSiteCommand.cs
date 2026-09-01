@@ -107,9 +107,14 @@ internal sealed class RedlistAuditSiteCommand : Command<RedlistAuditSiteCommand.
             return -1;
         }
 
-        // "Names not found in CoL" is the longest and least actionable list, so it goes last. OrderBy
-        // is stable, so everything else keeps the order Producers() declares.
-        reports = reports.OrderBy(r => r.Id == ColCrosscheckProducer.NotFoundId ? 1 : 0).ToList();
+        // The two "the name is not in CoL" pages are the least actionable lists, so they go last and
+        // stay next to each other. Producers() cannot express this: both come out of the middle of
+        // the CoL set. OrderBy is stable, so everything else keeps the order Producers() declares.
+        reports = reports.OrderBy(r => r.Id switch {
+            ColCrosscheckProducer.SynonymLeadId => 1,
+            ColCrosscheckProducer.NotFoundId => 2,
+            _ => 0,
+        }).ToList();
 
         var config = new AuditSiteConfig {
             Contact = string.IsNullOrWhiteSpace(settings.Contact) ? "feedback@pengowray.com" : settings.Contact!,
