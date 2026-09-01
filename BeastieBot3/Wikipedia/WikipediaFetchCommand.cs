@@ -21,6 +21,7 @@ namespace BeastieBot3.Wikipedia;
         "wikipedia fetch-pages",
         "wikipedia fetch-pages --awaited-only --newest-first --limit 2000",
         "wikipedia fetch-pages --failed-only",
+        "wikipedia fetch-pages --exists-first --limit 2000",
         "wikipedia fetch-pages --limit 25",
         "wikipedia fetch-pages --refresh-only --refresh-days 365",
         "wikipedia fetch-pages --title \"Ursus maritimus\""
@@ -55,6 +56,10 @@ public sealed class WikipediaFetchCommand : AsyncCommand<WikipediaFetchCommand.S
         [CommandOption("--refresh-only")]
         [Description("Re-download cached pages only, ignoring everything never fetched. Needs --refresh-days.")]
         public bool RefreshOnly { get; init; }
+
+        [CommandOption("--exists-first")]
+        [Description("Fetch titles the enwiki all-titles dump lists first. Titles absent from the dump are likely redlinks and go last. Needs `wikipedia titles-dump` run once.")]
+        public bool ExistsFirst { get; init; }
 
         [CommandOption("--failed-only")]
         [Description("Only retry titles whose last download attempt failed. They sit behind the whole queue otherwise.")]
@@ -96,13 +101,26 @@ public sealed class WikipediaFetchCommand : AsyncCommand<WikipediaFetchCommand.S
             return -1;
         }
 
+        var existsFirst = settings.ExistsFirst;
+        if (existsFirst && cacheStore.CountDumpTitles() == 0) {
+            AnsiConsole.MarkupLine("[yellow]--exists-first has nothing to go on: no all-titles dump is imported. Run `wikipedia titles-dump` first. Fetching in the usual order.[/]");
+            existsFirst = false;
+        }
+
         var scope = new WikipediaCacheStore.WikiFetchScope {
             RefreshThreshold = refreshThreshold,
             AwaitedOnly = settings.AwaitedOnly,
             RefreshOnly = settings.RefreshOnly,
             FailedOnly = settings.FailedOnly,
             NewestFirst = settings.NewestFirst,
+            KnownTitlesFirst = existsFirst,
         };
+
+        if (existsFirst) {
+            var (inDump, absent) = cacheStore.CountQueuedAgainstDump();
+            AnsiConsole.MarkupLineInterpolated(
+                $"[grey]Dump check:[/] {inDump:n0} queued titles are in the all-titles dump; {absent:n0} are not (likely redlinks) and go last.");
+        }
 
         // The queue holds six figures of titles, so say up front how many this run's scope
         // covers -- otherwise "--limit 500" gives no sense of what fraction is left.

@@ -51,12 +51,13 @@ public static class FlowStepProbes {
     public const string WikipediaMatch = "wiki-wp-match";
     public const string WikipediaFetchAwaited = "wiki-wp-fetch-awaited";
     public const string WikipediaFetchRest = "wiki-wp-fetch-rest";
+    public const string WikipediaTitlesDump = "wiki-wp-titles-dump";
     public const string WikiRetryFailed = "wiki-retry-failed";
     public const string WikiRefresh = "wiki-refresh";
 
     public static bool IsWikiProbe(string probe) =>
         probe is WikidataSweep or WikidataSearch or WikidataDownload or WikipediaQueue or WikipediaMatch
-            or WikipediaFetchAwaited or WikipediaFetchRest or WikiRetryFailed or WikiRefresh;
+            or WikipediaFetchAwaited or WikipediaFetchRest or WikipediaTitlesDump or WikiRetryFailed or WikiRefresh;
 
     public static FlowProbeResult? EvaluateWiki(string probe, WikiCoverageState s) {
         // Nothing measured yet (first poll after startup, or a cache missing): say nothing
@@ -70,6 +71,7 @@ public static class FlowStepProbes {
             WikipediaMatch => WikiWikipediaMatch(s),
             WikipediaFetchAwaited => WikiFetchAwaited(s),
             WikipediaFetchRest => WikiFetchRest(s),
+            WikipediaTitlesDump => WikiTitlesDump(s),
             WikiRetryFailed => WikiFailures(s),
             WikiRefresh => WikiRefreshAge(s),
             _ => null,
@@ -132,6 +134,20 @@ public static class FlowStepProbes {
         return rest == 0
             ? new FlowProbeResult("ok", "Nothing else queued.")
             : new FlowProbeResult("backlog", $"{rest:n0} other pages queued: higher taxa, synonyms and redirects no taxon is waiting on.");
+    }
+
+    // The all-titles dump is optional but cheap: without it every likely redlink in the queue
+    // costs an API round-trip to learn nothing.
+    internal static FlowProbeResult WikiTitlesDump(WikiCoverageState s) {
+        if (s.DumpTitles == 0) {
+            return new FlowProbeResult("todo",
+                "No all-titles dump imported, so the fetch queue cannot tell likely redlinks from real pages.");
+        }
+        var dump = s.DumpDate is null ? "All-titles dump" : $"All-titles dump of {s.DumpDate}";
+        var queued = s.PagesQueuedInDump + s.PagesQueuedNotInDump;
+        return new FlowProbeResult("ok", queued == 0
+            ? $"{dump}: {s.DumpTitles:n0} titles imported."
+            : $"{dump}: {s.DumpTitles:n0} titles imported. {s.PagesQueuedInDump:n0} queued titles are in it; {s.PagesQueuedNotInDump:n0} are not (likely redlinks).");
     }
 
     internal static FlowProbeResult WikiFailures(WikiCoverageState s) {

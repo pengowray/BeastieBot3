@@ -61,6 +61,14 @@ public sealed record WikiCoverageState {
     public long TaxaWithoutArticle { get; init; }
     /// Oldest cached page's download date - what a refresh pass would be working back from.
     public DateTime? OldestCachedPageAt { get; init; }
+
+    // --- the enwiki all-titles dump (a cheap local existence check for queued titles) ---
+    public long DumpTitles { get; init; }                  // 0 = no dump imported
+    public string? DumpDate { get; init; }                 // the dump's Last-Modified date, yyyy-MM-dd
+    /// Queued (pending/failed) titles the dump lists - an article or redirect exists.
+    public long PagesQueuedInDump { get; init; }
+    /// Queued titles absent from the dump - likely redlinks.
+    public long PagesQueuedNotInDump { get; init; }
 }
 
 public static class WikiCoverageStateReader {
@@ -134,8 +142,23 @@ public static class WikiCoverageStateReader {
                 WHERE subpopulationName IS NULL OR TRIM(subpopulationName) = ''
                 """;
 
+            // The all-titles dump tables arrived later than the rest of the schema, so an older
+            // cache without them reads as "no dump imported", which is also true.
+            var dumpTitles = CountOrZero(conn, "SELECT COUNT(*) FROM wp.enwiki_dump_titles");
+            var queuedInDump = dumpTitles == 0 ? 0 : CountOrZero(conn, """
+                SELECT COUNT(*) FROM wp.wiki_pages p
+                WHERE p.download_status IN ('pending', 'failed')
+                  AND EXISTS (SELECT 1 FROM wp.enwiki_dump_titles d WHERE d.title = p.normalized_title)
+                """);
+            var queuedTotal = dumpTitles == 0 ? 0 : CountOrZero(conn,
+                "SELECT COUNT(*) FROM wp.wiki_pages WHERE download_status IN ('pending', 'failed')");
+
             return state with {
                 Known = true,
+                DumpTitles = dumpTitles,
+                DumpDate = TextOrNull(conn, "SELECT value FROM wp.enwiki_dump_info WHERE key = 'dump_date'"),
+                PagesQueuedInDump = queuedInDump,
+                PagesQueuedNotInDump = Math.Max(0, queuedTotal - queuedInDump),
                 IucnTaxa = Count(conn, $"SELECT COUNT(*) FROM ({Eligible})"),
 
                 WikidataEntitiesCached = Count(conn, "SELECT COUNT(*) FROM wd.wikidata_entities WHERE json_downloaded = 1"),
@@ -214,6 +237,16 @@ public static class WikiCoverageStateReader {
 
     private static long CountOrZero(SqliteConnection conn, string sql) {
         try { return Count(conn, sql); } catch { return 0; }
+    }
+
+    private static string? TextOrNull(SqliteConnection conn, string sql) {
+        try {
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = sql;
+            cmd.CommandTimeout = 30;
+            var value = cmd.ExecuteScalar() as string;
+            return string.IsNullOrWhiteSpace(value) ? null : value;
+        } catch { return null; }
     }
 
     private static DateTime? Stamp(SqliteConnection conn, string sql) {

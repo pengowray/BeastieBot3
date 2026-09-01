@@ -133,6 +133,13 @@ CREATE TABLE IF NOT EXISTS taxon_wiki_match_attempts (
     attempted_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_taxon_wiki_attempts_taxon ON taxon_wiki_match_attempts(taxon_source, taxon_identifier);
+CREATE TABLE IF NOT EXISTS enwiki_dump_titles (
+    title TEXT PRIMARY KEY
+) WITHOUT ROWID;
+CREATE TABLE IF NOT EXISTS enwiki_dump_info (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+);
 """;
         command.ExecuteNonQuery();
     }
@@ -183,6 +190,7 @@ SELECT
         public bool RefreshOnly { get; init; }   // skip the never-fetched queue; re-download cached pages only
         public bool FailedOnly { get; init; }    // only titles whose last download attempt failed
         public bool NewestFirst { get; init; }   // most recently queued first, instead of oldest first
+        public bool KnownTitlesFirst { get; init; } // titles the enwiki all-titles dump lists before likely redlinks
 
         public static readonly WikiFetchScope All = new();
     }
@@ -229,6 +237,16 @@ SELECT
                        IFNULL(downloaded_at, '0000-01-01T00:00:00Z'),
                        id
               """;
+
+        // Between the status precedence and the age order: the all-titles dump says which queued
+        // titles have an article at all, so a run asking for it downloads pages first and leaves
+        // the likely redlinks (each of which costs an API round-trip to learn nothing) for last.
+        if (scope.KnownTitlesFirst) {
+            var lines = order.Split('\n');
+            order = lines[0] + "\n" +
+                    "         EXISTS (SELECT 1 FROM enwiki_dump_titles d WHERE d.title = wiki_pages.normalized_title) DESC,\n" +
+                    string.Join('\n', lines[1..]);
+        }
 
         return $"{select}\nFROM wiki_pages\nWHERE {where}\n{order}\nLIMIT @limit";
     }
@@ -857,6 +875,135 @@ LIMIT 1
         command.ExecuteNonQuery();
     }
 
+    // ---- the enwiki all-titles dump -------------------------------------------------------
+    // A twice-monthly list of every ns0 title (articles and redirects, no page ids), kept as a
+    // cheap local existence check: a queued title absent from it is almost certainly a redlink.
+    // Titles are stored in normalized form (underscores as spaces) so they join directly against
+    // wiki_pages.normalized_title.
+
+    public EnwikiDumpInfo? GetDumpInfo() {
+        using var command = _connection.CreateCommand();
+        command.CommandText = "SELECT key, value FROM enwiki_dump_info";
+        string? dumpDate = null, source = null, importedRaw = null;
+        long count = 0;
+        var partial = false;
+        using (var reader = command.ExecuteReader()) {
+            while (reader.Read()) {
+                var value = reader.GetString(1);
+                switch (reader.GetString(0)) {
+                    case "dump_date": dumpDate = value; break;
+                    case "source": source = value; break;
+                    case "imported_at": importedRaw = value; break;
+                    case "title_count": long.TryParse(value, NumberStyles.None, CultureInfo.InvariantCulture, out count); break;
+                    case "partial": partial = value == "1"; break;
+                }
+            }
+        }
+
+        if (importedRaw is null) {
+            return null;
+        }
+
+        DateTime? importedAt = DateTime.TryParse(importedRaw, CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var parsed)
+            ? parsed
+            : null;
+        return new EnwikiDumpInfo(dumpDate, importedAt, count, source, partial);
+    }
+
+    public string? GetDumpInfoValue(string key) {
+        using var command = _connection.CreateCommand();
+        command.CommandText = "SELECT value FROM enwiki_dump_info WHERE key=@key";
+        command.Parameters.AddWithValue("@key", key);
+        return command.ExecuteScalar() as string;
+    }
+
+    public void SetDumpInfoValue(string key, string? value) {
+        using var command = _connection.CreateCommand();
+        if (value is null) {
+            command.CommandText = "DELETE FROM enwiki_dump_info WHERE key=@key";
+            command.Parameters.AddWithValue("@key", key);
+        }
+        else {
+            command.CommandText = "INSERT INTO enwiki_dump_info(key, value) VALUES (@key,@value) ON CONFLICT(key) DO UPDATE SET value=excluded.value";
+            command.Parameters.AddWithValue("@key", key);
+            command.Parameters.AddWithValue("@value", value);
+        }
+        command.ExecuteNonQuery();
+    }
+
+    /// A fresh import starts by clearing the old dump and its recorded facts (the download
+    /// bookkeeping keys are kept), so an interrupted import reads as "no dump" rather than as a
+    /// complete older one.
+    public void ClearDumpTitles() {
+        using var command = _connection.CreateCommand();
+        command.CommandText = """
+            DELETE FROM enwiki_dump_titles;
+            DELETE FROM enwiki_dump_info WHERE key IN ('dump_date','imported_at','title_count','partial','source');
+            """;
+        command.ExecuteNonQuery();
+    }
+
+    /// Inserts a batch of already-normalized titles inside one transaction. Returns rows added
+    /// (duplicates are ignored, so re-feeding a batch is harmless).
+    public long AddDumpTitles(IReadOnlyList<string> normalizedTitles) {
+        if (normalizedTitles.Count == 0) {
+            return 0;
+        }
+
+        long added = 0;
+        using var tx = _connection.BeginTransaction();
+        using (var command = _connection.CreateCommand()) {
+            command.Transaction = tx;
+            command.CommandText = "INSERT OR IGNORE INTO enwiki_dump_titles(title) VALUES (@title)";
+            var title = command.Parameters.Add("@title", SqliteType.Text);
+            foreach (var value in normalizedTitles) {
+                title.Value = value;
+                added += command.ExecuteNonQuery();
+            }
+        }
+        tx.Commit();
+        return added;
+    }
+
+    public void RecordDumpImport(EnwikiDumpInfo info) {
+        if (info is null) {
+            throw new ArgumentNullException(nameof(info));
+        }
+
+        SetDumpInfoValue("dump_date", info.DumpDate ?? "");
+        SetDumpInfoValue("imported_at", (info.ImportedAt ?? DateTime.UtcNow).ToString("O"));
+        SetDumpInfoValue("title_count", info.TitleCount.ToString(CultureInfo.InvariantCulture));
+        SetDumpInfoValue("source", info.Source ?? "");
+        SetDumpInfoValue("partial", info.Partial ? "1" : "0");
+    }
+
+    public long CountDumpTitles() {
+        using var command = _connection.CreateCommand();
+        command.CommandText = "SELECT COUNT(*) FROM enwiki_dump_titles";
+        return command.ExecuteScalar() is long n ? n : 0;
+    }
+
+    /// How the queue splits against the dump: titles it lists (an article or redirect exists)
+    /// versus titles it does not (likely redlinks).
+    public (long InDump, long Absent) CountQueuedAgainstDump() {
+        using var command = _connection.CreateCommand();
+        command.CommandText = """
+            SELECT
+                SUM(CASE WHEN EXISTS (SELECT 1 FROM enwiki_dump_titles d WHERE d.title = wiki_pages.normalized_title) THEN 1 ELSE 0 END),
+                SUM(CASE WHEN EXISTS (SELECT 1 FROM enwiki_dump_titles d WHERE d.title = wiki_pages.normalized_title) THEN 0 ELSE 1 END)
+            FROM wiki_pages
+            WHERE download_status IN (@pending, @failed)
+            """;
+        command.Parameters.AddWithValue("@pending", WikiPageDownloadStatus.Pending);
+        command.Parameters.AddWithValue("@failed", WikiPageDownloadStatus.Failed);
+        using var reader = command.ExecuteReader(CommandBehavior.SingleRow);
+        if (!reader.Read()) {
+            return (0, 0);
+        }
+        long Get(int ordinal) => reader.IsDBNull(ordinal) ? 0L : reader.GetInt64(ordinal);
+        return (Get(0), Get(1));
+    }
+
     public int GetNextAttemptOrder(string taxonSource, string taxonIdentifier) {
         using var command = _connection.CreateCommand();
         command.CommandText = "SELECT IFNULL(MAX(attempt_order), 0) FROM taxon_wiki_match_attempts WHERE taxon_source=@source AND taxon_identifier=@id";
@@ -981,6 +1128,16 @@ internal sealed record TaxonWikiMatchAttempt(
     string? RedirectFinalTitle,
     string? Notes,
     DateTime AttemptedAt
+);
+
+/// What the enwiki all-titles dump import recorded: which dump it was (its Last-Modified date),
+/// when it was imported, how many titles went in, and whether the import was cut short (--limit).
+internal sealed record EnwikiDumpInfo(
+    string? DumpDate,
+    DateTime? ImportedAt,
+    long TitleCount,
+    string? Source,
+    bool Partial
 );
 
 internal sealed record WikiCacheStats(

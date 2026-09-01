@@ -168,4 +168,46 @@ public class WikipediaFetchScopeTests {
         Assert.Equal(new[] { "Queued", "Cached last year" },
             Titles(f.Store, new WikipediaCacheStore.WikiFetchScope { RefreshThreshold = threshold }));
     }
+
+    // --exists-first: titles the all-titles dump lists come before likely redlinks, but never
+    // before the status precedence (a failed page in the dump must not jump ahead of a
+    // never-tried redlink and loop).
+    [Fact]
+    public void Exists_first_downloads_dump_listed_titles_before_likely_redlinks() {
+        using var f = new Fixture();
+        f.AddPage("Fakeus notrealis", "pending", Now.AddDays(-2));      // queued first, but a redlink
+        f.AddPage("Ursus maritimus", "pending", Now);
+        f.AddPage("Panthera leo", "failed", Now.AddDays(-1));
+        f.Store.AddDumpTitles(new[] { "Ursus maritimus", "Panthera leo" });
+
+        Assert.Equal(new[] { "Ursus maritimus", "Fakeus notrealis", "Panthera leo" },
+            Titles(f.Store, new WikipediaCacheStore.WikiFetchScope { KnownTitlesFirst = true }));
+    }
+
+    [Fact]
+    public void Dump_import_is_recorded_and_the_queue_split_counted() {
+        using var f = new Fixture();
+        f.AddPage("Ursus maritimus", "pending", Now);
+        f.AddPage("Fakeus notrealis", "pending", Now);
+        f.AddPage("Cached page", "cached", Now, downloaded: Now);       // not queued, not counted
+
+        Assert.Equal(2, f.Store.AddDumpTitles(new[] { "Ursus maritimus", "Cached page" }));
+        Assert.Equal(0, f.Store.AddDumpTitles(new[] { "Ursus maritimus" }));   // duplicate ignored
+        Assert.Equal(2, f.Store.CountDumpTitles());
+        Assert.Equal((1L, 1L), f.Store.CountQueuedAgainstDump());
+
+        f.Store.RecordDumpImport(new EnwikiDumpInfo("2026-08-20", Now, 2, "test", Partial: false));
+        var info = f.Store.GetDumpInfo();
+        Assert.NotNull(info);
+        Assert.Equal("2026-08-20", info!.DumpDate);
+        Assert.Equal(2, info.TitleCount);
+        Assert.False(info.Partial);
+
+        // A fresh import clears the titles and the record, but keeps download bookkeeping.
+        f.Store.SetDumpInfoValue("download_last_modified", "2026-08-20");
+        f.Store.ClearDumpTitles();
+        Assert.Equal(0, f.Store.CountDumpTitles());
+        Assert.Null(f.Store.GetDumpInfo());
+        Assert.Equal("2026-08-20", f.Store.GetDumpInfoValue("download_last_modified"));
+    }
 }

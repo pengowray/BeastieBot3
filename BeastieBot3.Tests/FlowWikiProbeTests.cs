@@ -33,6 +33,10 @@ public class FlowWikiProbeTests {
         public long TaxaNeverMatched;
         public long TaxaWithArticle = 67_134;
         public DateTime? OldestCachedPageAt = new(2026, 6, 14, 0, 0, 0, DateTimeKind.Utc);
+        public long DumpTitles;
+        public string? DumpDate;
+        public long PagesQueuedInDump;
+        public long PagesQueuedNotInDump;
 
         public WikiCoverageState Build() => new() {
             Known = Known,
@@ -52,6 +56,10 @@ public class FlowWikiProbeTests {
             TaxaNeverMatched = TaxaNeverMatched,
             TaxaWithArticle = TaxaWithArticle,
             OldestCachedPageAt = OldestCachedPageAt,
+            DumpTitles = DumpTitles,
+            DumpDate = DumpDate,
+            PagesQueuedInDump = PagesQueuedInDump,
+            PagesQueuedNotInDump = PagesQueuedNotInDump,
         };
     }
 
@@ -220,5 +228,29 @@ public class FlowWikiProbeTests {
         var r = FlowStepProbes.WikiRefreshAge(State(s => { s.PagesCached = 0; s.OldestCachedPageAt = null; }));
         Assert.Equal("ok", r.Status);
         Assert.Contains("No pages cached", r.Detail);
+    }
+
+    // Without the dump the fetch queue cannot tell a redlink from a real page; with it the light
+    // reports the dump's date and how the queue splits, and stays green (importing again before
+    // a new dump exists would change nothing).
+    [Fact]
+    public void Titles_dump_says_what_the_queue_gains_from_importing_one() {
+        var r = FlowStepProbes.WikiTitlesDump(State());
+        Assert.Equal("todo", r.Status);
+        Assert.Contains("No all-titles dump imported", r.Detail);
+    }
+
+    [Fact]
+    public void Titles_dump_reports_the_dump_date_and_the_queue_split() {
+        var r = FlowStepProbes.WikiTitlesDump(State(s => {
+            s.DumpTitles = 7_012_345;
+            s.DumpDate = "2026-08-20";
+            s.PagesQueuedInDump = 61_000;
+            s.PagesQueuedNotInDump = 129_000;
+        }));
+        Assert.Equal("ok", r.Status);
+        Assert.Contains("2026-08-20", r.Detail);
+        Assert.Contains("61,000 queued titles are in it", r.Detail);
+        Assert.Contains("129,000 are not (likely redlinks)", r.Detail);
     }
 }
