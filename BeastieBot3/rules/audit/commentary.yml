@@ -52,10 +52,9 @@
   scope: report
   title: Changes since 2025-2
   markdown: |
-    Blank-scope assessments, which the API used to answer HTTP 500 for, were planned to be listed on 
-    this page, however the API now serves them, so they have moved to
-    [Assessments with no geographic scope](empty-scope.html), where the blank scope itself is the
-    observation.
+    Blank-scope assessments, which the API previously answered with an HTTP 500 Error, were 
+    planned to be listed on this page also, however the API now serves them, so they have moved to
+    [Assessments with no geographic scope](empty-scope.html).
 
 - report: no-latest
   release: 2026-1
