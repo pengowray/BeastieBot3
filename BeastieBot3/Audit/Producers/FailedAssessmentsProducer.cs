@@ -85,7 +85,7 @@ internal sealed class FailedAssessmentsProducer : IAuditReportProducer {
                     "The geographic scope of the taxon's current assessment in the CSV export."),
                 AuditColumns.AssessmentId("Failed assessment"),
                 AuditColumns.Custom("httpStatus", "HTTP status", AuditColumnType.Number),
-                AuditColumns.Latest(),
+                AuditColumns.Latest("Current"),
                 AuditColumns.Year(),
                 AuditColumns.Custom("attemptCount", "Attempts", AuditColumnType.Number),
                 AuditColumns.TaxonId(),
