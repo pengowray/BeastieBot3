@@ -105,7 +105,7 @@ public sealed class WikipediaUpdateCommand : AsyncCommand<WikipediaUpdateCommand
                         return exit;
                     }
                     AnsiConsole.MarkupLineInterpolated(
-                        $"[yellow]`{command}` exited with code {exit}; carrying on.[/] This step is optional and the rest of the update does not depend on it.");
+                        $"[yellow]`{command}` exited with code {exit}.[/] Continuing; the remaining steps do not depend on it. Run `wikipedia update` again later to retry this step.");
                 }
                 cancellationToken.ThrowIfCancellationRequested();
             }
@@ -126,7 +126,11 @@ public sealed class WikipediaUpdateCommand : AsyncCommand<WikipediaUpdateCommand
         var rungs = new List<Rung> {
             new("Sweep Wikidata for new IUCN-tagged items",
                 new[] { "wikidata seed-taxa" },
-                Gate: null),
+                Gate: null,
+                // Needs query.wikidata.org, a public endpoint that is regularly overloaded. The
+                // eight steps below use the Wikidata and Wikipedia web APIs instead, which stay up
+                // independently of it, so an outage here must not abandon the run.
+                StopOnFailure: false),
             new("Download queued Wikidata items",
                 new[] { Cap("wikidata cache-entities") },
                 s => s.WikidataEntitiesQueued > 0
@@ -192,7 +196,7 @@ public sealed class WikipediaUpdateCommand : AsyncCommand<WikipediaUpdateCommand
         // created moments ago by an earlier rung). Running the step is the safe default: every
         // step skips work already done.
         if (!state.Known) {
-            return (true, "could not count what is left, so running it to be sure");
+            return (true, "will run (couldn't count what's left)");
         }
         return rung.Gate(state);
     }
@@ -223,7 +227,8 @@ public sealed class WikipediaUpdateCommand : AsyncCommand<WikipediaUpdateCommand
     // not just what this run touched.
     private static void PrintTotals(WikiCoverageState s) {
         if (!s.Known) {
-            AnsiConsole.MarkupLine("[grey]Overall counts unavailable (a cache is missing or brand new). They appear once the caches exist.[/]");
+            AnsiConsole.MarkupLineInterpolated(
+                $"[yellow]Overall counts unavailable:[/] {s.UnavailableReason ?? MissingCacheReason(s)}");
             return;
         }
 
@@ -234,6 +239,18 @@ public sealed class WikipediaUpdateCommand : AsyncCommand<WikipediaUpdateCommand
         var dump = s.DumpTitles == 0 ? "no all-titles dump imported" : $"all-titles dump of {s.DumpDate ?? "unknown date"} imported";
         AnsiConsole.MarkupLineInterpolated(
             $"[grey]Wikipedia:[/] {s.PagesCached:n0} pages cached · {s.PagesQueued:n0} queued ({s.PagesQueuedAwaited:n0} awaited by a taxon) · {s.PagesFailed:n0} failed · {dump}");
+    }
+
+    // The one cause worth naming, because it is the one the reader can act on. Everything else
+    // comes back as the reader it failed on, verbatim.
+    private static string MissingCacheReason(WikiCoverageState s) {
+        var missing = new List<string>();
+        if (!s.IucnExists) missing.Add("the IUCN database");
+        if (!s.WikidataExists) missing.Add("the Wikidata cache");
+        if (!s.WikipediaExists) missing.Add("the Wikipedia cache");
+        return missing.Count > 0
+            ? $"{string.Join(" and ", missing)} not found. Check the paths in paths.ini."
+            : "the counts have not been measured yet.";
     }
 
     // What a re-run (or a bigger run) would still pick up. Without this, "finished" reads as

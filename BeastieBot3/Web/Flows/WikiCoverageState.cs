@@ -26,6 +26,10 @@ public sealed record WikiCoverageState {
     /// Probes must stay silent rather than report zero gaps they have not measured.
     public bool Known { get; init; }
     public DateTime? ReadAt { get; init; }
+    /// Why the counts are missing, when a database was there but the read failed. Callers show it
+    /// verbatim: guessing at the cause is how "a cache is missing or brand new" came to be printed
+    /// for a year over three caches that were all present.
+    public string? UnavailableReason { get; init; }
 
     public bool IucnExists { get; init; }
     public bool WikidataExists { get; init; }
@@ -129,7 +133,11 @@ public static class WikiCoverageStateReader {
         try {
             // Opened through a file: URI so the two ATTACHed caches can carry ?mode=ro of their
             // own. A plain ATTACH would open them read-write, and this runs on a poll.
-            var csb = new SqliteConnectionStringBuilder { DataSource = ReadOnlyUri(iucn!) };
+            // Pooling off deliberately. A pooled connection goes back to the pool with its ATTACHes
+            // still in place, so the next measurement fails on "database wd is already in use" and
+            // every count after the first in a process reads as unknown - which is exactly what a
+            // long-lived `serve` does. This runs once a minute at most, so a fresh handle is cheap.
+            var csb = new SqliteConnectionStringBuilder { DataSource = ReadOnlyUri(iucn!), Pooling = false };
             using var conn = new SqliteConnection(csb.ConnectionString);
             conn.Open();
             Attach(conn, "wd", wikidata!);
@@ -204,7 +212,7 @@ public static class WikiCoverageStateReader {
                 _warned = true;
                 Console.Error.WriteLine($"Workflow coverage counts unavailable: {ex.Message}");
             }
-            return state;
+            return state with { UnavailableReason = ex.Message };
         }
     }
 

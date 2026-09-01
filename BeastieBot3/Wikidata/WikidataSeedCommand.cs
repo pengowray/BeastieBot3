@@ -44,6 +44,12 @@ public sealed class WikidataSeedSettings : CommonSettings {
     })]
 public sealed class WikidataSeedCommand : AsyncCommand<WikidataSeedSettings> {
     private const string CursorKey = "wikidata_taxa_cursor";
+    private const int MinBatchSize = 50;
+    // Waits between retries once the batch is as small as it goes. Roughly seven minutes in all,
+    // which rides out the query service's usual bad patches without stalling a workflow run.
+    private static readonly TimeSpan[] StallWaits = {
+        TimeSpan.FromSeconds(30), TimeSpan.FromMinutes(1), TimeSpan.FromMinutes(2), TimeSpan.FromMinutes(4),
+    };
 
     public override Task<int> ExecuteAsync(CommandContext context, WikidataSeedSettings settings, CancellationToken cancellationToken) {
         _ = context;
@@ -72,6 +78,8 @@ public sealed class WikidataSeedCommand : AsyncCommand<WikidataSeedSettings> {
         var totalNew = 0;
         var totalTouched = 0;
         var lastBatch = 0;
+        var stalledRounds = 0;
+        WikidataApiException? outage = null;
 
         while (!cancellationToken.IsCancellationRequested) {
             var remaining = totalGoal - totalTouched;
@@ -84,12 +92,30 @@ public sealed class WikidataSeedCommand : AsyncCommand<WikidataSeedSettings> {
             try {
                 seeds = await client.QueryTaxonSeedsAsync(cursor, requestSize, cancellationToken).ConfigureAwait(false);
             }
-            catch (WikidataApiException ex) when (ShouldDownshift(ex, dynamicBatchSize)) {
-                dynamicBatchSize = Math.Max(50, dynamicBatchSize / 2);
-                AnsiConsole.MarkupLineInterpolated($"[yellow]SPARQL request timed out (status {(int?)ex.StatusCode ?? 0}). Reducing batch size to {dynamicBatchSize} and retrying from Q{cursor}.[/]");
-                await Task.Delay(TimeSpan.FromSeconds(5), cancellationToken).ConfigureAwait(false);
+            catch (WikidataApiException ex) when (IsServerSideFailure(ex)) {
+                // The query service goes down, or slows past its own timeout, for minutes at a
+                // time. Every completed batch has already stored its cursor, so the only thing at
+                // stake is this run: shrink the batch, then wait longer and longer, then stop and
+                // say so. Throwing here used to abandon a `wikipedia update` at its first step.
+                if (dynamicBatchSize > MinBatchSize) {
+                    dynamicBatchSize = Math.Max(MinBatchSize, dynamicBatchSize / 2);
+                    AnsiConsole.MarkupLineInterpolated($"[yellow]Wikidata Query Service returned {Describe(ex)}.[/] Retrying from Q{cursor} with a smaller batch of {dynamicBatchSize} items.");
+                    await Task.Delay(TimeSpan.FromSeconds(5), cancellationToken).ConfigureAwait(false);
+                    continue;
+                }
+
+                stalledRounds++;
+                if (stalledRounds > StallWaits.Length) {
+                    outage = ex;
+                    break;
+                }
+
+                var wait = StallWaits[stalledRounds - 1];
+                AnsiConsole.MarkupLineInterpolated($"[yellow]Wikidata Query Service returned {Describe(ex)}.[/] Waiting {Format(wait)}, then retrying from Q{cursor} (retry {stalledRounds} of {StallWaits.Length}).");
+                await Task.Delay(wait, cancellationToken).ConfigureAwait(false);
                 continue;
             }
+            stalledRounds = 0;
             if (seeds.Count == 0) {
                 break;
             }
@@ -113,11 +139,17 @@ public sealed class WikidataSeedCommand : AsyncCommand<WikidataSeedSettings> {
             }
         }
 
-        var status = lastBatch == 0
-            ? "[yellow]No additional Wikidata taxa found for the given cursor.[/]"
-            : "[green]Finished fetching Wikidata taxon ids.[/]";
-
-        AnsiConsole.MarkupLine(status);
+        if (outage is not null) {
+            AnsiConsole.MarkupLineInterpolated(
+                $"[yellow]Wikidata Query Service is not responding ({Describe(outage)}).[/] Stopping this step; everything fetched so far is saved.");
+            AnsiConsole.MarkupLine(
+                "Run `wikipedia update` again later to continue from the cursor below. The remaining steps do not use this service and will run now.");
+        }
+        else {
+            AnsiConsole.MarkupLine(lastBatch == 0
+                ? "[yellow]No additional Wikidata taxa found for the given cursor.[/]"
+                : "[green]Finished fetching Wikidata taxon ids.[/]");
+        }
         AnsiConsole.MarkupLine($"[yellow]Cursor persisted at:[/] Q{cursor}");
         AnsiConsole.MarkupLine($"[green]New rows:[/] {totalNew}");
         AnsiConsole.MarkupLine($"[grey]Touched rows (new + existing):[/] {totalTouched}");
@@ -153,19 +185,25 @@ public sealed class WikidataSeedCommand : AsyncCommand<WikidataSeedSettings> {
 
         return long.TryParse(span, out cursor);
     }
-    private static bool ShouldDownshift(WikidataApiException ex, int currentBatch) {
-        if (currentBatch <= 50) {
-            return false;
-        }
-
+    // Anything that is the query service's problem rather than ours: a gateway or timeout status,
+    // or no status at all (the connection died before a response). A 400 stays fatal, because a
+    // malformed query does not fix itself by waiting.
+    private static bool IsServerSideFailure(WikidataApiException ex) {
         if (!ex.StatusCode.HasValue) {
-            return false;
+            return true;
         }
 
         return ex.StatusCode.Value is System.Net.HttpStatusCode.GatewayTimeout
             or System.Net.HttpStatusCode.RequestTimeout
             or System.Net.HttpStatusCode.ServiceUnavailable
             or System.Net.HttpStatusCode.BadGateway
-            or System.Net.HttpStatusCode.InternalServerError;
+            or System.Net.HttpStatusCode.InternalServerError
+            or System.Net.HttpStatusCode.TooManyRequests;
     }
+
+    private static string Describe(WikidataApiException ex) =>
+        ex.StatusCode.HasValue ? $"HTTP {(int)ex.StatusCode.Value}" : "no response";
+
+    private static string Format(TimeSpan wait) =>
+        wait.TotalMinutes >= 1 ? $"{wait.TotalMinutes:0.#} minutes" : $"{wait.TotalSeconds:0} seconds";
 }
