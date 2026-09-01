@@ -341,14 +341,14 @@ public static class FlowCatalogue {
                 new FlowStep {
                     Id = "wikidata-discover",
                     Title = "Search Wikidata for the taxa still without an item",
-                    Description = "The new release's synonyms give the search extra scientific names to try, which can link taxa that had no Wikidata item before.",
+                    Description = "Search Wikidata for each IUCN taxon that still has no Wikidata item, using its scientific name and now the new release's synonyms. Existing matches are never changed.",
                     Commands = new[] { "wikidata backfill-iucn", "wikidata cache-entities" },
                     InputSourceIds = new[] { "col-sqlite", "iucn-main", "wikidata-cache" },
                     OutputSourceIds = new[] { "wikidata-cache" },
                     Optional = true,
                     Probe = FlowStepProbes.WikidataSearch,
                     Group = "3 \u00b7 Search for new matches (downloads)",
-                    Note = "Worth running only if the new release actually added synonyms. `backfill-iucn` searches and queues ids; `cache-entities` downloads them and rebuilds the name index as it goes, so there is no separate rebuild to run. Taxa searched before with no match are skipped, so this run works on taxa never searched: add --retry-missing to search for the rest again with the new synonyms, which is the point of running it after a Catalogue of Life update. Downloads from Wikidata (needs WIKIDATA_USER_AGENT in .env). Skipping the step only means you miss new matches; nothing already cached breaks. The full picture is in the Wikipedia reports pipeline.",
+                    Note = "`backfill-iucn` goes through the IUCN taxa that have no linked Wikidata item and searches Wikidata for each one: first its scientific name, then its IUCN and Catalogue of Life synonyms. A hit links the taxon to that item and queues the item for download; `cache-entities` then downloads the queued items and updates the name index as it goes (no separate rebuild). This step only adds links. Taxa that already have an item are not searched, and no existing match is changed or re-checked, so every match it reports is new. Taxa searched before with no result are skipped too, so a plain run covers only never-searched taxa. After a Catalogue of Life update the point is to try the new synonyms on the old no-result taxa, so add --retry-missing. Downloads from Wikidata (needs WIKIDATA_USER_AGENT in .env). Safe to skip: you only miss new matches; nothing already cached breaks. The full picture is in the Wikipedia reports pipeline.",
                 },
                 new FlowStep {
                     Id = "wikipedia-discover",
@@ -360,7 +360,7 @@ public static class FlowCatalogue {
                     Optional = true,
                     Probe = FlowStepProbes.WikipediaFetchAwaited,
                     Group = "3 \u00b7 Search for new matches (downloads)",
-                    Note = "Match, download, match again. The first `match-taxa` makes no network calls and only queues candidate titles; `fetch-pages` downloads them, narrowed to pages a taxon is waiting on and taking the newest titles first; the second `match-taxa` settles the matches for what arrived. Run the Wikidata step above first, because match-taxa also resolves through Wikidata site links. Downloads from Wikipedia.",
+                    Note = "Match, download, match again. The first `match-taxa` makes no network calls and only queues candidate titles; `fetch-pages` downloads them, narrowed to pages a taxon is waiting on and taking the newest titles first; the second `match-taxa` settles the matches for what arrived. Taxa that already have a matched article are left alone (pass --reprocess-matched to revisit them), so this only finds articles for taxa that had none. Run the Wikidata step above first, because match-taxa also resolves through Wikidata site links. Downloads from Wikipedia.",
                 },
 
                 // ===== 4 · Regenerate outputs =====
@@ -487,7 +487,7 @@ public static class FlowCatalogue {
                     Optional = true,
                     Probe = FlowStepProbes.WikidataSearch,
                     Group = "2 \u00b7 Wikidata",
-                    Note = "Much slower than the sweep because it searches one taxon at a time, so run it after the sweep rather than instead of it. Taxa searched before with no match are skipped, so a run after a new release spends its time on taxa never searched; --retry-missing searches for those again, and --retry-missing-after <DAYS> only for the ones searched longest ago. Synonyms come from the IUCN API cache and Catalogue of Life, so importing those first finds more matches. Ids it finds are queued, not downloaded, so run the download step after it.",
+                    Note = "Much slower than the sweep because it searches one taxon at a time, so run it after the sweep rather than instead of it. It only adds links: taxa that already have an item are not searched again, and no existing match is changed, so every match it reports is new. Taxa searched before with no match are skipped, so a run after a new release spends its time on taxa never searched; --retry-missing searches for those again, and --retry-missing-after <DAYS> only for the ones searched longest ago. Synonyms come from the IUCN API cache and Catalogue of Life, so importing those first finds more matches. Ids it finds are queued, not downloaded, so run the download step after it.",
                 },
                 new FlowStep {
                     Id = "wikipedia-queue",
