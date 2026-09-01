@@ -90,7 +90,7 @@ internal sealed class ColCrosscheckEngine {
                         : $" CoL records '{colName}' as a synonym of {colAcceptedName}.";
                 }
                 if (iucnMatch == IucnSynonymMatch.SameTaxon) {
-                    detail += $" IUCN already lists '{colName}' as a synonym of this taxon, so the two names are a recorded pair rather than a spelling difference.";
+                    detail += $" IUCN already lists '{colName}' as a synonym of this taxon.";
                 } else if (iucnMatch == IucnSynonymMatch.OtherTaxon) {
                     detail += $" IUCN lists '{colName}' as a synonym of a different taxon.";
                 }
