@@ -88,8 +88,8 @@ internal sealed class EmptyScopeProducer : IAuditReportProducer {
                 : haveApi ? "IUCN API" : "IUCN CSV export",
             Blurb = "Assessments whose geographic scope is blank, so any scope filter, including the usual \"Global\" filter, silently drops them.",
             Summary =
-                "Every assessment is expected to record at least one geographic scope, the region it covers: Global, Europe, Mediterranean, Persian Gulf, and so on. " +
-                "The assessments listed below have no scope at all.\n\n" +
+                "The table below lists assessments with no geographic scope at all. " +
+                "An assessment's scope is the region it covers, and every assessment is expected to record at least one: Global, Europe, Mediterranean, Persian Gulf, and so on.\n\n" +
                 "Some are the taxon's current assessment. Those also appear in the downloadable CSV export with an empty `scopes` column, so the gap is in the underlying data rather than in one delivery format; " +
                 "every other assessment row in the export has a scope. The rest are historical assessments, which the export does not include, so they are visible only through the API.\n\n" +
                 "Until shortly before this site release, the API returned HTTP 500 (a server error) for every one of these records, and they could not be read at all. " +

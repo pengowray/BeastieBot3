@@ -57,11 +57,12 @@ internal sealed class FailedAssessmentsProducer : IAuditReportProducer {
                 ? "Historical assessment ids that appear in a taxon's API record but return HTTP 404 (not found) when requested directly."
                 : "Assessment ids that appear in a taxon's API record but return an error when requested directly.",
             Summary =
-                "Each taxon record on the IUCN API includes a list of that taxon's assessments, current and historical. " +
+                "The table below lists assessments that the IUCN API says exist but cannot return. " +
+                "Each taxon record on the API includes a list of that taxon's assessments, current and historical. " +
                 (only404
-                    ? "The assessment ids listed below appear in a taxon's list, but a direct request to /api/v4/assessment/{id} returns HTTP 404 (not found).\n\n" +
+                    ? "Every assessment id listed below appears in one of those lists, but a direct request to /api/v4/assessment/{id} returns HTTP 404 (not found).\n\n" +
                       "Every affected id is a historical (superseded) assessment; each taxon's current assessment loads normally. "
-                    : "The assessment ids listed below appear in a taxon's list, but a direct request to /api/v4/assessment/{id} returns an error. " +
+                    : "Every assessment id listed below appears in one of those lists, but a direct request to /api/v4/assessment/{id} returns an error. " +
                       "The HTTP status of each is in the table, and the summary below counts how many are the taxon's current assessment.\n\n") +
                 "Because the API returns no data for these records, the species name and taxonomy in the table below are taken from the offline CSV export on iucnredlist.org, matched on the taxon's SIS id.\n\n" +
                 "### Why it matters\n\n" +
