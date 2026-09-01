@@ -283,12 +283,34 @@ display:
 The Catalogue of Life is used to fix two name problems in list output (`BeastieBot3/Col/ColNameResolver.cs`,
 the shared per-taxon resolver; IUCN stays the name of record throughout):
 
-- **Article links (offline, `wikipedia match-taxa`):** when an IUCN name is a CoL synonym of an
-  accepted name, or a formatting-equivalent slip, the accepted name / clean spelling is added as a
-  candidate article title (`IucnSynonymService`, match methods `col-accepted` / `col-corrected`). Each
-  candidate is validated against the enwiki cache before it is recorded, so a wrong guess just fails to
-  match. This fixes redlinks where the article lives at the accepted/current name. Re-run `match-taxa`
-  (part of the col-update flow) for it to take effect.
+- **Article links (offline, `wikipedia match-taxa`):** four kinds of CoL name are added as candidate
+  article titles (`IucnSynonymService`), each validated against the enwiki cache before it is
+  recorded, so a wrong guess just fails to match rather than producing a wrong link. This fixes
+  redlinks where the article lives at the accepted or current name. Re-run `match-taxa` (part of the
+  col-update flow) for it to take effect.
+
+  | Match method | When |
+  | --- | --- |
+  | `col-accepted` | the IUCN name is a CoL synonym of an accepted name |
+  | `col-corrected` | the IUCN name is a formatting-equivalent slip (mojibake, diacritic, spacing) |
+  | `col-variant` | CoL writes the same name a different legitimate way (see below) |
+  | `col-accepted-via-synonym` | the IUCN name is unknown to CoL, but another name IUCN records for the taxon is a CoL synonym of an accepted name |
+
+  `col-variant` uses `LatinNameVariant`, which asks whether two names are **one name written two
+  ways**: gender agreement after a genus transfer (`Schistura striatus` / `striata`), a patronym
+  formed with one -i or two (`lesueuri` / `lesueurii`), transliterated Greek (`rithymna` /
+  `rhithymna`). It requires the genus to match exactly and the epithets to be equal once those
+  endings and spellings are folded. This is deliberately **not** an edit-distance rule: over the 799
+  close matches in 2026-1 it accepts 611 and rejects 188, and the rejects are the point.
+  `Cordia santacruzensis` / `Cora santacruzensis`, `Sorex monticola` / `Shorea monticola`, and
+  `Elater turcicus` / `Elater suecicus` are all one or two edits apart and are different taxa; linking
+  any of them would put a wrong link on a published list.
+
+  `col-accepted-via-synonym` is the second hop, and is what reaches CoL when the two catalogues
+  disagree about the genus outright (`Idiopoma javanica` / `Filopaludina javanica`). It is gated on
+  `ColNameResolution.NameIsUnknownToCol`, not on "the first hop returned no accepted name": almost
+  every taxon is accepted in CoL under its IUCN name and also returns no accepted name, and running
+  the hop for those would add several CoL queries per taxon across the whole Red List for nothing.
 - **Displayed name (generation):** a garbled scientific name is replaced with the CoL spelling only
   when the difference is formatting-equivalent (mojibake, a diacritic, encoding, or spacing), via
   `IucnSpeciesRecord.ScientificNameOverride`, for full species only. A genuine spelling difference is

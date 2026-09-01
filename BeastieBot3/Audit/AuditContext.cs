@@ -77,6 +77,18 @@ internal sealed class AuditContext : IDisposable {
         return Exists(p) ? OpenReadOnly(p!) : null;
     }
 
+    // The Wikidata and Wikipedia caches. Neither is part of the Red List, so a report that reads
+    // them must work without them; both are absent on a machine that has only ever imported IUCN.
+    public SqliteConnection? WikidataCacheOrNull() {
+        var p = SafeResolve(() => Paths.GetWikidataCachePath() ?? throw new InvalidOperationException());
+        return Exists(p) ? OpenReadOnly(p!) : null;
+    }
+
+    public SqliteConnection? WikipediaCacheOrNull() {
+        var p = SafeResolve(() => Paths.GetWikipediaCachePath() ?? throw new InvalidOperationException());
+        return Exists(p) ? OpenReadOnly(p!) : null;
+    }
+
     public SqliteConnection? ColOrNull() {
         var p = SafeResolve(() => Paths.GetColSqlitePath() ?? throw new InvalidOperationException());
         return Exists(p) ? OpenReadOnly(p!) : null;

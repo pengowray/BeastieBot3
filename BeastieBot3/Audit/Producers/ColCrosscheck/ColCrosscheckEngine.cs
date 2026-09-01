@@ -27,10 +27,13 @@ namespace BeastieBot3.Audit.Producers.ColCrosscheck;
 internal sealed class ColCrosscheckEngine {
     private readonly ColTaxonRepository _col;
     private readonly IucnSynonymIndex? _iucnSynonyms;
+    private readonly OtherSourceIndex? _otherSources;
 
-    public ColCrosscheckEngine(ColTaxonRepository col, IucnSynonymIndex? iucnSynonyms = null) {
+    public ColCrosscheckEngine(ColTaxonRepository col, IucnSynonymIndex? iucnSynonyms = null,
+        OtherSourceIndex? otherSources = null) {
         _col = col ?? throw new ArgumentNullException(nameof(col));
         _iucnSynonyms = iucnSynonyms;
+        _otherSources = otherSources;
     }
 
     public ColCrosscheckData Run(IReadOnlyList<IucnTaxonomyRow> rows, CancellationToken ct) {
@@ -50,7 +53,64 @@ internal sealed class ColCrosscheckEngine {
         }
         data.HigherTaxaCompared = higher.Count;
 
+        AddOtherSources(data, ct);
         return data;
+    }
+
+    // Runs over the not-found bucket alone, after the main pass. That bucket is a few hundred rows
+    // out of nearly two hundred thousand, so a handful of indexed queries each costs nothing, and
+    // the page it feeds is the one whose claim ("no route into CoL") these sources can qualify.
+    private void AddOtherSources(ColCrosscheckData data, CancellationToken ct) {
+        if (_otherSources is null || data.NotFound.Count == 0) {
+            return;
+        }
+        data.OtherSourcesChecked = true;
+
+        foreach (var finding in data.NotFound) {
+            ct.ThrowIfCancellationRequested();
+            if (finding.TaxonId is not { } taxonId) {
+                continue;
+            }
+            var hit = _otherSources.Lookup(taxonId, finding.ScientificName, ct);
+            if (hit.WikidataId is not null) {
+                SetExtra(finding, "wikidataId", hit.WikidataId);
+                SetExtra(finding, "wikidataUrl", OtherSourceIndex.WikidataUrl(hit.WikidataId));
+                data.OtherSourcesWithWikidata++;
+            }
+            if (hit.WikipediaTitle is not null) {
+                SetExtra(finding, "wikipediaTitle", hit.WikipediaTitle);
+                SetExtra(finding, "wikipediaUrl", OtherSourceIndex.WikipediaUrl(hit.WikipediaTitle));
+                data.OtherSourcesWithWikipedia++;
+            }
+
+            // The one that closes the gap: a name from those sources that CoL does record. An
+            // accepted name is worth more than a synonym, so the whole list is tried before
+            // settling for the first hit.
+            ColTaxonRecord? best = null;
+            string? bestName = null;
+            foreach (var name in hit.OtherNames) {
+                foreach (var usage in _col.FindByScientificName(name, ct)) {
+                    if (best is null || (!IsAcceptedStatus(best.Status) && IsAcceptedStatus(usage.Status))) {
+                        best = usage;
+                        bestName = name;
+                    }
+                }
+                if (best is not null && IsAcceptedStatus(best.Status)) {
+                    break;
+                }
+            }
+            if (best is null || bestName is null) {
+                continue;
+            }
+
+            SetExtra(finding, "otherName", bestName);
+            SetExtra(finding, "otherNameColStatus", ColStatusLabel(best.Status));
+            SetExtra(finding, "colUrl", ColUrls.Taxon(best.Id));
+            finding.Notes.Add(IsAcceptedStatus(best.Status)
+                ? $"{bestName}, a name for this taxon on Wikidata or Wikipedia, is an accepted name in the Catalogue of Life."
+                : $"{bestName}, a name for this taxon on Wikidata or Wikipedia, is in the Catalogue of Life as a synonym.");
+            data.OtherSourcesWithColName++;
+        }
     }
 
     // --- assessed taxa (species, subspecies, varieties) --------------------------------------
@@ -696,4 +756,11 @@ internal sealed class ColCrosscheckData {
     public List<AuditFinding> Authority { get; } = new();
     public int AssessedCompared { get; set; }
     public int HigherTaxaCompared { get; set; }
+
+    // Whether the Wikidata/Wikipedia caches were read at all, and what they turned up for the
+    // not-found list. False means the check did not run, which is not the same as finding nothing.
+    public bool OtherSourcesChecked { get; set; }
+    public int OtherSourcesWithWikidata { get; set; }
+    public int OtherSourcesWithWikipedia { get; set; }
+    public int OtherSourcesWithColName { get; set; }
 }

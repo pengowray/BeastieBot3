@@ -61,7 +61,12 @@ internal sealed class ColCrosscheckProducer : IAuditReportSetProducer {
         var apiCache = ctx.IucnApiCacheOrNull();
         var iucnSynonyms = apiCache is null ? null : IucnSynonymIndex.Build(apiCache, ctx.Limit, ctx.Ct);
 
-        var data = new ColCrosscheckEngine(colRepo, iucnSynonyms).Run(rows, ctx.Ct);
+        // Wikidata and Wikipedia sit outside both catalogues, so they can say whether a name CoL
+        // has never heard of is in use anywhere else, and occasionally supply the name that is in
+        // CoL. Only the not-found page uses them, and only for its own few hundred rows.
+        var otherSources = OtherSourceIndex.Build(ctx.WikidataCacheOrNull(), ctx.WikipediaCacheOrNull());
+
+        var data = new ColCrosscheckEngine(colRepo, iucnSynonyms, otherSources).Run(rows, ctx.Ct);
         var colRelease = ctx.ColReleaseLabel();
         var source = colRelease is null
             ? $"IUCN Red List {ctx.Release} vs Catalogue of Life"
@@ -78,34 +83,38 @@ internal sealed class ColCrosscheckProducer : IAuditReportSetProducer {
             Reorg(source, higher, data.Reorg),
             Authority(source, assessed, data.Authority),
             SynonymLead(source, assessed, data.SynonymLead),
-            NotFound(source, assessed, data.NotFound),
+            NotFound(source, assessed, data),
         };
     }
 
     // --- species / subspecies reports -------------------------------------------------------
 
-    private static AuditReport NotFound(string source, int assessed, List<AuditFinding> findings) => new() {
-        Id = NotFoundId,
-        Title = "Names not found in the Catalogue of Life",
-        Breakage = BreakageClass.Advisory,
-        DataSourceLabel = source,
-        SectionId = ColFamily,
-        FamilyId = ColFamily,
-        FamilyRank = 1,
-        FamilyScope = "The name is absent from CoL: no near spelling, and no other name for the taxon either.",
-        Blurb = "IUCN names that appear nowhere in the Catalogue of Life, with no close spelling match and no other name for the taxon there either.",
-        Summary =
-            "The IUCN names below appear nowhere in the Catalogue of Life, neither as accepted names nor as synonyms, and a search for similar spellings within the same genus and species epithet found no close candidate either. A further check looked up each taxon's other IUCN-listed names; those are absent from CoL too. Taxa where such a name was found have their own page: [Names absent from the Catalogue of Life where another name for the taxon is present](col-other-name.html).\n\n" +
-            "### Why it matters\n\n" +
-            "There is no route from these taxa into the Catalogue of Life: not the name, not a near spelling, not another name for the taxon. The likely reasons vary: the name may be newer than the CoL release compared against, may come from a source CoL does not yet cover, or may be spelled differently enough that no match is found.\n\n" +
-            "### Suggestion\n\n" +
-            "Use this as a list to spot-check against current literature. Many entries are expected to be legitimately newer than the Catalogue of Life release compared against (its version is given above under Source).",
-        Columns = NotFoundColumns(),
-        Findings = OrderSpecies(findings),
-        HeadlineCount = findings.Count,
-        SummaryTables = new[] { ByClassSummary("By class", findings, assessed) },
-        GroupLevels = AuditGroups.ByClassOrderFamily,
-    };
+    private static AuditReport NotFound(string source, int assessed, ColCrosscheckData data) {
+        var findings = data.NotFound;
+        return new AuditReport {
+            Id = NotFoundId,
+            Title = "Names not found in the Catalogue of Life",
+            Breakage = BreakageClass.Advisory,
+            DataSourceLabel = source,
+            SectionId = ColFamily,
+            FamilyId = ColFamily,
+            FamilyRank = 1,
+            FamilyScope = "The name is absent from CoL: no near spelling, and no other name for the taxon either.",
+            Blurb = "IUCN names that appear nowhere in the Catalogue of Life, with no close spelling match and no other name for the taxon there either.",
+            Summary =
+                "The IUCN names below appear nowhere in the Catalogue of Life, neither as accepted names nor as synonyms, and a search for similar spellings within the same genus and species epithet found no close candidate either. A further check looked up each taxon's other IUCN-listed names; those are absent from CoL too. Taxa where such a name was found have their own page: [Names absent from the Catalogue of Life where another name for the taxon is present](col-other-name.html).\n\n" +
+                OtherSourceSummary(data) + "\n\n" +
+                "### Why it matters\n\n" +
+                WhyItMatters(data) + "\n\n" +
+                "### Suggestion\n\n" +
+                "Use this as a list to spot-check against current literature. Many entries are expected to be legitimately newer than the Catalogue of Life release compared against (its version is given above under Source).",
+            Columns = NotFoundColumns(data.OtherSourcesChecked),
+            Findings = OrderSpecies(findings),
+            HeadlineCount = findings.Count,
+            SummaryTables = new[] { ByClassSummary("By class", findings, assessed) },
+            GroupLevels = AuditGroups.ByClassOrderFamily,
+        };
+    }
 
     private static AuditReport CloseMatch(string source, int assessed, List<AuditFinding> findings) => new() {
         Id = CloseMatchId,
@@ -332,8 +341,56 @@ internal sealed class ColCrosscheckProducer : IAuditReportSetProducer {
         AuditColumns.Detail(),
     };
 
-    private static IReadOnlyList<AuditColumn> NotFoundColumns() =>
-        IucnHead().Concat(SpeciesTail()).ToList();
+    private static IReadOnlyList<AuditColumn> NotFoundColumns(bool otherSourcesChecked) {
+        var columns = IucnHead().ToList();
+        if (otherSourcesChecked) {
+            columns.AddRange(OtherSourceColumns());
+        }
+        columns.AddRange(SpeciesTail());
+        return columns;
+    }
+
+    // Shown only when the Wikidata/Wikipedia caches were actually read. Leaving them out entirely
+    // beats three empty columns, which read as "checked, found nothing".
+    private static IEnumerable<AuditColumn> OtherSourceColumns() => new[] {
+        new AuditColumn {
+            Key = "wikidataId", Header = "Wikidata", Type = AuditColumnType.Url,
+            Help = "The Wikidata item linked to this taxon's IUCN id. Blank: no item found.",
+            Value = f => f.Get("wikidataId"), Href = f => f.Get("wikidataUrl"),
+        },
+        new AuditColumn {
+            Key = "wikipediaTitle", Header = "Wikipedia", Type = AuditColumnType.Url,
+            Help = "The English Wikipedia article matched to this taxon. Blank: no article found.",
+            Value = f => f.Get("wikipediaTitle"), Href = f => f.Get("wikipediaUrl"),
+        },
+        new AuditColumn {
+            Key = "otherName", Header = "Name in CoL", Type = AuditColumnType.Url,
+            Help = "A name for this taxon, recorded on Wikidata or Wikipedia, that is in the Catalogue of Life. Blank: no such name found.",
+            Value = f => f.Get("otherName"), Href = f => f.Get("colUrl"),
+        },
+    };
+
+    // The counts belong in the introduction, because the columns are blank for most rows and a
+    // reader needs to know whether that is a finding or a check that never ran.
+    private static string OtherSourceSummary(ColCrosscheckData data) {
+        if (!data.OtherSourcesChecked) {
+            return "The Wikidata and Wikipedia check did not run for this report, so the Wikidata, Wikipedia, and Name in CoL columns are blank on every row; blank here does not mean nothing was found.";
+        }
+        return $"Each of these names is also looked up on Wikidata and English Wikipedia. Of the {data.NotFound.Count:N0} taxa, " +
+               $"{data.OtherSourcesWithWikidata:N0} have a Wikidata item, {data.OtherSourcesWithWikipedia:N0} have an English Wikipedia article, " +
+               $"and {data.OtherSourcesWithColName:N0} have an alternative name recorded there that is in the Catalogue of Life, usually a genus transfer CoL has made and the Red List has not. " +
+               "For the rest this check adds nothing, which is itself worth knowing: most have neither a Wikidata item nor a Wikipedia article, so the name is not in use in any source the check covers.";
+    }
+
+    private static string WhyItMatters(ColCrosscheckData data) {
+        const string Reasons = "the likely reasons vary: the name may be newer than the CoL release compared against, may come from a source CoL does not yet cover, or may be spelled differently enough that no match is found.";
+        if (!data.OtherSourcesChecked || data.OtherSourcesWithColName == 0) {
+            return "There is no route from these taxa into the Catalogue of Life: not the name, not a near spelling, not another name for the taxon. For all of them, " + Reasons;
+        }
+        return "For nearly all of these taxa there is no route into the Catalogue of Life: not the name, not a near spelling, not another name for the taxon. " +
+               $"The exceptions are the {data.OtherSourcesWithColName:N0} where Wikidata or Wikipedia records a name that is in CoL, usually a genus transfer CoL has made and the Red List has not. " +
+               "For the rest, " + Reasons;
+    }
 
     private static IReadOnlyList<AuditColumn> CloseMatchColumns() =>
         IucnHead().Concat(new[] {

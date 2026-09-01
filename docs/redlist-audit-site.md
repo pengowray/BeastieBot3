@@ -226,6 +226,22 @@ split for the same reason: one says confirm a spelling, the other says be aware 
 bug where the missing column always read NULL), and the higher-rank placement comparison reads the
 inline ancestor columns instead of walking the tree.
 
+**Wikidata and Wikipedia on `col-not-found`.** `OtherSourceIndex` reads the Wikidata cache
+(`wikidata_p627_values` joined to `wikidata_entities` / `wikidata_scientific_names`, keyed on the IUCN
+taxon id) and the Wikipedia cache (`taxon_wiki_matches` + `wiki_pages`), and runs as a second pass
+over the `col-not-found` bucket alone, after the main scan. That bucket is a few hundred rows out of
+~190,000, so a handful of indexed queries each costs nothing, and it is the one page whose claim
+("no route into CoL") those two sources can qualify. Three columns are added: the Wikidata item, the
+English Wikipedia article, and any name recorded on either that **is** in CoL. That third one is
+usually a genus transfer CoL made and the Red List has not (`Idiopoma javanica` /
+`Filopaludina javanica`); on 2026-1 it fires for about 20 of 745, while about half have a Wikidata
+item and 109 have an article.
+
+Both caches are optional and sit outside the Red List entirely. When neither is present the columns
+are **left out of the table** rather than rendered empty, and the intro says the check did not run:
+three blank columns read as "checked, found nothing", which is a different claim. `ColCrosscheckData`
+carries `OtherSourcesChecked` plus the three counts so the page copy can state them.
+
 **Two passes.** The first pass matches each assessed taxon (exact name, then genus/species/infra
 components). No match runs two further checks in order: a fuzzy pass over the same genus and epithet
 (`ScientificNameDifference` + `FindByGenericName`/`FindBySpecificEpithet`) gives `col-close-match`,
