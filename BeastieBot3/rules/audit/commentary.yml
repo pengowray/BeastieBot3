@@ -52,8 +52,8 @@
   scope: report
   title: Changes since 2025-2
   markdown: |
-    Blank-scope assessments, which the API used to answer HTTP 500 for, were listed on this page
-    in earlier releases. The API now serves them, so they have moved to
+    Blank-scope assessments, which the API used to answer HTTP 500 for, were planned to be listed on 
+    this page, however the API now serves them, so they have moved to
     [Assessments with no geographic scope](empty-scope.html), where the blank scope itself is the
     observation.
 

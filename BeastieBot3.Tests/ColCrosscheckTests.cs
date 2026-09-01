@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Threading;
@@ -42,16 +42,31 @@ public class ColCrosscheckTests {
         var repo = new ColTaxonRepository(col);
         // IUCN records "Panthera leo" as a synonym of taxon 103 (the Felis leo assessment), so the
         // two catalogues are reversed for that pair.
-        var iucnSynonyms = IucnSynonymIndex.FromEntries(new[] { ("Panthera leo", 103L) });
+        var iucnSynonyms = IucnSynonymIndex.FromEntries(new[] {
+            ("Panthera leo", 103L), ("Yearclash novus", 114L), ("Authordiff novus", 115L),
+        });
         var data = new ColCrosscheckEngine(repo, iucnSynonyms).Run(IucnRows(), CancellationToken.None);
 
-        // Synonym at species level, resolved through parentID (this used to return zero).
-        var syn = Assert.Single(data.Synonym, f => f.ScientificName == "Felis leo");
-        Assert.Equal("Panthera leo", syn.SuggestedValue);
-        Assert.Equal("(Linnaeus, 1758)", syn.Get("colAuthority")); // CoL accepted name's authority + year
-        Assert.Equal("1998", syn.YearPublished);                   // IUCN assessment year
-        Assert.Equal("1758", syn.Get("colYear"));                  // CoL year, from the accepted name's authority
-        Assert.Equal("of same taxon", syn.Get("iucnSynonym"));     // reversed-direction disagreement
+        // Synonym at species level, resolved through parentID (this used to return zero). IUCN also
+        // records the CoL accepted name among its own synonyms, so the pair is joinable and belongs
+        // on the accepted-name-differs report rather than in the synonym list.
+        var reversed = Assert.Single(data.AcceptedDiffers, f => f.ScientificName == "Felis leo");
+        Assert.Equal("Panthera leo", reversed.SuggestedValue);
+        Assert.Equal("(Linnaeus, 1758)", reversed.Get("colAuthority")); // CoL accepted name's authority + year
+        Assert.Equal("1998", reversed.YearPublished);                   // IUCN assessment year
+        Assert.DoesNotContain(data.Synonym, f => f.ScientificName == "Felis leo");
+        Assert.Null(reversed.Get("authorityYears"));                    // no IUCN authority to compare
+
+        // Same author on both sides but a different year: flagged, and lifted above the plain rows.
+        var clash = Assert.Single(data.AcceptedDiffers, f => f.ScientificName == "Yearclash oldus");
+        Assert.Equal("IUCN 1881 vs CoL 1891", clash.Get("authorityYears"));
+        Assert.Equal("Herzenstein, 1881", clash.Get("iucnAuthority"));
+        Assert.Contains("Both credit Herzenstein", clash.Detail);
+        Assert.True(clash.SeverityTier > reversed.SeverityTier);
+
+        // Different author and a different year is a different name, not a date to check: not flagged.
+        var authordiff = Assert.Single(data.AcceptedDiffers, f => f.ScientificName == "Authordiff oldus");
+        Assert.Null(authordiff.Get("authorityYears"));
 
         // Higher-rank synonym: a genus CoL records only as a synonym, with the accepted spelling and its authority.
         var higherSyn = Assert.Single(data.SynonymHigher, f => f.ScientificName == "Bofonaria");
@@ -122,6 +137,10 @@ public class ColCrosscheckTests {
         Row(12, 112, "Yearus changeus", "ANIMALIA", "ARTHROPODA", "INSECTA", "COLEOPTERA", "YEARIDAE", "Yearus", "changeus", "(Smith, 1900)"),
         // Exact match whose authority differs only by punctuation (an apostrophe) -> also dropped.
         Row(13, 113, "Punctus namus", "ANIMALIA", "MOLLUSCA", "GASTROPODA", "LITTORINIMORPHA", "PUNCTIDAE", "Punctus", "namus", "(dOrbigny, 1835)"),
+        // Reversed pair whose two authorities credit the same author but a different year.
+        Row(14, 114, "Yearclash oldus", "ANIMALIA", "CHORDATA", "ACTINOPTERYGII", "CYPRINIFORMES", "CYPRINIDAE", "Yearclash", "oldus", "Herzenstein, 1881"),
+        // Reversed pair whose two authorities are different authors: the year gap is not a date to check.
+        Row(15, 115, "Authordiff oldus", "ANIMALIA", "CHORDATA", "AVES", "COLUMBIFORMES", "COLUMBIDAE", "Authordiff", "oldus", "Layard, 1875"),
     };
 
     private static IucnTaxonomyRow Row(long assessmentId, long taxonId, string name, string kingdom, string phylum,
@@ -188,6 +207,20 @@ public class ColCrosscheckTests {
         AddCol(conn, "YEARUS", "species", "accepted", "Yearus changeus", authorship: "(Smith, 1902)",
             kingdom: "Animalia", phylum: "Arthropoda", klass: "Insecta", order: "Coleoptera",
             genericName: "Yearus", specificEpithet: "changeus");
+
+        // Reversed pair, same author, different year -> the authority-years flag.
+        AddCol(conn, "YC_NEW", "species", "accepted", "Yearclash novus", authorship: "(Herzenstein, 1891)",
+            kingdom: "Animalia", phylum: "Chordata", klass: "Actinopterygii", order: "Cypriniformes", family: "Cyprinidae",
+            genericName: "Yearclash", specificEpithet: "novus");
+        AddCol(conn, "YC_OLD", "species", "synonym", "Yearclash oldus", authorship: "Herzenstein, 1881", parentId: "YC_NEW",
+            genericName: "Yearclash", specificEpithet: "oldus");
+
+        // Reversed pair, different authors -> no flag.
+        AddCol(conn, "AD_NEW", "species", "accepted", "Authordiff novus", authorship: "D. G. Elliot, 1878",
+            kingdom: "Animalia", phylum: "Chordata", klass: "Aves", order: "Columbiformes", family: "Columbidae",
+            genericName: "Authordiff", specificEpithet: "novus");
+        AddCol(conn, "AD_OLD", "species", "synonym", "Authordiff oldus", authorship: "Layard, 1875", parentId: "AD_NEW",
+            genericName: "Authordiff", specificEpithet: "oldus");
 
         // Exact match whose authority differs only by punctuation (apostrophe) -> dropped.
         AddCol(conn, "PUNCTUS", "species", "accepted", "Punctus namus", authorship: "(d'Orbigny, 1835)",

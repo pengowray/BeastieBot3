@@ -25,6 +25,7 @@ internal sealed class ColCrosscheckProducer : IAuditReportSetProducer {
     public const string NotFoundId = "col-not-found";
     public const string CloseMatchId = "col-close-match";
     public const string SynonymId = "col-synonym";
+    public const string AcceptedDiffersId = "col-accepted-differs";
     public const string SynonymHigherId = "col-synonym-higher";
     public const string ClassificationId = "col-classification";
     public const string ReorgId = "col-reorg";
@@ -67,6 +68,7 @@ internal sealed class ColCrosscheckProducer : IAuditReportSetProducer {
         return new[] {
             CloseMatch(source, assessed, data.CloseMatch),
             Synonym(source, assessed, data.Synonym),
+            AcceptedDiffers(source, assessed, data.AcceptedDiffers),
             SynonymHigher(source, higher, data.SynonymHigher),
             Classification(source, higher, data.Classification),
             Reorg(source, higher, data.Reorg),
@@ -104,11 +106,11 @@ internal sealed class ColCrosscheckProducer : IAuditReportSetProducer {
         Blurb = "IUCN names that appear nowhere in the Catalogue of Life, each paired with the most similar CoL spelling and a note on how the two differ.",
         Summary =
             "The IUCN names below appear nowhere in the Catalogue of Life, neither as accepted names nor as synonyms. Each is paired with the most similar CoL spelling in the same genus or with the same species epithet. The detail column says how the two spellings differ (punctuation, diacritics, Unicode encoding, or a small spelling change).\n\n" +
-            "Two checks run on each suggested match, shown as columns: whether CoL treats it as an accepted name or as a synonym, and whether IUCN already lists it as a synonym of the taxon.\n\n" +
+            "Two checks run on each suggested match, shown as columns: whether CoL treats it as an accepted name or as a synonym, and whether IUCN already lists it as a synonym of the taxon. Rows where IUCN already lists the close CoL spelling as a synonym of the same taxon are on [Name pairs where IUCN and the Catalogue of Life differ on which name is accepted](col-accepted-differs.html) instead.\n\n" +
             "### Why it matters\n\n" +
             "A name spelled slightly differently in the two catalogues will not cross reference, even when both records describe the same taxon. Automated matching fails and manual searches come up empty.\n\n" +
             "### Suggestion\n\n" +
-            "Check each pair. Where the two spellings are the same name, aligning them lets the catalogues match. Where the closest CoL name is a synonym, the CoL accepted name is the better one to compare against.",
+            "Where the paired spelling is a variant of the same name, recording it as a synonym or aligning the spelling would let the two catalogues link. Where the closest CoL name is itself a CoL synonym, the CoL accepted name is the better one to compare against. The rows marked \"of other taxon\" pair the name with a similar spelling IUCN assigns to a different taxon; the resemblance there may be coincidence.",
         Columns = CloseMatchColumns(),
         Findings = OrderSpecies(findings),
         HeadlineCount = findings.Count,
@@ -123,12 +125,33 @@ internal sealed class ColCrosscheckProducer : IAuditReportSetProducer {
         DataSourceLabel = source,
         Blurb = "Assessed IUCN taxa whose name the Catalogue of Life records as a synonym of a different accepted name.",
         Summary =
-            "The table below lists IUCN species, subspecies, and varieties whose scientific name the Catalogue of Life records as a synonym of a different accepted name. That accepted name is shown in the CoL accepted name column.\n\n" +
+            "The table below lists IUCN species, subspecies, and varieties whose scientific name the Catalogue of Life records as a synonym of a different accepted name. That accepted name is shown in the CoL accepted name column. Rows where IUCN in turn lists the CoL accepted name as its own synonym are on [Name pairs where IUCN and the Catalogue of Life differ on which name is accepted](col-accepted-differs.html) instead.\n\n" +
             "### Why it matters\n\n" +
             "Where CoL has moved a name into synonymy, the IUCN name may be an earlier combination of the same species, or a taxon that has since been merged into another. Databases that follow the Catalogue of Life file the taxon under the accepted name, not the IUCN one.\n\n" +
             "### Suggestion\n\n" +
             "Compare each IUCN name with the CoL accepted name and confirm which reflects current taxonomy.",
         Columns = SynonymColumns(),
+        Findings = OrderSpecies(findings),
+        HeadlineCount = findings.Count,
+        SummaryTables = new[] { ByRankSummary("By rank", findings), ByClassSummary("By class", findings, assessed) },
+        GroupLevels = AuditGroups.ByClassOrderFamily,
+    };
+
+    // The reversed pairs pulled out of CloseMatch and Synonym: both catalogues hold both names and
+    // each points at the other, so the records can be joined and nothing here is a broken link.
+    private static AuditReport AcceptedDiffers(string source, int assessed, List<AuditFinding> findings) => new() {
+        Id = AcceptedDiffersId,
+        Title = "Name pairs where IUCN and the Catalogue of Life differ on which name is accepted",
+        Breakage = BreakageClass.Advisory,
+        DataSourceLabel = source,
+        Blurb = "The two catalogues accept different names for the same taxon; IUCN's synonym list already links the pair.",
+        Summary =
+            "IUCN and the Catalogue of Life accept different names for each taxon on this page, and the IUCN record already lists the name CoL accepts among its synonyms. Some rows are mutual: CoL likewise treats the IUCN name as a synonym of its accepted name. In the others the IUCN spelling appears nowhere in CoL, and the pairing rests on the IUCN synonym list alone. Either way the two records can be cross referenced, so nothing on this page is a missing name or a broken link.\n\n" +
+            "### Why it matters\n\n" +
+            "Not much is at stake: nothing on either side is wrong, and nothing here needs fixing. Two details are still worth knowing. The link between the pairs lives in the IUCN synonym list, which is published through the Red List API but not in the CSV export, so a match run against the export alone misses it. And a small number of rows give the same author two different publication years, one per catalogue; that can be a real bibliographic difference, as with a work issued in parts, or a transcription error, and those rows sort to the top of the table.\n\n" +
+            "### Suggestion\n\n" +
+            "No change is suggested. The table works as a concordance between the two datasets, as the list of taxa that would change name if the Catalogue of Life treatment were adopted, and, where the Authority years column is filled, as a short checklist of publication dates the two catalogues disagree on.",
+        Columns = AcceptedDiffersColumns(),
         Findings = OrderSpecies(findings),
         HeadlineCount = findings.Count,
         SummaryTables = new[] { ByRankSummary("By rank", findings), ByClassSummary("By class", findings, assessed) },
@@ -262,8 +285,23 @@ internal sealed class ColCrosscheckProducer : IAuditReportSetProducer {
             ColYearColumn(),
             AuditColumns.ColLink(),
             AuditColumns.Custom("iucnSynonym", "CoL name in IUCN synonyms", AuditColumnType.Text,
-                "Whether IUCN already records the CoL accepted name as a synonym. \"of same taxon\" means the two catalogues disagree on which name is accepted. Blank when IUCN synonym data from the IUCN API is unavailable."),
+                "Whether IUCN already records the CoL accepted name as a synonym. Blank when IUCN synonym data from the IUCN API is unavailable."),
         }).Concat(SpeciesTail()).ToList();
+
+    // Accepted-name-differs report: the two names side by side with their authorities, the year
+    // discrepancy flag, then the shared tail. Rank and assessment year are dropped; neither is acted
+    // on here, and the trinomials show the rank anyway.
+    private static IReadOnlyList<AuditColumn> AcceptedDiffersColumns() => new[] {
+        AuditColumns.ScientificName("IUCN name"),
+        AuditColumns.Custom("iucnAuthority", "IUCN authority", AuditColumnType.Text,
+            "Naming authority recorded by IUCN for its accepted name."),
+        AuditColumns.Status("IUCN status"),
+        AuditColumns.SuggestedValue("CoL name", AuditColumnType.Text),
+        ColAuthorityColumn(),
+        AuditColumns.Custom("authorityYears", "Authority years", AuditColumnType.Text,
+            "Filled only where both catalogues credit the same author but give different years for the name."),
+        AuditColumns.ColLink(),
+    }.Concat(SpeciesTail()).ToList();
 
     private static IReadOnlyList<AuditColumn> AuthorityColumns() =>
         IucnHead().Concat(new[] {

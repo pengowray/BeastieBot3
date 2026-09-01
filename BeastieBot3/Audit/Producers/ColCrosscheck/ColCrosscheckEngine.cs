@@ -90,8 +90,13 @@ internal sealed class ColCrosscheckEngine {
                         : $" CoL records '{colName}' as a synonym of {colAcceptedName}.";
                 }
                 if (iucnMatch == IucnSynonymMatch.SameTaxon) {
-                    detail += $" IUCN already lists '{colName}' as a synonym of this taxon.";
-                } else if (iucnMatch == IucnSynonymMatch.OtherTaxon) {
+                    // IUCN's own synonym list already links the two names, so the pair can be joined
+                    // and "align the spelling" is the wrong suggestion for it. Reported separately.
+                    data.AcceptedDiffers.Add(AcceptedDiffersFinding(row, rank, isFull, name, colName,
+                        AuditMapping.Decode(near.Best.Authorship), near.Best.Id, severity, mutual: false));
+                    return;
+                }
+                if (iucnMatch == IucnSynonymMatch.OtherTaxon) {
                     detail += $" IUCN lists '{colName}' as a synonym of a different taxon.";
                 }
 
@@ -110,12 +115,17 @@ internal sealed class ColCrosscheckEngine {
             var acceptedName = AuditMapping.Decode(accepted?.ScientificName);
             var linkId = accepted?.Id ?? primary.Id;
             var match = _iucnSynonyms?.Lookup(acceptedName, row.TaxonId) ?? IucnSynonymMatch.Unknown;
+            if (match == IucnSynonymMatch.SameTaxon) {
+                // Each catalogue records the other's name, so the pair is joinable through IUCN's
+                // synonym list. That is a different observation from a name CoL has moved into
+                // synonymy while IUCN carries no pointer to the replacement, so it gets its own page.
+                data.AcceptedDiffers.Add(AcceptedDiffersFinding(row, rank, isFull, name, acceptedName,
+                    AuditMapping.Decode(accepted?.Authorship), linkId, severity, mutual: true));
+                return;
+            }
             var detail = acceptedName is null
                 ? "Catalogue of Life treats this name as a synonym."
                 : $"Catalogue of Life treats this name as a synonym of {acceptedName}.";
-            if (match == IucnSynonymMatch.SameTaxon) {
-                detail += " IUCN already lists that name as a synonym of this same taxon, so the two catalogues disagree on which name is accepted.";
-            }
             var finding = SpeciesFinding(ColCrosscheckProducer.SynonymId, row, rank, isFull, name,
                 "synonym-in-col", "scientificName", name, acceptedName, linkId, severity, detail);
             SetExtra(finding, "colAuthority", AuditMapping.Decode(accepted?.Authorship));
@@ -154,6 +164,57 @@ internal sealed class ColCrosscheckEngine {
                 }
             }
         }
+    }
+
+    // One row of the accepted-name-differs report. `mutual` is true when CoL also records the IUCN
+    // name as a synonym of its accepted name, false when CoL holds no entry for the IUCN spelling and
+    // the pairing rests on IUCN's synonym list alone. Rows whose two authorities credit the same
+    // author but a different year are lifted above the rest by their severity tier.
+    private AuditFinding AcceptedDiffersFinding(IucnTaxonomyRow row, string rank, bool isFull, string? name,
+        string? colName, string? colAuthority, string? colId, int severity, bool mutual) {
+        var iucnAuthority = AuditMapping.Decode(GetIucnAuthority(row));
+        var clash = AuthorityYearClash(iucnAuthority, colAuthority);
+
+        var detail = mutual
+            ? $"The Catalogue of Life treats {name} as a synonym of {colName}; IUCN treats {colName} as a synonym of {name}."
+            : $"IUCN treats {colName} as a synonym of {name}; the Catalogue of Life has no entry for the spelling {name}.";
+        if (clash is not null) {
+            detail += $" Both credit {clash.Value.Author}, but the years differ: {clash.Value.IucnYear} in IUCN, {clash.Value.ColYear} in the Catalogue of Life.";
+        }
+
+        var finding = SpeciesFinding(ColCrosscheckProducer.AcceptedDiffersId, row, rank, isFull, name,
+            "accepted-name-differs", "scientificName", name, colName, colId,
+            clash is null ? severity : severity + 10, detail);
+        SetExtra(finding, "iucnAuthority", iucnAuthority);
+        SetExtra(finding, "colAuthority", colAuthority);
+        if (clash is not null) {
+            SetExtra(finding, "authorityYears", $"IUCN {clash.Value.IucnYear} vs CoL {clash.Value.ColYear}");
+        }
+        return finding;
+    }
+
+    // Set only where the two catalogues credit the same author and give different years. A different
+    // author means a different name, which is not a date to check, so those rows are left blank.
+    private static (string Author, string IucnYear, string ColYear)? AuthorityYearClash(string? iucnAuthority, string? colAuthority) {
+        if (string.IsNullOrWhiteSpace(iucnAuthority) || string.IsNullOrWhiteSpace(colAuthority)) {
+            return null;
+        }
+        var iucnYear = ExtractYear(iucnAuthority);
+        var colYear = ExtractYear(colAuthority);
+        if (iucnYear is null || colYear is null || string.Equals(iucnYear, colYear, StringComparison.Ordinal)) {
+            return null;
+        }
+        if (!string.Equals(AuthorLetters(iucnAuthority!), AuthorLetters(colAuthority!), StringComparison.OrdinalIgnoreCase)) {
+            return null;
+        }
+        return (AuthorDisplay(iucnAuthority!), iucnYear, colYear);
+    }
+
+    // The author name on its own, for the detail sentence: brackets and the year taken off.
+    private static string AuthorDisplay(string authority) {
+        var text = authority.Replace("(", "").Replace(")", "").Replace("[", "").Replace("]", "");
+        text = YearPattern.Replace(text, "");
+        return text.Trim().TrimEnd(',', ';', ' ').Trim();
     }
 
     // --- higher taxa (genus, family, order, class) ------------------------------------------
@@ -559,6 +620,7 @@ internal sealed class ColCrosscheckData {
     public List<AuditFinding> NotFound { get; } = new();
     public List<AuditFinding> CloseMatch { get; } = new();
     public List<AuditFinding> Synonym { get; } = new();
+    public List<AuditFinding> AcceptedDiffers { get; } = new();
     public List<AuditFinding> SynonymHigher { get; } = new();
     public List<AuditFinding> Classification { get; } = new();
     public List<AuditFinding> Reorg { get; } = new();

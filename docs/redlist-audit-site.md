@@ -124,12 +124,13 @@ the same table.
 ### Catalogue of Life crosscheck (`Producers/ColCrosscheck/`)
 
 `ColCrosscheckEngine` matches the release against the Catalogue of Life in one scan and sorts the
-findings into seven separate report pages (most actionable first, noisiest last):
+findings into eight separate report pages (most actionable first, noisiest last):
 
 | Report id | Page | What it lists |
 | --- | --- | --- |
 | `col-close-match` | Names with a close CoL match | the IUCN name is in no CoL usage at all (accepted or synonym), but a near CoL name exists (likely spelling/encoding), with that near name checked against CoL's own status and IUCN's synonym list |
-| `col-synonym` | Species and subspecies treated as synonyms in CoL | an assessed taxon whose name CoL records as a synonym of another accepted name (with the accepted name's authority/year, and whether IUCN already records that name as a synonym) |
+| `col-synonym` | Species and subspecies treated as synonyms in CoL | an assessed taxon whose name CoL records as a synonym of another accepted name, where IUCN does *not* list that accepted name among its own synonyms (with the accepted name's authority/year) |
+| `col-accepted-differs` | Name pairs where IUCN and CoL differ on which name is accepted | a reversed pair: IUCN already lists the CoL accepted name among its synonyms, so the two records join and only the choice of accepted name differs. Fed from both `col-close-match` and `col-synonym` |
 | `col-synonym-higher` | Higher-rank names treated as synonyms in CoL | a genus/family/order/class name CoL records only as a synonym (with the accepted name's authority/year) |
 | `col-classification` | Higher-rank placement differences that look like spelling variants | a higher taxon whose parent differs like a typo (fuzzy/encoding), same phylum only |
 | `col-reorg` | Higher-rank names placed differently in CoL | a higher taxon under a genuinely different parent (not a typo), same phylum only |
@@ -146,7 +147,9 @@ authority, `CoL year`, link, cross-checks), then taxonomy context. The `CoL year
 **Synonym cross-check.** `IucnSynonymIndex` scans the IUCN API cache once (the only place IUCN
 carries synonyms, `taxon.synonyms[]`, reconstructing the bare name from the structured fields) and
 answers, for a given CoL name, whether IUCN already records it as a synonym "of same taxon" (the
-catalogues are reversed on which name is accepted) or "of other taxon". Two reports use it. The
+catalogues are reversed on which name is accepted) or "of other taxon". The close-match and synonym
+reports both consult it, and an "of same taxon" answer routes the row out to `col-accepted-differs`,
+so the value left in their own columns is only "no" or "of other taxon". The
 column is blank when the API cache is unavailable; under `--limit` the index is partial, so run
 without a limit for a complete answer.
 
@@ -160,6 +163,27 @@ column). A pair IUCN already records is a known relationship, not a spelling sli
 spelling" would be the wrong suggestion for it. On 2026-1 about a fifth of the suggested near names
 are CoL synonyms, so the checks are not hypothetical. Note what the report does *not* claim: the near
 name is chosen by spelling similarity, and a row is a candidate for review, not a confirmed pair.
+
+**The reversed pairs.** Where IUCN's own synonym list already holds the name CoL accepts, both
+catalogues carry both names and each points at the other, so the records join and the only
+disagreement is which name heads them. Those rows are pulled out of `col-close-match` and
+`col-synonym` into `col-accepted-differs` (130 + 2,516 = 2,646 on 2026-1), because "align the
+spelling" is wrong advice for them and because leaving them in overstated both source pages. The
+page says plainly that nothing on it needs fixing: the one practical consequence is that IUCN
+publishes synonyms only through the API, so a match run against the CSV export alone will not see
+the link. Both source pages link across to it.
+
+`Authority years` on that page is a flag column, blank on all but ~51 rows. It fills only where the
+two authority strings credit the **same author** (letters only, brackets and digits stripped) and
+give **different years**; a different author is a different name, not a date discrepancy. Those rows
+get +10 severity so `OrderSpecies` lifts them to the top. The year is read from the two authority
+strings, not from `ColYear`, which prefers CoL's `namePublishedInYear`.
+
+A "CoL has the more recent authority year" split was considered and rejected on the data: of the
+1,657 reversed pairs with a parseable year on both sides, 1,489 have the *same* year (a recombination
+carries the original author and year over), and of the rest the split is roughly even in both
+directions. The differences that do exist are mostly the two catalogues disagreeing on the
+publication year of one author's name, which is what `Authority years` reports.
 
 **ColDP shape.** This ColDP `nameusage` table has no `acceptedNameUsageID` column; a synonym's
 `parentID` points at its accepted taxon, and every accepted name carries its higher-rank ancestors
