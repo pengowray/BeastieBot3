@@ -106,9 +106,10 @@ internal sealed class IucnSynonymService : IDisposable {
         }
 
         // The article overwhelmingly lives at the CoL ACCEPTED name (when the IUCN name is a CoL
-        // synonym) or at the clean spelling (when the IUCN name is a formatting slip). Offer both as
-        // candidates; the matcher validates each against the enwiki cache, so a wrong guess simply
-        // fails to match rather than corrupting anything.
+        // synonym), at the clean spelling (when the IUCN name is a formatting slip), or at the way
+        // CoL writes the same name (gender agreement after a genus transfer). Offer all three; the
+        // matcher validates each against the enwiki cache, so a wrong guess simply fails to match
+        // rather than corrupting anything.
         if (_colNameResolver is not null) {
             var primaryName = !string.IsNullOrWhiteSpace(row.ScientificNameTaxonomy)
                 ? row.ScientificNameTaxonomy
@@ -116,6 +117,29 @@ internal sealed class IucnSynonymService : IDisposable {
             var resolution = _colNameResolver.Resolve(row.GenusName, row.SpeciesName, row.InfraName, primaryName, row.KingdomName, cancellationToken);
             AddCandidate(resolution.AcceptedName, TaxonNameSource.ColAccepted);
             AddCandidate(resolution.CorrectedSpelling, TaxonNameSource.ColCorrected);
+            AddCandidate(resolution.VariantName, TaxonNameSource.ColVariant);
+
+            // Second hop, and only for the taxa that need it. The lookup above starts from the IUCN
+            // name, so it finds nothing when the two catalogues disagree about the genus outright:
+            // IUCN's name is absent from CoL and so are its near spellings. Looking up the taxon's
+            // OTHER IUCN names reaches CoL in those cases, and CoL's accepted name for one of them
+            // is where the article lives. Gated on NameIsUnknownToCol rather than on "no accepted
+            // name": the overwhelming majority of taxa are accepted in CoL under the IUCN name and
+            // also return no accepted name, and running the hop for those would add several CoL
+            // queries per taxon across the whole Red List for nothing.
+            if (resolution.NameIsUnknownToCol) {
+                foreach (var synonym in GetIucnApiSynonyms(sisId, cancellationToken)) {
+                    var bare = BareScientificName.Strip(synonym.Trim());
+                    if (bare.Length == 0 || bare.IndexOf(' ') < 0) {
+                        continue;
+                    }
+                    var viaSynonym = _colNameResolver.Resolve(null, null, null, bare, row.KingdomName, cancellationToken);
+                    if (viaSynonym.HasAcceptedName) {
+                        AddCandidate(viaSynonym.AcceptedName, TaxonNameSource.ColAcceptedViaSynonym);
+                        break;
+                    }
+                }
+            }
         }
 
         return results;
@@ -224,8 +248,12 @@ internal sealed class IucnSynonymService : IDisposable {
 }
 
 internal sealed record TaxonNameCandidate(string Name, TaxonNameSource Source) {
+    // "Not the name IUCN publishes", which is what the matcher records as synonym_used. Every CoL
+    // and IUCN-synonym source qualifies; only the four IucnTaxonomy/Assessments/Constructed/
+    // InfraRanked renderings of the assessed name itself do not.
     public bool IsSynonym => Source is TaxonNameSource.IucnSynonym or TaxonNameSource.ColSynonym
-        or TaxonNameSource.ColAccepted or TaxonNameSource.ColCorrected;
+        or TaxonNameSource.ColAccepted or TaxonNameSource.ColCorrected
+        or TaxonNameSource.ColVariant or TaxonNameSource.ColAcceptedViaSynonym;
     public bool IsAlternateMatch => IsSynonym || Source is TaxonNameSource.IucnInfraRanked;
 };
 
@@ -239,5 +267,9 @@ internal enum TaxonNameSource {
     // The CoL accepted name (the IUCN name is a CoL synonym of it) and the clean CoL spelling (the
     // IUCN name is a formatting-equivalent slip). Both are resolved by ColNameResolver.
     ColAccepted,
-    ColCorrected
+    ColCorrected,
+    // The same name as CoL writes it, differing only by Latin gender agreement or a patronym
+    // ending, and the CoL accepted name reached through one of the taxon's other IUCN names.
+    ColVariant,
+    ColAcceptedViaSynonym
 }

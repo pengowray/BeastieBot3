@@ -402,6 +402,8 @@ public sealed class WikipediaMatchTaxaCommand : AsyncCommand<WikipediaMatchTaxaC
                 TaxonNameSource.ColSynonym => "col-synonym",
                 TaxonNameSource.ColAccepted => "col-accepted",
                 TaxonNameSource.ColCorrected => "col-corrected",
+                TaxonNameSource.ColVariant => "col-variant",
+                TaxonNameSource.ColAcceptedViaSynonym => "col-accepted-via-synonym",
                 _ => "scientific-name"
             };
             AddCandidate(candidate.Name, method, method, candidate.IsSynonym, candidate.Name);
