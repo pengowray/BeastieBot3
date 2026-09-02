@@ -49,13 +49,18 @@ public class WikidataApiClientRetryTests {
 
     [Fact]
     public async Task RealCancellation_StillAborts() {
+        // Cancelled from inside the handler, so the request is genuinely in flight when the
+        // token fires. Cancelling up front would be caught by the loop's top-of-iteration
+        // check and never reach the catch filter this is here to pin.
         var handler = ScriptedHandler.Always(Step.Timeout);
-        using var client = ClientWith(handler);
         using var cts = new CancellationTokenSource();
-        cts.Cancel();
+        handler.OnCall = cts.Cancel;
+        using var client = ClientWith(handler);
 
         await Assert.ThrowsAnyAsync<OperationCanceledException>(
             () => client.SearchTaxaByP225Async("Panthera leo", cts.Token));
+
+        Assert.Equal(1, handler.Calls);   // aborted, not retried
     }
 
     [Fact]
@@ -78,6 +83,9 @@ public class WikidataApiClientRetryTests {
         private int _index;
         public int Calls { get; private set; }
 
+        // Runs after the call is counted, so a test can cancel mid-request.
+        public Action? OnCall { get; set; }
+
         public ScriptedHandler(params Step[] sequence) => _sequence = sequence;
 
         public static ScriptedHandler Always(Step step) => new(step);
@@ -85,8 +93,12 @@ public class WikidataApiClientRetryTests {
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) {
             cancellationToken.ThrowIfCancellationRequested();
             Calls++;
+            OnCall?.Invoke();
             var step = _index < _sequence.Length ? _sequence[_index] : _sequence[^1];
             _index++;
+            if (cancellationToken.IsCancellationRequested) {
+                return Task.FromException<HttpResponseMessage>(new OperationCanceledException(cancellationToken));
+            }
 
             return step switch {
                 // Exactly how HttpClient surfaces its own Timeout: a cancellation the caller

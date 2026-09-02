@@ -78,6 +78,12 @@ These notes exist so the next AI (or human) that drops into this repo avoids the
 - Wikipedia list generation is currently fast (~30s for 48 lists), but may slow as we add features.
 - Consider logging timings when you touch anything that hits SQLite. `sqlite3 .timer on` is fine, but kill the command if it exceeds a minute—you almost certainly regressed the query plan.
 
+## HTTP retry loops
+- **Never write `catch (OperationCanceledException) { throw; }` in a retry loop.** `HttpClient` raises its own `Timeout` as a `TaskCanceledException` with the caller's token untouched, so that filter treats a routine timeout as "the user cancelled" and aborts the whole command. Guard it: `catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)`. Everything else falls through to the transient budget, like a 503.
+- The blast radius is worse than it looks: `Program.cs`'s handler returns `-2` for any `OperationCanceledException` and prints nothing, so the run dies with a bare exit code and no reason. It now singles out `{ InnerException: TimeoutException }` and says so.
+- A long command must bank its findings as it goes, not in one write at the end. `wikidata backfill-iucn` held its no-match verdicts until the loop finished; a timeout at hour two threw away ~900 searched taxa, so the next run started on the same ones and the step never advanced. Flush on the progress tick and in a `finally`.
+- Pinned by `WikidataApiClientRetryTests` over an injected `HttpMessageHandler` — no real HTTP, so the retry contract is cheap to keep honest.
+
 ## IUCN API cache schema
 - [BeastieBot3/IucnApiCacheStore.cs](BeastieBot3/IucnApiCacheStore.cs) owns the cache.
 - Tables to know:
