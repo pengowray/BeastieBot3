@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Net;
 using System.Net.Http;
@@ -130,21 +130,29 @@ internal sealed class WikipediaApiClient : IDisposable {
 
                 delay = await DelayAfterFailureAsync(response, delay, cancellationToken).ConfigureAwait(false);
             }
-            catch (OperationCanceledException) {
+            // See WikidataApiClient: an HttpClient timeout arrives as TaskCanceledException with
+            // the token untouched, so only a genuine cancellation may abort the run.
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) {
                 throw;
             }
             catch (WikipediaApiException) {
                 throw;
             }
-            catch (Exception ex) when (attempt < maxAttempts) {
+            catch (Exception ex) {
+                if (attempt >= maxAttempts) {
+                    throw new WikipediaApiException(client.BaseAddress?.ToString() ?? "wikipedia", null, DescribeTransient(ex), attempt, ex);
+                }
                 await Task.Delay(delay, cancellationToken).ConfigureAwait(false);
                 delay = NextDelay(delay);
-                if (attempt >= maxAttempts) {
-                    throw new WikipediaApiException(client.BaseAddress?.ToString() ?? "wikipedia", null, ex.Message, attempt, ex);
-                }
             }
         }
     }
+
+    // An HttpClient timeout reads as "A task was canceled." â€” useless in a log. Say what it was.
+    private static string DescribeTransient(Exception ex) =>
+        ex is OperationCanceledException
+            ? "the request timed out"
+            : ex.Message;
 
     private static bool ShouldRetry(HttpStatusCode statusCode, int attempt) {
         if (attempt >= 5) {
@@ -369,11 +377,20 @@ internal sealed record WikipediaRedirectStep(string FromTitle, string ToTitle);
 
 internal sealed class WikipediaApiException : Exception {
     public WikipediaApiException(string url, HttpStatusCode? statusCode, string responseBody, int attempt, Exception? inner = null)
-        : base($"Wikipedia request to {url} failed with status {(int?)statusCode ?? 0} on attempt {attempt}" + (string.IsNullOrWhiteSpace(responseBody) ? string.Empty : $" Body: {responseBody}"), inner) {
+        : base(Describe(url, statusCode, responseBody, attempt), inner) {
         Url = url;
         StatusCode = statusCode;
         ResponseBody = responseBody;
         Attempt = attempt;
+    }
+
+    // "status 0" told the operator nothing on the failure that matters most: no reply at all
+    // (a timeout or a dropped connection), where the body carries the real reason.
+    private static string Describe(string url, HttpStatusCode? statusCode, string responseBody, int attempt) {
+        var reason = string.IsNullOrWhiteSpace(responseBody) ? null : responseBody.Trim();
+        return statusCode is { } code
+            ? $"Wikipedia request to {url} failed with status {(int)code} on attempt {attempt}." + (reason is null ? string.Empty : $" Body: {reason}")
+            : $"Wikipedia request to {url} got no reply on attempt {attempt}" + (reason is null ? "." : $": {reason}.");
     }
 
     public string Url { get; }

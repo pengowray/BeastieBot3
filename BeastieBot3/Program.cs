@@ -1,4 +1,4 @@
-using BeastieBot3.Web;
+﻿using BeastieBot3.Web;
 using BeastieBot3.Web.Commands;
 using Spectre.Console;
 using Spectre.Console.Cli;
@@ -52,7 +52,14 @@ internal class Program {
                 // "[cancelled by request]" marker. Print nothing here so the
                 // log doesn't show a misleading "Error: The operation was
                 // canceled" alongside the friendlier cancellation note.
-                if (ex is OperationCanceledException) {
+                // A genuine cancellation only. An HttpClient timeout arrives as
+                // TaskCanceledException too, and silently exiting -2 for it left the
+                // operator with a dead run and nothing to read.
+                if (ex is OperationCanceledException oce) {
+                    if (oce.InnerException is TimeoutException) {
+                        AnsiConsole.MarkupLine("[red]Error:[/] a request timed out. The server may be busy; run the command again to continue.");
+                        return -1;
+                    }
                     return -2;
                 }
                 AnsiConsole.MarkupLine($"[red]Error:[/] {Markup.Escape(ex.Message)}");

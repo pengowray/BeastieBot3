@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.Net;
 using System.Net.Http;
@@ -27,12 +27,14 @@ internal sealed class WikidataApiClient : IDisposable {
     private DateTime _nextApiAllowed = DateTime.MinValue;
     private DateTime _nextSparqlAllowed = DateTime.MinValue;
 
-    public WikidataApiClient(WikidataConfiguration configuration) {
-        _configuration = configuration;
+    public WikidataApiClient(WikidataConfiguration configuration)
+        : this(configuration, NewHandler(), NewHandler()) {
+    }
 
-        var apiHandler = new SocketsHttpHandler {
-            AutomaticDecompression = DecompressionMethods.Deflate | DecompressionMethods.GZip
-        };
+    // Test/advanced seam: inject the message handlers (e.g. a fake that times out) so the
+    // retry/backoff logic can be exercised without real HTTP.
+    internal WikidataApiClient(WikidataConfiguration configuration, HttpMessageHandler apiHandler, HttpMessageHandler sparqlHandler) {
+        _configuration = configuration;
 
         _apiClient = new HttpClient(apiHandler) {
             BaseAddress = configuration.ApiEndpoint,
@@ -40,16 +42,16 @@ internal sealed class WikidataApiClient : IDisposable {
         };
         ConfigureDefaultHeaders(_apiClient.DefaultRequestHeaders, configuration.UserAgent, "application/json");
 
-        var sparqlHandler = new SocketsHttpHandler {
-            AutomaticDecompression = DecompressionMethods.Deflate | DecompressionMethods.GZip
-        };
-
         _sparqlClient = new HttpClient(sparqlHandler) {
             BaseAddress = configuration.SparqlEndpoint,
             Timeout = configuration.Timeout
         };
         ConfigureDefaultHeaders(_sparqlClient.DefaultRequestHeaders, configuration.UserAgent, "application/sparql-results+json");
     }
+
+    private static SocketsHttpHandler NewHandler() => new() {
+        AutomaticDecompression = DecompressionMethods.Deflate | DecompressionMethods.GZip
+    };
 
     public async Task<WikidataApiResponse> GetEntityAsync(string entityId, CancellationToken cancellationToken) {
         await _apiSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
@@ -142,18 +144,23 @@ internal sealed class WikidataApiClient : IDisposable {
 
                 delay = await DelayAfterFailureAsync(response, delay, cancellationToken).ConfigureAwait(false);
             }
-            catch (OperationCanceledException) {
+            // Only a real cancellation gets to abort the run. An HttpClient timeout also
+            // surfaces as TaskCanceledException, with the token untouched â€” rethrowing that
+            // killed the whole command with no message at all (Program.cs reads any
+            // OperationCanceledException as "cancelled" and exits -2 silently). Treat it as
+            // the transient failure it is.
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) {
                 throw;
             }
             catch (WikidataApiException) {
                 throw;
             }
-            catch (Exception ex) when (attempt < 5) {
+            catch (Exception ex) {
+                if (attempt >= 5) {
+                    throw new WikidataApiException(relativeUrl, null, DescribeTransient(ex), attempt, ex);
+                }
                 await Task.Delay(delay, cancellationToken).ConfigureAwait(false);
                 delay = NextDelay(delay);
-                if (attempt >= 5) {
-                    throw new WikidataApiException(relativeUrl, null, ex.Message, attempt, ex);
-                }
             }
         }
     }
@@ -174,6 +181,12 @@ internal sealed class WikidataApiClient : IDisposable {
             _sparqlSemaphore.Release();
         }
     }
+
+    // An HttpClient timeout reads as "A task was canceled." â€” useless in a log. Say what it was.
+    private static string DescribeTransient(Exception ex) =>
+        ex is OperationCanceledException
+            ? "the request timed out"
+            : ex.Message;
 
     private static bool ShouldRetry(HttpStatusCode statusCode, int attempt) {
         if (attempt >= 5) {
@@ -414,11 +427,20 @@ internal sealed record WikidataSearchResult(long NumericId, string EntityId, str
 
 internal sealed class WikidataApiException : Exception {
     public WikidataApiException(string url, HttpStatusCode? statusCode, string responseBody, int attempt, Exception? inner = null)
-        : base($"Wikidata request to {url} failed with status {(int?)statusCode ?? 0} on attempt {attempt}" + (string.IsNullOrWhiteSpace(responseBody) ? string.Empty : $" Body: {responseBody}"), inner) {
+        : base(Describe(url, statusCode, responseBody, attempt), inner) {
         Url = url;
         StatusCode = statusCode;
         ResponseBody = responseBody;
         Attempt = attempt;
+    }
+
+    // "status 0" told the operator nothing on the failure that matters most: no reply at all
+    // (a timeout or a dropped connection), where the body carries the real reason.
+    private static string Describe(string url, HttpStatusCode? statusCode, string responseBody, int attempt) {
+        var reason = string.IsNullOrWhiteSpace(responseBody) ? null : responseBody.Trim();
+        return statusCode is { } code
+            ? $"Wikidata request to {url} failed with status {(int)code} on attempt {attempt}." + (reason is null ? string.Empty : $" Body: {reason}")
+            : $"Wikidata request to {url} got no reply on attempt {attempt}" + (reason is null ? "." : $": {reason}.");
     }
 
     public string Url { get; }

@@ -1,4 +1,4 @@
-using System;
+﻿using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Threading;
@@ -127,9 +127,10 @@ public sealed class WikipediaUpdateCommand : AsyncCommand<WikipediaUpdateCommand
             new("Sweep Wikidata for new IUCN-tagged items",
                 new[] { "wikidata seed-taxa" },
                 Gate: null,
-                // Needs query.wikidata.org, a public endpoint that is regularly overloaded. The
-                // eight steps below use the Wikidata and Wikipedia web APIs instead, which stay up
-                // independently of it, so an outage here must not abandon the run.
+                // Needs query.wikidata.org, a public endpoint that is regularly overloaded. Only
+                // this step and the backfill search below use it; everything else goes through the
+                // Wikidata and Wikipedia web APIs, which stay up independently of it. So an outage
+                // here must not abandon the run.
                 StopOnFailure: false),
             new("Download queued Wikidata items",
                 new[] { Cap("wikidata cache-entities") },
@@ -140,7 +141,11 @@ public sealed class WikipediaUpdateCommand : AsyncCommand<WikipediaUpdateCommand
                 new[] { Cap("wikidata backfill-iucn") },
                 s => Unsearched(s) > 0
                     ? (true, $"{Unsearched(s):n0} taxa never searched for")
-                    : (false, "every taxon without an item has been searched for already")),
+                    : (false, "every taxon without an item has been searched for already"),
+                // Same query.wikidata.org endpoint as the sweep, and this is the longest step in
+                // the ladder — a bad hour there used to strand every Wikipedia step behind it.
+                // What it did find is banked as it goes, and the next step re-measures the queue.
+                StopOnFailure: false),
             new("Download the items the search found",
                 new[] { Cap("wikidata cache-entities") },
                 s => s.WikidataEntitiesQueued > 0

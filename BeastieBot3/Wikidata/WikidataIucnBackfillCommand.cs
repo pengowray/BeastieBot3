@@ -161,89 +161,100 @@ public sealed class WikidataIucnBackfillCommand : AsyncCommand<WikidataIucnBackf
         const int progressInterval = 250;
         var nextProgress = progressInterval;
 
-        foreach (var row in repository.ReadRows(0, cancellationToken)) {
-            cancellationToken.ThrowIfCancellationRequested();
+        // Written as we go, not once at the end. Each entry is a finished verdict — the taxon
+        // was searched under every candidate name and nothing came back — so it is safe to bank
+        // whenever the run stops. Holding them to the end meant a timeout threw away hours of
+        // searching and the next run started on the same taxa, forever.
+        void FlushMisses() {
+            if (newMisses.Count == 0) return;
+            store.RecordBackfillMisses(newMisses);
+            newMisses.Clear();
+        }
 
-            if (!IsEligible(row)) {
-                continue;
-            }
+        try {
+            foreach (var row in repository.ReadRows(0, cancellationToken)) {
+                cancellationToken.ThrowIfCancellationRequested();
 
-            var sisId = row.TaxonId.ToString(CultureInfo.InvariantCulture);
-
-            if (existingTaxonIds.Contains(sisId)) {
-                continue;
-            }
-
-            if (previousMisses.Contains(sisId)) {
-                stats.SkippedPreviousMiss++;
-                continue;
-            }
-
-            var primaryName = row.ScientificNameTaxonomy
-                ?? row.ScientificNameAssessments
-                ?? ScientificNameHelper.BuildFromParts(row.GenusName, row.SpeciesName, row.InfraName);
-            var normalizedPrimary = ScientificNameHelper.Normalize(primaryName);
-            if (!string.IsNullOrEmpty(normalizedPrimary) && existingNames.Contains(normalizedPrimary)) {
-                continue;
-            }
-
-            // Checked here rather than after a match: taxa with no match used to skip the check
-            // entirely, so --limit 3 could search hundreds of taxa before the third match.
-            if (stats.Evaluated >= rowLimit) {
-                break;
-            }
-
-            stats.Evaluated++;
-            if (stats.Evaluated >= nextProgress) {
-                AnsiConsole.MarkupLineInterpolated($"[grey]Evaluated {stats.Evaluated:n0} taxa ({stats.Matches:n0} matches, {stats.Queued:n0} queued)...[/]");
-                nextProgress += progressInterval;
-            }
-
-            var candidates = synonymService.GetCandidates(row, cancellationToken);
-            if (candidates.Count == 0) {
-                stats.Missing++;
-                newMisses.Add(new WikidataBackfillMiss(sisId, DateTime.UtcNow, 0, "no-names-to-search"));
-                continue;
-            }
-
-            var matches = await FindMatchesAsync(candidates, settings.QueueAllSynonyms, wikidataClient, cancellationToken).ConfigureAwait(false);
-            if (matches.Count == 0) {
-                stats.Missing++;
-                newMisses.Add(new WikidataBackfillMiss(sisId, DateTime.UtcNow, candidates.Count, "no-match"));
-                continue;
-            }
-
-            foreach (var match in matches) {
-                stats.RecordMatch(match);
-                AnsiConsole.MarkupLineInterpolated($"[green]Match #{stats.Matches:n0}:[/] SIS {Markup.Escape(sisId)} via {match.Method} ({Markup.Escape(match.Candidate.Name)}) -> {match.Result.EntityId}");
-
-                if (knownEntities.Contains(match.Result.NumericId)) {
-                    stats.AlreadyKnown++;
+                if (!IsEligible(row)) {
                     continue;
                 }
 
-                store.UpsertSeeds(new[] { new WikidataSeedRow(match.Result.NumericId, match.Result.EntityId, false, false) });
-                store.UpsertPendingIucnMatches(new[] {
-                    new WikidataPendingIucnMatchRow(
-                        sisId!,
-                        match.Result.NumericId,
-                        match.Result.EntityId,
-                        match.Candidate.Name,
-                        match.Method.ToString(),
-                        match.Candidate.IsSynonym,
-                        DateTime.UtcNow,
-                        DateTime.UtcNow)
-                });
-                knownEntities.Add(match.Result.NumericId);
-                stats.Queued++;
+                var sisId = row.TaxonId.ToString(CultureInfo.InvariantCulture);
+
+                if (existingTaxonIds.Contains(sisId)) {
+                    continue;
+                }
+
+                if (previousMisses.Contains(sisId)) {
+                    stats.SkippedPreviousMiss++;
+                    continue;
+                }
+
+                var primaryName = row.ScientificNameTaxonomy
+                    ?? row.ScientificNameAssessments
+                    ?? ScientificNameHelper.BuildFromParts(row.GenusName, row.SpeciesName, row.InfraName);
+                var normalizedPrimary = ScientificNameHelper.Normalize(primaryName);
+                if (!string.IsNullOrEmpty(normalizedPrimary) && existingNames.Contains(normalizedPrimary)) {
+                    continue;
+                }
+
+                // Checked here rather than after a match: taxa with no match used to skip the check
+                // entirely, so --limit 3 could search hundreds of taxa before the third match.
+                if (stats.Evaluated >= rowLimit) {
+                    break;
+                }
+
+                stats.Evaluated++;
+                if (stats.Evaluated >= nextProgress) {
+                    FlushMisses();
+                    AnsiConsole.MarkupLineInterpolated($"[grey]Evaluated {stats.Evaluated:n0} taxa ({stats.Matches:n0} matches, {stats.Queued:n0} queued)...[/]");
+                    nextProgress += progressInterval;
+                }
+
+                var candidates = synonymService.GetCandidates(row, cancellationToken);
+                if (candidates.Count == 0) {
+                    stats.Missing++;
+                    newMisses.Add(new WikidataBackfillMiss(sisId, DateTime.UtcNow, 0, "no-names-to-search"));
+                    continue;
+                }
+
+                var matches = await FindMatchesAsync(candidates, settings.QueueAllSynonyms, wikidataClient, cancellationToken).ConfigureAwait(false);
+                if (matches.Count == 0) {
+                    stats.Missing++;
+                    newMisses.Add(new WikidataBackfillMiss(sisId, DateTime.UtcNow, candidates.Count, "no-match"));
+                    continue;
+                }
+
+                foreach (var match in matches) {
+                    stats.RecordMatch(match);
+                    AnsiConsole.MarkupLineInterpolated($"[green]Match #{stats.Matches:n0}:[/] SIS {Markup.Escape(sisId)} via {match.Method} ({Markup.Escape(match.Candidate.Name)}) -> {match.Result.EntityId}");
+
+                    if (knownEntities.Contains(match.Result.NumericId)) {
+                        stats.AlreadyKnown++;
+                        continue;
+                    }
+
+                    store.UpsertSeeds(new[] { new WikidataSeedRow(match.Result.NumericId, match.Result.EntityId, false, false) });
+                    store.UpsertPendingIucnMatches(new[] {
+                        new WikidataPendingIucnMatchRow(
+                            sisId!,
+                            match.Result.NumericId,
+                            match.Result.EntityId,
+                            match.Candidate.Name,
+                            match.Method.ToString(),
+                            match.Candidate.IsSynonym,
+                            DateTime.UtcNow,
+                            DateTime.UtcNow)
+                    });
+                    knownEntities.Add(match.Result.NumericId);
+                    stats.Queued++;
+                }
+
+                existingTaxonIds.Add(sisId);
             }
-
-            existingTaxonIds.Add(sisId);
+        } finally {
+            FlushMisses();
         }
-
-        // Recorded at the end rather than per taxon: a cancelled run then leaves the record
-        // untouched instead of half-marking taxa it never really finished with.
-        store.RecordBackfillMisses(newMisses);
 
         RenderSummary(stats, iucnPath, wikidataCachePath, iucnApiCachePath, colPath, settings.QueueAllSynonyms);
         return 0;
