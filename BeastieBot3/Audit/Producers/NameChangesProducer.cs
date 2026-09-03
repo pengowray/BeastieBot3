@@ -9,8 +9,8 @@ using BeastieBot3.Iucn;
 
 // SIS taxon ids whose cached assessments carry more than one distinct taxon_scientific_name, which
 // would indicate a recorded binomial changed across assessment versions. In current data this is
-// typically empty, because amended assessments keep the present name and record the former one in the
-// errata narrative. Documents the coverage of a field-based detection approach.
+// always empty, because amended assessments keep the present name and record the former one in the
+// errata narrative, so the page is only published when a row actually turns up.
 
 namespace BeastieBot3.Audit.Producers;
 
@@ -47,21 +47,24 @@ internal sealed class NameChangesProducer : IAuditReportProducer {
             .Select(Build)
             .ToList();
 
+        if (findings.Count == 0) {
+            // No page. A rename is not recordable in this field the way IUCN keeps its data, so an
+            // empty table only tells the reader that a check they never asked for found nothing.
+            return null;
+        }
+
         return new AuditReport {
             Id = Id,
             SectionId = "text",
-            // Finding nothing is the finding here: former names live in the errata text, not in a
-            // field, so a field comparison cannot see them. Reported as a clean check rather than
-            // returned as null, which the producer contract reserves for a missing data source.
-            Breakage = findings.Count == 0 ? BreakageClass.Clear : BreakageClass.Advisory,
+            Breakage = BreakageClass.Advisory,
             Title = "Scientific name changes across assessment versions",
             DataSourceLabel = "IUCN API (taxon assessment summaries)",
             Blurb = "Taxa whose assessments record more than one distinct scientific name.",
             Summary =
                 "The table below lists taxa whose assessments record more than one distinct scientific name. It is built by comparing the scientific name on each of a taxon's assessment summaries, grouped by SIS id. " +
-                "In current data the table is usually empty: amended assessments keep the taxon's present name and record the former name in the errata text rather than in a dedicated field, so a name-field comparison finds little.\n\n" +
+                "This page appears only when there is something to show: amended assessments normally keep the taxon's present name and record the former name in the errata text rather than in a field, so the comparison usually finds nothing.\n\n" +
                 "### Why it matters\n\n" +
-                "A taxon whose assessments disagree on the scientific name is ambiguous to anything that keys on that field. The check also documents how much a name-field comparison can catch, given that historical names live in errata text.\n\n" +
+                "A taxon whose assessments disagree on the scientific name is ambiguous to anything that keys on that field.\n\n" +
                 "### Suggestion\n\n" +
                 "Where a row appears, reconcile the assessments onto the taxon's current name. To track renames more completely, a dedicated former-name field would catch what the errata text currently hides.",
             Columns = new List<AuditColumn> {

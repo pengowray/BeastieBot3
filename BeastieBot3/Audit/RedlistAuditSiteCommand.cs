@@ -87,7 +87,7 @@ internal sealed class RedlistAuditSiteCommand : Command<RedlistAuditSiteCommand.
                 try {
                     var produced = producer.Produce(ctx);
                     if (produced.Count == 0) {
-                        AnsiConsole.MarkupLineInterpolated($"[yellow]skipped[/] {producer.Id} (data source unavailable)");
+                        AnsiConsole.MarkupLineInterpolated($"[yellow]skipped[/] {producer.Id} (data source unavailable, or nothing to report)");
                         continue;
                     }
                     foreach (var report in produced) {

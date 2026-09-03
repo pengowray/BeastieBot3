@@ -122,12 +122,12 @@ names are expected to carry accented letters, so that count is large, uniform, a
 with it; the page does not mention the omission, because a reader who never sees the row has no
 question to answer.
 
-`NameChangesProducer` finds nothing in current data, and that is the finding: amended assessments keep
-the taxon's present name and record the former name in the errata text rather than in a field, so a
-field comparison cannot see a rename. It used to return null when empty, which made the command print
-"skipped name-changes (data source unavailable)" and claim a cause that was not true. Null is reserved
-for a genuinely missing data source; a check that ran and found nothing publishes its page with zero
-rows and `BreakageClass.Clear`, the same as `taxonomy-consistency`.
+`NameChangesProducer` finds nothing in current data: amended assessments keep the taxon's present name
+and record the former name in the errata text rather than in a field, so a field comparison cannot see
+a rename. It briefly published an always-empty page with `BreakageClass.Clear`; that told the reader
+only that a check they never asked about found nothing, so it is suppressed again and publishes only
+when the count is above zero. The command's skip line reads "(data source unavailable, or nothing to
+report)" so the message stays true for both reasons a producer can return null.
 
 **Page order.** The index is one table, in the order `Producers()` declares, with one exception the
 list cannot express: `col-not-found` comes out of the middle of the CoL set and is the longest, least
