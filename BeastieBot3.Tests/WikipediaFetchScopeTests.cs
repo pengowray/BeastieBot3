@@ -210,4 +210,25 @@ public class WikipediaFetchScopeTests {
         Assert.Null(f.Store.GetDumpInfo());
         Assert.Equal("2026-08-20", f.Store.GetDumpInfoValue("download_last_modified"));
     }
+
+    // A failure stamps last_seen_at and changes nothing else, so without a cutoff the batch that
+    // just failed is the next batch too, and a 2,000-page run spends itself on 400 titles.
+    [Fact]
+    public void A_failure_is_retried_once_per_run_not_once_per_batch() {
+        using var f = new Fixture();
+        var runStart = Now;
+        f.AddPage("Failed last week", "failed", Now.AddDays(-7));
+        f.AddPage("Failed in this run", "failed", Now.AddMinutes(1));
+        f.AddPage("Never tried", "pending", Now.AddMinutes(1));
+
+        var failedOnly = new WikipediaCacheStore.WikiFetchScope { FailedOnly = true, FailedBefore = runStart };
+        Assert.Equal(new[] { "Failed last week" }, Titles(f.Store, failedOnly));
+        Assert.Equal(1, f.Store.CountPendingPages(failedOnly));
+
+        var everything = new WikipediaCacheStore.WikiFetchScope { FailedBefore = runStart };
+        Assert.Equal(new[] { "Never tried", "Failed last week" }, Titles(f.Store, everything));
+
+        // No cutoff: the old behaviour, every failure every time.
+        Assert.Equal(2, f.Store.CountPendingPages(new WikipediaCacheStore.WikiFetchScope { FailedOnly = true }));
+    }
 }

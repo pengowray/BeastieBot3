@@ -21,7 +21,7 @@ namespace BeastieBot3.Wikipedia;
 
 [CommandInfo("wikipedia update", CommandKind.Mutates,
     "Run all the Wikidata and Wikipedia cache steps in order: sweep, download, search, queue titles, match, fetch pages. Skips steps with nothing to do and stops cleanly, so re-running continues where it left off. --status shows the same plan without running anything.",
-    Reason = "Runs the individual cache commands in order; each only adds what is missing.",
+    Reason = "Runs the individual cache commands in order; each only adds what is missing. Also drops queued titles that carry an authority or a note, since no article can have such a title.",
     Rerun = RerunEffect.IdempotentAdd,
     Examples = new[] {
         "wikipedia update",
@@ -158,6 +158,13 @@ public sealed class WikipediaUpdateCommand : AsyncCommand<WikipediaUpdateCommand
                 new[] { "wikipedia titles-dump" },
                 Gate: null,
                 StopOnFailure: false),   // needs dumps.wikimedia.org; the update works without it
+            // Earlier matcher runs queued IUCN synonyms verbatim, authority and note included
+            // ("Eumeces schneideri (Daudin, 1802) [orth. error]"), and no article can have such
+            // a title. Dropping them here, before the match pass, means a taxon that was waiting
+            // on one is re-matched from clean candidates in this same run.
+            new("Drop queued titles no article can have",
+                new[] { "wikipedia prune-queue --apply" },
+                _ => (true, "always runs; removes only titles that carry an authority or a note")),
             new("Match taxa to articles",
                 new[] { "wikipedia match-taxa" },
                 s => s.TaxaNeverMatched > 0
@@ -180,7 +187,10 @@ public sealed class WikipediaUpdateCommand : AsyncCommand<WikipediaUpdateCommand
                 new[] { Cap("wikidata cache-entities --failed-only"), Cap("wikipedia fetch-pages --failed-only") },
                 s => s.WikidataEntitiesFailed > 0 || s.PagesFailed > 0
                     ? (true, $"{s.WikidataEntitiesFailed:n0} Wikidata items and {s.PagesFailed:n0} pages failed before")
-                    : (false, "no downloads have failed")));
+                    : (false, "no downloads have failed"),
+                // A retry that fails again is the expected outcome for a share of these, and the
+                // low-priority queue below does not depend on it.
+                StopOnFailure: false));
             // --exists-first only helps once a dump is imported; the rung before this imports it.
             var existsFirst = initial.DumpTitles > 0 ? " --exists-first" : "";
             rungs.Add(new("Download the rest of the queue (low priority)",

@@ -120,4 +120,28 @@ public class SynonymNameNotesTests {
     public void Blank_input_gives_blank_output(string value) {
         Assert.Equal("", BareScientificName.Strip(value));
     }
+
+    // The queue also holds common-name titles from Wikidata sitelinks. Strip cuts those too (a
+    // third lowercase word reads as leftovers after a binomial), so the prune test has to be
+    // stricter than "Strip changed it" or it deletes real article titles.
+    [Theory]
+    [InlineData("Gila spotted whiptail")]
+    [InlineData("Large-spined bell toad")]
+    [InlineData("Black-and-white ruffed lemur")]
+    [InlineData("Black-faced Impala")]
+    [InlineData("Cape Town frog")]
+    [InlineData("Telchinia encedon subspecies encedon")]   // not a title, but harmless: one 404
+    public void A_common_name_title_is_not_read_as_an_authority(string title) {
+        Assert.False(BareScientificName.CarriesAuthorityOrNote(title));
+    }
+
+    [Theory]
+    [InlineData("Marlierea insignis McVaugh")]
+    [InlineData("Melanoselinum edule (Lowe) Baillon")]
+    [InlineData("Squalus  vacca\t Bloch & Schneider, 1801")]
+    [InlineData("Hexanchus griseus ssp. australis de Buen, 1960")]
+    [InlineData("Vespertilio murinus Schreber [1803]")]
+    public void An_authority_after_a_binomial_is_reported(string title) {
+        Assert.True(BareScientificName.CarriesAuthorityOrNote(title));
+    }
 }

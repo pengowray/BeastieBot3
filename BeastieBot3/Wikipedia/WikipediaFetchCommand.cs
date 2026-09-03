@@ -114,6 +114,7 @@ public sealed class WikipediaFetchCommand : AsyncCommand<WikipediaFetchCommand.S
             FailedOnly = settings.FailedOnly,
             NewestFirst = settings.NewestFirst,
             KnownTitlesFirst = existsFirst,
+            FailedBefore = now,   // each failure gets one try per run
         };
 
         if (existsFirst) {
@@ -150,6 +151,12 @@ public sealed class WikipediaFetchCommand : AsyncCommand<WikipediaFetchCommand.S
             cancellationToken.ThrowIfCancellationRequested();
 
             if (workItems.Count == 0) {
+                // Explicit titles are the whole job. Without this, "--title X" went on to work
+                // through the entire queue once X was done.
+                if (settings.Titles.Length > 0) {
+                    break;
+                }
+
                 var needed = Math.Min(DefaultBatchSize, totalLimit - processed);
                 if (needed <= 0) {
                     break;

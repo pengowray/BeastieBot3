@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.ComponentModel;
+using System.IO;
 using System.Threading;
 using Spectre.Console;
 using Spectre.Console.Cli;
@@ -12,8 +13,12 @@ using BeastieBot3.Taxonomy;
 // (Daudin, 1802) [orth. error]") being used verbatim as candidate article titles. In the 2026-1
 // cache that was 48,000 of the 190,000 titles waiting to be downloaded, none of which can exist.
 //
-// The matcher no longer produces them (IucnSynonymService reduces a name to its bare form), so
-// this is a one-off tidy of what earlier runs queued. Reports by default; --apply deletes.
+// The matcher no longer produces them (IucnSynonymService reduces a name to its bare form).
+// `wikipedia update` runs this with --apply before its match step, so whatever an older run
+// queued is gone before the matcher looks. Reports by default; --apply deletes.
+//
+// The rule is narrower than "BareScientificName.Strip changed it": the queue also holds
+// common-name titles from Wikidata sitelinks, which Strip cuts too. See CarriesAuthorityOrNote.
 
 namespace BeastieBot3.Wikipedia;
 
@@ -36,6 +41,10 @@ internal sealed class WikipediaPruneQueueCommand : Command<WikipediaPruneQueueCo
         [CommandOption("--apply")]
         [Description("Delete the titles. Without it the command only reports what it would remove.")]
         public bool Apply { get; init; }
+
+        [CommandOption("--report <FILE>")]
+        [Description("Write every title that would be (or was) removed to this file, one per line, for checking.")]
+        public string? ReportPath { get; init; }
     }
 
     public override int Execute(CommandContext context, Settings settings, CancellationToken cancellationToken) {
@@ -56,22 +65,29 @@ internal sealed class WikipediaPruneQueueCommand : Command<WikipediaPruneQueueCo
 
         var queued = store.ReadQueuedTitles();
         var doomed = new List<long>();
-        var examples = new List<string>();
+        var doomedTitles = new List<string>();
         foreach (var (id, title) in queued) {
             cancellationToken.ThrowIfCancellationRequested();
             if (!BareScientificName.CarriesAuthorityOrNote(title)) {
                 continue;
             }
             doomed.Add(id);
-            if (examples.Count < ExamplesShown) {
-                examples.Add(title);
-            }
+            doomedTitles.Add(title);
+        }
+
+        if (!string.IsNullOrWhiteSpace(settings.ReportPath)) {
+            var reportPath = Path.GetFullPath(settings.ReportPath);
+            Directory.CreateDirectory(Path.GetDirectoryName(reportPath)!);
+            File.WriteAllLines(reportPath, doomedTitles);
+            AnsiConsole.MarkupLineInterpolated($"[grey]Full list written to[/] {Markup.Escape(reportPath)}");
         }
 
         if (doomed.Count == 0) {
             AnsiConsole.MarkupLineInterpolated($"[green]Nothing to remove.[/] All {queued.Count:n0} queued titles read as names.");
             return 0;
         }
+
+        var examples = doomedTitles.GetRange(0, Math.Min(ExamplesShown, doomedTitles.Count));
 
         AnsiConsole.MarkupLineInterpolated(
             $"{doomed.Count:n0} of {queued.Count:n0} queued titles carry an authority or a note:");

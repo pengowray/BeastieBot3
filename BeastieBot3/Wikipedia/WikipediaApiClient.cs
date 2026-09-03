@@ -217,6 +217,14 @@ internal sealed class WikipediaApiClient : IDisposable {
             return WikipediaQueryResult.Missing(requestedTitle, normalized, redirects, "missing", missingReason, response.StatusCode, response.PayloadBytes);
         }
 
+        // A title MediaWiki cannot have at all ("[orth. error]", "<i>", "|") comes back as
+        // `invalid`, not `missing`, with no ns/pageid. Treated as found, it went on to the REST
+        // endpoint, which answered 403, and the title was retried as a transient failure forever.
+        if (page.TryGetProperty("invalid", out _)) {
+            var invalidReason = page.TryGetProperty("invalidreason", out var reasonElement) ? reasonElement.GetString() : null;
+            return WikipediaQueryResult.Missing(requestedTitle, normalized, redirects, "invalid-title", invalidReason, response.StatusCode, response.PayloadBytes);
+        }
+
         var canonicalTitle = page.TryGetProperty("title", out var titleElement) ? titleElement.GetString() ?? requestedTitle : requestedTitle;
         var displayTitle = page.TryGetProperty("pageprops", out var propsElement)
             && propsElement.TryGetProperty("displaytitle", out var displayElement)

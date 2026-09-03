@@ -75,6 +75,16 @@ internal sealed class WikipediaPageFetcher {
         try {
             htmlResult = await _client.GetMobileHtmlAsync(canonicalTitle, cancellationToken).ConfigureAwait(false);
         }
+        catch (WikipediaApiException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound) {
+            // The action API said the page exists, the REST endpoint says it does not. Either way
+            // there is no page to download, and "missing" is a settled answer where "failed" is
+            // retried on every --failed-only run.
+            var reason = "REST endpoint returned 404";
+            _cache.RecordMissingTitle(new WikiMissingTitle(workItem.PageTitle, normalizedTitle, "missing", reason, DateTime.UtcNow));
+            _cache.MarkPageMissing(pageRowId, reason, DateTime.UtcNow);
+            _cache.CompleteImportFailure(importId, ex.Message, (int?)ex.StatusCode, DateTime.UtcNow - importStarted);
+            return WikipediaFetchOutcome.CreateMissing(workItem.PageTitle, reason);
+        }
         catch (WikipediaApiException ex) {
             _cache.RecordPageFailure(pageRowId, ex.Message, DateTime.UtcNow);
             _cache.CompleteImportFailure(importId, ex.Message, (int?)ex.StatusCode, DateTime.UtcNow - importStarted);

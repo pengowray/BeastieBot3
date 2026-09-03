@@ -73,6 +73,10 @@ CREATE TABLE IF NOT EXISTS wiki_page_categories (
     PRIMARY KEY(page_row_id, category_name)
 );
 CREATE INDEX IF NOT EXISTS idx_wiki_page_categories_name ON wiki_page_categories(category_name);
+-- Every column that references wiki_pages(id) is indexed: a DELETE on wiki_pages has to find
+-- the referencing rows for each cascade / set-null, and without these it scanned the whole
+-- categories table (1.1M rows) per page, which turned pruning 70,000 titles into hours.
+CREATE INDEX IF NOT EXISTS idx_wiki_page_categories_page ON wiki_page_categories(page_row_id);
 CREATE TABLE IF NOT EXISTS wiki_redirect_edges (
     page_row_id INTEGER NOT NULL REFERENCES wiki_pages(id) ON DELETE CASCADE,
     hop INTEGER NOT NULL,
@@ -133,6 +137,7 @@ CREATE TABLE IF NOT EXISTS taxon_wiki_match_attempts (
     attempted_at TEXT NOT NULL
 );
 CREATE INDEX IF NOT EXISTS idx_taxon_wiki_attempts_taxon ON taxon_wiki_match_attempts(taxon_source, taxon_identifier);
+CREATE INDEX IF NOT EXISTS idx_taxon_wiki_attempts_page ON taxon_wiki_match_attempts(page_row_id);
 CREATE TABLE IF NOT EXISTS enwiki_dump_titles (
     title TEXT PRIMARY KEY
 ) WITHOUT ROWID;
@@ -192,6 +197,12 @@ SELECT
         public bool NewestFirst { get; init; }   // most recently queued first, instead of oldest first
         public bool KnownTitlesFirst { get; init; } // titles the enwiki all-titles dump lists before likely redlinks
 
+        // Failures are only retried if they last failed before this moment: the run's start.
+        // Without it a batch that fails comes straight back in the next batch (a failure stamps
+        // last_seen_at, and nothing else changes), and "--failed-only --limit 2000" spends its
+        // whole limit cycling the same few hundred titles.
+        public DateTime? FailedBefore { get; init; }
+
         public static readonly WikiFetchScope All = new();
     }
 
@@ -202,11 +213,13 @@ SELECT
             ? "SELECT COUNT(*)"
             : "SELECT id, IFNULL(page_title, normalized_title), normalized_title, download_status, downloaded_at, attempt_count";
 
+        const string failedBeforeRun = "(download_status = @failed AND (@failedBefore IS NULL OR last_seen_at IS NULL OR last_seen_at < @failedBefore))";
         var where = scope switch {
-            { FailedOnly: true } => "download_status = @failed",
+            { FailedOnly: true } => failedBeforeRun,
             { RefreshOnly: true } => "(@refresh IS NOT NULL AND downloaded_at IS NOT NULL AND downloaded_at < @refresh)",
-            _ => """
-                 (download_status IN (@pending, @failed)
+            _ => $"""
+                 (download_status = @pending
+                     OR {failedBeforeRun}
                      OR (@refresh IS NOT NULL AND downloaded_at IS NOT NULL AND downloaded_at < @refresh))
                  """,
         };
@@ -255,6 +268,7 @@ SELECT
         command.Parameters.AddWithValue("@pending", WikiPageDownloadStatus.Pending);
         command.Parameters.AddWithValue("@failed", WikiPageDownloadStatus.Failed);
         command.Parameters.AddWithValue("@refresh", scope.RefreshThreshold?.ToString("O") ?? (object)DBNull.Value);
+        command.Parameters.AddWithValue("@failedBefore", scope.FailedBefore?.ToString("O") ?? (object)DBNull.Value);
     }
 
     public long CountPendingPages(WikiFetchScope scope) {

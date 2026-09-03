@@ -34,20 +34,27 @@ internal static class BareScientificName {
     /// The name without its authority or bracketed note. Returns the input trimmed when it does
     /// not parse as a scientific name, so higher taxa ("Felidae") pass through untouched.
     public static string Strip(string? raw) {
+        var (kept, _) = Split(raw);
+        return string.Join(' ', kept);
+    }
+
+    /// The tokens that make up the name, and the tokens after it (authority, year, anything the
+    /// name parser stopped at). Notes and markup are already blanked out of both.
+    private static (IReadOnlyList<string> Kept, IReadOnlyList<string> After) Split(string? raw) {
         if (string.IsNullOrWhiteSpace(raw)) {
-            return string.Empty;
+            return (Array.Empty<string>(), Array.Empty<string>());
         }
 
         var text = RemoveNotesAndMarkup(raw);
         var tokens = text.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
         if (tokens.Length == 0) {
-            return string.Empty;
+            return (Array.Empty<string>(), Array.Empty<string>());
         }
 
         // Token 0 is the genus (or a higher taxon on its own). Anything else at the front, such as
         // a stray "cf." or a lowercase word, means this is not a name we can safely cut.
         if (!IsCapitalisedWord(tokens[0])) {
-            return text;
+            return (tokens, Array.Empty<string>());
         }
 
         var kept = new List<string> { tokens[0] };
@@ -61,7 +68,7 @@ internal static class BareScientificName {
 
         // The specific epithet. Without one there is nothing more a name can hold.
         if (index >= tokens.Length || !IsEpithet(tokens[index])) {
-            return string.Join(' ', kept);
+            return (kept, tokens[index..]);
         }
         kept.Add(tokens[index]);
         index++;
@@ -88,18 +95,42 @@ internal static class BareScientificName {
             break;
         }
 
-        return string.Join(' ', kept);
+        return (kept, tokens[index..]);
     }
 
-    /// True when stripping actually removed something, i.e. the stored name carried an authority
-    /// or a note. Used to report how much of a queue is names that were never article titles.
+    /// True when the stored name carries an authority or a nomenclatural note, which no article
+    /// title does. Used to find queued titles that can never be downloaded.
+    ///
+    /// Deliberately narrower than "Strip changed something": a common name is also two or three
+    /// words ("Gila spotted whiptail", "Black-faced impala"), and Strip cuts those too because
+    /// it reads them as a binomial plus leftovers. So a note in brackets or markup counts on its
+    /// own, and otherwise the name must be a binomial and the leftovers must look like an
+    /// authority: a capitalised surname, a parenthesised one, a year, or a comma.
     public static bool CarriesAuthorityOrNote(string? raw) {
         if (string.IsNullOrWhiteSpace(raw)) {
             return false;
         }
-        var stripped = Strip(raw);
-        return stripped.Length > 0 && !string.Equals(stripped, raw.Trim(), StringComparison.Ordinal);
+        if (raw.IndexOfAny(NoteDelimiters) >= 0) {
+            return true;
+        }
+
+        var (kept, after) = Split(raw);
+        if (after.Count == 0 || kept.Count < 2 || !IsCapitalisedWord(kept[0]) || !IsEpithet(kept[1])) {
+            return false;
+        }
+        foreach (var token in after) {
+            if (LooksLikeAuthority(token)) {
+                return true;
+            }
+        }
+        return false;
     }
+
+    private static readonly char[] NoteDelimiters = { '[', ']', '<', '>' };
+
+    private static bool LooksLikeAuthority(string token) =>
+        token.Length > 0
+        && (char.IsUpper(token[0]) || token[0] == '(' || char.IsDigit(token[0]) || token.Contains(','));
 
     private static string RemoveNotesAndMarkup(string raw) {
         var sb = new StringBuilder(raw.Length);
