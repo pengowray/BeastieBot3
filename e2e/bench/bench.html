@@ -1,0 +1,31 @@
+<!doctype html><meta charset="utf-8"><title>terminal bench</title>
+<link rel="stylesheet" href="../../BeastieBot3/Web/wwwroot/style.css">
+<style>body{height:100vh;display:flex;flex-direction:column}.job-dock{max-height:45vh}</style>
+<div style="flex:1"></div>
+<div class="job-dock"><div class="dock-body"><div id="job-output" class="terminal"></div></div></div>
+<script src="../../BeastieBot3/Web/wwwroot/ansi.js"></script>
+<script src="old-terminal.js"></script>
+<script src="../../BeastieBot3/Web/wwwroot/terminal.js"></script>
+<script>
+  // Old code renders into a <pre> with text nodes; give it its own <pre> so both
+  // run against the same CSS. It looked up #job-output at load time, so swap ids.
+  const root = document.getElementById('job-output');
+  window.newTerminal = createTerminal(root);
+  function bigLines(n){ let s=''; for(let i=0;i<n;i++) s += '\x1b[32m['+i+']\x1b[0m fetched taxon '+i+' Panthera leo ssp. '+(i%7)+' ok\n'; return s; }
+  function crRedraw(n){ let s=''; for(let i=0;i<n;i++) s += '\rProgress '+i+'/'+n+' [########------]'; return s+'\n'; }
+  async function frame(){ return new Promise(r=>requestAnimationFrame(()=>r())); }
+  async function run(term, name){
+    const out={};
+    term.reset();
+    let t=performance.now(); term.append(bigLines(200000)); term.flush(); await frame(); out.replay200kLines=Math.round(performance.now()-t);
+    term.reset();
+    t=performance.now(); term.append(crRedraw(60000)); term.flush(); await frame(); out.cr60k=Math.round(performance.now()-t);
+    term.reset();
+    // 64K events, 20 per second for 5 s, measure total main-thread time spent inside append+flush
+    const chunk=bigLines(1000); let spent=0; let maxFrame=0;
+    for(let k=0;k<100;k++){ const a=performance.now(); term.append(chunk); if(k%2) term.flush(); const b=performance.now(); spent+=b-a; if(b-a>maxFrame) maxFrame=b-a; await new Promise(r=>setTimeout(r,50)); }
+    term.flush(); await frame();
+    out.stream100x1kLines_totalMs=Math.round(spent); out.stream_maxEventMs=Math.round(maxFrame); out.lines=term.lineCount();
+    out.name=name; return out;
+  }
+</script>
