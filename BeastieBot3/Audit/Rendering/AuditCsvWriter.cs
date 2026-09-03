@@ -5,31 +5,36 @@ using BeastieBot3.Audit.Model;
 
 // Writes a report's full finding set to CSV using the same AuditColumn definitions the HTML
 // table uses, so the download and the on-screen list always carry the same columns in the same
-// order. Values are the raw column values (no HTML, no whitespace markers).
+// order. Values are the raw column values (no HTML, no whitespace markers). A leading "id" column
+// carries the finding's stable key ("{report}:{key}") so a row can be cited, tracked across
+// releases, and matched to commentary without depending on its position.
 
 namespace BeastieBot3.Audit.Rendering;
 
 internal static class AuditCsvWriter {
+    public const string IdColumn = "id";
+
     public static string Write(AuditReport report) => Write(report.Columns, report.CsvRows);
+
+    public static string StableId(AuditFinding f) =>
+        string.IsNullOrEmpty(f.Key) ? "" : $"{f.ReportId}:{f.Key}";
 
     public static string Write(IReadOnlyList<AuditColumn> allColumns, IEnumerable<AuditFinding> findings) {
         // HTML-only columns (e.g. a modal-viewer button) have no meaningful flat-CSV value.
         var columns = allColumns.Where(c => !c.HtmlOnly).ToList();
         var sb = new StringBuilder();
-        for (var i = 0; i < columns.Count; i++) {
-            if (i > 0) {
-                sb.Append(',');
-            }
-            sb.Append(Escape(columns[i].Key));
+        sb.Append(IdColumn);
+        foreach (var column in columns) {
+            sb.Append(',');
+            sb.Append(Escape(column.Key));
         }
         sb.Append('\n');
 
         foreach (var f in findings) {
-            for (var i = 0; i < columns.Count; i++) {
-                if (i > 0) {
-                    sb.Append(',');
-                }
-                sb.Append(Escape(columns[i].Value(f) ?? "", columns[i].IsNumeric));
+            sb.Append(Escape(StableId(f)));
+            foreach (var column in columns) {
+                sb.Append(',');
+                sb.Append(Escape(column.Value(f) ?? "", column.IsNumeric));
             }
             sb.Append('\n');
         }

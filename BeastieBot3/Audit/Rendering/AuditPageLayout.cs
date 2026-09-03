@@ -1,9 +1,9 @@
-﻿using System.Text;
+using System.Text;
 using BeastieBot3.Audit.Model;
 
-// Shared page chrome for every page in the bundle: head, header with the site title, the
-// unofficial disclaimer, optional breadcrumbs, the body, and a footer that repeats the
-// disclaimer, attribution, licence, and generation date. Asset links are relative so the
+// Shared page chrome for every page in the bundle: head, header with the site title, optional
+// breadcrumbs, the body, and a footer carrying the one unofficial disclaimer, attribution, licence,
+// and generation date. Asset links are relative so the
 // bundle works at any base URL (a local folder, a static host, an email attachment).
 
 namespace BeastieBot3.Audit.Rendering;
@@ -36,7 +36,7 @@ internal static class AuditPageLayout {
         sb.Append("<footer class=\"site\">\n<div class=\"wrap\">\n");
         sb.Append("<p><strong>Unofficial and unaffiliated.</strong> This compilation is independent. ");
         sb.Append("It is not produced, reviewed, or endorsed by the IUCN, the IUCN Red List, the Species Survival Commission, or any Red List Authority. ");
-        sb.Append("It is shared in good faith to help with data review, and any observation here may be incomplete or mistaken.</p>\n");
+        sb.Append("It is shared in good faith to help with data review. It may be incomplete or contain errors.</p>\n");
         sb.Append($"<p>Compiled by {HtmlText.Escape(cfg.ContactName)} (<a href=\"mailto:{HtmlText.Escape(cfg.Contact)}\">{HtmlText.Escape(cfg.Contact)}</a>). ");
         sb.Append($"Source data: IUCN Red List version {HtmlText.Escape(doc.Release)}, retrieved from <a href=\"https://www.iucnredlist.org\" rel=\"noopener\" target=\"_blank\">iucnredlist.org</a>. ");
         sb.Append($"Tables and CSV downloads compiled here are released under {HtmlText.Escape(cfg.CsvLicence)}. ");
@@ -60,16 +60,16 @@ internal static class AuditPageLayout {
         return sb.ToString();
     }
 
-    // The type chip. Four labels site-wide, so the column reads at a glance; the legend under each
-    // index table spells them out. When the chip sits inside a heading, aria-hidden keeps it out of
-    // the accessible heading text, so a title such as "English common name issues" is never read as
-    // one run-on string with the chip label appended.
-    public static string BreakageBadge(BreakageClass breakage, bool inHeading = false) {
-        var (cls, text) = breakage switch {
-            BreakageClass.Breaking => ("breaking", "Missing data"),
-            BreakageClass.FixableData => ("fixable", "Text cleanup"),
-            BreakageClass.Clear => ("clear", "Nothing found"),
-            _ => ("advisory", "For review"),
+    // The action chip: what a reader would do about the rows. Four labels site-wide, each a plain
+    // instruction, so no legend is needed. When the chip sits inside a heading, aria-hidden keeps it
+    // out of the accessible heading text, so a title such as "English common name issues" is never
+    // read as one run-on string with the chip label appended.
+    public static string ActionBadge(ActionClass action, bool inHeading = false) {
+        var (cls, text) = action switch {
+            ActionClass.Mechanical => ("mechanical", "Fix by script"),
+            ActionClass.ByHand => ("by-hand", "Fix by hand"),
+            ActionClass.Policy => ("policy", "Decide policy"),
+            _ => ("informational", "No action"),
         };
         var hidden = inHeading ? " aria-hidden=\"true\"" : "";
         return $"<span class=\"badge {cls}\"{hidden}>{HtmlText.Escape(text)}</span>";

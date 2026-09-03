@@ -142,12 +142,44 @@ public class AuditRenderingTests {
             new() { Key = "detail", Header = "Detail", Value = f => f.Detail },
         };
         var findings = new[] {
-            new AuditFinding { ScientificName = "Aus, bus", Detail = "has \"quote\"" },
+            new AuditFinding { ReportId = "demo", Key = "1:x", ScientificName = "Aus, bus", Detail = "has \"quote\"" },
+            new AuditFinding { ScientificName = "Cus dus" },
         };
         var csv = AuditCsvWriter.Write(columns, findings);
         var lines = csv.Replace("\r", "").Split('\n');
-        Assert.Equal("name,detail", lines[0]);
-        Assert.Equal("\"Aus, bus\",\"has \"\"quote\"\"\"", lines[1]);
+        Assert.Equal("id,name,detail", lines[0]);
+        Assert.Equal("demo:1:x,\"Aus, bus\",\"has \"\"quote\"\"\"", lines[1]);
+        // No key: the id cell is blank rather than invented.
+        Assert.Equal(",Cus dus,", lines[2]);
+    }
+
+    // ---- AuditReleaseCounts ----
+
+    [Fact]
+    public void ReleaseCounts_FindsPreviousReleaseAndCounts() {
+        var dir = Path.Combine(Path.GetTempPath(), "audit-rc-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(Path.Combine(dir, "audit"));
+        File.WriteAllText(Path.Combine(dir, "audit", "release-counts.yml"), """
+2025-1:
+  empty-scope: 10
+2025-2:
+  empty-scope: 23
+  no-latest: 3898
+2026-1:
+  empty-scope: 52
+""");
+        try {
+            var counts = AuditReleaseCounts.Load(dir);
+            Assert.Equal("2025-2", counts.PreviousRelease("2026-1"));
+            Assert.Equal("2025-1", counts.PreviousRelease("2025-2"));
+            Assert.Null(counts.PreviousRelease("2025-1"));
+            Assert.Equal(23, counts.Count("2025-2", "empty-scope"));
+            Assert.Null(counts.Count("2025-2", "taxonomy-cleanup"));
+            Assert.Equal("2026-2:" + Environment.NewLine + "  a: 1" + Environment.NewLine + "  b: 2",
+                AuditReleaseCounts.FormatBlock("2026-2", new[] { ("a", 1), ("b", 2) }));
+        } finally {
+            Directory.Delete(dir, true);
+        }
     }
 
     // ---- AuditCommentary ----

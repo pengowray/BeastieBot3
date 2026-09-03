@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -100,7 +100,7 @@ internal sealed class CommonNameIssuesProducer : IAuditReportProducer {
             Id = Id,
             SectionId = "text",
             Title = "English common name issues",
-            Breakage = BreakageClass.FixableData,
+            Action = ActionClass.ByHand,
             DataSourceLabel = "IUCN API (English common names)",
             Blurb = "English common names with a likely error or a formatting choice worth checking (species codes, all-capitals text, stray whitespace, backticks standing in for apostrophes), with a tidied suggestion where one is clear.",
             Summary =
@@ -116,8 +116,8 @@ internal sealed class CommonNameIssuesProducer : IAuditReportProducer {
                 AuditColumns.ScientificName("Taxon"),
                 AuditColumns.CurrentValue("Common name (English)", AuditColumnType.Whitespace),
                 AuditColumns.SuggestedValue("Suggested", AuditColumnType.Code),
-                AuditColumns.IssueType("Issue(s)"),
-                AuditColumns.Custom("mainName", "Primary", AuditColumnType.Text),
+                AuditColumns.IssueType("Problem"),
+                AuditColumns.Custom("mainName", "Main name", AuditColumnType.Text, "Yes when this is the taxon's main English common name rather than an alternative."),
                 AuditColumns.Status(),
                 AuditColumns.Class(),
                 AuditColumns.Family(),

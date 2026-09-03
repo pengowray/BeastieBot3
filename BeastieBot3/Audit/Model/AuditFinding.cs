@@ -8,7 +8,9 @@ using System.Collections.Generic;
 namespace BeastieBot3.Audit.Model;
 
 internal sealed class AuditFinding {
-    public string ReportId { get; init; } = "";
+    // Settable because a producer may move a row to a sibling report after it is built (the CoL
+    // crosscheck does this once Wikidata and Wikipedia have been consulted).
+    public string ReportId { get; set; } = "";
 
     // Stable identity for this finding within its report (e.g. "{taxonId}:{issueType}"), used to
     // pin one-time commentary to a specific row so the note survives re-sorting and can be

@@ -1,4 +1,4 @@
-﻿// The CSS and JS for the static audit bundle, embedded so the generator emits a self-contained
+// The CSS and JS for the static audit bundle, embedded so the generator emits a self-contained
 // site (no build step, no external assets). audit.css is a clean light theme suited to a formal
 // document; audit.js gives every table click-to-sort and a filter box with no dependencies.
 
@@ -82,10 +82,18 @@ table.index td.kind, table.index th.kind { white-space: nowrap; width: 1%; }
 p.legend { color: var(--ink-soft); font-size: 0.9rem; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line-soft); }
 
 .badge { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 0.74rem; font-weight: 600; letter-spacing: 0.02em; vertical-align: middle; white-space: nowrap; }
-.badge.breaking { background: #f7e4e1; color: var(--breaking); }
-.badge.fixable { background: #f6ecd6; color: var(--fixable); }
-.badge.advisory { background: #e3eef5; color: var(--advisory); }
-.badge.clear { background: #e2f0e6; color: var(--clear); }
+.badge.by-hand { background: #f7e4e1; color: var(--breaking); }
+.badge.mechanical { background: #e2f0e6; color: var(--clear); }
+.badge.policy { background: #f6ecd6; color: var(--fixable); }
+.badge.informational { background: #eceff1; color: var(--ink-soft); }
+table.index td.since { white-space: nowrap; color: var(--ink-soft); }
+table.index td.since.up { color: var(--breaking); }
+table.index td.since.down { color: var(--clear); }
+ol.triage { padding-left: 1.4em; margin: 10px 0 0; }
+ol.triage li { margin: 0 0 10px; }
+ol.triage .triage-count { color: var(--ink-soft); }
+.patch-note { font-size: 0.9rem; color: var(--ink-soft); }
+tr.appendix-head th { padding-top: 16px; font-weight: 600; color: var(--ink-soft); border-bottom: 0; }
 .badge.tier { background: var(--accent-soft); color: var(--accent); }
 
 .status-badge { display: inline-block; min-width: 2.6em; text-align: center; padding: 1px 7px; border-radius: 5px; font-size: 0.78rem; font-weight: 600; }

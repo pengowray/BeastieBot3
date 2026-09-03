@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
@@ -32,7 +32,7 @@ internal sealed class NoLatestAssessmentProducer : IAuditReportProducer {
             Id = Id,
             SectionId = "records",
             Title = "Taxa with no current assessment",
-            Breakage = BreakageClass.Advisory,
+            Action = ActionClass.Policy,
             DataSourceLabel = "IUCN API",
             Blurb = "Taxa whose assessments are all historical: none is flagged as current, usually because the taxon was removed, merged, or reclassified.",
             Summary =

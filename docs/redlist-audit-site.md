@@ -33,25 +33,40 @@ incomplete or mistaken. When editing copy, avoid em-dashes and "not X but Y" phr
 - **`Model/AuditReport`** — a report: neutral `Summary`, optional `SummaryTables`, a column list,
   and findings pre-sorted by importance. The full-list page always shows every row on one page
   (filter box + click-to-sort), never split into per-group pages.
-**The index is three sections**, declared once in `AuditSiteRenderer.IndexSections` and selected by
-each report's `SectionId`: `records` (absent, unreachable, or not current), `text` (stray characters,
+**The index opens with "Start here"**: up to five reports with `TriageRank > 0` and a non-zero count,
+lowest rank first, each with its live count, its change since the previous release, its Action chip,
+and the producer's one-line `TriageReason` (which must add to the title, not restate it).
+Release-specific colour for that block goes in `commentary.yml` under `report: index`.
+
+**Then three sections**, declared once in `AuditSiteRenderer.IndexSections` and selected by each
+report's `SectionId`: `records` (absent, unreachable, or not current), `text` (stray characters,
 markup, fields that disagree), `col` (the crosscheck). Boundaries follow what the observation is
-about, not what the Type chip says, because that is what tells a reader whether a block is theirs.
-The `col` block is ordered by `FamilyRank`, the same order as the you-are-here table on each of its
-nine pages, so the reader learns one order and meets it twice; the other two use document order,
-which is `Producers()` order. A report naming no section, or an unknown one, is listed in the last
-section rather than dropped. The Type chip stays on every row even where a section's values are
-uniform today: it doubles as the status light, and any report can fall to `Nothing found` in a given
-release. The legend sits at the foot of the intro card, above all three sections, since it describes
-a column they share.
-- **`BreakageClass`** — the `Type` chip on the index and on each report heading. Four values, no
-  per-report overrides, so the column can be skimmed: `Breaking` → "Missing data" (red),
-  `FixableData` → "Text cleanup" (amber), `Advisory` → "For review" (blue), `Clear` → "Nothing
-  found" (green). Green is reserved for `Clear`, where it genuinely means good; the advisory class
-  is blue because most of its rows are CoL differences that need judgment, not reassurance. The
-  index table prints `TypeLegend` (in `AuditSiteRenderer`) under the heading, since an unexplained
-  chip is not a label. Adding a fifth label is almost always the wrong fix: a report that does not
-  fit belongs in a clearer existing class, or its title should say more.
+about, not what the Action chip says, because that is what tells a reader whether a block is theirs.
+The `col` block lists only `ColIndexHighlights` (`col-close-match`, `col-classification`) and links
+to `col-crosscheck.html`, the crosscheck's own entry page (`BuildFamilyPage`): its pages record two
+catalogues disagreeing, not IUCN errors, and listed beside whitespace findings they read as though the
+site thought otherwise. The entry page and the you-are-here table on every member page share one
+ordering (`FamilyRank`) and set `IsAppendix` reports apart under an "Appendix" row. The other two
+sections use `Producers()` order. A report naming no section, or an unknown one, is listed in the last
+section rather than dropped. There is no legend: the chip labels are instructions, and the site
+disclaimer appears once, in the footer.
+
+**"Since <release>" column.** `rules/audit/release-counts.yml` records headline counts per report per
+release; `AuditReleaseCounts` picks the most recent earlier release and the index and family tables
+print "up from N" / "down from N" / "unchanged" / "fixed (was N)", or nothing when that release
+recorded no count for the report. The build never writes the file (a `--limit` run would record partial
+counts); it prints the current release's block, and saves it as `release-counts.yml` in the output
+directory, for pasting in once the release is final.
+
+- **`ActionClass`** â€” the `Action` chip on the index and on each report heading: what a reader would
+  do about the rows, not what kind of data they are. Four values, no per-report overrides:
+  `Mechanical` → "Fix by script" (green; every row carries a replacement value), `ByHand` → "Fix by
+  hand" (red), `Policy` → "Decide policy" (amber; e.g. `no-latest`, which is a question about how the
+  dataset is meant to work), `Informational` → "No action" (grey). The labels are instructions, so
+  there is no legend. Adding a fifth label is almost always the wrong fix. `CsvIsPatch` marks the
+  reports whose CSV carries taxon id, field, current and replacement values on every row; the report
+  page says so under the download link. Every CSV starts with an `id` column
+  (`AuditCsvWriter.StableId`: `{report}:{Key}`) so a row can be cited and tracked across releases.
 - **`Model/AuditColumn` + `AuditColumns`** — column definitions and a factory of reusable columns
   (scientific name, status badge, taxonomy, ids, Red List link, field/current/suggested). Defined
   once, rendered identically in HTML and CSV.
@@ -66,7 +81,7 @@ a column they share.
   The Catalogue of Life crosscheck (`Producers/ColCrosscheck/`) is the set producer.
 - **`Rendering/`** — `HtmlListRenderer` (the one sortable/filterable table renderer), `AuditCsvWriter`
   (same columns to CSV), `AuditPageLayout` (page chrome + disclaimer), `AuditSiteRenderer`
-  (orchestrates index, per-report detail pages, full-list pages, methodology, assets), `HtmlText`
+  (orchestrates index, per-report detail pages, full-list pages, family entry pages, assets), `HtmlText`
   (escaping, a whitespace visualiser, a tiny Markdown subset), `AuditAssets` (embedded CSS + JS).
   A summary table with more than 8 rows is written in full but carries `data-collapse="6"`; `audit.js`
   clamps it to 6 rows with a fade over the clipped row and a "Show all N rows" toggle, so a 15-row
@@ -124,16 +139,14 @@ question to answer.
 
 `NameChangesProducer` finds nothing in current data: amended assessments keep the taxon's present name
 and record the former name in the errata text rather than in a field, so a field comparison cannot see
-a rename. It briefly published an always-empty page with `BreakageClass.Clear`; that told the reader
+a rename. It briefly published an always-empty page (then badged "Nothing found"); that told the reader
 only that a check they never asked about found nothing, so it is suppressed again and publishes only
 when the count is above zero. The command's skip line reads "(data source unavailable, or nothing to
 report)" so the message stays true for both reasons a producer can return null.
 
-**Page order.** The index is one table, in the order `Producers()` declares, with one exception the
-list cannot express: `col-not-found` comes out of the middle of the CoL set and is the longest, least
-actionable list, so `Execute` sorts it to the end (a stable `OrderBy`, so nothing else moves). There
-is no separate methodology section; a report that gives context rather than rows sits near the end of
-the same table.
+**Page order.** Within each index section, `Producers()` order; the CoL set is always `FamilyRank`
+order. There is no methodology page: the report pages carry their own source line and scope, and the
+one-time methodology text said nothing the reader could act on.
 
 ### Catalogue of Life crosscheck (`Producers/ColCrosscheck/`)
 
@@ -149,7 +162,8 @@ findings into nine separate report pages (most actionable first, noisiest last):
 | `col-classification` | Higher-rank placement differences that look like spelling variants | a higher taxon whose parent differs like a typo (fuzzy/encoding), same phylum only |
 | `col-reorg` | Higher-rank names placed differently in CoL | a higher taxon under a genuinely different parent (not a typo), same phylum only |
 | `col-authority` | Minor naming authority differences | an exact name match whose author name differs like a typo (spelling/diacritic/encoding); differences only in spacing, punctuation, or the year are dropped |
-| `col-other-name` | Names absent from CoL where another name for the taxon is present | the IUCN name is in no CoL usage and has no near spelling, but another name IUCN records for the taxon is in CoL as a synonym. A lead, not a match: the chain can end on an unrelated name |
+| `col-via-wiki` | Names not in CoL, but a Wikidata or Wikipedia name is | the IUCN name is in no CoL usage, no near spelling, no IUCN synonym in CoL, but Wikidata or English Wikipedia record another name for the taxon that CoL holds (usually a genus transfer CoL adopted). Split out of `col-not-found` in `AddOtherSources`, which reassigns `ReportId`. The ask: check whether it is a valid synonym and, if so, add it, since no name currently joins the two records |
+| `col-other-name` | Names not in CoL, but an IUCN synonym is | the IUCN name is in no CoL usage and has no near spelling, but another name IUCN records for the taxon is in CoL as a synonym. A lead, not a match: the chain can end on an unrelated name |
 | `col-not-found` | Names not found in CoL | no exact match, no near candidate, and no other IUCN-listed name for the taxon in CoL either |
 
 Each report carries every one of its rows on the full-list page and the CSV (there is no
@@ -226,16 +240,16 @@ split for the same reason: one says confirm a spelling, the other says be aware 
 bug where the missing column always read NULL), and the higher-rank placement comparison reads the
 inline ancestor columns instead of walking the tree.
 
-**Wikidata and Wikipedia on `col-not-found`.** `OtherSourceIndex` reads the Wikidata cache
+**Wikidata and Wikipedia on `col-not-found` (and the `col-via-wiki` split).** `OtherSourceIndex` reads the Wikidata cache
 (`wikidata_p627_values` joined to `wikidata_entities` / `wikidata_scientific_names`, keyed on the IUCN
 taxon id) and the Wikipedia cache (`taxon_wiki_matches` + `wiki_pages`), and runs as a second pass
 over the `col-not-found` bucket alone, after the main scan. That bucket is a few hundred rows out of
 ~190,000, so a handful of indexed queries each costs nothing, and it is the one page whose claim
-("no route into CoL") those two sources can qualify. Three columns are added: the Wikidata item, the
-English Wikipedia article, and any name recorded on either that **is** in CoL. That third one is
-usually a genus transfer CoL made and the Red List has not (`Idiopoma javanica` /
-`Filopaludina javanica`); on 2026-1 it fires for about 20 of 745, while about half have a Wikidata
-item and 109 have an article.
+("no route into CoL") those two sources can qualify. Two columns are added to `col-not-found`: the Wikidata item and the
+English Wikipedia article. A row where either source records a name that **is** in CoL moves to
+`col-via-wiki` (with a Name in CoL column, its CoL status, and the CoL link). That is usually a genus
+transfer CoL made and the Red List has not (`Idiopoma javanica` / `Filopaludina javanica`); on 2026-1
+about 20 of 745 move, while about half of the rest have a Wikidata item and 109 have an article.
 
 Both caches are optional and sit outside the Red List entirely. When neither is present the columns
 are **left out of the table** rather than rendered empty, and the intro says the check did not run:
@@ -273,8 +287,9 @@ responsive.
 
 ```
 reports/redlist-audit-2026/
-  index.html                 overview, disclaimer, report tables (IUCN-owned, then methodology)
-  methodology.html           how it was made, scope, caveats
+  index.html                 overview, Start here, report tables (records, text, CoL highlights)
+  col-crosscheck.html        the crosscheck's entry page: what it compares, every page, appendix
+  release-counts.yml         this release's headline counts, for rules/audit/release-counts.yml
   <report>.html              description + commentary + summary tables + short preview + links
   <report>-list.html         full sortable/filterable list (or a per-group index when very large)
   <report>-g-<class>.html     per-group pages when a report is split by class

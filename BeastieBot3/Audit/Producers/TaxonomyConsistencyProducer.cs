@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using System.Linq;
 using BeastieBot3.Audit.Model;
 using BeastieBot3.Infrastructure;
@@ -61,8 +61,10 @@ internal sealed class TaxonomyConsistencyProducer : IAuditReportProducer {
         return new AuditReport {
             Id = Id,
             SectionId = "text",
-            Title = "Scientific name fields versus taxonomy components",
-            Breakage = isClean ? BreakageClass.Clear : BreakageClass.FixableData,
+            Title = "Scientific names that do not match their genus and species fields",
+            Action = isClean ? ActionClass.Informational : ActionClass.ByHand,
+            TriageRank = isClean ? 0 : 4,
+            TriageReason = "Few rows, each a plain typo in one field.",
             DataSourceLabel = $"IUCN Red List {ctx.Release} (CSV export)",
             Blurb = "Assessments whose recorded scientific name does not agree with the separate genus, species, and infrarank fields it should be built from.",
             Summary =

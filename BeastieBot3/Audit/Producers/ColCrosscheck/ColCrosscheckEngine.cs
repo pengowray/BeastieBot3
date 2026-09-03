@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
@@ -58,29 +58,30 @@ internal sealed class ColCrosscheckEngine {
     }
 
     // Runs over the not-found bucket alone, after the main pass. That bucket is a few hundred rows
-    // out of nearly two hundred thousand, so a handful of indexed queries each costs nothing, and
-    // the page it feeds is the one whose claim ("no route into CoL") these sources can qualify.
+    // out of nearly two hundred thousand, so a handful of indexed queries each costs nothing. A row
+    // where Wikidata or Wikipedia supplies a name CoL does hold moves to its own bucket (ViaWiki):
+    // that row has a lead to check, which is a different job from the plain not-found list.
     private void AddOtherSources(ColCrosscheckData data, CancellationToken ct) {
         if (_otherSources is null || data.NotFound.Count == 0) {
             return;
         }
         data.OtherSourcesChecked = true;
 
+        var remaining = new List<AuditFinding>(data.NotFound.Count);
         foreach (var finding in data.NotFound) {
             ct.ThrowIfCancellationRequested();
             if (finding.TaxonId is not { } taxonId) {
+                remaining.Add(finding);
                 continue;
             }
             var hit = _otherSources.Lookup(taxonId, finding.ScientificName, ct);
             if (hit.WikidataId is not null) {
                 SetExtra(finding, "wikidataId", hit.WikidataId);
                 SetExtra(finding, "wikidataUrl", OtherSourceIndex.WikidataUrl(hit.WikidataId));
-                data.OtherSourcesWithWikidata++;
             }
             if (hit.WikipediaTitle is not null) {
                 SetExtra(finding, "wikipediaTitle", hit.WikipediaTitle);
                 SetExtra(finding, "wikipediaUrl", OtherSourceIndex.WikipediaUrl(hit.WikipediaTitle));
-                data.OtherSourcesWithWikipedia++;
             }
 
             // The one that closes the gap: a name from those sources that CoL does record. An
@@ -100,17 +101,27 @@ internal sealed class ColCrosscheckEngine {
                 }
             }
             if (best is null || bestName is null) {
+                if (hit.WikidataId is not null) {
+                    data.OtherSourcesWithWikidata++;
+                }
+                if (hit.WikipediaTitle is not null) {
+                    data.OtherSourcesWithWikipedia++;
+                }
+                remaining.Add(finding);
                 continue;
             }
 
+            finding.ReportId = ColCrosscheckProducer.ViaWikiId;
             SetExtra(finding, "otherName", bestName);
             SetExtra(finding, "otherNameColStatus", ColStatusLabel(best.Status));
             SetExtra(finding, "colUrl", ColUrls.Taxon(best.Id));
             finding.Notes.Add(IsAcceptedStatus(best.Status)
-                ? $"{bestName}, a name for this taxon on Wikidata or Wikipedia, is an accepted name in the Catalogue of Life."
-                : $"{bestName}, a name for this taxon on Wikidata or Wikipedia, is in the Catalogue of Life as a synonym.");
-            data.OtherSourcesWithColName++;
+                ? $"{bestName}, recorded for this taxon on Wikidata or Wikipedia, is an accepted name in the Catalogue of Life."
+                : $"{bestName}, recorded for this taxon on Wikidata or Wikipedia, is a synonym in the Catalogue of Life.");
+            data.ViaWiki.Add(finding);
         }
+        data.NotFound.Clear();
+        data.NotFound.AddRange(remaining);
     }
 
     // --- assessed taxa (species, subspecies, varieties) --------------------------------------
@@ -748,6 +759,7 @@ internal sealed class ColCrosscheckEngine {
 // non-empty bucket into an AuditReport page.
 internal sealed class ColCrosscheckData {
     public List<AuditFinding> NotFound { get; } = new();
+    public List<AuditFinding> ViaWiki { get; } = new();
     public List<AuditFinding> SynonymLead { get; } = new();
     public List<AuditFinding> CloseMatch { get; } = new();
     public List<AuditFinding> Synonym { get; } = new();
@@ -759,10 +771,10 @@ internal sealed class ColCrosscheckData {
     public int AssessedCompared { get; set; }
     public int HigherTaxaCompared { get; set; }
 
-    // Whether the Wikidata/Wikipedia caches were read at all, and what they turned up for the
-    // not-found list. False means the check did not run, which is not the same as finding nothing.
+    // Whether the Wikidata/Wikipedia caches were read at all, and what they turned up for the rows
+    // that stay on the not-found list (rows with a CoL name via those sources are in ViaWiki).
+    // False means the check did not run, which is not the same as finding nothing.
     public bool OtherSourcesChecked { get; set; }
     public int OtherSourcesWithWikidata { get; set; }
     public int OtherSourcesWithWikipedia { get; set; }
-    public int OtherSourcesWithColName { get; set; }
 }

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.Globalization;
@@ -45,11 +45,10 @@ internal sealed class RedlistAuditSiteCommand : Command<RedlistAuditSiteCommand.
         public string? Contact { get; init; }
     }
 
-    // Page order on the index is the order below, most actionable first. Most producers emit one
+    // Page order on the index is the order below within each index section. Most producers emit one
     // report; ColCrosscheckProducer emits several from one pass, so everything is wrapped to the
-    // set-producer contract and iterated uniformly. The one report whose position this list cannot
-    // express is "names not found in CoL", which comes out of the middle of the CoL set and belongs
-    // last; Execute moves it there.
+    // set-producer contract and iterated uniformly. The CoL set is ordered by FamilyRank wherever it
+    // is listed.
     private static IReadOnlyList<IAuditReportSetProducer> Producers() => new IAuditReportSetProducer[] {
         new SingleReportProducer(new EmptyScopeProducer()),
         new SingleReportProducer(new FailedAssessmentsProducer()),
@@ -74,7 +73,8 @@ internal sealed class RedlistAuditSiteCommand : Command<RedlistAuditSiteCommand.
         var limit = settings.Limit > 0 ? settings.Limit : (long?)null;
 
         var commentary = LoadCommentary(paths);
-        AnsiConsole.MarkupLineInterpolated($"[grey]Release:[/] {release}    [grey]commentary:[/] {commentary.SourcePath ?? "(none)"}");
+        var releaseCounts = LoadReleaseCounts(paths);
+        AnsiConsole.MarkupLineInterpolated($"[grey]Release:[/] {release}    [grey]commentary:[/] {commentary.SourcePath ?? "(none)"}    [grey]release counts:[/] {releaseCounts.SourcePath ?? "(none)"}");
 
         var outputDir = ResolveOutputDir(paths, settings.OutputDir);
 
@@ -118,12 +118,25 @@ internal sealed class RedlistAuditSiteCommand : Command<RedlistAuditSiteCommand.
             Reports = reports,
             Config = config,
             CommentarySource = commentary,
+            PreviousRelease = releaseCounts.PreviousRelease(release),
+            ReleaseCounts = releaseCounts,
         };
 
         AuditSiteRenderer.Write(document, outputDir, line => AnsiConsole.MarkupLineInterpolated($"[grey]{Markup.Escape(line)}[/]"));
 
         AnsiConsole.MarkupLineInterpolated($"[green]Audit site written to:[/] {outputDir}");
         AnsiConsole.MarkupLineInterpolated($"[grey]Open:[/] {Path.Combine(outputDir, "index.html")}");
+
+        // The counts block for this release, for release-counts.yml. Not written automatically: a
+        // --limit run would record partial counts as history.
+        var block = AuditReleaseCounts.FormatBlock(release, reports.Select(r => (r.Id, r.Count)));
+        File.WriteAllText(Path.Combine(outputDir, "release-counts.yml"), block + Environment.NewLine);
+        if (limit is null) {
+            AnsiConsole.MarkupLineInterpolated($"[grey]Row counts for release-counts.yml (also saved as {Path.Combine(outputDir, "release-counts.yml")}):[/]");
+            AnsiConsole.WriteLine(block);
+        } else {
+            AnsiConsole.MarkupLine("[grey]Row counts not printed: --limit was set, so they are partial.[/]");
+        }
         return 0;
     }
 
@@ -187,6 +200,16 @@ internal sealed class RedlistAuditSiteCommand : Command<RedlistAuditSiteCommand.
             return AuditCommentary.Load(rules.BuildOutputRulesDir);
         } catch {
             return AuditCommentary.Empty;
+        }
+    }
+
+    private static AuditReleaseCounts LoadReleaseCounts(PathsService paths) {
+        try {
+            var rules = RulesPaths.Resolve(paths);
+            var counts = AuditReleaseCounts.Load(rules.SourceRulesDir);
+            return counts.SourcePath is not null ? counts : AuditReleaseCounts.Load(rules.BuildOutputRulesDir);
+        } catch {
+            return AuditReleaseCounts.Empty;
         }
     }
 

@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -39,12 +39,12 @@ internal sealed class SynonymNameNotesProducer : IAuditReportProducer {
             Id = Id,
             SectionId = "text",
             Title = "Notes written inside synonym names",
-            Breakage = BreakageClass.FixableData,
+            Action = ActionClass.Policy,
             DataSourceLabel = "IUCN API (taxon synonyms)",
             Blurb = "Synonyms whose name field contains a bracketed nomenclatural note, such as [orth. error], alongside the name itself.",
             Summary =
                 "The table below lists synonyms whose name field contains a nomenclatural note in square brackets alongside the name itself, such as " +
-                "`Eumeces schneideri (Daudin, 1802) [orth. error]`. Each row also shows the name on its own. " +
+                "`Eumeces schneideri (Daudin, 1802) [orth. error]`. The Synonym (fixed) column shows the name with the note removed, and Removed text shows the note. " +
                 "The scientific name column shows the accepted taxon the synonym belongs to.\n\n" +
                 "Not every square bracket is treated as a note. Three standard uses of brackets are counted in the summary but not listed: " +
                 "an inferred publication year (`[1803]`), an inferred or attributed author (`Anonymous [Bennett], 1830`), " +
@@ -52,15 +52,16 @@ internal sealed class SynonymNameNotesProducer : IAuditReportProducer {
                 "### Why it matters\n\n" +
                 "A note in the name field means the field contains more than just the name. " +
                 "A search index, an export, or another database that matches on the name treats the note as part of the text, so the lookup fails. " +
-                "Listing the notes together also shows a second problem: the same note is spelled several ways (the second table below).\n\n" +
+                "The same note is also spelled several ways; the second table lists them.\n\n" +
                 "### Suggestion\n\n" +
-                "Keep the note, but hold it in a field of its own so the name field holds only the name. " +
+                "Move each note to a field of its own, so the name field holds only the name. " +
                 "Settle on one spelling per note: the variants table shows which ones currently have several.",
             Columns = new List<AuditColumn> {
                 AuditColumns.ScientificName("Accepted taxon"),
+                AuditColumns.Field(),
                 AuditColumns.CurrentValue("Synonym (current)", AuditColumnType.Whitespace),
-                AuditColumns.SuggestedValue("Name without the note", AuditColumnType.Code),
-                AuditColumns.IssueType("Note"),
+                AuditColumns.SuggestedValue("Synonym (fixed)", AuditColumnType.Code),
+                AuditColumns.IssueType("Removed text"),
                 AuditColumns.Status(),
                 AuditColumns.Class(),
                 AuditColumns.Family(),
@@ -104,7 +105,7 @@ internal sealed class SynonymNameNotesProducer : IAuditReportProducer {
             Detail = labels,
         };
         if (r.Suggested is null) {
-            finding.Notes.Add("Nothing is left once the note is removed, so no name can be suggested.");
+            finding.Notes.Add("The field holds only the note, so there is no name to keep.");
         }
         return finding;
     }
@@ -121,7 +122,7 @@ internal sealed class SynonymNameNotesProducer : IAuditReportProducer {
 
         var distinct = Math.Max(0, rows.Count - 1);
         return new AuditSummaryTable {
-            Title = "Notes by text",
+            Title = "Notes found",
             Note = $"{distinct:N0} distinct notes across {notes.Count:N0} occurrences, out of {scan.TotalSynonyms:N0} synonym names examined. " +
                    "Occurrences can outnumber the rows above because a synonym can have more than one note. " +
                    $"Standard bracket uses are not counted here: {scan.DateBracketCount:N0} bracketed publication years and {scan.AuthorBracketCount:N0} bracketed author attributions or in-name expansions.",

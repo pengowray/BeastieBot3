@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -50,7 +50,9 @@ internal sealed class FailedAssessmentsProducer : IAuditReportProducer {
             Id = Id,
             SectionId = "records",
             Title = only404 ? "Historical assessments missing from the API" : "Assessment ids that return an error",
-            Breakage = BreakageClass.Breaking,
+            Action = ActionClass.ByHand,
+            TriageRank = 3,
+            TriageReason = "The API returns 404 for each of these. Few rows, each unambiguous.",
             DataSourceLabel = "IUCN API, with species and taxonomy from the CSV export",
             Blurb = only404
                 ? "Historical assessment ids that appear in a taxon's API record but return HTTP 404 (not found) when requested directly."

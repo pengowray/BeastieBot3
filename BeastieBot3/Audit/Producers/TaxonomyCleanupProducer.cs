@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using System.Linq;
 using BeastieBot3.Audit.Model;
 using BeastieBot3.Infrastructure;
@@ -63,8 +63,11 @@ internal sealed class TaxonomyCleanupProducer : IAuditReportProducer {
         return new AuditReport {
             Id = Id,
             SectionId = "text",
-            Title = "Whitespace and marker cleanup in taxonomy fields",
-            Breakage = BreakageClass.FixableData,
+            Title = "Stray whitespace in taxonomy fields",
+            Action = ActionClass.Mechanical,
+            CsvIsPatch = true,
+            TriageRank = 2,
+            TriageReason = "Every row has a replacement value; the CSV can be applied as-is.",
             DataSourceLabel = $"IUCN Red List {ctx.Release} (CSV export)",
             Blurb = "Taxonomy field values with stray whitespace (leading, trailing, doubled, or non-breaking), each with a suggested cleaned-up value.",
             Summary =
@@ -78,7 +81,7 @@ internal sealed class TaxonomyCleanupProducer : IAuditReportProducer {
             Columns = new List<AuditColumn> {
                 AuditColumns.ScientificName(),
                 AuditColumns.Field(),
-                AuditColumns.IssueType("Cleanup"),
+                AuditColumns.IssueType("Problem"),
                 AuditColumns.CurrentValue("Current value", AuditColumnType.Whitespace),
                 AuditColumns.SuggestedValue("Suggested value", AuditColumnType.Code),
                 AuditColumns.Status(),
@@ -92,7 +95,7 @@ internal sealed class TaxonomyCleanupProducer : IAuditReportProducer {
             Findings = ordered,
             SummaryTables = new List<AuditSummaryTable> {
                 issueTypeSummary,
-                new() { Title = "By field", Note = "Which taxonomy field each flagged value sits in.", Headers = new[] { "Field", "Rows" }, Rows = byField, NumericColumns = new[] { 1 } },
+                new() { Title = "By field", Note = "The taxonomy field each listed value is in.", Headers = new[] { "Field", "Rows" }, Rows = byField, NumericColumns = new[] { 1 } },
             },
             GroupLevels = AuditGroups.ByClass,
         };
@@ -120,9 +123,9 @@ internal sealed class TaxonomyCleanupProducer : IAuditReportProducer {
             .ToList();
         rows.Add(new[] { "Total (distinct rows)", findings.Count.ToString("N0") });
         return new AuditSummaryTable {
-            Title = "Issues by type",
+            Title = "By kind of problem",
             Note = "Each kind is counted once per field row; because one field can have several, the kinds add up to more than the distinct total.",
-            Headers = new[] { "Issue", "Rows" }, Rows = rows, NumericColumns = new[] { 1 },
+            Headers = new[] { "Problem", "Rows" }, Rows = rows, NumericColumns = new[] { 1 },
         };
     }
 

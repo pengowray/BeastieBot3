@@ -65,6 +65,9 @@
     <None Update="rules\audit\commentary.yml">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>
+    <None Update="rules\audit\release-counts.yml">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+    </None>
     <None Update="rules\wikipedia\templates\amphibians-status.mustache">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </None>

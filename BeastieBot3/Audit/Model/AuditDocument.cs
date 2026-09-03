@@ -25,4 +25,9 @@ internal sealed class AuditDocument {
     public required IReadOnlyList<AuditReport> Reports { get; init; }
     public AuditSiteConfig Config { get; init; } = new();
     public AuditCommentary? CommentarySource { get; init; }
+
+    // Row counts from the most recent earlier release in release-counts.yml, for the index's
+    // "Since <release>" column. Null when no earlier release is recorded.
+    public string? PreviousRelease { get; init; }
+    public AuditReleaseCounts? ReleaseCounts { get; init; }
 }

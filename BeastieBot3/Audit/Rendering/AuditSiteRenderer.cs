@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
@@ -8,7 +8,7 @@ using BeastieBot3.Audit.Model;
 
 // Turns an AuditDocument into a self-contained static bundle: index, one detail page per report
 // (with a short embedded preview that links out to the full list and the CSV), one full-list page
-// per report (split into a simple per-group tree when very large), a methodology page, the CSV
+// per report, an entry page for each report family (the Catalogue of Life crosscheck), the CSV
 // downloads, and the shared assets. Every listing is rendered by HtmlListRenderer, so the look and
 // the sort/filter behaviour are identical across the whole site.
 
@@ -38,7 +38,11 @@ internal static class AuditSiteRenderer {
         }
 
         File.WriteAllText(Path.Combine(outputDir, "index.html"), BuildIndex(doc), Utf8NoBom);
-        File.WriteAllText(Path.Combine(outputDir, "methodology.html"), BuildMethodology(doc), Utf8NoBom);
+        foreach (var family in FamilyHeadings) {
+            if (doc.Reports.Any(r => r.FamilyId == family.Key)) {
+                File.WriteAllText(Path.Combine(outputDir, $"{family.Key}-crosscheck.html"), BuildFamilyPage(doc, family.Key), Utf8NoBom);
+            }
+        }
     }
 
     // -- index -----------------------------------------------------------------------------
@@ -46,18 +50,11 @@ internal static class AuditSiteRenderer {
     private static string BuildIndex(AuditDocument doc) {
         var sb = new StringBuilder();
 
-        sb.Append("<div class=\"disclaimer\">\n");
-        sb.Append("<strong>This is an unofficial, independent compilation.</strong> ");
-        sb.Append("It is not produced, reviewed, or endorsed by the IUCN or the IUCN Red List. ");
-        sb.Append("It gathers observations noticed while preparing Red List data for use on Wikipedia and Wikidata, ");
-        sb.Append("and it is shared in the hope that some are useful for a future release.\n");
-        sb.Append("</div>\n");
-
         sb.Append("<section>\n");
-        sb.Append("<p class=\"lede\">This page collects observations about the data in IUCN Red List version ");
-        sb.Append($"{HtmlText.Escape(doc.Release)}. The tables below group the observations; each links to a description with a short preview, ");
-        sb.Append("a full sortable list, and a CSV download. The intent is to help with data review for the next release. ");
-        sb.Append("Every observation may be incomplete or mistaken.</p>\n");
+        sb.Append("<p class=\"lede\">Observations about the data in IUCN Red List version ");
+        sb.Append($"{HtmlText.Escape(doc.Release)}, gathered while preparing Red List data for Wikipedia and Wikidata and shared for the next release's data review. ");
+        sb.Append("Each observation links to a description with a short preview, a full sortable list, and a CSV download. ");
+        sb.Append("It may be incomplete or contain errors.</p>\n");
 
         sb.Append("<dl class=\"meta-grid\">\n");
         sb.Append($"<dt>Release reviewed</dt><dd>IUCN Red List version {HtmlText.Escape(doc.Release)}</dd>\n");
@@ -66,37 +63,59 @@ internal static class AuditSiteRenderer {
             sb.Append($"<dt>{HtmlText.Escape(src.Name)}</dt><dd>{HtmlText.Escape(src.Detail)}</dd>\n");
         }
         sb.Append("</dl>\n");
-        sb.Append("<p><a href=\"methodology.html\">How this was put together, how to read the lists, and its caveats →</a></p>\n");
-        sb.Append($"<p class=\"legend\">{HtmlText.Escape(TypeLegend)}</p>\n");
         sb.Append("</section>\n");
 
+        AppendTriage(sb, doc);
         AppendIndexSections(sb, doc);
 
         return AuditPageLayout.Page(doc, "", null, sb.ToString());
     }
 
+    // The short list at the top: the reports worth doing before the next release, ranked by the
+    // producers (TriageRank) with live counts and the change since the previous release. The
+    // release-specific commentary for report "index" prints above it when present.
+    private static void AppendTriage(StringBuilder sb, AuditDocument doc) {
+        var triage = doc.Reports.Where(r => r.TriageRank > 0 && r.Count > 0).OrderBy(r => r.TriageRank).Take(5).ToList();
+        if (triage.Count == 0) {
+            return;
+        }
+        sb.Append("<section>\n<h2>Start here</h2>\n");
+        sb.Append("<p>The observations most worth acting on before the next release. The full catalogue follows.</p>\n");
+        AppendCommentary(sb, doc, "index");
+        sb.Append("<ol class=\"triage\">\n");
+        foreach (var r in triage) {
+            sb.Append("<li>");
+            sb.Append($"<a href=\"{r.Id}.html\">{HtmlText.Escape(r.Title)}</a> ");
+            sb.Append($"<span class=\"triage-count\">({r.Count:N0} rows");
+            var since = SinceText(doc, r);
+            if (since.Text.Length > 0) {
+                sb.Append($", {HtmlText.Escape(since.Text)}");
+            }
+            sb.Append(")</span> ");
+            sb.Append(AuditPageLayout.ActionBadge(r.Action));
+            if (!string.IsNullOrWhiteSpace(r.TriageReason)) {
+                sb.Append($"<div class=\"report-desc\">{HtmlText.Escape(r.TriageReason)}</div>");
+            }
+            sb.Append("</li>\n");
+        }
+        sb.Append("</ol>\n</section>\n");
+    }
+
     // The index in three blocks, in this order. Boundaries follow what the observation is about, not
-    // what the Type chip says, because that is what tells a reader whether a block is theirs. The
-    // crosscheck block repeats the order of the "you are here" table on each of its nine pages, so
-    // the reader learns one order and meets it twice. That order is FamilyRank, by how likely a row is
-    // to need a change, not by how close it is to a clean match: leading with the page whose own title
-    // says "minor" buried the ones worth opening.
+    // what the Action chip says, because that is what tells a reader whether a block is theirs. The
+    // crosscheck block lists only its two highest-yield pages here and sends the reader to the
+    // crosscheck's own entry page for the rest: nine pages of two catalogues disagreeing are not IUCN
+    // errors, and listed beside whitespace findings they read as if the site thought they were.
     private static readonly (string Id, string Heading, string Blurb)[] IndexSections = {
         ("records", "Missing and outdated records",
             "Assessments and taxa that are absent, unreachable in the API, or without a current assessment."),
         ("text", "Text cleanup",
             "Stray whitespace, markup, and values that disagree with each other in name, synonym, and narrative fields."),
         ("col", "Catalogue of Life crosscheck",
-            "Differences found when checking every assessed name against the Catalogue of Life; each is on exactly one of these pages."),
+            "Every assessed name is checked against the Catalogue of Life. The two pages most likely to need a change are listed here."),
     };
 
-    // The chip is also the status light: any report can drop to "Nothing found" in a release, so it
-    // stays on every row even in blocks where today's values happen to be uniform.
-    private const string TypeLegend =
-        "Missing data: a record is absent or incomplete. " +
-        "Text cleanup: stray characters or markup in a field. " +
-        "For review: a difference worth a look, not an error. " +
-        "Nothing found: the check found nothing in this release.";
+    private static readonly string[] ColIndexHighlights = { "col-close-match", "col-classification" };
 
     private static void AppendIndexSections(StringBuilder sb, AuditDocument doc) {
         for (var i = 0; i < IndexSections.Length; i++) {
@@ -109,35 +128,65 @@ internal static class AuditSiteRenderer {
                 reports.AddRange(doc.Reports.Where(r =>
                     r.SectionId is null || !IndexSections.Any(sec => sec.Id == r.SectionId)));
             }
+            string? footer = null;
             if (string.Equals(id, "col", StringComparison.Ordinal)) {
-                reports = reports.OrderBy(r => r.FamilyRank).ToList();
+                var all = reports.Count;
+                var rows = reports.Sum(r => r.Count);
+                reports = reports.Where(r => ColIndexHighlights.Contains(r.Id) || r.FamilyId != "col").OrderBy(r => r.FamilyRank).ToList();
+                footer = $"<p><a href=\"col-crosscheck.html\">All {all} crosscheck pages ({rows:N0} rows), for anyone reconciling the two catalogues &rarr;</a></p>\n";
             }
-            AppendReportTable(sb, reports, heading, blurb);
+            AppendReportTable(sb, doc, reports, heading, blurb, footer);
         }
     }
 
-    private static void AppendReportTable(StringBuilder sb, IReadOnlyList<AuditReport> reports, string heading, string blurb) {
+    private static void AppendReportTable(StringBuilder sb, AuditDocument doc, IReadOnlyList<AuditReport> reports, string heading, string blurb, string? footerHtml = null) {
         if (reports.Count == 0) {
             return;
         }
+        var since = doc.PreviousRelease is null ? "" : $"<th class=\"since\">Since {HtmlText.Escape(doc.PreviousRelease)}</th>";
         sb.Append("<section>\n");
         sb.Append($"<h2>{HtmlText.Escape(heading)}</h2>\n");
         sb.Append($"<p>{HtmlText.Escape(blurb)}</p>\n");
-        sb.Append("<table class=\"index\">\n<thead><tr><th>Observation</th><th class=\"kind\">Type</th><th class=\"count\">Rows</th><th>Open</th></tr></thead>\n<tbody>\n");
+        sb.Append($"<table class=\"index\">\n<thead><tr><th>Observation</th><th class=\"kind\">Action</th><th class=\"count\">Rows</th>{since}<th>Open</th></tr></thead>\n<tbody>\n");
         foreach (var r in reports) {
             sb.Append("<tr>\n");
             sb.Append($"<td><div class=\"report-title\"><a href=\"{r.Id}.html\">{HtmlText.Escape(r.Title)}</a></div>");
             sb.Append($"<div class=\"report-desc\">{HtmlText.Escape(IndexBlurb(r))}</div></td>\n");
-            sb.Append($"<td class=\"kind\">{AuditPageLayout.BreakageBadge(r.Breakage)}</td>\n");
+            sb.Append($"<td class=\"kind\">{AuditPageLayout.ActionBadge(r.Action)}</td>\n");
             sb.Append($"<td class=\"count\">{r.Count:N0}</td>\n");
+            if (doc.PreviousRelease is not null) {
+                var change = SinceText(doc, r);
+                sb.Append($"<td class=\"since {change.Css}\">{HtmlText.Escape(change.Text)}</td>\n");
+            }
             sb.Append("<td class=\"links\">");
             sb.Append($"<a href=\"{r.Id}.html\">details</a>");
             if (r.Findings.Count > 0) {
-                sb.Append($" · <a href=\"{r.Id}-list.html\">full list</a> · <a href=\"csv/{r.Id}.csv\">csv</a>");
+                sb.Append($" &middot; <a href=\"{r.Id}-list.html\">full list</a> &middot; <a href=\"csv/{r.Id}.csv\">csv</a>");
             }
             sb.Append("</td>\n</tr>\n");
         }
-        sb.Append("</tbody>\n</table>\n</section>\n");
+        sb.Append("</tbody>\n</table>\n");
+        if (footerHtml is not null) {
+            sb.Append(footerHtml);
+        }
+        sb.Append("</section>\n");
+    }
+
+    // The change since the previous release, as a short phrase. Blank when that release recorded no
+    // count for the report, which is not the same as zero.
+    private static (string Text, string Css) SinceText(AuditDocument doc, AuditReport report) {
+        if (doc.PreviousRelease is null || doc.ReleaseCounts?.Count(doc.PreviousRelease, report.Id) is not { } previous) {
+            return ("", "");
+        }
+        if (report.Count == previous) {
+            return ("unchanged", "");
+        }
+        if (report.Count == 0) {
+            return ($"fixed (was {previous:N0})", "down");
+        }
+        return report.Count > previous
+            ? ($"up from {previous:N0}", "up")
+            : ($"down from {previous:N0}", "down");
     }
 
     // -- report detail ---------------------------------------------------------------------
@@ -145,7 +194,7 @@ internal static class AuditSiteRenderer {
     private static void WriteReportPage(AuditDocument doc, AuditReport report, string outputDir) {
         var sb = new StringBuilder();
         sb.Append("<section>\n");
-        sb.Append($"<h2>{HtmlText.Escape(report.Title)} {AuditPageLayout.BreakageBadge(report.Breakage, inHeading: true)}</h2>\n");
+        sb.Append($"<h2>{HtmlText.Escape(report.Title)} {AuditPageLayout.ActionBadge(report.Action, inHeading: true)}</h2>\n");
         sb.Append($"<p class=\"report-desc\"><small>Source: {HtmlText.Escape(report.DataSourceLabel)}");
         if (report.Findings.Count > 0) {
             sb.Append($" · {report.Findings.Count:N0} rows");
@@ -154,7 +203,7 @@ internal static class AuditSiteRenderer {
         sb.Append($"<div class=\"description\">{HtmlText.Markdown(report.Summary)}</div>\n");
 
         AppendFamilyTable(sb, doc, report);
-        AppendCommentary(sb, doc, report);
+        AppendCommentary(sb, doc, report.Id);
 
         foreach (var table in report.SummaryTables) {
             AppendSummaryTable(sb, table);
@@ -171,6 +220,7 @@ internal static class AuditSiteRenderer {
             sb.Append($"<a href=\"{report.Id}-list.html\">View the full list →</a>");
             sb.Append($" &nbsp; <a href=\"csv/{report.Id}.csv\">Download CSV ({report.CsvRows.Count:N0} rows)</a>");
             sb.Append("</p>\n");
+            sb.Append(CsvNote(report));
         } else if (report.SummaryTables.Count == 0) {
             sb.Append("<p>No observations of this kind in the current release.</p>\n");
         }
@@ -184,10 +234,11 @@ internal static class AuditSiteRenderer {
 
     // A "you are here" table for a group of reports that partition one comparison. Its counts come
     // from the document, so they always match the pages they link to. Placed after the report's own
-    // description, where it reads as the expansion of the sibling pages the description names.
+    // description, where it reads as the expansion of the sibling pages the description names. The
+    // same table, with a longer introduction, is the family's entry page.
     private static readonly Dictionary<string, (string Heading, string Intro)> FamilyHeadings = new() {
         ["col"] = ("The Catalogue of Life crosscheck",
-            "Every assessed name is checked against the Catalogue of Life; each difference found is listed on exactly one of the pages below."),
+            "Every assessed name is checked against the Catalogue of Life; each difference found is listed on exactly one of the pages below. Pages are ordered by how likely a row is to need a change."),
     };
 
     private static void AppendFamilyTable(StringBuilder sb, AuditDocument doc, AuditReport report) {
@@ -198,24 +249,68 @@ internal static class AuditSiteRenderer {
         if (family.Count < 2) {
             return;
         }
-        sb.Append($"<h3>{HtmlText.Escape(heading.Heading)}</h3>\n");
+        sb.Append($"<h3><a href=\"{report.FamilyId}-crosscheck.html\">{HtmlText.Escape(heading.Heading)}</a></h3>\n");
         sb.Append($"<p>{HtmlText.Escape(heading.Intro)}</p>\n");
-        sb.Append("<table class=\"summary family\">\n<thead><tr><th>Page</th><th class=\"num\">Names</th><th>What it lists</th></tr></thead>\n<tbody>\n");
-        foreach (var r in family) {
-            var here = r.Id == report.Id;
+        AppendFamilyRows(sb, doc, family, report.Id);
+    }
+
+    private static void AppendFamilyRows(StringBuilder sb, AuditDocument doc, IReadOnlyList<AuditReport> family, string? hereId) {
+        var since = doc.PreviousRelease is null ? "" : $"<th class=\"since\">Since {HtmlText.Escape(doc.PreviousRelease)}</th>";
+        sb.Append($"<table class=\"summary family\">\n<thead><tr><th>Page</th><th class=\"kind\">Action</th><th class=\"num\">Names</th>{since}<th>What it lists</th></tr></thead>\n<tbody>\n");
+        var appendixStarted = false;
+        foreach (var r in family.OrderBy(r => r.IsAppendix ? 1 : 0).ThenBy(r => r.FamilyRank)) {
+            if (r.IsAppendix && !appendixStarted) {
+                appendixStarted = true;
+                var span = doc.PreviousRelease is null ? 4 : 5;
+                sb.Append($"<tr class=\"appendix-head\"><th colspan=\"{span}\">Appendix</th></tr>\n");
+            }
+            var here = r.Id == hereId;
             sb.Append(here ? "<tr class=\"here\">" : "<tr>");
             sb.Append(here
                 ? $"<td>{HtmlText.Escape(r.Title)} <span class=\"here-tag\">this page</span></td>"
                 : $"<td><a href=\"{r.Id}.html\">{HtmlText.Escape(r.Title)}</a></td>");
+            sb.Append($"<td class=\"kind\">{AuditPageLayout.ActionBadge(r.Action)}</td>");
             sb.Append($"<td class=\"num\">{r.Count:N0}</td>");
+            if (doc.PreviousRelease is not null) {
+                var change = SinceText(doc, r);
+                sb.Append($"<td class=\"since {change.Css}\">{HtmlText.Escape(change.Text)}</td>");
+            }
             sb.Append($"<td>{HtmlText.Escape(r.FamilyScope ?? string.Empty)}</td>");
             sb.Append("</tr>\n");
         }
         sb.Append("</tbody>\n</table>\n");
     }
 
-    private static void AppendCommentary(StringBuilder sb, AuditDocument doc, AuditReport report) {
-        var entries = doc.CommentarySource?.ForReport(report.Id, doc.Release) ?? (IReadOnlyList<CommentaryEntry>)Array.Empty<CommentaryEntry>();
+    // The entry page for a report family: for the crosscheck, the page aimed at someone reconciling
+    // the two catalogues rather than reviewing IUCN data. It says what the comparison is and is not,
+    // then lists every page with the appendix set apart.
+    private static string BuildFamilyPage(AuditDocument doc, string familyId) {
+        var heading = FamilyHeadings[familyId];
+        var family = doc.Reports.Where(r => r.FamilyId == familyId).OrderBy(r => r.FamilyRank).ToList();
+        var sb = new StringBuilder();
+        sb.Append("<section>\n");
+        sb.Append($"<h2>{HtmlText.Escape(heading.Heading)}</h2>\n");
+        var source = family.FirstOrDefault()?.DataSourceLabel;
+        if (source is not null) {
+            sb.Append($"<p class=\"report-desc\"><small>Source: {HtmlText.Escape(source)} &middot; {family.Sum(r => r.Count):N0} rows across {family.Count} pages</small></p>\n");
+        }
+        sb.Append("<div class=\"description\">\n");
+        sb.Append("<p>These pages compare the scientific names and classification in the IUCN Red List with the Catalogue of Life (CoL). ");
+        sb.Append("The two are independent catalogues with different sources and update cycles, and the Red List does not follow CoL, so a difference is not an error in either. ");
+        sb.Append("The lists are for anyone reconciling the two: matching Red List assessments to CoL records, or checking where the catalogues have diverged.</p>\n");
+        sb.Append("<p>Every assessed IUCN name (species, subspecies, and varieties, excluding subpopulations) is looked up in CoL by exact name, then by near spelling, then through IUCN's own synonym list, and finally through names recorded on Wikidata and English Wikipedia. ");
+        sb.Append("Higher-rank names (genus to class) are compared separately. Each difference appears on exactly one page.</p>\n");
+        sb.Append("</div>\n");
+        AppendCommentary(sb, doc, $"{familyId}-crosscheck");
+        sb.Append("<h3>Pages</h3>\n");
+        AppendFamilyRows(sb, doc, family, hereId: null);
+        sb.Append("</section>\n");
+        var crumbs = AuditPageLayout.Crumbs(("Home", "index.html"), (heading.Heading, null));
+        return AuditPageLayout.Page(doc, heading.Heading, crumbs, sb.ToString());
+    }
+
+    private static void AppendCommentary(StringBuilder sb, AuditDocument doc, string reportId) {
+        var entries = doc.CommentarySource?.ForReport(reportId, doc.Release) ?? (IReadOnlyList<CommentaryEntry>)Array.Empty<CommentaryEntry>();
         foreach (var entry in entries) {
             sb.Append("<div class=\"commentary\">\n");
             if (!string.IsNullOrWhiteSpace(entry.Title)) {
@@ -285,46 +380,21 @@ internal static class AuditSiteRenderer {
         File.WriteAllText(Path.Combine(outputDir, $"{report.Id}-list.html"), html, Utf8NoBom);
     }
 
-    // -- methodology -----------------------------------------------------------------------
-
-    private static string BuildMethodology(AuditDocument doc) {
-        var sb = new StringBuilder();
-        sb.Append("<section>\n<h2>How this was put together</h2>\n");
-        sb.Append("<p>The observations here come from two public IUCN sources: the CSV export of IUCN Red List ");
-        sb.Append($"version {HtmlText.Escape(doc.Release)} downloaded from iucnredlist.org, and the public IUCN API (api.iucnredlist.org). ");
-        sb.Append("Each report names which of the two it reads under <em>Source</em>. Some reports compare the Red List against the ");
-        sb.Append("Catalogue of Life as a taxonomic reference; the Catalogue of Life release used is named on those pages. ");
-        sb.Append("The observations were gathered while preparing Red List data for use on Wikipedia and Wikidata, ");
-        sb.Append("where small differences in names, formatting, and coverage surface naturally.</p>\n");
-
-        sb.Append("<h3>How to read the lists</h3>\n");
-        sb.Append("<ul>\n");
-        sb.Append("<li>Each report has a short preview on its page and a full sortable, filterable list behind the <em>full list</em> link.</li>\n");
-        sb.Append("<li>Rows are ordered with the entries most likely to help first: full species before subspecies and varieties, and current assessments before historical ones where that information is available.</li>\n");
-        sb.Append("<li>Where a row maps to a Red List page, the scientific name links to it.</li>\n");
-        sb.Append("<li>Status badge colours are only a reading aid and are not the official IUCN category colours.</li>\n");
-        sb.Append("</ul>\n");
-
-        sb.Append("<h3>Scope of a \"species\"</h3>\n");
-        sb.Append("<p>Where a report counts species, it means global, species-rank assessments: rows with no infraspecific ");
-        sb.Append("rank (subspecies or variety) and no subpopulation or regional scope. Subspecies, varieties, ");
-        sb.Append("subpopulations, and regional assessments are listed separately where relevant.</p>\n");
-
-        sb.Append("<h3>Caveats</h3>\n");
-        sb.Append("<ul>\n");
-        sb.Append("<li>Counts are computed from the public CSV export and API data and may differ slightly from figures published elsewhere.</li>\n");
-        sb.Append("<li>Every observation is automated and may be incomplete or mistaken.</li>\n");
-        sb.Append("<li>Only names, classification, formatting, and coverage are examined. The scientific content of assessments (categories, criteria, narratives, ranges, maps, citations) is out of scope.</li>\n");
-        sb.Append("</ul>\n");
-        sb.Append("</section>\n");
-
-        var crumbs = AuditPageLayout.Crumbs(("Home", "index.html"), ("Methodology", null));
-        return AuditPageLayout.Page(doc, "Methodology", crumbs, sb.ToString());
-    }
-
     // -- helpers ---------------------------------------------------------------------------
 
-    // The one-line description under a report title on the index and methodology pages.
+    // Under the CSV link on a report page: whether the file can be applied as it stands, and that
+    // every row carries a stable id.
+    private static string CsvNote(AuditReport report) {
+        var sb = new StringBuilder("<p class=\"patch-note\">");
+        if (report.CsvIsPatch) {
+            sb.Append("The CSV can be applied as-is: every row gives the taxon id, the field, the current value, and the replacement value. ");
+        }
+        sb.Append($"Each row has a stable <code>{AuditCsvWriter.IdColumn}</code>, kept across releases, for citing a row or tracking it in the next release.");
+        sb.Append("</p>\n");
+        return sb.ToString();
+    }
+
+    // The one-line description under a report title on the index.
     // Prefers the purpose-written Blurb; otherwise falls back to the Summary's first
     // paragraph (stopping before any markdown heading), so headings and later sections
     // never leak into the listing.

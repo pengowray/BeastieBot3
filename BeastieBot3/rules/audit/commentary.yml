@@ -7,10 +7,11 @@
 # Fields:
 #   report   the report id (failed-assessments, empty-scope, taxonomy-cleanup, synonym-whitespace,
 #            synonym-markup, synonym-name-notes, common-name-issues, orphan-infraranks, no-latest,
-#            html-consistency,
-#            taxonomy-consistency, count-scopes, field-hygiene, name-changes; and the Catalogue of
-#            Life crosscheck pages col-close-match, col-synonym, col-synonym-higher,
-#            col-classification, col-reorg, col-authority, col-not-found)
+#            html-consistency, taxonomy-consistency, field-hygiene, name-changes; the Catalogue of
+#            Life crosscheck pages col-close-match, col-other-name, col-via-wiki, col-synonym,
+#            col-synonym-higher, col-classification, col-authority, col-accepted-differs, col-reorg,
+#            col-not-found; "index" for the note above the Start here list on the front page; and
+#            "col-crosscheck" for the crosscheck's own entry page)
 #   release  "2025-2" for this release only, or "any" to carry forward to later releases
 #   scope    "report" (shown on the report page) or "finding" (matched to a row by key)
 #   key      required for scope: finding; the AuditFinding.Key, usually "{taxonId}:{issueType}"
@@ -33,18 +34,22 @@
   scope: report
   title: Changes since 2025-2
   markdown: |
-    The scope for these assessments is not global or local, but empty.
-    This was previously a larger problem as the records caused IUCN's API to return an HTTP 500 (Internal
-    Server Error) when one of these assessments was requested. The API now serves them normally, which 
-    resolves a major issue, but the data for these assessments still includes a blank scope, indicating
-    some other underlying problem and causing other issues.
+    Release 2025-2 had 23 of these records; 2026-1 has 52, so new ones are still being created.
+    Several of the new ones have scientific names ending in `_new`, which suggests draft records
+    that reached the published dataset.
 
-    IUCN's 2025-2 release had 23 of these records; 2026-1 has 52, so new ones are still being created.
-    Until late August 2026 the API returned HTTP 500 for every one of them. Between 24 August and
-    1 September 2026 the API began serving them normally, which is great news. The underlying data 
-    issue remains though, the scope for these assessments is still empty, possibly indiciating some 
-    other issue. The assessments may be hidden from some searches, but are available via the API 
-    or by direct link.
+    Until late August 2026 the API returned HTTP 500 (Internal Server Error) for every one of these
+    assessments. Between 24 August and 1 September 2026 the API began serving them normally. The
+    scope field is still blank, so the records still drop out of any scoped search, including the
+    usual "Global" filter; they remain reachable through the API and by direct link.
+
+- report: index
+  release: 2026-1
+  scope: report
+  markdown: |
+    Compared with 2025-2, the blank-scope list more than doubled and the whitespace list is
+    unchanged. The Catalogue of Life crosscheck is on its own page; it records where two catalogues
+    disagree, not errors in either.
 
 - report: failed-assessments
   release: 2026-1

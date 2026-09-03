@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using System.Linq;
 using Microsoft.Data.Sqlite;
 using BeastieBot3.Audit.Model;
@@ -48,7 +48,7 @@ internal sealed class OrphanInfraranksProducer : IAuditReportProducer {
             Id = Id,
             SectionId = "records",
             Title = "Subspecies and varieties with no assessed parent species",
-            Breakage = BreakageClass.Breaking,
+            Action = ActionClass.Policy,
             DataSourceLabel = $"IUCN Red List {ctx.Release} (CSV export)",
             Blurb = "Assessed subspecies and varieties whose parent species has no assessment of its own, leaving them reachable only by their SIS id.",
             Summary =
@@ -147,7 +147,7 @@ ORDER BY i.kingdomName, i.className, i.orderName, i.familyName, i.scientificName
                 Detail = $"Parent species {parent} has no species-level assessment, so this taxon is reachable only by its own SIS id.",
             };
             finding.Extra["parentSpecies"] = parent;
-            finding.Notes.Add("Recoverable only by SIS id (the API cannot discover it through an assessed parent species).");
+            finding.Notes.Add("Reachable in the API only by SIS id; there is no assessed parent species to find it under.");
             rows.Add(finding);
         }
 

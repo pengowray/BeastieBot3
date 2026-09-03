@@ -1,0 +1,10 @@
+# Headline row counts per report per release. The index uses the most recent earlier release here
+# to fill its "Since <release>" column. `redlist audit-site` prints the block for the release it
+# just built; paste it in once that release is final. Reports missing from a release show no change.
+2025-2:
+  empty-scope: 23
+  no-latest: 3898
+  orphan-infraranks: 383
+  taxonomy-cleanup: 1095
+  synonym-whitespace: 11578
+  taxonomy-consistency: 4

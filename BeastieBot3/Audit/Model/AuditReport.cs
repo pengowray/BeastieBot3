@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Linq;
 
@@ -9,15 +9,16 @@ using System.Linq;
 
 namespace BeastieBot3.Audit.Model;
 
-// The one-word "type" badge shown against each report. Exactly four values, so the column can be
-// skimmed: Breaking = something is absent from the published dataset; FixableData = stray characters
-// or text fields that disagree; Advisory = a difference from another source or from expectation,
-// often intentional; Clear = the report ran and found nothing.
-internal enum BreakageClass {
-    Breaking,
-    FixableData,
-    Advisory,
-    Clear,
+// The "action" badge shown against each report: what a reader would do about the rows, not what
+// kind of data they are. Four values so the column can be skimmed. Mechanical = every row carries a
+// replacement value that can be applied by script; ByHand = each row needs a person to look;
+// Policy = a decision about how the dataset is meant to work, not a per-row fix; Informational =
+// nothing to change, listed for reference.
+internal enum ActionClass {
+    Mechanical,
+    ByHand,
+    Policy,
+    Informational,
 }
 
 // A small aggregate table (counts by class, by issue kind, reconciliation, etc.).
@@ -34,7 +35,20 @@ internal sealed class AuditSummaryTable {
 internal sealed class AuditReport {
     public required string Id { get; init; }              // kebab id, also the page/file stem
     public required string Title { get; init; }
-    public BreakageClass Breakage { get; init; } = BreakageClass.Advisory;
+    public ActionClass Action { get; init; } = ActionClass.Informational;
+
+    // Reports listed in the "Start here" block at the top of the index, lowest rank first. 0 (the
+    // default) keeps a report out of that block. TriageReason is the one-line, release-agnostic
+    // reason it is there; release-specific colour belongs in commentary.yml under report "index".
+    public int TriageRank { get; init; }
+    public string? TriageReason { get; init; }
+
+    // Listed under an "Appendix" heading on its family's entry page: complete, but low-yield.
+    public bool IsAppendix { get; init; }
+
+    // True when every CSV row carries taxon id, field, current value, and suggested value, so the
+    // file can be applied as a patch without further interpretation.
+    public bool CsvIsPatch { get; init; }
 
     // Which block of the index the report is listed under. AuditSiteRenderer.IndexSections declares
     // the blocks and their order; a report naming none of them is listed in the last block rather
@@ -53,7 +67,7 @@ internal sealed class AuditReport {
     // page and its higher-rank twin sit together.
     public int FamilyRank { get; init; }
 
-    // One-sentence plain-text description for the index table and the methodology listing.
+    // One-sentence plain-text description for the index table.
     // When unset, the renderer falls back to the first paragraph of Summary.
     public string? Blurb { get; init; }
 

@@ -1,4 +1,4 @@
-﻿using System.Collections.Generic;
+using System.Collections.Generic;
 using System.Linq;
 using BeastieBot3.Audit.Model;
 
@@ -47,7 +47,8 @@ internal sealed class SynonymOtherFormattingProducer : IAuditReportProducer {
             Id = Id,
             SectionId = "text",
             Title = "Synonym names with markup or unusual characters",
-            Breakage = BreakageClass.FixableData,
+            Action = ActionClass.Mechanical,
+            CsvIsPatch = true,
             DataSourceLabel = "IUCN API (taxon synonyms)",
             Blurb = "Synonym names containing HTML markup, stray HTML entities, or typographic quotes, each with a cleaned plain-text suggestion.",
             Summary =
@@ -61,9 +62,10 @@ internal sealed class SynonymOtherFormattingProducer : IAuditReportProducer {
                 "Apply the cleaned suggestion: strip the markup, decode the stray entity, and replace typographic quotes with straight ones. Review case by case where a character may be intentional.",
             Columns = new List<AuditColumn> {
                 AuditColumns.ScientificName("Accepted taxon"),
+                AuditColumns.Field(),
                 AuditColumns.CurrentValue("Synonym (current)", AuditColumnType.Whitespace),
-                AuditColumns.SuggestedValue("Suggested", AuditColumnType.Code),
-                AuditColumns.IssueType("Issue(s)"),
+                AuditColumns.SuggestedValue("Synonym (fixed)", AuditColumnType.Code),
+                AuditColumns.IssueType("Problem"),
                 AuditColumns.Status(),
                 AuditColumns.Class(),
                 AuditColumns.Family(),

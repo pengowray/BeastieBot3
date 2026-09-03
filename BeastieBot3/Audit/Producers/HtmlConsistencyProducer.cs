@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -103,7 +103,7 @@ internal sealed class HtmlConsistencyProducer : IAuditReportProducer {
             SectionId = "text",
             Title = "HTML and plain-text narrative fields that differ",
             Blurb = "Assessments whose narrative text differs between the HTML and plain-text CSV exports, often because heavy redundant markup left the plain-text version empty or truncated.",
-            Breakage = BreakageClass.FixableData,
+            Action = ActionClass.ByHand,
             DataSourceLabel = $"IUCN Red List {ctx.Release} (CSV export)",
             Summary = summary,
             Columns = new List<AuditColumn> {
@@ -115,11 +115,11 @@ internal sealed class HtmlConsistencyProducer : IAuditReportProducer {
                 // on screen (CsvOnly). Headers name the source CSV so the reader knows which file each
                 // side comes from.
                 new AuditColumn {
-                    Key = "currentValue", Header = "assessments.csv text at difference",
+                    Key = "currentValue", Header = "assessments.csv (where they differ)",
                     Type = AuditColumnType.LongText, CsvOnly = true, Value = f => f.CurrentValue,
                 },
                 new AuditColumn {
-                    Key = "suggestedValue", Header = "assessments_with_html.csv text at difference",
+                    Key = "suggestedValue", Header = "assessments_with_html.csv (where they differ)",
                     Type = AuditColumnType.LongText, CsvOnly = true, Value = f => f.SuggestedValue,
                 },
                 new AuditColumn {

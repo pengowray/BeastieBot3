@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -81,7 +81,9 @@ internal sealed class EmptyScopeProducer : IAuditReportProducer {
             Id = Id,
             SectionId = "records",
             Title = "Assessments with no geographic scope",
-            Breakage = BreakageClass.Breaking,
+            Action = ActionClass.ByHand,
+            TriageRank = 1,
+            TriageReason = "Each drops out of every scoped search, including the usual Global filter. Every row needs a look.",
             DataSourceLabel = haveApi && haveCsv
                 ? "IUCN API and CSV export"
                 : haveApi ? "IUCN API" : "IUCN CSV export",
@@ -318,7 +320,7 @@ WHERE a.scopes IS NULL OR TRIM(a.scopes) = ''";
             finding.Notes.Add("The taxon has no other assessment with a scope.");
         }
         if (r.ScientificName?.EndsWith("_new", StringComparison.Ordinal) == true) {
-            finding.Notes.Add("The scientific name ends in \"_new\", which reads like a working record.");
+            finding.Notes.Add("The scientific name ends in \"_new\", which looks like a draft record.");
         }
         return finding;
     }

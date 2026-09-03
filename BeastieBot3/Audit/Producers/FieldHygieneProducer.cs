@@ -1,4 +1,4 @@
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
@@ -80,8 +80,8 @@ internal sealed class FieldHygieneProducer : IAuditReportProducer {
         return new AuditReport {
             Id = Id,
             SectionId = "text",
-            Title = "Text hygiene by taxonomy field",
-            Breakage = BreakageClass.Advisory,
+            Title = "Stray whitespace and unusual characters, by taxonomy field",
+            Action = ActionClass.Informational,
             DataSourceLabel = $"IUCN Red List {ctx.Release} (CSV export, taxonomy file)",
             Blurb = "A field-by-field profile of text irregularities in the taxonomy data, showing which fields have the most stray whitespace or unusual characters.",
             Summary =
@@ -93,7 +93,7 @@ internal sealed class FieldHygieneProducer : IAuditReportProducer {
                 "Use the percentages to prioritise. Fields with a high share of surrounding whitespace, repeated spaces, or non-NFC values are the best candidates for a normalisation pass.",
             Columns = new List<AuditColumn> {
                 AuditColumns.Field(),
-                AuditColumns.IssueType("Characteristic"),
+                AuditColumns.IssueType("Irregularity"),
                 AuditColumns.Custom("affectedRows", "Rows affected", AuditColumnType.Number),
                 AuditColumns.Custom("affectedPct", "% of values", AuditColumnType.Number),
                 AuditColumns.CurrentValue("Example", AuditColumnType.Whitespace),
