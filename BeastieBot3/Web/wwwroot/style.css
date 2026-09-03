@@ -572,6 +572,16 @@ td { word-break: break-all; font-family: ui-monospace, Menlo, monospace; }
   overflow-y: auto;
   color: #d0d4dc;
 }
+/* One block per line (terminal.js): appending a line lays out that line, not
+   the whole log. "anywhere" lets a long token wrap instead of widening the
+   flex item, and an empty line still takes up a row. */
+.terminal .tline {
+  display: block;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  min-height: 1.45em;
+  contain: content;
+}
 
 .job-list {
   list-style: none;
