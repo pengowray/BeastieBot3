@@ -52,7 +52,7 @@ internal sealed class SynonymOtherFormattingProducer : IAuditReportProducer {
             Blurb = "Synonym names containing HTML markup, stray HTML entities, or typographic quotes, each with a cleaned plain-text suggestion.",
             Summary =
                 "The table below lists synonym names with a formatting problem other than whitespace: embedded HTML markup, a stray HTML entity, or curly quotes where straight quotes are the norm. Each row includes a cleaned suggestion. " +
-                "Ordinary accented letters are not treated as a problem; only characters that look like markup or an encoding mistake are flagged, and the summary keeps every check visible, including any that found nothing. " +
+                "Ordinary accented letters are not treated as a problem; only characters that look like markup or an encoding mistake are flagged. The summary shows all checks, including any that found nothing. " +
                 "The scientific name column shows the accepted taxon the synonym belongs to.\n\n" +
                 "### Why it matters\n\n" +
                 "Markup and encoding artefacts in a synonym appear verbatim in search results and exports, and they stop the synonym from matching the clean text other databases hold. " +
