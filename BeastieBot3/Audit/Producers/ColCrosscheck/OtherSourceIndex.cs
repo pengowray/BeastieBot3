@@ -1,14 +1,15 @@
 using System;
 using System.Collections.Generic;
 using System.Globalization;
+using System.Linq;
 using System.Threading;
 using Microsoft.Data.Sqlite;
 
 // What Wikidata and the English Wikipedia hold for a taxon, looked up by IUCN taxon id.
 //
-// Only the "not found in the Catalogue of Life" report uses this, and only for the few hundred taxa
-// on it, so every answer is a small indexed query rather than a table scan. The report's claim is
-// "there is no route from this taxon into CoL", and these two sources qualify that claim in two
+// Used by the not-found report (a few hundred taxa) and, for one extra column, by the two synonym
+// pages: every answer is a small indexed query rather than a table scan. For the not-found report
+// the claim is "nothing links this taxon to CoL", and these two sources qualify that claim in two
 // ways worth showing:
 //
 //   Recognised elsewhere - a Wikidata item or a Wikipedia article means the name is in use even
@@ -30,6 +31,27 @@ internal sealed record OtherSourceHit {
     public string? WikipediaTitle { get; init; }
     /// Names for this taxon from either source that IUCN does not publish, best first.
     public IReadOnlyList<string> OtherNames { get; init; } = Array.Empty<string>();
+    /// True when either source records the IUCN name itself for this taxon.
+    public bool UsesIucnName { get; init; }
+
+    public bool Found => WikidataId is not null || WikipediaTitle is not null;
+
+    /// Which of the two catalogue names the sources use for this taxon: "CoL name", "IUCN name",
+    /// "both", "neither", or null when neither source has the taxon at all. Compared on the bare
+    /// name, case-insensitively; a redirect from one name to the other counts as both.
+    public string? NameInUse(string? iucnName, string? colName) {
+        if (!Found) {
+            return null;
+        }
+        var col = !string.IsNullOrWhiteSpace(colName) && OtherNames.Any(n => string.Equals(n, colName!.Trim(), StringComparison.OrdinalIgnoreCase));
+        var iucn = UsesIucnName;
+        return (col, iucn) switch {
+            (true, true) => "both",
+            (true, false) => "CoL name",
+            (false, true) => "IUCN name",
+            _ => "neither",
+        };
+    }
 
     public static readonly OtherSourceHit None = new();
 }
@@ -65,9 +87,8 @@ internal sealed class OtherSourceIndex {
         var id = taxonId.ToString(CultureInfo.InvariantCulture);
         var names = new List<string>();
         var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        if (!string.IsNullOrWhiteSpace(iucnName)) {
-            seen.Add(iucnName!.Trim());   // the name we already know is absent from CoL
-        }
+        var usesIucnName = false;
+        var iucn = string.IsNullOrWhiteSpace(iucnName) ? null : iucnName!.Trim();
 
         void Offer(string? value) {
             if (string.IsNullOrWhiteSpace(value)) {
@@ -75,6 +96,11 @@ internal sealed class OtherSourceIndex {
             }
             // Wikipedia titles use spaces in this cache, but a stored redirect target may not.
             var name = value.Replace('_', ' ').Trim();
+            // The IUCN name is not "another" name, but whether the sources use it is worth knowing.
+            if (iucn is not null && string.Equals(name, iucn, StringComparison.OrdinalIgnoreCase)) {
+                usesIucnName = true;
+                return;
+            }
             // A bare genus is not another name for a species; offering it would pair the taxon with
             // its genus article and read as a match.
             if (name.IndexOf(' ') < 0 || !seen.Add(name)) {
@@ -128,6 +154,7 @@ internal sealed class OtherSourceIndex {
             WikidataId = wikidataId,
             WikipediaTitle = string.IsNullOrWhiteSpace(title) ? null : title,
             OtherNames = names,
+            UsesIucnName = usesIucnName,
         };
     }
 

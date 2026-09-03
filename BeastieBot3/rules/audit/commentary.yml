@@ -63,17 +63,10 @@
 - report: no-latest
   release: 2026-1
   scope: report
-  title: Change since 2025-2
+  title: About the count
   markdown: |
-    In release 2025-2 this list held 3,898 taxa; in 2026-1 it holds 4,218 (up 320). Both figures
-    are minimums, covering the taxa retrieved from the API at the time.
-
-- report: orphan-infraranks
-  release: 2026-1
-  scope: report
-  title: Change since 2025-2
-  markdown: |
-    Down from 383 in release 2025-2 to 358 in 2026-1.
+    Both the 2025-2 and 2026-1 figures are minimums, covering the taxa retrieved from the API at
+    the time.
 
 - report: taxonomy-consistency
   release: 2026-1
@@ -84,17 +77,3 @@
     *MIcrocephalophis* (extra capital I) while the genus field correctly reads
     *Microcephalophis*. The same typo is present in release 2025-2.
 
-- report: taxonomy-cleanup
-  release: 2026-1
-  scope: report
-  title: Change since 2025-2
-  markdown: |
-    Essentially unchanged from release 2025-2 (1,095 rows then, 1,099 now).
-
-- report: synonym-whitespace
-  release: 2026-1
-  scope: report
-  title: Change since 2025-2
-  markdown: |
-    Release 2025-2 had 11,578 rows; 2026-1 has slightly more. The earlier observations remain in
-    the data, with new ones added alongside.

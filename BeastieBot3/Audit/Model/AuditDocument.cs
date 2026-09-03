@@ -9,7 +9,7 @@ namespace BeastieBot3.Audit.Model;
 
 internal sealed class AuditSiteConfig {
     public string SiteTitle { get; init; } = "IUCN Red List data observations";
-    public string Subtitle { get; init; } = "An unofficial, independent review to support data improvement";
+    public string Subtitle { get; init; } = "Unofficial notes for the next release's data review";
     public string ContactName { get; init; } = "Pengo Wray";
     public string Contact { get; init; } = "feedback@pengowray.com";
     public string CsvLicence { get; init; } = "CC0 1.0 (public domain dedication)";

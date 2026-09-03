@@ -96,7 +96,7 @@ internal sealed class ColCrosscheckProducer : IAuditReportSetProducer {
         var findings = data.NotFound;
         return new AuditReport {
             Id = NotFoundId,
-            Title = "Names not found in the Catalogue of Life",
+            Title = "Names not in the Catalogue of Life under any known name",
             Action = ActionClass.Informational,
             IsAppendix = true,
             DataSourceLabel = source,
@@ -191,14 +191,15 @@ internal sealed class ColCrosscheckProducer : IAuditReportSetProducer {
         Blurb = "Assessed IUCN taxa whose name the Catalogue of Life records as a synonym of a different accepted name.",
         Summary =
             "The table below lists IUCN species, subspecies, and varieties whose scientific name the Catalogue of Life records as a synonym of a different accepted name. That accepted name is shown in the CoL accepted name column. Rows where IUCN in turn lists the CoL accepted name as its own synonym are on [Name pairs where IUCN and the Catalogue of Life differ on which name is accepted](col-accepted-differs.html) instead.\n\n" +
+            NameInUseIntro + "\n\n" +
             "### Why it matters\n\n" +
             "Where CoL has moved a name into synonymy, the IUCN name may be an earlier combination of the same species, or a taxon that has since been merged into another. Databases that follow the Catalogue of Life file the taxon under the accepted name, not the IUCN one.\n\n" +
             "### Suggestion\n\n" +
-            "Compare each IUCN name with the CoL accepted name and confirm which reflects current taxonomy.",
+            "Compare each IUCN name with the CoL accepted name and confirm which reflects current taxonomy. Rows where Wikidata and Wikipedia already use the CoL name sort first; those are the likeliest to need a change.",
         Columns = SynonymColumns(),
-        Findings = OrderSpecies(findings),
+        Findings = OrderByNameInUse(findings),
         HeadlineCount = findings.Count,
-        SummaryTables = new[] { ByRankSummary("By rank", findings), ByClassSummary("By class", findings, assessed) },
+        SummaryTables = new[] { NameInUseSummary(findings), ByRankSummary("By rank", findings), ByClassSummary("By class", findings, assessed) },
         GroupLevels = AuditGroups.ByClassOrderFamily,
     };
 
@@ -242,14 +243,15 @@ internal sealed class ColCrosscheckProducer : IAuditReportSetProducer {
         Blurb = "The IUCN name is not in CoL, but one of the taxon's IUCN-listed synonyms is there as a synonym. Each row needs checking; the synonym may point at a different taxon.",
         Summary =
             "The IUCN names below are not in the Catalogue of Life: not accepted, not a synonym, and no near spelling either. But each taxon has an IUCN-listed synonym that is in CoL as a synonym. That synonym is shown per row, with the accepted name CoL gives for it where CoL records one. A synonym can belong to a different taxon in CoL, so each row needs checking.\n\n" +
+            NameInUseIntro + "\n\n" +
             "### Why it matters\n\n" +
             "Searched by accepted name alone, these taxa look absent from the Catalogue of Life; searched by synonym, each one is found. Where CoL gives an accepted name for the synonym, that name may be the same taxon under a different treatment, or a different taxon that shares the synonym; the table cannot tell the two apart.\n\n" +
             "### Suggestion\n\n" +
             "Check each row: look up the CoL accepted name where one is shown, or the synonym record where none is, and judge whether it is the same taxon. Where it is, adding that accepted name to the assessment's synonyms would let the two catalogues link directly.",
         Columns = SynonymLeadColumns(),
-        Findings = OrderSpecies(findings),
+        Findings = OrderByNameInUse(findings),
         HeadlineCount = findings.Count,
-        SummaryTables = new[] { ByClassSummary("By class", findings, assessed) },
+        SummaryTables = new[] { NameInUseSummary(findings), ByClassSummary("By class", findings, assessed) },
         GroupLevels = AuditGroups.ByClassOrderFamily,
     };
 
@@ -259,6 +261,7 @@ internal sealed class ColCrosscheckProducer : IAuditReportSetProducer {
                 "An IUCN-listed synonym of this taxon that is in the Catalogue of Life."),
             AuditColumns.Custom("colAcceptedForSynonym", "CoL accepted name", AuditColumnType.Text,
                 "The accepted name CoL gives for that synonym. Blank when CoL does not link it to one."),
+            NameInUseColumn(),
             AuditColumns.ColLink(),
         }).Concat(SpeciesTail()).ToList();
 
@@ -433,7 +436,7 @@ internal sealed class ColCrosscheckProducer : IAuditReportSetProducer {
             AuditColumns.SuggestedValue("Closest CoL name", AuditColumnType.Text),
             AuditColumns.Custom("colStatus", "CoL status", AuditColumnType.Text,
                 "What the Catalogue of Life calls the closest name: an accepted name, or a synonym of some other accepted name."),
-            AuditColumns.Custom("iucnSynonym", "Closest name in IUCN synonyms", AuditColumnType.Text,
+            AuditColumns.Custom("iucnSynonym", "Closest name listed as IUCN synonym", AuditColumnType.Text,
                 "Whether IUCN already records the closest CoL name as a synonym. Blank when IUCN synonym data from the IUCN API is unavailable."),
             ColYearColumn(),
             AuditColumns.ColLink(),
@@ -447,9 +450,45 @@ internal sealed class ColCrosscheckProducer : IAuditReportSetProducer {
             ColAuthorityColumn(),
             ColYearColumn(),
             AuditColumns.ColLink(),
-            AuditColumns.Custom("iucnSynonym", "CoL name in IUCN synonyms", AuditColumnType.Text,
+            AuditColumns.Custom("iucnSynonym", "CoL name listed as IUCN synonym", AuditColumnType.Text,
                 "Whether IUCN already records the CoL accepted name as a synonym. Blank when IUCN synonym data from the IUCN API is unavailable."),
+            NameInUseColumn(),
         }).Concat(SpeciesTail()).ToList();
+
+    private const string NameInUseIntro =
+        "The Name used on Wikidata and Wikipedia column says which of the two names those sources use for the taxon: the CoL name, the IUCN name, both (usually one redirecting to the other), or neither. Neither source is an authority, but each is a third party that chose one of the two names. Blank means the taxon has no Wikidata item and no English Wikipedia article, or the check did not run.";
+
+    private static AuditColumn NameInUseColumn() => AuditColumns.Custom("nameInUse", "Name used on Wikidata and Wikipedia", AuditColumnType.Text,
+        "Which of the two names Wikidata and English Wikipedia use for this taxon: CoL name, IUCN name, both, or neither. Blank when the taxon is in neither source.");
+
+    private static int NameInUseOrder(string? value) => value switch {
+        "CoL name" => 0,
+        "both" => 1,
+        "neither" => 2,
+        "IUCN name" => 3,
+        _ => 4,
+    };
+
+    private static IReadOnlyList<AuditFinding> OrderByNameInUse(List<AuditFinding> findings) => findings
+        .OrderBy(f => NameInUseOrder(f.Get("nameInUse")))
+        .ThenByDescending(f => f.SeverityTier)
+        .ThenBy(f => f.Class, StringComparer.OrdinalIgnoreCase)
+        .ThenBy(f => f.Order, StringComparer.OrdinalIgnoreCase)
+        .ThenBy(f => f.Family, StringComparer.OrdinalIgnoreCase)
+        .ThenBy(f => f.ScientificName, StringComparer.OrdinalIgnoreCase)
+        .ToList();
+
+    private static AuditSummaryTable NameInUseSummary(IReadOnlyList<AuditFinding> findings) {
+        var order = new[] { "CoL name", "both", "neither", "IUCN name" };
+        var counts = findings.GroupBy(f => f.Get("nameInUse") ?? "").ToDictionary(g => g.Key, g => g.Count());
+        var rows = order.Select(k => new[] { k, (counts.TryGetValue(k, out var n) ? n : 0).ToString("N0") } as IReadOnlyList<string>).ToList();
+        rows.Add(new[] { "Not on Wikidata or Wikipedia", (counts.TryGetValue("", out var blank) ? blank : 0).ToString("N0") });
+        return new AuditSummaryTable {
+            Title = "Name used on Wikidata and Wikipedia",
+            Note = "Which of the two names each third-party source uses for the taxon. \"Both\" is usually one name redirecting to the other.",
+            Headers = new[] { "Name in use", "Taxa" }, Rows = rows, NumericColumns = new[] { 1 },
+        };
+    }
 
     // Accepted-name-differs report: the two names side by side with their authorities, the year
     // discrepancy flag, then the shared tail. Rank and assessment year are dropped; neither is acted

@@ -8,3 +8,26 @@
   taxonomy-cleanup: 1095
   synonym-whitespace: 11578
   taxonomy-consistency: 4
+2026-1:
+  empty-scope: 52
+  failed-assessments: 3
+  taxonomy-cleanup: 1099
+  synonym-whitespace: 11827
+  synonym-markup: 2802
+  synonym-name-notes: 2309
+  common-name-issues: 615
+  orphan-infraranks: 358
+  no-latest: 4218
+  html-consistency: 523
+  taxonomy-consistency: 4
+  col-close-match: 799
+  col-synonym: 11664
+  col-accepted-differs: 2742
+  col-synonym-higher: 717
+  col-classification: 94
+  col-reorg: 1663
+  col-authority: 9343
+  col-other-name: 134
+  col-via-wiki: 23
+  col-not-found: 722
+  field-hygiene: 8

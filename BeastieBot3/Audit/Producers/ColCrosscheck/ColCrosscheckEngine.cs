@@ -54,6 +54,8 @@ internal sealed class ColCrosscheckEngine {
         data.HigherTaxaCompared = higher.Count;
 
         AddOtherSources(data, ct);
+        AddNameInUse(data.Synonym, f => f.SuggestedValue, ct);
+        AddNameInUse(data.SynonymLead, f => f.Get("colAcceptedForSynonym") ?? f.Get("iucnSynonymInCol"), ct);
         return data;
     }
 
@@ -122,6 +124,23 @@ internal sealed class ColCrosscheckEngine {
         }
         data.NotFound.Clear();
         data.NotFound.AddRange(remaining);
+    }
+
+    // For the pages where IUCN and CoL use different names for one taxon: which name Wikidata and
+    // English Wikipedia use. Neither source is an authority, but each is a third party that chose
+    // one of the two names, so "CoL name" on a row is a reason to look at it first.
+    private void AddNameInUse(List<AuditFinding> findings, Func<AuditFinding, string?> colName, CancellationToken ct) {
+        if (_otherSources is null) {
+            return;
+        }
+        foreach (var finding in findings) {
+            ct.ThrowIfCancellationRequested();
+            if (finding.TaxonId is not { } taxonId) {
+                continue;
+            }
+            var hit = _otherSources.Lookup(taxonId, finding.ScientificName, ct);
+            SetExtra(finding, "nameInUse", hit.NameInUse(finding.ScientificName, colName(finding)));
+        }
     }
 
     // --- assessed taxa (species, subspecies, varieties) --------------------------------------

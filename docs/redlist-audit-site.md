@@ -164,7 +164,7 @@ findings into nine separate report pages (most actionable first, noisiest last):
 | `col-authority` | Minor naming authority differences | an exact name match whose author name differs like a typo (spelling/diacritic/encoding); differences only in spacing, punctuation, or the year are dropped |
 | `col-via-wiki` | Names not in CoL, but a Wikidata or Wikipedia name is | the IUCN name is in no CoL usage, no near spelling, no IUCN synonym in CoL, but Wikidata or English Wikipedia record another name for the taxon that CoL holds (usually a genus transfer CoL adopted). Split out of `col-not-found` in `AddOtherSources`, which reassigns `ReportId`. The ask: check whether it is a valid synonym and, if so, add it, since no name currently joins the two records |
 | `col-other-name` | Names not in CoL, but an IUCN synonym is | the IUCN name is in no CoL usage and has no near spelling, but another name IUCN records for the taxon is in CoL as a synonym. A lead, not a match: the chain can end on an unrelated name |
-| `col-not-found` | Names not found in CoL | no exact match, no near candidate, and no other IUCN-listed name for the taxon in CoL either |
+| `col-not-found` | Names not in CoL under any known name | no exact match, no near candidate, and no other IUCN-listed name for the taxon in CoL either |
 
 Each report carries every one of its rows on the full-list page and the CSV (there is no
 HTML-subset / CSV-superset split), shows the IUCN status badge like the other reports, and links each
@@ -239,6 +239,19 @@ split for the same reason: one says confirm a spelling, the other says be aware 
 (kingdom..family) inline. So synonymy is resolved through `parentID` (this fixed a silent zero-count
 bug where the missing column always read NULL), and the higher-rank placement comparison reads the
 inline ancestor columns instead of walking the tree.
+
+**Name in use on `col-synonym` and `col-other-name`.** After the main pass, `AddNameInUse` asks
+`OtherSourceIndex` which of the two names Wikidata and English Wikipedia use for each taxon
+(`OtherSourceHit.NameInUse`: "CoL name" / "IUCN name" / "both" / "neither" / blank when the taxon is
+in neither source). Neither source is an authority, but each is a third party that picked one name,
+so both pages sort "CoL name" rows first and carry a "Name used on Wikidata and Wikipedia" summary
+table. On 2026-1 (20k-row sample) the synonym page split 53 CoL / 271 both / 32 neither / 1,433 IUCN.
+
+**`no-latest` breakdown.** None of the 4,218 taxa is in the 2026-1 CSV export (the page computes and
+states this, so it stays true), so they are genuinely dropped taxa, not current taxa missing a flag.
+The page sorts most recently assessed first and adds "By year of last assessment" (2020+ are recent
+taxonomic changes; 1996/1998 have been in this state for every release) and "By scope of last
+assessment" (230 Europe-only and 48 Mediterranean-only taxa were never globally assessed).
 
 **Wikidata and Wikipedia on `col-not-found` (and the `col-via-wiki` split).** `OtherSourceIndex` reads the Wikidata cache
 (`wikidata_p627_values` joined to `wikidata_entities` / `wikidata_scientific_names`, keyed on the IUCN
