@@ -33,8 +33,7 @@
   scope: report
   title: Changes since 2025-2
   markdown: |
-    The scope for these assessments is not global or local, but an empty list.
-    
+    The scope for these assessments is not global or local, but empty.
     This was previously a larger problem as the records caused IUCN's API to return an HTTP 500 (Internal
     Server Error) when one of these assessments was requested. The API now serves them normally, which 
     resolves a major issue, but the data for these assessments still includes a blank scope, indicating
