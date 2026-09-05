@@ -396,10 +396,10 @@ footer.site a { color: var(--accent); }
       var note = m.querySelector(".audit-clean-note");
       if (d.viewCleanVerified === "yes") {
         note.className = "audit-clean-note";
-        note.textContent = "Suggested change (not reviewed): Redundant empty markup removed. The text extracted from this cleaned HTML matches the original, but it has not been reviewed.";
+        note.textContent = "Not reviewed, but an automatic comparison found no change to the readable text. Removes only redundant markup, invisible characters and blank space at either end.";
       } else {
         note.className = "audit-clean-note warn";
-        note.textContent = "Suggested change (not reviewed; text possibly differs): Redundant empty markup removed. The text extracted from the cleaned HTML does not exactly match the original. Human review recommended before use.";
+        note.textContent = "Check before use: not reviewed, and an automatic comparison found that the clean-up changed the readable text. Removes redundant markup, invisible characters and blank space at either end.";
       }
       cleanSection.removeAttribute("hidden");
     } else {
