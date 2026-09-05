@@ -80,6 +80,9 @@ public class ColCrosscheckTests {
         // No exact match, but a near candidate in the same genus.
         var close = Assert.Single(data.CloseMatch, f => f.ScientificName == "Panthera leoo");
         Assert.Equal("Panthera leo", close.SuggestedValue);
+        // IUCN files the closest name as a synonym of taxon 103, not of this row, and the cell names
+        // that taxon (by id here, since the test index carries no accepted names).
+        Assert.Equal("IUCN taxon 103", close.Get("iucnSynonym"));
 
         // No exact match and no near candidate.
         Assert.Contains(data.NotFound, f => f.ScientificName == "Zzzus nonexistus");

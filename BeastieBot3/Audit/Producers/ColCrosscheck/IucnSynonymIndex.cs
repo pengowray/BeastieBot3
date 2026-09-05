@@ -24,12 +24,15 @@ internal enum IucnSynonymMatch {
 internal sealed class IucnSynonymIndex {
     private readonly Dictionary<string, HashSet<long>> _byName;
     private readonly Dictionary<long, List<string>> _byTaxon;
+    private readonly Dictionary<long, string> _taxonNames;
 
     public int SynonymNameCount => _byName.Count;
 
-    private IucnSynonymIndex(Dictionary<string, HashSet<long>> byName, Dictionary<long, List<string>> byTaxon) {
+    private IucnSynonymIndex(Dictionary<string, HashSet<long>> byName, Dictionary<long, List<string>> byTaxon,
+        Dictionary<long, string>? taxonNames = null) {
         _byName = byName;
         _byTaxon = byTaxon;
+        _taxonNames = taxonNames ?? new Dictionary<long, string>();
     }
 
     // The taxon's own synonyms, as IUCN records them. Read the other way round from Lookup: used to
@@ -48,6 +51,18 @@ internal sealed class IucnSynonymIndex {
         return taxa.Contains(iucnTaxonId) ? IucnSynonymMatch.SameTaxon : IucnSynonymMatch.OtherTaxon;
     }
 
+    // The IUCN accepted names the given name is filed under as a synonym, for showing to the reader.
+    // A taxon whose accepted name the API cache did not give is shown by its id.
+    public IReadOnlyList<string> AcceptedNamesFor(string? synonymName) {
+        var key = Normalize(synonymName);
+        if (key.Length == 0 || !_byName.TryGetValue(key, out var taxa)) {
+            return Array.Empty<string>();
+        }
+        return taxa.OrderBy(id => id)
+            .Select(id => _taxonNames.TryGetValue(id, out var n) ? n : $"IUCN taxon {id}")
+            .ToList();
+    }
+
     // Test seam: build directly from (synonym name, accepted taxon id) pairs.
     public static IucnSynonymIndex FromEntries(IEnumerable<(string Name, long TaxonId)> entries) {
         var map = new Dictionary<string, HashSet<long>>(StringComparer.Ordinal);
@@ -61,6 +76,7 @@ internal sealed class IucnSynonymIndex {
     public static IucnSynonymIndex Build(SqliteConnection apiCache, int? limit, CancellationToken ct) {
         var map = new Dictionary<string, HashSet<long>>(StringComparer.Ordinal);
         var byTaxon = new Dictionary<long, List<string>>();
+        var names = new Dictionary<long, string>();
         const string sql = "SELECT root_sis_id, json FROM taxa";
         using var command = apiCache.CreateCommand();
         command.CommandText = limit is > 0 ? sql + " LIMIT " + limit.Value : sql;
@@ -80,6 +96,9 @@ internal sealed class IucnSynonymIndex {
                 if (!root.TryGetProperty("taxon", out var taxon) || taxon.ValueKind != JsonValueKind.Object) {
                     continue;
                 }
+                if (Str(taxon, "scientific_name") is { } accepted) {
+                    names[rootSisId] = accepted;
+                }
                 if (!taxon.TryGetProperty("synonyms", out var synonyms) || synonyms.ValueKind != JsonValueKind.Array) {
                     continue;
                 }
@@ -91,7 +110,7 @@ internal sealed class IucnSynonymIndex {
                 }
             }
         }
-        return new IucnSynonymIndex(map, byTaxon);
+        return new IucnSynonymIndex(map, byTaxon, names);
     }
 
     private static void Add(Dictionary<string, HashSet<long>> map, Dictionary<long, List<string>> byTaxon,

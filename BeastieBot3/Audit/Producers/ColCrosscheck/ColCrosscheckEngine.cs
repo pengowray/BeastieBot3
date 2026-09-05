@@ -224,7 +224,7 @@ internal sealed class ColCrosscheckEngine {
                 SetExtra(closeFinding, "colStatus", ColStatusLabel(near.Best.Status));
                 SetExtra(closeFinding, "colSynonymOf", colAcceptedName);
                 SetExtra(closeFinding, "colYear", ColYear(near.Best));
-                SetExtra(closeFinding, "iucnSynonym", IucnSynonymLabel(iucnMatch));
+                SetExtra(closeFinding, "iucnSynonym", IucnSynonymLabel(iucnMatch, colName));
                 data.CloseMatch.Add(closeFinding);
             }
             return;
@@ -250,7 +250,7 @@ internal sealed class ColCrosscheckEngine {
                 "synonym-in-col", "scientificName", name, acceptedName, linkId, severity, detail);
             SetExtra(finding, "colAuthority", AuditMapping.Decode(accepted?.Authorship));
             SetExtra(finding, "colYear", ColYear(accepted));
-            SetExtra(finding, "iucnSynonym", IucnSynonymLabel(match));
+            SetExtra(finding, "iucnSynonym", IucnSynonymLabel(match, acceptedName));
             data.Synonym.Add(finding);
             return;
         }
@@ -747,11 +747,12 @@ internal sealed class ColCrosscheckEngine {
     private static string ColStatusLabel(string? status) =>
         IsAcceptedStatus(status) ? "accepted" : IsSynonymStatus(status) ? "synonym of" : "other";
 
-    private static string? IucnSynonymLabel(IucnSynonymMatch match) => match switch {
-        IucnSynonymMatch.SameTaxon => "synonym of this taxon",
-        IucnSynonymMatch.OtherTaxon => "synonym of another taxon",
+    // The cell names the IUCN taxon (or taxa) the name is filed under, so a reader can see at a glance
+    // whether it is the row's own taxon without working out what "this" or "another" points at.
+    private string? IucnSynonymLabel(IucnSynonymMatch match, string? synonymName) => match switch {
         IucnSynonymMatch.None => "not listed",
-        _ => null,
+        IucnSynonymMatch.Unknown => null,
+        _ => string.Join("; ", _iucnSynonyms!.AcceptedNamesFor(synonymName)),
     };
 
     private static string? GetIucnAuthority(IucnTaxonomyRow row) =>

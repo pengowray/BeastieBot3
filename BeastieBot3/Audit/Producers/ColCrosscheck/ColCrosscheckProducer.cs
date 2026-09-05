@@ -171,7 +171,7 @@ internal sealed class ColCrosscheckProducer : IAuditReportSetProducer {
             "### Why it matters\n\n" +
             "A name spelled slightly differently in the two catalogues will not cross reference, even when both records describe the same taxon. Automated matching fails and manual searches come up empty.\n\n" +
             "### Suggestion\n\n" +
-            "Where the paired spelling is a variant of the same name, recording it as a synonym or aligning the spelling would let the two catalogues link. Where the closest CoL name is itself a CoL synonym, the CoL accepted name is the better one to compare against. Rows marked \"synonym of another taxon\" pair the name with a similar spelling that IUCN assigns to a different taxon; those may be coincidence.",
+            "Where the paired spelling is a variant of the same name, recording it as a synonym or aligning the spelling would let the two catalogues link. Where the closest CoL name is itself a CoL synonym, the CoL accepted name is the better one to compare against. Where the IUCN synonym column names a taxon other than the row's own, the similar spelling is one IUCN assigns to a different taxon, and the pairing may be coincidence.",
         Columns = CloseMatchColumns(),
         Findings = OrderSpecies(findings),
         HeadlineCount = findings.Count,
@@ -440,8 +440,8 @@ internal sealed class ColCrosscheckProducer : IAuditReportSetProducer {
                 "What the Catalogue of Life calls the closest name: an accepted name, or a synonym of some other accepted name."),
             AuditColumns.Custom("colSynonymOf", "CoL accepted name", AuditColumnType.Text,
                 "When the closest name is a CoL synonym, the accepted name CoL points it to."),
-            AuditColumns.Custom("iucnSynonym", "Closest name in IUCN synonym list", AuditColumnType.Text,
-                "Whether IUCN's own synonym list already holds the closest CoL name, and for which taxon. Blank when IUCN synonym data from the IUCN API is unavailable."),
+            AuditColumns.Custom("iucnSynonym", "IUCN lists closest name as synonym of", AuditColumnType.Text,
+                "The IUCN taxon whose synonym list holds the closest CoL name. When it is the row's own IUCN name, the two catalogues already record the pair. \"not listed\" when no IUCN taxon has it as a synonym. Blank when IUCN synonym data from the IUCN API is unavailable."),
             ColYearColumn(),
             AuditColumns.ColLink(),
         }).Concat(SpeciesTail()).ToList();
@@ -454,8 +454,8 @@ internal sealed class ColCrosscheckProducer : IAuditReportSetProducer {
             ColAuthorityColumn(),
             ColYearColumn(),
             AuditColumns.ColLink(),
-            AuditColumns.Custom("iucnSynonym", "CoL name in IUCN synonym list", AuditColumnType.Text,
-                "Whether IUCN's own synonym list already holds the CoL accepted name, and for which taxon. Blank when IUCN synonym data from the IUCN API is unavailable."),
+            AuditColumns.Custom("iucnSynonym", "IUCN lists CoL name as synonym of", AuditColumnType.Text,
+                "The IUCN taxon whose synonym list holds the CoL accepted name. \"not listed\" when no IUCN taxon has it as a synonym. Blank when IUCN synonym data from the IUCN API is unavailable."),
             NameInUseColumn(),
         }).Concat(SpeciesTail()).ToList();
 
