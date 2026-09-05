@@ -53,8 +53,7 @@ internal static class AuditSiteRenderer {
         sb.Append("<section>\n");
         sb.Append("<p class=\"lede\">Observations about the data in IUCN Red List version ");
         sb.Append($"{HtmlText.Escape(doc.Release)}, gathered while preparing Red List data for Wikipedia and Wikidata and shared for the next release's data review. ");
-        sb.Append("Each observation links to a description with a short preview, a full sortable list, and a CSV download. ");
-        sb.Append("It may be incomplete or contain errors.</p>\n");
+        sb.Append("Each observation links to a description with a short preview, a full sortable list, and a CSV download.</p>\n");
 
         sb.Append("<dl class=\"meta-grid\">\n");
         sb.Append($"<dt>Release reviewed</dt><dd>IUCN Red List version {HtmlText.Escape(doc.Release)}</dd>\n");
