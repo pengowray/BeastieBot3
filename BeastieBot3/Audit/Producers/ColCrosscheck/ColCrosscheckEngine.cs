@@ -116,6 +116,9 @@ internal sealed class ColCrosscheckEngine {
             finding.ReportId = ColCrosscheckProducer.ViaWikiId;
             SetExtra(finding, "otherName", bestName);
             SetExtra(finding, "otherNameColStatus", ColStatusLabel(best.Status));
+            if (IsSynonymStatus(best.Status) && !string.IsNullOrWhiteSpace(best.ParentId)) {
+                SetExtra(finding, "otherNameSynonymOf", AuditMapping.Decode(_col.GetById(best.ParentId!, ct)?.ScientificName));
+            }
             SetExtra(finding, "colUrl", ColUrls.Taxon(best.Id));
             finding.Notes.Add(IsAcceptedStatus(best.Status)
                 ? $"{bestName}, recorded for this taxon on Wikidata or Wikipedia, is an accepted name in the Catalogue of Life."
@@ -219,6 +222,7 @@ internal sealed class ColCrosscheckEngine {
                 var closeFinding = SpeciesFinding(ColCrosscheckProducer.CloseMatchId, row, rank, isFull, name,
                     "close-col-match", "scientificName", name, colName, near.Best.Id, severity, detail);
                 SetExtra(closeFinding, "colStatus", ColStatusLabel(near.Best.Status));
+                SetExtra(closeFinding, "colSynonymOf", colAcceptedName);
                 SetExtra(closeFinding, "colYear", ColYear(near.Best));
                 SetExtra(closeFinding, "iucnSynonym", IucnSynonymLabel(iucnMatch));
                 data.CloseMatch.Add(closeFinding);
@@ -741,12 +745,12 @@ internal sealed class ColCrosscheckEngine {
     // What the Catalogue of Life itself makes of a matched name. "other" covers the rarer usage
     // states (misapplied, ambiguous), which are neither an accepted name nor a plain synonym.
     private static string ColStatusLabel(string? status) =>
-        IsAcceptedStatus(status) ? "accepted" : IsSynonymStatus(status) ? "synonym" : "other";
+        IsAcceptedStatus(status) ? "accepted" : IsSynonymStatus(status) ? "synonym of" : "other";
 
     private static string? IucnSynonymLabel(IucnSynonymMatch match) => match switch {
-        IucnSynonymMatch.SameTaxon => "of same taxon",
-        IucnSynonymMatch.OtherTaxon => "of other taxon",
-        IucnSynonymMatch.None => "no",
+        IucnSynonymMatch.SameTaxon => "synonym of this taxon",
+        IucnSynonymMatch.OtherTaxon => "synonym of another taxon",
+        IucnSynonymMatch.None => "not listed",
         _ => null,
     };
 

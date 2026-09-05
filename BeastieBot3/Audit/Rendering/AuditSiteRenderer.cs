@@ -72,7 +72,7 @@ internal static class AuditSiteRenderer {
     }
 
     // The short list at the top: the reports worth doing before the next release, ranked by the
-    // producers (TriageRank) with live counts and the change since the previous release. The
+    // producers (TriageRank) with live counts. The
     // release-specific commentary for report "index" prints above it when present.
     private static void AppendTriage(StringBuilder sb, AuditDocument doc) {
         var triage = doc.Reports.Where(r => r.TriageRank > 0 && r.Count > 0).OrderBy(r => r.TriageRank).Take(5).ToList();
@@ -87,10 +87,6 @@ internal static class AuditSiteRenderer {
             sb.Append("<li>");
             sb.Append($"<a href=\"{r.Id}.html\">{HtmlText.Escape(r.Title)}</a> ");
             sb.Append($"<span class=\"triage-count\">({r.Count:N0} rows");
-            var since = SinceText(doc, r);
-            if (since.Text.Length > 0) {
-                sb.Append($", {HtmlText.Escape(since.Text)}");
-            }
             sb.Append(")</span> ");
             sb.Append(AuditPageLayout.ActionBadge(r.Action));
             if (!string.IsNullOrWhiteSpace(r.TriageReason)) {
@@ -179,20 +175,14 @@ internal static class AuditSiteRenderer {
             return ("", "");
         }
         if (report.Count == previous) {
-            return ("unchanged since last release", "");
+            return ("unchanged", "");
         }
         if (report.Count == 0) {
-            return ($"fixed since last release (was {previous:N0})", "down");
+            return ($"fixed (was {previous:N0})", "down");
         }
-        var up = report.Count > previous;
-        // A small shift is not worth a second number; the reader only needs the direction.
-        var minor = Math.Abs(report.Count - previous) * 10 < previous;
-        if (minor) {
-            return (up ? "increased since the previous release" : "decreased since the previous release", up ? "up" : "down");
-        }
-        return up
-            ? ($"up from {previous:N0} last release", "up")
-            : ($"down from {previous:N0} last release", "down");
+        return report.Count > previous
+            ? ($"up from {previous:N0}", "up")
+            : ($"down from {previous:N0}", "down");
     }
 
     // -- report detail ---------------------------------------------------------------------
