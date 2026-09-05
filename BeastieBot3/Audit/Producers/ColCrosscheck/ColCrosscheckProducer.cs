@@ -158,7 +158,7 @@ internal sealed class ColCrosscheckProducer : IAuditReportSetProducer {
         Title = "Names with a close Catalogue of Life match",
         Action = ActionClass.ByHand,
         TriageRank = 5,
-        TriageReason = "Each pairs an IUCN name missing from the Catalogue of Life with the near spelling CoL holds; most differ by one character.",
+        TriageReason = "Spelling differences which prevent cross referencing.",
         DataSourceLabel = source,
         SectionId = ColFamily,
         FamilyId = ColFamily,

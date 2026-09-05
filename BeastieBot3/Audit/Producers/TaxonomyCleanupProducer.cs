@@ -67,7 +67,7 @@ internal sealed class TaxonomyCleanupProducer : IAuditReportProducer {
             Action = ActionClass.Mechanical,
             CsvIsPatch = true,
             TriageRank = 2,
-            TriageReason = "Every row has a replacement value; the CSV can be applied as-is.",
+            TriageReason = "Simple automated fix is possible.",
             DataSourceLabel = $"IUCN Red List {ctx.Release} (CSV export)",
             Blurb = "Taxonomy field values with stray whitespace (leading, trailing, doubled, or non-breaking), each with a suggested cleaned-up value.",
             Summary =

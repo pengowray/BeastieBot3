@@ -52,7 +52,9 @@ internal sealed class NoLatestAssessmentProducer : IAuditReportProducer {
                 "Many do not come up through search on iucnredlist.org, yet each stays reachable through its direct species URL. " +
                 "Some of the pages include a note such as \"(This concept is no longer recognised)\", but it is easy to overlook, and many have no such note at all.\n\n" +
                 "### Suggestion\n\n" +
-                "If the taxon is still valid, flag its most recent assessment as current. If it was removed, merged, or reclassified, add a final 'Not Evaluated' assessment. Either way, adjust how old assessments display on the website so they cannot be mistaken for current ones.",
+                "- For any taxon which was removed, merged, or reclassified: create a new Not Evaluated (NE) assessment for the taxon. The NE \"assessment\" becomes the current assessment. This will show it's no longer assessed by the IUCN, and do so in a way consistent with the rest of the Red List data and site.\n" +
+                "- If the taxon is still valid, flag its most recent assessment as current.\n" +
+                "- Update how old assessments display on the website so they cannot be mistaken for the current one. Have old assessment pages include a link to the current assessment or make it clear when there is none.",
             Columns = new List<AuditColumn> {
                 AuditColumns.ScientificName(),
                 AuditColumns.CommonName(),

@@ -43,14 +43,6 @@
     scope field is still blank, so the records still drop out of any scoped search, including the
     usual "Global" filter; they remain reachable through the API and by direct link.
 
-- report: index
-  release: 2026-1
-  scope: report
-  markdown: |
-    Compared with 2025-2, the blank-scope list more than doubled and the whitespace list is
-    unchanged. The Catalogue of Life crosscheck is on its own page; it records where two catalogues
-    disagree, not errors in either.
-
 - report: failed-assessments
   release: 2026-1
   scope: report

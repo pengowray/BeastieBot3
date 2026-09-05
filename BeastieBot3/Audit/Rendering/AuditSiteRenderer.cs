@@ -80,7 +80,7 @@ internal static class AuditSiteRenderer {
             return;
         }
         sb.Append("<section>\n<h2>Start here</h2>\n");
-        sb.Append("<p>The observations most worth acting on before the next release. The full catalogue follows.</p>\n");
+        sb.Append("<p>The observations most worth acting on before the next release.</p>\n");
         AppendCommentary(sb, doc, "index");
         sb.Append("<ol class=\"triage\">\n");
         foreach (var r in triage) {
@@ -179,14 +179,20 @@ internal static class AuditSiteRenderer {
             return ("", "");
         }
         if (report.Count == previous) {
-            return ("unchanged", "");
+            return ("unchanged since last release", "");
         }
         if (report.Count == 0) {
-            return ($"fixed (was {previous:N0})", "down");
+            return ($"fixed since last release (was {previous:N0})", "down");
         }
-        return report.Count > previous
-            ? ($"up from {previous:N0}", "up")
-            : ($"down from {previous:N0}", "down");
+        var up = report.Count > previous;
+        // A small shift is not worth a second number; the reader only needs the direction.
+        var minor = Math.Abs(report.Count - previous) * 10 < previous;
+        if (minor) {
+            return (up ? "increased since the previous release" : "decreased since the previous release", up ? "up" : "down");
+        }
+        return up
+            ? ($"up from {previous:N0} last release", "up")
+            : ($"down from {previous:N0} last release", "down");
     }
 
     // -- report detail ---------------------------------------------------------------------

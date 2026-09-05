@@ -83,7 +83,7 @@ internal sealed class EmptyScopeProducer : IAuditReportProducer {
             Title = "Assessments with no geographic scope",
             Action = ActionClass.ByHand,
             TriageRank = 1,
-            TriageReason = "Each drops out of every scoped search, including the usual Global filter. Every row needs a look.",
+            TriageReason = "These assessments drop out of scoped search, including the usual Global filter. Every row needs a look.",
             DataSourceLabel = haveApi && haveCsv
                 ? "IUCN API and CSV export"
                 : haveApi ? "IUCN API" : "IUCN CSV export",
