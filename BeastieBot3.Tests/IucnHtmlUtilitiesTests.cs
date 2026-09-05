@@ -128,4 +128,48 @@ public class IucnHtmlUtilitiesTests {
         Assert.Equal("<span class=\"st\">text</span>", Clean("<span tabindex=\"0\"><span class=\"st\">text</span></span>"));
         Assert.Equal("<span class=\"st\">text</span>", Clean("<span class=\"st\"><span tabindex=\"0\">text</span></span>"));
     }
+    [Fact]
+    public void KeptTagTheSourceNeverClosedIsClosedInTheSuggestion() {
+        // The Euonymus corymbosus population field: twice as many <span> opens as closes, so the
+        // kept wrapper had no close to keep. The suggestion is meant to be pasted back, so it closes
+        // it rather than handing the reader an unterminated tag.
+        var html = "<span class=\"st\"><span tabindex=\"0\">Fewer than 2,500 mature individuals.</span>";
+        Assert.Equal("<span class=\"st\">Fewer than 2,500 mature individuals.</span>", Clean(html));
+        AssertSameReadableText(html);
+    }
+
+    [Fact]
+    public void MisNestedCloseStillLeavesBalancedMarkup() {
+        // Interleaved tags (`<b><span></b></span>`) used to strand the span open: the </b> forgot it,
+        // and the later </span> was then dropped as an orphan.
+        var html = "<b><span class=\"st\">text</b></span>";
+        Assert.Equal("<b><span class=\"st\">text</span></b>", Clean(html));
+        AssertSameReadableText(html);
+    }
+
+    [Fact]
+    public void EveryCleanedFieldHasBalancedInlineTags() {
+        // A blanket check over the shapes above: opens and closes must match in the suggestion.
+        var cases = new[] {
+            "<span class=\"st\">a<span tabindex=\"0\">b",
+            "<b><i>x</b></i>",
+            "</span>stray close<span class=\"st\">tail",
+            "<span class=\"st\"><span class=\"st\">nested",
+        };
+        foreach (var html in cases) {
+            var cleaned = Clean(html);
+            Assert.Equal(Count(cleaned, "<span"), Count(cleaned, "</span>"));
+            Assert.Equal(Count(cleaned, "<b>"), Count(cleaned, "</b>"));
+            Assert.Equal(Count(cleaned, "<i>"), Count(cleaned, "</i>"));
+        }
+    }
+
+    private static int Count(string haystack, string needle) {
+        var n = 0;
+        for (var i = haystack.IndexOf(needle, StringComparison.Ordinal); i >= 0;
+             i = haystack.IndexOf(needle, i + 1, StringComparison.Ordinal)) {
+            n++;
+        }
+        return n;
+    }
 }

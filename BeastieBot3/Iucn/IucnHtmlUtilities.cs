@@ -155,9 +155,14 @@ internal static class IucnHtmlUtilities {
     // identical one (same name and attributes) is already open above it, or when it is a styling-free
     // <span>; in either case its matching close tag is dropped too. Everything else — text, structural
     // tags, and inline tags that do carry styling — is passed through unchanged, so only tags that add
-    // no rendered effect are removed. Malformed input with more opens than closes is mirrored, not
-    // "repaired": a kept tag whose close never arrives simply stays open, as it did in the source.
-    // A close with no open is dropped, since it renders nothing.
+    // no rendered effect are removed. A close with no open is dropped, since it renders nothing.
+    //
+    // The output is always balanced, even when the source is not. These narratives routinely carry
+    // far more opens than closes (Euonymus corymbosus' population field has 2,063 <span> opens to
+    // 1,031 closes), and the suggestion is meant to be pasted back, so leaving a kept wrapper hanging
+    // open would hand the reader broken markup. Kept tags left open by a mis-nested close are closed
+    // before that close, and anything still open at the end is closed there — both are where a browser
+    // implicitly closes them, so the rendered text is unchanged.
     private static string UnwrapRedundantInlineTags(string html) {
         var sb = new StringBuilder(html.Length);
         var stack = new List<(string Name, string Key, bool Dropped)>();
@@ -206,6 +211,13 @@ internal static class IucnHtmlUtilities {
                 // left behind when a broken open tag (see BrokenOpenTagRegex) was removed above.
                 continue;
             }
+            // Inner tags left unclosed by this mis-nested close (`<b><i></b>`) are closed here, in
+            // innermost-first order, so the output stays balanced.
+            for (var k = stack.Count - 1; k > idx; k--) {
+                if (!stack[k].Dropped) {
+                    sb.Append("</").Append(stack[k].Name).Append('>');
+                }
+            }
             var dropped = stack[idx].Dropped;
             stack.RemoveRange(idx, stack.Count - idx);
             if (!dropped) {
@@ -215,6 +227,13 @@ internal static class IucnHtmlUtilities {
 
         if (pos < html.Length) {
             sb.Append(html, pos, html.Length - pos);
+        }
+
+        // Whatever the source never closed, close now.
+        for (var k = stack.Count - 1; k >= 0; k--) {
+            if (!stack[k].Dropped) {
+                sb.Append("</").Append(stack[k].Name).Append('>');
+            }
         }
         return sb.ToString();
     }
