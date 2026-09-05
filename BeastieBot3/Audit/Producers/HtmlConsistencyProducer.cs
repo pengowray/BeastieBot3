@@ -219,8 +219,12 @@ internal sealed class HtmlConsistencyProducer : IAuditReportProducer {
                 var htmlText = Canonical(IucnHtmlUtilities.ConvertHtmlToExactPlainText(htmlVal));
                 var plainText = Canonical(plainVal);
 
-                // Identical readable text (cosmetic-only differences) is not a finding.
-                if (string.Equals(htmlText, plainText, StringComparison.Ordinal)) {
+                // Identical readable text (cosmetic-only differences) is not a finding, unless a pasted
+                // tag has swallowed a paragraph as attribute names: then both exports agree and both
+                // are missing text, which is worth a row of its own.
+                var trapped = IucnHtmlUtilities.TextTrappedInAttributes(htmlVal);
+                var sameText = string.Equals(htmlText, plainText, StringComparison.Ordinal);
+                if (sameText && trapped is null) {
                     continue;
                 }
 
@@ -237,7 +241,10 @@ internal sealed class HtmlConsistencyProducer : IAuditReportProducer {
                 string detail;
                 int severity;
 
-                if (plainText.Length == 0 && htmlText.Length > 0) {
+                if (sameText) {
+                    issueType = "text lost inside a tag"; severity = 4;
+                    detail = "Both versions read the same, but the HTML holds further text only as attribute names of a pasted-in tag, so that text is missing from both. See the Compare view for the words.";
+                } else if (plainText.Length == 0 && htmlText.Length > 0) {
                     if (redundant) {
                         issueType = "plain text empty (redundant markup)"; severity = 5;
                         detail = $"The assessments.csv field is empty while assessments_with_html.csv contains text. The HTML is about {ratio:N0} times the size of its readable text, and the plain-text version appears to have been cut off inside the redundant markup.";
@@ -307,7 +314,7 @@ internal sealed class HtmlConsistencyProducer : IAuditReportProducer {
                 finding.Extra["viewHtml"] = htmlVal ?? "";
                 finding.Extra["htmlLen"] = rawHtmlLen.ToString("N0", CultureInfo.InvariantCulture);
                 finding.Extra["viewRatio"] = ratio > 0 ? ratio.ToString("N0", CultureInfo.InvariantCulture) : "";
-                finding.Extra["viewChangeNote"] = DescribeChange(plainVal, htmlVal, plainText, htmlText, redundant, ratio);
+                finding.Extra["viewChangeNote"] = DescribeChange(plainVal, htmlVal, plainText, htmlText, redundant, ratio, sameText) + TrappedTextNote(trapped);
                 if (hasApi) {
                     finding.Extra["viewApi"] = DescribeApiComparison(GetApiDoc(assessmentId), field, htmlVal, htmlText);
                 }
@@ -345,7 +352,10 @@ internal sealed class HtmlConsistencyProducer : IAuditReportProducer {
     // A one-line summary of how the two versions differ, shown above the panes so the reader does not
     // have to hunt for it. The most useful case is an invisible character: the panes look identical
     // except for a gap, so the note names the exact character and the word it sits in.
-    private static string DescribeChange(string? rawPlain, string? rawHtml, string plainText, string htmlText, bool redundant, double ratio) {
+    private static string DescribeChange(string? rawPlain, string? rawHtml, string plainText, string htmlText, bool redundant, double ratio, bool sameText) {
+        if (sameText) {
+            return "The readable text is the same in both versions.";
+        }
         if (redundant) {
             return $"Heavy redundant markup: the HTML is about {ratio:N0} times the size of its readable text, and the assessments.csv plain text does not get past it. The suggested cleaned-up HTML below restores the readable text.";
         }
@@ -362,6 +372,18 @@ internal sealed class HtmlConsistencyProducer : IAuditReportProducer {
             return "The assessments.csv field stops early; the assessments_with_html.csv version continues. The point where it stops is highlighted below.";
         }
         return "The readable text differs between the two versions. The first difference is highlighted below.";
+    }
+
+    // A spreadsheet paste can turn a paragraph into a tag's attribute names. Those words are in
+    // neither export's readable text and no tidy can recover them, so the reader is told they exist.
+    private static string TrappedTextNote(string? trapped) {
+        if (trapped is null) {
+            return "";
+        }
+        // Show both ends: the run often opens with a duplicate of a visible paragraph and only the
+        // tail is the text nobody can read.
+        var preview = trapped.Length > 130 ? trapped[..60].TrimEnd() + " â€¦ " + trapped[^60..].TrimStart() : trapped;
+        return $" A pasted-in tag in the HTML has swallowed further text as attribute names (\"{preview}\"). That text is not readable in either export and the cleaned-up HTML cannot restore it; it needs re-entering by hand.";
     }
 
     // When the two readable texts match once zero-width / soft-hyphen characters are removed, the only

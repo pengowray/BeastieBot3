@@ -1,4 +1,5 @@
 using System;
+using System.Linq;
 using BeastieBot3.Iucn;
 using Xunit;
 
@@ -41,6 +42,34 @@ public class IucnHtmlUtilitiesTests {
         var html = "<span tabindex=\"0\" lang=\"en\"><span>The <span lang=\"en\">range</span> is small.</span></span>";
         Assert.Equal("The range is small.", Clean(html));
         AssertSameReadableText(html);
+    }
+
+    [Fact]
+    public void PasteArtefactSpansAreUnwrapped() {
+        // Google Docs wraps a paste in a guid span; Google Sheets adds data-* and a run of empty-value
+        // attributes. None of it renders, so all of it goes.
+        var html = "<span id=\"docs-internal-guid-1\">A <span data-sheets-value=\"{&quot;1&quot;:2}\" climate=\"\" change=\"\">B</span></span>";
+        Assert.Equal("A B", Clean(html));
+        AssertSameReadableText(html);
+    }
+
+    [Fact]
+    public void BrokenOpenTagIsDroppedByCleanerAndPlainText() {
+        // The Bolitoglossa synoria threats pattern: an open tag whose ">" never arrives, so its
+        // attributes run straight into the closing tags. The tag is dropped and the leading text kept.
+        var html = "Text.<span><span data-sheets-value=\"{&quot;1&quot;:2}\" lost=\"\" words=\"\"</span></span>";
+        Assert.Equal("Text.", Clean(html));
+        Assert.Equal("Text.", IucnHtmlUtilities.ConvertHtmlToExactPlainText(html));
+        Assert.Equal("Text.", Clean("Text.<br/><br/>")); // trailing breaks render nothing
+        Assert.Equal("a<br/>b", Clean("a<br/>b"));
+    }
+
+    [Fact]
+    public void TrappedTextIsReportedNotRecovered() {
+        var attrs = string.Concat(System.Linq.Enumerable.Range(1, 14).Select(i => $" w{i}=\"\""));
+        var html = $"<span data-sheets-value=\"x\"{attrs}>hi</span>";
+        Assert.Equal("w1 w2 w3 w4 w5 w6 w7 w8 w9 w10 w11 w12 w13 w14", IucnHtmlUtilities.TextTrappedInAttributes(html));
+        Assert.Null(IucnHtmlUtilities.TextTrappedInAttributes("<span a=\"\" b=\"\">x</span>"));
     }
 
     [Fact]

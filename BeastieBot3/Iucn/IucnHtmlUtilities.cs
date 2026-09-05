@@ -31,6 +31,14 @@ internal static class IucnHtmlUtilities {
     private static readonly Regex BreakTagRegex = new($"<br\\b{AttributeFragment}>", RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
     private static readonly Regex BlockTagRegex = new($"</?(?:p|div|section|article|blockquote|ul|ol|li|table|thead|tbody|tfoot|tr|th|td|h[1-6])\\b{AttributeFragment}>", RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
     private static readonly Regex GenericTagRegex = new($"</?{TagNamePattern}\\b{AttributeFragment}>", RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+    // An open tag whose ">" never arrives: attributes run straight into the next tag. Spreadsheet
+    // pastes produce these (a <span data-sheets-value=...> whose remaining text became attribute
+    // names). Without this, every tag regex fails on it and the whole tag leaks into the plain text.
+    private static readonly Regex BrokenOpenTagRegex = new($"<{TagNamePattern}\\b(?=\\s)(?:{AttributeFragment}=){AttributeFragment}(?=<)", RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+    // Words trapped as valueless attribute names (`the="" emergence="" salamander=""`), the signature
+    // of a spreadsheet paste that turned a paragraph into markup. Twelve in a row is well past anything
+    // a real tag carries.
+    private static readonly Regex TrappedWordsRegex = new("(?:\\s+[^\\s=\"'<>]+=\"\"){12,}", RegexOptions.Compiled | RegexOptions.CultureInvariant);
     private static readonly Regex SupTagRegex = new("<sup\\b[^>]*>(.*?)</sup>", RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.Singleline);
     private static readonly Regex NumericEntityRegex = new("&#(?:(?<dec>[0-9]+)|x(?<hex>[0-9a-fA-F]+));", RegexOptions.Compiled | RegexOptions.CultureInvariant);
     private static readonly Regex RandomEmailToRemove = new(@"""[^""]*?<[a-z]+@yahoo\.com\.br>.*?""[^""/]*?/", RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
@@ -73,17 +81,23 @@ internal static class IucnHtmlUtilities {
         "<(?<close>/?)(?<name>" + TagNamePattern + ")(?<attrs>" + AttributeFragment + ")>",
         RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Singleline);
     private static readonly Regex AttrNameRegex = new(
-        "(?<name>[A-Za-z_:][-\\w:.]*)\\s*(?:=\\s*(?:\"[^\"]*\"|'[^']*'|[^\\s\"'>]*))?",
+        "(?<name>[A-Za-z_:][-\\w:.]*)\\s*(?:=\\s*(?<value>\"[^\"]*\"|'[^']*'|[^\\s\"'>]*))?",
         RegexOptions.Compiled | RegexOptions.CultureInvariant);
     private static readonly Regex AnyWhitespaceRegex = new("\\s+", RegexOptions.Compiled);
     private static readonly Regex MultipleSpacesRegex = new("[ \\t]{2,}", RegexOptions.Compiled);
     private static readonly Regex BlankLineRunRegex = new("(?:\\n[ \\t]*){3,}", RegexOptions.Compiled);
+    private static readonly Regex TrailingBreaksRegex = new("(?:<br\\b[^>]*>\\s*)+$", RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
 
     // <span> attributes that carry no rendered styling, so a span whose attributes are only these
     // (or none at all) can be unwrapped entirely. tabindex/lang/dir are accessibility/locale hints
-    // the editor sprays onto every wrapper; dropping them leaves the readable text untouched.
+    // the editor sprays onto every wrapper; id and data-* are paste artefacts (Google Docs' guid
+    // span, Google Sheets' data-sheets-value); an attribute with an empty value renders nothing
+    // either. Dropping them leaves the readable text untouched.
     private static readonly HashSet<string> ValuelessSpanAttributes = new(StringComparer.OrdinalIgnoreCase) {
-        "tabindex", "lang", "dir", "xml:lang", "role",
+        "tabindex", "lang", "dir", "xml:lang", "role", "id",
+    };
+    private static readonly HashSet<string> StylingAttributes = new(StringComparer.OrdinalIgnoreCase) {
+        "style", "class", "title", "hidden",
     };
 
     // Produces a suggested tidy of a narrative HTML field by removing redundant inline markup, then
@@ -102,6 +116,7 @@ internal static class IucnHtmlUtilities {
         var working = NormalizeLineEndings(html);
         working = CommentRegex.Replace(working, string.Empty);
         working = RemoveInvisibleCharacters(working);
+        working = BrokenOpenTagRegex.Replace(working, string.Empty);
 
         // Empty-tag removal can expose a newly-empty parent (an emptied wrapper), so repeat until
         // stable, bounded for safety. An empty tag that wrapped whitespace is replaced with a single
@@ -117,6 +132,8 @@ internal static class IucnHtmlUtilities {
 
         working = MultipleSpacesRegex.Replace(working, " ");
         working = BlankLineRunRegex.Replace(working, "\n\n");
+        // Line breaks at the very end of a field render nothing.
+        working = TrailingBreaksRegex.Replace(working.Trim(), string.Empty);
         return working.Trim();
     }
 
@@ -138,8 +155,9 @@ internal static class IucnHtmlUtilities {
     // identical one (same name and attributes) is already open above it, or when it is a styling-free
     // <span>; in either case its matching close tag is dropped too. Everything else — text, structural
     // tags, and inline tags that do carry styling — is passed through unchanged, so only tags that add
-    // no rendered effect are removed. Malformed input (more opens than closes) is mirrored, not
+    // no rendered effect are removed. Malformed input with more opens than closes is mirrored, not
     // "repaired": a kept tag whose close never arrives simply stays open, as it did in the source.
+    // A close with no open is dropped, since it renders nothing.
     private static string UnwrapRedundantInlineTags(string html) {
         var sb = new StringBuilder(html.Length);
         var stack = new List<(string Name, string Key, bool Dropped)>();
@@ -184,7 +202,8 @@ internal static class IucnHtmlUtilities {
                 if (string.Equals(stack[k].Name, name, StringComparison.OrdinalIgnoreCase)) { idx = k; break; }
             }
             if (idx < 0) {
-                sb.Append(raw); // stray close with no matching open: keep as-is
+                // A close with no matching open renders nothing; dropping it also tidies the close
+                // left behind when a broken open tag (see BrokenOpenTagRegex) was removed above.
                 continue;
             }
             var dropped = stack[idx].Dropped;
@@ -218,11 +237,35 @@ internal static class IucnHtmlUtilities {
         var any = false;
         foreach (Match a in AttrNameRegex.Matches(trimmed)) {
             any = true;
-            if (!ValuelessSpanAttributes.Contains(a.Groups["name"].Value)) {
+            var attrName = a.Groups["name"].Value;
+            if (StylingAttributes.Contains(attrName)) {
+                return false;
+            }
+            var value = a.Groups["value"].Value.Trim('"', '\'');
+            var valueless = ValuelessSpanAttributes.Contains(attrName)
+                || attrName.StartsWith("data-", StringComparison.OrdinalIgnoreCase)
+                || value.Length == 0;
+            if (!valueless) {
                 return false;
             }
         }
         return any;
+    }
+
+    // Words that survive only as attribute names, when a pasted tag has swallowed a paragraph
+    // (`the="" emergence="" salamander=""`). Returns the run as readable words, or null when there is
+    // none. The text is not part of the narrative in any export, so callers can only report it.
+    public static string? TextTrappedInAttributes(string? html) {
+        if (string.IsNullOrEmpty(html)) {
+            return null;
+        }
+        var m = TrappedWordsRegex.Match(html);
+        if (!m.Success) {
+            return null;
+        }
+        var words = m.Value.Replace("=\"\"", string.Empty);
+        words = WebUtility.HtmlDecode(words);
+        return AnyWhitespaceRegex.Replace(words, " ").Trim();
     }
 
     public static string? ConvertHtmlToPlainTextNeater(string? html) => ConvertHtmlToPlain(html, PlainTextFlavor.Friendly);
@@ -285,6 +328,7 @@ internal static class IucnHtmlUtilities {
 
         working = ReplaceSupTags(working, flavor);
         working = ReplaceStructuralTags(working, flavor);
+        working = BrokenOpenTagRegex.Replace(working, string.Empty);
         working = GenericTagRegex.Replace(working, string.Empty);
 
         working = WebUtility.HtmlDecode(working);
