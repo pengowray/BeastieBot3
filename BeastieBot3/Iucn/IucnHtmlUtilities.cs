@@ -86,7 +86,24 @@ internal static class IucnHtmlUtilities {
     private static readonly Regex AnyWhitespaceRegex = new("\\s+", RegexOptions.Compiled);
     private static readonly Regex MultipleSpacesRegex = new("[ \\t]{2,}", RegexOptions.Compiled);
     private static readonly Regex BlankLineRunRegex = new("(?:\\n[ \\t]*){3,}", RegexOptions.Compiled);
-    private static readonly Regex TrailingBreaksRegex = new("(?:<br\\b[^>]*>\\s*)+$", RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+    // Markup that renders nothing on its own: whitespace, a non-breaking space in any spelling, and a
+    // line break. Used to recognise the padding at either end of a narrative field.
+    private const string NothingFragment = "\\s|&nbsp;|&#0*160;|&#[xX]0*[aA]0;|<br\\b" + AttributeFragment + ">";
+    // Tags whose empty form renders nothing at the ends of a field. Deliberately excludes list items
+    // and table cells: an empty last <li> or <td> still draws a bullet or a cell.
+    private const string EmptyPairTagNames = "p|div|" + InlineTagNames;
+    private const string EmptyPairFragment =
+        "<(?<pair>" + EmptyPairTagNames + ")\\b" + AttributeFragment + ">(?:" + NothingFragment + ")*</\\k<pair>\\s*>";
+    // The run of nothing-rendering content at the end of a field, including the part tucked inside the
+    // closing tags that wrap the whole narrative (`text.&#160;<br/><br/></span>`). Closing tags in the
+    // run are kept — their opens are further back in the document — so the output stays balanced.
+    private static readonly Regex TrailingNothingRegex = new(
+        "(?:(?:" + NothingFragment + ")|" + EmptyPairFragment + "|(?<keep></" + TagNamePattern + "\\s*>))+\\z",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Singleline);
+    // The same at the start of a field (`<p></p><p>Direct threats…`), keeping the opening tags.
+    private static readonly Regex LeadingNothingRegex = new(
+        "\\A(?:(?:" + NothingFragment + ")|" + EmptyPairFragment + "|(?<keep><" + TagNamePattern + AttributeFragment + ">))+",
+        RegexOptions.Compiled | RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Singleline);
 
     // <span> attributes that carry no rendered styling, so a span whose attributes are only these
     // (or none at all) can be unwrapped entirely. tabindex/lang/dir are accessibility/locale hints
@@ -105,8 +122,10 @@ internal static class IucnHtmlUtilities {
     // the rendered text: empty inline tags; inline tags nested inside an identical one (same name and
     // attributes, so the inner adds nothing); and <span>s that carry no styling at all (bare, or only
     // editor-noise attributes such as tabindex/lang). Stray zero-width and soft-hyphen characters are
-    // deleted as well, so the suggestion does not leave invisible artefacts behind. Structural tags
-    // (<p>, <br>, <li>, …) are left intact. It is still a best-effort suggestion: callers should
+    // deleted as well, so the suggestion does not leave invisible artefacts behind. Padding that renders
+    // nothing at either end of the field — trailing line breaks, spaces, non-breaking spaces and empty
+    // paragraphs, inside the wrapping tags as well as outside them — is trimmed. Structural tags
+    // elsewhere (<p>, <br>, <li>, …) are left intact. It is still a best-effort suggestion: callers should
     // verify the extracted text still matches and note that identical rendering has not been checked.
     public static string? CleanRedundantMarkup(string? html) {
         if (string.IsNullOrEmpty(html)) {
@@ -132,9 +151,20 @@ internal static class IucnHtmlUtilities {
 
         working = MultipleSpacesRegex.Replace(working, " ");
         working = BlankLineRunRegex.Replace(working, "\n\n");
-        // Line breaks at the very end of a field render nothing.
-        working = TrailingBreaksRegex.Replace(working.Trim(), string.Empty);
+        // Line breaks, spaces, non-breaking spaces and empty paragraphs at either end of a field render
+        // nothing, whether they sit outside the wrapping tags or inside them.
+        working = TrailingNothingRegex.Replace(working.Trim(), KeepTags);
+        working = LeadingNothingRegex.Replace(working, KeepTags);
         return working.Trim();
+    }
+
+    // Rebuilds a matched run of nothing-rendering content as just the tags worth keeping, in order.
+    private static string KeepTags(Match match) {
+        var sb = new StringBuilder();
+        foreach (Capture capture in match.Groups["keep"].Captures) {
+            sb.Append(capture.Value);
+        }
+        return sb.ToString();
     }
 
     private static string RemoveEmptyInlineTags(string html) {

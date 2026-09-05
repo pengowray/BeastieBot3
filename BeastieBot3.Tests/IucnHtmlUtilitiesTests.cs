@@ -12,10 +12,13 @@ namespace BeastieBot3.Tests;
 public class IucnHtmlUtilitiesTests {
     private static string Clean(string html) => IucnHtmlUtilities.CleanRedundantMarkup(html) ?? "";
 
+    // Compared trimmed: the cleaner deliberately drops padding that renders nothing at either end of
+    // the field, and a trailing non-breaking space survives the exact conversion (it is not trimmable
+    // whitespace there). The producer verifies the suggestion the same way, over canonicalised text.
     private static void AssertSameReadableText(string html) {
         var before = IucnHtmlUtilities.ConvertHtmlToExactPlainText(html);
         var after = IucnHtmlUtilities.ConvertHtmlToExactPlainText(Clean(html));
-        Assert.Equal(before, after);
+        Assert.Equal(before?.Trim(), after?.Trim());
     }
 
     [Fact]
@@ -145,6 +148,45 @@ public class IucnHtmlUtilitiesTests {
         var html = "<b><span class=\"st\">text</b></span>";
         Assert.Equal("<b><span class=\"st\">text</span></b>", Clean(html));
         AssertSameReadableText(html);
+    }
+
+    [Fact]
+    public void PaddingAtTheEndOfTheFieldIsDroppedInsideTheWrappingTags() {
+        // The commonest tail in the report: line breaks and spaces left before the closing tag.
+        Assert.Equal("<span class=\"st\">Assessed as Least Concern.</span>",
+            Clean("<span class=\"st\">Assessed as Least Concern. <br/><br/></span>"));
+        Assert.Equal("<span class=\"st\">Assessed as Least Concern.</span>",
+            Clean("<span class=\"st\">Assessed as Least Concern.&#160;</span>"));
+        AssertSameReadableText("<span class=\"st\">Assessed as Least Concern.&#160; <br/></span>");
+    }
+
+    [Fact]
+    public void EmptyParagraphsAtEitherEndAreDropped() {
+        Assert.Equal("<p>Direct threats are not well understood.</p>",
+            Clean("<p></p><p>Direct threats are not well understood.</p><p></p>"));
+        Assert.Equal("<p>Habitat loss is inferred.</p>",
+            Clean("<p>Habitat loss is inferred.&#160;</p><p></p>"));
+    }
+
+    [Fact]
+    public void StyledWrapperAroundNothingButABreakGoesWithIt() {
+        // `text.<span style="font-weight: bold;"><br/></span>` at the end of a field.
+        Assert.Equal("<p>Pers. comm. 2007.</p>",
+            Clean("<p>Pers. comm. 2007.</p><span style=\"font-weight: bold;\"><br/></span>"));
+    }
+
+    [Fact]
+    public void PaddingInTheMiddleOfTheFieldIsLeftAlone() {
+        // Only the ends are trimmed: a break run or an empty paragraph between two paragraphs is
+        // spacing the author may have meant, and an empty cell or bullet still renders.
+        const string breaks = "<p>One.</p><br/><br/><br/><p>Two.</p>";
+        Assert.Equal(breaks, Clean(breaks));
+        const string gap = "<p>One.</p><p></p><p>Two.</p>";
+        Assert.Equal(gap, Clean(gap));
+        const string cell = "<table><tr><td>One.</td><td></td></tr></table>";
+        Assert.Equal(cell, Clean(cell));
+        const string inner = "Two&#160;words.";
+        Assert.Equal(inner, Clean(inner));
     }
 
     [Fact]
