@@ -61,9 +61,11 @@ internal sealed class ProvisionalNamesProducer : IAuditReportProducer {
             // IUCN's own synonym list, which the API publishes and the CSV export does not. Read
             // per taxon rather than through IucnSynonymIndex, which scans the whole API cache to
             // build a release-wide map; only these few taxa are ever asked about. A synonym that is
-            // itself provisional is not a described name, so it does not count.
-            var known = hasSynonyms && DescribedSynonyms(apiCache!, row.TaxonId).Count > 0;
-            if (known) {
+            // itself provisional is not a described name, so it does not count, and the row says so.
+            var (described, stillProvisional) = hasSynonyms
+                ? Synonyms(apiCache!, row.TaxonId)
+                : (Array.Empty<string>(), Array.Empty<string>());
+            if (described.Count > 0) {
                 Count(tally, Disposition.KnownToIucn);
                 continue;
             }
@@ -86,7 +88,7 @@ internal sealed class ProvisionalNamesProducer : IAuditReportProducer {
             }
 
             Count(tally, Disposition.Listed);
-            findings.Add(Build(row, name, parsed, col1, other, otherNames));
+            findings.Add(Build(row, name, parsed, col1, other, otherNames, stillProvisional, repo is not null));
         }
 
         var ordered = findings
@@ -98,22 +100,25 @@ internal sealed class ProvisionalNamesProducer : IAuditReportProducer {
         return BuildReport(ctx, ordered, provisionalCount, tally, repo is not null, hasSynonyms, others);
     }
 
-    // The described (non-provisional) names IUCN already files as synonyms of this taxon. One
-    // indexed read per listed taxon, against the API cache's stored payload.
-    private static IReadOnlyList<string> DescribedSynonyms(SqliteConnection apiCache, long taxonId) {
+    // The names IUCN already files as synonyms of this taxon, split into described names (which
+    // answer the question and take the taxon off the list) and names that are themselves provisional
+    // (which do not). One indexed read per provisional taxon, against the API cache's stored payload.
+    private static (IReadOnlyList<string> Described, IReadOnlyList<string> Provisional) Synonyms(
+        SqliteConnection apiCache, long taxonId) {
         using var command = apiCache.CreateCommand();
         command.CommandText = "SELECT json FROM taxa WHERE root_sis_id = @id LIMIT 1";
         command.Parameters.AddWithValue("@id", taxonId);
         command.CommandTimeout = 30;
         if (command.ExecuteScalar() is not string payload || string.IsNullOrWhiteSpace(payload)) {
-            return Array.Empty<string>();
+            return (Array.Empty<string>(), Array.Empty<string>());
         }
-        var names = new List<string>();
+        var described = new List<string>();
+        var provisional = new List<string>();
         try {
             using var document = JsonDocument.Parse(payload);
             if (!document.RootElement.TryGetProperty("taxon", out var taxon) ||
                 !taxon.TryGetProperty("synonyms", out var synonyms) || synonyms.ValueKind != JsonValueKind.Array) {
-                return names;
+                return (described, provisional);
             }
             foreach (var synonym in synonyms.EnumerateArray()) {
                 var genus = JsonString(synonym, "genus_name");
@@ -123,15 +128,13 @@ internal sealed class ProvisionalNamesProducer : IAuditReportProducer {
                 }
                 var infra = JsonString(synonym, "infra_name");
                 var name = infra is null ? $"{genus} {species}" : $"{genus} {species} {infra}";
-                if (!ProvisionalNames.IsProvisional(name)) {
-                    names.Add(name);
-                }
+                (ProvisionalNames.IsProvisional(name) ? provisional : described).Add(name);
             }
         } catch (JsonException) {
             // A payload this producer cannot read answers nothing; treat it as no synonyms rather
             // than dropping the taxon from the report.
         }
-        return names;
+        return (described, provisional);
     }
 
     private static string? JsonString(JsonElement element, string name) =>
@@ -167,18 +170,19 @@ internal sealed class ProvisionalNamesProducer : IAuditReportProducer {
 
     // -- finding -----------------------------------------------------------------------------
 
-    private static AuditFinding Build(ProvisionalRow row, string name, ProvisionalName parsed,
-        ColMatch? col, OtherSourceHit other, IReadOnlyList<string> otherNames) {
+    private static AuditFinding Build(ProvisionalRow row, string name, ProvisionalName parsed, ColMatch? col,
+        OtherSourceHit other, IReadOnlyList<string> otherNames, IReadOnlyList<string> provisionalSynonyms, bool colChecked) {
         var (rank, isFull) = AuditMapping.Rank(row.InfraType, row.Subpopulation);
         var colName = AuditMapping.Decode(col?.Record.ScientificName);
+        var colAuthority = AuditMapping.Decode(col?.Record.Authorship);
         var colYear = ColYear(col?.Record);
-        var assessmentYear = Year(row.YearPublished);
-        var describedSince = colYear is not null && assessmentYear is not null && colYear > assessmentYear;
+        var iucnYear = Year(row.YearPublished);
+        var describedSince = colYear is not null && iucnYear is not null && colYear > iucnYear;
+        var describedName = colName ?? otherNames[0];
 
         // Strongest first: a name CoL accepts and dates after the assessment, then one CoL simply
         // accepts, then one CoL files under something else, then a name only the wikis carry.
         var severity = col is null ? 2 : col.IsAccepted ? (describedSince ? 5 : 4) : 3;
-        var suggested = colName ?? otherNames[0];
 
         var finding = new AuditFinding {
             ReportId = Id_,
@@ -204,16 +208,16 @@ internal sealed class ProvisionalNamesProducer : IAuditReportProducer {
             DataSource = "iucn-csv+col+wiki",
             Field = "scientificName",
             CurrentValue = name,
-            SuggestedValue = suggested,
+            SuggestedValue = describedName,
             IssueType = col is null ? "described-name-in-wikis"
                 : col.IsAccepted ? (describedSince ? "described-since-assessment" : "described-name-in-col")
                 : "candidate-name-is-a-col-synonym",
             SeverityTier = severity,
-            Detail = Detail(col, colName, colYear, assessmentYear, describedSince, otherNames),
+            Detail = Detail(col, describedName, colAuthority, colYear, iucnYear, other, otherNames, colChecked),
         };
 
         Set(finding, "candidateName", parsed.CandidateName);
-        Set(finding, "colAuthority", AuditMapping.Decode(col?.Record.Authorship));
+        Set(finding, "colAuthority", colAuthority);
         Set(finding, "colYear", colYear?.ToString(CultureInfo.InvariantCulture));
         Set(finding, "colStatus", col is null ? null : col.IsAccepted ? "accepted" : "synonym");
         Set(finding, "colUrl", ColUrls.Taxon(col?.Record.Id));
@@ -221,22 +225,47 @@ internal sealed class ProvisionalNamesProducer : IAuditReportProducer {
             Set(finding, "wikidataId", other.WikidataId);
             Set(finding, "wikidataUrl", OtherSourceIndex.WikidataUrl(other.WikidataId));
         }
-        if (other.WikipediaTitle is not null && !ProvisionalNames.IsProvisional(other.WikipediaTitle)) {
-            Set(finding, "wikipediaTitle", other.WikipediaTitle);
-            Set(finding, "wikipediaUrl", OtherSourceIndex.WikipediaUrl(other.WikipediaTitle));
+        var wikipediaTitle = other.WikipediaTitle is not null && !ProvisionalNames.IsProvisional(other.WikipediaTitle)
+            ? other.WikipediaTitle : null;
+        if (wikipediaTitle is not null) {
+            Set(finding, "wikipediaTitle", wikipediaTitle);
+            Set(finding, "wikipediaUrl", OtherSourceIndex.WikipediaUrl(wikipediaTitle));
         }
 
-        if (col is not null && otherNames.Count > 0 &&
-            otherNames.Any(n => string.Equals(n, colName, StringComparison.OrdinalIgnoreCase))) {
-            finding.Notes.Add("Wikidata or Wikipedia records the same name against this taxon's SIS id.");
+        AddNotes(finding, col, describedName, wikipediaTitle, otherNames, provisionalSynonyms, row);
+        return finding;
+    }
+
+    private static void AddNotes(AuditFinding finding, ColMatch? col, string describedName, string? wikipediaTitle,
+        IReadOnlyList<string> otherNames, IReadOnlyList<string> provisionalSynonyms, ProvisionalRow row) {
+        // Only worth saying when CoL is the source of the described name; when the wikis are the
+        // only source, the Detail has already named them.
+        if (col is not null) {
+            var onWikidata = otherNames.Any(n => string.Equals(n, describedName, StringComparison.OrdinalIgnoreCase))
+                             && !string.Equals(wikipediaTitle, describedName, StringComparison.OrdinalIgnoreCase);
+            var onWikipedia = string.Equals(wikipediaTitle, describedName, StringComparison.OrdinalIgnoreCase);
+            var both = otherNames.Any(n => string.Equals(n, describedName, StringComparison.OrdinalIgnoreCase)) && onWikipedia;
+            if (both) {
+                finding.Notes.Add($"Wikidata and English Wikipedia also give {describedName} as this taxon's name.");
+            } else if (onWikipedia) {
+                finding.Notes.Add($"English Wikipedia also has an article on this taxon under {describedName}.");
+            } else if (onWikidata) {
+                finding.Notes.Add($"Wikidata also gives {describedName} as this taxon's name.");
+            }
         }
+
+        // Why this taxon survived the already-known exclusion: IUCN does record a synonym, but it is
+        // another working name, so no described name is on record yet.
+        if (provisionalSynonyms.Count > 0) {
+            finding.Notes.Add($"IUCN lists {provisionalSynonyms[0]} as a synonym of this taxon; that name is also provisional, so it does not count as a described name.");
+        }
+
         // Only when both sides actually name a family. IUCN writes "NOT ASSIGNED" where it records
         // none, which is not a family and must not be printed as one.
         if (col is not null && Named(row.Family) is { } iucnFamily && Named(col.Record.Family) is { } colFamily &&
             !string.Equals(iucnFamily, colFamily, StringComparison.OrdinalIgnoreCase)) {
             finding.Notes.Add($"CoL places that name in {colFamily} while IUCN places this taxon in {iucnFamily}, so the two may not be the same taxon.");
         }
-        return finding;
     }
 
     // A family name, or null where the source records none. IUCN uses the literal "NOT ASSIGNED".
@@ -246,21 +275,59 @@ internal sealed class ProvisionalNamesProducer : IAuditReportProducer {
             ? null : trimmed;
     }
 
-    private static string Detail(ColMatch? col, string? colName, int? colYear, int? assessmentYear,
-        bool describedSince, IReadOnlyList<string> otherNames) {
+    // One sentence for what the Catalogue of Life makes of the name, plus one for how its year sits
+    // against the assessment. The two are separate facts: "CoL records no year" and "the name already
+    // existed when the taxon was assessed" say different things and a reader acts on them differently.
+    private static string Detail(ColMatch? col, string describedName, string? colAuthority, int? colYear,
+        int? iucnYear, OtherSourceHit other, IReadOnlyList<string> otherNames, bool colChecked) {
         if (col is null) {
-            return $"No Catalogue of Life record matches the name built from the tag, but {string.Join(" and ", otherNames)} is recorded against this taxon's SIS id elsewhere.";
+            var source = SourcePhrase(other, otherNames);
+            var colClause = colChecked
+                ? "The Catalogue of Life lookup found no described name for it."
+                : "The Catalogue of Life was not checked for this build.";
+            return $"This taxon is named {describedName} on {source}. {colClause}";
         }
-        if (!col.IsAccepted) {
-            var target = AuditMapping.Decode(col.AcceptedTarget?.ScientificName);
-            return target is null
-                ? $"The Catalogue of Life holds {colName} as a synonym, so the tag may point at a name that is no longer in use."
-                : $"The Catalogue of Life holds {colName} as a synonym of {target}, so the tag may point at that taxon rather than an undescribed one.";
+
+        // The authority follows the name unbracketed: "Heptapleurum nanocephalum (de Kok)" would read
+        // to a botanist as a basionym author awaiting a combining author, a different claim.
+        var named = string.IsNullOrWhiteSpace(colAuthority) ? describedName : $"{describedName} {colAuthority}";
+        if (col.IsAccepted) {
+            var head = $"{named} is an accepted name in the Catalogue of Life";
+            return head + YearClause(colYear, iucnYear) ;
         }
-        if (describedSince) {
-            return $"The Catalogue of Life accepts {colName}, published in {colYear}, after this assessment of {assessmentYear}.";
+
+        var target = AuditMapping.Decode(col.AcceptedTarget?.ScientificName);
+        var synonymHead = target is null
+            ? $"{named} is in the Catalogue of Life as a synonym, with no accepted name linked to it"
+            : $"{named} is in the Catalogue of Life as a synonym of {target}";
+        return synonymHead + YearClause(colYear, iucnYear);
+    }
+
+    private static string YearClause(int? colYear, int? iucnYear) {
+        if (colYear is null) {
+            return iucnYear is null
+                ? "."
+                : $". CoL records no publication year for it, so whether it predates the {iucnYear} assessment is unknown.";
         }
-        return $"The Catalogue of Life accepts {colName} as a described species.";
+        if (iucnYear is null) {
+            return $", published in {colYear}.";
+        }
+        if (colYear > iucnYear) {
+            var gap = colYear.Value - iucnYear.Value;
+            var span = gap == 1 ? "1 year" : $"{gap} years";
+            return $", published in {colYear}, {span} after the {iucnYear} assessment.";
+        }
+        return $", published in {colYear}. The name already existed when the taxon was assessed in {iucnYear}.";
+    }
+
+    private static string SourcePhrase(OtherSourceHit other, IReadOnlyList<string> otherNames) {
+        var wikidata = other.WikidataId is not null && otherNames.Count > 0;
+        var wikipedia = other.WikipediaTitle is not null && !ProvisionalNames.IsProvisional(other.WikipediaTitle);
+        return (wikidata, wikipedia) switch {
+            (true, true) => "Wikidata and English Wikipedia",
+            (false, true) => "English Wikipedia",
+            _ => "Wikidata",
+        };
     }
 
     private static int? ColYear(ColTaxonRecord? record) {
@@ -346,45 +413,33 @@ ORDER BY i.scientificName, i.taxonId";
             sources.Add("English Wikipedia");
         }
 
-        var rows = new List<IReadOnlyList<string>>();
-        void Row(Disposition d, string label) {
-            var n = d == Disposition.Listed ? findings.Count : tally.TryGetValue(d, out var v) ? v : 0;
-            rows.Add(new[] { label, n.ToString("N0", CultureInfo.InvariantCulture) });
-        }
-        Row(Disposition.Listed, "Listed below");
-        Row(Disposition.KnownToIucn, "IUCN already records a described synonym");
-        Row(Disposition.Qualified, "Tag qualified with cf. or aff.");
-        Row(Disposition.NoDescribedName, "No described name found");
-        Row(Disposition.NothingToLookUp, "No name to look up in the tag");
-
-        var caveats = new List<string>();
-        if (!hasCol) {
-            caveats.Add("The Catalogue of Life database was unavailable, so only Wikidata and Wikipedia were checked.");
-        }
-        if (!hasSynonyms) {
-            caveats.Add("The Red List API cache was unavailable, so taxa whose synonym list already names a described species could not be filtered out.");
-        }
-        if (others is null) {
-            caveats.Add("Neither the Wikidata nor the Wikipedia cache was available, so only the Catalogue of Life was checked.");
-        }
+        int Tally(Disposition d) => tally.TryGetValue(d, out var v) ? v : 0;
+        var rows = new List<IReadOnlyList<string>> {
+            Row("Listed: a described name was found", findings.Count),
+            Row("Dropped: IUCN's synonym list already has a described name", Tally(Disposition.KnownToIucn)),
+            Row("Dropped: tag qualified with cf. or aff.", Tally(Disposition.Qualified)),
+            Row("Not listed: no described name found", Tally(Disposition.NoDescribedName)),
+            Row("Not listed: no name to look up in the tag", Tally(Disposition.NothingToLookUp)),
+        };
 
         return new AuditReport {
             Id = Id_,
             SectionId = "records",
-            Title = "Provisional names that another catalogue now records as described",
+            Title = "Provisional (sp. nov.) names with a described name in another source",
             Action = ActionClass.ByHand,
             TriageRank = findings.Count > 0 ? 5 : 0,
-            TriageReason = "A handful of rows, each a name that may have been described since.",
+            TriageReason = "Few rows, each a specific described name to confirm against its publication.",
             DataSourceLabel = string.Join(" + ", sources),
-            Blurb = "Assessments published under a provisional name where the Catalogue of Life, Wikidata or Wikipedia now holds a described name for the same taxon.",
-            Summary = SummaryText(provisionalCount, caveats),
-            Columns = Columns(),
+            Blurb = "Taxa assessed under a provisional name (Genus sp. nov. 'epithet') for which the Catalogue of Life, Wikidata, or English Wikipedia now records a described name that IUCN's own synonym list does not.",
+            Summary = SummaryText(ctx.Release, provisionalCount, Tally(Disposition.KnownToIucn), Tally(Disposition.Qualified),
+                Tally(Disposition.NoDescribedName) + Tally(Disposition.NothingToLookUp), hasCol, hasSynonyms, others),
+            Columns = Columns(others),
             Findings = findings,
             ShowGroupCounts = true,
             SummaryTables = new List<AuditSummaryTable> {
                 new() {
-                    Title = "Every provisional name in the release",
-                    Note = $"{provisionalCount:N0} assessed taxa carry a provisional name. What happened to each.",
+                    Title = "By outcome of the check",
+                    Note = $"Every assessed name containing sp. nov. or ssp. nov. in {ctx.Release}, each taxon counted once.",
                     Headers = new[] { "Outcome", "Taxa" },
                     Rows = rows,
                     NumericColumns = new[] { 1 },
@@ -393,49 +448,92 @@ ORDER BY i.scientificName, i.taxonId";
         };
     }
 
-    private static string SummaryText(int provisionalCount, IReadOnlyList<string> caveats) {
-        var text =
-            $"An assessment can be published for a species that has not been formally described, under a provisional name such as \"Notogomphus sp. nov. 'gorilla'\". {provisionalCount:N0} assessed taxa in this release carry one. Some of those species have since been described, and the table below lists the ones another catalogue appears to have a described name for.\n\n" +
-            "A candidate binomial is built from the quoted tag, so \"Notogomphus sp. nov. 'gorilla'\" gives Notogomphus gorilla, and that name is looked up in the Catalogue of Life. Wikidata and the English Wikipedia are asked separately what name they hold against the same SIS id. Only a tag that reads as a species epithet produces a candidate: a locality, a collector code or a description gives nothing to look up.\n\n" +
-            "Three exclusions keep the list conservative. A taxon whose Red List synonym list already names a described species is left out, because the link is already recorded. A tag qualified with \"cf.\" or \"aff.\" is never turned into a candidate, because it says the taxon resembles that species rather than being it. And a name match alone is a lead, not a determination: the same binomial can belong to a different taxon, so each row needs a person to confirm against the description.\n\n" +
-            "### Why it matters\n\n" +
-            "A provisional name is not an error. It is how an undescribed species gets assessed, and it is often the right record. But once the species is described, the assessment is filed under a name no other database uses, so the taxon is hard to link, hard to search for, and easy to assess twice under two names.\n\n" +
-            "### Suggestion\n\n" +
-            "Check each row against the publication the Catalogue of Life cites, and where it is the same taxon, record the described name. Adding it as a synonym would be enough to link the two catalogues.";
-        if (caveats.Count > 0) {
-            text += "\n\n" + string.Join(" ", caveats);
+    private static IReadOnlyList<string> Row(string label, int count) =>
+        new[] { label, count.ToString("N0", CultureInfo.InvariantCulture) };
+
+    private static string SummaryText(string release, int total, int known, int qualified, int none,
+        bool hasCol, bool hasSynonyms, OtherSourceIndex? others) {
+        var opening =
+            "The table below lists taxa assessed under a provisional name (Genus sp. nov. 'epithet', for example Notogomphus sp. nov. 'gorilla') for which the Catalogue of Life, Wikidata, or English Wikipedia now records a described name that IUCN's own synonym list does not. " +
+            "Assessing a species before it is formally described is deliberate and valid, and the provisional name is expected in that case. Each row is a case where a described name may since have been published for the same species.";
+        if (!hasSynonyms) {
+            opening += " IUCN synonym data from the Red List API was not available for this build, so the check for described names IUCN already lists as synonyms did not run. Some rows may be relationships IUCN already records.";
         }
-        return text;
+        if (others is null) {
+            opening += " The Wikidata and Wikipedia check did not run for this build, so only the Catalogue of Life was consulted.";
+        }
+        if (!hasCol) {
+            opening += " The Catalogue of Life database was not available for this build, so only Wikidata and Wikipedia were consulted.";
+        }
+
+        return opening + "\n\n" +
+            $"Every assessed taxon whose name contains sp. nov. or ssp. nov. is collected ({total:N0} in {release}). " +
+            "Where the quoted tag is one plain lower-case word, joining it to the genus gives a candidate binomial: Notogomphus sp. nov. 'gorilla' gives Notogomphus gorilla. " +
+            "A tag that is a locality, a collector code, or a description ('Bavispe Trout', 'HC - blind', 'B = Bester 11112') gives no candidate. " +
+            "Each candidate is matched against CoL as an exact name, so a described name published under a different genus, or with a different ending, is reachable only through the other two sources. " +
+            "Separately, Wikidata and English Wikipedia are checked by IUCN taxon id for any non-provisional name they record for the taxon.\n\n" +
+            "Two exclusions keep the list conservative. " +
+            $"Where IUCN's own synonym list for the taxon (published through the Red List API; the CSV export carries no synonyms) already holds a described name, the described name is already on record and the row is dropped ({known:N0} taxa this release). " +
+            "A synonym that is itself provisional does not count, so those taxa stay listed. " +
+            $"Where the tag carries cf. or aff., as in Barbus sp. nov. 'cf. gurneyi', the assessor compared the species with gurneyi and left its identity open, so the row is dropped ({qualified:N0} taxa). " +
+            $"The remaining {none:N0} taxa have no described name in any source checked. The table under this description gives the breakdown.\n\n" +
+            "A match is a lead. The same binomial can belong to a different species from the one assessed, and only a reader of the published description can confirm that the two names refer to the same taxon. " +
+            "The catalogues checked change between releases, so this page is rebuilt with each one, and a taxon absent now may appear later.\n\n" +
+            "### Why it matters\n\n" +
+            "Once a species is described, its provisional name and its binomial are two different strings, and no field on either side points to the other. " +
+            "A search for the described name does not find the assessment, a reader of the assessment has no route to the description, and any database that matches the Red List by name files the taxon as unmatched. " +
+            "Where both years are given, the IUCN year and CoL year columns show the gap between the assessment and the description.\n\n" +
+            "### Suggestion\n\n" +
+            "Check each row against the publication in the CoL authority column, where given. " +
+            "Where the described species is the one that was assessed, recording the described name on the assessment, as a synonym now or as the accepted name at the next reassessment, would let the two records join. " +
+            "Where CoL treats the described name as a synonym, the accepted name given in the Detail column is the one to compare. Where it is a different species, no change is needed.";
     }
 
-    private static IReadOnlyList<AuditColumn> Columns() => new List<AuditColumn> {
-        AuditColumns.ScientificName("IUCN name"),
-        AuditColumns.Rank(),
-        AuditColumns.Status(),
-        AuditColumns.Year("IUCN year"),
-        AuditColumns.SuggestedValue("Described name", AuditColumnType.Text),
-        AuditColumns.Custom("colAuthority", "CoL authority", AuditColumnType.Text,
-            "Authorship of the Catalogue of Life name, showing who described the species and when."),
-        AuditColumns.Custom("colYear", "CoL year", AuditColumnType.Number,
-            "Year of the Catalogue of Life name: its name-published year, or the year in its authority."),
-        AuditColumns.Custom("colStatus", "CoL status", AuditColumnType.Text,
-            "Whether the Catalogue of Life accepts that name or files it as a synonym of another."),
-        AuditColumns.ColLink(),
-        new AuditColumn {
-            Key = "wikidataId", Header = "Wikidata", Type = AuditColumnType.Url,
-            Value = f => f.Get("wikidataId"), Href = f => f.Get("wikidataUrl"),
-            Help = "Wikidata item carrying this taxon's SIS id.",
-        },
-        new AuditColumn {
-            Key = "wikipediaTitle", Header = "Wikipedia", Type = AuditColumnType.Url,
-            Value = f => f.Get("wikipediaTitle"), Href = f => f.Get("wikipediaUrl"),
-            Help = "English Wikipedia article matched to this taxon.",
-        },
-        AuditColumns.Group(),
-        AuditColumns.Class(csvOnly: true),
-        AuditColumns.Family(csvOnly: true),
-        AuditColumns.TaxonId("Taxon id"),
-        AuditColumns.RedlistLink(),
-        AuditColumns.Detail(),
-    };
+    // Wikidata and Wikipedia columns appear only when their caches were read. Leaving them out beats
+    // two blank columns, which read as "checked, found nothing".
+    private static IReadOnlyList<AuditColumn> Columns(OtherSourceIndex? others) {
+        var columns = new List<AuditColumn> {
+            AuditColumns.ScientificName("IUCN name"),
+            AuditColumns.Rank(),
+            AuditColumns.Status("IUCN status"),
+            new AuditColumn {
+                Key = "yearPublished", Header = "IUCN year", Type = AuditColumnType.Number,
+                Value = f => f.YearPublished,
+                Help = "Year the current assessment was published. Compare with CoL year.",
+            },
+            AuditColumns.SuggestedValue("Described name", AuditColumnType.Text),
+            AuditColumns.Custom("colAuthority", "CoL authority", AuditColumnType.Text,
+                "Authorship (with year) of the described name in the Catalogue of Life. Blank when the name was found only on Wikidata or Wikipedia."),
+            AuditColumns.Custom("colYear", "CoL year", AuditColumnType.Number,
+                "Year of the Catalogue of Life name: its name-published year, or the year in its authority."),
+            AuditColumns.Custom("colStatus", "CoL status", AuditColumnType.Text,
+                "Whether the Catalogue of Life treats the described name as an accepted name or as a synonym of another name. Blank when the name is not in CoL."),
+            AuditColumns.ColLink(),
+        };
+
+        if (others?.HasWikidata == true) {
+            columns.Add(new AuditColumn {
+                Key = "wikidataId", Header = "Wikidata", Type = AuditColumnType.Url,
+                Value = f => f.Get("wikidataId"), Href = f => f.Get("wikidataUrl"),
+                Help = "The Wikidata item linked to this taxon's IUCN id. Blank: no item found.",
+            });
+        }
+        if (others?.HasWikipedia == true) {
+            columns.Add(new AuditColumn {
+                Key = "wikipediaTitle", Header = "Wikipedia", Type = AuditColumnType.Url,
+                Value = f => f.Get("wikipediaTitle"), Href = f => f.Get("wikipediaUrl"),
+                Help = "The English Wikipedia article matched to this taxon. Blank: no article found.",
+            });
+        }
+
+        columns.AddRange(new[] {
+            AuditColumns.Group(),
+            AuditColumns.Class(csvOnly: true),
+            AuditColumns.Family(csvOnly: true),
+            AuditColumns.TaxonId("Taxon id"),
+            AuditColumns.RedlistLink(),
+            AuditColumns.Detail(),
+        });
+        return columns;
+    }
 }

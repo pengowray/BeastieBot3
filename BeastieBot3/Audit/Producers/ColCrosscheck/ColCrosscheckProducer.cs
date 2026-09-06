@@ -157,7 +157,9 @@ internal sealed class ColCrosscheckProducer : IAuditReportSetProducer {
         Id = CloseMatchId,
         Title = "Names with a close Catalogue of Life match",
         Action = ActionClass.ByHand,
-        TriageRank = 5,
+        // 6, not 5: provisional-names took that slot. This page is bulk review, so it is the one
+        // to give way when the Start here block is full.
+        TriageRank = 6,
         TriageReason = "Spelling differences which prevent cross referencing.",
         DataSourceLabel = source,
         SectionId = ColFamily,

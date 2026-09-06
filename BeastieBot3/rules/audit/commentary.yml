@@ -7,7 +7,8 @@
 # Fields:
 #   report   the report id (failed-assessments, empty-scope, taxonomy-cleanup, synonym-whitespace,
 #            synonym-markup, synonym-name-notes, common-name-issues, orphan-infraranks, no-latest,
-#            html-consistency, taxonomy-consistency, field-hygiene, name-changes; the Catalogue of
+#            html-consistency, taxonomy-consistency, field-hygiene, name-changes, provisional-names;
+#            the Catalogue of
 #            Life crosscheck pages col-close-match, col-other-name, col-via-wiki, col-synonym,
 #            col-synonym-higher, col-classification, col-authority, col-accepted-differs, col-reorg,
 #            col-not-found; "index" for the note above the Start here list on the front page; and
@@ -69,3 +70,11 @@
     *MIcrocephalophis* (extra capital I) while the genus field correctly reads
     *Microcephalophis*. The same typo is present in release 2025-2.
 
+- report: provisional-names
+  release: 2026-1
+  scope: report
+  markdown: |
+    The sharpest case this release is Notogomphus sp. nov. 'gorilla', assessed as Data Deficient in
+    2010: Notogomphus gorilla Dijkstra, 2015 is an accepted name in the Catalogue of Life.
+    Heptapleurum sp. nov. 'nanocephalum' (Vulnerable, 2003) has a described name in all three
+    sources: Wikidata and English Wikipedia both record it as Heptapleurum nanocephalum.

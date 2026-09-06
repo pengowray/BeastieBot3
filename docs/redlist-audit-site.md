@@ -140,6 +140,22 @@ CSV export, which is where the taxon's *current* blank-scope assessments show up
 keeps its id and URL but now reports only ids a taxon lists that return HTTP 404; its title and
 summary widen automatically if a non-404 status ever returns.
 
+`ProvisionalNamesProducer` reports assessments published under a provisional name (`Genus sp. nov.
+'epithet'`, 168 taxa in 2026-1) for which another source now holds a described name. `ProvisionalNames`
+is the pure half: it decides what counts as provisional at all (the marker regex requires the trailing
+period, so the real epithet in `Conophytum flavum subsp. novicium` is not one) and which quoted tags
+become a candidate binomial. Only a single plain lower-case word does; localities, collector codes and
+descriptions give nothing to look up. The candidate is matched against CoL as an **exact** name, so a
+described name under a different genus or with a changed ending is reachable only through Wikidata and
+Wikipedia, which are asked by SIS id instead. Three deliberate narrowings, each stated on the page: a
+taxon whose Red List **API** synonym list already names a described species is dropped (the CSV export
+carries no synonyms, so this needs the API cache; a synonym that is itself provisional does not count,
+and the row says so in a note); a `cf.`/`aff.` tag is a comparison rather than an identification and
+never becomes a candidate; and a bare name match is a lead, so the page never asserts identity. The
+synonym read is one indexed query per provisional taxon rather than `IucnSynonymIndex.Build`, which
+scans the whole API cache to answer for the entire release. The summary table accounts for all 168, so
+a four-row page does not read as a broken scan.
+
 `FieldHygieneProducer` profiles the taxonomy table column by column: for each text column, the share
 of values with surrounding whitespace, repeated spaces, non-breaking or control characters, or non-NFC
 normalisation. Plain non-ASCII content is deliberately not counted. Names, authorities, and place
