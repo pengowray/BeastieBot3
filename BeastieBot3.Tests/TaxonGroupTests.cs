@@ -95,6 +95,14 @@ public class TaxonGroupTests {
         Assert.Equal("Mammals (3), Reptiles (1), Plants (1)", TaxonGroups.CountLine(findings));
     }
 
+    // A bare group label means "not one of the labelled orders", so it belongs after them.
+    [Fact]
+    public void TheResidualSortsAfterTheLabelledOrders() {
+        var bats = TaxonGroups.SortKey(Finding("ANIMALIA", "MAMMALIA", "CHIROPTERA"));
+        var other = TaxonGroups.SortKey(Finding("ANIMALIA", "MAMMALIA", "CARNIVORA"));
+        Assert.True(string.CompareOrdinal(bats, other) < 0);
+    }
+
     [Fact]
     public void SortKeyKeepsOneGroupTogether() {
         var hagfish = TaxonGroups.SortKey(Finding("ANIMALIA", "MYXINI", null));

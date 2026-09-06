@@ -247,10 +247,12 @@ internal static class TaxonGroups {
 
     // Sorts the column by the canonical group order, then by detail, so rows of one group stay
     // together instead of scattering alphabetically ("Fish: Hagfishes" next to "Fish: Lampreys").
+    // A bare group means "outside the labelled orders", so it sorts after them rather than first.
     public static string SortKey(AuditFinding f) {
         var g = For(f);
         var rank = GroupRank.TryGetValue(g.Group, out var i) ? i : GroupOrder.Length;
-        return $"{rank:D2}|{g.Group.ToLowerInvariant()}|{(g.Detail ?? "").ToLowerInvariant()}";
+        var detail = string.IsNullOrEmpty(g.Detail) ? "~" : g.Detail.ToLowerInvariant();
+        return $"{rank:D2}|{g.Group.ToLowerInvariant()}|{detail}";
     }
 
     // Counts by the coarse tier only, biggest first, for the one-line summary that replaces the old
