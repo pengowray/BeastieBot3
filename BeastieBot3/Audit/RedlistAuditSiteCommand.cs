@@ -59,6 +59,7 @@ internal sealed class RedlistAuditSiteCommand : Command<RedlistAuditSiteCommand.
         new SingleReportProducer(new CommonNameIssuesProducer()),
         new SingleReportProducer(new OrphanInfraranksProducer()),
         new SingleReportProducer(new NoLatestAssessmentProducer()),
+        new SingleReportProducer(new ProvisionalNamesProducer()),
         new SingleReportProducer(new HtmlConsistencyProducer()),
         new SingleReportProducer(new TaxonomyConsistencyProducer()),
         new ColCrosscheckProducer(),
