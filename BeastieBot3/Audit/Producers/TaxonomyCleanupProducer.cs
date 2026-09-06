@@ -43,7 +43,7 @@ internal sealed class TaxonomyCleanupProducer : IAuditReportProducer {
 
         var ordered = findings
             .OrderByDescending(f => Priority(f.IssueType))
-            .ThenBy(f => f.Class, System.StringComparer.OrdinalIgnoreCase)
+            .ThenBy(TaxonGroups.SortKey, System.StringComparer.Ordinal)
             .ThenBy(f => f.ScientificName, System.StringComparer.OrdinalIgnoreCase)
             .ToList();
 

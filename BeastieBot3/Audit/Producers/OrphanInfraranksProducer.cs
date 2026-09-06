@@ -149,7 +149,7 @@ ORDER BY i.kingdomName, i.className, i.orderName, i.familyName, i.scientificName
 
         return rows
             .OrderBy(f => AuditMapping.StatusSortKey(f.StatusCode))
-            .ThenBy(f => f.Class, System.StringComparer.OrdinalIgnoreCase)
+            .ThenBy(TaxonGroups.SortKey, System.StringComparer.Ordinal)
             .ThenBy(f => f.Order, System.StringComparer.OrdinalIgnoreCase)
             .ThenBy(f => f.Family, System.StringComparer.OrdinalIgnoreCase)
             .ThenBy(f => f.ScientificName, System.StringComparer.OrdinalIgnoreCase)

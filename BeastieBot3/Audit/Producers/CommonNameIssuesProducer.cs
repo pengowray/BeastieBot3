@@ -92,7 +92,7 @@ internal sealed class CommonNameIssuesProducer : IAuditReportProducer {
 
         var ordered = findings
             .OrderByDescending(f => f.SeverityTier)
-            .ThenBy(f => f.Class, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(TaxonGroups.SortKey, StringComparer.Ordinal)
             .ThenBy(f => f.ScientificName, StringComparer.OrdinalIgnoreCase)
             .ToList();
 

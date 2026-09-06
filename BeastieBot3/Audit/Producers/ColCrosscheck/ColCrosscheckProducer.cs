@@ -480,7 +480,7 @@ internal sealed class ColCrosscheckProducer : IAuditReportSetProducer {
     private static IReadOnlyList<AuditFinding> OrderByNameInUse(List<AuditFinding> findings) => findings
         .OrderBy(f => NameInUseOrder(f.Get("nameInUse")))
         .ThenByDescending(f => f.SeverityTier)
-        .ThenBy(f => f.Class, StringComparer.OrdinalIgnoreCase)
+        .ThenBy(TaxonGroups.SortKey, StringComparer.Ordinal)
         .ThenBy(f => f.Order, StringComparer.OrdinalIgnoreCase)
         .ThenBy(f => f.Family, StringComparer.OrdinalIgnoreCase)
         .ThenBy(f => f.ScientificName, StringComparer.OrdinalIgnoreCase)
@@ -552,7 +552,7 @@ internal sealed class ColCrosscheckProducer : IAuditReportSetProducer {
 
     private static IReadOnlyList<AuditFinding> OrderSpecies(List<AuditFinding> findings) => findings
         .OrderByDescending(f => f.SeverityTier)
-        .ThenBy(f => f.Class, StringComparer.OrdinalIgnoreCase)
+        .ThenBy(TaxonGroups.SortKey, StringComparer.Ordinal)
         .ThenBy(f => f.Order, StringComparer.OrdinalIgnoreCase)
         .ThenBy(f => f.Family, StringComparer.OrdinalIgnoreCase)
         .ThenBy(f => f.ScientificName, StringComparer.OrdinalIgnoreCase)

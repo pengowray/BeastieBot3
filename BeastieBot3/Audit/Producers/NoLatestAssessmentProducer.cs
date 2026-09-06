@@ -138,7 +138,7 @@ ORDER BY t.root_sis_id";
         return findings
             .OrderByDescending(f => int.TryParse(f.YearPublished, out var y) ? y : 0)
             .ThenBy(f => f.Kingdom, StringComparer.OrdinalIgnoreCase)
-            .ThenBy(f => f.Class, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(TaxonGroups.SortKey, StringComparer.Ordinal)
             .ThenBy(f => f.Order, StringComparer.OrdinalIgnoreCase)
             .ThenBy(f => f.Family, StringComparer.OrdinalIgnoreCase)
             .ThenBy(f => f.ScientificName, StringComparer.OrdinalIgnoreCase)

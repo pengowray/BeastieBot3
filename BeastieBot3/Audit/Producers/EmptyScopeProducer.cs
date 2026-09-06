@@ -57,7 +57,7 @@ internal sealed class EmptyScopeProducer : IAuditReportProducer {
         var findings = rows.Values
             .Select(r => Build(r, csvBlank.ContainsKey(r.AssessmentId), taxonScopes, haveCsv))
             .OrderByDescending(f => f.SeverityTier)
-            .ThenBy(f => f.Class, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(TaxonGroups.SortKey, StringComparer.Ordinal)
             .ThenBy(f => f.ScientificName, StringComparer.OrdinalIgnoreCase)
             .ToList();
 
