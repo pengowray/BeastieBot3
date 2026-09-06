@@ -29,10 +29,6 @@ internal sealed class NoLatestAssessmentProducer : IAuditReportProducer {
             ? CountInCsv(csv, findings.Select(f => f.TaxonId).OfType<long>())
             : (int?)null;
 
-        var byClass = findings.GroupBy(f => f.Class ?? "(unspecified)").OrderByDescending(g => g.Count())
-            .Select(g => new[] { g.Key, g.Count().ToString("N0") } as IReadOnlyList<string>)
-            .ToList();
-
         return new AuditReport {
             Id = Id,
             SectionId = "records",
@@ -58,9 +54,10 @@ internal sealed class NoLatestAssessmentProducer : IAuditReportProducer {
             Columns = new List<AuditColumn> {
                 AuditColumns.ScientificName(),
                 AuditColumns.CommonName(),
-                AuditColumns.Class(),
-                AuditColumns.Order(),
-                AuditColumns.Family(),
+                AuditColumns.Group(),
+                AuditColumns.Class(csvOnly: true),
+                AuditColumns.Order(csvOnly: true),
+                AuditColumns.Family(csvOnly: true),
                 AuditColumns.Status("Last status"),
                 AuditColumns.Year("Last assessed"),
                 AuditColumns.Custom("lastScope", "Scope of last assessment", AuditColumnType.Text,
@@ -75,9 +72,8 @@ internal sealed class NoLatestAssessmentProducer : IAuditReportProducer {
             SummaryTables = new List<AuditSummaryTable> {
                 ByYearBucket(findings),
                 ByScope(findings),
-                new() { Title = "By class", Headers = new[] { "Class", "Count" }, Rows = byClass, NumericColumns = new[] { 1 } },
             },
-            GroupLevels = AuditGroups.ByClass,
+            ShowGroupCounts = true,
         };
     }
 

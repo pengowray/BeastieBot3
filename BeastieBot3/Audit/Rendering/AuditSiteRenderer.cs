@@ -203,6 +203,7 @@ internal static class AuditSiteRenderer {
         foreach (var table in report.SummaryTables) {
             AppendSummaryTable(sb, table);
         }
+        AppendGroupCounts(sb, report);
 
         if (report.Findings.Count > 0) {
             sb.Append("<h3>Preview</h3>\n");
@@ -321,6 +322,24 @@ internal static class AuditSiteRenderer {
     // written into the HTML, so the table is complete with JS off.
     private const int SummaryCollapseOver = 8;
     private const int SummaryCollapseKeep = 6;
+
+    // The taxonomic spread of a report's rows, as one line rather than a table: the reader wants
+    // "mostly plants" at a glance, and a two-column table of the same thing pushed the actual
+    // findings below the fold.
+    private static void AppendGroupCounts(StringBuilder sb, AuditReport report) {
+        if (!report.ShowGroupCounts || report.Findings.Count == 0) {
+            return;
+        }
+        var line = TaxonGroups.CountLine(report.Findings);
+        if (string.IsNullOrEmpty(line)) {
+            return;
+        }
+        sb.Append($"<p class=\"group-counts\"><strong>Groups:</strong> {HtmlText.Escape(line)}");
+        if (!string.IsNullOrWhiteSpace(report.GroupCountsNote)) {
+            sb.Append($" <small>{HtmlText.Escape(report.GroupCountsNote!)}</small>");
+        }
+        sb.Append("</p>\n");
+    }
 
     private static void AppendSummaryTable(StringBuilder sb, AuditSummaryTable table) {
         sb.Append($"<h3>{HtmlText.Escape(table.Title)}</h3>\n");

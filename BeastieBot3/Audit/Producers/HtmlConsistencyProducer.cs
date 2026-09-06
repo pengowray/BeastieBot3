@@ -142,7 +142,8 @@ internal sealed class HtmlConsistencyProducer : IAuditReportProducer {
                     },
                 },
                 AuditColumns.Detail(),
-                AuditColumns.Class(),
+                AuditColumns.Group(),
+                AuditColumns.Class(csvOnly: true),
                 AuditColumns.TaxonId("Taxon id"),
                 AuditColumns.AssessmentId(),
                 AuditColumns.RedlistLink(),
@@ -152,7 +153,6 @@ internal sealed class HtmlConsistencyProducer : IAuditReportProducer {
                 new() { Title = "By observation", Headers = new[] { "Observation", "Count" }, Rows = byKind, NumericColumns = new[] { 1 } },
                 new() { Title = "By field", Headers = new[] { "Field", "Differences" }, Rows = byField, NumericColumns = new[] { 1 } },
             },
-            GroupLevels = AuditGroups.ByClass,
         };
     }
 

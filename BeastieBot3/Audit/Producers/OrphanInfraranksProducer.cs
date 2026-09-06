@@ -26,10 +26,11 @@ internal sealed class OrphanInfraranksProducer : IAuditReportProducer {
             AuditColumns.Rank(),
             AuditColumns.Status(),
             AuditColumns.Custom("parentSpecies", "Parent species (unassessed)", AuditColumnType.Text),
-            AuditColumns.Class(),
-            AuditColumns.Order(),
-            AuditColumns.Family(),
-            AuditColumns.Kingdom(),
+            AuditColumns.Group(),
+            AuditColumns.Class(csvOnly: true),
+            AuditColumns.Order(csvOnly: true),
+            AuditColumns.Family(csvOnly: true),
+            AuditColumns.Kingdom(csvOnly: true),
             AuditColumns.Year(),
             AuditColumns.TaxonId(),
             AuditColumns.AssessmentId(),
@@ -40,10 +41,6 @@ internal sealed class OrphanInfraranksProducer : IAuditReportProducer {
         var byInfra = findings.GroupBy(f => f.Rank ?? "")
             .Select(g => new[] { g.Key, g.Count().ToString("N0") } as IReadOnlyList<string>)
             .ToList();
-        var byClass = findings.GroupBy(f => f.Class ?? "(unspecified)").OrderByDescending(g => g.Count())
-            .Select(g => new[] { g.Key, g.Count().ToString("N0") } as IReadOnlyList<string>)
-            .ToList();
-
         return new AuditReport {
             Id = Id,
             SectionId = "records",
@@ -62,9 +59,8 @@ internal sealed class OrphanInfraranksProducer : IAuditReportProducer {
             Findings = findings,
             SummaryTables = new List<AuditSummaryTable> {
                 new() { Title = "By rank", Headers = new[] { "Rank", "Count" }, Rows = byInfra, NumericColumns = new[] { 1 } },
-                new() { Title = "By class", Headers = new[] { "Class", "Count" }, Rows = byClass, NumericColumns = new[] { 1 } },
             },
-            GroupLevels = AuditGroups.ByClass,
+            ShowGroupCounts = true,
         };
     }
 

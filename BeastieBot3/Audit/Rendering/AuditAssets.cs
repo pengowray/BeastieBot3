@@ -133,6 +133,9 @@ table.summary thead th { color: var(--ink-soft); font-size: 0.82rem; text-transf
 table.summary.family td:first-child { white-space: normal; }
 table.summary.family tr.here { background: var(--bg-soft); }
 table.summary.family tr.here td:first-child { font-weight: 600; }
+.group-counts { margin: 10px 0 4px; font-size: 0.92rem; line-height: 1.6; }
+.group-counts strong { color: var(--ink-soft); font-weight: 600; }
+.group-counts small { color: var(--ink-soft); }
 .here-tag { color: var(--ink-soft); font-weight: 400; font-size: 0.82rem; }
 
 /* Long aggregate tables are clamped to their first few rows by audit.js; the gradient over the

@@ -116,8 +116,8 @@ internal sealed class ColCrosscheckProducer : IAuditReportSetProducer {
             Columns = NotFoundColumns(data.OtherSourcesChecked),
             Findings = OrderSpecies(findings),
             HeadlineCount = findings.Count,
-            SummaryTables = new[] { ByClassSummary("By class", findings, assessed) },
-            GroupLevels = AuditGroups.ByClassOrderFamily,
+            ShowGroupCounts = true,
+            GroupCountsNote = ComparedNote(assessed),
         };
     }
 
@@ -148,8 +148,8 @@ internal sealed class ColCrosscheckProducer : IAuditReportSetProducer {
             Columns = ViaWikiColumns(),
             Findings = OrderSpecies(findings),
             HeadlineCount = findings.Count,
-            SummaryTables = new[] { ByClassSummary("By class", findings, assessed) },
-            GroupLevels = AuditGroups.ByClassOrderFamily,
+            ShowGroupCounts = true,
+            GroupCountsNote = ComparedNote(assessed),
         };
     }
 
@@ -175,8 +175,8 @@ internal sealed class ColCrosscheckProducer : IAuditReportSetProducer {
         Columns = CloseMatchColumns(),
         Findings = OrderSpecies(findings),
         HeadlineCount = findings.Count,
-        SummaryTables = new[] { ByClassSummary("By class", findings, assessed) },
-        GroupLevels = AuditGroups.ByClassOrderFamily,
+        ShowGroupCounts = true,
+        GroupCountsNote = ComparedNote(assessed),
     };
 
     private static AuditReport Synonym(string source, int assessed, List<AuditFinding> findings) => new() {
@@ -199,8 +199,9 @@ internal sealed class ColCrosscheckProducer : IAuditReportSetProducer {
         Columns = SynonymColumns(),
         Findings = OrderByNameInUse(findings),
         HeadlineCount = findings.Count,
-        SummaryTables = new[] { NameInUseSummary(findings), ByRankSummary("By rank", findings), ByClassSummary("By class", findings, assessed) },
-        GroupLevels = AuditGroups.ByClassOrderFamily,
+        SummaryTables = new[] { NameInUseSummary(findings), ByRankSummary("By rank", findings) },
+        ShowGroupCounts = true,
+        GroupCountsNote = ComparedNote(assessed),
     };
 
     // The reversed pairs pulled out of CloseMatch and Synonym: both catalogues hold both names and
@@ -224,8 +225,9 @@ internal sealed class ColCrosscheckProducer : IAuditReportSetProducer {
         Columns = AcceptedDiffersColumns(),
         Findings = OrderSpecies(findings),
         HeadlineCount = findings.Count,
-        SummaryTables = new[] { ByRankSummary("By rank", findings), ByClassSummary("By class", findings, assessed) },
-        GroupLevels = AuditGroups.ByClassOrderFamily,
+        SummaryTables = new[] { ByRankSummary("By rank", findings) },
+        ShowGroupCounts = true,
+        GroupCountsNote = ComparedNote(assessed),
     };
 
     // Split out of NotFound: the IUCN name is absent from CoL, but another name IUCN records for the
@@ -251,8 +253,9 @@ internal sealed class ColCrosscheckProducer : IAuditReportSetProducer {
         Columns = SynonymLeadColumns(),
         Findings = OrderByNameInUse(findings),
         HeadlineCount = findings.Count,
-        SummaryTables = new[] { NameInUseSummary(findings), ByClassSummary("By class", findings, assessed) },
-        GroupLevels = AuditGroups.ByClassOrderFamily,
+        SummaryTables = new[] { NameInUseSummary(findings) },
+        ShowGroupCounts = true,
+        GroupCountsNote = ComparedNote(assessed),
     };
 
     private static IReadOnlyList<AuditColumn> SynonymLeadColumns() =>
@@ -285,8 +288,8 @@ internal sealed class ColCrosscheckProducer : IAuditReportSetProducer {
         Columns = AuthorityColumns(),
         Findings = OrderSpecies(findings),
         HeadlineCount = findings.Count,
-        SummaryTables = new[] { ByClassSummary("By class", findings, assessed) },
-        GroupLevels = AuditGroups.ByClassOrderFamily,
+        ShowGroupCounts = true,
+        GroupCountsNote = ComparedNote(assessed),
     };
 
     // --- higher-rank reports ----------------------------------------------------------------
@@ -377,8 +380,9 @@ internal sealed class ColCrosscheckProducer : IAuditReportSetProducer {
     };
 
     private static IEnumerable<AuditColumn> SpeciesTail() => new[] {
-        AuditColumns.Class(),
-        AuditColumns.Family(),
+        AuditColumns.Group(),
+        AuditColumns.Class(csvOnly: true),
+        AuditColumns.Family(csvOnly: true),
         AuditColumns.TaxonId("Taxon id"),
         AuditColumns.RedlistLink(),
         AuditColumns.Detail(),
@@ -518,8 +522,9 @@ internal sealed class ColCrosscheckProducer : IAuditReportSetProducer {
         }).Concat(SpeciesTail()).ToList();
 
     private static IEnumerable<AuditColumn> HigherTail() => new[] {
-        AuditColumns.Kingdom(),
-        AuditColumns.Phylum(),
+        AuditColumns.Group(),
+        AuditColumns.Kingdom(csvOnly: true),
+        AuditColumns.Phylum(csvOnly: true),
         AuditColumns.Custom("iucnSpecies", "IUCN taxa", AuditColumnType.Number,
             "Number of assessed IUCN taxa placed under this name."),
         AuditColumns.Detail(),
@@ -567,22 +572,9 @@ internal sealed class ColCrosscheckProducer : IAuditReportSetProducer {
         _ => 4,
     };
 
-    private static AuditSummaryTable ByClassSummary(string title, IReadOnlyList<AuditFinding> findings, int compared) {
-        var rows = findings
-            .GroupBy(f => f.Class ?? "(unspecified)")
-            .OrderByDescending(g => g.Count())
-            .Take(15)
-            .Select(g => new[] { g.Key, g.Count().ToString("N0") } as IReadOnlyList<string>)
-            .ToList();
-        if (rows.Count == 0) {
-            rows.Add(new[] { "(none)", "0" });
-        }
-        return new AuditSummaryTable {
-            Title = title,
-            Note = $"{compared:N0} assessments compared. Top classes shown; every row is in the CSV download.",
-            Headers = new[] { "Class", "Count" }, Rows = rows, NumericColumns = new[] { 1 },
-        };
-    }
+    // The "assessments compared" denominator used to hang off the by-class table's note; it is the
+    // only place the figure appears, so it moves onto the count line that replaced that table.
+    private static string ComparedNote(int compared) => $"of {compared:N0} assessments compared.";
 
     private static AuditSummaryTable ByRankSummary(string title, IReadOnlyList<AuditFinding> findings) {
         var order = new[] { "class", "order", "family", "genus", "species", "subspecies", "variety" };

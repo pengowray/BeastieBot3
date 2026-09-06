@@ -71,12 +71,6 @@ internal sealed class EmptyScopeProducer : IAuditReportProducer {
             } as IReadOnlyList<string>)
             .ToList();
 
-        var byClass = findings
-            .GroupBy(f => f.Class ?? "(unspecified)")
-            .OrderByDescending(g => g.Count()).ThenBy(g => g.Key, StringComparer.OrdinalIgnoreCase)
-            .Select(g => new[] { g.Key, g.Count().ToString("N0") } as IReadOnlyList<string>)
-            .ToList();
-
         return new AuditReport {
             Id = Id,
             SectionId = "records",
@@ -105,9 +99,10 @@ internal sealed class EmptyScopeProducer : IAuditReportProducer {
             Columns = new List<AuditColumn> {
                 AuditColumns.ScientificName(),
                 AuditColumns.Custom("authority", "Authority", AuditColumnType.Code),
-                AuditColumns.Class(),
-                AuditColumns.Order(),
-                AuditColumns.Family(),
+                AuditColumns.Group(),
+                AuditColumns.Class(csvOnly: true),
+                AuditColumns.Order(csvOnly: true),
+                AuditColumns.Family(csvOnly: true),
                 AuditColumns.Status("Assessed as"),
                 AuditColumns.AssessmentId("Assessment"),
                 AuditColumns.Latest("Current"),
@@ -128,8 +123,8 @@ internal sealed class EmptyScopeProducer : IAuditReportProducer {
                     Headers = new[] { "Assessment", "Rows", "Also blank in the CSV export" },
                     Rows = byLatest, NumericColumns = new[] { 1, 2 },
                 },
-                new() { Title = "By class", Headers = new[] { "Class", "Rows" }, Rows = byClass, NumericColumns = new[] { 1 } },
             },
+            ShowGroupCounts = true,
         };
     }
 

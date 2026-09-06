@@ -95,28 +95,16 @@ internal sealed class AuditReport {
     // their own (e.g. the number of fields profiled).
     public int? HeadlineCount { get; init; }
 
-    // Ordered grouping levels for the full-list page. When the finding count is large the full list
-    // splits into a tree: by the first level, then any over-sized group splits by the next, and so
-    // on (e.g. class then order then family). Empty means no split.
-    public IReadOnlyList<AuditGroupLevel> GroupLevels { get; init; } = Array.Empty<AuditGroupLevel>();
+    // Show a one-line count of the findings by friendly taxon group ("Mammals (5), Reptiles (3)")
+    // below the summary tables. Set on reports whose rows carry taxonomy; it replaced a full
+    // "By class" table, which cost a lot of page for a shape the reader takes in at a glance.
+    public bool ShowGroupCounts { get; init; }
+
+    // Optional sentence appended after those counts (e.g. how many assessments were compared).
+    public string? GroupCountsNote { get; init; }
 
     // True when the report has nothing to list this release (shown as a clean "no observations").
     public bool IsEmpty => Findings.Count == 0 && SummaryTables.Count == 0;
 
     public int Count => HeadlineCount ?? Findings.Count;
-}
-
-internal sealed record AuditGroupLevel(string Label, Func<AuditFinding, string?> Selector);
-
-// Common grouping ladders for full-list tree splitting.
-internal static class AuditGroups {
-    public static IReadOnlyList<AuditGroupLevel> ByClass => new[] {
-        new AuditGroupLevel("class", f => f.Class),
-    };
-
-    public static IReadOnlyList<AuditGroupLevel> ByClassOrderFamily => new[] {
-        new AuditGroupLevel("class", f => f.Class),
-        new AuditGroupLevel("order", f => f.Order),
-        new AuditGroupLevel("family", f => f.Family),
-    };
 }

@@ -85,8 +85,9 @@ internal sealed class TaxonomyCleanupProducer : IAuditReportProducer {
                 AuditColumns.CurrentValue("Current value", AuditColumnType.Whitespace),
                 AuditColumns.SuggestedValue("Suggested value", AuditColumnType.Code),
                 AuditColumns.Status(),
-                AuditColumns.Class(),
-                AuditColumns.Family(),
+                AuditColumns.Group(),
+                AuditColumns.Class(csvOnly: true),
+                AuditColumns.Family(csvOnly: true),
                 AuditColumns.TaxonId(),
                 AuditColumns.AssessmentId(),
                 AuditColumns.RedlistLink(),
@@ -97,7 +98,6 @@ internal sealed class TaxonomyCleanupProducer : IAuditReportProducer {
                 issueTypeSummary,
                 new() { Title = "By field", Note = "The taxonomy field each listed value is in.", Headers = new[] { "Field", "Rows" }, Rows = byField, NumericColumns = new[] { 1 } },
             },
-            GroupLevels = AuditGroups.ByClass,
         };
     }
 

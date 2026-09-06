@@ -85,8 +85,9 @@ internal sealed class TaxonomyConsistencyProducer : IAuditReportProducer {
                 AuditColumns.CurrentValue("Recorded", AuditColumnType.Code),
                 AuditColumns.SuggestedValue("Expected", AuditColumnType.Code),
                 AuditColumns.Status(),
-                AuditColumns.Class(),
-                AuditColumns.Family(),
+                AuditColumns.Group(),
+                AuditColumns.Class(csvOnly: true),
+                AuditColumns.Family(csvOnly: true),
                 AuditColumns.TaxonId("Taxon id"),
                 AuditColumns.AssessmentId(),
                 AuditColumns.RedlistLink(),
@@ -96,7 +97,6 @@ internal sealed class TaxonomyConsistencyProducer : IAuditReportProducer {
             SummaryTables = new List<AuditSummaryTable> {
                 new() { Title = "By observation", Note = $"{result.TotalRows:N0} rows scanned. Checks listed at 0 ran and found nothing.", Headers = new[] { "Observation", "Count" }, Rows = summary, NumericColumns = new[] { 1 } },
             },
-            GroupLevels = AuditGroups.ByClass,
         };
     }
 

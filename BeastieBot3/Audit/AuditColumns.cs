@@ -31,24 +31,34 @@ internal static class AuditColumns {
         Key = "iucnCategoryText", Header = header, Type = AuditColumnType.Text, Value = f => f.StatusCategory,
     };
 
-    public static AuditColumn Kingdom(string header = "Kingdom") => new() {
-        Key = "kingdom", Header = header, Type = AuditColumnType.Text, Value = f => f.Kingdom,
+    // The friendly group label ("Mammals", "Mammals: Bats", "Plants: Cycads") shown in place of the
+    // raw Class and Family columns. See TaxonGroups for the vocabulary.
+    public static AuditColumn Group(string header = "Group") => new() {
+        Key = "group", Header = header, Type = AuditColumnType.Text,
+        Value = f => TaxonGroups.Label(f), SortKey = TaxonGroups.SortKey,
+        Help = "Everyday name for the taxonomic group, from the assessment's kingdom, class and order.",
     };
 
-    public static AuditColumn Phylum(string header = "Phylum") => new() {
-        Key = "phylum", Header = header, Type = AuditColumnType.Text, Value = f => f.Phylum,
+    // The Linnaean ladder. Pass csvOnly: true to keep a level in the CSV download but off the page,
+    // where the Group column stands in for it.
+    public static AuditColumn Kingdom(string header = "Kingdom", bool csvOnly = false) => new() {
+        Key = "kingdom", Header = header, Type = AuditColumnType.Text, Value = f => f.Kingdom, CsvOnly = csvOnly,
     };
 
-    public static AuditColumn Class(string header = "Class") => new() {
-        Key = "class", Header = header, Type = AuditColumnType.Text, Value = f => f.Class,
+    public static AuditColumn Phylum(string header = "Phylum", bool csvOnly = false) => new() {
+        Key = "phylum", Header = header, Type = AuditColumnType.Text, Value = f => f.Phylum, CsvOnly = csvOnly,
     };
 
-    public static AuditColumn Order(string header = "Order") => new() {
-        Key = "order", Header = header, Type = AuditColumnType.Text, Value = f => f.Order,
+    public static AuditColumn Class(string header = "Class", bool csvOnly = false) => new() {
+        Key = "class", Header = header, Type = AuditColumnType.Text, Value = f => f.Class, CsvOnly = csvOnly,
     };
 
-    public static AuditColumn Family(string header = "Family") => new() {
-        Key = "family", Header = header, Type = AuditColumnType.Text, Value = f => f.Family,
+    public static AuditColumn Order(string header = "Order", bool csvOnly = false) => new() {
+        Key = "order", Header = header, Type = AuditColumnType.Text, Value = f => f.Order, CsvOnly = csvOnly,
+    };
+
+    public static AuditColumn Family(string header = "Family", bool csvOnly = false) => new() {
+        Key = "family", Header = header, Type = AuditColumnType.Text, Value = f => f.Family, CsvOnly = csvOnly,
     };
 
     public static AuditColumn Year(string header = "Year") => new() {
