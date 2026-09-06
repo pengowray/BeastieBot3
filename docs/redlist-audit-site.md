@@ -92,9 +92,9 @@ directory, for pasting in once the release is final.
   (orchestrates index, per-report detail pages, full-list pages, family entry pages, assets), `HtmlText`
   (escaping, a whitespace visualiser, a tiny Markdown subset), `AuditAssets` (embedded CSS + JS).
   A summary table with more than 8 rows is written in full but carries `data-collapse="6"`; `audit.js`
-  clamps it to 6 rows with a fade over the clipped row and a "Show all N rows" toggle, so a 15-row
-  class breakdown no longer pushes the findings preview off the screen. With JS off the whole table
-  shows.
+  clamps it to 6 rows with a fade over the clipped row and a "Show all N rows" toggle, so a long
+  per-field or per-observation breakdown does not push the findings preview off the screen. With JS
+  off the whole table shows.
 - **`RedlistAuditSiteCommand`** — the `redlist audit-site` command; runs the producers and writes the bundle.
 
 The reusable seams already in the codebase that producers call directly: `IucnTaxonomyRepository`,

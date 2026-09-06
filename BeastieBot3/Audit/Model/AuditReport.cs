@@ -21,7 +21,7 @@ internal enum ActionClass {
     Informational,
 }
 
-// A small aggregate table (counts by class, by issue kind, reconciliation, etc.).
+// A small aggregate table (counts by issue kind, by rank, reconciliation, etc.).
 internal sealed class AuditSummaryTable {
     public required string Title { get; init; }
     public string? Note { get; init; }
