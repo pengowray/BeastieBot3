@@ -574,7 +574,7 @@ internal sealed class ColCrosscheckProducer : IAuditReportSetProducer {
 
     // The "assessments compared" denominator used to hang off the by-class table's note; it is the
     // only place the figure appears, so it moves onto the count line that replaced that table.
-    private static string ComparedNote(int compared) => $"of {compared:N0} assessments compared.";
+    private static string ComparedNote(int compared) => $"{compared:N0} assessments compared.";
 
     private static AuditSummaryTable ByRankSummary(string title, IReadOnlyList<AuditFinding> findings) {
         var order = new[] { "class", "order", "family", "genus", "species", "subspecies", "variety" };

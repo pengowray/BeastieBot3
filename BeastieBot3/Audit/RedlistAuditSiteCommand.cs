@@ -107,6 +107,13 @@ internal sealed class RedlistAuditSiteCommand : Command<RedlistAuditSiteCommand.
             return -1;
         }
 
+        var unknownClasses = TaxonGroups.UnknownClasses(reports.SelectMany(r => r.CsvRows));
+        if (unknownClasses.Count > 0) {
+            AnsiConsole.MarkupLineInterpolated(
+                $"[yellow]Taxonomic classes with no group label:[/] {Markup.Escape(string.Join(", ", unknownClasses))}");
+            AnsiConsole.MarkupLine("[grey]Their rows are labelled by kingdom alone. Add them to TaxonGroups.ByClass.[/]");
+        }
+
         var config = new AuditSiteConfig {
             Contact = string.IsNullOrWhiteSpace(settings.Contact) ? "feedback@pengowray.com" : settings.Contact!,
         };

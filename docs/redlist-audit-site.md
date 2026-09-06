@@ -78,6 +78,8 @@ directory, for pasting in once the release is final.
   it as a one-line count ("Mammals (5), Reptiles (3), Plants (1)") in place of the old per-report
   "By class" table. `NOT ASSIGNED` reads as missing, an unrecognised class falls back to its kingdom
   keeping its own name, and a class-rank finding ignores the order it borrowed from a sample row.
+  A run ends by naming any class value the table does not cover, so a release that adds or renames
+  one says so rather than quietly labelling those rows by kingdom alone.
 - **`AuditMapping`** — rank/full-species derivation, status-code normalisation, threat-order sort key.
 - **`IucnStatusVisuals`** — status badge colour (ported from the legacy palette; a reading aid, not
   the official IUCN colours).

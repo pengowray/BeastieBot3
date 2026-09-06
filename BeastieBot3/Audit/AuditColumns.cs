@@ -36,7 +36,7 @@ internal static class AuditColumns {
     public static AuditColumn Group(string header = "Group") => new() {
         Key = "group", Header = header, Type = AuditColumnType.Text,
         Value = f => TaxonGroups.Label(f), SortKey = TaxonGroups.SortKey,
-        Help = "Everyday name for the taxonomic group, from the assessment's kingdom, class and order.",
+        Help = "Broad taxonomic group, derived from the taxon's IUCN class and order. Not an IUCN field.",
     };
 
     // The Linnaean ladder. Pass csvOnly: true to keep a level in the CSV download but off the page,

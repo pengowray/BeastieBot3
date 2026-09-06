@@ -16,7 +16,7 @@ public class TaxonGroupTests {
     [InlineData("ANIMALIA", "CHONDRICHTHYES", "Fish: Sharks and rays")]
     [InlineData("PLANTAE", "CYCADOPSIDA", "Plants: Cycads")]
     [InlineData("PLANTAE", "MAGNOLIOPSIDA", "Plants: Dicotyledons")]
-    [InlineData("ANIMALIA", "CLITELLATA", "Invertebrates: Segmented worms")]
+    [InlineData("ANIMALIA", "CLITELLATA", "Other invertebrates: Earthworms and leeches")]
     public void ClassAloneGivesTheGroup(string kingdom, string cls, string expected) =>
         Assert.Equal(expected, Label(kingdom, cls));
 
@@ -54,8 +54,34 @@ public class TaxonGroupTests {
         Assert.Equal("Plants: Newopsida", Label("PLANTAE", "NEWOPSIDA"));
 
     [Fact]
-    public void NothingAtAllReadsAsUnplaced() =>
-        Assert.Equal(TaxonGroups.Unplaced, Label(null, null));
+    public void NothingAtAllDescribesTheRecord() =>
+        Assert.Equal(TaxonGroups.NoTaxonomy, Label(null, null));
+
+    // An unrecognised chordate class is a vertebrate; it must not fall into an invertebrate bucket.
+    [Fact]
+    public void UnknownChordateClassStaysOutOfTheInvertebrates() =>
+        Assert.Equal("Other animals: Cephalaspidomorphus",
+            TaxonGroups.For("ANIMALIA", "CHORDATA", "CEPHALASPIDOMORPHUS", null).Label);
+
+    [Fact]
+    public void UnknownNonChordateAnimalClassIsAnInvertebrate() =>
+        Assert.Equal("Other invertebrates: Newozoa",
+            TaxonGroups.For("ANIMALIA", "NEWOPHORA", "NEWOZOA", null).Label);
+
+    // Only "NOT ASSIGNED" is hidden: a real kingdom name is a name.
+    [Fact]
+    public void UnrecognisedKingdomKeepsItsName() =>
+        Assert.Equal("Protozoa: Ciliophora", TaxonGroups.For("PROTOZOA", null, "CILIOPHORA", null).Label);
+
+    [Theory]
+    [InlineData("THEOCOSTRACA")]
+    [InlineData("THECOSTRACA")]
+    public void BothSpellingsOfThecostracaAreBarnacles(string cls) =>
+        Assert.Equal("Crustaceans: Barnacles", Label("ANIMALIA", cls));
+
+    [Fact]
+    public void TheRetiredLampreyClassStillResolves() =>
+        Assert.Equal("Fish: Lampreys", Label("ANIMALIA", "CEPHALASPIDOMORPHI"));
 
     [Fact]
     public void CountsUseTheCoarseTierAndListTheBiggestFirst() {
