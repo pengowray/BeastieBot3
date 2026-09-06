@@ -193,7 +193,13 @@ internal static class TaxonGroups {
             : char.ToUpperInvariant(trimmed[0]) + trimmed[1..].ToLowerInvariant();
     }
 
-    public static TaxonGroup For(AuditFinding f) => For(f.Kingdom, f.Phylum, f.Class, f.Order);
+    public static TaxonGroup For(AuditFinding f) {
+        // A class-rank finding borrows its ladder from one sample assessment below it, so its order
+        // is whichever order that sample happened to be in. Ignore it: labelling the class MAMMALIA
+        // "Mammals: Bats" because the sample was a bat would be wrong, not merely coarse.
+        var order = string.Equals(f.Rank, "class", StringComparison.OrdinalIgnoreCase) ? null : f.Order;
+        return For(f.Kingdom, f.Phylum, f.Class, order);
+    }
 
     public static string Label(AuditFinding f) => For(f).Label;
 

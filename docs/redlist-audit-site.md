@@ -70,6 +70,14 @@ directory, for pasting in once the release is final.
 - **`Model/AuditColumn` + `AuditColumns`** — column definitions and a factory of reusable columns
   (scientific name, status badge, taxonomy, ids, Red List link, field/current/suggested). Defined
   once, rendered identically in HTML and CSV.
+- **`TaxonGroups`** — the friendly `Group` column ("Mammals", "Mammals: Bats", "Plants: Cycads")
+  that stands in for the raw `Class` and `Family` columns on every listing. A static class→group
+  table plus a short curated order→detail table; the raw ladder columns are still written to the CSV
+  download (`AuditColumns.Class(csvOnly: true)` and friends) so the spreadsheet stays filterable on
+  real taxonomy. The coarse tier is deliberately small because `AuditReport.ShowGroupCounts` renders
+  it as a one-line count ("Mammals (5), Reptiles (3), Plants (1)") in place of the old per-report
+  "By class" table. `NOT ASSIGNED` reads as missing, an unrecognised class falls back to its kingdom
+  keeping its own name, and a class-rank finding ignores the order it borrowed from a sample row.
 - **`AuditMapping`** — rank/full-species derivation, status-code normalisation, threat-order sort key.
 - **`IucnStatusVisuals`** — status badge colour (ported from the legacy palette; a reading aid, not
   the official IUCN colours).
