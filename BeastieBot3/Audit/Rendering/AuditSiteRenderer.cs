@@ -102,8 +102,10 @@ internal static class AuditSiteRenderer {
     // crosscheck's own entry page for the rest: nine pages of two catalogues disagreeing are not IUCN
     // errors, and listed beside whitespace findings they read as if the site thought they were.
     private static readonly (string Id, string Heading, string Blurb)[] IndexSections = {
+        // One item per page in the block, in the order the rows appear under it, so a reader can
+        // match each phrase to a row without decoding it.
         ("records", "Missing and outdated records",
-            "Assessments and taxa that are absent, unreachable in the API, or without a current assessment."),
+            "Assessments and taxa missing something: a geographic scope, an API response, an assessed parent species, a current assessment, or a described name."),
         ("text", "Text cleanup",
             "Stray whitespace, markup, and values that disagree with each other in name, synonym, and narrative fields."),
         ("col", "Catalogue of Life crosscheck",

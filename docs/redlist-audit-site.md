@@ -39,7 +39,7 @@ and the producer's one-line `TriageReason` (which must add to the title, not res
 Release-specific colour for that block goes in `commentary.yml` under `report: index`.
 
 **Then three sections**, declared once in `AuditSiteRenderer.IndexSections` and selected by each
-report's `SectionId`: `records` (absent, unreachable, or not current), `text` (stray characters,
+report's `SectionId`: `records` (missing a scope, an API response, a parent assessment, a current assessment, or a described name), `text` (stray characters,
 markup, fields that disagree), `col` (the crosscheck). Boundaries follow what the observation is
 about, not what the Action chip says, because that is what tells a reader whether a block is theirs.
 The `col` block lists only `ColIndexHighlights` (`col-close-match`, `col-classification`) and links

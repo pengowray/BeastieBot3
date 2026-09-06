@@ -80,4 +80,31 @@ public class ProvisionalNameTests {
     [Fact]
     public void AProvisionalSynonymIsRecognisedAsProvisional() =>
         Assert.True(ProvisionalNames.IsProvisional("Schefflera sp. nov. 'nanocephala'"));
+
+    [Theory]
+    [InlineData("Notogomphus gorilla")]
+    [InlineData("Heideella andreae boulanouari")]
+    [InlineData("Rosa x damascena")]
+    public void ABinomialCanStandInTheDescribedNameColumn(string name) =>
+        Assert.True(ProvisionalNames.LooksLikeDescribedName(name));
+
+    [Theory]
+    [InlineData("Notogomphus")]
+    [InlineData("Notogomphus gorilla Dijkstra, 2015")]
+    [InlineData("Notogomphus sp. nov. 'gorilla'")]
+    [InlineData("Gila spotted whiptail lizard of Arizona")]
+    [InlineData("")]
+    [InlineData(null)]
+    public void AnythingElseIsNotADescribedName(string? name) =>
+        Assert.False(ProvisionalNames.LooksLikeDescribedName(name));
+
+    // Shape alone cannot separate a common-name article title from a trinomial, which is why the
+    // producer also requires the leading word to be a genus.
+    [Fact]
+    public void ACommonNameTitleHasTheSameShapeAsATrinomial() {
+        Assert.True(ProvisionalNames.LooksLikeDescribedName("Gila spotted whiptail"));
+        Assert.Equal("Gila", ProvisionalNames.LeadingWord("Gila spotted whiptail"));
+        Assert.Equal("Notogomphus", ProvisionalNames.LeadingWord("Notogomphus gorilla"));
+        Assert.Null(ProvisionalNames.LeadingWord("  "));
+    }
 }

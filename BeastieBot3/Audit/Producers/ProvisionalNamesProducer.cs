@@ -78,7 +78,7 @@ internal sealed class ProvisionalNamesProducer : IAuditReportProducer {
                 ? null
                 : BestColMatch(repo, parsed.CandidateName, ctx);
             var other = others?.Lookup(row.TaxonId, name, ctx.Ct) ?? OtherSourceHit.None;
-            var otherNames = other.OtherNames.Where(n => !ProvisionalNames.IsProvisional(n)).ToList();
+            var otherNames = other.OtherNames.Where(n => IsDescribedName(n, row, repo, ctx)).ToList();
 
             if (col1 is null && otherNames.Count == 0) {
                 Count(tally, parsed.Outcome == ProvisionalOutcome.Candidate
@@ -98,6 +98,27 @@ internal sealed class ProvisionalNamesProducer : IAuditReportProducer {
             .ToList();
 
         return BuildReport(ctx, ordered, provisionalCount, tally, repo is not null, hasSynonyms, others);
+    }
+
+    // A name from Wikidata or Wikipedia is only allowed into the Described name column when it is
+    // shaped like a binomial AND its first word is a genus. Shape alone is not enough: the Wikipedia
+    // matcher also matches taxa to common-name articles, and "Gila spotted whiptail" is the same
+    // shape as a trinomial. The taxon's own genus settles most cases without a query; otherwise CoL
+    // is asked whether the word is a genus at all, which is what a transfer to another genus looks
+    // like. With no CoL to ask, only the taxon's own genus is accepted, which is the safe side.
+    private static bool IsDescribedName(string? candidate, ProvisionalRow row, ColTaxonRepository? repo, AuditContext ctx) {
+        if (!ProvisionalNames.LooksLikeDescribedName(candidate)) {
+            return false;
+        }
+        var genus = ProvisionalNames.LeadingWord(candidate);
+        if (genus is null) {
+            return false;
+        }
+        if (string.Equals(genus, row.Genus?.Trim(), StringComparison.OrdinalIgnoreCase)) {
+            return true;
+        }
+        return repo is not null &&
+               repo.FindByScientificName(genus, ctx.Ct).Any(u => Looks(u.Rank, "genus"));
     }
 
     // The names IUCN already files as synonyms of this taxon, split into described names (which
@@ -213,7 +234,8 @@ internal sealed class ProvisionalNamesProducer : IAuditReportProducer {
                 : col.IsAccepted ? (describedSince ? "described-since-assessment" : "described-name-in-col")
                 : "candidate-name-is-a-col-synonym",
             SeverityTier = severity,
-            Detail = Detail(col, describedName, colAuthority, colYear, iucnYear, other, otherNames, colChecked),
+            Detail = Detail(col, describedName, colAuthority, colYear, iucnYear, other, otherNames,
+                colChecked, parsed.CandidateName is not null),
         };
 
         Set(finding, "candidateName", parsed.CandidateName);
@@ -279,12 +301,16 @@ internal sealed class ProvisionalNamesProducer : IAuditReportProducer {
     // against the assessment. The two are separate facts: "CoL records no year" and "the name already
     // existed when the taxon was assessed" say different things and a reader acts on them differently.
     private static string Detail(ColMatch? col, string describedName, string? colAuthority, int? colYear,
-        int? iucnYear, OtherSourceHit other, IReadOnlyList<string> otherNames, bool colChecked) {
+        int? iucnYear, OtherSourceHit other, IReadOnlyList<string> otherNames, bool colChecked, bool hadCandidate) {
         if (col is null) {
             var source = SourcePhrase(other, otherNames);
-            var colClause = colChecked
-                ? "The Catalogue of Life lookup found no described name for it."
-                : "The Catalogue of Life was not checked for this build.";
+            // Three different facts, and saying the wrong one misreports the check: no candidate was
+            // built at all, a candidate was built and CoL did not have it, or CoL was never read.
+            var colClause = !hadCandidate
+                ? "The tag on the IUCN name gave no binomial to look up in the Catalogue of Life."
+                : colChecked
+                    ? "The Catalogue of Life lookup found no described name for it."
+                    : "The Catalogue of Life was not checked for this build.";
             return $"This taxon is named {describedName} on {source}. {colClause}";
         }
 
@@ -459,10 +485,11 @@ ORDER BY i.scientificName, i.taxonId";
         if (!hasSynonyms) {
             opening += " IUCN synonym data from the Red List API was not available for this build, so the check for described names IUCN already lists as synonyms did not run. Some rows may be relationships IUCN already records.";
         }
-        if (others is null) {
+        if (others is null && !hasCol) {
+            opening += " Neither the Catalogue of Life nor the Wikidata and Wikipedia caches were available for this build, so no source could be checked.";
+        } else if (others is null) {
             opening += " The Wikidata and Wikipedia check did not run for this build, so only the Catalogue of Life was consulted.";
-        }
-        if (!hasCol) {
+        } else if (!hasCol) {
             opening += " The Catalogue of Life database was not available for this build, so only Wikidata and Wikipedia were consulted.";
         }
 

@@ -82,6 +82,28 @@ internal static class ProvisionalNames {
         return new ProvisionalName(ProvisionalOutcome.Candidate, tag, candidate);
     }
 
+    // Genus, then one or two lower-case epithets. Hyphens and the hybrid marker are allowed; an
+    // authority, a note or anything capitalised mid-name is not.
+    private static readonly Regex Binomial = new(@"^[A-Z][a-z-]+(?: [x\u00d7])?(?: [a-z][a-z-]+){1,2}$", RegexOptions.Compiled);
+
+    /// True when a name from another source is shaped like a described binomial or trinomial.
+    ///
+    /// Shape alone does not settle it: the Wikipedia matcher also matches taxa to common-name
+    /// articles, and "Gila spotted whiptail" has the same shape as a trinomial. Callers must also
+    /// check that the first word is a genus, which is what actually separates the two.
+    public static bool LooksLikeDescribedName(string? name) =>
+        !string.IsNullOrWhiteSpace(name) && !IsProvisional(name) && Binomial.IsMatch(name.Trim());
+
+    /// The first word of a scientific name, which should be its genus.
+    public static string? LeadingWord(string? name) {
+        var trimmed = name?.Trim();
+        if (string.IsNullOrEmpty(trimmed)) {
+            return null;
+        }
+        var space = trimmed.IndexOf(' ');
+        return space < 0 ? trimmed : trimmed[..space];
+    }
+
     /// True when a name published by another source is itself provisional, so it does not answer
     /// the question this report asks.
     public static bool IsProvisional(string? name) => !string.IsNullOrWhiteSpace(name) && Marker.IsMatch(name);
