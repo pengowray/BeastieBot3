@@ -45,7 +45,7 @@ public sealed class WikipediaUpdateCommand : AsyncCommand<WikipediaUpdateCommand
         public bool IncludeRest { get; init; }
 
         [CommandOption("--until-done")]
-        [Description("Go round the steps again until nothing is left to do, or until a round changes nothing. --limit still applies to each step in each round, so stopping partway loses nothing.")]
+        [Description("Repeat all the steps in rounds until nothing is left to do or a round changes nothing. --limit caps each step in each round. Ctrl+C stops safely; the next run continues from there.")]
         public bool UntilDone { get; init; }
     }
 
@@ -160,18 +160,27 @@ public sealed class WikipediaUpdateCommand : AsyncCommand<WikipediaUpdateCommand
             if (!WikiUpdateProgress.MadeProgress(roundStart, state)) {
                 AnsiConsole.WriteLine();
                 AnsiConsole.MarkupLineInterpolated(
-                    $"[yellow]Stopped after round {round}:[/] it changed nothing, so another round would start from the same place. What is left needs a different step (see below).");
+                    $"[yellow]Stopped after round {round}:[/] it changed nothing, so another round would not either. Usually a step failed (see its message above) or the same downloads failed again.");
                 break;
             }
             AnsiConsole.WriteLine();
-            AnsiConsole.MarkupLineInterpolated(
-                $"[grey]Round {round} done: {WikiUpdateProgress.Describe(roundStart, state) ?? "no change"}. Starting round {round + 1}; Ctrl+C stops safely.[/]");
+            var roundChanges = WikiUpdateProgress.Describe(roundStart, state);
+            if (roundChanges is null) {
+                // MadeProgress lets an unmeasured round through; it did not measure "no change".
+                AnsiConsole.MarkupLineInterpolated($"[grey]Round {round} done (couldn't measure what changed). Starting round {round + 1}; Ctrl+C stops safely.[/]");
+            } else {
+                AnsiConsole.MarkupLineInterpolated($"[grey]Round {round} done: {roundChanges}. Starting round {round + 1}; Ctrl+C stops safely.[/]");
+            }
         }
 
         // Where things stand now that the run is done, and what a re-run would still find.
         AnsiConsole.WriteLine();
-        var rounds = settings.UntilDone ? $" over {round} round{(round == 1 ? "" : "s")}" : "";
-        AnsiConsole.MarkupLineInterpolated($"[green]Update finished:[/] {stepsRun} steps ran{rounds}, {stepsSkipped} had nothing to do.");
+        if (settings.UntilDone) {
+            // Skips include first-round-only steps, which did have work; "had nothing to do" would be false.
+            AnsiConsole.MarkupLineInterpolated($"[green]Update finished after {round} round{(round == 1 ? "" : "s")}:[/] {stepsRun} steps ran, {stepsSkipped} were skipped.");
+        } else {
+            AnsiConsole.MarkupLineInterpolated($"[green]Update finished:[/] {stepsRun} steps ran, {stepsSkipped} had nothing to do.");
+        }
         PrintRunChanges(runStart, state);
         PrintTotals(state);
         PrintWhatRemains(state, settings, limit);
@@ -234,8 +243,8 @@ public sealed class WikipediaUpdateCommand : AsyncCommand<WikipediaUpdateCommand
             new("Match taxa to articles",
                 new[] { "wikipedia match-taxa" },
                 s => s.TaxaNeverMatched > 0
-                    ? (true, $"{s.TaxaNeverMatched:n0} taxa never checked; also re-checks taxa with no article")
-                    : (true, "re-checks taxa with no article, in case new names or Wikidata items give them a title to try"),
+                    ? (true, $"{s.TaxaNeverMatched:n0} taxa never checked; also re-checks every taxon with no article")
+                    : (true, "every taxon has been checked once; re-checks those with no article (a new name or Wikidata item can give one a title to try)"),
                 Repeat: Repeat.WhenWikidataChanged),
             new("Download the pages taxa are waiting on",
                 new[] { Cap("wikipedia fetch-pages --awaited-only --newest-first") },
@@ -278,7 +287,7 @@ public sealed class WikipediaUpdateCommand : AsyncCommand<WikipediaUpdateCommand
             case Repeat.FirstRoundOnly:
                 return (false, "only runs in the first round");
             case Repeat.WhenWikidataChanged when lastRan is not null && !WikiUpdateProgress.WikidataChanged(lastRan, state):
-                return (false, "no new Wikidata items or links since it last ran");
+                return (false, "no new Wikidata items or taxon links since it last ran");
             default:
                 return Decide(rung, state);
         }
@@ -315,9 +324,9 @@ public sealed class WikipediaUpdateCommand : AsyncCommand<WikipediaUpdateCommand
 
         if (limit > 0) {
             if (settings.UntilDone) {
-                AnsiConsole.MarkupLineInterpolated($"[grey]Downloads and searches are capped at {limit:n0} per step per round (--limit changes this; 0 removes the cap). Rounds repeat until nothing is left or a round changes nothing.[/]");
+                AnsiConsole.MarkupLineInterpolated($"[grey]At most {limit:n0} downloads or searches per step per round (--limit; 0 = no cap). Rounds repeat until nothing is left or a round changes nothing.[/]");
             } else {
-                AnsiConsole.MarkupLineInterpolated($"[grey]Downloads and searches are capped at {limit:n0} per step this run (--limit changes this; 0 removes the cap). Re-running continues where this run stops; --until-done keeps going by itself.[/]");
+                AnsiConsole.MarkupLineInterpolated($"[grey]At most {limit:n0} downloads or searches per step this run (--limit; 0 = no cap). Whatever is not reached is picked up by the next run, or add --until-done to repeat the steps until nothing is left.[/]");
             }
         }
 
@@ -333,16 +342,17 @@ public sealed class WikipediaUpdateCommand : AsyncCommand<WikipediaUpdateCommand
             return;
         }
 
+        var notCounted = s.VarietiesSkipped > 0
+            ? $" [grey](not counting {s.VarietiesSkipped:n0} varieties, which the matcher skips, or subpopulations)[/]"
+            : " [grey](not counting subpopulations)[/]";
         var taxa = new List<string> {
-            $"{s.IucnTaxa:n0} in IUCN",
             $"{s.TaxaWithArticle:n0} matched to an article",
             $"{s.TaxaWithoutArticle:n0} checked, no article found",
         };
         if (s.TaxaAwaitingPage > 0) taxa.Add($"{s.TaxaAwaitingPage:n0} waiting on a page");
         if (s.TaxaRejected > 0) taxa.Add($"{s.TaxaRejected:n0} with only disambiguation pages");
         taxa.Add($"{s.TaxaNeverMatched:n0} never checked");
-        var varieties = s.VarietiesSkipped > 0 ? $" [grey](not counted: {s.VarietiesSkipped:n0} varieties, which are not matched)[/]" : "";
-        AnsiConsole.MarkupLine($"[grey]Taxa:[/] {Markup.Escape(string.Join(" · ", taxa))}{varieties}");
+        AnsiConsole.MarkupLine($"[grey]Taxa:[/] {s.IucnTaxa:n0} in IUCN{notCounted} · {Markup.Escape(string.Join(" · ", taxa))}");
         AnsiConsole.MarkupLineInterpolated(
             $"[grey]Wikidata:[/] {s.WikidataEntitiesCached:n0} items downloaded · {s.WikidataEntitiesQueued:n0} queued · {s.WikidataEntitiesFailed:n0} failed · {s.TaxaNeverSearched:n0} taxa never searched for");
         var dump = s.DumpTitles == 0 ? "no all-titles dump imported" : $"all-titles dump of {s.DumpDate ?? "unknown date"} imported";
@@ -379,12 +389,12 @@ public sealed class WikipediaUpdateCommand : AsyncCommand<WikipediaUpdateCommand
     // than leaving the reader to compare totals.
     private static void PrintStepResult(WikiCoverageState before, WikiCoverageState after) {
         if (!before.Known || !after.Known) {
-            AnsiConsole.MarkupLine("[grey]Result: couldn't measure what changed.[/]");
+            AnsiConsole.MarkupLine("[grey]Result: not measured (the counts couldn't be read).[/]");
             return;
         }
         var line = WikiUpdateProgress.Describe(before, after);
         if (line is null) {
-            AnsiConsole.MarkupLine("[grey]Result: no change to the counts.[/]");
+            AnsiConsole.MarkupLine("[grey]Result: none of the counts changed.[/]");
         } else {
             AnsiConsole.MarkupLineInterpolated($"[green]Result:[/] {line}");
         }
@@ -397,7 +407,7 @@ public sealed class WikipediaUpdateCommand : AsyncCommand<WikipediaUpdateCommand
         if (changes.Count == 0) {
             AnsiConsole.MarkupLine(start.Known && end.Known
                 ? "[yellow]This run changed none of the counts.[/]"
-                : "[grey]Couldn't measure what this run changed.[/]");
+                : "[grey]Couldn't measure what this run changed; the counts are unavailable (see below).[/]");
             return;
         }
 
@@ -424,8 +434,8 @@ public sealed class WikipediaUpdateCommand : AsyncCommand<WikipediaUpdateCommand
         var remains = Remaining(s, settings);
         if (remains.Count > 0) {
             var next = settings.UntilDone
-                ? "Run `wikipedia update --until-done` again to retry"
-                : $"Run `wikipedia update` again to continue{(limit > 0 ? ", raise --limit" : "")}, or add --until-done to keep going by itself";
+                ? "Run `wikipedia update --until-done` again later to retry"
+                : $"Run `wikipedia update` again to continue{(limit > 0 ? ", raise --limit to do more per run" : "")}, or add --until-done to repeat until nothing is left";
             AnsiConsole.MarkupLineInterpolated($"[yellow]Still to do:[/] {string.Join(" · ", remains)}. {next}.");
             return;
         }

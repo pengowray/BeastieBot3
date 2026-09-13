@@ -218,8 +218,10 @@ public sealed class WikidataIucnBackfillCommand : AsyncCommand<WikidataIucnBackf
 
                 // Checked here rather than after a match: taxa with no match used to skip the check
                 // entirely, so --limit 3 could search hundreds of taxa before the third match.
+                // The scan carries on past the limit so every name link above is still made:
+                // --limit caps online searches, and a link costs none.
                 if (stats.Evaluated >= rowLimit) {
-                    break;
+                    continue;
                 }
 
                 stats.Evaluated++;
@@ -537,7 +539,7 @@ public sealed class WikidataIucnBackfillCommand : AsyncCommand<WikidataIucnBackf
         table.AddRow("Synonym matches", stats.SynonymMatches.ToString("n0"));
         table.AddRow("Already known", stats.AlreadyKnown.ToString("n0"));
         table.AddRow("Queued", stats.Queued.ToString("n0"));
-        table.AddRow("Linked to a cached item with the same name", stats.LinkedByName.ToString("n0"));
+        table.AddRow("Linked by exact name, no search needed", stats.LinkedByName.ToString("n0"));
         table.AddRow("Searched, not found", stats.Missing.ToString("n0"));
         table.AddRow("Skipped (searched before, not found)", stats.SkippedPreviousMiss.ToString("n0"));
         AnsiConsole.Write(table);

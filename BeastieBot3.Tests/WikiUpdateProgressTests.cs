@@ -34,8 +34,23 @@ public class WikiUpdateProgressTests {
     public void A_download_step_says_what_arrived_and_what_turned_out_missing() {
         var line = WikiUpdateProgress.Describe(Start, AfterFetch);
         Assert.Equal(
-            "81 pages downloaded · 1,197 titles have no article · 1,278 fewer titles queued · 652 fewer pages a taxon is waiting on",
+            "81 pages downloaded · 1,197 titles have no article · 1,278 fewer titles queued · 652 fewer pages awaited by a taxon",
             line);
+    }
+
+    // A match step moves the awaited-page queue as well as the taxa; the outcomes lead.
+    [Fact]
+    public void Outcomes_come_before_queue_sizes_and_new_titles_are_not_said_twice() {
+        var matched = Start with {
+            TaxaWithArticle = Start.TaxaWithArticle + 300,
+            PagesKnown = Start.PagesKnown + 652,
+            PagesQueued = Start.PagesQueued + 652,
+            PagesQueuedAwaited = Start.PagesQueuedAwaited + 652,
+        };
+        Assert.Equal(
+            "300 taxa matched to an article · 652 titles queued · 652 more pages awaited by a taxon",
+            WikiUpdateProgress.Describe(Start, matched));
+        Assert.Contains(WikiUpdateProgress.Changes(Start, matched), c => c.Metric.Label == "Titles ever queued");
     }
 
     [Fact]

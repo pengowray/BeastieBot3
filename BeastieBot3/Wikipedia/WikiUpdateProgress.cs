@@ -21,42 +21,47 @@ internal static class WikiUpdateProgress {
     /// <param name="Down">Step-result phrase when the count falls, with {0} for the amount.</param>
     /// <param name="CountsAsProgress">Movement here means work got done. Queue sizes and failure
     /// counts are excluded: they move when nothing useful happened (a retry that fails again).</param>
+    /// <param name="RiseInStepLine">False when a rise only repeats another phrase in the same step
+    /// line: every title queued is also a rise in "titles queued".</param>
     internal sealed record Metric(
         Group Group,
         string Label,
         Func<WikiCoverageState, long> Read,
         string Up,
         string Down,
-        bool CountsAsProgress);
+        bool CountsAsProgress,
+        bool RiseInStepLine = true);
 
     internal sealed record Change(Metric Metric, long Before, long After) {
         public long Delta => After - Before;
     }
 
-    // Table order. Step results list changes in this order too, so a download step leads with
-    // what arrived and a match step with what matched.
+    // Table order. Step lines put the outcomes (CountsAsProgress) first and queue sizes after,
+    // so a match step leads with what matched rather than with the pages it queued.
     internal static readonly IReadOnlyList<Metric> Metrics = new Metric[] {
         new(Group.Wikidata, "Wikidata items downloaded", s => s.WikidataEntitiesCached,
-            "{0} Wikidata items downloaded", "{0} fewer Wikidata items cached", true),
+            "{0} Wikidata items downloaded", "{0} Wikidata items removed from the cache", true),
         new(Group.Wikidata, "Wikidata items queued", s => s.WikidataEntitiesQueued,
             "{0} Wikidata items queued", "{0} fewer Wikidata items queued", false),
         new(Group.Wikidata, "Taxa with no Wikidata item", s => s.TaxaWithoutWikidata,
             "{0} more taxa with no Wikidata item", "{0} taxa linked to a Wikidata item", true),
+        // Falls under the sweep as well as the search (a linked taxon needs no search), so the
+        // phrase can't claim a search happened.
         new(Group.Wikidata, "Taxa never searched for", s => s.TaxaNeverSearched,
-            "{0} more taxa to search for", "{0} taxa searched for", true),
+            "{0} more taxa to search for", "{0} fewer taxa to search for", true),
 
-        new(Group.Pages, "Titles known", s => s.PagesKnown,
-            "{0} titles added to the queue", "{0} titles removed from the queue", true),
+        new(Group.Pages, "Titles ever queued", s => s.PagesKnown,
+            "{0} new titles", "{0} titles dropped", true, RiseInStepLine: false),
         new(Group.Pages, "Pages downloaded", s => s.PagesCached,
-            "{0} pages downloaded", "{0} fewer pages cached", true),
+            "{0} pages downloaded", "{0} pages removed from the cache", true),
         new(Group.Pages, "Titles with no article", s => s.PagesMissing,
-            "{0} titles have no article", "{0} fewer titles marked as having no article", true),
+            "{0} titles have no article", "{0} fewer titles with no article", true),
         new(Group.Pages, "Failed downloads", s => s.PagesFailed,
-            "{0} downloads failed", "{0} failed downloads recovered", false),
+            "{0} downloads failed", "{0} fewer failed downloads", false),
         new(Group.Pages, "Titles queued", s => s.PagesQueued,
-            "{0} more titles queued", "{0} fewer titles queued", false),
-        new(Group.Pages, "Titles a taxon is waiting on", s => s.PagesQueuedAwaited,
-            "{0} more pages a taxon is waiting on", "{0} fewer pages a taxon is waiting on", false),
+            "{0} titles queued", "{0} fewer titles queued", false),
+        new(Group.Pages, "Pages awaited by a taxon", s => s.PagesQueuedAwaited,
+            "{0} more pages awaited by a taxon", "{0} fewer pages awaited by a taxon", false),
 
         new(Group.Taxa, "Taxa matched to an article", s => s.TaxaWithArticle,
             "{0} taxa matched to an article", "{0} fewer taxa matched to an article", true),
@@ -88,12 +93,14 @@ internal static class WikiUpdateProgress {
     }
 
     /// One line for a step's result: "81 pages downloaded · 1,197 titles have no article".
-    /// Null when nothing moved, so the caller chooses how to say that.
+    /// Null when nothing moved (or a snapshot is unmeasured), so the caller chooses how to say that.
     public static string? Describe(WikiCoverageState before, WikiCoverageState after) {
-        var changes = Changes(before, after);
-        if (changes.Count == 0) return null;
-        return string.Join(" · ", changes.Select(c =>
-            string.Format(c.Delta > 0 ? c.Metric.Up : c.Metric.Down, Math.Abs(c.Delta).ToString("n0"))));
+        var phrases = Changes(before, after)
+            .Where(c => c.Delta < 0 || c.Metric.RiseInStepLine)
+            .OrderBy(c => c.Metric.CountsAsProgress ? 0 : 1)   // stable: table order within each half
+            .Select(c => string.Format(c.Delta > 0 ? c.Metric.Up : c.Metric.Down, Math.Abs(c.Delta).ToString("n0")))
+            .ToList();
+        return phrases.Count == 0 ? null : string.Join(" · ", phrases);
     }
 
     /// Whether Wikidata gained items or taxon links between the snapshots: the thing that can

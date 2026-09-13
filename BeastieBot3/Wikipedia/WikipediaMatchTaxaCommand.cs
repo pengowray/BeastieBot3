@@ -69,7 +69,7 @@ public sealed class WikipediaMatchTaxaCommand : AsyncCommand<WikipediaMatchTaxaC
         public bool ReprocessMatched { get; init; }
 
         [CommandOption("--pending-only")]
-        [Description("Only check taxa never checked before and taxa waiting on a page download. Skips re-checking taxa already found to have no article, which is most of the run time.")]
+        [Description("Check only taxa never checked and taxa waiting on a page download. Skips re-checking taxa already found to have no article, which takes most of a full run.")]
         public bool PendingOnly { get; init; }
     }
 
@@ -540,7 +540,7 @@ public sealed class WikipediaMatchTaxaCommand : AsyncCommand<WikipediaMatchTaxaC
         Row("No names to look up", stats.NoCandidates);
         table.AddRow("[grey]Already matched, not re-checked[/]", $"[grey]{stats.AlreadyMatched:n0}[/]", "");
         if (stats.NotRechecked > 0) {
-            table.AddRow("[grey]Settled before, not re-checked[/]", $"[grey]{stats.NotRechecked:n0}[/]", "");
+            table.AddRow("[grey]Checked before, skipped (--pending-only)[/]", $"[grey]{stats.NotRechecked:n0}[/]", "");
         }
         table.AddRow("[grey]Skipped (subpopulations, varieties)[/]", $"[grey]{stats.Skipped:n0}[/]", "");
         AnsiConsole.Write(table);
