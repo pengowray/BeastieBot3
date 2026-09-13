@@ -67,6 +67,10 @@ public sealed class WikipediaMatchTaxaCommand : AsyncCommand<WikipediaMatchTaxaC
         [CommandOption("--reprocess-matched")]
         [Description("Re-evaluate taxa already marked as matched.")]
         public bool ReprocessMatched { get; init; }
+
+        [CommandOption("--pending-only")]
+        [Description("Only check taxa never checked before and taxa waiting on a page download. Skips re-checking taxa already found to have no article, which is most of the run time.")]
+        public bool PendingOnly { get; init; }
     }
 
     public override Task<int> ExecuteAsync(CommandContext context, Settings settings, CancellationToken cancellationToken) {
@@ -155,15 +159,16 @@ public sealed class WikipediaMatchTaxaCommand : AsyncCommand<WikipediaMatchTaxaC
             processed++;
             stats.Evaluated++;
 
-            var result = ProcessTaxon(row, wikipediaStore, wikidataLookup, synonymService, settings, cancellationToken);
-            stats.Record(result);
+            var existing = wikipediaStore.GetTaxonMatch(TaxonSources.Iucn, rowTaxonId);
+            var result = ProcessTaxon(row, existing, wikipediaStore, wikidataLookup, synonymService, settings, cancellationToken);
+            stats.Record(result, existing?.MatchStatus);
 
             if (processed >= limit) {
                 break;
             }
 
             if (stats.Evaluated >= nextProgress) {
-                AnsiConsole.MarkupLineInterpolated($"[grey]Evaluated {stats.Evaluated:n0} taxa (matched {stats.Matched:n0}, pending {stats.Pending:n0}, missing {stats.Missing:n0}).[/]");
+                AnsiConsole.MarkupLineInterpolated($"[grey]Evaluated {stats.Evaluated:n0} taxa (matched {stats.Matched.Total:n0}, pending {stats.Pending.Total:n0}, missing {stats.Missing.Total:n0}).[/]");
                 nextProgress += progressInterval;
             }
         }
@@ -174,21 +179,30 @@ public sealed class WikipediaMatchTaxaCommand : AsyncCommand<WikipediaMatchTaxaC
 
     private static TaxonProcessResult ProcessTaxon(
         IucnTaxonomyRow row,
+        TaxonWikiMatch? existing,
         WikipediaCacheStore cacheStore,
         WikidataIucnMatchLookup wikidataLookup,
         IucnSynonymService synonymService,
         Settings settings,
         CancellationToken cancellationToken) {
         var taxonId = row.TaxonId.ToString(CultureInfo.InvariantCulture);
-
-        var existing = cacheStore.GetTaxonMatch(TaxonSources.Iucn, taxonId);
         if (!settings.ReprocessMatched && existing is not null && string.Equals(existing.MatchStatus, TaxonWikiMatchStatus.Matched, StringComparison.OrdinalIgnoreCase)) {
             return TaxonProcessResult.AlreadyMatched;
+        }
+
+        // `wikipedia update` settles taxa after a page download this way: only a taxon that was
+        // waiting on a page (or was never checked) can change because a page arrived.
+        if (settings.PendingOnly && existing is not null && !string.Equals(existing.MatchStatus, TaxonWikiMatchStatus.Pending, StringComparison.OrdinalIgnoreCase)) {
+            return TaxonProcessResult.NotRechecked;
         }
 
         // Re-evaluating this taxon: drop its prior attempt rows so the attempt log holds
         // only the latest run instead of appending unbounded history on every re-run.
         cacheStore.ClearTaxonAttempts(TaxonSources.Iucn, taxonId);
+
+        // One line per taxon whose result changed. Printing every re-checked taxon put 89,000
+        // "Missing" lines in each run's log, burying the few that moved.
+        bool Unchanged(string status) => string.Equals(existing?.MatchStatus, status, StringComparison.OrdinalIgnoreCase);
 
         var candidates = BuildCandidates(row, wikidataLookup, synonymService, cancellationToken);
         if (candidates.Count == 0) {
@@ -204,7 +218,9 @@ public sealed class WikipediaMatchTaxaCommand : AsyncCommand<WikipediaMatchTaxaC
                 null,
                 "No candidate names available",
                 DateTime.UtcNow));
-            AnsiConsole.MarkupLineInterpolated($"[yellow]No candidates[/] for SIS {Markup.Escape(taxonId)}");
+            if (!Unchanged(TaxonWikiMatchStatus.Missing)) {
+                AnsiConsole.MarkupLineInterpolated($"[yellow]No candidates[/] for SIS {Markup.Escape(taxonId)}");
+            }
             return TaxonProcessResult.NoCandidates;
         }
 
@@ -269,7 +285,9 @@ public sealed class WikipediaMatchTaxaCommand : AsyncCommand<WikipediaMatchTaxaC
                 pendingCandidate.MatchMethod,
                 state.Notes ?? "Awaiting download",
                 DateTime.UtcNow));
-            AnsiConsole.MarkupLineInterpolated($"[yellow]Pending[/] SIS {Markup.Escape(taxonId)} waiting on {Markup.Escape(pendingCandidate.DisplayTitle)}");
+            if (!Unchanged(TaxonWikiMatchStatus.Pending)) {
+                AnsiConsole.MarkupLineInterpolated($"[yellow]Pending[/] SIS {Markup.Escape(taxonId)} waiting on {Markup.Escape(pendingCandidate.DisplayTitle)}");
+            }
             return TaxonProcessResult.Pending;
         }
 
@@ -288,7 +306,9 @@ public sealed class WikipediaMatchTaxaCommand : AsyncCommand<WikipediaMatchTaxaC
                 null,
                 "All candidate pages were disambiguation or set-index pages",
                 DateTime.UtcNow));
-            AnsiConsole.MarkupLineInterpolated($"[yellow]Rejected[/] SIS {Markup.Escape(taxonId)} (disambiguation/set-index only)");
+            if (!Unchanged(TaxonWikiMatchStatus.Rejected)) {
+                AnsiConsole.MarkupLineInterpolated($"[yellow]Rejected[/] SIS {Markup.Escape(taxonId)} (disambiguation/set-index only)");
+            }
             return TaxonProcessResult.Rejected;
         }
 
@@ -304,7 +324,9 @@ public sealed class WikipediaMatchTaxaCommand : AsyncCommand<WikipediaMatchTaxaC
             null,
             "All candidates missing or invalid",
             DateTime.UtcNow));
-        AnsiConsole.MarkupLineInterpolated($"[red]Missing[/] SIS {Markup.Escape(taxonId)} (no valid articles)");
+        if (!Unchanged(TaxonWikiMatchStatus.Missing)) {
+            AnsiConsole.MarkupLineInterpolated($"[red]Missing[/] SIS {Markup.Escape(taxonId)} (no valid articles)");
+        }
         return TaxonProcessResult.Missing;
     }
 
@@ -501,53 +523,77 @@ public sealed class WikipediaMatchTaxaCommand : AsyncCommand<WikipediaMatchTaxaC
         return connection;
     }
 
+    // Each outcome is split into "new this run" and "same as last time": a re-run re-checks
+    // tens of thousands of taxa and lands most of them where they were, so a bare total (89,645
+    // missing) hid the handful that actually moved.
     private static void RenderSummary(WikipediaMatchStats stats) {
         var table = new Table().Border(TableBorder.Rounded).Title("Wikipedia match summary");
-        table.AddColumn("Category");
-        table.AddColumn("Count");
-        table.AddRow("Evaluated", stats.Evaluated.ToString("n0"));
-        table.AddRow("Matched", stats.Matched.ToString("n0"));
-        table.AddRow("Pending", stats.Pending.ToString("n0"));
-        table.AddRow("Missing", stats.Missing.ToString("n0"));
-        table.AddRow("Rejected", stats.Rejected.ToString("n0"));
-        table.AddRow("No candidates", stats.NoCandidates.ToString("n0"));
-        table.AddRow("Skipped", stats.Skipped.ToString("n0"));
-        table.AddRow("Already matched", stats.AlreadyMatched.ToString("n0"));
+        table.AddColumn("Result");
+        table.AddColumn(new TableColumn("Taxa").RightAligned());
+        table.AddColumn(new TableColumn("New this run").RightAligned());
+        void Row(string label, TransitionCount count) =>
+            table.AddRow(label, count.Total.ToString("n0"), count.Changed == 0 ? "[grey]0[/]" : count.Changed.ToString("n0"));
+        Row("Matched to an article", stats.Matched);
+        Row("Waiting on a page download", stats.Pending);
+        Row("No article found", stats.Missing);
+        Row("Only disambiguation pages", stats.Rejected);
+        Row("No names to look up", stats.NoCandidates);
+        table.AddRow("[grey]Already matched, not re-checked[/]", $"[grey]{stats.AlreadyMatched:n0}[/]", "");
+        if (stats.NotRechecked > 0) {
+            table.AddRow("[grey]Settled before, not re-checked[/]", $"[grey]{stats.NotRechecked:n0}[/]", "");
+        }
+        table.AddRow("[grey]Skipped (subpopulations, varieties)[/]", $"[grey]{stats.Skipped:n0}[/]", "");
         AnsiConsole.Write(table);
+    }
+
+    private sealed class TransitionCount {
+        public long Total { get; private set; }
+        public long Changed { get; private set; }
+        public void Add(bool changed) {
+            Total++;
+            if (changed) Changed++;
+        }
     }
 
     private sealed class WikipediaMatchStats {
         public long Evaluated { get; set; }
-        public long Matched { get; set; }
-        public long Pending { get; set; }
-        public long Missing { get; set; }
-        public long Rejected { get; set; }
-        public long NoCandidates { get; set; }
+        public TransitionCount Matched { get; } = new();
+        public TransitionCount Pending { get; } = new();
+        public TransitionCount Missing { get; } = new();
+        public TransitionCount Rejected { get; } = new();
+        public TransitionCount NoCandidates { get; } = new();
         public long Skipped { get; set; }
         public long AlreadyMatched { get; set; }
+        public long NotRechecked { get; set; }
 
-        public void Record(TaxonProcessResult result) {
+        // previousStatus is the taxon's match row before this run touched it (null: never checked).
+        // "No names to look up" is stored as 'missing', so it counts as new only from another status.
+        public void Record(TaxonProcessResult result, string? previousStatus) {
+            bool Was(string status) => string.Equals(previousStatus, status, StringComparison.OrdinalIgnoreCase);
             switch (result) {
                 case TaxonProcessResult.Matched:
-                    Matched++;
+                    Matched.Add(!Was(TaxonWikiMatchStatus.Matched));
                     break;
                 case TaxonProcessResult.Pending:
-                    Pending++;
+                    Pending.Add(!Was(TaxonWikiMatchStatus.Pending));
                     break;
                 case TaxonProcessResult.Missing:
-                    Missing++;
+                    Missing.Add(!Was(TaxonWikiMatchStatus.Missing));
                     break;
                 case TaxonProcessResult.Rejected:
-                    Rejected++;
+                    Rejected.Add(!Was(TaxonWikiMatchStatus.Rejected));
                     break;
                 case TaxonProcessResult.NoCandidates:
-                    NoCandidates++;
+                    NoCandidates.Add(!Was(TaxonWikiMatchStatus.Missing));
                     break;
                 case TaxonProcessResult.Skipped:
                     Skipped++;
                     break;
                 case TaxonProcessResult.AlreadyMatched:
                     AlreadyMatched++;
+                    break;
+                case TaxonProcessResult.NotRechecked:
+                    NotRechecked++;
                     break;
             }
         }
@@ -560,7 +606,8 @@ public sealed class WikipediaMatchTaxaCommand : AsyncCommand<WikipediaMatchTaxaC
         Rejected,
         NoCandidates,
         Skipped,
-        AlreadyMatched
+        AlreadyMatched,
+        NotRechecked
     }
 
     private enum CandidateEvaluationStatus {

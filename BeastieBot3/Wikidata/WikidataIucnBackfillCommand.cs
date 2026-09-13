@@ -149,6 +149,7 @@ public sealed class WikidataIucnBackfillCommand : AsyncCommand<WikidataIucnBackf
         var knownEntities = LoadKnownEntityIds(wikidataIndexConnection);
         var stats = new BackfillStats();
         var newMisses = new List<WikidataBackfillMiss>();
+        var nameLinks = new List<WikidataPendingIucnMatchRow>();
         var rowLimit = settings.Limit > 0 ? settings.Limit : int.MaxValue;
         AnsiConsole.MarkupLineInterpolated($"[grey]Loaded {existingTaxonIds.Count:n0} cached IUCN ids, {existingNames.Count:n0} normalized names, {knownEntities.Count:n0} known entities.[/]");
         AnsiConsole.MarkupLineInterpolated($"[grey]Queue all synonyms:[/] {(settings.QueueAllSynonyms ? "yes" : "no")}, limit: {(rowLimit == int.MaxValue ? "all" : rowLimit.ToString())}.");
@@ -166,6 +167,10 @@ public sealed class WikidataIucnBackfillCommand : AsyncCommand<WikidataIucnBackf
         // whenever the run stops. Holding them to the end meant a timeout threw away hours of
         // searching and the next run started on the same taxa, forever.
         void FlushMisses() {
+            if (nameLinks.Count > 0) {
+                store.UpsertPendingIucnMatches(nameLinks);
+                nameLinks.Clear();
+            }
             if (newMisses.Count == 0) return;
             store.RecordBackfillMisses(newMisses);
             newMisses.Clear();
@@ -194,8 +199,21 @@ public sealed class WikidataIucnBackfillCommand : AsyncCommand<WikidataIucnBackf
                     ?? row.ScientificNameAssessments
                     ?? ScientificNameHelper.BuildFromParts(row.GenusName, row.SpeciesName, row.InfraName);
                 var normalizedPrimary = ScientificNameHelper.Normalize(primaryName);
-                if (!string.IsNullOrEmpty(normalizedPrimary) && existingNames.Contains(normalizedPrimary)) {
-                    continue;
+                // A cached item already carries this taxon's name, so there is nothing to search for:
+                // link the taxon to it. This used to be a bare `continue`, which recorded nothing:
+                // the matcher never got the item's enwiki title as a candidate, and 4,628 taxa sat
+                // in "never searched for" through every run. A name shared by two cached items
+                // falls through to the search, which picks between them the usual way.
+                if (!string.IsNullOrEmpty(normalizedPrimary) && existingNames.TryGetValue(normalizedPrimary, out var namedEntity)) {
+                    if (namedEntity is { } entityNumericId) {
+                        nameLinks.Add(new WikidataPendingIucnMatchRow(
+                            sisId, entityNumericId, $"Q{entityNumericId}", primaryName!,
+                            "CachedName", false, DateTime.UtcNow, DateTime.UtcNow));
+                        existingTaxonIds.Add(sisId);
+                        stats.LinkedByName++;
+                        if (nameLinks.Count >= 500) FlushMisses();
+                        continue;
+                    }
                 }
 
                 // Checked here rather than after a match: taxa with no match used to skip the check
@@ -229,12 +247,14 @@ public sealed class WikidataIucnBackfillCommand : AsyncCommand<WikidataIucnBackf
                     stats.RecordMatch(match);
                     AnsiConsole.MarkupLineInterpolated($"[green]Match #{stats.Matches:n0}:[/] SIS {Markup.Escape(sisId)} via {match.Method} ({Markup.Escape(match.Candidate.Name)}) -> {match.Result.EntityId}");
 
-                    if (knownEntities.Contains(match.Result.NumericId)) {
+                    // An item already in the cache still gets the taxon link. Skipping it (as this
+                    // did) left the taxon unlinked and unrecorded, so every run searched it again.
+                    var alreadyKnown = knownEntities.Contains(match.Result.NumericId);
+                    if (alreadyKnown) {
                         stats.AlreadyKnown++;
-                        continue;
+                    } else {
+                        store.UpsertSeeds(new[] { new WikidataSeedRow(match.Result.NumericId, match.Result.EntityId, false, false) });
                     }
-
-                    store.UpsertSeeds(new[] { new WikidataSeedRow(match.Result.NumericId, match.Result.EntityId, false, false) });
                     store.UpsertPendingIucnMatches(new[] {
                         new WikidataPendingIucnMatchRow(
                             sisId!,
@@ -246,8 +266,10 @@ public sealed class WikidataIucnBackfillCommand : AsyncCommand<WikidataIucnBackf
                             DateTime.UtcNow,
                             DateTime.UtcNow)
                     });
-                    knownEntities.Add(match.Result.NumericId);
-                    stats.Queued++;
+                    if (!alreadyKnown) {
+                        knownEntities.Add(match.Result.NumericId);
+                        stats.Queued++;
+                    }
                 }
 
                 existingTaxonIds.Add(sisId);
@@ -358,30 +380,38 @@ public sealed class WikidataIucnBackfillCommand : AsyncCommand<WikidataIucnBackf
         return set;
     }
 
-    private static HashSet<string> LoadScientificNames(SqliteConnection connection) {
-        var set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+    // Normalized taxon name -> the cached entity carrying it, or null when more than one does.
+    private static Dictionary<string, long?> LoadScientificNames(SqliteConnection connection) {
+        var names = new Dictionary<string, long?>(StringComparer.OrdinalIgnoreCase);
         var (hasIndex, isComplete) = GetTaxonNameIndexStatus(connection);
         if (hasIndex) {
-            LoadScientificNamesFromQuery(connection, set, "SELECT normalized_name FROM wikidata_taxon_name_index");
-            if (isComplete && set.Count > 0) {
-                return set;
+            LoadScientificNamesFromQuery(connection, names, "SELECT entity_numeric_id, normalized_name FROM wikidata_taxon_name_index");
+            if (isComplete && names.Count > 0) {
+                return names;
             }
         }
 
-        LoadScientificNamesFromQuery(connection, set, "SELECT LOWER(name) FROM wikidata_scientific_names");
-        return set;
+        LoadScientificNamesFromQuery(connection, names, "SELECT entity_numeric_id, LOWER(name) FROM wikidata_scientific_names");
+        return names;
     }
 
-    private static void LoadScientificNamesFromQuery(SqliteConnection connection, HashSet<string> target, string sql) {
+    private static void LoadScientificNamesFromQuery(SqliteConnection connection, Dictionary<string, long?> target, string sql) {
         using var command = connection.CreateCommand();
         command.CommandText = sql;
         using var reader = command.ExecuteReader();
         while (reader.Read()) {
-            if (!reader.IsDBNull(0)) {
-                var name = reader.GetString(0)?.Trim();
-                if (!string.IsNullOrWhiteSpace(name)) {
-                    target.Add(name);
-                }
+            if (reader.IsDBNull(0) || reader.IsDBNull(1)) {
+                continue;
+            }
+            var name = reader.GetString(1)?.Trim();
+            if (string.IsNullOrWhiteSpace(name)) {
+                continue;
+            }
+            var entity = reader.GetInt64(0);
+            if (!target.TryGetValue(name, out var existing)) {
+                target[name] = entity;
+            } else if (existing is not null && existing != entity) {
+                target[name] = null;
             }
         }
     }
@@ -507,6 +537,7 @@ public sealed class WikidataIucnBackfillCommand : AsyncCommand<WikidataIucnBackf
         table.AddRow("Synonym matches", stats.SynonymMatches.ToString("n0"));
         table.AddRow("Already known", stats.AlreadyKnown.ToString("n0"));
         table.AddRow("Queued", stats.Queued.ToString("n0"));
+        table.AddRow("Linked to a cached item with the same name", stats.LinkedByName.ToString("n0"));
         table.AddRow("Searched, not found", stats.Missing.ToString("n0"));
         table.AddRow("Skipped (searched before, not found)", stats.SkippedPreviousMiss.ToString("n0"));
         AnsiConsole.Write(table);
@@ -520,6 +551,7 @@ public sealed class WikidataIucnBackfillCommand : AsyncCommand<WikidataIucnBackf
         public long Queued { get; set; }
         public long Missing { get; set; }
         public long SkippedPreviousMiss { get; set; }
+        public long LinkedByName { get; set; }
 
         public void RecordMatch(WikidataMatch match) {
             Matches++;

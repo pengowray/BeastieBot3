@@ -49,6 +49,20 @@ public class WikipediaFetchScopeTests {
             cmd.ExecuteNonQuery();
         }
 
+        public void RecordAttempt(long pageRowId, string taxonId, int order) {
+            using var cmd = Connection.CreateCommand();
+            cmd.CommandText = """
+                INSERT INTO taxon_wiki_match_attempts(taxon_source, taxon_identifier, attempt_order, candidate_title,
+                                                      normalized_title, source_hint, outcome, page_row_id, attempted_at)
+                VALUES ('iucn', @id, @order, 't', 't', 'test', 'pending', @page, @at)
+                """;
+            cmd.Parameters.AddWithValue("@id", taxonId);
+            cmd.Parameters.AddWithValue("@order", order);
+            cmd.Parameters.AddWithValue("@page", pageRowId);
+            cmd.Parameters.AddWithValue("@at", Now.ToString("O"));
+            cmd.ExecuteNonQuery();
+        }
+
         public void Dispose() {
             Store.Dispose();
             Connection.Dispose();
@@ -60,6 +74,26 @@ public class WikipediaFetchScopeTests {
         var titles = new string[items.Count];
         for (var i = 0; i < items.Count; i++) titles[i] = items[i].PageTitle;
         return titles;
+    }
+
+    // The match row names only a taxon's first undownloaded candidate. Fetching just that one
+    // settled a taxon with N redlink candidates over N update runs; every candidate it tried
+    // counts as awaited.
+    [Fact]
+    public void Awaited_only_takes_every_candidate_a_waiting_taxon_tried() {
+        using var f = new Fixture();
+        var first = f.AddPage("Leo leo", "pending", Now);
+        var second = f.AddPage("Felis leo", "pending", Now);
+        var ofSettled = f.AddPage("Ursus arctos", "pending", Now);
+        f.AwaitPage(first, "1000");
+        f.RecordAttempt(first, "1000", 1);
+        f.RecordAttempt(second, "1000", 2);
+        f.AwaitPage(ofSettled, "1001", matchStatus: "missing");
+        f.RecordAttempt(ofSettled, "1001", 1);
+
+        var awaited = new WikipediaCacheStore.WikiFetchScope { AwaitedOnly = true };
+        Assert.Equal(new[] { "Felis leo", "Leo leo" }, Titles(f.Store, awaited).OrderBy(t => t).ToArray());
+        Assert.Equal(2, f.Store.CountPendingPages(awaited));
     }
 
     [Fact]

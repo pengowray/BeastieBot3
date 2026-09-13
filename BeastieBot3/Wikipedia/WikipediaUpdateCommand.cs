@@ -27,6 +27,7 @@ namespace BeastieBot3.Wikipedia;
         "wikipedia update",
         "wikipedia update --status",
         "wikipedia update --limit 500",
+        "wikipedia update --until-done",
         "wikipedia update --include-rest --limit 0"
     })]
 public sealed class WikipediaUpdateCommand : AsyncCommand<WikipediaUpdateCommand.Settings> {
@@ -42,6 +43,19 @@ public sealed class WikipediaUpdateCommand : AsyncCommand<WikipediaUpdateCommand
         [CommandOption("--include-rest")]
         [Description("Also retry failed downloads and work the low-priority queue (higher taxa, synonyms, redirects). Off by default because that queue holds hundreds of thousands of titles.")]
         public bool IncludeRest { get; init; }
+
+        [CommandOption("--until-done")]
+        [Description("Go round the steps again until nothing is left to do, or until a round changes nothing. --limit still applies to each step in each round, so stopping partway loses nothing.")]
+        public bool UntilDone { get; init; }
+    }
+
+    // Whether a rung runs again in a later --until-done round. Sweeping Wikidata or checking for
+    // a new dump minutes after the first round finds nothing, and the full re-match only finds
+    // something when Wikidata has changed since it last ran.
+    private enum Repeat {
+        EveryRound,          // the gate decides each round
+        FirstRoundOnly,
+        WhenWikidataChanged, // first round: the gate decides; later rounds: only after new Wikidata items or links
     }
 
     // One rung of the ladder. Gate reads a fresh measurement just before the rung runs, so a
@@ -51,7 +65,8 @@ public sealed class WikipediaUpdateCommand : AsyncCommand<WikipediaUpdateCommand
         string Title,
         string[] Commands,
         Func<WikiCoverageState, (bool Run, string Why)>? Gate,
-        bool StopOnFailure = true
+        bool StopOnFailure = true,
+        Repeat Repeat = Repeat.EveryRound
     );
 
     public override async Task<int> ExecuteAsync(CommandContext context, Settings settings, CancellationToken cancellationToken) {
@@ -68,53 +83,96 @@ public sealed class WikipediaUpdateCommand : AsyncCommand<WikipediaUpdateCommand
         var limit = Math.Max(0, settings.Limit);
         var rungs = BuildLadder(settings, limit, state);
 
-        PrintPlan(rungs, state, limit, settings.StatusOnly);
+        PrintPlan(rungs, state, limit, settings);
         if (settings.StatusOnly) {
             return 0;
         }
 
+        var runStart = state;
         var stepsRun = 0;
         var stepsSkipped = 0;
-        for (var i = 0; i < rungs.Count; i++) {
-            cancellationToken.ThrowIfCancellationRequested();
-            var rung = rungs[i];
+        var round = 0;
+        // The state just after each rung last ran, for Repeat.WhenWikidataChanged.
+        var lastRanAt = new Dictionary<Rung, WikiCoverageState>();
 
-            // Measure again now: an earlier rung may have queued or drained the very thing
-            // this rung is gated on.
-            state = WikiCoverageStateReader.ReadNow(paths);
-            var (run, why) = Decide(rung, state);
-            if (!run) {
-                stepsSkipped++;
-                AnsiConsole.MarkupLineInterpolated($"[grey]Step {i + 1} of {rungs.Count} · {rung.Title} — skipped: {why}[/]");
-                continue;
+        while (true) {
+            round++;
+            var roundStart = state;
+            if (settings.UntilDone) {
+                AnsiConsole.WriteLine();
+                AnsiConsole.Write(new Rule($"[bold]Round {round}[/]").LeftJustified());
             }
 
-            stepsRun++;
-            AnsiConsole.WriteLine();
-            AnsiConsole.MarkupLineInterpolated($"[bold]Step {i + 1} of {rungs.Count} · {rung.Title}[/] [grey]({why})[/]");
-
-            foreach (var command in rung.Commands) {
-                var full = WithCommonArgs(command, settings);
-                AnsiConsole.MarkupLineInterpolated($"[grey]$ beastiebot3 {full}[/]");
-                var exit = await RunSubCommandAsync(full, cancellationToken).ConfigureAwait(false);
-                if (exit != 0 && !cancellationToken.IsCancellationRequested) {
-                    if (rung.StopOnFailure) {
-                        AnsiConsole.WriteLine();
-                        AnsiConsole.MarkupLineInterpolated(
-                            $"[red]Stopped at step {i + 1} ({rung.Title}):[/] `{command}` exited with code {exit}. Nothing done so far is lost; run `wikipedia update` again to continue from here.");
-                        return exit;
-                    }
-                    AnsiConsole.MarkupLineInterpolated(
-                        $"[yellow]`{command}` exited with code {exit}.[/] Continuing; the remaining steps do not depend on it. Run `wikipedia update` again later to retry this step.");
-                }
+            for (var i = 0; i < rungs.Count; i++) {
                 cancellationToken.ThrowIfCancellationRequested();
+                var rung = rungs[i];
+
+                // Measured after the previous rung, so a count it queued or drained is seen here.
+                var (run, why) = round == 1
+                    ? Decide(rung, state)
+                    : DecideLaterRound(rung, state, lastRanAt.GetValueOrDefault(rung));
+                if (!run) {
+                    stepsSkipped++;
+                    AnsiConsole.MarkupLineInterpolated($"[grey]Step {i + 1} of {rungs.Count} · {rung.Title}: skipped, {why}[/]");
+                    continue;
+                }
+
+                stepsRun++;
+                AnsiConsole.WriteLine();
+                AnsiConsole.MarkupLineInterpolated($"[bold]Step {i + 1} of {rungs.Count} · {rung.Title}[/] [grey]({why})[/]");
+
+                var before = state;
+                foreach (var command in rung.Commands) {
+                    var full = WithCommonArgs(command, settings);
+                    AnsiConsole.MarkupLineInterpolated($"[grey]$ beastiebot3 {full}[/]");
+                    var exit = await RunSubCommandAsync(full, cancellationToken).ConfigureAwait(false);
+                    if (exit != 0 && !cancellationToken.IsCancellationRequested) {
+                        if (rung.StopOnFailure) {
+                            state = WikiCoverageStateReader.ReadNow(paths);
+                            PrintStepResult(before, state);
+                            AnsiConsole.WriteLine();
+                            AnsiConsole.MarkupLineInterpolated(
+                                $"[red]Stopped at step {i + 1} ({rung.Title}):[/] `{command}` exited with code {exit}. Nothing done so far is lost; run `wikipedia update` again to continue from here.");
+                            PrintRunChanges(runStart, state);
+                            return exit;
+                        }
+                        AnsiConsole.MarkupLineInterpolated(
+                            $"[yellow]`{command}` exited with code {exit}.[/] Continuing; the remaining steps do not depend on it. Run `wikipedia update` again later to retry this step.");
+                    }
+                    cancellationToken.ThrowIfCancellationRequested();
+                }
+
+                state = WikiCoverageStateReader.ReadNow(paths);
+                lastRanAt[rung] = state;
+                PrintStepResult(before, state);
             }
+
+            if (!settings.UntilDone) {
+                break;
+            }
+
+            var remains = Remaining(state, settings);
+            if (remains.Count == 0) {
+                AnsiConsole.WriteLine();
+                AnsiConsole.MarkupLineInterpolated($"[green]Round {round} finished with nothing left to do.[/]");
+                break;
+            }
+            if (!WikiUpdateProgress.MadeProgress(roundStart, state)) {
+                AnsiConsole.WriteLine();
+                AnsiConsole.MarkupLineInterpolated(
+                    $"[yellow]Stopped after round {round}:[/] it changed nothing, so another round would start from the same place. What is left needs a different step (see below).");
+                break;
+            }
+            AnsiConsole.WriteLine();
+            AnsiConsole.MarkupLineInterpolated(
+                $"[grey]Round {round} done: {WikiUpdateProgress.Describe(roundStart, state) ?? "no change"}. Starting round {round + 1}; Ctrl+C stops safely.[/]");
         }
 
         // Where things stand now that the run is done, and what a re-run would still find.
         AnsiConsole.WriteLine();
-        AnsiConsole.MarkupLineInterpolated($"[green]Update finished:[/] {stepsRun} steps ran, {stepsSkipped} had nothing to do.");
-        state = WikiCoverageStateReader.ReadNow(paths);
+        var rounds = settings.UntilDone ? $" over {round} round{(round == 1 ? "" : "s")}" : "";
+        AnsiConsole.MarkupLineInterpolated($"[green]Update finished:[/] {stepsRun} steps ran{rounds}, {stepsSkipped} had nothing to do.");
+        PrintRunChanges(runStart, state);
         PrintTotals(state);
         PrintWhatRemains(state, settings, limit);
         return 0;
@@ -131,7 +189,8 @@ public sealed class WikipediaUpdateCommand : AsyncCommand<WikipediaUpdateCommand
                 // this step and the backfill search below use it; everything else goes through the
                 // Wikidata and Wikipedia web APIs, which stay up independently of it. So an outage
                 // here must not abandon the run.
-                StopOnFailure: false),
+                StopOnFailure: false,
+                Repeat: Repeat.FirstRoundOnly),
             new("Download queued Wikidata items",
                 new[] { Cap("wikidata cache-entities") },
                 s => s.WikidataEntitiesQueued > 0
@@ -139,8 +198,8 @@ public sealed class WikipediaUpdateCommand : AsyncCommand<WikipediaUpdateCommand
                     : (false, "nothing queued")),
             new("Search Wikidata for taxa the sweep missed",
                 new[] { Cap("wikidata backfill-iucn") },
-                s => Unsearched(s) > 0
-                    ? (true, $"{Unsearched(s):n0} taxa never searched for")
+                s => s.TaxaNeverSearched > 0
+                    ? (true, $"{s.TaxaNeverSearched:n0} taxa never searched for")
                     : (false, "every taxon without an item has been searched for already"),
                 // Same query.wikidata.org endpoint as the sweep, and this is the longest step in
                 // the ladder — a bad hour there used to strand every Wikipedia step behind it.
@@ -153,30 +212,38 @@ public sealed class WikipediaUpdateCommand : AsyncCommand<WikipediaUpdateCommand
                     : (false, "the search queued nothing new")),
             new("Queue Wikipedia titles from the cached items",
                 new[] { "wikipedia enqueue-wikidata", "wikipedia enqueue-taxa" },
-                Gate: null),
+                Gate: null,
+                Repeat: Repeat.WhenWikidataChanged),
             new("Check for a new all-titles dump",
                 new[] { "wikipedia titles-dump" },
                 Gate: null,
-                StopOnFailure: false),   // needs dumps.wikimedia.org; the update works without it
+                StopOnFailure: false,    // needs dumps.wikimedia.org; the update works without it
+                Repeat: Repeat.FirstRoundOnly),
             // Earlier matcher runs queued IUCN synonyms verbatim, authority and note included
             // ("Eumeces schneideri (Daudin, 1802) [orth. error]"), and no article can have such
             // a title. Dropping them here, before the match pass, means a taxon that was waiting
             // on one is re-matched from clean candidates in this same run.
             new("Drop queued titles no article can have",
                 new[] { "wikipedia prune-queue --apply" },
-                _ => (true, "always runs; removes only titles that carry an authority or a note")),
+                _ => (true, "always runs; removes only titles that carry an authority or a note"),
+                Repeat: Repeat.FirstRoundOnly),
+            // The full pass: re-checks taxa already found to have no article too, because a new
+            // Wikidata item or synonym can give one a candidate title. This rung's old gate
+            // ("any taxon never checked") was always true only because 980 varieties the matcher
+            // skips were counted as never checked, so the full pass ran on every update, twice.
             new("Match taxa to articles",
                 new[] { "wikipedia match-taxa" },
                 s => s.TaxaNeverMatched > 0
-                    ? (true, $"{s.TaxaNeverMatched:n0} taxa never checked")
-                    : (false, "every taxon has been checked")),
+                    ? (true, $"{s.TaxaNeverMatched:n0} taxa never checked; also re-checks taxa with no article")
+                    : (true, "re-checks taxa with no article, in case new names or Wikidata items give them a title to try"),
+                Repeat: Repeat.WhenWikidataChanged),
             new("Download the pages taxa are waiting on",
                 new[] { Cap("wikipedia fetch-pages --awaited-only --newest-first") },
                 s => s.PagesQueuedAwaited > 0
                     ? (true, $"{s.PagesQueuedAwaited:n0} pages awaited")
                     : (false, "no taxon is waiting on a page")),
             new("Settle the matches for the pages that arrived",
-                new[] { "wikipedia match-taxa" },
+                new[] { "wikipedia match-taxa --pending-only" },
                 s => s.TaxaAwaitingPage > 0 || s.TaxaNeverMatched > 0
                     ? (true, $"{s.TaxaAwaitingPage:n0} taxa have a candidate page to settle")
                     : (false, "no matches waiting on a page")),
@@ -190,7 +257,10 @@ public sealed class WikipediaUpdateCommand : AsyncCommand<WikipediaUpdateCommand
                     : (false, "no downloads have failed"),
                 // A retry that fails again is the expected outcome for a share of these, and the
                 // low-priority queue below does not depend on it.
-                StopOnFailure: false));
+                StopOnFailure: false,
+                // Once is enough: the same failures retried every round would spend the limit
+                // on titles that just failed.
+                Repeat: Repeat.FirstRoundOnly));
             // --exists-first only helps once a dump is imported; the rung before this imports it.
             var existsFirst = initial.DumpTitles > 0 ? " --exists-first" : "";
             rungs.Add(new("Download the rest of the queue (low priority)",
@@ -201,6 +271,17 @@ public sealed class WikipediaUpdateCommand : AsyncCommand<WikipediaUpdateCommand
         }
 
         return rungs;
+    }
+
+    private static (bool Run, string Why) DecideLaterRound(Rung rung, WikiCoverageState state, WikiCoverageState? lastRan) {
+        switch (rung.Repeat) {
+            case Repeat.FirstRoundOnly:
+                return (false, "only runs in the first round");
+            case Repeat.WhenWikidataChanged when lastRan is not null && !WikiUpdateProgress.WikidataChanged(lastRan, state):
+                return (false, "no new Wikidata items or links since it last ran");
+            default:
+                return Decide(rung, state);
+        }
     }
 
     private static (bool Run, string Why) Decide(Rung rung, WikiCoverageState state) {
@@ -216,11 +297,12 @@ public sealed class WikipediaUpdateCommand : AsyncCommand<WikipediaUpdateCommand
         return rung.Gate(state);
     }
 
-    private void PrintPlan(List<Rung> rungs, WikiCoverageState state, int limit, bool statusOnly) {
+    private void PrintPlan(List<Rung> rungs, WikiCoverageState state, int limit, Settings settings) {
+        var statusOnly = settings.StatusOnly;
         var table = new Table().Border(TableBorder.Simple);
         table.AddColumn("#");
         table.AddColumn("Step");
-        table.AddColumn(statusOnly ? "What a run would do" : "This run");
+        table.AddColumn(statusOnly ? "What a run would do" : settings.UntilDone ? "First round" : "This run");
 
         for (var i = 0; i < rungs.Count; i++) {
             var (run, why) = Decide(rungs[i], state);
@@ -232,7 +314,11 @@ public sealed class WikipediaUpdateCommand : AsyncCommand<WikipediaUpdateCommand
         AnsiConsole.Write(table);
 
         if (limit > 0) {
-            AnsiConsole.MarkupLineInterpolated($"[grey]Downloads and searches are capped at {limit:n0} per step this run (--limit changes this; 0 removes the cap). Re-running continues where this run stops.[/]");
+            if (settings.UntilDone) {
+                AnsiConsole.MarkupLineInterpolated($"[grey]Downloads and searches are capped at {limit:n0} per step per round (--limit changes this; 0 removes the cap). Rounds repeat until nothing is left or a round changes nothing.[/]");
+            } else {
+                AnsiConsole.MarkupLineInterpolated($"[grey]Downloads and searches are capped at {limit:n0} per step this run (--limit changes this; 0 removes the cap). Re-running continues where this run stops; --until-done keeps going by itself.[/]");
+            }
         }
 
         PrintTotals(state);
@@ -247,10 +333,18 @@ public sealed class WikipediaUpdateCommand : AsyncCommand<WikipediaUpdateCommand
             return;
         }
 
+        var taxa = new List<string> {
+            $"{s.IucnTaxa:n0} in IUCN",
+            $"{s.TaxaWithArticle:n0} matched to an article",
+            $"{s.TaxaWithoutArticle:n0} checked, no article found",
+        };
+        if (s.TaxaAwaitingPage > 0) taxa.Add($"{s.TaxaAwaitingPage:n0} waiting on a page");
+        if (s.TaxaRejected > 0) taxa.Add($"{s.TaxaRejected:n0} with only disambiguation pages");
+        taxa.Add($"{s.TaxaNeverMatched:n0} never checked");
+        var varieties = s.VarietiesSkipped > 0 ? $" [grey](not counted: {s.VarietiesSkipped:n0} varieties, which are not matched)[/]" : "";
+        AnsiConsole.MarkupLine($"[grey]Taxa:[/] {Markup.Escape(string.Join(" · ", taxa))}{varieties}");
         AnsiConsole.MarkupLineInterpolated(
-            $"[grey]Taxa:[/] {s.IucnTaxa:n0} in IUCN · {s.TaxaWithArticle:n0} matched to an article · {s.TaxaWithoutArticle:n0} checked, no article found · {s.TaxaNeverMatched:n0} never checked");
-        AnsiConsole.MarkupLineInterpolated(
-            $"[grey]Wikidata:[/] {s.WikidataEntitiesCached:n0} items downloaded · {s.WikidataEntitiesQueued:n0} queued · {s.WikidataEntitiesFailed:n0} failed · {Unsearched(s):n0} taxa never searched for");
+            $"[grey]Wikidata:[/] {s.WikidataEntitiesCached:n0} items downloaded · {s.WikidataEntitiesQueued:n0} queued · {s.WikidataEntitiesFailed:n0} failed · {s.TaxaNeverSearched:n0} taxa never searched for");
         var dump = s.DumpTitles == 0 ? "no all-titles dump imported" : $"all-titles dump of {s.DumpDate ?? "unknown date"} imported";
         AnsiConsole.MarkupLineInterpolated(
             $"[grey]Wikipedia:[/] {s.PagesCached:n0} pages cached · {s.PagesQueued:n0} queued ({s.PagesQueuedAwaited:n0} awaited by a taxon) · {s.PagesFailed:n0} failed · {dump}");
@@ -268,18 +362,71 @@ public sealed class WikipediaUpdateCommand : AsyncCommand<WikipediaUpdateCommand
             : "the counts have not been measured yet.";
     }
 
+    // The work a re-run would pick up, most valuable first. --until-done keeps going while this
+    // is non-empty (and rounds keep changing something).
+    private static List<string> Remaining(WikiCoverageState s, Settings settings) {
+        var remains = new List<string>();
+        if (!s.Known) return remains;
+        if (s.WikidataEntitiesQueued > 0) remains.Add($"{s.WikidataEntitiesQueued:n0} Wikidata items still queued");
+        if (s.TaxaNeverSearched > 0) remains.Add($"{s.TaxaNeverSearched:n0} taxa still to search for");
+        if (s.TaxaNeverMatched > 0) remains.Add($"{s.TaxaNeverMatched:n0} taxa still never checked");
+        if (s.PagesQueuedAwaited > 0) remains.Add($"{s.PagesQueuedAwaited:n0} awaited pages still to download");
+        if (settings.IncludeRest && RestOfQueue(s) > 0) remains.Add($"{RestOfQueue(s):n0} low-priority titles still queued");
+        return remains;
+    }
+
+    // One line under each step: what it changed. A step that finds nothing new says so, rather
+    // than leaving the reader to compare totals.
+    private static void PrintStepResult(WikiCoverageState before, WikiCoverageState after) {
+        if (!before.Known || !after.Known) {
+            AnsiConsole.MarkupLine("[grey]Result: couldn't measure what changed.[/]");
+            return;
+        }
+        var line = WikiUpdateProgress.Describe(before, after);
+        if (line is null) {
+            AnsiConsole.MarkupLine("[grey]Result: no change to the counts.[/]");
+        } else {
+            AnsiConsole.MarkupLineInterpolated($"[green]Result:[/] {line}");
+        }
+    }
+
+    // The whole run's effect, start against finish, for every count that moved.
+    private static void PrintRunChanges(WikiCoverageState start, WikiCoverageState end) {
+        var changes = WikiUpdateProgress.Changes(start, end);
+        AnsiConsole.WriteLine();
+        if (changes.Count == 0) {
+            AnsiConsole.MarkupLine(start.Known && end.Known
+                ? "[yellow]This run changed none of the counts.[/]"
+                : "[grey]Couldn't measure what this run changed.[/]");
+            return;
+        }
+
+        var table = new Table().Border(TableBorder.Simple).Title("What this run changed");
+        table.AddColumn("");
+        table.AddColumn(new TableColumn("Before").RightAligned());
+        table.AddColumn(new TableColumn("After").RightAligned());
+        table.AddColumn(new TableColumn("Change").RightAligned());
+        foreach (var c in changes) {
+            table.AddRow(
+                Markup.Escape(c.Metric.Label),
+                c.Before.ToString("n0"),
+                c.After.ToString("n0"),
+                (c.Delta > 0 ? "+" : "-") + Math.Abs(c.Delta).ToString("n0"));
+        }
+        AnsiConsole.Write(table);
+    }
+
     // What a re-run (or a bigger run) would still pick up. Without this, "finished" reads as
     // "done forever", and with queues this size it never is.
     private static void PrintWhatRemains(WikiCoverageState s, Settings settings, int limit) {
         if (!s.Known) return;
 
-        var remains = new List<string>();
-        if (s.WikidataEntitiesQueued > 0) remains.Add($"{s.WikidataEntitiesQueued:n0} Wikidata items still queued");
-        if (Unsearched(s) > 0) remains.Add($"{Unsearched(s):n0} taxa still to search for");
-        if (s.TaxaNeverMatched > 0) remains.Add($"{s.TaxaNeverMatched:n0} taxa still never checked");
-        if (s.PagesQueuedAwaited > 0) remains.Add($"{s.PagesQueuedAwaited:n0} awaited pages still to download");
+        var remains = Remaining(s, settings);
         if (remains.Count > 0) {
-            AnsiConsole.MarkupLineInterpolated($"[yellow]Still to do:[/] {string.Join(" · ", remains)}. Run `wikipedia update` again to continue{(limit > 0 ? ", or raise --limit" : "")}.");
+            var next = settings.UntilDone
+                ? "Run `wikipedia update --until-done` again to retry"
+                : $"Run `wikipedia update` again to continue{(limit > 0 ? ", raise --limit" : "")}, or add --until-done to keep going by itself";
+            AnsiConsole.MarkupLineInterpolated($"[yellow]Still to do:[/] {string.Join(" · ", remains)}. {next}.");
             return;
         }
 
@@ -298,7 +445,6 @@ public sealed class WikipediaUpdateCommand : AsyncCommand<WikipediaUpdateCommand
         }
     }
 
-    private static long Unsearched(WikiCoverageState s) => Math.Max(0, s.TaxaWithoutWikidata - s.WikidataBackfillMisses);
     private static long RestOfQueue(WikiCoverageState s) => Math.Max(0, s.PagesQueued - s.PagesQueuedAwaited);
 
     private static string WithCommonArgs(string command, Settings settings) {

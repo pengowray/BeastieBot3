@@ -206,6 +206,20 @@ SELECT
         public static readonly WikiFetchScope All = new();
     }
 
+    // A page "awaited" by a taxon still waiting for an article. The match row names only the
+    // taxon's first undownloaded candidate, but every candidate it tried is in the attempt log.
+    // Fetching just the named one meant a taxon with 20 candidate titles, each a redlink, needed
+    // 20 separate update runs to settle. Shared with WikiCoverageStateReader (schemaPrefix "wp.")
+    // so the count the plan prints is the queue the fetch works through.
+    internal static string AwaitedPagePredicate(string schemaPrefix, string pageIdExpression) => $"""
+        (EXISTS (SELECT 1 FROM {schemaPrefix}taxon_wiki_matches m
+                 WHERE m.page_row_id = {pageIdExpression} AND m.match_status = 'pending')
+         OR EXISTS (SELECT 1 FROM {schemaPrefix}taxon_wiki_match_attempts a
+                    JOIN {schemaPrefix}taxon_wiki_matches m
+                      ON m.taxon_source = a.taxon_source AND m.taxon_identifier = a.taxon_identifier
+                    WHERE a.page_row_id = {pageIdExpression} AND m.match_status = 'pending'))
+        """;
+
     // WHERE/ORDER BY shared by the queue count and the queue read, so the number the command
     // reports up front is the number of pages it will actually work through.
     private static string PendingPagesSql(WikiFetchScope scope, bool forCount) {
@@ -225,11 +239,7 @@ SELECT
         };
 
         if (scope.AwaitedOnly) {
-            where += """
-
-                AND EXISTS (SELECT 1 FROM taxon_wiki_matches m
-                            WHERE m.page_row_id = wiki_pages.id AND m.match_status = 'pending')
-                """;
+            where += "\nAND " + AwaitedPagePredicate("", "wiki_pages.id");
         }
 
         if (forCount) {

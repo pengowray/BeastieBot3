@@ -4,6 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using BeastieBot3.CommonNames;
 using BeastieBot3.Configuration;
+using BeastieBot3.Wikipedia;
 using Microsoft.Data.Sqlite;
 
 // How much Wikidata/Wikipedia work is outstanding right now, in the terms the workflow page
@@ -35,7 +36,7 @@ public sealed record WikiCoverageState {
     public bool WikidataExists { get; init; }
     public bool WikipediaExists { get; init; }
 
-    /// IUCN taxa excluding subpopulation/regional rows, which neither cache tries to match.
+    /// IUCN taxa excluding subpopulation/regional rows and varieties, which neither cache tries to match.
     public long IucnTaxa { get; init; }
 
     // --- Wikidata ---
@@ -47,6 +48,9 @@ public sealed record WikiCoverageState {
     public long WikidataSweepCursor { get; init; }
     /// IUCN taxa with neither a P627 link nor a queued backfill match.
     public long TaxaWithoutWikidata { get; init; }
+    /// Of those, taxa `wikidata backfill-iucn` has no verdict for yet. Counted directly rather than
+    /// as TaxaWithoutWikidata minus the misses table, which also holds taxa a later release dropped.
+    public long TaxaNeverSearched { get; init; }
 
     // --- Wikipedia ---
     public long PagesKnown { get; init; }                  // every title in the queue, any status
@@ -63,6 +67,11 @@ public sealed record WikiCoverageState {
     public long TaxaWithArticle { get; init; }
     /// Taxa the matcher looked at and found no article for.
     public long TaxaWithoutArticle { get; init; }
+    /// Taxa whose only candidate pages were disambiguation or set-index pages.
+    public long TaxaRejected { get; init; }
+    /// Varieties: in IUCN, but neither matcher nor backfill tries to place them, so they are left
+    /// out of IucnTaxa and every gap. Counted so the totals can say where they went.
+    public long VarietiesSkipped { get; init; }
     /// Oldest cached page's download date - what a refresh pass would be working back from.
     public DateTime? OldestCachedPageAt { get; init; }
 
@@ -143,11 +152,15 @@ public static class WikiCoverageStateReader {
             Attach(conn, "wd", wikidata!);
             Attach(conn, "wp", wikipedia!);
 
-            // One eligibility rule for both caches: subpopulation/regional rows are not taxa
-            // either matcher tries to place, so counting them would overstate every gap.
+            // One eligibility rule for both caches: subpopulation/regional rows and varieties are
+            // not taxa either matcher tries to place (WikipediaMatchTaxaCommand.ShouldSkip,
+            // WikidataIucnBackfillCommand.IsEligible), so counting them overstates every gap. It
+            // did: 980 varieties sat in "never checked" for good, and the match step ran on every
+            // update to check them. 'variety' is the only such infraType IUCN uses (2026-1).
             const string Eligible = """
                 SELECT taxonId FROM taxonomy_html
-                WHERE subpopulationName IS NULL OR TRIM(subpopulationName) = ''
+                WHERE (subpopulationName IS NULL OR TRIM(subpopulationName) = '')
+                  AND IFNULL(infraType, '') <> 'variety'
                 """;
 
             // The all-titles dump tables arrived later than the rest of the schema, so an older
@@ -161,8 +174,31 @@ public static class WikiCoverageStateReader {
             var queuedTotal = dumpTitles == 0 ? 0 : CountOrZero(conn,
                 "SELECT COUNT(*) FROM wp.wiki_pages WHERE download_status IN ('pending', 'failed')");
 
+            // Restricted to taxa in this release: rows for taxa a later release dropped are never
+            // re-evaluated, so a leftover 'pending' row would hold the settle step open forever.
+            var byStatus = CountMatchStatuses(conn, Eligible);
+
+            var withoutWikidata = $"""
+                SELECT COUNT(*) FROM ({Eligible}) t
+                WHERE NOT EXISTS (SELECT 1 FROM wd.wikidata_p627_values p WHERE p.value = CAST(t.taxonId AS TEXT))
+                  AND NOT EXISTS (SELECT 1 FROM wd.wikidata_pending_iucn_matches m WHERE m.iucn_taxon_id = CAST(t.taxonId AS TEXT))
+                """;
+            var taxaWithoutWikidata = Count(conn, withoutWikidata);
+            long taxaNeverSearched;
+            try {
+                taxaNeverSearched = Count(conn, withoutWikidata +
+                    "\n  AND NOT EXISTS (SELECT 1 FROM wd.wikidata_backfill_misses x WHERE x.iucn_taxon_id = CAST(t.taxonId AS TEXT))");
+            } catch (SqliteException) {
+                // A cache from before backfill-iucn recorded its searches: none recorded.
+                taxaNeverSearched = taxaWithoutWikidata;
+            }
+
             return state with {
                 Known = true,
+                VarietiesSkipped = CountOrZero(conn, """
+                    SELECT COUNT(*) FROM taxonomy_html
+                    WHERE (subpopulationName IS NULL OR TRIM(subpopulationName) = '') AND infraType = 'variety'
+                    """),
                 DumpTitles = dumpTitles,
                 DumpDate = TextOrNull(conn, "SELECT value FROM wp.enwiki_dump_info WHERE key = 'dump_date'"),
                 PagesQueuedInDump = queuedInDump,
@@ -176,27 +212,24 @@ public static class WikiCoverageStateReader {
                 // it recorded searches, where "none recorded" is the right answer anyway.
                 WikidataBackfillMisses = CountOrZero(conn, "SELECT COUNT(*) FROM wd.wikidata_backfill_misses"),
                 WikidataSweepCursor = Count(conn, "SELECT CAST(IFNULL((SELECT value FROM wd.wikidata_sync_state WHERE key = 'wikidata_taxa_cursor'), '0') AS INTEGER)"),
-                TaxaWithoutWikidata = Count(conn, $"""
-                    SELECT COUNT(*) FROM ({Eligible}) t
-                    WHERE NOT EXISTS (SELECT 1 FROM wd.wikidata_p627_values p WHERE p.value = CAST(t.taxonId AS TEXT))
-                      AND NOT EXISTS (SELECT 1 FROM wd.wikidata_pending_iucn_matches m WHERE m.iucn_taxon_id = CAST(t.taxonId AS TEXT))
-                    """),
+                TaxaWithoutWikidata = taxaWithoutWikidata,
+                TaxaNeverSearched = taxaNeverSearched,
 
                 PagesKnown = Count(conn, "SELECT COUNT(*) FROM wp.wiki_pages"),
                 PagesCached = Count(conn, "SELECT COUNT(*) FROM wp.wiki_pages WHERE download_status = 'cached'"),
                 PagesMissing = Count(conn, "SELECT COUNT(*) FROM wp.wiki_pages WHERE download_status = 'missing'"),
                 PagesQueued = Count(conn, "SELECT COUNT(*) FROM wp.wiki_pages WHERE download_status = 'pending'"),
                 PagesFailed = Count(conn, "SELECT COUNT(*) FROM wp.wiki_pages WHERE download_status = 'failed'"),
-                PagesQueuedAwaited = Count(conn, """
+                PagesQueuedAwaited = Count(conn, $"""
                     SELECT COUNT(*) FROM wp.wiki_pages p
                     WHERE p.download_status = 'pending'
-                      AND EXISTS (SELECT 1 FROM wp.taxon_wiki_matches m
-                                  WHERE m.page_row_id = p.id AND m.match_status = 'pending')
+                      AND {WikipediaCacheStore.AwaitedPagePredicate("wp.", "p.id")}
                     """),
                 MissingTitles = Count(conn, "SELECT COUNT(*) FROM wp.wiki_missing_titles"),
-                TaxaAwaitingPage = Count(conn, "SELECT COUNT(*) FROM wp.taxon_wiki_matches WHERE match_status = 'pending'"),
-                TaxaWithArticle = Count(conn, "SELECT COUNT(*) FROM wp.taxon_wiki_matches WHERE match_status = 'matched'"),
-                TaxaWithoutArticle = Count(conn, "SELECT COUNT(*) FROM wp.taxon_wiki_matches WHERE match_status = 'missing'"),
+                TaxaAwaitingPage = byStatus.Pending,
+                TaxaWithArticle = byStatus.Matched,
+                TaxaWithoutArticle = byStatus.Missing,
+                TaxaRejected = byStatus.Rejected,
                 TaxaNeverMatched = Count(conn, $"""
                     SELECT COUNT(*) FROM ({Eligible}) t
                     WHERE NOT EXISTS (SELECT 1 FROM wp.taxon_wiki_matches m
@@ -214,6 +247,29 @@ public static class WikiCoverageStateReader {
             }
             return state with { UnavailableReason = ex.Message };
         }
+    }
+
+    private static (long Matched, long Missing, long Pending, long Rejected) CountMatchStatuses(SqliteConnection conn, string eligible) {
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = $"""
+            SELECT m.match_status, COUNT(*) FROM ({eligible}) t
+            JOIN wp.taxon_wiki_matches m
+              ON m.taxon_source = 'iucn' AND m.taxon_identifier = CAST(t.taxonId AS TEXT)
+            GROUP BY m.match_status
+            """;
+        cmd.CommandTimeout = 30;
+        long matched = 0, missing = 0, pending = 0, rejected = 0;
+        using var reader = cmd.ExecuteReader();
+        while (reader.Read()) {
+            var n = reader.GetInt64(1);
+            switch (reader.GetString(0)) {
+                case "matched": matched = n; break;
+                case "missing": missing = n; break;
+                case "pending": pending = n; break;
+                case "rejected": rejected = n; break;
+            }
+        }
+        return (matched, missing, pending, rejected);
     }
 
     private static void Attach(SqliteConnection conn, string alias, string path) {

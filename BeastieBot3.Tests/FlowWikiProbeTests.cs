@@ -21,6 +21,8 @@ public class FlowWikiProbeTests {
         public long TaxaWithoutWikidata;
         public long SweepCursor = 136_591_620;
         public long BackfillMisses;
+        // The reader counts this directly; by default the misses are taken to be current taxa.
+        public long? NeverSearched;
         public long EntitiesCached = 181_294;
         public long EntitiesQueued;
         public long EntitiesFailed;
@@ -44,6 +46,7 @@ public class FlowWikiProbeTests {
             TaxaWithoutWikidata = TaxaWithoutWikidata,
             WikidataSweepCursor = SweepCursor,
             WikidataBackfillMisses = BackfillMisses,
+            TaxaNeverSearched = NeverSearched ?? Math.Max(0, TaxaWithoutWikidata - BackfillMisses),
             WikidataEntitiesCached = EntitiesCached,
             WikidataEntitiesQueued = EntitiesQueued,
             WikidataEntitiesFailed = EntitiesFailed,

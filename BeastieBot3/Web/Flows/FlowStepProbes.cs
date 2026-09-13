@@ -86,7 +86,7 @@ public static class FlowStepProbes {
     // in one line, most valuable work first. "backlog" not "todo" when only the standing download
     // queues remain: never finished in one sitting is not the same as overdue.
     internal static FlowProbeResult WikiUpdate(WikiCoverageState s) {
-        var unsearched = Math.Max(0, s.TaxaWithoutWikidata - s.WikidataBackfillMisses);
+        var unsearched = s.TaxaNeverSearched;
         var parts = new List<string>();
         if (unsearched > 0) parts.Add($"{unsearched:n0} taxa never searched for on Wikidata");
         if (s.TaxaNeverMatched > 0) parts.Add($"{s.TaxaNeverMatched:n0} taxa never checked for an article");
@@ -132,15 +132,15 @@ public static class FlowStepProbes {
             return new FlowProbeResult("ok", "Every IUCN taxon has a Wikidata item.");
         }
 
-        var unsearched = Math.Max(0, s.TaxaWithoutWikidata - s.WikidataBackfillMisses);
+        var unsearched = s.TaxaNeverSearched;
         if (unsearched == 0) {
             return new FlowProbeResult("ok",
                 $"{s.TaxaWithoutWikidata:n0} IUCN taxa have no Wikidata item, all searched for already without a match.");
         }
 
-        return new FlowProbeResult("todo", s.WikidataBackfillMisses == 0
+        return new FlowProbeResult("todo", unsearched == s.TaxaWithoutWikidata
             ? $"{unsearched:n0} IUCN taxa have no Wikidata item and have not been searched for."
-            : $"{s.TaxaWithoutWikidata:n0} IUCN taxa have no Wikidata item: {unsearched:n0} not searched for yet, {s.WikidataBackfillMisses:n0} searched before with no match.");
+            : $"{s.TaxaWithoutWikidata:n0} IUCN taxa have no Wikidata item: {unsearched:n0} not searched for yet, {s.TaxaWithoutWikidata - unsearched:n0} searched before with no match.");
     }
 
     internal static FlowProbeResult WikiWikidataDownload(WikiCoverageState s) =>

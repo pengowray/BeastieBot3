@@ -19,8 +19,9 @@ public class WikiCoverageReaderTests : IDisposable {
     public WikiCoverageReaderTests() {
         Directory.CreateDirectory(_dir);
         Exec("iucn.sqlite", """
-            CREATE TABLE taxonomy_html(taxonId INTEGER, subpopulationName TEXT);
-            INSERT INTO taxonomy_html VALUES (1, NULL), (2, ''), (3, 'Lake Turkana');
+            CREATE TABLE taxonomy_html(taxonId INTEGER, subpopulationName TEXT, infraType TEXT);
+            INSERT INTO taxonomy_html VALUES (1, NULL, NULL), (2, '', NULL), (3, 'Lake Turkana', NULL),
+                                             (4, NULL, 'variety');
             """);
         Exec("wikidata.sqlite", """
             CREATE TABLE wikidata_entities(entity_numeric_id INTEGER, json_downloaded INTEGER,
@@ -29,15 +30,21 @@ public class WikiCoverageReaderTests : IDisposable {
             CREATE TABLE wikidata_p627_values(entity_numeric_id INTEGER, value TEXT);
             INSERT INTO wikidata_p627_values VALUES (10, '1');
             CREATE TABLE wikidata_pending_iucn_matches(iucn_taxon_id TEXT);
+            CREATE TABLE wikidata_backfill_misses(iucn_taxon_id TEXT PRIMARY KEY);
             CREATE TABLE wikidata_sync_state(key TEXT, value TEXT);
             """);
         Exec("enwiki.sqlite", """
             CREATE TABLE wiki_pages(id INTEGER PRIMARY KEY, normalized_title TEXT, download_status TEXT,
                                     downloaded_at TEXT);
-            INSERT INTO wiki_pages VALUES (1, 'Panthera leo', 'cached', '2026-01-01T00:00:00.0000000Z');
+            INSERT INTO wiki_pages VALUES (1, 'Panthera leo', 'cached', '2026-01-01T00:00:00.0000000Z'),
+                                          (2, 'Leo leo', 'pending', NULL),
+                                          (3, 'Felis leo', 'pending', NULL);
             CREATE TABLE taxon_wiki_matches(taxon_source TEXT, taxon_identifier TEXT, match_status TEXT,
                                             page_row_id INTEGER);
-            INSERT INTO taxon_wiki_matches VALUES ('iucn', '1', 'matched', 1);
+            INSERT INTO taxon_wiki_matches VALUES ('iucn', '1', 'matched', 1), ('iucn', '2', 'pending', 2),
+                                                  ('iucn', '99', 'pending', 2);
+            CREATE TABLE taxon_wiki_match_attempts(taxon_source TEXT, taxon_identifier TEXT, page_row_id INTEGER);
+            INSERT INTO taxon_wiki_match_attempts VALUES ('iucn', '2', 2), ('iucn', '2', 3);
             CREATE TABLE wiki_missing_titles(title TEXT);
             """);
         File.WriteAllText(Path.Combine(_dir, "paths.ini"), $"""
@@ -56,12 +63,17 @@ public class WikiCoverageReaderTests : IDisposable {
             WikiCoverageStateReader.Invalidate();
             var state = WikiCoverageStateReader.ReadNow(paths);
             Assert.True(state.Known, $"read {read} could not measure");
-            Assert.Equal(2, state.IucnTaxa);            // the subpopulation row is not a taxon either cache places
+            Assert.Equal(2, state.IucnTaxa);            // neither the subpopulation nor the variety is a taxon either cache places
+            Assert.Equal(1, state.VarietiesSkipped);
             Assert.Equal(1, state.WikidataEntitiesCached);
             Assert.Equal(1, state.WikidataEntitiesQueued);
             Assert.Equal(1, state.TaxaWithoutWikidata);
+            Assert.Equal(1, state.TaxaNeverSearched);
             Assert.Equal(1, state.TaxaWithArticle);
-            Assert.Equal(1, state.TaxaNeverMatched);
+            Assert.Equal(1, state.TaxaAwaitingPage);    // taxon 99 is not in this release
+            Assert.Equal(0, state.TaxaNeverMatched);    // the variety is not "never checked"
+            // Taxon 2's match row names page 2, but it also tried page 3: both are awaited.
+            Assert.Equal(2, state.PagesQueuedAwaited);
         }
     }
 
