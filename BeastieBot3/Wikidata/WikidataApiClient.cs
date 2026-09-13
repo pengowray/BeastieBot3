@@ -101,6 +101,25 @@ internal sealed class WikidataApiClient : IDisposable {
         return ExecuteSearchAsync(query, cancellationToken);
     }
 
+    /// Runs a read-only SPARQL query against this client's endpoint and returns the JSON result
+    /// body, with the same rate limit and retry/backoff as the typed queries.
+    public async Task<string> QuerySparqlAsync(string query, CancellationToken cancellationToken) {
+        await _sparqlSemaphore.WaitAsync(cancellationToken).ConfigureAwait(false);
+        try {
+            _nextSparqlAllowed = await EnforceRateLimitAsync(_nextSparqlAllowed, _configuration.SparqlDelay, cancellationToken).ConfigureAwait(false);
+            var response = await SendWithRetryAsync(
+                _sparqlClient,
+                HttpMethod.Post,
+                string.Empty,
+                () => new FormUrlEncodedContent(new[] { new KeyValuePair<string, string>("query", query) }),
+                cancellationToken).ConfigureAwait(false);
+            return response.Body;
+        }
+        finally {
+            _sparqlSemaphore.Release();
+        }
+    }
+
     private async Task<WikidataApiResponse> SendEntityRequestAsync(string entityId, CancellationToken cancellationToken) {
         return await SendWithRetryAsync(
             _apiClient,
