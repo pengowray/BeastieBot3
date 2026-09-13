@@ -16,7 +16,7 @@ using BeastieBot3.Taxonomy;
 
 namespace BeastieBot3.Wikidata;
 
-internal sealed class WikidataCacheStore : HttpCacheSqliteStore {
+internal sealed partial class WikidataCacheStore : HttpCacheSqliteStore {
     private WikidataCacheStore(SqliteConnection connection) : base(connection) {
     }
 
@@ -127,6 +127,7 @@ CREATE TABLE IF NOT EXISTS wikidata_backfill_misses (
 );
 """;
         command.ExecuteNonQuery();
+        EnsureAssessmentItemSchema();
     BackfillTaxonNameIndex();
     }
 
