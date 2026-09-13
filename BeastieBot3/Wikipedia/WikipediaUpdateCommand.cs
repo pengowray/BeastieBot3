@@ -28,7 +28,7 @@ namespace BeastieBot3.Wikipedia;
         "wikipedia update --status",
         "wikipedia update --limit 500",
         "wikipedia update --until-done",
-        "wikipedia update --include-rest --limit 0"
+        "wikipedia update --include-rest"
     })]
 public sealed class WikipediaUpdateCommand : AsyncCommand<WikipediaUpdateCommand.Settings> {
     public sealed class Settings : CommonSettings {
@@ -37,8 +37,8 @@ public sealed class WikipediaUpdateCommand : AsyncCommand<WikipediaUpdateCommand
         public bool StatusOnly { get; init; }
 
         [CommandOption("--limit <N>")]
-        [Description("Most downloads or searches per step this run (default 2000; 0 = no cap). Whatever is not reached this run is picked up by the next.")]
-        public int Limit { get; init; } = 2000;
+        [Description("Most downloads or searches per step this run (0 = no cap, the default). Whatever is not reached this run is picked up by the next.")]
+        public int Limit { get; init; }
 
         [CommandOption("--include-rest")]
         [Description("Also retry failed downloads and work the low-priority queue (higher taxa, synonyms, redirects). Off by default because that queue holds hundreds of thousands of titles.")]
