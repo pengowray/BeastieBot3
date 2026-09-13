@@ -130,6 +130,10 @@ public sealed class WikipediaMatchTaxaCommand : AsyncCommand<WikipediaMatchTaxaC
         var processed = 0;
         const int progressInterval = 250;
         var nextProgress = progressInterval;
+        // ReadRows yields one row per assessment, and a taxon with a regional assessment as well as
+        // its global one comes back more than once (197,315 rows for 188,792 taxa in 2026-1). Each
+        // taxon is matched once; the repeat rows used to redo the work and count it twice.
+        var seenTaxa = new HashSet<long>();
 
         AnsiConsole.MarkupLineInterpolated($"[grey]IUCN DB:[/] {Markup.Escape(iucnPath)}");
         AnsiConsole.MarkupLineInterpolated($"[grey]Wikipedia cache:[/] {Markup.Escape(wikipediaCachePath)}");
@@ -148,6 +152,10 @@ public sealed class WikipediaMatchTaxaCommand : AsyncCommand<WikipediaMatchTaxaC
 
             var rowTaxonId = row.TaxonId.ToString(CultureInfo.InvariantCulture);
             if (resumeToken is not null && string.Compare(rowTaxonId, resumeToken, StringComparison.Ordinal) <= 0) {
+                continue;
+            }
+
+            if (!seenTaxa.Add(row.TaxonId)) {
                 continue;
             }
 

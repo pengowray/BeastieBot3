@@ -176,11 +176,15 @@ public sealed class WikidataIucnBackfillCommand : AsyncCommand<WikidataIucnBackf
             newMisses.Clear();
         }
 
+        // One row per assessment: a taxon with a regional assessment too comes back twice, and an
+        // unmatched one was searched online twice per run.
+        var seenTaxa = new HashSet<long>();
+
         try {
             foreach (var row in repository.ReadRows(0, cancellationToken)) {
                 cancellationToken.ThrowIfCancellationRequested();
 
-                if (!IsEligible(row)) {
+                if (!seenTaxa.Add(row.TaxonId) || !IsEligible(row)) {
                     continue;
                 }
 
