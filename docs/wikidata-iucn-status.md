@@ -26,7 +26,7 @@ Wikidata. The workflow page is "Update IUCN statuses on Wikidata" (`wikidata-iuc
   targets the same job. Contact before any bot request. IUCN terms of use vs CC0 is unresolved since
   2013 and goes in the bot request.
 - **Status values:** from P141's one-of constraint (`WikidataIucnStatusValues`). LR/nt → NT, LR/lc →
-  LC (Wikidata has no Lower Risk values). **LR/cd has no value** and is left unchanged (121 pairs in
+  LC (Wikidata has no Lower Risk values). **LR/cd has no value** and is left unchanged (123 pairs in
   2026-1; existing Wikidata statements for those taxa mostly say LC, while the Wikipedia generator
   treats LR/cd as NT). CR(PE)/CR(PEW) are written as CR and flagged.
 
