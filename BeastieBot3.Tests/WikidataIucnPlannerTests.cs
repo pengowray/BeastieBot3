@@ -230,6 +230,26 @@ public class WikidataIucnPlannerTests {
         Assert.Null(assessmentSnak["numeric-id"]);
     }
 
+    // Most planned edits are this one: the status already agrees and only needs citing.
+    [Fact]
+    public void References_only_payload_keeps_the_statement_and_its_old_reference() {
+        var oldRef = Ref(("P248", Edition2022), ("P627", "31317"));
+        oldRef.Raw["snaks"]!.AsObject()["P248"] = new JsonArray(WbEditPayloadBuilder.ItemSnak("P248", Edition2022));
+        var item = Item(new[] { Status("Q24024$s1", EN, "normal", oldRef) });
+        var edit = WbEditPayloadBuilder.Build(item, Assessment(), Plan(item), EditVariant.Preferred, Config);
+
+        var claim = Assert.Single(edit.Data["claims"]!.AsArray())!;
+        Assert.Equal("Q24024$s1", (string)claim["id"]!);
+        Assert.Equal("normal", (string)claim["rank"]!);
+        var refs = claim["references"]!.AsArray();
+        Assert.Equal(3, refs.Count);
+        Assert.Equal(115962546, (long)refs[0]!["snaks"]!["P248"]![0]!["datavalue"]!["value"]!["numeric-id"]!);
+        Assert.Equal(Edition2026, (string)refs[1]!["snaks"]!["P248"]![0]!["datavalue"]!["value"]!["id"]!);
+        var assessmentSnak = refs[2]!["snaks"]!["P248"]![0]!["datavalue"]!["value"]!;
+        Assert.Equal("CREATE:iucn-assessment:45173922", (string)assessmentSnak["id"]!);
+        Assert.Null(assessmentSnak["numeric-id"]);
+    }
+
     [Fact]
     public void Payload_changes_a_copy_never_the_cached_statement() {
         var item = Item(new[] { Status("Q24024$s1", VU, "preferred") });
