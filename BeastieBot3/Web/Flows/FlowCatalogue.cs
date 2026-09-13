@@ -742,6 +742,142 @@ public static class FlowCatalogue {
         },
 
         // ---------------------------------------------------------------
+        // Wikidata IUCN statuses: bring P141 on Wikidata taxon items up to the
+        // latest IUCN release, citing the release and each assessment. Dry run
+        // only for now; the Wikidata-side steps (coordination, the release item,
+        // proposals, the bot request) are done by hand on Wikidata.
+        // ---------------------------------------------------------------
+        new FlowDefinition {
+            Id = "wikidata-iucn-status",
+            Title = "Update IUCN statuses on Wikidata",
+            Description = "Plan updates to the IUCN conservation status of Wikidata species and subspecies items from the latest IUCN release, each cited to the release and to its assessment. Dry run only: nothing here edits Wikidata.",
+            Steps = new[] {
+                // ===== 1 · Local data =====
+                new FlowStep {
+                    Id = "iucn-api-dataset",
+                    Title = "Build or update the IUCN API dataset",
+                    Description = "The dry run reads each taxon's latest global assessment, with its citation and assessors, from the IUCN API data.",
+                    Commands = new[] { "iucn api cache-all --full", "iucn api cache-all --full --status" },
+                    OutputSourceIds = new[] { "iucn-api-cache" },
+                    Probe = FlowStepProbes.IucnApiUpdateAll,
+                    Group = "1 · Local data",
+                },
+                new FlowStep {
+                    Id = "wikidata-links",
+                    Title = "Update the Wikidata and Wikipedia caches",
+                    Description = "Finds the Wikidata item for each IUCN taxon: by the IUCN id already on the item, or by searching for its name.",
+                    Commands = new[] { "wikipedia update", "wikipedia update --status" },
+                    OutputSourceIds = new[] { "wikidata-cache" },
+                    Probe = FlowStepProbes.WikiUpdateAll,
+                    Group = "1 · Local data",
+                },
+                new FlowStep {
+                    Id = "wikidata-refresh-items",
+                    Title = "Download fresh copies of the linked items",
+                    Description = "Re-download Wikidata items last downloaded more than 30 days ago, so the plan is built on their current revision.",
+                    Commands = new[] { "wikidata cache-entities --refresh-only --max-age-hours 720" },
+                    InputSourceIds = new[] { "wikidata-cache" },
+                    OutputSourceIds = new[] { "wikidata-cache" },
+                    Probe = WikidataIucnProbes.ItemsFresh,
+                    Group = "1 · Local data",
+                    Note = "Measured by the last dry run. An edit is sent with the revision it was planned on, and Wikidata refuses it if the item has changed since.",
+                },
+                new FlowStep {
+                    Id = "wikidata-assessment-items",
+                    Title = "Look up assessment items already on Wikidata",
+                    Description = "Finds the items Wikidata already has for individual IUCN assessments, so the plan cites them instead of proposing duplicates.",
+                    Commands = new[] { "wikidata iucn-assessment-items", "wikidata iucn-assessment-items --status" },
+                    InputSourceIds = new[] { "wikidata-cache" },
+                    Probe = WikidataIucnProbes.AssessmentItems,
+                    Group = "1 · Local data",
+                },
+
+                // ===== 2 · On Wikidata, by hand =====
+                new FlowStep {
+                    Id = "wikidata-coordinate",
+                    Title = "Contact the IUCN Updater Bot operator (manual)",
+                    Description = "Someone else is building a bot for the same job. Talk to them before asking for approval of a second one.",
+                    Group = "2 · On Wikidata, by hand",
+                    Note = "Nikola Tulechki announced IUCN Updater Bot on Property talk:P141 on 20 July 2026; the account was registered on 4 August 2026 and had no bot approval when checked on 13 September 2026.",
+                    GuideTitle = "What to raise",
+                    GuideSteps = new[] {
+                        "Post on Property talk:P141 or the operator's talk page.",
+                        "Offer the dry run's report and confidence tiers.",
+                        "Ask which rank convention they plan to use for a changed status.",
+                        "Ask whether they plan to cite individual assessments.",
+                    },
+                },
+                new FlowStep {
+                    Id = "wikidata-edition-item",
+                    Title = "Create the item for the 2026-1 release (manual)",
+                    Description = "Every status edit cites the release through its item. Wikidata has release items up to 2025.2 but none for 2026-1 yet.",
+                    Probe = WikidataIucnProbes.EditionItem,
+                    Group = "2 · On Wikidata, by hand",
+                    Note = "Once the item exists, put its id in edition_item in rules/wikidata/iucn-status.yml and run the dry run again.",
+                    GuideTitle = "Statements to copy from the 2025.2 item (Q136547248)",
+                    GuideSteps = new[] {
+                        "instance of (P31): version, edition or translation (Q3331189)",
+                        "edition or translation of (P629): IUCN Red List (Q32059)",
+                        "title (P1476): The IUCN Red List of Threatened Species 2026.1",
+                        "publication date (P577): the release date",
+                        "follows (P155): Q136547248, and add followed by (P156) to Q136547248",
+                        "language of work or name (P407): English (Q1860)",
+                    },
+                },
+                new FlowStep {
+                    Id = "wikidata-assessment-model",
+                    Title = "Propose how assessment items are modelled (manual)",
+                    Description = "Citing each assessment means creating about 170,000 items. Agree their class, label and statements with WikiProject Taxonomy first.",
+                    Group = "2 · On Wikidata, by hand",
+                    Note = "The ~6,600 existing assessment items are mostly scholarly articles labelled \"Species: Authors\", with authors only in the label. The dry run's settings (assessment_item in rules/wikidata/iucn-status.yml) hold the model it proposes.",
+                },
+                new FlowStep {
+                    Id = "wikidata-assessment-id-property",
+                    Title = "Propose a property for the IUCN assessment id (manual)",
+                    Description = "Wikidata has a property for the IUCN taxon id but none for the assessment id. Until there is one, the release reference carries the assessment page URL.",
+                    Optional = true,
+                    Group = "2 · On Wikidata, by hand",
+                },
+
+                // ===== 3 · Dry run =====
+                new FlowStep {
+                    Id = "wikidata-iucn-plan",
+                    Title = "Plan the status updates (dry run)",
+                    Description = "Match each assessed taxon to its item, rate how sure the match is, and plan the changes in both rank styles. Writes a report, a CSV of every pair and sample edits.",
+                    Commands = new[] { "wikidata iucn-status-plan", "wikidata iucn-status-plan --limit 2000" },
+                    InputSourceIds = new[] { "iucn-api-cache", "wikidata-cache" },
+                    Probe = WikidataIucnProbes.Plan,
+                    Group = "3 · Dry run",
+                    OutputPatterns = new[] {
+                        new FlowOutputPattern { Root = "reports", Pattern = "wikidata-iucn-status-*.md", Label = "Report" },
+                        new FlowOutputPattern { Root = "reports", Pattern = "wikidata-iucn-status-*.csv", Label = "Every pair (CSV)" },
+                        new FlowOutputPattern { Root = "reports", Pattern = "wikidata-iucn-status-*-sample-edits.jsonl", Label = "Sample edits" },
+                    },
+                    Note = "Tiers A and B would be edited. Tiers C and D need a person to confirm the match first.",
+                },
+                new FlowStep {
+                    Id = "wikidata-iucn-review",
+                    Title = "Review the uncertain matches (manual)",
+                    Description = "Check the tier C and D pairs in the CSV: items found by name search, synonyms, conflicting or duplicated IUCN ids.",
+                    Group = "3 · Dry run",
+                },
+
+                // ===== 4 · Editing (not built) =====
+                new FlowStep {
+                    Id = "wikidata-bot-request",
+                    Title = "Request bot approval (manual)",
+                    Description = "Open a request on Wikidata:Requests for permissions/Bot before any test edits.",
+                    Group = "4 · Editing (not built yet)",
+                    Note = "Raise IUCN's terms of use in the request: whether they allow the data under Wikidata's CC0 has been asked since 2013 and never settled.",
+                },
+            },
+            Outputs = new[] {
+                new FlowResource { Label = "Dry run settings", Root = "rules", Path = "wikidata/iucn-status.yml", Kind = "yaml",
+                    Description = "The release item, the rank styles and how new assessment items are modelled." },
+            },
+        },
+
+        // ---------------------------------------------------------------
         // Wiki/Wikidata Quality: curated grouping of report commands that
         // surface coverage gaps, freshness, sitelink mismatches.
         // ---------------------------------------------------------------

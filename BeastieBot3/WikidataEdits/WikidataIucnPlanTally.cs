@@ -22,6 +22,10 @@ internal sealed class WikidataIucnPlanTally {
     public long LinksToTaxaOutsideRelease { get; set; }
     public DateTime? OldestItemDownloadUtc { get; set; }
     public DateTime? NewestItemDownloadUtc { get; set; }
+    /// Linked items whose copy was more than StaleAfterDays old when the plan ran: their revision
+    /// has likely moved on, so an edit built on it would be refused.
+    public long StaleItems { get; set; }
+    public const int StaleAfterDays = 30;
 
     // Pairs
     public long Pairs { get; set; }
@@ -51,8 +55,9 @@ internal sealed class WikidataIucnPlanTally {
         if (first.Any(a => a is DeprecateTaxonIdClaim)) TaxonIdsToDeprecate++;
     }
 
-    public void SeeItemDownload(DateTime? downloadedAtUtc) {
+    public void SeeItemDownload(DateTime? downloadedAtUtc, DateTime planStartedUtc) {
         if (downloadedAtUtc is not { } at) return;
+        if (planStartedUtc - at > TimeSpan.FromDays(StaleAfterDays)) StaleItems++;
         if (OldestItemDownloadUtc is null || at < OldestItemDownloadUtc) OldestItemDownloadUtc = at;
         if (NewestItemDownloadUtc is null || at > NewestItemDownloadUtc) NewestItemDownloadUtc = at;
     }

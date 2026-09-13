@@ -143,7 +143,7 @@ internal sealed class WikidataIucnStatusPlanCommand : AsyncCommand<WikidataIucnS
                 tally.ItemsRead++;
                 if (!linksByItem.TryGetValue(item.Qid, out var itemLinks)) continue;
                 itemsWithLinks++;
-                tally.SeeItemDownload(item.DownloadedAtUtc);
+                tally.SeeItemDownload(item.DownloadedAtUtc, started);
 
                 foreach (var link in itemLinks) {
                     var assessment = assessments[link.TaxonId];
@@ -191,8 +191,8 @@ internal sealed class WikidataIucnStatusPlanCommand : AsyncCommand<WikidataIucnS
         tally.ItemsLinkedButNotDownloaded = settings.Limit > 0 ? 0 : Math.Max(0, linkedItemIds.Count - itemsWithLinks);
 
         // ---- Report files
-        var dir = Path.Combine(ReportPathResolver.ResolveDirectory(paths, settings.OutputDirectory, null), "wikidata-iucn-status");
-        Directory.CreateDirectory(dir);
+        // Top level of the reports folder: the workflow page's "latest file" links only look there.
+        var dir = ReportPathResolver.ResolveDirectory(paths, settings.OutputDirectory, null);
         var stem = Path.Combine(dir, $"wikidata-iucn-status-{config.Release}");
         var csvPath = stem + ".csv";
         var samplesPath = stem + "-sample-edits.jsonl";
