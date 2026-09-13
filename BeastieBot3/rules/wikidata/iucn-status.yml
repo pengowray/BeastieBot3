@@ -1,33 +1,40 @@
 # Settings for `wikidata iucn-status-plan`, the dry run that plans IUCN conservation status (P141)
-# updates on Wikidata taxon items. Each id here was checked on Wikidata on 2026-09-13.
-# Leave an id empty until the item exists: the plan then writes a CREATE: placeholder instead.
+# updates on Wikidata taxon items. Each Q-id here was checked on Wikidata on 2026-09-13.
+# Leave an id empty until the item exists on Wikidata: the plan then cites a CREATE: placeholder
+# in its place, and the workflow page shows the step as still to do.
 
+# The IUCN release the plan is for, named the way the IUCN database names it (2026-1, not 2026.1).
 release: 2026-1
 
-# "The IUCN Red List of Threatened Species 2026.1" edition item. Does not exist yet.
-# Model it on 2025.2 (Q136547248): P31 Q3331189, P629 Q32059, P1476, P577, P155 Q136547248, P407 Q1860.
+# The item for "The IUCN Red List of Threatened Species 2026.1". Does not exist yet (2026-09-13).
+# Model it on the 2025.2 item (Q136547248): P31 Q3331189, P629 Q32059, P1476, P577, P155 Q136547248,
+# P407 Q1860. Fill this in once it exists, then run the dry run again.
 edition_item:
 
-red_list_item: Q32059          # IUCN Red List
+red_list_item: Q32059          # IUCN Red List, the work as a whole (published in, P1433, on assessment items)
 
-# Rank variants recorded for a changed status:
-#   preferred: new preferred statement, earlier ones kept at normal rank (MatSuBot, Nov 2025)
-#   replace:   value and references overwritten in place (SuccuBot, 2013-2023)
+# Which rank conventions to plan for a changed status. Both are in live use on Wikidata:
+#   preferred: add the new status as a preferred-rank statement, keep earlier ones at normal rank (MatSuBot, Nov 2025)
+#   replace:   overwrite the current statement's value and references in place (SuccuBot, 2013 to 2023)
+# When the status is unchanged or the item has none, both variants plan the same edit.
 rank_variants: [preferred, replace]
 
-# Add the assessment page URL (which carries the assessment id) to the release reference,
-# until Wikidata has a property for the IUCN assessment id.
+# Put the assessment page URL (reference URL, P854) in the release reference. The URL carries the
+# assessment id, which has no Wikidata property of its own yet.
 reference_assessment_url: true
 
+# Edit summary on every planned edit. Placeholders: {release} {code} {taxon_id} {assessment_id}.
+# Wording not settled; one summary covers status changes and reference-only edits alike.
 edit_summary: "IUCN Red List {release}: conservation status {code} (IUCN taxon {taxon_id}, assessment {assessment_id})"
 
-# A new item for an assessment publication, used when Wikidata has none for that assessment.
-# The class, label and title language are part of the modelling proposal and not settled.
+# The item to create for an assessment publication when Wikidata has none for that assessment.
+# The class, label, description and title language are part of the modelling proposal and not settled.
+# Placeholders in label and description: {name} {year} {taxon_id} {assessment_id}.
 assessment_item:
-  instance_of: Q13442814       # scholarly article, like most of the ~5,000 existing assessment items
+  instance_of: Q13442814       # scholarly article, like most of the ~6,600 assessment items already on Wikidata
   label: "{name}. The IUCN Red List of Threatened Species {year}: e.T{taxon_id}A{assessment_id}"
   description: "IUCN Red List assessment of {name}"
-  title_language: en
+  title_language: en           # language of the title statement (P1476), which is the scientific name
   publisher: Q48268            # International Union for Conservation of Nature
   language: Q1860              # English
-  author_credit_types: [assessor]
+  author_credit_types: [assessor]   # IUCN credit types written as author name strings (P2093), in citation order

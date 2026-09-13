@@ -29,8 +29,8 @@ using BeastieBot3.Web.Endpoints;
 namespace BeastieBot3.WikidataEdits;
 
 [CommandInfo("wikidata iucn-status-plan", CommandKind.Mutates,
-    "Dry run: plan updates to IUCN conservation statuses (P141) on Wikidata taxon items from the latest global assessments, with references to the Red List release and to each assessment. Writes a plan and a report; sends nothing to Wikidata.",
-    Reason = "Replaces the stored plan and writes report files. Reads the caches only; makes no Wikidata edits.",
+    "Dry run: plan updates to the IUCN conservation status (P141) of Wikidata taxon items from the latest global assessments, each status cited to the Red List release and to its own assessment. Stores the plan and writes a report; sends nothing to Wikidata.",
+    Reason = "Replaces the stored plan and overwrites the report files for the release. Reads the local caches only; makes no Wikidata edits.",
     Rerun = RerunEffect.Rebuilds,
     Examples = new[] {
         "wikidata iucn-status-plan",
@@ -40,11 +40,11 @@ namespace BeastieBot3.WikidataEdits;
 internal sealed class WikidataIucnStatusPlanCommand : AsyncCommand<WikidataIucnStatusPlanCommand.Settings> {
     public sealed class Settings : CommonSettings {
         [CommandOption("--limit <N>")]
-        [Description("Stop after this many Wikidata items (0 = all). For a quick look; the stored plan is then partial.")]
+        [Description("Stop after this many linked Wikidata items (0 = all). For a quick look: the stored plan and the report are then partial.")]
         public int Limit { get; init; }
 
         [CommandOption("--samples <N>")]
-        [Description("Example edits kept per confidence tier, change type and rank variant (default 5).")]
+        [Description("Sample edits to keep per confidence tier, change type and rank variant (default 5).")]
         public int Samples { get; init; } = 5;
 
         [CommandOption("-o|--output <DIR>")]
@@ -71,9 +71,9 @@ internal sealed class WikidataIucnStatusPlanCommand : AsyncCommand<WikidataIucnS
         }
 
         var config = LoadConfig(paths, out var configPath);
-        AnsiConsole.MarkupLineInterpolated($"[grey]Settings:[/] {configPath ?? "defaults (rules/wikidata/iucn-status.yml not found)"}");
+        AnsiConsole.MarkupLineInterpolated($"[grey]Settings:[/] {configPath ?? "built-in defaults (rules/wikidata/iucn-status.yml not found)"}");
         if (config.EditionItemOrNull is null) {
-            AnsiConsole.MarkupLineInterpolated($"[yellow]No release item set for {config.Release}.[/] Edits cite a placeholder until edition_item is set.");
+            AnsiConsole.MarkupLineInterpolated($"[yellow]No Wikidata item set for the {config.Release} release.[/] Planned edits cite a placeholder until edition_item is set in the settings file.");
         }
 
         var started = DateTime.UtcNow;
@@ -207,7 +207,7 @@ internal sealed class WikidataIucnStatusPlanCommand : AsyncCommand<WikidataIucnS
         store.FinishRun(runId, DateTime.UtcNow, tally.OldestItemDownloadUtc, tally);
 
         PrintSummary(tally, settings.Limit > 0);
-        AnsiConsole.MarkupLineInterpolated($"[green]Report:[/] {mdPath}");
+        AnsiConsole.MarkupLineInterpolated($"[green]Report:[/] {mdPath} (CSV of every pair and sample files beside it)");
         AnsiConsole.MarkupLineInterpolated($"[grey]Plan stored in {planPath}. Nothing was sent to Wikidata.[/]");
         return 0;
     }
@@ -266,10 +266,10 @@ internal sealed class WikidataIucnStatusPlanCommand : AsyncCommand<WikidataIucnS
     }
 
     private static void PrintSummary(WikidataIucnPlanTally t, bool partial) {
-        var table = new Table().Border(TableBorder.Simple).Title(partial ? "Planned changes (partial, --limit)" : "Planned changes");
+        var table = new Table().Border(TableBorder.Simple).Title(partial ? "Planned changes, pairs (partial: stopped at --limit)" : "Planned changes, pairs (A and B would be edited; C and D need a person first)");
         table.AddColumn("Tier");
         var categories = new[] { PlanCategory.StatusChanged, PlanCategory.StatusAdded, PlanCategory.ReferencesOnly, PlanCategory.NoChange, PlanCategory.UnmappedCategory };
-        var headers = new[] { "Status changed", "No status", "References only", "No change", "No P141 value" };
+        var headers = new[] { "Status changed", "Status added", "References added", "Nothing to change", "No P141 value" };
         foreach (var h in headers) table.AddColumn(new TableColumn(h).RightAligned());
         foreach (var tier in Enum.GetValues<ConfidenceTier>()) {
             table.AddRow(new[] { tier.ToString() }.Concat(categories.Select(c => t.Count(tier, c).ToString("n0"))).ToArray());
@@ -278,6 +278,6 @@ internal sealed class WikidataIucnStatusPlanCommand : AsyncCommand<WikidataIucnS
         AnsiConsole.MarkupLineInterpolated(
             $"[grey]Taxa:[/] {t.TaxaWithGlobalAssessment:n0} with a global assessment · {t.TaxaWithNoItem:n0} with no Wikidata item · {t.TaxaWithSeveralItems:n0} linked to more than one item");
         AnsiConsole.MarkupLineInterpolated(
-            $"[grey]Edits:[/] {t.TaxonIdsToAdd:n0} IUCN ids to add · {t.TaxonIdsToDeprecate:n0} renumbered ids to deprecate · {t.AssessmentItemsToCreate:n0} assessment items to create, {t.AssessmentItemsReused:n0} reused");
+            $"[grey]Also planned:[/] {t.TaxonIdsToAdd:n0} IUCN taxon ids (P627) to add · {t.TaxonIdsToDeprecate:n0} renumbered ids to mark deprecated · {t.AssessmentItemsToCreate:n0} assessment items to create, {t.AssessmentItemsReused:n0} existing reused");
     }
 }

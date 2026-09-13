@@ -49,8 +49,8 @@ public sealed class WikidataIucnAssessmentItemsSettings : CommonSettings {
 }
 
 [CommandInfo("wikidata iucn-assessment-items", CommandKind.Mutates,
-    "Find Wikidata items for IUCN Red List assessments (by DOI, published in, or Red List URL) and store them in the Wikidata cache.",
-    Reason = "Writes the wikidata_iucn_assessment_items table of the Wikidata cache. Only reads from Wikidata.",
+    "Find the Wikidata items for individual IUCN Red List assessments (by DOI, published in, or Red List URL) and store them in the Wikidata cache, so the status dry run can cite them.",
+    Reason = "Writes the wikidata_iucn_assessment_items table of the Wikidata cache. Only reads from Wikidata (SPARQL).",
     Rerun = RerunEffect.IdempotentAdd,
     RerunNote = "Re-reads every item and replaces its row; rows for items no longer found are kept.",
     Examples = new[] {
@@ -91,7 +91,7 @@ public sealed class WikidataIucnAssessmentItemsCommand : AsyncCommand<WikidataIu
             }
 
             var lastFetch = stored.Rows.Max(r => r.FetchedAtUtc);
-            AnsiConsole.WriteLine($"Last fetched {lastFetch:yyyy-MM-dd HH:mm} UTC");
+            AnsiConsole.WriteLine($"Last looked up {lastFetch:yyyy-MM-dd HH:mm} UTC");
             PrintSummary(stored.Rows, LoadRelease(paths, settings), LoadApiBacklog(paths, settings));
             return 0;
         }
@@ -103,7 +103,7 @@ public sealed class WikidataIucnAssessmentItemsCommand : AsyncCommand<WikidataIu
 
         var runStartedUtc = DateTime.UtcNow;
         AnsiConsole.WriteLine();
-        AnsiConsole.WriteLine("Finding items");
+        AnsiConsole.WriteLine("Finding assessment items on Wikidata");
         var discovery = await DiscoverAsync(mainClient, scholarlyClient, cancellationToken).ConfigureAwait(false);
         AnsiConsole.WriteLine($"  found by any route: {discovery.Tags.Count:N0}");
 
@@ -120,7 +120,7 @@ public sealed class WikidataIucnAssessmentItemsCommand : AsyncCommand<WikidataIu
         AnsiConsole.WriteLine($"  main graph: {detail.FoundIn[WikidataGraph.Main]:N0}");
         if (detail.NotFound.Count > 0) {
             // Deleted or merged since the search index last saw them.
-            AnsiConsole.WriteLine($"  in neither graph: {detail.NotFound.Count:N0}");
+            AnsiConsole.WriteLine($"  in neither graph (deleted or merged since they were found): {detail.NotFound.Count:N0}");
             AnsiConsole.WriteLine($"    {Examples(detail.NotFound)}");
         }
 
@@ -426,12 +426,12 @@ public sealed class WikidataIucnAssessmentItemsCommand : AsyncCommand<WikidataIu
         }
 
         AnsiConsole.WriteLine();
-        AnsiConsole.WriteLine("Ids");
+        AnsiConsole.WriteLine("IUCN ids read from the items");
         AnsiConsole.WriteLine($"  taxon and assessment id: {s.WithTaxonAndAssessmentId:N0} (from the DOI {s.IdsFromDoi:N0}, from a URL {s.IdsFromUrl:N0})");
         AnsiConsole.WriteLine($"  taxon id only: {s.TaxonIdOnly:N0}");
-        AnsiConsole.WriteLine($"  IUCN DOI with no ids in it: {s.IucnDoiNotParsed:N0}");
+        AnsiConsole.WriteLine($"  IUCN DOI that no ids could be read from: {s.IucnDoiNotParsed:N0}");
         AnsiConsole.WriteLine($"  no IUCN DOI or Red List URL: {s.NoIucnDoiOrUrl:N0}");
-        AnsiConsole.WriteLine($"  DOIs not in upper case: {s.DoiNotUpperCase:N0}");
+        AnsiConsole.WriteLine($"  DOIs not in upper case (Wikidata stores DOIs upper-case): {s.DoiNotUpperCase:N0}");
         if (s.EarliestRelease is not null) {
             AnsiConsole.WriteLine($"  Red List versions in DOIs: {s.EarliestRelease} to {s.LatestRelease}");
         }
@@ -447,7 +447,7 @@ public sealed class WikidataIucnAssessmentItemsCommand : AsyncCommand<WikidataIu
         }
 
         if (s.TaxonItems.Count > 0) {
-            AnsiConsole.WriteLine($"  Taxon items with an assessment DOI: {string.Join(", ", s.TaxonItems)}");
+            AnsiConsole.WriteLine($"  Taxon items carrying an assessment DOI (not publications, left out of the comparisons below): {string.Join(", ", s.TaxonItems)}");
         }
 
         AnsiConsole.WriteLine();
@@ -463,14 +463,14 @@ public sealed class WikidataIucnAssessmentItemsCommand : AsyncCommand<WikidataIu
         AnsiConsole.WriteLine("Authors");
         AnsiConsole.WriteLine($"  author items (P50): {s.WithAuthorItems:N0}");
         AnsiConsole.WriteLine($"  author name strings (P2093): {s.WithAuthorStrings:N0}");
-        AnsiConsole.WriteLine($"  neither: {s.WithNoAuthorStatements:N0}");
+        AnsiConsole.WriteLine($"  no author statements: {s.WithNoAuthorStatements:N0}");
 
         // Taxon items are left out of both comparisons and the duplicate check.
         AnsiConsole.WriteLine();
         if (release is not null) {
-            AnsiConsole.WriteLine($"Compared with {release.Label} ({release.AssessmentIds.Count:N0} assessments)");
-            AnsiConsole.WriteLine($"  current assessment: {s.LatestInRelease:N0}");
-            AnsiConsole.WriteLine($"  older assessment, taxon still assessed: {s.OlderAssessmentOfTaxonInRelease:N0}");
+            AnsiConsole.WriteLine($"Publication items with an assessment id, compared with {release.Label} ({release.AssessmentIds.Count:N0} assessments)");
+            AnsiConsole.WriteLine($"  cite an assessment in the release: {s.LatestInRelease:N0}");
+            AnsiConsole.WriteLine($"  cite an older assessment of a taxon in the release: {s.OlderAssessmentOfTaxonInRelease:N0}");
             AnsiConsole.WriteLine($"  taxon not in the release: {s.TaxonNotInRelease:N0}");
         }
         else {
@@ -478,18 +478,18 @@ public sealed class WikidataIucnAssessmentItemsCommand : AsyncCommand<WikidataIu
         }
 
         if (api is not null) {
-            AnsiConsole.WriteLine($"Compared with the IUCN API cache ({api.LatestAssessmentIds.Count:N0} latest)");
-            AnsiConsole.WriteLine($"  latest: {s.LatestInApiCache:N0}");
-            AnsiConsole.WriteLine($"  superseded: {s.SupersededInApiCache:N0}");
+            AnsiConsole.WriteLine($"Compared with the IUCN API cache ({api.LatestAssessmentIds.Count:N0} latest assessments)");
+            AnsiConsole.WriteLine($"  cite a latest assessment: {s.LatestInApiCache:N0}");
+            AnsiConsole.WriteLine($"  cite a superseded assessment: {s.SupersededInApiCache:N0}");
             AnsiConsole.WriteLine($"  not in the cache: {s.NotInApiCache:N0}");
         }
 
         AnsiConsole.WriteLine();
         if (s.Duplicates.Count == 0) {
-            AnsiConsole.WriteLine("Duplicates: none");
+            AnsiConsole.WriteLine("Assessment ids on more than one item: none");
         }
         else {
-            AnsiConsole.WriteLine($"Duplicates: {s.Duplicates.Count:N0} assessment ids, {s.Duplicates.Sum(d => d.Qids.Count):N0} items");
+            AnsiConsole.WriteLine($"Assessment ids on more than one item: {s.Duplicates.Count:N0} ids, {s.Duplicates.Sum(d => d.Qids.Count):N0} items");
             foreach (var duplicate in s.Duplicates.Take(10)) {
                 AnsiConsole.WriteLine($"  {duplicate.AssessmentId}: {string.Join(", ", duplicate.Qids)}");
             }

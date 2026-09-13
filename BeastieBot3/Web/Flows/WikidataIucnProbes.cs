@@ -24,28 +24,28 @@ public static class WikidataIucnProbes {
     internal static FlowProbeResult AssessmentItemsStep(WikidataIucnFlowState s) =>
         !s.AssessmentItemTableExists || s.AssessmentItemsCheckedAtUtc is null
             ? new FlowProbeResult("todo", "Not looked up yet.")
-            : new FlowProbeResult("ok", $"{s.AssessmentItems:n0} found, last checked {s.AssessmentItemsCheckedAtUtc:d MMM yyyy}.");
+            : new FlowProbeResult("ok", $"{s.AssessmentItems:n0} assessment items found on Wikidata, last looked up {s.AssessmentItemsCheckedAtUtc:d MMM yyyy}.");
 
     // Measured by the last dry run, the only read that walks every linked item.
     internal static FlowProbeResult? ItemsFreshStep(WikidataIucnFlowState s) {
         if (s.LastPlan is not { } plan) return null;
         return plan.StaleItems == 0
-            ? new FlowProbeResult("ok", $"All linked items were downloaded in the 30 days before the dry run of {plan.FinishedAtUtc:d MMM yyyy}.")
-            : new FlowProbeResult("todo", $"{plan.StaleItems:n0} linked items were more than 30 days old at the dry run of {plan.FinishedAtUtc:d MMM yyyy}.");
+            ? new FlowProbeResult("ok", $"Every linked item was under 30 days old at the dry run on {plan.FinishedAtUtc:d MMM yyyy}.")
+            : new FlowProbeResult("todo", $"{plan.StaleItems:n0} linked items were over 30 days old at the dry run on {plan.FinishedAtUtc:d MMM yyyy}.");
     }
 
     internal static FlowProbeResult EditionItemStep(WikidataIucnFlowState s) =>
         s.EditionItem is null
-            ? new FlowProbeResult("todo", $"No item set for the {s.Release} release. Edits cite a placeholder until one is.")
+            ? new FlowProbeResult("todo", $"No Wikidata item set for the {s.Release} release: planned edits cite a placeholder until edition_item is set.")
             : new FlowProbeResult("ok", $"{s.Release} release item: {s.EditionItem}.");
 
     internal static FlowProbeResult PlanStep(WikidataIucnFlowState s) {
         if (s.LastPlan is not { } plan) {
             return new FlowProbeResult("todo", "No dry run yet.");
         }
-        var summary = $"{plan.Editable:n0} edits ready, {plan.ForReview:n0} for review (dry run of {plan.FinishedAtUtc:d MMM yyyy}).";
+        var summary = $"{plan.Editable:n0} edits planned, {plan.ForReview:n0} pairs need a person to confirm the match (dry run on {plan.FinishedAtUtc:d MMM yyyy}).";
         if (!string.Equals(plan.Release, s.Release, StringComparison.Ordinal) || plan.EditionItem != s.EditionItem) {
-            return new FlowProbeResult("todo", $"Settings changed since the last dry run. {summary}");
+            return new FlowProbeResult("todo", $"The release or release item changed since the last dry run; run it again. Last run: {summary}");
         }
         return new FlowProbeResult("ok", summary);
     }
