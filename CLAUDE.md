@@ -84,6 +84,7 @@ Use `ReportPathResolver` to resolve output paths. Priority: explicit CLI `--outp
 | `BeastieBot3/Taxonomy/` | Scientific name normalisation, authority parsing, `TaxonLadder` hierarchy |
 | `BeastieBot3/Configuration/` | INI reading, path resolution, `.env` loading |
 | `BeastieBot3/Infrastructure/` | `ApiImportMetadataStore`, `ReportPathResolver` |
+| `BeastieBot3/WikidataEdits/` | `wikidata iucn-status-plan` dry run: IUCN status (P141) edits for Wikidata taxon items, link confidence tiers, rank variants, wbeditentity payload builders, plan store |
 | `BeastieBot3/Audit/` | `redlist audit-site` generator: unified `AuditFinding` model, per-report producers, shared `HtmlListRenderer`/CSV writer, release-pinned commentary |
 | `BeastieBot3/rules/` | YAML rule files and Mustache templates for list generation (`rules/audit/commentary.yml` for the audit site) |
 | `BeastieBot3/BeastieLegacy/` | Legacy code — read for output format reference only; do not reuse directly |
@@ -236,6 +237,7 @@ A `taxa_group` of `~` (null) means no taxonomic filter — counts all species in
 | `docs/common-names.md` | Common names aggregation workflow |
 | `docs/iucn-api-discover-by-family.md` | IUCN API discovery strategy |
 | `docs/wikipedia-chart-generation.md` | Chart generation workflow, Extension:Chart format, output files |
+| `docs/wikidata-iucn-status.md` | Wikidata IUCN status dry run: decisions (references, item per assessment, rank variants, coordination), tiers, safety properties, what's not built |
 | `docs/redlist-audit-site.md` | `redlist audit-site` generator: producers, unified model, commentary mechanism, output structure |
 
 ## Code Conventions
