@@ -50,6 +50,16 @@ namespace BeastieBot3.Configuration;
         public string? GetWikipediaCachePath() =>
             _reader.Get("Datastore:enwiki_cache_sqlite") ?? _reader.Get("enwiki_cache_sqlite");
 
+        // The Wikidata IUCN status dry run's plan (`wikidata iucn-status-plan`). Defaults to a file
+        // beside the Wikidata cache, so it needs no paths.ini line.
+        public string? GetWikidataIucnPlanPath() {
+            var configured = _reader.Get("Datastore:wikidata_iucn_plan_sqlite");
+            if (!string.IsNullOrWhiteSpace(configured)) return configured;
+            var cache = GetWikidataCachePath();
+            var dir = string.IsNullOrWhiteSpace(cache) ? null : Path.GetDirectoryName(cache);
+            return dir is null ? null : Path.Combine(dir, "wikidata_iucn_plan.sqlite");
+        }
+
         public string? GetReportOutputDirectory() =>
             _reader.Get("Datastore:reports_dir")
             ?? _reader.Get("reports_dir")
