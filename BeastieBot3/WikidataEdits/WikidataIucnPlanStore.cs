@@ -163,6 +163,25 @@ internal sealed class WikidataIucnPlanStore : SqliteStore {
         cmd.ExecuteNonQuery();
     }
 
+    /// Every stored pair as CSV fields, weakest tier and biggest change first.
+    public IEnumerable<string[]> ReadPairsForExport() {
+        using var cmd = _connection.CreateCommand();
+        cmd.CommandText = """
+            SELECT taxon_id, scientific_name, qid, tier, flags, category, iucn_code, target_value, current_values,
+                   link_source, assessment_id, assessment_ref, creates_assessment_item, variants_differ, base_rev_id, actions_json
+            FROM plan_pairs
+            ORDER BY tier, category, taxon_id
+            """;
+        using var reader = cmd.ExecuteReader();
+        while (reader.Read()) {
+            var fields = new string[reader.FieldCount];
+            for (var i = 0; i < fields.Length; i++) {
+                fields[i] = reader.IsDBNull(i) ? "" : Convert.ToString(reader.GetValue(i), System.Globalization.CultureInfo.InvariantCulture) ?? "";
+            }
+            yield return fields;
+        }
+    }
+
     public IReadOnlyDictionary<(long TaxonId, string Qid), string> LoadReviewDecisions() {
         var result = new Dictionary<(long, string), string>();
         using var cmd = _connection.CreateCommand();
