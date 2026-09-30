@@ -54,7 +54,7 @@ public sealed class WikidataIucnFreshnessReportCommand : AsyncCommand<WikidataIu
         string iucnPath;
         string wikidataPath;
         try {
-            iucnPath = paths.ResolveIucnDatabasePath(settings.IucnDatabase);
+            iucnPath = paths.ResolveIucnDatabasePath(settings.IucnDatabase, "--iucn-db");
             wikidataPath = paths.ResolveWikidataCachePath(settings.WikidataCache);
         }
         catch (Exception ex) {

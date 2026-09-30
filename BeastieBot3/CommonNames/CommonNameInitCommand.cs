@@ -66,7 +66,7 @@ internal sealed class CommonNameInitCommand : AsyncCommand<CommonNameInitCommand
         var paths = settings.CreatePaths();
 
         // Resolve database paths
-        var commonNameDbPath = paths.ResolveCommonNameStorePath(settings.DatabasePath);
+        var commonNameDbPath = paths.ResolveCommonNameStorePath(settings.DatabasePath, "--database");
         AnsiConsole.MarkupLine($"[blue]Common name store:[/] {commonNameDbPath}");
 
         using var store = CommonNameStore.Open(commonNameDbPath);
@@ -78,7 +78,7 @@ internal sealed class CommonNameInitCommand : AsyncCommand<CommonNameInitCommand
 
         // Import taxa from IUCN
         if (!settings.SkipTaxa) {
-            var iucnDbPath = paths.ResolveIucnDatabasePath(settings.IucnDatabasePath);
+            var iucnDbPath = paths.ResolveIucnDatabasePath(settings.IucnDatabasePath, "--iucn-database");
             await ImportIucnTaxaAsync(store, iucnDbPath, settings.Limit);
         }
 

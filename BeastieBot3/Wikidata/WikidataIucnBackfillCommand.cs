@@ -76,7 +76,7 @@ public sealed class WikidataIucnBackfillCommand : AsyncCommand<WikidataIucnBackf
         string iucnPath;
         string wikidataCachePath;
         try {
-            iucnPath = paths.ResolveIucnDatabasePath(settings.IucnDatabase);
+            iucnPath = paths.ResolveIucnDatabasePath(settings.IucnDatabase, "--iucn-db");
             wikidataCachePath = paths.ResolveWikidataCachePath(settings.WikidataCache);
         }
         catch (Exception ex) {

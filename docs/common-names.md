@@ -23,12 +23,12 @@ These commands process large amounts of data and can take significant time to ru
 | `aggregate --source wikipedia` | ~22 min | ~22 min | Parses 30k page taxoboxes |
 | `aggregate --source col` | ~110 min | ~110 min | Includes COL synonym import |
 | `aggregate` (all sources) | ~160 min | ~160 min | Total of above |
-| `detect-conflicts` | ~45 min | ~45 min | Analyzes 385k common names |
-| `init --aggregate` + `detect-conflicts` | ~210 min | - | Full fresh setup (~3.5 hours) |
+| `detect-conflicts` | ~1 min | ~15 sec | Checks 166k distinct English common names. Measured September 2026 on Linux; "Fresh Run" is with `--clear-existing` |
+| `init --aggregate` + `detect-conflicts` | ~170 min | - | Full fresh setup (~3 hours) |
 
 **Re-running commands:**
 - All commands use **UPSERT** operations - safe to re-run at any time
-- Re-running takes approximately the same time as a fresh run
+- Re-running takes approximately the same time as a fresh run, except `detect-conflicts` (see the table)
 - No data is lost when re-running; existing records are updated in place
 - Use `common-names sources` to check which sources have been aggregated
 
@@ -153,10 +153,15 @@ beastiebot3 common-names detect-conflicts --clear-existing
 ```
 
 **Behavior with existing data:**
-- By default, adds new conflicts while preserving existing ones
-- Use `--clear-existing` to start fresh
-- **Safe to re-run**: Use `--clear-existing` for a complete refresh
-- Detection takes ~45 minutes on a full dataset (~385k common names)
+- Safe to re-run. A plain re-run adds only the conflicts that are not stored yet and keeps the
+  stored ones. Each conflict (one common name shared by two taxa) is stored once.
+- `--clear-existing` first deletes all stored conflicts, including conflicts for names that are
+  no longer ambiguous and conflicts found with a different `--language`, then detects them again.
+- At the end, the command counts the stored conflicts that this run did not find. When every
+  stored conflict came from earlier runs with the same `--language` and `--include-fossil`
+  setting, it says they are out of date and suggests `--clear-existing`.
+- Detection takes about 15 seconds on the full store (166k distinct English common names), or
+  about a minute with `--clear-existing`.
 
 ### `common-names report`
 

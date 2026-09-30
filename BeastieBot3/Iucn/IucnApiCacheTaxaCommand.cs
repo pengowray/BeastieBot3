@@ -71,7 +71,7 @@ public sealed class IucnApiCacheTaxaCommand : AsyncCommand<IucnApiCacheTaxaSetti
 
     internal static async Task<int> RunAsync(IucnApiCacheTaxaSettings settings, CancellationToken cancellationToken) {
         var paths = settings.CreatePaths();
-        var sourcePath = paths.ResolveIucnDatabasePath(settings.SourceDatabase);
+        var sourcePath = paths.ResolveIucnDatabasePath(settings.SourceDatabase, "--source-db");
         var cachePath = paths.ResolveIucnApiCachePath(settings.CacheDatabase);
 
         AnsiConsole.MarkupLine($"[grey]Source CSV database:[/] {Markup.Escape(sourcePath)}");

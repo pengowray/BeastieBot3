@@ -49,7 +49,7 @@ public sealed class IucnTaxonomyCleanupCommand : Command<IucnTaxonomyCleanupComm
 
         string databasePath;
         try {
-            databasePath = paths.ResolveIucnDatabasePath(settings.DatabasePath);
+            databasePath = paths.ResolveIucnDatabasePath(settings.DatabasePath, "--database");
         } catch (Exception ex) {
             AnsiConsole.MarkupLine($"[red]{Markup.Escape(ex.Message)}[/]");
             return -2;

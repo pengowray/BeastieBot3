@@ -87,7 +87,7 @@ public sealed class WikipediaListCommand : Command<WikipediaListCommand.Settings
         var templatesDir = ResolveTemplatesDir(paths, settings.TemplatesDirectory);
         var rulesPath = ResolveRulesPath(paths, settings.RulesPath);
         var outputDir = ResolveOutputDir(paths, settings.OutputDirectory);
-        var databasePath = IucnDatasetResolver.Resolve(paths, settings.Dataset, settings.DatabasePath);
+        var databasePath = IucnDatasetResolver.Resolve(paths, settings.Dataset, settings.DatabasePath, "--database");
 
         var loader = new WikipediaListDefinitionLoader();
         var config = loader.Load(configPath);
@@ -118,43 +118,58 @@ public sealed class WikipediaListCommand : Command<WikipediaListCommand.Settings
         var taxonRulesPath = ResolveTaxonRulesPath(paths, rulesPath);
         TaxonRulesService? taxonRules = taxonRulesPath != null ? TaxonRulesService.Load(taxonRulesPath) : null;
 
-        // Determine which common name provider to use
-        var commonNamesDbPath = settings.CommonNamesDbPath ?? paths.ResolveCommonNameStorePath(null);
-        var useStoreBackedProvider = !settings.UseLegacyNames && File.Exists(commonNamesDbPath);
-
-        // Determine COL enricher availability
+        // Decide the common-name source first: Catalogue of Life enrichment is only wired into the
+        // store-backed generator, so it depends on that choice.
+        string? commonNamesDbPath = null;
+        string? storeNotConfiguredMessage = null;
+        if (!settings.UseLegacyNames) {
+            try {
+                commonNamesDbPath = paths.ResolveCommonNameStorePath(settings.CommonNamesDbPath, "--common-names-db");
+            } catch (InvalidOperationException ex) {
+                storeNotConfiguredMessage = ex.Message;
+            }
+        }
         var colDbPath = settings.ColDatabasePath ?? paths.GetColSqlitePath();
-        var useColEnrichment = !settings.NoColEnrichment && !string.IsNullOrWhiteSpace(colDbPath) && File.Exists(colDbPath);
+        var plan = PlanNameSources(
+            settings.UseLegacyNames,
+            commonNamesDbPath,
+            commonNamesDbPath is not null && File.Exists(commonNamesDbPath),
+            settings.NoColEnrichment,
+            colDbPath,
+            !string.IsNullOrWhiteSpace(colDbPath) && File.Exists(colDbPath));
+
         ColTaxonomyEnricher? colEnricher = null;
         Col.ColNameResolver? colNameResolver = null;
-
-        if (useColEnrichment) {
-            AnsiConsole.MarkupLine($"[grey]Using COL taxonomy enrichment from:[/] {colDbPath}");
-            colEnricher = new ColTaxonomyEnricher(colDbPath!);
-            // Same CoL DB, used to clean formatting-equivalent slips in the displayed scientific name.
-            colNameResolver = new Col.ColNameResolver(colDbPath!);
-        }
-
         WikipediaListGenerator generator;
         IDisposable? providerToDispose = null;
 
         try {
-            if (useStoreBackedProvider) {
-                AnsiConsole.MarkupLine($"[grey]Using aggregated common names from:[/] {commonNamesDbPath}");
+            if (plan.UseStore) {
+                AnsiConsole.MarkupLine($"[grey]Using aggregated common names from:[/] {Markup.Escape(commonNamesDbPath!)}");
                 var wikipediaCachePath = paths.GetWikipediaCachePath();
                 if (!string.IsNullOrWhiteSpace(wikipediaCachePath) && File.Exists(wikipediaCachePath)) {
-                    AnsiConsole.MarkupLine($"[grey]Using Wikipedia cache from:[/] {wikipediaCachePath}");
+                    AnsiConsole.MarkupLine($"[grey]Using Wikipedia cache from:[/] {Markup.Escape(wikipediaCachePath)}");
                 }
-                var storeProvider = new StoreBackedCommonNameProvider(commonNamesDbPath, wikipediaCachePath);
+                if (plan.Col == ColEnrichment.On) {
+                    AnsiConsole.MarkupLine($"[grey]Using COL taxonomy enrichment from:[/] {Markup.Escape(colDbPath!)}");
+                    colEnricher = new ColTaxonomyEnricher(colDbPath!);
+                    // Same CoL DB, used to clean formatting-equivalent slips in the displayed scientific name.
+                    colNameResolver = new Col.ColNameResolver(colDbPath!);
+                }
+                var storeProvider = new StoreBackedCommonNameProvider(commonNamesDbPath!, wikipediaCachePath);
                 providerToDispose = storeProvider;
                 generator = new WikipediaListGenerator(query, templates, rules, storeProvider, colEnricher, taxonRules, chartData, colNameResolver);
             } else {
-                if (!settings.UseLegacyNames) {
-                    AnsiConsole.MarkupLine("[yellow]Common names store not found, using legacy provider.[/]");
-                }
-                var legacyProvider = new CommonNameProvider(paths.GetWikidataCachePath(), paths.GetIucnApiCachePath());
+                var wikidataCachePath = paths.GetWikidataCachePath();
+                var iucnApiCachePath = paths.GetIucnApiCachePath();
+                ReportLegacyNameSource(plan, commonNamesDbPath, storeNotConfiguredMessage, wikidataCachePath, iucnApiCachePath);
+                var legacyProvider = new CommonNameProvider(wikidataCachePath, iucnApiCachePath);
                 providerToDispose = legacyProvider;
                 generator = new WikipediaListGenerator(query, templates, rules, legacyProvider, taxonRules, chartData);
+            }
+            if (plan.Col == ColEnrichment.NotFound) {
+                AnsiConsole.MarkupLine($"[yellow]Catalogue of Life database not found:[/] {Markup.Escape(colDbPath!)}");
+                AnsiConsole.MarkupLine($"[yellow]{IucnOnlyNamesNote}[/]");
             }
 
             var results = new List<(WikipediaListDefinition Definition, WikipediaListResult Result)>();
@@ -184,6 +199,98 @@ public sealed class WikipediaListCommand : Command<WikipediaListCommand.Settings
             providerToDispose?.Dispose();
             colEnricher?.Dispose();
             colNameResolver?.Dispose();
+        }
+    }
+
+    /// <summary>Why the Common names store is not used.</summary>
+    internal enum StoreFallback {
+        None,
+        LegacyRequested,
+        NotConfigured,
+        NotFound,
+    }
+
+    /// <summary>Whether Catalogue of Life enrichment is used, and if not, why.</summary>
+    internal enum ColEnrichment {
+        On,
+        Disabled,
+        NotConfigured,
+        NotFound,
+        NeedsStore,
+    }
+
+    internal readonly record struct NameSourcePlan(bool UseStore, StoreFallback StoreFallback, ColEnrichment Col);
+
+    /// <summary>
+    /// Chooses the common-name source and whether Catalogue of Life enrichment is used. Only the
+    /// store-backed generator takes the CoL enricher, so CoL is used only when the Common names
+    /// store is. The CoL checks run in the order a user would fix them: an explicit
+    /// --no-col-enrichment or --use-legacy-names (whose help says the CoL database is ignored,
+    /// so a missing CoL file is not worth a warning), then a missing path or file, then the
+    /// missing store.
+    /// </summary>
+    internal static NameSourcePlan PlanNameSources(
+        bool useLegacyNames,
+        string? storePath,
+        bool storeExists,
+        bool noColEnrichment,
+        string? colPath,
+        bool colExists) {
+        var fallback = useLegacyNames ? StoreFallback.LegacyRequested
+            : string.IsNullOrWhiteSpace(storePath) ? StoreFallback.NotConfigured
+            : !storeExists ? StoreFallback.NotFound
+            : StoreFallback.None;
+        var useStore = fallback == StoreFallback.None;
+
+        var col = noColEnrichment || useLegacyNames ? ColEnrichment.Disabled
+            : string.IsNullOrWhiteSpace(colPath) ? ColEnrichment.NotConfigured
+            : !colExists ? ColEnrichment.NotFound
+            : !useStore ? ColEnrichment.NeedsStore
+            : ColEnrichment.On;
+
+        return new NameSourcePlan(useStore, fallback, col);
+    }
+
+    private const string IucnOnlyNamesNote = "Lists use only IUCN ranks and IUCN spellings of scientific names.";
+
+    /// <summary>
+    /// Prints why the Common names store is not used, which caches the common names come from
+    /// instead, and that Catalogue of Life enrichment is off when that is the reason it is off.
+    /// With --use-legacy-names the plan's CoL state is Disabled, so no line about CoL is printed.
+    /// </summary>
+    private static void ReportLegacyNameSource(
+        NameSourcePlan plan,
+        string? storePath,
+        string? storeNotConfiguredMessage,
+        string? wikidataCachePath,
+        string? iucnApiCachePath) {
+        switch (plan.StoreFallback) {
+            case StoreFallback.NotFound:
+                AnsiConsole.MarkupLine($"[yellow]Common names store not found:[/] {Markup.Escape(storePath ?? "")}");
+                AnsiConsole.MarkupLine("[yellow]To create the Common names store, run common-names init --aggregate. To use a store at another path, pass --common-names-db <PATH>.[/]");
+                break;
+            case StoreFallback.NotConfigured:
+                AnsiConsole.MarkupLine($"[yellow]{Markup.Escape(storeNotConfiguredMessage ?? "Common names store path is not configured.")}[/]");
+                break;
+        }
+
+        var wikidataFound = !string.IsNullOrWhiteSpace(wikidataCachePath) && File.Exists(wikidataCachePath);
+        var iucnApiFound = !string.IsNullOrWhiteSpace(iucnApiCachePath) && File.Exists(iucnApiCachePath);
+        if (wikidataFound) {
+            AnsiConsole.MarkupLine($"[grey]Using English common names (P1843) from the Wikidata cache:[/] {Markup.Escape(wikidataCachePath!)}");
+        }
+        if (iucnApiFound) {
+            var label = wikidataFound
+                ? "Using English common names from the IUCN API cache where Wikidata has none:"
+                : "Using English common names from the IUCN API cache:";
+            AnsiConsole.MarkupLine($"[grey]{label}[/] {Markup.Escape(iucnApiCachePath!)}");
+        }
+        if (!wikidataFound && !iucnApiFound) {
+            AnsiConsole.MarkupLine("[yellow]No common names available: the Wikidata cache and the IUCN API cache were not found.[/]");
+        }
+
+        if (plan.Col == ColEnrichment.NeedsStore) {
+            AnsiConsole.MarkupLine($"[yellow]Catalogue of Life enrichment is off because it requires the Common names store. {IucnOnlyNamesNote}[/]");
         }
     }
 

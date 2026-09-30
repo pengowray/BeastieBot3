@@ -69,7 +69,7 @@ internal sealed class CommonNameReportCommand : AsyncCommand<CommonNameReportCom
 
     public override async Task<int> ExecuteAsync(CommandContext context, Settings settings, CancellationToken cancellationToken) {
         var paths = settings.CreatePaths();
-        var commonNameDbPath = paths.ResolveCommonNameStorePath(settings.DatabasePath);
+        var commonNameDbPath = paths.ResolveCommonNameStorePath(settings.DatabasePath, "--database");
 
         AnsiConsole.MarkupLine($"[blue]Common name store:[/] {commonNameDbPath}");
 
@@ -442,7 +442,7 @@ internal sealed class CommonNameReportCommand : AsyncCommand<CommonNameReportCom
         return Task.Run(() => {
             AnsiConsole.MarkupLine("[yellow]Generating common name trace report...[/]");
 
-            var iucnDbPath = paths.ResolveIucnDatabasePath(settings.IucnDatabasePath);
+            var iucnDbPath = paths.ResolveIucnDatabasePath(settings.IucnDatabasePath, "--iucn-db");
             AnsiConsole.MarkupLine($"[blue]IUCN database:[/] {iucnDbPath}");
 
             using var iucnConnection = new SqliteConnection($"Data Source={iucnDbPath};Mode=ReadOnly");

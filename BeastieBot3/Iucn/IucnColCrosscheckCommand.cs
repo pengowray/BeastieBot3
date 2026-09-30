@@ -65,7 +65,7 @@ public sealed class IucnColCrosscheckCommand : Command<IucnColCrosscheckCommand.
 
         string iucnPath;
         try {
-            iucnPath = paths.ResolveIucnDatabasePath(settings.IucnDatabase);
+            iucnPath = paths.ResolveIucnDatabasePath(settings.IucnDatabase, "--iucn-database");
         } catch (Exception ex) {
             AnsiConsole.MarkupLine($"[red]{Markup.Escape(ex.Message)}[/]");
             return -2;

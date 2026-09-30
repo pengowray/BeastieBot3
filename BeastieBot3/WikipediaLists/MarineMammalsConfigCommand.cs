@@ -76,7 +76,7 @@ internal sealed class MarineMammalsConfigCommand : Command<MarineMammalsConfigCo
 
     public override int Execute(CommandContext context, Settings settings, CancellationToken cancellationToken) {
         var paths = settings.CreatePaths();
-        var dbPath = paths.ResolveIucnDatabasePath(settings.DatabasePath);
+        var dbPath = paths.ResolveIucnDatabasePath(settings.DatabasePath, "--database");
 
         if (string.IsNullOrWhiteSpace(dbPath) || !File.Exists(dbPath)) {
             AnsiConsole.MarkupLine("[red]IUCN database not found.[/]");

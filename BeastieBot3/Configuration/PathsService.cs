@@ -85,13 +85,23 @@ namespace BeastieBot3.Configuration;
         public string? GetRulesSourceDir() =>
             _reader.Get("Dirs:rules_source_dir") ?? _reader.Get("Datastore:rules_source_dir") ?? _reader.Get("rules_source_dir");
 
-        public string ResolveIucnDatabasePath(string? overridePath) {
+        /// <summary>
+        /// Resolves the IUCN CSV database: <paramref name="overridePath"/> when given, otherwise
+        /// Datastore:IUCN_sqlite_from_cvs.
+        /// </summary>
+        /// <param name="optionName">
+        /// The calling command's option for <paramref name="overridePath"/> (for example
+        /// "--iucn-db"), named in the error when no path is configured. Commands spell this option
+        /// differently, and web endpoints have none, so the error names no option unless given one.
+        /// </param>
+        public string ResolveIucnDatabasePath(string? overridePath, string? optionName = null) {
             var configuredPath = !string.IsNullOrWhiteSpace(overridePath)
                 ? overridePath
                 : GetIucnDatabasePath();
 
             if (string.IsNullOrWhiteSpace(configuredPath)) {
-                throw new InvalidOperationException($"IUCN SQLite database path is not configured. Set Datastore:IUCN_sqlite_from_cvs or pass --database.\n[using ini-file: '{_reader.SourceFilePath}']");
+                throw new InvalidOperationException(
+                    NotConfiguredMessage("IUCN Red List database", "Datastore:IUCN_sqlite_from_cvs", optionName));
             }
 
             try {
@@ -100,6 +110,17 @@ namespace BeastieBot3.Configuration;
             catch (Exception ex) {
                 throw new InvalidOperationException($"Failed to resolve database path {configuredPath}: {ex.Message}", ex);
             }
+        }
+
+        // "<what> path is not configured. Set <key> in <ini file>, or pass <option> <PATH>."
+        // The option part is left out when the caller has no option for the path.
+        // No square brackets: some callers print the message through MarkupLineInterpolated
+        // after Markup.Escape, which escapes it twice and shows each bracket doubled.
+        internal string NotConfiguredMessage(string what, string iniKey, string? optionName) {
+            var message = $"{what} path is not configured. Set {iniKey} in {_reader.SourceFilePath}";
+            return string.IsNullOrWhiteSpace(optionName)
+                ? message + "."
+                : $"{message}, or pass {optionName} <PATH>.";
         }
 
         public string ResolveSpratDatabasePath(string? overridePath) {
@@ -211,7 +232,17 @@ namespace BeastieBot3.Configuration;
             }
         }
 
-        public string ResolveCommonNameStorePath(string? overridePath) {
+        /// <summary>
+        /// Resolves the Common names store: <paramref name="overridePath"/> when given, otherwise
+        /// Datastore:common_names_sqlite, otherwise common_names.sqlite in Datastore:datastore_dir.
+        /// </summary>
+        /// <param name="optionName">
+        /// The calling command's option for <paramref name="overridePath"/>, named in the error when
+        /// no path is configured. The common-names commands call it --database, generate-lists calls
+        /// it --common-names-db, and in `sprat generate-lists` --database is the SPRAT database, so
+        /// the error names no option unless given one.
+        /// </param>
+        public string ResolveCommonNameStorePath(string? overridePath, string? optionName = null) {
             var configuredPath = !string.IsNullOrWhiteSpace(overridePath)
                 ? overridePath
                 : GetCommonNameStorePath();
@@ -222,7 +253,8 @@ namespace BeastieBot3.Configuration;
                 if (!string.IsNullOrWhiteSpace(datastoreDir)) {
                     configuredPath = Path.Combine(datastoreDir, "common_names.sqlite");
                 } else {
-                    throw new InvalidOperationException("Common name store path is not configured. Set Datastore:common_names_sqlite or pass --database.");
+                    throw new InvalidOperationException(
+                        NotConfiguredMessage("Common names store", "Datastore:common_names_sqlite", optionName));
                 }
             }
 

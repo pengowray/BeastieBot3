@@ -220,7 +220,7 @@ public sealed class ColNameUsageFieldProfileCommand : Command<ColNameUsageFieldP
 
         if (string.IsNullOrWhiteSpace(configuredPath)) {
             var guidance = settings.UseIucnDatabase
-                ? "Set [bold]Datastore:IUCN_CVS_sqlite[/] in paths.ini or pass --database."
+                ? "Set [bold]Datastore:IUCN_sqlite_from_cvs[/] in paths.ini or pass --database."
                 : "Set [bold]Datastore:COL_sqlite[/] in paths.ini or pass --database.";
             AnsiConsole.MarkupLine($"[red]{datasetLabel} database path is not configured.[/] {guidance}");
             return -1;
