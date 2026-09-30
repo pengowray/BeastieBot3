@@ -113,7 +113,11 @@ internal static class ChildLinkReport {
             ? n.ChildGroup
             : $"{n.ChildGroup} ({n.ChildDisplayName})";
 
-    private static string CreateListHint(ChildLinkNote n) => n.ChildHasLists
-        ? $"To create {n.ChildGroup}-{n.Preset}, add {n.Preset} to the {n.ChildGroup} entry in wikipedia-lists.yml."
-        : $"To create {n.ChildGroup}-{n.Preset}, add an entry for {n.ChildGroup} to wikipedia-lists.yml.";
+    // category_split overrides presets in a list entry, so an entry that uses it needs category_split replaced.
+    private static string CreateListHint(ChildLinkNote n) =>
+        !n.ChildHasLists
+            ? $"To create {n.ChildGroup}-{n.Preset}, add an entry for {n.ChildGroup} to wikipedia-lists.yml."
+        : n.ChildUsesCategorySplit
+            ? $"To create {n.ChildGroup}-{n.Preset}, replace category_split in the {n.ChildGroup} entry in wikipedia-lists.yml with presets that include {n.Preset}."
+            : $"To create {n.ChildGroup}-{n.Preset}, add {n.Preset} to the {n.ChildGroup} entry in wikipedia-lists.yml.";
 }

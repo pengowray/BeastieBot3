@@ -188,6 +188,7 @@ internal enum ChildLinkOutcome {
 /// <param name="Outcome">Which list was linked, or why none was.</param>
 /// <param name="LinkedListId">The linked list id, e.g. "liliopsida-lc" or "conifers-all-status"; null when none.</param>
 /// <param name="ChildHasLists">True when wikipedia-lists.yml has any list for the sub-group (decides the fix to suggest).</param>
+/// <param name="ChildUsesCategorySplit">True when the sub-group's wikipedia-lists.yml entry uses category_split, which overrides presets.</param>
 internal sealed record ChildLinkNote(
     string ParentListId,
     string ParentGroup,
@@ -197,7 +198,8 @@ internal sealed record ChildLinkNote(
     GroupingKind Kind,
     ChildLinkOutcome Outcome,
     string? LinkedListId,
-    bool ChildHasLists);
+    bool ChildHasLists,
+    bool ChildUsesCategorySplit = false);
 
 /// <summary>
 /// A custom group for family-based grouping.

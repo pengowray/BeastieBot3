@@ -116,6 +116,14 @@ public class SubGroupLinkTests {
         Assert.Equal("To create mushrooms-threatened, add an entry for mushrooms to wikipedia-lists.yml.", warning.Hint);
     }
 
+    // category_split overrides presets, so adding a preset to that entry would change nothing.
+    [Fact]
+    public void ForList_SubGroupEntryWithCategorySplit_SuggestsReplacingIt() {
+        var warning = ChildLinkReport.ForList("fungi-threatened", LoadRules().ChildLinkNotes)
+            .Single(m => m.Text.StartsWith("No list ferns-threatened", StringComparison.Ordinal));
+        Assert.Equal("To create ferns-threatened, replace category_split in the ferns entry in wikipedia-lists.yml with presets that include threatened.", warning.Hint);
+    }
+
     [Fact]
     public void WarningsForGroup_CollectsParentPageWarnings() {
         var config = LoadRules();
@@ -208,9 +216,11 @@ public class SubGroupLinkTests {
             children: [dicots]
           mushrooms:
             name: "Mushrooms"
+          ferns:
+            name: "Ferns"
           fungi:
             name: "Fungi"
-            children: [dicots, mushrooms, lichens]
+            children: [dicots, mushrooms, lichens, ferns]
         """;
 
     private const string PresetsYaml = """
@@ -263,5 +273,8 @@ public class SubGroupLinkTests {
             presets: [nt]
           - taxa_group: fungi
             presets: [threatened]
+          # "separate" has no threatened page; its presets missing from this file are skipped.
+          - taxa_group: ferns
+            category_split: separate
         """;
 }

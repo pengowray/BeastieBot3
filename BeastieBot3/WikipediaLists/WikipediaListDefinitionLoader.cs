@@ -77,10 +77,15 @@ internal sealed class WikipediaListDefinitionLoader {
         // Track (group, preset) per expanded list id so the post-expansion pass can resolve a parent's
         // children to the actual {child}-{preset} ids — only for those that genuinely generated.
         var groupPresetById = new Dictionary<string, (string Group, string Preset)>(StringComparer.OrdinalIgnoreCase);
+        // Groups whose list entry uses category_split, so a warning's fix names category_split, not presets.
+        var categorySplitGroups = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
         foreach (var rawList in raw.Lists) {
             // The category_split shorthand, when set, determines the preset fan-out (overriding `presets`).
             var effectivePresets = ResolveEffectivePresets(rawList);
+            if (!string.IsNullOrEmpty(rawList.TaxaGroup) && !string.IsNullOrWhiteSpace(rawList.CategorySplit)) {
+                categorySplitGroups.Add(rawList.TaxaGroup);
+            }
             // Multi-preset syntax: taxa_group + presets array (or category_split)
             if (!string.IsNullOrEmpty(rawList.TaxaGroup) && effectivePresets is { Count: > 0 }) {
                 foreach (var presetName in effectivePresets) {
@@ -114,7 +119,7 @@ internal sealed class WikipediaListDefinitionLoader {
             }
         }
 
-        var childLinkNotes = ResolveChildLinks(expandedLists, groupPresetById, taxaGroups);
+        var childLinkNotes = ResolveChildLinks(expandedLists, groupPresetById, categorySplitGroups, taxaGroups);
 
         return new WikipediaListConfig {
             Defaults = raw.Defaults ?? new WikipediaListDefaults(),
@@ -136,12 +141,14 @@ internal sealed class WikipediaListDefinitionLoader {
     private static List<ChildLinkNote> ResolveChildLinks(
         List<WikipediaListDefinition> lists,
         Dictionary<string, (string Group, string Preset)> groupPresetById,
+        IReadOnlySet<string> categorySplitGroups,
         Dictionary<string, TaxaGroupDefinition> taxaGroups) {
 
         var byId = new Dictionary<string, WikipediaListDefinition>(StringComparer.OrdinalIgnoreCase);
         foreach (var list in lists) byId[list.Id] = list;
         var listIds = new HashSet<string>(byId.Keys, StringComparer.OrdinalIgnoreCase);
         var groupsWithLists = new HashSet<string>(groupPresetById.Values.Select(v => v.Group), StringComparer.OrdinalIgnoreCase);
+        var entries = new ChildEntryKinds(groupsWithLists, categorySplitGroups);
         var notes = new List<ChildLinkNote>();
 
         foreach (var def in lists) {
@@ -154,15 +161,18 @@ internal sealed class WikipediaListDefinitionLoader {
             // parent page (plants-nt, where no sub-group has an nt list, stays as it is).
             var hasPresetChild = group.Children?.Any(c => listIds.Contains($"{c}-{gp.Preset}")) == true;
             AddChildLinks(def, gp, group.Children, GroupingKind.Phylogenetic, allowAllStatus: hasPresetChild,
-                byId, listIds, groupsWithLists, taxaGroups, notes);
+                byId, listIds, entries, taxaGroups, notes);
             // A see-also link is a bullet under "Related lists" and does not change the page layout, so
             // its all-status stand-in needs no such condition.
             AddChildLinks(def, gp, group.SeeAlso, GroupingKind.SeeAlso, allowAllStatus: true,
-                byId, listIds, groupsWithLists, taxaGroups, notes);
+                byId, listIds, entries, taxaGroups, notes);
         }
 
         return notes;
     }
+
+    // Which taxa groups have a list entry in wikipedia-lists.yml, and which of those use category_split.
+    private sealed record ChildEntryKinds(IReadOnlySet<string> WithLists, IReadOnlySet<string> CategorySplit);
 
     private static void AddChildLinks(
         WikipediaListDefinition parent,
@@ -172,7 +182,7 @@ internal sealed class WikipediaListDefinitionLoader {
         bool allowAllStatus,
         Dictionary<string, WikipediaListDefinition> byId,
         IReadOnlySet<string> listIds,
-        IReadOnlySet<string> groupsWithLists,
+        ChildEntryKinds entries,
         Dictionary<string, TaxaGroupDefinition> taxaGroups,
         List<ChildLinkNote> notes) {
 
@@ -189,7 +199,8 @@ internal sealed class WikipediaListDefinitionLoader {
 
             var (outcome, childId) = ResolveChildLink(childGroupName, preset, listIds, allowAllStatus);
             notes.Add(new ChildLinkNote(parent.Id, parentGroup, preset, childGroupName, childGroup.Name, kind,
-                outcome, childId, groupsWithLists.Contains(childGroupName)));
+                outcome, childId, entries.WithLists.Contains(childGroupName),
+                ChildUsesCategorySplit: entries.CategorySplit.Contains(childGroupName)));
             if (childId is null) continue;
 
             var childDef = byId[childId];
