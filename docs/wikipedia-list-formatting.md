@@ -228,7 +228,7 @@ well as parent pages.
 
 Parent groups in the shipped rules: `fish` (ray-finned fishes, sharks and rays), `invertebrates`
 (insects, gastropods, bivalves, crustaceans, corals, arachnids), and `plants` (dicots, monocots,
-conifers, cycads; parent pages for `threatened` and `lc` only). `SubGroupLinkTests` checks the
+conifers, cycads; parent pages for `threatened` and `lc` only). `SubGroupShippedRulesTests` checks the
 shipped rules: every parent page links all its sub-groups, and no list gets a sub-group warning.
 
 A sub-group must be defined by a single `value:` at the rank the parent's sub-groups share (class
