@@ -175,6 +175,7 @@ public sealed class WikipediaListCommand : Command<WikipediaListCommand.Settings
             var results = new List<(WikipediaListDefinition Definition, WikipediaListResult Result)>();
             foreach (var definition in definitions) {
                 AnsiConsole.MarkupLine($"[grey]Generating[/] [white]{definition.Title}[/]...");
+                ChildLinkReport.PrintForList(definition.Id, config.ChildLinkNotes);
                 var result = generator.Generate(definition, config.Defaults, outputDir, settings.Limit);
                 results.Add((definition, result));
                 var problemFlag = result.Metrics?.Problems.Count > 0 ? $" [yellow]({result.Metrics.Problems.Count} problems)[/]" : "";

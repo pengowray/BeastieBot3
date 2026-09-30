@@ -114,69 +114,111 @@ internal sealed class WikipediaListDefinitionLoader {
             }
         }
 
-        ResolveChildLinks(expandedLists, groupPresetById, taxaGroups);
+        var childLinkNotes = ResolveChildLinks(expandedLists, groupPresetById, taxaGroups);
 
         return new WikipediaListConfig {
             Defaults = raw.Defaults ?? new WikipediaListDefaults(),
-            Lists = expandedLists
+            Lists = expandedLists,
+            ChildLinkNotes = childLinkNotes,
         };
     }
 
+    /// <summary>The preset whose single page lists every category (see list-presets.yml).</summary>
+    internal const string AllStatusPreset = "all-status";
+
     /// <summary>
-    /// Post-expansion pass: attach each parent list's resolved child/see-also links. A link is added
-    /// only when the corresponding <c>{childGroup}-{preset}</c> list actually exists in the expanded
-    /// set — so a parent like <c>invertebrates-ew</c> won't emit a dangling link to a never-generated
-    /// <c>insects-ew</c>. Title/filters come from the child's already-expanded definition (no re-gen).
+    /// Post-expansion pass: attach each parent list's resolved child/see-also links, and return one
+    /// <see cref="ChildLinkNote"/> per (list, sub-group) pair saying what was linked. A link is added only
+    /// when the list it points to exists in the expanded set, so a parent like <c>invertebrates-ew</c>
+    /// won't emit a dangling link to a never-generated <c>insects-ew</c>. Title/filters come from the
+    /// child's already-expanded definition (no re-gen).
     /// </summary>
-    private static void ResolveChildLinks(
+    private static List<ChildLinkNote> ResolveChildLinks(
         List<WikipediaListDefinition> lists,
         Dictionary<string, (string Group, string Preset)> groupPresetById,
         Dictionary<string, TaxaGroupDefinition> taxaGroups) {
 
         var byId = new Dictionary<string, WikipediaListDefinition>(StringComparer.OrdinalIgnoreCase);
         foreach (var list in lists) byId[list.Id] = list;
+        var listIds = new HashSet<string>(byId.Keys, StringComparer.OrdinalIgnoreCase);
+        var groupsWithLists = new HashSet<string>(groupPresetById.Values.Select(v => v.Group), StringComparer.OrdinalIgnoreCase);
+        var notes = new List<ChildLinkNote>();
 
         foreach (var def in lists) {
             if (!groupPresetById.TryGetValue(def.Id, out var gp)) continue;
             if (!taxaGroups.TryGetValue(gp.Group, out var group)) continue;
 
-            AddChildLinks(def.SubLists, group.Children, GroupingKind.Phylogenetic, gp.Preset, byId, taxaGroups, def.Id);
-            AddChildLinks(def.SeeAlso, group.SeeAlso, GroupingKind.SeeAlso, gp.Preset, byId, taxaGroups, def.Id);
+            // An all-status list stands in for a sub-group's missing preset list only on a page that
+            // already links at least one sub-group list for its own preset. That completes a parent page
+            // (plants-threatened also links conifers-all-status) without turning an ordinary list into a
+            // parent page (plants-nt, where no sub-group has an nt list, stays as it is).
+            var hasPresetChild = group.Children?.Any(c => listIds.Contains($"{c}-{gp.Preset}")) == true;
+            AddChildLinks(def, gp, group.Children, GroupingKind.Phylogenetic, allowAllStatus: hasPresetChild,
+                byId, listIds, groupsWithLists, taxaGroups, notes);
+            // A see-also link is a bullet under "Related lists" and does not change the page layout, so
+            // its all-status stand-in needs no such condition.
+            AddChildLinks(def, gp, group.SeeAlso, GroupingKind.SeeAlso, allowAllStatus: true,
+                byId, listIds, groupsWithLists, taxaGroups, notes);
         }
+
+        return notes;
     }
 
     private static void AddChildLinks(
-        List<ChildListLink> target,
+        WikipediaListDefinition parent,
+        (string Group, string Preset) parentGroupPreset,
         List<string>? childGroupNames,
         GroupingKind kind,
-        string preset,
+        bool allowAllStatus,
         Dictionary<string, WikipediaListDefinition> byId,
+        IReadOnlySet<string> listIds,
+        IReadOnlySet<string> groupsWithLists,
         Dictionary<string, TaxaGroupDefinition> taxaGroups,
-        string parentId) {
+        List<ChildLinkNote> notes) {
 
         if (childGroupNames is null) return;
+        var target = kind == GroupingKind.SeeAlso ? parent.SeeAlso : parent.SubLists;
+        var (parentGroup, preset) = parentGroupPreset;
 
         foreach (var childGroupName in childGroupNames) {
             if (!taxaGroups.TryGetValue(childGroupName, out var childGroup)) {
-                Console.Error.WriteLine($"Warning: child group '{childGroupName}' referenced by '{parentId}' not found in taxa-groups.yml");
+                notes.Add(new ChildLinkNote(parent.Id, parentGroup, preset, childGroupName, null, kind,
+                    ChildLinkOutcome.UnknownGroup, null, ChildHasLists: false));
                 continue;
             }
 
-            var childId = $"{childGroupName}-{preset}";
-            if (!byId.TryGetValue(childId, out var childDef)) {
-                // The child group exists but has no list for this preset (e.g. invertebrates-ew but
-                // insects defines no 'ew'). Skip rather than emit a dangling wikilink.
-                continue;
-            }
+            var (outcome, childId) = ResolveChildLink(childGroupName, preset, listIds, allowAllStatus);
+            notes.Add(new ChildLinkNote(parent.Id, parentGroup, preset, childGroupName, childGroup.Name, kind,
+                outcome, childId, groupsWithLists.Contains(childGroupName)));
+            if (childId is null) continue;
 
+            var childDef = byId[childId];
             target.Add(new ChildListLink(
-                Id: childId,
+                Id: childDef.Id,
                 DisplayName: childGroup.Name ?? childGroupName,
                 Adjective: childGroup.Adjective ?? string.Empty,
                 WikiTitle: DeriveWikiTitle(childDef.OutputFile),
                 Filters: childDef.Filters,
                 Kind: kind));
         }
+    }
+
+    /// <summary>
+    /// The list a parent links for one sub-group: the sub-group's list for the parent's preset
+    /// (<c>{child}-{preset}</c>); failing that, when <paramref name="allowAllStatus"/>, its all-status
+    /// list; otherwise none.
+    /// </summary>
+    internal static (ChildLinkOutcome Outcome, string? ListId) ResolveChildLink(
+        string childGroup, string preset, IReadOnlySet<string> listIds, bool allowAllStatus) {
+        var presetId = $"{childGroup}-{preset}";
+        if (listIds.Contains(presetId)) {
+            return (ChildLinkOutcome.Linked, presetId);
+        }
+        var allStatusId = $"{childGroup}-{AllStatusPreset}";
+        if (allowAllStatus && listIds.Contains(allStatusId)) {
+            return (ChildLinkOutcome.LinkedAllStatus, allStatusId);
+        }
+        return (ChildLinkOutcome.NoList, null);
     }
 
     /// <summary>Derive a Wikipedia article title from an output filename

@@ -16,6 +16,13 @@ namespace BeastieBot3.WikipediaLists;
 internal sealed class WikipediaListConfig {
     public WikipediaListDefaults Defaults { get; init; } = new();
     public List<WikipediaListDefinition> Lists { get; init; } = new();
+
+    /// <summary>
+    /// One note per (list, sub-group) pair the loader resolved for a group with <c>children:</c> or
+    /// <c>see_also:</c>: which list it linked, or why it linked none. generate-lists and the Taxa
+    /// grouping page print these (<see cref="ChildLinkReport"/>) so a missing sub-list is visible.
+    /// </summary>
+    public List<ChildLinkNote> ChildLinkNotes { get; init; } = new();
 }
 
 /// <summary>
@@ -151,6 +158,46 @@ internal sealed record ChildListLink(
     string WikiTitle,
     List<TaxonFilterDefinition> Filters,
     GroupingKind Kind);
+
+/// <summary>What the loader did with one sub-group (child or see-also group) of one parent list.</summary>
+internal enum ChildLinkOutcome {
+    /// <summary>Linked to the sub-group's list for the parent's preset (plants-lc → magnoliopsida-lc).</summary>
+    Linked,
+    /// <summary>
+    /// The sub-group has no list for the parent's preset, so the parent links its all-status list
+    /// instead (plants-threatened → conifers-all-status). An all-status list covers every category,
+    /// so it includes the species the parent's section counts.
+    /// </summary>
+    LinkedAllStatus,
+    /// <summary>
+    /// No list linked. Either the sub-group has no list for the parent's preset and no usable
+    /// all-status list, or the parent has no other sub-group list for its preset, so it stays an
+    /// ordinary list (an all-status list alone never turns an ordinary list into a parent page).
+    /// </summary>
+    NoList,
+    /// <summary>The sub-group name is not a group in taxa-groups.yml.</summary>
+    UnknownGroup,
+}
+
+/// <param name="ParentListId">e.g. "plants-lc".</param>
+/// <param name="ParentGroup">The parent's taxa group, e.g. "plants".</param>
+/// <param name="Preset">The parent list's preset, e.g. "lc".</param>
+/// <param name="ChildGroup">The sub-group named in children:/see_also:, e.g. "liliopsida".</param>
+/// <param name="ChildDisplayName">The sub-group's name: in taxa-groups.yml, e.g. "Monocotyledons" (null if unknown).</param>
+/// <param name="Kind">Phylogenetic (children:) or SeeAlso (see_also:).</param>
+/// <param name="Outcome">Which list was linked, or why none was.</param>
+/// <param name="LinkedListId">The linked list id, e.g. "liliopsida-lc" or "conifers-all-status"; null when none.</param>
+/// <param name="ChildHasLists">True when wikipedia-lists.yml has any list for the sub-group (decides the fix to suggest).</param>
+internal sealed record ChildLinkNote(
+    string ParentListId,
+    string ParentGroup,
+    string Preset,
+    string ChildGroup,
+    string? ChildDisplayName,
+    GroupingKind Kind,
+    ChildLinkOutcome Outcome,
+    string? LinkedListId,
+    bool ChildHasLists);
 
 /// <summary>
 /// A custom group for family-based grouping.

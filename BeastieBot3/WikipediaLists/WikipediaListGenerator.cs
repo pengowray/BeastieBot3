@@ -190,8 +190,9 @@ internal sealed class WikipediaListGenerator {
         }
 
         // Non-phylogenetic cross-references (e.g. marine mammals under mammals) render once as a plain
-        // bullet block — never as count rows or nested phylogenetic sub-lists.
-        if (isParent && definition.SeeAlso.Count > 0) {
+        // bullet block — never as count rows or nested phylogenetic sub-lists. Ordinary lists get the
+        // block too: see_also on a group with no children (mammals) must still produce its links.
+        if (definition.SeeAlso.Count > 0) {
             builder.AppendLine(BuildRelatedListsBlock(definition.SeeAlso));
             builder.AppendLine();
             totalHeadingCount++;

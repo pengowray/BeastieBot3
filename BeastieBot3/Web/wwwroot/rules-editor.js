@@ -504,9 +504,12 @@
       return;
     }
     const list = (data.children || []).join(', ') || 'none';
-    $('#grp-msg').textContent = data.changed
+    const saved = data.changed
       ? `Saved to the draft taxa-groups.yml. Sub-groups of '${group}': ${list}. To copy the draft to rules/, click "Apply changed files to source" in the Rules editor.`
       : `No change to the draft taxa-groups.yml. Sub-groups of '${group}': ${list}.`;
+    // Sub-groups that a list of this group cannot link (checked by the server against the draft rules).
+    const warnings = (data.warnings || []).map((w) => ` Warning: ${w}`).join('');
+    $('#grp-msg').textContent = saved + warnings;
   }
 
   // ===================== Rules editor =====================
