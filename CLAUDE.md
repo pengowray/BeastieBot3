@@ -152,7 +152,7 @@ Steps also expose their command's full option form (the same one the Run command
 
 Four-file config in `rules/`:
 
-- `taxa-groups.yml` — taxonomic groups with kingdom/class/order filters (shared by lists and charts).
+- `taxa-groups.yml` — taxonomic groups with kingdom/class/order filters (shared by lists and charts). A group with `children:` makes parent pages that link its sub-groups' lists (the sub-group's list for the same preset; failing that, its all-status list, but only on a page that already links at least one sub-group list for its own preset); `generate-lists` warns about each sub-group a parent page cannot link. See "Parent Lists" in `docs/wikipedia-list-formatting.md`.
 - `list-presets.yml` — section presets (ex, cr, threatened, etc.) with template expansion.
 - `wikipedia-lists.yml` — combines taxa groups + presets via `taxa_group:` and `preset:` references.
 - `chart-groups.yml` — chart group definitions referencing taxa groups, with completeness flags and template names.

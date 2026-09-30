@@ -362,7 +362,21 @@ public static class TaxaGroupingEndpoints {
             return Results.BadRequest(new { error = err, hint = childrenHint });
 
         if (changed) File.WriteAllText(draftFile, updated);
-        return Results.Json(new { group = req.Group, children, changed, file = "taxa-groups.yml" }, JsonOpts);
+        var warnings = SubGroupLinkWarnings(req.Group!, children, Path.GetDirectoryName(draftFile) ?? ".");
+        return Results.Json(new { group = req.Group, children, changed, file = "taxa-groups.yml", warnings }, JsonOpts);
+    }
+
+    // After a save, the sub-groups the group's lists cannot link (read from the draft rules beside the
+    // draft taxa-groups.yml), so the page can say so instead of generate-lists finding out later.
+    internal static IReadOnlyList<string> SubGroupLinkWarnings(string group, IReadOnlyCollection<string> children, string draftRoot) {
+        var listsFile = Path.Combine(draftRoot, "wikipedia-lists.yml");
+        if (children.Count == 0 || !File.Exists(listsFile)) return Array.Empty<string>();
+        try {
+            var config = new WikipediaListDefinitionLoader().Load(listsFile);
+            return ChildLinkReport.WarningsForGroup(group, children, config);
+        } catch (Exception ex) {
+            return new[] { "Could not read the draft wikipedia-lists.yml, so the links to sub-group lists were not checked: " + ex.Message };
+        }
     }
 
     // The parent's new children list: the existing list in its order, minus `remove`, plus each name in

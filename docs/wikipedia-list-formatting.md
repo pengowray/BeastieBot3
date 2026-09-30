@@ -1,4 +1,4 @@
-# Wikipedia List Formatting Guide
+﻿# Wikipedia List Formatting Guide
 
 This document describes the formatting rules for Wikipedia IUCN species lists, comparing legacy (BeastieLegacy circa 2016) and new implementations.
 
@@ -187,6 +187,63 @@ For comprehensive lists (all statuses), subspecies can appear as sub-bullets:
 ```
 
 Enable via `display.group_subspecies: true` in YAML.
+
+## Parent Lists (sub-groups)
+
+A taxa group with `children:` in `taxa-groups.yml` (its sub-groups, as the Taxa grouping page calls
+them) makes its lists parent pages. A parent page has:
+
+- a summary table with one row per class (the rank the sub-groups are defined at), the EX to DD
+  counts, Total, and CR total;
+- one section per linked sub-group: its heading, `{{main|...}}` to the sub-group's list, and the
+  number of species in the page's categories;
+- one section per remaining class, listing that class's species on the parent page itself.
+
+For each of its presets, a parent page links each sub-group to:
+
+1. the sub-group's list for the same preset (`plants-lc` links `magnoliopsida-lc`);
+2. otherwise the sub-group's all-status list (`plants-lc` links `conifers-all-status`), but only
+   when the page already links at least one sub-group list for its own preset. An all-status list
+   alone does not make a page a parent page: `plants-nt` is an ordinary list because no sub-group of
+   plants has an `nt` list;
+3. otherwise nothing. The sub-group's species are then listed on the parent page under their class
+   heading.
+
+`wikipedia generate-lists` prints these lines under each list's "Generating" line:
+
+- `Sub-group lists linked: ...` for a parent page, with the list ids it links;
+- a warning for each sub-group a parent page cannot link, naming the missing list id and the
+  wikipedia-lists.yml entry to change;
+- a note for a list whose group has sub-groups but that links none of them, so it has no summary
+  table.
+
+After "Save sub-groups", the Taxa grouping page checks the group's lists against the draft rules
+and shows the warnings as a list under the status line. It gives one warning per sub-group, naming
+every preset whose list the sub-group lacks (`No corals lists for presets cr, en, vu and ex, ...`),
+where `generate-lists` prints one per list. The loader records one `ChildLinkNote` per list and
+sub-group (`WikipediaListConfig.ChildLinkNotes`); `ChildLinkReport` turns them into these messages
+(`ForList` for `generate-lists`, `WarningsForGroup` for the Taxa grouping page), and
+`SubGroupLinkTests` pins both.
+
+`see_also:` on a group adds a "Related lists" section to each of its lists, with a link to the
+named group's list for the same preset (or its all-status list). It applies to ordinary lists as
+well as parent pages.
+
+Parent groups in the shipped rules: `fish` (ray-finned fishes, sharks and rays), `invertebrates`
+(insects, gastropods, bivalves, crustaceans, corals, arachnids), and `plants` (dicots, monocots,
+conifers, cycads; parent pages for `threatened` and `lc` only). `SubGroupShippedRulesTests` checks the
+shipped rules: every parent page links all its sub-groups, and no list gets a sub-group warning.
+
+A sub-group must be defined by a single `value:` at the rank the parent's sub-groups share (class
+for all three parents). The summary table and the sub-group sections match each sub-group by that
+one value, so a sub-group with a `values: [...]` filter, or one defined only at a higher rank than
+the other sub-groups, gets no table row and no section.
+
+Mosses are not a sub-group of `plants`. The `bryopsida` group (named "Mosses") covers class
+Bryopsida only, so a "Mosses" section on the plants pages would count only 96 of the 112
+threatened mosses in 2026-1. Widening the group to the other moss classes (Sphagnopsida,
+Andreaeopsida, Takakiopsida, Polytrichopsida) would give it a `values: [...]` filter, and so no
+table row and no section. The plants pages list Bryopsida species in an ordinary class section.
 
 ## Legacy Rules File (rules-list.txt)
 
