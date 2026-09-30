@@ -895,19 +895,22 @@ internal sealed class CommonNameStore : SqliteStore {
     /// explicit map rather than a match on the source string.
     /// `constructed` synonyms are deliberately absent: `common-names init` mints those from the
     /// hub's own names, so no aggregation source owns them.
+    /// MintsTaxa is false for IUCN: its taxa are the skeleton `common-names init` seeds, not
+    /// --create-missing additions, so a purge of IUCN must never delete taxa.
     /// </summary>
     internal static readonly IReadOnlyDictionary<string, SourceRowTags> PurgeableSources =
         new Dictionary<string, SourceRowTags>(StringComparer.OrdinalIgnoreCase) {
-            ["iucn"] = new(CommonNames: new[] { "iucn" }, Synonyms: new[] { "iucn" }, CrossReferences: new[] { "iucn" }),
-            ["wikidata"] = new(CommonNames: new[] { "wikidata", "wikidata_label" }, Synonyms: Array.Empty<string>(), CrossReferences: new[] { "wikidata" }),
-            ["wikipedia"] = new(CommonNames: new[] { "wikipedia_title", "wikipedia_taxobox" }, Synonyms: Array.Empty<string>(), CrossReferences: new[] { "wikipedia" }),
-            ["col"] = new(CommonNames: new[] { "col" }, Synonyms: new[] { "col" }, CrossReferences: new[] { "col" }),
+            ["iucn"] = new(CommonNames: new[] { "iucn" }, Synonyms: new[] { "iucn" }, CrossReferences: new[] { "iucn" }, MintsTaxa: false),
+            ["wikidata"] = new(CommonNames: new[] { "wikidata", "wikidata_label" }, Synonyms: Array.Empty<string>(), CrossReferences: new[] { "wikidata" }, MintsTaxa: true),
+            ["wikipedia"] = new(CommonNames: new[] { "wikipedia_title", "wikipedia_taxobox" }, Synonyms: Array.Empty<string>(), CrossReferences: new[] { "wikipedia" }, MintsTaxa: true),
+            ["col"] = new(CommonNames: new[] { "col" }, Synonyms: new[] { "col" }, CrossReferences: new[] { "col" }, MintsTaxa: true),
         };
 
     internal readonly record struct SourceRowTags(
         IReadOnlyList<string> CommonNames,
         IReadOnlyList<string> Synonyms,
-        IReadOnlyList<string> CrossReferences);
+        IReadOnlyList<string> CrossReferences,
+        bool MintsTaxa);
 
     /// <summary>Counts removed by <see cref="PurgeSource"/>.</summary>
     public readonly record struct PurgeCounts(int CommonNames, int Synonyms, int CrossReferences, int Taxa, int Conflicts) {
@@ -939,7 +942,7 @@ internal sealed class CommonNameStore : SqliteStore {
             ? DeleteByTag(transaction, "scientific_name_synonyms", "source", tags.Synonyms)
             : 0;
         var xrefs = DeleteByTag(transaction, "taxon_cross_references", "source", tags.CrossReferences);
-        var taxa = DeleteOrphanedTaxa(transaction, source);
+        var taxa = tags.MintsTaxa ? DeleteOrphanedTaxa(transaction, source) : 0;
         RecordReplacement(transaction, source, names, synonyms, xrefs, taxa);
         transaction.Commit();
 
@@ -1028,6 +1031,9 @@ internal sealed class CommonNameStore : SqliteStore {
     // A taxon this source minted is dead weight once the purge leaves it with no names, no
     // synonyms and no cross-references from any source. Anything another source still points at
     // survives, so this can never thin the hub below what the other sources describe.
+    // Only called for sources that mint taxa (--create-missing). For IUCN, primary_source
+    // "iucn" marks the init-seeded skeleton instead, and nothing writes an "iucn"
+    // cross-reference, so this query would delete every IUCN species left without names.
     private int DeleteOrphanedTaxa(SqliteTransaction transaction, string source) {
         using var command = _connection.CreateCommand();
         command.Transaction = transaction;

@@ -71,16 +71,39 @@ public class CommonNamePurgeTests {
         Assert.Equal(shared, store.FindTaxonByCanonicalName("puma concolor"));
     }
 
-    [Fact]
-    public void PurgeSource_KeepsIucnSkeletonTaxaThatHaveNoNamesYet() {
+    [Theory]
+    [InlineData("col")]
+    [InlineData("iucn")]
+    public void PurgeSource_KeepsIucnSkeletonTaxaThatHaveNoNamesYet(string purged) {
         // `common-names init` seeds hub taxa from IUCN; a species with no common name anywhere
-        // has no child rows at all, and must survive a purge of any other source.
+        // has no child rows at all, and must survive a purge of any source, IUCN included.
         using var store = OpenInMemory();
         var bare = AddTaxon(store, "hypothetical species", "iucn", "999");
 
-        store.PurgeSource("col");
+        var removed = store.PurgeSource(purged);
 
+        Assert.Equal(0, removed.Taxa);
         Assert.Equal(bare, store.FindTaxonByCanonicalName("hypothetical species"));
+    }
+
+    [Fact]
+    public void PurgeSource_Iucn_KeepsTaxaWhoseOnlyNamesWereIucn() {
+        // Nothing writes an "iucn" cross-reference, so once the IUCN names are purged these taxa
+        // have no child rows left. The IUCN re-import finds taxa by FindTaxonBySourceId("iucn",
+        // sisId) and skips any it cannot find, so deleting them would lose them until the next
+        // `common-names init`.
+        using var store = OpenInMemory();
+        var taxon = AddTaxon(store, "panthera leo", "iucn", "15951");
+        AddName(store, taxon, "Lion", "iucn");
+        store.InsertSynonym(taxon, "felis leo", "Felis leo", "iucn");
+
+        var removed = store.PurgeSource("iucn");
+
+        Assert.Equal(1, removed.CommonNames);
+        Assert.Equal(1, removed.Synonyms);
+        Assert.Equal(0, removed.Taxa);
+        Assert.Equal(taxon, store.FindTaxonBySourceId("iucn", "15951"));
+        Assert.Empty(store.GetCommonNamesForTaxon(taxon));
     }
 
     [Fact]
