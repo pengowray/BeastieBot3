@@ -23,7 +23,7 @@ namespace BeastieBot3.Web.Endpoints;
 //
 //   GET  /api/grouping/groups                                  -> parsed groups (name/filters/children)
 //   GET  /api/grouping/children-counts?group=&childRank=class  -> per-child EX..DD breakdown
-//   POST /api/grouping/children {group, children[]}            -> rewrite ONLY the children: block (draft)
+//   POST /api/grouping/children {group, add[], remove[]}       -> add/remove sub-groups in ONLY the children: line (draft)
 
 public static class TaxaGroupingEndpoints {
     private static readonly JsonSerializerOptions JsonOpts =
@@ -31,7 +31,12 @@ public static class TaxaGroupingEndpoints {
 
     public static void MapTaxaGroupingEndpoints(this IEndpointRouteBuilder app) {
         app.MapGet("/api/grouping/groups", (PathsService paths) => {
-            var groups = LoadDraftGroups(paths, out _);
+            Dictionary<string, TaxaGroupDefinition> groups;
+            try {
+                groups = LoadDraftGroups(paths, out _);
+            } catch (Exception ex) {
+                return DraftUnreadable(ex);
+            }
             var result = groups.Select(kv => new {
                 name = kv.Key,
                 displayName = kv.Value.Name ?? kv.Key,
@@ -45,20 +50,32 @@ public static class TaxaGroupingEndpoints {
         });
 
         app.MapGet("/api/grouping/children-counts", (string group, string? childRank, PathsService paths) => {
-            var groups = LoadDraftGroups(paths, out _);
+            Dictionary<string, TaxaGroupDefinition> groups;
+            try {
+                groups = LoadDraftGroups(paths, out _);
+            } catch (Exception ex) {
+                return DraftUnreadable(ex);
+            }
             if (!groups.TryGetValue(group, out var def))
                 return Results.NotFound(new { error = $"Unknown group '{group}'" });
 
             var rank = string.IsNullOrWhiteSpace(childRank) ? "class" : childRank.Trim().ToLowerInvariant();
+            if (TaxonFilterSql.ResolveColumn(rank) is null)
+                return Results.BadRequest(new { error = $"Unknown child rank '{childRank}'. Use class, order, family or phylum." });
             var entries = ChartStatusOrder.Entries;
 
             // Which child rank values already correspond to an existing taxa-group (so the UI can mark
             // them and offer a "child" checkbox).
             var valueToGroup = BuildValueToGroupMap(groups, rank);
 
-            var dbPath = paths.ResolveIucnDatabasePath(null);
-            using var chart = new IucnChartDataBuilder(dbPath);
-            var breakdown = chart.BuildChildBreakdown(def.Filters, rank);
+            Dictionary<string, IReadOnlyList<StatusCount>> breakdown;
+            try {
+                var dbPath = paths.ResolveIucnDatabasePath(null);
+                using var chart = new IucnChartDataBuilder(dbPath);
+                breakdown = chart.BuildChildBreakdown(def.Filters, rank);
+            } catch (Exception ex) {
+                return Results.Json(new { error = "Could not count species in the IUCN database: " + ex.Message }, statusCode: 500);
+            }
 
             var rows = breakdown
                 .Select(kv => new {
@@ -82,30 +99,9 @@ public static class TaxaGroupingEndpoints {
 
         app.MapPost("/api/grouping/children", async (HttpContext ctx, PathsService paths) => {
             var req = await JsonSerializer.DeserializeAsync<ChildrenRequest>(ctx.Request.Body, JsonOpts).ConfigureAwait(false);
-            if (req is null || string.IsNullOrWhiteSpace(req.Group))
-                return Results.BadRequest(new { error = "group is required" });
-
             var loc = RulesPaths.Resolve(paths);
             EnsureSeeded(loc);
-            var draftFile = Path.Combine(loc.DraftRoot, "taxa-groups.yml");
-            if (!File.Exists(draftFile))
-                return Results.NotFound(new { error = "draft taxa-groups.yml not found" });
-
-            var children = (req.Children ?? Array.Empty<string>())
-                .Select(c => c.Trim()).Where(c => c.Length > 0).ToList();
-
-            var original = File.ReadAllText(draftFile);
-            var childrenHint = $"To set sub-groups by hand, open taxa-groups.yml in the Rules editor and edit the children list of group '{req.Group}'.";
-            if (!TryRewriteChildrenBlock(original, req.Group!, children, out var updated, out var err))
-                return Results.BadRequest(new { error = err, hint = childrenHint });
-
-            // Round-trip assertion: the result must still parse AND yield exactly the requested children
-            // for this group, with all other groups intact. Never write a file we can't re-read.
-            if (!RoundTripOk(original, updated, req.Group!, children, out var rtErr))
-                return Results.BadRequest(new { error = rtErr, hint = childrenHint });
-
-            File.WriteAllText(draftFile, updated);
-            return Results.Json(new { group = req.Group, children, file = "taxa-groups.yml" }, JsonOpts);
+            return SaveChildren(req, Path.Combine(loc.DraftRoot, "taxa-groups.yml"));
         });
 
         // Set the per-group tuning knobs in the DRAFT rules: size_budget.max_entries on the group in
@@ -200,7 +196,12 @@ public static class TaxaGroupingEndpoints {
             if (!File.Exists(groupsFile))
                 return Results.NotFound(new { error = "draft taxa-groups.yml not found" });
 
-            var existing = LoadDraftGroups(paths, out _);
+            Dictionary<string, TaxaGroupDefinition> existing;
+            try {
+                existing = LoadDraftGroups(paths, out _);
+            } catch (Exception ex) {
+                return DraftUnreadable(ex);
+            }
             if (existing.ContainsKey(key))
                 return Results.Conflict(new { error = $"Group '{key}' already exists. Pick a different key, or edit it in the rules editor." });
 
@@ -327,6 +328,105 @@ public static class TaxaGroupingEndpoints {
             }
         }
         return map;
+    }
+
+    // A draft taxa-groups.yml that no longer parses (e.g. after a hand edit in the Rules editor) gets an
+    // error the page can show, instead of a bare 500.
+    private static IResult DraftUnreadable(Exception ex) =>
+        Results.Json(new {
+            error = "Could not read the draft taxa-groups.yml: " + ex.Message,
+            hint = "To fix it, open taxa-groups.yml in the Rules editor and correct the YAML, or select taxa-groups.yml there and click \"Revert from source\" to replace the draft copy of that file with the one in rules/.",
+        }, statusCode: 500);
+
+    // ---- children: add/remove sub-groups ----
+
+    // POST /api/grouping/children without the HTTP plumbing: checks the request, then adds and removes
+    // sub-groups in `draftFile` (the draft taxa-groups.yml). Only the groups the counts table showed as
+    // rows are added (ticked) or removed (unticked); every other existing child, e.g. a group with a
+    // system filter, is kept.
+    internal static IResult SaveChildren(ChildrenRequest? req, string draftFile) {
+        if (req is null || string.IsNullOrWhiteSpace(req.Group))
+            return Results.BadRequest(new { error = "group is required" });
+        // A page loaded before the request shape changed still posts {group, children}, which binds to
+        // Add = Remove = null and would save nothing while reporting success. The current page always
+        // sends both arrays, empty when the table has no tickboxes, and that stays a valid no-op save.
+        if (req.Add is null && req.Remove is null)
+            return Results.BadRequest(new { error = "The page is out of date.", hint = "Reload the page, then save again." });
+        if (!File.Exists(draftFile))
+            return Results.NotFound(new { error = "draft taxa-groups.yml not found" });
+
+        var original = File.ReadAllText(draftFile);
+        var childrenHint = $"To set sub-groups by hand, open taxa-groups.yml in the Rules editor and edit the children list of group '{req.Group}'.";
+        if (!TryUpdateChildren(original, req.Group!, req.Add ?? Array.Empty<string>(), req.Remove ?? Array.Empty<string>(),
+                out var updated, out var children, out var changed, out var err))
+            return Results.BadRequest(new { error = err, hint = childrenHint });
+
+        if (changed) File.WriteAllText(draftFile, updated);
+        return Results.Json(new { group = req.Group, children, changed, file = "taxa-groups.yml" }, JsonOpts);
+    }
+
+    // The parent's new children list: the existing list in its order, minus `remove`, plus each name in
+    // `add` that is not already there (appended in request order). A name in both lists is added.
+    // Children named in neither list are kept as they are, so saving from the counts table never drops
+    // a sub-group that has no row there (a group with a system filter, or one at another rank).
+    internal static List<string> MergeChildren(IEnumerable<string>? existing, IEnumerable<string> add, IEnumerable<string> remove) {
+        var addList = add.Select(c => c.Trim()).Where(c => c.Length > 0).Distinct(StringComparer.Ordinal).ToList();
+        var removeSet = remove.Select(c => c.Trim()).Where(c => c.Length > 0).ToHashSet(StringComparer.Ordinal);
+        removeSet.ExceptWith(addList);
+        var merged = (existing ?? Enumerable.Empty<string>()).Where(c => !removeSet.Contains(c)).ToList();
+        foreach (var c in addList) {
+            if (!merged.Contains(c, StringComparer.Ordinal)) merged.Add(c);
+        }
+        return merged;
+    }
+
+    // Adds and removes sub-groups of `group` in the draft taxa-groups.yml text: validates the names,
+    // rewrites only the group's children: line, and checks that the result re-parses to the merged list
+    // with every other group intact. When the merge leaves the list as it was, `changed` is false and
+    // `updated` is the input, so a no-op save doesn't restyle a block-style children: list.
+    internal static bool TryUpdateChildren(
+        string yaml, string group, IEnumerable<string> add, IEnumerable<string> remove,
+        out string updated, out List<string> children, out bool changed, out string error) {
+        updated = yaml;
+        children = new();
+        changed = false;
+        error = "";
+
+        Dictionary<string, TaxaGroupDefinition> groups;
+        try {
+            var deserializer = new DeserializerBuilder()
+                .IgnoreUnmatchedProperties()
+                .WithNamingConvention(UnderscoredNamingConvention.Instance)
+                .Build();
+            groups = deserializer.Deserialize<TaxaGroupsFile>(yaml)?.Groups ?? new();
+        } catch (Exception ex) {
+            error = $"YAML error in the draft taxa-groups.yml; draft not changed: {ex.Message}";
+            return false;
+        }
+        if (!groups.TryGetValue(group, out var def)) { error = $"Group '{group}' not found in taxa-groups.yml."; return false; }
+
+        var addList = add.Select(c => c.Trim()).Where(c => c.Length > 0).ToList();
+        if (addList.Contains(group, StringComparer.Ordinal)) {
+            error = $"Group '{group}' cannot be a sub-group of itself.";
+            return false;
+        }
+        var unknown = addList.Where(c => !groups.ContainsKey(c)).Distinct(StringComparer.Ordinal).ToList();
+        if (unknown.Count > 0) {
+            error = $"Unknown group{(unknown.Count == 1 ? "" : "s")} in the draft taxa-groups.yml: {string.Join(", ", unknown)}. Click \"Show counts\" to reload the table, then save again.";
+            return false;
+        }
+
+        var existing = def.Children ?? new();
+        children = MergeChildren(existing, addList, remove);
+        if (children.SequenceEqual(existing, StringComparer.Ordinal)) return true;
+
+        if (!TryRewriteChildrenBlock(yaml, group, children, out var rewritten, out error)) return false;
+        // Round-trip assertion: the result must still parse AND yield exactly the merged children for
+        // this group, with all other groups intact. Never write a file we can't re-read.
+        if (!RoundTripOk(yaml, rewritten, group, children, out error)) return false;
+        updated = rewritten;
+        changed = true;
+        return true;
     }
 
     // ---- children: block rewrite (conservative, flow-style) ----
@@ -737,9 +837,10 @@ public static class TaxaGroupingEndpoints {
         public string? Value { get; set; }
     }
 
-    private sealed class ChildrenRequest {
+    internal sealed class ChildrenRequest {
         public string? Group { get; set; }
-        public string[]? Children { get; set; }
+        public string[]? Add { get; set; }      // ticked rows: make these groups sub-groups
+        public string[]? Remove { get; set; }   // unticked rows: stop these groups being sub-groups
     }
 
     private sealed class KnobsRequest {

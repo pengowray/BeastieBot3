@@ -6,9 +6,27 @@
   const $ = (sel) => document.querySelector(sel);
   const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
 
+  // An endpoint's {error, hint} as one line of text: "error. hint".
+  function errorWithHint(data) {
+    const error = String(data.error || '').trim();
+    const hint = String(data.hint || '').trim();
+    if (!hint) return error;
+    if (!error) return hint;
+    return /[.!?]$/.test(error) ? `${error} ${hint}` : `${error}. ${hint}`;
+  }
+
   async function getJson(url) {
     const res = await fetch(url);
-    if (!res.ok) throw new Error(await res.text());
+    if (!res.ok) {
+      // The endpoints answer failures with JSON {error, hint}; show that text, not the raw JSON body.
+      const text = await res.text().catch(() => '');
+      let message = '';
+      try {
+        const data = JSON.parse(text);
+        if (data && typeof data === 'object') message = errorWithHint(data);
+      } catch { /* not JSON: use the raw text */ }
+      throw new Error(message || text || `${res.status} ${res.statusText}`.trim());
+    }
     return res.json();
   }
   async function postJson(url, body) {
@@ -56,20 +74,41 @@
     await loadCounts();
   }
 
+  // Bumped by each "Show counts": a response that arrives after a later request started is dropped, so
+  // a slow earlier load can't replace the table (and lastCounts) for the group now selected.
+  let countsRequest = 0;
+
   async function loadCounts() {
     const group = $('#grp-parent').value;
     const rank = $('#grp-rank').value;
+    const request = ++countsRequest;
     $('#grp-msg').textContent = 'Loading counts…';
     try {
       const data = await getJson(`/api/grouping/children-counts?group=${encodeURIComponent(group)}&childRank=${encodeURIComponent(rank)}`);
+      if (request !== countsRequest) return;
       lastCounts = data;
       renderCounts(data);
-      $('#grp-save').hidden = false;
-      $('#grp-msg').textContent = `${data.rows.length} sub-taxa at rank '${data.childRank}', grand total ${data.grandTotal}. Tick existing groups to make them sub-lists.`;
+      // "Save sub-groups" only acts on rows with a tickbox, so it is hidden when the table has none.
+      const tickable = data.rows.filter((r) => isTickable(r, data.group)).length;
+      $('#grp-save').hidden = tickable === 0;
+      const subTaxa = data.rows.length === 1 ? 'sub-taxon' : 'sub-taxa';
+      let msg = `${data.rows.length.toLocaleString()} ${subTaxa} of '${data.group}' at rank ${data.childRank}, `
+        + `${data.grandTotal.toLocaleString()} species in total.`;
+      if (tickable) {
+        msg += ` To change the sub-groups of '${data.group}', tick or untick rows, then click "Save sub-groups".`;
+      }
+      $('#grp-msg').textContent = msg;
       loadImpact(group, rank);
     } catch (e) {
+      if (request !== countsRequest) return;
       $('#grp-msg').textContent = 'Failed: ' + e.message;
     }
+  }
+
+  // A row gets a tickbox when its sub-taxon has a taxa group, other than the Parent itself (e.g. MAMMALIA
+  // under mammals at rank class): a group can't be its own sub-group.
+  function isTickable(row, parentGroup) {
+    return !!row.existingGroup && row.existingGroup !== parentGroup;
   }
 
   // Counts-only page-size impact for the selected group (GET /api/lists/impact). Shows the cost of
@@ -78,19 +117,29 @@
   // The group's own size budget from the last load without a what-if budget, keyed by group, so the
   // heading and the "Set budget" placeholder still show it while a what-if budget is previewed.
   const ruleBudgets = {};
+  // The group and child rank the impact panel was loaded for. The panel's buttons act on these, not on
+  // the Parent and Child rank selects, which may have changed since "Show counts".
+  let impactFor = null;
+  // Bumped by each impact load, so only the latest response is rendered: a slower earlier one would
+  // otherwise show another group's panel while its buttons act on impactFor.
+  let impactRequest = 0;
 
   async function loadImpact(group, rank, candidateBudget) {
     const el = $('#grp-impact');
     if (!el) return;
+    impactFor = { group, rank };
+    const request = ++impactRequest;
     el.innerHTML = '<p class="muted small">Sizing pages…</p>';
     try {
       let url = `/api/lists/impact?group=${encodeURIComponent(group)}&splitRank=${encodeURIComponent(rank)}`;
       if (candidateBudget) url += `&budget=${encodeURIComponent(candidateBudget)}`;
       const d = await getJson(url);
+      if (request !== impactRequest) return;
       if (!candidateBudget) ruleBudgets[group] = d.budget || null;
       const ruleBudget = candidateBudget ? ruleBudgets[group] : d.budget;
-      el.innerHTML = renderImpact(d, rank, candidateBudget, ruleBudget);
+      el.innerHTML = renderImpact(d, group, rank, candidateBudget, ruleBudget);
     } catch (e) {
+      if (request !== impactRequest) return;
       const msg = String(e.message || e);
       // The estimate reads rules/ from the build output (ListImpactEndpoints), and "Unknown taxa group"
       // means that copy of wikipedia-lists.yml has no list entry for the group.
@@ -99,7 +148,7 @@
         ? ` This estimate reads the rule files from the last <code>dotnet build</code>, and needs a list entry for '${g}' in wikipedia-lists.yml.`
           + ` If '${g}' is new or changed in the draft, click "Apply changed files to source" in the Rules editor, then run <code>dotnet build</code> again.`
         : '';
-      el.innerHTML = `<p class="muted small">Could not estimate list page sizes: ${esc(msg)}${hint}</p>`;
+      el.innerHTML = `<p class="muted small">Could not estimate list page sizes for '${g}': ${esc(msg)}${hint}</p>`;
     }
   }
 
@@ -126,7 +175,8 @@
   // Persist the tuning knobs to the draft rules (size_budget on the group, category_split on the list
   // entry). The user then reviews via the Rules-editor diff and Applies to source.
   async function saveKnobs() {
-    const group = $('#grp-parent').value;
+    if (!impactFor) return;
+    const group = impactFor.group;
     const body = { group };
     const budget = $('#imp-knob-budget') ? $('#imp-knob-budget').value.trim() : '';
     if (budget) body.sizeBudgetMaxEntries = parseInt(budget, 10);
@@ -140,16 +190,31 @@
       setImpactMsg('Nothing to save — change the category split and/or set a budget first.');
       return;
     }
-    const { ok, data } = await postJson('/api/grouping/knobs', body);
-    setImpactMsg(ok
-      ? `Saved to draft: ${(data.changed || []).join(', ') || 'no change'}. Review in the Rules editor (Diff) → Apply to source → then "Regenerate group".`
-      : 'Save failed: ' + (data.error || '') + (data.hint ? ' — ' + data.hint : ''));
+    const { ok, status, data } = await postJson('/api/grouping/knobs', body);
+    if (!ok) {
+      setImpactMsg(`Save failed: ${errorWithHint(data) || `HTTP ${status}`}`);
+      return;
+    }
+    // Name the group and each saved value: the Parent select may show another group by now.
+    const changed = data.changed || [];
+    const saved = [];
+    if (changed.includes('taxa-groups.yml') && body.sizeBudgetMaxEntries != null) {
+      saved.push(`Size budget of '${group}': ${body.sizeBudgetMaxEntries.toLocaleString()} bullets.`);
+    }
+    if (changed.includes('wikipedia-lists.yml') && body.categorySplit) {
+      saved.push(`Category split of '${group}': ${body.categorySplit}.`);
+      // The draft now has this split, so a later budget-only save doesn't write it again.
+      if (splitSel) splitSel.dataset.current = body.categorySplit;
+    }
+    setImpactMsg(`Saved to the draft ${changed.join(' and ')}. ${saved.join(' ')}`
+      + ' To copy the draft to rules/, click "Apply changed files to source" in the Rules editor. Then click "Regenerate group".');
   }
 
   // Regenerate every list for the selected taxa group from SOURCE rules (so an applied split/join takes
   // effect without a rebuild). Apply the draft first — this does NOT read the draft.
   async function regenerateGroup() {
-    const group = $('#grp-parent').value;
+    if (!impactFor) return;
+    const group = impactFor.group;
     setImpactMsg(`Starting generate-lists --taxa-group ${group}…`);
     const loc = await getJson('/api/rules/locations').catch(() => null);
     const args = ['--taxa-group', group];
@@ -166,15 +231,16 @@
     const gen = ev.target.closest('[data-gen-list]');
     if (gen) { generateList(gen.getAttribute('data-gen-list')); return; }
     if (ev.target.closest('[data-apply-budget]')) {
+      if (!impactFor) return;
       const v = $('#imp-budget') ? $('#imp-budget').value.trim() : '';
-      loadImpact($('#grp-parent').value, $('#grp-rank').value, v ? parseInt(v, 10) : null);
+      loadImpact(impactFor.group, impactFor.rank, v ? parseInt(v, 10) : null);
       return;
     }
     if (ev.target.closest('[data-save-knobs]')) { saveKnobs(); return; }
     if (ev.target.closest('[data-regen-group]')) { regenerateGroup(); }
   }
 
-  function renderImpact(d, rank, candidateBudget, ruleBudget) {
+  function renderImpact(d, group, rank, candidateBudget, ruleBudget) {
     const num = (n) => (n || 0).toLocaleString();
     const verdict = (o) => o.overBudget == null ? ''
       : (o.overBudget ? `<span class="feat-no">over budget</span>` : `<span class="feat-yes">within budget</span>`);
@@ -227,7 +293,7 @@
     const whatIf = `<div class="imp-controls">`
       + `<label>What-if budget <input id="imp-budget" type="number" min="0" step="500" `
       + `value="${candidateBudget || ''}" placeholder="${d.budget || 'e.g. 5000'}"></label>`
-      + `<button class="ghost xsmall" data-apply-budget>Preview verdicts</button></div>`;
+      + `<button class="ghost xsmall" data-apply-budget>Preview budget check</button></div>`;
 
     // Tuning knobs → draft rules (size_budget on the group, category_split on the list entry).
     // The split <select> is pre-set to the group's current setting (from the draft), so it shows what's
@@ -247,11 +313,11 @@
       + `<button class="ghost xsmall" data-save-knobs>Save to draft</button>`
       + `<button class="ghost xsmall" data-regen-group title="Run generate-lists for this taxa group from source rules (Apply your draft first)">Regenerate group</button></div>`;
 
-    return `<h4 class="grp-impact-title">Page-size impact${budgetNote}${candNote}</h4>`
+    return `<h4 class="grp-impact-title">Page-size impact for '${esc(group)}'${budgetNote}${candNote}</h4>`
       + `<p class="muted small">Bullets: entries on the list page, including subspecies and varieties listed separately. Species: species only, the number stated in the page's lead. The size budget applies to Bullets. Global assessments only, no subpopulations.</p>`
       + `<div class="feature-table-wrap"><table class="feature-table"><thead><tr>`
       + `<th class="wt-left">Page option</th><th>Bullets</th><th>Species</th><th>Budget check</th>`
-      + `<th class="wt-left">Structure (last gen)</th><th></th></tr></thead>`
+      + `<th class="wt-left">Structure (last generated)</th><th></th></tr></thead>`
       + `<tbody>${opts}</tbody></table></div>${sub}`
       + whatIf + knobs
       + `<p class="muted small" id="imp-msg"></p>`;
@@ -264,7 +330,7 @@
   function renderCounts(data) {
     const head = ['', 'Sub-taxon', 'Group', ...data.columns, 'Total'];
     const rows = data.rows.map((r) => {
-      const cb = r.existingGroup
+      const cb = isTickable(r, data.group)
         ? `<input type="checkbox" class="grp-child" value="${esc(r.existingGroup)}" ${r.isChild ? 'checked' : ''}>`
         : '';
       // Rows without a matching taxa-group get a "＋ define" button that pre-fills the create panel.
@@ -355,7 +421,8 @@
     let row = document.querySelector('#cg-filters .cg-filter-row') || addFilterRow();
     row.querySelector('.cgf-type').value = 'rank';
     syncRowType(row);
-    row.querySelector('.cgf-rank').value = $('#grp-rank').value;
+    // The rank the counts table was loaded at: the Child rank select may have changed since "Show counts".
+    row.querySelector('.cgf-rank').value = (lastCounts && lastCounts.childRank) || $('#grp-rank').value;
     row.querySelector('.cgf-op').value = 'is';
     row.querySelector('.cgf-value').value = value || '';
     const slug = (value || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
@@ -392,9 +459,9 @@
       categorySplit: $('#cg-split').value || null,
     };
     $('#cg-msg').textContent = 'Creating…';
-    const { ok, data } = await postJson('/api/grouping/create-group', body);
+    const { ok, status, data } = await postJson('/api/grouping/create-group', body);
     if (!ok) {
-      $('#cg-msg').textContent = 'Failed: ' + (data.error || '') + (data.hint ? ' — ' + data.hint : '');
+      $('#cg-msg').textContent = `Failed: ${errorWithHint(data) || `HTTP ${status}`}`;
       return;
     }
     const changedFiles = data.changed || [];
@@ -414,14 +481,24 @@
     await loadCounts();
   }
 
+  // Adds the ticked rows' groups to the Parent's sub-groups and removes the unticked ones. The server
+  // keeps every other existing sub-group (ones with no row in this table). Uses the group the table was
+  // loaded for, since the Parent select may have changed since "Show counts".
   async function saveChildren() {
     if (!lastCounts) return;
-    const group = $('#grp-parent').value;
-    const children = Array.from(document.querySelectorAll('.grp-child:checked')).map((c) => c.value);
-    const { ok, data } = await postJson('/api/grouping/children', { group, children });
-    $('#grp-msg').textContent = ok
-      ? `Saved ${children.length} sub-group(s) to draft taxa-groups.yml. Use the Rules editor to Apply to source.`
-      : `Save failed: ${data.error || ''} ${data.hint || ''}`;
+    const group = lastCounts.group;
+    const boxes = Array.from(document.querySelectorAll('#grp-counts .grp-child'));
+    const add = boxes.filter((c) => c.checked).map((c) => c.value);
+    const remove = boxes.filter((c) => !c.checked).map((c) => c.value);
+    const { ok, status, data } = await postJson('/api/grouping/children', { group, add, remove });
+    if (!ok) {
+      $('#grp-msg').textContent = `Save failed: ${errorWithHint(data) || `HTTP ${status}`}`;
+      return;
+    }
+    const list = (data.children || []).join(', ') || 'none';
+    $('#grp-msg').textContent = data.changed
+      ? `Saved to the draft taxa-groups.yml. Sub-groups of '${group}': ${list}. To copy the draft to rules/, click "Apply changed files to source" in the Rules editor.`
+      : `No change to the draft taxa-groups.yml. Sub-groups of '${group}': ${list}.`;
   }
 
   // ===================== Rules editor =====================
