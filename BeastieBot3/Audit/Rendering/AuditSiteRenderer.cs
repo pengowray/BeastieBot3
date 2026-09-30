@@ -12,10 +12,18 @@ using BeastieBot3.Audit.Model;
 // per report, an entry page for each report family (the Catalogue of Life crosscheck), the CSV
 // downloads, and the shared assets. Every listing is rendered by HtmlListRenderer, so the look and
 // the sort/filter behaviour are identical across the whole site. A full run also writes
-// release-counts.yml. Pages and CSVs an earlier run wrote and this run did not are removed, so the
-// folder holds one run's output.
+// release-counts.yml. Files an earlier run wrote and this run did not are removed, so the folder
+// holds one run's output; every run lists the files it wrote in .audit-files.txt for the next run
+// to compare against.
 
 namespace BeastieBot3.Audit.Rendering;
+
+// What Write did with the files an earlier run left in the folder that this run did not write.
+// Paths are relative to the output folder, with '/' separators.
+internal sealed record AuditSiteWriteResult(
+    IReadOnlyList<string> Removed,
+    IReadOnlyList<string> Kept,        // not removed because Write was called with prune: false
+    IReadOnlyList<string> NotRemoved); // File.Delete failed; each is logged with the reason
 
 internal static class AuditSiteRenderer {
     private const int PreviewRows = 15;
@@ -25,7 +33,14 @@ internal static class AuditSiteRenderer {
 
     public const string ReleaseCountsFileName = "release-counts.yml";
 
-    public static void Write(AuditDocument doc, string outputDir, Action<string>? log = null) {
+    // The list of files a run wrote, one relative path per line. The next run removes the files on
+    // it that it does not write itself, and nothing else, so any other file in an --output folder
+    // (a CNAME, notes, the owner's own CSVs) is never touched.
+    public const string ManifestFileName = ".audit-files.txt";
+
+    // prune: false keeps every file from an earlier run. The command passes it when a producer
+    // failed, because that producer's pages were not rewritten and would otherwise all be removed.
+    public static AuditSiteWriteResult Write(AuditDocument doc, string outputDir, Action<string>? log = null, bool prune = true) {
         Directory.CreateDirectory(outputDir);
         Directory.CreateDirectory(Path.Combine(outputDir, "assets"));
         Directory.CreateDirectory(Path.Combine(outputDir, "csv"));
@@ -64,36 +79,108 @@ internal static class AuditSiteRenderer {
             Save(ReleaseCountsFileName, ReleaseCountsBlock(doc) + Environment.NewLine, Utf8NoBom);
         }
 
-        RemoveStaleFiles(outputDir, written, log);
+        var result = RemoveStaleFiles(outputDir, written, prune, log);
+
+        // Written last and not listed in itself. Files this run kept, or failed to remove, stay on
+        // the list, so the next run still knows they came from the generator.
+        var root = Path.GetFullPath(outputDir);
+        var listed = written.Select(path => Relative(root, path))
+            .Concat(result.Kept)
+            .Concat(result.NotRemoved)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(path => path, StringComparer.Ordinal);
+        var manifest = new StringBuilder();
+        manifest.Append("# Files written by redlist audit-site. The next run removes any file on this list that it does not write again.\n");
+        foreach (var path in listed) {
+            manifest.Append(path).Append('\n');
+        }
+        File.WriteAllText(Path.Combine(root, ManifestFileName), manifest.ToString(), Utf8NoBom);
+
+        return result;
     }
 
     public static string ReleaseCountsBlock(AuditDocument doc) =>
         AuditReleaseCounts.FormatBlock(doc.Release, doc.Reports.Select(r => (r.Id, r.Count)));
 
-    // Pages and CSVs left by an earlier run that this run did not write: a report that now has no
-    // rows (its full list and CSV), a report whose producer was skipped (every page of it), or a
-    // page layout an older version wrote. The index does not link them, but they stay in the folder
-    // and in any copy of it, looking current. Only files the generator itself writes are removed:
-    // top-level pages that link assets/audit.css, and CSVs in csv/ whose header starts with the id
-    // column. Anything else in an --output folder is left alone.
-    private static void RemoveStaleFiles(string outputDir, HashSet<string> written, Action<string>? log) {
-        var candidates = SafeFiles(outputDir, "*.html").Where(IsGeneratedPage)
-            .Concat(SafeFiles(Path.Combine(outputDir, "csv"), "*.csv").Where(IsGeneratedCsv))
+    // Files left by an earlier run that this run did not write: a report that now has no rows (its
+    // full list and CSV), a report whose producer was skipped (every page of it), a page layout an
+    // older version wrote, or release-counts.yml when this run is a --limit run. The index does not
+    // link them, but they stay in the folder and in any copy of it, looking current.
+    private static AuditSiteWriteResult RemoveStaleFiles(string outputDir, HashSet<string> written, bool prune, Action<string>? log) {
+        var root = Path.GetFullPath(outputDir);
+        var stale = PreviousRunFiles(root)
+            .Where(full => !written.Contains(full) && File.Exists(full))
+            .Select(full => Relative(root, full))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .OrderBy(path => path, StringComparer.Ordinal)
             .ToList();
-        foreach (var file in candidates) {
-            var full = Path.GetFullPath(file);
-            if (written.Contains(full)) {
+
+        var removed = new List<string>();
+        var kept = new List<string>();
+        var notRemoved = new List<string>();
+        foreach (var relative in stale) {
+            if (!prune) {
+                kept.Add(relative);
                 continue;
             }
-            var relative = Path.GetRelativePath(outputDir, full).Replace('\\', '/');
             try {
-                File.Delete(full);
+                File.Delete(Path.Combine(root, relative));
+                removed.Add(relative);
                 log?.Invoke($"  removed {relative} (from an earlier run)");
             } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) {
+                notRemoved.Add(relative);
                 log?.Invoke($"  could not remove {relative} (from an earlier run): {ex.Message}");
             }
         }
+        return new AuditSiteWriteResult(removed, kept, notRemoved);
     }
+
+    // The files the previous run wrote, as full paths inside the folder. From its manifest when
+    // there is one. A folder written before the manifest existed has none, and then the generator's
+    // own files are recognised by their content: top-level pages that link assets/audit.css, and
+    // CSVs in csv/ whose first row id starts with the file's own report id.
+    private static IEnumerable<string> PreviousRunFiles(string root) {
+        var manifest = ReadManifest(root);
+        if (manifest is not null) {
+            return manifest;
+        }
+        return SafeFiles(root, "*.html").Where(IsGeneratedPage)
+            .Concat(SafeFiles(Path.Combine(root, "csv"), "*.csv").Where(IsGeneratedCsv))
+            .Select(Path.GetFullPath);
+    }
+
+    // Null when the folder has no manifest or it cannot be read. Entries that would resolve outside
+    // the folder, or to the manifest itself, are ignored.
+    private static List<string>? ReadManifest(string root) {
+        var path = Path.Combine(root, ManifestFileName);
+        string[] lines;
+        try {
+            if (!File.Exists(path)) {
+                return null;
+            }
+            lines = File.ReadAllLines(path);
+        } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) {
+            return null;
+        }
+        var files = new List<string>();
+        foreach (var raw in lines) {
+            var line = raw.Trim();
+            if (line.Length == 0 || line.StartsWith('#') || Path.IsPathRooted(line)) {
+                continue;
+            }
+            var full = Path.GetFullPath(Path.Combine(root, line));
+            var relative = Path.GetRelativePath(root, full);
+            if (relative == "." || relative.StartsWith("..", StringComparison.Ordinal) || Path.IsPathRooted(relative)
+                || string.Equals(relative, ManifestFileName, StringComparison.OrdinalIgnoreCase)) {
+                continue;
+            }
+            files.Add(full);
+        }
+        return files;
+    }
+
+    private static string Relative(string root, string fullPath) =>
+        Path.GetRelativePath(root, fullPath).Replace('\\', '/');
 
     private static IEnumerable<string> SafeFiles(string dir, string pattern) {
         try {
@@ -108,16 +195,29 @@ internal static class AuditSiteRenderer {
     private static bool IsGeneratedPage(string path) =>
         ReadStart(path, 4096)?.Contains(AuditPageLayout.StylesheetLink, StringComparison.Ordinal) == true;
 
+    // An "id" header column is common in hand-made CSVs, so the first data row must also start with
+    // the stable id AuditCsvWriter writes, "<report id>:<key>", where the report id is the file name.
+    // The generator writes a CSV only for a report with rows, so every CSV it wrote has a data row.
     private static bool IsGeneratedCsv(string path) {
-        var start = ReadStart(path, 64);
+        var start = ReadStart(path, 4096);
         if (start is null) {
             return false;
         }
         start = start.TrimStart('\uFEFF');
-        var header = AuditCsvWriter.IdColumn;
-        return start.StartsWith(header + ",", StringComparison.Ordinal)
-            || start.StartsWith(header + "\n", StringComparison.Ordinal)
-            || start.StartsWith(header + "\r", StringComparison.Ordinal);
+        var headerEnd = start.IndexOf('\n');
+        if (headerEnd < 0) {
+            return false;
+        }
+        var header = start[..headerEnd].TrimEnd('\r');
+        var idColumn = AuditCsvWriter.IdColumn;
+        if (header != idColumn && !header.StartsWith(idColumn + ",", StringComparison.Ordinal)) {
+            return false;
+        }
+        var firstCell = start[(headerEnd + 1)..];
+        if (firstCell.StartsWith('"')) {
+            firstCell = firstCell[1..];
+        }
+        return firstCell.StartsWith(Path.GetFileNameWithoutExtension(path) + ":", StringComparison.Ordinal);
     }
 
     private static string? ReadStart(string path, int chars) {
@@ -306,7 +406,7 @@ internal static class AuditSiteRenderer {
             sb.Append("</p>\n");
             sb.Append(CsvNote(report));
         } else if (report.SummaryTables.Count == 0) {
-            sb.Append(doc.RowLimit is { } limit
+            sb.Append(doc.RowLimit is { } limit && !report.IgnoresRowLimit
                 ? $"<p>No observations of this kind in the rows checked. This run used <code>--limit {limit.ToString(CultureInfo.InvariantCulture)}</code>, so a full run may find some.</p>\n"
                 : "<p>No observations of this kind in the current release.</p>\n");
         }

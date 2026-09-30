@@ -37,7 +37,7 @@ internal sealed class RedlistAuditSiteCommand : Command<RedlistAuditSiteCommand.
         public string? OutputDir { get; init; }
 
         [CommandOption("--limit <ROWS>")]
-        [Description("Maximum number of database rows most reports check, for a quick test run (0 = all rows, the default). Without --output, a run with a limit is written to <Datastore:reports_dir>/redlist-audit-2026-limited, so the full run's pages are kept. Every page of a limited run has a notice that its counts are partial, and no release-counts.yml is written.")]
+        [Description("Maximum number of database rows each report checks, for a quick test run (0 = all rows, the default). failed-assessments ignores it and always checks every row. Without --output, a run with a limit is written to <Datastore:reports_dir>/redlist-audit-2026-limited, so the full run's pages are kept. Every page of a limited run has a notice that its counts are partial, and no release-counts.yml is written.")]
         public long Limit { get; init; }
 
         [CommandOption("--contact <EMAIL>")]
@@ -81,6 +81,7 @@ internal sealed class RedlistAuditSiteCommand : Command<RedlistAuditSiteCommand.
         var outputDir = ResolveOutputDir(reportsDir, settings.OutputDir, limited: limit is not null, Environment.CurrentDirectory);
 
         var reports = new List<AuditReport>();
+        var failed = new List<string>();
         string? colRelease;
         using (var ctx = new AuditContext(paths, limit is null ? null : (int?)Math.Min(int.MaxValue, limit.Value), release, releaseYear, commentary, ct)) {
             colRelease = ctx.ColReleaseLabel();
@@ -99,6 +100,7 @@ internal sealed class RedlistAuditSiteCommand : Command<RedlistAuditSiteCommand.
                 } catch (OperationCanceledException) {
                     throw;
                 } catch (Exception ex) {
+                    failed.Add(producer.Id);
                     AnsiConsole.MarkupLineInterpolated($"[red]error[/] {producer.Id}: {Markup.Escape(ex.Message)}");
                 }
             }
@@ -132,7 +134,22 @@ internal sealed class RedlistAuditSiteCommand : Command<RedlistAuditSiteCommand.
             RowLimit = limit,
         };
 
-        AuditSiteRenderer.Write(document, outputDir, line => AnsiConsole.MarkupLineInterpolated($"[grey]{Markup.Escape(line)}[/]"));
+        // A producer that threw wrote none of its pages, so pruning would remove its whole report
+        // family from the folder (for the CoL crosscheck, about 30 files). Keep everything instead;
+        // the next run without errors removes what it does not write. A skipped producer (missing
+        // data source, or nothing to report) is not a failure, and its old pages are removed.
+        var written = AuditSiteRenderer.Write(document, outputDir,
+            line => AnsiConsole.MarkupLineInterpolated($"[grey]{Markup.Escape(line)}[/]"),
+            prune: failed.Count == 0);
+        if (written.Removed.Count > 0) {
+            AnsiConsole.MarkupLineInterpolated($"[yellow]Removed {FileCount(written.Removed.Count)} from an earlier run, because this run did not write {(written.Removed.Count == 1 ? "it" : "them")}.[/]");
+        }
+        if (written.Kept.Count > 0) {
+            AnsiConsole.MarkupLineInterpolated($"[yellow]Kept {FileCount(written.Kept.Count)} from an earlier run, because {HtmlText.JoinWithAnd(failed)} failed. This run did not write {(written.Kept.Count == 1 ? "it, so it" : "them, so they")} may be out of date.[/]");
+        }
+        if (written.NotRemoved.Count > 0) {
+            AnsiConsole.MarkupLineInterpolated($"[yellow]Could not remove {FileCount(written.NotRemoved.Count)} from an earlier run.[/]");
+        }
 
         AnsiConsole.MarkupLineInterpolated($"[green]Audit site written to:[/] {outputDir}");
         AnsiConsole.MarkupLineInterpolated($"[grey]Open:[/] {Path.Combine(outputDir, "index.html")}");
@@ -154,6 +171,9 @@ internal sealed class RedlistAuditSiteCommand : Command<RedlistAuditSiteCommand.
         AnsiConsole.WriteLine(AuditSiteRenderer.ReleaseCountsBlock(document));
         return 0;
     }
+
+    private static string FileCount(int count) =>
+        count == 1 ? "1 file" : $"{count.ToString("N0", CultureInfo.InvariantCulture)} files";
 
     // The default folder name under Datastore:reports_dir, and the suffix a --limit run adds to it.
     // ColArtifacts skips "-limited" folders, so a test run never counts as rebuilding the site.

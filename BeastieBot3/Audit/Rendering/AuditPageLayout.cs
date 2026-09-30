@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Linq;
 using System.Text;
 using BeastieBot3.Audit.Model;
 
@@ -59,15 +60,22 @@ internal static class AuditPageLayout {
     }
 
     // The notice at the top of every page of a --limit run, so a test build cannot be mistaken
-    // for the full site. Empty for a full run. "Most reports": a few producers ignore the limit.
+    // for the full site. Empty for a full run. Reports whose producer ignores the limit
+    // (AuditReport.IgnoresRowLimit) are named, with links, as the exceptions.
     public static string LimitedNotice(AuditDocument doc) {
         if (doc.RowLimit is not { } limit) {
             return "";
         }
         var flag = $"--limit {limit.ToString(CultureInfo.InvariantCulture)}";
+        var exceptions = doc.Reports.Where(r => r.IgnoresRowLimit)
+            .Select(r => $"“<a href=\"{HtmlText.Escape(r.Id)}.html\">{HtmlText.Escape(r.Title)}</a>”")
+            .ToList();
+        var which = exceptions.Count == 0
+            ? "Every report on this site"
+            : $"Every report except {HtmlText.JoinWithAnd(exceptions)}";
         return "<div class=\"limited-notice\" role=\"note\">"
             + $"<strong>Partial results from a limited run (<code>{HtmlText.Escape(flag)}</code>).</strong> "
-            + $"Most reports on this site checked at most {limit:N0} database rows, so their counts and lists are incomplete. "
+            + $"{which} checked at most {limit.ToString("N0", CultureInfo.InvariantCulture)} database rows, so their counts and lists may be incomplete. "
             + "For complete results, run <code>redlist audit-site</code> without <code>--limit</code>."
             + "</div>\n";
     }

@@ -103,6 +103,12 @@ internal sealed class AuditReport {
     // Optional sentence appended after those counts (e.g. how many assessments were compared).
     public string? GroupCountsNote { get; init; }
 
+    // True when the producer reads every row whatever --limit says, so the report is complete even
+    // in a limited run. The notice at the top of each page of a limited run names these reports as
+    // the exceptions, and an empty one says it found nothing in the release rather than in the rows
+    // checked. Not read in a full run.
+    public bool IgnoresRowLimit { get; init; }
+
     // True when the report has nothing to list this release (shown as a clean "no observations").
     public bool IsEmpty => Findings.Count == 0 && SummaryTables.Count == 0;
 

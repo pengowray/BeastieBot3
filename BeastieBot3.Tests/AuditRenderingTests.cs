@@ -314,7 +314,8 @@ public class AuditRenderingTests {
     }
 
     // A report that drops to zero rows, or is skipped, must not leave its old list and CSV in the
-    // folder looking current; files the generator did not write are left alone.
+    // folder looking current. Once a folder has a manifest, only files on it are removed, so the
+    // owner's own files are kept even when they look like the generator's.
     [Fact]
     public void Write_RemovesGeneratedFilesThisRunDidNotWrite() {
         var dir = TempDir("audit-stale-");
@@ -322,25 +323,169 @@ public class AuditRenderingTests {
             AuditSiteRenderer.Write(Doc(null, SampleReport(), EmptyReport("gone")), dir);
             Assert.True(File.Exists(Path.Combine(dir, "demo-list.html")));
             Assert.True(File.Exists(Path.Combine(dir, "csv", "demo.csv")));
+            var manifest = File.ReadAllLines(Path.Combine(dir, AuditSiteRenderer.ManifestFileName));
+            Assert.Contains("demo-list.html", manifest);
+            Assert.Contains("csv/demo.csv", manifest);
+            Assert.Contains("assets/audit.css", manifest);
+
             File.WriteAllText(Path.Combine(dir, "notes.html"), "<!doctype html><p>my notes</p>");
+            File.WriteAllText(Path.Combine(dir, "CNAME"), "audit.example.org\n");
             File.WriteAllText(Path.Combine(dir, "csv", "mine.csv"), "name,value\nx,1\n");
-            // An old page layout from an earlier version: same stylesheet link, name no longer written.
-            File.WriteAllText(Path.Combine(dir, "demo-g-mammalia.html"),
+            // A hand-made CSV with an id column, and a hand-made page that copies the stylesheet link.
+            File.WriteAllText(Path.Combine(dir, "csv", "mine2.csv"), "id,name\n1,x\n");
+            File.WriteAllText(Path.Combine(dir, "mine.html"),
                 "<!doctype html>\n<head>\n" + AuditPageLayout.StylesheetLink + "\n</head>");
 
             var logged = new List<string>();
-            AuditSiteRenderer.Write(Doc(null, EmptyReport("demo")), dir, logged.Add);
+            var result = AuditSiteRenderer.Write(Doc(null, EmptyReport("demo")), dir, logged.Add);
 
             Assert.True(File.Exists(Path.Combine(dir, "demo.html")));
             Assert.False(File.Exists(Path.Combine(dir, "demo-list.html")));
             Assert.False(File.Exists(Path.Combine(dir, "csv", "demo.csv")));
             Assert.False(File.Exists(Path.Combine(dir, "gone.html")));
-            Assert.False(File.Exists(Path.Combine(dir, "demo-g-mammalia.html")));
             Assert.True(File.Exists(Path.Combine(dir, "notes.html")));
+            Assert.True(File.Exists(Path.Combine(dir, "CNAME")));
             Assert.True(File.Exists(Path.Combine(dir, "csv", "mine.csv")));
+            Assert.True(File.Exists(Path.Combine(dir, "csv", "mine2.csv")));
+            Assert.True(File.Exists(Path.Combine(dir, "mine.html")));
+            Assert.Equal(new[] { "csv/demo.csv", "demo-list.html", "gone.html" }, result.Removed);
+            Assert.Empty(result.Kept);
             Assert.Contains(logged, l => l.Contains("removed csv/demo.csv"));
+
+            manifest = File.ReadAllLines(Path.Combine(dir, AuditSiteRenderer.ManifestFileName));
+            Assert.DoesNotContain("demo-list.html", manifest);
+            Assert.DoesNotContain("mine.html", manifest);
+            Assert.Contains("demo.html", manifest);
         } finally {
             Directory.Delete(dir, recursive: true);
         }
+    }
+
+    // A folder written before the manifest existed: the generator's files are recognised by their
+    // content, once. An "id" header alone is not enough for a CSV; its first row id must start with
+    // the file's own report id.
+    [Fact]
+    public void Write_FolderWithoutManifest_RemovesOnlyFilesWithTheGeneratorsMarks() {
+        var dir = TempDir("audit-legacy-");
+        try {
+            Directory.CreateDirectory(Path.Combine(dir, "csv"));
+            void Put(string relative, string content) => File.WriteAllText(Path.Combine(dir, relative), content);
+            Put("demo-g-mammalia.html", "<!doctype html>\n<head>\n" + AuditPageLayout.StylesheetLink + "\n</head>");
+            Put("notes.html", "<!doctype html><p>my notes</p>");
+            Put("CNAME", "audit.example.org\n");
+            Put(Path.Combine("csv", "old.csv"), "\uFEFFid,scientificName\nold:123,Panthera leo\n");
+            Put(Path.Combine("csv", "quoted.csv"), "id,name\r\n\"quoted:1:a, b\",x\r\n");
+            Put(Path.Combine("csv", "mine2.csv"), "id,name\n1,x\n");
+            Put(Path.Combine("csv", "header-only.csv"), "id,name\n");
+            Put(Path.Combine("csv", "other.csv"), "id,name\ndemo:1,x\n");
+
+            var result = AuditSiteRenderer.Write(Doc(null, SampleReport()), dir);
+
+            Assert.Equal(new[] { "csv/old.csv", "csv/quoted.csv", "demo-g-mammalia.html" }, result.Removed);
+            Assert.True(File.Exists(Path.Combine(dir, "notes.html")));
+            Assert.True(File.Exists(Path.Combine(dir, "CNAME")));
+            Assert.True(File.Exists(Path.Combine(dir, "csv", "mine2.csv")));
+            Assert.True(File.Exists(Path.Combine(dir, "csv", "header-only.csv")));
+            Assert.True(File.Exists(Path.Combine(dir, "csv", "other.csv")));
+            Assert.True(File.Exists(Path.Combine(dir, AuditSiteRenderer.ManifestFileName)));
+        } finally {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    // The command passes prune: false when a producer failed, so that producer's pages from the
+    // earlier run are kept. They stay on the manifest, so the next run without errors removes them.
+    [Fact]
+    public void Write_PruneFalse_KeepsEarlierFilesAndStillListsThem() {
+        var dir = TempDir("audit-keep-");
+        try {
+            AuditSiteRenderer.Write(Doc(null, SampleReport(), EmptyReport("col-a", "col"), EmptyReport("col-b", "col")), dir);
+
+            var kept = AuditSiteRenderer.Write(Doc(null, SampleReport()), dir, prune: false);
+            Assert.Equal(new[] { "col-a.html", "col-b.html", "col-crosscheck.html" }, kept.Kept);
+            Assert.Empty(kept.Removed);
+            Assert.True(File.Exists(Path.Combine(dir, "col-a.html")));
+            Assert.True(File.Exists(Path.Combine(dir, "col-crosscheck.html")));
+            Assert.Contains("col-a.html", File.ReadAllLines(Path.Combine(dir, AuditSiteRenderer.ManifestFileName)));
+
+            var next = AuditSiteRenderer.Write(Doc(null, SampleReport()), dir);
+            Assert.Equal(new[] { "col-a.html", "col-b.html", "col-crosscheck.html" }, next.Removed);
+            Assert.False(File.Exists(Path.Combine(dir, "col-a.html")));
+        } finally {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    // A --limit run into the full run's folder (an explicit --output) leaves no full-run counts
+    // file beside its partial pages.
+    [Fact]
+    public void Write_LimitedRunOverFullFolder_RemovesReleaseCounts() {
+        var dir = TempDir("audit-counts-");
+        try {
+            AuditSiteRenderer.Write(Doc(null, SampleReport()), dir);
+            Assert.True(File.Exists(Path.Combine(dir, AuditSiteRenderer.ReleaseCountsFileName)));
+            var result = AuditSiteRenderer.Write(Doc(100, SampleReport()), dir);
+            Assert.Equal(new[] { AuditSiteRenderer.ReleaseCountsFileName }, result.Removed);
+        } finally {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void Write_IgnoresManifestEntriesOutsideTheFolder() {
+        var parent = TempDir("audit-outside-");
+        try {
+            var site = Path.Combine(parent, "site");
+            Directory.CreateDirectory(site);
+            var outside = Path.Combine(parent, "outside.html");
+            var absolute = Path.Combine(parent, "absolute.html");
+            File.WriteAllText(outside, "x");
+            File.WriteAllText(absolute, "x");
+            File.WriteAllText(Path.Combine(site, AuditSiteRenderer.ManifestFileName),
+                "../outside.html\n" + absolute + "\n" + AuditSiteRenderer.ManifestFileName + "\n");
+
+            var result = AuditSiteRenderer.Write(Doc(null, SampleReport()), site);
+
+            Assert.Empty(result.Removed);
+            Assert.True(File.Exists(outside));
+            Assert.True(File.Exists(absolute));
+            Assert.True(File.Exists(Path.Combine(site, AuditSiteRenderer.ManifestFileName)));
+        } finally {
+            Directory.Delete(parent, recursive: true);
+        }
+    }
+
+    // The failed-assessments producer reads every row whatever --limit says: the notice names it as
+    // the exception, and its empty state speaks for the whole release.
+    [Fact]
+    public void LimitedNotice_NamesReportsThatIgnoreTheLimit() {
+        var failed = new AuditReport {
+            Id = "failed-assessments", Title = "Historical assessments missing from the API",
+            Summary = "x", DataSourceLabel = "src", IgnoresRowLimit = true,
+        };
+        var withException = AuditPageLayout.LimitedNotice(Doc(5000, SampleReport(), failed));
+        Assert.Contains("Every report except \u201C<a href=\"failed-assessments.html\">Historical assessments missing from the API</a>\u201D checked at most 5,000 database rows", withException);
+
+        var withoutException = AuditPageLayout.LimitedNotice(Doc(5000, SampleReport()));
+        Assert.Contains("Every report on this site checked at most 5,000 database rows", withoutException);
+        Assert.Equal("", AuditPageLayout.LimitedNotice(Doc(null, SampleReport(), failed)));
+
+        var dir = TempDir("audit-ignores-");
+        try {
+            AuditSiteRenderer.Write(Doc(5000, failed), dir);
+            var page = File.ReadAllText(Path.Combine(dir, "failed-assessments.html"));
+            Assert.Contains("in the current release", page);
+            Assert.DoesNotContain("in the rows checked", page);
+        } finally {
+            Directory.Delete(dir, recursive: true);
+        }
+    }
+
+    [Fact]
+    public void JoinWithAnd_JoinsLikeASentence() {
+        Assert.Equal("", HtmlText.JoinWithAnd(Array.Empty<string>()));
+        Assert.Equal("a", HtmlText.JoinWithAnd(new[] { "a" }));
+        Assert.Equal("a and b", HtmlText.JoinWithAnd(new[] { "a", "b" }));
+        Assert.Equal("a, b and c", HtmlText.JoinWithAnd(new[] { "a", "b", "c" }));
     }
 }

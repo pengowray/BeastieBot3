@@ -19,19 +19,26 @@ directory in `paths.ini`, e.g. `D:\datasets\beastiebot\reports\redlist-audit-202
 override. The release label comes from `import_metadata.redlist_version` in the IUCN CSV database
 (falling back to the dataset folder name).
 
-**`--limit` runs.** Most producers append `LIMIT N` to their query (`AuditContext.Limit`;
-`failed-assessments` ignores it), so every count a limited run shows is partial. Such a run:
+**`--limit` runs.** Every producer except `failed-assessments` reads at most N rows from its main
+query (`AuditContext.Limit`, usually a `LIMIT N` clause), so its counts in a limited run may be
+partial. `failed-assessments` reads its whole (small) failed-request log and sets
+`AuditReport.IgnoresRowLimit`. Such a run:
 
 - defaults to `<Datastore:reports_dir>/redlist-audit-2026-limited`, beside the full site, so a test
   build never overwrites the pages of a full run (`RedlistAuditSiteCommand.ResolveOutputDir`; an
   explicit `--output` still wins). The command prints where it wrote and, when a full site exists
   in `redlist-audit-2026`, that it was not changed.
 - puts a notice at the top of every page, and "Partial results" at the start of every `<title>`
-  (`AuditPageLayout.LimitedNotice`, driven by `AuditDocument.RowLimit`);
+  (`AuditPageLayout.LimitedNotice`, driven by `AuditDocument.RowLimit`). The notice names, with a
+  link, each report that sets `IgnoresRowLimit` as the exception: "Every report except
+  “Historical assessments missing from the API” checked at most 5,000 database rows";
 - drops the "Since <release>" columns (`AuditDocument.SinceRelease` is null), because a partial count
   beside the previous release's full count reads as a real change;
 - says "No observations of this kind in the rows checked" rather than "in the current release" on a
-  report page with nothing to list;
+  report page with nothing to list, unless the report sets `IgnoresRowLimit`. (This sentence shows
+  only for a report with no rows and no summary tables. The producers whose limited query already
+  selects only matching rows, `orphan-infraranks`, `no-latest` and `provisional-names`, always add
+  a summary table, so they never show it.)
 - writes no `release-counts.yml` and prints no counts block.
 
 `ColArtifacts` skips `*-limited` folders, so a limited run never marks the CoL flow's "Rebuild the Red
@@ -348,6 +355,7 @@ reports/redlist-audit-2026/
   index.html                 overview, Start here, report tables (records, text, CoL highlights)
   col-crosscheck.html        the crosscheck's entry page: what it compares, every page, appendix
   release-counts.yml         this release's headline counts, for rules/audit/release-counts.yml (full runs only)
+  .audit-files.txt           every file this run wrote, one path per line, for the next run's cleanup
   <report>.html              description + commentary + summary tables + short preview + links
   <report>-list.html         full sortable/filterable list, one page (only for a report with rows)
   csv/<report>.csv           every row, CC0 (only for a report with rows)
@@ -357,14 +365,35 @@ reports/redlist-audit-2026-limited/   the same layout, from a --limit run (no re
 
 Each report page embeds a short preview and links out to the full list and the CSV.
 
-**Files from an earlier run.** After writing, `AuditSiteRenderer.Write` removes the pages and CSVs
-the folder holds that this run did not write: the list page and CSV of a report that now has no
-rows, every page of a report whose producer was skipped, and pages an older version wrote (such as
-the old `methodology.html` and `<report>-g-<class>.html` pages). It removes only files the generator
-itself writes: top-level `.html` files whose head links `assets/audit.css`
-(`AuditPageLayout.StylesheetLink`) and files in `csv/` whose header starts with the `id` column.
-Anything else in the folder (a `CNAME` for hosting, notes, a zip) is left alone, so `--output` can
-point at a folder that holds other files. Each removal is printed.
+**Files from an earlier run.** After writing, `AuditSiteRenderer.Write` removes the files an
+earlier run wrote that this run did not: the list page and CSV of a report that now has no rows,
+every page of a report whose producer was skipped, pages an older version wrote (such as the old
+`methodology.html` and `<report>-g-<class>.html` pages), and `release-counts.yml` when a `--limit`
+run is written over a full run's folder. Each removal is printed in grey, then one yellow line
+gives the number of files removed.
+
+It knows which files the generator wrote from `.audit-files.txt`, which every run writes last: one
+relative path per line for every file it wrote (plus any earlier file it kept). Only files on that
+list are removed, and entries that would resolve outside the folder are ignored, so anything else in
+the folder (a `CNAME` for hosting, notes, the owner's own CSVs and pages) is left alone and
+`--output` can point at a folder that holds other files. The list holds only the site's own file
+names, so it is harmless to publish with the site. A folder written before the list existed has
+none; that one time, the generator's files are recognised by their content instead: top-level
+`.html` files whose head links `assets/audit.css` (`AuditPageLayout.StylesheetLink`), and files in
+`csv/` whose header starts with the `id` column **and** whose first row id starts with
+`<file name>:`, the `AuditCsvWriter.StableId` format. A hand-made CSV with an `id` column fails the
+second test and is kept.
+
+**When a producer fails.** A producer that throws is printed as `error <id>: <message>`, and the
+run carries on and exits 0. None of its pages are written, so removing stale files would take its
+whole report family out of the folder (about 30 files for `col-crosscheck`). Such a run removes
+nothing: `RedlistAuditSiteCommand` passes `prune: false`, prints a yellow line saying how many
+earlier files were kept and which producers failed, and the kept files stay on `.audit-files.txt`,
+so the next run without errors removes whichever of them it does not write. A **skipped** producer
+is different: it returned no report because its data source is missing, or, for `empty-scope`,
+because it found nothing. That run still removes the producer's old pages, since the index no
+longer links them. For example, if `COL_sqlite` points at a missing file, the Catalogue of Life
+crosscheck pages from the earlier run are removed.
 
 ## Year-specific vs generic commentary
 
