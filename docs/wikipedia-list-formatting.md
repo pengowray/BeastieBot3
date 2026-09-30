@@ -1,4 +1,4 @@
-# Wikipedia List Formatting Guide
+﻿# Wikipedia List Formatting Guide
 
 This document describes the formatting rules for Wikipedia IUCN species lists, comparing legacy (BeastieLegacy circa 2016) and new implementations.
 
@@ -228,7 +228,19 @@ well as parent pages.
 
 Parent groups in the shipped rules: `fish` (ray-finned fishes, sharks and rays), `invertebrates`
 (insects, gastropods, bivalves, crustaceans, corals, arachnids), and `plants` (dicots, monocots,
-conifers, cycads, mosses; parent pages for `threatened` and `lc` only).
+conifers, cycads; parent pages for `threatened` and `lc` only). `SubGroupLinkTests` checks the
+shipped rules: every parent page links all its sub-groups, and no list gets a sub-group warning.
+
+A sub-group must be defined by a single `value:` at the rank the parent's sub-groups share (class
+for all three parents). The summary table and the sub-group sections match each sub-group by that
+one value, so a sub-group with a `values: [...]` filter, or one defined only at a higher rank than
+the other sub-groups, gets no table row and no section.
+
+Mosses are not a sub-group of `plants`. The `bryopsida` group (named "Mosses") covers class
+Bryopsida only, so a "Mosses" section on the plants pages would count only 96 of the 112
+threatened mosses in 2026-1. Widening the group to the other moss classes (Sphagnopsida,
+Andreaeopsida, Takakiopsida, Polytrichopsida) would give it a `values: [...]` filter, and so no
+table row and no section. The plants pages list Bryopsida species in an ordinary class section.
 
 ## Legacy Rules File (rules-list.txt)
 

@@ -108,7 +108,9 @@ lists:
   # ==================== PLANTS (parent: merged top-level + per-class breakouts) ====================
   # merged -> extinct-combined, threatened, nt, dd, lc (CR/EN/VU never split; EX/EW/PE/PEW on one page).
   # plants-threatened / plants-lc become parent pages that break out the dicot/monocot sub-lists, and
-  # link the conifer, cycad and moss all-status pages below. nt/dd/extinct-combined stay ordinary lists.
+  # link the conifer and cycad all-status pages below. nt/dd/extinct-combined stay ordinary lists.
+  # bryopsida is not a sub-group of plants (it covers class Bryopsida only, not all mosses; see
+  # taxa-groups.yml), so the plants pages list Bryopsida species in their own class section.
   - taxa_group: plants
     category_split: merged
   - taxa_group: magnoliopsida
