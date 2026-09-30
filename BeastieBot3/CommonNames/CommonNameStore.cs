@@ -197,6 +197,52 @@ internal sealed class CommonNameStore : SqliteStore {
             );
             """;
         command.ExecuteNonQuery();
+        EnsureConflictPairIndex();
+    }
+
+    private const string ConflictPairIndexName = "ux_conflicts_pair";
+
+    // One row per (name, type, taxon pair), so running detect-conflicts again adds only the pairs
+    // it has not recorded yet. Stores written before this index existed can hold a second copy of
+    // every conflict (InsertConflict was a plain INSERT), and the unique index cannot be created
+    // over them, so the first open removes those copies, keeping the oldest row of each pair.
+    // Later opens only look the index up in sqlite_master.
+    private void EnsureConflictPairIndex() {
+        using (var check = _connection.CreateCommand()) {
+            check.CommandText = "SELECT 1 FROM sqlite_master WHERE type = 'index' AND name = @name;";
+            check.Parameters.AddWithValue("@name", ConflictPairIndexName);
+            if (check.ExecuteScalar() != null) {
+                return;
+            }
+        }
+
+        using var transaction = _connection.BeginTransaction();
+        using var command = _connection.CreateCommand();
+        command.Transaction = transaction;
+        // InsertConflict stores the smaller taxon id in taxon_id_a. Older rows were stored in
+        // whatever order detection met the two taxa, so put them in the same order first; SQLite
+        // evaluates every SET expression against the row as it was, so this swaps the pair.
+        command.CommandText =
+            $"""
+            UPDATE common_name_conflicts
+            SET taxon_id_a = taxon_id_b, taxon_id_b = taxon_id_a,
+                common_name_id_a = common_name_id_b, common_name_id_b = common_name_id_a
+            WHERE taxon_id_b IS NOT NULL AND taxon_id_b < taxon_id_a;
+
+            DELETE FROM common_name_conflicts
+            WHERE id NOT IN (
+                SELECT MIN(id) FROM common_name_conflicts
+                GROUP BY normalized_name, conflict_type, taxon_id_a, taxon_id_b
+            );
+
+            -- taxon_id_b is nullable and a unique index treats NULLs as distinct, so a conflict
+            -- type with no second taxon would not be de-duplicated. Only 'ambiguous' conflicts
+            -- (always two taxa) are written today.
+            CREATE UNIQUE INDEX IF NOT EXISTS {ConflictPairIndexName}
+                ON common_name_conflicts(normalized_name, conflict_type, taxon_id_a, taxon_id_b);
+            """;
+        command.ExecuteNonQuery();
+        transaction.Commit();
     }
 
     #region Taxa Operations
@@ -1053,19 +1099,30 @@ internal sealed class CommonNameStore : SqliteStore {
 
     #region Conflict Operations
 
-    public void InsertConflict(
+    /// <summary>
+    /// Records a conflict between two taxa. The pair is stored with the smaller taxon id first,
+    /// so (a, b) and (b, a) are the same conflict; one that is already stored is left as it is.
+    /// </summary>
+    /// <returns>True when a new row was added, false when the conflict was already stored.</returns>
+    public bool InsertConflict(
         string normalizedName,
         string conflictType,
         long taxonIdA,
         long? commonNameIdA,
         long? taxonIdB,
         long? commonNameIdB) {
+        if (taxonIdB is { } b && b < taxonIdA) {
+            (taxonIdA, taxonIdB) = (b, taxonIdA);
+            (commonNameIdA, commonNameIdB) = (commonNameIdB, commonNameIdA);
+        }
+
         using var command = _connection.CreateCommand();
         command.CommandText =
             """
-            INSERT INTO common_name_conflicts 
+            INSERT INTO common_name_conflicts
                 (normalized_name, conflict_type, taxon_id_a, common_name_id_a, taxon_id_b, common_name_id_b, detected_at)
-            VALUES (@name, @type, @taxonA, @cnA, @taxonB, @cnB, @now);
+            VALUES (@name, @type, @taxonA, @cnA, @taxonB, @cnB, @now)
+            ON CONFLICT(normalized_name, conflict_type, taxon_id_a, taxon_id_b) DO NOTHING;
             """;
         command.Parameters.AddWithValue("@name", normalizedName);
         command.Parameters.AddWithValue("@type", conflictType);
@@ -1074,7 +1131,7 @@ internal sealed class CommonNameStore : SqliteStore {
         command.Parameters.AddWithValue("@taxonB", taxonIdB ?? (object)DBNull.Value);
         command.Parameters.AddWithValue("@cnB", commonNameIdB ?? (object)DBNull.Value);
         command.Parameters.AddWithValue("@now", DateTime.UtcNow.ToString("O"));
-        command.ExecuteNonQuery();
+        return command.ExecuteNonQuery() == 1;
     }
 
     public void ClearConflicts() {
