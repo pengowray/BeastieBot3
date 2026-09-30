@@ -38,11 +38,11 @@ public sealed class IucnSynonymFormattingReportCommand : Command<IucnSynonymForm
         public string? MarkdownOutputPath { get; init; }
 
         [CommandOption("--csv-output <PATH>")]
-        [Description("Optional CSV output path. Defaults to the same directory as the Markdown report.")]
+        [Description("Path of the CSV file, which lists the same synonyms as the Markdown report. Default: a timestamped file in the same folder as the Markdown report.")]
         public string? CsvOutputPath { get; init; }
 
         [CommandOption("--output-dir <DIR>")]
-        [Description("Folder for both files (Markdown and CSV); takes priority over Datastore:reports_dir in paths.ini, but not over a path given in --markdown-output or --csv-output.")]
+        [Description("Folder for both files (Markdown and CSV); takes priority over Datastore:reports_dir in paths.ini. A path in --markdown-output overrides it for both files, and a path in --csv-output overrides it for the CSV.")]
         public string? OutputDirectory { get; init; }
 
         [CommandOption("--limit <ROWS>")]
@@ -80,12 +80,7 @@ public sealed class IucnSynonymFormattingReportCommand : Command<IucnSynonymForm
                 settings.OutputDirectory,
                 fallbackBaseDirectory: fallbackBaseDir,
                 defaultFileName: $"iucn-synonym-formatting-{stamp}.md");
-            csvPath = ReportPathResolver.ResolveFilePath(
-                paths,
-                settings.CsvOutputPath,
-                settings.OutputDirectory,
-                fallbackBaseDirectory: fallbackBaseDir,
-                defaultFileName: $"iucn-synonym-formatting-{stamp}.csv");
+            csvPath = ResolveCsvPath(settings.CsvOutputPath, markdownPath, stamp);
         }
         catch (Exception ex) {
             AnsiConsole.MarkupLine($"[red]Failed to resolve output paths:[/] {Markup.Escape(ex.Message)}");
@@ -135,6 +130,18 @@ public sealed class IucnSynonymFormattingReportCommand : Command<IucnSynonymForm
         }
 
         return 0;
+    }
+
+    // Without --csv-output the CSV goes beside the Markdown report, as in the other IUCN reports
+    // (orphan infraranks, no-latest, failed assessments). It used to resolve its own folder, so
+    // --markdown-output /tmp/x.md left the CSV in reports_dir.
+    internal static string ResolveCsvPath(string? csvOutputPath, string markdownPath, string stamp) {
+        if (!string.IsNullOrWhiteSpace(csvOutputPath)) {
+            return Path.GetFullPath(csvOutputPath);
+        }
+
+        var folder = Path.GetDirectoryName(markdownPath) ?? ".";
+        return Path.Combine(folder, $"iucn-synonym-formatting-{stamp}.csv");
     }
 
     private static bool TableExists(SqliteConnection connection, string tableName) {
@@ -213,7 +220,7 @@ public sealed class IucnSynonymFormattingReportCommand : Command<IucnSynonymForm
             }
             catch (JsonException ex) {
                 result.JsonFailures++;
-                AnsiConsole.MarkupLineInterpolated($"[yellow]Skipping root SIS {rootSisId}: {Markup.Escape(ex.Message)}[/]");
+                AnsiConsole.MarkupLineInterpolated($"[yellow]Skipping root SIS {rootSisId}: {ex.Message}[/]");
             }
         }
 
