@@ -28,7 +28,7 @@ These commands process large amounts of data and can take significant time to ru
 
 **Re-running commands:**
 - All commands use **UPSERT** operations - safe to re-run at any time
-- Re-running takes approximately the same time as a fresh run
+- Re-running takes approximately the same time as a fresh run, except `detect-conflicts` (see the table)
 - No data is lost when re-running; existing records are updated in place
 - Use `common-names sources` to check which sources have been aggregated
 
