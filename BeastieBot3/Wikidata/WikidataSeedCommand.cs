@@ -31,7 +31,7 @@ public sealed class WikidataSeedSettings : CommonSettings {
     public string? Cursor { get; init; }
 
     [CommandOption("--reset-cursor")]
-    [Description("Reset the persisted cursor to zero before fetching.")]
+    [Description("Start the P627 and P141 sweeps again from the first Q-number, to find items that gained P627 or P141 after the sweep passed their Q-number. Ignored when --cursor is given.")]
     public bool ResetCursor { get; init; }
 }
 
@@ -76,6 +76,8 @@ public sealed class WikidataSeedCommand : AsyncCommand<WikidataSeedSettings> {
         using var store = WikidataCacheStore.Open(cachePath);
         using var client = new WikidataApiClient(configuration);
 
+        ApplyResetCursor(settings, store);
+
         var batchSize = Math.Clamp(settings.BatchSize ?? configuration.SparqlBatchSize, 5, 2_000);
         var totalGoal = settings.Limit.HasValue && settings.Limit.Value > 0 ? settings.Limit.Value : int.MaxValue;
 
@@ -106,10 +108,6 @@ public sealed class WikidataSeedCommand : AsyncCommand<WikidataSeedSettings> {
         WikidataSeedSettings settings, int batchSize, int totalGoal, CancellationToken cancellationToken) {
         var startCursor = DetermineCursor(settings, store, pass.CursorKey);
         var dynamicBatchSize = batchSize;
-
-        if (settings.ResetCursor && settings.Cursor is null) {
-            store.SetSyncCursor(pass.CursorKey, startCursor);
-        }
 
         var cursor = startCursor;
         var totalNew = 0;
@@ -184,8 +182,11 @@ public sealed class WikidataSeedCommand : AsyncCommand<WikidataSeedSettings> {
         if (outage is not null) {
             AnsiConsole.MarkupLineInterpolated(
                 $"[yellow]Wikidata Query Service is not responding ({Describe(outage)}).[/] Stopping this step; everything fetched so far is saved.");
+            // Printed whichever command ran the sweep (seed-taxa, cache-all or wikipedia update), so
+            // it names the sweep's own command and says nothing about later steps: there are none
+            // after seed-taxa, and wikipedia update's backfill step uses the query service too.
             AnsiConsole.MarkupLine(
-                "Run `wikipedia update` again later to continue from the cursors below. The remaining steps do not use this service and will run now.");
+                "Run `wikidata seed-taxa` later to continue each sweep from its saved cursor.");
         }
         else {
             AnsiConsole.MarkupLine(anyRows
@@ -214,6 +215,25 @@ public sealed class WikidataSeedCommand : AsyncCommand<WikidataSeedSettings> {
         }
 
         return ReadCursor(store, cursorKey);
+    }
+
+    // --reset-cursor (without --cursor) sets every pass's cursor to 0 before the first pass, and
+    // the combined cursor from before the split too. ReadCursor reads a pass cursor of 0 as "no
+    // cursor of its own" and falls back to the combined one, so resetting only the pass cursors
+    // let a reset run that stopped early (--limit, an outage, Ctrl+C) resume from the old combined
+    // position on the next run. Resetting here rather than at the start of each pass also covers
+    // a pass that never starts: an outage in the P627 pass ends the run before the P141 pass.
+    // Returns whether it reset anything.
+    internal static bool ApplyResetCursor(WikidataSeedSettings settings, WikidataCacheStore store) {
+        if (!settings.ResetCursor || !string.IsNullOrWhiteSpace(settings.Cursor)) {
+            return false;
+        }
+
+        foreach (var pass in Passes) {
+            store.SetSyncCursor(pass.CursorKey, 0);
+        }
+        store.SetSyncCursor(LegacyCursorKey, 0);
+        return true;
     }
 
     // A cache written before the sweep was split has only the combined cursor. That one sweep read
