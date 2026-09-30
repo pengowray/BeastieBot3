@@ -1,24 +1,33 @@
+using System.Globalization;
 using System.Text;
 using BeastieBot3.Audit.Model;
 
 // Shared page chrome for every page in the bundle: head, header with the site title, optional
 // breadcrumbs, the body, and a footer carrying the one unofficial disclaimer, attribution, licence,
 // and generation date. Asset links are relative so the
-// bundle works at any base URL (a local folder, a static host, an email attachment).
+// bundle works at any base URL (a local folder, a static host, an email attachment). A --limit run
+// also gets a notice at the top of every page, since every count on it is partial.
 
 namespace BeastieBot3.Audit.Rendering;
 
 internal static class AuditPageLayout {
+    // In the head of every page. AuditSiteRenderer also uses it to recognise pages an earlier run
+    // wrote, so it must stay byte-identical to what earlier versions wrote.
+    public const string StylesheetLink = "<link rel=\"stylesheet\" href=\"assets/audit.css\">";
+
     public static string Page(AuditDocument doc, string pageTitle, string? crumbsHtml, string bodyHtml, bool wide = false) {
         var cfg = doc.Config;
         var fullTitle = pageTitle.Length == 0 ? cfg.SiteTitle : $"{pageTitle} · {cfg.SiteTitle}";
+        if (doc.IsLimited) {
+            fullTitle = $"Partial results · {fullTitle}";
+        }
         var sb = new StringBuilder();
         sb.Append("<!doctype html>\n<html lang=\"en\">\n<head>\n");
         sb.Append("<meta charset=\"utf-8\">\n");
         sb.Append("<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n");
         sb.Append("<meta name=\"robots\" content=\"noindex\">\n");
         sb.Append($"<title>{HtmlText.Escape(fullTitle)}</title>\n");
-        sb.Append("<link rel=\"stylesheet\" href=\"assets/audit.css\">\n");
+        sb.Append(StylesheetLink).Append('\n');
         sb.Append(wide ? "</head>\n<body class=\"wide\">\n" : "</head>\n<body>\n");
 
         sb.Append("<header class=\"site\">\n<div class=\"wrap\">\n");
@@ -30,6 +39,7 @@ internal static class AuditPageLayout {
         sb.Append("</div>\n</header>\n");
 
         sb.Append("<main>\n<div class=\"wrap\">\n");
+        sb.Append(LimitedNotice(doc));
         sb.Append(bodyHtml);
         sb.Append("</div>\n</main>\n");
 
@@ -46,6 +56,20 @@ internal static class AuditPageLayout {
         sb.Append("<script src=\"assets/audit.js\"></script>\n");
         sb.Append("</body>\n</html>\n");
         return sb.ToString();
+    }
+
+    // The notice at the top of every page of a --limit run, so a test build cannot be mistaken
+    // for the full site. Empty for a full run. "Most reports": a few producers ignore the limit.
+    public static string LimitedNotice(AuditDocument doc) {
+        if (doc.RowLimit is not { } limit) {
+            return "";
+        }
+        var flag = $"--limit {limit.ToString(CultureInfo.InvariantCulture)}";
+        return "<div class=\"limited-notice\" role=\"note\">"
+            + $"<strong>Partial results from a limited run (<code>{HtmlText.Escape(flag)}</code>).</strong> "
+            + $"Most reports on this site checked at most {limit:N0} database rows, so their counts and lists are incomplete. "
+            + "For complete results, run <code>redlist audit-site</code> without <code>--limit</code>."
+            + "</div>\n";
     }
 
     public static string Crumbs(params (string Label, string? Href)[] parts) {

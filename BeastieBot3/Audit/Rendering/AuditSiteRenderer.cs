@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -10,7 +11,9 @@ using BeastieBot3.Audit.Model;
 // (with a short embedded preview that links out to the full list and the CSV), one full-list page
 // per report, an entry page for each report family (the Catalogue of Life crosscheck), the CSV
 // downloads, and the shared assets. Every listing is rendered by HtmlListRenderer, so the look and
-// the sort/filter behaviour are identical across the whole site.
+// the sort/filter behaviour are identical across the whole site. A full run also writes
+// release-counts.yml. Pages and CSVs an earlier run wrote and this run did not are removed, so the
+// folder holds one run's output.
 
 namespace BeastieBot3.Audit.Rendering;
 
@@ -20,28 +23,111 @@ internal static class AuditSiteRenderer {
     private static readonly Encoding Utf8NoBom = new UTF8Encoding(false);
     private static readonly Encoding Utf8Bom = new UTF8Encoding(true);
 
+    public const string ReleaseCountsFileName = "release-counts.yml";
+
     public static void Write(AuditDocument doc, string outputDir, Action<string>? log = null) {
         Directory.CreateDirectory(outputDir);
         Directory.CreateDirectory(Path.Combine(outputDir, "assets"));
         Directory.CreateDirectory(Path.Combine(outputDir, "csv"));
 
-        File.WriteAllText(Path.Combine(outputDir, "assets", "audit.css"), AuditAssets.Css, Utf8NoBom);
-        File.WriteAllText(Path.Combine(outputDir, "assets", "audit.js"), AuditAssets.Js, Utf8NoBom);
+        var written = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        void Save(string relativePath, string content, Encoding encoding) {
+            var path = Path.GetFullPath(Path.Combine(outputDir, relativePath));
+            File.WriteAllText(path, content, encoding);
+            written.Add(path);
+        }
+
+        Save(Path.Combine("assets", "audit.css"), AuditAssets.Css, Utf8NoBom);
+        Save(Path.Combine("assets", "audit.js"), AuditAssets.Js, Utf8NoBom);
 
         foreach (var report in doc.Reports) {
             if (report.CsvRows.Count > 0) {
-                File.WriteAllText(Path.Combine(outputDir, "csv", $"{report.Id}.csv"), AuditCsvWriter.Write(report), Utf8Bom);
+                Save(Path.Combine("csv", $"{report.Id}.csv"), AuditCsvWriter.Write(report), Utf8Bom);
             }
-            WriteReportPage(doc, report, outputDir);
-            WriteFullListPages(doc, report, outputDir);
+            Save($"{report.Id}.html", BuildReportPage(doc, report), Utf8NoBom);
+            if (report.Findings.Count > 0) {
+                Save($"{report.Id}-list.html", BuildFullListPage(doc, report), Utf8NoBom);
+            }
             log?.Invoke($"  {report.Id}: {report.Count:N0}");
         }
 
-        File.WriteAllText(Path.Combine(outputDir, "index.html"), BuildIndex(doc), Utf8NoBom);
+        Save("index.html", BuildIndex(doc), Utf8NoBom);
         foreach (var family in FamilyHeadings) {
             if (doc.Reports.Any(r => r.FamilyId == family.Key)) {
-                File.WriteAllText(Path.Combine(outputDir, $"{family.Key}-crosscheck.html"), BuildFamilyPage(doc, family.Key), Utf8NoBom);
+                Save($"{family.Key}-crosscheck.html", BuildFamilyPage(doc, family.Key), Utf8NoBom);
             }
+        }
+
+        // The counts block for rules/audit/release-counts.yml, saved for pasting in once the release
+        // is final. Never from a --limit run, whose counts are partial.
+        if (!doc.IsLimited) {
+            Save(ReleaseCountsFileName, ReleaseCountsBlock(doc) + Environment.NewLine, Utf8NoBom);
+        }
+
+        RemoveStaleFiles(outputDir, written, log);
+    }
+
+    public static string ReleaseCountsBlock(AuditDocument doc) =>
+        AuditReleaseCounts.FormatBlock(doc.Release, doc.Reports.Select(r => (r.Id, r.Count)));
+
+    // Pages and CSVs left by an earlier run that this run did not write: a report that now has no
+    // rows (its full list and CSV), a report whose producer was skipped (every page of it), or a
+    // page layout an older version wrote. The index does not link them, but they stay in the folder
+    // and in any copy of it, looking current. Only files the generator itself writes are removed:
+    // top-level pages that link assets/audit.css, and CSVs in csv/ whose header starts with the id
+    // column. Anything else in an --output folder is left alone.
+    private static void RemoveStaleFiles(string outputDir, HashSet<string> written, Action<string>? log) {
+        var candidates = SafeFiles(outputDir, "*.html").Where(IsGeneratedPage)
+            .Concat(SafeFiles(Path.Combine(outputDir, "csv"), "*.csv").Where(IsGeneratedCsv))
+            .ToList();
+        foreach (var file in candidates) {
+            var full = Path.GetFullPath(file);
+            if (written.Contains(full)) {
+                continue;
+            }
+            var relative = Path.GetRelativePath(outputDir, full).Replace('\\', '/');
+            try {
+                File.Delete(full);
+                log?.Invoke($"  removed {relative} (from an earlier run)");
+            } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) {
+                log?.Invoke($"  could not remove {relative} (from an earlier run): {ex.Message}");
+            }
+        }
+    }
+
+    private static IEnumerable<string> SafeFiles(string dir, string pattern) {
+        try {
+            return Directory.Exists(dir) ? Directory.GetFiles(dir, pattern, SearchOption.TopDirectoryOnly) : Array.Empty<string>();
+        } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) {
+            return Array.Empty<string>();
+        }
+    }
+
+    // The stylesheet link sits in the head, within the first few hundred bytes; full-list pages
+    // run to megabytes, so only the start of each file is read.
+    private static bool IsGeneratedPage(string path) =>
+        ReadStart(path, 4096)?.Contains(AuditPageLayout.StylesheetLink, StringComparison.Ordinal) == true;
+
+    private static bool IsGeneratedCsv(string path) {
+        var start = ReadStart(path, 64);
+        if (start is null) {
+            return false;
+        }
+        start = start.TrimStart('\uFEFF');
+        var header = AuditCsvWriter.IdColumn;
+        return start.StartsWith(header + ",", StringComparison.Ordinal)
+            || start.StartsWith(header + "\n", StringComparison.Ordinal)
+            || start.StartsWith(header + "\r", StringComparison.Ordinal);
+    }
+
+    private static string? ReadStart(string path, int chars) {
+        try {
+            using var reader = new StreamReader(path, Encoding.UTF8, detectEncodingFromByteOrderMarks: false);
+            var buffer = new char[chars];
+            var read = reader.ReadBlock(buffer, 0, chars);
+            return new string(buffer, 0, read);
+        } catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) {
+            return null;
         }
     }
 
@@ -140,7 +226,7 @@ internal static class AuditSiteRenderer {
         if (reports.Count == 0) {
             return;
         }
-        var since = doc.PreviousRelease is null ? "" : $"<th class=\"since\">Since {HtmlText.Escape(doc.PreviousRelease)}</th>";
+        var since = doc.SinceRelease is null ? "" : $"<th class=\"since\">Since {HtmlText.Escape(doc.SinceRelease)}</th>";
         sb.Append("<section>\n");
         sb.Append($"<h2>{HtmlText.Escape(heading)}</h2>\n");
         sb.Append($"<p>{HtmlText.Escape(blurb)}</p>\n");
@@ -151,7 +237,7 @@ internal static class AuditSiteRenderer {
             sb.Append($"<div class=\"report-desc\">{HtmlText.Escape(IndexBlurb(r))}</div></td>\n");
             sb.Append($"<td class=\"kind\">{AuditPageLayout.ActionBadge(r.Action)}</td>\n");
             sb.Append($"<td class=\"count\">{r.Count:N0}</td>\n");
-            if (doc.PreviousRelease is not null) {
+            if (doc.SinceRelease is not null) {
                 var change = SinceText(doc, r);
                 sb.Append($"<td class=\"since {change.Css}\">{HtmlText.Escape(change.Text)}</td>\n");
             }
@@ -172,7 +258,7 @@ internal static class AuditSiteRenderer {
     // The change since the previous release, as a short phrase. Blank when that release recorded no
     // count for the report, which is not the same as zero.
     private static (string Text, string Css) SinceText(AuditDocument doc, AuditReport report) {
-        if (doc.PreviousRelease is null || doc.ReleaseCounts?.Count(doc.PreviousRelease, report.Id) is not { } previous) {
+        if (doc.SinceRelease is null || doc.ReleaseCounts?.Count(doc.SinceRelease, report.Id) is not { } previous) {
             return ("", "");
         }
         if (report.Count == previous) {
@@ -188,7 +274,7 @@ internal static class AuditSiteRenderer {
 
     // -- report detail ---------------------------------------------------------------------
 
-    private static void WriteReportPage(AuditDocument doc, AuditReport report, string outputDir) {
+    private static string BuildReportPage(AuditDocument doc, AuditReport report) {
         var sb = new StringBuilder();
         sb.Append("<section>\n");
         sb.Append($"<h2>{HtmlText.Escape(report.Title)} {AuditPageLayout.ActionBadge(report.Action, inHeading: true)}</h2>\n");
@@ -220,14 +306,15 @@ internal static class AuditSiteRenderer {
             sb.Append("</p>\n");
             sb.Append(CsvNote(report));
         } else if (report.SummaryTables.Count == 0) {
-            sb.Append("<p>No observations of this kind in the current release.</p>\n");
+            sb.Append(doc.RowLimit is { } limit
+                ? $"<p>No observations of this kind in the rows checked. This run used <code>--limit {limit.ToString(CultureInfo.InvariantCulture)}</code>, so a full run may find some.</p>\n"
+                : "<p>No observations of this kind in the current release.</p>\n");
         }
 
         sb.Append("</section>\n");
 
         var crumbs = AuditPageLayout.Crumbs(("Home", "index.html"), (report.Title, null));
-        var html = AuditPageLayout.Page(doc, report.Title, crumbs, sb.ToString());
-        File.WriteAllText(Path.Combine(outputDir, $"{report.Id}.html"), html, Utf8NoBom);
+        return AuditPageLayout.Page(doc, report.Title, crumbs, sb.ToString());
     }
 
     // A "you are here" table for a group of reports that partition one comparison. Its counts come
@@ -253,13 +340,13 @@ internal static class AuditSiteRenderer {
     }
 
     private static void AppendFamilyRows(StringBuilder sb, AuditDocument doc, IReadOnlyList<AuditReport> family, string? hereId) {
-        var since = doc.PreviousRelease is null ? "" : $"<th class=\"since\">Since {HtmlText.Escape(doc.PreviousRelease)}</th>";
+        var since = doc.SinceRelease is null ? "" : $"<th class=\"since\">Since {HtmlText.Escape(doc.SinceRelease)}</th>";
         sb.Append($"<table class=\"summary family\">\n<thead><tr><th>Page</th><th class=\"kind\">Action</th><th class=\"num\">Names</th>{since}<th>What it lists</th></tr></thead>\n<tbody>\n");
         var appendixStarted = false;
         foreach (var r in family.OrderBy(r => r.IsAppendix ? 1 : 0).ThenBy(r => r.FamilyRank)) {
             if (r.IsAppendix && !appendixStarted) {
                 appendixStarted = true;
-                var span = doc.PreviousRelease is null ? 4 : 5;
+                var span = doc.SinceRelease is null ? 4 : 5;
                 sb.Append($"<tr class=\"appendix-head\"><th colspan=\"{span}\">Appendix</th></tr>\n");
             }
             var here = r.Id == hereId;
@@ -269,7 +356,7 @@ internal static class AuditSiteRenderer {
                 : $"<td><a href=\"{r.Id}.html\">{HtmlText.Escape(r.Title)}</a></td>");
             sb.Append($"<td class=\"kind\">{AuditPageLayout.ActionBadge(r.Action)}</td>");
             sb.Append($"<td class=\"num\">{r.Count:N0}</td>");
-            if (doc.PreviousRelease is not null) {
+            if (doc.SinceRelease is not null) {
                 var change = SinceText(doc, r);
                 sb.Append($"<td class=\"since {change.Css}\">{HtmlText.Escape(change.Text)}</td>");
             }
@@ -373,11 +460,8 @@ internal static class AuditSiteRenderer {
 
     // The full list is always one page that shows every row; it is never cut into per-group
     // pages. Long lists rely on the filter box and click-to-sort instead, and the page opts into
-    // the wide layout so the table can use the full page width.
-    private static void WriteFullListPages(AuditDocument doc, AuditReport report, string outputDir) {
-        if (report.Findings.Count == 0) {
-            return;
-        }
+    // the wide layout so the table can use the full page width. Written only for a report with rows.
+    private static string BuildFullListPage(AuditDocument doc, AuditReport report) {
         var heading = $"{report.Title}: full list";
 
         var body = new StringBuilder();
@@ -392,8 +476,7 @@ internal static class AuditSiteRenderer {
             ("Home", "index.html"),
             (report.Title, $"{report.Id}.html"),
             ("Full list", null));
-        var html = AuditPageLayout.Page(doc, heading, crumbs, body.ToString(), wide: true);
-        File.WriteAllText(Path.Combine(outputDir, $"{report.Id}-list.html"), html, Utf8NoBom);
+        return AuditPageLayout.Page(doc, heading, crumbs, body.ToString(), wide: true);
     }
 
     // -- helpers ---------------------------------------------------------------------------

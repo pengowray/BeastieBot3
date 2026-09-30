@@ -45,7 +45,8 @@ header.site .release { color: var(--ink-soft); font-size: 0.95rem; }
 nav.crumbs { font-size: 0.9rem; color: var(--ink-soft); margin: 14px 0 0; }
 nav.crumbs a { color: var(--ink-soft); }
 
-.disclaimer {
+/* .limited-notice: the notice at the top of every page of a --limit run. */
+.disclaimer, .limited-notice {
   background: #fff8ec;
   border: 1px solid #f0dca8;
   border-radius: 8px;
@@ -54,7 +55,9 @@ nav.crumbs a { color: var(--ink-soft); }
   font-size: 0.92rem;
   color: #5b4a25;
 }
-.disclaimer strong { color: #4a3a18; }
+.disclaimer strong, .limited-notice strong { color: #4a3a18; }
+.limited-notice { border-color: #e3bf6a; font-size: 0.95rem; }
+.limited-notice code { white-space: nowrap; }
 
 main { padding: 8px 0 56px; }
 section { background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 20px 22px; margin: 18px 0; }

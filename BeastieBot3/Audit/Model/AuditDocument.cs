@@ -30,4 +30,16 @@ internal sealed class AuditDocument {
     // "Since <release>" column. Null when no earlier release is recorded.
     public string? PreviousRelease { get; init; }
     public AuditReleaseCounts? ReleaseCounts { get; init; }
+
+    // The --limit value of a limited run: most producers read at most this many database rows, so
+    // every count in the document is partial. Null for a full run. Every page of a limited run
+    // carries a notice saying so (AuditPageLayout), and the run writes no release-counts.yml.
+    public long? RowLimit { get; init; }
+
+    public bool IsLimited => RowLimit is not null;
+
+    // The release the "Since <release>" columns compare against. Null for a limited run as well as
+    // when no earlier release is recorded: a partial count beside a full count from the previous
+    // release would read as a real change ("fixed (was 3,898)").
+    public string? SinceRelease => IsLimited ? null : PreviousRelease;
 }

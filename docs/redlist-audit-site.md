@@ -19,6 +19,25 @@ directory in `paths.ini`, e.g. `D:\datasets\beastiebot\reports\redlist-audit-202
 override. The release label comes from `import_metadata.redlist_version` in the IUCN CSV database
 (falling back to the dataset folder name).
 
+**`--limit` runs.** Most producers append `LIMIT N` to their query (`AuditContext.Limit`;
+`failed-assessments` ignores it), so every count a limited run shows is partial. Such a run:
+
+- defaults to `<Datastore:reports_dir>/redlist-audit-2026-limited`, beside the full site, so a test
+  build never overwrites the pages of a full run (`RedlistAuditSiteCommand.ResolveOutputDir`; an
+  explicit `--output` still wins). The command prints where it wrote and, when a full site exists
+  in `redlist-audit-2026`, that it was not changed.
+- puts a notice at the top of every page, and "Partial results" at the start of every `<title>`
+  (`AuditPageLayout.LimitedNotice`, driven by `AuditDocument.RowLimit`);
+- drops the "Since <release>" columns (`AuditDocument.SinceRelease` is null), because a partial count
+  beside the previous release's full count reads as a real change;
+- says "No observations of this kind in the rows checked" rather than "in the current release" on a
+  report page with nothing to list;
+- writes no `release-counts.yml` and prints no counts block.
+
+`ColArtifacts` skips `*-limited` folders, so a limited run never marks the CoL flow's "Rebuild the Red
+List audit site" step as done. A limited run written over the full folder with an explicit `--output`
+still counts; that is the user's explicit choice.
+
 ## Tone
 
 The site is neutral and non-judgmental throughout. It describes "observations" and
@@ -54,9 +73,9 @@ disclaimer appears once, in the footer.
 **"Since <release>" column.** `rules/audit/release-counts.yml` records headline counts per report per
 release; `AuditReleaseCounts` picks the most recent earlier release and the index and family tables
 print "up from N" / "down from N" / "unchanged" / "fixed (was N)", or nothing when that release
-recorded no count for the report. The build never writes the file (a `--limit` run would record partial
-counts); it prints the current release's block, and saves it as `release-counts.yml` in the output
-directory, for pasting in once the release is final.
+recorded no count for the report. The build never writes that file; a full run prints the current
+release's block and saves it as `release-counts.yml` in the output directory, for pasting in once the
+release is final. A `--limit` run does neither, since its counts are partial.
 
 - **`ActionClass`** â€” the `Action` chip on the index and on each report heading: what a reader would
   do about the rows, not what kind of data they are. Four values, no per-report overrides:
@@ -328,15 +347,24 @@ responsive.
 reports/redlist-audit-2026/
   index.html                 overview, Start here, report tables (records, text, CoL highlights)
   col-crosscheck.html        the crosscheck's entry page: what it compares, every page, appendix
-  release-counts.yml         this release's headline counts, for rules/audit/release-counts.yml
+  release-counts.yml         this release's headline counts, for rules/audit/release-counts.yml (full runs only)
   <report>.html              description + commentary + summary tables + short preview + links
-  <report>-list.html         full sortable/filterable list (or a per-group index when very large)
-  <report>-g-<class>.html     per-group pages when a report is split by class
-  csv/<report>.csv           every row, CC0
+  <report>-list.html         full sortable/filterable list, one page (only for a report with rows)
+  csv/<report>.csv           every row, CC0 (only for a report with rows)
   assets/audit.css, audit.js shared, embedded; no external dependencies
+reports/redlist-audit-2026-limited/   the same layout, from a --limit run (no release-counts.yml)
 ```
 
 Each report page embeds a short preview and links out to the full list and the CSV.
+
+**Files from an earlier run.** After writing, `AuditSiteRenderer.Write` removes the pages and CSVs
+the folder holds that this run did not write: the list page and CSV of a report that now has no
+rows, every page of a report whose producer was skipped, and pages an older version wrote (such as
+the old `methodology.html` and `<report>-g-<class>.html` pages). It removes only files the generator
+itself writes: top-level `.html` files whose head links `assets/audit.css`
+(`AuditPageLayout.StylesheetLink`) and files in `csv/` whose header starts with the `id` column.
+Anything else in the folder (a `CNAME` for hosting, notes, a zip) is left alone, so `--output` can
+point at a folder that holds other files. Each removal is printed.
 
 ## Year-specific vs generic commentary
 
