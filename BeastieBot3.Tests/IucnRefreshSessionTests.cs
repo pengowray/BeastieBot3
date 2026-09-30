@@ -199,4 +199,26 @@ public class IucnRefreshSessionTests {
         var session = store.StartRefreshSession(Cutoff, null, false, false);
         Assert.Throws<ArgumentException>(() => store.MarkRefreshPhaseDone(session.Id, "completed_at"));
     }
+
+    // The assessment queue must read downloaded_at back as UTC. Plain DateTime.TryParse returned
+    // local time, and DateTime comparison ignores Kind, so at UTC+10 an assessment downloaded up to
+    // ten hours before the cutoff looked newer than it and was never re-fetched, while the session's
+    // SQL count still listed it as remaining. The Kind check fails on any machine, including one on UTC.
+    [Fact]
+    public void AssessmentQueue_ReadsDownloadedAtAsUtc() {
+        using var connection = OpenMemory();
+        using var store = IucnApiCacheStore.OpenFromConnection(connection);
+
+        var downloaded = Cutoff.AddHours(-1);
+        var importId = store.BeginImport("/api/v4/taxa/sis/100");
+        store.WriteTaxonAtomic(100, importId, "{}", Now, new[] { new TaxaLookupRow(100, 100, "species") },
+            new[] { new IucnAssessmentHeader(900, 100, Latest: true, YearPublished: 2020) });
+        store.UpsertAssessment(900, 100, importId, "{}", downloaded);
+
+        var row = Assert.Single(store.GetAssessmentBacklogOrdered());
+        Assert.NotNull(row.DownloadedAt);
+        Assert.Equal(DateTimeKind.Utc, row.DownloadedAt!.Value.Kind);
+        Assert.Equal(downloaded, row.DownloadedAt.Value);
+        Assert.True(row.DownloadedAt.Value < Cutoff);
+    }
 }

@@ -374,11 +374,7 @@ ORDER BY b.latest DESC, IFNULL(b.year_published, 0) DESC, b.assessment_id DESC";
             var rootSisId = reader.GetInt64(2);
             var latest = reader.GetInt64(3) != 0;
             int? year = reader.IsDBNull(4) ? null : reader.GetInt32(4);
-            var downloaded = reader.IsDBNull(5) ? null : reader.GetString(5);
-            DateTime? downloadedAt = null;
-            if (!string.IsNullOrEmpty(downloaded) && DateTime.TryParse(downloaded, out var parsed)) {
-                downloadedAt = parsed;
-            }
+            var downloadedAt = ParseStoredUtc(reader.IsDBNull(5) ? null : reader.GetString(5));
 
             list.Add(new AssessmentQueueRow(assessmentId, sisId, rootSisId, latest, year, downloadedAt));
         }
