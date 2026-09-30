@@ -57,7 +57,7 @@ public sealed class IucnTaxonomyConsistencyCommand : Command<IucnTaxonomyConsist
         }
 
         if (!File.Exists(databasePath)) {
-            AnsiConsole.MarkupLine($"[red]IUCN SQLite database not found at:[/] {Markup.Escape(databasePath)}");
+            AnsiConsole.MarkupLine($"[red]IUCN Red List database not found:[/] {Markup.Escape(databasePath)}");
             return -3;
         }
 

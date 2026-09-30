@@ -348,7 +348,7 @@ public sealed class IucnApiCacheFullCommand : AsyncCommand<IucnApiCacheFullSetti
         var parts = new System.Collections.Generic.List<string>();
         if (backlog > 0) parts.Add($"{backlog:N0} queued assessments to download");
         if (refresh is { AssessmentsRemaining: > 0 }) parts.Add($"{refresh.AssessmentsRemaining:N0} to re-download for the re-import");
-        if (s.ServerErrorAssessments > 0) parts.Add($"{s.ServerErrorAssessments:N0} assessments the API answers with a server error are left alone");
+        if (s.ServerErrorAssessments > 0) parts.Add($"{s.ServerErrorAssessments:N0} assessments that got a server error (HTTP 5xx) are retried at the end of the run if their retry is due");
         if (s.BacklogNotFound > 0) parts.Add(runTombstones
             ? $"{s.BacklogNotFound:N0} assessments not found on the API (404) are requested again later in the run"
             : $"{s.BacklogNotFound:N0} assessments not found on the API (404) are left alone");

@@ -72,7 +72,7 @@ public sealed class IucnColCrosscheckCommand : Command<IucnColCrosscheckCommand.
         }
 
         if (!File.Exists(iucnPath)) {
-            AnsiConsole.MarkupLine($"[red]IUCN SQLite database not found at:[/] {Markup.Escape(iucnPath)}");
+            AnsiConsole.MarkupLine($"[red]IUCN Red List database not found:[/] {Markup.Escape(iucnPath)}");
             return -3;
         }
 

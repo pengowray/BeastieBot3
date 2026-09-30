@@ -46,7 +46,7 @@ internal static class WikidataCoverageAnalysis {
         }
 
         if (!File.Exists(iucnDb)) {
-            AnsiConsole.MarkupLine($"[red]IUCN SQLite database not found:[/] {Markup.Escape(iucnDb)}");
+            AnsiConsole.MarkupLine($"[red]IUCN Red List database not found:[/] {Markup.Escape(iucnDb)}");
             return -3;
         }
 

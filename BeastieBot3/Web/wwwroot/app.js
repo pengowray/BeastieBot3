@@ -313,7 +313,7 @@
 
   function jobTimesTooltip(j) {
     const lines = [];
-    if (j.createdAt) lines.push('enqueued ' + formatAbsolute(j.createdAt));
+    if (j.createdAt) lines.push('queued ' + formatAbsolute(j.createdAt));
     if (j.startedAt) lines.push('started ' + formatAbsolute(j.startedAt));
     if (j.completedAt) lines.push((wasInterrupted(j) ? 'marked interrupted at server restart ' : 'finished ') + formatAbsolute(j.completedAt));
     return lines.join('\n');

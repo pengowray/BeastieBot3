@@ -97,7 +97,7 @@ public sealed class WikipediaMatchTaxaCommand : AsyncCommand<WikipediaMatchTaxaC
         }
 
         if (!File.Exists(iucnPath)) {
-            AnsiConsole.MarkupLineInterpolated($"[red]IUCN SQLite database not found:[/] {Markup.Escape(iucnPath)}");
+            AnsiConsole.MarkupLineInterpolated($"[red]IUCN Red List database not found:[/] {Markup.Escape(iucnPath)}");
             return -3;
         }
 
