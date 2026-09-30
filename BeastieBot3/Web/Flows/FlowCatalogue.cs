@@ -599,7 +599,7 @@ public static class FlowCatalogue {
                 new FlowStep {
                     Id = "refresh-caps",
                     Title = "Refresh capitalization rules (after editing caps.txt)",
-                    Description = "Re-import rules/caps.txt into the common-names store so capitalization edits (including multi-word phrase rules like \"guinea pig\") take effect — without rebuilding the whole store.",
+                    Description = "Re-import rules/caps.txt into the Common names store so capitalization edits (including multi-word phrase rules like \"guinea pig\") take effect — without rebuilding the whole store.",
                     Commands = new[] { "common-names init --skip-taxa" },
                     InputSourceIds = new[] { "common-names" },
                     OutputSourceIds = new[] { "common-names" },
