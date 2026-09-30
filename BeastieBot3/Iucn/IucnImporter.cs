@@ -21,7 +21,15 @@ using BeastieBot3.Infrastructure;
 namespace BeastieBot3.Iucn;
 
 public sealed class IucnImporter {
-    private static readonly Regex RedlistVersionRegex = new(@"(?<version>\d{4}-\d+)", RegexOptions.Compiled | RegexOptions.CultureInvariant);
+    // A Red List release is "YYYY-N" with a plausible year and a 1-2 digit release number. The
+    // lookaround boundaries keep the match off digit runs it doesn't own: ISO dates ("2025-10-24",
+    // which would otherwise read as release 2025-10) and year ranges ("2019-2020").
+    private static readonly Regex RedlistVersionRegex = new(@"(?<!\d)(?<version>(?:19|20)\d{2}-\d{1,2})(?![\d-])", RegexOptions.Compiled | RegexOptions.CultureInvariant);
+
+    // IUCN names each downloaded zip "redlist_species_data_<uuid>.zip", and the uuid's hex groups
+    // can spell a plausible release ("...-2011-4abc-..."), so uuids are removed from the path before
+    // looking for a version.
+    private static readonly Regex UuidRegex = new(@"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}", RegexOptions.Compiled | RegexOptions.CultureInvariant);
     private readonly IAnsiConsole _console;
     private readonly SqliteConnection _connection;
     private readonly string _rootDir;
@@ -433,7 +441,9 @@ VALUES (@filename, @version, @started);";
             return "unknown";
         }
 
-        var normalized = path.Replace('\\', '/');
+        // Replace a uuid with a space, not nothing, so digits either side of it can't join up into
+        // a version that was never in the path.
+        var normalized = UuidRegex.Replace(path.Replace('\\', '/'), " ");
         var segments = normalized.Split('/', StringSplitOptions.RemoveEmptyEntries);
         foreach (var segment in segments) {
             var match = RedlistVersionRegex.Match(segment);

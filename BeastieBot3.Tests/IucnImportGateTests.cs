@@ -92,6 +92,31 @@ public class IucnImportGateTests {
     }
 
     [Fact]
+    public void Import_TwoUuidNamedZipsOfOneRelease_Accumulate() {
+        // Regression: IUCN names both downloads of a release redlist_species_data_<uuid>.zip. The uuid
+        // used to be read as the release version, giving the two zips different bogus versions, so the
+        // second one was refused as a cross-release import.
+        using var ctx = new GateFixture();
+        ctx.Import(ctx.MakeZip("redlist_species_data_581ed650-1373-414a-a785-081f3250d4b3.zip", taxonId: 1, assessmentId: 100), "2026-1", force: false);
+        ctx.Import(ctx.MakeZip("redlist_species_data_a1b2c3d4-2011-4abc-8def-0123456789ab.zip", taxonId: 2, assessmentId: 200), "2026-1", force: false);
+
+        Assert.Equal(2, ctx.TaxonomyCount());
+        Assert.Equal("2026-1", ctx.ScalarString("SELECT DISTINCT redlist_version FROM import_metadata;"));
+    }
+
+    [Fact]
+    public void Import_VersionFromSubfolderName_BeatsTheHint() {
+        // The documented layout: one subfolder per download, named for the release. The folder name is
+        // the version of record even when the CSV directory hint says otherwise.
+        using var ctx = new GateFixture();
+        ctx.Import(
+            ctx.MakeZip("redlist_species_data_581ed650-1373-414a-a785-081f3250d4b3.zip", taxonId: 1, assessmentId: 100, subfolder: "2026-1 non-passerines"),
+            "unknown", force: false);
+
+        Assert.Equal("2026-1", ctx.ScalarString("SELECT DISTINCT redlist_version FROM import_metadata;"));
+    }
+
+    [Fact]
     public void Import_DifferentReleaseWithForce_WipesAndRebuilds() {
         using var ctx = new GateFixture();
         ctx.Import(ctx.MakeZip("export-a.zip", taxonId: 1, assessmentId: 100), "2025-2", force: false);
@@ -118,10 +143,13 @@ public class IucnImportGateTests {
             pragma.ExecuteNonQuery();
         }
 
-        // A minimal IUCN export zip: taxonomy.csv + assessments.csv with one row each. The filename
-        // carries no YYYY-N, so the importer falls back to the version hint we pass to Import().
-        public string MakeZip(string name, int taxonId, int assessmentId) {
-            var path = Path.Combine(_dir, name);
+        // A minimal IUCN export zip: taxonomy.csv + assessments.csv with one row each. Unless the
+        // name or subfolder carries a YYYY-N, the importer falls back to the version hint we pass to
+        // Import().
+        public string MakeZip(string name, int taxonId, int assessmentId, string? subfolder = null) {
+            var dir = subfolder is null ? _dir : Path.Combine(_dir, subfolder);
+            Directory.CreateDirectory(dir);
+            var path = Path.Combine(dir, name);
             if (File.Exists(path)) File.Delete(path); // a reused filename across releases overwrites
             using var zip = ZipFile.Open(path, ZipArchiveMode.Create);
             WriteEntry(zip, "taxonomy.csv",
