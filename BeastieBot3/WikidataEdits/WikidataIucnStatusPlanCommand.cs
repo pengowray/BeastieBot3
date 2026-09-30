@@ -137,6 +137,7 @@ internal sealed class WikidataIucnStatusPlanCommand : AsyncCommand<WikidataIucnS
         var batch = new List<PlanPairRow>(1000);
         var linkedTaxaSeen = new HashSet<long>();
         var itemsWithLinks = 0L;
+        var stoppedAtLimit = false;
 
         using (var items = WdTaxonItemReader.Open(wikidataCache!)) {
             foreach (var item in items.ReadAll(ct)) {
@@ -181,14 +182,20 @@ internal sealed class WikidataIucnStatusPlanCommand : AsyncCommand<WikidataIucnS
                     }
                 }
 
-                if (settings.Limit > 0 && itemsWithLinks >= settings.Limit) break;
+                if (settings.Limit > 0 && itemsWithLinks >= settings.Limit) {
+                    stoppedAtLimit = true;
+                    break;
+                }
             }
         }
         store.InsertPairs(batch);
 
         var linkedItemIds = linksByItem.Keys.ToHashSet(StringComparer.Ordinal);
         tally.TaxaWithNoItem = assessments.Count - itemsPerTaxon.Count;
-        tally.ItemsLinkedButNotDownloaded = settings.Limit > 0 ? 0 : Math.Max(0, linkedItemIds.Count - itemsWithLinks);
+        // Only a run that read every item can say which linked items it never saw. --limit on its own
+        // does not mean the run stopped early: a limit above the number of linked items is never reached.
+        tally.StoppedAtLimit = stoppedAtLimit ? settings.Limit : null;
+        tally.ItemsLinkedButNotDownloaded = stoppedAtLimit ? 0 : Math.Max(0, linkedItemIds.Count - itemsWithLinks);
 
         // ---- Report files
         // Top level of the reports folder: the workflow page's "latest file" links only look there.
@@ -206,7 +213,7 @@ internal sealed class WikidataIucnStatusPlanCommand : AsyncCommand<WikidataIucnS
 
         store.FinishRun(runId, DateTime.UtcNow, tally.OldestItemDownloadUtc, tally);
 
-        PrintSummary(tally, settings.Limit > 0);
+        PrintSummary(tally);
         AnsiConsole.MarkupLineInterpolated($"[green]Report:[/] {mdPath} (CSV of every pair and sample files beside it)");
         AnsiConsole.MarkupLineInterpolated($"[grey]Plan stored in {planPath}. Nothing was sent to Wikidata.[/]");
         return 0;
@@ -265,8 +272,12 @@ internal sealed class WikidataIucnStatusPlanCommand : AsyncCommand<WikidataIucnS
         }
     }
 
-    private static void PrintSummary(WikidataIucnPlanTally t, bool partial) {
-        var table = new Table().Border(TableBorder.Simple).Title(partial ? "Planned changes, pairs (partial: stopped at --limit)" : "Planned changes, pairs (A and B would be edited; C and D need a person first)");
+    internal static string SummaryTitle(WikidataIucnPlanTally t) => t.StoppedAtLimit is { } limit
+        ? $"Planned changes, pairs (partial: stopped at --limit {limit})"
+        : "Planned changes, pairs (A and B would be edited; C and D need a person first)";
+
+    private static void PrintSummary(WikidataIucnPlanTally t) {
+        var table = new Table().Border(TableBorder.Simple).Title(Markup.Escape(SummaryTitle(t)));
         table.AddColumn("Tier");
         var categories = new[] { PlanCategory.StatusChanged, PlanCategory.StatusAdded, PlanCategory.ReferencesOnly, PlanCategory.NoChange, PlanCategory.UnmappedCategory };
         var headers = new[] { "Status changed", "Status added", "References added", "Nothing to change", "No P141 value" };
