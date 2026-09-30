@@ -165,7 +165,7 @@ public class FlowApiProbeTests {
     public void Infraranks_IgnoresTheOnesTheApiCannotServe() {
         var r = FlowStepProbes.ApiInfraranks(State(backlogOutstanding: 23, serverErrors: 23))!;
         Assert.Equal("ok", r.Status);
-        Assert.Equal("352,384 assessments cached. Every queued assessment is downloaded except 23. The API returns a server error for those 23.", r.Detail);
+        Assert.Equal("352,384 assessments cached. 23 queued assessments failed to download with a server error (HTTP 5xx); later runs try them again. Every other queued assessment is downloaded.", r.Detail);
     }
 
     // A 404 is tombstoned and no normal run asks for it again, so it is not work left either.
@@ -174,14 +174,14 @@ public class FlowApiProbeTests {
     public void Infraranks_NotFoundOnly_IsOkAndSaysHowMany() {
         var r = FlowStepProbes.ApiInfraranks(State(notFound: 57))!;
         Assert.Equal("ok", r.Status);
-        Assert.Equal("352,384 assessments cached. Every queued assessment is downloaded except 57, which are not found on the API (404). A re-import requests those 57 again.", r.Detail);
+        Assert.Equal("352,384 assessments cached. 57 queued assessments were not found on the API (404); a re-import requests them again. Every other queued assessment is downloaded.", r.Detail);
     }
 
     [Fact]
     public void Infraranks_ServerErrorsAndNotFound_NamesBoth() {
         var r = FlowStepProbes.ApiInfraranks(State(backlogOutstanding: 23, serverErrors: 23, notFound: 57))!;
         Assert.Equal("ok", r.Status);
-        Assert.Equal("352,384 assessments cached. Every queued assessment is downloaded except 80. The API returns a server error for 23 of them, and the other 57 are not found on the API (404). A re-import requests those 57 again.", r.Detail);
+        Assert.Equal("352,384 assessments cached. 23 queued assessments failed to download with a server error (HTTP 5xx); later runs try them again. 57 queued assessments were not found on the API (404); a re-import requests them again. Every other queued assessment is downloaded.", r.Detail);
     }
 
     // While a re-import is open its tombstone pass may already have asked for these again, so the
@@ -190,21 +190,21 @@ public class FlowApiProbeTests {
     public void Infraranks_NotFoundDuringAReimport_LeavesOutTheReimportSentence() {
         var r = FlowStepProbes.ApiInfraranks(State(notFound: 57, session: Session()))!;
         Assert.Equal("ok", r.Status);
-        Assert.Equal("352,384 assessments cached. Every queued assessment is downloaded except 57, which are not found on the API (404).", r.Detail);
+        Assert.Equal("352,384 assessments cached. 57 queued assessments were not found on the API (404). Every other queued assessment is downloaded.", r.Detail);
     }
 
     [Fact]
     public void Infraranks_ServerErrorsAndNotFoundDuringAReimport_LeavesOutTheReimportSentence() {
         var r = FlowStepProbes.ApiInfraranks(State(backlogOutstanding: 23, serverErrors: 23, notFound: 57, session: Session()))!;
         Assert.Equal("ok", r.Status);
-        Assert.Equal("352,384 assessments cached. Every queued assessment is downloaded except 80. The API returns a server error for 23 of them, and the other 57 are not found on the API (404).", r.Detail);
+        Assert.Equal("352,384 assessments cached. 23 queued assessments failed to download with a server error (HTTP 5xx); later runs try them again. 57 queued assessments were not found on the API (404). Every other queued assessment is downloaded.", r.Detail);
     }
 
     [Fact]
-    public void Infraranks_NothingMissing_KeepsTheShortLine() {
+    public void Infraranks_NothingMissing_SaysEveryQueuedAssessmentIsDownloaded() {
         var r = FlowStepProbes.ApiInfraranks(State())!;
         Assert.Equal("ok", r.Status);
-        Assert.Equal("Every queued assessment is downloaded (352,384 in the cache).", r.Detail);
+        Assert.Equal("352,384 assessments cached. Every queued assessment is downloaded.", r.Detail);
     }
 
     // The count of work left is the same number the one-button light shows: server errors out.
@@ -280,7 +280,7 @@ public class FlowApiProbeTests {
     public void UpdateLight_OnlyNotFoundLeft_IsOkAndNamesThem() {
         var r = FlowStepProbes.ApiUpdate(State(notFound: 57, projection: Projection()));
         Assert.Equal("ok", r.Status);
-        Assert.Contains(" Every queued assessment is downloaded except 57, which are not found on the API (404). A re-import requests those 57 again. For a new Red List release", r.Detail);
+        Assert.Contains(" 57 queued assessments were not found on the API (404); a re-import requests them again. Every other queued assessment is downloaded. For a new Red List release", r.Detail);
     }
 
     [Fact]
@@ -296,22 +296,22 @@ public class FlowApiProbeTests {
     public void UpdateLight_OnlyServerErrorsLeft_IsOkWithoutTheReimportSentence() {
         var r = FlowStepProbes.ApiUpdate(State(backlogOutstanding: 23, serverErrors: 23, projection: Projection()));
         Assert.Equal("ok", r.Status);
-        Assert.Contains(" Every queued assessment is downloaded except 23. The API returns a server error for those 23. For a new Red List release", r.Detail);
-        Assert.DoesNotContain("requests those", r.Detail);
+        Assert.Contains(" 23 queued assessments failed to download with a server error (HTTP 5xx); later runs try them again. Every other queued assessment is downloaded. For a new Red List release", r.Detail);
+        Assert.DoesNotContain("re-import requests", r.Detail);
     }
 
     [Fact]
     public void UpdateLight_NothingMissing_HasNoExceptSentence() {
         var r = FlowStepProbes.ApiUpdate(State(projection: Projection()));
         Assert.Equal("ok", r.Status);
-        Assert.DoesNotContain("Every queued assessment", r.Detail);
+        Assert.DoesNotContain("queued assessment", r.Detail);
     }
 
     [Fact]
     public void UpdateLight_ServerErrorsAndNotFound_IsOkAndNamesBoth() {
         var r = FlowStepProbes.ApiUpdate(State(backlogOutstanding: 23, serverErrors: 23, notFound: 57, projection: Projection()));
         Assert.Equal("ok", r.Status);
-        Assert.Contains(" Every queued assessment is downloaded except 80. The API returns a server error for 23 of them, and the other 57 are not found on the API (404). A re-import requests those 57 again. For a new Red List release", r.Detail);
+        Assert.Contains(" 23 queued assessments failed to download with a server error (HTTP 5xx); later runs try them again. 57 queued assessments were not found on the API (404); a re-import requests them again. Every other queued assessment is downloaded. For a new Red List release", r.Detail);
     }
 
     [Fact]

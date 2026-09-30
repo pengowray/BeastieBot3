@@ -197,9 +197,11 @@
           Red List category per sub-taxon (the same numbers as a parent list's summary table).
         </p>
         <p class="muted small">
-          <strong>Save sub-groups</strong> adds the groups in ticked rows to the parent's sub-groups in the draft
-          <code>taxa-groups.yml</code>, and removes the groups in unticked rows. Sub-groups with no row in this table,
-          such as ones with a system filter or at another rank, stay as they are. Apply the draft in the Rules editor.
+          Tick the rows whose groups should be sub-groups of the Parent group, untick the others, then click
+          <strong>Save sub-groups</strong>. Sub-groups with no tickbox in the table are kept, for example marine-mammals
+          (class Mammalia in the Marine system) or a group at another rank. Saving writes only to the draft
+          <code>taxa-groups.yml</code>; to copy the draft to rules/, click <strong>Apply changed files to source</strong>
+          in the Rules editor.
         </p>
         <div class="filter-bar">
           <label>Parent <select id="grp-parent"></select></label>

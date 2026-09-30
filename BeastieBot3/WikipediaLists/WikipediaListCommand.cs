@@ -73,7 +73,7 @@ public sealed class WikipediaListCommand : Command<WikipediaListCommand.Settings
         public string? ColDatabasePath { get; init; }
 
         [CommandOption("--no-col-enrichment")]
-        [System.ComponentModel.Description("Ignore the Catalogue of Life database even if the file exists; lists then use only IUCN ranks and IUCN spellings of scientific names.")]
+        [System.ComponentModel.Description("Ignore the Catalogue of Life database even if the file exists; section headings then use only the ranks in the IUCN data (kingdom, phylum, class, order, family and genus), and species names keep the IUCN spelling even where it has an error.")]
         public bool NoColEnrichment { get; init; }
 
         [CommandOption("--compare <FILE>")]
@@ -251,7 +251,7 @@ public sealed class WikipediaListCommand : Command<WikipediaListCommand.Settings
         return new NameSourcePlan(useStore, fallback, col);
     }
 
-    private const string IucnOnlyNamesNote = "Lists use only IUCN ranks and IUCN spellings of scientific names.";
+    private const string IucnOnlyNamesNote = "Section headings use only the ranks in the IUCN data (kingdom, phylum, class, order, family and genus), and species names keep the IUCN spelling even where it has an error.";
 
     /// <summary>
     /// Prints why the Common names store is not used, which caches the common names come from

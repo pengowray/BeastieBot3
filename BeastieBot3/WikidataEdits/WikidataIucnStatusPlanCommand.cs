@@ -271,8 +271,8 @@ internal sealed class WikidataIucnStatusPlanCommand : AsyncCommand<WikidataIucnS
     }
 
     internal static string SummaryTitle(WikidataIucnPlanTally t) => t.StoppedAtLimit is { } limit
-        ? $"Planned changes, pairs (partial: stopped at --limit {limit})"
-        : "Planned changes, pairs (A and B would be edited; C and D need a person first)";
+        ? $"Taxon-item pairs by tier (partial: stopped after {limit:N0} linked Wikidata items)"
+        : "Taxon-item pairs by tier (A and B would be edited; C and D need a person first)";
 
     private static void PrintSummary(WikidataIucnPlanTally t) {
         var table = new Table().Border(TableBorder.Simple).Title(Markup.Escape(SummaryTitle(t)));

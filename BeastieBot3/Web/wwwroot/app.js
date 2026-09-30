@@ -159,14 +159,14 @@
       });
     } catch (e) {
       if (generation !== dockGeneration) return;
-      terminal.setText('Failed to enqueue: ' + fetchErrorText(e) + '. Check that `serve` is running.\n');
+      terminal.setText('Failed to start job: no reply from `serve` (' + fetchErrorText(e) + '). Check that `serve` is running.\n');
       setStatus('failed');
       return;
     }
     if (!res.ok) {
       const errText = await responseErrorText(res);
       if (generation !== dockGeneration) return;
-      terminal.setText('Failed to enqueue: ' + errText + '\n');
+      terminal.setText('Failed to start job: ' + errText + '\n');
       setStatus('failed');
       return;
     }
@@ -315,7 +315,7 @@
     const lines = [];
     if (j.createdAt) lines.push('enqueued ' + formatAbsolute(j.createdAt));
     if (j.startedAt) lines.push('started ' + formatAbsolute(j.startedAt));
-    if (j.completedAt) lines.push((wasInterrupted(j) ? 'serve restarted ' : 'finished ') + formatAbsolute(j.completedAt));
+    if (j.completedAt) lines.push((wasInterrupted(j) ? 'marked interrupted at server restart ' : 'finished ') + formatAbsolute(j.completedAt));
     return lines.join('\n');
   }
 

@@ -11,7 +11,7 @@ public class WikidataIucnProbeTests {
 
     private static WikidataIucnPlanRun Run(long stale = 0, string? edition = null, int? limit = null) => new() {
         FinishedAtUtc = Finished, Release = "2026-1", EditionItem = edition,
-        Pairs = 178_000, Editable = 148_000, ForReview = 25_000, StaleItems = stale, StoppedAtLimit = limit,
+        Pairs = 2_000, Editable = 1_848, ForReview = 152, StaleItems = stale, StoppedAtLimit = limit,
     };
 
     [Fact]
@@ -90,7 +90,7 @@ public class WikidataIucnProbeTests {
         var partial = WikidataIucnProbes.PlanStep(state);
         Assert.Equal("todo", partial.Status);
         Assert.StartsWith("Partial dry run on ", partial.Detail);
-        Assert.Contains("For those 2,000 items: 148,000 edits planned, 25,000 pairs need a person to confirm the match.", partial.Detail);
+        Assert.Contains("For those 2,000 items: 1,848 edits planned, 152 taxon-item pairs need a person to confirm the match.", partial.Detail);
         Assert.Contains("stopped after 2,000 linked Wikidata items. For those 2,000 items:", partial.Detail);
         Assert.Contains("without --limit for the complete plan", partial.Detail);
         Assert.DoesNotContain("(--limit", partial.Detail);

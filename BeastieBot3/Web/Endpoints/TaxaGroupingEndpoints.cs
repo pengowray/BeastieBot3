@@ -74,7 +74,7 @@ public static class TaxaGroupingEndpoints {
                 using var chart = new IucnChartDataBuilder(dbPath);
                 breakdown = chart.BuildChildBreakdown(def.Filters, rank);
             } catch (Exception ex) {
-                return Results.Json(new { error = "Could not count species in the IUCN database: " + ex.Message }, statusCode: 500);
+                return Results.Json(new { error = "Counting species in the IUCN Red List database: " + ex.Message }, statusCode: 500);
             }
 
             var rows = breakdown

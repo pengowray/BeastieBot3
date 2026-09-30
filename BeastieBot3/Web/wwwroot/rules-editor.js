@@ -92,8 +92,8 @@
       const tickable = data.rows.filter((r) => isTickable(r, data.group)).length;
       $('#grp-save').hidden = tickable === 0;
       const subTaxa = data.rows.length === 1 ? 'sub-taxon' : 'sub-taxa';
-      let msg = `${data.rows.length.toLocaleString()} ${subTaxa} of '${data.group}' at rank ${data.childRank}, `
-        + `${data.grandTotal.toLocaleString()} species in total.`;
+      let msg = `'${data.group}' by ${data.childRank}: ${data.rows.length.toLocaleString()} ${subTaxa}, `
+        + `${data.grandTotal.toLocaleString()} species.`;
       if (tickable) {
         msg += ` To change the sub-groups of '${data.group}', tick or untick rows, then click "Save sub-groups".`;
       }
@@ -293,7 +293,10 @@
     const whatIf = `<div class="imp-controls">`
       + `<label>What-if budget <input id="imp-budget" type="number" min="0" step="500" `
       + `value="${candidateBudget || ''}" placeholder="${d.budget || 'e.g. 5000'}"></label>`
-      + `<button class="ghost xsmall" data-apply-budget>Preview budget check</button></div>`;
+      + `<button class="ghost xsmall" data-apply-budget title="Recalculates the Budget check column and the Split at line `
+      + `with the number in the What-if budget box in place of the group's own budget (the most bullets one list page should have). `
+      + `Nothing is saved and no page is generated. With the box empty, the check uses the group's own budget again. `
+      + `To save a budget, type it in Set budget and click Save to draft.">Check pages against what-if budget</button></div>`;
 
     // Tuning knobs → draft rules (size_budget on the group, category_split on the list entry).
     // The split <select> is pre-set to the group's current setting (from the draft), so it shows what's
@@ -317,7 +320,12 @@
       + `<p class="muted small">Bullets: entries on the list page, including subspecies and varieties listed separately. Species: species only, the number stated in the page's lead. The size budget applies to Bullets. Global assessments only, no subpopulations.</p>`
       + `<div class="feature-table-wrap"><table class="feature-table"><thead><tr>`
       + `<th class="wt-left">Page option</th><th>Bullets</th><th>Species</th><th>Budget check</th>`
-      + `<th class="wt-left">Structure (last generated)</th><th></th></tr></thead>`
+      + `<th class="wt-left" title="The headings and wikitext file size of each page, from the last time wikipedia generate-lists `
+      + `generated that page. Bullets, Species and Budget check are counted from the current IUCN data, so this column can be older `
+      + `than those counts and the current rules. Level is the MediaWiki heading level (== is level 2). If the headings text is red, `
+      + `the generator found a layout problem on that page, and its tooltip lists the problems. If the size is red, the file is over 2 MB. `
+      + `A dash (—) means there is no stored record for that page: the page was never generated, or a later wikipedia generate-lists `
+      + `run on a newer IUCN release dropped its record.">Headings as last generated</th><th></th></tr></thead>`
       + `<tbody>${opts}</tbody></table></div>${sub}`
       + whatIf + knobs
       + `<p class="muted small" id="imp-msg"></p>`;

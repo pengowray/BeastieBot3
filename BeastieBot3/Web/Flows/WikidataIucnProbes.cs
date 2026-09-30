@@ -49,7 +49,7 @@ public static class WikidataIucnProbes {
         if (s.LastPlan is not { } plan) {
             return new FlowProbeResult("todo", "No dry run yet.");
         }
-        var counts = $"{plan.Editable:n0} edits planned, {plan.ForReview:n0} pairs need a person to confirm the match";
+        var counts = $"{plan.Editable:n0} edits planned, {plan.ForReview:n0} taxon-item pairs need a person to confirm the match";
         var summary = plan.StoppedAtLimit is { } stoppedAt
             ? $"{counts} (partial dry run on {plan.FinishedAtUtc:d MMM yyyy}, stopped after {stoppedAt:n0} linked Wikidata items)."
             : $"{counts} (dry run on {plan.FinishedAtUtc:d MMM yyyy}).";

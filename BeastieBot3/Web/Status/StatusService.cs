@@ -121,7 +121,7 @@ public sealed class StatusService {
             var value = raw is null || raw is DBNull ? (long?)null : Convert.ToInt64(raw);
             return new MetricResult { Label = spec.Label, Value = value };
         } catch (SqliteException ex) when (spec.TolerateMissing && IsMissingTable(ex)) {
-            return new MetricResult { Label = spec.Label, Value = null, Note = "table not yet created" };
+            return new MetricResult { Label = spec.Label, Value = null, Note = "none in this file yet" };
         } catch (Exception ex) {
             return new MetricResult { Label = spec.Label, Value = null, Error = ex.Message };
         }

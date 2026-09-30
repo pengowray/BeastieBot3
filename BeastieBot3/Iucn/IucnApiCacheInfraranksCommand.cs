@@ -152,7 +152,7 @@ public sealed class IucnApiCacheInfraranksCommand : AsyncCommand<IucnApiCacheInf
                 AnsiConsole.MarkupLine("[green]Nothing to download. All discovered infraspecific taxa are already cached.[/]");
             } else {
                 AnsiConsole.MarkupLineInterpolated(
-                    $"[green]Nothing to download.[/] {sorted.AlreadyCached:N0} infraspecific taxa are already cached. The API reported {sorted.NotFoundEarlier:N0} as not found (HTTP 404) on an earlier run; use --force to request them again.");
+                    $"[green]Nothing to download.[/] {sorted.AlreadyCached:N0} infraspecific taxa are already cached, and {sorted.NotFoundEarlier:N0} infraspecific taxa were not found (HTTP 404) on an earlier run. With --force, both the cached and the not-found infraspecific taxa are requested again.");
             }
             return 0;
         }

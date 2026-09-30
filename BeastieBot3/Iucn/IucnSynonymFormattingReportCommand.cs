@@ -42,7 +42,7 @@ public sealed class IucnSynonymFormattingReportCommand : Command<IucnSynonymForm
         public string? CsvOutputPath { get; init; }
 
         [CommandOption("--output-dir <DIR>")]
-        [Description("Folder for both files (Markdown and CSV); takes priority over Datastore:reports_dir in paths.ini. A path in --markdown-output overrides it for both files, and a path in --csv-output overrides it for the CSV.")]
+        [Description("Folder for the Markdown report, in place of the folder set by Datastore:reports_dir in paths.ini. By default the CSV file goes in the same folder as the Markdown report, so when --markdown-output is given, --output-dir is not used for either file. The folder is created if it does not exist.")]
         public string? OutputDirectory { get; init; }
 
         [CommandOption("--limit <ROWS>")]

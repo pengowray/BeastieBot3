@@ -39,8 +39,8 @@ public class FlowSourceHeadlineTests {
 
     [Fact]
     public void A_metric_without_a_value_shows_its_note() {
-        Assert.Equal("entities cached: table not yet created", FlowEvaluator.SummariseHeadline(Source(metrics:
-            Metric("entities cached", note: "table not yet created"))));
+        Assert.Equal("entities cached: none in this file yet", FlowEvaluator.SummariseHeadline(Source(metrics:
+            Metric("entities cached", note: "none in this file yet"))));
     }
 
     [Fact]

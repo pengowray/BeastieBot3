@@ -84,6 +84,6 @@ public class DataSourceMetricTests {
 
         Assert.Null(result.Value);
         Assert.Null(result.Error);
-        Assert.Equal("table not yet created", result.Note);
+        Assert.Equal("none in this file yet", result.Note);
     }
 }
