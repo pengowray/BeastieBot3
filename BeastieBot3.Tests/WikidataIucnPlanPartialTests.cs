@@ -17,7 +17,8 @@ public class WikidataIucnPlanPartialTests {
         var t = new WikidataIucnPlanTally { StoppedAtLimit = 2000 };
 
         Assert.Equal("Planned changes, pairs (partial: stopped at --limit 2000)", WikidataIucnStatusPlanCommand.SummaryTitle(t));
-        Assert.Contains("**Partial plan:** this run stopped after 2,000 of the Wikidata items linked to IUCN taxa (`--limit 2000`).", Report(t));
+        Assert.Contains("**Partial plan:** this run stopped after 2,000 of the Wikidata items linked to IUCN taxa (`--limit 2000`). " +
+                        "The Coverage section is complete; all other counts cover only those 2,000 items.", Report(t));
     }
 
     [Fact]

@@ -169,19 +169,18 @@ public static class WikiCoverageStateReader {
 
             // The all-titles dump tables arrived later than the rest of the schema, so an older
             // cache without them reads as "no dump imported", which is also true.
+            var pages = CountPageStatuses(conn);
             var dumpTitles = CountOrZero(conn, "SELECT COUNT(*) FROM wp.enwiki_dump_titles");
             var queuedInDump = dumpTitles == 0 ? 0 : CountOrZero(conn, """
                 SELECT COUNT(*) FROM wp.wiki_pages p
                 WHERE p.download_status IN ('pending', 'failed')
                   AND EXISTS (SELECT 1 FROM wp.enwiki_dump_titles d WHERE d.title = p.normalized_title)
                 """);
-            var queuedTotal = dumpTitles == 0 ? 0 : CountOrZero(conn,
-                "SELECT COUNT(*) FROM wp.wiki_pages WHERE download_status IN ('pending', 'failed')");
+            var queuedTotal = dumpTitles == 0 ? 0 : pages.Pending + pages.Failed;
 
             // Restricted to taxa in this release: rows for taxa a later release dropped are never
             // re-evaluated, so a leftover 'pending' row would hold the settle step open forever.
             var byStatus = CountMatchStatuses(conn, Eligible);
-            var pages = CountPageStatuses(conn);
 
             var withoutWikidata = $"""
                 SELECT COUNT(*) FROM ({Eligible}) t

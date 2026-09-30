@@ -87,7 +87,7 @@ internal static class WikidataIucnPlanReport {
         sb.AppendLine();
         if (t.StoppedAtLimit is { } limit) {
             sb.AppendLine($"**Partial plan:** this run stopped after {N(limit)} of the Wikidata items linked to IUCN taxa (`--limit {limit}`). " +
-                "Pair counts and planned changes cover those items only. For the complete plan, run again without `--limit`.");
+                $"The Coverage section is complete; all other counts cover only those {N(limit)} items. For the complete plan, run again without `--limit`.");
             sb.AppendLine();
         }
 

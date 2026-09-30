@@ -135,7 +135,6 @@ internal sealed class WikidataIucnStatusPlanCommand : AsyncCommand<WikidataIucnS
         var sampleCounts = new Dictionary<string, int>();
         var assessmentSamples = new List<JsonObject>();
         var batch = new List<PlanPairRow>(1000);
-        var linkedTaxaSeen = new HashSet<long>();
         var itemsWithLinks = 0L;
         var stoppedAtLimit = false;
 
@@ -148,7 +147,6 @@ internal sealed class WikidataIucnStatusPlanCommand : AsyncCommand<WikidataIucnS
 
                 foreach (var link in itemLinks) {
                     var assessment = assessments[link.TaxonId];
-                    linkedTaxaSeen.Add(link.TaxonId);
                     if (decisions.TryGetValue((link.TaxonId, item.Qid), out var decision)) {
                         if (decision == "rejected") { tally.ReviewRejected++; continue; }
                         tally.ReviewConfirmed++;
