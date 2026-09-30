@@ -96,7 +96,9 @@ test('expanding a command shows its auto-generated form without running it', asy
   // `sprat generate-lists` match — so pick the row inside the wikipedia branch.
   const branch = page.locator('#command-tree .cmd-branch')
     .filter({ has: page.locator('.cmd-branch-name', { hasText: /^wikipedia$/ }) });
-  const row = branch.locator('.cmd-row', { hasText: 'generate-lists' }).first();
+  // Match the row by its name: other rows' descriptions mention generate-lists too.
+  const row = branch.locator('.cmd-row')
+    .filter({ has: page.locator('.name', { hasText: /^generate-lists$/ }) });
   await row.click();
   // The form renders with a Run button — but we never click it.
   const form = branch.locator('.cmd-form').first();
