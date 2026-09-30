@@ -737,12 +737,12 @@
   // CommandClassificationTests checks that every RerunEffect has an entry here.
   const EFFECTS = {
     readonly:       { label: 'read-only', cls: 'readonly', icon: '👁', hint: 'Reads data and writes reports or output files. Changes no cache or database.' },
-    idempotentadd:  { label: 'adds what is missing', cls: 'add', icon: '＋', hint: 'By default, a run adds only what is missing and keeps what is already there.' },
+    idempotentadd:  { label: 'adds what is missing', cls: 'add', icon: '＋', hint: 'By default, a run adds only the records that are missing, and keeps the records already there.' },
     discovers:      { label: 'finds new records', cls: 'discovers', icon: '🔍', hint: 'Searches the IUCN Red List API or Wikidata, and adds the records it finds to the cache or to the download queue. Deletes nothing.' },
-    rebuilds:       { label: 'rebuilds output', cls: 'rebuilds', icon: '🔁', hint: 'Rebuilds its result from data already stored locally, and replaces the result of the previous run.' },
+    rebuilds:       { label: 'rebuilds output', cls: 'rebuilds', icon: '🔁', hint: 'Each run rebuilds the output from data already stored locally, and replaces the output of the previous run.' },
     plansdownloads: { label: 'changes what is downloaded next', cls: 'queue', icon: '📋', hint: 'Changes only which records the download commands fetch next. Downloads nothing and deletes no downloaded data.' },
     clearscache:    { label: 'clears cache', cls: 'fresh', icon: '🧹', hint: 'Deletes downloaded data from the cache.' },
-    imports:        { label: 're-import needs --force', cls: 'fresh', icon: '🗄', hint: 'Imports downloaded files into a database. Running it again skips files already imported. With --force, the command deletes the imported data and imports the files again.' },
+    imports:        { label: 're-import needs --force', cls: 'fresh', icon: '🗄', hint: 'Imports downloaded files into a database. Running the command again skips files already imported. With --force, the command deletes the imported data and imports the files again.' },
   };
   function effectInfo(cmd) { return EFFECTS[cmd.rerun] || null; }
 

@@ -25,7 +25,7 @@ namespace BeastieBot3.Wikipedia;
 // Mutates, not Destructive: the titles it deletes were never downloaded and cannot be (see the
 // confirmation rule above CommandKind), and `wikipedia update` runs it with --apply every time.
 [CommandInfo("wikipedia prune-queue", CommandKind.Mutates,
-    "Delete queued Wikipedia titles that contain a taxonomic authority or a nomenclatural note, such as \"Eumeces schneideri (Daudin, 1802) [orth. error]\". No Wikipedia article has a title like that, so wikipedia fetch-pages would request each one and download nothing. wikipedia update already does this every run, before it matches taxa to articles. Run this command yourself before running wikipedia fetch-pages on its own. Without --apply, the command shows how many titles it would delete, with examples, and deletes nothing.",
+    "Delete queued Wikipedia titles that contain a taxonomic authority or a nomenclatural note, such as \"Eumeces schneideri (Daudin, 1802) [orth. error]\". No Wikipedia article has a title like that, so wikipedia fetch-pages would request each one and download nothing. wikipedia update deletes these titles in every run, before it matches taxa to articles. Run this command yourself before running wikipedia fetch-pages on its own. Without --apply, the command shows how many titles it would delete, with examples, and deletes nothing.",
     Rerun = RerunEffect.PlansDownloads,
     RerunNote = "A taxon that was waiting on a deleted title is checked again by the next wikipedia match-taxa run.",
     Examples = new[] {
