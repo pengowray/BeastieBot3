@@ -95,7 +95,9 @@ lists:
     presets: [threatened, cr, en, vu, nt, dd, lc, ex]
 
   # ==================== INVERTEBRATES (parent — nests insects, gastropods, ...) ====================
-  # Presets MUST be a subset of every child's presets so each {child}-{preset} link resolves.
+  # Keep these presets a subset of every child's presets, so each {child}-{preset} link resolves.
+  # A child with no list for a preset but an all-status list is linked to its all-status list; a
+  # child with neither is left unlinked, and generate-lists prints a warning for it.
   - taxa_group: invertebrates
     presets: [threatened, cr, en, vu, nt, dd, lc, ex]
 
@@ -105,13 +107,14 @@ lists:
 
   # ==================== PLANTS (parent: merged top-level + per-class breakouts) ====================
   # merged -> extinct-combined, threatened, nt, dd, lc (CR/EN/VU never split; EX/EW/PE/PEW on one page).
-  # plants-threatened / plants-lc become parent pages that break out the dicot/monocot sub-lists.
+  # plants-threatened / plants-lc become parent pages that break out the dicot/monocot sub-lists, and
+  # link the conifer, cycad and moss all-status pages below. nt/dd/extinct-combined stay ordinary lists.
   - taxa_group: plants
     category_split: merged
   - taxa_group: magnoliopsida
     presets: [threatened, lc]
   - taxa_group: liliopsida
-    presets: [threatened]
+    presets: [threatened, lc]
   - taxa_group: bryopsida
     category_split: all-status
 

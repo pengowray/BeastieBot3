@@ -253,6 +253,9 @@ groups:
   # ==================== VIRTUAL PARENTS (nested lists) ====================
   # Parent groups aggregate several leaf groups: they render a per-child summary table + bare-bones
   # sections + links DOWN to the child lists, instead of a flat species body. See docs/wikipedia-list-formatting.md.
+  # A parent list links each child's list for the same preset; a child with no such list but an
+  # all-status list is linked to that instead, on a page that links at least one other child list.
+  # generate-lists prints a warning for each child a parent page cannot link.
 
   # Invertebrates = all animals except chordates (true paraphyly → needs the exclude filter).
   invertebrates:
@@ -297,8 +300,11 @@ groups:
     filters:
       - rank: kingdom
         value: Plantae
-    # Parent breakouts: the threatened/lc plant pages link DOWN to the dicot/monocot sub-lists.
-    children: [magnoliopsida, liliopsida]
+    # Parent breakouts: the threatened/lc plant pages link DOWN to the dicot/monocot sub-lists. Conifers,
+    # cycads and mosses have one all-status page each, which those two pages link in place of a
+    # threatened/lc list. plants-nt/dd/extinct-combined stay ordinary lists: no sub-group has a list
+    # for those presets, and an all-status list alone does not make a page a parent.
+    children: [magnoliopsida, liliopsida, conifers, cycads, bryopsida]
 
   # Flowering plants split into the two big classes so the huge threatened list can break out by class.
   magnoliopsida:
