@@ -53,7 +53,7 @@ internal static class IucnRefreshRun {
 
         store.CloseRefreshSession(current.Id);
         AnsiConsole.MarkupLineInterpolated(
-            $"[green]Refresh finished:[/] {current.DisplayLabel}. Everything fetched before {IucnRefreshMath.Stamp(current.CutoffUtc)} has been downloaded again.");
+            $"[green]Refresh finished:[/] {current.DisplayLabel}. Everything fetched before {IucnRefreshMath.Stamp(current.CutoffUtc)} has been downloaded again{progress.NotFoundClause}.");
     }
 }
 
@@ -167,11 +167,17 @@ internal sealed class IucnApiRefreshStartCommand : AsyncCommand<IucnApiRefreshSt
             $"Done so far: {progress.TaxaDone:N0} of {session.StartTaxaRemaining:N0} taxa, {progress.AssessmentsDone:N0} of {session.StartAssessmentsRemaining:N0} assessments ({progress.PercentDone}%).");
     }
 
-    internal static IucnRefreshProgress ReadProgress(IucnApiCacheStore store, IucnRefreshSession session) => new() {
-        Session = session,
-        TaxaRemaining = store.CountTaxaDownloadedBefore(session.CutoffUtc),
-        AssessmentsRemaining = store.CountAssessmentsDownloadedBefore(session.CutoffUtc),
-    };
+    internal static IucnRefreshProgress ReadProgress(IucnApiCacheStore store, IucnRefreshSession session) {
+        var taxa = store.CountTaxaBefore(session.CutoffUtc);
+        var assessments = store.CountAssessmentsBefore(session.CutoffUtc);
+        return new IucnRefreshProgress {
+            Session = session,
+            TaxaRemaining = taxa.Remaining,
+            AssessmentsRemaining = assessments.Remaining,
+            TaxaNotFound = taxa.NotFound,
+            AssessmentsNotFound = assessments.NotFound,
+        };
+    }
 }
 
 [CommandInfo("iucn api refresh-status", CommandKind.ReadOnly,
@@ -227,9 +233,12 @@ internal sealed class IucnApiRefreshStatusCommand : Command<IucnApiRefreshStatus
         }
         AnsiConsole.Write(table);
 
-        AnsiConsole.MarkupLine(progress.IsFinished
-            ? "[green]Everything is downloaded.[/] The refresh closes itself on the next [bold]iucn api cache-all[/] run."
-            : "Carry on with [bold]iucn api cache-all --full[/]. The cutoff is remembered, so there is nothing to re-enter.");
+        if (progress.IsFinished) {
+            AnsiConsole.MarkupLineInterpolated(
+                $"[green]Everything is downloaded{progress.NotFoundClause}.[/] The refresh closes itself on the next [bold]iucn api cache-all[/] run.");
+        } else {
+            AnsiConsole.MarkupLine("Carry on with [bold]iucn api cache-all --full[/]. The cutoff is remembered, so there is nothing to re-enter.");
+        }
         return 0;
     }
 }

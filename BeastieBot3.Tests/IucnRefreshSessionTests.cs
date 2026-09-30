@@ -134,6 +134,26 @@ public class IucnRefreshSessionTests {
         Assert.Equal(66, progress.PercentDone);   // 200 of 300
     }
 
+    // The exception to "everything has been downloaded again": only the groups with rows, and
+    // nothing at all when there are none.
+    [Theory]
+    [InlineData(0, 0, "")]
+    [InlineData(0, 3, " except 3 assessments not found on the API (404)")]
+    [InlineData(0, 1, " except 1 assessment not found on the API (404)")]
+    [InlineData(1, 0, " except 1 taxon not found on the API (404)")]
+    [InlineData(1_522, 3, " except 1,522 taxa and 3 assessments not found on the API (404)")]
+    public void NotFoundClause_NamesOnlyTheGroupsWithRows(long taxa, long assessments, string expected) {
+        Assert.Equal(expected, IucnRefreshMath.NotFoundClause(taxa, assessments));
+        var progress = new IucnRefreshProgress {
+            Session = Session(),
+            TaxaRemaining = 0,
+            AssessmentsRemaining = 0,
+            TaxaNotFound = taxa,
+            AssessmentsNotFound = assessments,
+        };
+        Assert.Equal(expected, progress.NotFoundClause);
+    }
+
     [Fact]
     public void ProgressNeverGoesNegativeOrPastComplete() {
         Assert.Equal(0, IucnRefreshMath.Done(100, 150));

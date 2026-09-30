@@ -31,19 +31,34 @@ public sealed record IucnApiCacheState {
     public bool CacheExists { get; init; }
     public long TaxaCached { get; init; }
     public long AssessmentsCached { get; init; }
+    // Queued assessments not downloaded yet that a normal run still asks the API for. Includes
+    // ServerErrorAssessments; excludes BacklogNotFound.
     public long BacklogOutstanding { get; init; }
+    // Queued assessments the API answered 404/410 for. Only a tombstone re-check asks for them again.
+    public long BacklogNotFound { get; init; }
     public DateTime? OldestTaxaDownloadedAt { get; init; }
     public long TombstonedTaxa { get; init; }
+    // The part of BacklogOutstanding whose last attempt got a server error (HTTP 5xx).
     public long ServerErrorAssessments { get; init; }
     public IucnRefreshSession? ActiveSession { get; init; }
     public long RefreshTaxaRemaining { get; init; }
     public long RefreshAssessmentsRemaining { get; init; }
+    // Rows older than the refresh cutoff that the API has since answered 404/410 for. The two
+    // remaining counts leave them out.
+    public long RefreshTaxaNotFound { get; init; }
+    public long RefreshAssessmentsNotFound { get; init; }
     public IucnProjectionState? Projection { get; init; }
+
+    // What a run can still download: the outstanding queue less the server errors, which the
+    // workflow steps do not count as work left.
+    public long AssessmentsToDownload => Math.Max(0, BacklogOutstanding - ServerErrorAssessments);
 
     public IucnRefreshProgress? RefreshProgress => ActiveSession is null ? null : new IucnRefreshProgress {
         Session = ActiveSession,
         TaxaRemaining = RefreshTaxaRemaining,
         AssessmentsRemaining = RefreshAssessmentsRemaining,
+        TaxaNotFound = RefreshTaxaNotFound,
+        AssessmentsNotFound = RefreshAssessmentsNotFound,
     };
 }
 
@@ -64,16 +79,22 @@ public static class IucnApiCacheStateReader {
             if (store is null) return state;
 
             var session = store.GetActiveRefreshSession();
+            var backlog = store.CountAssessmentBacklog();
+            var refreshTaxa = session is null ? default : store.CountTaxaBefore(session.CutoffUtc);
+            var refreshAssessments = session is null ? default : store.CountAssessmentsBefore(session.CutoffUtc);
             return state with {
                 TaxaCached = store.CountTaxa(),
                 AssessmentsCached = store.CountAssessments(),
-                BacklogOutstanding = store.CountBacklogOutstanding(),
+                BacklogOutstanding = backlog.Outstanding,
+                BacklogNotFound = backlog.NotFound,
                 OldestTaxaDownloadedAt = store.GetOldestTaxaDownloadedAt(),
                 TombstonedTaxa = store.GetTombstonedEntityIds("taxa_sis").Count,
-                ServerErrorAssessments = store.GetServerErrorEntityIds("assessment").Count,
+                ServerErrorAssessments = backlog.ServerErrors,
                 ActiveSession = session,
-                RefreshTaxaRemaining = session is null ? 0 : store.CountTaxaDownloadedBefore(session.CutoffUtc),
-                RefreshAssessmentsRemaining = session is null ? 0 : store.CountAssessmentsDownloadedBefore(session.CutoffUtc),
+                RefreshTaxaRemaining = refreshTaxa.Remaining,
+                RefreshAssessmentsRemaining = refreshAssessments.Remaining,
+                RefreshTaxaNotFound = refreshTaxa.NotFound,
+                RefreshAssessmentsNotFound = refreshAssessments.NotFound,
             };
         } catch {
             return state;

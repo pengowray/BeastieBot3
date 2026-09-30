@@ -39,6 +39,14 @@ public sealed record IucnRefreshProgress {
     public required IucnRefreshSession Session { get; init; }
     public required long TaxaRemaining { get; init; }
     public required long AssessmentsRemaining { get; init; }
+    // Rows older than the cutoff that the remaining counts leave out, because the API has since
+    // answered 404/410 for them. They keep their old download date.
+    public long TaxaNotFound { get; init; }
+    public long AssessmentsNotFound { get; init; }
+
+    // "" or " except 5 taxa and 3 assessments not found on the API (404)", for the end of a
+    // sentence that says everything older than the cutoff has been downloaded again.
+    public string NotFoundClause => IucnRefreshMath.NotFoundClause(TaxaNotFound, AssessmentsNotFound);
 
     public long TaxaDone => IucnRefreshMath.Done(Session.StartTaxaRemaining, TaxaRemaining);
     public long AssessmentsDone => IucnRefreshMath.Done(Session.StartAssessmentsRemaining, AssessmentsRemaining);
@@ -67,9 +75,10 @@ public static class IucnRefreshMath {
         return (int)Math.Clamp(done * 100 / start, 0, 100);
     }
 
-    // A session is finished when nothing is left older than the cutoff and every phase it asked
-    // for has run. Without this the fallback cutoff would apply forever and the step would offer
-    // to resume a refresh that finished months ago.
+    // A session is finished when nothing is left older than the cutoff (apart from rows the API
+    // answered 404/410 for, which the counts leave out) and every phase it asked for has run.
+    // Without this the fallback cutoff would apply forever and the step would offer to resume a
+    // refresh that finished months ago.
     public static bool IsComplete(IucnRefreshSession session, long taxaRemaining, long assessmentsRemaining) =>
         taxaRemaining == 0
         && assessmentsRemaining == 0
@@ -127,6 +136,15 @@ public static class IucnRefreshMath {
             $"Refresh {session?.DisplayLabel ?? "session"} is running: re-downloading anything fetched before {Stamp(threshold)}.",
         _ => "",
     };
+
+    // The exception to "everything older than the cutoff has been downloaded again": the rows the
+    // API answered 404/410 for. Only the groups with rows are named. "" when there are none.
+    public static string NotFoundClause(long taxaNotFound, long assessmentsNotFound) {
+        var groups = new System.Collections.Generic.List<string>(2);
+        if (taxaNotFound > 0) groups.Add(taxaNotFound == 1 ? "1 taxon" : $"{taxaNotFound:N0} taxa");
+        if (assessmentsNotFound > 0) groups.Add(assessmentsNotFound == 1 ? "1 assessment" : $"{assessmentsNotFound:N0} assessments");
+        return groups.Count == 0 ? "" : $" except {string.Join(" and ", groups)} not found on the API (404)";
+    }
 
     public static string Stamp(DateTime utc) => utc.ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture) + " UTC";
 }

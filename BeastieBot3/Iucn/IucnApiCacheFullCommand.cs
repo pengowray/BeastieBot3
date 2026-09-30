@@ -325,7 +325,7 @@ public sealed class IucnApiCacheFullCommand : AsyncCommand<IucnApiCacheFullSetti
         Row("Download assessments (cache-assessments)",
             runs: !settings.SkipAssessments,
             settings.SkipAssessments ? "--skip-assessments"
-                : BuildAssessmentPlanText(s, refresh));
+                : BuildAssessmentPlanText(s, refresh, runTombstones));
 
         Row("Re-check taxa the API previously said were gone",
             runs: runTombstones,
@@ -342,12 +342,15 @@ public sealed class IucnApiCacheFullCommand : AsyncCommand<IucnApiCacheFullSetti
         PrintTotals(s, finishing: false);
     }
 
-    private static string BuildAssessmentPlanText(IucnApiCacheState s, IucnRefreshProgress? refresh) {
-        var backlog = Math.Max(0, s.BacklogOutstanding - s.ServerErrorAssessments);
+    private static string BuildAssessmentPlanText(IucnApiCacheState s, IucnRefreshProgress? refresh, bool runTombstones) {
+        var backlog = s.AssessmentsToDownload;
         var parts = new System.Collections.Generic.List<string>();
         if (backlog > 0) parts.Add($"{backlog:N0} queued assessments to download");
         if (refresh is { AssessmentsRemaining: > 0 }) parts.Add($"{refresh.AssessmentsRemaining:N0} to re-download for the re-import");
-        if (s.ServerErrorAssessments > 0) parts.Add($"{s.ServerErrorAssessments:N0} the API answers with a server error are left alone");
+        if (s.ServerErrorAssessments > 0) parts.Add($"{s.ServerErrorAssessments:N0} assessments the API answers with a server error are left alone");
+        if (s.BacklogNotFound > 0) parts.Add(runTombstones
+            ? $"{s.BacklogNotFound:N0} assessments not found on the API (404) are requested again later in the run"
+            : $"{s.BacklogNotFound:N0} assessments not found on the API (404) are left alone");
         return parts.Count == 0 ? "adds only assessments not cached yet" : string.Join(" · ", parts);
     }
 
@@ -382,7 +385,7 @@ public sealed class IucnApiCacheFullCommand : AsyncCommand<IucnApiCacheFullSetti
                 $"[yellow]Still to do:[/] re-import {refresh.Session.DisplayLabel} is {refresh.PercentDone}% done — {refresh.TaxaRemaining:N0} taxa and {refresh.AssessmentsRemaining:N0} assessments to re-download. Run `iucn api cache-all --full` again to carry on; the cutoff date is remembered.");
             return;
         }
-        var backlog = Math.Max(0, s.BacklogOutstanding - s.ServerErrorAssessments);
+        var backlog = s.AssessmentsToDownload;
         if (backlog > 0) {
             AnsiConsole.MarkupLineInterpolated(
                 $"[yellow]Still to do:[/] {backlog:N0} queued assessments are not downloaded yet. Run `iucn api cache-all --full` again to fetch them.");
