@@ -6,9 +6,27 @@
   const $ = (sel) => document.querySelector(sel);
   const esc = (s) => String(s).replace(/[&<>]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
 
+  // An endpoint's {error, hint} as one line of text: "error. hint".
+  function errorWithHint(data) {
+    const error = String(data.error || '').trim();
+    const hint = String(data.hint || '').trim();
+    if (!hint) return error;
+    if (!error) return hint;
+    return /[.!?]$/.test(error) ? `${error} ${hint}` : `${error}. ${hint}`;
+  }
+
   async function getJson(url) {
     const res = await fetch(url);
-    if (!res.ok) throw new Error(await res.text());
+    if (!res.ok) {
+      // The endpoints answer failures with JSON {error, hint}; show that text, not the raw JSON body.
+      const text = await res.text().catch(() => '');
+      let message = '';
+      try {
+        const data = JSON.parse(text);
+        if (data && typeof data === 'object') message = errorWithHint(data);
+      } catch { /* not JSON: use the raw text */ }
+      throw new Error(message || text || `${res.status} ${res.statusText}`.trim());
+    }
     return res.json();
   }
   async function postJson(url, body) {
@@ -65,7 +83,7 @@
       lastCounts = data;
       renderCounts(data);
       $('#grp-save').hidden = false;
-      $('#grp-msg').textContent = `${data.rows.length} sub-taxa at rank '${data.childRank}', grand total ${data.grandTotal}. Tick existing groups to make them sub-lists.`;
+      $('#grp-msg').textContent = `${data.rows.length} sub-taxa of '${data.group}' at rank '${data.childRank}', grand total ${data.grandTotal}. Tick a row to make its group a sub-group of '${data.group}'.`;
       loadImpact(group, rank);
     } catch (e) {
       $('#grp-msg').textContent = 'Failed: ' + e.message;
@@ -78,10 +96,14 @@
   // The group's own size budget from the last load without a what-if budget, keyed by group, so the
   // heading and the "Set budget" placeholder still show it while a what-if budget is previewed.
   const ruleBudgets = {};
+  // The group and child rank the impact panel was loaded for. The panel's buttons act on these, not on
+  // the Parent and Child rank selects, which may have changed since "Show counts".
+  let impactFor = null;
 
   async function loadImpact(group, rank, candidateBudget) {
     const el = $('#grp-impact');
     if (!el) return;
+    impactFor = { group, rank };
     el.innerHTML = '<p class="muted small">Sizing pages…</p>';
     try {
       let url = `/api/lists/impact?group=${encodeURIComponent(group)}&splitRank=${encodeURIComponent(rank)}`;
@@ -126,7 +148,8 @@
   // Persist the tuning knobs to the draft rules (size_budget on the group, category_split on the list
   // entry). The user then reviews via the Rules-editor diff and Applies to source.
   async function saveKnobs() {
-    const group = $('#grp-parent').value;
+    if (!impactFor) return;
+    const group = impactFor.group;
     const body = { group };
     const budget = $('#imp-knob-budget') ? $('#imp-knob-budget').value.trim() : '';
     if (budget) body.sizeBudgetMaxEntries = parseInt(budget, 10);
@@ -149,7 +172,8 @@
   // Regenerate every list for the selected taxa group from SOURCE rules (so an applied split/join takes
   // effect without a rebuild). Apply the draft first — this does NOT read the draft.
   async function regenerateGroup() {
-    const group = $('#grp-parent').value;
+    if (!impactFor) return;
+    const group = impactFor.group;
     setImpactMsg(`Starting generate-lists --taxa-group ${group}…`);
     const loc = await getJson('/api/rules/locations').catch(() => null);
     const args = ['--taxa-group', group];
@@ -166,8 +190,9 @@
     const gen = ev.target.closest('[data-gen-list]');
     if (gen) { generateList(gen.getAttribute('data-gen-list')); return; }
     if (ev.target.closest('[data-apply-budget]')) {
+      if (!impactFor) return;
       const v = $('#imp-budget') ? $('#imp-budget').value.trim() : '';
-      loadImpact($('#grp-parent').value, $('#grp-rank').value, v ? parseInt(v, 10) : null);
+      loadImpact(impactFor.group, impactFor.rank, v ? parseInt(v, 10) : null);
       return;
     }
     if (ev.target.closest('[data-save-knobs]')) { saveKnobs(); return; }
@@ -227,7 +252,7 @@
     const whatIf = `<div class="imp-controls">`
       + `<label>What-if budget <input id="imp-budget" type="number" min="0" step="500" `
       + `value="${candidateBudget || ''}" placeholder="${d.budget || 'e.g. 5000'}"></label>`
-      + `<button class="ghost xsmall" data-apply-budget>Preview verdicts</button></div>`;
+      + `<button class="ghost xsmall" data-apply-budget>Preview budget check</button></div>`;
 
     // Tuning knobs → draft rules (size_budget on the group, category_split on the list entry).
     // The split <select> is pre-set to the group's current setting (from the draft), so it shows what's
@@ -251,7 +276,7 @@
       + `<p class="muted small">Bullets: entries on the list page, including subspecies and varieties listed separately. Species: species only, the number stated in the page's lead. The size budget applies to Bullets. Global assessments only, no subpopulations.</p>`
       + `<div class="feature-table-wrap"><table class="feature-table"><thead><tr>`
       + `<th class="wt-left">Page option</th><th>Bullets</th><th>Species</th><th>Budget check</th>`
-      + `<th class="wt-left">Structure (last gen)</th><th></th></tr></thead>`
+      + `<th class="wt-left">Structure (last generated)</th><th></th></tr></thead>`
       + `<tbody>${opts}</tbody></table></div>${sub}`
       + whatIf + knobs
       + `<p class="muted small" id="imp-msg"></p>`;
@@ -264,7 +289,9 @@
   function renderCounts(data) {
     const head = ['', 'Sub-taxon', 'Group', ...data.columns, 'Total'];
     const rows = data.rows.map((r) => {
-      const cb = r.existingGroup
+      // No tickbox on the row whose group is the Parent itself (e.g. MAMMALIA under mammals at rank class):
+      // a group can't be its own sub-group.
+      const cb = r.existingGroup && r.existingGroup !== data.group
         ? `<input type="checkbox" class="grp-child" value="${esc(r.existingGroup)}" ${r.isChild ? 'checked' : ''}>`
         : '';
       // Rows without a matching taxa-group get a "＋ define" button that pre-fills the create panel.
@@ -414,14 +441,24 @@
     await loadCounts();
   }
 
+  // Adds the ticked rows' groups to the Parent's sub-groups and removes the unticked ones. The server
+  // keeps every other existing sub-group (ones with no row in this table). Uses the group the table was
+  // loaded for, since the Parent select may have changed since "Show counts".
   async function saveChildren() {
     if (!lastCounts) return;
-    const group = $('#grp-parent').value;
-    const children = Array.from(document.querySelectorAll('.grp-child:checked')).map((c) => c.value);
-    const { ok, data } = await postJson('/api/grouping/children', { group, children });
-    $('#grp-msg').textContent = ok
-      ? `Saved ${children.length} sub-group(s) to draft taxa-groups.yml. Use the Rules editor to Apply to source.`
-      : `Save failed: ${data.error || ''} ${data.hint || ''}`;
+    const group = lastCounts.group;
+    const boxes = Array.from(document.querySelectorAll('#grp-counts .grp-child'));
+    const add = boxes.filter((c) => c.checked).map((c) => c.value);
+    const remove = boxes.filter((c) => !c.checked).map((c) => c.value);
+    const { ok, status, data } = await postJson('/api/grouping/children', { group, add, remove });
+    if (!ok) {
+      $('#grp-msg').textContent = `Save failed: ${errorWithHint(data) || `HTTP ${status}`}`;
+      return;
+    }
+    const list = (data.children || []).join(', ') || 'none';
+    $('#grp-msg').textContent = data.changed
+      ? `Saved to the draft taxa-groups.yml. Sub-groups of '${group}': ${list}. To copy the draft to rules/, click "Apply changed files to source" in the Rules editor.`
+      : `No change to the draft taxa-groups.yml. Sub-groups of '${group}': ${list}.`;
   }
 
   // ===================== Rules editor =====================
