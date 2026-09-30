@@ -391,7 +391,7 @@ A **skipped** producer returned no report, either because its data source is mis
 can't tell those apart. In both cases none of that producer's pages are written, so removing stale
 files would take its whole report family out of the folder (about 30 files for `col-crosscheck`).
 Such a run removes nothing: `RedlistAuditSiteCommand` passes `prune: false`, prints a yellow line
-saying how many earlier files were kept and which producers failed or did not run, and the kept
+saying how many earlier files were kept and which producers failed or were skipped, and the kept
 files stay on `.audit-files.txt`, so the next run in which every producer writes removes whichever
 of them it does not write. Kept pages are not linked from the new index.
 

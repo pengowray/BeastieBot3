@@ -147,7 +147,7 @@ public static class FlowCatalogue {
                 // ===== 2 · From the IUCN API =====
                 new FlowStep {
                     Id = "api-refresh-start",
-                    Title = "Start a re-import of the API data (only for a new release)",
+                    Title = "Start a refresh of the API data (only for a new release)",
                     Description = "Mark everything downloaded before a date to be fetched again. Skip this the first time you build the API dataset: without it, the steps below only fetch what is missing.",
                     Commands = new[] { "iucn api refresh-start" },
                     InputSourceIds = new[] { "iucn-api-cache" },
@@ -155,18 +155,18 @@ public static class FlowCatalogue {
                     Optional = true,
                     Probe = FlowStepProbes.IucnApiRefresh,
                     Group = "2 · From the IUCN API",
-                    Note = "Open Options and set --cutoff to a date just before the new release was published (UTC, for example 2026-06-16). With the default cutoff (now), the whole IUCN API cache is downloaded again. This step only stores the date: on every run, `iucn api cache-all --full` in \"Build or update the API dataset\" re-downloads everything downloaded before the stored date, so you enter the date once. A full API re-import is about 37 hours of downloading, and you can stop `iucn api cache-all --full` at any time; the next run continues with what is left. By default the API re-import also runs \"Discover extra taxa by family\" once and re-checks taxa and assessments for which the API returned HTTP 404 or 410, because a taxon missing from the previous release can be in the new one. --no-discovery turns off \"Discover extra taxa by family\", and --no-tombstones turns off the re-check.",
+                    Note = "Open Options and set --cutoff to a date just before the new release was published (UTC, for example 2026-06-16). With the default cutoff (now), the whole IUCN API cache is downloaded again. This step only stores the date: on every run, `iucn api cache-all --full` in \"Build or update the API dataset\" re-downloads everything downloaded before the stored date, so you enter the date once. A full API refresh is about 37 hours of downloading, and you can stop `iucn api cache-all --full` at any time; the next run continues with what is left. By default the API refresh also runs \"Discover extra taxa by family\" once and re-checks taxa and assessments for which the API returned HTTP 404 or 410, because a taxon missing from the previous release can be in the new one. --no-discovery turns off \"Discover extra taxa by family\", and --no-tombstones turns off the re-check.",
                 },
                 new FlowStep {
                     Id = "api-update",
                     Title = "Build or update the API dataset",
-                    Description = "`iucn api cache-all --full` downloads species, subspecies, varieties and their assessments into the IUCN API cache, then rebuilds the IUCN API projection that `--dataset api` reads. During an API re-import it also runs \"Discover extra taxa by family\" and re-checks taxa and assessments that the API reported as gone (HTTP 404 or 410).",
+                    Description = "`iucn api cache-all --full` downloads species, subspecies, varieties and their assessments into the IUCN API cache, then rebuilds the IUCN API projection that `--dataset api` reads. During an API refresh it also runs \"Discover extra taxa by family\" and re-checks taxa and assessments that the API reported as gone (HTTP 404 or 410).",
                     Commands = new[] { "iucn api cache-all --full", "iucn api cache-all --full --status" },
                     InputSourceIds = new[] { "iucn-main" },
                     OutputSourceIds = new[] { "iucn-api-cache", "iucn-api-projected" },
                     Probe = FlowStepProbes.IucnApiUpdateAll,
                     Group = "2 · From the IUCN API",
-                    Note = "You can stop `iucn api cache-all --full` at any time: each phase downloads only what is missing from the IUCN API cache (during an API re-import, also what was downloaded before the cutoff date), so the next run continues where the last one stopped. Before and after downloading, the command prints a table of its phases and the number of taxa and assessments in the IUCN API cache. `iucn api cache-all --full --status` prints only that and downloads nothing. The \"Step by step\" panel below has the same work as separate commands.",
+                    Note = "You can stop `iucn api cache-all --full` at any time: each phase downloads only what is missing from the IUCN API cache (during an API refresh, also what was downloaded before the cutoff date), so the next run continues where the last one stopped. Before and after downloading, the command prints a table of its phases and the number of taxa and assessments in the IUCN API cache. `iucn api cache-all --full --status` prints only that and downloads nothing. The \"Step by step\" panel below has the same work as separate commands.",
                 },
                 new FlowStep {
                     Id = "api-cache-species",
@@ -183,7 +183,7 @@ public static class FlowCatalogue {
                 new FlowStep {
                     Id = "api-discover-by-family",
                     Title = "Discover extra taxa by family (no CSV needed)",
-                    Description = "Download every taxon listed under any family on the IUCN API that is not yet in the IUCN API cache. This finds taxa missing from the CSV release: removed or delisted taxa, reclassified taxa, and taxa with only historical assessments. `iucn api cache-all --full` runs this step only during an API re-import.",
+                    Description = "Download every taxon listed under any family on the IUCN API that is not yet in the IUCN API cache. This finds taxa missing from the CSV release: removed or delisted taxa, reclassified taxa, and taxa with only historical assessments. `iucn api cache-all --full` runs this step only during an API refresh.",
                     Commands = new[] { "iucn api discover-by-family" },
                     Probe = FlowStepProbes.IucnApiDiscovery,
                     InputSourceIds = new[] { "iucn-api-cache" },
@@ -265,7 +265,7 @@ public static class FlowCatalogue {
         new FlowDefinition {
             Id = "col-update",
             Title = "Update Catalogue of Life",
-            Description = "Import a new Catalogue of Life (CoL) release, then rebuild the outputs that use CoL data: the common-name hub, the Red List audit site and the Wikipedia lists. Optional steps also search Wikidata and Wikipedia, using the new release's synonyms, for IUCN taxa that have no Wikidata item or Wikipedia article. One step is done by hand: edit paths.ini to point at the new CoL database, then restart serve. Each output is based on the previous CoL release until the step that builds it is run again.",
+            Description = "Import a new Catalogue of Life (CoL) release, then rebuild the outputs that use CoL data: the Common names store, the Red List audit site and the Wikipedia lists. Optional steps also search Wikidata and Wikipedia, using the new release's synonyms, for IUCN taxa that have no Wikidata item or Wikipedia article. One step is done by hand: edit paths.ini to point at the new CoL database, then restart serve. Each output is based on the previous CoL release until the step that builds it is run again.",
             Steps = new[] {
                 // ===== 1 · Import & repoint =====
                 new FlowStep {
@@ -277,7 +277,7 @@ public static class FlowCatalogue {
                     OutputSourceIds = new[] { "col-sqlite" },
                     Group = "1 · Import & repoint",
                     Probe = FlowStepProbes.ColImport,
-                    Note = "`col import` builds col_coldp_<label>.sqlite for each ColDP zip in Datasets:COL_dir, where <label> is the release alias from the zip's metadata.yaml with spaces replaced by underscores (alias \"COL26.5 XR\" gives col_coldp_COL26.5_XR.sqlite). A new release therefore gets a new database file, and the previous one stays on disk until you delete it ('Delete old CoL leftovers (manual)' under Maintenance). Each database is over 10 GB and the import takes tens of minutes. The `col import` button runs without asking. With --force ticked under Options, the run asks for confirmation first, because --force deletes and rebuilds even a complete database. Without --force, a finished database is skipped and an incomplete one is imported again.",
+                    Note = "`col import` builds col_coldp_<label>.sqlite for each ColDP zip in Datasets:COL_dir, where <label> is the release alias from the zip's metadata.yaml with spaces replaced by underscores (alias \"COL26.5 XR\" gives col_coldp_COL26.5_XR.sqlite). A new release therefore gets a new database file, and the previous one stays on disk until you delete it ('Delete old CoL leftovers (manual)' under Maintenance). Each database is over 10 GB and the import takes tens of minutes. Clicking the `col import` button starts the import at once, without --force: complete databases are skipped, incomplete databases (the import stopped before the end, or the file cannot be opened) are deleted and rebuilt, and missing databases are built. To delete and rebuild every database, open Options, tick --force and click \"Run (confirm)\"; the page asks you to confirm before the import starts.",
                 },
                 new FlowStep {
                     Id = "repoint-paths",
@@ -306,13 +306,13 @@ public static class FlowCatalogue {
                 new FlowStep {
                     Id = "common-names",
                     Title = "Re-aggregate common names",
-                    Description = "Pull the new release's English vernacular names and synonyms into the common-name hub.",
+                    Description = "Pull the new release's English vernacular names and synonyms into the Common names store.",
                     Commands = new[] { "common-names aggregate", "common-names aggregate --source col --replace" },
                     InputSourceIds = new[] { "col-sqlite", "iucn-main" },
                     OutputSourceIds = new[] { "common-names" },
                     Group = "2 · Refresh derived data",
                     Probe = FlowStepProbes.ColRebuildNames,
-                    Note = "Imports the new release's English vernacular names and scientific-name synonyms from Catalogue of Life into the common-name hub. It downloads nothing and is safe to run twice. By default it only adds and updates: names this release dropped stay in the hub, and the old release's Catalogue of Life ids stay attached to their species. Catalogue of Life reissues those ids between releases, so a leftover id can attach one of the new names to the wrong species. To avoid that, run it with --replace (the second command button below): that deletes the Catalogue of Life names, synonyms and ids already in the hub before importing, leaving the hub matching this release exactly. Names from IUCN, Wikidata and Wikipedia are kept either way. `common-names init` is only needed when the hub database does not exist yet; it seeds species from IUCN and caps.txt and never reads Catalogue of Life.",
+                    Note = "Imports the new release's English vernacular names and scientific-name synonyms from Catalogue of Life into the Common names store. It downloads nothing and is safe to run twice. By default it only adds and updates: names this release dropped stay in the store, and the old release's Catalogue of Life ids stay attached to their species. Catalogue of Life reissues those ids between releases, so a leftover id can attach one of the new names to the wrong species. To avoid that, run it with --replace (the second command button below): that deletes the Catalogue of Life names, synonyms and ids already in the store before importing, leaving the store matching this release exactly. Names from IUCN, Wikidata and Wikipedia are kept either way. `common-names init` is only needed when the Common names store does not exist yet; it seeds species from IUCN and caps.txt and never reads Catalogue of Life.",
                 },
                 new FlowStep {
                     Id = "redlist-audit",
@@ -376,7 +376,7 @@ public static class FlowCatalogue {
                     OutputSourceIds = Array.Empty<string>(),
                     Group = "4 · Regenerate outputs",
                     Probe = FlowStepProbes.ColRebuildLists,
-                    Note = "Run 'Re-aggregate common names' and the steps under '3 · Search for new matches (downloads)' first, so the lists get the new common names and article links. Then run `wikipedia generate-lists` for every list, without --list, --status or --taxa-group: this step's status line checks only the newest .wikitext file, so it shows done even when some lists still use the previous CoL release. The first run after a CoL update is slower while it builds a new cache file beside the CoL database. `wikipedia generate-charts` does not use CoL, so charts need no re-run. `wikipedia generate-lists` skips every common name shared by two or more taxa in the common-name hub, and works out these ambiguous names each time it runs; `common-names report --report ambiguous` lists them.",
+                    Note = "Run 'Re-aggregate common names' and the steps under '3 · Search for new matches (downloads)' first, so the lists get the new common names and article links. Then run `wikipedia generate-lists` for every list, without --list, --status or --taxa-group: this step's status line checks only the newest .wikitext file, so it shows done even when some lists still use the previous CoL release. The first run after a CoL update is slower while it builds a new cache file beside the CoL database. `wikipedia generate-charts` does not use CoL, so charts need no re-run. `wikipedia generate-lists` skips every common name shared by two or more taxa in the Common names store, and works out these ambiguous names each time it runs; `common-names report --report ambiguous` lists them.",
                     OutputPatterns = new[] {
                         new FlowOutputPattern { Root = "wikipedia-output", Pattern = "*.wikitext", Label = "Lists" },
                     },
@@ -406,14 +406,14 @@ public static class FlowCatalogue {
                 },
                 new FlowStep {
                     Id = "full-rebuild-names",
-                    Title = "Rebuild the common-name hub from scratch (manual + command)",
-                    Description = "Delete the common-name database and build it again from every source.",
+                    Title = "Rebuild the Common names store from scratch (manual + command)",
+                    Description = "Delete the Common names store and build it again from every source.",
                     Commands = new[] { "common-names init", "common-names aggregate" },
                     InputSourceIds = new[] { "iucn-main", "col-sqlite" },
                     OutputSourceIds = new[] { "common-names" },
                     Optional = true,
                     Section = FlowSection.Maintenance,
-                    Note = "Not part of a normal release update: `common-names aggregate --source col --replace` in the Re-aggregate step above already makes the hub match the new Catalogue of Life release. Use this only when the hub itself looks wrong (for example after an interrupted import, or when several sources need clearing at once): delete the common-names SQLite file by hand, then run init, then aggregate. Rebuilding takes far longer than a re-aggregate, and any hand edits made to the hub are lost."
+                    Note = "Not part of a normal release update: `common-names aggregate --source col --replace` in the Re-aggregate step above already makes the store match the new Catalogue of Life release. Use this only when the store itself looks wrong (for example after an interrupted import, or when several sources need clearing at once): delete the store's SQLite file by hand, then run init, then aggregate. Rebuilding takes far longer than a re-aggregate, and any hand edits made to the store are lost."
                 },
             },
             Outputs = new[] {
@@ -615,7 +615,7 @@ public static class FlowCatalogue {
                     InputSourceIds = new[] { "iucn-main", "wikipedia-cache", "common-names", "col-sqlite" },
                     OutputSourceIds = Array.Empty<string>(),
                     Group = "4 \u00b7 Generate",
-                    Note = "Uses rules/wikipedia-lists.yml, rules/chart-groups.yml, rules/rules-list.txt, and templates under rules/wikipedia/templates/. These (and taxon-rules.yml) are read fresh each run — no import step. Edited caps.txt? Run \"Refresh capitalization rules\" above first. Common names come from the Common names store. `wikipedia generate-lists` skips every common name shared by two or more taxa in the store, and works out these ambiguous names each time it runs. The Wikipedia list then shows another common name for the taxon, or only its scientific name if all of the taxon's common names are ambiguous. A common name set for the taxon in rules/rules-list.txt is used even if it is ambiguous. \"List ambiguous common names\" in group 3 writes the ambiguous names to a report.",
+                    Note = "Uses rules/wikipedia-lists.yml, rules/chart-groups.yml, rules/rules-list.txt, and templates under rules/wikipedia/templates/. These (and taxon-rules.yml) are read fresh each run — no import step. Edited caps.txt? Run \"Refresh capitalization rules\" above first. Common names come from the Common names store. `wikipedia generate-lists` skips every common name shared by two or more taxa in the store, and works out these ambiguous names each time it runs. The Wikipedia list then shows another common name for the taxon, or only its scientific name if all of the taxon's common names are ambiguous. A common name set for a taxon in rules/rules-list.txt is used even if it is ambiguous. \"List ambiguous common names\" in group 3 writes the ambiguous names to a report.",
                     OutputPatterns = new[] {
                         new FlowOutputPattern { Root = "wikipedia-output", Pattern = "*.wikitext", Label = "Lists" },
                         new FlowOutputPattern { Root = "wikipedia-output", Pattern = "*.tab",      Label = "Chart data" },

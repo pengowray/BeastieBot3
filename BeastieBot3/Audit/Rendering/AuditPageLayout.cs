@@ -75,7 +75,7 @@ internal static class AuditPageLayout {
             : $"All reports except {HtmlText.JoinWithAnd(exceptions)}";
         return "<div class=\"limited-notice\" role=\"note\">"
             + $"<strong>Partial results from a limited run (<code>{HtmlText.Escape(flag)}</code>).</strong> "
-            + $"{which} checked at most {limit.ToString("N0", CultureInfo.InvariantCulture)} database rows, so their counts and lists may be incomplete. "
+            + $"{which} checked at most {limit.ToString("N0", CultureInfo.InvariantCulture)} database rows each, so their counts and lists may be incomplete. "
             + "For complete results, run <code>redlist audit-site</code> without <code>--limit</code>."
             + "</div>\n";
     }

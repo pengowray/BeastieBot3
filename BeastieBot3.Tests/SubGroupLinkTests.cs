@@ -113,7 +113,7 @@ public class SubGroupLinkTests {
     public void ForList_SubGroupWithNoListsAtAll_SuggestsAnEntry() {
         var warning = ChildLinkReport.ForList("fungi-threatened", LoadRules().ChildLinkNotes)
             .Single(m => m.Text.StartsWith("No list mushrooms-threatened", StringComparison.Ordinal));
-        Assert.Equal("To create mushrooms-threatened, add an entry for mushrooms to wikipedia-lists.yml.", warning.Hint);
+        Assert.Equal("To create mushrooms-threatened, add an entry for mushrooms to wikipedia-lists.yml with presets that include threatened.", warning.Hint);
     }
 
     // category_split overrides presets, so adding a preset to that entry would change nothing.
@@ -156,7 +156,7 @@ public class SubGroupLinkTests {
         Assert.Equal(new[] {
             "No mushrooms lists for presets threatened and lc, so species in sub-group mushrooms are listed on the fungi lists for those presets. To create the mushrooms lists, add an entry for mushrooms to wikipedia-lists.yml with presets that include threatened and lc.",
             "No list ferns-threatened, so species in sub-group ferns are listed on fungi-threatened itself. To create ferns-threatened, replace category_split in the ferns entry in wikipedia-lists.yml with presets that include threatened.",
-            "Unknown sub-group lichens in the children of fungi: taxa-groups.yml has no group lichens. To fix it, correct or remove lichens in the children of fungi in taxa-groups.yml.",
+            "Unknown group lichens in the children: list of the fungi group in taxa-groups.yml, so lichens is ignored. Change lichens to the key of an existing group in taxa-groups.yml, or remove lichens from the children: list of the fungi group.",
         }, warnings);
     }
 

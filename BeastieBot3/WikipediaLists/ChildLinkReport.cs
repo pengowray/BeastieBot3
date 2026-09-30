@@ -137,8 +137,8 @@ internal static class ChildLinkReport {
     private static Message UnknownGroupMessage(ChildLinkNote n) {
         var key = n.Kind == GroupingKind.SeeAlso ? "see_also" : "children";
         return new Message(Severity.Warning,
-            $"Unknown sub-group {n.ChildGroup} in the {key} of {n.ParentGroup}: taxa-groups.yml has no group {n.ChildGroup}.",
-            $"To fix it, correct or remove {n.ChildGroup} in the {key} of {n.ParentGroup} in taxa-groups.yml.");
+            $"Unknown group {n.ChildGroup} in the {key}: list of the {n.ParentGroup} group in taxa-groups.yml, so {n.ChildGroup} is ignored.",
+            $"Change {n.ChildGroup} to the key of an existing group in taxa-groups.yml, or remove {n.ChildGroup} from the {key}: list of the {n.ParentGroup} group.");
     }
 
     // "cr", "cr and ex", "cr, en, vu and ex".
@@ -158,7 +158,7 @@ internal static class ChildLinkReport {
         if (presets.Count == 1) {
             var preset = presets[0];
             return !n.ChildHasLists
-                ? $"To create {child}-{preset}, add an entry for {child} to wikipedia-lists.yml."
+                ? $"To create {child}-{preset}, add an entry for {child} to wikipedia-lists.yml with presets that include {preset}."
                 : n.ChildUsesCategorySplit
                     ? $"To create {child}-{preset}, replace category_split in the {child} entry in wikipedia-lists.yml with presets that include {preset}."
                     : $"To create {child}-{preset}, add {preset} to the {child} entry in wikipedia-lists.yml.";

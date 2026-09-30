@@ -55,7 +55,8 @@ public sealed class IucnApiCacheDiscoverByFamilySettings : CommonSettings {
     "Scan IUCN families via the API to discover taxa missing from the local cache (removed or reclassified species). More complete than cache-taxa, which only fetches SIS ids already present in the CSV export.",
     Reason = "Adds newly-discovered taxa to the cache; --dry-run only inspects.",
     Rerun = RerunEffect.Discovers,
-    RerunNote = "Pages through every family on the IUCN Red List API and downloads the taxa not yet in the IUCN API cache. --dry-run lists those taxa and downloads none of them; --force downloads every taxon it finds, including the ones already cached. " + RerunNotes.DuringIucnRefresh,
+    RerunNote = "Scans every family on the IUCN Red List API, or only the families given with --family, and downloads the record of each taxon not yet in the IUCN API cache. Each downloaded record queues that taxon's assessments for iucn api cache-assessments. --dry-run lists the taxa not in the cache and downloads nothing; --force downloads the record of every taxon the scan finds, including taxa already cached. "
+        + RerunNotes.DuringIucnRefreshPrefix + "the record of every taxon the scan finds whose cached record was downloaded before the refresh's cutoff date.",
     Examples = new[] {
         "iucn api discover-by-family --dry-run",
         "iucn api discover-by-family",

@@ -37,7 +37,7 @@ internal sealed class RedlistAuditSiteCommand : Command<RedlistAuditSiteCommand.
         public string? OutputDir { get; init; }
 
         [CommandOption("--limit <ROWS>")]
-        [Description("Maximum number of database rows each report checks, for a quick test run (0 = all rows, the default). failed-assessments ignores it and always checks every row. Without --output, a run with a limit is written to <Datastore:reports_dir>/redlist-audit-2026-limited, so the full run's pages are kept. Every page of a limited run has a notice that its counts are partial, and no release-counts.yml is written.")]
+        [Description("Limits every report except the failed-assessments report to at most this many database rows, for a quick test run (0 = no limit, the default). That report always checks every row. Without --output, a limited run is written to <Datastore:reports_dir>/redlist-audit-2026-limited, and <Datastore:reports_dir>/redlist-audit-2026 is left unchanged. Every page of a limited run has a notice that its counts are partial, and no release-counts.yml block is saved or printed.")]
         public long Limit { get; init; }
 
         [CommandOption("--contact <EMAIL>")]
@@ -149,10 +149,7 @@ internal sealed class RedlistAuditSiteCommand : Command<RedlistAuditSiteCommand.
             AnsiConsole.MarkupLineInterpolated($"[yellow]Removed {FileCount(written.Removed.Count)} from an earlier run, because this run did not write {(written.Removed.Count == 1 ? "it" : "them")}.[/]");
         }
         if (written.Kept.Count > 0) {
-            var reason = failed.Count > 0 && skipped.Count > 0
-                ? $"{HtmlText.JoinWithAnd(failed)} failed and {HtmlText.JoinWithAnd(skipped)} did not run"
-                : failed.Count > 0 ? $"{HtmlText.JoinWithAnd(failed)} failed" : $"{HtmlText.JoinWithAnd(skipped)} did not run";
-            AnsiConsole.MarkupLineInterpolated($"[yellow]Kept {FileCount(written.Kept.Count)} from an earlier run, because {reason}. This run did not write {(written.Kept.Count == 1 ? "it, so it" : "them, so they")} may be out of date.[/]");
+            AnsiConsole.MarkupLineInterpolated($"[yellow]{KeptFilesLine(written.Kept.Count, failed, skipped)}[/]");
         }
         if (written.NotRemoved.Count > 0) {
             AnsiConsole.MarkupLineInterpolated($"[yellow]Could not remove {FileCount(written.NotRemoved.Count)} from an earlier run.[/]");
@@ -182,6 +179,20 @@ internal sealed class RedlistAuditSiteCommand : Command<RedlistAuditSiteCommand.
 
     private static string FileCount(int count) =>
         count == 1 ? "1 file" : $"{count.ToString("N0", CultureInfo.InvariantCulture)} files";
+
+    // "Kept 31 files from an earlier run, because 1 report failed (col-crosscheck) and 2 reports
+    // were skipped (empty-scope and no-latest). ..." The ids match the built/skipped/error lines.
+    internal static string KeptFilesLine(int keptCount, IReadOnlyList<string> failed, IReadOnlyList<string> skipped) {
+        static string Reports(int n) => n == 1 ? "1 report" : $"{n.ToString("N0", CultureInfo.InvariantCulture)} reports";
+        var failedPart = $"{Reports(failed.Count)} failed ({HtmlText.JoinWithAnd(failed)})";
+        var skippedPart = $"{Reports(skipped.Count)} {(skipped.Count == 1 ? "was" : "were")} skipped ({HtmlText.JoinWithAnd(skipped)})";
+        var reason = failed.Count > 0 && skipped.Count > 0 ? $"{failedPart} and {skippedPart}"
+            : failed.Count > 0 ? failedPart : skippedPart;
+        var one = keptCount == 1;
+        return $"Kept {FileCount(keptCount)} from an earlier run, because {reason}. "
+            + $"This run did not write {(one ? "it, so it" : "them, so they")} may be out of date. "
+            + $"A run that builds every report replaces or removes {(one ? "it" : "them")}.";
+    }
 
     // The default folder name under Datastore:reports_dir, and the suffix a --limit run adds to it.
     // ColArtifacts skips "-limited" folders, so a test run never counts as rebuilding the site.

@@ -62,10 +62,12 @@ public enum RerunEffect {
     Default,        // unset: allowed only on ReadOnly commands, where it means ReadOnly
     ReadOnly,       // reads data and shows or writes results; changes no downloaded or imported data. A
                     // rebuildable lookup file is allowed (generate-lists writes <CoL db>.enrich-cache.sqlite)
-    IdempotentAdd,  // by default adds only what is missing and keeps what is already there (downloads, queues, upserts)
+    IdempotentAdd,  // adds what is missing and may update what is already there (downloads, queues, upserts,
+                    // match results); cache-all --full also rebuilds the projection
     Discovers,      // searches the IUCN Red List API or Wikidata; adds what it finds to a cache or the download queue
     Rebuilds,       // rebuilds its result from data already stored locally and replaces the previous result
-    PlansDownloads, // changes only which records the download commands fetch next; downloads and deletes no downloaded data
+    PlansDownloads, // changes which records the IUCN API or Wikipedia download commands fetch on later runs;
+                    // downloads nothing and deletes no downloaded data
     ClearsCache,    // deletes downloaded data from a cache; the next download run fetches it again
     Imports,        // imports downloaded files into a database; a re-run skips what is imported, --force imports it again
 }
@@ -142,7 +144,9 @@ public sealed class CommandInfoAttribute : Attribute {
 // command joins one to its own note with +.
 internal static class RerunNotes {
     // Every iucn api download command (cache-all, cache-taxa, cache-assessments, cache-infraranks,
-    // discover-by-family) falls back to the open refresh's cutoff (IucnRefreshRun.Begin).
-    public const string DuringIucnRefresh =
-        "During a refresh started with iucn api refresh-start, a run also downloads again every record downloaded before the refresh's cutoff date.";
+    // discover-by-family) falls back to the open refresh's cutoff (IucnRefreshRun.Begin). What it
+    // downloads again differs by command, so each command ends this sentence with its own noun
+    // phrase and a full stop, e.g. DuringIucnRefreshPrefix + "every cached taxon record ... date."
+    public const string DuringIucnRefreshPrefix =
+        "During a refresh started with iucn api refresh-start, a run also downloads again ";
 }

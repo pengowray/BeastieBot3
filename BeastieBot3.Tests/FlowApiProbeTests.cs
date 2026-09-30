@@ -60,7 +60,7 @@ public class FlowApiProbeTests {
         ProjectedTaxa = 181_338,
     };
 
-    // ---- the re-import step ----
+    // ---- the refresh step ----
 
     [Fact]
     public void NoCacheYet_SaysNothingAboutReimporting() =>
@@ -174,18 +174,18 @@ public class FlowApiProbeTests {
     public void Infraranks_NotFoundOnly_IsOkAndSaysHowMany() {
         var r = FlowStepProbes.ApiInfraranks(State(notFound: 57))!;
         Assert.Equal("ok", r.Status);
-        Assert.Equal("352,384 assessments cached. 57 queued assessments were not found on the API (404); a re-import requests them again. Every other queued assessment is downloaded.", r.Detail);
+        Assert.Equal("352,384 assessments cached. 57 queued assessments were not found on the API (404); a refresh requests them again. Every other queued assessment is downloaded.", r.Detail);
     }
 
     [Fact]
     public void Infraranks_ServerErrorsAndNotFound_NamesBoth() {
         var r = FlowStepProbes.ApiInfraranks(State(backlogOutstanding: 23, serverErrors: 23, notFound: 57))!;
         Assert.Equal("ok", r.Status);
-        Assert.Equal("352,384 assessments cached. 23 queued assessments failed to download with a server error (HTTP 5xx); later runs try them again. 57 queued assessments were not found on the API (404); a re-import requests them again. Every other queued assessment is downloaded.", r.Detail);
+        Assert.Equal("352,384 assessments cached. 23 queued assessments failed to download with a server error (HTTP 5xx); later runs try them again. 57 queued assessments were not found on the API (404); a refresh requests them again. Every other queued assessment is downloaded.", r.Detail);
     }
 
-    // While a re-import is open its tombstone pass may already have asked for these again, so the
-    // sentence about what a re-import does is left out.
+    // While a refresh is open its tombstone pass may already have asked for these again, so the
+    // sentence about what a refresh does is left out.
     [Fact]
     public void Infraranks_NotFoundDuringAReimport_LeavesOutTheReimportSentence() {
         var r = FlowStepProbes.ApiInfraranks(State(notFound: 57, session: Session()))!;
@@ -238,17 +238,17 @@ public class FlowApiProbeTests {
         Assert.Contains("512", r.Detail);
     }
 
-    // A projection built before the re-import finished still holds the old download, however
+    // A projection built before the refresh finished still holds the old download, however
     // healthy it looks on its own.
     [Fact]
     public void Projection_BuiltBeforeTheRefreshFinished_IsTodo() {
         var r = FlowStepProbes.ApiProjection(State(session: Session(), projection: Projection()))!;
         Assert.Equal("todo", r.Status);
-        Assert.Contains("Needs rebuilding after re-import", r.Detail);
+        Assert.Contains("Needs rebuilding after refresh", r.Detail);
     }
 
     // ---- the one-button light (cache-all --full) ----
-    // One decisive fact at a time, in run order: nothing yet, re-import mid-flight, assessment
+    // One decisive fact at a time, in run order: nothing yet, refresh mid-flight, assessment
     // backlog, stale projection, done.
 
     [Fact]
@@ -280,7 +280,7 @@ public class FlowApiProbeTests {
     public void UpdateLight_OnlyNotFoundLeft_IsOkAndNamesThem() {
         var r = FlowStepProbes.ApiUpdate(State(notFound: 57, projection: Projection()));
         Assert.Equal("ok", r.Status);
-        Assert.Contains(" 57 queued assessments were not found on the API (404); a re-import requests them again. Every other queued assessment is downloaded. For a new Red List release", r.Detail);
+        Assert.Contains(" 57 queued assessments were not found on the API (404); a refresh requests them again. Every other queued assessment is downloaded. For a new Red List release", r.Detail);
     }
 
     [Fact]
@@ -291,13 +291,13 @@ public class FlowApiProbeTests {
         Assert.DoesNotContain("57", r.Detail);
     }
 
-    // Server errors alone: no re-import sentence, because a normal run retries them.
+    // Server errors alone: no refresh sentence, because a normal run retries them.
     [Fact]
     public void UpdateLight_OnlyServerErrorsLeft_IsOkWithoutTheReimportSentence() {
         var r = FlowStepProbes.ApiUpdate(State(backlogOutstanding: 23, serverErrors: 23, projection: Projection()));
         Assert.Equal("ok", r.Status);
         Assert.Contains(" 23 queued assessments failed to download with a server error (HTTP 5xx); later runs try them again. Every other queued assessment is downloaded. For a new Red List release", r.Detail);
-        Assert.DoesNotContain("re-import requests", r.Detail);
+        Assert.DoesNotContain("refresh requests", r.Detail);
     }
 
     [Fact]
@@ -311,7 +311,7 @@ public class FlowApiProbeTests {
     public void UpdateLight_ServerErrorsAndNotFound_IsOkAndNamesBoth() {
         var r = FlowStepProbes.ApiUpdate(State(backlogOutstanding: 23, serverErrors: 23, notFound: 57, projection: Projection()));
         Assert.Equal("ok", r.Status);
-        Assert.Contains(" 23 queued assessments failed to download with a server error (HTTP 5xx); later runs try them again. 57 queued assessments were not found on the API (404); a re-import requests them again. Every other queued assessment is downloaded. For a new Red List release", r.Detail);
+        Assert.Contains(" 23 queued assessments failed to download with a server error (HTTP 5xx); later runs try them again. 57 queued assessments were not found on the API (404); a refresh requests them again. Every other queued assessment is downloaded. For a new Red List release", r.Detail);
     }
 
     [Fact]
@@ -326,6 +326,6 @@ public class FlowApiProbeTests {
         var r = FlowStepProbes.ApiUpdate(State(projection: Projection()));
         Assert.Equal("ok", r.Status);
         Assert.Contains("186,236 taxa", r.Detail);
-        Assert.Contains("start a re-import first", r.Detail);
+        Assert.Contains("start a refresh first", r.Detail);
     }
 }

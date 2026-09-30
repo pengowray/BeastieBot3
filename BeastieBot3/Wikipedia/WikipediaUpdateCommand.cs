@@ -23,7 +23,7 @@ namespace BeastieBot3.Wikipedia;
     "Update the Wikidata and Wikipedia caches and match IUCN taxa to Wikipedia articles, by running the individual cache commands in order. Steps whose queue is empty are skipped, and the next run continues from where the last run stopped.",
     Reason = "Runs the individual cache commands in order; each only adds what is missing. Also drops queued titles that carry an authority or a note, since no article can have such a title.",
     Rerun = RerunEffect.Discovers,
-    RerunNote = "Each run also imports a newer all-titles dump when one has been published (wikipedia titles-dump), and deletes queued Wikipedia titles that no article can have (wikipedia prune-queue --apply).",
+    RerunNote = "Each run also runs wikipedia titles-dump, to import a newer all-titles dump when one has been published, and wikipedia prune-queue --apply, to delete queued titles that no Wikipedia article can have: titles with an author, a year or a note after the scientific name, such as \"Eumeces schneideri (Daudin, 1802) [orth. error]\".",
     ReportOnlyWith = new[] { "--status" },
     Examples = new[] {
         "wikipedia update",

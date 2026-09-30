@@ -488,4 +488,17 @@ public class AuditRenderingTests {
         Assert.Equal("a and b", HtmlText.JoinWithAnd(new[] { "a", "b" }));
         Assert.Equal("a, b and c", HtmlText.JoinWithAnd(new[] { "a", "b", "c" }));
     }
+
+    // ---- the line about files kept from an earlier run ----
+
+    // Each id comes after a counted noun, so a line never reads "failed-assessments failed".
+    [Fact]
+    public void KeptFilesLine_NamesFailedAndSkippedReportsWithCounts() {
+        Assert.Equal(
+            "Kept 31 files from an earlier run, because 1 report failed (col-crosscheck) and 2 reports were skipped (empty-scope and no-latest). This run did not write them, so they may be out of date. A run that builds every report replaces or removes them.",
+            RedlistAuditSiteCommand.KeptFilesLine(31, new[] { "col-crosscheck" }, new[] { "empty-scope", "no-latest" }));
+        Assert.Equal(
+            "Kept 1 file from an earlier run, because 1 report was skipped (empty-scope). This run did not write it, so it may be out of date. A run that builds every report replaces or removes it.",
+            RedlistAuditSiteCommand.KeptFilesLine(1, Array.Empty<string>(), new[] { "empty-scope" }));
+    }
 }

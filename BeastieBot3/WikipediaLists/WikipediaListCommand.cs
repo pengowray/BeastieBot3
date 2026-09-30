@@ -65,7 +65,7 @@ public sealed class WikipediaListCommand : Command<WikipediaListCommand.Settings
         public bool UseLegacyNames { get; init; }
 
         [CommandOption("--common-names-db <PATH>")]
-        [System.ComponentModel.Description("Path to the Common names store (default: Datastore:common_names_sqlite in paths.ini, or common_names.sqlite in Datastore:datastore_dir when common_names_sqlite is not set). A common name shared by two or more taxa in the store is skipped as ambiguous, and the list shows another common name for the taxon, or only its scientific name. A common name set for the taxon in rules/rules-list.txt is used even if it is ambiguous. 'common-names report --report ambiguous' lists the ambiguous names.")]
+        [System.ComponentModel.Description("Path to the Common names store (default: Datastore:common_names_sqlite in paths.ini, or common_names.sqlite in Datastore:datastore_dir when common_names_sqlite is not set). A common name shared by two or more taxa in the store is skipped as ambiguous, and the list shows another common name for the taxon. If every common name the store has for a taxon is ambiguous, or the store has none, the list shows only the taxon's scientific name. A common name set for a taxon in rules/rules-list.txt is used even if it is ambiguous. 'common-names report --report ambiguous' lists the ambiguous names.")]
         public string? CommonNamesDbPath { get; init; }
 
         [CommandOption("--col-database <PATH>")]
@@ -256,13 +256,14 @@ public sealed class WikipediaListCommand : Command<WikipediaListCommand.Settings
     }
 
     /// <summary>
-    /// The line printed under the store path: how many common names the lists skip as ambiguous.
+    /// The line printed under the store path: how many ambiguous common names the whole store has,
+    /// which the lists skip (not how many this run's lists leave out).
     /// The names are worked out from the store's common names on each run
     /// (CommonNameStore.QueryAmbiguousNames), so nothing has to be rebuilt first. Null when no
     /// name is skipped.
     /// </summary>
     internal static string? AmbiguousNamesLine(int skipped) => skipped > 0
-        ? $"Skipping {skipped:N0} ambiguous common names, each shared by two or more taxa. To list them, run common-names report --report ambiguous."
+        ? $"The Common names store has {skipped:N0} ambiguous common names, each shared by two or more taxa, and the lists skip them. To see them, run common-names report --report ambiguous."
         : null;
 
     private const string IucnOnlyNamesNote = "Section headings use only the ranks in the IUCN data (kingdom, phylum, class, order, family and genus), and species names keep the IUCN spelling even where it has an error.";

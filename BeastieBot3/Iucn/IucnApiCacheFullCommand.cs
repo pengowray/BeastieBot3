@@ -105,7 +105,7 @@ public sealed class IucnApiCacheFullSettings : CommonSettings {
     "Build or update the IUCN API cache, and with --full also the IUCN API projection that --dataset api reads. Runs cache-taxa, then cache-assessments; --full also runs cache-infraranks --from-csv before cache-assessments, and project-view at the end. During a refresh (`iucn api refresh-start`) it also runs discover-by-family and re-checks taxa and assessments the API previously said were gone, unless the refresh was started with --no-discovery or --no-tombstones.",
     Reason = "Caches IUCN /api/v4 taxa + assessment payloads into the local API cache (idempotent additive; --force-taxa/--force-assessments re-download already-cached entries). --project also rebuilds the derived projection DB.",
     Rerun = RerunEffect.IdempotentAdd,
-    RerunNote = RerunNotes.DuringIucnRefresh,
+    RerunNote = RerunNotes.DuringIucnRefreshPrefix + "every cached taxon record and assessment downloaded before the refresh's cutoff date.",
     ReportOnlyWith = new[] { "--status" },
     Examples = new[] {
         "iucn api cache-all",
@@ -312,14 +312,14 @@ public sealed class IucnApiCacheFullCommand : AsyncCommand<IucnApiCacheFullSetti
         Row("Download species records (cache-taxa)",
             runs: !settings.SkipTaxa,
             settings.SkipTaxa ? "--skip-taxa"
-                : refresh is { TaxaRemaining: > 0 } ? $"{refresh.TaxaRemaining:N0} taxa to re-download for re-import {refresh.Session.DisplayLabel}"
+                : refresh is { TaxaRemaining: > 0 } ? $"{refresh.TaxaRemaining:N0} taxa to re-download for refresh {refresh.Session.DisplayLabel}"
                 : "adds only species not cached yet");
 
         Row("Family sweep for taxa the CSV omits (discover-by-family)",
             runs: runDiscovery,
-            runDiscovery ? "this re-import asked for it and it has not run yet"
-                : s.ActiveSession is { IncludeDiscovery: true } ? "already done for this re-import"
-                : "only runs as part of a re-import that asks for it");
+            runDiscovery ? "this refresh asked for it and it has not run yet"
+                : s.ActiveSession is { IncludeDiscovery: true } ? "already done for this refresh"
+                : "only runs as part of a refresh that asks for it");
 
         Row("Download subspecies and varieties (cache-infraranks)",
             runs: runInfraranks,
@@ -334,8 +334,8 @@ public sealed class IucnApiCacheFullCommand : AsyncCommand<IucnApiCacheFullSetti
             runs: runTombstones,
             runTombstones ? $"{s.TombstonedTaxa:N0} ids to re-check against the new release"
                 : settings.SkipTombstones ? "--skip-tombstones"
-                : s.ActiveSession is { IncludeTombstones: true } ? "already done for this re-import"
-                : "only runs as part of a re-import that asks for it");
+                : s.ActiveSession is { IncludeTombstones: true } ? "already done for this refresh"
+                : "only runs as part of a refresh that asks for it");
 
         Row("Rebuild the projection --dataset api reads (project-view)",
             runs: runProject,
@@ -349,7 +349,7 @@ public sealed class IucnApiCacheFullCommand : AsyncCommand<IucnApiCacheFullSetti
         var backlog = s.AssessmentsToDownload;
         var parts = new System.Collections.Generic.List<string>();
         if (backlog > 0) parts.Add($"{backlog:N0} queued assessments to download");
-        if (refresh is { AssessmentsRemaining: > 0 }) parts.Add($"{refresh.AssessmentsRemaining:N0} to re-download for the re-import");
+        if (refresh is { AssessmentsRemaining: > 0 }) parts.Add($"{refresh.AssessmentsRemaining:N0} to re-download for the refresh");
         if (s.ServerErrorAssessments > 0) parts.Add($"{s.ServerErrorAssessments:N0} assessments that got a server error (HTTP 5xx) are retried at the end of the run if their retry is due");
         if (s.BacklogNotFound > 0) parts.Add(runTombstones
             ? $"{s.BacklogNotFound:N0} assessments not found on the API (404) are requested again later in the run"
@@ -385,7 +385,7 @@ public sealed class IucnApiCacheFullCommand : AsyncCommand<IucnApiCacheFullSetti
 
         if (s.RefreshProgress is { } refresh && (refresh.TaxaRemaining > 0 || refresh.AssessmentsRemaining > 0)) {
             AnsiConsole.MarkupLineInterpolated(
-                $"[yellow]Still to do:[/] re-import {refresh.Session.DisplayLabel} is {refresh.PercentDone}% done — {refresh.TaxaRemaining:N0} taxa and {refresh.AssessmentsRemaining:N0} assessments to re-download. Run `iucn api cache-all --full` again to carry on; the cutoff date is remembered.");
+                $"[yellow]Still to do:[/] refresh {refresh.Session.DisplayLabel} is {refresh.PercentDone}% done — {refresh.TaxaRemaining:N0} taxa and {refresh.AssessmentsRemaining:N0} assessments to re-download. Run `iucn api cache-all --full` again to carry on; the cutoff date is remembered.");
             return;
         }
         var backlog = s.AssessmentsToDownload;

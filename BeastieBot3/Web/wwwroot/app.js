@@ -740,10 +740,10 @@
   // CommandClassificationTests checks that every RerunEffect has an entry here.
   const EFFECTS = {
     readonly:       { label: 'read-only', cls: 'readonly', icon: '👁', hint: 'Reads data and shows the results or writes them to files. Changes none of the downloaded or imported data.' },
-    idempotentadd:  { label: 'adds what is missing', cls: 'add', icon: '＋', hint: 'By default, a run adds only the records that are missing, and keeps the records already there.' },
+    idempotentadd:  { label: 'adds or updates records', cls: 'add', icon: '＋', hint: 'A run adds the records missing from this command\'s cache, store or download queue, and can update records already there.' },
     discovers:      { label: 'finds new records', cls: 'discovers', icon: '🔍', hint: 'Searches the IUCN Red List API or Wikidata, and adds the records it finds to the cache or to the download queue.' },
     rebuilds:       { label: 'rebuilds output', cls: 'rebuilds', icon: '🔁', hint: 'Each run rebuilds the output from data already stored locally, and replaces the output of the previous run.' },
-    plansdownloads: { label: 'changes what is downloaded next', cls: 'queue', icon: '📋', hint: 'Changes only which records the download commands fetch next. Downloads nothing and deletes no downloaded data.' },
+    plansdownloads: { label: 'changes later downloads', cls: 'queue', icon: '📋', hint: 'Changes which records the IUCN API or Wikipedia download commands fetch on later runs. Downloads nothing, and deletes no downloaded data.' },
     clearscache:    { label: 'clears cache', cls: 'fresh', icon: '🧹', hint: 'Deletes downloaded data from the cache.' },
     imports:        { label: 're-import needs --force', cls: 'fresh', icon: '🗄', hint: 'Imports downloaded files into a database. Running the command again skips files already imported. With --force, the command deletes the imported data and imports the files again.' },
   };

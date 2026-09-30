@@ -247,7 +247,7 @@ public static class FlowStepProbes {
     };
 
     // The one light for the "cache-all --full" button: the single most decisive fact about the
-    // API dataset, in the order a run works through them — nothing yet, a re-import mid-flight,
+    // API dataset, in the order a run works through them — nothing yet, a refresh mid-flight,
     // an assessment backlog, a stale projection, or done.
     internal static FlowProbeResult ApiUpdate(IucnApiCacheState s) {
         if (!s.CacheExists || s.TaxaCached == 0) {
@@ -259,14 +259,14 @@ public static class FlowStepProbes {
             var session = refresh.Session;
             if (refresh.TaxaRemaining > 0 || refresh.AssessmentsRemaining > 0) {
                 return new FlowProbeResult("todo",
-                    $"Re-import {session.DisplayLabel} is {refresh.PercentDone}% done: {refresh.TaxaRemaining:N0} taxa and {refresh.AssessmentsRemaining:N0} assessments still to re-download. Run this step again to continue; the cutoff date is remembered.");
+                    $"Refresh {session.DisplayLabel} is {refresh.PercentDone}% done: {refresh.TaxaRemaining:N0} taxa and {refresh.AssessmentsRemaining:N0} assessments still to re-download. Run this step again to continue; the cutoff date is remembered.");
             }
             var passesLeft = new List<string>();
             if (session.IncludeDiscovery && session.DiscoveryDoneAt is null) passesLeft.Add("the family sweep");
             if (session.IncludeTombstones && session.TombstonesDoneAt is null) passesLeft.Add("the re-check of taxa the API previously said were gone");
             return new FlowProbeResult("todo", passesLeft.Count == 0
-                ? $"Re-import {session.DisplayLabel} not finished. All re-downloads are done. Run this step once more to finish the re-import."
-                : $"Re-import {session.DisplayLabel} not finished. All re-downloads are done; still to run: {string.Join(" and ", passesLeft)}. Run this step again to finish the re-import.");
+                ? $"Refresh {session.DisplayLabel} not finished. All re-downloads are done. Run this step once more to finish the refresh."
+                : $"Refresh {session.DisplayLabel} not finished. All re-downloads are done; still to run: {string.Join(" and ", passesLeft)}. Run this step again to finish the refresh.");
         }
 
         var backlog = s.AssessmentsToDownload;
@@ -289,18 +289,18 @@ public static class FlowStepProbes {
         var notDownloaded = NotDownloadedSentences(s);
         if (notDownloaded.Length > 0) notDownloaded = " " + notDownloaded;
         return new FlowProbeResult("ok",
-            $"{s.TaxaCached:N0} taxa and {s.AssessmentsCached:N0} assessments cached{age}.{notDownloaded} For a new Red List release, start a re-import first (iucn api refresh-start), then run this step.");
+            $"{s.TaxaCached:N0} taxa and {s.AssessmentsCached:N0} assessments cached{age}.{notDownloaded} For a new Red List release, start a refresh first (iucn api refresh-start), then run this step.");
     }
 
     // The queued assessments a normal run does not count as work left: the ones whose last
     // download got a server error (retried by later runs once their back-off ends), and the ones
-    // the API answered 404/410 for, which only a re-import's tombstone pass asks for again. Each
+    // the API answered 404/410 for, which only a refresh's tombstone pass asks for again. Each
     // group gets its own sentence with its own count, and a closing sentence says every other
     // queued assessment is downloaded. "" when there are none.
     //
-    // The re-import clause describes a future re-import, so it is left out while one is open:
-    // that re-import's tombstone pass may already have asked for these again. ApiUpdate returns
-    // before this while a re-import is open; ApiInfraranks does not check.
+    // The refresh clause describes a future refresh, so it is left out while one is open:
+    // that refresh's tombstone pass may already have asked for these again. ApiUpdate returns
+    // before this while a refresh is open; ApiInfraranks does not check.
     private static string NotDownloadedSentences(IucnApiCacheState s) {
         var serverErrors = s.ServerErrorAssessments;
         var notFound = s.BacklogNotFound;
@@ -314,7 +314,7 @@ public static class FlowStepProbes {
         if (notFound > 0) {
             var were = notFound == 1 ? "was" : "were";
             var them = notFound == 1 ? "it" : "them";
-            var reimport = s.ActiveSession is null ? $"; a re-import requests {them} again" : "";
+            var reimport = s.ActiveSession is null ? $"; a refresh requests {them} again" : "";
             sentences.Add($"{QueuedAssessments(notFound)} {were} not found on the API (404){reimport}.");
         }
         sentences.Add("Every other queued assessment is downloaded.");
@@ -398,21 +398,21 @@ public static class FlowStepProbes {
     // A refresh is one job across several steps, so while one is running every download step
     // reports against it. With no refresh in progress each step reports its own coverage.
 
-    // Is a re-import under way, and does it still need starting?
+    // Is a refresh under way, and does it still need starting?
     internal static FlowProbeResult? ApiRefresh(IucnApiCacheState s) {
-        if (!s.CacheExists) return null;   // nothing cached yet, so there is nothing to re-import
+        if (!s.CacheExists) return null;   // nothing cached yet, so there is nothing to refresh
 
         if (s.ActiveSession is not { } session) {
             var age = s.OldestTaxaDownloadedAt is { } oldest
                 ? $" The oldest payload was fetched {IucnRefreshMath.Stamp(oldest)}."
                 : "";
             return new FlowProbeResult("ok",
-                $"No re-import in progress, so the steps below only fetch what is missing.{age}");
+                $"No refresh in progress, so the steps below only fetch what is missing.{age}");
         }
 
         var progress = s.RefreshProgress!;
         return new FlowProbeResult("ok",
-            $"Re-import {session.DisplayLabel}, {progress.PercentDone}% done: everything downloaded before {IucnRefreshMath.Stamp(session.CutoffUtc)} is to be downloaded again. Run 'Build or update the API dataset' until the re-import finishes; the cutoff date is remembered.");
+            $"Refresh {session.DisplayLabel}, {progress.PercentDone}% done: everything downloaded before {IucnRefreshMath.Stamp(session.CutoffUtc)} is to be downloaded again. Run 'Build or update the API dataset' until the refresh finishes; the cutoff date is remembered.");
     }
 
     // Species and their assessments: the two long download phases.
@@ -427,10 +427,10 @@ public static class FlowStepProbes {
             // they keep their old download date, so "all" names them as the exception.
             if (refresh.TaxaRemaining == 0 && refresh.AssessmentsRemaining == 0) {
                 return new FlowProbeResult("ok",
-                    $"Re-import {session.DisplayLabel}: this step is done. IUCN API cache: {s.TaxaCached:N0} taxa and {s.AssessmentsCached:N0} assessments, all downloaded after the cutoff date{refresh.NotFoundClause}.");
+                    $"Refresh {session.DisplayLabel}: this step is done. IUCN API cache: {s.TaxaCached:N0} taxa and {s.AssessmentsCached:N0} assessments, all downloaded after the cutoff date{refresh.NotFoundClause}.");
             }
             return new FlowProbeResult("todo",
-                $"Re-import {session.DisplayLabel} is {refresh.PercentDone}% done: "
+                $"Refresh {session.DisplayLabel} is {refresh.PercentDone}% done: "
                 + $"{refresh.TaxaRemaining:N0} taxa and {refresh.AssessmentsRemaining:N0} assessments still to re-download. "
                 + "Run this step again to continue; the cutoff date is remembered.");
         }
@@ -453,9 +453,9 @@ public static class FlowStepProbes {
 
         return session.DiscoveryDoneAt is null
             ? new FlowProbeResult("todo",
-                $"Family sweep not run yet for re-import {session.DisplayLabel}. Run 'Build or update the API dataset', which includes the family sweep; running this step separately is not recorded as done for the re-import.")
+                $"Family sweep not run yet for refresh {session.DisplayLabel}. Run 'Build or update the API dataset', which includes the family sweep; running this step separately is not recorded as done for the refresh.")
             : new FlowProbeResult("ok",
-                $"Re-import {session.DisplayLabel}: family sweep done {IucnRefreshMath.Stamp(session.DiscoveryDoneAt.Value)}.");
+                $"Refresh {session.DisplayLabel}: family sweep done {IucnRefreshMath.Stamp(session.DiscoveryDoneAt.Value)}.");
     }
 
     // Subspecies and varieties queue assessments of their own, so the honest signal for these
@@ -489,7 +489,7 @@ public static class FlowStepProbes {
 
         if (s.ActiveSession is { } session) {
             return new FlowProbeResult("todo",
-                $"Needs rebuilding after re-import {session.DisplayLabel} finishes. 'Build or update the API dataset' does the rebuild as its last phase. Built {Stamp(projection.BuiltAt)}.");
+                $"Needs rebuilding after refresh {session.DisplayLabel} finishes. 'Build or update the API dataset' does the rebuild as its last phase. Built {Stamp(projection.BuiltAt)}.");
         }
 
         if (projection.IsPartial) {
