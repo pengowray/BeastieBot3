@@ -147,6 +147,61 @@ public class SubGroupLinkTests {
         Assert.Equal(new[] { "shrubs has no lists in wikipedia-lists.yml, so no list links to its sub-groups." }, warnings);
     }
 
+    // One warning per sub-group, however many of the group's lists it is missing from; an unknown
+    // sub-group is named once, not once per list.
+    [Fact]
+    public void WarningsForGroup_OneWarningPerSubGroup() {
+        var config = LoadRules();
+        var warnings = ChildLinkReport.WarningsForGroup("fungi", new[] { "dicots", "mushrooms", "lichens", "ferns" }, config);
+        Assert.Equal(new[] {
+            "No mushrooms lists for presets threatened and lc, so species in sub-group mushrooms are listed on the fungi lists for those presets. To create the mushrooms lists, add an entry for mushrooms to wikipedia-lists.yml with presets that include threatened and lc.",
+            "No list ferns-threatened, so species in sub-group ferns are listed on fungi-threatened itself. To create ferns-threatened, replace category_split in the ferns entry in wikipedia-lists.yml with presets that include threatened.",
+            "Unknown sub-group lichens in the children of fungi: taxa-groups.yml has no group lichens. To fix it, correct or remove lichens in the children of fungi in taxa-groups.yml.",
+        }, warnings);
+    }
+
+    [Theory]
+    [InlineData(true, false, "To create the corals lists, add cr, en, vu and ex to the corals entry in wikipedia-lists.yml.")]
+    [InlineData(true, true, "To create the corals lists, replace category_split in the corals entry in wikipedia-lists.yml with presets that include cr, en, vu and ex.")]
+    [InlineData(false, false, "To create the corals lists, add an entry for corals to wikipedia-lists.yml with presets that include cr, en, vu and ex.")]
+    public void WarningsForGroup_SubGroupMissingSeveralPresets(bool hasLists, bool usesCategorySplit, string hint) {
+        var presets = new[] { "threatened", "cr", "en", "vu", "ex" };
+        var config = new WikipediaListConfig {
+            Lists = presets.Select(p => new WikipediaListDefinition { Id = $"invertebrates-{p}", TaxaGroup = "invertebrates", Preset = p }).ToList(),
+            ChildLinkNotes = presets.SelectMany(p => new[] {
+                new ChildLinkNote($"invertebrates-{p}", "invertebrates", p, "insects", "Insects", GroupingKind.Phylogenetic,
+                    ChildLinkOutcome.Linked, $"insects-{p}", ChildHasLists: true),
+                p == "threatened"
+                    ? new ChildLinkNote($"invertebrates-{p}", "invertebrates", p, "corals", "Corals", GroupingKind.Phylogenetic,
+                        ChildLinkOutcome.Linked, "corals-threatened", ChildHasLists: true)
+                    : new ChildLinkNote($"invertebrates-{p}", "invertebrates", p, "corals", "Corals", GroupingKind.Phylogenetic,
+                        ChildLinkOutcome.NoList, null, hasLists, usesCategorySplit),
+            }).ToList(),
+        };
+        var warning = Assert.Single(ChildLinkReport.WarningsForGroup("invertebrates", new[] { "insects", "corals" }, config));
+        Assert.Equal(
+            "No corals lists for presets cr, en, vu and ex, so species in sub-group corals are listed on the invertebrates lists for those presets. " + hint,
+            warning);
+    }
+
+    [Fact]
+    public void WarningsForGroup_SeeAlsoMissingSeveralPresets() {
+        var presets = new[] { "cr", "en" };
+        var config = new WikipediaListConfig {
+            Lists = presets.Select(p => new WikipediaListDefinition { Id = $"mammals-{p}", TaxaGroup = "mammals", Preset = p }).ToList(),
+            ChildLinkNotes = presets.SelectMany(p => new[] {
+                new ChildLinkNote($"mammals-{p}", "mammals", p, "bats", "Bats", GroupingKind.Phylogenetic,
+                    ChildLinkOutcome.Linked, $"bats-{p}", ChildHasLists: true),
+                new ChildLinkNote($"mammals-{p}", "mammals", p, "marine-mammals", "Marine mammals", GroupingKind.SeeAlso,
+                    ChildLinkOutcome.NoList, null, ChildHasLists: true),
+            }).ToList(),
+        };
+        var warning = Assert.Single(ChildLinkReport.WarningsForGroup("mammals", new[] { "bats" }, config));
+        Assert.Equal(
+            "No list marine-mammals-all-status and no marine-mammals lists for presets cr and en, so the mammals lists for those presets have no link to marine-mammals (Marine mammals) under \"Related lists\". To create the marine-mammals lists, add cr and en to the marine-mammals entry in wikipedia-lists.yml.",
+            warning);
+    }
+
     // The Taxa grouping page's "Save sub-groups" answer carries the same warnings, read from the draft.
     [Fact]
     public void SaveChildren_ReturnsSubGroupLinkWarnings() {
@@ -272,7 +327,7 @@ public class SubGroupLinkTests {
           - taxa_group: trees
             presets: [nt]
           - taxa_group: fungi
-            presets: [threatened]
+            presets: [threatened, lc]
           # "separate" has no threatened page; its presets missing from this file are skipped.
           - taxa_group: ferns
             category_split: separate

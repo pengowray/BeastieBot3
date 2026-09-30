@@ -43,6 +43,21 @@
 
   let lastCounts = null;
 
+  // Sets the status line under the Taxa grouping controls and the warnings list below it. Every
+  // update replaces both, so warnings from "Save sub-groups" are cleared by the next "Show counts".
+  function setGrpMsg(text, warnings = []) {
+    $('#grp-msg').textContent = text;
+    const list = $('#grp-warnings');
+    if (!list) return;
+    list.innerHTML = '';
+    for (const w of warnings) {
+      const li = document.createElement('li');
+      li.textContent = `Warning: ${w}`;
+      list.appendChild(li);
+    }
+    list.hidden = warnings.length === 0;
+  }
+
   async function loadGroups() {
     try {
       const { groups } = await getJson('/api/grouping/groups');
@@ -55,7 +70,7 @@
         sel.appendChild(opt);
       }
     } catch (e) {
-      $('#grp-msg').textContent = 'Failed to load groups: ' + e.message;
+      setGrpMsg('Failed to load groups: ' + e.message);
     }
   }
 
@@ -68,7 +83,7 @@
     if (groupId && Array.from(sel.options).some((o) => o.value === groupId)) {
       sel.value = groupId;
     } else if (groupId) {
-      $('#grp-msg').textContent = `Group '${groupId}' is not a configured taxa group.`;
+      setGrpMsg(`Group '${groupId}' is not a configured taxa group.`);
       return;
     }
     await loadCounts();
@@ -82,7 +97,7 @@
     const group = $('#grp-parent').value;
     const rank = $('#grp-rank').value;
     const request = ++countsRequest;
-    $('#grp-msg').textContent = 'Loading counts…';
+    setGrpMsg('Loading counts…');
     try {
       const data = await getJson(`/api/grouping/children-counts?group=${encodeURIComponent(group)}&childRank=${encodeURIComponent(rank)}`);
       if (request !== countsRequest) return;
@@ -97,11 +112,11 @@
       if (tickable) {
         msg += ` To change the sub-groups of '${data.group}', tick or untick rows, then click "Save sub-groups".`;
       }
-      $('#grp-msg').textContent = msg;
+      setGrpMsg(msg);
       loadImpact(group, rank);
     } catch (e) {
       if (request !== countsRequest) return;
-      $('#grp-msg').textContent = 'Failed: ' + e.message;
+      setGrpMsg('Failed: ' + e.message);
     }
   }
 
@@ -500,7 +515,7 @@
     const remove = boxes.filter((c) => !c.checked).map((c) => c.value);
     const { ok, status, data } = await postJson('/api/grouping/children', { group, add, remove });
     if (!ok) {
-      $('#grp-msg').textContent = `Save failed: ${errorWithHint(data) || `HTTP ${status}`}`;
+      setGrpMsg(`Save failed: ${errorWithHint(data) || `HTTP ${status}`}`);
       return;
     }
     const list = (data.children || []).join(', ') || 'none';
@@ -508,8 +523,7 @@
       ? `Saved to the draft taxa-groups.yml. Sub-groups of '${group}': ${list}. To copy the draft to rules/, click "Apply changed files to source" in the Rules editor.`
       : `No change to the draft taxa-groups.yml. Sub-groups of '${group}': ${list}.`;
     // Sub-groups that a list of this group cannot link (checked by the server against the draft rules).
-    const warnings = (data.warnings || []).map((w) => ` Warning: ${w}`).join('');
-    $('#grp-msg').textContent = saved + warnings;
+    setGrpMsg(saved, data.warnings || []);
   }
 
   // ===================== Rules editor =====================

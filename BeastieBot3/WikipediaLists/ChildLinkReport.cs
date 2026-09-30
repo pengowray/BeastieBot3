@@ -42,9 +42,7 @@ internal static class ChildLinkReport {
             messages.Add(new Message(Severity.Info,
                 "Sub-group lists linked: " + string.Join(", ", linked.Select(n => n.LinkedListId))));
             foreach (var n in children.Where(n => n.Outcome == ChildLinkOutcome.NoList)) {
-                messages.Add(new Message(Severity.Warning,
-                    $"No list {n.ChildGroup}-{n.Preset}, so species in sub-group {Describe(n)} are listed on {listId} itself.",
-                    CreateListHint(n)));
+                messages.Add(new Message(Severity.Warning, MissingSubListText(n, listId), CreateListHint(n, new[] { n.Preset })));
             }
         } else if (children.Any(n => n.Outcome != ChildLinkOutcome.UnknownGroup)) {
             var first = children[0];
@@ -54,25 +52,22 @@ internal static class ChildLinkReport {
         }
 
         foreach (var n in notes.Where(n => n.Outcome == ChildLinkOutcome.UnknownGroup)) {
-            var key = n.Kind == GroupingKind.SeeAlso ? "see_also" : "children";
-            messages.Add(new Message(Severity.Warning,
-                $"Unknown sub-group {n.ChildGroup} in the {key} of {n.ParentGroup}: taxa-groups.yml has no group {n.ChildGroup}.",
-                $"To fix it, correct or remove {n.ChildGroup} in the {key} of {n.ParentGroup} in taxa-groups.yml."));
+            messages.Add(UnknownGroupMessage(n));
         }
 
         foreach (var n in notes.Where(n => n.Kind == GroupingKind.SeeAlso && n.Outcome == ChildLinkOutcome.NoList)) {
-            messages.Add(new Message(Severity.Warning,
-                $"No list {n.ChildGroup}-{n.Preset} or {n.ChildGroup}-{WikipediaListDefinitionLoader.AllStatusPreset}, so {listId} has no link to {Describe(n)} under \"Related lists\".",
-                CreateListHint(n)));
+            messages.Add(new Message(Severity.Warning, MissingSeeAlsoText(n, listId), CreateListHint(n, new[] { n.Preset })));
         }
 
         return messages;
     }
 
     /// <summary>
-    /// Warnings for every list of one taxa group, for the Taxa grouping page after "Save sub-groups":
-    /// the per-list warnings (duplicates removed), plus one warning when the group has sub-groups but
-    /// none of its lists links any of them.
+    /// Warnings for every list of one taxa group, for the Taxa grouping page after "Save sub-groups".
+    /// One warning per sub-group, naming every preset whose list it lacks, where <see cref="ForList"/>
+    /// gives one per list (a sub-group with no cr, en, vu or ex list would otherwise get four
+    /// near-identical warnings). Plus one warning when the group has sub-groups but none of its lists
+    /// links any of them.
     /// </summary>
     public static IReadOnlyList<string> WarningsForGroup(
         string group, IReadOnlyCollection<string> childGroups, WikipediaListConfig config) {
@@ -82,24 +77,42 @@ internal static class ChildLinkReport {
         var groupLists = config.Lists
             .Where(l => string.Equals(l.TaxaGroup, group, StringComparison.OrdinalIgnoreCase))
             .ToList();
-        var groupListIds = groupLists.Select(l => l.Id).ToList();
+        var groupListIds = new HashSet<string>(groupLists.Select(l => l.Id), StringComparer.OrdinalIgnoreCase);
         if (groupListIds.Count == 0) {
             warnings.Add($"{group} has no lists in wikipedia-lists.yml, so no list links to its sub-groups.");
             return warnings;
         }
 
-        foreach (var id in groupListIds) {
-            foreach (var m in ForList(id, config.ChildLinkNotes).Where(m => m.Severity == Severity.Warning)) {
-                var text = m.Hint is null ? m.Text : $"{m.Text} {m.Hint}";
-                if (!warnings.Contains(text)) warnings.Add(text);
-            }
+        var notes = config.ChildLinkNotes.Where(n => groupListIds.Contains(n.ParentListId)).ToList();
+        // As in ForList, an unlinked sub-group is a warning only on a parent page (a list that links at
+        // least one sub-group list); an ordinary list lists every sub-group's species anyway.
+        var parentPages = new HashSet<string>(
+            notes.Where(n => n.Kind == GroupingKind.Phylogenetic && n.LinkedListId is not null).Select(n => n.ParentListId),
+            StringComparer.OrdinalIgnoreCase);
+
+        var missing = notes
+            .Where(n => n.Outcome == ChildLinkOutcome.NoList
+                && (n.Kind == GroupingKind.SeeAlso || parentPages.Contains(n.ParentListId)))
+            .GroupBy(n => (n.Kind, n.ChildGroup))
+            .OrderBy(g => g.Key.Kind == GroupingKind.Phylogenetic ? 0 : 1);
+        foreach (var byChild in missing) {
+            var first = byChild.First();
+            var presets = byChild.Select(n => n.Preset).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+            var text = (first.Kind, presets.Count) switch {
+                (GroupingKind.SeeAlso, 1) => MissingSeeAlsoText(first, first.ParentListId),
+                (GroupingKind.SeeAlso, _) => MissingSeeAlsoListsText(first, presets),
+                (_, 1) => MissingSubListText(first, first.ParentListId),
+                _ => MissingSubListsText(first, presets),
+            };
+            warnings.Add($"{text} {CreateListHint(first, presets)}");
         }
 
-        var anyLinked = config.ChildLinkNotes.Any(n =>
-            n.Kind == GroupingKind.Phylogenetic
-            && n.LinkedListId is not null
-            && groupListIds.Contains(n.ParentListId, StringComparer.OrdinalIgnoreCase));
-        if (!anyLinked) {
+        foreach (var n in notes.Where(n => n.Outcome == ChildLinkOutcome.UnknownGroup).DistinctBy(n => (n.Kind, n.ChildGroup))) {
+            var m = UnknownGroupMessage(n);
+            warnings.Add($"{m.Text} {m.Hint}");
+        }
+
+        if (parentPages.Count == 0) {
             var presets = string.Join(", ", groupLists.Select(l => l.Preset).Where(p => p is not null).Distinct());
             warnings.Add($"No {group} list links to a sub-group list, because no sub-group of {group} has a list for any of these presets: {presets}.");
         }
@@ -107,17 +120,54 @@ internal static class ChildLinkReport {
         return warnings;
     }
 
+    // "No list monocots-lc, so species in sub-group monocots (Monocotyledons) are listed on plants-lc itself."
+    private static string MissingSubListText(ChildLinkNote n, string listId) =>
+        $"No list {n.ChildGroup}-{n.Preset}, so species in sub-group {Describe(n)} are listed on {listId} itself.";
+
+    // The same for several presets of one parent group.
+    private static string MissingSubListsText(ChildLinkNote n, IReadOnlyList<string> presets) =>
+        $"No {n.ChildGroup} lists for presets {JoinAnd(presets)}, so species in sub-group {Describe(n)} are listed on the {n.ParentGroup} lists for those presets.";
+
+    private static string MissingSeeAlsoText(ChildLinkNote n, string listId) =>
+        $"No list {n.ChildGroup}-{n.Preset} or {n.ChildGroup}-{WikipediaListDefinitionLoader.AllStatusPreset}, so {listId} has no link to {Describe(n)} under \"Related lists\".";
+
+    private static string MissingSeeAlsoListsText(ChildLinkNote n, IReadOnlyList<string> presets) =>
+        $"No list {n.ChildGroup}-{WikipediaListDefinitionLoader.AllStatusPreset} and no {n.ChildGroup} lists for presets {JoinAnd(presets)}, so the {n.ParentGroup} lists for those presets have no link to {Describe(n)} under \"Related lists\".";
+
+    private static Message UnknownGroupMessage(ChildLinkNote n) {
+        var key = n.Kind == GroupingKind.SeeAlso ? "see_also" : "children";
+        return new Message(Severity.Warning,
+            $"Unknown sub-group {n.ChildGroup} in the {key} of {n.ParentGroup}: taxa-groups.yml has no group {n.ChildGroup}.",
+            $"To fix it, correct or remove {n.ChildGroup} in the {key} of {n.ParentGroup} in taxa-groups.yml.");
+    }
+
+    // "cr", "cr and ex", "cr, en, vu and ex".
+    private static string JoinAnd(IReadOnlyList<string> items) =>
+        items.Count <= 1 ? string.Join("", items) : $"{string.Join(", ", items.Take(items.Count - 1))} and {items[^1]}";
+
     // "liliopsida (Monocotyledons)", or just the group key when it has no display name.
     private static string Describe(ChildLinkNote n) =>
         string.IsNullOrWhiteSpace(n.ChildDisplayName) || string.Equals(n.ChildDisplayName, n.ChildGroup, StringComparison.OrdinalIgnoreCase)
             ? n.ChildGroup
             : $"{n.ChildGroup} ({n.ChildDisplayName})";
 
-    // category_split overrides presets in a list entry, so an entry that uses it needs category_split replaced.
-    private static string CreateListHint(ChildLinkNote n) =>
-        !n.ChildHasLists
-            ? $"To create {n.ChildGroup}-{n.Preset}, add an entry for {n.ChildGroup} to wikipedia-lists.yml."
-        : n.ChildUsesCategorySplit
-            ? $"To create {n.ChildGroup}-{n.Preset}, replace category_split in the {n.ChildGroup} entry in wikipedia-lists.yml with presets that include {n.Preset}."
-            : $"To create {n.ChildGroup}-{n.Preset}, add {n.Preset} to the {n.ChildGroup} entry in wikipedia-lists.yml.";
+    // How to create the sub-group's missing list (one preset) or lists (several presets). category_split
+    // overrides presets in a list entry, so an entry that uses it needs category_split replaced.
+    private static string CreateListHint(ChildLinkNote n, IReadOnlyList<string> presets) {
+        var child = n.ChildGroup;
+        if (presets.Count == 1) {
+            var preset = presets[0];
+            return !n.ChildHasLists
+                ? $"To create {child}-{preset}, add an entry for {child} to wikipedia-lists.yml."
+                : n.ChildUsesCategorySplit
+                    ? $"To create {child}-{preset}, replace category_split in the {child} entry in wikipedia-lists.yml with presets that include {preset}."
+                    : $"To create {child}-{preset}, add {preset} to the {child} entry in wikipedia-lists.yml.";
+        }
+        var list = JoinAnd(presets);
+        return !n.ChildHasLists
+            ? $"To create the {child} lists, add an entry for {child} to wikipedia-lists.yml with presets that include {list}."
+            : n.ChildUsesCategorySplit
+                ? $"To create the {child} lists, replace category_split in the {child} entry in wikipedia-lists.yml with presets that include {list}."
+                : $"To create the {child} lists, add {list} to the {child} entry in wikipedia-lists.yml.";
+    }
 }

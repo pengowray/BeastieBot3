@@ -217,9 +217,12 @@ For each of its presets, a parent page links each sub-group to:
 - a note for a list whose group has sub-groups but that links none of them, so it has no summary
   table.
 
-After "Save sub-groups", the Taxa grouping page shows the same warnings for the group's lists, read
-from the draft rules. The loader records one `ChildLinkNote` per list and sub-group
-(`WikipediaListConfig.ChildLinkNotes`); `ChildLinkReport` turns them into these messages, and
+After "Save sub-groups", the Taxa grouping page checks the group's lists against the draft rules
+and shows the warnings as a list under the status line. It gives one warning per sub-group, naming
+every preset whose list the sub-group lacks (`No corals lists for presets cr, en, vu and ex, ...`),
+where `generate-lists` prints one per list. The loader records one `ChildLinkNote` per list and
+sub-group (`WikipediaListConfig.ChildLinkNotes`); `ChildLinkReport` turns them into these messages
+(`ForList` for `generate-lists`, `WarningsForGroup` for the Taxa grouping page), and
 `SubGroupLinkTests` pins both.
 
 `see_also:` on a group adds a "Related lists" section to each of its lists, with a link to the
