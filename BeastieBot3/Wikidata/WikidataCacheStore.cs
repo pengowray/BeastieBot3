@@ -8,11 +8,15 @@ using BeastieBot3.Infrastructure;
 using BeastieBot3.Taxonomy;
 
 // SQLite store for Wikidata entities (Datastore:wikidata_cache_sqlite).
-// Schema: wikidata_items (qid, status, json_response), wikidata_iucn_id
-// (sis_id→qid mapping from P627), wikidata_sitelinks (qid→wiki article titles).
-// Seeded via SPARQL: "?item wdt:P627 ?iucnId" finds taxa with IUCN IDs.
-// JSON parsed by WikidataEntityParser for P1843 (common names), P225 (taxon name).
-// Used by WikipediaEnqueueCommand to find article titles for species.
+// wikidata_entities has one row per Q-ID: queued by wikidata seed-taxa (SPARQL sweeps of P627
+// IUCN taxon id and P141 conservation status) and wikidata backfill-iucn, and downloaded by
+// wikidata cache-entities (json, downloaded_at, last_attempt_at, last_error). Each download is
+// parsed by WikidataEntityParser into wikidata_p627_values, wikidata_p141_statements and
+// wikidata_p141_references, wikidata_scientific_names, wikidata_taxon_name_index,
+// wikidata_taxon_rank and wikidata_parent_taxa. wikidata_sync_state holds the seed-taxa cursors.
+// wikidata_pending_iucn_matches holds the IUCN taxa that backfill-iucn linked to an item by name
+// or synonym, and wikidata_backfill_misses the taxa it searched for and did not find. The
+// wikidata_iucn_assessment_items table is in WikidataCacheStore.AssessmentItems.cs.
 
 namespace BeastieBot3.Wikidata;
 
@@ -50,6 +54,9 @@ internal sealed partial class WikidataCacheStore : HttpCacheSqliteStore {
     json TEXT
 );
 CREATE INDEX IF NOT EXISTS idx_wikidata_entities_downloaded ON wikidata_entities(json_downloaded, entity_numeric_id);
+-- The download queue's order (GetPendingEntities): never-downloaded items, then cached copies
+-- least recently downloaded first.
+CREATE INDEX IF NOT EXISTS idx_wikidata_entities_downloaded_at ON wikidata_entities(json_downloaded, downloaded_at, entity_numeric_id);
 CREATE INDEX IF NOT EXISTS idx_wikidata_entities_last_seen ON wikidata_entities(last_seen_at);
 CREATE TABLE IF NOT EXISTS wikidata_sync_state (
     key TEXT PRIMARY KEY,
@@ -370,14 +377,44 @@ ON CONFLICT(key) DO UPDATE SET value=excluded.value";
     // refreshOnly skips everything never downloaded and re-fetches only what is already cached
     // and older than the threshold. Without it a refresh pass also drags the whole never-fetched
     // queue along, which is the opposite of what a "leave the new work alone" run is for.
-    private static string PendingEntitiesWhere(bool refreshOnly) => refreshOnly
-        ? "json_downloaded = 1 AND @refresh IS NOT NULL AND downloaded_at IS NOT NULL AND downloaded_at < @refresh"
-        : """
-          json_downloaded = 0
-             OR (@refresh IS NOT NULL AND downloaded_at IS NOT NULL AND downloaded_at < @refresh)
-          """;
+    //
+    // attemptedBefore is the start of the run. A failed download keeps json_downloaded = 0 (or its
+    // old downloaded_at), so without this cutoff the item matched again and came back at the front
+    // of the next batch: one failing item near the start of the queue was retried once per batch
+    // for the whole run. RecordSuccess and RecordFailure both stamp last_attempt_at, so an item
+    // tried in this run is left for the next run.
+    private static string PendingEntitiesWhere(bool refreshOnly) {
+        var queue = refreshOnly
+            ? "json_downloaded = 1 AND @refresh IS NOT NULL AND downloaded_at IS NOT NULL AND downloaded_at < @refresh"
+            : """
+              json_downloaded = 0
+                 OR (@refresh IS NOT NULL AND downloaded_at IS NOT NULL AND downloaded_at < @refresh)
+              """;
+        return $"({queue})\nAND {NotAttemptedThisRun}";
+    }
 
-    public IReadOnlyList<WikidataEntityWorkItem> GetPendingEntities(int limit, DateTime? refreshThreshold, bool refreshOnly = false) {
+    private const string NotAttemptedThisRun =
+        "(@attemptedBefore IS NULL OR last_attempt_at IS NULL OR last_attempt_at < @attemptedBefore)";
+
+    private const string FailedEntitiesWhere =
+        "json_downloaded = 0 AND attempt_count > 0 AND last_error IS NOT NULL AND " + NotAttemptedThisRun;
+
+    private static void BindPendingScope(SqliteCommand command, DateTime? refreshThreshold, DateTime? attemptedBefore) {
+        command.Parameters.AddWithValue("@refresh", refreshThreshold?.ToString("O") ?? (object)DBNull.Value);
+        BindAttemptedBefore(command, attemptedBefore);
+    }
+
+    private static void BindAttemptedBefore(SqliteCommand command, DateTime? attemptedBefore) =>
+        command.Parameters.AddWithValue("@attemptedBefore", attemptedBefore?.ToString("O") ?? (object)DBNull.Value);
+
+    // Never-downloaded items first, then cached copies least recently downloaded first
+    // (idx_wikidata_entities_downloaded_at). Ordering cached copies by Q-number instead meant every
+    // --force run started again from the lowest Q-number, because every cached copy is older than
+    // the run: "--force --limit N" re-downloaded the same N items each time, and an interrupted
+    // force run over the whole cache restarted from the beginning. With the oldest copy first, the
+    // next run takes the copies the last run did not reach. A copy re-downloaded in this run sorts
+    // last, so a batch query does not read past the copies already re-downloaded.
+    public IReadOnlyList<WikidataEntityWorkItem> GetPendingEntities(int limit, DateTime? refreshThreshold, bool refreshOnly = false, DateTime? attemptedBefore = null) {
         if (limit <= 0) {
             return Array.Empty<WikidataEntityWorkItem>();
         }
@@ -387,10 +424,10 @@ ON CONFLICT(key) DO UPDATE SET value=excluded.value";
 SELECT entity_numeric_id, entity_id, downloaded_at, attempt_count
 FROM wikidata_entities
 WHERE {PendingEntitiesWhere(refreshOnly)}
-ORDER BY json_downloaded ASC, entity_numeric_id
+ORDER BY json_downloaded ASC, downloaded_at, entity_numeric_id
 LIMIT @limit
 """;
-        command.Parameters.AddWithValue("@refresh", refreshThreshold?.ToString("O") ?? (object)DBNull.Value);
+        BindPendingScope(command, refreshThreshold, attemptedBefore);
         command.Parameters.AddWithValue("@limit", limit);
 
         var list = new List<WikidataEntityWorkItem>();
@@ -408,17 +445,23 @@ LIMIT @limit
         return list;
     }
 
-    public IReadOnlyList<WikidataEntityWorkItem> GetFailedEntities(int limit) {
+    // Oldest attempt first. Newest first put an item that had just failed straight back at the
+    // front, so "--failed-only --limit N" retried the same N items on every run and never reached
+    // the older failures.
+    public IReadOnlyList<WikidataEntityWorkItem> GetFailedEntities(int limit, DateTime? attemptedBefore = null) {
         if (limit <= 0) {
             return Array.Empty<WikidataEntityWorkItem>();
         }
 
         using var command = _connection.CreateCommand();
-        command.CommandText = @"SELECT entity_numeric_id, entity_id, downloaded_at, attempt_count
+        command.CommandText = $"""
+SELECT entity_numeric_id, entity_id, downloaded_at, attempt_count
 FROM wikidata_entities
-WHERE json_downloaded = 0 AND attempt_count > 0 AND last_error IS NOT NULL
-ORDER BY IFNULL(last_attempt_at, last_seen_at) DESC
-LIMIT @limit";
+WHERE {FailedEntitiesWhere}
+ORDER BY IFNULL(last_attempt_at, last_seen_at), entity_numeric_id
+LIMIT @limit
+""";
+        BindAttemptedBefore(command, attemptedBefore);
         command.Parameters.AddWithValue("@limit", limit);
 
         var list = new List<WikidataEntityWorkItem>();
@@ -436,19 +479,18 @@ LIMIT @limit";
         return list;
     }
 
-    public int CountPendingEntities(DateTime? refreshThreshold, bool refreshOnly = false) {
+    public int CountPendingEntities(DateTime? refreshThreshold, bool refreshOnly = false, DateTime? attemptedBefore = null) {
         using var command = _connection.CreateCommand();
         command.CommandText = $"SELECT COUNT(*) FROM wikidata_entities WHERE {PendingEntitiesWhere(refreshOnly)}";
-        command.Parameters.AddWithValue("@refresh", refreshThreshold?.ToString("O") ?? (object)DBNull.Value);
+        BindPendingScope(command, refreshThreshold, attemptedBefore);
         var result = command.ExecuteScalar();
         return Convert.ToInt32(result ?? 0);
     }
 
-    public int CountFailedEntities() {
+    public int CountFailedEntities(DateTime? attemptedBefore = null) {
         using var command = _connection.CreateCommand();
-        command.CommandText = @"SELECT COUNT(*)
-FROM wikidata_entities
-WHERE json_downloaded = 0 AND attempt_count > 0 AND last_error IS NOT NULL";
+        command.CommandText = $"SELECT COUNT(*) FROM wikidata_entities WHERE {FailedEntitiesWhere}";
+        BindAttemptedBefore(command, attemptedBefore);
         var result = command.ExecuteScalar();
         return Convert.ToInt32(result ?? 0);
     }
