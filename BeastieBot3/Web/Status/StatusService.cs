@@ -44,7 +44,7 @@ public sealed class StatusService {
             "sqlite"    => SnapshotSqlite(d, resolved),
             "directory" => SnapshotDirectory(d, resolved),
             _           => new DataSourceStatus {
-                Id = d.Id, Name = d.Name, Kind = d.Kind, Path = resolved,
+                Id = d.Id, Name = d.Name, Kind = d.Kind, Description = d.Description, Path = resolved,
                 Exists = false, Error = $"Unknown kind '{d.Kind}'.",
             },
         };
@@ -85,7 +85,8 @@ public sealed class StatusService {
         return status with { Metrics = metrics };
     }
 
-    private static MetricResult RunMetric(SqliteConnection conn, MetricSpec spec) {
+    // Internal so tests can run a catalogue metric over an in-memory store.
+    internal static MetricResult RunMetric(SqliteConnection conn, MetricSpec spec) {
         try {
             using var cmd = conn.CreateCommand();
             cmd.CommandText = spec.Sql;

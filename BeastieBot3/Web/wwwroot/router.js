@@ -140,7 +140,11 @@
         fetch('/api/flows').then((r) => r.json()),
       ]);
     } catch (e) {
-      grid.innerHTML = '<p class="error">Failed to load dashboard: ' + e.message + '</p>';
+      grid.textContent = '';
+      const p = document.createElement('p');
+      p.className = 'error';
+      p.textContent = 'Failed to load dashboard: ' + e.message;
+      grid.appendChild(p);
       return;
     }
     const snaps = await Promise.all(
@@ -239,7 +243,10 @@
 
       const st = document.createElement('span');
       st.className = 'status ' + j.status;
-      st.textContent = j.status + (j.exitCode != null ? ' (' + j.exitCode + ')' : '');
+      // Same wording as the Jobs page; the tile has no room for the error, so it is the tooltip.
+      st.textContent = b.jobStatusText ? b.jobStatusText(j) : j.status;
+      const err = b.jobErrorText ? b.jobErrorText(j.error) : (j.error || '');
+      if (err) st.title = err;
 
       meta.appendChild(time);
       meta.appendChild(st);

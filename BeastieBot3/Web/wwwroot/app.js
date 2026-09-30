@@ -14,6 +14,23 @@
   // message with one), so it can go in the middle of a sentence.
   const fetchErrorText = (e) => String((e && e.message) || e).replace(/\.+$/, '');
 
+  // The error text of a failed API response. The endpoints answer with JSON such as
+  // { "error": "...", "hint": "..." }; anything else (an HTML or plain-text 500) is shown raw,
+  // cut to its first line.
+  async function responseErrorText(res) {
+    let text = '';
+    try { text = await res.text(); } catch (_) { /* no body */ }
+    try {
+      const body = JSON.parse(text);
+      if (body && typeof body.error === 'string' && body.error) {
+        return body.error + (typeof body.hint === 'string' && body.hint ? ' ' + body.hint : '');
+      }
+    } catch (_) { /* not JSON */ }
+    const firstLine = text.trim().split('\n')[0].trim();
+    if (firstLine) return firstLine.length > 200 ? firstLine.slice(0, 200) + '…' : firstLine;
+    return 'HTTP error ' + res.status;
+  }
+
   // --- Settings table -------------------------------------------------
 
   $('#load-paths').addEventListener('click', async () => {
@@ -68,8 +85,32 @@
 
   const terminal = createTerminal(jobOutput);
 
-  function setStatus(status) {
-    jobStatus.textContent = status;
+  // A job's error field: the message of the exception that stopped the command, or
+  // "[interrupted by server restart]" for a job that was running when serve stopped. The
+  // brackets are dropped for display.
+  function jobErrorText(error) {
+    if (!error) return '';
+    return String(error).trim().replace(/^\[([^\]]*)\]$/, '$1');
+  }
+
+  // First line of a text, cut to at most max characters.
+  function shorten(text, max) {
+    const line = String(text).split('\n')[0].trim();
+    return line.length > max ? line.slice(0, max - 1) + '…' : line;
+  }
+
+  // "failed (exit code 1)". A succeeded job always exits with 0, so the exit code is shown
+  // only for the others.
+  function jobStatusText(j) {
+    return j.status + (j.exitCode != null && j.status !== 'succeeded' ? ' (exit code ' + j.exitCode + ')' : '');
+  }
+
+  // The dock bar has room for a short error only (Cancel and Close sit beside it); the full
+  // text is in the tooltip.
+  function setStatus(status, error) {
+    const err = jobErrorText(error);
+    jobStatus.textContent = status + (err ? ': ' + shorten(err, 60) : '');
+    jobStatus.title = err;
     jobStatus.className = 'status ' + status;
     const cancellable = status === 'pending' || status === 'running';
     jobCancel.hidden = !cancellable;
@@ -82,8 +123,7 @@
     try {
       const res = await fetch('/api/jobs/' + currentJobId + '/cancel', { method: 'POST' });
       if (!res.ok) {
-        const err = await res.text();
-        alert('Cancel failed: ' + err);
+        alert('Cancel failed: ' + await responseErrorText(res));
         jobCancel.disabled = false;
       }
       // Otherwise wait for the SSE 'status' event to flip us to cancelled.
@@ -103,14 +143,20 @@
     terminal.reset();
     setStatus('pending');
 
-    const res = await fetch('/api/jobs', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ command: command, args: args || [] }),
-    });
+    let res;
+    try {
+      res = await fetch('/api/jobs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ command: command, args: args || [] }),
+      });
+    } catch (e) {
+      terminal.setText('Failed to enqueue: ' + fetchErrorText(e) + '. Check that `serve` is running.\n');
+      setStatus('failed');
+      return;
+    }
     if (!res.ok) {
-      const err = await res.text();
-      terminal.setText('Failed to enqueue: ' + err + '\n');
+      terminal.setText('Failed to enqueue: ' + await responseErrorText(res) + '\n');
       setStatus('failed');
       return;
     }
@@ -139,7 +185,7 @@
     es.addEventListener('status', (e) => {
       try {
         const j = JSON.parse(e.data);
-        setStatus(j.status);
+        setStatus(j.status, j.error);
       } catch (_) { /* ignore */ }
     });
     es.addEventListener('done', () => {
@@ -186,6 +232,16 @@
       });
       left.appendChild(link);
 
+      // Why the job failed, when the server recorded a reason (the full text is in the tooltip).
+      const err = jobErrorText(j.error);
+      if (err) {
+        const errEl = document.createElement('div');
+        errEl.className = 'small error';
+        errEl.textContent = shorten(err, 160);
+        errEl.title = err;
+        left.appendChild(errEl);
+      }
+
       const right = document.createElement('span');
       right.className = 'job-meta';
 
@@ -200,9 +256,7 @@
 
       const status = document.createElement('span');
       status.className = 'status ' + j.status;
-      // A succeeded job always exits with 0, so the exit code is shown only for the others.
-      status.textContent = j.status +
-        (j.exitCode != null && j.status !== 'succeeded' ? ' (exit code ' + j.exitCode + ')' : '');
+      status.textContent = jobStatusText(j);
 
       right.appendChild(time);
       right.appendChild(status);
@@ -252,9 +306,16 @@
     terminal.reset();
     setStatus('running');
     attachStream(id);
-    fetch('/api/jobs/' + id).then(r => r.json()).then(j => {
+    fetch('/api/jobs/' + id).then(r => r.ok ? r.json() : null).then(j => {
+      // Another job may have been opened while this request was in flight.
+      if (!j || currentJobId !== id) return;
       jobTitle.textContent = '$ beastiebot3 ' + j.commandLine;
-    });
+      // A finished job's status cannot change, so show it (and its error) now rather than
+      // "running" until the stream has replayed the whole output.
+      if (j.status === 'succeeded' || j.status === 'failed' || j.status === 'cancelled') {
+        setStatus(j.status, j.error);
+      }
+    }).catch(() => { /* the stream's status event still sets the status */ });
   }
 
   $('#refresh-jobs').addEventListener('click', refreshJobList);
@@ -289,13 +350,15 @@
   }
 
   // Counts that turn a data source's pill amber when above 0: Wikidata items waiting to be
-  // downloaded, failed IUCN API requests, and common-name conflicts. The other counts are
-  // records that stay above 0 for good (every assessment id listed by the cached IUCN taxa,
-  // Wikidata items linked to taxa by name, titles with no Wikipedia article), so they set no pill.
+  // downloaded, IUCN assessments waiting to be downloaded, failed IUCN API requests, and
+  // common-name conflicts. The other counts are records that stay above 0 for good (Wikidata
+  // items linked to taxa by name, titles with no Wikipedia article), so they set no pill.
   // Keys are the metric labels from DataSourceDescriptor.cs, exactly; values are the pill text
-  // that follows the count, e.g. "3 failed requests".
+  // that follows the count, e.g. "3 failed requests". The pill shows the first of these counts
+  // above 0, in the card's metric order.
   const ATTENTION_PILL_TEXT = new Map([
     ['pending download', 'items to download'],
+    ['assessments to download', 'assessments to download'],
     ['failed requests', 'failed requests'],
     ['conflicts', 'common-name conflicts'],
   ]);
@@ -349,7 +412,7 @@
     const meta = document.createElement('div');
     meta.className = 'status-meta';
     const parts = [];
-    if (s.path) parts.push(`<span title="${s.path}">${s.path}</span>`);
+    if (s.path) parts.push('<span title="' + escapeHtml(s.path) + '">' + escapeHtml(s.path) + '</span>');
     if (s.sizeBytes != null) parts.push(formatBytes(s.sizeBytes));
     if (s.lastModified) parts.push('updated ' + formatRelative(s.lastModified));
     if (!s.exists) parts.push('(not present)');
@@ -934,7 +997,8 @@
     const hint = document.createElement('span');
     hint.className = 'field-hint';
     const bits = [];
-    if (f.description) bits.push(f.description);
+    // Descriptions are plain text that may contain <angle brackets> (e.g. <Datastore:reports_dir>).
+    if (f.description) bits.push(codeHtml(f.description));
     if (f.hasDefault && f.defaultValue != null && f.defaultValue !== '' && f.kind !== 'Flag') {
       bits.push('<span class="default">default: ' + escapeHtml(f.defaultValue) + '</span>');
     }
@@ -949,9 +1013,14 @@
       ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   }
 
-  // Workflow text marks commands and file names with `backticks`; show those as inline code.
+  // Workflow text and option descriptions mark commands and file names with `backticks`;
+  // escape the text and show those as inline code.
+  function codeHtml(text) {
+    return escapeHtml(text).replace(/`([^`]+)`/g, '<code>$1</code>');
+  }
+
   function setTextWithCode(el, text) {
-    el.innerHTML = escapeHtml(text).replace(/`([^`]+)`/g, '<code>$1</code>');
+    el.innerHTML = codeHtml(text);
   }
 
   // Fill a generated form from an args[] — used to open a workflow step's options already
@@ -1680,7 +1749,7 @@
     enqueue, replayJob, openFile, openDir,
     refreshStatus, refreshJobList, refreshActiveFlow, loadFlowsList, selectFlow,
     formatBytes, formatRelative, formatNumber, statusKind,
-    jobDuration, jobTimesTooltip,
+    jobDuration, jobTimesTooltip, jobStatusText, jobErrorText,
     getFlows: () => allFlows,
     getCommands: () => allCommands,
   };
