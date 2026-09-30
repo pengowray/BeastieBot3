@@ -97,13 +97,30 @@ public sealed class FlowEvaluator {
     // as a one-line headline on a step's source chip. Prefers the first non-
     // null, non-zero metric so a brand-new database that has only "0 rows"
     // metrics still shows "0 taxa" rather than blank.
-    private static string? SummariseHeadline(DataSourceStatus s) {
+    //
+    // A metric with no value says why, as the Data sources page does: its note ("table not yet
+    // created") or its error. "n/a" alone left no way to tell a new cache from a broken one.
+    internal static string? SummariseHeadline(DataSourceStatus s) {
         if (!s.Exists) return "missing";
-        if (s.Metrics.Count == 0) return null;
+        if (s.Metrics.Count == 0) {
+            // The file is there but could not be opened, so no metric ran.
+            return s.Error is null ? null : $"read failed ({Brief(s.Error)})";
+        }
         var first = s.Metrics.FirstOrDefault(m => m.Value is > 0)
                     ?? s.Metrics.First();
-        if (first.Value is null) return first.Label + ": n/a";
+        if (first.Value is null) {
+            if (!string.IsNullOrWhiteSpace(first.Note)) return $"{first.Label}: {first.Note}";
+            if (!string.IsNullOrWhiteSpace(first.Error)) return $"{first.Label}: count failed ({Brief(first.Error)})";
+            return first.Label + ": n/a";
+        }
         return string.Format("{0:N0} {1}", first.Value, first.Label);
+    }
+
+    // Error messages are exception text (a SQLite message, a file path), which can run long; the
+    // chip is one line.
+    private static string Brief(string message) {
+        var text = message.Trim().TrimEnd('.');
+        return text.Length <= 80 ? text : text[..79].TrimEnd() + "…";
     }
 
     private FlowStepSnapshot Evaluate(FlowStep step,
