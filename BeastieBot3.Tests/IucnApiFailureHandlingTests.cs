@@ -4,8 +4,8 @@ using Microsoft.Data.Sqlite;
 namespace BeastieBot3.Tests;
 
 // Pins the 404 "no standalone record" handling: a 404 is tombstoned as a permanent failure so the
-// download gates (ShouldDownload / ShouldDownloadInfrarank) skip it and it isn't re-probed every
-// run, while a transient failure stays retryable.
+// download gates (ShouldDownload / IucnApiCacheInfraranksCommand.Classify) skip it and it isn't
+// re-probed every run, while a transient failure stays retryable.
 public class IucnApiFailureHandlingTests {
     [Fact]
     public void Permanent404_IsTombstoned_TransientStaysRetryable() {

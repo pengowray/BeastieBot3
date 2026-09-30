@@ -220,7 +220,7 @@ public sealed class IucnSynonymFormattingReportCommand : Command<IucnSynonymForm
             }
             catch (JsonException ex) {
                 result.JsonFailures++;
-                AnsiConsole.MarkupLineInterpolated($"[yellow]Skipping root SIS {rootSisId}: {Markup.Escape(ex.Message)}[/]");
+                AnsiConsole.MarkupLineInterpolated($"[yellow]Skipping root SIS {rootSisId}: {ex.Message}[/]");
             }
         }
 

@@ -27,9 +27,9 @@ public class IucnInfrarankQueueTests {
         using var conn = new SqliteConnection("Data Source=:memory:");
         var store = NewStore(conn);
 
-        Assert.Equal(Candidate.AlreadyCached, IucnApiCacheInfraranksCommand.Classify(store, 100, force: false, refreshThreshold: null));
-        Assert.Equal(Candidate.NotFoundEarlier, IucnApiCacheInfraranksCommand.Classify(store, 200, force: false, refreshThreshold: null));
-        Assert.Equal(Candidate.Download, IucnApiCacheInfraranksCommand.Classify(store, 300, force: false, refreshThreshold: null));
+        Assert.Equal(Candidate.AlreadyCached, IucnApiCacheInfraranksCommand.Classify(store, 100, refreshThreshold: null));
+        Assert.Equal(Candidate.NotFoundEarlier, IucnApiCacheInfraranksCommand.Classify(store, 200, refreshThreshold: null));
+        Assert.Equal(Candidate.Download, IucnApiCacheInfraranksCommand.Classify(store, 300, refreshThreshold: null));
     }
 
     [Fact]
@@ -39,18 +39,40 @@ public class IucnInfrarankQueueTests {
         var after = Downloaded.AddDays(1);
         var before = Downloaded.AddDays(-1);
 
-        Assert.Equal(Candidate.Download, IucnApiCacheInfraranksCommand.Classify(store, 100, force: false, refreshThreshold: after));
-        Assert.Equal(Candidate.AlreadyCached, IucnApiCacheInfraranksCommand.Classify(store, 100, force: false, refreshThreshold: before));
-        Assert.Equal(Candidate.NotFoundEarlier, IucnApiCacheInfraranksCommand.Classify(store, 200, force: false, refreshThreshold: after));
+        Assert.Equal(Candidate.Download, IucnApiCacheInfraranksCommand.Classify(store, 100, refreshThreshold: after));
+        Assert.Equal(Candidate.AlreadyCached, IucnApiCacheInfraranksCommand.Classify(store, 100, refreshThreshold: before));
+        Assert.Equal(Candidate.NotFoundEarlier, IucnApiCacheInfraranksCommand.Classify(store, 200, refreshThreshold: after));
     }
 
     [Fact]
-    public void Force_DownloadsEveryCandidate_Including404s() {
+    public void BuildQueue_QueuesOnlyDownloads_AndCountsTheRest() {
         using var conn = new SqliteConnection("Data Source=:memory:");
         var store = NewStore(conn);
 
-        Assert.Equal(Candidate.Download, IucnApiCacheInfraranksCommand.Classify(store, 100, force: true, refreshThreshold: null));
-        Assert.Equal(Candidate.Download, IucnApiCacheInfraranksCommand.Classify(store, 200, force: true, refreshThreshold: null));
-        Assert.Equal(Candidate.Download, IucnApiCacheInfraranksCommand.Classify(store, 300, force: true, refreshThreshold: null));
+        var result = IucnApiCacheInfraranksCommand.BuildQueue(
+            new long[] { 100, 200, 300 },
+            id => IucnApiCacheInfraranksCommand.Classify(store, id, refreshThreshold: null),
+            force: false);
+
+        Assert.Equal(new long[] { 300 }, result.Queue);
+        Assert.Equal(1, result.AlreadyCached);
+        Assert.Equal(1, result.NotFoundEarlier);
+    }
+
+    // --force queues every candidate, including the 404s, but the counts still say which were
+    // cached and which were 404s. They used to read 0 and 0 under --force.
+    [Fact]
+    public void BuildQueue_Force_QueuesEveryCandidate_AndKeepsTheCounts() {
+        using var conn = new SqliteConnection("Data Source=:memory:");
+        var store = NewStore(conn);
+
+        var result = IucnApiCacheInfraranksCommand.BuildQueue(
+            new long[] { 100, 200, 300 },
+            id => IucnApiCacheInfraranksCommand.Classify(store, id, refreshThreshold: null),
+            force: true);
+
+        Assert.Equal(new long[] { 100, 200, 300 }, result.Queue);
+        Assert.Equal(1, result.AlreadyCached);
+        Assert.Equal(1, result.NotFoundEarlier);
     }
 }

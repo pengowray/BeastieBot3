@@ -45,8 +45,11 @@ public sealed class WikidataCacheFullSettings : CommonSettings {
     [Description("In the cache-entities phase, also re-download cached Wikidata items that were downloaded more than this many hours ago. Empty or 0 means cached items are not re-downloaded (the default).")]
     public double? DownloadMaxAgeHours { get; init; }
 
+    // Passed through as cache-entities --force, so this description has to match that option's
+    // behaviour. It describes cache-entities --force from 6de6b52 and 3748738, which re-download
+    // cached items, least recently downloaded first; before those commits --force changed nothing.
     [CommandOption("--download-force")]
-    [Description("In the cache-entities phase, download every Wikidata item in the Wikidata cache again, as well as the queued items, up to --download-limit. --download-max-age-hours is ignored.")]
+    [Description("In the cache-entities phase, download the queued Wikidata items, then download every Wikidata item already in the cache again, least recently downloaded first, up to --download-limit in total. --download-max-age-hours is ignored.")]
     public bool DownloadForce { get; init; }
 
     [CommandOption("--download-failed-only")]

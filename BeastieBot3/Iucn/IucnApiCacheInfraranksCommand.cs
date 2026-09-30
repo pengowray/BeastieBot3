@@ -34,7 +34,7 @@ public sealed class IucnApiCacheInfraranksSettings : CommonSettings {
     public long? Limit { get; init; }
 
     [CommandOption("--force")]
-    [Description("Download all discovered infraspecific taxa, even those already cached.")]
+    [Description("Request every subspecies and variety from the API again, including those already cached and those reported as not found (HTTP 404) on an earlier run.")]
     public bool Force { get; init; }
 
     [CommandOption("--from-csv")]
@@ -65,8 +65,8 @@ public sealed class IucnApiCacheInfraranksSettings : CommonSettings {
 [CommandInfo("iucn api cache-infraranks", CommandKind.Mutates,
     "Downloads taxon records for the subspecies and varieties of species already in the IUCN API cache. Run `iucn api cache-taxa` or `iucn api discover-by-family` first. Afterwards, run `iucn api cache-assessments` and then `iucn api project-view` so that lists made with --dataset api include subspecies and varieties.",
     Reason = "Downloads infraspecific taxa + their assessment backlog into the API cache (idempotent additive).",
-    Rerun = RerunEffect.Discovers,
-    RerunNote = "A re-run downloads the subspecies and varieties not yet cached, and skips those the API answered \"not found\" (HTTP 404) for. Afterwards, run iucn api cache-assessments, then iucn api project-view.",
+    Rerun = RerunEffect.IdempotentAdd,
+    RerunNote = "A re-run skips any subspecies and varieties that the API reported as not found (HTTP 404) on an earlier run. With --force ticked, the command requests every subspecies and variety again, including the ones reported as not found. Afterwards, run iucn api cache-assessments, then iucn api project-view.",
     Examples = new[] {
         "iucn api cache-infraranks --dry-run",
         "iucn api cache-infraranks",
@@ -127,31 +127,32 @@ public sealed class IucnApiCacheInfraranksCommand : AsyncCommand<IucnApiCacheInf
             AnsiConsole.MarkupLineInterpolated($"[grey]Candidates:[/] {apiDiscovered:N0} from cached species + {fromCsvCount:N0} new from CSV = {candidateSet.Count:N0}");
         }
 
-        var queue = new List<long>();
-        var alreadyCached = 0;
-        var notFoundEarlier = 0;
-        foreach (var sisId in candidateIds) {
-            switch (Classify(cacheStore, sisId, settings.Force, refreshThreshold)) {
-                case InfrarankCandidate.Download: queue.Add(sisId); break;
-                case InfrarankCandidate.AlreadyCached: alreadyCached++; break;
-                case InfrarankCandidate.NotFoundEarlier: notFoundEarlier++; break;
-            }
-        }
+        var sorted = BuildQueue(candidateIds, sisId => Classify(cacheStore, sisId, refreshThreshold), settings.Force);
+        var queue = sorted.Queue;
+        var queuedBeforeLimit = queue.Count;
 
         if (settings.Limit.HasValue && queue.Count > settings.Limit.Value) {
-            AnsiConsole.MarkupLineInterpolated($"[grey]Limiting to {settings.Limit.Value:N0} of {queue.Count:N0} infraspecific taxa.[/]");
-            queue = queue.GetRange(0, (int)settings.Limit.Value);
+            var take = (int)Math.Max(0, settings.Limit.Value);
+            AnsiConsole.MarkupLineInterpolated($"[grey]Limiting to {take:N0} of {queue.Count:N0} infraspecific taxa.[/]");
+            queue = queue.GetRange(0, take);
         }
 
         AnsiConsole.MarkupLineInterpolated(
-            $"[grey]Infraspecific taxa discovered:[/] {candidateSet.Count:N0}   [grey]already cached:[/] {alreadyCached:N0}   [grey]not found (HTTP 404) on an earlier run:[/] {notFoundEarlier:N0}   [grey]to download:[/] {queue.Count:N0}");
+            $"[grey]Infraspecific taxa discovered:[/] {candidateSet.Count:N0}   [grey]already cached:[/] {sorted.AlreadyCached:N0}   [grey]not found (HTTP 404) on an earlier run:[/] {sorted.NotFoundEarlier:N0}   [grey]to download:[/] {queue.Count:N0}");
+        if (settings.Force && queue.Count > 0 && sorted.AlreadyCached + sorted.NotFoundEarlier > 0) {
+            AnsiConsole.MarkupLine("[grey]--force is set, so the command also requests the taxa already cached and the taxa not found (HTTP 404) on an earlier run.[/]");
+        }
 
         if (queue.Count == 0) {
-            if (notFoundEarlier == 0) {
+            // A --limit of 0 or less empties a non-empty queue; the "Limiting to" line has said so.
+            if (queuedBeforeLimit > 0) {
+                return 0;
+            }
+            if (sorted.NotFoundEarlier == 0) {
                 AnsiConsole.MarkupLine("[green]Nothing to download. All discovered infraspecific taxa are already cached.[/]");
             } else {
                 AnsiConsole.MarkupLineInterpolated(
-                    $"[green]Nothing to download.[/] {alreadyCached:N0} infraspecific taxa are already cached, and the API answered \"not found\" (HTTP 404) for the other {notFoundEarlier:N0} on an earlier run.");
+                    $"[green]Nothing to download.[/] {sorted.AlreadyCached:N0} infraspecific taxa are already cached. The API reported {sorted.NotFoundEarlier:N0} as not found (HTTP 404) on an earlier run; use --force to request them again.");
             }
             return 0;
         }
@@ -207,16 +208,36 @@ public sealed class IucnApiCacheInfraranksCommand : AsyncCommand<IucnApiCacheInf
 
     internal enum InfrarankCandidate { Download, AlreadyCached, NotFoundEarlier }
 
+    internal sealed record InfrarankQueue(List<long> Queue, int AlreadyCached, int NotFoundEarlier);
+
+    // Counts each candidate by its Classify category, and queues the Download ones, or every
+    // candidate under --force. The counts ignore --force, so a --force run still reports how many
+    // candidates are already cached and how many the API reported as not found on an earlier run.
+    internal static InfrarankQueue BuildQueue(IEnumerable<long> candidateIds, Func<long, InfrarankCandidate> classify, bool force) {
+        var queue = new List<long>();
+        var alreadyCached = 0;
+        var notFoundEarlier = 0;
+        foreach (var sisId in candidateIds) {
+            var kind = classify(sisId);
+            if (force || kind == InfrarankCandidate.Download) {
+                queue.Add(sisId);
+            }
+            if (kind == InfrarankCandidate.AlreadyCached) {
+                alreadyCached++;
+            } else if (kind == InfrarankCandidate.NotFoundEarlier) {
+                notFoundEarlier++;
+            }
+        }
+        return new InfrarankQueue(queue, alreadyCached, notFoundEarlier);
+    }
+
     // An infrarank sis_id maps through taxa_lookup to its PARENT species' taxa record, so the
     // shared (lookup-based) ShouldDownload would always see it as cached. Check the taxon's own
     // record instead: do we have a taxa row whose root_sis_id is this infrarank sis_id? Ids
     // tombstoned as 404 (no standalone record) are skipped so they aren't re-probed each run, even
-    // under a refresh cutoff; only --force requests them again. The three outcomes are counted
-    // separately so the "nothing to download" line doesn't call a 404'd candidate cached.
-    internal static InfrarankCandidate Classify(IucnApiCacheStore cacheStore, long sisId, bool force, DateTime? refreshThreshold) {
-        if (force) {
-            return InfrarankCandidate.Download;
-        }
+    // under a refresh cutoff; only --force (in BuildQueue) requests them again. The three outcomes
+    // are counted separately so the "nothing to download" line doesn't call a 404'd candidate cached.
+    internal static InfrarankCandidate Classify(IucnApiCacheStore cacheStore, long sisId, DateTime? refreshThreshold) {
         if (cacheStore.HasPermanentFailure("taxa_sis", sisId)) {
             return InfrarankCandidate.NotFoundEarlier;
         }

@@ -16,14 +16,14 @@ namespace BeastieBot3.Col;
 
 [CommandInfo("col import", CommandKind.Destructive,
     "Import Catalogue of Life ColDP zip archives into individual SQLite databases.",
-    Reason = "With --force, col import deletes and rebuilds the database of every ColDP zip in Datasets:COL_dir, and each rebuild takes tens of minutes; without --force, it skips a database that already holds a finished import.",
+    Reason = "With --force, col import deletes and rebuilds the database for every ColDP zip in Datasets:COL_dir, and each rebuild takes tens of minutes. Without --force, it skips a complete database, and deletes and rebuilds an incomplete one.",
     Rerun = RerunEffect.FreshDataset,
-    RerunNote = "For a new CoL release, set Datasets:COL_dir to the folder with its ColDP zip and run again. Each release gets its own col_coldp_<label>.sqlite, so a new release imports without --force.",
+    RerunNote = "For a new CoL release, set Datasets:COL_dir to the folder with its ColDP zip and run again. Each release gets its own col_coldp_<label>.sqlite, so a new release imports without --force. After the import, set Datastore:COL_sqlite to the new col_coldp_<label>.sqlite file; until you do, every command still reads the previous release. Then restart serve, which reads paths.ini only when it starts.",
     Examples = new[] { "col import", "col import --force" })]
 public sealed class ColImportCommand : Command<ColImportCommand.Settings> {
     public sealed class Settings : CommonSettings {
         [CommandOption("--force")]
-        [Description("Re-import zip files even if the database already exists; existing files will be replaced.")]
+        [Description("Re-import each ColDP zip even if its database is complete. The existing database file is replaced.")]
         public bool Force { get; init; }
     }
 
@@ -77,6 +77,10 @@ public sealed class ColImportCommand : Command<ColImportCommand.Settings> {
         }
 
         AnsiConsole.MarkupLine("[green]ColDP import complete.[/]");
+        // The import never changes paths.ini, so a new release is not used until COL_sqlite names it.
+        var colSqlite = paths.GetColSqlitePath();
+        AnsiConsole.MarkupLineInterpolated($"[grey]CoL database read by other commands (Datastore:COL_sqlite):[/] {(string.IsNullOrWhiteSpace(colSqlite) ? "not set" : colSqlite)}");
+        AnsiConsole.MarkupLine("[grey]To use a newly imported release, set Datastore:COL_sqlite in paths.ini to its col_coldp_<label>.sqlite file, then restart serve if it is running.[/]");
         return 0;
     }
 }
