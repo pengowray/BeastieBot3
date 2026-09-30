@@ -534,14 +534,15 @@ public static class FlowStepProbes {
 
     // ---- the common-name hub ----------------------------------------------------------------
     // The ambiguous-name list is derived from the names in the hub, so aggregating again leaves
-    // it out of date, and nothing downstream complains: generation just treats a name that has
-    // since become ambiguous as if it were unique.
+    // it out of date. Wikipedia list generation does not read the list (it works out ambiguous
+    // names from the hub's common names itself), so an out-of-date list only makes this step's
+    // count and the Data sources page's conflict count wrong.
     internal static FlowProbeResult? Conflicts(CommonNameHubState s) {
         if (!s.HubExists || !s.Readable) return null;
 
         if (s.ConflictsBuiltAt is null) {
-            return s.ConflictCount == 0
-                ? new FlowProbeResult("todo", "Not built yet, so no common name is treated as ambiguous.")
+            return s.AmbiguousNameCount == 0
+                ? new FlowProbeResult("todo", "Not built yet.")
                 : null;   // rows but no date to judge them by — leave the step on its run history
         }
 
@@ -552,7 +553,7 @@ public static class FlowStepProbes {
         }
 
         return new FlowProbeResult("ok",
-            $"Last built {Stamp(built)} · {s.ConflictCount:N0} ambiguous names");
+            $"Last built {Stamp(built)} · {s.AmbiguousNameCount:N0} ambiguous names");
     }
 
     private static string Release(string? label, string? issued) =>

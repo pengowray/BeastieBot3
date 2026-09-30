@@ -8,8 +8,9 @@ using Microsoft.Data.Sqlite;
 //
 // The one question a step's run history cannot answer: the ambiguous-name list is derived from
 // the names in the hub, so it goes stale the moment names are aggregated again — and nothing
-// downstream notices. A list built before the last aggregate silently un-flags names that have
-// become ambiguous since, and Wikipedia list generation then uses them as if they were unique.
+// downstream notices. A list built before the last aggregate leaves out names that have become
+// ambiguous since. (Wikipedia list generation does not read the list: it works out ambiguous
+// names from the hub's common names each time it runs.)
 //
 // Read-only and offline: opened read-only, no schema work, and every query is O(log n) or over
 // the tiny bookkeeping tables, because this is polled every ten seconds.
@@ -20,7 +21,10 @@ public sealed record CommonNameHubState {
     public string? HubPath { get; init; }
     public bool HubExists { get; init; }
     public bool Readable { get; init; }
-    public long ConflictCount { get; init; }
+    /// Distinct common names in the ambiguous-name list. The list has one row per pair of taxa
+    /// sharing a name, so it has several times more rows than names (51,872 rows and 8,810
+    /// names in September 2026).
+    public long AmbiguousNameCount { get; init; }
     /// When the ambiguous-name list was last built, from the detect-conflicts run record, or
     /// failing that the newest conflict row (lists built before runs were recorded).
     public DateTime? ConflictsBuiltAt { get; init; }
@@ -50,7 +54,8 @@ public static class CommonNameHubStateReader {
 
             return state with {
                 Readable = true,
-                ConflictCount = Scalar(conn, "SELECT COUNT(*) FROM common_name_conflicts") is long c ? c : 0,
+                // Served by the index on normalized_name: a few milliseconds on the full hub.
+                AmbiguousNameCount = Scalar(conn, "SELECT COUNT(DISTINCT normalized_name) FROM common_name_conflicts") is long c ? c : 0,
                 ConflictsBuiltAt = ReadConflictsBuiltAt(conn),
                 NamesChangedAt = Later(
                     Stamp(conn, """
