@@ -101,8 +101,8 @@
           Click a command to open its form. While a command runs, its output appears
           in the job panel at the bottom of the window and in the terminal where
           <code>serve</code> is running. <span class="dot dot-destructive"></span>
-          Destructive commands ask for confirmation before they start
-          (<code>iucn import</code> asks only when the run would replace data already imported).
+          Destructive commands ask for confirmation before a run that would delete downloaded
+          or imported data. For example, <code>col import</code> asks only when --force is ticked.
         </p>
         <div class="filter-bar">
           <input type="search" id="cmd-search" placeholder="Filter commands…" autocomplete="off">

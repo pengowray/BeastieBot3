@@ -23,6 +23,7 @@ namespace BeastieBot3.CommonNames;
 [CommandInfo("common-names detect-conflicts", CommandKind.Mutates,
     "Detect ambiguous common names (same name used for different valid taxa).",
     Reason = "Writes conflict rows into the store; --clear-existing also wipes prior conflicts.",
+    Rerun = RerunEffect.IdempotentAdd,
     Examples = new[] {
         "common-names detect-conflicts",
         "common-names detect-conflicts --clear-existing"

@@ -29,7 +29,8 @@ public sealed class WikidataRebuildIndexesSettings : CommonSettings {
 [CommandInfo("wikidata rebuild-indexes", CommandKind.Mutates,
     "Add missing entries to the Wikidata cache's name index (used to find a taxon's Wikidata item by scientific name) from item data already downloaded. --include-p141 also extracts P141 statements and references, if the cache has no P141 statements yet. wikidata cache-entities already indexes each item it downloads and extracts its P141 statements, so this command is only for repairs.",
     Reason = "Rebuilds lookup indexes from cached Wikidata JSON; --force replaces existing rows.",
-    Rerun = RerunEffect.Rebuilds,
+    Rerun = RerunEffect.IdempotentAdd,
+    RerunNote = "With --force, the command deletes the name index and rebuilds it from the downloaded items.",
     Examples = new[] {
         "wikidata rebuild-indexes",
         "wikidata rebuild-indexes --force",

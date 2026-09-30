@@ -1,5 +1,4 @@
 using BeastieBot3.Configuration;
-using BeastieBot3.Iucn;
 using BeastieBot3.Web.Commands;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -11,10 +10,10 @@ namespace BeastieBot3.Web.Endpoints;
 // dispatch — sourced from the [CommandInfo] assembly scan — including each
 // command's classification and its reflected form schema.
 //
-// /api/commands/preflight additionally answers "what would this actually do right
-// now", by inspecting the configured files. The confirmation dialog uses it so it can
-// describe the real situation instead of the command's fixed warning text. Only
-// commands with a preflight implementation return anything.
+// /api/commands/preflight answers "does this run need confirmation, and what does it
+// delete?" for a command and its options (CommandPreflight). The web UI asks it before
+// every run and asks the user only when it says confirm. `supported: false` means
+// nothing to confirm and nothing to show.
 
 public static class CommandsEndpoints {
     public static void MapCommandsEndpoints(this IEndpointRouteBuilder app) {
@@ -24,6 +23,8 @@ public static class CommandsEndpoints {
                 description = c.Description,
                 kind = c.Kind.ToString().ToLowerInvariant(),
                 reason = c.Reason,
+                confirm = CommandPreflight.ConfirmMode(c.Info),
+                promptOption = c.Info.PromptOption,
                 rerun = c.Rerun.ToString().ToLowerInvariant(),
                 rerunNote = c.RerunNote,
                 examples = c.Examples,
@@ -34,23 +35,24 @@ public static class CommandsEndpoints {
         });
 
         app.MapGet("/api/commands/preflight", (PathsService paths, string path, string? args) => {
-            var argv = (args ?? string.Empty).Split(' ', StringSplitOptions.RemoveEmptyEntries);
-
-            if (path == "iucn import") {
-                var pre = IucnImportPreflight.Describe(
-                    paths,
-                    force: argv.Contains("--force"),
-                    replaceRelease: argv.Contains("--replace-release"));
-                return Results.Json(new {
-                    supported = true,
-                    confirm = pre.Confirm,
-                    headline = pre.Headline,
-                    details = pre.Details,
-                    warning = pre.Warning,
-                });
+            var cmd = CommandRegistry.FindByPath(path);
+            if (cmd is null) {
+                return Results.Json(new { supported = false });
             }
 
-            return Results.Json(new { supported = false });
+            var argv = (args ?? string.Empty).Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            var pre = CommandPreflight.Describe(cmd.Info, argv, paths);
+            if (pre is null) {
+                return Results.Json(new { supported = false });
+            }
+            return Results.Json(new {
+                supported = true,
+                confirm = pre.Confirm,
+                headline = pre.Headline,
+                details = pre.Details,
+                warning = pre.Warning,
+                addArgs = pre.AddArgs,
+            });
         });
     }
 }

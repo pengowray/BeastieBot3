@@ -49,6 +49,7 @@ public sealed class WikidataCacheItemsSettings : CommonSettings {
 [CommandInfo("wikidata cache-entities", CommandKind.Mutates,
     "Downloads queued Wikidata items into the Wikidata cache and updates the name index, which is used to find a taxon's Wikidata item by scientific name. Items are queued by wikidata seed-taxa and wikidata backfill-iucn; wikidata cache-all runs wikidata seed-taxa and then this command.",
     Reason = "With --force, wikidata cache-entities also downloads every item already in the Wikidata cache again, oldest download first. By default it downloads only queued items that are not cached yet.",
+    Rerun = RerunEffect.IdempotentAdd,
     Examples = new[] {
         "wikidata cache-entities",
         "wikidata cache-entities --failed-only"

@@ -28,25 +28,41 @@ namespace BeastieBot3;
 //   "iucn api cache-taxa"        -> nested "iucn" > "api" branch
 //   "show-paths"                 -> top-level command (no branch)
 
+// When the web UI asks for confirmation. It asks before a run only when that run, with the
+// options chosen, deletes data that took downloads or an import to build:
+//   - it deletes downloaded data and does not download it again (wikidata reset-cache), or
+//   - it deletes an imported dataset in order to import it again (iucn import, col import and
+//     sprat import with --force).
+// It does not ask before a run that only reports, adds, downloads again over copies already
+// downloaded (the --force of the download commands: each old copy stays until its new copy
+// arrives), rebuilds something from data already stored locally (the IUCN API projection, the
+// common names store, the Wikidata name index), or deletes only entries that no command can use
+// (wikipedia prune-queue --apply, which wikipedia update runs every time).
+//
+// A command whose runs can meet that rule is Destructive. CommandInfo.ConfirmWhen names the
+// options that make a run meet it; with none named, every run asks. A command with a preflight
+// (Web/Commands/CommandPreflight.cs, only iucn import so far) decides from the files on disk
+// instead. The decision is made on the server, in CommandPreflight, and the web UI only follows it.
 public enum CommandKind {
-    ReadOnly,     // pure query or report (output files are fine; not state)
-    Mutates,      // additive cache/db write; idempotent on re-run
-    Destructive,  // wholesale rewrite or deletion of state; UI re-confirms
+    ReadOnly,     // reads data and writes reports or output files only; changes no cache or database
+    Mutates,      // writes caches or databases; no run deletes downloaded or imported data
+    Destructive,  // some runs delete downloaded or imported data; the web UI asks before those runs
 }
 
-// Finer-grained "what happens if I run this (again)?" classification, orthogonal
-// to CommandKind. Surfaced in the web UI so a user can tell, before clicking,
-// whether a run is cheap-and-safe, will discover new work, rebuilds a derived
-// artifact, or should target a fresh database. Unset (= default) is derived from
-// CommandKind in RegisteredCommand.Rerun so most commands need no annotation.
+// "What happens if I run this (again)?", orthogonal to CommandKind. The web UI shows it as a pill
+// on the Run command page and beside Workflows command buttons, with a hover hint (app.js EFFECTS)
+// that has to be true for every command in the category; RerunNote adds command-specific detail.
+// Every Mutates or Destructive command sets it explicitly (pinned by CommandClassificationTests).
+// A ReadOnly command may leave it as Default, which means ReadOnly.
 public enum RerunEffect {
-    Default,        // unspecified — derive from CommandKind
-    ReadOnly,       // reads/produces reports only; never changes cached state
-    IdempotentAdd,  // additive: skips entries already present, only fetches/adds new (safe, cheap re-run)
-    Discovers,      // scans an external source to find entries not yet known locally
-    Rebuilds,       // recomputes/replaces a derived artifact from data already held locally
-    ClearsCache,    // deletes cached payloads in place (a queue/seed is kept; next fetch re-downloads)
-    FreshDataset,   // establishes or replaces a dataset; for a NEW release, target a fresh database file
+    Default,        // unset: allowed only on ReadOnly commands, where it means ReadOnly
+    ReadOnly,       // reads data and writes reports or output files; changes no cache or database
+    IdempotentAdd,  // by default adds only what is missing and keeps what is already there (downloads, queues, upserts)
+    Discovers,      // searches the IUCN Red List API or Wikidata for records not cached yet; adds them or queues them
+    Rebuilds,       // rebuilds its result from data already stored locally and replaces the previous result
+    PlansDownloads, // changes only which records the download commands fetch next; downloads and deletes no downloaded data
+    ClearsCache,    // deletes downloaded data from a cache; the next download run fetches it again
+    Imports,        // imports downloaded files into a database; a re-run skips what is imported, --force imports it again
 }
 
 // Describes a CLI branch (intermediate node in the path tree). One per
@@ -69,10 +85,26 @@ public sealed class CommandInfoAttribute : Attribute {
     public CommandKind Kind { get; }
     public string Description { get; }
 
-    // Human-readable note shown alongside Destructive commands ("Rewrites X tables...").
+    // Shown with a warning sign in the web UI's form for a Destructive command: which runs delete
+    // what. Not shown for other kinds.
     public string? Reason { get; init; }
 
-    // What happens on (re-)run. Default is derived from Kind (see RegisteredCommand.Rerun).
+    // Destructive commands only: the options that make a run delete downloaded or imported data
+    // (see the rule above CommandKind). The web UI asks for confirmation only when the run has
+    // one of them. Left empty, every run asks. Not used for a command with its own preflight.
+    public string[] ConfirmWhen { get; init; } = Array.Empty<string>();
+
+    // Destructive commands only: the first line of the confirmation, saying what this run
+    // deletes. Defaults to Reason.
+    public string? ConfirmText { get; init; }
+
+    // The option that skips the command's own terminal prompt (wikidata reset-cache --force).
+    // A web UI job cannot answer a terminal prompt, so once the user confirms in the web UI's
+    // dialog, the web UI adds this option to the run.
+    public string? PromptOption { get; init; }
+
+    // What happens on (re-)run. Must be set on Mutates and Destructive commands; Default means
+    // ReadOnly (see RegisteredCommand.Rerun).
     public RerunEffect Rerun { get; init; } = RerunEffect.Default;
 
     // Optional one-line specific about the re-run effect (e.g. "--force re-downloads

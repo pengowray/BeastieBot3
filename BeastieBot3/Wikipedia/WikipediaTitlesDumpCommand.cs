@@ -25,7 +25,8 @@ namespace BeastieBot3.Wikipedia;
 [CommandInfo("wikipedia titles-dump", CommandKind.Mutates,
     "Download the enwiki all-titles dump and import it into the Wikipedia cache as a local title-existence check. Re-running skips the download and import when the dump has not changed.",
     Reason = "Replaces the imported all-titles dump with the current one.",
-    Rerun = RerunEffect.Rebuilds,
+    Rerun = RerunEffect.Imports,
+    RerunNote = "A run downloads and imports the dump only when a newer one has been published.",
     Examples = new[] {
         "wikipedia titles-dump",
         "wikipedia titles-dump --force",

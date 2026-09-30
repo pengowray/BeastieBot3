@@ -38,6 +38,7 @@ public sealed class WikidataSeedSettings : CommonSettings {
 [CommandInfo("wikidata seed-taxa", CommandKind.Mutates,
     "Find Wikidata items with an IUCN taxon ID (P627) or IUCN conservation status (P141) and add each item not yet in the Wikidata cache to the download queue, continuing where the last run stopped.",
     Reason = "Enqueues Wikidata Q-ids for IUCN-linked taxa.",
+    Rerun = RerunEffect.Discovers,
     Examples = new[] {
         "wikidata seed-taxa",
         "wikidata seed-taxa --limit 1000"

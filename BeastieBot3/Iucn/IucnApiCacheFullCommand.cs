@@ -105,6 +105,7 @@ public sealed class IucnApiCacheFullSettings : CommonSettings {
     "Build or update the IUCN API cache, and with --full also the IUCN API projection that --dataset api reads. Runs cache-taxa, then cache-assessments; --full also runs cache-infraranks --from-csv before cache-assessments, and project-view at the end. During a refresh (`iucn api refresh-start`) it also runs discover-by-family and re-checks taxa and assessments the API previously said were gone, unless the refresh was started with --no-discovery or --no-tombstones.",
     Reason = "Caches IUCN /api/v4 taxa + assessment payloads into the local API cache (idempotent additive; --force-taxa/--force-assessments re-download already-cached entries). --project also rebuilds the derived projection DB.",
     Rerun = RerunEffect.IdempotentAdd,
+    RerunNote = "During a refresh started with iucn api refresh-start, a run also downloads again every record downloaded before the refresh's cutoff date.",
     Examples = new[] {
         "iucn api cache-all",
         "iucn api cache-all --full",

@@ -19,6 +19,7 @@ namespace BeastieBot3.Wikipedia;
 [CommandInfo("wikipedia enqueue-taxa", CommandKind.Mutates,
     "Add the higher-taxon names in the IUCN Red List database (class, order and family by default) to the Wikipedia download queue. `wikipedia generate-lists` uses the article that a taxon's name redirects to (Araneae redirects to Spider) as the taxon's common name when neither the rule files nor the common names store has one.",
     Reason = "Seeds the Wikipedia cache with higher-taxon titles from IUCN.",
+    Rerun = RerunEffect.IdempotentAdd,
     Examples = new[] {
         "wikipedia enqueue-taxa",
         "wikipedia enqueue-taxa --ranks class,order,family",

@@ -24,7 +24,7 @@ namespace BeastieBot3.Audit;
 
 [CommandInfo("redlist audit-site", CommandKind.ReadOnly,
     "Build the unofficial IUCN Red List data-observations static site (HTML plus CSV) from the locally-imported release.",
-    Rerun = RerunEffect.Rebuilds,
+    Rerun = RerunEffect.ReadOnly,
     Examples = new[] {
         "redlist audit-site",
         "redlist audit-site --limit 5000",
