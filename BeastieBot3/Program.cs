@@ -32,6 +32,7 @@ public class CommonSettings : CommandSettings {
 
 internal class Program {
     static int Main(string[] args) {
+        Infrastructure.ConsoleSize.EnsureUsable(AnsiConsole.Console);
         var app = BuildApp();
         return app.Run(args);
     }

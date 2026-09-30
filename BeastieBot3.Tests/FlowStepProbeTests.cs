@@ -176,13 +176,18 @@ public class FlowStepProbeTests {
         Assert.Equal(1, s.ImportedZipCount(s.ConfiguredDb));
     }
 
+    // The reader passes this method a GetFullPath result, so the tests use a rooted path for the
+    // current platform. A literal like D:\store has no directory part on Linux.
+    private static readonly string StoreDir = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "store");
+
     [Fact]
     public void ReleaseDbPath_IsNullWhenItWouldBeTheConfiguredFile() =>
-        Assert.Null(IucnReleaseStateReader.ResolveReleaseDbPath(@"D:\store\IUCN_2026-1.sqlite", "2026-1"));
+        Assert.Null(IucnReleaseStateReader.ResolveReleaseDbPath(
+            System.IO.Path.Combine(StoreDir, "IUCN_2026-1.sqlite"), "2026-1"));
 
     [Fact]
     public void ReleaseDbPath_SitsBesideTheConfiguredFile() =>
         Assert.Equal(
-            System.IO.Path.Combine(@"D:\store", "IUCN_2026-1.sqlite"),
-            IucnReleaseStateReader.ResolveReleaseDbPath(@"D:\store\IUCN_2025-2.sqlite", "2026-1"));
+            System.IO.Path.Combine(StoreDir, "IUCN_2026-1.sqlite"),
+            IucnReleaseStateReader.ResolveReleaseDbPath(System.IO.Path.Combine(StoreDir, "IUCN_2025-2.sqlite"), "2026-1"));
 }

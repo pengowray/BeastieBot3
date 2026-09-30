@@ -1,3 +1,4 @@
+using BeastieBot3.Infrastructure;
 using Spectre.Console;
 
 namespace BeastieBot3.Web.Jobs;
@@ -68,7 +69,7 @@ public sealed class JobRunner {
             // proxy itself would recurse forever through the AsyncLocal slot.
             var teeOut = new TeeTextWriter(_console.StdOut.Base, chunk => job.Output.Append(chunk));
             var teeErr = new TeeTextWriter(_console.StdErr.Base, chunk => job.Output.Append(chunk));
-            var teeAnsi = AnsiConsole.Create(new AnsiConsoleSettings {
+            var teeAnsi = ConsoleSize.EnsureUsable(AnsiConsole.Create(new AnsiConsoleSettings {
                 Ansi = AnsiSupport.Yes,
                 ColorSystem = ColorSystemSupport.Standard,
                 // The output is captured to a buffer, not a live terminal: mark it
@@ -76,7 +77,7 @@ public sealed class JobRunner {
                 // into the log (ProgressConsole emits throttled text counts instead).
                 Interactive = InteractionSupport.No,
                 Out = new AnsiConsoleOutput(teeOut),
-            });
+            }));
 
             int exitCode;
             bool cancelled = false;

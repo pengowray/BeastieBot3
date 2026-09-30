@@ -11,13 +11,24 @@ namespace BeastieBot3.Tests;
 public class ProgressConsoleTests {
     private static (IAnsiConsole Console, StringWriter Out) NonInteractive() {
         var sw = new StringWriter();
-        var console = AnsiConsole.Create(new AnsiConsoleSettings {
+        var console = ConsoleSize.EnsureUsable(AnsiConsole.Create(new AnsiConsoleSettings {
             Ansi = AnsiSupport.No,
             ColorSystem = ColorSystemSupport.NoColors,
             Interactive = InteractionSupport.No,
             Out = new AnsiConsoleOutput(sw),
-        });
+        }));
         return (console, sw);
+    }
+
+    // With no terminal attached (Linux test hosts, piped CLI runs, serve without a tty) Spectre
+    // reads the width as -1 and writes nothing. EnsureUsable must leave the console able to write.
+    [Fact]
+    public void EnsureUsable_ConsoleOverStringWriter_HasASizeAndWrites() {
+        var (console, sw) = NonInteractive();
+        Assert.True(console.Profile.Width > 0);
+        Assert.True(console.Profile.Height > 0);
+        console.WriteLine("hello");
+        Assert.Contains("hello", sw.ToString());
     }
 
     [Fact]
