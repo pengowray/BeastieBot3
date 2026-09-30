@@ -32,8 +32,8 @@ public static class WikidataIucnProbes {
         if (s.LastPlan is not { } plan) return null;
         if (plan.StoppedAtLimit is { } limit) {
             return plan.StaleItems == 0
-                ? new FlowProbeResult("todo", $"{PartialRun(plan, limit)} The cached copies of those {limit:n0} items were all 30 days old or less; the other linked items were not checked. Run the dry run again without --limit to check every linked item.")
-                : new FlowProbeResult("todo", $"{PartialRun(plan, limit)} {plan.StaleItems:n0} of those {limit:n0} items had cached copies more than 30 days old; the other linked items were not checked. Re-download the items with old copies, then run the dry run again without --limit.");
+                ? new FlowProbeResult("todo", $"{PartialRun(plan, limit)}: their cached copies were all 30 days old or less. The other linked items were not checked. Run the dry run again without --limit.")
+                : new FlowProbeResult("todo", $"{PartialRun(plan, limit)}: {plan.StaleItems:n0} of those items had cached copies more than 30 days old. The other linked items were not checked. Re-download the items with old copies, then run the dry run again without --limit.");
         }
         return plan.StaleItems == 0
             ? new FlowProbeResult("ok", $"Dry run on {plan.FinishedAtUtc:d MMM yyyy}: every cached copy of a linked Wikidata item was 30 days old or less.")
@@ -58,11 +58,11 @@ public static class WikidataIucnProbes {
         }
         // The counts of a run that stopped at --limit cover only part of the plan.
         if (plan.StoppedAtLimit is { } limit) {
-            return new FlowProbeResult("todo", $"{PartialRun(plan, limit)} For those {limit:n0} items: {counts}. Run the dry run again without --limit for the complete plan.");
+            return new FlowProbeResult("todo", $"{PartialRun(plan, limit)}. For those {limit:n0} items: {counts}. Run the dry run again without --limit for the complete plan.");
         }
         return new FlowProbeResult("ok", summary);
     }
 
     private static string PartialRun(WikidataIucnPlanRun plan, int limit) =>
-        $"Partial dry run on {plan.FinishedAtUtc:d MMM yyyy}, stopped after {limit:n0} linked Wikidata items (--limit {limit}).";
+        $"Partial dry run on {plan.FinishedAtUtc:d MMM yyyy}, stopped after {limit:n0} linked Wikidata items";
 }

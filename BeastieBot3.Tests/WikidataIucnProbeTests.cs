@@ -72,14 +72,16 @@ public class WikidataIucnProbeTests {
         var fresh = WikidataIucnProbes.ItemsFreshStep(new WikidataIucnFlowState { LastPlan = Run(limit: 100) })!;
         Assert.Equal("todo", fresh.Status);
         Assert.StartsWith("Partial dry run on ", fresh.Detail);
-        Assert.Contains("stopped after 100 linked Wikidata items (--limit 100).", fresh.Detail);
-        Assert.Contains("The cached copies of those 100 items were all 30 days old or less; the other linked items were not checked.", fresh.Detail);
+        Assert.Contains("stopped after 100 linked Wikidata items: their cached copies were all 30 days old or less. The other linked items were not checked.", fresh.Detail);
+        Assert.Contains("run the dry run again without --limit", fresh.Detail, StringComparison.OrdinalIgnoreCase);
+        Assert.DoesNotContain("(--limit", fresh.Detail);
         Assert.DoesNotContain("every cached copy", fresh.Detail);
 
         var stale = WikidataIucnProbes.ItemsFreshStep(new WikidataIucnFlowState { LastPlan = Run(stale: 12, limit: 100) })!;
         Assert.Equal("todo", stale.Status);
-        Assert.Contains("12 of those 100 items had cached copies more than 30 days old", stale.Detail);
+        Assert.Contains("stopped after 100 linked Wikidata items: 12 of those items had cached copies more than 30 days old.", stale.Detail);
         Assert.Contains("run the dry run again without --limit", stale.Detail);
+        Assert.DoesNotContain("(--limit", stale.Detail);
     }
 
     [Fact]
@@ -89,7 +91,9 @@ public class WikidataIucnProbeTests {
         Assert.Equal("todo", partial.Status);
         Assert.StartsWith("Partial dry run on ", partial.Detail);
         Assert.Contains("For those 2,000 items: 148,000 edits planned, 25,000 pairs need a person to confirm the match.", partial.Detail);
+        Assert.Contains("stopped after 2,000 linked Wikidata items. For those 2,000 items:", partial.Detail);
         Assert.Contains("without --limit for the complete plan", partial.Detail);
+        Assert.DoesNotContain("(--limit", partial.Detail);
 
         // The release-changed line still names the last run as partial.
         var changed = WikidataIucnProbes.PlanStep(state with { EditionItem = "Q140000001" });
