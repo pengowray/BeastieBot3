@@ -25,6 +25,10 @@ public sealed record WikidataIucnPlanRun {
     public long ForReview { get; init; }
     public long StaleItems { get; init; }
     public long AssessmentItemsToCreate { get; init; }
+    /// The --limit value when the run stopped there: every count above then covers only that many
+    /// linked items. Null for a run that read every item, and for runs saved before the dry run
+    /// recorded it.
+    public int? StoppedAtLimit { get; init; }
 }
 
 public sealed record WikidataIucnFlowState {
@@ -82,6 +86,7 @@ public static class WikidataIucnFlowStateReader {
 
     internal static WikidataIucnPlanRun PlanRun(DateTime finished, string release, string? edition, string? countsJson) {
         long editable = 0, review = 0, pairs = 0, stale = 0, create = 0;
+        int? stoppedAtLimit = null;
         if (countsJson is not null) {
             using var doc = JsonDocument.Parse(countsJson);
             var root = doc.RootElement;
@@ -89,6 +94,11 @@ public static class WikidataIucnFlowStateReader {
             pairs = Get(nameof(WikidataIucnPlanTally.Pairs));
             stale = Get(nameof(WikidataIucnPlanTally.StaleItems));
             create = Get(nameof(WikidataIucnPlanTally.AssessmentItemsToCreate));
+            // Saved as null by a run that read every item; TryGetInt32 throws on a JSON null.
+            if (root.TryGetProperty(nameof(WikidataIucnPlanTally.StoppedAtLimit), out var limit)
+                && limit.ValueKind == JsonValueKind.Number && limit.TryGetInt32(out var limitValue)) {
+                stoppedAtLimit = limitValue;
+            }
             if (root.TryGetProperty(nameof(WikidataIucnPlanTally.TierByCategory), out var tiers)) {
                 foreach (var tier in tiers.EnumerateObject()) {
                     foreach (var cat in tier.Value.EnumerateObject()) {
@@ -102,6 +112,7 @@ public static class WikidataIucnFlowStateReader {
         return new WikidataIucnPlanRun {
             FinishedAtUtc = finished, Release = release, EditionItem = edition, Pairs = pairs,
             Editable = editable, ForReview = review, StaleItems = stale, AssessmentItemsToCreate = create,
+            StoppedAtLimit = stoppedAtLimit,
         };
     }
 

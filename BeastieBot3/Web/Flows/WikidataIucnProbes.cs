@@ -26,9 +26,15 @@ public static class WikidataIucnProbes {
             ? new FlowProbeResult("todo", "Not looked up yet.")
             : new FlowProbeResult("ok", $"{s.AssessmentItems:n0} assessment items found on Wikidata, last looked up {s.AssessmentItemsCheckedAtUtc:d MMM yyyy}.");
 
-    // Measured by the last dry run, the only read that walks every linked item.
+    // Measured by the last dry run, the only read that walks every linked item. A run that stopped
+    // at --limit saw only that many items, so it can report old copies but never that all are fresh.
     internal static FlowProbeResult? ItemsFreshStep(WikidataIucnFlowState s) {
         if (s.LastPlan is not { } plan) return null;
+        if (plan.StoppedAtLimit is { } limit) {
+            return plan.StaleItems == 0
+                ? new FlowProbeResult("todo", $"{PartialRun(plan, limit)}: their cached copies were all 30 days old or less. The other linked items were not checked. Run the dry run again without --limit.")
+                : new FlowProbeResult("todo", $"{PartialRun(plan, limit)}: {plan.StaleItems:n0} of those items had cached copies more than 30 days old. The other linked items were not checked. Re-download the items with old copies, then run the dry run again without --limit.");
+        }
         return plan.StaleItems == 0
             ? new FlowProbeResult("ok", $"Dry run on {plan.FinishedAtUtc:d MMM yyyy}: every cached copy of a linked Wikidata item was 30 days old or less.")
             : new FlowProbeResult("todo", $"Dry run on {plan.FinishedAtUtc:d MMM yyyy}: {plan.StaleItems:n0} linked Wikidata items had cached copies more than 30 days old. Re-download those items, then run the dry run again.");
@@ -43,10 +49,20 @@ public static class WikidataIucnProbes {
         if (s.LastPlan is not { } plan) {
             return new FlowProbeResult("todo", "No dry run yet.");
         }
-        var summary = $"{plan.Editable:n0} edits planned, {plan.ForReview:n0} pairs need a person to confirm the match (dry run on {plan.FinishedAtUtc:d MMM yyyy}).";
+        var counts = $"{plan.Editable:n0} edits planned, {plan.ForReview:n0} pairs need a person to confirm the match";
+        var summary = plan.StoppedAtLimit is { } stoppedAt
+            ? $"{counts} (partial dry run on {plan.FinishedAtUtc:d MMM yyyy}, stopped after {stoppedAt:n0} linked Wikidata items)."
+            : $"{counts} (dry run on {plan.FinishedAtUtc:d MMM yyyy}).";
         if (!string.Equals(plan.Release, s.Release, StringComparison.Ordinal) || plan.EditionItem != s.EditionItem) {
             return new FlowProbeResult("todo", $"The release or release item changed since the last dry run; run it again. Last run: {summary}");
         }
+        // The counts of a run that stopped at --limit cover only part of the plan.
+        if (plan.StoppedAtLimit is { } limit) {
+            return new FlowProbeResult("todo", $"{PartialRun(plan, limit)}. For those {limit:n0} items: {counts}. Run the dry run again without --limit for the complete plan.");
+        }
         return new FlowProbeResult("ok", summary);
     }
+
+    private static string PartialRun(WikidataIucnPlanRun plan, int limit) =>
+        $"Partial dry run on {plan.FinishedAtUtc:d MMM yyyy}, stopped after {limit:n0} linked Wikidata items";
 }
