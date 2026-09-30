@@ -92,7 +92,7 @@ public static class PreviewEndpoints {
                 var html = await ParseWikitextAsync(name, wikitext, ct);
                 return Results.Json(new { name, title = DeriveTitle(name), html });
             } catch (Exception ex) {
-                return Results.Json(new { error = "Wikipedia preview failed: " + ex.Message }, statusCode: 502);
+                return Results.Json(new { error = "Wikipedia parse API: " + ex.Message }, statusCode: 502);
             }
         });
     }
@@ -115,8 +115,11 @@ public static class PreviewEndpoints {
         var json = await resp.Content.ReadAsStringAsync(ct);
         using var doc = JsonDocument.Parse(json);
         if (doc.RootElement.TryGetProperty("error", out var err)) {
-            var info = err.TryGetProperty("info", out var i) ? i.GetString() : "API error";
-            throw new Exception(info);
+            // Shown after "Wikipedia parse API: ". Wikipedia's own description (info) is shown as-is;
+            // the fallbacks cover a response with only an error code, or with neither.
+            var info = err.TryGetProperty("info", out var i) ? i.GetString() : null;
+            var code = err.TryGetProperty("code", out var c) ? c.GetString() : null;
+            throw new Exception(info ?? (code is not null ? $"error code {code}" : "error response with no error code or description"));
         }
         return doc.RootElement.GetProperty("parse").GetProperty("text").GetString() ?? string.Empty;
     }

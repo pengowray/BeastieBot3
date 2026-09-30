@@ -19,11 +19,15 @@
   let taxaMaxSize = 0;           // largest visible list size, for the by-taxa heat scale
 
   // Status (preset) display order + labels for the by-taxa chips. Anything not listed sorts last.
-  const PRESET_ORDER = ['ex', 'ew', 'threatened', 'endangered-combined', 'cr', 'en', 'vu', 'nt', 'lc', 'dd', 'all-status', 'conservation-dependent'];
+  const PRESET_ORDER = ['extinct-combined', 'ex', 'ew', 'threatened', 'endangered-combined', 'cr', 'en', 'vu', 'nt', 'lc', 'dd', 'all-status', 'conservation-dependent'];
   const PRESET_LABEL = {
-    ex: 'Extinct', ew: 'EW', threatened: 'Threatened', 'endangered-combined': 'EN+CR',
+    'extinct-combined': 'Extinct+EW', ex: 'Extinct', ew: 'EW', threatened: 'Threatened', 'endangered-combined': 'EN+CR',
     cr: 'CR', en: 'EN', vu: 'VU', nt: 'NT', lc: 'LC', dd: 'DD',
     'all-status': 'By status', 'conservation-dependent': 'LR/cd',
+  };
+  // Extra tooltip line for chips whose label leaves out some of the categories on the list.
+  const PRESET_NOTE = {
+    'extinct-combined': 'One list for EX, EW, CR(PE) and CR(PEW)',
   };
 
   // View + stat preferences persist so the user's chosen layout is the default next visit.
@@ -52,7 +56,8 @@
       render();
       loaded = true;
     } catch (e) {
-      tbody.innerHTML = '<tr><td colspan="5" class="error">' + escapeHtml(e.message) + '</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="5" class="error">Failed to load the .wikitext file list from <code>serve</code>: '
+        + escapeHtml(e.message) + '</td></tr>';
     }
   }
 
@@ -67,7 +72,8 @@
         '. A “~” marks a list rebuilt since then (count may be stale).';
     } else {
       note.hidden = false;
-      note.textContent = 'No structure-metrics.json cache found — run a generation to populate taxa counts.';
+      note.innerHTML = 'No taxa counts: <code>structure-metrics.json</code> is missing or unreadable. '
+        + 'Run <code>wikipedia generate-lists</code> to record taxa counts, then press Refresh.';
     }
   }
 
@@ -289,8 +295,10 @@
     const sj = document.createElement('a');
     sj.href = '#/grouping';
     sj.className = 'wt-tg-edit';
-    sj.textContent = '⚙ split/join';
-    sj.title = 'Combine or split this group’s status lists in the Taxa-grouping editor';
+    sj.textContent = '⚙ Category split';
+    sj.title = 'Opens the Taxa grouping page with this group selected. There you can change this '
+      + 'group’s Category split: one list per Red List category, or one list for several '
+      + 'categories (for example, a Threatened list for CR, EN and VU).';
     sj.addEventListener('click', (e) => {
       e.preventDefault();
       if (window.BeastieRouter) {
@@ -343,6 +351,7 @@
     }
 
     const bits = [f.title];
+    if (f.preset && PRESET_NOTE[f.preset]) bits.push(PRESET_NOTE[f.preset]);
     if (f.taxa != null) bits.push(f.taxa.toLocaleString() + ' taxa' + (f.taxaStale ? ' (stale)' : ''));
     if (B.formatBytes) bits.push(B.formatBytes(f.size));
     if (B.formatRelative) bits.push(B.formatRelative(f.modified));

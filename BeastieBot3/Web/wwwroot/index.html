@@ -71,11 +71,21 @@
           <h3>IUCN dataset comparison — CSV vs API</h3>
         </div>
         <p class="muted small">
-          List/chart generation can read either the imported CSV release or the API-cache projection
-          (<code>iucn api project-view</code>, selected with <code>--dataset api</code>). Small differences are
-          expected: the API set excludes delisted taxa that no longer carry a latest assessment, and a few
-          latest assessments may not be downloaded yet.
+          Compares the IUCN Red List database (CSV release) with the IUCN API projection that
+          <code>iucn api project-view</code> builds from the IUCN API cache. List and chart commands read the
+          CSV release unless run with <code>--dataset api</code>.
         </p>
+        <details class="muted small">
+          <summary>Why the counts differ a little</summary>
+          <ul>
+            <li>Taxa with no current assessment in the IUCN API are left out of the API projection.</li>
+            <li>The IUCN API cache is downloaded over time, so some of its assessments can be from a different
+              Red List release than the CSV release.</li>
+            <li>The API projection has subspecies and varieties only after <code>iucn api cache-infraranks</code>
+              (<code>iucn api cache-all --full</code> runs it).</li>
+            <li>"partial" in the Coverage row: some current assessments are not downloaded yet.</li>
+          </ul>
+        </details>
         <div id="dataset-compare-body" class="muted small">Loading&hellip;</div>
       </section>
       <section class="card">
@@ -88,10 +98,11 @@
       <div class="view-head"><h2 class="view-title">Run a command</h2></div>
       <section class="card">
         <p class="muted small">
-          Click a command to open its form. Output streams in the dock at the
-          bottom and into the terminal where <code>serve</code> is running.
-          <span class="dot dot-destructive"></span> destructive commands ask
-          for confirmation and block other jobs while running.
+          Click a command to open its form. While a command runs, its output appears
+          in the job panel at the bottom of the window and in the terminal where
+          <code>serve</code> is running. <span class="dot dot-destructive"></span>
+          Destructive commands ask for confirmation before they start
+          (<code>iucn import</code> asks only when the run would replace data already imported).
         </p>
         <div class="filter-bar">
           <input type="search" id="cmd-search" placeholder="Filter commands…" autocomplete="off">
@@ -138,17 +149,16 @@
       </div>
       <section class="card">
         <p class="muted small">
-          Generated <code>.wikitext</code> lists. <strong>Preview</strong> renders the file through
-          Wikipedia's own parser (templates expanded, links live) — fetched on demand, one file at a
-          time, so Wikipedia is never bulk-hit. <strong>Source</strong> shows the raw wikitext.
-          Taxa counts come from the generator's <code>structure-metrics.json</code> cache.
+          The <code>.wikitext</code> list files written by <code>wikipedia generate-lists</code>.
+          <strong>Preview</strong> renders a file through the English Wikipedia parser, with templates expanded
+          and links to Wikipedia. <strong>Source</strong> shows the raw wikitext.
         </p>
         <div class="view-tabs wt-tabs" id="wt-view" role="tablist" aria-label="View">
           <button class="view-tab" data-view="table" role="tab">Table</button>
           <button class="view-tab" data-view="taxa" role="tab">By taxa</button>
           <span class="wt-tabs-right">
             <label class="wt-toggle small muted" title="Color-code lists by size — the largest highlighted (helps decide what to split).">
-              <input type="checkbox" id="wt-heat"> Highlight large
+              <input type="checkbox" id="wt-heat"> Shade by file size
             </label>
             <span class="wt-stat-group">
               <label class="wt-stat-label muted small">Stat</label>
@@ -183,8 +193,13 @@
       <div class="view-head"><h2 class="view-title">Taxa grouping</h2></div>
       <section class="card">
         <p class="muted small">
-          Pick a parent group and a child rank to see per-sub-taxon IUCN counts (the same numbers the
-          generated summary table uses). Tick existing groups to set them as the parent's sub-lists.
+          Pick a Parent group and a Child rank, then <strong>Show counts</strong> for the number of species in each
+          Red List category per sub-taxon (the same numbers as a parent list's summary table).
+        </p>
+        <p class="muted small">
+          <strong>Save sub-groups</strong> sets the parent's sub-groups in the draft <code>taxa-groups.yml</code>
+          to the ticked rows. Sub-groups with no row in this table, such as ones with a system filter or at another
+          rank, are removed. Apply the draft in the Rules editor.
         </p>
         <div class="filter-bar">
           <label>Parent <select id="grp-parent"></select></label>
@@ -205,13 +220,22 @@
         <details id="grp-create" class="grp-create">
           <summary>Define a new sub-group (e.g. a class like MAGNOLIOPSIDA)</summary>
           <p class="muted small">
-            Creates a new taxa-group from one or more filters, plus a list entry so it generates pages.
-            Each filter is a taxonomic rank (<em>is</em> / <em>any of</em> / <em>not</em>) or a
-            <em>system</em> tag (e.g. <code>Marine, Freshwater</code> = aquatic). Filters are ANDed;
-            comma-separated system tags are OR'd. Written to the <strong>draft</strong> — review the
-            diff and Apply in the Rules editor. Tip: click <em>＋ define</em> on a sub-taxon row above
-            to pre-fill the first filter.
+            <strong>Create sub-group</strong> adds a taxa group to the draft <code>taxa-groups.yml</code>, and a list
+            entry to the draft <code>wikipedia-lists.yml</code> so <code>wikipedia generate-lists</code> makes pages
+            for it. To make it a sub-group of Parent, tick its row in the counts table and <strong>Save
+            sub-groups</strong>; a group with no row there, such as one with a system filter, goes in the parent's
+            <code>children:</code> list in the Rules editor. Then apply the draft in the Rules editor.
           </p>
+          <ul class="muted small">
+            <li>A taxon must match every filter.</li>
+            <li>Rank filter: <em>is</em>, <em>any of</em> or <em>not</em>; separate several values with commas.</li>
+            <li>System filter: IUCN systems separated by commas; a taxon in any of them matches
+              (<code>Marine, Freshwater</code> selects aquatic taxa).</li>
+            <li><em>Inherit parent's filters</em> copies the parent's rank filters, except ranks you set yourself.
+              System filters are not copied.</li>
+            <li><em>＋ define</em> on a counts table row opens this panel with Key, Name and the first filter filled
+              in.</li>
+          </ul>
           <div class="filter-bar">
             <label>Key <input id="cg-key" placeholder="magnoliopsida"></label>
             <label>Name <input id="cg-name" placeholder="Dicotyledons"></label>
@@ -231,12 +255,12 @@
                 <option value="CommonNameOnly">CommonNameOnly</option>
               </select>
             </label>
-            <label>Pages
+            <label>Category split
               <select id="cg-split">
-                <option value="merged" selected>merged (threatened + extinct combined)</option>
-                <option value="combined-threatened">combined-threatened</option>
-                <option value="separate">separate (one page per status)</option>
-                <option value="all-status">all-status (single page)</option>
+                <option value="merged" selected>merged (threatened, extinct, NT, DD, LC pages)</option>
+                <option value="combined-threatened">combined-threatened (threatened, EX, EW, NT, DD, LC pages)</option>
+                <option value="separate">separate (one page per category)</option>
+                <option value="all-status">all-status (one page for all categories)</option>
               </select>
             </label>
             <button id="cg-create" class="ghost">Create sub-group</button>
@@ -252,7 +276,12 @@
     <section class="view" data-view="rules">
       <div class="view-head"><h2 class="view-title">Rules editor</h2></div>
       <section class="card">
-        <p class="muted small">Draft &rarr; apply. Edit a draft copy, diff it against source, then apply.</p>
+        <p class="muted small">
+          <strong>Save draft</strong> saves your edits to the draft copy of the selected rule file; the Taxa
+          grouping page saves its changes to the same draft. The files in <code>rules/</code> change only when you
+          click <strong>Apply changed files to source</strong>. <strong>Diff draft vs source</strong> shows every
+          change before you apply it.
+        </p>
         <p class="muted small" id="rules-locations">Loading locations&hellip;</p>
         <div class="filter-bar">
           <label>File <select id="rules-file"></select></label>
@@ -276,12 +305,13 @@
       <div class="view-head"><h2 class="view-title">Guides</h2></div>
 
       <section class="card">
-        <div class="card-head"><h3>Ways to get IUCN data — what each unlocks</h3></div>
+        <div class="card-head"><h3>Ways to get IUCN data</h3></div>
         <p class="muted small">
-          Each row is a download/build option. <span class="feat-yes">✓</span> = it adds that piece;
-          <span class="feat-no">·</span> = it doesn't; the last column lists extra requirements.
-          The API options are additive — typically cache-taxa → infraranks → cache-assessments → project-view,
-          or <code>iucn api cache-all --full</code> in one job.
+          <span class="feat-yes">✓</span> the command adds this data; <span class="feat-partial">~</span> part of it;
+          <span class="feat-partial">+</span> some species the CSV release lacks (see the + note below);
+          <span class="feat-no">·</span> none of it.<br>
+          The API commands all add to the same IUCN API cache, so their results combine.
+          <code>iucn api cache-all --full</code> runs them in one job and then builds the IUCN API projection.
         </p>
         <div class="feature-table-wrap">
           <table class="feature-table">
@@ -341,7 +371,7 @@
                 <td class="feat-req">— (local; needs the cache)</td>
               </tr>
               <tr>
-                <td><code>iucn api cache-all --full</code> <span class="muted small">(the chain)</span></td>
+                <td><code>iucn api cache-all --full</code> <span class="muted small">(taxa + infraranks + assessments + projection)</span></td>
                 <td class="feat-yes">✓</td><td class="feat-yes">✓</td><td class="feat-yes">✓</td>
                 <td class="feat-no">·</td><td class="feat-yes">✓</td><td class="feat-yes">✓</td>
                 <td class="feat-req">API token; CSV</td>
@@ -351,9 +381,13 @@
         </div>
         <p class="feature-note">
           <strong>+</strong> discover-by-family adds species the CSV omits (removed/historical/reclassified).
-          <strong>†</strong> Orphan subspecies = an assessed subspecies whose parent species is <em>unassessed</em>; it appears
-          on no family page and in no cached species, so only the CSV's sis_id reaches it.
-          <strong>‡</strong> Rich content = synonyms, population narratives, trends and history the CSV doesn't carry.
+          <strong>†</strong> Orphan subspecies: an assessed subspecies or variety whose parent species has no IUCN
+          assessment. Orphan subspecies can be downloaded from the API only by their own SIS IDs, which
+          <code>iucn api cache-infraranks --from-csv</code> reads from the imported CSV release.
+          <strong>‡</strong> Rich content: synonyms, narrative texts (such as the population narrative), population
+          trends and assessment history (earlier assessments of each taxon) from the IUCN API. <code>iucn import</code>
+          is marked ~ because the CSV release has the narrative texts and population trends, but no synonyms and only
+          the current assessment of each taxon.
           "Ready to generate lists" means you can run generate-lists/charts afterwards (CSV via the default
           <code>--dataset csv</code>; the API cache only after <code>project-view</code> via <code>--dataset api</code>).
         </p>
@@ -362,8 +396,9 @@
       <section class="card">
         <div class="card-head"><h3>Data sources — what each contributes</h3></div>
         <p class="muted small">
-          High-level overview of which features each source feeds into the aggregated data.
-          <span class="feat-yes">✓</span> primary&nbsp;·&nbsp;<span class="feat-partial">~</span> partial/secondary&nbsp;·&nbsp;<span class="feat-no">·</span> none.
+          For each data source, the table shows which kinds of data the tool takes from it:
+          <span class="feat-yes">✓</span> primary source; <span class="feat-partial">~</span> partial or secondary source;
+          <span class="feat-no">·</span> not used.
         </p>
         <div class="feature-table-wrap">
           <table class="feature-table">
@@ -407,7 +442,7 @@
                 <td>Wikipedia</td>
                 <td class="feat-no">·</td><td class="feat-no">·</td><td class="feat-no">·</td>
                 <td class="feat-yes">✓</td><td class="feat-yes">✓</td>
-                <td class="feat-req">The target articles — page matching, vernacular names and prose.</td>
+                <td class="feat-req">Where the list articles are published; IUCN taxa matched to their articles; common names (taxobox name).</td>
               </tr>
             </tbody>
           </table>

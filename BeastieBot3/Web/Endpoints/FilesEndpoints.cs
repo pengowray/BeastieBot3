@@ -103,12 +103,21 @@ public static class FilesEndpoints {
         error = "";
         var roots = ResolveRoots(paths);
         if (!roots.TryGetValue(root, out var r)) {
-            error = $"Unknown root '{root}'. Allowed: {string.Join(", ", roots.Keys)}";
+            error = IniKeyForRoot(root) is { } key
+                ? $"No folder set for {root}/ in paths.ini. Set [Datastore] {key} to a folder, then restart serve."
+                : $"Unknown folder: {root}/. Folders available: {string.Join(", ", roots.Keys.Select(k => k + "/"))}";
             return false;
         }
         rootPath = r;
         return true;
     }
+
+    // The paths.ini [Datastore] key that sets each optional root ("rules" is always present).
+    private static string? IniKeyForRoot(string root) => root switch {
+        "reports"          => "reports_dir",
+        "wikipedia-output" => "wikipedia_output_dir",
+        _ => null,
+    };
 
     private static bool TryResolveTarget(string rootPath, string relative, out string fullPath, out string error) {
         fullPath = "";

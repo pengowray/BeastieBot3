@@ -30,8 +30,8 @@ public static class WikidataIucnProbes {
     internal static FlowProbeResult? ItemsFreshStep(WikidataIucnFlowState s) {
         if (s.LastPlan is not { } plan) return null;
         return plan.StaleItems == 0
-            ? new FlowProbeResult("ok", $"Every linked item was under 30 days old at the dry run on {plan.FinishedAtUtc:d MMM yyyy}.")
-            : new FlowProbeResult("todo", $"{plan.StaleItems:n0} linked items were over 30 days old at the dry run on {plan.FinishedAtUtc:d MMM yyyy}.");
+            ? new FlowProbeResult("ok", $"Dry run on {plan.FinishedAtUtc:d MMM yyyy}: every cached copy of a linked Wikidata item was 30 days old or less.")
+            : new FlowProbeResult("todo", $"Dry run on {plan.FinishedAtUtc:d MMM yyyy}: {plan.StaleItems:n0} linked Wikidata items had cached copies more than 30 days old. Re-download those items, then run the dry run again.");
     }
 
     internal static FlowProbeResult EditionItemStep(WikidataIucnFlowState s) =>

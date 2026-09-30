@@ -73,7 +73,7 @@ public static class DataSourceCatalogue {
             Metrics = new[] {
                 new MetricSpec { Label = "taxa cached",         Sql = "SELECT COUNT(*) FROM taxa" },
                 new MetricSpec { Label = "assessments cached",  Sql = "SELECT COUNT(*) FROM assessments" },
-                new MetricSpec { Label = "backlog (pending)",   Sql = "SELECT COUNT(*) FROM taxa_assessment_backlog" },
+                new MetricSpec { Label = "assessments of cached taxa", Sql = "SELECT COUNT(*) FROM taxa_assessment_backlog" },
                 new MetricSpec { Label = "failed requests",     Sql = "SELECT COUNT(*) FROM failed_requests" },
             },
         },
@@ -97,7 +97,7 @@ public static class DataSourceCatalogue {
             Metrics = new[] {
                 new MetricSpec { Label = "entities cached",   Sql = "SELECT COUNT(*) FROM wikidata_entities WHERE json_downloaded = 1" },
                 new MetricSpec { Label = "pending download",  Sql = "SELECT COUNT(*) FROM wikidata_entities WHERE json_downloaded = 0" },
-                new MetricSpec { Label = "pending matches",   Sql = "SELECT COUNT(*) FROM wikidata_pending_iucn_matches" },
+                new MetricSpec { Label = "taxa linked by name or synonym", Sql = "SELECT COUNT(*) FROM wikidata_pending_iucn_matches" },
             },
         },
         new DataSourceDescriptor {
@@ -109,7 +109,7 @@ public static class DataSourceCatalogue {
             Metrics = new[] {
                 new MetricSpec { Label = "pages cached",   Sql = "SELECT COUNT(*) FROM wiki_pages" },
                 new MetricSpec { Label = "matched taxa",   Sql = "SELECT COUNT(*) FROM taxon_wiki_matches" },
-                new MetricSpec { Label = "missing titles", Sql = "SELECT COUNT(*) FROM wiki_missing_titles" },
+                new MetricSpec { Label = "titles with no article", Sql = "SELECT COUNT(*) FROM wiki_missing_titles" },
             },
         },
         new DataSourceDescriptor {

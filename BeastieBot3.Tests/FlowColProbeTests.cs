@@ -94,14 +94,14 @@ public class FlowColProbeTests {
         var r = FlowStepProbes.ColRepointStep(State(
             input: Input("COL25.10 XR", "25.10", "2025-10-01"), configDisagrees: true))!;
         Assert.Equal("todo", r.Status);
-        Assert.Contains("disagrees with itself", r.Detail);
+        Assert.Contains("paths.ini mismatch", r.Detail);
     }
 
     [Fact]
     public void Repoint_StillOnTheOldRelease_IsTodo() {
         var r = FlowStepProbes.ColRepointStep(State(input: Input("COL26.9 XR", "26.9", "2026-09-01")))!;
         Assert.Equal("todo", r.Status);
-        Assert.Contains("Still reading", r.Detail);
+        Assert.Contains("COL_sqlite still points to", r.Detail);
     }
 
     [Fact]

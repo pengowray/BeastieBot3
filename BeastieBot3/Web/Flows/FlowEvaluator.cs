@@ -118,8 +118,10 @@ public sealed class FlowEvaluator {
                                       Lazy<WikidataIucnFlowState> wdIucnState) {
         // Block status: any required input data source missing.
         // (Optional steps still report block info; the UI styles them differently.)
+        // Listed by data source name, as on the Data sources page and the step's Inputs chips.
         var missingInputs = step.InputSourceIds
             .Where(id => !sources.TryGetValue(id, out var s) || !s.Exists)
+            .Select(id => sources.TryGetValue(id, out var s) ? s.Name : id)
             .ToList();
 
         // Most recent successful completion across any of the step's commands.
@@ -288,7 +290,7 @@ public sealed record FlowStepSnapshot {
     public IReadOnlyList<string> GuideSteps { get; init; } = Array.Empty<string>();
     public required string Status { get; init; }              // "blocked" | "running" | "todo" | "backlog" | "manual" | "never-run" | "ok"
     public string? Detail { get; init; }                      // one line of on-disk state from the step's probe
-    public required IReadOnlyList<string> MissingInputs { get; init; }
+    public required IReadOnlyList<string> MissingInputs { get; init; }  // data source names (not ids), in the step's input order
     public DateTimeOffset? LastRunAt { get; init; }
     public string? LastRunCommand { get; init; }
     public IReadOnlyList<FlowRunningJob> RunningJobs { get; init; } = Array.Empty<FlowRunningJob>();

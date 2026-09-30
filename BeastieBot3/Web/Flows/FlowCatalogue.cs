@@ -94,7 +94,7 @@ public static class FlowCatalogue {
         new FlowDefinition {
             Id = "iucn-import",
             Title = "Import IUCN data",
-            Description = "Get the IUCN Red List into the local store — the base dataset every other workflow builds on. Pick one route: the CSV release (fast, the current published snapshot) or the live API (more complete: historical/delisted taxa, subspecies, synonyms; one command builds or updates the whole dataset). Optionally compare the two before generating lists/charts with --dataset csv|api.",
+            Description = "Every other workflow reads the IUCN data imported here. Most workflows need only the CSV release (1 · From the CSV release). The API dataset (2 · From the IUCN API) is optional: it adds synonyms, past assessments and taxa missing from the CSV release, and it needs the CSV release imported first. List and chart commands read the CSV release unless run with `--dataset api`.",
             Steps = new[] {
                 // ===== 1 · From the CSV release =====
                 new FlowStep {
@@ -117,7 +117,7 @@ public static class FlowCatalogue {
                         "The download appears on your account page, marked Preparing at first. Once that clears, download the zip from there.",
                         "Run the second search: leave Geographical Scope and Include empty as before, but under Taxonomy tick only Animalia > Chordata > Aves > Passeriformes. Download it the same way.",
                         "Save both zips, still zipped, under a folder for the release, for example D:\\datasets\\IUCN_CVS_2026-1. Give each download its own subfolder, and start that subfolder's name with the release version: \"2026-1 non-passerines\" and \"2026-1 passerines\".",
-                        "Starting the subfolder name with the version is not decoration. It is where the import reads the release from, and IUCN names the zips with a random id that contains number pairs like 1373-414. Miss the version out and the import mistakes one of those for the release, filing the two downloads as different releases.",
+                        "If a subfolder name does not start with the version, the import can read a digit group in IUCN's random zip file name (such as 1373-414) as the release. The import then stops and lists each zip with the release it read. Rename the subfolders so each name starts with the version, then run the import again.",
                         "Keep one release per folder. The import picks up every zip anywhere below the folder, and refuses to mix two releases in one database.",
                         "Last, set [Datasets] IUCN_CVS_dir in paths.ini to that release folder. If you launch commands from these web pages rather than the command line, restart serve afterwards, because paths.ini is only read at startup.",
                     },
@@ -136,13 +136,13 @@ public static class FlowCatalogue {
                 new FlowStep {
                     Id = "csv-repoint",
                     Title = "Point paths.ini at the new database & restart serve (manual)",
-                    Description = "Tell everything else to read the database the import just created, then restart the web server. No command: you edit paths.ini by hand. Skip this when the import went into the file paths.ini already names.",
+                    Description = "This step is needed when `iucn import` wrote the new release to a new file, such as IUCN_2026-1.sqlite. Open paths.ini in a text editor, set [Datastore] IUCN_sqlite_from_cvs to that file, and restart serve. Until then, every other command and every page of this web UI read the old database.",
                     Commands = Array.Empty<string>(),
                     InputSourceIds = new[] { "iucn-main" },
                     Optional = true,
                     Probe = FlowStepProbes.IucnCsvRepoint,
                     Group = "1 · From the CSV release",
-                    Note = "Set [Datastore] IUCN_sqlite_from_cvs to the file the import reported, then restart serve. Until you do, every other command and every page here still reads the previous release, and nothing warns you: a database from the old release looks perfectly healthy. paths.ini is only read at startup, so the restart is what makes the change take effect. Confirm with `show-paths` or the Data sources tab, which shows the imported version. That is all you need for the CSV dataset: skip to the Wikipedia workflows, or build the API dataset below as an alternative.",
+                    Note = "Until serve restarts with the new setting, this step's status is amber, and the line under the step title shows the database file serve is still using and the release that file contains. To check the setting: `show-paths` prints the path of the IUCN Red List database, and the Data sources page shows which release the IUCN Red List database contains. After the restart, the Wikipedia workflows, such as \"Wikipedia reports pipeline\", read the new release.",
                 },
 
                 // ===== 2 · From the IUCN API =====
@@ -156,22 +156,22 @@ public static class FlowCatalogue {
                     Optional = true,
                     Probe = FlowStepProbes.IucnApiRefresh,
                     Group = "2 · From the IUCN API",
-                    Note = "The API data carries no release version — a payload downloaded during the last release looks exactly like one downloaded today — so a re-import means \"fetch everything again that is older than this date\". The date is stored, so the steps below pick it up on their own and you never type it twice. Stop the download whenever you like: re-running carries on from where it stopped rather than starting over. The whole re-import is roughly 37 hours of downloading, and it also re-checks the taxa the API previously said were gone, because that answer was only ever true of the release it was recorded against. Set the date to just before the new release was published, or leave it at now to re-fetch the lot.",
+                    Note = "Open Options and set --cutoff to a date just before the new release was published (UTC, for example 2026-06-16). With the default cutoff (now), the whole IUCN API cache is downloaded again. This step only stores the date: on every run, `iucn api cache-all --full` in \"Build or update the API dataset\" re-downloads everything downloaded before the stored date, so you enter the date once. A full API re-import is about 37 hours of downloading, and you can stop `iucn api cache-all --full` at any time; the next run continues with what is left. By default the API re-import also runs \"Discover extra taxa by family\" once and re-checks taxa and assessments for which the API returned HTTP 404 or 410, because a taxon missing from the previous release can be in the new one. --no-discovery turns off \"Discover extra taxa by family\", and --no-tombstones turns off the re-check.",
                 },
                 new FlowStep {
                     Id = "api-update",
                     Title = "Build or update the API dataset",
-                    Description = "One command for the whole API route: download species, the family sweep and subspecies, then assessments, re-check ids previously reported gone, and rebuild the projection. Phases with nothing to do are skipped.",
+                    Description = "`iucn api cache-all --full` downloads species, subspecies, varieties and their assessments into the IUCN API cache, then rebuilds the IUCN API projection that `--dataset api` reads. During an API re-import it also runs \"Discover extra taxa by family\" and re-checks taxa and assessments that the API reported as gone (HTTP 404 or 410).",
                     Commands = new[] { "iucn api cache-all --full", "iucn api cache-all --full --status" },
                     InputSourceIds = new[] { "iucn-main" },
                     OutputSourceIds = new[] { "iucn-api-cache", "iucn-api-projected" },
                     Probe = FlowStepProbes.IucnApiUpdateAll,
                     Group = "2 · From the IUCN API",
-                    Note = "Safe to run whenever: every phase only fetches what is missing, so stopping midway loses nothing and re-running carries on from wherever it got to. It prints a phase-by-phase plan before downloading and where things stand after. --status (the second button) prints just that plan and the counts, which is the quickest answer to \"which phase am I up to?\". During a re-import (the step above) the stored cutoff date is picked up on its own, and the family sweep and gone-id re-check run once each as part of it. To run or tune one phase on its own, open \"Step by step\" below — this command runs exactly those phases in that order.",
+                    Note = "You can stop `iucn api cache-all --full` at any time: each phase downloads only what is missing from the IUCN API cache (during an API re-import, also what was downloaded before the cutoff date), so the next run continues where the last one stopped. Before and after downloading, the command prints a table of its phases and the number of taxa and assessments in the IUCN API cache. `iucn api cache-all --full --status` prints only that and downloads nothing. The \"Step by step\" panel below has the same work as separate commands.",
                 },
                 new FlowStep {
                     Id = "api-cache-species",
-                    Title = "Cache species from the API (CSV-sourced)",
+                    Title = "Download species listed in the CSV release",
                     Description = "Download /api/v4 taxa + assessment payloads for the species present in the imported CSV. The quickest way to seed the API cache once the CSV is imported.",
                     Commands = new[] { "iucn api cache-all" },
                     Probe = FlowStepProbes.IucnApiTaxa,
@@ -179,12 +179,12 @@ public static class FlowCatalogue {
                     OutputSourceIds = new[] { "iucn-api-cache" },
                     Section = FlowSection.StepByStep,
                     Group = "From the IUCN API",
-                    Note = "Reads the SIS ids from the CSV database (so run step 1 first). cache-all = cache-taxa then cache-assessments in one job. Idempotent — re-running only fetches what's missing unless you pass --force-taxa / --force-assessments. Shortcut: `iucn api cache-all --full` chains ALL the API steps below in one command — cache-taxa → cache-infraranks (--from-csv) → cache-assessments → project-view.",
+                    Note = "`iucn api cache-all` runs cache-taxa and then cache-assessments. It reads the species list from the IUCN Red List database, so do \"Import the IUCN CSV release\" first. Re-running downloads only what is not cached yet; --force-taxa and --force-assessments download everything again.",
                 },
                 new FlowStep {
                     Id = "api-discover-by-family",
                     Title = "Discover extra taxa by family (no CSV needed)",
-                    Description = "Page every family on the live API to also pick up taxa the CSV omits — removed/delisted, reclassified, or historical-only. API-native: doesn't rely on the CSV at all.",
+                    Description = "Download every taxon listed under any family on the IUCN API that is not yet in the IUCN API cache. This finds taxa missing from the CSV release: removed or delisted taxa, reclassified taxa, and taxa with only historical assessments. `iucn api cache-all --full` runs this step only during an API re-import.",
                     Commands = new[] { "iucn api discover-by-family" },
                     Probe = FlowStepProbes.IucnApiDiscovery,
                     InputSourceIds = new[] { "iucn-api-cache" },
@@ -196,8 +196,8 @@ public static class FlowCatalogue {
                 },
                 new FlowStep {
                     Id = "api-infraranks-cached",
-                    Title = "Add subspecies & varieties (cached API-sourced)",
-                    Description = "Fetch the infraspecific taxa (subspecies/varieties) listed under the species already in the cache (their taxon.infrarank_taxa) and download their assessments. API-native — no CSV needed.",
+                    Title = "Add subspecies & varieties of cached species",
+                    Description = "This step downloads the subspecies and varieties listed in the species records in the IUCN API cache, then downloads their assessments. It works from the IUCN API cache alone and does not need the CSV import.",
                     Commands = new[] { "iucn api cache-infraranks", "iucn api cache-assessments" },
                     Probe = FlowStepProbes.IucnApiInfraranks,
                     InputSourceIds = new[] { "iucn-api-cache" },
@@ -205,12 +205,12 @@ public static class FlowCatalogue {
                     Optional = true,
                     Section = FlowSection.StepByStep,
                     Group = "From the IUCN API",
-                    Note = "Subspecies' assessments aren't in the parent payload. cache-infraranks fetches each infrarank taxon (queuing its assessments); the following cache-assessments downloads them — and any queued by discover-by-family. Idempotent; ids previously 404'd (no standalone record) are skipped. Reaches subspecies of assessed species only — for the rest, run the CSV-sourced step.",
+                    Note = "If \"Import the IUCN CSV release\" is done, run \"Add subspecies & varieties, including CSV-listed ones\" instead: it does everything this step does, and also downloads subspecies and varieties whose species is not assessed. cache-infraranks queues the assessments of each subspecies and variety it downloads, and cache-assessments downloads the queue. Re-running skips what is already cached, and subspecies and varieties the API answered \"not found\" (HTTP 404) for.",
                 },
                 new FlowStep {
                     Id = "api-infraranks-csv",
-                    Title = "Add subspecies & varieties (CSV-sourced)",
-                    Description = "Also seed infraspecific taxa from the imported CSV, catching assessed subspecies/varieties whose PARENT species is unassessed (~0.2% of taxa). Those appear on no family page and in no cached species, so they're reachable only by their CSV-listed sis_id.",
+                    Title = "Add subspecies & varieties, including CSV-listed ones",
+                    Description = "Download the subspecies and varieties listed in cached species records and in the IUCN Red List database, then their assessments. Assessed subspecies and varieties whose species is not assessed are listed only in the IUCN Red List database, so only this step downloads them.",
                     Commands = new[] { "iucn api cache-infraranks --from-csv", "iucn api cache-assessments" },
                     Probe = FlowStepProbes.IucnApiInfraranks,
                     InputSourceIds = new[] { "iucn-api-cache", "iucn-main" },
@@ -218,7 +218,7 @@ public static class FlowCatalogue {
                     Optional = true,
                     Section = FlowSection.StepByStep,
                     Group = "From the IUCN API",
-                    Note = "Needs the CSV import (iucn-main). --from-csv unions the CSV's infraspecific taxonIds with the API discovery; the superset is filtered the same way (skips already-cached + 404-tombstoned). This is the only way to reach orphan subspecies of unassessed species. Supersedes the cached-API-sourced step, so you can run just this one if you want full coverage.",
+                    Note = "Run this step instead of \"Add subspecies & varieties of cached species\" once \"Import the IUCN CSV release\" is done. `iucn api cache-all --full` runs the same command, cache-infraranks --from-csv. Re-running skips subspecies and varieties already cached, and those the API answered \"not found\" (HTTP 404) for.",
                 },
                 new FlowStep {
                     Id = "api-project-view",
@@ -268,7 +268,7 @@ public static class FlowCatalogue {
         new FlowDefinition {
             Id = "col-update",
             Title = "Update Catalogue of Life",
-            Description = "Bring in a new Catalogue of Life (CoL) release and refresh everything that reads it: the common-name hub, the Red List audit site, Wikidata/Wikipedia synonym discovery, and the Wikipedia lists' sub-rank grouping. The flow can't change paths.ini for you, so one step is a manual config edit + serve restart. CoL is taxonomy enrichment, not a hard dependency — most consumers keep working without it, but their generated output stays frozen on the previous release until you re-run the step that produces it.",
+            Description = "Import a new Catalogue of Life (CoL) release, then rebuild the outputs that use CoL data: the common-name hub, the Red List audit site and the Wikipedia lists. Optional steps also search Wikidata and Wikipedia, using the new release's synonyms, for IUCN taxa that have no Wikidata item or Wikipedia article. One step is done by hand: edit paths.ini to point at the new CoL database, then restart serve. Each output is based on the previous CoL release until the step that builds it is run again.",
             Steps = new[] {
                 // ===== 1 · Import & repoint =====
                 new FlowStep {
@@ -280,7 +280,7 @@ public static class FlowCatalogue {
                     OutputSourceIds = new[] { "col-sqlite" },
                     Group = "1 · Import & repoint",
                     Probe = FlowStepProbes.ColImport,
-                    Note = "Reads the ColDP zip(s) from Datasets:COL_dir and builds col_coldp_<label>.sqlite, where <label> is the alias inside the zip's metadata.yaml (e.g. \"COL26.5 XR\" -> col_coldp_COL26.5_XR.sqlite) — NOT the zip filename. A new release gets a new filename, so it imports ALONGSIDE the old DB (the old one is left on disk; remove it in Maintenance below). Listed as Destructive only because --force wipes and rebuilds; without --force a finished DB is skipped and a half-written/corrupt one is rebuilt. The import is multi-GB and slow. It downloads datapackage.json from the CoL API once, only if the input folder doesn't already contain one (a provenance snapshot that is never parsed).",
+                    Note = "`col import` builds col_coldp_<label>.sqlite for each ColDP zip in Datasets:COL_dir, where <label> is the release alias from the zip's metadata.yaml with spaces replaced by underscores (alias \"COL26.5 XR\" gives col_coldp_COL26.5_XR.sqlite). A new release therefore gets a new database file, and the previous one stays on disk until you delete it ('Delete old CoL leftovers (manual)' under Maintenance). Each database is over 10 GB and the import takes tens of minutes. The button always asks for confirmation because --force deletes and rebuilds even a complete database; without --force, a finished database is skipped and an incomplete one is imported again.",
                 },
                 new FlowStep {
                     Id = "repoint-paths",
@@ -291,7 +291,7 @@ public static class FlowCatalogue {
                     OutputSourceIds = new[] { "col-sqlite" },
                     Group = "1 · Import & repoint",
                     Probe = FlowStepProbes.ColRepoint,
-                    Note = "The importer never edits paths.ini. Set [Datastore] COL_sqlite to the new col_coldp_<label>.sqlite AND [Datasets] COL_dir to the new folder — set BOTH, they can drift independently and nothing warns you if they disagree. Then RESTART serve: it loads paths.ini once into a singleton with no hot-reload, so until you restart, every page (including this flow) keeps resolving the OLD CoL file. Confirm with `show-paths` or the Data sources tab. Important: there is no CoL version/freshness check anywhere — a database from the previous release looks perfectly healthy — so confirming the dataset label in the next step is your only safeguard against silently running on the old release.",
+                    Note = "Set [Datastore] COL_sqlite to the new col_coldp_<label>.sqlite file and [Datasets] COL_dir to the folder with the new release's zip, then restart serve. serve reads paths.ini only when it starts, so until the restart the web UI still reads the old CoL database; `show-paths` on the Run command page shows the edited values straight away. After the restart, the 'Loaded:' line at the top of this page and the 'Catalogue of Life version' card on the Data sources page show the new release, and this step's status line warns if COL_sqlite and COL_dir hold different releases.",
                 },
                 new FlowStep {
                     Id = "verify-col",
@@ -302,7 +302,7 @@ public static class FlowCatalogue {
                     OutputSourceIds = new[] { "reports" },
                     Optional = true,
                     Group = "1 · Import & repoint",
-                    Note = "`col report-nameusage-fields` opens the new COL_sqlite, confirms the nameusage table is populated, and prints the dataset label + row counts — proving the repoint reached the intended release. `col report-subgenus-homonyms` is a heavier query that exercises the indexes and confirms the DB is fully queryable. (`col check` only checks that the source folder is mounted; it never opens the database, so it can't confirm the import. Also note nothing detects a half-written import — the success signal is internal — so a clean profile is reassuring but not a guarantee.)",
+                    Note = "Check the 'Database:' line in the output of `col report-nameusage-fields`: if it names the new file, COL_sqlite points at the new release, and the 'Rows in table:' line should show millions of rows. `col report-subgenus-homonyms` runs a heavier query to check that the new database answers queries; its output ends with 'Potential homonyms found:' and a count. If the import did not finish, the 'Loaded:' line at the top of this page says 'import incomplete'.",
                 },
 
                 // ===== 2 · Refresh derived data =====
@@ -320,13 +320,13 @@ public static class FlowCatalogue {
                 new FlowStep {
                     Id = "detect-conflicts",
                     Title = "Rebuild the ambiguous-name list",
-                    Description = "Work out which common names now point at more than one species, so the Wikipedia lists know not to use them on their own.",
+                    Description = "Record each English common name used for more than one species in the same kingdom. `wikipedia generate-lists` works out ambiguous names itself when it runs, so the lists do not depend on this step.",
                     Commands = new[] { "common-names detect-conflicts", "common-names detect-conflicts --clear-existing" },
                     InputSourceIds = new[] { "common-names" },
                     OutputSourceIds = new[] { "common-names" },
                     Group = "2 · Refresh derived data",
                     Probe = FlowStepProbes.CommonNameConflicts,
-                    Note = "Run this after the re-aggregate above: a name shared by two species is only found by comparing the names now in the hub, and aggregating does not redo that comparison. `--replace` empties the list first, so after the second aggregate button the plain command rebuilds it. After a plain aggregate, use `--clear-existing` (the second button) instead: without it, old rows stay behind for pairs that are no longer ambiguous. Wikipedia list generation reads the result: it passes over an ambiguous name in favour of the taxon's next-best common name, and falls back to the scientific name when every candidate is ambiguous.",
+                    Note = "Run `common-names detect-conflicts --clear-existing` after 'Re-aggregate common names'. With --clear-existing, the command empties the ambiguous-name list, then rebuilds it from the common names now in the hub. Plain `common-names detect-conflicts` only adds entries, so after a plain `common-names aggregate` the list keeps entries for names that are no longer ambiguous. After `common-names aggregate --source col --replace`, which empties the list, both commands give the same result.",
                 },
                 new FlowStep {
                     Id = "redlist-audit",
@@ -337,7 +337,7 @@ public static class FlowCatalogue {
                     OutputSourceIds = new[] { "reports" },
                     Group = "2 · Refresh derived data",
                     Probe = FlowStepProbes.ColRebuildAudit,
-                    Note = "The audit site's CoL-crosscheck page reads CoL live, so re-running reflects the new release. It internally replicates the `iucn report-col-crosscheck` logic, so you do NOT need to run that command first. Output: <reports_dir>/redlist-audit-2026/ (open index.html). If COL_sqlite is missing or has no nameusage table the CoL page is silently skipped (exit 0) — so verify the repoint first. The rendered site records no CoL version label; it always shows whatever COL_sqlite currently points at.",
+                    Note = "`redlist audit-site` builds its 'Catalogue of Life crosscheck' pages from the CoL database that COL_sqlite points at, so run it after the repoint; `iucn report-col-crosscheck` is not needed first. The site is written to <reports_dir>/redlist-audit-2026/ (open index.html) and names the CoL release it used under 'Catalogue of Life reference'. If COL_sqlite points at a missing file or a database with no nameusage table, the site is built without those pages, the job still succeeds, and its output says 'skipped col-crosscheck'.",
                 },
                 new FlowStep {
                     Id = "iucn-crosscheck",
@@ -348,7 +348,7 @@ public static class FlowCatalogue {
                     OutputSourceIds = new[] { "reports" },
                     Optional = true,
                     Group = "2 · Refresh derived data",
-                    Note = "Produces a timestamped iucn-col-crosscheck-*.txt (presence, accepted-vs-synonym status, authority alignment, and rank-ladder alignment) whose header records the exact CoL path used. Redundant with the audit site for the web view — run it for the standalone file. Tip: glance at the authority-match counts; if the new release renamed a CoL column outside the reader's known names it is silently read as NULL, which can inflate apparent authority mismatches.",
+                    Note = "`iucn report-col-crosscheck` writes iucn-col-crosscheck-*.txt to the reports folder, one file per run. For each IUCN taxon, the file reports whether the name is in CoL, whether CoL treats the name as accepted or as a synonym, and whether the authority and the classification (kingdom to genus) match. The header gives the path of the CoL database used. A jump in authority mismatches after a CoL update can mean the release renamed the authorship column: the tool then finds no authorship column and treats every CoL authority as empty.",
                     OutputPatterns = new[] {
                         new FlowOutputPattern { Root = "reports", Pattern = "iucn-col-crosscheck-*.txt", Label = "Crosscheck report" },
                     },
@@ -365,32 +365,32 @@ public static class FlowCatalogue {
                     Optional = true,
                     Probe = FlowStepProbes.WikidataSearch,
                     Group = "3 \u00b7 Search for new matches (downloads)",
-                    Note = "`backfill-iucn` goes through the IUCN taxa that have no linked Wikidata item and searches Wikidata for each one: first its scientific name, then its IUCN and Catalogue of Life synonyms. A hit links the taxon to that item and queues the item for download; `cache-entities` then downloads the queued items and updates the name index as it goes (no separate rebuild). This step only adds links. Taxa that already have an item are not searched, and no existing match is changed or re-checked, so every match it reports is new. Taxa searched before with no result are skipped too, so a plain run covers only never-searched taxa. After a Catalogue of Life update the point is to try the new synonyms on the old no-result taxa, so add --retry-missing. Downloads from Wikidata (needs WIKIDATA_USER_AGENT in .env). Safe to skip: you only miss new matches; nothing already cached breaks. The full picture is in the Wikipedia reports pipeline.",
+                    Note = "After a Catalogue of Life update, open Options next to `wikidata backfill-iucn`, tick --retry-missing and click Run, so taxa that had no match last time are searched again with the new CoL synonyms. Without --retry-missing, `wikidata backfill-iucn` searches only taxa never searched before. Then run `wikidata cache-entities` to download the matched Wikidata items. Each match listed in the job output links a taxon that had no Wikidata item. This step downloads from Wikidata.",
                 },
                 new FlowStep {
                     Id = "wikipedia-discover",
                     Title = "Look for articles for the taxa that have none",
-                    Description = "The new release's synonyms give the matcher extra candidate article titles. Queue them, download them, then match again.",
+                    Description = "Run the three commands in order: the first queues possible article titles (now including the new CoL release's synonyms), the second downloads those pages, and the third matches taxa to the downloaded pages.",
                     Commands = new[] { "wikipedia match-taxa", "wikipedia fetch-pages --awaited-only --newest-first", "wikipedia match-taxa" },
                     InputSourceIds = new[] { "col-sqlite", "iucn-main", "wikidata-cache", "wikipedia-cache" },
                     OutputSourceIds = new[] { "wikipedia-cache" },
                     Optional = true,
                     Probe = FlowStepProbes.WikipediaFetchAwaited,
                     Group = "3 \u00b7 Search for new matches (downloads)",
-                    Note = "Match, download, match again. The first `match-taxa` makes no network calls and only queues candidate titles; `fetch-pages` downloads them, narrowed to pages a taxon is waiting on and taking the newest titles first; the second `match-taxa` settles the matches for what arrived. Taxa that already have a matched article are left alone (pass --reprocess-matched to revisit them), so this only finds articles for taxa that had none. Run the Wikidata step above first, because match-taxa also resolves through Wikidata site links. Downloads from Wikipedia.",
+                    Note = "Run 'Search Wikidata for the taxa still without an item' first, because `wikipedia match-taxa` also finds article titles through Wikidata sitelinks. The first `wikipedia match-taxa` matches taxa to pages already downloaded and queues other possible article titles. `wikipedia fetch-pages --awaited-only --newest-first` downloads the queued titles that could be the article of a taxon with no article yet. The second `wikipedia match-taxa` records each match, or that the taxon has no article. Taxa that already have a matched article are skipped unless you add --reprocess-matched.",
                 },
 
                 // ===== 4 · Regenerate outputs =====
                 new FlowStep {
                     Id = "generate-lists",
                     Title = "Regenerate Wikipedia lists",
-                    Description = "Bake the new CoL sub-rank grouping, refreshed common names, and new article links into the wikitext lists.",
+                    Description = "Rebuild the .wikitext lists with the re-aggregated common names, the article links found in group 3, and the new CoL release's suborders, superfamilies, subfamilies, tribes and subgenera.",
                     Commands = new[] { "wikipedia generate-lists" },
                     InputSourceIds = new[] { "iucn-main", "col-sqlite", "common-names", "wikipedia-cache" },
                     OutputSourceIds = Array.Empty<string>(),
                     Group = "4 · Regenerate outputs",
                     Probe = FlowStepProbes.ColRebuildLists,
-                    Note = "Regenerate the FULL set — do NOT pass --list/--status/--taxa-group for a CoL update. CoL only changes the section grouping of lists that split on CoL-only ranks (suborder/superfamily/subfamily/tribe/subgenus), virtual groups, or auto-split; but structure-metrics.json is keyed to the IUCN release only, so a partial regenerate leaves stale CoL-grouped metrics behind (visible in `wikipedia preview-impact`). Run the common-names and discovery steps first so new vernaculars and article links are included. The first run is slower: the new CoL enrich-cache sidecar (col_coldp_<label>.sqlite.enrich-cache.sqlite, created next to the CoL DB) starts empty and rebuilds once. Charts (`wikipedia generate-charts`) don't read CoL — skip them for a CoL-only update.",
+                    Note = "Run 'Re-aggregate common names' and the steps under '3 · Search for new matches (downloads)' first, so the lists get the new common names and article links. Then run `wikipedia generate-lists` for every list, without --list, --status or --taxa-group: this step's status line checks only the newest .wikitext file, so it shows done even when some lists still use the previous CoL release. The first run after a CoL update is slower while it builds a new cache file beside the CoL database. `wikipedia generate-charts` does not use CoL, so charts need no re-run.",
                     OutputPatterns = new[] {
                         new FlowOutputPattern { Root = "wikipedia-output", Pattern = "*.wikitext", Label = "Lists" },
                     },
@@ -405,7 +405,7 @@ public static class FlowCatalogue {
                     InputSourceIds = new[] { "iucn-main", "wikidata-cache" },
                     Optional = true,
                     Section = FlowSection.Maintenance,
-                    Note = "Reads CoL live, so it always reflects the current COL_sqlite. Run after the discovery steps to confirm the new release improved coverage. No downloads.",
+                    Note = "`wikidata report-coverage` counts the IUCN taxa matched to a cached Wikidata item, by match method: P627, scientific name, or synonym (IUCN synonyms and the CoL synonyms in the database that COL_sqlite points at). To see what the new CoL release added, run it before and after the group 3 search steps and compare the counts. This step downloads nothing.",
                 },
                 new FlowStep {
                     Id = "cleanup-orphans",
@@ -434,9 +434,9 @@ public static class FlowCatalogue {
                 new FlowResource { Label = "Red List audit site", Root = "reports", Path = "redlist-audit-2026", Kind = "directory",
                     Description = "The rebuilt static audit site (open index.html); its CoL-crosscheck page reflects the new release." },
                 new FlowResource { Label = "Wikipedia lists", Root = "wikipedia-output", Path = "", Kind = "directory",
-                    Description = "Regenerated wikitext lists with the new CoL sub-rank grouping." },
+                    Description = ".wikitext list files from `wikipedia generate-lists`. After 'Regenerate Wikipedia lists', sections by suborder, superfamily, subfamily, tribe or subgenus use the new CoL release." },
                 new FlowResource { Label = "Reports output", Root = "reports", Path = "", Kind = "directory",
-                    Description = "Crosscheck and CoL profile reports land here as text/CSV." },
+                    Description = "Text files from `iucn report-col-crosscheck` and `col report-nameusage-fields`." },
             },
         },
 
@@ -446,7 +446,7 @@ public static class FlowCatalogue {
         new FlowDefinition {
             Id = "wiki-reports",
             Title = "Wikipedia reports pipeline",
-            Description = "Import the source data, press Update, then generate. The Update step runs every Wikidata and Wikipedia cache command in priority order, skips what is already done, and can be stopped and re-run at any time without losing work. The same commands are also available one at a time under \"Step by step\". Re-downloading copies you already have is the lowest priority and sits under Maintenance.",
+            Description = "Import the source data (group 1), run `wikipedia update` (group 2), build the common names (group 3), then generate the Wikipedia lists and charts (group 4). `wikipedia update` runs the Wikidata and Wikipedia download, search, queue and match commands in priority order, skipping any step with nothing to do, and can be stopped and re-run at any time without losing finished work. To run its commands one at a time, open \"Step by step\"; the lowest-priority work, \"Re-download old copies\", is in \"Maintenance\".",
             Steps = new[] {
                 // -------- Pipeline (core path) --------
                 new FlowStep {
@@ -458,8 +458,7 @@ public static class FlowCatalogue {
                     OutputSourceIds = new[] { "iucn-main" },
                     Probe = FlowStepProbes.IucnCsvImport,
                     Group = "1 \u00b7 Source data",
-                    Note = "The starting point of this pipeline — see the dedicated \"Import IUCN data\" workflow (first tab) for the full picture: the CSV route shown here, the IUCN API route (--dataset api), and comparing the two. " +
-                           "A new IUCN release belongs in a fresh database file (IUCN_<version>.sqlite) — importing into an existing DB double-counts.",
+                    Note = "Each IUCN release goes in its own database file, IUCN_<version>.sqlite. When the database in paths.ini holds a different release, `iucn import` creates the new file beside it and prints the paths.ini line to change; restart serve after changing it. The \"Import IUCN data\" workflow (first tab) covers the import in more detail, and the IUCN API route.",
                 },
                 new FlowStep {
                     Id = "col-import",
@@ -475,25 +474,25 @@ public static class FlowCatalogue {
                 new FlowStep {
                     Id = "wiki-update",
                     Title = "Update the Wikidata and Wikipedia caches",
-                    Description = "One command for the whole ladder: sweep Wikidata, download items, search for the taxa the sweep missed, queue and match Wikipedia titles, and download the pages taxa are waiting on. Steps with nothing to do are skipped.",
+                    Description = "`wikipedia update` finds Wikidata items with P627 or P141, downloads them, searches Wikidata for taxa still without an item, queues Wikipedia titles, matches taxa to articles, downloads the candidate pages of taxa with no matched article, and matches those taxa again. It skips steps with nothing to do.",
                     Commands = new[] { "wikipedia update", "wikipedia update --status", "wikipedia update --include-rest" },
                     InputSourceIds = new[] { "iucn-main" },
                     OutputSourceIds = new[] { "wikidata-cache", "wikipedia-cache" },
                     Probe = FlowStepProbes.WikiUpdateAll,
                     Group = "2 · Update the caches",
-                    Note = "Safe to run whenever: every step only adds what is missing, so nothing is redone and stopping midway loses nothing — the next run continues from wherever this one got to. Downloads are capped at 2,000 per step per run so a run has a foreseeable end; run it again (or raise --limit) to keep going. --status (the second button) prints the same step-by-step plan and counts without downloading anything, which is the quickest answer to \"where am I up to?\". --include-rest (the third) also retries failed downloads and works the low-priority queue of higher taxa, synonyms and redirects. To run or tune one piece on its own, open \"Step by step\" below — the Update command runs exactly those steps in that order.",
+                    Note = "Re-running is safe: finished downloads are kept, and the next run continues where the last one stopped. The first button, `wikipedia update`, has no download cap unless you set --limit <N> under Options; --until-done repeats the steps until nothing is left or a round makes no progress. The second, `wikipedia update --status`, shows what each step would do and downloads nothing. The third, `wikipedia update --include-rest`, also retries failed downloads and downloads the low-priority titles (higher taxa, synonyms and redirect targets). \"Step by step\" has the same steps as separate commands.",
                 },
                 new FlowStep {
                     Id = "wikidata-seed",
                     Title = "Find Wikidata items for IUCN taxa",
-                    Description = "One sweep of Wikidata for every item that carries an IUCN Red List id, adding each to the download queue. Downloads no entity data itself.",
+                    Description = "Add every Wikidata item with P627 (IUCN taxon ID) or P141 (IUCN conservation status) to the Wikidata download queue. The next step, \"Download the queued Wikidata items\", downloads the item data.",
                     Commands = new[] { "wikidata seed-taxa", "wikidata cache-all" },
                     InputSourceIds = new[] { "iucn-main" },
                     OutputSourceIds = new[] { "wikidata-cache" },
                     Probe = FlowStepProbes.WikidataSweep,
                     Section = FlowSection.StepByStep,
                     Group = "Wikidata",
-                    Note = "The cheap way to find items: one query returns everything Wikidata already tags with an IUCN id, instead of searching for taxa one at a time. It queues ids and stops there; the next step downloads them. Safe to re-run, and it continues from where the last sweep stopped, so it only adds ids it has not seen. It never goes back over items it has already passed, which means an item that gained an IUCN id since your last sweep is only picked up by starting the sweep again with --reset-cursor (see Re-download old copies, under Maintenance). `wikidata cache-all` runs this sweep and the download step below as one job. Needs WIKIDATA_USER_AGENT in .env.",
+                    Note = "The first button, `wikidata seed-taxa`, reads the Wikidata items with P627 or P141 in Q-number order and queues the ones not yet cached. It is much faster than the one-taxon-at-a-time search in \"Search for the taxa still without an item\". Each run continues from where the last one stopped, so it misses items that gained P627 or P141 after the sweep passed their Q-number; `wikidata seed-taxa --reset-cursor` (under \"Re-download old copies\" in Maintenance) starts again from the first Q-number. The second button, `wikidata cache-all`, runs the sweep and then downloads the queue.",
                 },
                 new FlowStep {
                     Id = "wikidata-download",
@@ -505,7 +504,7 @@ public static class FlowCatalogue {
                     Probe = FlowStepProbes.WikidataDownload,
                     Section = FlowSection.StepByStep,
                     Group = "Wikidata",
-                    Note = "Adds only: an item already downloaded is skipped, so stopping and re-running loses nothing. The name index the Wikipedia matcher reads is built during the download, so there is no separate rebuild step to run. --failed-only retries just the failures; --refresh-only with --max-age-hours re-downloads old copies without pulling in anything never downloaded.",
+                    Note = "Re-running is safe: items already downloaded are skipped. As it downloads each item, `wikidata cache-entities` adds the item's scientific names to the name index and extracts its P141 statements, so \"Rebuild Wikidata lookup indexes\" (Maintenance) is normally not needed. --failed-only retries only failed downloads; --refresh-only with --max-age-hours <N> re-downloads items older than N hours and leaves never-downloaded items in the queue.",
                 },
                 new FlowStep {
                     Id = "wikidata-search",
@@ -518,7 +517,7 @@ public static class FlowCatalogue {
                     Probe = FlowStepProbes.WikidataSearch,
                     Section = FlowSection.StepByStep,
                     Group = "Wikidata",
-                    Note = "Much slower than the sweep because it searches one taxon at a time, so run it after the sweep rather than instead of it. It only adds links: taxa that already have an item are not searched again, and no existing match is changed, so every match it reports is new. Taxa searched before with no match are skipped, so a run after a new release spends its time on taxa never searched; --retry-missing searches for those again, and --retry-missing-after <DAYS> only for the ones searched longest ago. Synonyms come from the IUCN API cache and Catalogue of Life, so importing those first finds more matches. Ids it finds are queued, not downloaded, so run the download step after it.",
+                    Note = "This search checks one taxon at a time, so it is much slower than \"Find Wikidata items for IUCN taxa\"; run that step first. It searches only taxa with no linked Wikidata item, by scientific name and then by synonyms from the IUCN API cache and the Catalogue of Life database, so every match it reports is a new link. Taxa searched before without a match are skipped: --retry-missing searches them again (worth doing after a Catalogue of Life update adds synonyms), and --retry-missing-after <DAYS> only those last searched more than DAYS days ago. Items found go into the download queue; the second button, `wikidata cache-entities`, downloads them.",
                 },
                 new FlowStep {
                     Id = "wikipedia-queue",
@@ -560,7 +559,7 @@ public static class FlowCatalogue {
                 new FlowStep {
                     Id = "wikipedia-fetch-awaited",
                     Title = "Download the pages taxa are waiting on",
-                    Description = "Fetch the queued pages that an IUCN taxon has no article without, newest titles first.",
+                    Description = "Download the queued Wikipedia pages for every candidate title of each IUCN taxon with no matched article yet. The most recently queued titles are downloaded first.",
                     Commands = new[] { "wikipedia fetch-pages --awaited-only --newest-first", "wikipedia match-taxa" },
                     InputSourceIds = new[] { "wikipedia-cache" },
                     OutputSourceIds = new[] { "wikipedia-cache" },
@@ -580,7 +579,7 @@ public static class FlowCatalogue {
                     Probe = FlowStepProbes.WikipediaFetchRest,
                     Section = FlowSection.StepByStep,
                     Group = "Wikipedia",
-                    Note = "The lists do not need these pages, but they improve redirect and synonym resolution for the taxa that do. There can be hundreds of thousands of them, so this is a job of days: use --limit to work through it in sessions. It downloads only what is missing, so stopping and re-running continues where it stopped. Run \"Remove titles that cannot be articles\" under Maintenance first: in August 2026, 38% of the queue was titles carrying an authority, which no article has. With the all-titles dump imported (the \"Import the all-titles dump\" step), --exists-first (the second button) downloads the titles that exist before spending API calls on likely redlinks.",
+                    Note = "The titles left in the Wikipedia titles queue after \"Download the pages taxa are waiting on\" are higher taxa, synonyms and redirect targets. They help resolve redirects and synonyms, but the lists do not need them. There can be hundreds of thousands, which take days to download, so use --limit <N> to spread the work over several sessions; each run continues where the last one stopped. With the all-titles dump imported, the second button, `wikipedia fetch-pages --exists-first`, downloads titles that exist on Wikipedia first and likely redlinks last. If you run this step's buttons directly, run \"Remove titles that cannot be articles\" (Maintenance) first; `wikipedia update` does that itself.",
                 },
                 new FlowStep {
                     Id = "common-names",
@@ -590,18 +589,18 @@ public static class FlowCatalogue {
                     InputSourceIds = new[] { "iucn-main", "wikidata-cache", "wikipedia-cache", "col-sqlite" },
                     OutputSourceIds = new[] { "common-names" },
                     Group = "3 \u00b7 Common names",
-                    Note = "`init` seeds the store's species from IUCN and rules/caps.txt; `aggregate` then reads the IUCN, Wikidata, Wikipedia and Catalogue of Life caches and fills in the names. Both are safe to re-run and download nothing. Re-running only adds and updates, so a name a source has since dropped or renamed stays in the store. After a cache has been refreshed or rebuilt, re-import that one source from scratch instead: `common-names aggregate --source wikidata --replace` (or wikipedia, col, iucn), which clears what that source contributed before importing it again and leaves the others alone. `common-names sources` lists when each source was last aggregated and last replaced.",
+                    Note = "`common-names init` (first button) adds every taxon in the IUCN Red List database to the common names store and imports the capitalization rules from rules/caps.txt. `common-names aggregate` (second button) then reads common names from the IUCN API cache, the Wikidata cache, the Wikipedia cache and the Catalogue of Life database. Neither command downloads anything. A re-run adds and updates names but never removes one; after a source's cache or database is refreshed, `common-names aggregate --source wikidata --replace` (or wikipedia, col or iucn) replaces that source's names and deletes every recorded ambiguous name, so run \"Find ambiguous common names\" afterwards. `common-names sources` lists when each source was last aggregated and replaced.",
                 },
                 new FlowStep {
                     Id = "detect-conflicts",
                     Title = "Find ambiguous common names",
-                    Description = "Work out which common names point at more than one species, so the lists know not to use them on their own.",
+                    Description = "Find English common names used for more than one valid taxon in the same kingdom, and record them in the common names store.",
                     Commands = new[] { "common-names detect-conflicts", "common-names detect-conflicts --clear-existing" },
                     InputSourceIds = new[] { "common-names" },
                     OutputSourceIds = new[] { "common-names" },
                     Probe = FlowStepProbes.CommonNameConflicts,
                     Group = "3 \u00b7 Common names",
-                    Note = "Run after aggregating: a name shared by two species is only found by comparing the names now in the hub, and aggregating does not redo that comparison. Generation reads the result: it passes over an ambiguous name in favour of the taxon's next-best common name, and falls back to the scientific name when every candidate is ambiguous. Use `--clear-existing` (the second button) to rebuild the list from scratch; without it, old rows stay behind for pairs that are no longer ambiguous.",
+                    Note = "Run this step after \"Aggregate common names\": aggregating can add ambiguous names, and --replace deletes the recorded ones. The recorded names are counted in this step's status and as \"conflicts\" for the Common names store on the Data sources page. `wikipedia generate-lists` works out ambiguous names itself: it uses the taxon's next-best common name, or its scientific name when every common name is ambiguous. Without --clear-existing (second button), a name recorded in an earlier run stays recorded even if it is no longer ambiguous.",
                 },
                 new FlowStep {
                     Id = "refresh-caps",
@@ -634,7 +633,7 @@ public static class FlowCatalogue {
                 new FlowStep {
                     Id = "wiki-retry-failed",
                     Title = "Retry failed downloads",
-                    Description = "Try the Wikipedia pages and Wikidata items that failed to download again.",
+                    Description = "Try again to download the Wikipedia pages and Wikidata items whose last download failed.",
                     Commands = new[] { "wikipedia fetch-pages --failed-only", "wikidata cache-entities --failed-only" },
                     InputSourceIds = new[] { "wikipedia-cache", "wikidata-cache" },
                     OutputSourceIds = new[] { "wikipedia-cache", "wikidata-cache" },
@@ -645,18 +644,18 @@ public static class FlowCatalogue {
                 new FlowStep {
                     Id = "wikipedia-prune-queue",
                     Title = "Remove titles that cannot be articles",
-                    Description = "Take the queued titles that carry a taxonomic authority or a nomenclatural note out of the queue. No Wikipedia article is titled that way.",
+                    Description = "Remove queued Wikipedia titles that include a taxonomic authority or a nomenclatural note, such as `Eumeces schneideri (Daudin, 1802) [orth. error]`. No Wikipedia article has a title like that.",
                     Commands = new[] { "wikipedia prune-queue", "wikipedia prune-queue --apply" },
                     InputSourceIds = new[] { "wikipedia-cache" },
                     OutputSourceIds = new[] { "wikipedia-cache" },
                     Optional = true,
                     Section = FlowSection.Maintenance,
-                    Note = "IUCN stores a synonym complete with its authority and any note, for example `Eumeces schneideri (Daudin, 1802) [orth. error]`, and earlier runs queued those strings as article titles. In the 2026-1 cache in August 2026 that was 73,144 of the 190,212 titles waiting to be downloaded, and not one of them can exist. The matcher no longer makes them, so this is a one-off tidy of what is already queued. The first button reports what it would remove and changes nothing; the second removes them. Cached pages and settled matches are left alone, and a taxon that was waiting on a removed title is picked up again by the next `wikipedia match-taxa` run.",
+                    Note = "`wikipedia update` already runs `wikipedia prune-queue --apply` before it matches taxa to articles. Run this step on its own before running `wikipedia fetch-pages` directly: the first button reports how many titles it would remove, with examples, and the second removes them. Older versions of `wikipedia match-taxa` queued IUCN synonyms with the authority and note attached (73,144 of 190,212 queued titles in August 2026). Downloaded pages and existing matches are unchanged, and the next `wikipedia match-taxa` run tries again for any taxon that was waiting on a removed title.",
                 },
                 new FlowStep {
                     Id = "wiki-refresh",
                     Title = "Re-download old copies",
-                    Description = "Update pages and items downloaded a long time ago. The lowest-priority work here: nothing is missing without it.",
+                    Description = "Re-download Wikipedia pages and Wikidata items that were downloaded long ago. This is the lowest-priority step: lists can be generated from the old copies.",
                     Commands = new[] {
                         "wikipedia fetch-pages --refresh-only --refresh-days 365",
                         "wikidata cache-entities --refresh-only --max-age-hours 8760",
@@ -667,7 +666,7 @@ public static class FlowCatalogue {
                     Optional = true,
                     Section = FlowSection.Maintenance,
                     Probe = FlowStepProbes.WikiRefresh,
-                    Note = "These already have a cached copy, and both caches are large enough that refreshing everything takes days, so leave this until the steps above are done. --refresh-only re-downloads cached copies and leaves the never-downloaded queue alone; without it, a refresh turns into a fetch of the whole queue as well. `seed-taxa --reset-cursor` starts the Wikidata sweep from the beginning, which is the only way to pick up items that gained an IUCN id after your last sweep. Adjust the day and hour thresholds on the buttons to suit how old is too old.",
+                    Note = "Re-downloading every cached Wikipedia page and Wikidata item takes days, so run this step only when `wikipedia update --include-rest` has nothing left to do. The first two buttons re-download only cached copies older than the age in their options (--refresh-days, --max-age-hours); --refresh-only keeps them from also downloading queued titles and items that were never downloaded. The third button, `wikidata seed-taxa --reset-cursor`, restarts the sweep in \"Find Wikidata items for IUCN taxa\" from the first Q-number, to find items that gained P627 or P141 after the sweep had passed them.",
                 },
                 new FlowStep {
                     Id = "wikidata-rebuild-indexes",
@@ -677,7 +676,7 @@ public static class FlowCatalogue {
                     InputSourceIds = new[] { "wikidata-cache" },
                     OutputSourceIds = new[] { "wikidata-cache" },
                     Section = FlowSection.Maintenance,
-                    Note = "--force drops and rebuilds; --include-p141 also rebuilds the P141 statement cache.",
+                    Note = "Without --force, `wikidata rebuild-indexes` adds missing entries to the name index; with --force, it deletes the name index and rebuilds it from the downloaded items. --include-p141 also extracts P141 statements and their references, but only if none have been extracted yet; `wikidata cache-entities` already extracts them as it downloads, so on most caches --include-p141 needs --force, which re-extracts them all.",
                 },
                 new FlowStep {
                     Id = "wikidata-reset",
@@ -723,7 +722,7 @@ public static class FlowCatalogue {
                     Commands = new[] { "sprat import" },
                     InputSourceIds = new[] { "sprat-input" },
                     OutputSourceIds = new[] { "sprat-sqlite" },
-                    Note = "The CSV is downloaded manually from environment.gov.au/sprat-public (Select All for every field). A completed database is skipped unless --force; after a fresh download, point Datasets:SPRAT_csv at it and re-run.",
+                    Note = "Download the SPRAT report CSV by hand from environment.gov.au/sprat-public (choose Select All for every field) and set Datasets:SPRAT_csv in paths.ini to its path. `sprat import` skips a database that already holds a finished import; to import a new report, tick --force under Options, which rebuilds the SPRAT (EPBC) database from the new CSV.",
                 },
                 new FlowStep {
                     Id = "sprat-generate",
@@ -732,7 +731,7 @@ public static class FlowCatalogue {
                     Commands = new[] { "sprat generate-lists" },
                     InputSourceIds = new[] { "sprat-sqlite", "common-names", "wikipedia-cache" },
                     OutputSourceIds = Array.Empty<string>(),
-                    Note = "SPRAT is the data source — no IUCN import required. The common-names hub and Wikipedia cache are optional: when present they supply real Wikipedia article links and conventionally-cased common names; otherwise SPRAT's own vernaculars are used. Output lands in the wikipedia output dir's australia/ subfolder.",
+                    Note = "Only the SPRAT (EPBC) database is required. With the Common names store, entries use the store's common names, capitalized by the rules in rules/caps.txt, and link to the taxon's Wikipedia article when the store has its title; other entries link to the scientific name, which may be a redlink. With the IUCN Red List database, each taxon found in it gets an {{IUCN status}} template that cites its Global assessment; other taxa show only the IUCN category listed in SPRAT. The lists are written to australia/ inside Datastore:wikipedia_output_dir.",
                 },
             },
             Outputs = new[] {
@@ -780,7 +779,7 @@ public static class FlowCatalogue {
                     OutputSourceIds = new[] { "wikidata-cache" },
                     Probe = WikidataIucnProbes.ItemsFresh,
                     Group = "1 · Local data",
-                    Note = "The count under the title comes from the last dry run, the only step that reads every linked item, so this light stays blank until a dry run has been done. An edit is sent with the revision it was planned on, and Wikidata refuses it if the item has changed since.",
+                    Note = "Only the dry run (3 · Dry run) reads every linked item, so this step's status line comes from the last dry run and stays empty until the first one. Each edit is sent with the item revision it was planned on, and Wikidata refuses the edit if the item has changed since.",
                 },
                 new FlowStep {
                     Id = "wikidata-assessment-items",
@@ -834,7 +833,7 @@ public static class FlowCatalogue {
                 new FlowStep {
                     Id = "wikidata-assessment-id-property",
                     Title = "Propose a property for the IUCN assessment id (manual)",
-                    Description = "Wikidata has a property for the IUCN taxon id (P627) but none for the assessment id. Until there is one, the release reference carries the assessment page URL (P854), which contains the id.",
+                    Description = "Wikidata has a property for the IUCN taxon id (P627) but none for the assessment id. Until there is one, each planned P141 statement cites the release with a reference that also gives the assessment page URL as reference URL (P854), and that URL contains the assessment id.",
                     Optional = true,
                     Group = "2 · On Wikidata, by hand",
                 },
@@ -869,7 +868,7 @@ public static class FlowCatalogue {
                     Title = "Request bot approval (manual)",
                     Description = "Open a request on Wikidata:Requests for permissions/Bot before any test edits.",
                     Group = "4 · Editing (not built yet)",
-                    Note = "Raise IUCN's terms of use in the request: whether they allow the data under Wikidata's CC0 has been asked since 2013 and never settled.",
+                    Note = "Raise the IUCN Red List terms of use in the bot request. It has been an open question since 2013 whether those terms allow Red List data to be added to Wikidata under CC0.",
                 },
             },
             Outputs = new[] {
@@ -885,7 +884,7 @@ public static class FlowCatalogue {
         new FlowDefinition {
             Id = "wiki-quality",
             Title = "Wikipedia / Wikidata quality",
-            Description = "Reports that surface coverage gaps, stale matches, and sitelink mismatches across the Wikipedia and Wikidata caches.",
+            Description = "These read-only reports show which IUCN taxa have a Wikidata item or a Wikipedia article, whether P141 statements on Wikidata match the current Red List category, and which enwiki sitelinks point to a redirect, a disambiguation page or an article about a different taxon.",
             Steps = new[] {
                 new FlowStep {
                     Id = "cache-status",
@@ -915,7 +914,7 @@ public static class FlowCatalogue {
                 new FlowStep {
                     Id = "freshness",
                     Title = "IUCN freshness in Wikidata",
-                    Description = "Compare IUCN data against the IUCN claims stored in cached Wikidata entities; surface stale rows.",
+                    Description = "Checks whether the P141 statements on items in the Wikidata cache match the current Red List category, which Red List edition (P248) and retrieved date (P813) their references cite, and how many IUCN taxa have an item with P627 and with IUCN's scientific name as its taxon name (P225).",
                     Commands = new[] { "wikidata report-iucn-freshness" },
                     InputSourceIds = new[] { "iucn-main", "wikidata-cache" },
                     OutputPatterns = new[] {
@@ -936,7 +935,7 @@ public static class FlowCatalogue {
             },
             Outputs = new[] {
                 new FlowResource { Label = "Reports output", Root = "reports", Path = "", Kind = "directory",
-                    Description = "All quality reports land here as Markdown (and sometimes CSV)." },
+                    Description = "Reports whose file names start with wikidata-. \"Inspect Wikipedia cache\" and \"Wikidata coverage summary\" write no file; their results are in the job output." },
             },
         },
 
@@ -946,26 +945,26 @@ public static class FlowCatalogue {
         new FlowDefinition {
             Id = "iucn-quality",
             Title = "IUCN data quality",
-            Description = "Reports that surface formatting inconsistencies, name changes, synonym anomalies and missing assessments in the IUCN dataset. Build the dataset first via the Import IUCN data workflow (CSV or API).",
+            Description = "These reports list errors and inconsistencies in scientific names, synonyms and narrative text fields, differences from the Catalogue of Life, taxa with no current assessment, subspecies and varieties whose species is not assessed, and failed assessment downloads. Some steps need the IUCN Red List database and others need the IUCN API cache; the \"Import IUCN data\" workflow builds both.",
             Steps = new[] {
                 new FlowStep {
                     Id = "html-consistency",
                     Title = "HTML vs plain-text consistency",
-                    Description = "Strip HTML from `_html` fields and compare against the plain-text versions for normalization drift.",
+                    Description = "Compares the narrative text fields of each assessment in assessments_with_html.csv, with the HTML markup removed, against the same fields in assessments.csv. Counts the assessments that differ in each field: rationale, habitat, threats, population, range, and use and trade.",
                     Commands = new[] { "iucn report-html-consistency" },
                     InputSourceIds = new[] { "iucn-main" },
                 },
                 new FlowStep {
                     Id = "taxonomy-consistency",
                     Title = "Taxonomy consistency",
-                    Description = "Rebuild scientific names from taxonomy components and verify field alignment.",
+                    Description = "Compares each assessment's scientific name with a name built from its genus, species, infraspecific rank and name, and subpopulation name fields. Also checks that the scientific name is the same in the assessments and taxonomy CSV files.",
                     Commands = new[] { "iucn report-taxonomy-consistency" },
                     InputSourceIds = new[] { "iucn-main" },
                 },
                 new FlowStep {
                     Id = "taxonomy-cleanup",
                     Title = "Taxonomy cleanup candidates",
-                    Description = "Identify per-record taxonomy fields needing whitespace normalisation or marker cleanup.",
+                    Description = "Lists taxonomy values to clean up: extra spaces, tabs and non-breaking spaces in name and authority fields; scientific names that differ between the assessments and taxonomy CSV files; and infraspecific names that start with \"ssp.\", \"var.\" or another rank marker.",
                     Commands = new[] { "iucn report-taxonomy-cleanup" },
                     InputSourceIds = new[] { "iucn-main" },
                 },
@@ -1003,7 +1002,7 @@ public static class FlowCatalogue {
                 new FlowStep {
                     Id = "no-latest",
                     Title = "Cached taxa without current assessment",
-                    Description = "Cached taxa whose `latest_assessment` is missing, grouped phylogenetically.",
+                    Description = "Lists taxa in the IUCN API cache with no assessment marked \"latest\", grouped by taxonomy. These taxa may have been removed from the Red List, merged into another taxon or taxonomically reclassified.",
                     Commands = new[] { "iucn api report-no-latest" },
                     InputSourceIds = new[] { "iucn-api-cache" },
                     OutputPatterns = new[] {
@@ -1014,7 +1013,7 @@ public static class FlowCatalogue {
                 new FlowStep {
                     Id = "orphan-infraranks",
                     Title = "Orphan subspecies & varieties (not API-discoverable)",
-                    Description = "Assessed subspecies/varieties whose parent species is unassessed — reachable from the API only by their CSV sis_id, so they explain the small API-vs-CSV coverage gap. Grouped by taxonomy.",
+                    Description = "Lists assessed subspecies and varieties whose species has no species-level assessment, grouped by taxonomy. `iucn api cache-infraranks --from-csv` or `iucn api cache-all --full` downloads them into the IUCN API cache by their SIS ids.",
                     Commands = new[] { "iucn report-orphan-infraranks" },
                     InputSourceIds = new[] { "iucn-main" },
                     OutputPatterns = new[] {
@@ -1025,7 +1024,7 @@ public static class FlowCatalogue {
                 new FlowStep {
                     Id = "failed-assessments",
                     Title = "Assessment downloads that keep failing",
-                    Description = "Assessment ids the IUCN API errors on and hasn't served since. Now HTTP 404 only: ids a taxon's own assessment list carries that the API says don't exist (all historical so far). Until Aug 2026 this was mostly HTTP 500 on empty-scope records; IUCN fixed the error without filling the scope in, so those now download fine and the blank scope is reported by the audit site instead.",
+                    Description = "Lists assessments whose most recent download attempt from the IUCN API failed, with the HTTP status, the number of failed attempts, and whether each is the taxon's latest assessment. HTTP 404 means the taxon's list of assessments includes the assessment, but requesting it returns \"not found\".",
                     Commands = new[] { "iucn api report-failed-assessments" },
                     InputSourceIds = new[] { "iucn-api-cache" },
                     OutputPatterns = new[] {
@@ -1038,7 +1037,7 @@ public static class FlowCatalogue {
             },
             Outputs = new[] {
                 new FlowResource { Label = "Reports output", Root = "reports", Path = "", Kind = "directory",
-                    Description = "All IUCN quality reports land here as Markdown (and sometimes CSV)." },
+                    Description = "Reports whose file names start with iucn-. \"HTML vs plain-text consistency\", \"Taxonomy consistency\" and \"Taxonomy cleanup candidates\" write no file; their results are in the job output." },
             },
         },
     };

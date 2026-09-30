@@ -166,7 +166,7 @@ public static class RulesEditorEndpoints {
             var loc = RulesPaths.Resolve(paths);
             if (loc.IsBuildOutputFallback) {
                 return Results.Json(new {
-                    error = "Refusing to apply: the source rules directory could not be located (it resolved to the build-output copy). Set [Dirs] rules_source_dir in paths.ini or BEASTIEBOT3_RULES_SOURCE.",
+                    error = "Project rules folder not found, so no files were copied. Set rules_source_dir under [Dirs] in paths.ini, or the environment variable BEASTIEBOT3_RULES_SOURCE, to the folder's full path, then restart serve.",
                 }, statusCode: 409);
             }
             var relPaths = req?.Paths ?? Array.Empty<string>();

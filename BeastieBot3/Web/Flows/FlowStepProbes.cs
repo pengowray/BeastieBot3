@@ -103,8 +103,12 @@ public static class FlowStepProbes {
         if (rest == 0 && failed == 0) {
             return new FlowProbeResult("ok", $"Caught up. {s.TaxaWithArticle:n0} taxa have an article; nothing is queued.");
         }
+        var lowPriority = new List<string>();
+        if (rest > 0) lowPriority.Add($"{rest:n0} titles queued");
+        if (s.PagesFailed > 0) lowPriority.Add($"{s.PagesFailed:n0} Wikipedia pages failed to download");
+        if (s.WikidataEntitiesFailed > 0) lowPriority.Add($"{s.WikidataEntitiesFailed:n0} Wikidata items failed to download");
         return new FlowProbeResult("ok",
-            $"Caught up on everything the lists need ({s.TaxaWithArticle:n0} taxa have an article). Low priority: {rest:n0} other titles queued, {failed:n0} failed downloads — --include-rest works through those.");
+            $"All {s.IucnTaxa:n0} IUCN species and subspecies have been checked for a Wikidata item and a Wikipedia article, and {s.TaxaWithArticle:n0} of them have an article. Low priority (wikipedia update --include-rest): {string.Join(", ", lowPriority)}.");
     }
 
     internal static FlowProbeResult WikiWikidataSweep(WikiCoverageState s) {
@@ -162,7 +166,7 @@ public static class FlowStepProbes {
         var rest = Math.Max(0, s.PagesQueued - s.PagesQueuedAwaited);
         return rest == 0
             ? new FlowProbeResult("ok", "Nothing else queued.")
-            : new FlowProbeResult("backlog", $"{rest:n0} other pages queued: higher taxa, synonyms and redirects no taxon is waiting on.");
+            : new FlowProbeResult("backlog", $"{rest:n0} titles queued: higher taxa, synonyms and redirect targets.");
     }
 
     // The all-titles dump is optional but cheap: without it every likely redlink in the queue
@@ -170,7 +174,7 @@ public static class FlowStepProbes {
     internal static FlowProbeResult WikiTitlesDump(WikiCoverageState s) {
         if (s.DumpTitles == 0) {
             return new FlowProbeResult("todo",
-                "No all-titles dump imported, so the fetch queue cannot tell likely redlinks from real pages.");
+                "No all-titles dump imported. With the dump imported, likely redlinks are downloaded last by wikipedia fetch-pages --exists-first and by the low-priority step of wikipedia update --include-rest.");
         }
         var dump = s.DumpDate is null ? "All-titles dump" : $"All-titles dump of {s.DumpDate}";
         var queued = s.PagesQueuedInDump + s.PagesQueuedNotInDump;
@@ -252,8 +256,12 @@ public static class FlowStepProbes {
                 return new FlowProbeResult("todo",
                     $"Re-import {session.DisplayLabel} is {refresh.PercentDone}% done: {refresh.TaxaRemaining:N0} taxa and {refresh.AssessmentsRemaining:N0} assessments still to re-download. Re-run to carry on; the cutoff date is remembered.");
             }
-            return new FlowProbeResult("todo",
-                $"Re-import {session.DisplayLabel}: everything is re-downloaded. One more run finishes the remaining checks and closes it.");
+            var passesLeft = new List<string>();
+            if (session.IncludeDiscovery && session.DiscoveryDoneAt is null) passesLeft.Add("the family sweep");
+            if (session.IncludeTombstones && session.TombstonesDoneAt is null) passesLeft.Add("the re-check of taxa the API previously said were gone");
+            return new FlowProbeResult("todo", passesLeft.Count == 0
+                ? $"Re-import {session.DisplayLabel} not finished. All re-downloads are done. Run this step once more to finish the re-import."
+                : $"Re-import {session.DisplayLabel} not finished. All re-downloads are done; still to run: {string.Join(" and ", passesLeft)}. Run this step again to finish the re-import.");
         }
 
         var backlog = Math.Max(0, s.BacklogOutstanding - s.ServerErrorAssessments);
@@ -264,7 +272,7 @@ public static class FlowStepProbes {
         if (s.Projection is { } p) {
             if (!p.Exists) {
                 return new FlowProbeResult("todo",
-                    $"{s.TaxaCached:N0} taxa and {s.AssessmentsCached:N0} assessments cached, but the projection --dataset api reads is not built yet.");
+                    $"{s.TaxaCached:N0} taxa and {s.AssessmentsCached:N0} assessments cached. The IUCN API projection is not built yet: run this step to build it before generating lists or charts with --dataset api.");
             }
             if (p.IsPartial) {
                 return new FlowProbeResult("todo",
@@ -272,9 +280,9 @@ public static class FlowStepProbes {
             }
         }
 
-        var age = s.OldestTaxaDownloadedAt is { } oldest ? $" · oldest fetched {IucnRefreshMath.Stamp(oldest)}" : "";
+        var age = s.OldestTaxaDownloadedAt is { } oldest ? $" · oldest taxon record downloaded {IucnRefreshMath.Stamp(oldest)}" : "";
         return new FlowProbeResult("ok",
-            $"{s.TaxaCached:N0} taxa and {s.AssessmentsCached:N0} assessments cached{age}. For a new release, start a re-import first (the step above).");
+            $"{s.TaxaCached:N0} taxa and {s.AssessmentsCached:N0} assessments cached{age}. For a new Red List release, start a re-import first (iucn api refresh-start), then run this step.");
     }
 
     // Are the release's zip files where the import will look for them?
@@ -366,7 +374,7 @@ public static class FlowStepProbes {
 
         var progress = s.RefreshProgress!;
         return new FlowProbeResult("ok",
-            $"Re-import {session.DisplayLabel} is running: everything fetched before {IucnRefreshMath.Stamp(session.CutoffUtc)}, {progress.PercentDone}% done. The steps below use this date on their own.");
+            $"Re-import {session.DisplayLabel}, {progress.PercentDone}% done: everything downloaded before {IucnRefreshMath.Stamp(session.CutoffUtc)} is to be downloaded again. Run 'Build or update the API dataset' until the re-import finishes; the cutoff date is remembered.");
     }
 
     // Species and their assessments: the two long download phases.
@@ -379,12 +387,12 @@ public static class FlowStepProbes {
             var session = refresh.Session;
             if (refresh.TaxaRemaining == 0 && refresh.AssessmentsRemaining == 0) {
                 return new FlowProbeResult("ok",
-                    $"Refresh {session.DisplayLabel}: everything re-downloaded ({s.TaxaCached:N0} taxa, {s.AssessmentsCached:N0} assessments).");
+                    $"Re-import {session.DisplayLabel}: this step is done. IUCN API cache: {s.TaxaCached:N0} taxa and {s.AssessmentsCached:N0} assessments, all downloaded after the cutoff date.");
             }
             return new FlowProbeResult("todo",
-                $"Refresh {session.DisplayLabel} is {refresh.PercentDone}% done: "
+                $"Re-import {session.DisplayLabel} is {refresh.PercentDone}% done: "
                 + $"{refresh.TaxaRemaining:N0} taxa and {refresh.AssessmentsRemaining:N0} assessments still to re-download. "
-                + "Re-run to carry on; the cutoff date is remembered.");
+                + "Run this step again to continue; the cutoff date is remembered.");
         }
 
         if (s.TaxaCached == 0) {
@@ -405,9 +413,9 @@ public static class FlowStepProbes {
 
         return session.DiscoveryDoneAt is null
             ? new FlowProbeResult("todo",
-                $"Refresh {session.DisplayLabel} includes the family sweep and it has not run yet. It runs itself as part of the next full API run.")
+                $"Family sweep not run yet for re-import {session.DisplayLabel}. Run 'Build or update the API dataset', which includes the family sweep; running this step separately is not recorded as done for the re-import.")
             : new FlowProbeResult("ok",
-                $"Refresh {session.DisplayLabel}: family sweep done {IucnRefreshMath.Stamp(session.DiscoveryDoneAt.Value)}.");
+                $"Re-import {session.DisplayLabel}: family sweep done {IucnRefreshMath.Stamp(session.DiscoveryDoneAt.Value)}.");
     }
 
     // Subspecies and varieties queue assessments of their own, so the honest signal for these
@@ -441,7 +449,7 @@ public static class FlowStepProbes {
 
         if (s.ActiveSession is { } session) {
             return new FlowProbeResult("todo",
-                $"Built {Stamp(projection.BuiltAt)} — before refresh {session.DisplayLabel} finished, so it still holds the old download. Re-build it at the end.");
+                $"Needs rebuilding after re-import {session.DisplayLabel} finishes. 'Build or update the API dataset' does the rebuild as its last phase. Built {Stamp(projection.BuiltAt)}.");
         }
 
         if (projection.IsPartial) {
@@ -484,13 +492,13 @@ public static class FlowStepProbes {
         // only once the import has run.
         if (s.Status == "update-available") {
             return new FlowProbeResult("todo",
-                $"Still reading {loaded.FileName} ({Release(loaded.Label, loaded.Issued)}). Import the newer release first, then point COL_sqlite and COL_dir at it and restart serve.");
+                $"COL_sqlite still points to {loaded.FileName} ({Release(loaded.Label, loaded.Issued)}), but the input folder (COL_dir) has a newer release that is not imported yet. Import the newer release first, then set COL_sqlite in paths.ini to the new database file and restart serve.");
         }
 
         // Both keys have to move together and nothing else notices when only one does.
         if (s.ConfigDisagrees) {
             return new FlowProbeResult("todo",
-                $"paths.ini disagrees with itself: COL_sqlite reads {loaded.FileName} ({loaded.Label}) while COL_dir holds {s.Input?.Label}. Set both to the same release and restart serve.");
+                $"paths.ini mismatch: COL_sqlite points to {loaded.FileName} (release {loaded.Label}), but the newest ColDP zip in COL_dir is release {s.Input?.Label}. Edit COL_sqlite or COL_dir so both refer to the same release, then restart serve.");
         }
 
         return new FlowProbeResult("ok",
@@ -558,7 +566,7 @@ public static class FlowStepProbes {
         return unit == 0 ? $"{bytes:N0} bytes" : $"{value:0.#} {units[unit]}";
     }
 
-    private static string Stamp(DateTime? utc) => utc is null ? "at some point" : IucnRefreshMath.Stamp(utc.Value);
+    private static string Stamp(DateTime? utc) => utc is null ? "(date unknown)" : IucnRefreshMath.Stamp(utc.Value);
 
     private static string Zips(int count) => count == 1 ? "1 zip file" : $"{count} zip files";
 }

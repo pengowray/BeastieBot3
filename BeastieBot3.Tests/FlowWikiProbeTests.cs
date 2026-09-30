@@ -261,8 +261,8 @@ public class FlowWikiProbeTests {
     public void Update_light_is_green_when_only_low_priority_work_remains() {
         var r = FlowStepProbes.WikiUpdate(State(s => { s.PagesQueued = 129_000; s.PagesFailed = 399; }));
         Assert.Equal("ok", r.Status);
-        Assert.Contains("129,000 other titles queued", r.Detail);
-        Assert.Contains("399 failed downloads", r.Detail);
+        Assert.Contains("129,000 titles queued", r.Detail);
+        Assert.Contains("399 Wikipedia pages failed to download", r.Detail);
 
         var done = FlowStepProbes.WikiUpdate(State());
         Assert.Equal("ok", done.Status);

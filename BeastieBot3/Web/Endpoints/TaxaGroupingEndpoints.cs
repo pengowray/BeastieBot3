@@ -95,13 +95,14 @@ public static class TaxaGroupingEndpoints {
                 .Select(c => c.Trim()).Where(c => c.Length > 0).ToList();
 
             var original = File.ReadAllText(draftFile);
+            var childrenHint = $"To set sub-groups by hand, open taxa-groups.yml in the Rules editor and edit the children list of group '{req.Group}'.";
             if (!TryRewriteChildrenBlock(original, req.Group!, children, out var updated, out var err))
-                return Results.BadRequest(new { error = err, hint = "Edit children: directly in the rules editor textarea instead." });
+                return Results.BadRequest(new { error = err, hint = childrenHint });
 
             // Round-trip assertion: the result must still parse AND yield exactly the requested children
             // for this group, with all other groups intact. Never write a file we can't re-read.
             if (!RoundTripOk(original, updated, req.Group!, children, out var rtErr))
-                return Results.BadRequest(new { error = rtErr, hint = "Edit children: directly in the rules editor textarea instead." });
+                return Results.BadRequest(new { error = rtErr, hint = childrenHint });
 
             File.WriteAllText(draftFile, updated);
             return Results.Json(new { group = req.Group, children, file = "taxa-groups.yml" }, JsonOpts);
@@ -122,15 +123,16 @@ public static class TaxaGroupingEndpoints {
 
             if (req.SizeBudgetMaxEntries is { } maxEntries) {
                 if (maxEntries < 0)
-                    return Results.BadRequest(new { error = "sizeBudgetMaxEntries must be >= 0" });
+                    return Results.BadRequest(new { error = "Budget must be a whole number, 0 or more." });
                 var file = Path.Combine(loc.DraftRoot, "taxa-groups.yml");
                 if (!File.Exists(file))
                     return Results.NotFound(new { error = "draft taxa-groups.yml not found" });
                 var original = File.ReadAllText(file);
+                var budgetHint = $"To set size_budget by hand, open taxa-groups.yml in the Rules editor and edit size_budget in group '{req.Group}'.";
                 if (!TryReplaceGroupKeyFlow(original, req.Group!, "size_budget", $"{{ max_entries: {maxEntries} }}", out var updated, out var err))
-                    return Results.BadRequest(new { error = err, hint = "Edit size_budget directly in the rules editor textarea instead." });
+                    return Results.BadRequest(new { error = err, hint = budgetHint });
                 if (!GroupBudgetRoundTripOk(updated, req.Group!, maxEntries, out var rtErr))
-                    return Results.BadRequest(new { error = rtErr, hint = "Edit size_budget directly in the rules editor textarea instead." });
+                    return Results.BadRequest(new { error = rtErr, hint = budgetHint });
                 File.WriteAllText(file, updated);
                 changed.Add("taxa-groups.yml");
             }
@@ -146,10 +148,12 @@ public static class TaxaGroupingEndpoints {
                 var original = File.ReadAllText(file);
                 // "default" means remove the override (fall back to the entry's explicit presets).
                 var value = split == "default" ? null : split;
+                // size_budget (above) is already written by now, so a failure here is a partial save.
+                var budgetSaved = changed.Count > 0 ? "size_budget saved to draft taxa-groups.yml. " : "";
                 if (!TrySetListCategorySplit(original, req.Group!, value, out var updated, out var err))
-                    return Results.BadRequest(new { error = err, hint = "Edit category_split directly in the rules editor textarea instead." });
+                    return Results.BadRequest(new { error = budgetSaved + err, hint = $"To set category_split by hand, open wikipedia-lists.yml in the Rules editor and add or edit the list entry for taxa_group '{req.Group}'." });
                 if (!YamlStillParses(updated, out var rtErr))
-                    return Results.BadRequest(new { error = rtErr, hint = "Edit category_split directly in the rules editor textarea instead." });
+                    return Results.BadRequest(new { error = budgetSaved + rtErr, hint = $"To set category_split by hand, open wikipedia-lists.yml in the Rules editor and edit the list entry for taxa_group '{req.Group}'." });
                 File.WriteAllText(file, updated);
                 changed.Add("wikipedia-lists.yml");
             }
@@ -229,10 +233,11 @@ public static class TaxaGroupingEndpoints {
             var groupsOriginal = File.ReadAllText(groupsFile);
             var filtersYaml = RenderFiltersYaml(filters, groupsOriginal.Contains("\r\n") ? "\r\n" : "\n");
             var block = BuildGroupBlock(groupsOriginal, key, name, req.Adjective, listingStyle, filtersYaml);
+            var addGroupHint = $"To add the group by hand, use the Rules editor: add group '{key}' to taxa-groups.yml, and a list entry for taxa_group '{key}' to wikipedia-lists.yml.";
             if (!TryAppendGroupBlock(groupsOriginal, block, out var groupsUpdated, out var gErr))
-                return Results.BadRequest(new { error = gErr, hint = "Add the group directly in the rules editor textarea instead." });
+                return Results.BadRequest(new { error = gErr, hint = addGroupHint });
             if (!NewGroupRoundTripOk(groupsUpdated, key, name, filters.Count, existing.Count + 1, out var gRt))
-                return Results.BadRequest(new { error = gRt, hint = "Add the group directly in the rules editor textarea instead." });
+                return Results.BadRequest(new { error = gRt, hint = addGroupHint });
             File.WriteAllText(groupsFile, groupsUpdated);
             var changedFiles = new List<string> { "taxa-groups.yml" };
 
@@ -247,12 +252,26 @@ public static class TaxaGroupingEndpoints {
                 }
             }
 
+            var parentKey = string.IsNullOrWhiteSpace(req.ParentGroup) ? null : req.ParentGroup!.Trim();
+            // The counts table offers a tickbox only for a group with a single-value ("is") filter at one of
+            // the Child rank options (see BuildValueToGroupMap); inherited filters map to the parent instead.
+            var rowRank = userFilters
+                .FirstOrDefault(f => f.Rank is "class" or "order" or "family" or "phylum" && !string.IsNullOrWhiteSpace(f.Value))?.Rank;
+            // Steps in the order the user does them: add to the parent's sub-groups (both routes save to the
+            // draft), then apply the draft to rules/.
+            string createdHint;
+            if (parentKey != null && rowRank != null)
+                createdHint = $"The new group is in the draft. To add '{key}' to the sub-groups of '{parentKey}', set Child rank to {rowRank}, click \"Show counts\", tick the '{key}' row and click \"Save sub-groups\". Then, to copy the draft to rules/, click \"Apply changed files to source\" in the Rules editor.";
+            else if (parentKey != null)
+                createdHint = $"The new group is in the draft. To add '{key}' to the sub-groups of '{parentKey}', open taxa-groups.yml in the Rules editor, add '{key}' to the children list of group '{parentKey}' and click \"Save draft\". Then, to copy the draft to rules/, click \"Apply changed files to source\".";
+            else
+                createdHint = "The new group is in the draft. To copy the draft to rules/, click \"Apply changed files to source\" in the Rules editor.";
+
             return Results.Json(new {
                 group = key,
                 changed = changedFiles,
                 pagePlan = split ?? string.Join(", ", presets),
-                hint = "Review the diff in the Rules editor → Apply to source. To break this out from a parent list, "
-                     + "select the parent + this rank above, Show counts, tick it, and Save sub-groups.",
+                hint = createdHint,
             }, JsonOpts);
         });
     }
@@ -371,7 +390,7 @@ public static class TaxaGroupingEndpoints {
                 .Build();
             var beforeFile = deserializer.Deserialize<TaxaGroupsFile>(original);
             var afterFile = deserializer.Deserialize<TaxaGroupsFile>(updated);
-            if (afterFile?.Groups is null) { error = "Rewritten YAML did not parse."; return false; }
+            if (afterFile?.Groups is null) { error = "Missing or empty 'groups:' in draft taxa-groups.yml; draft not changed. Fix 'groups:' in the Rules editor."; return false; }
 
             // The target group's children must equal the request.
             if (!afterFile.Groups.TryGetValue(group, out var g)) { error = $"Group '{group}' missing after rewrite."; return false; }
@@ -391,7 +410,7 @@ public static class TaxaGroupingEndpoints {
             }
             return true;
         } catch (Exception ex) {
-            error = $"Round-trip parse failed: {ex.Message}";
+            error = $"YAML error; draft taxa-groups.yml not changed. The error is from the change to the sub-groups, or was already in the draft: {ex.Message}";
             return false;
         }
     }
@@ -507,7 +526,7 @@ public static class TaxaGroupingEndpoints {
             }
             return true;
         } catch (Exception ex) {
-            error = $"Round-trip parse failed: {ex.Message}";
+            error = $"YAML error; draft taxa-groups.yml not changed. The error is from the change to size_budget, or was already in the draft: {ex.Message}";
             return false;
         }
     }
@@ -520,7 +539,7 @@ public static class TaxaGroupingEndpoints {
             deserializer.Deserialize<object>(updated);
             return true;
         } catch (Exception ex) {
-            error = $"Rewritten YAML did not parse: {ex.Message}";
+            error = $"YAML error; draft wikipedia-lists.yml not changed. The error is from the change to category_split, or was already in the draft: {ex.Message}";
             return false;
         }
     }
@@ -636,12 +655,12 @@ public static class TaxaGroupingEndpoints {
                 .WithNamingConvention(UnderscoredNamingConvention.Instance)
                 .Build();
             var file = de.Deserialize<TaxaGroupsFile>(updated);
-            if (file?.Groups is null) { error = "Rewritten YAML did not parse."; return false; }
+            if (file?.Groups is null) { error = "Missing or empty 'groups:' in draft taxa-groups.yml; draft not changed. Fix 'groups:' in the Rules editor."; return false; }
             if (file.Groups.Count != expectedGroupCount) {
                 error = $"Group count changed unexpectedly (got {file.Groups.Count}, expected {expectedGroupCount}).";
                 return false;
             }
-            if (!file.Groups.TryGetValue(key, out var g)) { error = $"New group '{key}' missing after write."; return false; }
+            if (!file.Groups.TryGetValue(key, out var g)) { error = $"Group '{key}' not added to taxa-groups.yml (cause unknown). Draft files unchanged."; return false; }
             if (!string.Equals(g.Name, expectedName, StringComparison.Ordinal)) {
                 error = $"New group name mismatch (got '{g.Name}').";
                 return false;
@@ -652,7 +671,7 @@ public static class TaxaGroupingEndpoints {
             }
             return true;
         } catch (Exception ex) {
-            error = $"Round-trip parse failed: {ex.Message}";
+            error = $"YAML error; draft files not changed. The error is from adding the new group: {ex.Message}";
             return false;
         }
     }

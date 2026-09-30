@@ -75,6 +75,10 @@
   // Counts-only page-size impact for the selected group (GET /api/lists/impact). Shows the cost of
   // combining categories vs separate pages, and which sub-pages would bust the group's size budget.
   // `candidateBudget` (optional) re-runs the verdicts against a what-if budget without saving anything.
+  // The group's own size budget from the last load without a what-if budget, keyed by group, so the
+  // heading and the "Set budget" placeholder still show it while a what-if budget is previewed.
+  const ruleBudgets = {};
+
   async function loadImpact(group, rank, candidateBudget) {
     const el = $('#grp-impact');
     if (!el) return;
@@ -83,9 +87,19 @@
       let url = `/api/lists/impact?group=${encodeURIComponent(group)}&splitRank=${encodeURIComponent(rank)}`;
       if (candidateBudget) url += `&budget=${encodeURIComponent(candidateBudget)}`;
       const d = await getJson(url);
-      el.innerHTML = renderImpact(d, rank, candidateBudget);
+      if (!candidateBudget) ruleBudgets[group] = d.budget || null;
+      const ruleBudget = candidateBudget ? ruleBudgets[group] : d.budget;
+      el.innerHTML = renderImpact(d, rank, candidateBudget, ruleBudget);
     } catch (e) {
-      el.innerHTML = `<p class="muted small">No size impact for this group — ${esc(e.message || e)}</p>`;
+      const msg = String(e.message || e);
+      // The estimate reads rules/ from the build output (ListImpactEndpoints), and "Unknown taxa group"
+      // means that copy of wikipedia-lists.yml has no list entry for the group.
+      const g = esc(group);
+      const hint = msg.includes('Unknown taxa group')
+        ? ` This estimate reads the rule files from the last <code>dotnet build</code>, and needs a list entry for '${g}' in wikipedia-lists.yml.`
+          + ` If '${g}' is new or changed in the draft, click "Apply changed files to source" in the Rules editor, then run <code>dotnet build</code> again.`
+        : '';
+      el.innerHTML = `<p class="muted small">Could not estimate list page sizes: ${esc(msg)}${hint}</p>`;
     }
   }
 
@@ -105,7 +119,7 @@
     }
     const { ok, data } = await postJson('/api/jobs', { command: 'wikipedia generate-lists', args });
     setImpactMsg(ok
-      ? `Started generate-lists --list ${listId} (job ${data.id}). Watch the "Run a command" card, then preview it under "Wikitext outputs".`
+      ? `Started generate-lists --list ${listId} from the source rules. To see the job's output, open "Jobs" and click the job. The list will be on "Wikitext outputs" when the job finishes.`
       : 'Failed to start: ' + (data.error || ''));
   }
 
@@ -144,7 +158,7 @@
     }
     const { ok, data } = await postJson('/api/jobs', { command: 'wikipedia generate-lists', args });
     setImpactMsg(ok
-      ? `Started generate-lists --taxa-group ${group} (job ${data.id}). Reads SOURCE rules, so Apply your draft first if you changed the split. Watch "Run a command", then preview under "Wikitext outputs".`
+      ? `Started generate-lists --taxa-group ${group} from the source rules. To see the job's output, open "Jobs" and click the job. To use changes saved only to the draft, apply them in the Rules editor and click "Regenerate group" again.`
       : 'Failed to start: ' + (data.error || ''));
   }
 
@@ -160,15 +174,27 @@
     if (ev.target.closest('[data-regen-group]')) { regenerateGroup(); }
   }
 
-  function renderImpact(d, rank, candidateBudget) {
+  function renderImpact(d, rank, candidateBudget, ruleBudget) {
     const num = (n) => (n || 0).toLocaleString();
     const verdict = (o) => o.overBudget == null ? ''
-      : (o.overBudget ? `<span class="feat-no">exceeds ${num(d.budget)}</span>` : `<span class="feat-yes">fits</span>`);
+      : (o.overBudget ? `<span class="feat-no">over budget</span>` : `<span class="feat-yes">within budget</span>`);
     const struct = (o) => {
       const s = o.structure;
       if (!s) return '<span class="muted">—</span>';
-      let t = `${num(s.headings)} hd · depth ${s.maxDepth}`;
-      if (s.singleItemHeadings) t += ` · ${s.singleItemHeadings}&times; single`;
+      // maxDepth is the MediaWiki heading level (== is 2, === is 3), so show the equals signs too.
+      // singleItemHeadings counts headings with exactly one bullet and no sub-headings.
+      const singles = s.singleItemHeadings || 0;
+      const depth = s.maxDepth || 0;
+      const level = `level ${depth} (${'='.repeat(depth)})`;
+      let t;
+      if (!s.headings) {
+        t = '0 headings';
+      } else if (s.headings === 1) {
+        t = `1 heading, ${level}${singles ? ', with 1 entry' : ''}`;
+      } else {
+        t = `${num(s.headings)} headings, deepest ${level}`;
+        if (singles) t += `, ${num(singles)} heading${singles === 1 ? '' : 's'} with 1 entry`;
+      }
       if (s.problems && s.problems.length) {
         t = `<span class="feat-no" title="${esc(s.problems.join('; '))}">${t}</span>`;
       }
@@ -196,8 +222,8 @@
 
     // Candidate-budget what-if (A/B): re-runs the verdicts against a trial budget without saving.
     const candNote = candidateBudget
-      ? ` <span class="feat-no">— verdicts shown at candidate ${num(candidateBudget)}</span>` : '';
-    const budgetNote = d.budget ? ` <span class="muted small">(budget ${num(d.budget)} bullets)</span>` : '';
+      ? ` <span class="muted small">· Budget check uses a what-if budget of ${num(candidateBudget)} bullets</span>` : '';
+    const budgetNote = ruleBudget ? ` <span class="muted small">(budget ${num(ruleBudget)} bullets)</span>` : '';
     const whatIf = `<div class="imp-controls">`
       + `<label>What-if budget <input id="imp-budget" type="number" min="0" step="500" `
       + `value="${candidateBudget || ''}" placeholder="${d.budget || 'e.g. 5000'}"></label>`
@@ -208,23 +234,23 @@
     // in effect; saveKnobs only writes it when the user changes it (see data-current).
     const cur = d.currentSplit || '';
     const splitOpt = (val, label) =>
-      `<option value="${val}"${val === cur ? ' selected' : ''}>${label}${val === cur ? ' — current' : ''}</option>`;
+      `<option value="${val}"${val === cur ? ' selected' : ''}>${label}${val === cur ? ' (current)' : ''}</option>`;
     const knobs = `<div class="imp-controls">`
-      + `<label>Set budget <input id="imp-knob-budget" type="number" min="0" step="500" placeholder="${d.budget || 'max_entries'}"></label>`
+      + `<label>Set budget <input id="imp-knob-budget" type="number" min="0" step="500" placeholder="${ruleBudget || 'max_entries'}"></label>`
       + `<label>Category split <select id="imp-knob-split" data-current="${esc(cur)}">`
       + (cur ? '' : `<option value="" selected>(keep current)</option>`)
-      + splitOpt('default', 'default (per-status pages)')
-      + splitOpt('separate', 'separate')
-      + splitOpt('combined-threatened', 'combined-threatened')
-      + splitOpt('merged', 'merged (threatened + extinct combined)')
-      + splitOpt('all-status', 'all-status') + `</select></label>`
-      + `<button class="ghost xsmall" data-save-knobs>Save knobs to draft</button>`
+      + splitOpt('default', 'default (no category_split; pages from presets)')
+      + splitOpt('separate', 'separate (one page per category)')
+      + splitOpt('combined-threatened', 'combined-threatened (threatened, EX, EW, NT, DD, LC pages)')
+      + splitOpt('merged', 'merged (threatened, extinct, NT, DD, LC pages)')
+      + splitOpt('all-status', 'all-status (one page for all categories)') + `</select></label>`
+      + `<button class="ghost xsmall" data-save-knobs>Save to draft</button>`
       + `<button class="ghost xsmall" data-regen-group title="Run generate-lists for this taxa group from source rules (Apply your draft first)">Regenerate group</button></div>`;
 
     return `<h4 class="grp-impact-title">Page-size impact${budgetNote}${candNote}</h4>`
-      + `<p class="muted small">Bullets = species + subspecies/varieties rendered; species = the prose headline. Counts only — nothing is generated.</p>`
+      + `<p class="muted small">Bullets: entries on the list page, including subspecies and varieties listed separately. Species: species only, the number stated in the page's lead. The size budget applies to Bullets. Global assessments only, no subpopulations.</p>`
       + `<div class="feature-table-wrap"><table class="feature-table"><thead><tr>`
-      + `<th class="wt-left">Page option</th><th>Bullets</th><th>Species</th><th>Verdict</th>`
+      + `<th class="wt-left">Page option</th><th>Bullets</th><th>Species</th><th>Budget check</th>`
       + `<th class="wt-left">Structure (last gen)</th><th></th></tr></thead>`
       + `<tbody>${opts}</tbody></table></div>${sub}`
       + whatIf + knobs
@@ -371,8 +397,13 @@
       $('#cg-msg').textContent = 'Failed: ' + (data.error || '') + (data.hint ? ' — ' + data.hint : '');
       return;
     }
-    $('#cg-msg').textContent =
-      `Created '${data.group}' → wrote ${(data.changed || []).join(', ')} (pages: ${data.pagePlan}). ${data.hint || ''}`;
+    const changedFiles = data.changed || [];
+    // The server writes taxa-groups.yml first, then adds a list entry to wikipedia-lists.yml unless one
+    // already exists or the append fails. Its hint (appended below) says the change is in the draft.
+    const created = changedFiles.includes('wikipedia-lists.yml')
+      ? `Created taxa group '${data.group}' in taxa-groups.yml and a list entry for it in wikipedia-lists.yml, with category split ${data.pagePlan}.`
+      : `Created taxa group '${data.group}' in taxa-groups.yml. The draft wikipedia-lists.yml was not changed: check that it has a list entry for '${data.group}'. Without a list entry, '${data.group}' gets no Wikipedia list pages of its own.`;
+    $('#cg-msg').textContent = `${created} ${data.hint || ''}`;
     // Reset for the next create.
     ['#cg-key', '#cg-name', '#cg-adj'].forEach((s) => { if ($(s)) $(s).value = ''; });
     $('#cg-filters').innerHTML = '';
@@ -451,7 +482,7 @@
       currentMtime = data.modified;
       $('#rules-msg').textContent = `Saved draft ${path} (${data.size} bytes).`;
     } else if (status === 409) {
-      $('#rules-msg').textContent = 'Conflict: the draft changed underneath. Reload before saving.';
+      $('#rules-msg').textContent = `Not saved: the draft copy of ${path} changed after you loaded it. Copy your edits, click "Reload", redo only your edits in the reloaded text, then click "Save draft".`;
     } else {
       $('#rules-msg').textContent = 'Save failed: ' + (data.error || status);
     }
@@ -474,7 +505,10 @@
         return;
       }
       const blocks = changed.map((f) => {
-        const diff = f.diff ? `<pre class="terminal">${esc(f.diff)}</pre>` : '<p class="muted small">(no inline diff — git unavailable)</p>';
+        const noDiff = f.status === 'draft-only'
+          ? '(new file: the whole file will be copied to source)'
+          : '(diff not available: git is not installed or returned no output)';
+        const diff = f.diff ? `<pre class="terminal">${esc(f.diff)}</pre>` : `<p class="muted small">${noDiff}</p>`;
         return `<div><strong>${esc(f.path)}</strong> <span class="muted small">[${f.status}]</span>${diff}</div>`;
       });
       $('#rules-diff-out').innerHTML = blocks.join('');
@@ -491,7 +525,11 @@
       if (!confirm(`Apply ${changed.length} changed file(s) to the source rules/ tree?\n\n${changed.join('\n')}`)) return;
       const res = await postJson('/api/rules/apply', { paths: changed });
       if (!res.ok) { $('#rules-msg').textContent = 'Apply failed: ' + (res.data.error || res.status); return; }
-      $('#rules-msg').textContent = `Applied ${res.data.applied.length} file(s) to source. Rebuild or use "Run generate-lists (from source)".`;
+      const skipped = res.data.skipped || [];
+      const skippedText = skipped.length
+        ? ` Skipped ${skipped.length}: ${skipped.map((s) => `${s.path} (${s.reason})`).join('; ')}.`
+        : '';
+      $('#rules-msg').textContent = `Applied ${res.data.applied.length} file(s) to source.${skippedText} "Run generate-lists (from source)" uses the applied files now; commands started from "Run command" or "Workflows" use them after a rebuild of the project (dotnet build).`;
     } catch (e) {
       $('#rules-msg').textContent = 'Apply failed: ' + e.message;
     }
@@ -506,7 +544,7 @@
     }
     const { ok, data } = await postJson('/api/jobs', { command: 'wikipedia generate-lists', args });
     $('#rules-msg').textContent = ok
-      ? `Started generate-lists (job ${data.id}). Watch output in the "Run a command" card.`
+      ? `Started generate-lists for every list in wikipedia-lists.yml. To see the job's output, open "Jobs" and click the job. The lists will be on "Wikitext outputs" when the job finishes.`
       : 'Failed to start: ' + (data.error || '');
   }
 

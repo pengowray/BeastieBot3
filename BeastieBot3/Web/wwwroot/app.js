@@ -10,12 +10,15 @@
 
 (function () {
   const $ = (sel) => document.querySelector(sel);
+  // The browser's network error text without a trailing full stop (Firefox ends its
+  // message with one), so it can go in the middle of a sentence.
+  const fetchErrorText = (e) => String((e && e.message) || e).replace(/\.+$/, '');
 
   // --- Settings table -------------------------------------------------
 
   $('#load-paths').addEventListener('click', async () => {
     const res = await fetch('/api/paths');
-    if (!res.ok) { alert('Failed: ' + res.status); return; }
+    if (!res.ok) { alert('Could not load paths from paths.ini: HTTP error ' + res.status + '.'); return; }
     const data = await res.json();
     $('#paths-source').textContent = data.source;
     const tbody = document.querySelector('#paths-table tbody');
@@ -197,7 +200,9 @@
 
       const status = document.createElement('span');
       status.className = 'status ' + j.status;
-      status.textContent = j.status + (j.exitCode != null ? ' (' + j.exitCode + ')' : '');
+      // A succeeded job always exits with 0, so the exit code is shown only for the others.
+      status.textContent = j.status +
+        (j.exitCode != null && j.status !== 'succeeded' ? ' (exit code ' + j.exitCode + ')' : '');
 
       right.appendChild(time);
       right.appendChild(status);
@@ -283,19 +288,25 @@
     return n.toLocaleString();
   }
 
-  // Labels whose non-zero value indicates something needs attention.
-  const ATTENTION_LABELS = new Set([
-    'backlog (pending)', 'pending download', 'pending matches',
-    'failed requests', 'missing titles', 'conflicts',
+  // Counts that turn a data source's pill amber when above 0: Wikidata items waiting to be
+  // downloaded, failed IUCN API requests, and common-name conflicts. The other counts are
+  // records that stay above 0 for good (every assessment id listed by the cached IUCN taxa,
+  // Wikidata items linked to taxa by name, titles with no Wikipedia article), so they set no pill.
+  // Keys are the metric labels from DataSourceDescriptor.cs, exactly; values are the pill text
+  // that follows the count, e.g. "3 failed requests".
+  const ATTENTION_PILL_TEXT = new Map([
+    ['pending download', 'items to download'],
+    ['failed requests', 'failed requests'],
+    ['conflicts', 'common-name conflicts'],
   ]);
 
   function statusKind(s) {
     if (!s.exists) return { cls: 'missing', text: 'missing' };
     if (s.error) return { cls: 'err', text: 'error' };
-    // Any non-zero metric in ATTENTION_LABELS surfaces a "pending" pill.
+    // The pill shows the first attention count above 0, e.g. "3 failed requests".
     for (const m of (s.metrics || [])) {
-      if (ATTENTION_LABELS.has(m.label) && m.value && m.value > 0) {
-        return { cls: 'warn', text: 'pending work' };
+      if (ATTENTION_PILL_TEXT.has(m.label) && m.value && m.value > 0) {
+        return { cls: 'warn', text: formatNumber(m.value) + ' ' + ATTENTION_PILL_TEXT.get(m.label) };
       }
       if (m.error) return { cls: 'err', text: 'error' };
     }
@@ -368,7 +379,7 @@
         } else {
           val.textContent = formatNumber(m.value);
           if (m.value === 0) val.classList.add('zero');
-          if (ATTENTION_LABELS.has(m.label) && m.value > 0) {
+          if (ATTENTION_PILL_TEXT.has(m.label) && m.value > 0) {
             val.classList.add('attention');
           }
         }
@@ -394,14 +405,14 @@
     generatedEl.textContent = 'Refreshing…';
     try {
       const res = await fetch('/api/status');
-      if (!res.ok) { generatedEl.textContent = 'Failed: ' + res.status; return; }
+      if (!res.ok) { generatedEl.textContent = 'Refresh failed: HTTP error ' + res.status; return; }
       const data = await res.json();
       const ul = $('#status-list');
       ul.innerHTML = '';
       for (const s of data.sources) ul.appendChild(renderStatusItem(s));
       generatedEl.textContent = 'Generated ' + new Date(data.generatedAt).toLocaleTimeString();
     } catch (e) {
-      generatedEl.textContent = 'Error: ' + e.message;
+      generatedEl.textContent = 'Refresh failed: ' + fetchErrorText(e) + '. Check that `serve` is running.';
     }
     // IUCN version (local-only, no live call) + dataset comparison ride along
     // with the sources refresh.
@@ -419,9 +430,9 @@
     if (refresh) body.textContent = 'Checking live IUCN API…';
     try {
       const res = await fetch('/api/iucn-version' + (refresh ? '?refresh=1' : ''));
-      if (!res.ok) { body.textContent = 'Failed: ' + res.status; return; }
+      if (!res.ok) { body.textContent = 'Could not load this card: HTTP error ' + res.status + '. Click Refresh to retry.'; return; }
       renderIucnVersion(await res.json());
-    } catch (e) { body.textContent = 'Error: ' + e.message; }
+    } catch (e) { body.textContent = 'Could not load this card: ' + fetchErrorText(e) + '. Check that `serve` is running.'; }
   }
 
   function renderIucnVersion(d) {
@@ -447,9 +458,9 @@
     if (!body) return;
     try {
       const res = await fetch('/api/dataset-compare');
-      if (!res.ok) { body.textContent = 'Failed: ' + res.status; return; }
+      if (!res.ok) { body.textContent = 'Could not load this card: HTTP error ' + res.status + '. Click Refresh to retry.'; return; }
       renderDatasetCompare(await res.json());
-    } catch (e) { body.textContent = 'Error: ' + e.message; }
+    } catch (e) { body.textContent = 'Could not load this card: ' + fetchErrorText(e) + '. Check that `serve` is running.'; }
   }
 
   function renderDatasetCompare(d) {
@@ -458,7 +469,7 @@
     const csv = d.csv || {}, api = d.api || {};
     if (!csv.exists && !api.exists) { body.textContent = 'Neither IUCN dataset is available.'; return; }
     const num = (v) => (v == null ? '—' : Number(v).toLocaleString());
-    let html = '<table class="compare-table"><thead><tr><th></th><th>CSV release</th><th>API projection</th><th></th></tr></thead><tbody>';
+    let html = '<table class="compare-table"><thead><tr><th></th><th>CSV release</th><th>API projection</th><th>API minus CSV</th></tr></thead><tbody>';
     html += '<tr><td class="ct-label">Version</td><td>' + escapeHtml(String(csv.version || '—')) +
             '</td><td>' + escapeHtml(String(api.version || (api.exists ? '—' : 'not built'))) + '</td><td></td></tr>';
     html += '<tr><td class="ct-label">Updated</td><td>' + (csv.lastModified ? formatRelative(csv.lastModified) : '—') +
@@ -467,7 +478,7 @@
     // when some taxa's latest assessment JSON wasn't downloaded before project-view ran.
     const apiCoverage = !api.exists ? '—'
       : api.partial === true
-        ? '<span class="agree warn">partial' + (api.latestNotDownloaded != null ? ' (−' + num(api.latestNotDownloaded) + ')' : '') + '</span>'
+        ? '<span class="agree warn">partial' + (api.latestNotDownloaded != null ? ' (' + num(api.latestNotDownloaded) + ' assessments not downloaded)' : '') + '</span>'
         : api.partial === false ? '<span class="agree ok">complete</span>' : '—';
     html += '<tr><td class="ct-label">Coverage</td><td>' + (csv.exists ? '<span class="agree ok">complete</span>' : '—') +
             '</td><td>' + apiCoverage + '</td><td></td></tr>';
@@ -476,7 +487,7 @@
       if (row.csv != null && row.api != null) {
         mark = row.equal
           ? '<span class="agree ok">✓</span>'
-          : '<span class="agree warn">Δ ' + (row.delta > 0 ? '+' : '') + Number(row.delta).toLocaleString() + '</span>';
+          : '<span class="agree warn">' + (row.delta > 0 ? '+' : '') + Number(row.delta).toLocaleString() + '</span>';
       }
       html += '<tr class="' + (row.category ? 'ct-cat' : 'ct-metric') + '"><td class="ct-label">' +
               escapeHtml(row.label) + '</td><td>' + num(row.csv) + '</td><td>' + num(row.api) + '</td><td>' + mark + '</td></tr>';
@@ -487,7 +498,7 @@
               '(after <code>iucn api cache-all</code>) to enable <code>--dataset api</code>.</p>';
     } else if (api.partial === true) {
       html += '<p class="small muted">API projection is <strong>partial</strong>' +
-              (api.latestNotDownloaded != null ? ' — ' + num(api.latestNotDownloaded) + ' taxa missing (latest assessment not downloaded)' : '') +
+              (api.latestNotDownloaded != null ? ' — ' + num(api.latestNotDownloaded) + ' assessments not downloaded' : '') +
               '. Run <code>iucn api cache-assessments</code> then <code>iucn api project-view</code> for full coverage.</p>';
     }
     body.innerHTML = html;
@@ -533,9 +544,9 @@
     if (refresh) body.textContent = 'Re-reading input folder…';
     try {
       const res = await fetch('/api/col-version' + (refresh ? '?refresh=1' : ''));
-      if (!res.ok) { body.textContent = 'Failed: ' + res.status; return; }
+      if (!res.ok) { body.textContent = 'Could not load this card: HTTP error ' + res.status + '. Click Refresh to retry.'; return; }
       renderColVersion(await res.json());
-    } catch (e) { body.textContent = 'Error: ' + e.message; }
+    } catch (e) { body.textContent = 'Could not load this card: ' + fetchErrorText(e) + '. Check that `serve` is running.'; }
   }
 
   const colVersionCheck = $('#col-version-check');
@@ -573,13 +584,13 @@
     try {
       const res = await fetch('/api/commands');
       if (!res.ok) {
-        $('#command-tree').textContent = 'Failed to load commands: ' + res.status;
+        $('#command-tree').textContent = 'Failed to load commands: HTTP error ' + res.status;
         return;
       }
       allCommands = await res.json();
       renderCommandTree();
     } catch (e) {
-      $('#command-tree').textContent = 'Error: ' + e.message;
+      $('#command-tree').textContent = 'Failed to load commands: ' + fetchErrorText(e) + '. Check that `serve` is running.';
     }
   }
 
@@ -634,11 +645,11 @@
   // command's `rerun` effect (served by /api/commands). Orthogonal to `kind`.
   const EFFECTS = {
     readonly:      { label: 'read-only',  cls: 'readonly',  icon: '👁', hint: 'Read-only — produces output/reports; never changes cached data.' },
-    idempotentadd: { label: 'adds new',   cls: 'add',       icon: '＋', hint: 'Safe to re-run — skips entries already present and only fetches/adds new ones.' },
-    discovers:     { label: 'discovers',  cls: 'discovers', icon: '🔍', hint: 'Discovers new entries — scans an external source for items not yet cached locally.' },
-    rebuilds:      { label: 'rebuilds',   cls: 'rebuilds',  icon: '🔁', hint: 'Rebuilds a derived artifact from data already held locally.' },
-    clearscache:   { label: 'clears cache', cls: 'fresh',   icon: '🧹', hint: 'Deletes cached payloads in place; the seed/queue is kept so the next fetch re-downloads.' },
-    freshdataset:  { label: 'fresh DB',   cls: 'fresh',     icon: '🗄', hint: 'Establishes or replaces a dataset — a new release belongs in a fresh database file.' },
+    idempotentadd: { label: 'adds new records', cls: 'add', icon: '＋', hint: 'By default, running a download command again downloads only records not yet in the cache.' },
+    discovers:     { label: 'finds new records', cls: 'discovers', icon: '🔍', hint: 'Discovers new entries — scans an external source for items not yet cached locally.' },
+    rebuilds:      { label: 'rebuilds output', cls: 'rebuilds', icon: '🔁', hint: 'Running again replaces this command\'s previous result with a new one.' },
+    clearscache:   { label: 'clears cache', cls: 'fresh',   icon: '🧹', hint: 'Deletes the downloaded copies of Wikidata items from the cache and keeps the download queue.' },
+    freshdataset:  { label: 're-import needs --force', cls: 'fresh', icon: '🗄', hint: 'Imports a downloaded release into a database file. With --force ticked, the command replaces data that is already imported.' },
   };
   function effectInfo(cmd) { return EFFECTS[cmd.rerun] || null; }
 
@@ -738,14 +749,23 @@
     form.appendChild(forceWarn);
     const updateForceWarn = () => {
       const inputs = Array.from(form.querySelectorAll('[data-field-name]'));
-      const forced = inputs.some(i => i.dataset.fieldKind === 'Flag' && i.checked && /force/i.test(i.dataset.fieldName));
-      const aged = inputs.some(i => /max-age/i.test(i.dataset.fieldName) && (i.value || '').trim() !== '');
+      // The one clears-cache command, wikidata reset-cache, uses --force only to skip its
+      // confirmation prompt, so the re-download warning would be wrong there.
+      const forced = cmd.rerun === 'clearscache' ? null
+        : inputs.find(i => i.dataset.fieldKind === 'Flag' && i.checked && /force/i.test(i.dataset.fieldName));
+      const aged = inputs.find(i => /max-age/i.test(i.dataset.fieldName) && (i.value || '').trim() !== '');
       if (forced) {
         forceWarn.hidden = false;
-        forceWarn.textContent = '⚠ --force re-downloads / recreates everything already present — redundant work unless the source data has changed.';
+        forceWarn.textContent = '⚠ ' + forced.dataset.fieldName + ' re-downloads, re-imports or rebuilds everything ' +
+          'already in the cache or database. Use it only when the source data has changed.';
       } else if (aged) {
+        const hours = aged.value.trim();
+        // Only the iucn api download commands have a fixed-date option; the Wikidata ones do not.
+        const hasRefreshBefore = inputs.some(i => i.dataset.fieldName === '--refresh-before');
         forceWarn.hidden = false;
-        forceWarn.textContent = 'ℹ --max-age-hours re-fetches entries older than the threshold (some redundant downloads).';
+        forceWarn.textContent = 'ℹ ' + aged.dataset.fieldName + ' ' + hours + ': re-downloads records cached more than ' + hours +
+          ' hours before this run, so a refresh spread over several runs downloads some records twice.' +
+          (hasRefreshBefore ? ' For a fixed cutoff date, use --refresh-before.' : '');
       } else {
         forceWarn.hidden = true;
       }
@@ -989,7 +1009,7 @@
       renderFlowTabs();
       if (allFlows.length > 0) selectFlow(allFlows[0].id);
     } catch (e) {
-      $('#flow-content').textContent = 'Error loading flows: ' + e.message;
+      $('#flow-content').textContent = 'Could not load the list of workflows. Check that `serve` is running, then reload the page. Error: ' + e.message;
     }
   }
 
@@ -1013,7 +1033,7 @@
     try {
       const res = await fetch('/api/flows/' + encodeURIComponent(id));
       if (!res.ok) {
-        $('#flow-content').textContent = 'Failed: ' + res.status;
+        $('#flow-content').textContent = 'Could not load the selected workflow (HTTP status ' + res.status + '). See the `serve` console output.';
         return;
       }
       const snap = await res.json();
@@ -1087,10 +1107,10 @@
       wrap.open = openDetails.has('stepbystep');
       const summary = document.createElement('summary');
       summary.innerHTML = '<span class="flow-maintenance-title">Step by step</span> ' +
-                          '<span class="small muted">the same work as the one-command step above, as ' + stepByStepSteps.length +
-                          ' separate steps' +
-                          (withWork > 0 ? ' — ' + withWork + ' with work left' : ' — all caught up') +
-                          '</span>';
+                          '<span class="small muted">' + stepByStepSteps.length + ' separate step' +
+                          (stepByStepSteps.length === 1 ? '' : 's') + ', ' +
+                          (withWork > 0 ? withWork : 'none') +
+                          ' marked "to do" or "more to do"</span>';
       wrap.appendChild(summary);
       const pipe = document.createElement('div');
       pipe.className = 'flow-pipeline';
@@ -1119,7 +1139,7 @@
       summary.innerHTML = '<span class="flow-maintenance-title">Maintenance</span> ' +
                           '<span class="small muted">' + maintenanceSteps.length + ' step' +
                           (maintenanceSteps.length === 1 ? '' : 's') +
-                          ' — only run when coverage drops or caches need repair</span>';
+                          ', only needed when coverage drops or a cache needs repair</span>';
       wrap.appendChild(summary);
       const pipe = document.createElement('div');
       pipe.className = 'flow-pipeline';

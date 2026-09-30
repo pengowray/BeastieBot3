@@ -173,7 +173,7 @@
     summary.className = 'dash-stat-row';
     summary.appendChild(stat(sources.length, 'sources'));
     summary.appendChild(stat(counts.ok || 0, 'ok', 'ok'));
-    if (counts.warn) summary.appendChild(stat(counts.warn, 'pending', 'warn'));
+    if (counts.warn) summary.appendChild(stat(counts.warn, 'with pending work', 'warn'));
     if (counts.err) summary.appendChild(stat(counts.err, 'error', 'err'));
     if (counts.missing) summary.appendChild(stat(counts.missing, 'missing', 'missing'));
     card.appendChild(summary);

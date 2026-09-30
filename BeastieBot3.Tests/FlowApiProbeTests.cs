@@ -75,7 +75,7 @@ public class FlowApiProbeTests {
         Assert.Equal("ok", r.Status);
         Assert.Contains("2026-06-16", r.Detail);
         Assert.Contains("50% done", r.Detail);
-        Assert.Contains("use this date on their own", r.Detail);
+        Assert.Contains("the cutoff date is remembered", r.Detail);
     }
 
     // ---- the download step ----
@@ -108,7 +108,7 @@ public class FlowApiProbeTests {
     public void RefreshWithNothingLeft_IsOk() {
         var r = FlowStepProbes.ApiTaxa(State(session: Session()))!;
         Assert.Equal("ok", r.Status);
-        Assert.Contains("everything re-downloaded", r.Detail);
+        Assert.Contains("all downloaded after the cutoff date", r.Detail);
     }
 
     // ---- the family sweep ----
@@ -180,7 +180,7 @@ public class FlowApiProbeTests {
     public void Projection_BuiltBeforeTheRefreshFinished_IsTodo() {
         var r = FlowStepProbes.ApiProjection(State(session: Session(), projection: Projection()))!;
         Assert.Equal("todo", r.Status);
-        Assert.Contains("still holds the old download", r.Detail);
+        Assert.Contains("Needs rebuilding after re-import", r.Detail);
     }
 
     // ---- the one-button light (cache-all --full) ----
