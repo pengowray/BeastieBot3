@@ -4,6 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using BeastieBot3.Configuration;
 using BeastieBot3.Infrastructure;
+using BeastieBot3.Wikidata;
 using BeastieBot3.Wikipedia;
 using Microsoft.Data.Sqlite;
 
@@ -44,8 +45,11 @@ public sealed record WikiCoverageState {
     public long WikidataEntitiesQueued { get; init; }     // seeded, JSON never downloaded
     public long WikidataEntitiesFailed { get; init; }
     public long WikidataBackfillMisses { get; init; }     // searched before, nothing found
-    /// How far the Wikidata sweep has read, as a Q-number.
-    public long WikidataSweepCursor { get; init; }
+    /// How far `wikidata seed-taxa` has read items with an IUCN taxon id (P627), as a Q-number.
+    /// 0 = not started.
+    public long WikidataSweepCursorP627 { get; init; }
+    /// How far `wikidata seed-taxa` has read items with an IUCN conservation status (P141).
+    public long WikidataSweepCursorP141 { get; init; }
     /// IUCN taxa with neither a P627 link nor a queued backfill match.
     public long TaxaWithoutWikidata { get; init; }
     /// Of those, taxa `wikidata backfill-iucn` has no verdict for yet. Counted directly rather than
@@ -211,7 +215,8 @@ public static class WikiCoverageStateReader {
                 // Written by `wikidata backfill-iucn`; absent from a cache last written before
                 // it recorded searches, where "none recorded" is the right answer anyway.
                 WikidataBackfillMisses = CountOrZero(conn, "SELECT COUNT(*) FROM wd.wikidata_backfill_misses"),
-                WikidataSweepCursor = Count(conn, "SELECT CAST(IFNULL((SELECT value FROM wd.wikidata_sync_state WHERE key = 'wikidata_taxa_cursor'), '0') AS INTEGER)"),
+                WikidataSweepCursorP627 = SweepCursor(conn, WikidataSeedProperty.IucnTaxonId),
+                WikidataSweepCursorP141 = SweepCursor(conn, WikidataSeedProperty.ConservationStatus),
                 TaxaWithoutWikidata = taxaWithoutWikidata,
                 TaxaNeverSearched = taxaNeverSearched,
 
@@ -247,6 +252,27 @@ public static class WikiCoverageStateReader {
             }
             return state with { UnavailableReason = ex.Message };
         }
+    }
+
+    // The cursor `wikidata seed-taxa` wrote before it swept one property per pass. Private in
+    // WikidataSeedCommand, so repeated here.
+    private const string LegacySweepCursorKey = "wikidata_taxa_cursor";
+
+    // Same rule as WikidataSeedCommand.ReadCursor: a pass's own cursor once it has one, otherwise
+    // the combined cursor it starts from. Reading only the combined key showed a Q-number frozen at
+    // the split, and 0 on a cache created after it.
+    private static long SweepCursor(SqliteConnection conn, WikidataSeedProperty property) {
+        var key = WikidataSeedCommand.Passes.First(p => p.Property == property).CursorKey;
+        var own = SyncCursor(conn, key);
+        return own > 0 ? own : SyncCursor(conn, LegacySweepCursorKey);
+    }
+
+    private static long SyncCursor(SqliteConnection conn, string key) {
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "SELECT value FROM wd.wikidata_sync_state WHERE key = @key";
+        cmd.Parameters.AddWithValue("@key", key);
+        cmd.CommandTimeout = 30;
+        return long.TryParse(cmd.ExecuteScalar() as string, out var n) ? n : 0;
     }
 
     private static (long Matched, long Missing, long Pending, long Rejected) CountMatchStatuses(SqliteConnection conn, string eligible) {

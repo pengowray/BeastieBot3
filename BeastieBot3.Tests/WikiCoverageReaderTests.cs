@@ -32,6 +32,8 @@ public class WikiCoverageReaderTests : IDisposable {
             CREATE TABLE wikidata_pending_iucn_matches(iucn_taxon_id TEXT);
             CREATE TABLE wikidata_backfill_misses(iucn_taxon_id TEXT PRIMARY KEY);
             CREATE TABLE wikidata_sync_state(key TEXT, value TEXT);
+            INSERT INTO wikidata_sync_state VALUES ('wikidata_taxa_cursor', '136591620'),
+                                                   ('wikidata_taxa_cursor_p627', '141278490');
             """);
         Exec("enwiki.sqlite", """
             CREATE TABLE wiki_pages(id INTEGER PRIMARY KEY, normalized_title TEXT, download_status TEXT,
@@ -75,6 +77,20 @@ public class WikiCoverageReaderTests : IDisposable {
             // Taxon 2's match row names page 2, but it also tried page 3: both are awaited.
             Assert.Equal(2, state.PagesQueuedAwaited);
         }
+    }
+
+    // seed-taxa keeps one cursor per property and falls back to the combined cursor it wrote
+    // before the split. The reader used to read only the combined one, so the step showed the
+    // Q-number from before the split for good.
+    [Fact]
+    public void SweepCursorsAreReadPerPropertyWithTheOldCursorAsFallback() {
+        var paths = new PathsService(Path.Combine(_dir, "paths.ini"), _dir);
+        WikiCoverageStateReader.Invalidate();
+        var state = WikiCoverageStateReader.ReadNow(paths);
+
+        Assert.True(state.Known);
+        Assert.Equal(141278490, state.WikidataSweepCursorP627);   // its own cursor
+        Assert.Equal(136591620, state.WikidataSweepCursorP141);   // no cursor of its own yet
     }
 
     private void Exec(string file, string sql) {
