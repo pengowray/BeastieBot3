@@ -73,7 +73,20 @@ public static class DataSourceCatalogue {
             Metrics = new[] {
                 new MetricSpec { Label = "taxa cached",         Sql = "SELECT COUNT(*) FROM taxa" },
                 new MetricSpec { Label = "assessments cached",  Sql = "SELECT COUNT(*) FROM assessments" },
-                new MetricSpec { Label = "assessments of cached taxa", Sql = "SELECT COUNT(*) FROM taxa_assessment_backlog" },
+                // Assessment ids listed by the cached taxa that are neither downloaded nor failed.
+                // taxa_assessment_backlog keeps every listed id after its download, so a bare
+                // COUNT(*) of it never drops to 0. Failed ids are left out because a 404 tombstone
+                // stays in the backlog for good and is already counted under "failed requests".
+                // Both lookups are index searches: about 0.15s on a 366k-row backlog.
+                new MetricSpec {
+                    Label = "assessments to download",
+                    Sql = """
+                        SELECT COUNT(*) FROM taxa_assessment_backlog b
+                        WHERE NOT EXISTS (SELECT 1 FROM assessments a WHERE a.assessment_id = b.assessment_id)
+                          AND NOT EXISTS (SELECT 1 FROM failed_requests f
+                                          WHERE f.endpoint = 'assessment' AND f.entity_id = CAST(b.assessment_id AS TEXT))
+                        """,
+                },
                 new MetricSpec { Label = "failed requests",     Sql = "SELECT COUNT(*) FROM failed_requests" },
             },
         },
@@ -108,7 +121,9 @@ public static class DataSourceCatalogue {
             ResolvePath = p => p.GetWikipediaCachePath(),
             Metrics = new[] {
                 new MetricSpec { Label = "pages cached",   Sql = "SELECT COUNT(*) FROM wiki_pages" },
-                new MetricSpec { Label = "matched taxa",   Sql = "SELECT COUNT(*) FROM taxon_wiki_matches" },
+                // Only rows the matcher settled on an article; the table also holds pending,
+                // missing and rejected rows. Same count as WikipediaCacheStore.GetCacheStats.
+                new MetricSpec { Label = "matched taxa",   Sql = "SELECT COUNT(*) FROM taxon_wiki_matches WHERE match_status = 'matched'" },
                 new MetricSpec { Label = "titles with no article", Sql = "SELECT COUNT(*) FROM wiki_missing_titles" },
             },
         },

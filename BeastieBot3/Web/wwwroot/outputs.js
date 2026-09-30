@@ -9,13 +9,15 @@
 
 (function () {
   const $ = (sel) => document.querySelector(sel);
-  let loaded = false;
+  let loaded = false;            // a list request has succeeded; the router's poll stops reloading
+  let loadError = null;          // HTML error from the last list request; null once one succeeds
   let allFiles = [];
   let groups = [];            // [{name, displayName, children[], filters[], isParent}]
   let groupById = new Map();
   let effChildren = new Map();   // group id -> effective child ids (explicit + filter-inferred)
   let effChildIds = new Set();   // group ids that are nested under some other group
   let generatedAt = null;
+  let outputDir = null;          // the folder the list came from (null when paths.ini sets none)
   let taxaMaxSize = 0;           // largest visible list size, for the by-taxa heat scale
 
   // Status (preset) display order + labels for the by-taxa chips. Anything not listed sorts last.
@@ -39,25 +41,33 @@
     const tbody = $('#wt-tbody');
     if (!tbody) return;
     tbody.innerHTML = '<tr><td colspan="5" class="muted">Loading&hellip;</td></tr>';
+    loadError = null;
     try {
       const [list, grp] = await Promise.all([
-        fetch('/api/wikitext/list').then((r) => r.json()),
+        fetch('/api/wikitext/list').then((r) => {
+          if (!r.ok) throw new Error('HTTP error ' + r.status);
+          return r.json();
+        }),
         fetch('/api/grouping/groups').then((r) => r.json()).catch(() => ({ groups: [] })),
       ]);
       allFiles = list.files || [];
       generatedAt = list.generatedAt || null;
+      outputDir = list.dir || null;
       groups = (grp && grp.groups) || [];
       groupById = new Map(groups.map((g) => [g.name, g]));
       buildTree();
 
       const count = $('#wt-count');
       if (count) count.textContent = allFiles.length + ' files';
+      loaded = true;
       renderCacheNote();
       render();
-      loaded = true;
     } catch (e) {
-      tbody.innerHTML = '<tr><td colspan="5" class="error">Failed to load the .wikitext file list from <code>serve</code>: '
-        + escapeHtml(e.message) + '</td></tr>';
+      loadError = 'Failed to load the .wikitext file list from <code>serve</code>: ' + escapeHtml(e.message);
+      // A file count from an earlier load would sit beside the error as if it were current.
+      const count = $('#wt-count');
+      if (count) count.textContent = '';
+      render();
     }
   }
 
@@ -65,6 +75,11 @@
     const note = $('#wt-cache-note');
     if (!note) return;
     const B = window.Beastie || {};
+    // With no files, the empty-list message says what to do; a missing-counts note would only repeat it.
+    if (!allFiles.length) {
+      note.hidden = true;
+      return;
+    }
     if (generatedAt) {
       note.hidden = false;
       note.textContent = 'Taxa counts cached from the last generation ' +
@@ -78,8 +93,31 @@
   }
 
   function currentFilter() {
-    return (($('#wt-search') || {}).value || '').toLowerCase();
+    return (($('#wt-search') || {}).value || '').trim().toLowerCase();
   }
+
+  // What to show in place of the list while there is no list to draw: the last request's error,
+  // or "Loading" before the first list arrives. Filtering, switching layout or changing the
+  // stat all re-render, so both layouts check this first; otherwise an unloaded list (no files,
+  // no folder) would be reported as a paths.ini problem. Null once a list has loaded.
+  function loadStateMessage() {
+    if (loadError) return { cls: 'error', html: loadError };
+    if (!loaded) return { cls: 'muted', html: 'Loading&hellip;' };
+    return null;
+  }
+
+  // HTML for an empty list. A folder with no files yet (or no folder set) needs different
+  // advice from a filter that matches none of the files. serve reads paths.ini once, at start.
+  function emptyMessageHtml() {
+    if (allFiles.length) return 'No matching outputs.';
+    if (!outputDir) {
+      return 'No folder is set for .wikitext files. Add <code>wikipedia_output_dir</code> to the '
+        + '<code>[Datastore]</code> section of <code>paths.ini</code>, then restart <code>serve</code>.';
+    }
+    return 'No .wikitext files in <code>' + escapeHtml(outputDir) + '</code> yet. '
+      + 'Run <code>wikipedia generate-lists</code> to write them, then press Refresh.';
+  }
+
   function matches(f, q) {
     return !q || f.title.toLowerCase().includes(q) || f.name.toLowerCase().includes(q);
   }
@@ -122,12 +160,17 @@
   function renderTable() {
     const tbody = $('#wt-tbody');
     if (!tbody) return;
+    const state = loadStateMessage();
+    if (state) {
+      tbody.innerHTML = '<tr><td colspan="5" class="' + state.cls + '">' + state.html + '</td></tr>';
+      return;
+    }
     const B = window.Beastie || {};
     const q = currentFilter();
     const rows = allFiles.filter((f) => matches(f, q));
 
     if (!rows.length) {
-      tbody.innerHTML = '<tr><td colspan="5" class="muted">No matching outputs.</td></tr>';
+      tbody.innerHTML = '<tr><td colspan="5" class="muted">' + emptyMessageHtml() + '</td></tr>';
       return;
     }
     const maxSize = rows.reduce((m, f) => Math.max(m, f.size || 0), 0);
@@ -228,6 +271,11 @@
   function renderTaxa() {
     const root = $('#wt-taxa');
     if (!root) return;
+    const state = loadStateMessage();
+    if (state) {
+      root.innerHTML = '<p class="' + state.cls + '">' + state.html + '</p>';
+      return;
+    }
     const q = currentFilter();
     const visible = allFiles.filter((f) => matches(f, q));
     taxaMaxSize = visible.reduce((m, f) => Math.max(m, f.size || 0), 0);
@@ -246,7 +294,7 @@
 
     root.innerHTML = '';
     if (!visible.length) {
-      root.innerHTML = '<p class="muted">No matching outputs.</p>';
+      root.innerHTML = '<p class="muted">' + emptyMessageHtml() + '</p>';
       return;
     }
 
