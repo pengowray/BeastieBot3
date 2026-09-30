@@ -225,7 +225,9 @@ public sealed class WikipediaListCommand : Command<WikipediaListCommand.Settings
     /// Chooses the common-name source and whether Catalogue of Life enrichment is used. Only the
     /// store-backed generator takes the CoL enricher, so CoL is used only when the Common names
     /// store is. The CoL checks run in the order a user would fix them: an explicit
-    /// --no-col-enrichment, then a missing path or file, then the missing store.
+    /// --no-col-enrichment or --use-legacy-names (whose help says the CoL database is ignored,
+    /// so a missing CoL file is not worth a warning), then a missing path or file, then the
+    /// missing store.
     /// </summary>
     internal static NameSourcePlan PlanNameSources(
         bool useLegacyNames,
@@ -240,7 +242,7 @@ public sealed class WikipediaListCommand : Command<WikipediaListCommand.Settings
             : StoreFallback.None;
         var useStore = fallback == StoreFallback.None;
 
-        var col = noColEnrichment ? ColEnrichment.Disabled
+        var col = noColEnrichment || useLegacyNames ? ColEnrichment.Disabled
             : string.IsNullOrWhiteSpace(colPath) ? ColEnrichment.NotConfigured
             : !colExists ? ColEnrichment.NotFound
             : !useStore ? ColEnrichment.NeedsStore
@@ -254,7 +256,7 @@ public sealed class WikipediaListCommand : Command<WikipediaListCommand.Settings
     /// <summary>
     /// Prints why the Common names store is not used, which caches the common names come from
     /// instead, and that Catalogue of Life enrichment is off when that is the reason it is off.
-    /// Warnings are yellow when the fallback was not asked for (no --use-legacy-names).
+    /// With --use-legacy-names the plan's CoL state is Disabled, so no line about CoL is printed.
     /// </summary>
     private static void ReportLegacyNameSource(
         NameSourcePlan plan,
@@ -288,8 +290,7 @@ public sealed class WikipediaListCommand : Command<WikipediaListCommand.Settings
         }
 
         if (plan.Col == ColEnrichment.NeedsStore) {
-            var colour = plan.StoreFallback == StoreFallback.LegacyRequested ? "grey" : "yellow";
-            AnsiConsole.MarkupLine($"[{colour}]Catalogue of Life enrichment is off because it requires the Common names store. {IucnOnlyNamesNote}[/]");
+            AnsiConsole.MarkupLine($"[yellow]Catalogue of Life enrichment is off because it requires the Common names store. {IucnOnlyNamesNote}[/]");
         }
     }
 

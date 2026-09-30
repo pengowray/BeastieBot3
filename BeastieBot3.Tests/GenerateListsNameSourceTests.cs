@@ -32,12 +32,18 @@ public class GenerateListsNameSourceTests {
         Assert.Equal(new NameSourcePlan(false, StoreFallback.NotConfigured, ColEnrichment.NeedsStore), plan);
     }
 
-    [Fact]
-    public void UseLegacyNames_SkipsStoreAndCol() {
-        // The command does not resolve the store path at all with --use-legacy-names.
-        var plan = PlanNameSources(useLegacyNames: true, storePath: null, storeExists: false, noColEnrichment: false, Col, colExists: true);
+    // The command does not resolve the store path at all with --use-legacy-names, and the option's
+    // help says the CoL database is ignored as with --no-col-enrichment. So CoL is Disabled whatever
+    // state its file is in; a configured CoL file that does not exist used to print a yellow
+    // "Catalogue of Life database not found" warning.
+    [Theory]
+    [InlineData(Col, true)]
+    [InlineData(Col, false)]
+    [InlineData(null, false)]
+    public void UseLegacyNames_SkipsStoreAndCol(string? colPath, bool colExists) {
+        var plan = PlanNameSources(useLegacyNames: true, storePath: null, storeExists: false, noColEnrichment: false, colPath, colExists);
 
-        Assert.Equal(new NameSourcePlan(false, StoreFallback.LegacyRequested, ColEnrichment.NeedsStore), plan);
+        Assert.Equal(new NameSourcePlan(false, StoreFallback.LegacyRequested, ColEnrichment.Disabled), plan);
     }
 
     // ColEnrichment is internal, so the expected value is passed by name (a public test method
