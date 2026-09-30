@@ -464,10 +464,10 @@ public class AuditRenderingTests {
             Summary = "x", DataSourceLabel = "src", IgnoresRowLimit = true,
         };
         var withException = AuditPageLayout.LimitedNotice(Doc(5000, SampleReport(), failed));
-        Assert.Contains("Every report except \u201C<a href=\"failed-assessments.html\">Historical assessments missing from the API</a>\u201D checked at most 5,000 database rows", withException);
+        Assert.Contains("All reports except \u201C<a href=\"failed-assessments.html\">Historical assessments missing from the API</a>\u201D checked at most 5,000 database rows", withException);
 
         var withoutException = AuditPageLayout.LimitedNotice(Doc(5000, SampleReport()));
-        Assert.Contains("Every report on this site checked at most 5,000 database rows", withoutException);
+        Assert.Contains("All reports on this site checked at most 5,000 database rows", withoutException);
         Assert.Equal("", AuditPageLayout.LimitedNotice(Doc(null, SampleReport(), failed)));
 
         var dir = TempDir("audit-ignores-");

@@ -30,7 +30,7 @@ partial. `failed-assessments` reads its whole (small) failed-request log and set
   in `redlist-audit-2026`, that it was not changed.
 - puts a notice at the top of every page, and "Partial results" at the start of every `<title>`
   (`AuditPageLayout.LimitedNotice`, driven by `AuditDocument.RowLimit`). The notice names, with a
-  link, each report that sets `IgnoresRowLimit` as the exception: "Every report except
+  link, each report that sets `IgnoresRowLimit` as the exception: "All reports except
   “Historical assessments missing from the API” checked at most 5,000 database rows";
 - drops the "Since <release>" columns (`AuditDocument.SinceRelease` is null), because a partial count
   beside the previous release's full count reads as a real change;

@@ -71,8 +71,8 @@ internal static class AuditPageLayout {
             .Select(r => $"“<a href=\"{HtmlText.Escape(r.Id)}.html\">{HtmlText.Escape(r.Title)}</a>”")
             .ToList();
         var which = exceptions.Count == 0
-            ? "Every report on this site"
-            : $"Every report except {HtmlText.JoinWithAnd(exceptions)}";
+            ? "All reports on this site"
+            : $"All reports except {HtmlText.JoinWithAnd(exceptions)}";
         return "<div class=\"limited-notice\" role=\"note\">"
             + $"<strong>Partial results from a limited run (<code>{HtmlText.Escape(flag)}</code>).</strong> "
             + $"{which} checked at most {limit.ToString("N0", CultureInfo.InvariantCulture)} database rows, so their counts and lists may be incomplete. "
