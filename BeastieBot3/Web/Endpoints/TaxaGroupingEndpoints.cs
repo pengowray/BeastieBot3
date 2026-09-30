@@ -99,25 +99,9 @@ public static class TaxaGroupingEndpoints {
 
         app.MapPost("/api/grouping/children", async (HttpContext ctx, PathsService paths) => {
             var req = await JsonSerializer.DeserializeAsync<ChildrenRequest>(ctx.Request.Body, JsonOpts).ConfigureAwait(false);
-            if (req is null || string.IsNullOrWhiteSpace(req.Group))
-                return Results.BadRequest(new { error = "group is required" });
-
             var loc = RulesPaths.Resolve(paths);
             EnsureSeeded(loc);
-            var draftFile = Path.Combine(loc.DraftRoot, "taxa-groups.yml");
-            if (!File.Exists(draftFile))
-                return Results.NotFound(new { error = "draft taxa-groups.yml not found" });
-
-            // Only the groups the counts table showed as rows are added (ticked) or removed (unticked);
-            // every other existing child, e.g. a group with a system filter, is kept.
-            var original = File.ReadAllText(draftFile);
-            var childrenHint = $"To set sub-groups by hand, open taxa-groups.yml in the Rules editor and edit the children list of group '{req.Group}'.";
-            if (!TryUpdateChildren(original, req.Group!, req.Add ?? Array.Empty<string>(), req.Remove ?? Array.Empty<string>(),
-                    out var updated, out var children, out var changed, out var err))
-                return Results.BadRequest(new { error = err, hint = childrenHint });
-
-            if (changed) File.WriteAllText(draftFile, updated);
-            return Results.Json(new { group = req.Group, children, changed, file = "taxa-groups.yml" }, JsonOpts);
+            return SaveChildren(req, Path.Combine(loc.DraftRoot, "taxa-groups.yml"));
         });
 
         // Set the per-group tuning knobs in the DRAFT rules: size_budget.max_entries on the group in
@@ -212,7 +196,12 @@ public static class TaxaGroupingEndpoints {
             if (!File.Exists(groupsFile))
                 return Results.NotFound(new { error = "draft taxa-groups.yml not found" });
 
-            var existing = LoadDraftGroups(paths, out _);
+            Dictionary<string, TaxaGroupDefinition> existing;
+            try {
+                existing = LoadDraftGroups(paths, out _);
+            } catch (Exception ex) {
+                return DraftUnreadable(ex);
+            }
             if (existing.ContainsKey(key))
                 return Results.Conflict(new { error = $"Group '{key}' already exists. Pick a different key, or edit it in the rules editor." });
 
@@ -346,10 +335,35 @@ public static class TaxaGroupingEndpoints {
     private static IResult DraftUnreadable(Exception ex) =>
         Results.Json(new {
             error = "Could not read the draft taxa-groups.yml: " + ex.Message,
-            hint = "To fix it, open taxa-groups.yml in the Rules editor and correct the YAML, or click \"Revert from source\" to replace the draft with the copy in rules/.",
+            hint = "To fix it, open taxa-groups.yml in the Rules editor and correct the YAML, or select taxa-groups.yml there and click \"Revert from source\" to replace the draft copy of that file with the one in rules/.",
         }, statusCode: 500);
 
     // ---- children: add/remove sub-groups ----
+
+    // POST /api/grouping/children without the HTTP plumbing: checks the request, then adds and removes
+    // sub-groups in `draftFile` (the draft taxa-groups.yml). Only the groups the counts table showed as
+    // rows are added (ticked) or removed (unticked); every other existing child, e.g. a group with a
+    // system filter, is kept.
+    internal static IResult SaveChildren(ChildrenRequest? req, string draftFile) {
+        if (req is null || string.IsNullOrWhiteSpace(req.Group))
+            return Results.BadRequest(new { error = "group is required" });
+        // A page loaded before the request shape changed still posts {group, children}, which binds to
+        // Add = Remove = null and would save nothing while reporting success. The current page always
+        // sends both arrays, empty when the table has no tickboxes, and that stays a valid no-op save.
+        if (req.Add is null && req.Remove is null)
+            return Results.BadRequest(new { error = "The page is out of date.", hint = "Reload the page, then save again." });
+        if (!File.Exists(draftFile))
+            return Results.NotFound(new { error = "draft taxa-groups.yml not found" });
+
+        var original = File.ReadAllText(draftFile);
+        var childrenHint = $"To set sub-groups by hand, open taxa-groups.yml in the Rules editor and edit the children list of group '{req.Group}'.";
+        if (!TryUpdateChildren(original, req.Group!, req.Add ?? Array.Empty<string>(), req.Remove ?? Array.Empty<string>(),
+                out var updated, out var children, out var changed, out var err))
+            return Results.BadRequest(new { error = err, hint = childrenHint });
+
+        if (changed) File.WriteAllText(draftFile, updated);
+        return Results.Json(new { group = req.Group, children, changed, file = "taxa-groups.yml" }, JsonOpts);
+    }
 
     // The parent's new children list: the existing list in its order, minus `remove`, plus each name in
     // `add` that is not already there (appended in request order). A name in both lists is added.
@@ -823,7 +837,7 @@ public static class TaxaGroupingEndpoints {
         public string? Value { get; set; }
     }
 
-    private sealed class ChildrenRequest {
+    internal sealed class ChildrenRequest {
         public string? Group { get; set; }
         public string[]? Add { get; set; }      // ticked rows: make these groups sub-groups
         public string[]? Remove { get; set; }   // unticked rows: stop these groups being sub-groups

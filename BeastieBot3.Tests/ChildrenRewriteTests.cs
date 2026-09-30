@@ -1,4 +1,6 @@
+using System.Text.Json;
 using BeastieBot3.Web.Endpoints;
+using Microsoft.AspNetCore.Http;
 
 namespace BeastieBot3.Tests;
 
@@ -164,4 +166,59 @@ public class ChildrenRewriteTests {
         Assert.False(ok);
         Assert.Contains("not found", err);
     }
+
+    // ---- SaveChildren (the POST handler, against a draft file on disk) ----
+
+    // A page loaded before the request shape changed posts {group, children}, which binds to
+    // Add = Remove = null. That must be refused, not answered with a 200 that saved nothing.
+    [Fact]
+    public void Save_OldRequestShape_IsRefusedAndDraftUnchanged() {
+        WithDraft(file => {
+            var result = TaxaGroupingEndpoints.SaveChildren(
+                new TaxaGroupingEndpoints.ChildrenRequest { Group = "mammals" }, file);
+            Assert.Equal(400, StatusOf(result));
+            Assert.Contains("out of date", Body(result).GetProperty("error").GetString());
+            Assert.Equal(GroupsYaml, File.ReadAllText(file));
+        });
+    }
+
+    // The page sends two empty arrays when the table has no tickboxes (e.g. the Parent at its own rank):
+    // a valid save that changes nothing.
+    [Fact]
+    public void Save_EmptyAddAndRemove_IsNoOpSave() {
+        WithDraft(file => {
+            var result = TaxaGroupingEndpoints.SaveChildren(
+                new TaxaGroupingEndpoints.ChildrenRequest { Group = "mammals", Add = Array.Empty<string>(), Remove = Array.Empty<string>() }, file);
+            Assert.Equal(200, StatusOf(result) ?? 200);
+            Assert.False(Body(result).GetProperty("changed").GetBoolean());
+            Assert.Equal(GroupsYaml, File.ReadAllText(file));
+        });
+    }
+
+    [Fact]
+    public void Save_TickedAndUntickedRows_WritesDraft() {
+        WithDraft(file => {
+            var result = TaxaGroupingEndpoints.SaveChildren(
+                new TaxaGroupingEndpoints.ChildrenRequest { Group = "mammals", Add = new[] { "primates" }, Remove = new[] { "rodents" } }, file);
+            Assert.Equal(200, StatusOf(result) ?? 200);
+            Assert.True(Body(result).GetProperty("changed").GetBoolean());
+            Assert.Contains("    children: [bats, aquatic-mammals, primates]\n", File.ReadAllText(file));
+        });
+    }
+
+    private static void WithDraft(Action<string> test) {
+        var dir = Directory.CreateTempSubdirectory("bb3-children-");
+        try {
+            var file = Path.Combine(dir.FullName, "taxa-groups.yml");
+            File.WriteAllText(file, GroupsYaml);
+            test(file);
+        } finally {
+            dir.Delete(recursive: true);
+        }
+    }
+
+    private static int? StatusOf(IResult result) => ((IStatusCodeHttpResult)result).StatusCode;
+
+    private static JsonElement Body(IResult result) =>
+        JsonSerializer.SerializeToElement(((IValueHttpResult)result).Value);
 }
