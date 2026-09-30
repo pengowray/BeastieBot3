@@ -15,7 +15,7 @@ namespace BeastieBot3.CommonNames;
 
 /// <summary>
 /// SQLite store for unified common names from all sources (IUCN, Wikidata, Wikipedia, COL).
-/// Supports disambiguation, conflict detection, and capitalization rules.
+/// Supports disambiguation, ambiguous-name detection, and capitalization rules.
 /// </summary>
 internal sealed class CommonNameStore : SqliteStore {
     // Cache for ambiguous names set (expensive to compute, rarely changes)
@@ -130,7 +130,10 @@ internal sealed class CommonNameStore : SqliteStore {
             );
             CREATE INDEX IF NOT EXISTS idx_xref_source ON taxon_cross_references(source, source_identifier);
 
-            -- Detected common name conflicts
+            -- Written only by the removed `common-names detect-conflicts` command; nothing reads it.
+            -- Kept so stores that still hold its rows open and purge as before (PurgeSource
+            -- empties it). Ambiguous names are worked out from common_names when they are needed
+            -- (QueryAmbiguousNames).
             CREATE TABLE IF NOT EXISTS common_name_conflicts (
                 id INTEGER PRIMARY KEY,
                 -- The ambiguous normalized name
@@ -197,52 +200,6 @@ internal sealed class CommonNameStore : SqliteStore {
             );
             """;
         command.ExecuteNonQuery();
-        EnsureConflictPairIndex();
-    }
-
-    private const string ConflictPairIndexName = "ux_conflicts_pair";
-
-    // One row per (name, type, taxon pair), so running detect-conflicts again adds only the pairs
-    // it has not recorded yet. Stores written before this index existed can hold a second copy of
-    // every conflict (InsertConflict was a plain INSERT), and the unique index cannot be created
-    // over them, so the first open removes those copies, keeping the oldest row of each pair.
-    // Later opens only look the index up in sqlite_master.
-    private void EnsureConflictPairIndex() {
-        using (var check = _connection.CreateCommand()) {
-            check.CommandText = "SELECT 1 FROM sqlite_master WHERE type = 'index' AND name = @name;";
-            check.Parameters.AddWithValue("@name", ConflictPairIndexName);
-            if (check.ExecuteScalar() != null) {
-                return;
-            }
-        }
-
-        using var transaction = _connection.BeginTransaction();
-        using var command = _connection.CreateCommand();
-        command.Transaction = transaction;
-        // InsertConflict stores the smaller taxon id in taxon_id_a. Older rows were stored in
-        // whatever order detection met the two taxa, so put them in the same order first; SQLite
-        // evaluates every SET expression against the row as it was, so this swaps the pair.
-        command.CommandText =
-            $"""
-            UPDATE common_name_conflicts
-            SET taxon_id_a = taxon_id_b, taxon_id_b = taxon_id_a,
-                common_name_id_a = common_name_id_b, common_name_id_b = common_name_id_a
-            WHERE taxon_id_b IS NOT NULL AND taxon_id_b < taxon_id_a;
-
-            DELETE FROM common_name_conflicts
-            WHERE id NOT IN (
-                SELECT MIN(id) FROM common_name_conflicts
-                GROUP BY normalized_name, conflict_type, taxon_id_a, taxon_id_b
-            );
-
-            -- taxon_id_b is nullable and a unique index treats NULLs as distinct, so a conflict
-            -- type with no second taxon would not be de-duplicated. Only 'ambiguous' conflicts
-            -- (always two taxa) are written today.
-            CREATE UNIQUE INDEX IF NOT EXISTS {ConflictPairIndexName}
-                ON common_name_conflicts(normalized_name, conflict_type, taxon_id_a, taxon_id_b);
-            """;
-        command.ExecuteNonQuery();
-        transaction.Commit();
     }
 
     #region Taxa Operations
@@ -683,7 +640,7 @@ internal sealed class CommonNameStore : SqliteStore {
     }
 
     /// <summary>
-    /// Get the set of normalized names that are ambiguous (used by multiple valid taxa).
+    /// Get the set of normalized names that are ambiguous (see <see cref="QueryAmbiguousNames"/>).
     /// Result is cached for efficiency when doing repeated lookups.
     /// </summary>
     private HashSet<string> GetAmbiguousNamesSet(string language = "en") {
@@ -692,31 +649,57 @@ internal sealed class CommonNameStore : SqliteStore {
             return _cachedAmbiguousNames;
         }
 
-        using var command = _connection.CreateCommand();
-        command.CommandText =
-            """
-            SELECT cn.normalized_name
-            FROM common_names cn
-            JOIN taxa t ON cn.taxon_id = t.id
-            WHERE cn.language = @lang
-              AND t.validity_status = 'valid'
-              AND t.is_fossil = 0
-            GROUP BY cn.normalized_name
-            HAVING COUNT(DISTINCT cn.taxon_id) > 1;
-            """;
-        command.Parameters.AddWithValue("@lang", language);
+        var set = new HashSet<string>(QueryAmbiguousNames(language), StringComparer.OrdinalIgnoreCase);
 
-        var set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        using var reader = command.ExecuteReader();
-        while (reader.Read()) {
-            set.Add(reader.GetString(0));
-        }
-        
         // Cache the result
         _cachedAmbiguousNames = set;
         _cachedAmbiguousNamesLanguage = language;
-        
+
         return set;
+    }
+
+    /// <summary>
+    /// The one definition of an ambiguous common name: a normalized name in
+    /// <paramref name="language"/> that two or more valid, non-fossil taxa have, in any kingdom,
+    /// including taxa that share a synonym. List generation skips these names
+    /// (<see cref="GetAmbiguousNamesSet"/>) and `common-names report --report ambiguous` lists them
+    /// (<see cref="GetAmbiguousCommonNames"/>), so both read this query and cannot drift apart.
+    /// With <paramref name="kingdom"/>, only that kingdom's taxa are counted, so a name shared by
+    /// a plant and an animal is not ambiguous within either kingdom. The kingdom is upper-cased
+    /// before binding, because taxa store it as IUCN writes it ("PLANTAE") and the report's
+    /// --kingdom help suggests "Plantae". The most-shared names come first.
+    /// </summary>
+    private List<string> QueryAmbiguousNames(string language, string? kingdom = null, int? limit = null) {
+        using var command = _connection.CreateCommand();
+        var kingdomFilter = kingdom != null ? "AND t.kingdom = @kingdom" : "";
+        var limitClause = limit.HasValue ? "LIMIT @limit" : "";
+        command.CommandText = $@"
+            SELECT c.normalized_name
+            FROM common_names c
+            JOIN taxa t ON c.taxon_id = t.id
+            WHERE c.language = @lang
+              AND t.validity_status = 'valid'
+              AND t.is_fossil = 0
+              {kingdomFilter}
+            GROUP BY c.normalized_name
+            HAVING COUNT(DISTINCT c.taxon_id) > 1
+            ORDER BY COUNT(DISTINCT c.taxon_id) DESC
+            {limitClause};
+        ";
+        command.Parameters.AddWithValue("@lang", language);
+        if (limit.HasValue) {
+            command.Parameters.AddWithValue("@limit", limit.Value);
+        }
+        if (kingdom != null) {
+            command.Parameters.AddWithValue("@kingdom", kingdom.Trim().ToUpperInvariant());
+        }
+
+        var results = new List<string>();
+        using var reader = command.ExecuteReader();
+        while (reader.Read()) {
+            results.Add(reader.GetString(0));
+        }
+        return results;
     }
 
     /// <summary>
@@ -980,8 +963,8 @@ internal sealed class CommonNameStore : SqliteStore {
         }
 
         using var transaction = _connection.BeginTransaction();
-        // Conflicts point at individual common-name rows, so every one of them is about to be
-        // stale or half-empty. detect-conflicts rebuilds the list from whatever the hub holds.
+        // Rows left by the removed `common-names detect-conflicts` command point at individual
+        // common-name rows, so the purge empties the table rather than leave them half-empty.
         var conflicts = DeleteAll(transaction, "common_name_conflicts");
         var names = DeleteByTag(transaction, "common_names", "source", tags.CommonNames);
         var synonyms = includeSynonyms
@@ -1093,58 +1076,6 @@ internal sealed class CommonNameStore : SqliteStore {
             """;
         command.Parameters.AddWithValue("@source", source);
         return command.ExecuteNonQuery();
-    }
-
-    #endregion
-
-    #region Conflict Operations
-
-    /// <summary>
-    /// Records a conflict between two taxa. The pair is stored with the smaller taxon id first,
-    /// so (a, b) and (b, a) are the same conflict; one that is already stored is left as it is.
-    /// </summary>
-    /// <returns>True when a new row was added, false when the conflict was already stored.</returns>
-    public bool InsertConflict(
-        string normalizedName,
-        string conflictType,
-        long taxonIdA,
-        long? commonNameIdA,
-        long? taxonIdB,
-        long? commonNameIdB) {
-        if (taxonIdB is { } b && b < taxonIdA) {
-            (taxonIdA, taxonIdB) = (b, taxonIdA);
-            (commonNameIdA, commonNameIdB) = (commonNameIdB, commonNameIdA);
-        }
-
-        using var command = _connection.CreateCommand();
-        command.CommandText =
-            """
-            INSERT INTO common_name_conflicts
-                (normalized_name, conflict_type, taxon_id_a, common_name_id_a, taxon_id_b, common_name_id_b, detected_at)
-            VALUES (@name, @type, @taxonA, @cnA, @taxonB, @cnB, @now)
-            ON CONFLICT(normalized_name, conflict_type, taxon_id_a, taxon_id_b) DO NOTHING;
-            """;
-        command.Parameters.AddWithValue("@name", normalizedName);
-        command.Parameters.AddWithValue("@type", conflictType);
-        command.Parameters.AddWithValue("@taxonA", taxonIdA);
-        command.Parameters.AddWithValue("@cnA", commonNameIdA ?? (object)DBNull.Value);
-        command.Parameters.AddWithValue("@taxonB", taxonIdB ?? (object)DBNull.Value);
-        command.Parameters.AddWithValue("@cnB", commonNameIdB ?? (object)DBNull.Value);
-        command.Parameters.AddWithValue("@now", DateTime.UtcNow.ToString("O"));
-        return command.ExecuteNonQuery() == 1;
-    }
-
-    public void ClearConflicts() {
-        using var command = _connection.CreateCommand();
-        command.CommandText = "DELETE FROM common_name_conflicts";
-        command.ExecuteNonQuery();
-    }
-
-    /// <summary>When the oldest stored conflict was recorded, or null when none are stored.</summary>
-    public DateTime? GetOldestConflictDetectedAt() {
-        using var command = _connection.CreateCommand();
-        command.CommandText = "SELECT MIN(detected_at) FROM common_name_conflicts";
-        return StoredUtc.Parse(command.ExecuteScalar() as string);
     }
 
     #endregion
@@ -1300,21 +1231,20 @@ internal sealed class CommonNameStore : SqliteStore {
 
     #region Statistics
 
-    public (int TaxaCount, int SynonymCount, int CommonNameCount, int ConflictCount) GetStatistics() {
+    public (int TaxaCount, int SynonymCount, int CommonNameCount) GetStatistics() {
         using var command = _connection.CreateCommand();
         command.CommandText =
             """
             SELECT 
                 (SELECT COUNT(*) FROM taxa),
                 (SELECT COUNT(*) FROM scientific_name_synonyms),
-                (SELECT COUNT(*) FROM common_names),
-                (SELECT COUNT(*) FROM common_name_conflicts);
+                (SELECT COUNT(*) FROM common_names);
             """;
         using var reader = command.ExecuteReader();
         if (reader.Read()) {
-            return (reader.GetInt32(0), reader.GetInt32(1), reader.GetInt32(2), reader.GetInt32(3));
+            return (reader.GetInt32(0), reader.GetInt32(1), reader.GetInt32(2));
         }
-        return (0, 0, 0, 0);
+        return (0, 0, 0);
     }
 
     /// <summary>
@@ -1343,7 +1273,7 @@ internal sealed class CommonNameStore : SqliteStore {
             command.Parameters.AddWithValue("@limit", limit.Value);
         }
         if (kingdom != null) {
-            command.Parameters.AddWithValue("@kingdom", kingdom);
+            command.Parameters.AddWithValue("@kingdom", kingdom.Trim().ToUpperInvariant());
         }
 
         var results = new List<string>();
@@ -1379,7 +1309,7 @@ internal sealed class CommonNameStore : SqliteStore {
             command.Parameters.AddWithValue("@limit", limit.Value);
         }
         if (kingdom != null) {
-            command.Parameters.AddWithValue("@kingdom", kingdom);
+            command.Parameters.AddWithValue("@kingdom", kingdom.Trim().ToUpperInvariant());
         }
 
         var results = new List<string>();
@@ -1391,39 +1321,12 @@ internal sealed class CommonNameStore : SqliteStore {
     }
 
     /// <summary>
-    /// Get normalized names that map to multiple distinct taxa (general ambiguity check).
+    /// Get English normalized names that map to multiple distinct taxa, most-shared first. Without
+    /// <paramref name="kingdom"/> these are exactly the names list generation skips
+    /// (<see cref="QueryAmbiguousNames"/>).
     /// </summary>
-    public IReadOnlyList<string> GetAmbiguousCommonNames(int? limit, string? kingdom = null) {
-        using var command = _connection.CreateCommand();
-        var kingdomFilter = kingdom != null ? "AND t.kingdom = @kingdom" : "";
-        var limitClause = limit.HasValue ? "LIMIT @limit" : "";
-        command.CommandText = $@"
-            SELECT c.normalized_name
-            FROM common_names c
-            JOIN taxa t ON c.taxon_id = t.id
-            WHERE c.language = 'en'
-              AND t.validity_status = 'valid'
-              AND t.is_fossil = 0
-              {kingdomFilter}
-            GROUP BY c.normalized_name
-            HAVING COUNT(DISTINCT c.taxon_id) > 1
-            ORDER BY COUNT(DISTINCT c.taxon_id) DESC
-            {limitClause};
-        ";
-        if (limit.HasValue) {
-            command.Parameters.AddWithValue("@limit", limit.Value);
-        }
-        if (kingdom != null) {
-            command.Parameters.AddWithValue("@kingdom", kingdom);
-        }
-
-        var results = new List<string>();
-        using var reader = command.ExecuteReader();
-        while (reader.Read()) {
-            results.Add(reader.GetString(0));
-        }
-        return results;
-    }
+    public IReadOnlyList<string> GetAmbiguousCommonNames(int? limit, string? kingdom = null) =>
+        QueryAmbiguousNames("en", kingdom, limit);
 
     #endregion
 }

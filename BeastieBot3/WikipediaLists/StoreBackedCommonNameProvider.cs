@@ -66,6 +66,13 @@ internal sealed class StoreBackedCommonNameProvider : IDisposable {
     }
 
     /// <summary>
+    /// How many English common names this provider skips because the store gives each to more
+    /// than one taxon; 0 when it was created with allowAmbiguous. The store computes the set on
+    /// first use and caches it, so reading this before generation costs nothing extra.
+    /// </summary>
+    public int AmbiguousNameCount => _allowAmbiguous ? 0 : _store.GetAmbiguousNames("en").Count;
+
+    /// <summary>
     /// Get the best common name for a species record.
     /// Returns null if no suitable name found.
     /// </summary>

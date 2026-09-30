@@ -76,8 +76,7 @@ internal sealed class CommonNameAggregateCommand : AsyncCommand<CommonNameAggreg
                      "synonyms and cross-references (its ids for each species) from all earlier runs. " +
                      "Species the source added with --create-missing are deleted too, if no other " +
                      "source refers to them. IUCN synonyms are deleted only with --include-synonyms. " +
-                     "Names from other sources are kept, but the whole conflict list is deleted: run " +
-                     "common-names detect-conflicts afterwards. Cannot be used with --limit.")]
+                     "Names from other sources are kept. Cannot be used with --limit.")]
         public bool Replace { get; init; }
 
         [CommandOption("--create-missing")]
@@ -174,14 +173,8 @@ internal sealed class CommonNameAggregateCommand : AsyncCommand<CommonNameAggreg
         table.AddRow("Taxa", stats.TaxaCount.ToString("N0"));
         table.AddRow("Synonyms", stats.SynonymCount.ToString("N0"));
         table.AddRow("Common Names", stats.CommonNameCount.ToString("N0"));
-        table.AddRow("Conflicts", stats.ConflictCount.ToString("N0"));
+        table.AddRow("Ambiguous English Names (skipped by wikipedia generate-lists)", store.GetAmbiguousNames("en").Count.ToString("N0"));
         AnsiConsole.Write(table);
-
-        if (settings.Replace) {
-            // The purge clears the conflict list, since every row in it points at names that may
-            // no longer exist.
-            AnsiConsole.MarkupLine("[yellow]Run `common-names detect-conflicts` next[/] to rebuild the conflict list from the names now in the hub.");
-        }
 
         return 0;
     }

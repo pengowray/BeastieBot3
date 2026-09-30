@@ -380,9 +380,9 @@
   }
 
   // Counts that turn a data source's pill amber when above 0: Wikidata items waiting to be
-  // downloaded, IUCN assessments waiting to be downloaded, failed IUCN API requests, and
-  // common-name conflicts. The other counts are records that stay above 0 for good (Wikidata
-  // items linked to taxa by name, titles with no Wikipedia article), so they set no pill.
+  // downloaded, IUCN assessments waiting to be downloaded, and failed IUCN API requests. The
+  // other counts are records that stay above 0 for good (Wikidata items linked to taxa by name,
+  // titles with no Wikipedia article), so they set no pill.
   // Keys are the metric labels from DataSourceDescriptor.cs, exactly; values are the pill text
   // that follows the count, e.g. "3 failed requests". The pill shows the first of these counts
   // above 0, in the card's metric order.
@@ -390,7 +390,6 @@
     ['pending download', 'items to download'],
     ['assessments to download', 'assessments to download'],
     ['failed requests', 'failed requests'],
-    ['conflicts', 'common-name conflicts'],
   ]);
 
   function statusKind(s) {

@@ -134,20 +134,33 @@ public class CommonNamePurgeTests {
     }
 
     [Fact]
-    public void PurgeSource_ClearsTheConflictList() {
-        // Conflict rows name specific common-name rows, so a purge leaves them describing names
-        // that may no longer exist; detect-conflicts rebuilds them.
-        using var store = OpenInMemory();
+    public void PurgeSource_EmptiesTheOldConflictTable() {
+        // Stores written before `common-names detect-conflicts` was removed can still hold its
+        // rows. Each names specific common-name rows, so a purge deletes them all rather than
+        // leave them describing names that may no longer exist.
+        using var conn = new SqliteConnection("Data Source=:memory:");
+        conn.Open();
+        using var store = CommonNameStore.OpenFromConnection(conn);
         var a = AddTaxon(store, "panthera leo", "iucn", "15951");
         var b = AddTaxon(store, "panthera onca", "iucn", "15953");
         var nameA = store.InsertCommonName(a, "Lion", "lion", "en", "col", "c1", false);
         var nameB = store.InsertCommonName(b, "Lion", "lion", "en", "iucn", "i1", false);
-        store.InsertConflict("lion", "ambiguous", a, nameA, b, nameB);
+        using (var insert = conn.CreateCommand()) {
+            insert.CommandText =
+                $"""
+                INSERT INTO common_name_conflicts
+                    (normalized_name, conflict_type, taxon_id_a, common_name_id_a, taxon_id_b, common_name_id_b, detected_at)
+                VALUES ('lion', 'ambiguous', {a}, {nameA}, {b}, {nameB}, '2026-01-01T00:00:00Z');
+                """;
+            insert.ExecuteNonQuery();
+        }
 
         var removed = store.PurgeSource("col");
 
         Assert.Equal(1, removed.Conflicts);
-        Assert.Equal(0, store.GetStatistics().ConflictCount);
+        using var count = conn.CreateCommand();
+        count.CommandText = "SELECT COUNT(*) FROM common_name_conflicts";
+        Assert.Equal(0L, (long)count.ExecuteScalar()!);
     }
 
     [Fact]

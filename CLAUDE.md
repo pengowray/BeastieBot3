@@ -79,7 +79,7 @@ Use `ReportPathResolver` to resolve output paths. Priority: explicit CLI `--outp
 | `BeastieBot3/Wikidata/` | SPARQL seeding, Wikidata entity caching, coverage reports |
 | `BeastieBot3/Wikipedia/` | Wikipedia page fetching and taxon matching |
 | `BeastieBot3/WikipediaLists/` | Wikipedia list generation using YAML definitions + Mustache templates |
-| `BeastieBot3/CommonNames/` | Multi-source common name aggregation, conflict detection, disambiguation reports |
+| `BeastieBot3/CommonNames/` | Multi-source common name aggregation, ambiguous-name and disambiguation reports (`CommonNameStore.QueryAmbiguousNames` is the one ambiguity rule, shared by list generation and `report --report ambiguous`) |
 | `BeastieBot3/Col/` | Catalogue of Life ColDP import and profiling |
 | `BeastieBot3/Taxonomy/` | Scientific name normalisation, authority parsing, `TaxonLadder` hierarchy |
 | `BeastieBot3/Configuration/` | INI reading, path resolution, `.env` loading |
