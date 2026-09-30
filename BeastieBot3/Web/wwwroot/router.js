@@ -227,7 +227,7 @@
       a.title = 'Open in dock';
       a.addEventListener('click', (e) => {
         e.preventDefault();
-        if (b.replayJob) b.replayJob(j.id);
+        if (b.replayJob) b.replayJob(j.id, j.commandLine);
       });
       const meta = document.createElement('span');
       meta.className = 'dash-job-meta';

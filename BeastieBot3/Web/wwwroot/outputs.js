@@ -9,7 +9,8 @@
 
 (function () {
   const $ = (sel) => document.querySelector(sel);
-  let loaded = false;
+  let loaded = false;            // a list request has succeeded; the router's poll stops reloading
+  let loadError = null;          // HTML error from the last list request; null once one succeeds
   let allFiles = [];
   let groups = [];            // [{name, displayName, children[], filters[], isParent}]
   let groupById = new Map();
@@ -40,6 +41,7 @@
     const tbody = $('#wt-tbody');
     if (!tbody) return;
     tbody.innerHTML = '<tr><td colspan="5" class="muted">Loading&hellip;</td></tr>';
+    loadError = null;
     try {
       const [list, grp] = await Promise.all([
         fetch('/api/wikitext/list').then((r) => {
@@ -57,15 +59,15 @@
 
       const count = $('#wt-count');
       if (count) count.textContent = allFiles.length + ' files';
+      loaded = true;
       renderCacheNote();
       render();
-      loaded = true;
     } catch (e) {
-      const msg = 'Failed to load the .wikitext file list from <code>serve</code>: ' + escapeHtml(e.message);
-      tbody.innerHTML = '<tr><td colspan="5" class="error">' + msg + '</td></tr>';
-      // The By taxa layout shows the same error; otherwise it keeps the last list it drew.
-      const taxaRoot = $('#wt-taxa');
-      if (taxaRoot) taxaRoot.innerHTML = '<p class="error">' + msg + '</p>';
+      loadError = 'Failed to load the .wikitext file list from <code>serve</code>: ' + escapeHtml(e.message);
+      // A file count from an earlier load would sit beside the error as if it were current.
+      const count = $('#wt-count');
+      if (count) count.textContent = '';
+      render();
     }
   }
 
@@ -92,6 +94,16 @@
 
   function currentFilter() {
     return (($('#wt-search') || {}).value || '').trim().toLowerCase();
+  }
+
+  // What to show in place of the list while there is no list to draw: the last request's error,
+  // or "Loading" before the first list arrives. Filtering, switching layout or changing the
+  // stat all re-render, so both layouts check this first; otherwise an unloaded list (no files,
+  // no folder) would be reported as a paths.ini problem. Null once a list has loaded.
+  function loadStateMessage() {
+    if (loadError) return { cls: 'error', html: loadError };
+    if (!loaded) return { cls: 'muted', html: 'Loading&hellip;' };
+    return null;
   }
 
   // HTML for an empty list. A folder with no files yet (or no folder set) needs different
@@ -148,6 +160,11 @@
   function renderTable() {
     const tbody = $('#wt-tbody');
     if (!tbody) return;
+    const state = loadStateMessage();
+    if (state) {
+      tbody.innerHTML = '<tr><td colspan="5" class="' + state.cls + '">' + state.html + '</td></tr>';
+      return;
+    }
     const B = window.Beastie || {};
     const q = currentFilter();
     const rows = allFiles.filter((f) => matches(f, q));
@@ -254,6 +271,11 @@
   function renderTaxa() {
     const root = $('#wt-taxa');
     if (!root) return;
+    const state = loadStateMessage();
+    if (state) {
+      root.innerHTML = '<p class="' + state.cls + '">' + state.html + '</p>';
+      return;
+    }
     const q = currentFilter();
     const visible = allFiles.filter((f) => matches(f, q));
     taxaMaxSize = visible.reduce((m, f) => Math.max(m, f.size || 0), 0);

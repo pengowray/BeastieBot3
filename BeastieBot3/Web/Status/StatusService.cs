@@ -9,15 +9,41 @@ namespace BeastieBot3.Web.Status;
 // refreshes cannot contend with a running import (which uses WAL anyway).
 // Each metric query is wrapped in try/catch: missing tables in a freshly-
 // cloned environment are reported as null, not as fatal errors.
+//
+// Collect() reuses its last result for a few seconds. /api/status and every
+// /api/flows/{id} call it, and the dashboard requests all of them at once every
+// 10 seconds, so without the reuse one dashboard refresh ran every metric query
+// once per flow. The lock makes those parallel requests share one result
+// instead of each running the queries. The slowest metric ("assessments to
+// download") takes about 0.15s on a full API cache.
 
 public sealed class StatusService {
+    internal static readonly TimeSpan ReuseFor = TimeSpan.FromSeconds(5);
+
     private readonly PathsService _paths;
-    public StatusService(PathsService paths) { _paths = paths; }
+    private readonly TimeProvider _clock;
+    private readonly object _gate = new();
+    private (DateTimeOffset At, IReadOnlyList<DataSourceStatus> Value)? _last;
+
+    public StatusService(PathsService paths) : this(paths, TimeProvider.System) { }
+
+    // Internal so tests can control the clock. DI only looks at public constructors.
+    internal StatusService(PathsService paths, TimeProvider clock) {
+        _paths = paths;
+        _clock = clock;
+    }
 
     public IReadOnlyList<DataSourceStatus> Collect() {
-        return DataSourceCatalogue.All
-            .Select(Snapshot)
-            .ToList();
+        lock (_gate) {
+            var now = _clock.GetUtcNow();
+            if (_last is { } last && now - last.At < ReuseFor && now >= last.At) return last.Value;
+            var value = DataSourceCatalogue.All
+                .Select(Snapshot)
+                .ToList()
+                .AsReadOnly();
+            _last = (_clock.GetUtcNow(), value);
+            return value;
+        }
     }
 
     private DataSourceStatus Snapshot(DataSourceDescriptor d) {

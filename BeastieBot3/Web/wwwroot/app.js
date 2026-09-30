@@ -61,6 +61,9 @@
   const jobCancel = $('#job-cancel');
   let currentEventSource = null;
   let currentJobId = null;
+  // Goes up by one each time the dock switches to another job (run or reopened). A response
+  // that arrives after a switch belongs to the job shown before it and is ignored.
+  let dockGeneration = 0;
 
   // --- Persistent dock --------------------------------------------------
   // The dock lives outside the view container so a running job stays visible
@@ -138,6 +141,10 @@
       currentEventSource.close();
       currentEventSource = null;
     }
+    // The new job has no id until the POST returns. Until then Cancel does nothing, rather than
+    // cancelling the job the dock showed before.
+    currentJobId = null;
+    const generation = ++dockGeneration;
     showDock(true);
     jobTitle.textContent = '$ beastiebot3 ' + command + (args && args.length ? ' ' + args.join(' ') : '');
     terminal.reset();
@@ -151,22 +158,30 @@
         body: JSON.stringify({ command: command, args: args || [] }),
       });
     } catch (e) {
+      if (generation !== dockGeneration) return;
       terminal.setText('Failed to enqueue: ' + fetchErrorText(e) + '. Check that `serve` is running.\n');
       setStatus('failed');
       return;
     }
     if (!res.ok) {
-      terminal.setText('Failed to enqueue: ' + await responseErrorText(res) + '\n');
+      const errText = await responseErrorText(res);
+      if (generation !== dockGeneration) return;
+      terminal.setText('Failed to enqueue: ' + errText + '\n');
       setStatus('failed');
       return;
     }
     const job = await res.json();
+    // The job was queued, but another job was opened in the dock meanwhile. Leave the dock on
+    // that one; the new job is in the Jobs list.
+    if (generation !== dockGeneration) { refreshJobList(); return; }
     setStatus('running');
     attachStream(job.id);
     refreshJobList();
   }
 
   function attachStream(jobId) {
+    // Never leave two streams writing into the one terminal.
+    if (currentEventSource) currentEventSource.close();
     currentJobId = jobId;
     const es = new EventSource('/api/jobs/' + jobId + '/stream');
     currentEventSource = es;
@@ -228,7 +243,7 @@
       link.textContent = j.commandLine;
       link.addEventListener('click', (e) => {
         e.preventDefault();
-        replayJob(j.id);
+        replayJob(j.id, j.commandLine);
       });
       left.appendChild(link);
 
@@ -304,18 +319,22 @@
     return lines.join('\n');
   }
 
-  function replayJob(id) {
+  // commandLine is optional: callers that have it show it at once instead of leaving the
+  // previous job's command above this job's output until the job record arrives.
+  function replayJob(id, commandLine) {
     if (currentEventSource) {
       currentEventSource.close();
       currentEventSource = null;
     }
+    const generation = ++dockGeneration;
     showDock(true);
+    jobTitle.textContent = commandLine ? '$ beastiebot3 ' + commandLine : '';
     terminal.reset();
     setStatus('running');
     attachStream(id);
     fetch('/api/jobs/' + id).then(r => r.ok ? r.json() : null).then(j => {
       // Another job may have been opened while this request was in flight.
-      if (!j || currentJobId !== id) return;
+      if (!j || generation !== dockGeneration) return;
       jobTitle.textContent = '$ beastiebot3 ' + j.commandLine;
       // A finished job's status cannot change, so show it (and its error) now rather than
       // "running" until the stream has replayed the whole output.
