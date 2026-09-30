@@ -136,6 +136,9 @@
     }
   });
 
+  // Posts a job and opens it in the job panel at the bottom of the window. Returns the queued job
+  // ({ id, ... }), or null when the job did not start (the job panel then shows the error).
+  // Also used by rules-editor.js through window.Beastie.
   async function enqueue(command, args) {
     if (currentEventSource) {
       currentEventSource.close();
@@ -158,25 +161,26 @@
         body: JSON.stringify({ command: command, args: args || [] }),
       });
     } catch (e) {
-      if (generation !== dockGeneration) return;
+      if (generation !== dockGeneration) return null;
       terminal.setText('Failed to start job: no reply from `serve` (' + fetchErrorText(e) + '). Check that `serve` is running.\n');
       setStatus('failed');
-      return;
+      return null;
     }
     if (!res.ok) {
       const errText = await responseErrorText(res);
-      if (generation !== dockGeneration) return;
+      if (generation !== dockGeneration) return null;
       terminal.setText('Failed to start job: ' + errText + '\n');
       setStatus('failed');
-      return;
+      return null;
     }
     const job = await res.json();
     // The job was queued, but another job was opened in the dock meanwhile. Leave the dock on
     // that one; the new job is in the Jobs list.
-    if (generation !== dockGeneration) { refreshJobList(); return; }
+    if (generation !== dockGeneration) { refreshJobList(); return job; }
     setStatus('running');
     attachStream(job.id);
     refreshJobList();
+    return job;
   }
 
   function attachStream(jobId) {
@@ -1767,9 +1771,10 @@
 
   loadFlowsList();
 
-  // --- Public surface for router.js / dashboard ----------------------
-  // Exposes the handful of cross-cutting actions and helpers the router and
-  // dashboard need: attaching jobs to the dock, opening files, and the live
+  // --- Public surface for router.js / rules-editor.js / dashboard -----
+  // Exposes the handful of cross-cutting actions and helpers the router, the
+  // Taxa grouping and Rules editor pages, and the dashboard need: starting jobs
+  // in the dock and attaching to them, opening files, and the live
   // data getters/refreshers. Everything else stays private to this IIFE.
   window.Beastie = {
     enqueue, replayJob, openFile, openDir,

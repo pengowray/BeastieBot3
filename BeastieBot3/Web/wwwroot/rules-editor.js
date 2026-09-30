@@ -1,6 +1,7 @@
-// Self-contained wiring for the Taxa-grouping and Rules-editor cards.
-// Talks only to the new endpoints (/api/grouping/*, /api/rules*, /api/rules-draft/*).
-// Kept separate from app.js so it doesn't touch the existing job-runner IIFE.
+// Wiring for the Taxa-grouping and Rules-editor cards.
+// Talks to /api/grouping/*, /api/rules*, /api/rules-draft/* directly. Jobs (generate-lists) start
+// through window.Beastie.enqueue, published by app.js, so they open in the job panel at the bottom
+// of the window the same way as jobs started from the Run command page.
 
 (function () {
   const $ = (sel) => document.querySelector(sel);
@@ -37,6 +38,28 @@
     });
     const data = await res.json().catch(() => ({}));
     return { ok: res.ok, status: res.status, data };
+  }
+
+  // --config and --rules pointing generate-lists at the SOURCE rules/ tree, so edits applied from the
+  // draft take effect without a rebuild. Empty when only the build-output copy was found (the command
+  // then reads that copy, its default).
+  async function sourceRulesArgs() {
+    const loc = await getJson('/api/rules/locations').catch(() => null);
+    if (!loc || loc.isBuildOutputFallback) return [];
+    return ['--config', loc.sourceRulesDir + '/wikipedia-lists.yml', '--rules', loc.sourceRulesDir + '/rules-list.txt'];
+  }
+
+  // Starts `wikipedia generate-lists` with the given args through app.js, which opens the job in the
+  // job panel at the bottom of the window. Shows startedText through setMsg when the job was queued;
+  // when it was not, the job panel shows the error.
+  async function startGenerateLists(args, setMsg, startedText) {
+    const B = window.Beastie;
+    if (!B || !B.enqueue) {
+      setMsg('Could not start generate-lists: the page did not finish loading. Reload the page.');
+      return;
+    }
+    const job = await B.enqueue('wikipedia generate-lists', args);
+    setMsg(job ? startedText : 'Could not start generate-lists. The job panel at the bottom of the window shows the error.');
   }
 
   // ===================== Taxa grouping =====================
@@ -157,19 +180,13 @@
     if (m) m.textContent = text;
   }
 
-  // Generate a single list into the output dir (reuses the job runner). Reads SOURCE rules so any
-  // applied knob edits take effect without a rebuild. The file is then previewable in Wikitext outputs.
+  // Generate a single list into the output dir. Reads SOURCE rules so any applied knob edits take
+  // effect without a rebuild. The file is then previewable in Wikitext outputs.
   async function generateList(listId) {
     setImpactMsg(`Starting generate-lists --list ${listId}…`);
-    const loc = await getJson('/api/rules/locations').catch(() => null);
-    const args = ['--list', listId];
-    if (loc && !loc.isBuildOutputFallback) {
-      args.push('--config', loc.sourceRulesDir + '/wikipedia-lists.yml', '--rules', loc.sourceRulesDir + '/rules-list.txt');
-    }
-    const { ok, data } = await postJson('/api/jobs', { command: 'wikipedia generate-lists', args });
-    setImpactMsg(ok
-      ? `Started generate-lists --list ${listId} from the source rules. To see the job's output, open "Jobs" and click the job. The list will be on "Wikitext outputs" when the job finishes.`
-      : 'Failed to start: ' + (data.error || ''));
+    const args = ['--list', listId, ...await sourceRulesArgs()];
+    await startGenerateLists(args, setImpactMsg,
+      `Started generate-lists --list ${listId} from the source rules. The list will be on "Wikitext outputs" when the job finishes.`);
   }
 
   // Persist the tuning knobs to the draft rules (size_budget on the group, category_split on the list
@@ -216,15 +233,10 @@
     if (!impactFor) return;
     const group = impactFor.group;
     setImpactMsg(`Starting generate-lists --taxa-group ${group}…`);
-    const loc = await getJson('/api/rules/locations').catch(() => null);
-    const args = ['--taxa-group', group];
-    if (loc && !loc.isBuildOutputFallback) {
-      args.push('--config', loc.sourceRulesDir + '/wikipedia-lists.yml', '--rules', loc.sourceRulesDir + '/rules-list.txt');
-    }
-    const { ok, data } = await postJson('/api/jobs', { command: 'wikipedia generate-lists', args });
-    setImpactMsg(ok
-      ? `Started generate-lists --taxa-group ${group} from the source rules. To see the job's output, open "Jobs" and click the job. To use changes saved only to the draft, apply them in the Rules editor and click "Regenerate group" again.`
-      : 'Failed to start: ' + (data.error || ''));
+    const args = ['--taxa-group', group, ...await sourceRulesArgs()];
+    await startGenerateLists(args, setImpactMsg,
+      `Started generate-lists --taxa-group ${group} from the source rules. The lists will be on "Wikitext outputs" when the job finishes. `
+      + 'To use changes saved only to the draft, apply them in the Rules editor and click "Regenerate group" again.');
   }
 
   function onImpactClick(ev) {
@@ -622,15 +634,9 @@
 
   async function runGenerate() {
     // Trigger generation reading the SOURCE rules so applied edits take effect without a rebuild.
-    const loc = await getJson('/api/rules/locations').catch(() => null);
-    const args = [];
-    if (loc && !loc.isBuildOutputFallback) {
-      args.push('--config', loc.sourceRulesDir + '/wikipedia-lists.yml', '--rules', loc.sourceRulesDir + '/rules-list.txt');
-    }
-    const { ok, data } = await postJson('/api/jobs', { command: 'wikipedia generate-lists', args });
-    $('#rules-msg').textContent = ok
-      ? `Started generate-lists for every list in wikipedia-lists.yml. To see the job's output, open "Jobs" and click the job. The lists will be on "Wikitext outputs" when the job finishes.`
-      : 'Failed to start: ' + (data.error || '');
+    const args = await sourceRulesArgs();
+    await startGenerateLists(args, (text) => { $('#rules-msg').textContent = text; },
+      'Started generate-lists for every list in wikipedia-lists.yml. The lists will be on "Wikitext outputs" when the job finishes.');
   }
 
   // ===================== wire up =====================
