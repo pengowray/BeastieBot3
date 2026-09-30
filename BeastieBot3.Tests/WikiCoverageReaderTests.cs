@@ -40,7 +40,9 @@ public class WikiCoverageReaderTests : IDisposable {
                                     downloaded_at TEXT);
             INSERT INTO wiki_pages VALUES (1, 'Panthera leo', 'cached', '2026-01-01T00:00:00.0000000Z'),
                                           (2, 'Leo leo', 'pending', NULL),
-                                          (3, 'Felis leo', 'pending', NULL);
+                                          (3, 'Felis leo', 'pending', NULL),
+                                          (4, 'Leo spelaea', 'failed', NULL),
+                                          (5, 'Leo nemo', 'missing', NULL);
             CREATE TABLE taxon_wiki_matches(taxon_source TEXT, taxon_identifier TEXT, match_status TEXT,
                                             page_row_id INTEGER);
             INSERT INTO taxon_wiki_matches VALUES ('iucn', '1', 'matched', 1), ('iucn', '2', 'pending', 2),
@@ -76,6 +78,11 @@ public class WikiCoverageReaderTests : IDisposable {
             Assert.Equal(0, state.TaxaNeverMatched);    // the variety is not "never checked"
             // Taxon 2's match row names page 2, but it also tried page 3: both are awaited.
             Assert.Equal(2, state.PagesQueuedAwaited);
+            Assert.Equal(5, state.PagesKnown);
+            Assert.Equal(1, state.PagesCached);
+            Assert.Equal(2, state.PagesQueued);
+            Assert.Equal(1, state.PagesFailed);
+            Assert.Equal(1, state.PagesMissing);
         }
     }
 

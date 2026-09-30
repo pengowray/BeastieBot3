@@ -124,12 +124,20 @@ public class FlowWikiProbeTests {
 
     [Fact]
     public void The_title_queue_splits_into_downloaded_to_do_and_no_article() {
-        var r = FlowStepProbes.WikiWikipediaQueue(State(s => s.PagesQueued = 189_813));
+        var r = FlowStepProbes.WikiWikipediaQueue(State(s => s.PagesQueued = 190_212));
         Assert.Equal("ok", r.Status);
-        Assert.Contains("334,925 titles", r.Detail);
-        Assert.Contains("99,689 downloaded", r.Detail);
-        Assert.Contains("189,813 to download", r.Detail);
-        Assert.Contains("45,024 with no article", r.Detail);
+        Assert.Equal("334,925 titles: 99,689 downloaded, 190,212 to download, 45,024 with no article.", r.Detail);
+    }
+
+    // The line left failed downloads out, so its parts came up 399 titles short of the total.
+    [Fact]
+    public void The_title_queue_parts_add_up_to_the_total_when_downloads_failed() {
+        var r = FlowStepProbes.WikiWikipediaQueue(State(s => { s.PagesQueued = 189_813; s.PagesFailed = 399; }));
+        Assert.Equal("334,925 titles: 99,689 downloaded, 189,813 to download, 399 failed to download, 45,024 with no article.", r.Detail);
+
+        var numbers = System.Text.RegularExpressions.Regex.Matches(r.Detail!, @"\d[\d,]*")
+            .Select(m => long.Parse(m.Value.Replace(",", ""))).ToList();
+        Assert.Equal(numbers[0], numbers.Skip(1).Sum());
     }
 
     [Fact]

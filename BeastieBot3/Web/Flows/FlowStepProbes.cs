@@ -137,8 +137,11 @@ public static class FlowStepProbes {
         if (s.PagesKnown == 0) {
             return new FlowProbeResult("todo", "No titles queued yet.");
         }
+        // Every download status gets a part, so the parts add up to the total. Failed downloads
+        // were left out, and the line came up short by that many titles.
+        var failed = s.PagesFailed > 0 ? $", {s.PagesFailed:n0} failed to download" : "";
         return new FlowProbeResult("ok",
-            $"{s.PagesKnown:n0} titles: {s.PagesCached:n0} downloaded, {s.PagesQueued:n0} to download, {s.PagesMissing:n0} with no article.");
+            $"{s.PagesKnown:n0} titles: {s.PagesCached:n0} downloaded, {s.PagesQueued:n0} to download{failed}, {s.PagesMissing:n0} with no article.");
     }
 
     // "backlog" is a queue worked down over time, not something overdue: it shows the count

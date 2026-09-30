@@ -181,6 +181,7 @@ public static class WikiCoverageStateReader {
             // Restricted to taxa in this release: rows for taxa a later release dropped are never
             // re-evaluated, so a leftover 'pending' row would hold the settle step open forever.
             var byStatus = CountMatchStatuses(conn, Eligible);
+            var pages = CountPageStatuses(conn);
 
             var withoutWikidata = $"""
                 SELECT COUNT(*) FROM ({Eligible}) t
@@ -220,11 +221,11 @@ public static class WikiCoverageStateReader {
                 TaxaWithoutWikidata = taxaWithoutWikidata,
                 TaxaNeverSearched = taxaNeverSearched,
 
-                PagesKnown = Count(conn, "SELECT COUNT(*) FROM wp.wiki_pages"),
-                PagesCached = Count(conn, "SELECT COUNT(*) FROM wp.wiki_pages WHERE download_status = 'cached'"),
-                PagesMissing = Count(conn, "SELECT COUNT(*) FROM wp.wiki_pages WHERE download_status = 'missing'"),
-                PagesQueued = Count(conn, "SELECT COUNT(*) FROM wp.wiki_pages WHERE download_status = 'pending'"),
-                PagesFailed = Count(conn, "SELECT COUNT(*) FROM wp.wiki_pages WHERE download_status = 'failed'"),
+                PagesKnown = pages.Total,
+                PagesCached = pages.Cached,
+                PagesMissing = pages.Missing,
+                PagesQueued = pages.Pending,
+                PagesFailed = pages.Failed,
                 PagesQueuedAwaited = Count(conn, $"""
                     SELECT COUNT(*) FROM wp.wiki_pages p
                     WHERE p.download_status = 'pending'
@@ -296,6 +297,27 @@ public static class WikiCoverageStateReader {
             }
         }
         return (matched, missing, pending, rejected);
+    }
+
+    // One statement, so the parts and the total come from the same moment and add up even while
+    // fetch-pages is moving titles from pending to cached. Five separate counts drifted apart then.
+    private static (long Total, long Cached, long Pending, long Failed, long Missing) CountPageStatuses(SqliteConnection conn) {
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "SELECT download_status, COUNT(*) FROM wp.wiki_pages GROUP BY download_status";
+        cmd.CommandTimeout = 30;
+        long total = 0, cached = 0, pending = 0, failed = 0, missing = 0;
+        using var reader = cmd.ExecuteReader();
+        while (reader.Read()) {
+            var n = reader.GetInt64(1);
+            total += n;
+            switch (reader.IsDBNull(0) ? null : reader.GetString(0)) {
+                case WikiPageDownloadStatus.Cached: cached = n; break;
+                case WikiPageDownloadStatus.Pending: pending = n; break;
+                case WikiPageDownloadStatus.Failed: failed = n; break;
+                case WikiPageDownloadStatus.Missing: missing = n; break;
+            }
+        }
+        return (total, cached, pending, failed, missing);
     }
 
     private static void Attach(SqliteConnection conn, string alias, string path) {
