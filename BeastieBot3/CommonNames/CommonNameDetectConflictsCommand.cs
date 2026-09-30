@@ -12,7 +12,8 @@ using BeastieBot3.Infrastructure;
 // Scans CommonNameStore to find vernacular names that refer to multiple distinct taxa
 // (e.g., "sea lion" used for different species). These ambiguous names need special
 // handling in Wikipedia lists—either disambiguation suffixes or exclusion. Results
-// inform the ambiguous_names table used by StoreBackedCommonNameProvider.
+// are stored in common_name_conflicts, which only reports and the workflow page count; list
+// generation works out ambiguous names from common_names itself (GetAmbiguousNamesSet).
 
 namespace BeastieBot3.CommonNames;
 
@@ -77,11 +78,61 @@ internal sealed class CommonNameDetectConflictsCommand : AsyncCommand<CommonName
         AnsiConsole.MarkupLine($"  Conflicts in the common names store: [yellow]{stats.ConflictCount:N0}[/]");
         var notFoundThisRun = stats.ConflictCount - scan.ConflictsFound;
         if (notFoundThisRun > 0) {
-            AnsiConsole.MarkupLine(
-                $"  Stored conflicts not found by this run: [yellow]{notFoundThisRun:N0}[/]. Run with --clear-existing to remove them.");
+            // common_name_conflicts has no language column, so a conflict stored by a run with
+            // another --language is "not found" by this one, and --clear-existing would delete it.
+            // Call the rows out of date only when the run history shows they cannot be that.
+            var earlierRuns = store.GetImportRuns("detect_conflicts").Where(r => r.Id != runId).ToList();
+            var sameSettings = StoredConflictsAreFromRunsLikeThis(
+                earlierRuns, store.GetOldestConflictDetectedAt(), settings.Language, settings.IncludeFossil);
+            AnsiConsole.MarkupLine(sameSettings
+                ? $"  Stored conflicts not found by this run: [yellow]{notFoundThisRun:N0}[/]. These are out of date. To delete them, run again with --clear-existing."
+                : $"  Stored conflicts not found by this run: [yellow]{notFoundThisRun:N0}[/]. Some may be out of date, and some may have been found by an earlier run with a different --language or --include-fossil setting. --clear-existing deletes all stored conflicts before detection.");
         }
 
         return 0;
+    }
+
+    /// <summary>
+    /// True when every stored conflict was written by a completed detect-conflicts run with the
+    /// same --language and --include-fossil setting as this run, so a stored conflict this run
+    /// did not find is out of date. False when that cannot be shown.
+    /// </summary>
+    /// <param name="earlierRunsNewestFirst">Earlier detect_conflicts runs, not including this one.</param>
+    /// <param name="oldestStoredConflict">When the oldest stored conflict was recorded.</param>
+    internal static bool StoredConflictsAreFromRunsLikeThis(
+        IReadOnlyList<ImportRunRecord> earlierRunsNewestFirst,
+        DateTime? oldestStoredConflict,
+        string language,
+        bool includeFossil) {
+        if (oldestStoredConflict is not { } oldest) {
+            return true;
+        }
+
+        foreach (var run in earlierRunsNewestFirst) {
+            // Each conflict is stamped while its run is running, so a run that ended before the
+            // oldest stored conflict has no conflicts left in the store, and nor has any older run.
+            if (run.EndedAt is { } ended && ended < oldest) {
+                return true;
+            }
+            // An interrupted run records no options, so its conflicts could be for any language.
+            if (run.Status != "completed" || run.Notes is null) {
+                return false;
+            }
+            var options = run.Notes.Split("; ");
+            var runLanguage = options.FirstOrDefault(o => o.StartsWith("language=", StringComparison.Ordinal))?["language=".Length..];
+            if (runLanguage != language || options.Contains("fossils included") != includeFossil) {
+                return false;
+            }
+            if (options.Contains("cleared first")) {
+                return true;
+            }
+        }
+
+        // detect-conflicts has not always recorded its runs, so conflicts older than the oldest
+        // recorded run were written by a run whose options are unknown.
+        return earlierRunsNewestFirst.Count > 0
+            && earlierRunsNewestFirst[^1].StartedAt is { } firstRunStarted
+            && oldest >= firstRunStarted;
     }
 
     /// <summary>Counts from one pass of <see cref="ScanForConflicts"/>.</summary>

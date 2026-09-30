@@ -1140,6 +1140,13 @@ internal sealed class CommonNameStore : SqliteStore {
         command.ExecuteNonQuery();
     }
 
+    /// <summary>When the oldest stored conflict was recorded, or null when none are stored.</summary>
+    public DateTime? GetOldestConflictDetectedAt() {
+        using var command = _connection.CreateCommand();
+        command.CommandText = "SELECT MIN(detected_at) FROM common_name_conflicts";
+        return StoredUtc.Parse(command.ExecuteScalar() as string);
+    }
+
     #endregion
 
     #region Caps Rules Operations
@@ -1230,6 +1237,34 @@ internal sealed class CommonNameStore : SqliteStore {
         command.Parameters.AddWithValue("@notes", notes ?? (object)DBNull.Value);
         command.Parameters.AddWithValue("@id", runId);
         command.ExecuteNonQuery();
+    }
+
+    /// <summary>
+    /// Every run of one import type, newest first. The notes hold each run's options (for
+    /// example "language=en; cleared first"); a run that never finished has none.
+    /// </summary>
+    public IReadOnlyList<ImportRunRecord> GetImportRuns(string importType) {
+        using var command = _connection.CreateCommand();
+        command.CommandText =
+            """
+            SELECT id, status, started_at, ended_at, notes
+            FROM import_runs
+            WHERE import_type = @type
+            ORDER BY id DESC;
+            """;
+        command.Parameters.AddWithValue("@type", importType);
+
+        var results = new List<ImportRunRecord>();
+        using var reader = command.ExecuteReader();
+        while (reader.Read()) {
+            results.Add(new ImportRunRecord(
+                reader.GetInt64(0),
+                reader.GetString(1),
+                StoredUtc.Parse(reader.GetString(2)),
+                reader.IsDBNull(3) ? null : StoredUtc.Parse(reader.GetString(3)),
+                reader.IsDBNull(4) ? null : reader.GetString(4)));
+        }
+        return results;
     }
 
     /// <summary>
@@ -1408,6 +1443,18 @@ public record CommonNameRecord(
     bool TaxonIsExtinct,
     bool TaxonIsFossil
 );
+/// <summary>
+/// One row of import_runs. <see cref="Status"/> is 'completed' for a run that finished and
+/// 'running' for one that is still running or was interrupted.
+/// </summary>
+public record ImportRunRecord(
+    long Id,
+    string Status,
+    DateTime? StartedAt,
+    DateTime? EndedAt,
+    string? Notes
+);
+
 /// <summary>
 /// Summary of import runs for a specific import type.
 /// </summary>
