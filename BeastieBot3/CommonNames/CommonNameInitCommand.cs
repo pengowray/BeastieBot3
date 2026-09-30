@@ -114,7 +114,7 @@ internal sealed class CommonNameInitCommand : AsyncCommand<CommonNameInitCommand
         table.AddRow("Taxa", stats.TaxaCount.ToString("N0"));
         table.AddRow("Synonyms", stats.SynonymCount.ToString("N0"));
         table.AddRow("Common Names", stats.CommonNameCount.ToString("N0"));
-        table.AddRow("Conflicts", stats.ConflictCount.ToString("N0"));
+        table.AddRow("Ambiguous English Names (skipped by wikipedia generate-lists)", store.GetAmbiguousNames("en").Count.ToString("N0"));
         table.AddRow("Caps Rules", store.GetCapsRuleCount().ToString("N0"));
         AnsiConsole.Write(table);
     }

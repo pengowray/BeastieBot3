@@ -1,13 +1,14 @@
 using System.Linq;
 using BeastieBot3.CommonNames;
+using BeastieBot3.WikipediaLists;
 using Microsoft.Data.Sqlite;
 
 namespace BeastieBot3.Tests;
 
 // Pins the rule `wikipedia generate-lists` uses to skip ambiguous common names, and that
 // `common-names report --report ambiguous` lists the same names. The workflow page and the
-// generate-lists help say both of these, and neither reads `common-names detect-conflicts`'
-// stored conflicts, which use a narrower rule (same kingdom, synonym pairs left out).
+// generate-lists help say both of these. Both read CommonNameStore.QueryAmbiguousNames; the
+// report test below fails if the two sets ever differ on its fixture.
 public class CommonNameAmbiguityTests {
     private static CommonNameStore OpenInMemory() {
         var conn = new SqliteConnection("Data Source=:memory:");
@@ -108,5 +109,77 @@ public class CommonNameAmbiguityTests {
 
         Assert.Null(store.GetBestCommonNameForTaxon(a));
         Assert.Equal("African common toad", store.GetBestCommonNameForTaxon(a, allowAmbiguous: true)!.RawName);
+    }
+
+    [Fact]
+    public void AmbiguousReport_WithAKingdom_CountsOnlyThatKingdomsTaxa() {
+        // A name shared by a plant and an animal is skipped by the lists, but is not ambiguous
+        // within either kingdom, so `--kingdom` leaves it out of the report.
+        using var store = OpenInMemory();
+        var tree = AddTaxon(store, "pochota fendleri", "1", "PLANTAE");
+        var moth = AddTaxon(store, "conistra vaccinii", "2", "ANIMALIA");
+        var oak = AddTaxon(store, "quercus robur", "3", "PLANTAE");
+        var holmOak = AddTaxon(store, "quercus ilex", "4", "PLANTAE");
+        AddName(store, tree, "Chestnut", "iucn");
+        AddName(store, moth, "Chestnut", "col");
+        AddName(store, oak, "Oak", "iucn");
+        AddName(store, holmOak, "Oak", "col");
+
+        Assert.Equal(new[] { "oak" }, store.GetAmbiguousCommonNames(limit: null, kingdom: "PLANTAE"));
+        // The --kingdom help gives "Plantae"; the store holds kingdoms in upper case.
+        Assert.Equal(new[] { "oak" }, store.GetAmbiguousCommonNames(limit: null, kingdom: "Plantae"));
+        Assert.Empty(store.GetAmbiguousCommonNames(limit: null, kingdom: "ANIMALIA"));
+        Assert.Equal(new[] { "chestnut", "oak" }, store.GetAmbiguousNames("en").OrderBy(n => n));
+    }
+
+    [Fact]
+    public void AmbiguousReport_ListsTheMostSharedNamesFirst() {
+        using var store = OpenInMemory();
+        var a = AddTaxon(store, "panthera leo", "1");
+        var b = AddTaxon(store, "puma concolor", "2");
+        var c = AddTaxon(store, "panthera onca", "3");
+        AddName(store, a, "Mountain lion", "col");
+        AddName(store, b, "Mountain lion", "iucn");
+        AddName(store, a, "Big cat", "col");
+        AddName(store, b, "Big cat", "col");
+        AddName(store, c, "Big cat", "col");
+
+        Assert.Equal(new[] { "bigcat", "mountainlion" }, store.GetAmbiguousCommonNames(limit: null));
+        Assert.Equal(new[] { "bigcat" }, store.GetAmbiguousCommonNames(limit: 1));
+    }
+
+    [Fact]
+    public void AmbiguousNames_AreWorkedOutAgain_AfterASourceIsReplaced() {
+        // `common-names aggregate --replace` purges a source in the same store instance that then
+        // prints the ambiguous-name count, so the cached set must not outlive the purge.
+        using var store = OpenInMemory();
+        var lion = AddTaxon(store, "panthera leo", "1");
+        var cougar = AddTaxon(store, "puma concolor", "2");
+        AddName(store, lion, "Mountain lion", "col");
+        AddName(store, cougar, "Mountain lion", "iucn");
+        Assert.Single(store.GetAmbiguousNames("en"));
+
+        store.PurgeSource("col");
+
+        Assert.Empty(store.GetAmbiguousNames("en"));
+    }
+
+    [Fact]
+    public void ListsProvider_CountsTheNamesItSkips() {
+        // generate-lists prints this count under the store path.
+        using var store = OpenInMemory();
+        var lion = AddTaxon(store, "panthera leo", "1");
+        var cougar = AddTaxon(store, "puma concolor", "2");
+        AddName(store, lion, "Mountain lion", "col");
+        AddName(store, cougar, "Mountain lion", "iucn");
+        AddName(store, cougar, "Cougar", "iucn");
+
+        using var provider = new StoreBackedCommonNameProvider(store);
+        using var allowing = new StoreBackedCommonNameProvider(store, allowAmbiguous: true);
+
+        Assert.Equal(1, provider.AmbiguousNameCount);
+        Assert.Equal(0, allowing.AmbiguousNameCount);
+        Assert.Null(WikipediaListCommand.AmbiguousNamesLine(0));
+        Assert.Contains("common-names report --report ambiguous", WikipediaListCommand.AmbiguousNamesLine(1));
     }
 }

@@ -65,7 +65,7 @@ public sealed class WikipediaListCommand : Command<WikipediaListCommand.Settings
         public bool UseLegacyNames { get; init; }
 
         [CommandOption("--common-names-db <PATH>")]
-        [System.ComponentModel.Description("Path to the Common names store (default: common_names_sqlite in paths.ini). A common name that the store gives to more than one taxon is skipped as ambiguous: the list shows another common name for the taxon, or only its scientific name. 'common-names report --report ambiguous' lists the ambiguous names.")]
+        [System.ComponentModel.Description("Path to the Common names store (default: Datastore:common_names_sqlite in paths.ini, or common_names.sqlite in Datastore:datastore_dir when common_names_sqlite is not set). A common name shared by two or more taxa in the store is skipped as ambiguous, and the list shows another common name for the taxon, or only its scientific name. A common name set for the taxon in rules/rules-list.txt is used even if it is ambiguous. 'common-names report --report ambiguous' lists the ambiguous names.")]
         public string? CommonNamesDbPath { get; init; }
 
         [CommandOption("--col-database <PATH>")]
@@ -146,8 +146,12 @@ public sealed class WikipediaListCommand : Command<WikipediaListCommand.Settings
         try {
             if (plan.UseStore) {
                 AnsiConsole.MarkupLine($"[grey]Using aggregated common names from:[/] {Markup.Escape(commonNamesDbPath!)}");
-                AnsiConsole.MarkupLine($"[grey]{AmbiguousNamesNote}[/]");
                 var wikipediaCachePath = paths.GetWikipediaCachePath();
+                var storeProvider = new StoreBackedCommonNameProvider(commonNamesDbPath!, wikipediaCachePath);
+                providerToDispose = storeProvider;
+                if (AmbiguousNamesLine(storeProvider.AmbiguousNameCount) is { } ambiguousLine) {
+                    AnsiConsole.MarkupLine($"[grey]{Markup.Escape(ambiguousLine)}[/]");
+                }
                 if (!string.IsNullOrWhiteSpace(wikipediaCachePath) && File.Exists(wikipediaCachePath)) {
                     AnsiConsole.MarkupLine($"[grey]Using Wikipedia cache from:[/] {Markup.Escape(wikipediaCachePath)}");
                 }
@@ -157,8 +161,6 @@ public sealed class WikipediaListCommand : Command<WikipediaListCommand.Settings
                     // Same CoL DB, used to clean formatting-equivalent slips in the displayed scientific name.
                     colNameResolver = new Col.ColNameResolver(colDbPath!);
                 }
-                var storeProvider = new StoreBackedCommonNameProvider(commonNamesDbPath!, wikipediaCachePath);
-                providerToDispose = storeProvider;
                 generator = new WikipediaListGenerator(query, templates, rules, storeProvider, colEnricher, taxonRules, chartData, colNameResolver);
             } else {
                 var wikidataCachePath = paths.GetWikidataCachePath();
@@ -252,9 +254,15 @@ public sealed class WikipediaListCommand : Command<WikipediaListCommand.Settings
         return new NameSourcePlan(useStore, fallback, col);
     }
 
-    // Printed under the store path. The ambiguous names are worked out from the store's common
-    // names on each run (CommonNameStore.GetAmbiguousNamesSet); nothing has to be rebuilt first.
-    private const string AmbiguousNamesNote = "Common names that this store gives to more than one taxon are skipped. To list them, run common-names report --report ambiguous.";
+    /// <summary>
+    /// The line printed under the store path: how many common names the lists skip as ambiguous.
+    /// The names are worked out from the store's common names on each run
+    /// (CommonNameStore.QueryAmbiguousNames), so nothing has to be rebuilt first. Null when no
+    /// name is skipped.
+    /// </summary>
+    internal static string? AmbiguousNamesLine(int skipped) => skipped > 0
+        ? $"Skipping {skipped:N0} ambiguous common names, each shared by two or more taxa. To list them, run common-names report --report ambiguous."
+        : null;
 
     private const string IucnOnlyNamesNote = "Section headings use only the ranks in the IUCN data (kingdom, phylum, class, order, family and genus), and species names keep the IUCN spelling even where it has an error.";
 

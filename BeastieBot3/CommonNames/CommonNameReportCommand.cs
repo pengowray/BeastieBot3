@@ -104,7 +104,7 @@ internal sealed class CommonNameReportCommand : AsyncCommand<CommonNameReportCom
             table.AddRow("Taxa", stats.TaxaCount.ToString("N0"));
             table.AddRow("Scientific Name Synonyms", stats.SynonymCount.ToString("N0"));
             table.AddRow("Common Names (total)", stats.CommonNameCount.ToString("N0"));
-            table.AddRow("Detected Conflicts", stats.ConflictCount.ToString("N0"));
+            table.AddRow("Ambiguous English Names (skipped by wikipedia generate-lists)", store.GetAmbiguousNames("en").Count.ToString("N0"));
             table.AddRow("Caps Rules", store.GetCapsRuleCount().ToString("N0"));
             AnsiConsole.Write(table);
 

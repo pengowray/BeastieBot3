@@ -159,7 +159,6 @@ Aggregates vernacular names from all sources for disambiguation analysis.
 | [CommonNameNormalizer.cs](../BeastieBot3/CommonNameNormalizer.cs) | Name normalization |
 | [CommonNameProvider.cs](../BeastieBot3/CommonNameProvider.cs) | Best name selection |
 | [CapsFileParser.cs](../BeastieBot3/CapsFileParser.cs) | Capitalization rules |
-| [CommonNameDetectConflictsCommand.cs](../BeastieBot3/CommonNameDetectConflictsCommand.cs) | Find ambiguous names |
 
 ---
 
