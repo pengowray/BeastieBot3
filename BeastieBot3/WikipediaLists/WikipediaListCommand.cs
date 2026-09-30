@@ -61,11 +61,11 @@ public sealed class WikipediaListCommand : Command<WikipediaListCommand.Settings
         public int? Limit { get; init; }
 
         [CommandOption("--use-legacy-names")]
-        [System.ComponentModel.Description("Skip the Common names store. Use the first English P1843 common name in the Wikidata cache, or the first English common name in the IUCN API cache if Wikidata has none. The Catalogue of Life database is also ignored, as with --no-col-enrichment.")]
+        [System.ComponentModel.Description("Skip the Common names store. Use the first English P1843 common name in the Wikidata cache, or the first English common name in the IUCN API cache if Wikidata has none. That name is used even if another taxon has the same common name. The Catalogue of Life database is also ignored, as with --no-col-enrichment.")]
         public bool UseLegacyNames { get; init; }
 
         [CommandOption("--common-names-db <PATH>")]
-        [System.ComponentModel.Description("Path to the common names SQLite database.")]
+        [System.ComponentModel.Description("Path to the Common names store (default: common_names_sqlite in paths.ini). A common name that the store gives to more than one taxon is skipped as ambiguous: the list shows another common name for the taxon, or only its scientific name. 'common-names report --report ambiguous' lists the ambiguous names.")]
         public string? CommonNamesDbPath { get; init; }
 
         [CommandOption("--col-database <PATH>")]
@@ -146,6 +146,7 @@ public sealed class WikipediaListCommand : Command<WikipediaListCommand.Settings
         try {
             if (plan.UseStore) {
                 AnsiConsole.MarkupLine($"[grey]Using aggregated common names from:[/] {Markup.Escape(commonNamesDbPath!)}");
+                AnsiConsole.MarkupLine($"[grey]{AmbiguousNamesNote}[/]");
                 var wikipediaCachePath = paths.GetWikipediaCachePath();
                 if (!string.IsNullOrWhiteSpace(wikipediaCachePath) && File.Exists(wikipediaCachePath)) {
                     AnsiConsole.MarkupLine($"[grey]Using Wikipedia cache from:[/] {Markup.Escape(wikipediaCachePath)}");
@@ -250,6 +251,10 @@ public sealed class WikipediaListCommand : Command<WikipediaListCommand.Settings
 
         return new NameSourcePlan(useStore, fallback, col);
     }
+
+    // Printed under the store path. The ambiguous names are worked out from the store's common
+    // names on each run (CommonNameStore.GetAmbiguousNamesSet); nothing has to be rebuilt first.
+    private const string AmbiguousNamesNote = "Common names that this store gives to more than one taxon are skipped. To list them, run common-names report --report ambiguous.";
 
     private const string IucnOnlyNamesNote = "Section headings use only the ranks in the IUCN data (kingdom, phylum, class, order, family and genus), and species names keep the IUCN spelling even where it has an error.";
 

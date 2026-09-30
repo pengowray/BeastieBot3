@@ -9,19 +9,26 @@ using Spectre.Console.Cli;
 using BeastieBot3.Configuration;
 using BeastieBot3.Infrastructure;
 
-// Scans CommonNameStore to find vernacular names that refer to multiple distinct taxa
-// (e.g., "sea lion" used for different species). These ambiguous names need special
-// handling in Wikipedia lists—either disambiguation suffixes or exclusion. Results
-// are stored in common_name_conflicts, which only reports and the workflow page count; list
-// generation works out ambiguous names from common_names itself (GetAmbiguousNamesSet).
+// Scans CommonNameStore for vernacular names that two distinct taxa in the same kingdom share,
+// skipping pairs that AreSynonyms says share a scientific name, and stores each pair in
+// common_name_conflicts.
+//
+// Nothing reads those rows. Only their count appears (GetStatistics, in the summaries of init,
+// aggregate, report and this command). Wikipedia list generation works out ambiguous names from
+// common_names itself on every run (CommonNameStore.GetAmbiguousNamesSet), with a broader rule:
+// any two valid taxa, in any kingdom, synonyms included. `common-names report --report ambiguous`
+// uses that same rule. On the September 2026 store the two rules gave 8,810 and 10,165 names.
+// So this command is kept only for querying the stored pairs by hand; the workflow pages no
+// longer have a step for it.
 
 namespace BeastieBot3.CommonNames;
 
 /// <summary>
-/// Detects ambiguous common names (same normalized name used for different valid taxa in the same kingdom).
+/// Stores a conflict for each pair of valid taxa in the same kingdom that share a normalized
+/// common name. List generation does not read the stored conflicts.
 /// </summary>
 [CommandInfo("common-names detect-conflicts", CommandKind.Mutates,
-    "Detect ambiguous common names (same name used for different valid taxa).",
+    "Store a conflict for each pair of taxa in the same kingdom that share an English common name. The stored conflicts appear only as a count in the summaries of this command and of `common-names init`, `aggregate` and `report`. `wikipedia generate-lists` does not read them: it works out ambiguous common names each time it runs, and `common-names report --report ambiguous` lists those names.",
     Reason = "Writes conflict rows into the store; --clear-existing also wipes prior conflicts.",
     Examples = new[] {
         "common-names detect-conflicts",

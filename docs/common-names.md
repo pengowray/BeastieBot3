@@ -7,7 +7,8 @@ The `common-names` command group provides tools for aggregating, disambiguating,
 Common names for species are notoriously ambiguous. The same name can refer to different species ("snapper" can refer to dozens of fish species), and the same species may have many common names across different sources. This system:
 
 1. **Aggregates** common names from multiple authoritative sources
-2. **Detects conflicts** where the same name is used for different species
+2. **Finds ambiguous names**, common names that more than one taxon has, which
+   `wikipedia generate-lists` skips (see [Ambiguous common names](#ambiguous-common-names))
 3. **Applies capitalization rules** based on a curated rules file
 4. **Generates reports** for Wikipedia editors to help with disambiguation
 
@@ -24,7 +25,7 @@ These commands process large amounts of data and can take significant time to ru
 | `aggregate --source col` | ~110 min | ~110 min | Includes COL synonym import |
 | `aggregate` (all sources) | ~160 min | ~160 min | Total of above |
 | `detect-conflicts` | ~1 min | ~15 sec | Checks 166k distinct English common names. Measured September 2026 on Linux; "Fresh Run" is with `--clear-existing` |
-| `init --aggregate` + `detect-conflicts` | ~170 min | - | Full fresh setup (~3 hours) |
+| `init --aggregate` | ~170 min | - | Full fresh setup (~3 hours) |
 
 **Re-running commands:**
 - All commands use **UPSERT** operations - safe to re-run at any time
@@ -78,8 +79,9 @@ beastiebot3 common-names init --limit 1000
 - IUCN synonyms are only purged when `--include-synonyms` is also given, since that is the only
   flag that re-imports them.
 - Rejected with `--limit`, which would delete a source and re-import only part of it.
-- Clears the conflict list (its rows point at individual common-name rows), so run
-  `detect-conflicts` afterwards to rebuild it.
+- Also deletes every conflict stored by `detect-conflicts`, because each one points at
+  individual common-name rows. List generation does not read them, so there is nothing to
+  rebuild afterwards.
 - Recorded per source, and shown in the `Replaced` column of `common-names sources`. A source
   reading `never` there still holds everything it has ever contributed.
 - Re-running takes approximately the same time as a fresh run (~5-6 minutes)
@@ -140,9 +142,36 @@ Displays a table showing:
 - **Records** - Number of records added in the last run
 - **Last Run** - Timestamp of the last aggregation
 
+### Ambiguous common names
+
+`wikipedia generate-lists` takes each taxon's English common name from this store. It skips a
+common name that the store gives to more than one taxon: two or more valid, non-fossil taxa, in
+any kingdom, including taxa that share a scientific synonym. For that taxon it uses the next
+common name in source order (Wikipedia article title, Wikipedia taxobox, Wikidata label, IUCN
+preferred name, other IUCN names, other Wikidata names, Catalogue of Life). When every common
+name of the taxon is ambiguous, the list shows only its scientific name.
+
+The ambiguous names are worked out from `common_names` each time `generate-lists` runs
+(`CommonNameStore.GetAmbiguousNamesSet`), so nothing has to be rebuilt after aggregating. To
+see them, run `common-names report --report ambiguous`, which uses the same rule and writes
+`common-name-ambiguous-<timestamp>.md` to the reports folder. On the September 2026 store it
+listed 10,165 names. In the web UI this is the optional "List ambiguous common names" step of
+the "Wikipedia reports pipeline" workflow.
+
+With `--use-legacy-names`, `generate-lists` reads names from the Wikidata and IUCN API caches
+instead of this store and skips no names as ambiguous.
+
 ### `common-names detect-conflicts`
 
-Analyzes the common names database to find ambiguous names (same name used for different valid taxa).
+Stores a conflict in `common_name_conflicts` for each pair of valid taxa in the same kingdom
+that share a common name, leaving out pairs that share a scientific name or synonym
+(`CommonNameStore.AreSynonyms`). Nothing reads these rows: only their count appears, in the
+summaries of `init`, `aggregate`, `report` and this command. List generation and
+`common-names report --report ambiguous` use the broader rule in
+[Ambiguous common names](#ambiguous-common-names), so the counts differ: on the September 2026
+store this command stored conflicts for 8,810 names, and the lists skipped 10,165. The
+workflows in the web UI have no step for this command; it is kept for querying the stored
+pairs by hand.
 
 ```bash
 # Detect conflicts
@@ -184,7 +213,8 @@ beastiebot3 common-names report --report all --limit 100
 
 **Available reports:**
 - `summary` - Overview statistics
-- `ambiguous` - Names that refer to multiple valid species
+- `ambiguous` - Names that more than one valid taxon has, in any kingdom: the names
+  `wikipedia generate-lists` skips
 - `ambiguous-iucn` - Ambiguous names where at least one taxon is IUCN-listed
 - `caps` - Missing capitalization rules
 - `wiki-disambig` - Names that may need Wikipedia disambiguation
@@ -193,16 +223,13 @@ beastiebot3 common-names report --report all --limit 100
 
 ## Typical Workflow
 
-> **Time expectation:** A complete fresh setup takes approximately 3-4 hours. Once set up, re-running individual sources or conflict detection takes the same time as shown in the Performance Notes table above.
+> **Time expectation:** A complete fresh setup takes approximately 3-4 hours. Once set up, re-running individual sources takes the same time as shown in the Performance Notes table above.
 
 ### First-time setup
 
 ```bash
 # Initialize with all data
 beastiebot3 common-names init --aggregate
-
-# Detect conflicts
-beastiebot3 common-names detect-conflicts
 
 # Generate reports
 beastiebot3 common-names report --report all
@@ -220,8 +247,8 @@ beastiebot3 common-names aggregate
 # Mirror a source exactly after an upstream release, dropping what it no longer lists
 beastiebot3 common-names aggregate --source col --replace
 
-# Re-run conflict detection
-beastiebot3 common-names detect-conflicts --clear-existing
+# List the common names that wikipedia generate-lists now skips as ambiguous
+beastiebot3 common-names report --report ambiguous
 ```
 
 ### Checking status
@@ -238,7 +265,8 @@ The common names store (`common_names.sqlite`) contains:
 - **taxa** - Unified taxa from IUCN (the "backbone")
 - **scientific_name_synonyms** - Alternative scientific names for matching
 - **common_names** - All common names from all sources
-- **common_name_conflicts** - Detected ambiguities
+- **common_name_conflicts** - Pairs of taxa that share a common name, stored by `detect-conflicts`
+  (list generation does not read it)
 - **caps_rules** - Capitalization rules from caps.txt
 - **import_runs** - Tracking of aggregation runs for each source
 

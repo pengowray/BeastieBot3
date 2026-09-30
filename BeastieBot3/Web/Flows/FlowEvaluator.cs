@@ -1,5 +1,4 @@
 ﻿using BeastieBot3.Col;
-using BeastieBot3.CommonNames;
 using BeastieBot3.Configuration;
 using BeastieBot3.Iucn;
 using BeastieBot3.Web.Jobs;
@@ -53,14 +52,13 @@ public sealed class FlowEvaluator {
         // takes around twenty seconds. It is warmed in the background instead.
         var colState = new Lazy<ColUpdateState>(() => ColUpdateStateReader.Read(_paths, readArchives: false));
         var colArtifacts = new Lazy<ColArtifacts>(() => ColArtifacts.Read(_paths));
-        var hubState = new Lazy<CommonNameHubState>(() => CommonNameHubStateReader.Read(_paths));
         // Cross-database counts (IUCN taxa vs the two caches) take about a second, so this
         // returns the last background snapshot and never blocks the poll.
         var wikiState = new Lazy<WikiCoverageState>(() => WikiCoverageStateReader.Read(_paths));
         var wdIucnState = new Lazy<WikidataIucnFlowState>(() => WikidataIucnFlowStateReader.Read(_paths));
 
         var steps = flow.Steps
-            .Select(s => Evaluate(s, sourceStatusById, runningJobsByCommand, iucnState, apiState, colState, colArtifacts, hubState, wikiState, wdIucnState))
+            .Select(s => Evaluate(s, sourceStatusById, runningJobsByCommand, iucnState, apiState, colState, colArtifacts, wikiState, wdIucnState))
             .ToList();
 
         // Collect the subset of data sources actually referenced by this flow,
@@ -130,7 +128,6 @@ public sealed class FlowEvaluator {
                                       Lazy<IucnApiCacheState> apiState,
                                       Lazy<ColUpdateState> colState,
                                       Lazy<ColArtifacts> colArtifacts,
-                                      Lazy<CommonNameHubState> hubState,
                                       Lazy<WikiCoverageState> wikiState,
                                       Lazy<WikidataIucnFlowState> wdIucnState) {
         // Block status: any required input data source missing.
@@ -175,7 +172,7 @@ public sealed class FlowEvaluator {
 
         // What the on-disk state says about this step, if it carries a probe. Kept separate from
         // the status so its explanation still shows while the step is blocked or running.
-        var probe = RunProbe(step, iucnState, apiState, colState, colArtifacts, hubState, wikiState, wdIucnState);
+        var probe = RunProbe(step, iucnState, apiState, colState, colArtifacts, wikiState, wdIucnState);
 
         string status;
         if (missingInputs.Count > 0) {
@@ -225,7 +222,6 @@ public sealed class FlowEvaluator {
                                              Lazy<IucnApiCacheState> apiState,
                                              Lazy<ColUpdateState> colState,
                                              Lazy<ColArtifacts> colArtifacts,
-                                             Lazy<CommonNameHubState> hubState,
                                       Lazy<WikiCoverageState> wikiState,
                                       Lazy<WikidataIucnFlowState> wdIucnState) {
         if (step.Probe is null) return null;
@@ -233,7 +229,6 @@ public sealed class FlowEvaluator {
             if (FlowStepProbes.IsIucnCsvProbe(step.Probe)) return FlowStepProbes.Evaluate(step.Probe, iucnState.Value);
             if (FlowStepProbes.IsIucnApiProbe(step.Probe)) return FlowStepProbes.EvaluateApi(step.Probe, apiState.Value);
             if (FlowStepProbes.IsColProbe(step.Probe)) return FlowStepProbes.EvaluateCol(step.Probe, colState.Value, colArtifacts.Value);
-            if (FlowStepProbes.IsCommonNameProbe(step.Probe)) return FlowStepProbes.EvaluateCommonNames(step.Probe, hubState.Value);
             if (FlowStepProbes.IsWikiProbe(step.Probe)) return FlowStepProbes.EvaluateWiki(step.Probe, wikiState.Value);
             if (WikidataIucnProbes.IsProbe(step.Probe)) return WikidataIucnProbes.Evaluate(step.Probe, wdIucnState.Value);
             return null;

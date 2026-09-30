@@ -1,4 +1,5 @@
 using System;
+using BeastieBot3.Infrastructure;
 using BeastieBot3.Wikidata;
 using BeastieBot3.Wikipedia;
 using Microsoft.Data.Sqlite;
@@ -81,5 +82,14 @@ public class StoredDownloadedAtTests {
         var scope = new WikipediaCacheStore.WikiFetchScope { RefreshOnly = true, RefreshThreshold = Threshold };
         var page = Assert.Single(store.GetPendingPages(10, scope));
         AssertUtc(page.DownloadedAt);
+    }
+
+    // The shared parser every reader above should use. Moved here from the removed common-name
+    // probe tests, which were its only direct test.
+    [Fact]
+    public void StoredUtc_ParsesAStoredStampAsUtc() {
+        var parsed = StoredUtc.Parse("2026-08-20T10:00:00.0000000Z");
+        Assert.Equal(DateTimeKind.Utc, parsed!.Value.Kind);
+        Assert.Equal(new DateTime(2026, 8, 20, 10, 0, 0, DateTimeKind.Utc), parsed.Value);
     }
 }
