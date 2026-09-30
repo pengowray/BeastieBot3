@@ -267,8 +267,15 @@
   }
 
   // Wall-clock run time: started→completed, or started→now while running.
+  // A job that was running when serve stopped is marked failed at the next start, with no exit
+  // code (every job that ends normally or is cancelled has one). Its completedAt is that restart.
+  function wasInterrupted(j) {
+    return j.status === 'failed' && j.exitCode == null;
+  }
+
   function jobDuration(j) {
-    if (!j.startedAt) return '';
+    // Start to restart would overstate how long an interrupted job ran.
+    if (!j.startedAt || wasInterrupted(j)) return '';
     const start = new Date(j.startedAt).getTime();
     const end = j.completedAt ? new Date(j.completedAt).getTime() : Date.now();
     return formatDuration(end - start);
@@ -293,7 +300,7 @@
     const lines = [];
     if (j.createdAt) lines.push('enqueued ' + formatAbsolute(j.createdAt));
     if (j.startedAt) lines.push('started ' + formatAbsolute(j.startedAt));
-    if (j.completedAt) lines.push('finished ' + formatAbsolute(j.completedAt));
+    if (j.completedAt) lines.push((wasInterrupted(j) ? 'serve restarted ' : 'finished ') + formatAbsolute(j.completedAt));
     return lines.join('\n');
   }
 
