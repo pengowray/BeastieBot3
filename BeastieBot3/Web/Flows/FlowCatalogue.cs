@@ -776,7 +776,7 @@ public static class FlowCatalogue {
                     OutputSourceIds = new[] { "wikidata-cache" },
                     Probe = WikidataIucnProbes.ItemsFresh,
                     Group = "1 · Local data",
-                    Note = "Only the dry run (3 · Dry run) reads every linked item, so this step's status line comes from the last dry run and stays empty until the first one. Each edit is sent with the item revision it was planned on, and Wikidata refuses the edit if the item has changed since.",
+                    Note = "This step's status line comes from the last dry run (3 · Dry run), because only a dry run reads the linked items, and a dry run with --limit reads only some of them. The line stays empty until the first dry run. Each edit is sent with the item revision it was planned on, and Wikidata refuses the edit if the item has changed since.",
                 },
                 new FlowStep {
                     Id = "wikidata-assessment-items",
