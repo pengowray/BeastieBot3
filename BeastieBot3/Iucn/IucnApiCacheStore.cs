@@ -673,9 +673,28 @@ FROM refresh_sessions WHERE {where} ORDER BY id DESC LIMIT 1";
 
     public long CountTaxa() => Scalar("SELECT COUNT(*) FROM taxa");
     public long CountAssessments() => Scalar("SELECT COUNT(*) FROM assessments");
-    public long CountBacklogOutstanding() => Scalar(
-        @"SELECT COUNT(*) FROM taxa_assessment_backlog b
-          WHERE NOT EXISTS (SELECT 1 FROM assessments a WHERE a.assessment_id = b.assessment_id)");
+    // Queued assessments not downloaded yet, split by what a normal cache-assessments run does with
+    // them. A 404/410 is a tombstone: a normal run never asks again (only --retry-tombstones, the
+    // re-import's last pass, does), so it is counted apart from the outstanding work, or the step
+    // could never finish. Server errors stay in Outstanding: they are retried once their back-off
+    // ends. Both failure counts join on the backlog, because a re-downloaded taxon replaces its
+    // backlog rows while its failed_requests rows stay behind.
+    public AssessmentBacklogCounts CountAssessmentBacklog() {
+        using var command = _connection.CreateCommand();
+        command.CommandText = @"SELECT
+    COUNT(*),
+    IFNULL(SUM(f.last_status IN (404, 410)), 0),
+    IFNULL(SUM(f.last_status >= 500), 0)
+FROM taxa_assessment_backlog b
+LEFT JOIN failed_requests f
+    ON f.endpoint = 'assessment' AND f.entity_id = CAST(b.assessment_id AS TEXT)
+WHERE NOT EXISTS (SELECT 1 FROM assessments a WHERE a.assessment_id = b.assessment_id)";
+        using var reader = command.ExecuteReader();
+        if (!reader.Read()) return new AssessmentBacklogCounts(0, 0, 0);
+        var notDownloaded = reader.GetInt64(0);
+        var notFound = reader.GetInt64(1);
+        return new AssessmentBacklogCounts(notDownloaded - notFound, notFound, reader.GetInt64(2));
+    }
 
     public DateTime? GetOldestTaxaDownloadedAt() =>
         StoredUtc.Parse(ScalarString("SELECT MIN(downloaded_at) FROM taxa"));
@@ -706,20 +725,15 @@ FROM refresh_sessions WHERE {where} ORDER BY id DESC LIMIT 1";
         }
         return list;
     }
-
-    // Ids the API keeps erroring on with a server fault (the known empty-scope HTTP 500s).
-    public IReadOnlyList<long> GetServerErrorEntityIds(string endpoint) {
-        using var command = _connection.CreateCommand();
-        command.CommandText = "SELECT entity_id FROM failed_requests WHERE endpoint=@endpoint AND last_status >= 500";
-        command.Parameters.AddWithValue("@endpoint", endpoint);
-        var list = new List<long>();
-        using var reader = command.ExecuteReader();
-        while (reader.Read()) {
-            if (long.TryParse(reader.GetString(0), out var id)) list.Add(id);
-        }
-        return list;
-    }
 }
+
+/// <summary>
+/// Queued assessments that are not downloaded yet. <see cref="Outstanding"/> is what a normal run
+/// still works on, server errors included; <see cref="NotFound"/> is the 404/410 tombstones, which
+/// only a tombstone re-check asks for again; <see cref="ServerErrors"/> is the part of
+/// <see cref="Outstanding"/> whose last attempt got an HTTP 5xx.
+/// </summary>
+internal readonly record struct AssessmentBacklogCounts(long Outstanding, long NotFound, long ServerErrors);
 
 internal sealed record TaxaLookupRow(long SisId, long RootSisId, string Scope);
 

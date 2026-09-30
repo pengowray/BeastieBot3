@@ -27,6 +27,7 @@ public class FlowApiProbeTests {
         long assessments = 352_384,
         long backlogOutstanding = 0,
         long serverErrors = 0,
+        long notFound = 0,
         IucnRefreshSession? session = null,
         long taxaRemaining = 0,
         long assessmentsRemaining = 0,
@@ -38,6 +39,7 @@ public class FlowApiProbeTests {
             AssessmentsCached = assessments,
             BacklogOutstanding = backlogOutstanding,
             ServerErrorAssessments = serverErrors,
+            BacklogNotFound = notFound,
             OldestTaxaDownloadedAt = new DateTime(2025, 11, 14, 5, 37, 0, DateTimeKind.Utc),
             ActiveSession = session,
             RefreshTaxaRemaining = taxaRemaining,
@@ -149,7 +151,33 @@ public class FlowApiProbeTests {
     public void Infraranks_IgnoresTheOnesTheApiCannotServe() {
         var r = FlowStepProbes.ApiInfraranks(State(backlogOutstanding: 23, serverErrors: 23))!;
         Assert.Equal("ok", r.Status);
-        Assert.Contains("server error", r.Detail);
+        Assert.Contains("except 23 that the API answers with a server error", r.Detail);
+    }
+
+    // A 404 is tombstoned and no normal run asks for it again, so it is not work left either.
+    // It is named in the ok line so the gap between queued and cached is explained.
+    [Fact]
+    public void Infraranks_NotFoundOnly_IsOkAndSaysHowMany() {
+        var r = FlowStepProbes.ApiInfraranks(State(notFound: 57))!;
+        Assert.Equal("ok", r.Status);
+        Assert.Contains("except 57 not found on the API", r.Detail);
+        Assert.DoesNotContain("server error", r.Detail);
+    }
+
+    [Fact]
+    public void Infraranks_ServerErrorsAndNotFound_NamesBoth() {
+        var r = FlowStepProbes.ApiInfraranks(State(backlogOutstanding: 23, serverErrors: 23, notFound: 57))!;
+        Assert.Equal("ok", r.Status);
+        Assert.Contains("23 that the API answers with a server error and 57 not found on the API", r.Detail);
+    }
+
+    // The count of work left is the same number the one-button light shows: server errors out.
+    [Fact]
+    public void Infraranks_TodoCountLeavesOutServerErrorsAndNotFound() {
+        var r = FlowStepProbes.ApiInfraranks(State(backlogOutstanding: 900, serverErrors: 100, notFound: 57))!;
+        Assert.Equal("todo", r.Status);
+        Assert.Contains("800 queued assessments", r.Detail);
+        Assert.DoesNotContain("57", r.Detail);
     }
 
     // ---- the projection ----
@@ -208,6 +236,30 @@ public class FlowApiProbeTests {
         var r = FlowStepProbes.ApiUpdate(State(backlogOutstanding: 900, serverErrors: 100));
         Assert.Equal("todo", r.Status);
         Assert.Contains("800 queued assessments", r.Detail);
+    }
+
+    // The bug this pins: 404 tombstones sat in the outstanding count, which no run could close,
+    // so the light stayed amber for good.
+    [Fact]
+    public void UpdateLight_OnlyNotFoundLeft_IsOkAndNamesThem() {
+        var r = FlowStepProbes.ApiUpdate(State(notFound: 57, projection: Projection()));
+        Assert.Equal("ok", r.Status);
+        Assert.Contains("Every queued assessment is downloaded, except 57 not found on the API.", r.Detail);
+    }
+
+    [Fact]
+    public void UpdateLight_NotFoundPlusRealBacklog_IsTodoWithTheRealCountOnly() {
+        var r = FlowStepProbes.ApiUpdate(State(backlogOutstanding: 40, notFound: 57, projection: Projection()));
+        Assert.Equal("todo", r.Status);
+        Assert.Contains("40 queued assessments", r.Detail);
+        Assert.DoesNotContain("57", r.Detail);
+    }
+
+    [Fact]
+    public void UpdateLight_ServerErrorsAndNotFound_IsOkAndNamesBoth() {
+        var r = FlowStepProbes.ApiUpdate(State(backlogOutstanding: 23, serverErrors: 23, notFound: 57, projection: Projection()));
+        Assert.Equal("ok", r.Status);
+        Assert.Contains("except 23 that the API answers with a server error and 57 not found on the API", r.Detail);
     }
 
     [Fact]

@@ -279,7 +279,7 @@ public static class FlowStepProbes {
                 : $"Re-import {session.DisplayLabel} not finished. All re-downloads are done; still to run: {string.Join(" and ", passesLeft)}. Run this step again to finish the re-import.");
         }
 
-        var backlog = Math.Max(0, s.BacklogOutstanding - s.ServerErrorAssessments);
+        var backlog = s.AssessmentsToDownload;
         if (backlog > 0) {
             return new FlowProbeResult("todo", $"{backlog:N0} queued assessments are not downloaded yet.");
         }
@@ -296,8 +296,20 @@ public static class FlowStepProbes {
         }
 
         var age = s.OldestTaxaDownloadedAt is { } oldest ? $" · oldest taxon record downloaded {IucnRefreshMath.Stamp(oldest)}" : "";
+        var except = ExceptNotDownloaded(s);
+        var notDownloaded = except.Length == 0 ? "" : $" Every queued assessment is downloaded{except}.";
         return new FlowProbeResult("ok",
-            $"{s.TaxaCached:N0} taxa and {s.AssessmentsCached:N0} assessments cached{age}. For a new Red List release, start a re-import first (iucn api refresh-start), then run this step.");
+            $"{s.TaxaCached:N0} taxa and {s.AssessmentsCached:N0} assessments cached{age}.{notDownloaded} For a new Red List release, start a re-import first (iucn api refresh-start), then run this step.");
+    }
+
+    // The queued assessments a normal run does not count as work left: the ones the API answers
+    // with a server error, and the ones it answered 404/410 for, which only a re-import's
+    // tombstone pass asks for again. "" when there are none.
+    private static string ExceptNotDownloaded(IucnApiCacheState s) {
+        var parts = new List<string>();
+        if (s.ServerErrorAssessments > 0) parts.Add($"{s.ServerErrorAssessments:N0} that the API answers with a server error");
+        if (s.BacklogNotFound > 0) parts.Add($"{s.BacklogNotFound:N0} not found on the API");
+        return parts.Count == 0 ? "" : ", except " + string.Join(" and ", parts);
     }
 
     // Are the release's zip files where the import will look for them?
@@ -438,18 +450,15 @@ public static class FlowStepProbes {
     internal static FlowProbeResult? ApiInfraranks(IucnApiCacheState s) {
         if (!s.CacheExists || s.TaxaCached == 0) return null;
 
-        if (s.BacklogOutstanding == 0) {
-            return new FlowProbeResult("ok", $"Every queued assessment is downloaded ({s.AssessmentsCached:N0} in the cache).");
+        // Assessments the API answers with a server error, or answered 404/410 for, are not work
+        // left: AssessmentsToDownload leaves both out, and the ok line names them.
+        if (s.AssessmentsToDownload > 0) {
+            return new FlowProbeResult("todo",
+                $"{s.AssessmentsToDownload:N0} queued assessments are not downloaded yet.");
         }
 
-        // The handful the API answers with a server error never come down; they are not work left.
-        if (s.BacklogOutstanding <= s.ServerErrorAssessments) {
-            return new FlowProbeResult("ok",
-                $"{s.BacklogOutstanding:N0} queued assessments are still missing, and all of them are ones the API answers with a server error. Nothing left to fetch.");
-        }
-
-        return new FlowProbeResult("todo",
-            $"{s.BacklogOutstanding:N0} queued assessments are not downloaded yet.");
+        return new FlowProbeResult("ok",
+            $"Every queued assessment is downloaded ({s.AssessmentsCached:N0} in the cache){ExceptNotDownloaded(s)}.");
     }
 
     // The projection is what --dataset api actually reads, so "is it built from what is in the
