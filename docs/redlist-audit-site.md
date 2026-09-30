@@ -384,16 +384,16 @@ none; that one time, the generator's files are recognised by their content inste
 `<file name>:`, the `AuditCsvWriter.StableId` format. A hand-made CSV with an `id` column fails the
 second test and is kept.
 
-**When a producer fails.** A producer that throws is printed as `error <id>: <message>`, and the
-run carries on and exits 0. None of its pages are written, so removing stale files would take its
-whole report family out of the folder (about 30 files for `col-crosscheck`). Such a run removes
-nothing: `RedlistAuditSiteCommand` passes `prune: false`, prints a yellow line saying how many
-earlier files were kept and which producers failed, and the kept files stay on `.audit-files.txt`,
-so the next run without errors removes whichever of them it does not write. A **skipped** producer
-is different: it returned no report because its data source is missing, or, for `empty-scope`,
-because it found nothing. That run still removes the producer's old pages, since the index no
-longer links them. For example, if `COL_sqlite` points at a missing file, the Catalogue of Life
-crosscheck pages from the earlier run are removed.
+**When a producer fails or is skipped.** A producer that throws is printed as `error <id>: <message>`;
+the run carries on, writes the rest of the site, and exits 1 so the web UI shows the job as failed.
+A **skipped** producer returned no report, either because its data source is missing (for example
+`COL_sqlite` points at a missing file) or because it found nothing (`empty-scope`); the command
+can't tell those apart. In both cases none of that producer's pages are written, so removing stale
+files would take its whole report family out of the folder (about 30 files for `col-crosscheck`).
+Such a run removes nothing: `RedlistAuditSiteCommand` passes `prune: false`, prints a yellow line
+saying how many earlier files were kept and which producers failed or did not run, and the kept
+files stay on `.audit-files.txt`, so the next run in which every producer writes removes whichever
+of them it does not write. Kept pages are not linked from the new index.
 
 ## Year-specific vs generic commentary
 

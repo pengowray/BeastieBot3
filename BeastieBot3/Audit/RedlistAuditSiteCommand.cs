@@ -82,6 +82,7 @@ internal sealed class RedlistAuditSiteCommand : Command<RedlistAuditSiteCommand.
 
         var reports = new List<AuditReport>();
         var failed = new List<string>();
+        var skipped = new List<string>();
         string? colRelease;
         using (var ctx = new AuditContext(paths, limit is null ? null : (int?)Math.Min(int.MaxValue, limit.Value), release, releaseYear, commentary, ct)) {
             colRelease = ctx.ColReleaseLabel();
@@ -91,6 +92,7 @@ internal sealed class RedlistAuditSiteCommand : Command<RedlistAuditSiteCommand.
                     var produced = producer.Produce(ctx);
                     if (produced.Count == 0) {
                         AnsiConsole.MarkupLineInterpolated($"[yellow]skipped[/] {producer.Id} (data source unavailable, or nothing to report)");
+                        skipped.Add(producer.Id);
                         continue;
                     }
                     foreach (var report in produced) {
@@ -134,18 +136,23 @@ internal sealed class RedlistAuditSiteCommand : Command<RedlistAuditSiteCommand.
             RowLimit = limit,
         };
 
-        // A producer that threw wrote none of its pages, so pruning would remove its whole report
-        // family from the folder (for the CoL crosscheck, about 30 files). Keep everything instead;
-        // the next run without errors removes what it does not write. A skipped producer (missing
-        // data source, or nothing to report) is not a failure, and its old pages are removed.
+        // A producer that threw or was skipped wrote none of its pages, so pruning would remove its
+        // whole report family from the folder (for the CoL crosscheck, about 30 files). A skip can
+        // mean a data source is missing (a paths.ini typo), which is no reason to delete published
+        // pages, and the producer can't tell that apart from "nothing to report". So keep
+        // everything; the next run in which every producer writes removes what it does not write.
+        var kept = failed.Concat(skipped).ToList();
         var written = AuditSiteRenderer.Write(document, outputDir,
             line => AnsiConsole.MarkupLineInterpolated($"[grey]{Markup.Escape(line)}[/]"),
-            prune: failed.Count == 0);
+            prune: kept.Count == 0);
         if (written.Removed.Count > 0) {
             AnsiConsole.MarkupLineInterpolated($"[yellow]Removed {FileCount(written.Removed.Count)} from an earlier run, because this run did not write {(written.Removed.Count == 1 ? "it" : "them")}.[/]");
         }
         if (written.Kept.Count > 0) {
-            AnsiConsole.MarkupLineInterpolated($"[yellow]Kept {FileCount(written.Kept.Count)} from an earlier run, because {HtmlText.JoinWithAnd(failed)} failed. This run did not write {(written.Kept.Count == 1 ? "it, so it" : "them, so they")} may be out of date.[/]");
+            var reason = failed.Count > 0 && skipped.Count > 0
+                ? $"{HtmlText.JoinWithAnd(failed)} failed and {HtmlText.JoinWithAnd(skipped)} did not run"
+                : failed.Count > 0 ? $"{HtmlText.JoinWithAnd(failed)} failed" : $"{HtmlText.JoinWithAnd(skipped)} did not run";
+            AnsiConsole.MarkupLineInterpolated($"[yellow]Kept {FileCount(written.Kept.Count)} from an earlier run, because {reason}. This run did not write {(written.Kept.Count == 1 ? "it, so it" : "them, so they")} may be out of date.[/]");
         }
         if (written.NotRemoved.Count > 0) {
             AnsiConsole.MarkupLineInterpolated($"[yellow]Could not remove {FileCount(written.NotRemoved.Count)} from an earlier run.[/]");
@@ -163,13 +170,14 @@ internal sealed class RedlistAuditSiteCommand : Command<RedlistAuditSiteCommand.
             if (string.IsNullOrWhiteSpace(settings.OutputDir) && File.Exists(Path.Combine(fullDir, "index.html"))) {
                 AnsiConsole.MarkupLineInterpolated($"[grey]The full site in {fullDir} was not changed.[/]");
             }
-            return 0;
+            return failed.Count > 0 ? 1 : 0;
         }
 
         var countsFile = Path.Combine(outputDir, AuditSiteRenderer.ReleaseCountsFileName);
         AnsiConsole.MarkupLineInterpolated($"[grey]Row counts for release-counts.yml (also saved as {countsFile}):[/]");
         AnsiConsole.WriteLine(AuditSiteRenderer.ReleaseCountsBlock(document));
-        return 0;
+        // A report that threw is missing from the site, so the job must not show as a success.
+        return failed.Count > 0 ? 1 : 0;
     }
 
     private static string FileCount(int count) =>
