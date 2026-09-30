@@ -30,11 +30,11 @@ public sealed class WikidataCacheItemsSettings : CommonSettings {
     public int? BatchSize { get; init; }
 
     [CommandOption("--max-age-hours <HOURS>")]
-    [Description("Redownload entities older than the supplied age (forces refresh).")]
+    [Description("Re-download cached entities that were downloaded more than HOURS hours ago.")]
     public double? MaxAgeHours { get; init; }
 
     [CommandOption("--force")]
-    [Description("Re-download every entity, including entities already cached. --max-age-hours is ignored. Add --refresh-only to re-download only the cached entities.")]
+    [Description("Download entities not yet cached, then re-download every cached entity, least recently downloaded first. --max-age-hours is ignored. With --refresh-only, re-download only the cached entities.")]
     public bool Force { get; init; }
 
     [CommandOption("--failed-only")]
@@ -71,29 +71,22 @@ public sealed class WikidataCacheItemsCommand : AsyncCommand<WikidataCacheItemsS
         using var store = WikidataCacheStore.Open(cachePath);
         using var client = new WikidataApiClient(configuration);
 
-        var refreshThreshold = RefreshCutoff(settings.Force, settings.MaxAgeHours, runStart);
+        var (refreshThreshold, totalTarget) = PlanQueue(store, settings, runStart);
 
         if (settings.RefreshOnly && refreshThreshold is null) {
             AnsiConsole.MarkupLine("[red]--refresh-only needs --max-age-hours <HOURS> (re-download cached entities older than HOURS hours) or --force (re-download every cached entity).[/]");
             return -1;
         }
 
-        var limit = settings.Limit is { } l && l > 0 ? l : int.MaxValue;
         var batchSize = Math.Clamp(settings.BatchSize ?? 250, 25, 2_000);
 
-        var totalCandidates = settings.FailedOnly
-            ? store.CountFailedEntities(runStart)
-            : store.CountPendingEntities(refreshThreshold, settings.RefreshOnly, runStart);
-
-        if (totalCandidates == 0) {
+        if (totalTarget == 0) {
             var message = settings.FailedOnly
                 ? "[yellow]No previously failed Wikidata entities match the provided filters.[/]"
                 : "[yellow]No Wikidata entities are pending download for the provided filters.[/]";
             AnsiConsole.MarkupLine(message);
             return 0;
         }
-
-        var totalTarget = Math.Min(limit, totalCandidates);
 
         var (downloaded, skipped, failures, completed) = await DownloadEntitiesAsync(
             totalTarget,
@@ -128,6 +121,23 @@ public sealed class WikidataCacheItemsCommand : AsyncCommand<WikidataCacheItemsS
         return maxAgeHours is { } hours && hours > 0
             ? runStart - TimeSpan.FromHours(hours)
             : null;
+    }
+
+    // The run's plan from its settings: the re-download cutoff (RefreshCutoff) and how many entities
+    // the run will try, which is the number queued or --limit, whichever is lower. --refresh-only
+    // with no cutoff queues nothing and is not counted; RunAsync reports it as an error. The tests
+    // call this too, so they go through the same settings-to-query wiring as the command.
+    internal static (DateTime? Cutoff, int Total) PlanQueue(WikidataCacheStore store, WikidataCacheItemsSettings settings, DateTime runStart) {
+        var cutoff = RefreshCutoff(settings.Force, settings.MaxAgeHours, runStart);
+        if (settings.RefreshOnly && cutoff is null) {
+            return (null, 0);
+        }
+
+        var queued = settings.FailedOnly
+            ? store.CountFailedEntities(runStart)
+            : store.CountPendingEntities(cutoff, settings.RefreshOnly, runStart);
+        var limit = settings.Limit is { } l && l > 0 ? l : int.MaxValue;
+        return (cutoff, Math.Min(limit, queued));
     }
 
     // download is WikidataEntityDownloader.DownloadSingleAsync in the command; tests pass a fake

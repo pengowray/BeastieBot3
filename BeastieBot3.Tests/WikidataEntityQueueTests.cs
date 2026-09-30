@@ -22,6 +22,10 @@ namespace BeastieBot3.Tests;
 // A successful download does (json_downloaded = 1, new downloaded_at); a failed one did not, so it
 // came straight back in the next batch, and --failed-only (newest attempt first) picked the item
 // that had just failed again. The queue now leaves out anything attempted since the run started.
+//
+// Cached copies used to be queued in Q-number order. Every cached copy is older than a --force
+// run, so each --force run started again from the lowest Q-number: "--force --limit N" re-downloaded
+// the same N items every time. They are now queued least recently downloaded first.
 public class WikidataEntityQueueTests {
     private static SqliteConnection OpenMemory() {
         var connection = new SqliteConnection("Data Source=:memory:");
@@ -68,15 +72,12 @@ public class WikidataEntityQueueTests {
         return StoredUtc.Parse(cmd.ExecuteScalar() as string);
     }
 
-    // Runs the command's download loop with a fake download that writes the same rows the real
-    // one does, and returns the Q-numbers in the order they were tried.
+    // Runs the command's plan and download loop with a fake download that writes the same rows the
+    // real one does, and returns the Q-numbers in the order they were tried.
     private static async Task<(List<long> Tried, (int downloaded, int skipped, int failed, int completed) Result)> RunLoopAsync(
         WikidataCacheStore store, WikidataCacheItemsSettings settings, DateTime runStart, int batchSize,
         ISet<long> failing) {
-        var cutoff = WikidataCacheItemsCommand.RefreshCutoff(settings.Force, settings.MaxAgeHours, runStart);
-        var total = settings.FailedOnly
-            ? store.CountFailedEntities(runStart)
-            : store.CountPendingEntities(cutoff, settings.RefreshOnly, runStart);
+        var (cutoff, total) = WikidataCacheItemsCommand.PlanQueue(store, settings, runStart);
 
         var tried = new List<long>();
         var result = await WikidataCacheItemsCommand.DownloadEntitiesAsync(
@@ -191,5 +192,84 @@ public class WikidataEntityQueueTests {
         Assert.Equal((0, 0, 2, 2), result);
         Assert.Empty(store.GetFailedEntities(10, runStart));
         Assert.Equal(2, store.CountFailedEntities());
+    }
+
+    [Fact]
+    public void PlanQueue_TakesCutoffAndTotalFromTheSettings() {
+        using var connection = OpenMemory();
+        using var store = WikidataCacheStore.OpenFromConnection(connection);
+        var runStart = new DateTime(2026, 9, 30, 12, 0, 0, DateTimeKind.Utc);
+        AddEntity(connection, 1, downloadedAt: null);
+        AddEntity(connection, 2, downloadedAt: null, lastAttemptAt: runStart.AddDays(-1), lastError: "HTTP 500");
+        AddEntity(connection, 3, downloadedAt: runStart.AddDays(-3), lastAttemptAt: runStart.AddDays(-3));
+        AddEntity(connection, 4, downloadedAt: runStart.AddMinutes(-10), lastAttemptAt: runStart.AddMinutes(-10));
+
+        (DateTime?, int) Plan(WikidataCacheItemsSettings settings) =>
+            WikidataCacheItemsCommand.PlanQueue(store, settings, runStart);
+
+        Assert.Equal((null, 2), Plan(new WikidataCacheItemsSettings()));
+        Assert.Equal((runStart, 4), Plan(new WikidataCacheItemsSettings { Force = true }));
+        Assert.Equal((runStart, 2), Plan(new WikidataCacheItemsSettings { Force = true, RefreshOnly = true }));
+        Assert.Equal((runStart, 4), Plan(new WikidataCacheItemsSettings { Force = true, MaxAgeHours = 24 }));
+        Assert.Equal((runStart.AddHours(-24), 3), Plan(new WikidataCacheItemsSettings { MaxAgeHours = 24 }));
+        Assert.Equal((runStart.AddHours(-24), 1), Plan(new WikidataCacheItemsSettings { MaxAgeHours = 24, RefreshOnly = true }));
+        Assert.Equal((null, 1), Plan(new WikidataCacheItemsSettings { FailedOnly = true }));
+        Assert.Equal((runStart, 3), Plan(new WikidataCacheItemsSettings { Force = true, Limit = 3 }));
+        Assert.Equal((runStart, 4), Plan(new WikidataCacheItemsSettings { Force = true, Limit = 0 }));
+
+        // --refresh-only with no cutoff: RunAsync reports this as an error.
+        Assert.Equal((null, 0), Plan(new WikidataCacheItemsSettings { RefreshOnly = true }));
+    }
+
+    [Fact]
+    public void PendingQueue_CachedCopies_LeastRecentlyDownloadedFirst() {
+        using var connection = OpenMemory();
+        using var store = WikidataCacheStore.OpenFromConnection(connection);
+        var runStart = new DateTime(2026, 9, 30, 12, 0, 0, DateTimeKind.Utc);
+        AddEntity(connection, 1, downloadedAt: runStart.AddDays(-3), lastAttemptAt: runStart.AddDays(-3));
+        AddEntity(connection, 2, downloadedAt: runStart.AddDays(-1), lastAttemptAt: runStart.AddDays(-1));
+        AddEntity(connection, 3, downloadedAt: runStart.AddDays(-2), lastAttemptAt: runStart.AddDays(-2));
+        AddEntity(connection, 4, downloadedAt: null);
+
+        var cutoff = WikidataCacheItemsCommand.RefreshCutoff(force: true, maxAgeHours: null, runStart);
+        Assert.Equal(new long[] { 4, 1, 3, 2 },
+            store.GetPendingEntities(10, cutoff, attemptedBefore: runStart).Select(i => i.NumericId));
+        Assert.Equal(new long[] { 1, 3, 2 },
+            store.GetPendingEntities(10, cutoff, refreshOnly: true, attemptedBefore: runStart).Select(i => i.NumericId));
+    }
+
+    [Fact]
+    public async Task ForceRunsWithLimit_EachRunContinuesWhereTheLastOneStopped() {
+        using var connection = OpenMemory();
+        using var store = WikidataCacheStore.OpenFromConnection(connection);
+        var now = DateTime.UtcNow;
+        AddEntity(connection, 1, downloadedAt: now.AddDays(-1), lastAttemptAt: now.AddDays(-1));
+        AddEntity(connection, 2, downloadedAt: now.AddDays(-10), lastAttemptAt: now.AddDays(-10));
+        AddEntity(connection, 3, downloadedAt: now.AddDays(-5), lastAttemptAt: now.AddDays(-5));
+        AddEntity(connection, 4, downloadedAt: now.AddDays(-2), lastAttemptAt: now.AddDays(-2));
+        AddEntity(connection, 5, downloadedAt: now.AddDays(-20), lastAttemptAt: now.AddDays(-20));
+
+        var settings = new WikidataCacheItemsSettings { Force = true, Limit = 2 };
+        var noFailures = new HashSet<long>();
+
+        // Each run takes its own start time, after the previous run's downloads. Only the items
+        // each run tries first are checked: a copy re-downloaded in the same tick as the next run
+        // starts is left out of that run rather than sorted last, and either is correct.
+        var (run1, _) = await RunLoopAsync(store, settings, DateTime.UtcNow, batchSize: 25, noFailures);
+        var (run2, _) = await RunLoopAsync(store, settings, DateTime.UtcNow, batchSize: 25, noFailures);
+        var (run3, _) = await RunLoopAsync(store, settings, DateTime.UtcNow, batchSize: 25, noFailures);
+
+        Assert.Equal(new long[] { 5, 2 }, run1);
+        Assert.Equal(new long[] { 3, 4 }, run2);
+        Assert.Equal(1, run3[0]);
+    }
+
+    [Fact]
+    public void Schema_HasTheIndexForTheQueueOrder() {
+        using var connection = OpenMemory();
+        using var store = WikidataCacheStore.OpenFromConnection(connection);
+        using var cmd = connection.CreateCommand();
+        cmd.CommandText = "SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' AND name = 'idx_wikidata_entities_downloaded_at'";
+        Assert.Equal(1L, cmd.ExecuteScalar());
     }
 }
