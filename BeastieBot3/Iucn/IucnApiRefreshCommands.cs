@@ -61,7 +61,7 @@ internal static class IucnRefreshRun {
     "Begin a refresh of the API cache: mark everything downloaded before a cutoff date to be fetched again.",
     Reason = "Records the refresh cutoff. Downloads only happen when you then run the cache commands.",
     Rerun = RerunEffect.PlansDownloads,
-    RerunNote = "Records a cutoff date; the following cache-all run re-downloads everything older than it, and resumes from where it stopped on every later run. Refuses to start while another refresh is open unless you pass --replace.",
+    RerunNote = "Records a cutoff date. While the refresh is open, each run of an iucn api download command (cache-all, cache-taxa, cache-assessments, cache-infraranks, discover-by-family) downloads again the records downloaded before that date, and continues from where the previous run stopped. Refuses to start while another refresh is open unless you pass --replace.",
     Examples = new[] {
         "iucn api refresh-start --label 2026-1",
         "iucn api refresh-start --cutoff 2026-06-16 --label 2026-1",

@@ -31,21 +31,25 @@ namespace BeastieBot3;
 // When the web UI asks for confirmation. It asks before a run only when that run, with the
 // options chosen, deletes data that took downloads or an import to build:
 //   - it deletes downloaded data and does not download it again (wikidata reset-cache), or
-//   - it deletes an imported dataset in order to import it again (iucn import, col import and
+//   - it deletes a dataset imported from files you downloaded by hand (the IUCN release zips, the
+//     ColDP zips, the SPRAT report CSV) in order to import it again (iucn import, col import and
 //     sprat import with --force).
 // It does not ask before a run that only reports, adds, downloads again over copies already
 // downloaded (the --force of the download commands: each old copy stays until its new copy
 // arrives), rebuilds something from data already stored locally (the IUCN API projection, the
 // common names store, the Wikidata name index), or deletes only entries that no command can use
 // (wikipedia prune-queue --apply, which wikipedia update runs every time).
+// wikipedia titles-dump --force deletes the imported all-titles dump and imports it again, but it
+// downloads the dump itself, and wikipedia update runs it (without --force) every time, replacing
+// the imported dump whenever a newer one is published; so it is Mutates and does not ask.
 //
 // A command whose runs can meet that rule is Destructive. CommandInfo.ConfirmWhen names the
 // options that make a run meet it; with none named, every run asks. A command with a preflight
 // (Web/Commands/CommandPreflight.cs, only iucn import so far) decides from the files on disk
 // instead. The decision is made on the server, in CommandPreflight, and the web UI only follows it.
 public enum CommandKind {
-    ReadOnly,     // reads data and writes reports or output files only; changes no cache or database
-    Mutates,      // writes caches or databases; no run deletes downloaded or imported data
+    ReadOnly,     // reads data and shows or writes results; changes no downloaded or imported data (see RerunEffect.ReadOnly)
+    Mutates,      // writes caches or databases; no run meets the confirmation rule above
     Destructive,  // some runs delete downloaded or imported data; the web UI asks before those runs
 }
 
@@ -56,9 +60,10 @@ public enum CommandKind {
 // A ReadOnly command may leave it as Default, which means ReadOnly.
 public enum RerunEffect {
     Default,        // unset: allowed only on ReadOnly commands, where it means ReadOnly
-    ReadOnly,       // reads data and writes reports or output files; changes no cache or database
+    ReadOnly,       // reads data and shows or writes results; changes no downloaded or imported data. A
+                    // rebuildable lookup file is allowed (generate-lists writes <CoL db>.enrich-cache.sqlite)
     IdempotentAdd,  // by default adds only what is missing and keeps what is already there (downloads, queues, upserts)
-    Discovers,      // searches the IUCN Red List API or Wikidata for records not cached yet; adds them or queues them
+    Discovers,      // searches the IUCN Red List API or Wikidata; adds what it finds to a cache or the download queue
     Rebuilds,       // rebuilds its result from data already stored locally and replaces the previous result
     PlansDownloads, // changes only which records the download commands fetch next; downloads and deletes no downloaded data
     ClearsCache,    // deletes downloaded data from a cache; the next download run fetches it again
@@ -103,12 +108,23 @@ public sealed class CommandInfoAttribute : Attribute {
     // dialog, the web UI adds this option to the run.
     public string? PromptOption { get; init; }
 
+    // Options that make a run only report: a run with any of them writes no cache or database
+    // (iucn api cache-all --status). The Workflows page shows the button for such a run as
+    // read-only and without the re-run effect pill. The names are served to the web UI with
+    // every alias (CommandReflector.AllNamesOf).
+    public string[] ReportOnlyWith { get; init; } = Array.Empty<string>();
+
+    // Options without which a run only reports: a run with none of them writes no cache or
+    // database (wikipedia prune-queue without --apply). Shown the same way as ReportOnlyWith.
+    public string[] ChangesOnlyWith { get; init; } = Array.Empty<string>();
+
     // What happens on (re-)run. Must be set on Mutates and Destructive commands; Default means
     // ReadOnly (see RegisteredCommand.Rerun).
     public RerunEffect Rerun { get; init; } = RerunEffect.Default;
 
     // Optional one-line specific about the re-run effect (e.g. "--force re-downloads
-    // everything already cached"). Surfaced beside the effect hint in the web UI.
+    // everything already cached"). Surfaced beside the effect hint in the web UI. Shared
+    // sentences are in RerunNotes.
     public string? RerunNote { get; init; }
 
     // CLI usage examples. Each string is one example command line; the shell-quote
@@ -120,4 +136,13 @@ public sealed class CommandInfoAttribute : Attribute {
         Kind = kind;
         Description = description;
     }
+}
+
+// RerunNote sentences that several commands share. Attribute arguments must be constants, so a
+// command joins one to its own note with +.
+internal static class RerunNotes {
+    // Every iucn api download command (cache-all, cache-taxa, cache-assessments, cache-infraranks,
+    // discover-by-family) falls back to the open refresh's cutoff (IucnRefreshRun.Begin).
+    public const string DuringIucnRefresh =
+        "During a refresh started with iucn api refresh-start, a run also downloads again every record downloaded before the refresh's cutoff date.";
 }

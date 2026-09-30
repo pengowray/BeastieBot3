@@ -53,6 +53,7 @@ public sealed class WikidataIucnAssessmentItemsSettings : CommonSettings {
     Reason = "Writes the wikidata_iucn_assessment_items table of the Wikidata cache. Only reads from Wikidata (SPARQL).",
     Rerun = RerunEffect.Discovers,
     RerunNote = "Re-reads every item and replaces its row; rows for items no longer found are kept.",
+    ReportOnlyWith = new[] { "--status" },
     Examples = new[] {
         "wikidata iucn-assessment-items",
         "wikidata iucn-assessment-items --limit 200",

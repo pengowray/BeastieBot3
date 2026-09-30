@@ -15,6 +15,9 @@ namespace BeastieBot3.Web.Commands;
 //   - Commands in FilePreflights: decided from the configured files, so the dialog can say what
 //     is really there ("creates a new database" rather than a warning about data that does not
 //     exist). Only iucn import so far.
+//
+// An option counts under any name the command declares for it: with "-f|--force" declared,
+// ConfirmWhen = { "--force" } also matches a run given "-f" (CommandReflector.AllNamesOf).
 
 public sealed record CommandPreflightResult {
     public required bool Confirm { get; init; }             // ask the user before this run
@@ -27,12 +30,13 @@ public sealed record CommandPreflightResult {
 }
 
 public static class CommandPreflight {
-    private static readonly IReadOnlyDictionary<string, Func<PathsService, IReadOnlyList<string>, CommandPreflightResult>> FilePreflights =
-        new Dictionary<string, Func<PathsService, IReadOnlyList<string>, CommandPreflightResult>>(StringComparer.Ordinal) {
-            ["iucn import"] = (paths, argv) => FromImport(IucnImportPreflight.Describe(
+    // Each preflight gets `has`, which says whether the run has an option under any of its names.
+    private static readonly IReadOnlyDictionary<string, Func<PathsService, Func<string, bool>, CommandPreflightResult>> FilePreflights =
+        new Dictionary<string, Func<PathsService, Func<string, bool>, CommandPreflightResult>>(StringComparer.Ordinal) {
+            ["iucn import"] = (paths, has) => FromImport(IucnImportPreflight.Describe(
                 paths,
-                force: HasOption(argv, "--force"),
-                replaceRelease: HasOption(argv, "--replace-release"))),
+                force: has("--force"),
+                replaceRelease: has("--replace-release"))),
         };
 
     public static bool HasFilePreflight(string path) => FilePreflights.ContainsKey(path);
@@ -47,20 +51,22 @@ public static class CommandPreflight {
     }
 
     // Null means no confirmation and nothing to show before the run.
-    public static CommandPreflightResult? Describe(CommandInfoAttribute info, IReadOnlyList<string> argv, PathsService paths) =>
-        FilePreflights.TryGetValue(info.Path, out var preflight)
-            ? preflight(paths, argv)
-            : Decide(info, argv);
+    public static CommandPreflightResult? Describe(RegisteredCommand cmd, IReadOnlyList<string> argv, PathsService paths) =>
+        FilePreflights.TryGetValue(cmd.Path, out var preflight)
+            ? preflight(paths, OptionLookup(cmd.Type, argv))
+            : Decide(cmd, argv);
 
     // The decision for every command without a file preflight.
-    public static CommandPreflightResult? Decide(CommandInfoAttribute info, IReadOnlyList<string> argv) {
+    public static CommandPreflightResult? Decide(RegisteredCommand cmd, IReadOnlyList<string> argv) {
+        var info = cmd.Info;
         if (info.Kind != CommandKind.Destructive) {
             return null;
         }
-        if (info.ConfirmWhen.Length > 0 && !info.ConfirmWhen.Any(option => HasOption(argv, option))) {
+        var has = OptionLookup(cmd.Type, argv);
+        if (info.ConfirmWhen.Length > 0 && !info.ConfirmWhen.Any(has)) {
             return null;
         }
-        var addArgs = info.PromptOption is { } prompt && !HasOption(argv, prompt)
+        var addArgs = info.PromptOption is { } prompt && !has(prompt)
             ? new[] { prompt }
             : Array.Empty<string>();
         return new CommandPreflightResult {
@@ -69,6 +75,10 @@ public static class CommandPreflight {
             AddArgs = addArgs,
         };
     }
+
+    // Whether the run has the option under any name the command declares for it.
+    internal static Func<string, bool> OptionLookup(Type commandType, IReadOnlyList<string> argv) =>
+        option => CommandReflector.AllNamesOf(commandType, option).Any(name => HasOption(argv, name));
 
     // "--force" or "--force=true". The web UI sends a ticked flag as the bare option.
     internal static bool HasOption(IReadOnlyList<string> argv, string option) =>

@@ -736,15 +736,25 @@
   // command with that effect; command-specific detail goes in the command's rerunNote.
   // CommandClassificationTests checks that every RerunEffect has an entry here.
   const EFFECTS = {
-    readonly:       { label: 'read-only', cls: 'readonly', icon: '👁', hint: 'Reads data and writes reports or output files. Changes no cache or database.' },
+    readonly:       { label: 'read-only', cls: 'readonly', icon: '👁', hint: 'Reads data and shows the results or writes them to files. Changes none of the downloaded or imported data.' },
     idempotentadd:  { label: 'adds what is missing', cls: 'add', icon: '＋', hint: 'By default, a run adds only the records that are missing, and keeps the records already there.' },
-    discovers:      { label: 'finds new records', cls: 'discovers', icon: '🔍', hint: 'Searches the IUCN Red List API or Wikidata, and adds the records it finds to the cache or to the download queue. Deletes nothing.' },
+    discovers:      { label: 'finds new records', cls: 'discovers', icon: '🔍', hint: 'Searches the IUCN Red List API or Wikidata, and adds the records it finds to the cache or to the download queue.' },
     rebuilds:       { label: 'rebuilds output', cls: 'rebuilds', icon: '🔁', hint: 'Each run rebuilds the output from data already stored locally, and replaces the output of the previous run.' },
     plansdownloads: { label: 'changes what is downloaded next', cls: 'queue', icon: '📋', hint: 'Changes only which records the download commands fetch next. Downloads nothing and deletes no downloaded data.' },
     clearscache:    { label: 'clears cache', cls: 'fresh', icon: '🧹', hint: 'Deletes downloaded data from the cache.' },
     imports:        { label: 're-import needs --force', cls: 'fresh', icon: '🗄', hint: 'Imports downloaded files into a database. Running the command again skips files already imported. With --force, the command deletes the imported data and imports the files again.' },
   };
   function effectInfo(cmd) { return EFFECTS[cmd.rerun] || null; }
+
+  // Whether a run with these options only reports (CommandInfo ReportOnlyWith / ChangesOnlyWith,
+  // served with every alias): "iucn api cache-all --full --status", or "wikipedia prune-queue"
+  // without --apply. Used for Workflows buttons, whose options are fixed.
+  function isReportOnlyRun(meta, args) {
+    const names = args.filter(a => a.startsWith('-')).map(a => a.split('=')[0]);
+    const hasAny = (list) => (list || []).some(o => names.includes(o));
+    if (hasAny(meta.reportOnlyWith)) return true;
+    return (meta.changesOnlyWith || []).length > 0 && !hasAny(meta.changesOnlyWith);
+  }
 
   function renderCommandRow(cmd) {
     const wrap = document.createElement('div');
@@ -1482,9 +1492,13 @@
         // A flow command may carry trailing args (e.g. "iucn api cache-infraranks --from-csv").
         // Match the longest registered command path that prefixes it; the rest are args.
         const { meta: cmdMeta, path, args } = splitFlowCommand(c);
+        // A button whose options make the run only report ("--status", or prune-queue without
+        // --apply) looks like a read-only command's button and has no effect pill.
+        const readOnlyRun = !!cmdMeta && (cmdMeta.rerun === 'readonly' || isReportOnlyRun(cmdMeta, args));
         const btn = document.createElement('button');
-        btn.className = 'flow-cmd-btn ' + (cmdMeta ? cmdMeta.kind : 'mutates');
+        btn.className = 'flow-cmd-btn ' + (readOnlyRun ? 'readonly' : cmdMeta ? cmdMeta.kind : 'mutates');
         btn.textContent = c;
+        if (readOnlyRun) btn.title = EFFECTS.readonly.hint;
         btn.addEventListener('click', (e) => {
           e.stopPropagation();
           if (!cmdMeta) {
@@ -1499,7 +1513,7 @@
         // same metadata the Run command page shows. Answers "will this replace what I have?"
         // without opening the step's options.
         const cmdEff = cmdMeta ? effectInfo(cmdMeta) : null;
-        if (cmdEff && cmdMeta.rerun !== 'readonly') {
+        if (cmdEff && !readOnlyRun) {
           const pill = document.createElement('span');
           pill.className = 'effect-badge ' + cmdEff.cls;
           pill.textContent = cmdEff.label;

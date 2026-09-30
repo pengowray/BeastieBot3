@@ -22,7 +22,9 @@ namespace BeastieBot3.Wikipedia;
 [CommandInfo("wikipedia update", CommandKind.Mutates,
     "Update the Wikidata and Wikipedia caches and match IUCN taxa to Wikipedia articles, by running the individual cache commands in order. Steps whose queue is empty are skipped, and the next run continues from where the last run stopped.",
     Reason = "Runs the individual cache commands in order; each only adds what is missing. Also drops queued titles that carry an authority or a note, since no article can have such a title.",
-    Rerun = RerunEffect.IdempotentAdd,
+    Rerun = RerunEffect.Discovers,
+    RerunNote = "Each run also imports a newer all-titles dump when one has been published (wikipedia titles-dump), and deletes queued Wikipedia titles that no article can have (wikipedia prune-queue --apply).",
+    ReportOnlyWith = new[] { "--status" },
     Examples = new[] {
         "wikipedia update",
         "wikipedia update --status",

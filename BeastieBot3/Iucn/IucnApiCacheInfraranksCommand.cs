@@ -66,7 +66,7 @@ public sealed class IucnApiCacheInfraranksSettings : CommonSettings {
     "Downloads taxon records for the subspecies and varieties of species already in the IUCN API cache. Run `iucn api cache-taxa` or `iucn api discover-by-family` first. Afterwards, run `iucn api cache-assessments` and then `iucn api project-view` so that lists made with --dataset api include subspecies and varieties.",
     Reason = "Downloads infraspecific taxa + their assessment backlog into the API cache (idempotent additive).",
     Rerun = RerunEffect.IdempotentAdd,
-    RerunNote = "A re-run skips any subspecies and varieties that the API reported as not found (HTTP 404) on an earlier run. With --force ticked, the command requests every subspecies and variety again, including the ones reported as not found. Afterwards, run iucn api cache-assessments, then iucn api project-view.",
+    RerunNote = "A re-run skips any subspecies and varieties that the API reported as not found (HTTP 404) on an earlier run. With --force ticked, the command requests every subspecies and variety again, including the ones reported as not found. " + RerunNotes.DuringIucnRefresh + " Afterwards, run iucn api cache-assessments, then iucn api project-view.",
     Examples = new[] {
         "iucn api cache-infraranks --dry-run",
         "iucn api cache-infraranks",

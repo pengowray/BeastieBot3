@@ -25,6 +25,9 @@ public static class CommandsEndpoints {
                 reason = c.Reason,
                 confirm = CommandPreflight.ConfirmMode(c.Info),
                 promptOption = c.Info.PromptOption,
+                // Every name of each option, so the web UI can match a Workflows button's options.
+                reportOnlyWith = c.Info.ReportOnlyWith.SelectMany(o => CommandReflector.AllNamesOf(c.Type, o)),
+                changesOnlyWith = c.Info.ChangesOnlyWith.SelectMany(o => CommandReflector.AllNamesOf(c.Type, o)),
                 rerun = c.Rerun.ToString().ToLowerInvariant(),
                 rerunNote = c.RerunNote,
                 examples = c.Examples,
@@ -41,7 +44,7 @@ public static class CommandsEndpoints {
             }
 
             var argv = (args ?? string.Empty).Split(' ', StringSplitOptions.RemoveEmptyEntries);
-            var pre = CommandPreflight.Describe(cmd.Info, argv, paths);
+            var pre = CommandPreflight.Describe(cmd, argv, paths);
             if (pre is null) {
                 return Results.Json(new { supported = false });
             }

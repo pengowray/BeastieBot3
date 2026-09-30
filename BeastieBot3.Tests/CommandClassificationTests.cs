@@ -2,7 +2,9 @@ using System;
 using System.IO;
 using System.Linq;
 using System.Text.RegularExpressions;
+using System.Threading;
 using BeastieBot3.Web.Commands;
+using Spectre.Console.Cli;
 
 namespace BeastieBot3.Tests;
 
@@ -15,7 +17,7 @@ public class CommandClassificationTests {
         CommandRegistry.FindByPath(path) ?? throw new InvalidOperationException("No command " + path);
 
     private static CommandPreflightResult? Decide(string path, params string[] argv) =>
-        CommandPreflight.Decide(Command(path).Info, argv);
+        CommandPreflight.Decide(Command(path), argv);
 
     // ---- every command ----
 
@@ -48,15 +50,30 @@ public class CommandClassificationTests {
     }
 
     [Fact]
-    public void ConfirmationOptions_AreOptionsTheCommandHas() {
+    public void NamedOptions_AreOptionsTheCommandHas() {
         foreach (var c in CommandRegistry.All) {
             var names = CommandReflector.BuildSchema(c.Type).Fields
                 .SelectMany(f => f.AltNames.Prepend(f.Name))
                 .ToHashSet(StringComparer.Ordinal);
-            foreach (var option in c.Info.ConfirmWhen.Append(c.Info.PromptOption).OfType<string>()) {
+            var named = c.Info.ConfirmWhen
+                .Concat(c.Info.ReportOnlyWith)
+                .Concat(c.Info.ChangesOnlyWith)
+                .Append(c.Info.PromptOption)
+                .OfType<string>();
+            foreach (var option in named) {
                 Assert.True(names.Contains(option), $"{c.Path} has no option {option}");
             }
         }
+    }
+
+    [Fact]
+    public void ReportOnlyOptions_AreOnlyOnCommandsThatChangeData() {
+        var pointless = CommandRegistry.All
+            .Where(c => c.Kind == CommandKind.ReadOnly
+                        && (c.Info.ReportOnlyWith.Length > 0 || c.Info.ChangesOnlyWith.Length > 0))
+            .Select(c => c.Path)
+            .ToList();
+        Assert.True(pointless.Count == 0, "Every run of a read-only command only reports already: " + string.Join(", ", pointless));
     }
 
     [Fact]
@@ -124,6 +141,59 @@ public class CommandClassificationTests {
     [Fact]
     public void IucnImport_IsDecidedFromTheFiles() =>
         Assert.Equal("files", CommandPreflight.ConfirmMode(Command("iucn import").Info));
+
+    // ---- options under any of their names ----
+
+    // Not registered (CommandRegistry scans only the BeastieBot3 assembly); used through a
+    // hand-built RegisteredCommand to check that a short alias counts as the option.
+    internal sealed class AliasCommand : Command<AliasCommand.Settings> {
+        public sealed class Settings : CommonSettings {
+            [CommandOption("-f|--force")]
+            public bool Force { get; init; }
+
+            [CommandOption("-y|--yes")]
+            public bool Yes { get; init; }
+
+            [CommandOption("--limit <N>")]
+            public int Limit { get; init; }
+        }
+
+        public override int Execute(CommandContext context, Settings settings, CancellationToken cancellationToken) => 0;
+    }
+
+    private static readonly RegisteredCommand AliasDestructive = new(typeof(AliasCommand),
+        new CommandInfoAttribute("test alias", CommandKind.Destructive, "Test command") {
+            ConfirmWhen = new[] { "--force" },
+            ConfirmText = "Deletes the test data.",
+            PromptOption = "--yes",
+            Rerun = RerunEffect.Imports,
+        });
+
+    [Fact]
+    public void ConfirmWhen_MatchesTheShortAlias() {
+        Assert.Null(CommandPreflight.Decide(AliasDestructive, new[] { "--limit", "5" }));
+        var pre = CommandPreflight.Decide(AliasDestructive, new[] { "-f" });
+        Assert.NotNull(pre);
+        Assert.True(pre!.Confirm);
+        Assert.Equal(new[] { "--yes" }, pre.AddArgs);
+    }
+
+    [Fact]
+    public void PromptOption_GivenAsTheShortAlias_IsNotAddedAgain() {
+        var pre = CommandPreflight.Decide(AliasDestructive, new[] { "--force", "-y" });
+        Assert.True(pre!.Confirm);
+        Assert.Empty(pre.AddArgs);
+    }
+
+    [Theory]
+    [InlineData("--force")]
+    [InlineData("-f")]
+    public void AllNamesOf_GivesEveryNameOfTheOption(string option) =>
+        Assert.Equal(new[] { "--force", "-f" }, CommandReflector.AllNamesOf(typeof(AliasCommand), option));
+
+    [Fact]
+    public void AllNamesOf_AnUndeclaredOption_GivesItself() =>
+        Assert.Equal(new[] { "--nope" }, CommandReflector.AllNamesOf(typeof(AliasCommand), "--nope"));
 
     [Theory]
     [InlineData("--force", true)]

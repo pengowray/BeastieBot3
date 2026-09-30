@@ -59,6 +59,7 @@ public sealed class IucnApiCacheTaxaSettings : CommonSettings {
     "Download /api/v4/taxa/sis/{sis_id} payloads into the local API cache.",
     Reason = "Downloads IUCN /api/v4/taxa payloads into the local cache (idempotent additive).",
     Rerun = RerunEffect.IdempotentAdd,
+    RerunNote = RerunNotes.DuringIucnRefresh,
     Examples = new[] {
         "iucn api cache-taxa",
         "iucn api cache-taxa --limit 100",
