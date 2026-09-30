@@ -95,7 +95,7 @@ internal sealed class CountScopeAuditCommand : Command<CountScopeAuditCommand.Se
     // ==================== single-dataset audit ====================
 
     private int RunSingle(PathsService paths, Settings settings, List<AuditTarget> targets, CancellationToken ct) {
-        var dbPath = IucnDatasetResolver.Resolve(paths, settings.Dataset, settings.DatabasePath);
+        var dbPath = IucnDatasetResolver.Resolve(paths, settings.Dataset, settings.DatabasePath, "--database");
         var dataset = string.IsNullOrWhiteSpace(settings.Dataset) ? "csv" : settings.Dataset.Trim().ToLowerInvariant();
 
         AnsiConsole.MarkupLineInterpolated($"[grey]Dataset:[/] {dataset}");

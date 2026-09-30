@@ -64,7 +64,7 @@ public sealed class WikidataWikipediaMismatchReportCommand : Command<WikidataWik
         string wikidataCachePath;
         string wikipediaCachePath;
         try {
-            iucnPath = paths.ResolveIucnDatabasePath(settings.IucnDatabase);
+            iucnPath = paths.ResolveIucnDatabasePath(settings.IucnDatabase, "--iucn-db");
             wikidataCachePath = paths.ResolveWikidataCachePath(settings.WikidataCache);
             wikipediaCachePath = paths.ResolveWikipediaCachePath(settings.WikipediaCache);
         }

@@ -93,7 +93,7 @@ internal sealed class CommonNameAggregateCommand : AsyncCommand<CommonNameAggreg
 
     public override async Task<int> ExecuteAsync(CommandContext context, Settings settings, CancellationToken cancellationToken) {
         var paths = settings.CreatePaths();
-        var commonNameDbPath = paths.ResolveCommonNameStorePath(settings.DatabasePath);
+        var commonNameDbPath = paths.ResolveCommonNameStorePath(settings.DatabasePath, "--database");
 
         AnsiConsole.MarkupLine($"[blue]Common name store:[/] {commonNameDbPath}");
 

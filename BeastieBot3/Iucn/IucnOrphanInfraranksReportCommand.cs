@@ -47,7 +47,7 @@ public sealed class IucnOrphanInfraranksReportCommand : Command<IucnOrphanInfrar
     public override int Execute(CommandContext context, Settings settings, CancellationToken cancellationToken) {
         _ = context;
         var paths = settings.CreatePaths();
-        var dbPath = paths.ResolveIucnDatabasePath(settings.DatabasePath);
+        var dbPath = paths.ResolveIucnDatabasePath(settings.DatabasePath, "--database");
 
         if (!File.Exists(dbPath)) {
             AnsiConsole.MarkupLineInterpolated($"[red]IUCN CSV database not found:[/] {dbPath}");

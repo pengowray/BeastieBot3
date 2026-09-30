@@ -15,11 +15,16 @@ using Spectre.Console;
 namespace BeastieBot3.WikipediaLists;
 
 internal static class IucnDatasetResolver {
-    public static string Resolve(PathsService paths, string? dataset, string? databaseOverride) {
+    /// <param name="optionName">
+    /// The calling command's option for <paramref name="databaseOverride"/> (--database in every
+    /// command today), named in the error when the CSV database path is not configured. Web
+    /// endpoints have no option and pass none.
+    /// </param>
+    public static string Resolve(PathsService paths, string? dataset, string? databaseOverride, string? optionName = null) {
         var ds = string.IsNullOrWhiteSpace(dataset) ? "csv" : dataset.Trim().ToLowerInvariant();
         switch (ds) {
             case "csv":
-                return paths.ResolveIucnDatabasePath(databaseOverride);
+                return paths.ResolveIucnDatabasePath(databaseOverride, optionName);
             case "api":
                 var path = paths.ResolveIucnApiProjectedPath(databaseOverride);
                 if (!File.Exists(path)) {

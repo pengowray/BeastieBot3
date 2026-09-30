@@ -109,7 +109,7 @@ public sealed class IucnApiCacheInfraranksCommand : AsyncCommand<IucnApiCacheInf
 
         var fromCsvCount = 0;
         if (settings.FromCsv) {
-            var sourcePath = paths.ResolveIucnDatabasePath(settings.SourceDatabase);
+            var sourcePath = paths.ResolveIucnDatabasePath(settings.SourceDatabase, "--source-db");
             if (!File.Exists(sourcePath)) {
                 AnsiConsole.MarkupLineInterpolated($"[red]CSV database not found for --from-csv:[/] {sourcePath}");
                 return 1;

@@ -37,7 +37,7 @@ internal static class WikidataCoverageAnalysis {
         string iucnDb;
         string wikidataDb;
         try {
-            iucnDb = paths.ResolveIucnDatabasePath(settings.IucnDatabase);
+            iucnDb = paths.ResolveIucnDatabasePath(settings.IucnDatabase, "--iucn-db");
             wikidataDb = paths.ResolveWikidataCachePath(settings.WikidataCache);
         }
         catch (Exception ex) {

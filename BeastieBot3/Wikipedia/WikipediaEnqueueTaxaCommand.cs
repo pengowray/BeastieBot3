@@ -58,7 +58,7 @@ public sealed class WikipediaEnqueueTaxaCommand : Command<WikipediaEnqueueTaxaCo
         string iucnPath;
         string cachePath;
         try {
-            iucnPath = paths.ResolveIucnDatabasePath(settings.IucnDatabase);
+            iucnPath = paths.ResolveIucnDatabasePath(settings.IucnDatabase, "--iucn-db");
             cachePath = paths.ResolveWikipediaCachePath(settings.CachePath);
         }
         catch (Exception ex) {

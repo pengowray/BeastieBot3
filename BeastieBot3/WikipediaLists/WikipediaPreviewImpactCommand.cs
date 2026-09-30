@@ -62,7 +62,7 @@ internal sealed class WikipediaPreviewImpactCommand : Command<WikipediaPreviewIm
         var paths = settings.CreatePaths();
         var configPath = settings.ConfigPath
             ?? System.IO.Path.Combine(paths.BaseDirectory, "rules", "wikipedia-lists.yml");
-        var databasePath = IucnDatasetResolver.Resolve(paths, settings.Dataset, settings.DatabasePath);
+        var databasePath = IucnDatasetResolver.Resolve(paths, settings.Dataset, settings.DatabasePath, "--database");
 
         var record = ListImpactService.Compute(databasePath, configPath, settings.TaxaGroup!, settings.SplitRank,
             settings.BudgetEntries, paths.GetWikipediaOutputDirectory());

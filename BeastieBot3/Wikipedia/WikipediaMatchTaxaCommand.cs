@@ -88,7 +88,7 @@ public sealed class WikipediaMatchTaxaCommand : AsyncCommand<WikipediaMatchTaxaC
         string iucnPath;
         string wikipediaCachePath;
         try {
-            iucnPath = paths.ResolveIucnDatabasePath(settings.IucnDatabase);
+            iucnPath = paths.ResolveIucnDatabasePath(settings.IucnDatabase, "--iucn-db");
             wikipediaCachePath = paths.ResolveWikipediaCachePath(settings.WikipediaCache);
         }
         catch (Exception ex) {

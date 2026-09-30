@@ -87,7 +87,7 @@ public sealed class WikipediaListCommand : Command<WikipediaListCommand.Settings
         var templatesDir = ResolveTemplatesDir(paths, settings.TemplatesDirectory);
         var rulesPath = ResolveRulesPath(paths, settings.RulesPath);
         var outputDir = ResolveOutputDir(paths, settings.OutputDirectory);
-        var databasePath = IucnDatasetResolver.Resolve(paths, settings.Dataset, settings.DatabasePath);
+        var databasePath = IucnDatasetResolver.Resolve(paths, settings.Dataset, settings.DatabasePath, "--database");
 
         var loader = new WikipediaListDefinitionLoader();
         var config = loader.Load(configPath);
