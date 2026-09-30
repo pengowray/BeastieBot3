@@ -306,6 +306,10 @@ public static class FlowStepProbes {
     // with a server error, and the ones it answered 404/410 for, which only a re-import's
     // tombstone pass asks for again. The total comes first and each group gets its own clause,
     // so the two counts cannot be read as one list. "" when there are none.
+    //
+    // The re-import sentence describes a future re-import, so it is left out while one is open:
+    // that re-import's tombstone pass may already have asked for these again. ApiUpdate returns
+    // before this while a re-import is open; ApiInfraranks does not check.
     private static string NotDownloadedSentences(IucnApiCacheState s) {
         var serverErrors = s.ServerErrorAssessments;
         var notFound = s.BacklogNotFound;
@@ -315,11 +319,11 @@ public static class FlowStepProbes {
         if (notFound <= 0) {
             return $"{total}. The API returns a server error for those {serverErrors:N0}.";
         }
-        var reimport = $"A re-import requests those {notFound:N0} again.";
+        var reimport = s.ActiveSession is null ? $" A re-import requests those {notFound:N0} again." : "";
         if (serverErrors <= 0) {
-            return $"{total}, which are not found on the API (404). {reimport}";
+            return $"{total}, which are not found on the API (404).{reimport}";
         }
-        return $"{total}. The API returns a server error for {serverErrors:N0} of them, and the other {notFound:N0} are not found on the API (404). {reimport}";
+        return $"{total}. The API returns a server error for {serverErrors:N0} of them, and the other {notFound:N0} are not found on the API (404).{reimport}";
     }
 
     // Are the release's zip files where the import will look for them?
@@ -423,10 +427,10 @@ public static class FlowStepProbes {
         if (s.RefreshProgress is { } refresh) {
             var session = refresh.Session;
             // The remaining counts leave out cached rows the API has since answered 404/410 for:
-            // they keep their old download date, so "all" needs the exception.
+            // they keep their old download date, so "all" names them as the exception.
             if (refresh.TaxaRemaining == 0 && refresh.AssessmentsRemaining == 0) {
                 return new FlowProbeResult("ok",
-                    $"Re-import {session.DisplayLabel}: this step is done. IUCN API cache: {s.TaxaCached:N0} taxa and {s.AssessmentsCached:N0} assessments, all downloaded after the cutoff date except any not found on the API (404).");
+                    $"Re-import {session.DisplayLabel}: this step is done. IUCN API cache: {s.TaxaCached:N0} taxa and {s.AssessmentsCached:N0} assessments, all downloaded after the cutoff date{refresh.NotFoundClause}.");
             }
             return new FlowProbeResult("todo",
                 $"Re-import {session.DisplayLabel} is {refresh.PercentDone}% done: "

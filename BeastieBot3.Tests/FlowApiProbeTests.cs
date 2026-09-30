@@ -31,6 +31,8 @@ public class FlowApiProbeTests {
         IucnRefreshSession? session = null,
         long taxaRemaining = 0,
         long assessmentsRemaining = 0,
+        long taxaNotFound = 0,
+        long assessmentsNotFound = 0,
         IucnProjectionState? projection = null,
         bool cacheExists = true) => new() {
             CachePath = @"D:\datasets\beastiebot\iucn_api_cache.sqlite",
@@ -44,6 +46,8 @@ public class FlowApiProbeTests {
             ActiveSession = session,
             RefreshTaxaRemaining = taxaRemaining,
             RefreshAssessmentsRemaining = assessmentsRemaining,
+            RefreshTaxaNotFound = taxaNotFound,
+            RefreshAssessmentsNotFound = assessmentsNotFound,
             Projection = projection,
         };
 
@@ -110,7 +114,17 @@ public class FlowApiProbeTests {
     public void RefreshWithNothingLeft_IsOk() {
         var r = FlowStepProbes.ApiTaxa(State(session: Session()))!;
         Assert.Equal("ok", r.Status);
-        Assert.Contains("all downloaded after the cutoff date except any not found on the API (404).", r.Detail);
+        Assert.EndsWith("assessments, all downloaded after the cutoff date.", r.Detail);
+        Assert.DoesNotContain("404", r.Detail);
+    }
+
+    // Old rows the API has since answered 404 for are left out of the remaining counts and keep
+    // their old download date, so the "all downloaded" line says how many there are.
+    [Fact]
+    public void RefreshWithNothingLeft_NamesTheOldRowsNotFound() {
+        var r = FlowStepProbes.ApiTaxa(State(session: Session(), assessmentsNotFound: 3))!;
+        Assert.Equal("ok", r.Status);
+        Assert.EndsWith("all downloaded after the cutoff date except 3 assessments not found on the API (404).", r.Detail);
     }
 
     // ---- the family sweep ----
@@ -168,6 +182,22 @@ public class FlowApiProbeTests {
         var r = FlowStepProbes.ApiInfraranks(State(backlogOutstanding: 23, serverErrors: 23, notFound: 57))!;
         Assert.Equal("ok", r.Status);
         Assert.Equal("352,384 assessments cached. Every queued assessment is downloaded except 80. The API returns a server error for 23 of them, and the other 57 are not found on the API (404). A re-import requests those 57 again.", r.Detail);
+    }
+
+    // While a re-import is open its tombstone pass may already have asked for these again, so the
+    // sentence about what a re-import does is left out.
+    [Fact]
+    public void Infraranks_NotFoundDuringAReimport_LeavesOutTheReimportSentence() {
+        var r = FlowStepProbes.ApiInfraranks(State(notFound: 57, session: Session()))!;
+        Assert.Equal("ok", r.Status);
+        Assert.Equal("352,384 assessments cached. Every queued assessment is downloaded except 57, which are not found on the API (404).", r.Detail);
+    }
+
+    [Fact]
+    public void Infraranks_ServerErrorsAndNotFoundDuringAReimport_LeavesOutTheReimportSentence() {
+        var r = FlowStepProbes.ApiInfraranks(State(backlogOutstanding: 23, serverErrors: 23, notFound: 57, session: Session()))!;
+        Assert.Equal("ok", r.Status);
+        Assert.Equal("352,384 assessments cached. Every queued assessment is downloaded except 80. The API returns a server error for 23 of them, and the other 57 are not found on the API (404).", r.Detail);
     }
 
     [Fact]

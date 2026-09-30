@@ -476,6 +476,25 @@ ORDER BY b.latest DESC, IFNULL(b.year_published, 0) DESC, b.assessment_id DESC";
         return command.ExecuteScalar() is not null;
     }
 
+    /// <summary>
+    /// Like <see cref="HasPermanentFailure"/>, and also returns when the API last answered 404/410
+    /// for the id (null if that time was not recorded). The tombstone re-check uses the time to
+    /// skip ids already asked about since a refresh's cutoff, so an interrupted pass carries on.
+    /// </summary>
+    public bool TryGetPermanentFailure(string endpoint, long entityId, out DateTime? lastAttemptAt) {
+        using var command = _connection.CreateCommand();
+        command.CommandText = "SELECT last_attempt_at FROM failed_requests WHERE endpoint=@endpoint AND entity_id=@entity AND last_status IN (404, 410) LIMIT 1";
+        command.Parameters.AddWithValue("@endpoint", endpoint);
+        command.Parameters.AddWithValue("@entity", entityId.ToString());
+        using var reader = command.ExecuteReader();
+        if (!reader.Read()) {
+            lastAttemptAt = null;
+            return false;
+        }
+        lastAttemptAt = reader.IsDBNull(0) ? null : StoredUtc.Parse(reader.GetString(0));
+        return true;
+    }
+
     public IReadOnlyList<long> GetFailedEntityIds(string endpoint) {
         using var command = _connection.CreateCommand();
         // Skip permanent failures (404/410 — no standalone record): retrying never helps, and they'd
@@ -657,36 +676,71 @@ FROM refresh_sessions WHERE {where} ORDER BY id DESC LIMIT 1";
     }
 
     // How much of the cache a refresh still has to re-download: rows downloaded before the cutoff.
-    // downloaded_at is a UTC "O" string, so the text comparison is chronological and uses the
-    // downloaded_at indexes.
+    // downloaded_at is a UTC "O" string, so the text comparison is chronological.
     //
     // A cached row whose re-download got a 404/410 keeps its old downloaded_at, and every normal
     // run skips it because of the tombstone; only the tombstone pass (--retry-tombstones) asks for
-    // it again. Counting it would keep the refresh open for good, so it is left out. Assessments
-    // are matched on assessment_id. Taxa are matched on root_sis_id, the id that cache-taxa and
-    // cache-infraranks request, not through taxa_lookup: that table also maps a species' infrarank
-    // SIS ids to the species row, and a 404 on a subspecies says nothing about its species.
-    // StartRefreshSession snapshots these same counts, so the starting totals and the progress
-    // use one definition.
-    public long CountTaxaDownloadedBefore(DateTime cutoffUtc) =>
-        CountBefore(@"SELECT COUNT(*) FROM taxa t
-WHERE t.downloaded_at < @cutoff
-  AND NOT EXISTS (SELECT 1 FROM failed_requests f
-                  WHERE f.endpoint = 'taxa_sis' AND f.entity_id = CAST(t.root_sis_id AS TEXT)
-                    AND f.last_status IN (404, 410))", cutoffUtc);
+    // it again. Counting it would keep the refresh open for good, so it is left out, and counted
+    // on its own as NotFound. Assessments are matched on assessment_id. Taxa are matched on
+    // root_sis_id, the id that cache-taxa and cache-infraranks request, not through taxa_lookup:
+    // that table also maps a species' infrarank SIS ids to the species row, and a 404 on a
+    // subspecies says nothing about its species. StartRefreshSession snapshots these same counts,
+    // so the starting totals and the progress use one definition.
+    //
+    // The count is "all old rows" minus "old rows with a tombstone", not one query with NOT EXISTS.
+    // The first half reads only the covering downloaded_at index. A NOT EXISTS needs the row's id,
+    // which is not in that index, so SQLite read every old row with its JSON: at the start of a
+    // re-import that is every row, and the count went from 0.04s to 0.75s warm and 43s cold on the
+    // live cache. The web UI polls these counts every 10 seconds while a re-import is open. The
+    // second half starts from the few thousand tombstones and looks each row up by its unique id.
+    // The subtraction cannot double-count: failed_requests is UNIQUE(endpoint, entity_id), entity_id
+    // is always written as the id's ToString(), and assessment_id and root_sis_id are UNIQUE.
+    public RefreshRemainingCounts CountTaxaBefore(DateTime cutoffUtc) => CountBefore(@"SELECT
+    (SELECT COUNT(*) FROM taxa WHERE downloaded_at < @cutoff),
+    (SELECT COUNT(*) FROM failed_requests f
+     JOIN taxa t ON t.root_sis_id = CAST(f.entity_id AS INTEGER)
+     WHERE f.endpoint = 'taxa_sis' AND f.last_status IN (404, 410)
+       AND t.downloaded_at < @cutoff)", cutoffUtc);
 
-    public long CountAssessmentsDownloadedBefore(DateTime cutoffUtc) =>
-        CountBefore(@"SELECT COUNT(*) FROM assessments a
-WHERE a.downloaded_at < @cutoff
-  AND NOT EXISTS (SELECT 1 FROM failed_requests f
-                  WHERE f.endpoint = 'assessment' AND f.entity_id = CAST(a.assessment_id AS TEXT)
-                    AND f.last_status IN (404, 410))", cutoffUtc);
+    public RefreshRemainingCounts CountAssessmentsBefore(DateTime cutoffUtc) => CountBefore(@"SELECT
+    (SELECT COUNT(*) FROM assessments WHERE downloaded_at < @cutoff),
+    (SELECT COUNT(*) FROM failed_requests f
+     JOIN assessments a ON a.assessment_id = CAST(f.entity_id AS INTEGER)
+     WHERE f.endpoint = 'assessment' AND f.last_status IN (404, 410)
+       AND a.downloaded_at < @cutoff)", cutoffUtc);
 
-    private long CountBefore(string sql, DateTime cutoffUtc) {
+    public long CountTaxaDownloadedBefore(DateTime cutoffUtc) => CountTaxaBefore(cutoffUtc).Remaining;
+
+    public long CountAssessmentsDownloadedBefore(DateTime cutoffUtc) => CountAssessmentsBefore(cutoffUtc).Remaining;
+
+    private RefreshRemainingCounts CountBefore(string sql, DateTime cutoffUtc) {
         using var command = _connection.CreateCommand();
         command.CommandText = sql;
         command.Parameters.AddWithValue("@cutoff", cutoffUtc.ToString("O"));
-        return Convert.ToInt64(command.ExecuteScalar() ?? 0L);
+        using var reader = command.ExecuteReader();
+        if (!reader.Read()) return new RefreshRemainingCounts(0, 0);
+        var old = reader.GetInt64(0);
+        var notFound = reader.GetInt64(1);
+        return new RefreshRemainingCounts(Math.Max(0, old - notFound), notFound);
+    }
+
+    // SIS ids of taxa rows downloaded before the cutoff. cache-taxa queues these during a refresh
+    // so it asks for every row the remaining count includes, not only the ids in the CSV and the
+    // ids some cached species lists: a species dropped from the CSV keeps its old row otherwise,
+    // and the refresh never closes. This reads every old row (root_sis_id is not in the
+    // downloaded_at index), so it is for a download run, never for anything the web UI polls.
+    // Sorted here rather than with ORDER BY: SQLite then scans the root_sis_id index and reads
+    // every row in the table, not only the old ones.
+    public IReadOnlyList<long> GetTaxaRootSisIdsDownloadedBefore(DateTime cutoffUtc) {
+        using var command = _connection.CreateCommand();
+        command.CommandText = "SELECT root_sis_id FROM taxa WHERE downloaded_at < @cutoff";
+        command.Parameters.AddWithValue("@cutoff", cutoffUtc.ToString("O"));
+        var list = new List<long>();
+        using (var reader = command.ExecuteReader()) {
+            while (reader.Read()) list.Add(reader.GetInt64(0));
+        }
+        list.Sort();
+        return list;
     }
 
     public long CountTaxa() => Scalar("SELECT COUNT(*) FROM taxa");
@@ -752,6 +806,13 @@ WHERE NOT EXISTS (SELECT 1 FROM assessments a WHERE a.assessment_id = b.assessme
 /// <see cref="Outstanding"/> whose last attempt got an HTTP 5xx.
 /// </summary>
 internal readonly record struct AssessmentBacklogCounts(long Outstanding, long NotFound, long ServerErrors);
+
+/// <summary>
+/// Cached rows downloaded before a refresh cutoff. <see cref="Remaining"/> is what the refresh still
+/// has to re-download; <see cref="NotFound"/> is the old rows left out of it because the API has
+/// since answered 404/410 for them.
+/// </summary>
+internal readonly record struct RefreshRemainingCounts(long Remaining, long NotFound);
 
 internal sealed record TaxaLookupRow(long SisId, long RootSisId, string Scope);
 

@@ -43,6 +43,10 @@ public sealed record IucnApiCacheState {
     public IucnRefreshSession? ActiveSession { get; init; }
     public long RefreshTaxaRemaining { get; init; }
     public long RefreshAssessmentsRemaining { get; init; }
+    // Rows older than the refresh cutoff that the API has since answered 404/410 for. The two
+    // remaining counts leave them out.
+    public long RefreshTaxaNotFound { get; init; }
+    public long RefreshAssessmentsNotFound { get; init; }
     public IucnProjectionState? Projection { get; init; }
 
     // What a run can still download: the outstanding queue less the server errors, which the
@@ -53,6 +57,8 @@ public sealed record IucnApiCacheState {
         Session = ActiveSession,
         TaxaRemaining = RefreshTaxaRemaining,
         AssessmentsRemaining = RefreshAssessmentsRemaining,
+        TaxaNotFound = RefreshTaxaNotFound,
+        AssessmentsNotFound = RefreshAssessmentsNotFound,
     };
 }
 
@@ -74,6 +80,8 @@ public static class IucnApiCacheStateReader {
 
             var session = store.GetActiveRefreshSession();
             var backlog = store.CountAssessmentBacklog();
+            var refreshTaxa = session is null ? default : store.CountTaxaBefore(session.CutoffUtc);
+            var refreshAssessments = session is null ? default : store.CountAssessmentsBefore(session.CutoffUtc);
             return state with {
                 TaxaCached = store.CountTaxa(),
                 AssessmentsCached = store.CountAssessments(),
@@ -83,8 +91,10 @@ public static class IucnApiCacheStateReader {
                 TombstonedTaxa = store.GetTombstonedEntityIds("taxa_sis").Count,
                 ServerErrorAssessments = backlog.ServerErrors,
                 ActiveSession = session,
-                RefreshTaxaRemaining = session is null ? 0 : store.CountTaxaDownloadedBefore(session.CutoffUtc),
-                RefreshAssessmentsRemaining = session is null ? 0 : store.CountAssessmentsDownloadedBefore(session.CutoffUtc),
+                RefreshTaxaRemaining = refreshTaxa.Remaining,
+                RefreshAssessmentsRemaining = refreshAssessments.Remaining,
+                RefreshTaxaNotFound = refreshTaxa.NotFound,
+                RefreshAssessmentsNotFound = refreshAssessments.NotFound,
             };
         } catch {
             return state;

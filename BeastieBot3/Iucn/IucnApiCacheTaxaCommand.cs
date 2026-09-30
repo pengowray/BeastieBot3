@@ -89,7 +89,7 @@ public sealed class IucnApiCacheTaxaCommand : AsyncCommand<IucnApiCacheTaxaSetti
         if (plan is null) return -1;
         var refreshThreshold = plan.Threshold;
 
-        var ids = BuildSisQueue(cacheStore, provider, settings, cancellationToken);
+        var ids = BuildSisQueue(cacheStore, provider.ReadSpeciesSisIds(settings.Limit, cancellationToken), refreshThreshold, settings);
         if (ids.Count == 0) {
             AnsiConsole.MarkupLine("[green]Nothing to do. Cache is already populated or only failed ids exist but were not requested.[/]");
             return 0;
@@ -136,20 +136,23 @@ public sealed class IucnApiCacheTaxaCommand : AsyncCommand<IucnApiCacheTaxaSetti
         return failures == 0 ? 0 : -1;
     }
 
-    private static List<long> BuildSisQueue(IucnApiCacheStore cacheStore, IucnSisIdProvider provider, IucnApiCacheTaxaSettings settings, CancellationToken cancellationToken) {
+    // The ids this run looks at, in order: failed ids due a retry, tombstoned ids (only for the
+    // re-check pass), the CSV's species, then, during a refresh, every taxa row older than the
+    // cutoff. csvSpeciesIds is read lazily, so --failed-only never opens the CSV database.
+    internal static List<long> BuildSisQueue(IucnApiCacheStore cacheStore, IEnumerable<long> csvSpeciesIds, DateTime? refreshThreshold, IucnApiCacheTaxaSettings settings) {
         var queue = new List<long>();
         var seen = new HashSet<long>();
 
         var totalLimit = settings.Limit;
 
-        var failed = cacheStore.GetFailedEntityIds("taxa_sis");
-        foreach (var sisId in failed) {
-            if (seen.Add(sisId)) {
-                queue.Add(sisId);
-                if (totalLimit.HasValue && queue.Count >= totalLimit.Value) {
-                    return TrimToLimit(queue, totalLimit.Value);
-                }
-            }
+        // True when the queue has reached --limit.
+        bool Add(long sisId) {
+            if (seen.Add(sisId)) queue.Add(sisId);
+            return totalLimit.HasValue && queue.Count >= totalLimit.Value;
+        }
+
+        foreach (var sisId in cacheStore.GetFailedEntityIds("taxa_sis")) {
+            if (Add(sisId)) return TrimToLimit(queue, totalLimit!.Value);
         }
 
         // Tombstoned ids are excluded from the failed list on purpose, so the pass that re-checks
@@ -157,12 +160,7 @@ public sealed class IucnApiCacheTaxaCommand : AsyncCommand<IucnApiCacheTaxaSetti
         // below, so without this they would never be looked at again.
         if (settings.RetryTombstones) {
             foreach (var sisId in cacheStore.GetTombstonedEntityIds("taxa_sis")) {
-                if (seen.Add(sisId)) {
-                    queue.Add(sisId);
-                    if (totalLimit.HasValue && queue.Count >= totalLimit.Value) {
-                        return TrimToLimit(queue, totalLimit.Value);
-                    }
-                }
+                if (Add(sisId)) return TrimToLimit(queue, totalLimit!.Value);
             }
         }
 
@@ -170,12 +168,19 @@ public sealed class IucnApiCacheTaxaCommand : AsyncCommand<IucnApiCacheTaxaSetti
             return totalLimit.HasValue ? TrimToLimit(queue, totalLimit.Value) : queue;
         }
 
-        foreach (var sisId in provider.ReadSpeciesSisIds(settings.Limit, cancellationToken)) {
-            if (seen.Add(sisId)) {
-                queue.Add(sisId);
-                if (totalLimit.HasValue && queue.Count >= totalLimit.Value) {
-                    break;
-                }
+        foreach (var sisId in csvSpeciesIds) {
+            if (Add(sisId)) return TrimToLimit(queue, totalLimit!.Value);
+        }
+
+        // A refresh's remaining count includes every taxa row older than the cutoff, but the CSV
+        // list above and cache-infraranks (subspecies and varieties a cached species lists, or the
+        // CSV lists) do not reach all of them: a species dropped from the new CSV keeps its old
+        // row. Queue those rows too, after the CSV species so a species comes before its
+        // subspecies. Each one then downloads again or gets a 404 tombstone, which the count
+        // leaves out, so the refresh can close. Almost all of them are CSV species already queued.
+        if (refreshThreshold is { } threshold) {
+            foreach (var sisId in cacheStore.GetTaxaRootSisIdsDownloadedBefore(threshold)) {
+                if (Add(sisId)) return TrimToLimit(queue, totalLimit!.Value);
             }
         }
 
@@ -194,11 +199,20 @@ public sealed class IucnApiCacheTaxaCommand : AsyncCommand<IucnApiCacheTaxaSetti
     internal static bool ShouldDownload(IucnApiCacheStore cacheStore, long sisId, DateTime? refreshThreshold, bool retryTombstones = false) {
         // A prior 404 means this id had no standalone record — don't re-probe it every run. That
         // verdict is only true of the release it was recorded against, so --retry-tombstones (and
-        // --force) look again.
-        if (!retryTombstones && cacheStore.HasPermanentFailure("taxa_sis", sisId)) {
-            return false;
+        // --force) look again. The re-check decides by when the 404 was recorded, not by a
+        // download date: a tombstoned subspecies has no row of its own, and the taxa_lookup path
+        // below would report its species' row, which the refresh has just downloaded again, so the
+        // re-check skipped almost every tombstone. With a cutoff, an id already asked about since
+        // the cutoff is not asked again, so an interrupted re-check carries on where it stopped.
+        if (cacheStore.TryGetPermanentFailure("taxa_sis", sisId, out var lastAttemptAt)) {
+            if (!retryTombstones) return false;
+            return refreshThreshold is null || lastAttemptAt is null || lastAttemptAt.Value < refreshThreshold.Value;
         }
-        var downloadedAt = cacheStore.GetTaxaDownloadedAt(sisId);
+
+        // The id's own row when it has one. taxa_lookup also maps a subspecies or variety id to
+        // its species' row, so a species downloaded again would hide the subspecies' own old row.
+        // Without its own row (the API answered with a different root id), fall back to the lookup.
+        var downloadedAt = cacheStore.GetTaxaDownloadedAtByRoot(sisId) ?? cacheStore.GetTaxaDownloadedAt(sisId);
         if (downloadedAt is null) {
             return true;
         }

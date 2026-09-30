@@ -43,6 +43,34 @@ public class IucnRefreshRemainingCountTests {
         store.RecordFailedRequest("taxa_sis", 903, "Not found", 404, IucnApiCacheStore.PermanentRetryDelay);
 
         Assert.Equal(2L, store.CountAssessmentsDownloadedBefore(Cutoff));   // 902 and 903
+        Assert.Equal(new RefreshRemainingCounts(2, 2), store.CountAssessmentsBefore(Cutoff));   // 900 and 901 not found
+    }
+
+    // The count is "old rows" minus "old rows with a tombstone". A row downloaded after the cutoff
+    // that also has a tombstone (a --force re-request that got a 404 does this) is in neither half,
+    // so it must not be subtracted: the tombstone half filters on downloaded_at too.
+    [Fact]
+    public void TombstoneOnARowDownloadedAfterTheCutoff_IsNotSubtracted() {
+        using var conn = new SqliteConnection("Data Source=:memory:");
+        conn.Open();
+        using var store = Seed(conn);
+        var importId = store.BeginImport("/api/v4/taxa/sis/300");
+        var fresh = Cutoff.AddDays(1);
+        store.WriteTaxonAtomic(300, importId, "{\"taxon\":300}", fresh,
+            new[] { new TaxaLookupRow(300, 300, "species") }, Array.Empty<IucnAssessmentHeader>());
+        store.UpsertAssessment(904, 300, importId, "{\"assessment\":904}", fresh);
+
+        store.RecordFailedRequest("taxa_sis", 300, "Not found", 404, IucnApiCacheStore.PermanentRetryDelay);
+        store.RecordFailedRequest("assessment", 904, "Not found", 404, IucnApiCacheStore.PermanentRetryDelay);
+
+        Assert.Equal(new RefreshRemainingCounts(2, 0), store.CountTaxaBefore(Cutoff));
+        Assert.Equal(new RefreshRemainingCounts(4, 0), store.CountAssessmentsBefore(Cutoff));
+
+        // A tombstone for an id with no cached row at all is in neither half either.
+        store.RecordFailedRequest("taxa_sis", 999, "Not found", 404, IucnApiCacheStore.PermanentRetryDelay);
+        store.RecordFailedRequest("assessment", 999, "Not found", 404, IucnApiCacheStore.PermanentRetryDelay);
+        Assert.Equal(new RefreshRemainingCounts(2, 0), store.CountTaxaBefore(Cutoff));
+        Assert.Equal(new RefreshRemainingCounts(4, 0), store.CountAssessmentsBefore(Cutoff));
     }
 
     // Taxa are matched on root_sis_id, the id cache-taxa and cache-infraranks request. A 404 on a
@@ -57,6 +85,7 @@ public class IucnRefreshRemainingCountTests {
 
         store.RecordFailedRequest("taxa_sis", 200, "Not found", 404, IucnApiCacheStore.PermanentRetryDelay);
         Assert.Equal(1L, store.CountTaxaDownloadedBefore(Cutoff));   // species 100
+        Assert.Equal(new RefreshRemainingCounts(1, 1), store.CountTaxaBefore(Cutoff));
 
         store.RecordFailedRequest("assessment", 100, "Not found", 404, IucnApiCacheStore.PermanentRetryDelay);
         Assert.Equal(1L, store.CountTaxaDownloadedBefore(Cutoff));
@@ -90,6 +119,9 @@ public class IucnRefreshRemainingCountTests {
         Assert.Equal(0L, progress.TaxaRemaining);
         Assert.Equal(0L, progress.AssessmentsRemaining);
         Assert.Equal(100, progress.PercentDone);
+        Assert.Equal(0L, progress.TaxaNotFound);
+        Assert.Equal(2L, progress.AssessmentsNotFound);   // 900 and 903
+        Assert.Equal(" except 2 assessments not found on the API (404)", progress.NotFoundClause);
         Assert.False(progress.IsFinished);   // the tombstone pass has not run yet
 
         store.MarkRefreshPhaseDone(session.Id, "tombstones_done_at");
