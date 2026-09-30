@@ -62,9 +62,9 @@ public sealed class IucnImportCommand : Command<IucnImportCommand.Settings> {
             return 0;
         }
 
-        // The importer reads each zip's release from its path below the CSV folder, and IUCN's
-        // random zip filenames can contain digit pairs that read as a version. Catch that here,
-        // before any database is opened, instead of filing rows under a release nobody meant.
+        // The importer reads each zip's release from its path below the CSV folder, falling back to
+        // the CSV folder's own. A subfolder named for another release means one of the two names is
+        // wrong; stop here, before any database is opened, rather than guess which.
         if (!string.Equals(redlistVersionHint, "unknown", StringComparison.OrdinalIgnoreCase)) {
             var misread = zipFiles
                 .Select(z => new {
@@ -76,11 +76,14 @@ public sealed class IucnImportCommand : Command<IucnImportCommand.Settings> {
                 .ToList();
 
             if (misread.Count > 0) {
-                AnsiConsole.MarkupLine($"[red]Stopping: the release read from these files is not {Markup.Escape(redlistVersionHint)}, the release the CSV folder is named for.[/]");
+                var hintSource = string.IsNullOrWhiteSpace(settings.Release)
+                    ? $"the release folder's name includes {Markup.Escape(redlistVersionHint)}"
+                    : $"--release is {Markup.Escape(redlistVersionHint)}";
+                AnsiConsole.MarkupLine($"[red]Release version conflict (nothing imported): {hintSource}, but the paths of these zips include a different release version:[/]");
                 foreach (var z in misread) {
-                    AnsiConsole.MarkupLine($"  reads as [bold]{Markup.Escape(z.Version)}[/]  {Markup.Escape(z.Name)}");
+                    AnsiConsole.MarkupLine($"  release [bold]{Markup.Escape(z.Version)}[/]  {Markup.Escape(z.Name)}");
                 }
-                AnsiConsole.MarkupLine($"Put each download in its own subfolder whose name starts with the release, for example \"{Markup.Escape(redlistVersionHint)} non-passerines\".");
+                AnsiConsole.MarkupLine($"If these zips are from {Markup.Escape(redlistVersionHint)}, correct the release version in their subfolder names. If they are from another release, move them to a release folder of their own.");
                 return -1;
             }
         }
