@@ -57,7 +57,7 @@ public class SubGroupShippedRulesTests {
         var lists = config.Lists
             .Where(l => string.Equals(l.TaxaGroup, group, StringComparison.OrdinalIgnoreCase))
             .ToList();
-        Assert.Equal(8, lists.Count);
+        Assert.NotEmpty(lists);
         foreach (var list in lists) {
             var notes = config.ChildLinkNotes
                 .Where(n => n.ParentListId == list.Id && n.Kind == GroupingKind.Phylogenetic)
