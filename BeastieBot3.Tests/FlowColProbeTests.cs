@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.IO;
 using BeastieBot3.Col;
 using BeastieBot3.Web.Flows;
 
@@ -239,5 +240,28 @@ public class FlowColProbeTests {
         Assert.Equal("ok", r.Status);
         Assert.Contains("COL26.5 XR", r.Detail);
         Assert.Contains("Still checking", r.Detail);
+    }
+
+    // A `redlist audit-site --limit` run writes to redlist-audit-2026-limited. Its partial pages
+    // must not mark the CoL flow's "Rebuild the Red List audit site" step as done.
+    [Fact]
+    public void AuditSiteIndex_IgnoresLimitedRunFolder() {
+        var reports = Path.Combine(Path.GetTempPath(), "col-art-" + Guid.NewGuid().ToString("N"));
+        var full = Path.Combine(reports, "redlist-audit-2026", "index.html");
+        var limited = Path.Combine(reports, "redlist-audit-2026-limited", "index.html");
+        Directory.CreateDirectory(Path.GetDirectoryName(full)!);
+        Directory.CreateDirectory(Path.GetDirectoryName(limited)!);
+        try {
+            File.WriteAllText(full, "full");
+            File.WriteAllText(limited, "limited");
+            File.SetLastWriteTimeUtc(full, new DateTime(2026, 9, 1, 0, 0, 0, DateTimeKind.Utc));
+            File.SetLastWriteTimeUtc(limited, new DateTime(2026, 9, 20, 0, 0, 0, DateTimeKind.Utc));
+            Assert.Equal(full, ColArtifacts.NewestAuditSiteIndex(reports));
+
+            File.Delete(full);
+            Assert.Null(ColArtifacts.NewestAuditSiteIndex(reports));
+        } finally {
+            Directory.Delete(reports, recursive: true);
+        }
     }
 }

@@ -53,6 +53,8 @@ internal sealed class FailedAssessmentsProducer : IAuditReportProducer {
             Action = ActionClass.ByHand,
             TriageRank = 3,
             TriageReason = "The API returns 404 for each of these. Few rows, each unambiguous.",
+            // ReadRaw has no LIMIT: the failed-request log is small, so a --limit run lists it all.
+            IgnoresRowLimit = true,
             DataSourceLabel = "IUCN API, with species and taxonomy from the CSV export",
             Blurb = only404
                 ? "Historical assessment ids that appear in a taxon's API record but return HTTP 404 (not found) when requested directly."

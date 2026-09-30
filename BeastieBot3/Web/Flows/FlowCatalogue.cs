@@ -334,7 +334,7 @@ public static class FlowCatalogue {
                     OutputSourceIds = new[] { "reports" },
                     Group = "2 · Refresh derived data",
                     Probe = FlowStepProbes.ColRebuildAudit,
-                    Note = "`redlist audit-site` builds its 'Catalogue of Life crosscheck' pages from the CoL database that COL_sqlite points at, so run it after the repoint; `iucn report-col-crosscheck` is not needed first. The site is written to <reports_dir>/redlist-audit-2026/ (open index.html) and names the CoL release it used under 'Catalogue of Life reference'. If COL_sqlite points at a missing file or a database with no nameusage table, the site is built without those pages, the job still succeeds, and its output says 'skipped col-crosscheck'.",
+                    Note = "`redlist audit-site` builds its 'Catalogue of Life crosscheck' pages from the CoL database that COL_sqlite points at, so run it after the repoint; `iucn report-col-crosscheck` is not needed first. The site is written to <reports_dir>/redlist-audit-2026/ (open index.html) and names the CoL release it used under 'Catalogue of Life reference'. A run with --limit is written to <reports_dir>/redlist-audit-2026-limited/ instead, and does not mark this step as done. If COL_sqlite points at a missing file or a database with no nameusage table, the site is built without those pages, the job still succeeds, and its output says 'skipped col-crosscheck'. The 'Catalogue of Life crosscheck' pages from the earlier run are then removed from the folder.",
                 },
                 new FlowStep {
                     Id = "iucn-crosscheck",

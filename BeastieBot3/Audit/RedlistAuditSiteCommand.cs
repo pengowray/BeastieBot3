@@ -33,11 +33,11 @@ namespace BeastieBot3.Audit;
 internal sealed class RedlistAuditSiteCommand : Command<RedlistAuditSiteCommand.Settings> {
     public sealed class Settings : CommonSettings {
         [CommandOption("-o|--output <DIR>")]
-        [Description("Output directory for the static bundle. Defaults to <Datastore:reports_dir>/redlist-audit-2026.")]
+        [Description("Output directory for the static bundle. Defaults to <Datastore:reports_dir>/redlist-audit-2026, or <Datastore:reports_dir>/redlist-audit-2026-limited for a run with --limit.")]
         public string? OutputDir { get; init; }
 
         [CommandOption("--limit <ROWS>")]
-        [Description("Maximum number of database rows most reports check, for a quick test run (0 = all rows, the default). A run with a limit writes partial pages over the pages from a full run, unless --output is set to a different folder.")]
+        [Description("Maximum number of database rows each report checks, for a quick test run (0 = all rows, the default). failed-assessments ignores it and always checks every row. Without --output, a run with a limit is written to <Datastore:reports_dir>/redlist-audit-2026-limited, so the full run's pages are kept. Every page of a limited run has a notice that its counts are partial, and no release-counts.yml is written.")]
         public long Limit { get; init; }
 
         [CommandOption("--contact <EMAIL>")]
@@ -77,9 +77,11 @@ internal sealed class RedlistAuditSiteCommand : Command<RedlistAuditSiteCommand.
         var releaseCounts = LoadReleaseCounts(paths);
         AnsiConsole.MarkupLineInterpolated($"[grey]Release:[/] {release}    [grey]commentary:[/] {commentary.SourcePath ?? "(none)"}    [grey]release counts:[/] {releaseCounts.SourcePath ?? "(none)"}");
 
-        var outputDir = ResolveOutputDir(paths, settings.OutputDir);
+        var reportsDir = paths.GetReportOutputDirectory();
+        var outputDir = ResolveOutputDir(reportsDir, settings.OutputDir, limited: limit is not null, Environment.CurrentDirectory);
 
         var reports = new List<AuditReport>();
+        var failed = new List<string>();
         string? colRelease;
         using (var ctx = new AuditContext(paths, limit is null ? null : (int?)Math.Min(int.MaxValue, limit.Value), release, releaseYear, commentary, ct)) {
             colRelease = ctx.ColReleaseLabel();
@@ -98,6 +100,7 @@ internal sealed class RedlistAuditSiteCommand : Command<RedlistAuditSiteCommand.
                 } catch (OperationCanceledException) {
                     throw;
                 } catch (Exception ex) {
+                    failed.Add(producer.Id);
                     AnsiConsole.MarkupLineInterpolated($"[red]error[/] {producer.Id}: {Markup.Escape(ex.Message)}");
                 }
             }
@@ -128,38 +131,67 @@ internal sealed class RedlistAuditSiteCommand : Command<RedlistAuditSiteCommand.
             CommentarySource = commentary,
             PreviousRelease = releaseCounts.PreviousRelease(release),
             ReleaseCounts = releaseCounts,
+            RowLimit = limit,
         };
 
-        AuditSiteRenderer.Write(document, outputDir, line => AnsiConsole.MarkupLineInterpolated($"[grey]{Markup.Escape(line)}[/]"));
+        // A producer that threw wrote none of its pages, so pruning would remove its whole report
+        // family from the folder (for the CoL crosscheck, about 30 files). Keep everything instead;
+        // the next run without errors removes what it does not write. A skipped producer (missing
+        // data source, or nothing to report) is not a failure, and its old pages are removed.
+        var written = AuditSiteRenderer.Write(document, outputDir,
+            line => AnsiConsole.MarkupLineInterpolated($"[grey]{Markup.Escape(line)}[/]"),
+            prune: failed.Count == 0);
+        if (written.Removed.Count > 0) {
+            AnsiConsole.MarkupLineInterpolated($"[yellow]Removed {FileCount(written.Removed.Count)} from an earlier run, because this run did not write {(written.Removed.Count == 1 ? "it" : "them")}.[/]");
+        }
+        if (written.Kept.Count > 0) {
+            AnsiConsole.MarkupLineInterpolated($"[yellow]Kept {FileCount(written.Kept.Count)} from an earlier run, because {HtmlText.JoinWithAnd(failed)} failed. This run did not write {(written.Kept.Count == 1 ? "it, so it" : "them, so they")} may be out of date.[/]");
+        }
+        if (written.NotRemoved.Count > 0) {
+            AnsiConsole.MarkupLineInterpolated($"[yellow]Could not remove {FileCount(written.NotRemoved.Count)} from an earlier run.[/]");
+        }
 
         AnsiConsole.MarkupLineInterpolated($"[green]Audit site written to:[/] {outputDir}");
         AnsiConsole.MarkupLineInterpolated($"[grey]Open:[/] {Path.Combine(outputDir, "index.html")}");
 
-        // The counts block for this release, for release-counts.yml. Not written automatically: a
-        // --limit run would record partial counts as history.
-        var block = AuditReleaseCounts.FormatBlock(release, reports.Select(r => (r.Id, r.Count)));
-        File.WriteAllText(Path.Combine(outputDir, "release-counts.yml"), block + Environment.NewLine);
-        if (limit is null) {
-            AnsiConsole.MarkupLineInterpolated($"[grey]Row counts for release-counts.yml (also saved as {Path.Combine(outputDir, "release-counts.yml")}):[/]");
-            AnsiConsole.WriteLine(block);
-        } else {
-            AnsiConsole.MarkupLine("[grey]Row counts not printed: --limit was set, so they are partial.[/]");
+        if (limit is not null) {
+            // rules/audit/release-counts.yml records each release's counts; a --limit run's counts
+            // are partial, so the renderer saves no block and none is printed here.
+            AnsiConsole.MarkupLineInterpolated(
+                $"[yellow]Limited run (--limit {limit.Value}):[/] counts are partial, and every page has a notice saying so. No release-counts.yml was saved.");
+            var fullDir = ResolveOutputDir(reportsDir, null, limited: false, Environment.CurrentDirectory);
+            if (string.IsNullOrWhiteSpace(settings.OutputDir) && File.Exists(Path.Combine(fullDir, "index.html"))) {
+                AnsiConsole.MarkupLineInterpolated($"[grey]The full site in {fullDir} was not changed.[/]");
+            }
+            return 0;
         }
+
+        var countsFile = Path.Combine(outputDir, AuditSiteRenderer.ReleaseCountsFileName);
+        AnsiConsole.MarkupLineInterpolated($"[grey]Row counts for release-counts.yml (also saved as {countsFile}):[/]");
+        AnsiConsole.WriteLine(AuditSiteRenderer.ReleaseCountsBlock(document));
         return 0;
     }
 
+    private static string FileCount(int count) =>
+        count == 1 ? "1 file" : $"{count.ToString("N0", CultureInfo.InvariantCulture)} files";
+
+    // The default folder name under Datastore:reports_dir, and the suffix a --limit run adds to it.
+    // ColArtifacts skips "-limited" folders, so a test run never counts as rebuilding the site.
+    public const string FolderName = "redlist-audit-2026";
+    public const string LimitedFolderSuffix = "-limited";
+
     // Explicit --output wins. Otherwise default to a "redlist-audit-2026" subdirectory of the
     // configured reports directory (Datastore:reports_dir), falling back to ./reports only when no
-    // reports directory is configured.
-    private static string ResolveOutputDir(PathsService paths, string? explicitDir) {
+    // reports directory is configured. A --limit run defaults to "redlist-audit-2026-limited" beside
+    // it, so a test run never overwrites the pages of a full run.
+    internal static string ResolveOutputDir(string? reportsDir, string? explicitDir, bool limited, string currentDir) {
         if (!string.IsNullOrWhiteSpace(explicitDir)) {
-            return Path.GetFullPath(explicitDir);
+            return Path.GetFullPath(explicitDir, currentDir);
         }
-        var reportsDir = paths.GetReportOutputDirectory();
         var baseDir = !string.IsNullOrWhiteSpace(reportsDir)
             ? reportsDir
-            : Path.Combine(Environment.CurrentDirectory, "reports");
-        return Path.Combine(Path.GetFullPath(baseDir), "redlist-audit-2026");
+            : Path.Combine(currentDir, "reports");
+        return Path.Combine(Path.GetFullPath(baseDir, currentDir), limited ? FolderName + LimitedFolderSuffix : FolderName);
     }
 
     private static (string Release, int? Year) ResolveRelease(PathsService paths) {

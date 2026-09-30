@@ -5,12 +5,20 @@ using System.Text;
 using System.Text.RegularExpressions;
 
 // Small HTML helpers for the static audit site: escaping, a whitespace visualiser (so cleanup
-// findings can show otherwise-invisible characters), text truncation, and a tiny Markdown
-// subset for the neutral descriptions and the commentary file. No external Markdown dependency.
+// findings can show otherwise-invisible characters), text truncation, joining a short list into a
+// sentence, and a tiny Markdown subset for the neutral descriptions and the commentary file. No
+// external Markdown dependency.
 
 namespace BeastieBot3.Audit.Rendering;
 
 internal static class HtmlText {
+    // "a", "a and b", "a, b and c". Joins the items as given; escape them first for HTML.
+    public static string JoinWithAnd(IReadOnlyList<string> items) => items.Count switch {
+        0 => "",
+        1 => items[0],
+        _ => string.Join(", ", items.Take(items.Count - 1)) + " and " + items[^1],
+    };
+
     public static string Escape(string? value) {
         if (string.IsNullOrEmpty(value)) {
             return "";

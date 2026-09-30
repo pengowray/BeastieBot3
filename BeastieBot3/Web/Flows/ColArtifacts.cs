@@ -24,12 +24,17 @@ public sealed record ColArtifacts {
 
     // The audit site's entry page: the generator rewrites it every run, so its timestamp is the
     // site's. The reports folder as a whole would pick up any unrelated report.
-    private static string? AuditSiteIndex(PathsService paths) {
-        var reports = Try(() => paths.GetReportOutputDirectory());
+    private static string? AuditSiteIndex(PathsService paths) =>
+        NewestAuditSiteIndex(Try(() => paths.GetReportOutputDirectory()));
+
+    // A --limit run writes to "redlist-audit-2026-limited"; its partial pages do not count as
+    // rebuilding the site.
+    internal static string? NewestAuditSiteIndex(string? reports) {
         if (string.IsNullOrWhiteSpace(reports) || !Directory.Exists(reports)) return null;
         try {
             var newest = new DirectoryInfo(reports)
                 .EnumerateDirectories("redlist-audit-*", SearchOption.TopDirectoryOnly)
+                .Where(d => !d.Name.EndsWith(Audit.RedlistAuditSiteCommand.LimitedFolderSuffix, StringComparison.OrdinalIgnoreCase))
                 .Select(d => Path.Combine(d.FullName, "index.html"))
                 .Where(File.Exists)
                 .OrderByDescending(File.GetLastWriteTimeUtc)
