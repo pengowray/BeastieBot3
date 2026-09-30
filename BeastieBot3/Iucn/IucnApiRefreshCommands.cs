@@ -53,7 +53,7 @@ internal static class IucnRefreshRun {
 
         store.CloseRefreshSession(current.Id);
         AnsiConsole.MarkupLineInterpolated(
-            $"[green]Refresh finished:[/] {current.DisplayLabel}. Everything fetched before {IucnRefreshMath.Stamp(current.CutoffUtc)} has been downloaded again.");
+            $"[green]Refresh finished:[/] {current.DisplayLabel}. Everything fetched before {IucnRefreshMath.Stamp(current.CutoffUtc)} has been downloaded again, except any not found on the API (404).");
     }
 }
 
@@ -228,7 +228,7 @@ internal sealed class IucnApiRefreshStatusCommand : Command<IucnApiRefreshStatus
         AnsiConsole.Write(table);
 
         AnsiConsole.MarkupLine(progress.IsFinished
-            ? "[green]Everything is downloaded.[/] The refresh closes itself on the next [bold]iucn api cache-all[/] run."
+            ? "[green]Everything is downloaded[/], except any not found on the API (404). The refresh closes itself on the next [bold]iucn api cache-all[/] run."
             : "Carry on with [bold]iucn api cache-all --full[/]. The cutoff is remembered, so there is nothing to re-enter.");
         return 0;
     }

@@ -67,9 +67,10 @@ public static class IucnRefreshMath {
         return (int)Math.Clamp(done * 100 / start, 0, 100);
     }
 
-    // A session is finished when nothing is left older than the cutoff and every phase it asked
-    // for has run. Without this the fallback cutoff would apply forever and the step would offer
-    // to resume a refresh that finished months ago.
+    // A session is finished when nothing is left older than the cutoff (apart from rows the API
+    // answered 404/410 for, which the counts leave out) and every phase it asked for has run.
+    // Without this the fallback cutoff would apply forever and the step would offer to resume a
+    // refresh that finished months ago.
     public static bool IsComplete(IucnRefreshSession session, long taxaRemaining, long assessmentsRemaining) =>
         taxaRemaining == 0
         && assessmentsRemaining == 0

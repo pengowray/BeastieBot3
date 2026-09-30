@@ -656,13 +656,31 @@ FROM refresh_sessions WHERE {where} ORDER BY id DESC LIMIT 1";
         command.ExecuteNonQuery();
     }
 
-    // How much of the cache still predates a cutoff. downloaded_at is a UTC "O" string, so the
-    // text comparison is chronological and uses the downloaded_at indexes.
+    // How much of the cache a refresh still has to re-download: rows downloaded before the cutoff.
+    // downloaded_at is a UTC "O" string, so the text comparison is chronological and uses the
+    // downloaded_at indexes.
+    //
+    // A cached row whose re-download got a 404/410 keeps its old downloaded_at, and every normal
+    // run skips it because of the tombstone; only the tombstone pass (--retry-tombstones) asks for
+    // it again. Counting it would keep the refresh open for good, so it is left out. Assessments
+    // are matched on assessment_id. Taxa are matched on root_sis_id, the id that cache-taxa and
+    // cache-infraranks request, not through taxa_lookup: that table also maps a species' infrarank
+    // SIS ids to the species row, and a 404 on a subspecies says nothing about its species.
+    // StartRefreshSession snapshots these same counts, so the starting totals and the progress
+    // use one definition.
     public long CountTaxaDownloadedBefore(DateTime cutoffUtc) =>
-        CountBefore("SELECT COUNT(*) FROM taxa WHERE downloaded_at < @cutoff", cutoffUtc);
+        CountBefore(@"SELECT COUNT(*) FROM taxa t
+WHERE t.downloaded_at < @cutoff
+  AND NOT EXISTS (SELECT 1 FROM failed_requests f
+                  WHERE f.endpoint = 'taxa_sis' AND f.entity_id = CAST(t.root_sis_id AS TEXT)
+                    AND f.last_status IN (404, 410))", cutoffUtc);
 
     public long CountAssessmentsDownloadedBefore(DateTime cutoffUtc) =>
-        CountBefore("SELECT COUNT(*) FROM assessments WHERE downloaded_at < @cutoff", cutoffUtc);
+        CountBefore(@"SELECT COUNT(*) FROM assessments a
+WHERE a.downloaded_at < @cutoff
+  AND NOT EXISTS (SELECT 1 FROM failed_requests f
+                  WHERE f.endpoint = 'assessment' AND f.entity_id = CAST(a.assessment_id AS TEXT)
+                    AND f.last_status IN (404, 410))", cutoffUtc);
 
     private long CountBefore(string sql, DateTime cutoffUtc) {
         using var command = _connection.CreateCommand();

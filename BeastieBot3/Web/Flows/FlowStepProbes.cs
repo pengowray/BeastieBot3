@@ -296,20 +296,30 @@ public static class FlowStepProbes {
         }
 
         var age = s.OldestTaxaDownloadedAt is { } oldest ? $" · oldest taxon record downloaded {IucnRefreshMath.Stamp(oldest)}" : "";
-        var except = ExceptNotDownloaded(s);
-        var notDownloaded = except.Length == 0 ? "" : $" Every queued assessment is downloaded{except}.";
+        var notDownloaded = NotDownloadedSentences(s);
+        if (notDownloaded.Length > 0) notDownloaded = " " + notDownloaded;
         return new FlowProbeResult("ok",
             $"{s.TaxaCached:N0} taxa and {s.AssessmentsCached:N0} assessments cached{age}.{notDownloaded} For a new Red List release, start a re-import first (iucn api refresh-start), then run this step.");
     }
 
     // The queued assessments a normal run does not count as work left: the ones the API answers
     // with a server error, and the ones it answered 404/410 for, which only a re-import's
-    // tombstone pass asks for again. "" when there are none.
-    private static string ExceptNotDownloaded(IucnApiCacheState s) {
-        var parts = new List<string>();
-        if (s.ServerErrorAssessments > 0) parts.Add($"{s.ServerErrorAssessments:N0} that the API answers with a server error");
-        if (s.BacklogNotFound > 0) parts.Add($"{s.BacklogNotFound:N0} not found on the API");
-        return parts.Count == 0 ? "" : ", except " + string.Join(" and ", parts);
+    // tombstone pass asks for again. The total comes first and each group gets its own clause,
+    // so the two counts cannot be read as one list. "" when there are none.
+    private static string NotDownloadedSentences(IucnApiCacheState s) {
+        var serverErrors = s.ServerErrorAssessments;
+        var notFound = s.BacklogNotFound;
+        if (serverErrors <= 0 && notFound <= 0) return "";
+
+        var total = $"Every queued assessment is downloaded except {serverErrors + notFound:N0}";
+        if (notFound <= 0) {
+            return $"{total}. The API returns a server error for those {serverErrors:N0}.";
+        }
+        var reimport = $"A re-import requests those {notFound:N0} again.";
+        if (serverErrors <= 0) {
+            return $"{total}, which are not found on the API (404). {reimport}";
+        }
+        return $"{total}. The API returns a server error for {serverErrors:N0} of them, and the other {notFound:N0} are not found on the API (404). {reimport}";
     }
 
     // Are the release's zip files where the import will look for them?
@@ -412,9 +422,11 @@ public static class FlowStepProbes {
 
         if (s.RefreshProgress is { } refresh) {
             var session = refresh.Session;
+            // The remaining counts leave out cached rows the API has since answered 404/410 for:
+            // they keep their old download date, so "all" needs the exception.
             if (refresh.TaxaRemaining == 0 && refresh.AssessmentsRemaining == 0) {
                 return new FlowProbeResult("ok",
-                    $"Re-import {session.DisplayLabel}: this step is done. IUCN API cache: {s.TaxaCached:N0} taxa and {s.AssessmentsCached:N0} assessments, all downloaded after the cutoff date.");
+                    $"Re-import {session.DisplayLabel}: this step is done. IUCN API cache: {s.TaxaCached:N0} taxa and {s.AssessmentsCached:N0} assessments, all downloaded after the cutoff date except any not found on the API (404).");
             }
             return new FlowProbeResult("todo",
                 $"Re-import {session.DisplayLabel} is {refresh.PercentDone}% done: "
@@ -457,8 +469,12 @@ public static class FlowStepProbes {
                 $"{s.AssessmentsToDownload:N0} queued assessments are not downloaded yet.");
         }
 
-        return new FlowProbeResult("ok",
-            $"Every queued assessment is downloaded ({s.AssessmentsCached:N0} in the cache){ExceptNotDownloaded(s)}.");
+        // The cache total gets its own sentence when there are exceptions: placed next to
+        // "except 80" it reads as the number the 80 are out of.
+        var notDownloaded = NotDownloadedSentences(s);
+        return new FlowProbeResult("ok", notDownloaded.Length == 0
+            ? $"Every queued assessment is downloaded ({s.AssessmentsCached:N0} in the cache)."
+            : $"{s.AssessmentsCached:N0} assessments cached. {notDownloaded}");
     }
 
     // The projection is what --dataset api actually reads, so "is it built from what is in the

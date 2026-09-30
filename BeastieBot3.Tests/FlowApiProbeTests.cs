@@ -110,7 +110,7 @@ public class FlowApiProbeTests {
     public void RefreshWithNothingLeft_IsOk() {
         var r = FlowStepProbes.ApiTaxa(State(session: Session()))!;
         Assert.Equal("ok", r.Status);
-        Assert.Contains("all downloaded after the cutoff date", r.Detail);
+        Assert.Contains("all downloaded after the cutoff date except any not found on the API (404).", r.Detail);
     }
 
     // ---- the family sweep ----
@@ -151,7 +151,7 @@ public class FlowApiProbeTests {
     public void Infraranks_IgnoresTheOnesTheApiCannotServe() {
         var r = FlowStepProbes.ApiInfraranks(State(backlogOutstanding: 23, serverErrors: 23))!;
         Assert.Equal("ok", r.Status);
-        Assert.Contains("except 23 that the API answers with a server error", r.Detail);
+        Assert.Equal("352,384 assessments cached. Every queued assessment is downloaded except 23. The API returns a server error for those 23.", r.Detail);
     }
 
     // A 404 is tombstoned and no normal run asks for it again, so it is not work left either.
@@ -160,15 +160,21 @@ public class FlowApiProbeTests {
     public void Infraranks_NotFoundOnly_IsOkAndSaysHowMany() {
         var r = FlowStepProbes.ApiInfraranks(State(notFound: 57))!;
         Assert.Equal("ok", r.Status);
-        Assert.Contains("except 57 not found on the API", r.Detail);
-        Assert.DoesNotContain("server error", r.Detail);
+        Assert.Equal("352,384 assessments cached. Every queued assessment is downloaded except 57, which are not found on the API (404). A re-import requests those 57 again.", r.Detail);
     }
 
     [Fact]
     public void Infraranks_ServerErrorsAndNotFound_NamesBoth() {
         var r = FlowStepProbes.ApiInfraranks(State(backlogOutstanding: 23, serverErrors: 23, notFound: 57))!;
         Assert.Equal("ok", r.Status);
-        Assert.Contains("23 that the API answers with a server error and 57 not found on the API", r.Detail);
+        Assert.Equal("352,384 assessments cached. Every queued assessment is downloaded except 80. The API returns a server error for 23 of them, and the other 57 are not found on the API (404). A re-import requests those 57 again.", r.Detail);
+    }
+
+    [Fact]
+    public void Infraranks_NothingMissing_KeepsTheShortLine() {
+        var r = FlowStepProbes.ApiInfraranks(State())!;
+        Assert.Equal("ok", r.Status);
+        Assert.Equal("Every queued assessment is downloaded (352,384 in the cache).", r.Detail);
     }
 
     // The count of work left is the same number the one-button light shows: server errors out.
@@ -244,7 +250,7 @@ public class FlowApiProbeTests {
     public void UpdateLight_OnlyNotFoundLeft_IsOkAndNamesThem() {
         var r = FlowStepProbes.ApiUpdate(State(notFound: 57, projection: Projection()));
         Assert.Equal("ok", r.Status);
-        Assert.Contains("Every queued assessment is downloaded, except 57 not found on the API.", r.Detail);
+        Assert.Contains(" Every queued assessment is downloaded except 57, which are not found on the API (404). A re-import requests those 57 again. For a new Red List release", r.Detail);
     }
 
     [Fact]
@@ -255,11 +261,27 @@ public class FlowApiProbeTests {
         Assert.DoesNotContain("57", r.Detail);
     }
 
+    // Server errors alone: no re-import sentence, because a normal run retries them.
+    [Fact]
+    public void UpdateLight_OnlyServerErrorsLeft_IsOkWithoutTheReimportSentence() {
+        var r = FlowStepProbes.ApiUpdate(State(backlogOutstanding: 23, serverErrors: 23, projection: Projection()));
+        Assert.Equal("ok", r.Status);
+        Assert.Contains(" Every queued assessment is downloaded except 23. The API returns a server error for those 23. For a new Red List release", r.Detail);
+        Assert.DoesNotContain("requests those", r.Detail);
+    }
+
+    [Fact]
+    public void UpdateLight_NothingMissing_HasNoExceptSentence() {
+        var r = FlowStepProbes.ApiUpdate(State(projection: Projection()));
+        Assert.Equal("ok", r.Status);
+        Assert.DoesNotContain("Every queued assessment", r.Detail);
+    }
+
     [Fact]
     public void UpdateLight_ServerErrorsAndNotFound_IsOkAndNamesBoth() {
         var r = FlowStepProbes.ApiUpdate(State(backlogOutstanding: 23, serverErrors: 23, notFound: 57, projection: Projection()));
         Assert.Equal("ok", r.Status);
-        Assert.Contains("except 23 that the API answers with a server error and 57 not found on the API", r.Detail);
+        Assert.Contains(" Every queued assessment is downloaded except 80. The API returns a server error for 23 of them, and the other 57 are not found on the API (404). A re-import requests those 57 again. For a new Red List release", r.Detail);
     }
 
     [Fact]
