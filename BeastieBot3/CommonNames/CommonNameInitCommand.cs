@@ -25,6 +25,7 @@ namespace BeastieBot3.CommonNames;
 [CommandInfo("common-names init", CommandKind.Mutates,
     "Initialize the common name store with taxa from IUCN and caps rules. Safe to re-run (uses upsert).",
     Reason = "Initializes the common name store via upsert (idempotent).",
+    Rerun = RerunEffect.IdempotentAdd,
     Examples = new[] {
         "common-names init",
         "common-names init --aggregate",

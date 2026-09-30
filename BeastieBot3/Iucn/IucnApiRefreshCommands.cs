@@ -60,8 +60,8 @@ internal static class IucnRefreshRun {
 [CommandInfo("iucn api refresh-start", CommandKind.Mutates,
     "Begin a refresh of the API cache: mark everything downloaded before a cutoff date to be fetched again.",
     Reason = "Records the refresh cutoff. Downloads only happen when you then run the cache commands.",
-    Rerun = RerunEffect.IdempotentAdd,
-    RerunNote = "Records a cutoff date; the following cache-all run re-downloads everything older than it, and resumes from where it stopped on every later run. Refuses to start while another refresh is open unless you pass --replace.",
+    Rerun = RerunEffect.PlansDownloads,
+    RerunNote = "Records a cutoff date. While the refresh is open, each run of an iucn api download command (cache-all, cache-taxa, cache-assessments, cache-infraranks, discover-by-family) downloads again the records downloaded before that date, and continues from where the previous run stopped. Refuses to start while another refresh is open unless you pass --replace.",
     Examples = new[] {
         "iucn api refresh-start --label 2026-1",
         "iucn api refresh-start --cutoff 2026-06-16 --label 2026-1",
@@ -246,7 +246,7 @@ internal sealed class IucnApiRefreshStatusCommand : Command<IucnApiRefreshStatus
 [CommandInfo("iucn api refresh-abandon", CommandKind.Mutates,
     "Stop the refresh in progress. Nothing already downloaded is lost.",
     Reason = "Closes the refresh record only; no cached payload is deleted.",
-    Rerun = RerunEffect.IdempotentAdd,
+    Rerun = RerunEffect.PlansDownloads,
     Examples = new[] { "iucn api refresh-abandon" })]
 internal sealed class IucnApiRefreshAbandonCommand : Command<IucnApiRefreshAbandonCommand.Settings> {
     public sealed class Settings : CommonSettings {

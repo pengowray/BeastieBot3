@@ -17,17 +17,12 @@ public sealed record RegisteredCommand(Type Type, CommandInfoAttribute Info) {
     public string? Reason => Info.Reason;
     public IReadOnlyList<string> Examples => Info.Examples;
 
-    // Re-run effect, defaulting from Kind when a command leaves it unspecified so
-    // the ~35 commands need no blanket annotation: read-only -> ReadOnly,
-    // additive mutate -> IdempotentAdd, destructive -> FreshDataset.
+    // Re-run effect. A ReadOnly command may leave it unset, which means ReadOnly. Every other
+    // command sets it (CommandClassificationTests fails otherwise); the IdempotentAdd fallback
+    // only keeps the web UI working until that test is fixed.
     public RerunEffect Rerun => Info.Rerun != RerunEffect.Default
         ? Info.Rerun
-        : Kind switch {
-            CommandKind.ReadOnly => RerunEffect.ReadOnly,
-            CommandKind.Mutates => RerunEffect.IdempotentAdd,
-            CommandKind.Destructive => RerunEffect.FreshDataset,
-            _ => RerunEffect.IdempotentAdd,
-        };
+        : Kind == CommandKind.ReadOnly ? RerunEffect.ReadOnly : RerunEffect.IdempotentAdd;
     public string? RerunNote => Info.RerunNote;
     public string[] PathSegments => Info.Path.Split(' ', StringSplitOptions.RemoveEmptyEntries);
     public string CommandName => PathSegments[^1];

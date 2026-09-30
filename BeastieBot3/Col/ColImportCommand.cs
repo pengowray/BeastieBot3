@@ -17,7 +17,9 @@ namespace BeastieBot3.Col;
 [CommandInfo("col import", CommandKind.Destructive,
     "Import Catalogue of Life ColDP zip archives into individual SQLite databases.",
     Reason = "With --force, col import deletes and rebuilds the database for every ColDP zip in Datasets:COL_dir, and each rebuild takes tens of minutes. Without --force, it skips a complete database, and deletes and rebuilds an incomplete one.",
-    Rerun = RerunEffect.FreshDataset,
+    ConfirmWhen = new[] { "--force" },
+    ConfirmText = "Deletes and rebuilds the database for every ColDP zip in Datasets:COL_dir. Each rebuild takes tens of minutes.",
+    Rerun = RerunEffect.Imports,
     RerunNote = "For a new Catalogue of Life release: set Datasets:COL_dir to the folder with its ColDP zip, run col import without --force (each release gets its own file), set Datastore:COL_sqlite to the new col_coldp_<label>.sqlite file, then restart serve. <label> is the release alias from the zip's metadata.yaml with spaces replaced by underscores, for example col_coldp_COL26.7_XR.sqlite. Until Datastore:COL_sqlite is changed, every command reads the previous release.",
     Examples = new[] { "col import", "col import --force" })]
 public sealed class ColImportCommand : Command<ColImportCommand.Settings> {

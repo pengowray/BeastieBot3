@@ -734,16 +734,30 @@
   }
 
   // Human-readable "what happens if I run this (again)?" hint, keyed off the
-  // command's `rerun` effect (served by /api/commands). Orthogonal to `kind`.
+  // command's `rerun` effect (served by /api/commands; RerunEffect in
+  // CommandClassification.cs). Orthogonal to `kind`. Each hint must be true for every
+  // command with that effect; command-specific detail goes in the command's rerunNote.
+  // CommandClassificationTests checks that every RerunEffect has an entry here.
   const EFFECTS = {
-    readonly:      { label: 'read-only',  cls: 'readonly',  icon: '👁', hint: 'Read-only — produces output/reports; never changes cached data.' },
-    idempotentadd: { label: 'adds new records', cls: 'add', icon: '＋', hint: 'By default, running a download command again downloads only records not yet in the cache.' },
-    discovers:     { label: 'finds new records', cls: 'discovers', icon: '🔍', hint: 'Discovers new entries — scans an external source for items not yet cached locally.' },
-    rebuilds:      { label: 'rebuilds output', cls: 'rebuilds', icon: '🔁', hint: 'Running again replaces this command\'s previous result with a new one.' },
-    clearscache:   { label: 'clears cache', cls: 'fresh',   icon: '🧹', hint: 'Deletes the downloaded copies of Wikidata items from the cache and keeps the download queue.' },
-    freshdataset:  { label: 're-import needs --force', cls: 'fresh', icon: '🗄', hint: 'Imports a downloaded release into a database file. With --force ticked, the command replaces data that is already imported.' },
+    readonly:       { label: 'read-only', cls: 'readonly', icon: '👁', hint: 'Reads data and shows the results or writes them to files. Changes none of the downloaded or imported data.' },
+    idempotentadd:  { label: 'adds what is missing', cls: 'add', icon: '＋', hint: 'By default, a run adds only the records that are missing, and keeps the records already there.' },
+    discovers:      { label: 'finds new records', cls: 'discovers', icon: '🔍', hint: 'Searches the IUCN Red List API or Wikidata, and adds the records it finds to the cache or to the download queue.' },
+    rebuilds:       { label: 'rebuilds output', cls: 'rebuilds', icon: '🔁', hint: 'Each run rebuilds the output from data already stored locally, and replaces the output of the previous run.' },
+    plansdownloads: { label: 'changes what is downloaded next', cls: 'queue', icon: '📋', hint: 'Changes only which records the download commands fetch next. Downloads nothing and deletes no downloaded data.' },
+    clearscache:    { label: 'clears cache', cls: 'fresh', icon: '🧹', hint: 'Deletes downloaded data from the cache.' },
+    imports:        { label: 're-import needs --force', cls: 'fresh', icon: '🗄', hint: 'Imports downloaded files into a database. Running the command again skips files already imported. With --force, the command deletes the imported data and imports the files again.' },
   };
   function effectInfo(cmd) { return EFFECTS[cmd.rerun] || null; }
+
+  // Whether a run with these options only reports (CommandInfo ReportOnlyWith / ChangesOnlyWith,
+  // served with every alias): "iucn api cache-all --full --status", or "wikipedia prune-queue"
+  // without --apply. Used for Workflows buttons, whose options are fixed.
+  function isReportOnlyRun(meta, args) {
+    const names = args.filter(a => a.startsWith('-')).map(a => a.split('=')[0]);
+    const hasAny = (list) => (list || []).some(o => names.includes(o));
+    if (hasAny(meta.reportOnlyWith)) return true;
+    return (meta.changesOnlyWith || []).length > 0 && !hasAny(meta.changesOnlyWith);
+  }
 
   function renderCommandRow(cmd) {
     const wrap = document.createElement('div');
@@ -804,11 +818,16 @@
     fullDesc.textContent = cmd.description || '';
     form.appendChild(fullDesc);
 
+    // Which runs of a destructive command delete what. Hidden while the preflight box is
+    // showing, because that box says what this particular run deletes.
+    let reasonEl = null;
     if (cmd.kind === 'destructive' && cmd.reason) {
       const r = document.createElement('p');
       r.className = 'reason';
       r.textContent = '⚠ ' + cmd.reason;
+      r.hidden = cmd.confirm === 'always' || cmd.confirm === 'files';
       form.appendChild(r);
+      reasonEl = r;
     }
 
     // "What happens if I run this?" effect hint + any command-specific note.
@@ -835,16 +854,19 @@
 
     // Contextual redundancy warning: --force / --max-age-hours re-fetch already-
     // cached entries. Driven by the live form state (no per-command metadata).
+    // Hidden while the preflight box below is showing: that box describes this run exactly.
     const forceWarn = document.createElement('p');
     forceWarn.className = 'force-warn';
     forceWarn.hidden = true;
     form.appendChild(forceWarn);
+    let preflightShown = false;
     const updateForceWarn = () => {
+      if (preflightShown) { forceWarn.hidden = true; return; }
       const inputs = Array.from(form.querySelectorAll('[data-field-name]'));
-      // The one clears-cache command, wikidata reset-cache, uses --force only to skip its
-      // confirmation prompt, so the re-download warning would be wrong there.
-      const forced = cmd.rerun === 'clearscache' ? null
-        : inputs.find(i => i.dataset.fieldKind === 'Flag' && i.checked && /force/i.test(i.dataset.fieldName));
+      // A command's prompt option (wikidata reset-cache --force) only skips its terminal
+      // prompt, so the re-download warning would be wrong for it.
+      const forced = inputs.find(i => i.dataset.fieldKind === 'Flag' && i.checked &&
+        /force/i.test(i.dataset.fieldName) && i.dataset.fieldName !== cmd.promptOption);
       const aged = inputs.find(i => /max-age/i.test(i.dataset.fieldName) && (i.value || '').trim() !== '');
       if (forced) {
         forceWarn.hidden = false;
@@ -868,15 +890,19 @@
     const runBtn = document.createElement('button');
     runBtn.type = 'submit';
     runBtn.className = 'run-btn ' + cmd.kind;
-    runBtn.textContent = cmd.kind === 'destructive' ? 'Run (confirm)' : 'Run';
+    // Says whether clicking will ask first. Set from the command's confirmation mode now, then
+    // from the preflight for the options chosen (see updatePreflight).
+    const setRunLabel = (asks) => { runBtn.textContent = asks ? 'Run (confirm)' : 'Run'; };
+    setRunLabel(cmd.confirm === 'always');
     actions.appendChild(runBtn);
     const preview = document.createElement('span');
     preview.className = 'preview';
     actions.appendChild(preview);
     form.appendChild(actions);
 
-    // What this run would do to the files as they are right now, refreshed as options change.
-    // Commands without a preflight leave the box hidden and fall back to the fixed warning.
+    // Whether this run, with the options chosen, will ask for confirmation, and what it would
+    // delete or do to the files as they are right now; refreshed as options change. Hidden for
+    // runs that do not ask and have nothing to report (most commands).
     const preflight = document.createElement('div');
     preflight.className = 'preflight';
     preflight.hidden = true;
@@ -884,9 +910,14 @@
     let preflightSeq = 0;
     const updatePreflight = async () => {
       const seq = ++preflightSeq;
-      const data = await fetchPreflight(cmd.path, readForm(form, cmd));
+      const result = await fetchPreflight(cmd.path, readForm(form, cmd));
       if (seq !== preflightSeq) return;
+      const data = result.ok ? result.data : null;
       renderPreflight(preflight, data);
+      preflightShown = !!data;
+      if (reasonEl) reasonEl.hidden = preflightShown;
+      setRunLabel(result.ok ? !!(data && data.confirm) : cmd.confirm !== 'never');
+      updateForceWarn();
     };
 
     const updatePreview = () => {
@@ -901,29 +932,30 @@
 
     form.addEventListener('submit', async (e) => {
       e.preventDefault();
-      const args = readForm(form, cmd);
-      if (!await confirmRun(cmd.path, args, cmd)) return;
-      enqueue(cmd.path, args);
+      const runArgs = await confirmRun(cmd.path, readForm(form, cmd), cmd);
+      if (runArgs) enqueue(cmd.path, runArgs);
     });
 
     return form;
   }
 
-  // --- Preflight: what a command would actually do, given the current files ----
-  // The command catalogue's warning text is fixed at build time, so on its own it can
-  // claim data will be dropped when there is none. Where the server can inspect the
-  // real state, it says so instead, and we only interrupt when something is at risk.
+  // --- Preflight: does this run need confirmation, and what would it delete? ----
+  // The server decides (CommandPreflight, rule above CommandKind): only a run that deletes
+  // downloaded or imported data asks. For iucn import it also inspects the real files, so it
+  // can say "creates a new database" instead of warning about data that is not there.
 
+  // { ok: true, data } where data is null when the run asks nothing and shows nothing;
+  // { ok: false } when the server could not be asked.
   async function fetchPreflight(path, args) {
     try {
       const url = '/api/commands/preflight?path=' + encodeURIComponent(path) +
                   '&args=' + encodeURIComponent(args.join(' '));
       const r = await fetch(url);
-      if (!r.ok) return null;
+      if (!r.ok) return { ok: false };
       const d = await r.json();
-      return d && d.supported ? d : null;
+      return { ok: true, data: d && d.supported ? d : null };
     } catch (_) {
-      return null;
+      return { ok: false };
     }
   }
 
@@ -952,22 +984,26 @@
     }
   }
 
+  // Returns the args to run (the preflight may add the command's prompt option, such as
+  // wikidata reset-cache --force, because a web job cannot answer a terminal prompt), or null
+  // when the user cancels. If the server cannot be asked, any command that can ask does ask.
   async function confirmRun(path, args, meta) {
-    const label = 'Run "' + path + (args.length ? ' ' + args.join(' ') : '') + '"?';
-    const pre = await fetchPreflight(path, args);
-
-    if (pre) {
-      if (!pre.confirm) return true;
-      const lines = [label, '', pre.headline];
-      if (pre.details && pre.details.length) lines.push('', pre.details.join('\n'));
-      if (pre.warning) lines.push('', pre.warning);
-      return confirm(lines.join('\n'));
+    const result = await fetchPreflight(path, args);
+    let pre = result.ok ? result.data : null;
+    if (!result.ok && meta && meta.confirm && meta.confirm !== 'never') {
+      pre = {
+        confirm: true,
+        headline: meta.reason || 'This run can delete downloaded or imported data.',
+        addArgs: meta.promptOption && !args.includes(meta.promptOption) ? [meta.promptOption] : [],
+      };
     }
+    if (!pre || !pre.confirm) return args;
 
-    if (meta && meta.kind === 'destructive') {
-      return confirm(label + '\n\n' + (meta.reason || 'This command makes destructive changes.'));
-    }
-    return true;
+    const runArgs = args.concat(pre.addArgs || []);
+    const lines = ['Run "' + path + (runArgs.length ? ' ' + runArgs.join(' ') : '') + '"?', '', pre.headline];
+    if (pre.details && pre.details.length) lines.push('', pre.details.join('\n'));
+    if (pre.warning) lines.push('', pre.warning);
+    return confirm(lines.join('\n')) ? runArgs : null;
   }
 
   function renderField(grid, f) {
@@ -1459,16 +1495,20 @@
         // A flow command may carry trailing args (e.g. "iucn api cache-infraranks --from-csv").
         // Match the longest registered command path that prefixes it; the rest are args.
         const { meta: cmdMeta, path, args } = splitFlowCommand(c);
+        // A button whose options make the run only report ("--status", or prune-queue without
+        // --apply) looks like a read-only command's button and has no effect pill.
+        const readOnlyRun = !!cmdMeta && (cmdMeta.rerun === 'readonly' || isReportOnlyRun(cmdMeta, args));
         const btn = document.createElement('button');
-        btn.className = 'flow-cmd-btn ' + (cmdMeta ? cmdMeta.kind : 'mutates');
+        btn.className = 'flow-cmd-btn ' + (readOnlyRun ? 'readonly' : cmdMeta ? cmdMeta.kind : 'mutates');
         btn.textContent = c;
+        if (readOnlyRun) btn.title = EFFECTS.readonly.hint;
         btn.addEventListener('click', (e) => {
           e.stopPropagation();
           if (!cmdMeta) {
             alert('Unknown command: ' + c);
             return;
           }
-          confirmRun(path, args, cmdMeta).then((ok) => { if (ok) enqueue(path, args); });
+          confirmRun(path, args, cmdMeta).then((runArgs) => { if (runArgs) enqueue(path, runArgs); });
         });
         cmdRow.appendChild(btn);
 
@@ -1476,7 +1516,7 @@
         // same metadata the Run command page shows. Answers "will this replace what I have?"
         // without opening the step's options.
         const cmdEff = cmdMeta ? effectInfo(cmdMeta) : null;
-        if (cmdEff && cmdMeta.rerun !== 'readonly') {
+        if (cmdEff && !readOnlyRun) {
           const pill = document.createElement('span');
           pill.className = 'effect-badge ' + cmdEff.cls;
           pill.textContent = cmdEff.label;

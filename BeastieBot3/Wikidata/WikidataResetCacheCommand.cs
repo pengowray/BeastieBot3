@@ -24,6 +24,7 @@ public sealed class WikidataResetCacheSettings : CommonSettings {
 [CommandInfo("wikidata reset-cache", CommandKind.Destructive,
     "Delete all downloaded item data in the Wikidata cache and everything extracted from the item data, including P627 IDs, P141 statuses, taxon names and the name index. The download queue and the taxon links made by wikidata backfill-iucn are kept. Downloading every item again with wikidata cache-entities takes days.",
     Reason = "Deletes all downloaded Wikidata item data and the P627 IDs, P141 statuses and taxon names extracted from it. Re-downloading every item takes days.",
+    PromptOption = "--force",
     Rerun = RerunEffect.ClearsCache,
     RerunNote = "The next run of wikidata cache-entities, wikidata cache-all or wikipedia update downloads every item again.",
     Examples = new[] {
@@ -43,7 +44,13 @@ public sealed class WikidataResetCacheCommand : AsyncCommand<WikidataResetCacheS
         AnsiConsole.MarkupLine($"[grey]Wikidata cache:[/] {Markup.Escape(cachePath)}");
 
         if (!settings.Force) {
-            var confirmed = AnsiConsole.Confirm("This will delete all downloaded Wikidata JSON payloads but keep the seed queue. Continue?");
+            // A web UI job (or any run without a terminal) cannot answer a prompt, and Spectre throws
+            // if asked to. The web UI asks in its own dialog and then adds --force (PromptOption).
+            if (!AnsiConsole.Profile.Capabilities.Interactive) {
+                AnsiConsole.MarkupLine("[red]Cannot ask for confirmation: this run is not in an interactive terminal. Nothing was deleted.[/] To delete without being asked, run [bold]wikidata reset-cache --force[/].");
+                return 1;
+            }
+            var confirmed = AnsiConsole.Confirm("Delete all downloaded item data in the Wikidata cache? Downloading every item again takes days.");
             if (!confirmed) {
                 AnsiConsole.MarkupLine("[yellow]Operation cancelled.[/]");
                 return 1;

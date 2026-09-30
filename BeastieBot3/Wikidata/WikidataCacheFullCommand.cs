@@ -68,7 +68,7 @@ public sealed class WikidataCacheFullSettings : CommonSettings {
 [CommandInfo("wikidata cache-all", CommandKind.Mutates,
     "Finds Wikidata items with P627 or P141 and downloads each item not yet in the Wikidata cache (runs wikidata seed-taxa, then wikidata cache-entities, as one job). Uses WIKIDATA_USER_AGENT from .env if it is set.",
     Reason = "Discovers Wikidata Q-ids and downloads their entity JSON into the cache (idempotent additive; --download-force re-downloads already-cached entities).",
-    Rerun = RerunEffect.IdempotentAdd,
+    Rerun = RerunEffect.Discovers,
     Examples = new[] {
         "wikidata cache-all",
         "wikidata cache-all --seed-limit 1000 --download-limit 200"

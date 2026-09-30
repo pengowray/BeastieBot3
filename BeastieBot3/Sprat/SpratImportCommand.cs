@@ -15,8 +15,10 @@ namespace BeastieBot3.Sprat;
 
 [CommandInfo("sprat import", CommandKind.Destructive,
     "Import the Australian SPRAT (EPBC) species report CSV into its own SQLite datastore.",
-    Reason = "With --force, sprat import deletes the SPRAT (EPBC) database and imports the SPRAT report CSV again. Without --force, it skips a complete database, and deletes and re-imports an incomplete one.",
-    Rerun = RerunEffect.FreshDataset,
+    Reason = "With --force, sprat import deletes the SPRAT (EPBC) database and imports the CSV file that Datasets:SPRAT_csv points at, or the file given with --csv. Without --force, it skips a complete database, and deletes and re-imports an incomplete one.",
+    ConfirmWhen = new[] { "--force" },
+    ConfirmText = "Deletes the SPRAT (EPBC) database and imports the CSV file that Datasets:SPRAT_csv points at, or the file given with --csv.",
+    Rerun = RerunEffect.Imports,
     RerunNote = "Without --force, sprat import skips a database that contains a complete import, even if Datasets:SPRAT_csv points at a newer CSV. To import a new SPRAT report CSV, set Datasets:SPRAT_csv to its path and tick --force.",
     Examples = new[] { "sprat import", "sprat import --force" })]
 public sealed class SpratImportCommand : Command<SpratImportCommand.Settings> {

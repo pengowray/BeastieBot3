@@ -29,6 +29,7 @@ namespace BeastieBot3.CommonNames;
 [CommandInfo("common-names aggregate", CommandKind.Mutates,
     "Aggregate common names from sources (IUCN, Wikidata, Wikipedia, COL). Safe to re-run: adds and updates, never removes, unless --replace is given.",
     Reason = "Aggregates common names from sources via upsert (idempotent). With --replace it first deletes the rows the named source contributed.",
+    Rerun = RerunEffect.IdempotentAdd,
     Examples = new[] {
         "common-names aggregate",
         "common-names aggregate --source iucn",

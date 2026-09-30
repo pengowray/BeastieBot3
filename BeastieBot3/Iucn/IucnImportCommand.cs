@@ -17,8 +17,8 @@ namespace BeastieBot3.Iucn;
 
 [CommandInfo("iucn import", CommandKind.Destructive,
     "Import IUCN CSV data from zip archives into the SQLite datastore.",
-    Reason = "Rewrites IUCN SQLite tables from the CSV release; --force drops existing data.",
-    Rerun = RerunEffect.FreshDataset,
+    Reason = "With --force, iucn import deletes the rows that earlier imports loaded from each zip file, and imports the zip file again. With --force --replace-release, it deletes everything in a database that holds a different release. Without --force, it skips zip files already imported.",
+    Rerun = RerunEffect.Imports,
     RerunNote = "A new IUCN release belongs in a fresh database file (IUCN_<version>.sqlite). When the configured database already holds a different release, the import creates that new file itself and tells you which paths.ini line to change; it never overwrites the previous release unless you pass --force --replace-release. Re-importing the same zip is skipped unless --force.",
     Examples = new[] { "iucn import", "iucn import --force" })]
 public sealed class IucnImportCommand : Command<IucnImportCommand.Settings> {

@@ -277,7 +277,7 @@ public static class FlowCatalogue {
                     OutputSourceIds = new[] { "col-sqlite" },
                     Group = "1 · Import & repoint",
                     Probe = FlowStepProbes.ColImport,
-                    Note = "`col import` builds col_coldp_<label>.sqlite for each ColDP zip in Datasets:COL_dir, where <label> is the release alias from the zip's metadata.yaml with spaces replaced by underscores (alias \"COL26.5 XR\" gives col_coldp_COL26.5_XR.sqlite). A new release therefore gets a new database file, and the previous one stays on disk until you delete it ('Delete old CoL leftovers (manual)' under Maintenance). Each database is over 10 GB and the import takes tens of minutes. The button always asks for confirmation because --force deletes and rebuilds even a complete database; without --force, a finished database is skipped and an incomplete one is imported again.",
+                    Note = "`col import` builds col_coldp_<label>.sqlite for each ColDP zip in Datasets:COL_dir, where <label> is the release alias from the zip's metadata.yaml with spaces replaced by underscores (alias \"COL26.5 XR\" gives col_coldp_COL26.5_XR.sqlite). A new release therefore gets a new database file, and the previous one stays on disk until you delete it ('Delete old CoL leftovers (manual)' under Maintenance). Each database is over 10 GB and the import takes tens of minutes. The `col import` button runs without asking. With --force ticked under Options, the run asks for confirmation first, because --force deletes and rebuilds even a complete database. Without --force, a finished database is skipped and an incomplete one is imported again.",
                 },
                 new FlowStep {
                     Id = "repoint-paths",

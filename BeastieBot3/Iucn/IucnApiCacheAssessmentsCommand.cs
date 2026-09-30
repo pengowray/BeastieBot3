@@ -60,7 +60,8 @@ public sealed class IucnApiCacheAssessmentsSettings : CommonSettings {
 [CommandInfo("iucn api cache-assessments", CommandKind.Mutates,
     "Download queued assessments into the IUCN API cache. An assessment is queued when cache-taxa, discover-by-family or cache-infraranks downloads its taxon's record, so run one of those commands first, or run cache-all, which runs cache-taxa and then cache-assessments.",
     Reason = "Downloads IUCN /api/v4/assessment payloads into the local cache (idempotent additive; --force re-downloads already-cached assessments).",
-    RerunNote = "Skips assessments already downloaded; processes the latest assessments first and retries previously-failed ones last (backed-off failures are skipped). --latest-only downloads just current assessments; --force re-downloads everything.",
+    Rerun = RerunEffect.IdempotentAdd,
+    RerunNote = "Outside a refresh, skips assessments already downloaded. Downloads the latest assessments first and retries failed downloads last. Skips a failed download until it is due for a retry, and skips assessments the API reported as not found (404). --latest-only downloads only current assessments; --force downloads everything again. " + RerunNotes.DuringIucnRefresh,
     Examples = new[] {
         "iucn api cache-assessments",
         "iucn api cache-assessments --latest-only",

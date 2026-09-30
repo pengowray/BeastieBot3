@@ -51,8 +51,9 @@ public sealed class WikidataIucnAssessmentItemsSettings : CommonSettings {
 [CommandInfo("wikidata iucn-assessment-items", CommandKind.Mutates,
     "Find the Wikidata items for individual IUCN Red List assessments (by DOI, published in, or Red List URL) and store them in the Wikidata cache, so the status dry run can cite them.",
     Reason = "Writes the wikidata_iucn_assessment_items table of the Wikidata cache. Only reads from Wikidata (SPARQL).",
-    Rerun = RerunEffect.IdempotentAdd,
+    Rerun = RerunEffect.Discovers,
     RerunNote = "Re-reads every item and replaces its row; rows for items no longer found are kept.",
+    ReportOnlyWith = new[] { "--status" },
     Examples = new[] {
         "wikidata iucn-assessment-items",
         "wikidata iucn-assessment-items --limit 200",

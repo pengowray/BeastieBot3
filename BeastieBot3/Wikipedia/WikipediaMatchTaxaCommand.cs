@@ -25,6 +25,8 @@ namespace BeastieBot3.Wikipedia;
 [CommandInfo("wikipedia match-taxa", CommandKind.Mutates,
     "Attempt to match IUCN taxa to cached Wikipedia pages using Wikidata sitelinks and synonyms.",
     Reason = "Writes IUCN taxon -> Wikipedia page matches into the cache.",
+    Rerun = RerunEffect.IdempotentAdd,
+    RerunNote = "Taxa already matched to an article are skipped, and every other taxon is checked again. --pending-only also skips taxa already found to have no article.",
     Examples = new[] {
         "wikipedia match-taxa",
         "wikipedia match-taxa --limit 500",

@@ -57,6 +57,19 @@ public static class CommandReflector {
         return new FormSchema { Fields = fields };
     }
 
+    // Every name the command declares for an option, long name first: "--force" gives
+    // ["--force", "-f"] when the settings declare "-f|--force", and so does "-f". An option the
+    // command does not declare gives only itself. Used to match CommandInfo option lists
+    // (ConfirmWhen, PromptOption, ReportOnlyWith, ChangesOnlyWith) against the options of a run,
+    // which may use any of the names.
+    public static IReadOnlyList<string> AllNamesOf(Type commandType, string option) {
+        var field = SchemaCache.GetOrAdd(commandType, BuildSchema).Fields
+            .FirstOrDefault(f => f.Name == option || f.AltNames.Contains(option));
+        return field is null ? new[] { option } : field.AltNames.Prepend(field.Name).ToArray();
+    }
+
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<Type, FormSchema> SchemaCache = new();
+
     // Spectre's CommandOption / CommandArgument attributes live on the Settings
     // type — which is conventionally nested as `XCommand.Settings`. Some commands
     // use a top-level settings type instead (e.g. WikidataSeedSettings); for
