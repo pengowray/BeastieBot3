@@ -949,6 +949,11 @@
       ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   }
 
+  // Workflow text marks commands and file names with `backticks`; show those as inline code.
+  function setTextWithCode(el, text) {
+    el.innerHTML = escapeHtml(text).replace(/`([^`]+)`/g, '<code>$1</code>');
+  }
+
   // Fill a generated form from an args[] — used to open a workflow step's options already
   // set to what that step would run, so changing one setting doesn't mean retyping the rest.
   function applyArgsToForm(formEl, args) {
@@ -1055,7 +1060,7 @@
 
     const desc = document.createElement('p');
     desc.className = 'muted';
-    desc.textContent = snap.description;
+    setTextWithCode(desc, snap.description);
     root.appendChild(desc);
 
     // For the CoL-update flow, show a live freshness banner up top so the operator
@@ -1250,13 +1255,13 @@
 
     const d = document.createElement('p');
     d.className = 'muted small';
-    d.textContent = step.description;
+    setTextWithCode(d, step.description);
     body.appendChild(d);
 
     if (step.note) {
       const n = document.createElement('p');
       n.className = 'flow-step-note';
-      n.textContent = step.note;
+      setTextWithCode(n, step.note);
       body.appendChild(n);
     }
 
@@ -1272,7 +1277,7 @@
       const ol = document.createElement('ol');
       for (const line of step.guideSteps) {
         const li = document.createElement('li');
-        li.textContent = line;
+        setTextWithCode(li, line);
         ol.appendChild(li);
       }
       g.appendChild(ol);
@@ -1470,7 +1475,7 @@
       if (r.description) {
         const d = document.createElement('div');
         d.className = 'small muted';
-        d.textContent = r.description;
+        setTextWithCode(d, r.description);
         row.appendChild(d);
       }
       wrap.appendChild(row);

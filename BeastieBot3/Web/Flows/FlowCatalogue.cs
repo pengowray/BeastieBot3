@@ -248,10 +248,8 @@ public static class FlowCatalogue {
                     },
                 },
             },
-            Outputs = new[] {
-                new FlowResource { Label = "IUCN (CSV) database",     Root = "reports", Path = "", Kind = "directory",
-                    Description = "The CSV-imported and API-projected SQLite databases live under Datastore paths (see Data sources / show-paths)." },
-            },
+            // No Outputs links: this flow produces databases, which the steps' Outputs lists and the
+            // Data sources page already show. A link here could only open the reports folder.
         },
 
         // ---------------------------------------------------------------

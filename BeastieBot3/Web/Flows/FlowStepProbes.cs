@@ -254,7 +254,7 @@ public static class FlowStepProbes {
             var session = refresh.Session;
             if (refresh.TaxaRemaining > 0 || refresh.AssessmentsRemaining > 0) {
                 return new FlowProbeResult("todo",
-                    $"Re-import {session.DisplayLabel} is {refresh.PercentDone}% done: {refresh.TaxaRemaining:N0} taxa and {refresh.AssessmentsRemaining:N0} assessments still to re-download. Re-run to carry on; the cutoff date is remembered.");
+                    $"Re-import {session.DisplayLabel} is {refresh.PercentDone}% done: {refresh.TaxaRemaining:N0} taxa and {refresh.AssessmentsRemaining:N0} assessments still to re-download. Run this step again to continue; the cutoff date is remembered.");
             }
             var passesLeft = new List<string>();
             if (session.IncludeDiscovery && session.DiscoveryDoneAt is null) passesLeft.Add("the family sweep");
