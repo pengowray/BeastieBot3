@@ -7,11 +7,12 @@ using Spectre.Console.Cli;
 using BeastieBot3.Configuration;
 using BeastieBot3.Infrastructure;
 
-// Step 2 of Wikidata caching: downloads full entity JSON for Q-IDs in
-// wikidata_items table that have status='pending'. Uses WikidataApiClient to
-// fetch from Special:EntityData. Entity JSON includes labels, sitelinks, and
-// claims (P627 IUCN ID, P1843 common names, P225 taxon name). Resume-safe.
-// Run via: wikidata cache items
+// Step 2 of Wikidata caching: downloads full entity JSON for the Q-IDs in the
+// wikidata_entities table that have none yet (json_downloaded = 0), plus cached copies
+// downloaded before a cutoff (--max-age-hours, or --force for all of them). Uses
+// WikidataApiClient. Entity JSON includes labels, sitelinks, and claims (P627 IUCN ID,
+// P1843 common names, P225 taxon name). Resume-safe.
+// Run via: wikidata cache-entities
 
 namespace BeastieBot3.Wikidata;
 
@@ -33,7 +34,7 @@ public sealed class WikidataCacheItemsSettings : CommonSettings {
     public double? MaxAgeHours { get; init; }
 
     [CommandOption("--force")]
-    [Description("Force re-download even if the entity JSON is already cached.")]
+    [Description("Re-download every entity, including entities already cached. --max-age-hours is ignored. Add --refresh-only to re-download only the cached entities.")]
     public bool Force { get; init; }
 
     [CommandOption("--failed-only")]
@@ -41,13 +42,13 @@ public sealed class WikidataCacheItemsSettings : CommonSettings {
     public bool FailedOnly { get; init; }
 
     [CommandOption("--refresh-only")]
-    [Description("Re-download cached entities only, ignoring everything never downloaded. Needs --max-age-hours.")]
+    [Description("Re-download cached entities only, ignoring everything never downloaded. Needs --max-age-hours or --force.")]
     public bool RefreshOnly { get; init; }
 }
 
 [CommandInfo("wikidata cache-entities", CommandKind.Mutates,
     "Downloads queued Wikidata items into the Wikidata cache and updates the name index, which is used to find a taxon's Wikidata item by scientific name. Items are queued by wikidata seed-taxa and wikidata backfill-iucn; wikidata cache-all runs wikidata seed-taxa and then this command.",
-    Reason = "Downloads queued Wikidata entity JSON into the cache (idempotent additive; --download-force re-downloads already-cached entities).",
+    Reason = "Downloads queued Wikidata entity JSON into the cache (idempotent additive; --force re-downloads already-cached entities).",
     Examples = new[] {
         "wikidata cache-entities",
         "wikidata cache-entities --failed-only"
@@ -59,6 +60,9 @@ public sealed class WikidataCacheItemsCommand : AsyncCommand<WikidataCacheItemsS
     }
 
     internal static async Task<int> RunAsync(WikidataCacheItemsSettings settings, CancellationToken cancellationToken) {
+        // Taken before anything is read. It is the --force cutoff, and every mode leaves an item
+        // already tried in this run (downloaded or failed) for the next run.
+        var runStart = DateTime.UtcNow;
         var configuration = WikidataConfiguration.FromEnvironment();
         var paths = settings.CreatePaths();
         var cachePath = paths.ResolveWikidataCachePath(settings.CacheDatabase);
@@ -67,12 +71,10 @@ public sealed class WikidataCacheItemsCommand : AsyncCommand<WikidataCacheItemsS
         using var store = WikidataCacheStore.Open(cachePath);
         using var client = new WikidataApiClient(configuration);
 
-        var refreshThreshold = settings.MaxAgeHours is { } hours && hours > 0
-            ? DateTime.UtcNow - TimeSpan.FromHours(hours)
-            : (DateTime?)null;
+        var refreshThreshold = RefreshCutoff(settings.Force, settings.MaxAgeHours, runStart);
 
         if (settings.RefreshOnly && refreshThreshold is null) {
-            AnsiConsole.MarkupLine("[red]--refresh-only needs --max-age-hours to say how old a cached entity has to be.[/]");
+            AnsiConsole.MarkupLine("[red]--refresh-only needs --max-age-hours <HOURS> (re-download cached entities older than HOURS hours) or --force (re-download every cached entity).[/]");
             return -1;
         }
 
@@ -80,8 +82,8 @@ public sealed class WikidataCacheItemsCommand : AsyncCommand<WikidataCacheItemsS
         var batchSize = Math.Clamp(settings.BatchSize ?? 250, 25, 2_000);
 
         var totalCandidates = settings.FailedOnly
-            ? store.CountFailedEntities()
-            : store.CountPendingEntities(refreshThreshold, settings.RefreshOnly);
+            ? store.CountFailedEntities(runStart)
+            : store.CountPendingEntities(refreshThreshold, settings.RefreshOnly, runStart);
 
         if (totalCandidates == 0) {
             var message = settings.FailedOnly
@@ -98,8 +100,10 @@ public sealed class WikidataCacheItemsCommand : AsyncCommand<WikidataCacheItemsS
             batchSize,
             settings,
             refreshThreshold,
-            client,
+            runStart,
             store,
+            item => WikidataEntityDownloader.DownloadSingleAsync(client, store, item, cancellationToken),
+            AnsiConsole.Console,
             cancellationToken).ConfigureAwait(false);
 
         AnsiConsole.MarkupLine($"[green]Downloaded:[/] {downloaded}/{totalTarget}");
@@ -112,20 +116,38 @@ public sealed class WikidataCacheItemsCommand : AsyncCommand<WikidataCacheItemsS
         return failures == 0 ? 0 : -1;
     }
 
-    private static async Task<(int downloaded, int skipped, int failed, int completed)> DownloadEntitiesAsync(
+    // Cached copies downloaded before the returned time are queued for download again. --force
+    // returns the start of the run, so every cached copy is queued (with --refresh-only too), and
+    // it overrides --max-age-hours. A copy re-downloaded in this run gets a later downloaded_at
+    // and leaves the queue.
+    internal static DateTime? RefreshCutoff(bool force, double? maxAgeHours, DateTime runStart) {
+        if (force) {
+            return runStart;
+        }
+
+        return maxAgeHours is { } hours && hours > 0
+            ? runStart - TimeSpan.FromHours(hours)
+            : null;
+    }
+
+    // download is WikidataEntityDownloader.DownloadSingleAsync in the command; tests pass a fake
+    // that records success or failure in the store without a network call.
+    internal static async Task<(int downloaded, int skipped, int failed, int completed)> DownloadEntitiesAsync(
         int totalTarget,
         int batchSize,
         WikidataCacheItemsSettings settings,
         DateTime? refreshThreshold,
-        WikidataApiClient client,
+        DateTime runStart,
         WikidataCacheStore store,
+        Func<WikidataEntityWorkItem, Task<bool>> download,
+        IAnsiConsole console,
         CancellationToken cancellationToken) {
         var downloaded = 0;
         var skipped = 0;
         var failures = 0;
         var completed = 0;
 
-        await ProgressConsole.RunAsync("Caching Wikidata entities", totalTarget, async progress => {
+        await ProgressConsole.RunAsync(console, "Caching Wikidata entities", totalTarget, async progress => {
             UpdateTaskDescription(progress, downloaded, skipped, failures);
 
             while (completed < totalTarget) {
@@ -135,8 +157,8 @@ public sealed class WikidataCacheItemsCommand : AsyncCommand<WikidataCacheItemsS
                 }
 
                 var queue = settings.FailedOnly
-                    ? store.GetFailedEntities(remainingBudget)
-                    : store.GetPendingEntities(remainingBudget, refreshThreshold, settings.RefreshOnly);
+                    ? store.GetFailedEntities(remainingBudget, runStart)
+                    : store.GetPendingEntities(remainingBudget, refreshThreshold, settings.RefreshOnly, runStart);
 
                 if (queue.Count == 0) {
                     break;
@@ -157,7 +179,7 @@ public sealed class WikidataCacheItemsCommand : AsyncCommand<WikidataCacheItemsS
                         continue;
                     }
 
-                    if (await WikidataEntityDownloader.DownloadSingleAsync(client, store, item, cancellationToken).ConfigureAwait(false)) {
+                    if (await download(item).ConfigureAwait(false)) {
                         downloaded++;
                     }
                     else {

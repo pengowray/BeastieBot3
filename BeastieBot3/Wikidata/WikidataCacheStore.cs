@@ -370,14 +370,37 @@ ON CONFLICT(key) DO UPDATE SET value=excluded.value";
     // refreshOnly skips everything never downloaded and re-fetches only what is already cached
     // and older than the threshold. Without it a refresh pass also drags the whole never-fetched
     // queue along, which is the opposite of what a "leave the new work alone" run is for.
-    private static string PendingEntitiesWhere(bool refreshOnly) => refreshOnly
-        ? "json_downloaded = 1 AND @refresh IS NOT NULL AND downloaded_at IS NOT NULL AND downloaded_at < @refresh"
-        : """
-          json_downloaded = 0
-             OR (@refresh IS NOT NULL AND downloaded_at IS NOT NULL AND downloaded_at < @refresh)
-          """;
+    //
+    // attemptedBefore is the start of the run. A failed download keeps json_downloaded = 0 (or its
+    // old downloaded_at), so without this cutoff the item matched again and came back at the front
+    // of the next batch: one failing item near the start of the queue was retried once per batch
+    // for the whole run. RecordSuccess and RecordFailure both stamp last_attempt_at, so an item
+    // tried in this run is left for the next run.
+    private static string PendingEntitiesWhere(bool refreshOnly) {
+        var queue = refreshOnly
+            ? "json_downloaded = 1 AND @refresh IS NOT NULL AND downloaded_at IS NOT NULL AND downloaded_at < @refresh"
+            : """
+              json_downloaded = 0
+                 OR (@refresh IS NOT NULL AND downloaded_at IS NOT NULL AND downloaded_at < @refresh)
+              """;
+        return $"({queue})\nAND {NotAttemptedThisRun}";
+    }
 
-    public IReadOnlyList<WikidataEntityWorkItem> GetPendingEntities(int limit, DateTime? refreshThreshold, bool refreshOnly = false) {
+    private const string NotAttemptedThisRun =
+        "(@attemptedBefore IS NULL OR last_attempt_at IS NULL OR last_attempt_at < @attemptedBefore)";
+
+    private const string FailedEntitiesWhere =
+        "json_downloaded = 0 AND attempt_count > 0 AND last_error IS NOT NULL AND " + NotAttemptedThisRun;
+
+    private static void BindPendingScope(SqliteCommand command, DateTime? refreshThreshold, DateTime? attemptedBefore) {
+        command.Parameters.AddWithValue("@refresh", refreshThreshold?.ToString("O") ?? (object)DBNull.Value);
+        BindAttemptedBefore(command, attemptedBefore);
+    }
+
+    private static void BindAttemptedBefore(SqliteCommand command, DateTime? attemptedBefore) =>
+        command.Parameters.AddWithValue("@attemptedBefore", attemptedBefore?.ToString("O") ?? (object)DBNull.Value);
+
+    public IReadOnlyList<WikidataEntityWorkItem> GetPendingEntities(int limit, DateTime? refreshThreshold, bool refreshOnly = false, DateTime? attemptedBefore = null) {
         if (limit <= 0) {
             return Array.Empty<WikidataEntityWorkItem>();
         }
@@ -390,7 +413,7 @@ WHERE {PendingEntitiesWhere(refreshOnly)}
 ORDER BY json_downloaded ASC, entity_numeric_id
 LIMIT @limit
 """;
-        command.Parameters.AddWithValue("@refresh", refreshThreshold?.ToString("O") ?? (object)DBNull.Value);
+        BindPendingScope(command, refreshThreshold, attemptedBefore);
         command.Parameters.AddWithValue("@limit", limit);
 
         var list = new List<WikidataEntityWorkItem>();
@@ -408,17 +431,23 @@ LIMIT @limit
         return list;
     }
 
-    public IReadOnlyList<WikidataEntityWorkItem> GetFailedEntities(int limit) {
+    // Oldest attempt first. Newest first put an item that had just failed straight back at the
+    // front, so "--failed-only --limit N" retried the same N items on every run and never reached
+    // the older failures.
+    public IReadOnlyList<WikidataEntityWorkItem> GetFailedEntities(int limit, DateTime? attemptedBefore = null) {
         if (limit <= 0) {
             return Array.Empty<WikidataEntityWorkItem>();
         }
 
         using var command = _connection.CreateCommand();
-        command.CommandText = @"SELECT entity_numeric_id, entity_id, downloaded_at, attempt_count
+        command.CommandText = $"""
+SELECT entity_numeric_id, entity_id, downloaded_at, attempt_count
 FROM wikidata_entities
-WHERE json_downloaded = 0 AND attempt_count > 0 AND last_error IS NOT NULL
-ORDER BY IFNULL(last_attempt_at, last_seen_at) DESC
-LIMIT @limit";
+WHERE {FailedEntitiesWhere}
+ORDER BY IFNULL(last_attempt_at, last_seen_at), entity_numeric_id
+LIMIT @limit
+""";
+        BindAttemptedBefore(command, attemptedBefore);
         command.Parameters.AddWithValue("@limit", limit);
 
         var list = new List<WikidataEntityWorkItem>();
@@ -436,19 +465,18 @@ LIMIT @limit";
         return list;
     }
 
-    public int CountPendingEntities(DateTime? refreshThreshold, bool refreshOnly = false) {
+    public int CountPendingEntities(DateTime? refreshThreshold, bool refreshOnly = false, DateTime? attemptedBefore = null) {
         using var command = _connection.CreateCommand();
         command.CommandText = $"SELECT COUNT(*) FROM wikidata_entities WHERE {PendingEntitiesWhere(refreshOnly)}";
-        command.Parameters.AddWithValue("@refresh", refreshThreshold?.ToString("O") ?? (object)DBNull.Value);
+        BindPendingScope(command, refreshThreshold, attemptedBefore);
         var result = command.ExecuteScalar();
         return Convert.ToInt32(result ?? 0);
     }
 
-    public int CountFailedEntities() {
+    public int CountFailedEntities(DateTime? attemptedBefore = null) {
         using var command = _connection.CreateCommand();
-        command.CommandText = @"SELECT COUNT(*)
-FROM wikidata_entities
-WHERE json_downloaded = 0 AND attempt_count > 0 AND last_error IS NOT NULL";
+        command.CommandText = $"SELECT COUNT(*) FROM wikidata_entities WHERE {FailedEntitiesWhere}";
+        BindAttemptedBefore(command, attemptedBefore);
         var result = command.ExecuteScalar();
         return Convert.ToInt32(result ?? 0);
     }
