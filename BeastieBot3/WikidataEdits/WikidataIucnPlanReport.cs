@@ -85,6 +85,11 @@ internal static class WikidataIucnPlanReport {
         sb.AppendLine();
         sb.AppendLine($"Generated {generatedUtc:yyyy-MM-dd HH:mm} UTC from the local caches. Nothing was sent to Wikidata.");
         sb.AppendLine();
+        if (t.StoppedAtLimit is { } limit) {
+            sb.AppendLine($"**Partial plan:** this run stopped after {N(limit)} of the Wikidata items linked to IUCN taxa (`--limit {limit}`). " +
+                $"The Coverage section is complete; all other counts cover only those {N(limit)} items. For the complete plan, run again without `--limit`.");
+            sb.AppendLine();
+        }
 
         // ---- The answer first
         sb.AppendLine("## Summary");
@@ -131,7 +136,9 @@ internal static class WikidataIucnPlanReport {
         sb.AppendLine($"| Left out: varieties and subpopulations | {N(t.TaxaNotEligible)} |");
         sb.AppendLine();
         if (t.ItemsLinkedButNotDownloaded > 0 || t.LinksToTaxaOutsideRelease > 0) {
-            sb.AppendLine($"Links skipped: {N(t.LinksToTaxaOutsideRelease)} point at IUCN ids not in {config.Release}; {N(t.ItemsLinkedButNotDownloaded)} point at items not downloaded yet.");
+            // A partial run stops before it has seen every item, so it cannot count the missing ones.
+            var notDownloaded = t.StoppedAtLimit is null ? $"; {N(t.ItemsLinkedButNotDownloaded)} point at items not downloaded yet" : "";
+            sb.AppendLine($"Links skipped: {N(t.LinksToTaxaOutsideRelease)} point at IUCN ids not in {config.Release}{notDownloaded}.");
             sb.AppendLine();
         }
 

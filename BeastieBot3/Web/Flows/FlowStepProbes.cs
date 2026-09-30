@@ -116,17 +116,32 @@ public static class FlowStepProbes {
         if (known == 0) {
             return new FlowProbeResult("todo", "No Wikidata items found yet.");
         }
-        return new FlowProbeResult("ok", s.WikidataSweepCursor > 0
-            ? $"{known:n0} Wikidata items found. The last sweep read as far as Q{s.WikidataSweepCursor:n0}."
-            : $"{known:n0} Wikidata items found.");
+        var found = $"{known:n0} Wikidata items found.";
+        return new FlowProbeResult("ok", SweepProgress(s.WikidataSweepCursorP627, s.WikidataSweepCursorP141) is { } progress
+            ? $"{found} {progress}"
+            : found);
+    }
+
+    // seed-taxa sweeps each property in its own pass with its own cursor. Both usually stand at
+    // the same Q-number, so one number is enough then. A Q-number is an identifier: no digit
+    // grouping (Q141278490, not Q141,278,490).
+    private static string? SweepProgress(long p627, long p141) {
+        if (p627 == 0 && p141 == 0) return null;
+        if (p627 == p141) return $"The sweep has read items up to Q{p627}.";
+        if (p141 == 0) return $"The sweep has read items with P627 up to Q{p627}, and has not started on items with P141.";
+        if (p627 == 0) return $"The sweep has read items with P141 up to Q{p141}, and has not started on items with P627.";
+        return $"The sweep has read items with P627 up to Q{p627} and items with P141 up to Q{p141}.";
     }
 
     internal static FlowProbeResult WikiWikipediaQueue(WikiCoverageState s) {
         if (s.PagesKnown == 0) {
             return new FlowProbeResult("todo", "No titles queued yet.");
         }
+        // Every download status gets a part, so the parts add up to the total. Failed downloads
+        // were left out, and the line came up short by that many titles.
+        var failed = s.PagesFailed > 0 ? $", {s.PagesFailed:n0} failed to download" : "";
         return new FlowProbeResult("ok",
-            $"{s.PagesKnown:n0} titles: {s.PagesCached:n0} downloaded, {s.PagesQueued:n0} to download, {s.PagesMissing:n0} with no article.");
+            $"{s.PagesKnown:n0} titles: {s.PagesCached:n0} downloaded, {s.PagesQueued:n0} to download{failed}, {s.PagesMissing:n0} with no article.");
     }
 
     // "backlog" is a queue worked down over time, not something overdue: it shows the count

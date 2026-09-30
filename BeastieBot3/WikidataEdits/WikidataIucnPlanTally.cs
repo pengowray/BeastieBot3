@@ -9,6 +9,11 @@ using System.Linq;
 namespace BeastieBot3.WikidataEdits;
 
 internal sealed class WikidataIucnPlanTally {
+    /// The --limit value when the run stopped there, so the pair counts cover only that many
+    /// linked items. Null when the run read every item, including a --limit run that never reached
+    /// its limit.
+    public int? StoppedAtLimit { get; set; }
+
     // IUCN side
     public long TaxaWithGlobalAssessment { get; set; }
     public long TaxaWithoutGlobalAssessment { get; set; }

@@ -4,6 +4,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using BeastieBot3.Configuration;
 using BeastieBot3.Infrastructure;
+using BeastieBot3.Wikidata;
 using BeastieBot3.Wikipedia;
 using Microsoft.Data.Sqlite;
 
@@ -44,8 +45,11 @@ public sealed record WikiCoverageState {
     public long WikidataEntitiesQueued { get; init; }     // seeded, JSON never downloaded
     public long WikidataEntitiesFailed { get; init; }
     public long WikidataBackfillMisses { get; init; }     // searched before, nothing found
-    /// How far the Wikidata sweep has read, as a Q-number.
-    public long WikidataSweepCursor { get; init; }
+    /// How far `wikidata seed-taxa` has read items with an IUCN taxon id (P627), as a Q-number.
+    /// 0 = not started.
+    public long WikidataSweepCursorP627 { get; init; }
+    /// How far `wikidata seed-taxa` has read items with an IUCN conservation status (P141).
+    public long WikidataSweepCursorP141 { get; init; }
     /// IUCN taxa with neither a P627 link nor a queued backfill match.
     public long TaxaWithoutWikidata { get; init; }
     /// Of those, taxa `wikidata backfill-iucn` has no verdict for yet. Counted directly rather than
@@ -165,14 +169,14 @@ public static class WikiCoverageStateReader {
 
             // The all-titles dump tables arrived later than the rest of the schema, so an older
             // cache without them reads as "no dump imported", which is also true.
+            var pages = CountPageStatuses(conn);
             var dumpTitles = CountOrZero(conn, "SELECT COUNT(*) FROM wp.enwiki_dump_titles");
             var queuedInDump = dumpTitles == 0 ? 0 : CountOrZero(conn, """
                 SELECT COUNT(*) FROM wp.wiki_pages p
                 WHERE p.download_status IN ('pending', 'failed')
                   AND EXISTS (SELECT 1 FROM wp.enwiki_dump_titles d WHERE d.title = p.normalized_title)
                 """);
-            var queuedTotal = dumpTitles == 0 ? 0 : CountOrZero(conn,
-                "SELECT COUNT(*) FROM wp.wiki_pages WHERE download_status IN ('pending', 'failed')");
+            var queuedTotal = dumpTitles == 0 ? 0 : pages.Pending + pages.Failed;
 
             // Restricted to taxa in this release: rows for taxa a later release dropped are never
             // re-evaluated, so a leftover 'pending' row would hold the settle step open forever.
@@ -211,15 +215,16 @@ public static class WikiCoverageStateReader {
                 // Written by `wikidata backfill-iucn`; absent from a cache last written before
                 // it recorded searches, where "none recorded" is the right answer anyway.
                 WikidataBackfillMisses = CountOrZero(conn, "SELECT COUNT(*) FROM wd.wikidata_backfill_misses"),
-                WikidataSweepCursor = Count(conn, "SELECT CAST(IFNULL((SELECT value FROM wd.wikidata_sync_state WHERE key = 'wikidata_taxa_cursor'), '0') AS INTEGER)"),
+                WikidataSweepCursorP627 = SweepCursor(conn, WikidataSeedProperty.IucnTaxonId),
+                WikidataSweepCursorP141 = SweepCursor(conn, WikidataSeedProperty.ConservationStatus),
                 TaxaWithoutWikidata = taxaWithoutWikidata,
                 TaxaNeverSearched = taxaNeverSearched,
 
-                PagesKnown = Count(conn, "SELECT COUNT(*) FROM wp.wiki_pages"),
-                PagesCached = Count(conn, "SELECT COUNT(*) FROM wp.wiki_pages WHERE download_status = 'cached'"),
-                PagesMissing = Count(conn, "SELECT COUNT(*) FROM wp.wiki_pages WHERE download_status = 'missing'"),
-                PagesQueued = Count(conn, "SELECT COUNT(*) FROM wp.wiki_pages WHERE download_status = 'pending'"),
-                PagesFailed = Count(conn, "SELECT COUNT(*) FROM wp.wiki_pages WHERE download_status = 'failed'"),
+                PagesKnown = pages.Total,
+                PagesCached = pages.Cached,
+                PagesMissing = pages.Missing,
+                PagesQueued = pages.Pending,
+                PagesFailed = pages.Failed,
                 PagesQueuedAwaited = Count(conn, $"""
                     SELECT COUNT(*) FROM wp.wiki_pages p
                     WHERE p.download_status = 'pending'
@@ -249,6 +254,27 @@ public static class WikiCoverageStateReader {
         }
     }
 
+    // The cursor `wikidata seed-taxa` wrote before it swept one property per pass. Private in
+    // WikidataSeedCommand, so repeated here.
+    private const string LegacySweepCursorKey = "wikidata_taxa_cursor";
+
+    // Same rule as WikidataSeedCommand.ReadCursor: a pass's own cursor once it has one, otherwise
+    // the combined cursor it starts from. Reading only the combined key showed a Q-number frozen at
+    // the split, and 0 on a cache created after it.
+    private static long SweepCursor(SqliteConnection conn, WikidataSeedProperty property) {
+        var key = WikidataSeedCommand.Passes.First(p => p.Property == property).CursorKey;
+        var own = SyncCursor(conn, key);
+        return own > 0 ? own : SyncCursor(conn, LegacySweepCursorKey);
+    }
+
+    private static long SyncCursor(SqliteConnection conn, string key) {
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "SELECT value FROM wd.wikidata_sync_state WHERE key = @key";
+        cmd.Parameters.AddWithValue("@key", key);
+        cmd.CommandTimeout = 30;
+        return long.TryParse(cmd.ExecuteScalar() as string, out var n) ? n : 0;
+    }
+
     private static (long Matched, long Missing, long Pending, long Rejected) CountMatchStatuses(SqliteConnection conn, string eligible) {
         using var cmd = conn.CreateCommand();
         cmd.CommandText = $"""
@@ -270,6 +296,27 @@ public static class WikiCoverageStateReader {
             }
         }
         return (matched, missing, pending, rejected);
+    }
+
+    // One statement, so the parts and the total come from the same moment and add up even while
+    // fetch-pages is moving titles from pending to cached. Five separate counts drifted apart then.
+    private static (long Total, long Cached, long Pending, long Failed, long Missing) CountPageStatuses(SqliteConnection conn) {
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "SELECT download_status, COUNT(*) FROM wp.wiki_pages GROUP BY download_status";
+        cmd.CommandTimeout = 30;
+        long total = 0, cached = 0, pending = 0, failed = 0, missing = 0;
+        using var reader = cmd.ExecuteReader();
+        while (reader.Read()) {
+            var n = reader.GetInt64(1);
+            total += n;
+            switch (reader.IsDBNull(0) ? null : reader.GetString(0)) {
+                case WikiPageDownloadStatus.Cached: cached = n; break;
+                case WikiPageDownloadStatus.Pending: pending = n; break;
+                case WikiPageDownloadStatus.Failed: failed = n; break;
+                case WikiPageDownloadStatus.Missing: missing = n; break;
+            }
+        }
+        return (total, cached, pending, failed, missing);
     }
 
     private static void Attach(SqliteConnection conn, string alias, string path) {

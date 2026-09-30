@@ -19,7 +19,8 @@ public class FlowWikiProbeTests {
         public bool Known = true;
         public long IucnTaxa = 188_485;
         public long TaxaWithoutWikidata;
-        public long SweepCursor = 136_591_620;
+        public long SweepCursorP627 = 141_278_490;
+        public long SweepCursorP141 = 141_278_490;
         public long BackfillMisses;
         // The reader counts this directly; by default the misses are taken to be current taxa.
         public long? NeverSearched;
@@ -44,7 +45,8 @@ public class FlowWikiProbeTests {
             Known = Known,
             IucnTaxa = IucnTaxa,
             TaxaWithoutWikidata = TaxaWithoutWikidata,
-            WikidataSweepCursor = SweepCursor,
+            WikidataSweepCursorP627 = SweepCursorP627,
+            WikidataSweepCursorP141 = SweepCursorP141,
             WikidataBackfillMisses = BackfillMisses,
             TaxaNeverSearched = NeverSearched ?? Math.Max(0, TaxaWithoutWikidata - BackfillMisses),
             WikidataEntitiesCached = EntitiesCached,
@@ -83,35 +85,59 @@ public class FlowWikiProbeTests {
 
     // Without this the step could only say when `seed-taxa` last ran, which for anyone who ran
     // `cache-all` or the CLI is never, next to 181,294 downloaded items.
+    // A Q-number is an identifier, so it is printed without digit grouping. It used to come out
+    // as Q136,591,620.
     [Fact]
     public void The_sweep_reports_what_it_found_and_how_far_it_read() {
         var r = FlowStepProbes.WikiWikidataSweep(State(s => s.EntitiesQueued = 312));
         Assert.Equal("ok", r.Status);
-        Assert.Contains("181,606 Wikidata items found", r.Detail);
-        Assert.Contains("Q136,591,620", r.Detail);
+        Assert.Equal("181,606 Wikidata items found. The sweep has read items up to Q141278490.", r.Detail);
+        Assert.DoesNotContain("Q141,", r.Detail);
+    }
+
+    // seed-taxa sweeps P627 and P141 in separate passes, each with its own cursor.
+    [Fact]
+    public void The_sweep_names_each_property_when_the_passes_stand_at_different_q_numbers() {
+        var r = FlowStepProbes.WikiWikidataSweep(State(s => s.SweepCursorP141 = 136_591_620));
+        Assert.Equal("181,294 Wikidata items found. The sweep has read items with P627 up to Q141278490 and items with P141 up to Q136591620.", r.Detail);
+    }
+
+    [Fact]
+    public void The_sweep_says_which_pass_has_not_started() {
+        var r = FlowStepProbes.WikiWikidataSweep(State(s => s.SweepCursorP141 = 0));
+        Assert.Contains("items with P627 up to Q141278490", r.Detail);
+        Assert.Contains("has not started on items with P141", r.Detail);
     }
 
     [Fact]
     public void The_sweep_is_todo_when_nothing_has_been_found_yet() {
-        var r = FlowStepProbes.WikiWikidataSweep(State(s => { s.EntitiesCached = 0; s.SweepCursor = 0; }));
+        var r = FlowStepProbes.WikiWikidataSweep(State(s => { s.EntitiesCached = 0; s.SweepCursorP627 = 0; s.SweepCursorP141 = 0; }));
         Assert.Equal("todo", r.Status);
         Assert.Contains("No Wikidata items found yet", r.Detail);
     }
 
     [Fact]
     public void The_sweep_leaves_the_cursor_out_before_the_first_run() {
-        var r = FlowStepProbes.WikiWikidataSweep(State(s => s.SweepCursor = 0));
+        var r = FlowStepProbes.WikiWikidataSweep(State(s => { s.SweepCursorP627 = 0; s.SweepCursorP141 = 0; }));
         Assert.Equal("181,294 Wikidata items found.", r.Detail);
     }
 
     [Fact]
     public void The_title_queue_splits_into_downloaded_to_do_and_no_article() {
-        var r = FlowStepProbes.WikiWikipediaQueue(State(s => s.PagesQueued = 189_813));
+        var r = FlowStepProbes.WikiWikipediaQueue(State(s => s.PagesQueued = 190_212));
         Assert.Equal("ok", r.Status);
-        Assert.Contains("334,925 titles", r.Detail);
-        Assert.Contains("99,689 downloaded", r.Detail);
-        Assert.Contains("189,813 to download", r.Detail);
-        Assert.Contains("45,024 with no article", r.Detail);
+        Assert.Equal("334,925 titles: 99,689 downloaded, 190,212 to download, 45,024 with no article.", r.Detail);
+    }
+
+    // The line left failed downloads out, so its parts came up 399 titles short of the total.
+    [Fact]
+    public void The_title_queue_parts_add_up_to_the_total_when_downloads_failed() {
+        var r = FlowStepProbes.WikiWikipediaQueue(State(s => { s.PagesQueued = 189_813; s.PagesFailed = 399; }));
+        Assert.Equal("334,925 titles: 99,689 downloaded, 189,813 to download, 399 failed to download, 45,024 with no article.", r.Detail);
+
+        var numbers = System.Text.RegularExpressions.Regex.Matches(r.Detail!, @"\d[\d,]*")
+            .Select(m => long.Parse(m.Value.Replace(",", ""))).ToList();
+        Assert.Equal(numbers[0], numbers.Skip(1).Sum());
     }
 
     [Fact]
