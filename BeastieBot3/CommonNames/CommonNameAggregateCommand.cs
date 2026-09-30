@@ -58,7 +58,8 @@ internal sealed class CommonNameAggregateCommand : AsyncCommand<CommonNameAggreg
         public string? ColSqlitePath { get; init; }
 
         [CommandOption("--include-synonyms")]
-        [Description("Also import scientific name synonyms from IUCN API.")]
+        [Description("Also imports IUCN scientific-name synonyms from the IUCN API cache, when --source is " +
+                     "iucn or all. With --replace, IUCN synonyms are deleted and imported again.")]
         public bool IncludeSynonyms { get; init; }
 
         [CommandOption("--source <SOURCE>")]
@@ -70,19 +71,23 @@ internal sealed class CommonNameAggregateCommand : AsyncCommand<CommonNameAggreg
         public int? Limit { get; init; }
 
         [CommandOption("--replace")]
-        [Description("Drop what this source contributed last time before importing it again, so the " +
-                     "hub matches the source's current contents instead of a union of every past " +
-                     "release. Removes that source's common names, synonyms and cross-references, " +
-                     "plus any taxon it created that nothing else refers to any more. Other sources " +
-                     "are untouched. Cannot be combined with --limit.")]
+        [Description("Removes common names and synonyms that are no longer in a source's data. Before " +
+                     "importing each source chosen with --source, deletes that source's common names, " +
+                     "synonyms and cross-references (its ids for each species) from all earlier runs. " +
+                     "Species the source added with --create-missing are deleted too, if no other " +
+                     "source refers to them. IUCN synonyms are deleted only with --include-synonyms. " +
+                     "Names from other sources are kept, but the whole conflict list is deleted: run " +
+                     "common-names detect-conflicts afterwards. Cannot be used with --limit.")]
         public bool Replace { get; init; }
 
         [CommandOption("--create-missing")]
-        [Description("Build a cross-source union: when a Wikidata/CoL/Wikipedia row names a species " +
-                     "not in the IUCN hub (and matches no existing taxon by cross-reference, canonical " +
-                     "name, or synonym), create a new taxon for it instead of dropping it. Default off " +
-                     "(IUCN-anchored). Best run after IUCN/CoL synonyms are aggregated so synonym-named " +
-                     "rows attach to existing taxa rather than minting duplicates.")]
+        [Description("Also add species that are not in the common names store, with their common names: " +
+                     "from Wikidata and Catalogue of Life, and from Wikipedia taxoboxes when wikipedia " +
+                     "match-taxa has made no matches. A species counts as already in the store when its " +
+                     "scientific name matches a species or synonym there (a Wikidata item also matches by " +
+                     "its IUCN taxon ID). A species listed under a name that is not a synonym in the store " +
+                     "is added again as a duplicate, so aggregate synonyms first: common-names aggregate " +
+                     "--source all --include-synonyms.")]
         public bool CreateMissing { get; init; }
     }
 

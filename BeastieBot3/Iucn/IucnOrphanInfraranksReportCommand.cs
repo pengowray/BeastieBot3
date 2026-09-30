@@ -24,7 +24,7 @@ using BeastieBot3.Infrastructure;
 namespace BeastieBot3.Iucn;
 
 [CommandInfo("iucn report-orphan-infraranks", CommandKind.ReadOnly,
-    "List assessed subspecies/varieties whose parent species is unassessed — the infraspecific taxa the IUCN API can't discover on its own (only reachable by their CSV sis_id). Outputs Markdown and CSV.",
+    "List assessed subspecies and varieties whose parent species has no species-level assessment. Reads the IUCN Red List database and outputs Markdown and CSV. To add these subspecies and varieties to the IUCN API cache, run iucn api cache-infraranks --from-csv or iucn api cache-all --full.",
     Examples = new[] {
         "iucn report-orphan-infraranks",
         "iucn report-orphan-infraranks -o orphans.md --csv-output orphans.csv"

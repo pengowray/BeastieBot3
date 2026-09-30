@@ -20,7 +20,7 @@ using BeastieBot3.Configuration;
 namespace BeastieBot3.Iucn;
 
 [CommandInfo("iucn report-taxonomy-consistency", CommandKind.ReadOnly,
-    "Rebuild scientific names from taxonomy components and verify field alignment.",
+    "Check that each assessment's scientific name matches its genus, species, infraspecific and subpopulation fields, and is the same in the assessments and taxonomy CSV files. The command ends with a non-zero exit code when any name does not match.",
     Examples = new[] {
         "iucn report-taxonomy-consistency",
         "iucn report-taxonomy-consistency --limit 5000"

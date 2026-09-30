@@ -22,10 +22,10 @@ public sealed class WikidataResetCacheSettings : CommonSettings {
 }
 
 [CommandInfo("wikidata reset-cache", CommandKind.Destructive,
-    "Delete downloaded Wikidata JSON payloads while keeping the seed queue intact.",
-    Reason = "Deletes downloaded Wikidata JSON payloads.",
+    "Delete all downloaded item data in the Wikidata cache and everything extracted from the item data, including P627 IDs, P141 statuses, taxon names and the name index. The download queue and the taxon links made by wikidata backfill-iucn are kept. Downloading every item again with wikidata cache-entities takes days.",
+    Reason = "Deletes all downloaded Wikidata item data and the P627 IDs, P141 statuses and taxon names extracted from it. Re-downloading every item takes days.",
     Rerun = RerunEffect.ClearsCache,
-    RerunNote = "Deletes downloaded entity JSON but preserves the seed queue, so a following cache-entities re-downloads from scratch.",
+    RerunNote = "The next run of wikidata cache-entities, wikidata cache-all or wikipedia update downloads every item again.",
     Examples = new[] {
         "wikidata reset-cache",
         "wikidata reset-cache --force"

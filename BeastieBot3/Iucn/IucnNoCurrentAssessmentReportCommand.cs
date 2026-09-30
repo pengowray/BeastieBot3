@@ -43,7 +43,7 @@ public sealed class IucnNoCurrentAssessmentReportCommand : Command<IucnNoCurrent
         public string? CsvOutputPath { get; init; }
 
         [CommandOption("--limit <N>")]
-        [Description("Limit the number of taxa rows scanned (for testing).")]
+        [Description("List at most N taxa in the report: the first N without a current assessment, in SIS id order. For test runs; no limit by default.")]
         public long? Limit { get; init; }
     }
 

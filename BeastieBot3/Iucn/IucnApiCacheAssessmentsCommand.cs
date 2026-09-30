@@ -33,11 +33,11 @@ public sealed class IucnApiCacheAssessmentsSettings : CommonSettings {
     public bool Force { get; init; }
 
     [CommandOption("--max-age-hours <HOURS>")]
-    [Description("Refresh cache entries older than the supplied age. A rolling window measured from now, so it moves between runs — prefer --refresh-before, or a refresh started with `iucn api refresh-start`, for anything that takes more than one sitting.")]
+    [Description("Download cached assessments again if they were downloaded more than this many hours before the run started. The cutoff moves with each run, so a refresh spread over several runs downloads some assessments twice; for a fixed cutoff date, use --refresh-before or `iucn api refresh-start`.")]
     public double? MaxAgeHours { get; init; }
 
     [CommandOption("--refresh-before <DATE>")]
-    [Description("Re-download anything fetched before this fixed date (UTC, e.g. 2026-06-16). Unlike --max-age-hours the date does not move, so stopping and re-running carries on rather than repeating work. Taken from the refresh in progress when omitted.")]
+    [Description("Download cached assessments again if they were downloaded before this date: a UTC date such as 2026-06-16, a full timestamp, or the word now. If you stop the command and run it again with the same date, it continues with the assessments it has not re-downloaded yet. If this option and --max-age-hours are both left empty, the command uses the cutoff date of the refresh in progress (started with `iucn api refresh-start`); with no refresh in progress, it downloads only assessments that are not in the cache yet.")]
     public string? RefreshBefore { get; init; }
 
     [CommandOption("--retry-tombstones")]
@@ -49,7 +49,7 @@ public sealed class IucnApiCacheAssessmentsSettings : CommonSettings {
     public bool FailedOnly { get; init; }
 
     [CommandOption("--latest-only")]
-    [Description("Download only the current (latest) assessment of each taxon — the only ones the --dataset api projection uses. Skips historical assessments (a much smaller queue; also sidesteps the handful of historical records IUCN's API errors on).")]
+    [Description("Download only current assessments, which are about half of all assessments. Current assessments are enough for lists and charts made with --dataset api, because the IUCN API projection uses only current assessments. Historical assessments stay in the queue until a later run without --latest-only downloads them.")]
     public bool LatestOnly { get; init; }
 
     [CommandOption("--sleep-ms <MS>")]
@@ -58,7 +58,7 @@ public sealed class IucnApiCacheAssessmentsSettings : CommonSettings {
 }
 
 [CommandInfo("iucn api cache-assessments", CommandKind.Mutates,
-    "Download /api/v4/assessment/{assessment_id} payloads for assessments queued in the API cache's taxa-assessment backlog (the backlog is populated by cache-taxa or discover-by-family).",
+    "Download queued assessments into the IUCN API cache. An assessment is queued when cache-taxa, discover-by-family or cache-infraranks downloads its taxon's record, so run one of those commands first, or run cache-all, which runs cache-taxa and then cache-assessments.",
     Reason = "Downloads IUCN /api/v4/assessment payloads into the local cache (idempotent additive; --force re-downloads already-cached assessments).",
     RerunNote = "Skips assessments already downloaded; processes the latest assessments first and retries previously-failed ones last (backed-off failures are skipped). --latest-only downloads just current assessments; --force re-downloads everything.",
     Examples = new[] {

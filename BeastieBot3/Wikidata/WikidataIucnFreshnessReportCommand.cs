@@ -32,12 +32,12 @@ public sealed class WikidataIucnFreshnessReportSettings : CommonSettings {
     public bool IncludeSubpopulations { get; init; }
 
     [CommandOption("--output <PATH>")]
-    [Description("Write the generated report to this path. Defaults to Reports:output_dir (or <IUCN DB>/data-analysis if unset).")]
+    [Description("Path of the Markdown report file. Default: a new file each run, named with the date and time (such as wikidata-iucn-freshness-20260930-142501.md), in Datastore:reports_dir; if reports_dir is not set, in a data-analysis folder next to the IUCN Red List database file.")]
     public string? OutputPath { get; init; }
 }
 
 [CommandInfo("wikidata report-iucn-freshness", CommandKind.ReadOnly,
-    "Generate a Markdown report describing how current IUCN data is reflected in cached Wikidata entities.",
+    "Report how the IUCN data in cached Wikidata items compares with the IUCN Red List database: P627 coverage, P225 names, P141 statuses against current Red List categories, and the Red List editions (P248) and retrieved dates (P813) in P141 references.",
     Examples = new[] {
         "wikidata report-iucn-freshness",
         "wikidata report-iucn-freshness --output reports/freshness.md"

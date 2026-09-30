@@ -19,7 +19,7 @@ using BeastieBot3.Configuration;
 namespace BeastieBot3.Iucn;
 
 [CommandInfo("iucn report-taxonomy-cleanup", CommandKind.ReadOnly,
-    "Identify per-record taxonomy fields that need whitespace normalization or marker cleanup.",
+    "Find extra whitespace in name and authority fields, infraspecific names that start with a rank marker such as \"ssp.\" or \"var.\", and scientific names that differ between the assessments and taxonomy CSV files.",
     Examples = new[] {
         "iucn report-taxonomy-cleanup",
         "iucn report-taxonomy-cleanup --limit 10000"

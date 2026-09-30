@@ -14,7 +14,7 @@ using BeastieBot3.Configuration;
 namespace BeastieBot3.Wikipedia;
 
 [CommandInfo("wikipedia fetch-pages", CommandKind.Mutates,
-    "Download queued Wikipedia pages (HTML plus wikitext) into the local cache. --awaited-only narrows the queue to pages a taxon has no article without; --newest-first takes a new release's taxa before the older backlog.",
+    "Download queued Wikipedia pages (HTML plus wikitext) into the local cache.",
     Reason = "Downloads queued Wikipedia pages into the local cache.",
     Rerun = RerunEffect.IdempotentAdd,
     Examples = new[] {
@@ -46,7 +46,7 @@ public sealed class WikipediaFetchCommand : AsyncCommand<WikipediaFetchCommand.S
         public string[] Titles { get; init; } = Array.Empty<string>();
 
         [CommandOption("--awaited-only")]
-        [Description("Only fetch pages a taxon is waiting on: queued titles that an IUCN taxon with no article yet is pointing at. Skips higher-taxon, synonym and redirect titles nothing is blocked on.")]
+        [Description("Download only the queued titles that `wikipedia match-taxa` tried as candidate titles for IUCN taxa that are waiting on a page download. Other queued titles, such as higher-taxon names, are skipped and stay in the queue.")]
         public bool AwaitedOnly { get; init; }
 
         [CommandOption("--newest-first")]
@@ -58,7 +58,7 @@ public sealed class WikipediaFetchCommand : AsyncCommand<WikipediaFetchCommand.S
         public bool RefreshOnly { get; init; }
 
         [CommandOption("--exists-first")]
-        [Description("Fetch titles the enwiki all-titles dump lists first. Titles absent from the dump are likely redlinks and go last. Needs `wikipedia titles-dump` run once.")]
+        [Description("Download order: queued titles in the all-titles dump, then queued titles missing from the dump (almost certainly redlinks). If no dump has been imported with `wikipedia titles-dump`, a warning is printed and the usual order is used.")]
         public bool ExistsFirst { get; init; }
 
         [CommandOption("--failed-only")]

@@ -46,7 +46,7 @@ public sealed class WikidataCacheItemsSettings : CommonSettings {
 }
 
 [CommandInfo("wikidata cache-entities", CommandKind.Mutates,
-    "Download Wikidata entity JSON for taxa queued by seed-taxa (or cache-all), populating the cache and its normalised taxon-name lookup indexes.",
+    "Downloads queued Wikidata items into the Wikidata cache and updates the name index, which is used to find a taxon's Wikidata item by scientific name. Items are queued by wikidata seed-taxa and wikidata backfill-iucn; wikidata cache-all runs wikidata seed-taxa and then this command.",
     Reason = "Downloads queued Wikidata entity JSON into the cache (idempotent additive; --download-force re-downloads already-cached entities).",
     Examples = new[] {
         "wikidata cache-entities",

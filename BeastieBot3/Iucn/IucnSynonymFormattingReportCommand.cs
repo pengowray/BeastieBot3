@@ -34,7 +34,7 @@ public sealed class IucnSynonymFormattingReportCommand : Command<IucnSynonymForm
         public string? CacheDatabase { get; init; }
 
         [CommandOption("--markdown-output <PATH>")]
-        [Description("Optional Markdown output path. Defaults to Reports:output_dir or <cache dir>/data-analysis.")]
+        [Description("Path of the Markdown report. Default: a timestamped file in the --output-dir folder; without --output-dir, in the folder set by Datastore:reports_dir in paths.ini; if reports_dir is not set, in a data-analysis folder next to the IUCN API cache file.")]
         public string? MarkdownOutputPath { get; init; }
 
         [CommandOption("--csv-output <PATH>")]
@@ -42,7 +42,7 @@ public sealed class IucnSynonymFormattingReportCommand : Command<IucnSynonymForm
         public string? CsvOutputPath { get; init; }
 
         [CommandOption("--output-dir <DIR>")]
-        [Description("Write both outputs into this directory (overrides Reports:output_dir).")]
+        [Description("Folder for both files (Markdown and CSV); takes priority over Datastore:reports_dir in paths.ini, but not over a path given in --markdown-output or --csv-output.")]
         public string? OutputDirectory { get; init; }
 
         [CommandOption("--limit <ROWS>")]

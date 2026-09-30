@@ -31,7 +31,7 @@ public sealed class WikipediaEnqueueCommand : Command<WikipediaEnqueueCommand.Se
         public string? WikidataCachePath { get; init; }
 
         [CommandOption("--limit <N>")]
-        [Description("Maximum number of Wikidata sitelinks to enqueue (0 = all pending).")]
+        [Description("Maximum number of Wikidata items to read from the Wikidata cache (0 = every item, the default). Items without an English Wikipedia sitelink count toward the limit, so fewer titles than the limit may be queued.")]
         public int Limit { get; init; }
 
         [CommandOption("--resume-after <ID>")]
@@ -39,11 +39,11 @@ public sealed class WikipediaEnqueueCommand : Command<WikipediaEnqueueCommand.Se
         public long? ResumeAfter { get; init; }
 
         [CommandOption("--force-refresh")]
-        [Description("Re-enqueue existing titles even if they were seen recently.")]
+        [Description("Queue sitelink titles that are already in the Wikipedia cache for download again, however recently they were downloaded.")]
         public bool ForceRefresh { get; init; }
 
         [CommandOption("--refresh-days <DAYS>")]
-        [Description("Refresh titles last seen before the specified number of days.")]
+        [Description("Queue sitelink titles that are already in the Wikipedia cache for download again if their last download or download attempt was more than DAYS days ago (0 = off).")]
         public int? RefreshDays { get; init; }
     }
 

@@ -39,7 +39,7 @@ public sealed class IucnApiProjectViewCommand : AsyncCommand<IucnApiProjectViewC
         public string? OutputPath { get; init; }
 
         [CommandOption("--redlist-version <VERSION>")]
-        [Description("Label stored as the projection's redlist_version (the API cache is unversioned). Defaults to 'api-cache'.")]
+        [Description("IUCN Red List release that was current when the API data was downloaded, such as 2026-1. The default, api-cache, is a placeholder: lists made with --dataset api then say 'As of api' and cite 'Version api-cache'.")]
         public string? RedlistVersion { get; init; }
 
         [CommandOption("--limit <N>")]
@@ -47,7 +47,7 @@ public sealed class IucnApiProjectViewCommand : AsyncCommand<IucnApiProjectViewC
         public int? Limit { get; init; }
 
         [CommandOption("--allow-partial")]
-        [Description("Build (and exit 0) even when some taxa have a latest assessment whose JSON isn't downloaded yet. Without this, a partial projection still builds but the command exits non-zero.")]
+        [Description("Exit with code 0 instead of 2 when the projection is partial (the latest assessment of some taxa is not downloaded yet), so the job shows as succeeded. The projection is written with or without this flag.")]
         public bool AllowPartial { get; init; }
     }
 

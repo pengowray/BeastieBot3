@@ -76,7 +76,7 @@ internal sealed class IucnApiRefreshStartCommand : AsyncCommand<IucnApiRefreshSt
         public string? Cutoff { get; init; }
 
         [CommandOption("--label <NAME>")]
-        [Description("What you are refreshing to, shown wherever the refresh is reported. Defaults to the release the imported CSV database holds, so there is normally nothing to type here.")]
+        [Description("Name for this refresh, such as 2026-1, shown in `iucn api refresh-status` output and on the 'Import IUCN data' workflow page. Leave empty to use the release of the IUCN Red List database.")]
         public string? Label { get; init; }
 
         [CommandOption("--no-tombstones")]

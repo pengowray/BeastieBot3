@@ -17,7 +17,7 @@ using BeastieBot3.Configuration;
 namespace BeastieBot3.Wikipedia;
 
 [CommandInfo("wikipedia enqueue-taxa", CommandKind.Mutates,
-    "Seed the Wikipedia cache with higher-taxon titles from the IUCN taxonomy view (for redirect lookup).",
+    "Add the higher-taxon names in the IUCN Red List database (class, order and family by default) to the Wikipedia download queue. `wikipedia generate-lists` uses the article that a taxon's name redirects to (Araneae redirects to Spider) as the taxon's common name when neither the rule files nor the common names store has one.",
     Reason = "Seeds the Wikipedia cache with higher-taxon titles from IUCN.",
     Examples = new[] {
         "wikipedia enqueue-taxa",
@@ -43,11 +43,11 @@ public sealed class WikipediaEnqueueTaxaCommand : Command<WikipediaEnqueueTaxaCo
         public int Limit { get; init; }
 
         [CommandOption("--force-refresh")]
-        [Description("Re-enqueue existing titles even if they were seen recently.")]
+        [Description("Queue higher-taxon titles that are already in the Wikipedia cache for download again, however recently they were downloaded.")]
         public bool ForceRefresh { get; init; }
 
         [CommandOption("--refresh-days <DAYS>")]
-        [Description("Refresh titles last seen before the specified number of days.")]
+        [Description("Queue higher-taxon titles that are already in the Wikipedia cache for download again if their last download or download attempt was more than DAYS days ago (0 = off).")]
         public int? RefreshDays { get; init; }
     }
 

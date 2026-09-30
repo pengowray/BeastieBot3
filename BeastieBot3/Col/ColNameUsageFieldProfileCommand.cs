@@ -72,6 +72,7 @@ public sealed class ColNameUsageFieldProfileCommand : Command<ColNameUsageFieldP
         public string? Table { get; init; }
 
         [CommandOption("--columns <COLUMNS>")]
+        [Description("Comma-separated column names to profile in the table set by --table, e.g. scientificName,authorship. Default: every text column, or every column with --all-columns. Cannot be used with --all-tables.")]
         public string? Columns { get; init; }
 
         [CommandOption("--all-columns")]

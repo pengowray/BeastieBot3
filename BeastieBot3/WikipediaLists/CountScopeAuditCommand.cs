@@ -35,7 +35,7 @@ using YamlDotNet.Serialization.NamingConventions;
 namespace BeastieBot3.WikipediaLists;
 
 [CommandInfo("iucn count-scopes", CommandKind.ReadOnly,
-    "Audit IUCN count scopes per taxa group: the canonical global-species count (= chart total = list headline) vs the regional, infraspecific (subspecies/variety) and subpopulation rows excluded from it. Pass --compare to diff the CSV and API datasets.",
+    "Count each taxa group's assessments in four parts that add up to the total: global species assessments (the count used in Wikipedia lists and charts), species assessments with a regional scope, subspecies and varieties, and subpopulations.",
     Reason = "Reads the IUCN dataset(s) read-only and writes a Markdown count-scope audit report.",
     Examples = new[] {
         "iucn count-scopes",
@@ -62,7 +62,7 @@ internal sealed class CountScopeAuditCommand : Command<CountScopeAuditCommand.Se
         public string[]? GroupIds { get; init; }
 
         [CommandOption("--compare")]
-        [Description("Run the canonical count on BOTH the CSV dataset and the API projection and show the delta.")]
+        [Description("Show counts from the CSV and API datasets side by side, with the difference (API minus CSV), for global species and for subspecies and varieties. --dataset and --database are ignored.")]
         public bool Compare { get; init; }
 
         [CommandOption("-o|--output <PATH>")]

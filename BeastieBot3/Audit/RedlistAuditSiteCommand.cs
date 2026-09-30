@@ -37,7 +37,7 @@ internal sealed class RedlistAuditSiteCommand : Command<RedlistAuditSiteCommand.
         public string? OutputDir { get; init; }
 
         [CommandOption("--limit <ROWS>")]
-        [Description("Cap rows scanned per report (for fast test runs). 0 or omitted scans everything.")]
+        [Description("Maximum number of database rows most reports check, for a quick test run (0 = all rows, the default). A run with a limit writes partial pages over the pages from a full run, unless --output is set to a different folder.")]
         public long Limit { get; init; }
 
         [CommandOption("--contact <EMAIL>")]

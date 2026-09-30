@@ -25,7 +25,7 @@ using BeastieBot3.Infrastructure;
 namespace BeastieBot3.Iucn;
 
 [CommandInfo("iucn api report-failed-assessments", CommandKind.ReadOnly,
-    "List assessment ids /api/v4/assessment/{id} keeps failing on, with their HTTP status, latest flag and SIS id. Outputs Markdown and CSV.",
+    "List assessments whose last download attempt from the IUCN Red List API failed, with the HTTP status of that attempt, the number of attempts, the SIS id and whether each is the taxon's current assessment. Outputs Markdown and CSV.",
     Examples = new[] {
         "iucn api report-failed-assessments",
         "iucn api report-failed-assessments -o failed.md --csv-output failed.csv"

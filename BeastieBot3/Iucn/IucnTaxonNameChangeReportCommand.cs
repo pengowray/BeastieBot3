@@ -46,7 +46,7 @@ namespace BeastieBot3.Iucn;
 /// This report generator does not look for errata text, only changes in the taxon_scientific_name field (and finds none).
 /// </summary>
 [CommandInfo("iucn report-name-changes", CommandKind.ReadOnly,
-    "Report assessments where taxon_scientific_name changes while sharing the same SIS taxon id.",
+    "List the SIS ids of taxa whose assessments have different scientific names, with a table of each taxon's assessments. Reads the IUCN API cache and outputs Markdown. Most renames are not in this report: when IUCN renames a species, it usually gives the older assessments the new name too and keeps the old name only in their amendment text.",
     Examples = new[] {
         "iucn report-name-changes",
         "iucn report-name-changes --output name-changes.md"
@@ -58,7 +58,7 @@ public sealed class IucnTaxonNameChangeReportCommand : Command<IucnTaxonNameChan
         public string? CacheDatabase { get; init; }
 
         [CommandOption("--output <PATH>")]
-        [Description("Write the generated report to this path. Defaults to Reports:output_dir (or <cache dir>/data-analysis if unset).")]
+        [Description("Path of the Markdown report. Default: a timestamped file in the folder set by Datastore:reports_dir in paths.ini; if reports_dir is not set, in a data-analysis folder next to the IUCN API cache file.")]
         public string? OutputPath { get; init; }
 
         [CommandOption("--limit <ROWS>")]

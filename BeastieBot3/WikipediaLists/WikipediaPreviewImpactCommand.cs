@@ -17,7 +17,7 @@ namespace BeastieBot3.WikipediaLists;
 // computation lives in ListImpactService and is shared with GET /api/lists/impact.
 
 [CommandInfo("wikipedia preview-impact", CommandKind.ReadOnly,
-    "Preview list sizes for category-split / taxonomic-split choices without generating (counts only).",
+    "For one taxa group, count bullets and species on a combined threatened (CR+EN+VU) page and on separate CR, EN, VU, NT, DD and LC pages, and check each page against the size budget if one is set.",
     Examples = new[] {
         "wikipedia preview-impact --taxa-group plants",
         "wikipedia preview-impact --taxa-group plants --split-rank class --budget-entries 5000",
@@ -41,11 +41,11 @@ internal sealed class WikipediaPreviewImpactCommand : Command<WikipediaPreviewIm
         public string? TaxaGroup { get; init; }
 
         [CommandOption("--split-rank <RANK>")]
-        [Description("Also break the group down by this rank (class|order|family) to size sub-pages.")]
+        [Description("Preview splitting the taxa group into sub-pages by class, order or family, with bullet counts for each sub-page.")]
         public string? SplitRank { get; init; }
 
         [CommandOption("--budget-entries <N>")]
-        [Description("Flag any page/sub-page whose renderable-row count exceeds N (else the group's size_budget).")]
+        [Description("Size budget for this run, in bullets. A page or sub-page with more than N bullets shows 'exceeds N'. Default: the taxa group's size_budget in rules/taxa-groups.yml.")]
         public int? BudgetEntries { get; init; }
 
         [CommandOption("--json")]

@@ -38,11 +38,11 @@ public sealed class WikidataIucnBackfillSettings : CommonSettings {
     public string? WikidataCache { get; init; }
 
     [CommandOption("--limit <N>")]
-    [Description("Limit the number of IUCN taxa to evaluate (0 = all)." )]
+    [Description("Maximum number of taxa to search for on Wikidata (0 = no limit). Taxa that this run links to a cached item by scientific name are not searched for, so they do not count toward the limit.")]
     public int Limit { get; init; }
 
     [CommandOption("--queue-all-synonyms")]
-    [Description("When supplied, queue/download matches for every synonym even if the primary name matched.")]
+    [Description("Search Wikidata for the IUCN scientific name and every synonym, even after an item is found. Items not yet cached go into the download queue, but the taxon is linked to only one item: the item found by the scientific name, or if there is none, an item found by a synonym.")]
     public bool QueueAllSynonyms { get; init; }
 
     [CommandOption("--retry-missing")]
@@ -55,7 +55,7 @@ public sealed class WikidataIucnBackfillSettings : CommonSettings {
 }
 
 [CommandInfo("wikidata backfill-iucn", CommandKind.Mutates,
-    "Search Wikidata by scientific name and synonyms for IUCN taxa that have no Wikidata entity, and queue what it finds. Taxa searched before with no match are skipped, so a run after a new release works on taxa never searched.",
+    "Link IUCN taxa to Wikidata items, for taxa not yet linked (by P627 or by an earlier run). If exactly one cached item has the taxon's scientific name, the taxon is linked to that item; otherwise Wikidata is searched for the scientific name, then, if nothing is found, for the taxon's synonyms, and the taxon is linked to the item found. Items not yet cached are added to the download queue. Taxa searched before without a result are skipped unless --retry-missing is set.",
     Reason = "Searches Wikidata for IUCN taxa without cached entities and queues what it finds.",
     Rerun = RerunEffect.Discovers,
     Examples = new[] {

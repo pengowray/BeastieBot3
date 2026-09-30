@@ -35,7 +35,7 @@ public sealed class WikidataWikipediaMismatchReportSettings : CommonSettings {
     public string? WikipediaCache { get; init; }
 
     [CommandOption("--output-dir <DIR>")]
-    [Description("Directory for generated reports (defaults to Reports:output_dir or ./reports).")]
+    [Description("Folder for wikidata-wiki-mismatches.md and wikidata-wiki-mismatches.csv, which are overwritten by each run that finds mismatches. Default: Datastore:reports_dir in paths.ini; if reports_dir is not set, a data-analysis folder next to the IUCN Red List database file.")]
     public string? OutputDirectory { get; init; }
 
     [CommandOption("--markdown-output <FILE>")]

@@ -20,7 +20,7 @@ using BeastieBot3.Web.Flows;
 namespace BeastieBot3.Wikipedia;
 
 [CommandInfo("wikipedia update", CommandKind.Mutates,
-    "Run all the Wikidata and Wikipedia cache steps in order: sweep, download, search, queue titles, match, fetch pages. Skips steps with nothing to do and stops cleanly, so re-running continues where it left off. --status shows the same plan without running anything.",
+    "Update the Wikidata and Wikipedia caches and match IUCN taxa to Wikipedia articles, by running the individual cache commands in order. Steps whose queue is empty are skipped, and the next run continues from where the last run stopped.",
     Reason = "Runs the individual cache commands in order; each only adds what is missing. Also drops queued titles that carry an authority or a note, since no article can have such a title.",
     Rerun = RerunEffect.IdempotentAdd,
     Examples = new[] {
@@ -37,7 +37,7 @@ public sealed class WikipediaUpdateCommand : AsyncCommand<WikipediaUpdateCommand
         public bool StatusOnly { get; init; }
 
         [CommandOption("--limit <N>")]
-        [Description("Most downloads or searches per step this run (0 = no cap, the default). Whatever is not reached this run is picked up by the next.")]
+        [Description("Maximum number of downloads or Wikidata searches per step (0 = no maximum, the default). Downloads and searches beyond the maximum are left for the next run, or the next round with --until-done.")]
         public int Limit { get; init; }
 
         [CommandOption("--include-rest")]

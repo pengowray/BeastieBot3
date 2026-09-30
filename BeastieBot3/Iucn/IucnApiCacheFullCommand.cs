@@ -45,7 +45,7 @@ public sealed class IucnApiCacheFullSettings : CommonSettings {
     public string? RefreshBefore { get; init; }
 
     [CommandOption("--skip-tombstones")]
-    [Description("Skip the final pass that re-checks taxa and assessments the API previously said were gone. That pass only runs as part of a refresh that asked for it.")]
+    [Description("In this run, skip the re-check of taxa and assessments that the API previously said were gone (tombstones), so the refresh started with `iucn api refresh-start` stays in progress until a later cache-all run does the re-check. Outside a refresh, or during a refresh started with --no-tombstones, the re-check does not run and this option changes nothing.")]
     public bool SkipTombstones { get; init; }
 
     [CommandOption("--taxa-failed-only")]
@@ -102,7 +102,7 @@ public sealed class IucnApiCacheFullSettings : CommonSettings {
 }
 
 [CommandInfo("iucn api cache-all", CommandKind.Mutates,
-    "Convenience wrapper that chains the API-cache phases in one job: cache-taxa then cache-assessments (the default), and with --full also cache-infraranks (subspecies/varieties, --from-csv) and project-view — i.e. the whole --dataset api build end to end.",
+    "Build or update the IUCN API cache, and with --full also the IUCN API projection that --dataset api reads. Runs cache-taxa, then cache-assessments; --full also runs cache-infraranks --from-csv before cache-assessments, and project-view at the end. During a refresh (`iucn api refresh-start`) it also runs discover-by-family and re-checks taxa and assessments the API previously said were gone, unless the refresh was started with --no-discovery or --no-tombstones.",
     Reason = "Caches IUCN /api/v4 taxa + assessment payloads into the local API cache (idempotent additive; --force-taxa/--force-assessments re-download already-cached entries). --project also rebuilds the derived projection DB.",
     Rerun = RerunEffect.IdempotentAdd,
     Examples = new[] {

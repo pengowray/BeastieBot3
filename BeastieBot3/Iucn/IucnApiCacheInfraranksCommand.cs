@@ -38,7 +38,7 @@ public sealed class IucnApiCacheInfraranksSettings : CommonSettings {
     public bool Force { get; init; }
 
     [CommandOption("--from-csv")]
-    [Description("Also seed infraspecific taxa from the CSV database, catching assessed subspecies/varieties whose parent species is unassessed (so they never surface via the API's infrarank_taxa). Needs the CSV import; this is the only way to reach those ~0.2% of taxa.")]
+    [Description("Also download the subspecies and varieties listed in the IUCN Red List database (needs `iucn import`). Without this option, the command finds only subspecies and varieties of species already in the IUCN API cache, so it misses those whose parent species IUCN has not assessed.")]
     public bool FromCsv { get; init; }
 
     [CommandOption("--source-db <PATH>")]
@@ -63,7 +63,7 @@ public sealed class IucnApiCacheInfraranksSettings : CommonSettings {
 }
 
 [CommandInfo("iucn api cache-infraranks", CommandKind.Mutates,
-    "Fetch the subspecies/varieties of cached species so the API projection (--dataset api) includes infraspecific taxa. The list comes from each cached species' taxon.infrarank_taxa (its subspecies/varieties), so run cache-taxa/discover-by-family first; then run cache-assessments + iucn api project-view. Note: an assessed subspecies whose parent species is unassessed can't be discovered this way (only via its CSV-known sis_id).",
+    "Downloads taxon records for the subspecies and varieties of species already in the IUCN API cache. Run `iucn api cache-taxa` or `iucn api discover-by-family` first. Afterwards, run `iucn api cache-assessments` and then `iucn api project-view` so that lists made with --dataset api include subspecies and varieties.",
     Reason = "Downloads infraspecific taxa + their assessment backlog into the API cache (idempotent additive).",
     Rerun = RerunEffect.Discovers,
     RerunNote = "Fetches infraspecific taxa not yet cached, read from cached species' infrarank_taxa (use --dry-run to preview, --force to re-download). Follow with cache-assessments + iucn api project-view. Skips ids previously 404'd (no standalone record).",

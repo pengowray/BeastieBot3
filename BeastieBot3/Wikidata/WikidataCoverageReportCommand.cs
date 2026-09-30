@@ -50,7 +50,7 @@ public sealed class WikidataCoverageReportSettings : CommonSettings {
     public int SampleCount { get; init; } = 10;
 
     [CommandOption("--output-dir <DIR>")]
-    [Description("Base directory for coverage detail outputs. Defaults to Reports:output_dir (or <IUCN DB>/data-analysis if unset).")]
+    [Description("Used only by wikidata report-coverage-details: folder for its Markdown files wikidata-coverage-synonyms-*.md and wikidata-coverage-unmatched-*.md. Default: Datastore:reports_dir in paths.ini; if reports_dir is not set, a data-analysis folder next to the IUCN Red List database file.")]
     public string? OutputDirectory { get; init; }
 
     [CommandOption("--synonym-output <FILE>")]

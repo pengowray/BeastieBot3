@@ -42,7 +42,7 @@ internal sealed class ChartGeneratorCommand : Command<ChartGeneratorCommand.Sett
         public string? Dataset { get; init; }
 
         [CommandOption("--output-dir <DIR>")]
-        [Description("Output directory for generated chart files. Defaults to report output directory.")]
+        [Description("Folder for the chart files. Default: wikipedia_output_dir/charts. If wikipedia_output_dir is not set in paths.ini, the files go directly in reports_dir, or in a data-analysis folder if reports_dir is not set either.")]
         public string? OutputDirectory { get; init; }
 
         [CommandOption("--chart-config <FILE>")]

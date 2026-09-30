@@ -43,7 +43,7 @@ internal sealed class CommonNameReportCommand : AsyncCommand<CommonNameReportCom
         public string? DatabasePath { get; init; }
 
         [CommandOption("--iucn-db <PATH>")]
-        [Description("Path to the IUCN SQLite database (for trace sampling and taxonomy context).")]
+        [Description("Path to the IUCN Red List database, used only by the trace report (--report trace or --report all). Default: Datastore:IUCN_sqlite_from_cvs.")]
         public string? IucnDatabasePath { get; init; }
 
         [CommandOption("--report <TYPE>")]

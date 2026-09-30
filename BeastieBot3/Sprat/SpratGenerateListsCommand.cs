@@ -50,7 +50,7 @@ public sealed class SpratGenerateListsCommand : Command<SpratGenerateListsComman
         public string? ModernizationRulesPath { get; init; }
 
         [CommandOption("--iucn-database <PATH>")]
-        [System.ComponentModel.Description("Override the IUCN release SQLite used to resolve IUCN ids/year (default: Datastore:IUCN_sqlite_from_cvs).")]
+        [System.ComponentModel.Description("Override the path of the optional IUCN Red List database (default: Datastore:IUCN_sqlite_from_cvs). When a taxon is found in the database, its {{IUCN status}} template uses the category, IUCN taxon id, assessment id and publication year of its Global assessment. For EX and EW the year is left out. Otherwise the template shows only SPRAT's IUCN category code.")]
         public string? IucnDatabasePath { get; init; }
 
         [CommandOption("--limit <N>")]

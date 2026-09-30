@@ -19,7 +19,7 @@ public sealed class WikidataSeedSettings : CommonSettings {
     public string? CacheDatabase { get; init; }
 
     [CommandOption("--limit <N>")]
-    [Description("Maximum number of seed rows to fetch during this run. Defaults to the SPARQL batch size (~500).")]
+    [Description("Maximum number of Wikidata items to read in this run, for P627 and P141 combined (0 = no limit, the default).")]
     public int? Limit { get; init; }
 
     [CommandOption("--batch-size <N>")]
@@ -27,7 +27,7 @@ public sealed class WikidataSeedSettings : CommonSettings {
     public int? BatchSize { get; init; }
 
     [CommandOption("--cursor <QID>")]
-    [Description("Start cursor (numeric or Q-id, exclusive). Overrides stored cursor for this run only.")]
+    [Description("Start the P627 and P141 sweeps after this Q-number (Q12345 or 12345), overriding the saved cursor. Later runs continue from where this run stops.")]
     public string? Cursor { get; init; }
 
     [CommandOption("--reset-cursor")]
@@ -36,7 +36,7 @@ public sealed class WikidataSeedSettings : CommonSettings {
 }
 
 [CommandInfo("wikidata seed-taxa", CommandKind.Mutates,
-    "Fetch Wikidata Q-ids for taxa carrying IUCN identifiers and enqueue them for caching.",
+    "Find Wikidata items with an IUCN taxon ID (P627) or IUCN conservation status (P141) and add each item not yet in the Wikidata cache to the download queue, continuing where the last run stopped.",
     Reason = "Enqueues Wikidata Q-ids for IUCN-linked taxa.",
     Examples = new[] {
         "wikidata seed-taxa",

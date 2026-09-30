@@ -40,7 +40,7 @@ namespace BeastieBot3.WikidataEdits;
 internal sealed class WikidataIucnStatusPlanCommand : AsyncCommand<WikidataIucnStatusPlanCommand.Settings> {
     public sealed class Settings : CommonSettings {
         [CommandOption("--limit <N>")]
-        [Description("Stop after this many linked Wikidata items (0 = all). For a quick look: the stored plan and the report are then partial.")]
+        [Description("Stop after this many Wikidata items linked to IUCN taxa (0 = all). A run that stops at the limit replaces the stored plan and the report with partial versions. For a complete plan and report, run again without --limit.")]
         public int Limit { get; init; }
 
         [CommandOption("--samples <N>")]

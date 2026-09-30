@@ -23,8 +23,8 @@ using BeastieBot3.Taxonomy;
 namespace BeastieBot3.Wikipedia;
 
 [CommandInfo("wikipedia prune-queue", CommandKind.Destructive,
-    "Remove queued Wikipedia titles that carry a taxonomic authority or a nomenclatural note, which no article title does. Reports what it would remove unless --apply is given.",
-    Reason = "Deletes queued titles from the Wikipedia cache. Cached pages and settled matches are untouched.",
+    "Delete queued Wikipedia titles that contain a taxonomic authority or a nomenclatural note, because no Wikipedia article has a title like that. Without --apply, the command only reports the titles it would delete.",
+    Reason = "With --apply, deletes the queued titles that contain a taxonomic authority or a nomenclatural note; without --apply, only reports them. The next `wikipedia match-taxa` run tries again to match any taxon that was waiting on a deleted title. Downloaded pages and taxon matches to downloaded pages are unchanged.",
     Rerun = RerunEffect.Rebuilds,
     Examples = new[] {
         "wikipedia prune-queue",

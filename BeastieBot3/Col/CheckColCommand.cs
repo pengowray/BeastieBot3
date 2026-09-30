@@ -12,7 +12,7 @@ using System.Threading;
 namespace BeastieBot3.Col;
 
 [CommandInfo("col check", CommandKind.ReadOnly,
-    "Detect the mounted COL dataset inside the container.",
+    "Check whether the COL_dir folder set in paths.ini exists. If COL_dir is not set, check the Docker mount point /app/datasets/Catalogue_of_Life_2025-10-10_XR.",
     Examples = new[] { "col check" })]
 public sealed class CheckColCommand : Command<CommonSettings> {
     public override int Execute(CommandContext context, CommonSettings settings, CancellationToken cancellationToken) {

@@ -61,7 +61,7 @@ public sealed class WikipediaListCommand : Command<WikipediaListCommand.Settings
         public int? Limit { get; init; }
 
         [CommandOption("--use-legacy-names")]
-        [System.ComponentModel.Description("Use legacy common name provider instead of the aggregated common names store.")]
+        [System.ComponentModel.Description("Skip the Common names store. Use the first English P1843 common name in the Wikidata cache, or the first English common name in the IUCN API cache if Wikidata has none. The Catalogue of Life database is also ignored, as with --no-col-enrichment.")]
         public bool UseLegacyNames { get; init; }
 
         [CommandOption("--common-names-db <PATH>")]
@@ -69,11 +69,11 @@ public sealed class WikipediaListCommand : Command<WikipediaListCommand.Settings
         public string? CommonNamesDbPath { get; init; }
 
         [CommandOption("--col-database <PATH>")]
-        [System.ComponentModel.Description("Path to the Catalogue of Life SQLite database for enriched taxonomy grouping.")]
+        [System.ComponentModel.Description("Path to the Catalogue of Life database (default: COL_sqlite in paths.ini). With this database, lists can have section headings at ranks IUCN does not record, such as suborder and tribe, and show the Catalogue of Life spelling in place of IUCN species names with encoding, diacritic, punctuation or spacing errors.")]
         public string? ColDatabasePath { get; init; }
 
         [CommandOption("--no-col-enrichment")]
-        [System.ComponentModel.Description("Disable COL-based taxonomy enrichment even if database is available.")]
+        [System.ComponentModel.Description("Ignore the Catalogue of Life database even if the file exists; lists then use only IUCN ranks and IUCN spellings of scientific names.")]
         public bool NoColEnrichment { get; init; }
 
         [CommandOption("--compare <FILE>")]

@@ -43,7 +43,7 @@ public sealed class IucnColCrosscheckCommand : Command<IucnColCrosscheckCommand.
         public long Limit { get; init; }
 
         [CommandOption("--output <FILE>")]
-        [Description("Optional report output path. Defaults to Reports:output_dir (or <IUCN DB>/data-analysis if unset).")]
+        [Description("Path of the plain-text (.txt) report. Default: a timestamped file in the folder set by Datastore:reports_dir in paths.ini; if reports_dir is not set, in a data-analysis folder next to the IUCN Red List database file.")]
         public string? OutputPath { get; init; }
 
         [CommandOption("--include-subpopulations")]
