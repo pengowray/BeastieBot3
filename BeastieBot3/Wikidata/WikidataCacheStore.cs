@@ -399,10 +399,7 @@ LIMIT @limit
             var numericId = reader.GetInt64(0);
             var entityId = reader.GetString(1);
             var downloadedAtValue = reader.IsDBNull(2) ? null : reader.GetString(2);
-            DateTime? downloadedAt = null;
-            if (!string.IsNullOrEmpty(downloadedAtValue) && DateTime.TryParse(downloadedAtValue, out var parsed)) {
-                downloadedAt = parsed;
-            }
+            var downloadedAt = StoredUtc.Parse(downloadedAtValue);
 
             var attemptCount = reader.GetInt32(3);
             list.Add(new WikidataEntityWorkItem(numericId, entityId, downloadedAt, attemptCount));
@@ -430,10 +427,7 @@ LIMIT @limit";
             var numericId = reader.GetInt64(0);
             var entityId = reader.GetString(1);
             var downloadedAtValue = reader.IsDBNull(2) ? null : reader.GetString(2);
-            DateTime? downloadedAt = null;
-            if (!string.IsNullOrEmpty(downloadedAtValue) && DateTime.TryParse(downloadedAtValue, out var parsed)) {
-                downloadedAt = parsed;
-            }
+            var downloadedAt = StoredUtc.Parse(downloadedAtValue);
 
             var attemptCount = reader.GetInt32(3);
             list.Add(new WikidataEntityWorkItem(numericId, entityId, downloadedAt, attemptCount));

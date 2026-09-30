@@ -302,10 +302,7 @@ SELECT
         using var reader = command.ExecuteReader();
         while (reader.Read()) {
             var downloadedValue = reader.IsDBNull(4) ? null : reader.GetString(4);
-            DateTime? downloadedAt = null;
-            if (!string.IsNullOrEmpty(downloadedValue) && DateTime.TryParse(downloadedValue, out var parsed)) {
-                downloadedAt = parsed;
-            }
+            var downloadedAt = StoredUtc.Parse(downloadedValue);
 
             list.Add(new WikiPageWorkItem(
                 reader.GetInt64(0),
