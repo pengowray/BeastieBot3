@@ -229,7 +229,8 @@ public sealed class IucnApiCacheFullCommand : AsyncCommand<IucnApiCacheFullSetti
 
         // Last, and only once the rest is downloaded: re-check what the API said was gone. A taxon
         // absent from the previous release can exist in the new one, and nothing else ever looks at
-        // those ids again. Small enough (a few thousand) that an interrupted pass just re-runs.
+        // those ids again. An interrupted taxa re-check carries on (it skips 404s recorded since the
+        // cutoff); the assessment half re-runs, which is cheap at a few thousand ids.
         if (runTombstones) {
             AnsiConsole.MarkupLine("[grey]== Phase: re-check taxa and assessments previously reported gone ==[/]");
             await IucnApiCacheTaxaCommand.RunAsync(new IucnApiCacheTaxaSettings {

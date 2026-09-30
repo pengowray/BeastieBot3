@@ -43,7 +43,7 @@ public sealed class IucnApiCacheTaxaSettings : CommonSettings {
     public string? RefreshBefore { get; init; }
 
     [CommandOption("--retry-tombstones")]
-    [Description("Also re-check the taxa the API previously said were gone (404). Skipped by default; worth doing once per release, because a taxon absent from the last one can exist in the new one.")]
+    [Description("Also re-check the taxa the API previously said were gone (404). Skipped by default; worth doing once per release, because a taxon absent from the last one can exist in the new one. With a cutoff date (a refresh in progress, --refresh-before or --max-age-hours), only 404s recorded before that date are re-checked.")]
     public bool RetryTombstones { get; init; }
 
     [CommandOption("--failed-only")]
@@ -172,7 +172,8 @@ public sealed class IucnApiCacheTaxaCommand : AsyncCommand<IucnApiCacheTaxaSetti
             if (Add(sisId)) return TrimToLimit(queue, totalLimit!.Value);
         }
 
-        // A refresh's remaining count includes every taxa row older than the cutoff, but the CSV
+        // With a cutoff (a refresh session, --refresh-before or --max-age-hours) every taxa row
+        // older than it is due. A refresh's remaining count includes all of them, but the CSV
         // list above and cache-infraranks (subspecies and varieties a cached species lists, or the
         // CSV lists) do not reach all of them: a species dropped from the new CSV keeps its old
         // row. Queue those rows too, after the CSV species so a species comes before its
