@@ -2,8 +2,8 @@ using System;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
-using BeastieBot3.CommonNames;
 using BeastieBot3.Configuration;
+using BeastieBot3.Infrastructure;
 using BeastieBot3.Wikipedia;
 using Microsoft.Data.Sqlite;
 
@@ -318,7 +318,7 @@ public static class WikiCoverageStateReader {
         cmd.CommandText = sql;
         cmd.CommandTimeout = 30;
         return cmd.ExecuteScalar() is string s
-            ? CommonNameHubStateReader.ParseStoredUtc(s)
+            ? StoredUtc.Parse(s)
             : null;
     }
 }

@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using BeastieBot3.Configuration;
+using BeastieBot3.Infrastructure;
 using Microsoft.Data.Sqlite;
 
 // What the API route looks like on disk right now: how much is cached, how old it is, whether a
@@ -102,7 +103,7 @@ FROM import_metadata WHERE ended_at IS NOT NULL ORDER BY rowid DESC LIMIT 1";
 
             return state with {
                 RedlistVersion = reader.IsDBNull(0) ? null : reader.GetString(0),
-                BuiltAt = reader.IsDBNull(1) ? null : IucnApiCacheStore.ParseStoredUtc(reader.GetString(1)),
+                BuiltAt = reader.IsDBNull(1) ? null : StoredUtc.Parse(reader.GetString(1)),
                 IsPartial = !reader.IsDBNull(2) && reader.GetInt64(2) != 0,
                 LatestNotDownloaded = reader.IsDBNull(3) ? 0 : reader.GetInt64(3),
                 ProjectedTaxa = reader.IsDBNull(4) ? 0 : reader.GetInt64(4),

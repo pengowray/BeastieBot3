@@ -5,6 +5,7 @@ using System.IO;
 using System.Text.Json;
 using System.Threading;
 using BeastieBot3.Iucn;
+using BeastieBot3.Infrastructure;
 using Microsoft.Data.Sqlite;
 
 // Streams the latest global assessment of every species and subspecies in the IUCN API cache
@@ -162,7 +163,7 @@ internal sealed class IucnGlobalAssessmentReader : IDisposable {
     }
 
     private static (IucnGlobalAssessment? Assessment, bool LatestFlag) ParseAssessment(string json, string? downloadedAt) {
-        var downloadedAtUtc = IucnApiCacheStore.ParseStoredUtc(downloadedAt);
+        var downloadedAtUtc = StoredUtc.Parse(downloadedAt);
         if (downloadedAtUtc is null) return (null, false);
         JsonDocument document;
         try {

@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using BeastieBot3.Configuration;
+using BeastieBot3.Infrastructure;
 using Microsoft.Data.Sqlite;
 
 // What the common-name hub looks like on disk right now, for the workflow page's lights.
@@ -89,19 +90,5 @@ public static class CommonNameHubStateReader {
     }
 
     private static DateTime? Stamp(SqliteConnection conn, string sql) =>
-        Scalar(conn, sql) is string s ? ParseStoredUtc(s) : null;
-
-    // Timestamps are written as UTC "O" strings. Plain DateTime.Parse turns the trailing Z into
-    // local time, which would shift every comparison here by the machine's offset.
-    internal static DateTime? ParseStoredUtc(string? value) {
-        if (!DateTime.TryParse(value, System.Globalization.CultureInfo.InvariantCulture,
-                System.Globalization.DateTimeStyles.RoundtripKind, out var parsed)) {
-            return null;
-        }
-        return parsed.Kind switch {
-            DateTimeKind.Utc => parsed,
-            DateTimeKind.Local => parsed.ToUniversalTime(),
-            _ => DateTime.SpecifyKind(parsed, DateTimeKind.Utc),
-        };
-    }
+        Scalar(conn, sql) is string s ? StoredUtc.Parse(s) : null;
 }

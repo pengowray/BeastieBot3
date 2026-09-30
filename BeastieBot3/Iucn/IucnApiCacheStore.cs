@@ -209,23 +209,13 @@ CREATE INDEX IF NOT EXISTS idx_taxa_lookup_taxa_id ON taxa_lookup(taxa_id);";
         idx.ExecuteNonQuery();
     }
 
-    // downloaded_at is written as a UTC "O" string. Plain DateTime.TryParse converts the trailing Z
-    // to LOCAL time, so the result would be compared against a UTC refresh cutoff and shift the
-    // boundary by the machine's offset — ten hours in Australia. Read it back as UTC.
-    internal static DateTime? ParseStoredUtc(string? text) =>
-        DateTime.TryParse(text, System.Globalization.CultureInfo.InvariantCulture,
-            System.Globalization.DateTimeStyles.AssumeUniversal | System.Globalization.DateTimeStyles.AdjustToUniversal,
-            out var parsed)
-            ? parsed
-            : null;
-
     public DateTime? GetTaxaDownloadedAt(long sisId) {
         using var command = _connection.CreateCommand();
         command.CommandText = @"SELECT t.downloaded_at FROM taxa t
 JOIN taxa_lookup l ON l.taxa_id = t.id
 WHERE l.sis_id = @sisId LIMIT 1";
         command.Parameters.AddWithValue("@sisId", sisId);
-        return ParseStoredUtc(command.ExecuteScalar() as string);
+        return StoredUtc.Parse(command.ExecuteScalar() as string);
     }
 
     /// <summary>
@@ -238,14 +228,14 @@ WHERE l.sis_id = @sisId LIMIT 1";
         using var command = _connection.CreateCommand();
         command.CommandText = "SELECT downloaded_at FROM taxa WHERE root_sis_id=@root LIMIT 1";
         command.Parameters.AddWithValue("@root", rootSisId);
-        return ParseStoredUtc(command.ExecuteScalar() as string);
+        return StoredUtc.Parse(command.ExecuteScalar() as string);
     }
 
     public DateTime? GetAssessmentDownloadedAt(long assessmentId) {
         using var command = _connection.CreateCommand();
         command.CommandText = "SELECT downloaded_at FROM assessments WHERE assessment_id=@id LIMIT 1";
         command.Parameters.AddWithValue("@id", assessmentId);
-        return ParseStoredUtc(command.ExecuteScalar() as string);
+        return StoredUtc.Parse(command.ExecuteScalar() as string);
     }
 
     public long UpsertTaxa(long rootSisId, long importId, string json, DateTime downloadedAt) {
@@ -374,7 +364,7 @@ ORDER BY b.latest DESC, IFNULL(b.year_published, 0) DESC, b.assessment_id DESC";
             var rootSisId = reader.GetInt64(2);
             var latest = reader.GetInt64(3) != 0;
             int? year = reader.IsDBNull(4) ? null : reader.GetInt32(4);
-            var downloadedAt = ParseStoredUtc(reader.IsDBNull(5) ? null : reader.GetString(5));
+            var downloadedAt = StoredUtc.Parse(reader.IsDBNull(5) ? null : reader.GetString(5));
 
             list.Add(new AssessmentQueueRow(assessmentId, sisId, rootSisId, latest, year, downloadedAt));
         }
@@ -627,8 +617,8 @@ FROM refresh_sessions WHERE {where} ORDER BY id DESC LIMIT 1";
         using (reader) {
         if (!reader.Read()) return null;
 
-        var cutoff = ParseStoredUtc(reader.GetString(1));
-        var started = ParseStoredUtc(reader.GetString(2));
+        var cutoff = StoredUtc.Parse(reader.GetString(1));
+        var started = StoredUtc.Parse(reader.GetString(2));
         if (cutoff is null || started is null) return null;
 
         return new IucnRefreshSession {
@@ -640,9 +630,9 @@ FROM refresh_sessions WHERE {where} ORDER BY id DESC LIMIT 1";
             IncludeDiscovery = reader.GetInt64(5) != 0,
             StartTaxaRemaining = reader.GetInt64(6),
             StartAssessmentsRemaining = reader.GetInt64(7),
-            TombstonesDoneAt = reader.IsDBNull(8) ? null : ParseStoredUtc(reader.GetString(8)),
-            DiscoveryDoneAt = reader.IsDBNull(9) ? null : ParseStoredUtc(reader.GetString(9)),
-            CompletedAt = reader.IsDBNull(10) ? null : ParseStoredUtc(reader.GetString(10)),
+            TombstonesDoneAt = reader.IsDBNull(8) ? null : StoredUtc.Parse(reader.GetString(8)),
+            DiscoveryDoneAt = reader.IsDBNull(9) ? null : StoredUtc.Parse(reader.GetString(9)),
+            CompletedAt = reader.IsDBNull(10) ? null : StoredUtc.Parse(reader.GetString(10)),
         };
         }
     }
@@ -688,7 +678,7 @@ FROM refresh_sessions WHERE {where} ORDER BY id DESC LIMIT 1";
           WHERE NOT EXISTS (SELECT 1 FROM assessments a WHERE a.assessment_id = b.assessment_id)");
 
     public DateTime? GetOldestTaxaDownloadedAt() =>
-        ParseStoredUtc(ScalarString("SELECT MIN(downloaded_at) FROM taxa"));
+        StoredUtc.Parse(ScalarString("SELECT MIN(downloaded_at) FROM taxa"));
 
     private long Scalar(string sql) {
         using var command = _connection.CreateCommand();

@@ -5,7 +5,7 @@ using System.IO;
 using System.Text;
 using System.Text.Json;
 using System.Threading;
-using BeastieBot3.Iucn;
+using BeastieBot3.Infrastructure;
 using Microsoft.Data.Sqlite;
 
 // Read-only access to cached taxon items in the Wikidata cache (Datastore:wikidata_cache_sqlite).
@@ -148,7 +148,7 @@ internal sealed class WdTaxonItemReader : IDisposable {
     }
 
     private WdTaxonItem? ParseRow(SqliteDataReader reader) {
-        var downloadedAt = reader.IsDBNull(1) ? null : IucnApiCacheStore.ParseStoredUtc(reader.GetString(1));
+        var downloadedAt = reader.IsDBNull(1) ? null : StoredUtc.Parse(reader.GetString(1));
         try {
             var item = WdTaxonItemParser.Parse(reader.GetString(2), downloadedAt);
             if (item is null) {

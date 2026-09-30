@@ -1,5 +1,6 @@
 using System;
 using BeastieBot3.CommonNames;
+using BeastieBot3.Infrastructure;
 using BeastieBot3.Web.Flows;
 
 namespace BeastieBot3.Tests;
@@ -66,7 +67,7 @@ public class FlowCommonNameProbeTests {
     // comparison above by the machine's offset.
     [Fact]
     public void Stored_timestamps_are_read_as_utc() {
-        var parsed = CommonNameHubStateReader.ParseStoredUtc("2026-08-20T10:00:00.0000000Z");
+        var parsed = StoredUtc.Parse("2026-08-20T10:00:00.0000000Z");
         Assert.Equal(DateTimeKind.Utc, parsed!.Value.Kind);
         Assert.Equal(new DateTime(2026, 8, 20, 10, 0, 0, DateTimeKind.Utc), parsed.Value);
     }

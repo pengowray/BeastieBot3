@@ -111,7 +111,7 @@ The API cache (`IUCN_api_cache_sqlite`) carries **no release version** — a pay
 
 A session also drives the family-paging sweep and a final `--retry-tombstones` pass (404/410 tombstones are permanent and invisible to every normal run, but that verdict is only true of the release it was recorded against). It closes itself once nothing predates the cutoff and every requested phase has run. `iucn api refresh-status` reports progress between runs; `refresh-abandon` exits without losing downloads. Decision logic is pure in `IucnRefreshMath` and pinned by `IucnRefreshSessionTests`.
 
-`downloaded_at` is stored as a UTC `"O"` string. Read it with `IucnApiCacheStore.ParseStoredUtc`, never plain `DateTime.TryParse`, which converts the trailing `Z` to local time and shifts every refresh boundary by the machine's offset.
+`downloaded_at` is stored as a UTC `"O"` string. Read it with `StoredUtc.Parse` (`Infrastructure/StoredUtc.cs`), never plain `DateTime.TryParse`, which converts the trailing `Z` to local time and shifts every refresh boundary by the machine's offset.
 
 ### Workflow step state (the web UI's lights)
 
