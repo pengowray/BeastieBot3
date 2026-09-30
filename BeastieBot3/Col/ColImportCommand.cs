@@ -10,15 +10,15 @@ using BeastieBot3.Configuration;
 // CLI entry point for COL import. Locates ColDP ZIP files in the configured directory
 // (from paths.ini), creates output SQLite databases named after each archive, and
 // delegates to ColImporter. Supports --force to re-import existing databases.
-// Output: one SQLite DB per archive in [Datastore] col_output_dir.
+// Output: one col_coldp_<label>.sqlite per archive in [Datastore] datastore_dir.
 
 namespace BeastieBot3.Col;
 
 [CommandInfo("col import", CommandKind.Destructive,
     "Import Catalogue of Life ColDP zip archives into individual SQLite databases.",
-    Reason = "Recreates per-archive SQLite databases from scratch with --force.",
+    Reason = "With --force, col import deletes and rebuilds the database of every ColDP zip in Datasets:COL_dir, and each rebuild takes tens of minutes; without --force, it skips a database that already holds a finished import.",
     Rerun = RerunEffect.FreshDataset,
-    RerunNote = "Each CoL archive imports into its own version-named DB (col_coldp_<label>.sqlite); an existing file is skipped unless --force. After a CoL update, point COL_dir at the new archive and re-run.",
+    RerunNote = "For a new CoL release, set Datasets:COL_dir to the folder with its ColDP zip and run again. Each release gets its own col_coldp_<label>.sqlite, so a new release imports without --force.",
     Examples = new[] { "col import", "col import --force" })]
 public sealed class ColImportCommand : Command<ColImportCommand.Settings> {
     public sealed class Settings : CommonSettings {
