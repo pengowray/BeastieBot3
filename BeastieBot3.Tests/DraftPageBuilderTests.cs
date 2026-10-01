@@ -102,6 +102,20 @@ public class DraftPageBuilderTests {
         Assert.Contains("[[User talk:Beastie Bot/Draft 2027]]", draft);
     }
 
+    // A partial run (--title) can post an index with one list of one kind and none of the other.
+    [Fact]
+    public void Index_with_one_IUCN_list_and_no_Australian_lists_reads_correctly() {
+        var posted = new[] {
+            new DraftIndexEntry(DraftGroup.Iucn, "List of critically endangered mammals", Index + "/List of critically endangered mammals", 34_457),
+        };
+        var index = DraftPageBuilder.BuildIndex(Index, posted, Array.Empty<DraftIndexEntry>(), new DateTime(2026, 10, 1), "2026-1");
+        Assert.Contains("The IUCN list uses data from the [[IUCN Red List]] version 2026-1. In the", index);
+        Assert.DoesNotContain("Australia use", index);
+        Assert.Equal(
+            "Index of drafts generated on 1 October 2026: 1 IUCN list, 0 Australian lists",
+            DraftPageBuilder.IndexEditSummary(new DateTime(2026, 10, 1), 1, 0, 0));
+    }
+
     [Fact]
     public void Iucn_version_is_read_from_the_citation() {
         const string cite = "{{cite web |title=IUCN Red List of Threatened Species. Version 2026-1 |url=https://www.iucnredlist.org/}}";
