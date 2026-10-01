@@ -699,7 +699,7 @@ public static class FlowCatalogue {
         },
 
         // ---------------------------------------------------------------
-        // Australia (SPRAT): a self-contained pipeline — import the EPBC
+        // Australia (SPRAT): a self-contained pipeline — download and import the EPBC
         // report CSV, then generate the "rare and threatened <group> of Australia"
         // lists. Independent of the IUCN dataset (SPRAT carries its own IUCN
         // status column); the common-names hub is an optional enrichment.
@@ -710,13 +710,29 @@ public static class FlowCatalogue {
             Description = "Import the Australian Government's SPRAT (Species Profile and Threats Database) report and generate \"List of rare and threatened <group> of Australia\" wikitext pages. Membership spans the EPBC Act, the IUCN Red List, and the eight state/territory acts, and every entry shows its status under each system. A self-contained pipeline — it does not need the IUCN import.",
             Steps = new[] {
                 new FlowStep {
+                    Id = "sprat-download",
+                    Title = "Download the SPRAT report CSV",
+                    Description = "Saves the latest SPRAT report CSV, with every column, in the folder of the file set in Datasets:SPRAT_csv.",
+                    Commands = new[] { "sprat download" },
+                    OutputSourceIds = new[] { "sprat-input" },
+                    Note = "`sprat download` saves the SPRAT report CSV in the same folder as the file set in Datasets:SPRAT_csv, or in --output-dir. You update paths.ini yourself: the output shows any SPRAT_csv= line to set and whether to run `sprat import --force`. The SPRAT site may refuse the download; if it does, try --user-agent with your own browser's user agent, or download the report by hand.",
+                    GuideTitle = "Download the report by hand",
+                    GuideSteps = new[] {
+                        "Open https://environment.gov.au/sprat-public/action/report",
+                        "Set Report Type to CSV.",
+                        "Click Select ALL in every group.",
+                        "Click Generate Report.",
+                        "Set Datasets:SPRAT_csv in paths.ini to the downloaded file.",
+                    },
+                },
+                new FlowStep {
                     Id = "sprat-import",
                     Title = "Import the SPRAT report CSV",
                     Description = "Load the SPRAT \"Select All\" report CSV (EPBC + state/territory + IUCN statuses, taxonomy, presence) into a local SQLite database.",
                     Commands = new[] { "sprat import" },
                     InputSourceIds = new[] { "sprat-input" },
                     OutputSourceIds = new[] { "sprat-sqlite" },
-                    Note = "Download the SPRAT report CSV by hand from environment.gov.au/sprat-public (choose Select All for every field) and set Datasets:SPRAT_csv in paths.ini to its path. `sprat import` skips a database that already holds a finished import; to import a new report, tick --force under Options, which rebuilds the SPRAT (EPBC) database from the new CSV.",
+                    Note = "Set Datasets:SPRAT_csv in paths.ini to the SPRAT report CSV: the one `sprat download` saved (its output shows the exact line), or one downloaded by hand from environment.gov.au/sprat-public (click Select ALL in every group). `sprat import` skips a database that already holds a finished import; to import a new report, tick --force under Options, which rebuilds the SPRAT (EPBC) database from the new CSV.",
                 },
                 new FlowStep {
                     Id = "sprat-generate",
