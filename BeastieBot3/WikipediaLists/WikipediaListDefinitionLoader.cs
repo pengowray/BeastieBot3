@@ -254,11 +254,13 @@ internal sealed class WikipediaListDefinitionLoader {
             return null;
         }
 
-        // Build template variables
+        // Build template variables. A group named by a scientific name (an order such as
+        // "Malpighiales") sets keep_name_case, so its title and file name keep the capital letter.
+        var taxaName = taxaGroup.Name ?? raw.TaxaGroup!;
         var vars = new Dictionary<string, string> {
-            ["taxa_name"] = taxaGroup.Name ?? raw.TaxaGroup!,
-            ["taxa_name_lower"] = (taxaGroup.Name ?? raw.TaxaGroup!).ToLowerInvariant(),
-            ["taxa_slug"] = ToSlug(taxaGroup.Name ?? raw.TaxaGroup!),
+            ["taxa_name"] = taxaName,
+            ["taxa_name_lower"] = taxaGroup.KeepNameCase ? taxaName : taxaName.ToLowerInvariant(),
+            ["taxa_slug"] = ToSlug(taxaName, taxaGroup.KeepNameCase),
             // Singular attributive form ("mammalian", "bird", "plant") so descriptions read
             // "Mammalian taxa …" rather than the ungrammatical plural "Mammals taxa …".
             ["taxa_adjective"] = taxaGroup.Adjective ?? (taxaGroup.Name ?? raw.TaxaGroup!).ToLowerInvariant(),
@@ -404,9 +406,10 @@ internal sealed class WikipediaListDefinitionLoader {
         return result;
     }
 
-    private static string ToSlug(string name) {
-        // Convert "Ray-finned fishes" -> "ray-finned_fishes"
-        return Regex.Replace(name.ToLowerInvariant(), @"[^a-z0-9]+", "_").Trim('_');
+    private static string ToSlug(string name, bool keepCase = false) {
+        // Convert "Ray-finned fishes" -> "ray_finned_fishes"; with keepCase, "Malpighiales" -> "Malpighiales"
+        var text = keepCase ? name : name.ToLowerInvariant();
+        return Regex.Replace(text, @"[^A-Za-z0-9]+", "_").Trim('_');
     }
 }
 
@@ -457,6 +460,13 @@ internal sealed class TaxaGroupsFile {
 
 internal sealed class TaxaGroupDefinition {
     public string? Name { get; init; }
+
+    /// <summary>
+    /// Keep the capital letters of <see cref="Name"/> in list titles and file names. For groups named
+    /// by a scientific name, such as the order "Malpighiales" ("List of threatened Malpighiales").
+    /// </summary>
+    public bool KeepNameCase { get; init; }
+
     /// <summary>
     /// Adjective form of the group name for use in prose (e.g., "mammalian", "amphibian").
     /// </summary>
