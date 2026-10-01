@@ -36,15 +36,24 @@ internal sealed class WikipediaListDefinitionLoader {
 
         var directory = Path.GetDirectoryName(fullPath) ?? ".";
 
-        // Load supporting files if they exist
-        var taxaGroups = LoadTaxaGroups(directory);
+        // Load supporting files if they exist. A group's sub_groups block becomes ordinary groups and
+        // list entries here (TaxaSubGroups), so everything below sees them like hand-written ones.
+        var expandedGroups = TaxaSubGroups.Expand(LoadTaxaGroups(directory));
+        foreach (var warning in expandedGroups.Warnings) {
+            Console.Error.WriteLine($"Warning: {warning}");
+        }
+        var taxaGroups = expandedGroups.Groups;
         var listPresets = LoadListPresets(directory);
 
         using var reader = File.OpenText(fullPath);
-        var rawConfig = _deserializer.Deserialize<WikipediaListConfigRaw>(reader);
-        if (rawConfig is null) {
+        var parsed = _deserializer.Deserialize<WikipediaListConfigRaw>(reader);
+        if (parsed is null) {
             throw new InvalidOperationException($"Unable to parse Wikipedia list config at {fullPath}.");
         }
+        var rawConfig = new WikipediaListConfigRaw {
+            Defaults = parsed.Defaults,
+            Lists = TaxaSubGroups.InsertListEntries(parsed.Lists, expandedGroups.Lists),
+        };
 
         // Expand the raw config using taxa groups and presets
         return ExpandConfig(rawConfig, taxaGroups, listPresets);
@@ -478,7 +487,14 @@ internal sealed class TaxaGroupDefinition {
     /// preset of this group, the loader attaches a <see cref="ChildListLink"/> to the matching
     /// <c>{child}-{preset}</c> list IF it exists, making this group's lists "parent" lists.
     /// </summary>
-    public List<string>? Children { get; init; }
+    public List<string>? Children { get; set; }
+
+    /// <summary>
+    /// Sub-groups defined by one value each at one rank (e.g. the largest orders of dicots), with the
+    /// presets they get lists for. Expanded into ordinary groups, children and list entries by
+    /// <see cref="TaxaSubGroups.Expand"/>.
+    /// </summary>
+    public SubGroupsDefinition? SubGroups { get; init; }
 
     /// <summary>
     /// Non-phylogenetic cross-reference group names (e.g. mammals → [marine-mammals]). Rendered as a

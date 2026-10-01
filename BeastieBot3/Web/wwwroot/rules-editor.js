@@ -365,9 +365,12 @@
   function renderCounts(data) {
     const head = ['', 'Sub-taxon', 'Group', ...data.columns, 'Total'];
     const rows = data.rows.map((r) => {
-      const cb = isTickable(r, data.group)
-        ? `<input type="checkbox" class="grp-child" value="${esc(r.existingGroup)}" ${r.isChild ? 'checked' : ''}>`
-        : '';
+      // A sub-group from the Parent's sub_groups block is shown ticked and locked: saveChildren only
+      // collects .grp-child boxes, and the block is edited in taxa-groups.yml.
+      const cb = !isTickable(r, data.group) ? ''
+        : r.inSubGroups
+          ? `<input type="checkbox" checked disabled title="Set in sub_groups of ${esc(data.group)} in taxa-groups.yml. To remove it, edit that file in the Rules editor.">`
+          : `<input type="checkbox" class="grp-child" value="${esc(r.existingGroup)}" ${r.isChild ? 'checked' : ''}>`;
       // Rows without a matching taxa-group get a "＋ define" button that pre-fills the create panel.
       const grpCell = r.existingGroup
         ? esc(r.existingGroup)

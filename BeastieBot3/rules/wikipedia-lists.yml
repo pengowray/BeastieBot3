@@ -5,6 +5,9 @@
 # 1. Compact multi-preset: taxa_group + presets array → generates one list per preset
 # 2. Single preset: taxa_group + preset → generates one list
 # 3. Full definition: specify all fields explicitly (for custom lists)
+#
+# A taxa group's sub_groups block (taxa-groups.yml) adds its sub-groups' list entries here when the
+# file is loaded, after the group's own entry. They are not written in this file.
 
 defaults:
   header_template: status-default
@@ -49,14 +52,10 @@ lists:
     presets: [threatened, cr, en, vu, nt, dd, lc, ex]
     templates:
       header: amphibians-status
-  - taxa_group: frogs
-    presets: [lc]
 
   # ==================== BIRDS ====================
   - taxa_group: birds
     presets: [threatened, cr, en, vu, nt, dd, lc, ew, ex]
-  - taxa_group: passerines
-    presets: [lc]
 
   # ==================== REPTILES ====================
   - taxa_group: reptiles
@@ -69,33 +68,6 @@ lists:
   # ==================== RAY-FINNED FISHES ====================
   - taxa_group: ray-finned-fishes
     presets: [threatened, cr, en, vu, nt, dd, lc, ex]
-  # Order sub-groups (taxa-groups.yml): the ray-finned fishes least concern and data deficient pages link them.
-  - taxa_group: anguilliformes
-    presets: [lc, dd]
-  - taxa_group: characiformes
-    presets: [lc, dd]
-  - taxa_group: cichliformes
-    presets: [lc, dd]
-  - taxa_group: cypriniformes
-    presets: [lc, dd]
-  - taxa_group: cyprinodontiformes
-    presets: [lc, dd]
-  - taxa_group: gobiiformes
-    presets: [lc, dd]
-  - taxa_group: ophidiiformes
-    presets: [lc, dd]
-  - taxa_group: perciformes
-    presets: [lc, dd]
-  - taxa_group: pleuronectiformes
-    presets: [lc, dd]
-  - taxa_group: scorpaeniformes
-    presets: [lc, dd]
-  - taxa_group: siluriformes
-    presets: [lc, dd]
-  - taxa_group: stomiiformes
-    presets: [lc, dd]
-  - taxa_group: tetraodontiformes
-    presets: [lc, dd]
 
   # ==================== SHARKS & RAYS ====================
   - taxa_group: sharks-rays
@@ -104,10 +76,6 @@ lists:
   # ==================== INSECTS ====================
   - taxa_group: insects
     presets: [threatened, cr, en, vu, nt, dd, lc, ex]
-  - taxa_group: odonata
-    presets: [lc, dd]
-  - taxa_group: lepidoptera
-    presets: [lc, dd]
 
   # ==================== GASTROPODS ====================
   - taxa_group: gastropods
@@ -151,43 +119,6 @@ lists:
   - taxa_group: magnoliopsida
     presets: [threatened, lc]
   - taxa_group: liliopsida
-    presets: [threatened, lc]
-  # Order sub-groups (taxa-groups.yml): the dicot and monocot threatened and least concern pages link them.
-  - taxa_group: apiales
-    presets: [threatened, lc]
-  - taxa_group: asterales
-    presets: [threatened, lc]
-  - taxa_group: caryophyllales
-    presets: [threatened, lc]
-  - taxa_group: ericales
-    presets: [threatened, lc]
-  - taxa_group: fabales
-    presets: [threatened, lc]
-  - taxa_group: fagales
-    presets: [threatened, lc]
-  - taxa_group: gentianales
-    presets: [threatened, lc]
-  - taxa_group: lamiales
-    presets: [threatened, lc]
-  - taxa_group: laurales
-    presets: [threatened, lc]
-  - taxa_group: magnoliales
-    presets: [threatened, lc]
-  - taxa_group: malpighiales
-    presets: [threatened, lc]
-  - taxa_group: malvales
-    presets: [threatened, lc]
-  - taxa_group: myrtales
-    presets: [threatened, lc]
-  - taxa_group: proteales
-    presets: [threatened, lc]
-  - taxa_group: rosales
-    presets: [threatened, lc]
-  - taxa_group: sapindales
-    presets: [threatened, lc]
-  - taxa_group: asparagales
-    presets: [threatened, lc]
-  - taxa_group: poales
     presets: [threatened, lc]
   - taxa_group: bryopsida
     category_split: all-status

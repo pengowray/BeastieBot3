@@ -51,8 +51,11 @@ public static class TaxaGroupingEndpoints {
 
         app.MapGet("/api/grouping/children-counts", (string group, string? childRank, PathsService paths) => {
             Dictionary<string, TaxaGroupDefinition> groups;
+            IReadOnlyDictionary<string, string> generatedBy;
             try {
-                groups = LoadDraftGroups(paths, out _);
+                var expanded = LoadDraftGroupsExpanded(paths, out _);
+                groups = expanded.Groups;
+                generatedBy = expanded.GeneratedBy;
             } catch (Exception ex) {
                 return DraftUnreadable(ex);
             }
@@ -82,6 +85,9 @@ public static class TaxaGroupingEndpoints {
                     key = kv.Key,
                     existingGroup = valueToGroup.GetValueOrDefault(kv.Key),
                     isChild = def.Children?.Contains(valueToGroup.GetValueOrDefault(kv.Key) ?? "\0") == true,
+                    // Defined in this group's sub_groups block, not its children: line, so the
+                    // sub-groups tickboxes cannot add or remove it.
+                    inSubGroups = valueToGroup.GetValueOrDefault(kv.Key) is { } g && generatedBy.GetValueOrDefault(g) == group,
                     counts = kv.Value.Select(c => c.Count).ToArray(),
                     total = kv.Value.Sum(c => c.Count),
                 })
@@ -279,18 +285,23 @@ public static class TaxaGroupingEndpoints {
 
     // ---- group loading ----
 
-    private static Dictionary<string, TaxaGroupDefinition> LoadDraftGroups(PathsService paths, out string path) {
+    // The groups as generate-lists sees them: a group's sub_groups block is expanded into ordinary
+    // groups and children (TaxaSubGroups), so those sub-groups get rows and ticks like the others.
+    private static Dictionary<string, TaxaGroupDefinition> LoadDraftGroups(PathsService paths, out string path) =>
+        LoadDraftGroupsExpanded(paths, out path).Groups;
+
+    private static ExpandedTaxaGroups LoadDraftGroupsExpanded(PathsService paths, out string path) {
         var loc = RulesPaths.Resolve(paths);
         EnsureSeeded(loc);
         path = Path.Combine(loc.DraftRoot, "taxa-groups.yml");
-        if (!File.Exists(path)) return new();
+        if (!File.Exists(path)) return TaxaSubGroups.Expand(new());
         var deserializer = new DeserializerBuilder()
             .IgnoreUnmatchedProperties()
             .WithNamingConvention(UnderscoredNamingConvention.Instance)
             .Build();
         using var reader = File.OpenText(path);
         var file = deserializer.Deserialize<TaxaGroupsFile>(reader);
-        return file?.Groups ?? new();
+        return TaxaSubGroups.Expand(file?.Groups ?? new());
     }
 
     private static void EnsureSeeded(RulesLocations loc) {
@@ -362,8 +373,25 @@ public static class TaxaGroupingEndpoints {
             return Results.BadRequest(new { error = err, hint = childrenHint });
 
         if (changed) File.WriteAllText(draftFile, updated);
+        // Report every sub-group the lists will use, including the group's sub_groups entries, which
+        // the children: line does not hold.
+        children = AllChildren(updated, req.Group!) ?? children;
         var warnings = SubGroupLinkWarnings(req.Group!, children, Path.GetDirectoryName(draftFile) ?? ".");
         return Results.Json(new { group = req.Group, children, changed, file = "taxa-groups.yml", warnings }, JsonOpts);
+    }
+
+    // The group's children after its sub_groups block is expanded, or null when the YAML doesn't parse.
+    internal static List<string>? AllChildren(string yaml, string group) {
+        try {
+            var deserializer = new DeserializerBuilder()
+                .IgnoreUnmatchedProperties()
+                .WithNamingConvention(UnderscoredNamingConvention.Instance)
+                .Build();
+            var groups = TaxaSubGroups.Expand(deserializer.Deserialize<TaxaGroupsFile>(yaml)?.Groups ?? new()).Groups;
+            return groups.TryGetValue(group, out var def) ? def.Children ?? new() : null;
+        } catch (YamlDotNet.Core.YamlException) {
+            return null;
+        }
     }
 
     // After a save, the sub-groups the group's lists cannot link (read from the draft rules beside the

@@ -7,6 +7,13 @@
 # - ScientificNameFocus: ''[[Scientific name]]'', Common name (for plants/invertebrates)
 # - CommonNameOnly: [[Common name]] (for mammals, birds, sharks+rays) -- Scientific name (italicized) displayed when common name is missing.
 # notes: Link points to the taxon page if known, otherwise redlink to scientific name from IUCN assessment.
+#
+# sub_groups: splits a group's pages by one rank (see magnoliopsida). Each entry under groups: becomes a
+# group with the parent's filters plus "<rank>: <value>", the parent's display, categories and
+# size_budget, a list for each of the presets (placed after the parent's entry in wikipedia-lists.yml),
+# and a place in the parent's children. Its id is the value in lower case (e.g. malpighiales); its name
+# defaults to the value and its adjective to the name. keep_name_case keeps the capital letters of a
+# scientific name in titles and file names ("List of threatened Malpighiales").
 
 groups:
   # ==================== ANIMALIA - VERTEBRATES ====================
@@ -25,23 +32,12 @@ groups:
     # Pages over about 3,600 entries go over Wikipedia's template expansion limit.
     size_budget:
       max_entries: 3600
-    children: [frogs]
-
-  # Sub-group of amphibians: least concern frogs are most of the least concern amphibians.
-  frogs:
-    name: "Frogs"
-    adjective: "frog"
-    categories:
-      kingdom_list: "Lists of animals by conservation status"
-      list: "Lists of amphibians"
-      conservation: "Amphibian conservation"
-    filters:
-      - rank: kingdom
-        value: Animalia
-      - rank: class
-        value: Amphibia
-      - rank: order
-        value: Anura
+    # Frogs are most of the least concern amphibians.
+    sub_groups:
+      rank: order
+      presets: [lc]
+      groups:
+        Anura: { name: "Frogs", adjective: "frog" }
 
   birds:
     name: "Birds"
@@ -60,25 +56,12 @@ groups:
     # Pages over about 3,600 entries go over Wikipedia's template expansion limit.
     size_budget:
       max_entries: 3600
-    children: [passerines]
-
-  # Sub-group of birds: passerines are about two thirds of the least concern birds.
-  passerines:
-    name: "Passerines"
-    adjective: "passerine"
-    categories:
-      kingdom_list: "Lists of animals by conservation status"
-      list: "Lists of birds"
-      conservation: "Bird conservation"
-    display:
-      listing_style: CommonNameOnly
-    filters:
-      - rank: kingdom
-        value: Animalia
-      - rank: class
-        value: Aves
-      - rank: order
-        value: Passeriformes
+    # Passerines are about two thirds of the least concern birds.
+    sub_groups:
+      rank: order
+      presets: [lc]
+      groups:
+        Passeriformes: { name: "Passerines", adjective: "passerine" }
 
   reptiles:
     name: "Reptiles"
@@ -215,181 +198,27 @@ groups:
     # Pages over about 3,600 entries go over Wikipedia's template expansion limit.
     size_budget:
       max_entries: 3600
-    children: [anguilliformes, characiformes, cichliformes, cypriniformes, cyprinodontiformes, gobiiformes, ophidiiformes, perciformes, pleuronectiformes, scorpaeniformes, siluriformes, stomiiformes, tetraodontiformes]
-
-  # Orders of ray-finned fishes with their own least concern and data deficient lists: the largest
-  # orders, chosen so the rest of each list fits on the ray-finned fishes page (under about 3,300
-  # entries). Named by the order's English name where the whole order has one (eels, catfishes,
-  # flatfishes, toothcarps), otherwise "<order adjective> fishes" as in the existing en-wiki article
-  # "List of least concern perciform fishes".
-  anguilliformes:
-    name: "Eels"
-    adjective: "eel"
-    display:
-      listing_style: ScientificNameFocus
-    filters:
-      - rank: kingdom
-        value: Animalia
-      - rank: class
-        value: Actinopterygii
-      - rank: order
-        value: Anguilliformes
-
-  characiformes:
-    name: "Characiform fishes"
-    adjective: "characiform fish"
-    display:
-      listing_style: ScientificNameFocus
-    filters:
-      - rank: kingdom
-        value: Animalia
-      - rank: class
-        value: Actinopterygii
-      - rank: order
-        value: Characiformes
-
-  cichliformes:
-    name: "Cichliform fishes"
-    adjective: "cichliform fish"
-    display:
-      listing_style: ScientificNameFocus
-    filters:
-      - rank: kingdom
-        value: Animalia
-      - rank: class
-        value: Actinopterygii
-      - rank: order
-        value: Cichliformes
-
-  cypriniformes:
-    name: "Cypriniform fishes"
-    adjective: "cypriniform fish"
-    display:
-      listing_style: ScientificNameFocus
-    filters:
-      - rank: kingdom
-        value: Animalia
-      - rank: class
-        value: Actinopterygii
-      - rank: order
-        value: Cypriniformes
-
-  cyprinodontiformes:
-    name: "Toothcarps"
-    adjective: "toothcarp"
-    display:
-      listing_style: ScientificNameFocus
-    filters:
-      - rank: kingdom
-        value: Animalia
-      - rank: class
-        value: Actinopterygii
-      - rank: order
-        value: Cyprinodontiformes
-
-  gobiiformes:
-    name: "Gobiiform fishes"
-    adjective: "gobiiform fish"
-    display:
-      listing_style: ScientificNameFocus
-    filters:
-      - rank: kingdom
-        value: Animalia
-      - rank: class
-        value: Actinopterygii
-      - rank: order
-        value: Gobiiformes
-
-  ophidiiformes:
-    name: "Ophidiiform fishes"
-    adjective: "ophidiiform fish"
-    display:
-      listing_style: ScientificNameFocus
-    filters:
-      - rank: kingdom
-        value: Animalia
-      - rank: class
-        value: Actinopterygii
-      - rank: order
-        value: Ophidiiformes
-
-  perciformes:
-    name: "Perciform fishes"
-    adjective: "perciform fish"
-    display:
-      listing_style: ScientificNameFocus
-    filters:
-      - rank: kingdom
-        value: Animalia
-      - rank: class
-        value: Actinopterygii
-      - rank: order
-        value: Perciformes
-
-  pleuronectiformes:
-    name: "Flatfishes"
-    adjective: "flatfish"
-    display:
-      listing_style: ScientificNameFocus
-    filters:
-      - rank: kingdom
-        value: Animalia
-      - rank: class
-        value: Actinopterygii
-      - rank: order
-        value: Pleuronectiformes
-
-  scorpaeniformes:
-    name: "Scorpaeniform fishes"
-    adjective: "scorpaeniform fish"
-    display:
-      listing_style: ScientificNameFocus
-    filters:
-      - rank: kingdom
-        value: Animalia
-      - rank: class
-        value: Actinopterygii
-      - rank: order
-        value: Scorpaeniformes
-
-  siluriformes:
-    name: "Catfishes"
-    adjective: "catfish"
-    display:
-      listing_style: ScientificNameFocus
-    filters:
-      - rank: kingdom
-        value: Animalia
-      - rank: class
-        value: Actinopterygii
-      - rank: order
-        value: Siluriformes
-
-  stomiiformes:
-    name: "Stomiiform fishes"
-    adjective: "stomiiform fish"
-    display:
-      listing_style: ScientificNameFocus
-    filters:
-      - rank: kingdom
-        value: Animalia
-      - rank: class
-        value: Actinopterygii
-      - rank: order
-        value: Stomiiformes
-
-  tetraodontiformes:
-    name: "Tetraodontiform fishes"
-    adjective: "tetraodontiform fish"
-    display:
-      listing_style: ScientificNameFocus
-    filters:
-      - rank: kingdom
-        value: Animalia
-      - rank: class
-        value: Actinopterygii
-      - rank: order
-        value: Tetraodontiformes
+    # The largest orders get their own least concern and data deficient lists, so the rest of each
+    # list fits on the ray-finned fishes page, under about 3,300 entries. No threatened lists: some of
+    # these orders have no threatened species. Named by the English name where the whole order has
+    # one, otherwise "<adjective> fishes" as in the en-wiki article "List of least concern perciform fishes".
+    sub_groups:
+      rank: order
+      presets: [lc, dd]
+      groups:
+        Anguilliformes: { name: "Eels", adjective: "eel" }
+        Characiformes: { name: "Characiform fishes", adjective: "characiform fish" }
+        Cichliformes: { name: "Cichliform fishes", adjective: "cichliform fish" }
+        Cypriniformes: { name: "Cypriniform fishes", adjective: "cypriniform fish" }
+        Cyprinodontiformes: { name: "Toothcarps", adjective: "toothcarp" }
+        Gobiiformes: { name: "Gobiiform fishes", adjective: "gobiiform fish" }
+        Ophidiiformes: { name: "Ophidiiform fishes", adjective: "ophidiiform fish" }
+        Perciformes: { name: "Perciform fishes", adjective: "perciform fish" }
+        Pleuronectiformes: { name: "Flatfishes", adjective: "flatfish" }
+        Scorpaeniformes: { name: "Scorpaeniform fishes", adjective: "scorpaeniform fish" }
+        Siluriformes: { name: "Catfishes", adjective: "catfish" }
+        Stomiiformes: { name: "Stomiiform fishes", adjective: "stomiiform fish" }
+        Tetraodontiformes: { name: "Tetraodontiform fishes", adjective: "tetraodontiform fish" }
 
   sharks-rays:
     name: "Sharks and rays"
@@ -417,34 +246,13 @@ groups:
     # Pages over about 3,600 entries go over Wikipedia's template expansion limit.
     size_budget:
       max_entries: 3600
-    children: [odonata, lepidoptera]
-
-  # Orders of insects with their own least concern and data deficient lists.
-  odonata:
-    name: "Dragonflies and damselflies"
-    adjective: "dragonfly and damselfly"
-    display:
-      listing_style: ScientificNameFocus
-    filters:
-      - rank: kingdom
-        value: Animalia
-      - rank: class
-        value: Insecta
-      - rank: order
-        value: Odonata
-
-  lepidoptera:
-    name: "Butterflies and moths"
-    adjective: "butterfly and moth"
-    display:
-      listing_style: ScientificNameFocus
-    filters:
-      - rank: kingdom
-        value: Animalia
-      - rank: class
-        value: Insecta
-      - rank: order
-        value: Lepidoptera
+    # The two largest orders get their own least concern and data deficient lists.
+    sub_groups:
+      rank: order
+      presets: [lc, dd]
+      groups:
+        Odonata: { name: "Dragonflies and damselflies", adjective: "dragonfly and damselfly" }
+        Lepidoptera: { name: "Butterflies and moths", adjective: "butterfly and moth" }
 
   gastropods:
     name: "Gastropods"
@@ -576,234 +384,29 @@ groups:
     # Pages over about 3,600 entries go over Wikipedia's template expansion limit.
     size_budget:
       max_entries: 3600
-    children: [apiales, asterales, caryophyllales, ericales, fabales, fagales, gentianales, lamiales, laurales, magnoliales, malpighiales, malvales, myrtales, proteales, rosales, sapindales]
-
-  # Orders of dicots with their own threatened and least concern lists: the largest orders, chosen so
-  # the rest of each list fits on the dicotyledons page (under about 3,300 entries). The other 39
-  # orders are listed on that page. Named by the order, so keep_name_case keeps the capital letter.
-  apiales:
-    name: "Apiales"
-    keep_name_case: true
-    adjective: "Apiales"
-    display:
-      listing_style: ScientificNameFocus
-    filters:
-      - rank: kingdom
-        value: Plantae
-      - rank: class
-        value: Magnoliopsida
-      - rank: order
-        value: Apiales
-
-  asterales:
-    name: "Asterales"
-    keep_name_case: true
-    adjective: "Asterales"
-    display:
-      listing_style: ScientificNameFocus
-    filters:
-      - rank: kingdom
-        value: Plantae
-      - rank: class
-        value: Magnoliopsida
-      - rank: order
-        value: Asterales
-
-  caryophyllales:
-    name: "Caryophyllales"
-    keep_name_case: true
-    adjective: "Caryophyllales"
-    display:
-      listing_style: ScientificNameFocus
-    filters:
-      - rank: kingdom
-        value: Plantae
-      - rank: class
-        value: Magnoliopsida
-      - rank: order
-        value: Caryophyllales
-
-  ericales:
-    name: "Ericales"
-    keep_name_case: true
-    adjective: "Ericales"
-    display:
-      listing_style: ScientificNameFocus
-    filters:
-      - rank: kingdom
-        value: Plantae
-      - rank: class
-        value: Magnoliopsida
-      - rank: order
-        value: Ericales
-
-  fabales:
-    name: "Fabales"
-    keep_name_case: true
-    adjective: "Fabales"
-    display:
-      listing_style: ScientificNameFocus
-    filters:
-      - rank: kingdom
-        value: Plantae
-      - rank: class
-        value: Magnoliopsida
-      - rank: order
-        value: Fabales
-
-  fagales:
-    name: "Fagales"
-    keep_name_case: true
-    adjective: "Fagales"
-    display:
-      listing_style: ScientificNameFocus
-    filters:
-      - rank: kingdom
-        value: Plantae
-      - rank: class
-        value: Magnoliopsida
-      - rank: order
-        value: Fagales
-
-  gentianales:
-    name: "Gentianales"
-    keep_name_case: true
-    adjective: "Gentianales"
-    display:
-      listing_style: ScientificNameFocus
-    filters:
-      - rank: kingdom
-        value: Plantae
-      - rank: class
-        value: Magnoliopsida
-      - rank: order
-        value: Gentianales
-
-  lamiales:
-    name: "Lamiales"
-    keep_name_case: true
-    adjective: "Lamiales"
-    display:
-      listing_style: ScientificNameFocus
-    filters:
-      - rank: kingdom
-        value: Plantae
-      - rank: class
-        value: Magnoliopsida
-      - rank: order
-        value: Lamiales
-
-  laurales:
-    name: "Laurales"
-    keep_name_case: true
-    adjective: "Laurales"
-    display:
-      listing_style: ScientificNameFocus
-    filters:
-      - rank: kingdom
-        value: Plantae
-      - rank: class
-        value: Magnoliopsida
-      - rank: order
-        value: Laurales
-
-  magnoliales:
-    name: "Magnoliales"
-    keep_name_case: true
-    adjective: "Magnoliales"
-    display:
-      listing_style: ScientificNameFocus
-    filters:
-      - rank: kingdom
-        value: Plantae
-      - rank: class
-        value: Magnoliopsida
-      - rank: order
-        value: Magnoliales
-
-  malpighiales:
-    name: "Malpighiales"
-    keep_name_case: true
-    adjective: "Malpighiales"
-    display:
-      listing_style: ScientificNameFocus
-    filters:
-      - rank: kingdom
-        value: Plantae
-      - rank: class
-        value: Magnoliopsida
-      - rank: order
-        value: Malpighiales
-
-  malvales:
-    name: "Malvales"
-    keep_name_case: true
-    adjective: "Malvales"
-    display:
-      listing_style: ScientificNameFocus
-    filters:
-      - rank: kingdom
-        value: Plantae
-      - rank: class
-        value: Magnoliopsida
-      - rank: order
-        value: Malvales
-
-  myrtales:
-    name: "Myrtales"
-    keep_name_case: true
-    adjective: "Myrtales"
-    display:
-      listing_style: ScientificNameFocus
-    filters:
-      - rank: kingdom
-        value: Plantae
-      - rank: class
-        value: Magnoliopsida
-      - rank: order
-        value: Myrtales
-
-  proteales:
-    name: "Proteales"
-    keep_name_case: true
-    adjective: "Proteales"
-    display:
-      listing_style: ScientificNameFocus
-    filters:
-      - rank: kingdom
-        value: Plantae
-      - rank: class
-        value: Magnoliopsida
-      - rank: order
-        value: Proteales
-
-  rosales:
-    name: "Rosales"
-    keep_name_case: true
-    adjective: "Rosales"
-    display:
-      listing_style: ScientificNameFocus
-    filters:
-      - rank: kingdom
-        value: Plantae
-      - rank: class
-        value: Magnoliopsida
-      - rank: order
-        value: Rosales
-
-  sapindales:
-    name: "Sapindales"
-    keep_name_case: true
-    adjective: "Sapindales"
-    display:
-      listing_style: ScientificNameFocus
-    filters:
-      - rank: kingdom
-        value: Plantae
-      - rank: class
-        value: Magnoliopsida
-      - rank: order
-        value: Sapindales
+    # The largest orders get their own threatened and least concern lists, so the rest of each
+    # dicotyledons list (the other 39 orders) fits on that page, under about 3,300 entries.
+    sub_groups:
+      rank: order
+      presets: [threatened, lc]
+      keep_name_case: true
+      groups:
+        Apiales: {}
+        Asterales: {}
+        Caryophyllales: {}
+        Ericales: {}
+        Fabales: {}
+        Fagales: {}
+        Gentianales: {}
+        Lamiales: {}
+        Laurales: {}
+        Magnoliales: {}
+        Malpighiales: {}
+        Malvales: {}
+        Myrtales: {}
+        Proteales: {}
+        Rosales: {}
+        Sapindales: {}
 
   liliopsida:
     name: "Monocotyledons"
@@ -818,36 +421,14 @@ groups:
     # Pages over about 3,600 entries go over Wikipedia's template expansion limit.
     size_budget:
       max_entries: 3600
-    children: [asparagales, poales]
-
-  # Orders of monocots with their own threatened and least concern lists.
-  asparagales:
-    name: "Asparagales"
-    keep_name_case: true
-    adjective: "Asparagales"
-    display:
-      listing_style: ScientificNameFocus
-    filters:
-      - rank: kingdom
-        value: Plantae
-      - rank: class
-        value: Liliopsida
-      - rank: order
-        value: Asparagales
-
-  poales:
-    name: "Poales"
-    keep_name_case: true
-    adjective: "Poales"
-    display:
-      listing_style: ScientificNameFocus
-    filters:
-      - rank: kingdom
-        value: Plantae
-      - rank: class
-        value: Liliopsida
-      - rank: order
-        value: Poales
+    # The two largest orders get their own threatened and least concern lists.
+    sub_groups:
+      rank: order
+      presets: [threatened, lc]
+      keep_name_case: true
+      groups:
+        Asparagales: {}
+        Poales: {}
 
   bryopsida:
     name: "Mosses"
