@@ -89,9 +89,17 @@ public class DraftPageBuilderTests {
         Assert.StartsWith("__NOINDEX__\n", index);
         Assert.Contains("[[User:Beastie Bot/Draft 2026/List of critically endangered mammals|List of critically endangered mammals]] || [[List of critically endangered mammals]] || style=\"text-align:right\" | 34", index);
         Assert.Contains("2026-1", index);
-        Assert.Contains("* [[List of least concern dicotyledons]] (2.7 MB)", index);
+        Assert.Contains("* [[List of least concern dicotyledons]]: 2.7 MB", index);
+        Assert.Contains("One draft was not posted", index);
         Assert.True(index.IndexOf("mammals of Australia", StringComparison.Ordinal) > index.IndexOf("critically endangered mammals", StringComparison.Ordinal));
         Assert.DoesNotContain("[[Category:", index);
+    }
+
+    [Fact]
+    public void Talk_page_follows_the_base_title() {
+        Assert.Equal("User talk:Beastie Bot/Draft 2027", DraftPageBuilder.TalkTitle("User:Beastie Bot/Draft 2027"));
+        var draft = DraftPageBuilder.BuildDraft(List, "List of X", "User:Beastie Bot/Draft 2027", new DateTime(2026, 10, 1));
+        Assert.Contains("[[User talk:Beastie Bot/Draft 2027]]", draft);
     }
 
     [Fact]
