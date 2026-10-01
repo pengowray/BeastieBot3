@@ -105,9 +105,7 @@ public static class TaxaGroupingEndpoints {
 
         app.MapPost("/api/grouping/children", async (HttpContext ctx, PathsService paths) => {
             var req = await JsonSerializer.DeserializeAsync<ChildrenRequest>(ctx.Request.Body, JsonOpts).ConfigureAwait(false);
-            var loc = RulesPaths.Resolve(paths);
-            EnsureSeeded(loc);
-            return SaveChildren(req, Path.Combine(loc.DraftRoot, "taxa-groups.yml"));
+            return SaveChildren(req, RulesDrafts.For(RulesPaths.Resolve(paths)));
         });
 
         // Set the per-group tuning knobs in the DRAFT rules: size_budget.max_entries on the group in
@@ -119,23 +117,21 @@ public static class TaxaGroupingEndpoints {
             if (req is null || string.IsNullOrWhiteSpace(req.Group))
                 return Results.BadRequest(new { error = "group is required" });
 
-            var loc = RulesPaths.Resolve(paths);
-            EnsureSeeded(loc);
+            var drafts = RulesDrafts.For(RulesPaths.Resolve(paths));
             var changed = new List<string>();
 
             if (req.SizeBudgetMaxEntries is { } maxEntries) {
                 if (maxEntries < 0)
                     return Results.BadRequest(new { error = "Budget must be a whole number, 0 or more." });
-                var file = Path.Combine(loc.DraftRoot, "taxa-groups.yml");
-                if (!File.Exists(file))
-                    return Results.NotFound(new { error = "draft taxa-groups.yml not found" });
-                var original = File.ReadAllText(file);
+                var original = drafts.ReadText("taxa-groups.yml");
+                if (original is null)
+                    return Results.NotFound(new { error = "taxa-groups.yml not found in rules/" });
                 var budgetHint = $"To set size_budget by hand, open taxa-groups.yml in the Rules editor and edit size_budget in group '{req.Group}'.";
                 if (!TryReplaceGroupKeyFlow(original, req.Group!, "size_budget", $"{{ max_entries: {maxEntries} }}", out var updated, out var err))
                     return Results.BadRequest(new { error = err, hint = budgetHint });
                 if (!GroupBudgetRoundTripOk(updated, req.Group!, maxEntries, out var rtErr))
                     return Results.BadRequest(new { error = rtErr, hint = budgetHint });
-                File.WriteAllText(file, updated);
+                drafts.Write("taxa-groups.yml", updated);
                 changed.Add("taxa-groups.yml");
             }
 
@@ -144,10 +140,9 @@ public static class TaxaGroupingEndpoints {
                 var allowed = new[] { "default", "separate", "combined-threatened", "merged", "all-status" };
                 if (!allowed.Contains(split))
                     return Results.BadRequest(new { error = $"categorySplit must be one of: {string.Join(", ", allowed)}" });
-                var file = Path.Combine(loc.DraftRoot, "wikipedia-lists.yml");
-                if (!File.Exists(file))
-                    return Results.NotFound(new { error = "draft wikipedia-lists.yml not found" });
-                var original = File.ReadAllText(file);
+                var original = drafts.ReadText("wikipedia-lists.yml");
+                if (original is null)
+                    return Results.NotFound(new { error = "wikipedia-lists.yml not found in rules/" });
                 // "default" means remove the override (fall back to the entry's explicit presets).
                 var value = split == "default" ? null : split;
                 // size_budget (above) is already written by now, so a failure here is a partial save.
@@ -156,7 +151,7 @@ public static class TaxaGroupingEndpoints {
                     return Results.BadRequest(new { error = budgetSaved + err, hint = $"To set category_split by hand, open wikipedia-lists.yml in the Rules editor and add or edit the list entry for taxa_group '{req.Group}'." });
                 if (!YamlStillParses(updated, out var rtErr))
                     return Results.BadRequest(new { error = budgetSaved + rtErr, hint = $"To set category_split by hand, open wikipedia-lists.yml in the Rules editor and edit the list entry for taxa_group '{req.Group}'." });
-                File.WriteAllText(file, updated);
+                drafts.Write("wikipedia-lists.yml", updated);
                 changed.Add("wikipedia-lists.yml");
             }
 
@@ -195,12 +190,10 @@ public static class TaxaGroupingEndpoints {
                 return Results.BadRequest(new { error = $"categorySplit must be one of: {string.Join(", ", allowedSplits)}" });
             if (presets.Count == 0 && split == null) split = "merged"; // sensible default → actually generates pages
 
-            var loc = RulesPaths.Resolve(paths);
-            EnsureSeeded(loc);
-            var groupsFile = Path.Combine(loc.DraftRoot, "taxa-groups.yml");
-            var listsFile = Path.Combine(loc.DraftRoot, "wikipedia-lists.yml");
-            if (!File.Exists(groupsFile))
-                return Results.NotFound(new { error = "draft taxa-groups.yml not found" });
+            var drafts = RulesDrafts.For(RulesPaths.Resolve(paths));
+            var groupsOriginal = drafts.ReadText("taxa-groups.yml");
+            if (groupsOriginal is null)
+                return Results.NotFound(new { error = "taxa-groups.yml not found in rules/" });
 
             Dictionary<string, TaxaGroupDefinition> existing;
             try {
@@ -237,7 +230,6 @@ public static class TaxaGroupingEndpoints {
             if (filters.Count == 0)
                 return Results.BadRequest(new { error = "At least one filter is required (a rank+value, or a system tag)." });
 
-            var groupsOriginal = File.ReadAllText(groupsFile);
             var filtersYaml = RenderFiltersYaml(filters, groupsOriginal.Contains("\r\n") ? "\r\n" : "\n");
             var block = BuildGroupBlock(groupsOriginal, key, name, req.Adjective, listingStyle, filtersYaml);
             var addGroupHint = $"To add the group by hand, use the Rules editor: add group '{key}' to taxa-groups.yml, and a list entry for taxa_group '{key}' to wikipedia-lists.yml.";
@@ -245,16 +237,15 @@ public static class TaxaGroupingEndpoints {
                 return Results.BadRequest(new { error = gErr, hint = addGroupHint });
             if (!NewGroupRoundTripOk(groupsUpdated, key, name, filters.Count, existing.Count + 1, out var gRt))
                 return Results.BadRequest(new { error = gRt, hint = addGroupHint });
-            File.WriteAllText(groupsFile, groupsUpdated);
+            drafts.Write("taxa-groups.yml", groupsUpdated);
             var changedFiles = new List<string> { "taxa-groups.yml" };
 
             // Wire a list entry so the new group actually fans out to pages.
-            if (File.Exists(listsFile)) {
-                var listsOriginal = File.ReadAllText(listsFile);
+            if (drafts.ReadText("wikipedia-lists.yml") is { } listsOriginal) {
                 if (!ListEntryExists(listsOriginal, key)
                     && TryAppendTaxaGroupListEntry(listsOriginal, key, split, presets, out var listsUpdated, out _)
                     && ListEntryRoundTripOk(listsUpdated, key, split, presets)) {
-                    File.WriteAllText(listsFile, listsUpdated);
+                    drafts.Write("wikipedia-lists.yml", listsUpdated);
                     changedFiles.Add("wikipedia-lists.yml");
                 }
             }
@@ -290,31 +281,18 @@ public static class TaxaGroupingEndpoints {
     private static Dictionary<string, TaxaGroupDefinition> LoadDraftGroups(PathsService paths, out string path) =>
         LoadDraftGroupsExpanded(paths, out path).Groups;
 
+    // The draft of taxa-groups.yml if there is one, otherwise the rules/ file.
     private static ExpandedTaxaGroups LoadDraftGroupsExpanded(PathsService paths, out string path) {
-        var loc = RulesPaths.Resolve(paths);
-        EnsureSeeded(loc);
-        path = Path.Combine(loc.DraftRoot, "taxa-groups.yml");
-        if (!File.Exists(path)) return TaxaSubGroups.Expand(new());
+        var drafts = RulesDrafts.For(RulesPaths.Resolve(paths));
+        path = drafts.EffectivePath("taxa-groups.yml") ?? "taxa-groups.yml";
+        var text = drafts.ReadText("taxa-groups.yml");
+        if (text is null) return TaxaSubGroups.Expand(new());
         var deserializer = new DeserializerBuilder()
             .IgnoreUnmatchedProperties()
             .WithNamingConvention(UnderscoredNamingConvention.Instance)
             .Build();
-        using var reader = File.OpenText(path);
-        var file = deserializer.Deserialize<TaxaGroupsFile>(reader);
+        var file = deserializer.Deserialize<TaxaGroupsFile>(text);
         return TaxaSubGroups.Expand(file?.Groups ?? new());
-    }
-
-    private static void EnsureSeeded(RulesLocations loc) {
-        if (Directory.Exists(loc.DraftRoot) && Directory.EnumerateFiles(loc.DraftRoot, "*", SearchOption.AllDirectories).Any())
-            return;
-        // Seed via the editor endpoints' logic by copying source files (read-only path here).
-        if (!Directory.Exists(loc.SourceRulesDir)) return;
-        foreach (var src in Directory.EnumerateFiles(loc.SourceRulesDir, "*", SearchOption.AllDirectories)) {
-            var rel = Path.GetRelativePath(loc.SourceRulesDir, src);
-            var dst = Path.Combine(loc.DraftRoot, rel);
-            Directory.CreateDirectory(Path.GetDirectoryName(dst)!);
-            if (!File.Exists(dst)) File.Copy(src, dst);
-        }
     }
 
     private static object DescribeFilter(TaxonFilterDefinition f) => new {
@@ -346,16 +324,16 @@ public static class TaxaGroupingEndpoints {
     private static IResult DraftUnreadable(Exception ex) =>
         Results.Json(new {
             error = "Could not read the draft taxa-groups.yml: " + ex.Message,
-            hint = "To fix it, open taxa-groups.yml in the Rules editor and correct the YAML, or select taxa-groups.yml there and click \"Revert from source\" to replace the draft copy of that file with the one in rules/.",
+            hint = "To fix it, open taxa-groups.yml in the Rules editor and correct the YAML, or select taxa-groups.yml there and click \"Discard draft\" to go back to the version in rules/.",
         }, statusCode: 500);
 
     // ---- children: add/remove sub-groups ----
 
     // POST /api/grouping/children without the HTTP plumbing: checks the request, then adds and removes
-    // sub-groups in `draftFile` (the draft taxa-groups.yml). Only the groups the counts table showed as
+    // sub-groups in taxa-groups.yml, saved as its draft (RulesDrafts). Only the groups the counts table showed as
     // rows are added (ticked) or removed (unticked); every other existing child, e.g. a group with a
     // system filter, is kept.
-    internal static IResult SaveChildren(ChildrenRequest? req, string draftFile) {
+    internal static IResult SaveChildren(ChildrenRequest? req, RulesDrafts drafts) {
         if (req is null || string.IsNullOrWhiteSpace(req.Group))
             return Results.BadRequest(new { error = "group is required" });
         // A page loaded before the request shape changed still posts {group, children}, which binds to
@@ -363,20 +341,19 @@ public static class TaxaGroupingEndpoints {
         // sends both arrays, empty when the table has no tickboxes, and that stays a valid no-op save.
         if (req.Add is null && req.Remove is null)
             return Results.BadRequest(new { error = "The page is out of date.", hint = "Reload the page, then save again." });
-        if (!File.Exists(draftFile))
-            return Results.NotFound(new { error = "draft taxa-groups.yml not found" });
-
-        var original = File.ReadAllText(draftFile);
+        var original = drafts.ReadText("taxa-groups.yml");
+        if (original is null)
+            return Results.NotFound(new { error = "taxa-groups.yml not found in rules/" });
         var childrenHint = $"To set sub-groups by hand, open taxa-groups.yml in the Rules editor and edit the children list of group '{req.Group}'.";
         if (!TryUpdateChildren(original, req.Group!, req.Add ?? Array.Empty<string>(), req.Remove ?? Array.Empty<string>(),
                 out var updated, out var children, out var changed, out var err))
             return Results.BadRequest(new { error = err, hint = childrenHint });
 
-        if (changed) File.WriteAllText(draftFile, updated);
+        if (changed) drafts.Write("taxa-groups.yml", updated);
         // Report every sub-group the lists will use, including the group's sub_groups entries, which
         // the children: line does not hold.
         children = AllChildren(updated, req.Group!) ?? children;
-        var warnings = SubGroupLinkWarnings(req.Group!, children, Path.GetDirectoryName(draftFile) ?? ".");
+        var warnings = SubGroupLinkWarnings(req.Group!, children, drafts);
         return Results.Json(new { group = req.Group, children, changed, file = "taxa-groups.yml", warnings }, JsonOpts);
     }
 
@@ -396,14 +373,17 @@ public static class TaxaGroupingEndpoints {
 
     // After a save, the sub-groups the group's lists cannot link (read from the draft rules beside the
     // draft taxa-groups.yml), so the page can say so instead of generate-lists finding out later.
-    internal static IReadOnlyList<string> SubGroupLinkWarnings(string group, IReadOnlyCollection<string> children, string draftRoot) {
-        var listsFile = Path.Combine(draftRoot, "wikipedia-lists.yml");
-        if (children.Count == 0 || !File.Exists(listsFile)) return Array.Empty<string>();
+    internal static IReadOnlyList<string> SubGroupLinkWarnings(string group, IReadOnlyCollection<string> children, RulesDrafts drafts) {
+        if (children.Count == 0 || drafts.ReadText("wikipedia-lists.yml") is null) return Array.Empty<string>();
+        // The loader reads the whole rules set from one folder: rules/ with the drafts on top.
+        var merged = drafts.MaterializeMerged();
         try {
-            var config = new WikipediaListDefinitionLoader().Load(listsFile);
+            var config = new WikipediaListDefinitionLoader().Load(Path.Combine(merged, "wikipedia-lists.yml"));
             return ChildLinkReport.WarningsForGroup(group, children, config);
         } catch (Exception ex) {
-            return new[] { "Could not read the draft wikipedia-lists.yml, so the links to sub-group lists were not checked: " + ex.Message };
+            return new[] { "Could not read wikipedia-lists.yml, so the links to sub-group lists were not checked: " + ex.Message };
+        } finally {
+            Directory.Delete(merged, recursive: true);
         }
     }
 

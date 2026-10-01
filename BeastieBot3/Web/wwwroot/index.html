@@ -280,17 +280,18 @@
       <div class="view-head"><h2 class="view-title">Rules editor</h2></div>
       <section class="card">
         <p class="muted small">
-          <strong>Save draft</strong> saves your edits to the draft copy of the selected rule file; the Taxa
-          grouping page saves its changes to the same draft. The files in <code>rules/</code> change only when you
-          click <strong>Apply changed files to source</strong>. <strong>Diff draft vs source</strong> shows every
-          change before you apply it.
+          <strong>Save draft</strong> saves your edits to a draft of the selected rule file; the Taxa grouping
+          page saves its changes to drafts too. Only edited files have a draft, marked "(draft)" in the file list;
+          every other file is shown as it is in <code>rules/</code>. The files in <code>rules/</code> change only when
+          you click <strong>Apply changed files to source</strong>, which also deletes the drafts.
+          <strong>Diff draft vs source</strong> shows every change before you apply it.
         </p>
         <p class="muted small" id="rules-locations">Loading locations&hellip;</p>
         <div class="filter-bar">
           <label>File <select id="rules-file"></select></label>
           <button id="rules-reload" class="ghost">Reload</button>
           <button id="rules-save" class="ghost">Save draft</button>
-          <button id="rules-revert" class="ghost">Revert from source</button>
+          <button id="rules-revert" class="ghost">Discard draft</button>
         </div>
         <textarea id="rules-text" spellcheck="false" style="width:100%;min-height:320px;font-family:monospace;white-space:pre;" placeholder="Select a file…"></textarea>
         <p class="muted small" id="rules-msg"></p>

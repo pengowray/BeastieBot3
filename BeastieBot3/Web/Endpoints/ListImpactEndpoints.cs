@@ -45,22 +45,19 @@ public static class ListImpactEndpoints {
         });
     }
 
-    // The group's current category_split from the DRAFT wikipedia-lists.yml (falling back to source),
+    // The group's current category_split from the draft of wikipedia-lists.yml (or the rules/ file),
     // normalised to the selector's option set. "default" when the entry has no category_split (i.e. it
     // uses its explicit presets). Best-effort — returns null on any parse failure.
     private static string? ReadDraftCategorySplit(PathsService paths, string group) {
         try {
-            var loc = RulesPaths.Resolve(paths);
-            var file = Path.Combine(loc.DraftRoot, "wikipedia-lists.yml");
-            if (!File.Exists(file)) file = Path.Combine(paths.BaseDirectory, "rules", "wikipedia-lists.yml");
-            if (!File.Exists(file)) return null;
+            var text = RulesDrafts.For(RulesPaths.Resolve(paths)).ReadText("wikipedia-lists.yml");
+            if (text is null) return null;
 
             var de = new DeserializerBuilder()
                 .IgnoreUnmatchedProperties()
                 .WithNamingConvention(UnderscoredNamingConvention.Instance)
                 .Build();
-            using var reader = File.OpenText(file);
-            var raw = de.Deserialize<WikipediaListConfigRaw>(reader);
+            var raw = de.Deserialize<WikipediaListConfigRaw>(text);
             var entry = raw?.Lists?.FirstOrDefault(l =>
                 string.Equals(l.TaxaGroup, group, StringComparison.OrdinalIgnoreCase));
             if (entry is null) return null;

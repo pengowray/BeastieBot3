@@ -7,7 +7,8 @@ namespace BeastieBot3.Web.Endpoints;
 // Resolves the three rules/ locations the web editor cares about:
 //
 //   SourceRulesDir      - the editable repo copy (what Apply writes back to)
-//   DraftRoot           - a writable working copy the browser edits (outside bin/)
+//   DraftRoot           - drafts of the files edited in the browser and not yet applied (outside
+//                         bin/; see RulesDrafts). Files without a draft are read from SourceRulesDir.
 //   BuildOutputRulesDir - AppContext.BaseDirectory/rules, the copy the default
 //                         `generate-lists` job actually reads (csproj PreserveNewest copy)
 //

@@ -549,8 +549,9 @@
       const warn = loc.isBuildOutputFallback
         ? ' <strong style="color:#b00">⚠ source rules dir not found — Apply is disabled. Set [Dirs] rules_source_dir in paths.ini.</strong>'
         : '';
+      const drafts = loc.draftCount === 1 ? '1 file with unapplied edits' : `${loc.draftCount} files with unapplied edits`;
       $('#rules-locations').innerHTML =
-        `Source: <code>${esc(loc.sourceRulesDir)}</code> &middot; Draft: <code>${esc(loc.draftRoot)}</code>${warn}`;
+        `Source: <code>${esc(loc.sourceRulesDir)}</code> &middot; Drafts: <code>${esc(loc.draftRoot)}</code> (${drafts})${warn}`;
       $('#rules-apply').disabled = !!loc.isBuildOutputFallback;
     } catch (e) {
       $('#rules-locations').textContent = 'Failed to load locations: ' + e.message;
@@ -563,16 +564,18 @@
     try {
       const { entries } = await getJson('/api/rules-draft/list');
       const sel = $('#rules-file');
+      const previous = sel.value;
       sel.innerHTML = '';
       for (const e of entries.filter((x) => x.editable)) {
         const opt = document.createElement('option');
         opt.value = e.path;
-        opt.textContent = e.path;
+        opt.textContent = e.hasDraft ? `${e.path} (draft)` : e.path;
         sel.appendChild(opt);
       }
+      if (previous && entries.some((e) => e.path === previous)) sel.value = previous;
       if (sel.value) await loadFile();
     } catch (e) {
-      $('#rules-msg').textContent = 'Failed to list draft: ' + e.message;
+      $('#rules-msg').textContent = 'Failed to list the rules files: ' + e.message;
     }
   }
 
@@ -583,7 +586,9 @@
       const data = await getJson('/api/rules-draft/read?path=' + encodeURIComponent(path));
       $('#rules-text').value = data.content;
       currentMtime = data.modified;
-      $('#rules-msg').textContent = `Loaded ${path} (${data.size} bytes).`;
+      $('#rules-msg').textContent = data.hasDraft
+        ? `Loaded your draft of ${path} (${data.size} bytes). It has edits that are not in rules/ yet.`
+        : `Loaded ${path} from rules/ (${data.size} bytes).`;
     } catch (e) {
       $('#rules-msg').textContent = 'Failed to read: ' + e.message;
     }
@@ -597,28 +602,57 @@
     });
     if (ok) {
       currentMtime = data.modified;
-      $('#rules-msg').textContent = `Saved draft ${path} (${data.size} bytes).`;
+      $('#rules-msg').textContent = data.hasDraft
+        ? `Saved the draft of ${path} (${data.size} bytes). To copy it to rules/, click "Apply changed files to source".`
+        : `${path} is the same as in rules/, so no draft was kept.`;
+      await refreshDraftMarks();
     } else if (status === 409) {
-      $('#rules-msg').textContent = `Not saved: the draft copy of ${path} changed after you loaded it. Copy your edits, click "Reload", redo only your edits in the reloaded text, then click "Save draft".`;
+      $('#rules-msg').textContent = `Not saved: ${path} changed after you loaded it. Copy your edits, click "Reload", redo only your edits in the reloaded text, then click "Save draft".`;
     } else {
       $('#rules-msg').textContent = 'Save failed: ' + (data.error || status);
     }
   }
 
-  async function revertFile() {
+  async function discardDraft() {
     const path = $('#rules-file').value;
     if (!path) return;
+    if (!confirm(`Discard your draft of ${path}? Its edits are deleted, and the editor shows the version in rules/.`)) return;
     const { ok, data } = await postJson('/api/rules-draft/revert', { path });
-    $('#rules-msg').textContent = ok ? `Reverted ${path} from source.` : 'Revert failed: ' + (data.error || '');
-    if (ok) await loadFile();
+    if (!ok) { $('#rules-msg').textContent = 'Discard failed: ' + (data.error || ''); return; }
+    await loadFile();
+    $('#rules-msg').textContent = data.discarded
+      ? `Discarded the draft of ${path}. Showing the version in rules/.`
+      : `${path} has no draft. Showing the version in rules/.`;
+    await refreshDraftMarks();
   }
+
+  // Re-reads which files have drafts, for the "(draft)" marks in the file list and the count above it.
+  async function refreshDraftMarks() {
+    try {
+      const { entries } = await getJson('/api/rules-draft/list');
+      const drafted = new Set(entries.filter((e) => e.hasDraft).map((e) => e.path));
+      for (const opt of $('#rules-file').options) {
+        opt.textContent = drafted.has(opt.value) ? `${opt.value} (draft)` : opt.value;
+      }
+      await loadLocations();
+    } catch (e) {
+      // The marks are a convenience; the save or discard message above already says what happened.
+    }
+  }
+
+  const DRAFT_STATUS = {
+    'modified': 'edited',
+    'draft-only': 'new file',
+    'source-changed': 'rules/ changed after this draft was started',
+    'unknown-base': 'may be an old copy of rules/',
+  };
 
   async function showDiff() {
     try {
       const data = await getJson('/api/rules/diff');
-      const changed = data.files.filter((f) => f.status !== 'unchanged');
+      const changed = data.files;
       if (changed.length === 0) {
-        $('#rules-diff-out').innerHTML = '<p class="muted small">No differences between draft and source.</p>';
+        $('#rules-diff-out').innerHTML = '<p class="muted small">No drafts. Every file is as it is in rules/.</p>';
         return;
       }
       const blocks = changed.map((f) => {
@@ -626,7 +660,9 @@
           ? '(new file: the whole file will be copied to source)'
           : '(diff not available: git is not installed or returned no output)';
         const diff = f.diff ? `<pre class="terminal">${esc(f.diff)}</pre>` : `<p class="muted small">${noDiff}</p>`;
-        return `<div><strong>${esc(f.path)}</strong> <span class="muted small">[${f.status}]</span>${diff}</div>`;
+        const warn = f.status === 'source-changed' || f.status === 'unknown-base';
+        const label = `<span class="small ${warn ? '' : 'muted'}"${warn ? ' style="color:var(--warn)"' : ''}>[${esc(DRAFT_STATUS[f.status] || f.status)}]</span>`;
+        return `<div><strong>${esc(f.path)}</strong> ${label}${diff}</div>`;
       });
       $('#rules-diff-out').innerHTML = blocks.join('');
     } catch (e) {
@@ -637,16 +673,26 @@
   async function applyToSource() {
     try {
       const data = await getJson('/api/rules/diff');
-      const changed = data.files.filter((f) => f.status === 'modified' || f.status === 'draft-only').map((f) => f.path);
-      if (changed.length === 0) { $('#rules-msg').textContent = 'Nothing to apply.'; return; }
-      if (!confirm(`Apply ${changed.length} changed file(s) to the source rules/ tree?\n\n${changed.join('\n')}`)) return;
-      const res = await postJson('/api/rules/apply', { paths: changed });
+      const changed = data.files.map((f) => f.path);
+      if (changed.length === 0) { $('#rules-msg').textContent = 'Nothing to apply: no file has a draft.'; return; }
+      // A draft whose rules/ file changed after it was started (or that may be an old copy) would undo
+      // that newer change, so it needs its own confirmation.
+      const risky = data.files.filter((f) => f.status === 'source-changed' || f.status === 'unknown-base');
+      if (!confirm(`Copy ${changed.length} draft(s) to rules/ and delete the drafts?\n\n${changed.join('\n')}`)) return;
+      let force = false;
+      if (risky.length > 0) {
+        force = confirm(`These drafts would replace a newer version in rules/. Click "Diff draft vs source" to see what would be lost.\n\n`
+          + risky.map((f) => `${f.path}: ${DRAFT_STATUS[f.status]}`).join('\n')
+          + `\n\nOK applies them anyway. Cancel applies only the other drafts.`);
+      }
+      const res = await postJson('/api/rules/apply', { paths: changed, force });
       if (!res.ok) { $('#rules-msg').textContent = 'Apply failed: ' + (res.data.error || res.status); return; }
       const skipped = res.data.skipped || [];
       const skippedText = skipped.length
         ? ` Skipped ${skipped.length}: ${skipped.map((s) => `${s.path} (${s.reason})`).join('; ')}.`
         : '';
       $('#rules-msg').textContent = `Applied ${res.data.applied.length} file(s) to source.${skippedText} "Run generate-lists (from source)" uses the applied files now; commands started from "Run command" or "Workflows" use them after a rebuild of the project (dotnet build).`;
+      await refreshDraftMarks();
     } catch (e) {
       $('#rules-msg').textContent = 'Apply failed: ' + e.message;
     }
@@ -686,7 +732,7 @@
       $('#rules-file').addEventListener('change', loadFile);
       $('#rules-reload').addEventListener('click', loadFile);
       $('#rules-save').addEventListener('click', saveFile);
-      $('#rules-revert').addEventListener('click', revertFile);
+      $('#rules-revert').addEventListener('click', discardDraft);
       $('#rules-diff').addEventListener('click', showDiff);
       $('#rules-apply').addEventListener('click', applyToSource);
       $('#rules-run').addEventListener('click', runGenerate);

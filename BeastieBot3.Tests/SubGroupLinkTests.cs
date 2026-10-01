@@ -208,7 +208,7 @@ public class SubGroupLinkTests {
         WithRules(dir => {
             var result = TaxaGroupingEndpoints.SaveChildren(
                 new TaxaGroupingEndpoints.ChildrenRequest { Group = "plants", Add = Array.Empty<string>(), Remove = Array.Empty<string>() },
-                Path.Combine(dir, "taxa-groups.yml"));
+                new RulesDrafts(dir, Path.Combine(dir, "..", Path.GetFileName(dir) + "-draft")));
             var body = JsonSerializer.SerializeToElement(((IValueHttpResult)result).Value);
             var warning = Assert.Single(body.GetProperty("warnings").EnumerateArray());
             Assert.StartsWith("No list monocots-lc", warning.GetString());

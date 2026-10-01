@@ -167,18 +167,19 @@ public class ChildrenRewriteTests {
         Assert.Contains("not found", err);
     }
 
-    // ---- SaveChildren (the POST handler, against a draft file on disk) ----
+    // ---- SaveChildren (the POST handler, against a rules folder and its drafts on disk) ----
 
     // A page loaded before the request shape changed posts {group, children}, which binds to
     // Add = Remove = null. That must be refused, not answered with a 200 that saved nothing.
     [Fact]
     public void Save_OldRequestShape_IsRefusedAndDraftUnchanged() {
-        WithDraft(file => {
+        WithDraft((drafts, source) => {
             var result = TaxaGroupingEndpoints.SaveChildren(
-                new TaxaGroupingEndpoints.ChildrenRequest { Group = "mammals" }, file);
+                new TaxaGroupingEndpoints.ChildrenRequest { Group = "mammals" }, drafts);
             Assert.Equal(400, StatusOf(result));
             Assert.Contains("out of date", Body(result).GetProperty("error").GetString());
-            Assert.Equal(GroupsYaml, File.ReadAllText(file));
+            Assert.Equal(GroupsYaml, File.ReadAllText(source));
+            Assert.False(drafts.HasDraft("taxa-groups.yml"));
         });
     }
 
@@ -186,32 +187,36 @@ public class ChildrenRewriteTests {
     // a valid save that changes nothing.
     [Fact]
     public void Save_EmptyAddAndRemove_IsNoOpSave() {
-        WithDraft(file => {
+        WithDraft((drafts, source) => {
             var result = TaxaGroupingEndpoints.SaveChildren(
-                new TaxaGroupingEndpoints.ChildrenRequest { Group = "mammals", Add = Array.Empty<string>(), Remove = Array.Empty<string>() }, file);
+                new TaxaGroupingEndpoints.ChildrenRequest { Group = "mammals", Add = Array.Empty<string>(), Remove = Array.Empty<string>() }, drafts);
             Assert.Equal(200, StatusOf(result) ?? 200);
             Assert.False(Body(result).GetProperty("changed").GetBoolean());
-            Assert.Equal(GroupsYaml, File.ReadAllText(file));
+            Assert.Equal(GroupsYaml, File.ReadAllText(source));
+            Assert.False(drafts.HasDraft("taxa-groups.yml"));
         });
     }
 
     [Fact]
     public void Save_TickedAndUntickedRows_WritesDraft() {
-        WithDraft(file => {
+        WithDraft((drafts, source) => {
             var result = TaxaGroupingEndpoints.SaveChildren(
-                new TaxaGroupingEndpoints.ChildrenRequest { Group = "mammals", Add = new[] { "primates" }, Remove = new[] { "rodents" } }, file);
+                new TaxaGroupingEndpoints.ChildrenRequest { Group = "mammals", Add = new[] { "primates" }, Remove = new[] { "rodents" } }, drafts);
             Assert.Equal(200, StatusOf(result) ?? 200);
             Assert.True(Body(result).GetProperty("changed").GetBoolean());
-            Assert.Contains("    children: [bats, aquatic-mammals, primates]\n", File.ReadAllText(file));
+            Assert.Contains("    children: [bats, aquatic-mammals, primates]\n", drafts.ReadText("taxa-groups.yml"));
+            Assert.Equal(GroupsYaml, File.ReadAllText(source)); // rules/ changes only on Apply
         });
     }
 
-    private static void WithDraft(Action<string> test) {
+    private static void WithDraft(Action<RulesDrafts, string> test) {
         var dir = Directory.CreateTempSubdirectory("bb3-children-");
         try {
-            var file = Path.Combine(dir.FullName, "taxa-groups.yml");
+            var source = Path.Combine(dir.FullName, "rules");
+            Directory.CreateDirectory(source);
+            var file = Path.Combine(source, "taxa-groups.yml");
             File.WriteAllText(file, GroupsYaml);
-            test(file);
+            test(new RulesDrafts(source, Path.Combine(dir.FullName, "rules-draft")), file);
         } finally {
             dir.Delete(recursive: true);
         }
