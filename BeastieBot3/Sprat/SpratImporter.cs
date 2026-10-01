@@ -204,4 +204,27 @@ public sealed class SpratImporter {
             return false;
         }
     }
+
+    /// <summary>
+    /// The file name of the report CSV behind the database's finished import, or null when the
+    /// database is missing, unreadable or has no finished import.
+    /// </summary>
+    public static string? ReadImportedFileName(string databasePath) {
+        if (!File.Exists(databasePath)) {
+            return null;
+        }
+        try {
+            var cs = new SqliteConnectionStringBuilder {
+                DataSource = databasePath,
+                Mode = SqliteOpenMode.ReadOnly,
+            }.ToString();
+            using var connection = new SqliteConnection(cs);
+            connection.Open();
+            using var cmd = connection.CreateCommand();
+            cmd.CommandText = "SELECT filename FROM import_metadata WHERE ended_at IS NOT NULL ORDER BY id DESC LIMIT 1";
+            return cmd.ExecuteScalar() as string;
+        } catch {
+            return null;
+        }
+    }
 }

@@ -6,7 +6,8 @@ using Spectre.Console;
 using Spectre.Console.Cli;
 using BeastieBot3.Configuration;
 
-// CLI entry point for the SPRAT import. Reads the single EPBC report CSV configured in paths.ini
+// CLI entry point for the SPRAT import. Reads the single EPBC report CSV (fetched by `sprat download`
+// or by hand) configured in paths.ini
 // ([Datasets] SPRAT_csv) and writes a self-contained sprat.sqlite ([Datastore] SPRAT_sqlite),
 // rebuilding from scratch (a complete existing DB is skipped unless --force). Delegates the CSV
 // load to SpratImporter. Registers automatically via [CommandInfo]; no Program.cs wiring.

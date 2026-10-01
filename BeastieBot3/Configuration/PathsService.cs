@@ -24,6 +24,8 @@ namespace BeastieBot3.Configuration;
         public IReadOnlyDictionary<string, string> GetAll() => _reader.GetAll();
 
         // Specific strongly-typed helpers
+        public string? GetDatasetsDir() => _reader.Get("Datasets:datasets_dir");
+
         public string? GetColDir() => _reader.Get("Datasets:COL_dir");
 
         public string? GetIucnCvsDir() => _reader.Get("Datasets:IUCN_CVS_dir");
