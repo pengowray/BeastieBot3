@@ -112,4 +112,17 @@ public class SpratReportDownloadTests {
             Directory.Delete(dir, recursive: true);
         }
     }
+
+    [Fact]
+    public void WriteLineUnwrapped_KeepsALongPathOnOneLine() {
+        var writer = new StringWriter();
+        var console = Spectre.Console.AnsiConsole.Create(new Spectre.Console.AnsiConsoleSettings {
+            Ansi = Spectre.Console.AnsiSupport.No,
+            Out = new Spectre.Console.AnsiConsoleOutput(writer),
+        });
+        console.Profile.Width = 40;
+        var line = "SPRAT_csv=/a/very/long/folder/name/that/goes/past/forty/columns/01102026-014425-report.csv";
+        BeastieBot3.Infrastructure.ConsoleSize.WriteLineUnwrapped(console, line);
+        Assert.Equal(line + Environment.NewLine, writer.ToString());
+    }
 }

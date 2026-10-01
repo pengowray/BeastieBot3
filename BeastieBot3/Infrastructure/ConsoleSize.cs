@@ -16,4 +16,11 @@ internal static class ConsoleSize {
         if (console.Profile.Height <= 0) console.Profile.Height = DefaultHeight;
         return console;
     }
+
+    // Writes a line the reader will copy (a paths.ini line, a file path) straight to the
+    // console's writer, so Spectre does not break it at the console width. Without a terminal
+    // (web jobs, pipes) that width is the 80-column default above, which split long paths.
+    public static void WriteLineUnwrapped(IAnsiConsole console, string line) {
+        console.Profile.Out.Writer.WriteLine(line);
+    }
 }

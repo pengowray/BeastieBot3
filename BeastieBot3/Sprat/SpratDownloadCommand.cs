@@ -8,6 +8,7 @@ using System.Threading.Tasks;
 using Spectre.Console;
 using Spectre.Console.Cli;
 using BeastieBot3.Configuration;
+using BeastieBot3.Infrastructure;
 
 // Downloads the SPRAT "Select ALL" report CSV the way a browser does: GET the report page (which
 // sets the session cookie and names the form's submit URL), then POST the form with report type
@@ -171,7 +172,7 @@ public sealed class SpratDownloadCommand : AsyncCommand<SpratDownloadCommand.Set
         var fileName = Path.GetFileName(report);
         if (!string.Equals(configuredCsv, report, StringComparison.Ordinal)) {
             AnsiConsole.MarkupLine("Next: in paths.ini, replace the SPRAT_csv line with:");
-            AnsiConsole.WriteLine($"SPRAT_csv={report}");
+            ConsoleSize.WriteLineUnwrapped(AnsiConsole.Console, $"SPRAT_csv={report}");
             AnsiConsole.MarkupLine("Then run sprat import --force.");
             return;
         }
