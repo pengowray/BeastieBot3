@@ -67,7 +67,7 @@ internal sealed class IntroProseBuilder {
             subpopulationParagraph = isExtinct ? null : BuildSubpopulationParagraph(subpopCount, taxaNameLower, statusText);
             threatenedContext = BuildThreatenedContext(definition, taxaAdj, taxaNameLower);
             ddInfo = BuildDataDeficientInfo(definition, taxaAdj);
-            notesParagraph = BuildNotesParagraph(speciesCount, subspeciesCount, varietyCount, subpopCount, taxaAdj, statusText);
+            notesParagraph = BuildNotesParagraph(speciesCount, subspeciesCount, varietyCount, subpopCount, taxaAdj, statusText, isParent: definition.SubLists.Count > 0);
         }
 
         // CR-specific: possibly extinct counts
@@ -191,7 +191,7 @@ internal sealed class IntroProseBuilder {
             + "<ref>{{cite web|title=2001 Categories & Criteria (version 3.1)|url=http://www.iucnredlist.org/static/categories_criteria_3_1|website=The IUCN Red List of Threatened Species|publisher=International Union for Conservation of Nature and Natural Resources (IUCN)|access-date=11 January 2016}}</ref>";
     }
 
-    private static string BuildNotesParagraph(int speciesCount, int subspeciesCount, int varietyCount, int subpopCount, string? taxaAdj, string? statusText) {
+    internal static string BuildNotesParagraph(int speciesCount, int subspeciesCount, int varietyCount, int subpopCount, string? taxaAdj, string? statusText, bool isParent = false) {
         var whats = "species";
         if (subspeciesCount > 0 && varietyCount > 0)
             whats = "species, subspecies and varieties";
@@ -199,7 +199,11 @@ internal sealed class IntroProseBuilder {
             whats = "species and subspecies";
 
         var statusPhrase = !string.IsNullOrEmpty(statusText) ? $"{statusText} " : "";
-        var note = $"This is a complete list of {statusPhrase}{taxaAdj} {whats} as evaluated by the IUCN.";
+        // A parent page lists only the groups without a list of their own; for each group that has
+        // one, its section gives the species count and a {{main}} link (BuildParentSectionBody).
+        var note = isParent
+            ? $"This is a list of {statusPhrase}{taxaAdj} {whats} as evaluated by the IUCN. For each group that has its own list article, this list gives only the number of species in that group and a link to that article."
+            : $"This is a complete list of {statusPhrase}{taxaAdj} {whats} as evaluated by the IUCN.";
 
         if (statusText == "critically endangered")
             note += " Species considered possibly extinct by the IUCN are marked as such.";
