@@ -187,6 +187,10 @@ Shorthand: `{ id: birds-cr, taxa_group: birds, preset: cr }`. Loader in `Wikiped
 
 Templates in `rules/wikipedia/templates/` use custom delimiters `<? ?>`. Inverted sections (`<?^ var ?>`) don't work with custom delimiters — use a separate boolean guard variable instead. Use `null` for falsy values (empty strings may be truthy in Stubble).
 
+### Posting drafts to Wikipedia
+
+`wikipedia post-drafts` posts every generated list (IUCN and `australia/`) to `User:Beastie Bot/Draft 2026/<article title>` (`--base`) plus an index at the base title. Which files are posted comes from the list definitions (`wikipedia-lists.yml`, `SpratListGroups`), never a folder listing. `DraftPageBuilder` (pure, pinned by `DraftPageBuilderTests`) moves `[[Category:]]` links into `{{Draft categories}}` (user pages must not be in article categories) and adds `__NOINDEX__` and a banner dated from the file's mtime, so reposting an unchanged file gives identical text and the sha1 comparison against the live revision skips it. Lists over 2048 KiB are not posted and are named on the index. Without `--apply` it only reads Wikipedia. `--apply` logs in with a bot password from `WIKIPEDIA_BOT_USERNAME` / `WIKIPEDIA_BOT_PASSWORD` (shell env or `.env`); saves use `assert=user`, `maxlag=5`, `watchlist=nochange` and a 10 s delay.
+
 ## Wikipedia Chart Generation
 
 The `wikipedia generate-charts` command produces IUCN Red List bar chart files for the MediaWiki Extension:Chart format. For each chart group defined in `chart-groups.yml`, it generates:

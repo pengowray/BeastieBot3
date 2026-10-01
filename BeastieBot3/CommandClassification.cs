@@ -70,6 +70,7 @@ public enum RerunEffect {
                     // downloads nothing and deletes no downloaded data
     ClearsCache,    // deletes downloaded data from a cache; the next download run fetches it again
     Imports,        // imports downloaded files into a database; a re-run skips what is imported, --force imports it again
+    Publishes,      // saves pages on Wikipedia with the configured account; changes no local data
 }
 
 // Describes a CLI branch (intermediate node in the path tree). One per

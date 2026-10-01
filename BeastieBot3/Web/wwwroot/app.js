@@ -746,6 +746,7 @@
     plansdownloads: { label: 'changes later downloads', cls: 'queue', icon: '📋', hint: 'Changes which records the IUCN API or Wikipedia download commands fetch on later runs. Downloads nothing, and deletes no downloaded data.' },
     clearscache:    { label: 'clears cache', cls: 'fresh', icon: '🧹', hint: 'Deletes downloaded data from the cache.' },
     imports:        { label: 're-import needs --force', cls: 'fresh', icon: '🗄', hint: 'Imports downloaded files into a database. Running the command again skips files already imported. With --force, the command deletes the imported data and imports the files again.' },
+    publishes:      { label: 'edits Wikipedia', cls: 'fresh', icon: '✎', hint: 'Saves pages on English Wikipedia, logged in with the bot password in WIKIPEDIA_BOT_USERNAME and WIKIPEDIA_BOT_PASSWORD. Changes none of the downloaded or imported data.' },
   };
   function effectInfo(cmd) { return EFFECTS[cmd.rerun] || null; }
 

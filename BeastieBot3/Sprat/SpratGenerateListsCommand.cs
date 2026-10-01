@@ -165,7 +165,7 @@ public sealed class SpratGenerateListsCommand : Command<SpratGenerateListsComman
         return !string.IsNullOrWhiteSpace(path) && File.Exists(path) ? WikipediaCacheStore.Open(path) : null;
     }
 
-    private static string ResolveOutputDir(PathsService paths, string? overridePath) {
+    internal static string ResolveOutputDir(PathsService paths, string? overridePath) {
         if (!string.IsNullOrWhiteSpace(overridePath)) {
             return Path.GetFullPath(overridePath);
         }

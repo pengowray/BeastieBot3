@@ -535,7 +535,7 @@ public sealed class WikipediaListCommand : Command<WikipediaListCommand.Settings
         AnsiConsole.Write(table);
     }
 
-    private static string ResolveConfigPath(PathsService paths, string? overridePath) {
+    internal static string ResolveConfigPath(PathsService paths, string? overridePath) {
         if (!string.IsNullOrWhiteSpace(overridePath)) {
             return Path.GetFullPath(overridePath);
         }
@@ -566,7 +566,7 @@ public sealed class WikipediaListCommand : Command<WikipediaListCommand.Settings
         return File.Exists(taxonRulesPath) ? taxonRulesPath : null;
     }
 
-    private static string ResolveOutputDir(PathsService paths, string? overridePath) {
+    internal static string ResolveOutputDir(PathsService paths, string? overridePath) {
         if (!string.IsNullOrWhiteSpace(overridePath)) {
             return Path.GetFullPath(overridePath);
         }
