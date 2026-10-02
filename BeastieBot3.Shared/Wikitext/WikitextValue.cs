@@ -8,29 +8,25 @@ namespace BeastieBot3.Shared.Wikitext;
 // can never contain a pipe or a brace.
 
 internal static partial class WikitextValue {
-    /// One line, single spaces, no HTML tags, no "|" (written as &#124;) and no braces that could open
-    /// or close a template ("{{" and "}}" are removed, a lone brace is written as an entity).
+    /// One line, single spaces, no HTML tags, no "|" (written as &#124;) and no braces.
     public static string Clean(string? value) {
         if (string.IsNullOrEmpty(value)) {
             return string.Empty;
         }
         var text = HtmlTag().Replace(value, string.Empty);
-        text = CollapseWhitespace(text);
 
-        // Removing one pair can join two others ("{{{{" or "{{{"), so repeat until none is left.
-        string previous;
-        do {
-            previous = text;
-            text = text.Replace("{{", string.Empty, StringComparison.Ordinal)
-                       .Replace("}}", string.Empty, StringComparison.Ordinal);
-        } while (text.Length != previous.Length);
-
-        // A lone brace is harmless on its own, but one at the end of the last value would join the
-        // template's closing "}}".
-        text = text.Replace("{", "&#123;", StringComparison.Ordinal)
-                   .Replace("}", "&#125;", StringComparison.Ordinal)
-                   .Replace("|", "&#124;", StringComparison.Ordinal);
-        return CollapseWhitespace(text);
+        // Every brace is removed, not only "{{" and "}}": removing one pair can join two others
+        // ("{{{{"), and a lone brace at the end of the last value would join the template's closing
+        // "}}". No IUCN name or author contains a brace. An entity such as &#125; would be safe too,
+        // but its digits and semicolon make CS1 report an author name as numeric or as several names.
+        var sb = new StringBuilder(text.Length);
+        foreach (var c in text) {
+            if (c is '{' or '}') {
+                continue;
+            }
+            sb.Append(c == '|' ? "&#124;" : c.ToString());
+        }
+        return CollapseWhitespace(sb.ToString());
     }
 
     /// Every run of whitespace (newlines, tabs, no-break spaces) becomes one space; trimmed.

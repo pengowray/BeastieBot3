@@ -259,14 +259,14 @@ public class CiteIucnRendererTests {
     [Fact]
     public void Values_CannotBreakTheTemplate() {
         var parts = HouseSparrow with {
-            Authors = [Verbatim("Smith,\n  J. | Jones}"), Verbatim("{{subst:foo}} Brown"), Verbatim("Grey , A.{")],
+            Authors = [Verbatim("Smith,\n  J. | Jones}"), Verbatim("{{subst:foo}} Brown"), Verbatim("Grey , A.{"), Verbatim("{{{{x}}}}")],
             RegionalScope = "Gulf {{of}} Mexico}",
             Doi = null,
         };
         var output = CiteIucnRenderer.Render(parts);
         Assert.Equal(
-            "{{cite iucn |author=Smith, J. &#124; Jones&#125; |author2=subst:foo Brown |author3=Grey , A.&#123; |year=2019 |amends=2018 " +
-            "|title=''Passer domesticus'' (Gulf of Mexico&#125; assessment) |volume=2019 |article-number=e.T103818789A155522130}}",
+            "{{cite iucn |author=Smith, J. &#124; Jones |author2=subst:foo Brown |author3=Grey , A. |author4=x |year=2019 |amends=2018 " +
+            "|title=''Passer domesticus'' (Gulf of Mexico assessment) |volume=2019 |article-number=e.T103818789A155522130}}",
             output);
         Assert.DoesNotContain("\n", output);
         // The only braces left are the template's own.
