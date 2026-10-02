@@ -382,9 +382,15 @@ VALUES (@import_id, @label, @key, @title, @alias, @description, @issued, @versio
         using var stream = entry.Open();
         using var reader = new StreamReader(stream, Encoding.UTF8, true);
 
+        // ColDP TSV files have no quoting: one line is one row, and a double quote is an ordinary
+        // character. With CsvHelper's default RFC 4180 mode, a value starting with `"` (such as a
+        // NameUsage remarks field) read on through the following rows up to the next quote, and
+        // those rows were never inserted (6,560 NameUsage rows on COL26.7 XR); a value wrapped in
+        // quotes lost them. NoEscape mode never calls BadDataFound, so rows are checked against
+        // the header's field count below instead.
         var config = new CsvConfiguration(CultureInfo.InvariantCulture) {
             Delimiter = "\t",
-            BadDataFound = null,
+            Mode = CsvMode.NoEscape,
             MissingFieldFound = null,
             TrimOptions = TrimOptions.None,
             DetectColumnCountChanges = false
@@ -414,15 +420,38 @@ VALUES (@import_id, @label, @key, @title, @alias, @description, @issued, @versio
             connection, tableName, columns,
             indexImportIdColumn: false, requireImportIdOnExisting: false);
 
+        // A row with fewer fields than the header gets NULL for the missing columns, and one with
+        // more loses the extra fields; either way its values may sit in the wrong columns.
+        long mismatchedRows = 0;
+        var mismatchedLines = new List<long>();
+        bool ReadRow() {
+            if (!csv.Read()) {
+                return false;
+            }
+            if (csv.Parser.Count != headers.Count) {
+                mismatchedRows++;
+                if (mismatchedLines.Count < 5) {
+                    mismatchedLines.Add(csv.Parser.RawRow);
+                }
+            }
+            return true;
+        }
+
         using var transaction = connection.BeginTransaction();
         var (inserted, _) = DelimitedTableImporter.BulkInsert(
             connection, transaction, tableName, columns, importId,
-            () => csv.Read(), i => csv.GetField(i),
+            ReadRow, i => csv.GetField(i),
             insertOrIgnore: false, prepare: true, cancellationToken);
         transaction.Commit();
 
         RegisterTableColumns(tableName, existingColumns);
         _console.MarkupLine($"    {tableName}: inserted {inserted:N0} rows (columns: {existingColumns.Count}).");
+        if (mismatchedRows > 0) {
+            _console.MarkupLine(
+                $"[yellow]    {tableName}: {mismatchedRows:N0} rows have a different number of fields from the header ({headers.Count}); " +
+                $"values in those rows may be in the wrong columns. First line numbers in {Markup.Escape(entry.FullName)}: " +
+                $"{string.Join(", ", mismatchedLines)}.[/]");
+        }
     }
 
     private static List<ColumnInfo> BuildColumnInfos(IReadOnlyList<string> headers) {
