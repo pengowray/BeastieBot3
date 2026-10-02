@@ -1,0 +1,70 @@
+# systemd unit for the BeastieBot3 public site.
+# setup-server.sh installs this file as /etc/systemd/system/beastie-site.service. Edit it here and
+# run setup-server.sh again, which restarts the service when the file has changed.
+#
+# /srv/beastie/app is a symbolic link to the current release in /srv/beastie/releases. deploy-app.sh
+# points it at a new release and restarts the service; deploy-db.sh replaces
+# /srv/beastie/data/site.sqlite and restarts the service.
+# Port 5080 also appears in Caddyfile.template and server-tasks.sh.
+
+[Unit]
+Description=BeastieBot3 public species site
+After=network.target
+
+[Service]
+Type=exec
+User=beastie
+Group=beastie
+WorkingDirectory=/srv/beastie/app
+ExecStart=/srv/beastie/app/BeastieBot3.Site
+Environment=ASPNETCORE_URLS=http://127.0.0.1:5080
+Environment=ASPNETCORE_ENVIRONMENT=Production
+Environment=Site__DatabasePath=/srv/beastie/data/site.sqlite
+# Workstation garbage collection uses less memory than server GC on a small VM.
+Environment=DOTNET_gcServer=0
+# ASP.NET Core keeps its data protection keys under $HOME/.aspnet. HOME is the state directory,
+# the only folder the service can write to.
+Environment=HOME=/var/lib/beastie-site
+StateDirectory=beastie-site
+StateDirectoryMode=0700
+Restart=always
+RestartSec=5
+TimeoutStopSec=30
+SyslogIdentifier=beastie-site
+
+# Hardening. The service can read the app and the database, and can write only to
+# /var/lib/beastie-site and its own private /tmp.
+NoNewPrivileges=yes
+ProtectSystem=strict
+ReadOnlyPaths=/srv/beastie
+InaccessiblePaths=-/srv/beastie/incoming
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+ProtectProc=invisible
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+RemoveIPC=yes
+SystemCallArchitectures=native
+CapabilityBoundingSet=
+AmbientCapabilities=
+UMask=0077
+# .NET reads network interface details over netlink.
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
+# The site only answers Caddy on 127.0.0.1 and makes no outbound connections. Remove these two
+# lines if a later version of the site needs to call other servers.
+IPAddressDeny=any
+IPAddressAllow=localhost
+# Not set: MemoryDenyWriteExecute, because the .NET JIT compiler needs memory that is both
+# writable and executable.
+
+[Install]
+WantedBy=multi-user.target
