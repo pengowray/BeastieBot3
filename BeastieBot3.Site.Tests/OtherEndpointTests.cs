@@ -141,6 +141,21 @@ public sealed class OtherEndpointTests(SiteFactory factory) : IClassFixture<Site
     }
 
     [Fact]
+    public async Task SecurityHeadersOnACachedTaxonPage() {
+        // The second request is answered by the output cache.
+        const string url = "/species/22823?authors=lastfirst&q=cache-test";
+        var first = await _client.GetAsync(url);
+        var second = await _client.GetAsync(url);
+        Assert.Equal(HttpStatusCode.OK, second.StatusCode);
+        Assert.Null(first.Headers.Age);
+        Assert.NotNull(second.Headers.Age);
+        Assert.Equal(await first.Content.ReadAsStringAsync(), await second.Content.ReadAsStringAsync());
+        Assert.Contains("default-src 'self'", string.Join(";", second.Headers.GetValues("Content-Security-Policy")));
+        Assert.Equal("nosniff", second.Headers.GetValues("X-Content-Type-Options").Single());
+        Assert.False(second.Headers.Contains("Set-Cookie"));
+    }
+
+    [Fact]
     public async Task PagesHaveNoInlineScriptsOrStyles() {
         foreach (var url in new[] { "/", "/species/22823", "/search?q=Fillerus", "/about", "/no/such/page" }) {
             var html = await (await _client.GetAsync(url)).Content.ReadAsStringAsync();
