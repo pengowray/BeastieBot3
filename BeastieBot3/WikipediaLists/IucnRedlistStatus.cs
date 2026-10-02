@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using System.Text;
+using BeastieBot3.Shared.Wikitext;
 
 // Maps IUCN Red List category codes to display names and sort order.
 // Categories: EX (Extinct), EW, CR, CR(PE), CR(PEW), EN, VU, NT, LC, DD, NE.
@@ -118,52 +119,23 @@ internal static class IucnRedlistStatus {
     /// Builds the full <c>{{IUCN status|CODE|taxonId/assessmentId|1|year=YYYY}}</c> template, mapping the
     /// base code + PE/PEW flags to the Wikipedia template code (CR → CR(PE)/CR(PEW)) and omitting the year
     /// for extinct categories. Shared by the IUCN lists and the SPRAT Australia lists so both emit a
-    /// byte-identical badge.
+    /// byte-identical badge. The template itself is built by <see cref="IucnStatusTemplate"/> in
+    /// BeastieBot3.Shared, which the public site uses too; the flags here are the CSV's "true"/"false" text.
     /// </summary>
     public static string BuildStatusTemplate(string baseCode, string? possiblyExtinct, string? possiblyExtinctInTheWild,
-        long taxonId, long assessmentId, string? yearPublished, bool yearAsBareLabel = false) {
-        var statusCode = ToWikipediaTemplateCode(baseCode, possiblyExtinct, possiblyExtinctInTheWild);
-        var sb = new StringBuilder();
-        sb.Append("{{IUCN status|").Append(statusCode).Append('|')
-          .Append(taxonId).Append('/').Append(assessmentId).Append("|1"); // 1 = make link visible
-        if (!IsExtinctTemplateCode(statusCode) && !string.IsNullOrWhiteSpace(yearPublished)) {
-            // year= renders the link as "IUCN <year>"; label= renders just "<year>". The bare-label form
-            // is used where the surrounding text already says "IUCN:" (the SPRAT Australia lists), so the
-            // "IUCN" prefix would be redundant; the standalone IUCN lists keep "IUCN <year>".
-            sb.Append(yearAsBareLabel ? "|label=" : "|year=").Append(yearPublished);
-        }
-        sb.Append("}}");
-        return sb.ToString();
-    }
+        long taxonId, long assessmentId, string? yearPublished, bool yearAsBareLabel = false) =>
+        IucnStatusTemplate.Render(baseCode, IsFlagTrue(possiblyExtinct), IsFlagTrue(possiblyExtinctInTheWild),
+            taxonId, assessmentId, yearPublished, yearAsBareLabel);
 
     /// <summary>
     /// Maps an IUCN status code to its Wikipedia {{IUCN status}} template code. Uses the PE/PEW database
     /// flags for CR species to produce CR(PE)/CR(PEW), and maps legacy LR/* codes (LR/cd stays LR/cd).
     /// </summary>
-    public static string ToWikipediaTemplateCode(string code, string? possiblyExtinct, string? possiblyExtinctInTheWild) {
-        var normalized = code.ToUpperInvariant();
+    public static string ToWikipediaTemplateCode(string code, string? possiblyExtinct, string? possiblyExtinctInTheWild) =>
+        IucnStatusTemplate.ToTemplateCode(code, IsFlagTrue(possiblyExtinct), IsFlagTrue(possiblyExtinctInTheWild));
 
-        if (normalized == "CR" || normalized == "CRITICALLY ENDANGERED") {
-            if (string.Equals(possiblyExtinct, "true", StringComparison.OrdinalIgnoreCase)) {
-                return "CR(PE)";
-            }
-            if (string.Equals(possiblyExtinctInTheWild, "true", StringComparison.OrdinalIgnoreCase)) {
-                return "CR(PEW)";
-            }
-            return "CR";
-        }
-
-        return normalized switch {
-            "CR(PE)" or "PE" => "CR(PE)",
-            "CR(PEW)" or "PEW" => "CR(PEW)",
-            "LR/CD" or "CD" => "LR/cd",
-            "LR/NT" => "LR/nt",
-            "LR/LC" => "LR/lc",
-            _ => normalized
-        };
-    }
-
-    private static bool IsExtinctTemplateCode(string code) => code.ToUpperInvariant() is "EX" or "EW";
+    // Exactly "true" in any case, untrimmed: the comparison these methods always made.
+    private static bool IsFlagTrue(string? flag) => string.Equals(flag, "true", StringComparison.OrdinalIgnoreCase);
 }
 
 internal sealed record RedlistStatusDescriptor(

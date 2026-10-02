@@ -33,19 +33,6 @@ public static class CiteIucnRenderer {
         throw new NotImplementedException();
 }
 
-public static class IucnStatusTemplate {
-    /// The {{IUCN status}} code for an IUCN category: CR with the possibly extinct flags becomes
-    /// CR(PE) or CR(PEW); LR/cd, LR/nt and LR/lc keep IUCN's case.
-    public static string ToTemplateCode(string category, bool possiblyExtinct, bool possiblyExtinctInTheWild) =>
-        throw new NotImplementedException();
-
-    /// {{IUCN status|CODE|taxonId/assessmentId|1|year=YYYY}}; no year for EX and EW. With
-    /// yearAsBareLabel the year goes in |label= instead of |year=.
-    public static string Render(string category, bool possiblyExtinct, bool possiblyExtinctInTheWild,
-        long taxonId, long assessmentId, string? yearPublished, bool yearAsBareLabel = false) =>
-        throw new NotImplementedException();
-}
-
 public static class SpeciesboxStatus {
     /// The status lines of a {{Speciesbox}} or {{Taxobox}}:
     /// "| status = EN\n| status_system = IUCN3.1\n| status_ref = <ref>...</ref>".
