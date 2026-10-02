@@ -280,6 +280,11 @@ public class IucnAssessmentCitationParserTests {
     [InlineData("Kaewmuan, A., Tran, V.T., Lowry II, P.P. & Middleton, D.", "Kaewmuan, A.|Tran, V.T.|Lowry II, P.P.|Middleton, D.")]
     [InlineData("Evangelista, V., Malabrigo Jr., P.L. & Umali, A.", "Evangelista, V.|Malabrigo Jr., P.L.|Umali, A.")]
     [InlineData("Agoo, E.M.G., Cootes, J., Golamco, A., Jr., de Vogel, E.F. & Tiu, D.", "Agoo, E.M.G.|Cootes, J.|Golamco, A., Jr.|de Vogel, E.F.|Tiu, D.")]
+    // The suffix between surname and initials (aid 3121523).
+    [InlineData("Driggers, III, W.B. & Carlson, J.", "Driggers, III, W.B.|Carlson, J.")]
+    // Spanish "los" and "las" are particles, so this six-word surname still pairs.
+    [InlineData("Vacas, O., Baldeón, S., de los Ángeles La Torre Cuadros, M. & Reynel, C.",
+        "Vacas, O.|Baldeón, S.|de los Ángeles La Torre Cuadros, M.|Reynel, C.")]
     [InlineData("Fernandez, E., Negrão, R., Guimarães, A. & Neto, L.N.", "Fernandez, E.|Negrão, R.|Guimarães, A.|Neto, L.N.")]
     // Initials without dots, hyphenated, or with a particle inside.
     [InlineData("Ahissa, L, Decher, J. & Gazzard, A.", "Ahissa, L|Decher, J.|Gazzard, A.")]

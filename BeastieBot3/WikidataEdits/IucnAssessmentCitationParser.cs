@@ -265,7 +265,7 @@ internal static class IucnAssessmentCitationParser {
 
     // Lower-case only: capitalised "Das", "Do", "Van" are surnames in their own right.
     private static readonly HashSet<string> Particles = new(StringComparer.Ordinal) {
-        "de", "da", "das", "do", "dos", "du", "van", "von", "der", "den", "la", "le", "di", "del", "della",
+        "de", "da", "das", "do", "dos", "du", "van", "von", "der", "den", "la", "las", "le", "los", "di", "del", "della",
         "bin", "binti", "al", "el", "y", "e", "ter", "ten",
     };
 
@@ -364,6 +364,13 @@ internal static class IucnAssessmentCitationParser {
             }
 
             if (next is not null && LooksLikeSurname(token)) {
+                // "Driggers, III, W.B.": the suffix written between surname and initials.
+                if (NameSuffix.IsMatch(next) && i + 2 < tokens.Count && IsInitials(StripNotes(tokens[i + 2]))) {
+                    names.Add($"{token}, {next}, {StripNotes(tokens[i + 2])}");
+                    anyPaired = lastWasPair = true;
+                    i += 3;
+                    continue;
+                }
                 if (IsInitials(next)) {
                     names.Add($"{token}, {next}");
                     anyPaired = lastWasPair = true;
