@@ -7,8 +7,13 @@ for HTTPS.
 ShellCheck 0.10.0, and the whole cycle ran in an Ubuntu 24.04 container (podman, systemd as PID 1,
 x86_64, with the INPUT rules from Oracle's tutorial): server setup (run three times), database deploys,
 automatic database rollback, manual rollbacks, app deploys with the real BeastieBot3.Site build
-running under the hardened systemd unit, release pruning, and HTTPS through Caddy. See
-[What was not tested](#what-was-not-tested) before the first real deploy.
+running under the hardened systemd unit, release pruning, and HTTPS through Caddy. A second run on
+2026-10-03, with schema version 2 databases and the site's real `/healthz`, also covered: ACCEPT
+rules for ports 80 and 443 added by hand after the REJECT rule (moved), the switch of Caddy's admin
+API from `localhost:2019` to its socket on a server set up by the earlier scripts, `systemctl reload
+caddy` afterwards, uploads through `.upload-` folders (an hour-old one deleted, a recent one kept),
+a rollback that skips a folder without the app, and pruning that keeps the release that was live
+before a deploy. See [What was not tested](#what-was-not-tested) before the first real deploy.
 
 ## What you get
 
@@ -25,8 +30,8 @@ running under the hardened systemd unit, release pruning, and HTTPS through Cadd
 
   | Script | What it does |
   |---|---|
-  | `setup-server.sh` | Prepares the VM. Run once, and again after changing `deploy.env`, `Caddyfile.template` or `beastie-site.service`. |
-  | `deploy-app.sh` | Builds the site, uploads it as a new release, switches to it and checks `/healthz`. `--rollback` switches back to the previous release. |
+  | `setup-server.sh` | Prepares the VM. Run once, and again after changing `deploy.env`, `Caddyfile.template`, `caddy-admin-socket.conf` or `beastie-site.service`. |
+  | `deploy-app.sh` | Builds the site, uploads it as a new release, switches to it and checks `/healthz`. `--rollback` switches back to the release built before the current one. |
   | `deploy-db.sh` | Uploads a new `site.sqlite`, switches to it and checks `/healthz`. Puts the old database back when the check fails. |
   | `rollback-db.sh` | Swaps the live database with the previous one. |
   | `status.sh` | Shows the release, service state, health check, databases and free disk space. |
@@ -170,12 +175,15 @@ deploy/oracle/deploy-app.sh
 2. Builds the site: `dotnet publish -c Release -r <RID> --self-contained` into
    `~/.cache/beastiebot-deploy/publish/<RID>` (set `WORK_DIR` to change the folder; keep it out of
    Dropbox).
-3. Uploads it to `/srv/beastie/releases/<UTC time>-<git commit>`. Files that are the same as in the
-   current release are hard-linked on the server instead of uploaded, so after the first deploy an
-   upload is usually a few MB. A commit name ending in `-dirty` means the checkout had uncommitted
-   changes.
-4. Points `/srv/beastie/app` at the new release (one rename) and deletes old releases, keeping
-   the newest 3.
+3. Uploads it to `/srv/beastie/releases/.upload-<UTC time>-<git commit>`, and renames that folder
+   to `/srv/beastie/releases/<UTC time>-<git commit>` once the upload has finished and the folder
+   has the app's executable. An interrupted upload therefore never counts as a release; the next
+   deploy deletes it once it has been left for an hour. Files that are the same as in the current
+   release are hard-linked on the server instead of uploaded, so after the first deploy an upload is
+   usually a few MB. A commit name ending in `-dirty` means the checkout had uncommitted changes.
+4. Points `/srv/beastie/app` at the new release (one rename) and deletes old releases. It keeps
+   the newest 3, and always keeps the release that was live before this deploy, so that release is
+   still there to go back to if the new one fails.
 5. Restarts the service and checks `http://127.0.0.1:5080/healthz` on the server for up to 60
    seconds (`HEALTH_TIMEOUT`).
 6. Checks `https://<DOMAIN>/healthz` from your computer. A failure here only gives a warning,
@@ -190,8 +198,11 @@ the new app and the new database have to go out one after the other (see
 deploy/oracle/deploy-app.sh --rollback
 ```
 
-This switches to the release before the current one. Running it again goes back one more release,
-up to the 3 that are kept.
+This switches to the newest release whose name (its UTC build time) is older than the current
+one, skipping any folder without the app's executable. It goes back by release name, not to the
+release that was live before: if you have already rolled back once and then deployed again, the
+first rollback can land on a release that failed before. Running it again goes back one more
+release. `status.sh` lists the releases on disk.
 
 ## Deploying a new database after each IUCN release
 
@@ -238,7 +249,7 @@ space for about 1.1 times the database size, plus 100 MB.
 | Caddy | Comes from Caddy's own apt repository, which the daily updates do not cover. Run `setup-server.sh` again (it runs `apt-get upgrade`), or `ssh ubuntu@<HOST> sudo apt-get upgrade`. |
 | .NET runtime | Part of the self-contained app. Security fixes reach the server only when you update the .NET 10 SDK on your computer and run `deploy-app.sh`. Microsoft releases .NET patches monthly. |
 | The site | `deploy-app.sh`. |
-| The domain, Caddy settings or the systemd unit | Edit `deploy.env`, `Caddyfile.template` or `beastie-site.service`, then run `setup-server.sh` again. It changes only what differs and restarts what it changed. |
+| The domain, Caddy settings or the systemd unit | Edit `deploy.env`, `Caddyfile.template`, `caddy-admin-socket.conf` or `beastie-site.service`, then run `setup-server.sh` again. It changes only what differs and reloads or restarts what it changed. |
 
 **When the database schema version changes** (`SiteDbSchema.Version`), the site refuses a database
 with a different version, so the app and the database have to change together:
@@ -271,7 +282,12 @@ On the server (`ssh ubuntu@<HOST>`):
 | `sudo tail -f /var/log/caddy/access.log` | Requests, one JSON object per line. Caddy starts a new file at 50 MB and deletes files after 14 days. |
 
 To be told when the site goes down, point an external uptime checker at
-`https://<DOMAIN>/healthz`.
+`https://<DOMAIN>/healthz`. It answers 200 "ok" when the site has opened the database and the
+database's schema version matches `SiteDbSchema.Version`, and 503 otherwise. The site checks the
+database file again every 30 seconds: if the file has been deleted or moved, `/healthz` answers 503
+within 30 seconds, and if it has been replaced, the site opens the new file and checks it the same
+way, without a restart. `deploy-db.sh` and `rollback-db.sh` still restart the site, so a new
+database is live at once.
 
 ## Rolling back to the previous database
 
@@ -304,23 +320,37 @@ To roll back the app instead, see [Deploying the app](#deploying-the-app).
 - `/srv/beastie` and `/srv/beastie/data`, owned by root. `/srv/beastie/releases` and
   `/srv/beastie/incoming`, owned by the SSH user so that uploads need no sudo.
 - iptables: an ACCEPT rule for new TCP connections to port 80 and to port 443 in the INPUT chain,
-  inserted before the first REJECT or DROP rule, and only if missing. The same for ip6tables when
-  its INPUT chain rejects or drops anything. Then `netfilter-persistent save` writes all current
-  rules to `/etc/iptables/rules.v4` and `rules.v6`. No rule is removed and nothing is flushed. If
-  ufw is active, the script stops before changing anything.
+  inserted before the first REJECT or DROP rule, and only if missing. If the same ACCEPT rule is
+  already there but comes after the first REJECT or DROP rule, where it has no effect (a common
+  mistake when the rule is added by hand with `-A`), the script inserts a copy before that rule,
+  deletes the old one and says so. The same for ip6tables when its INPUT chain rejects or drops
+  anything. Then `netfilter-persistent save` writes all current rules to `/etc/iptables/rules.v4`
+  and `rules.v6`. No other rule is removed and nothing is flushed. If ufw is active, the script
+  stops before changing anything.
 - Caddy's apt repository: `/usr/share/keyrings/caddy-stable-archive-keyring.gpg` and
   `/etc/apt/sources.list.d/caddy-stable.list`.
+- `/etc/systemd/system/caddy.service.d/beastie-admin-socket.conf`, a copy of
+  `caddy-admin-socket.conf`. It makes systemd create `/run/caddy`, owned by the `caddy` user and
+  closed to other users, each time Caddy starts.
 - `/etc/caddy/Caddyfile`, written from `Caddyfile.template` when it differs. The old file is kept
   as `/etc/caddy/Caddyfile.previous`. Caddy writes `/var/log/caddy/access.log` and keeps its
-  certificates under `/var/lib/caddy`.
-- `/etc/systemd/system/beastie-site.service`, enabled to start at boot. systemd creates
-  `/var/lib/beastie-site` for the service.
+  certificates under `/var/lib/caddy`. The Caddyfile moves Caddy's admin API from
+  `localhost:2019` to the unix socket `/run/caddy/admin.sock`, because the admin API has no
+  password and any process on the VM, the site included, could otherwise change Caddy's
+  configuration. `sudo systemctl reload caddy` still works. The script reloads Caddy after a
+  change, and restarts it instead when Caddy does not answer on the socket yet (the first run
+  with this setting) or the drop-in changed.
+- `/etc/systemd/system/beastie-site.service`, enabled to start at boot, with `__DOMAIN__` replaced
+  by `DOMAIN`, so that the site's canonical links use `https://<DOMAIN>` (`Site__BaseUrl`).
+  systemd creates `/var/lib/beastie-site` for the service.
 - `/usr/local/sbin/beastie-site`, a copy of `server-tasks.sh`.
 
 The deploy scripts:
 
-- `deploy-app.sh` adds folders under `/srv/beastie/releases`, deletes all but the newest 3, and
-  points the symbolic link `/srv/beastie/app` at the current one.
+- `deploy-app.sh` uploads into a folder `/srv/beastie/releases/.upload-<release>`, renames it to
+  `/srv/beastie/releases/<release>` when the upload has finished, and points the symbolic link
+  `/srv/beastie/app` at it. It deletes all releases but the newest 3 and the one that was live
+  before the switch, and deletes `.upload-` folders that have been left for over an hour.
 - `deploy-db.sh` uploads to `/srv/beastie/incoming` (the file is deleted after it is installed) and
   writes `/srv/beastie/data/site.sqlite`, `site.sqlite.prev` and, after a failed deploy,
   `site.sqlite.failed`. While it works it also uses `site.sqlite.new` and `site.sqlite.outgoing`.
@@ -339,8 +369,11 @@ connection serves a whole run.
   tutorial), the VCN security list, arm64, and the iptables rules surviving a reboot.
 - A Let's Encrypt certificate. The test used a `.localhost` name, for which Caddy uses its own
   internal certificate authority.
-- The real `/healthz`: the site skeleton has none yet, so the database tests used a stand-in app
-  that answers `/healthz` from the database's `schema_version`.
+- An upload interrupted partway through. The test made the `.upload-` folders by hand; the rename
+  into place was tested only after uploads that finished.
+- `Site__BaseUrl` and the site's check of the database file every 30 seconds. They came with a
+  change to the site made at the same time as these scripts, and the container ran a site build
+  from before it.
 - The swap file (the test machine had more than 2 GB of RAM).
 - In the rootless container, systemd's sandboxing options needed `--cap-add SYS_ADMIN` (they use
   mount namespaces). On a VM, systemd runs as root and has this. If the site fails to start with

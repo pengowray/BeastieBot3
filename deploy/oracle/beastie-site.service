@@ -1,6 +1,7 @@
 # systemd unit for the BeastieBot3 public site.
-# setup-server.sh installs this file as /etc/systemd/system/beastie-site.service. Edit it here and
-# run setup-server.sh again, which restarts the service when the file has changed.
+# setup-server.sh installs this file as /etc/systemd/system/beastie-site.service, with __DOMAIN__
+# replaced by DOMAIN from deploy.env. Edit it here and run setup-server.sh again, which restarts
+# the service when the installed file has changed.
 #
 # /srv/beastie/app is a symbolic link to the current release in /srv/beastie/releases. deploy-app.sh
 # points it at a new release and restarts the service; deploy-db.sh replaces
@@ -20,6 +21,10 @@ ExecStart=/srv/beastie/app/BeastieBot3.Site
 Environment=ASPNETCORE_URLS=http://127.0.0.1:5080
 Environment=ASPNETCORE_ENVIRONMENT=Production
 Environment=Site__DatabasePath=/srv/beastie/data/site.sqlite
+# Start of the canonical link in each page, so that it does not depend on the Host header of the
+# request. AllowedHosts is left at "*", because the health checks in server-tasks.sh call
+# http://127.0.0.1:5080/healthz directly.
+Environment=Site__BaseUrl=https://__DOMAIN__
 # Workstation garbage collection uses less memory than server GC on a small VM.
 Environment=DOTNET_gcServer=0
 # ASP.NET Core keeps its data protection keys under $HOME/.aspnet. HOME is the state directory,

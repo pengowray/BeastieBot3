@@ -5,9 +5,9 @@
 #
 # On your computer, run it with no arguments:
 #   deploy/oracle/setup-server.sh
-# It reads deploy.env, copies this script, server-tasks.sh, Caddyfile.template and
-# beastie-site.service to a temporary folder on the server, runs the script there with sudo, and
-# deletes the folder.
+# It reads deploy.env, copies this script, server-tasks.sh, Caddyfile.template,
+# caddy-admin-socket.conf and beastie-site.service to a temporary folder on the server, runs the
+# script there with sudo, and deletes the folder.
 #
 # On the server it runs with --on-server (as root):
 #   sudo bash setup-server.sh --on-server --domain species.example.org [--email you@example.org]
@@ -23,7 +23,7 @@ run_from_workstation() {
     source "$SCRIPT_DIR/lib.sh"
     load_env
 
-    local files=(setup-server.sh server-tasks.sh Caddyfile.template beastie-site.service) f
+    local files=(setup-server.sh server-tasks.sh Caddyfile.template caddy-admin-socket.conf beastie-site.service) f
     for f in "${files[@]}"; do
         [[ -f "$DEPLOY_DIR/$f" ]] || die "Missing file: $DEPLOY_DIR/$f"
     done
@@ -59,6 +59,8 @@ AUTO_REBOOT_AT=""
 BASE=/srv/beastie
 SERVICE=beastie-site
 SERVICE_USER=beastie
+CADDY_DROPIN=/etc/systemd/system/caddy.service.d/beastie-admin-socket.conf
+CADDY_ADMIN_SOCKET=/run/caddy/admin.sock
 
 log()  { printf '\n== %s\n' "$*"; }
 info() { printf '%s\n' "$*"; }
@@ -99,7 +101,7 @@ check_system() {
     [[ -n "$DEPLOY_USER" ]] || fail "--deploy-user is required when the script is not run with sudo."
     [[ "$DEPLOY_USER" != root ]] || fail "--deploy-user must be the SSH user you deploy with, not root."
     id "$DEPLOY_USER" >/dev/null 2>&1 || fail "User $DEPLOY_USER does not exist on this server."
-    for f in server-tasks.sh Caddyfile.template beastie-site.service; do
+    for f in server-tasks.sh Caddyfile.template caddy-admin-socket.conf beastie-site.service; do
         [[ -f "$SCRIPT_DIR/$f" ]] || fail "Missing file next to this script: $SCRIPT_DIR/$f"
     done
     # Installing iptables-persistent removes ufw, and Oracle advises against ufw on its images.
@@ -198,22 +200,74 @@ create_user_and_folders() {
     info "$BASE/releases and $BASE/incoming: writable by $DEPLOY_USER for uploads."
 }
 
+# Rule numbers below count the "-A INPUT" lines that "-S INPUT" prints, in order. They are the
+# numbers that "-L INPUT --line-numbers" shows and that -I, -D and "-S INPUT <number>" take.
+
+# Number and target of the first REJECT or DROP rule in the INPUT chain ("7 REJECT"), or nothing
+# when there is none.
+first_reject_rule() {
+    "$1" -S INPUT | awk '$1 == "-A" { n++; if ($0 ~ / -j (REJECT|DROP)( |$)/) { print n, ($0 ~ / -j REJECT/ ? "REJECT" : "DROP"); exit } }'
+}
+
+# Number and text (separated by a tab) of the first INPUT rule that accepts new TCP connections to
+# a port from anywhere, as "-S INPUT" prints it, or nothing. The text is matched loosely because
+# iptables may print the state match in another form than the one it was added with.
+accept_rule_for_port() {
+    "$1" -S INPUT | awk -v port="$2" '
+        $1 == "-A" {
+            n++
+            line = $0 " "
+            if (line ~ (" --dport " port " ") && line ~ / -p tcp / && line ~ / -j ACCEPT $/ &&
+                line ~ /NEW/ && line !~ / (-s|-d|-i|-o|!) /) {
+                print n "\t" $0
+                exit
+            }
+        }'
+}
+
 # Adds an ACCEPT rule for a TCP port to the INPUT chain of iptables or ip6tables when it is missing.
 # Oracle's Ubuntu images end the INPUT chain with a REJECT rule, so the new rule goes in just
-# before the first REJECT or DROP rule. Existing rules are never removed.
+# before the first REJECT or DROP rule. An ACCEPT rule that is already there but comes after the
+# first REJECT or DROP rule never matches (a common mistake when the rule is added by hand with -A),
+# so it is moved: a copy goes in before the REJECT or DROP rule and the old one is deleted. No
+# other rule is removed.
 open_port() {
     local tool="$1" port="$2"
     local rule=(-p tcp -m state --state NEW -m tcp --dport "$port" -j ACCEPT)
+    local reject reject_n="" target="" policy
+    reject="$(first_reject_rule "$tool")"
+    if [[ -n "$reject" ]]; then
+        reject_n="${reject%% *}"
+        target="${reject#* }"
+    fi
     if "$tool" -C INPUT "${rule[@]}" 2>/dev/null; then
-        info "$tool: port $port is already open."
+        local found accept_n accept_text
+        found="$(accept_rule_for_port "$tool" "$port")"
+        if [[ -z "$found" ]]; then
+            info "$tool: port $port is already open."
+            warn "Could not tell where the $tool rule for port $port is. It only works if it comes before the first REJECT rule; check with: sudo $tool -L INPUT --line-numbers -n"
+            return 0
+        fi
+        accept_n="${found%%$'\t'*}"
+        accept_text="${found#*$'\t'}"
+        if [[ -z "$reject_n" ]] || (( accept_n < reject_n )); then
+            info "$tool: port $port is already open."
+            return 0
+        fi
+        "$tool" -I INPUT "$reject_n" "${rule[@]}"
+        # The insert moved the old rule down by one. Delete it only if it is still the same rule.
+        if [[ "$("$tool" -S INPUT $(( accept_n + 1 )))" == "$accept_text" ]]; then
+            "$tool" -D INPUT $(( accept_n + 1 ))
+            info "$tool: port $port had an ACCEPT rule (rule $accept_n) after the $target rule (rule $reject_n), so it had no effect. Moved it to rule $reject_n, before the $target rule."
+        else
+            info "$tool: port $port had an ACCEPT rule (rule $accept_n) after the $target rule (rule $reject_n), so it had no effect. Added a copy as rule $reject_n, before the $target rule. The old rule, now rule $(( accept_n + 1 )), is still there and has no effect."
+        fi
         return 0
     fi
-    local line policy
-    line="$("$tool" -L INPUT --line-numbers -n | awk '$2 == "REJECT" || $2 == "DROP" { print $1; exit }')"
     policy="$("$tool" -S INPUT | awk '$1 == "-P" { print $3 }')"
-    if [[ -n "$line" ]]; then
-        "$tool" -I INPUT "$line" "${rule[@]}"
-        info "$tool: opened port $port (rule $line, before the first REJECT or DROP rule)."
+    if [[ -n "$reject_n" ]]; then
+        "$tool" -I INPUT "$reject_n" "${rule[@]}"
+        info "$tool: opened port $port (rule $reject_n, before the first REJECT or DROP rule)."
     elif [[ "$policy" != ACCEPT ]]; then
         "$tool" -A INPUT "${rule[@]}"
         info "$tool: opened port $port (appended; the INPUT policy is $policy)."
@@ -272,7 +326,22 @@ render_caddyfile() {
 }
 
 configure_caddy() {
-    log "Caddyfile for $DOMAIN"
+    log "Caddy settings for $DOMAIN"
+    # The drop-in goes in first: the new Caddyfile puts the admin API in /run/caddy, which systemd
+    # creates only when the drop-in is in place.
+    local dropin_changed=no caddyfile_changed=no
+    if [[ -f "$CADDY_DROPIN" ]] && cmp -s "$SCRIPT_DIR/caddy-admin-socket.conf" "$CADDY_DROPIN"; then
+        info "$CADDY_DROPIN is up to date."
+    else
+        install -d -m 755 -o root -g root "$(dirname "$CADDY_DROPIN")"
+        install -m 644 -o root -g root "$SCRIPT_DIR/caddy-admin-socket.conf" "$CADDY_DROPIN"
+        dropin_changed=yes
+        info "Installed $CADDY_DROPIN."
+        if systemd_running; then
+            systemctl daemon-reload
+        fi
+    fi
+
     local target=/etc/caddy/Caddyfile tmp
     tmp="$(mktemp)"
     render_caddyfile "$tmp"
@@ -280,27 +349,46 @@ configure_caddy() {
     if [[ -f "$target" ]] && cmp -s "$tmp" "$target"; then
         rm -f "$tmp"
         info "$target is up to date."
-        return 0
-    fi
-    # Validate as the caddy user: run as root, caddy validate would create the access log file
-    # owned by root, and the caddy service could not write to it.
-    if ! runuser -u caddy -- caddy validate --config "$tmp" --adapter caddyfile >/tmp/caddy-validate.log 2>&1; then
-        cat /tmp/caddy-validate.log >&2
+    else
+        # Validate as the caddy user: run as root, caddy validate would create the access log file
+        # owned by root, and the caddy service could not write to it.
+        if ! runuser -u caddy -- caddy validate --config "$tmp" --adapter caddyfile >/tmp/caddy-validate.log 2>&1; then
+            cat /tmp/caddy-validate.log >&2
+            rm -f "$tmp"
+            fail "The new Caddyfile is not valid. $target was not changed."
+        fi
+        if [[ -f "$target" ]]; then
+            cp -p "$target" "$target.previous"
+            info "Saved the old file as $target.previous."
+        fi
+        install -m 644 -o root -g root "$tmp" "$target"
         rm -f "$tmp"
-        fail "The new Caddyfile is not valid. $target was not changed."
+        caddyfile_changed=yes
+        info "Wrote $target."
     fi
-    if [[ -f "$target" ]]; then
-        cp -p "$target" "$target.previous"
-        info "Saved the old file as $target.previous."
+
+    systemd_running || return 0
+    systemctl enable caddy >/dev/null 2>&1 || true
+    # A reload sends the new configuration to the running Caddy through the admin socket named in
+    # the new Caddyfile. When Caddy does not answer there (the first run with the socket setting,
+    # when Caddy still listens on localhost:2019, or Caddy is not running) or the drop-in changed,
+    # Caddy has to be restarted instead. A restart keeps the certificates, which are stored on disk.
+    if [[ "$dropin_changed" == yes ]] || ! caddy_admin_answers; then
+        systemctl restart caddy
+        info "Restarted Caddy. It requests the certificate for $DOMAIN once DNS points at this server."
+    elif [[ "$caddyfile_changed" == yes ]]; then
+        systemctl reload caddy
+        info "Reloaded Caddy. It requests the certificate for $DOMAIN once DNS points at this server."
     fi
-    install -m 644 -o root -g root "$tmp" "$target"
-    rm -f "$tmp"
-    info "Wrote $target."
-    if systemd_running; then
-        systemctl enable caddy >/dev/null 2>&1 || true
-        systemctl reload-or-restart caddy
-        info "Caddy reloaded. It requests the certificate for $DOMAIN once DNS points at this server."
+    if ! caddy_admin_answers; then
+        warn "Caddy's admin API does not answer on $CADDY_ADMIN_SOCKET, so systemctl reload caddy will fail. Check: sudo journalctl -u caddy -n 50"
     fi
+}
+
+# Whether the running Caddy answers on its admin socket. A socket file alone proves nothing: Caddy
+# can leave one behind when it stops.
+caddy_admin_answers() {
+    curl -fsS --max-time 5 --unix-socket "$CADDY_ADMIN_SOCKET" -o /dev/null http://localhost/config/ 2>/dev/null
 }
 
 install_service() {
@@ -308,14 +396,18 @@ install_service() {
     install -m 755 -o root -g root "$SCRIPT_DIR/server-tasks.sh" /usr/local/sbin/beastie-site
     info "Installed /usr/local/sbin/beastie-site (run: sudo beastie-site status)."
 
-    local unit=/etc/systemd/system/$SERVICE.service changed=no
-    if ! [[ -f "$unit" ]] || ! cmp -s "$SCRIPT_DIR/beastie-site.service" "$unit"; then
-        install -m 644 -o root -g root "$SCRIPT_DIR/beastie-site.service" "$unit"
+    # The unit gets the domain for the site's canonical links (Site__BaseUrl).
+    local unit=/etc/systemd/system/$SERVICE.service changed=no tmp
+    tmp="$(mktemp)"
+    sed -e "s|__DOMAIN__|$DOMAIN|g" "$SCRIPT_DIR/beastie-site.service" > "$tmp"
+    if ! [[ -f "$unit" ]] || ! cmp -s "$tmp" "$unit"; then
+        install -m 644 -o root -g root "$tmp" "$unit"
         changed=yes
         info "Installed $unit."
     else
         info "$unit is up to date."
     fi
+    rm -f "$tmp"
     if ! systemd_running; then
         warn "systemd is not running here. Skipping systemctl."
         return 0

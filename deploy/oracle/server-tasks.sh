@@ -8,7 +8,7 @@
 #
 #   sudo beastie-site status        app release, service state, health check, databases, disk space
 #   sudo beastie-site rollback-db   swap site.sqlite and site.sqlite.prev, then restart
-#   sudo beastie-site rollback-app  switch to the release before the current one, then restart
+#   sudo beastie-site rollback-app  switch to the newest release older than the current one, then restart
 #
 # Nothing in this file may read standard input: when bash reads the script over SSH, standard
 # input is the script itself. Everything is inside functions and main runs on the last line, so
@@ -37,7 +37,8 @@ Tasks for use on the server:
   status         Show the app release, service state, health check, databases and disk space.
   rollback-db    Swap site.sqlite and site.sqlite.prev, then restart the site.
                  Running it a second time puts the newer database back.
-  rollback-app   Switch to the release before the current one, then restart the site.
+  rollback-app   Switch to the newest release that is older than the current one (by the build
+                 time in its name), then restart the site.
 
 Tasks the deploy scripts run:
   app-info, activate-app <release>, live-db-sha, install-db <file> <sha256> <bytes>
@@ -298,6 +299,17 @@ valid_release_id() {
     [[ "$1" =~ ^[0-9]{8}-[0-9]{6}(-[A-Za-z0-9._-]+)?$ ]]
 }
 
+# deploy-app.sh uploads a release into releases/.upload-<release>, and activate_app renames it to
+# releases/<release> only after the upload has finished. The leading dot keeps an unfinished upload
+# out of list_releases, so it is never switched to and never counts as a kept release.
+upload_dir() {
+    printf '%s/.upload-%s' "$RELEASES" "$1"
+}
+
+has_binary() {
+    [[ -x "$RELEASES/$1/BeastieBot3.Site" ]]
+}
+
 current_release() {
     if [[ -L "$APP_LINK" ]]; then
         basename "$(readlink "$APP_LINK")"
@@ -325,9 +337,11 @@ switch_app() {
     mv -Tf "$BASE/app.new" "$APP_LINK"
 }
 
-# Deletes all but the newest KEEP_RELEASES releases. The current release is always kept.
+# Deletes all but the newest KEEP_RELEASES releases. Never deletes the current release, or the
+# release named in the first argument: activate_app passes the release that was live before the
+# switch, so that release stays on disk while the new one is checked.
 prune_releases() {
-    local current name i
+    local keep_also="${1:-}" current name i
     current="$(current_release)"
     local -a all
     mapfile -t all < <(list_releases)
@@ -335,9 +349,21 @@ prune_releases() {
     for (( i = 0; i < remove_count; i++ )); do
         name="${all[$i]}"
         [[ "$name" == "$current" ]] && continue
+        [[ -n "$keep_also" && "$name" == "$keep_also" ]] && continue
         rm -rf -- "${RELEASES:?}/$name"
         say "Deleted old release $name."
     done
+}
+
+# Deletes unfinished uploads (releases/.upload-*) that have not changed for over an hour. rsync
+# writes each file under a temporary name in the folder and then renames it, so the folder's
+# modification time is updated while an upload is running.
+prune_unfinished_uploads() {
+    local dir
+    while IFS= read -r -d '' dir; do
+        rm -rf -- "$dir"
+        say "Deleted an unfinished upload: $(basename "$dir")."
+    done < <(find "$RELEASES" -mindepth 1 -maxdepth 1 -type d -name '.upload-*' -mmin +60 -print0)
 }
 
 app_info() {
@@ -367,28 +393,50 @@ after_switch_restart() {
     fi
 }
 
+# Moves a finished upload into place as releases/<release>, switches the site to it and restarts.
+# The upload is checked for the app's executable before it is renamed, so every folder that
+# list_releases returns is a complete release. Running it again for a release that is already in
+# place (no upload folder) just switches to it.
 activate_app() {
-    local id="${1:-}"
+    local id="${1:-}" upload
     valid_release_id "$id" || die "Not a release name: $id"
-    [[ -x "$RELEASES/$id/BeastieBot3.Site" ]] || die "Release $id has no executable BeastieBot3.Site in $RELEASES/$id"
+    upload="$(upload_dir "$id")"
+    if [[ -d "$upload" ]]; then
+        [[ ! -e "$RELEASES/$id" ]] || die "Both $upload and $RELEASES/$id exist. Delete one of them, then deploy again."
+        [[ -x "$upload/BeastieBot3.Site" ]] || die "The upload in $upload has no executable BeastieBot3.Site. Run deploy-app.sh again."
+        mv -T -- "$upload" "$RELEASES/$id"
+    fi
+    has_binary "$id" || die "Release $id has no executable BeastieBot3.Site in $RELEASES/$id"
     local previous
     previous="$(current_release)"
     switch_app "$id"
     say "The site now runs release $id (before: ${previous:-none})."
-    prune_releases
+    prune_releases "$previous"
+    prune_unfinished_uploads
     after_switch_restart
 }
 
+# Switches to the newest release whose name sorts before the current one and that has the app's
+# executable. Release names start with the UTC build time, so this goes back by build time, which
+# is not always the release that was live before.
 rollback_app() {
-    local current previous="" name
+    local current previous="" name i
     current="$(current_release)"
     [[ -n "$current" ]] || die "No release is active: $APP_LINK is not a symbolic link."
+    local -a older=()
     while IFS= read -r name; do
         if [[ "$name" < "$current" ]]; then
-            previous="$name"
+            older+=("$name")
         fi
     done < <(list_releases)
-    [[ -n "$previous" ]] || die "There is no release older than $current in $RELEASES."
+    for (( i = ${#older[@]} - 1; i >= 0; i-- )); do
+        if has_binary "${older[$i]}"; then
+            previous="${older[$i]}"
+            break
+        fi
+        say "Skipped release ${older[$i]}: it has no executable BeastieBot3.Site."
+    done
+    [[ -n "$previous" ]] || die "There is no release older than $current in $RELEASES that has an executable BeastieBot3.Site."
     switch_app "$previous"
     say "The site now runs release $previous (before: $current)."
     after_switch_restart
@@ -397,10 +445,14 @@ rollback_app() {
 # --- Status ----------------------------------------------------------------------------------
 
 show_status() {
-    local releases
+    local releases uploads
     releases="$(list_releases | paste -sd ' ' -)"
+    uploads="$(find "$RELEASES" -mindepth 1 -maxdepth 1 -type d -name '.upload-*' -printf '%f ' 2>/dev/null || true)"
     say "App release:       $(current_release || true)"
     say "Releases on disk:  ${releases:-none}"
+    if [[ -n "$uploads" ]]; then
+        say "Partial uploads:   ${uploads% } (the next deploy deletes any left for over an hour)"
+    fi
     say "Service:           $(systemctl is-active "$SERVICE" </dev/null || true)"
     say "Health check:      $(health_summary)"
     say "Live database:     $(db_info "$DB")"

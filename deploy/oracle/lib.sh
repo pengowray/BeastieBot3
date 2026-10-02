@@ -123,6 +123,8 @@ check_public_health() {
         say "The site answers on the server itself, so check the path from the internet to Caddy:
   - the DNS A record for $DOMAIN points at the VM's public IP ($HOST if HOST is that IP),
   - the VCN security list allows TCP 80 and 443 from 0.0.0.0/0,
+  - the VM's own firewall lets them in: ssh to the server and run  sudo iptables -L INPUT --line-numbers -n
+    (the ACCEPT rules for ports 80 and 443 must come before the REJECT rule; setup-server.sh moves them there),
   - Caddy has its certificate: ssh to the server and run  sudo journalctl -u caddy -n 50"
     fi
 }
