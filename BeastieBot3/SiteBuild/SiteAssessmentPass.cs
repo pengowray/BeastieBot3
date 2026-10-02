@@ -19,6 +19,15 @@ using Microsoft.Data.Sqlite;
 //     citation has one that fits; otherwise GBIF's, only for the assessment GBIF's checklist names
 //     as the taxon's current global one; otherwise Wikidata's (IucnDoiSelector checks each).
 //     Assessments with no cached payload (the CSV's subpopulations) keep citation_json NULL.
+//   - An author name with a letter lost to an encoding error ("Kry?tufek, B.") is repaired from the
+//     other assessor credits (AssessorNamePool). The pool is complete only after every payload has
+//     been read, so the few rows with such a name are parsed again and written at the end.
+//   - replaced_by_assessment_id is set on the assessment an errata or amended version replaced,
+//     pointing at the newer one. An errata version (its title says "errata version published in")
+//     replaced the one assessment IucnTaxaHeaders.PredecessorIds gives that is also a row here. An
+//     amended version replaced the one earlier assessment of the taxon, same scope, published in the
+//     year its title names. With none or several candidates, or when two newer versions name the
+//     same assessment, nothing is set.
 
 namespace BeastieBot3.SiteBuild;
 
@@ -34,6 +43,16 @@ internal sealed class SiteAssessmentPass {
     private readonly IReadOnlyDictionary<long, ApiTaxonRecord> _records;
     private readonly SiteBuildStats _stats;
     private readonly Dictionary<long, SiteAssessment> _plan = new();
+
+    // The planned rows of each taxon, kept after _plan is emptied, to find what a version replaced.
+    private readonly Dictionary<long, List<(long AssessmentId, string Scope, int? YearPublished, bool IsLatest)>> _rowsByTaxon = new();
+    // The assessment each replaced assessment was replaced by (null when two newer versions name it),
+    // and whether that newer one is an errata version or an amended one.
+    private readonly Dictionary<long, (long? By, bool ByErrata)> _replacedBy = new();
+
+    private readonly AssessorNamePool _names = new();
+    // Rows with a damaged author name, parsed again once _names is complete.
+    private readonly List<(SiteAssessment Assessment, byte[] Json, DateTime? Downloaded, SiteDoiSources Dois)> _waitingForNames = new();
 
     public SiteAssessmentPass(IReadOnlyDictionary<long, SiteTaxon> taxa, IReadOnlyDictionary<long, ApiTaxonRecord> records,
         SiteBuildStats stats) {
@@ -108,6 +127,13 @@ internal sealed class SiteAssessmentPass {
             }
         }
 
+        foreach (var row in _plan.Values) {
+            if (!_rowsByTaxon.TryGetValue(row.TaxonId, out var rows)) {
+                _rowsByTaxon[row.TaxonId] = rows = new();
+            }
+            rows.Add((row.AssessmentId, row.Scope, row.YearPublished, row.IsLatest));
+        }
+
         // The latest global assessment: the CSV's global row, else a global API row still flagged latest.
         foreach (var assessment in _plan.Values
                      .Where(a => a.IsLatest && a.Scope == SiteBuildRules.GlobalScope)
@@ -155,11 +181,21 @@ internal sealed class SiteAssessmentPass {
                     json = reader.GetFieldValue<byte[]>(1);
                 }
                 var assessment = _plan[assessmentId];
-                AddFromPayload(assessment, json, downloadedAt, dois);
-                Write(writer, assessment);
                 _plan.Remove(assessmentId);
+                if (AddFromPayload(assessment, json, downloadedAt, dois)) {
+                    Write(writer, assessment);
+                }
             }
         });
+
+        // Rows with a damaged author name, now that every other name is known.
+        foreach (var (assessment, json, downloaded, rowDois) in _waitingForNames) {
+            using (var document = JsonDocument.Parse(json)) {
+                AddCitation(assessment, document.RootElement, downloaded, rowDois, _names.Repair);
+            }
+            Write(writer, assessment);
+        }
+        _waitingForNames.Clear();
 
         // Planned rows with no cached payload: the CSV's subpopulations.
         foreach (var assessment in _plan.Values.OrderBy(a => a.AssessmentId)) {
@@ -167,15 +203,25 @@ internal sealed class SiteAssessmentPass {
             Write(writer, assessment);
         }
         _plan.Clear();
+
+        foreach (var (replaced, (by, byErrata)) in _replacedBy) {
+            if (by is not { } newer) {
+                continue;
+            }
+            writer.SetReplacedBy(replaced, newer);
+            if (byErrata) _stats.ReplacedByErrata++; else _stats.ReplacedByAmended++;
+        }
     }
 
-    private void AddFromPayload(SiteAssessment assessment, byte[] json, string downloadedAt, SiteDoiSources dois) {
+    // Adds what the payload gives. False when the row has a damaged author name and waits for the
+    // name pool; it is then written at the end of WriteAll.
+    private bool AddFromPayload(SiteAssessment assessment, byte[] json, string downloadedAt, SiteDoiSources dois) {
         JsonDocument document;
         try {
             document = JsonDocument.Parse(json);
         } catch (JsonException) {
             _stats.PayloadsUnreadable++;
-            return;
+            return true;
         }
         using (document) {
             var root = document.RootElement;
@@ -190,28 +236,81 @@ internal sealed class SiteAssessmentPass {
                 assessment.PopulationTrend = PopulationTrend(root);
                 assessment.CriteriaVersion = CriteriaVersion(root);
             }
-
-            var predecessors = _records.TryGetValue(assessment.TaxonId, out var record)
-                ? IucnTaxaHeaders.PredecessorIds(record.Headers, assessment.AssessmentId)
-                : Array.Empty<long>();
-            var parse = IucnCitationPartsParser.Parse(root, downloaded, predecessors);
-            if (parse.Parts is not { } parts) {
-                _stats.Count(_stats.CitationFailures, parse.Failure);
-                return;
+            if (!AddCitation(assessment, root, downloaded, dois, repairAuthorName: null)) {
+                _waitingForNames.Add((assessment, json, downloaded, dois));
+                return false;
             }
-            if (parts.Doi is null) {
-                string? gbifDoi = null;
-                if (dois.Gbif.TryGetValue(assessment.TaxonId, out var gbif) && gbif.AssessmentId == assessment.AssessmentId) {
-                    gbifDoi = gbif.Doi;
-                }
-                dois.Wikidata.TryGetValue(assessment.AssessmentId, out var wikidataDois);
-                var choice = IucnDoiSelector.Select(parts, citationDoi: null, gbifDoi, wikidataDois, predecessors);
-                parts = parts with { Doi = choice.Doi, DoiSource = choice.Source };
-            }
-            _stats.Count(_stats.DoisBySource, parts.Doi is null ? DoiSource.None : parts.DoiSource);
-            _stats.CitationsParsed++;
-            assessment.CitationJson = parts.ToJson();
+            return true;
         }
+    }
+
+    // Parses the citation into the row. Without a repair function, a parse with a damaged author
+    // name is not used and false is returned.
+    private bool AddCitation(SiteAssessment assessment, JsonElement root, DateTime? downloaded, SiteDoiSources dois,
+        Func<string, string?>? repairAuthorName) {
+        var predecessors = _records.TryGetValue(assessment.TaxonId, out var record)
+            ? IucnTaxaHeaders.PredecessorIds(record.Headers, assessment.AssessmentId)
+            : Array.Empty<long>();
+        var parse = IucnCitationPartsParser.Parse(root, downloaded, predecessors, repairAuthorName);
+        if (repairAuthorName is null && parse.DamagedAuthorNames.Count > 0) {
+            return false;
+        }
+        if (parse.Parts is not { } parts) {
+            _stats.Count(_stats.CitationFailures, parse.Failure);
+            return true;
+        }
+        _names.AddFrom(parse);
+        foreach (var repair in parse.RepairedAuthorNames) {
+            _stats.Count(_stats.AuthorNameRepairs, (repair.From, repair.To));
+        }
+        foreach (var name in parse.DamagedAuthorNames) {
+            _stats.Count(_stats.AuthorNamesNotRepaired, name);
+        }
+        if (parts.Doi is null) {
+            string? gbifDoi = null;
+            if (dois.Gbif.TryGetValue(assessment.TaxonId, out var gbif) && gbif.AssessmentId == assessment.AssessmentId) {
+                gbifDoi = gbif.Doi;
+            }
+            dois.Wikidata.TryGetValue(assessment.AssessmentId, out var wikidataDois);
+            var choice = IucnDoiSelector.Select(parts, citationDoi: null, gbifDoi, wikidataDois, predecessors);
+            parts = parts with { Doi = choice.Doi, DoiSource = choice.Source };
+        }
+        _stats.Count(_stats.DoisBySource, parts.Doi is null ? DoiSource.None : parts.DoiSource);
+        _stats.CitationsParsed++;
+        assessment.CitationJson = parts.ToJson();
+        LinkReplaced(assessment, parse, predecessors);
+        return true;
+    }
+
+    // Records which earlier assessment an errata or amended version replaced (see the file comment).
+    private void LinkReplaced(SiteAssessment assessment, IucnCitationParse parse, IReadOnlyList<long> predecessors) {
+        _rowsByTaxon.TryGetValue(assessment.TaxonId, out var rows);
+        rows ??= new();
+        List<long> candidates;
+        if (parse.HasErrataAnnotation) {
+            candidates = predecessors.Where(id => rows.Any(r => r.AssessmentId == id)).Distinct().ToList();
+        } else if (parse.Parts?.AmendsYear is { } amendsYear) {
+            candidates = rows
+                .Where(r => r.AssessmentId != assessment.AssessmentId && !r.IsLatest && r.YearPublished == amendsYear
+                    && string.Equals(r.Scope, assessment.Scope, StringComparison.Ordinal))
+                .Select(r => r.AssessmentId)
+                .ToList();
+        } else {
+            return;
+        }
+        if (candidates.Count != 1) {
+            if (candidates.Count == 0) _stats.ReplacedNoCandidate++; else _stats.ReplacedSeveralCandidates++;
+            return;
+        }
+        var replaced = candidates[0];
+        if (_replacedBy.TryGetValue(replaced, out var existing)) {
+            if (existing.By is { } other && other != assessment.AssessmentId) {
+                _replacedBy[replaced] = (null, false);
+                _stats.ReplacedClaimedTwice++;
+            }
+            return;
+        }
+        _replacedBy[replaced] = (assessment.AssessmentId, parse.HasErrataAnnotation);
     }
 
     private void Write(SiteDbWriter writer, SiteAssessment assessment) {

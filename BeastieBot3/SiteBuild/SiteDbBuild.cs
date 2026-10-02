@@ -13,7 +13,7 @@ using Spectre.Console;
 //   4. DOI sources: GBIF's checklist and Wikidata.
 //   5. IUCN API assessment payloads: citation parts; the assessment rows are written here.
 //   6. Common names store: English names, the best English name, CoL synonyms.
-//   7. Links: English Wikipedia, Wikidata, Catalogue of Life, SPRAT.
+//   7. Links: English Wikipedia, Wikidata, Catalogue of Life (and the release's citation), SPRAT.
 //   8. Parents, then the taxon and name rows, then meta.
 //   9. Name keys, indexes, full-text index, ANALYZE, VACUUM.
 //
@@ -99,10 +99,12 @@ internal sealed class SiteDbBuild {
         // 4. DOI sources.
         var dois = new SiteDoiSources();
         Optional("GBIF checklist", _inputs.GbifChecklist, path => {
-            var (version, published) = SiteLinkReaders.ReadGbif(path, taxa, dois, ct);
-            _stats.GbifVersion = version;
-            _stats.GbifPublished = published;
-            return $"{dois.Gbif.Count:N0} DOIs, version {version}, published {published}";
+            var gbif = SiteLinkReaders.ReadGbif(path, taxa, dois, ct);
+            _stats.GbifVersion = gbif.Version;
+            _stats.GbifPublished = gbif.Published;
+            _stats.GbifCitation = gbif.Citation;
+            _stats.GbifDoi = gbif.Doi;
+            return $"{dois.Gbif.Count:N0} DOIs, version {gbif.Version}, published {gbif.Published}, dataset DOI {gbif.Doi}";
         });
         Optional("Wikidata cache", _inputs.WikidataCache, path => {
             SiteLinkReaders.ReadWikidata(path, taxa, _stats, dois, ct);
@@ -139,6 +141,17 @@ internal sealed class SiteDbBuild {
         });
         SiteLinkReaders.ApplyColCrossReferences(taxa, colCrossReferences, _stats);
         _stats.ColRelease ??= SiteBuildRules.ColReleaseFromPath(_inputs.ColDatabase);
+        Optional("Catalogue of Life ColDP folder", _inputs.ColDir, path => {
+            var col = ColReleaseCitation.Find(path, _stats.ColRelease, out var warning);
+            if (col is null) {
+                _stats.Warnings.Add(warning!);
+                return "no citation";
+            }
+            _stats.ColRelease ??= col.Alias;
+            _stats.ColCitation = col.Citation;
+            _stats.ColDoi = col.Doi;
+            return $"citation of {col.Alias}, DOI {col.Doi ?? "none"}";
+        });
         Optional("SPRAT database", _inputs.SpratDatabase, path => {
             _stats.SpratReport = SiteLinkReaders.ReadSprat(path, taxa, _stats, ct);
             return $"{_stats.SpratMatched:N0} taxa matched by name, {_stats.EpbcStatuses:N0} with an EPBC status";
@@ -268,7 +281,11 @@ internal sealed class SiteDbBuild {
         writer.SetMeta(SiteDbSchema.MetaKeys.IucnApiDownloadedTo, _stats.DownloadedTo?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
         writer.SetMeta(SiteDbSchema.MetaKeys.GbifChecklistVersion, _stats.GbifVersion);
         writer.SetMeta(SiteDbSchema.MetaKeys.GbifChecklistPublished, _stats.GbifPublished);
+        writer.SetMeta(SiteDbSchema.MetaKeys.GbifChecklistCitation, _stats.GbifCitation);
+        writer.SetMeta(SiteDbSchema.MetaKeys.GbifChecklistDoi, _stats.GbifDoi);
         writer.SetMeta(SiteDbSchema.MetaKeys.ColRelease, _stats.ColRelease);
+        writer.SetMeta(SiteDbSchema.MetaKeys.ColCitation, _stats.ColCitation);
+        writer.SetMeta(SiteDbSchema.MetaKeys.ColDoi, _stats.ColDoi);
         writer.SetMeta(SiteDbSchema.MetaKeys.SpratReport, _stats.SpratReport);
         writer.SetMeta(SiteDbSchema.MetaKeys.TaxonCount, taxonCount.ToString(CultureInfo.InvariantCulture));
         writer.SetMeta(SiteDbSchema.MetaKeys.AssessmentCount, assessmentCount);
@@ -291,7 +308,7 @@ internal sealed class SiteDbBuild {
     }
 
     private void Optional(string sourceName, string? path, Func<string, string?> body) {
-        if (string.IsNullOrWhiteSpace(path) || !File.Exists(path)) {
+        if (string.IsNullOrWhiteSpace(path) || !(File.Exists(path) || Directory.Exists(path))) {
             _stats.MissingSources.Add(sourceName);
             var where = string.IsNullOrWhiteSpace(path) ? "no path is configured" : $"{path} does not exist";
             _console.MarkupLineInterpolated($"[yellow]Skipped the {sourceName}: {where}. The site database gets no data from it.[/]");

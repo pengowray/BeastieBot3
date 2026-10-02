@@ -19,6 +19,8 @@ using Microsoft.Data.Sqlite;
 //                  IUCN_Red_List_Listed_Names. Only an EPBC-listed row gives a status.
 //   DOIs           GBIF's copy of the IUCN checklist (the current global assessment of each taxon)
 //                  and Wikidata items for assessments (wikidata_iucn_assessment_items).
+//   GBIF citation  The checklist's recommended citation from its eml.xml, and the dataset DOI: the
+//                  citation's identifier, else the DOI in the citation text, else 10.15468/0qnb58.
 
 namespace BeastieBot3.SiteBuild;
 
@@ -270,7 +272,7 @@ internal static class SiteLinkReaders {
 
     // ------------------------------------------------------------ GBIF
 
-    public static (string? Version, string? Published) ReadGbif(string zipPath, IReadOnlyDictionary<long, SiteTaxon> taxa,
+    public static GbifChecklistInfo ReadGbif(string zipPath, IReadOnlyDictionary<long, SiteTaxon> taxa,
         SiteDoiSources dois, CancellationToken cancellationToken) {
         var checklist = GbifIucnChecklistReader.Read(zipPath, cancellationToken);
         foreach (var (taxonId, taxon) in checklist.Taxa) {
@@ -278,7 +280,16 @@ internal static class SiteLinkReaders {
                 dois.Gbif[taxonId] = (taxon.AssessmentId, taxon.Doi);
             }
         }
-        var dataset = checklist.Summary.Dataset;
-        return (dataset.RedListVersion ?? dataset.VersionText, dataset.PubDate);
+        return GbifChecklistInfo.From(checklist.Summary.Dataset);
     }
+}
+
+/// What the site shows about GBIF's copy of the IUCN checklist: its version, publication date,
+/// recommended citation and dataset DOI (without a resolver prefix).
+internal sealed record GbifChecklistInfo(string? Version, string? Published, string? Citation, string Doi) {
+    public static GbifChecklistInfo From(GbifIucnDatasetInfo dataset) => new(
+        dataset.RedListVersion ?? dataset.VersionText,
+        dataset.PubDate,
+        dataset.Citation,
+        Iucn.Gbif.IucnDoi.Extract(dataset.CitationIdentifier) ?? Iucn.Gbif.IucnDoi.Extract(dataset.Citation) ?? GbifIucnChecklistFiles.DatasetDoi);
 }

@@ -13,6 +13,8 @@ internal sealed record SiteBuildInputs {
     public string? WikipediaCache { get; init; }
     /// "<COL_sqlite>.placement.sqlite", built by `col build-placement`.
     public string? ColPlacement { get; init; }
+    /// The folder with the release's ColDP zip (Datasets:COL_dir), for its citation and DOI.
+    public string? ColDir { get; init; }
     /// The CoL database itself; only its file name is read, for the release when there is no placement file.
     public string? ColDatabase { get; init; }
     public string? SpratDatabase { get; init; }
@@ -119,6 +121,18 @@ internal sealed class SiteBuildStats {
     public readonly Dictionary<Shared.Wikitext.DoiSource, int> DoisBySource = new();
     public DateTime? DownloadedFrom;
     public DateTime? DownloadedTo;
+    /// Author names with a letter lost to an encoding error: repaired (from, to), and not repaired.
+    public readonly Dictionary<(string From, string To), int> AuthorNameRepairs = new();
+    public readonly Dictionary<string, int> AuthorNamesNotRepaired = new(StringComparer.Ordinal);
+
+    /// replaced_by_assessment_id values written, by the kind of version that replaced the assessment.
+    public int ReplacedByErrata;
+    public int ReplacedByAmended;
+    /// Errata and amended versions whose replaced assessment was not found, or not one alone.
+    public int ReplacedNoCandidate;
+    public int ReplacedSeveralCandidates;
+    /// Earlier assessments that two newer versions both name; left unlinked.
+    public int ReplacedClaimedTwice;
 
     public readonly Dictionary<string, int> NamesByType = new(StringComparer.Ordinal);
     public int CommonNamesEnglish;
@@ -138,7 +152,11 @@ internal sealed class SiteBuildStats {
 
     public string? GbifVersion;
     public string? GbifPublished;
+    public string? GbifCitation;
+    public string? GbifDoi;
     public string? ColRelease;
+    public string? ColCitation;
+    public string? ColDoi;
     public string? SpratReport;
     public readonly List<string> MissingSources = new();
     public readonly List<string> Warnings = new();

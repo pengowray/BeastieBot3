@@ -14,7 +14,7 @@ using Spectre.Console.Cli;
 namespace BeastieBot3.SiteBuild;
 
 [CommandInfo("site build-db", CommandKind.Mutates,
-    "Build the public species site's database (Datastore:site_sqlite) from the IUCN CSV export, the IUCN API cache, GBIF's copy of the IUCN checklist, the common names store, the Wikidata and Wikipedia caches, the Catalogue of Life placement file and the SPRAT database. The new database is written beside the old one and replaces it only when the build finishes. No assessment narrative text is stored.",
+    "Build the public species site's database (Datastore:site_sqlite) from the IUCN CSV export, the IUCN API cache, GBIF's copy of the IUCN checklist, the common names store, the Wikidata and Wikipedia caches, the Catalogue of Life placement file and release metadata, and the SPRAT database. The new database is written beside the old one and replaces it only when the build finishes. No assessment narrative text is stored.",
     Rerun = RerunEffect.Rebuilds,
     RerunNote = "Builds the whole database again from the data stored locally and replaces the previous one. A running site keeps reading the old file until it is restarted.",
     Examples = new[] {
@@ -56,6 +56,10 @@ internal sealed class SiteBuildDbCommand : Command<SiteBuildDbCommand.Settings> 
         [Description("Catalogue of Life placement file, built by col build-placement. Default: the file beside Datastore:COL_sqlite.")]
         public string? ColPlacement { get; init; }
 
+        [CommandOption("--col-dir <PATH>")]
+        [Description("Folder with the Catalogue of Life ColDP zip, read for the release's citation and DOI. Default: Datasets:COL_dir in paths.ini.")]
+        public string? ColDir { get; init; }
+
         [CommandOption("--sprat-db <PATH>")]
         [Description("SPRAT database. Default: Datastore:SPRAT_sqlite in paths.ini.")]
         public string? SpratDatabase { get; init; }
@@ -90,6 +94,7 @@ internal sealed class SiteBuildDbCommand : Command<SiteBuildDbCommand.Settings> 
                 ColPlacement = Full(settings.ColPlacement
                     ?? (string.IsNullOrWhiteSpace(colDatabase) ? null : TaxonPlacementStore.SidecarPath(colDatabase))),
                 ColDatabase = Full(colDatabase),
+                ColDir = Full(settings.ColDir ?? paths.GetColDir()),
                 SpratDatabase = Full(settings.SpratDatabase ?? paths.GetSpratDatabasePath()),
                 GbifChecklist = Full(settings.GbifChecklist ?? GbifIucnChecklistReader.FindNewest(paths.GetGbifIucnDir())),
                 RulesList = Full(settings.RulesList ?? Path.Combine(paths.BaseDirectory, "rules", "rules-list.txt")),
@@ -126,6 +131,12 @@ internal sealed class SiteBuildDbCommand : Command<SiteBuildDbCommand.Settings> 
         }
 
         WriteSummary(stats);
+        foreach (var ((from, to), count) in stats.AuthorNameRepairs.OrderByDescending(p => p.Value)) {
+            AnsiConsole.MarkupLineInterpolated($"[grey]Author name repaired:[/] {from} [grey]to[/] {to} [grey]({count:N0})[/]");
+        }
+        foreach (var (name, count) in stats.AuthorNamesNotRepaired.OrderByDescending(p => p.Value)) {
+            AnsiConsole.MarkupLineInterpolated($"[yellow]Author name with a lost letter, kept as IUCN wrote it:[/] {name} ({count:N0})");
+        }
         foreach (var warning in stats.Warnings.Take(20)) {
             AnsiConsole.MarkupLineInterpolated($"[yellow]{warning}[/]");
         }
@@ -162,6 +173,11 @@ internal sealed class SiteBuildDbCommand : Command<SiteBuildDbCommand.Settings> 
         Row("Flagged latest by the API, but the CSV has that scope (stored as earlier)", s.ApiLatestCoveredByCsv);
         Row("Flagged latest by the API and missing from the CSV (stored as latest)", s.ApiLatestNotInCsv);
         Row("Category in the CSV differs from the API taxon record", s.CsvCategoryDiffersFromApi);
+        Row("Replaced by an errata version (replaced_by_assessment_id set)", s.ReplacedByErrata);
+        Row("Replaced by an amended version (replaced_by_assessment_id set)", s.ReplacedByAmended);
+        Row("Errata or amended versions with no earlier assessment to link", s.ReplacedNoCandidate);
+        Row("Errata or amended versions with several earlier assessments that could be the one replaced", s.ReplacedSeveralCandidates);
+        Row("Earlier assessments named by two newer versions (not linked)", s.ReplacedClaimedTwice);
 
         Section("Citations");
         Row("Citations parsed from cached API assessments", s.CitationsParsed);
@@ -171,6 +187,8 @@ internal sealed class SiteBuildDbCommand : Command<SiteBuildDbCommand.Settings> 
         Row("DOIs from GBIF", s.DoisBySource.GetValueOrDefault(DoiSource.Gbif));
         Row("DOIs from Wikidata", s.DoisBySource.GetValueOrDefault(DoiSource.Wikidata));
         Row("Citations with no DOI", s.DoisBySource.GetValueOrDefault(DoiSource.None));
+        Row("Author names repaired: a letter lost to an encoding error, restored from other assessor credits", s.AuthorNameRepairs.Values.Sum());
+        Row("Author names with a lost letter that could not be repaired", s.AuthorNamesNotRepaired.Values.Sum());
         Text("API assessments downloaded", s.DownloadedFrom is null ? null
             : $"{s.DownloadedFrom:yyyy-MM-dd} to {s.DownloadedTo:yyyy-MM-dd}");
 
@@ -196,7 +214,9 @@ internal sealed class SiteBuildDbCommand : Command<SiteBuildDbCommand.Settings> 
         Section("Sources");
         Text("IUCN release", s.IucnRelease);
         Text("GBIF checklist", s.GbifVersion is null ? null : $"{s.GbifVersion}, published {s.GbifPublished}");
+        Text("GBIF checklist DOI", s.GbifDoi);
         Text("Catalogue of Life release", s.ColRelease);
+        Text("Catalogue of Life release DOI", s.ColDoi);
         Text("SPRAT report", s.SpratReport);
         if (s.MissingSources.Count > 0) {
             Text("Sources not found (skipped)", string.Join(", ", s.MissingSources));
