@@ -153,8 +153,11 @@ public static class SiteText {
     public const string ShowLatestWikitext = "Show wikitext for the latest assessment";
     public const string NoTemplateCode = "{{IUCN status}} and {{Speciesbox}} have no code for this category.";
 
-    /// The no-citation note, split around its link: before + link("its page on the IUCN Red List website") + after.
-    public const string NoCitationBefore = "No citation for this assessment yet: its details have not been downloaded from the IUCN Red List. {{IUCN status}} wikitext is available. To cite the assessment, use ";
+    /// The no-citation note: reason, then (when there is an {{IUCN status}} box) the available
+    /// line, then "To cite the assessment, use " + link("its page on the IUCN Red List website") + ".".
+    public const string NoCitationReason = "No citation for this assessment yet: its details have not been downloaded from the IUCN Red List.";
+    public const string NoCitationStatusAvailable = "{{IUCN status}} wikitext is available.";
+    public const string NoCitationBefore = "To cite the assessment, use ";
     public const string NoCitationLink = "its page on the IUCN Red List website";
     public const string NoCitationAfter = ".";
     public const string IucnCitationLabel = "Citation as given by IUCN";

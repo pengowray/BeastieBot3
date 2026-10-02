@@ -68,7 +68,7 @@ public sealed class SpeciesModel : PageModel {
     public string? DataDateRange { get; private set; }
 
     public IActionResult OnGet(long taxonId, long? assessment, string? authors, string? access, string? opts,
-        [FromQuery(Name = "ref")] string? wrapRef, string? refname, string? amp, string? q) {
+        [FromQuery(Name = "ref")] string? wrapRef, string? amp, string? q) {
         RequestedTaxonId = taxonId;
         var snapshot = _db.Snapshot;
         Version = snapshot?.IucnRelease;
@@ -82,7 +82,10 @@ public sealed class SpeciesModel : PageModel {
             Parent = _queries.GetSummary(parentId);
         }
         LoadAssessments(assessment);
-        Options = WikitextOptions.FromQuery(authors, access, opts, wrapRef, refname, amp);
+        // Read refname from the query itself: model binding turns an empty value into null, and an
+        // emptied ref name field means a plain <ref>, not the default name.
+        var refName = Request.Query.TryGetValue("refname", out var refNameValue) ? refNameValue.ToString() : null;
+        Options = WikitextOptions.FromQuery(authors, access, opts, wrapRef, refName, amp);
         BuildWikitext();
         LoadNames();
         Children = _queries.GetChildren(Taxon.TaxonId).Select(c => new TaxonListItem(c)).ToList();

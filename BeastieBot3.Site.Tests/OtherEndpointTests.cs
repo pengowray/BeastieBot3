@@ -1,0 +1,183 @@
+using System.Net;
+using System.Text.Json;
+
+namespace BeastieBot3.Site.Tests;
+
+public sealed class OtherEndpointTests(SiteFactory factory) : IClassFixture<SiteFactory> {
+    private readonly HttpClient _client = factory.Client();
+
+    [Fact]
+    public async Task NameWithOneTaxonRedirects() {
+        var response = await _client.GetAsync("/name/Ursus_maritimus");
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+        Assert.Equal($"/species/{FixtureDb.PolarBear}", response.Headers.Location?.OriginalString);
+
+        var common = await _client.GetAsync("/name/polar%20BEAR");
+        Assert.Equal($"/species/{FixtureDb.PolarBear}", common.Headers.Location?.OriginalString);
+    }
+
+    [Fact]
+    public async Task NameWithSeveralTaxaListsThem() {
+        var response = await _client.GetAsync("/name/Big_cat");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var html = await response.Content.ReadAsStringAsync();
+        var text = Html.Text(html);
+        Assert.Contains("Taxa with the name “Big cat”", text);
+        Assert.Contains("2 taxa have “Big cat” as their scientific name, a common name or a synonym. Select one to see its page.", text);
+        Assert.Contains($"/species/{FixtureDb.Tiger}\"", html);
+        Assert.Contains($"/species/{FixtureDb.Lion}\"", html);
+    }
+
+    [Fact]
+    public async Task NameWithNoTaxonGoesToSearch() {
+        var response = await _client.GetAsync("/name/Nothing_here");
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+        Assert.Equal("/search?q=Nothing%20here", response.Headers.Location?.OriginalString);
+    }
+
+    [Fact]
+    public async Task HealthzIsOk() {
+        var response = await _client.GetAsync("/healthz");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("ok", await response.Content.ReadAsStringAsync());
+    }
+
+    [Fact]
+    public async Task SuggestReturnsNamesIdsAndCategoryOnly() {
+        var response = await _client.GetAsync("/api/suggest?q=Urs");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        Assert.Equal("application/json", response.Content.Headers.ContentType?.MediaType);
+        using var doc = JsonDocument.Parse(await response.Content.ReadAsStringAsync());
+        var items = doc.RootElement.EnumerateArray().ToList();
+        var bear = Assert.Single(items);
+        Assert.Equal(["taxonId", "name", "commonName", "category"], bear.EnumerateObject().Select(p => p.Name).ToArray());
+        Assert.Equal(FixtureDb.PolarBear, bear.GetProperty("taxonId").GetInt64());
+        Assert.Equal("Ursus maritimus", bear.GetProperty("name").GetString());
+        Assert.Equal("Polar bear", bear.GetProperty("commonName").GetString());
+        Assert.Equal("VU", bear.GetProperty("category").GetString());
+    }
+
+    [Fact]
+    public async Task SuggestIsCappedAtTenAndKeepsPossiblyExtinct() {
+        using var many = JsonDocument.Parse(await _client.GetStringAsync("/api/suggest?q=Fillerus"));
+        Assert.Equal(10, many.RootElement.GetArrayLength());
+
+        using var baiji = JsonDocument.Parse(await _client.GetStringAsync("/api/suggest?q=Lipotes"));
+        Assert.Equal("CR(PE)", baiji.RootElement[0].GetProperty("category").GetString());
+
+        using var none = JsonDocument.Parse(await _client.GetStringAsync("/api/suggest?q=a"));
+        Assert.Equal(0, none.RootElement.GetArrayLength());
+
+        using var regional = JsonDocument.Parse(await _client.GetStringAsync("/api/suggest?q=Gobio"));
+        Assert.Equal(JsonValueKind.Null, regional.RootElement[0].GetProperty("category").ValueKind);
+    }
+
+    [Fact]
+    public async Task NoOtherApi() {
+        var response = await _client.GetAsync("/api/taxon/22823");
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task RobotsTxt() {
+        var response = await _client.GetAsync("/robots.txt");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var body = await response.Content.ReadAsStringAsync();
+        Assert.Contains("User-agent: *", body);
+        Assert.Contains("Allow: /", body);
+        Assert.Contains("Disallow: /search", body);
+        Assert.Contains("Disallow: /api/", body);
+    }
+
+    [Fact]
+    public async Task AboutPage() {
+        var html = await _client.GetStringAsync("/about");
+        var text = Html.Text(html);
+        Assert.Contains("About Beastie Bot Species Status", text);
+        Assert.Contains("Beastie Bot Species Status is an unofficial website for looking up IUCN Red List assessments and citing them on English Wikipedia.", text);
+        Assert.Contains("contact User talk:Example on English Wikipedia. Include the address of the taxon page.", text);
+        Assert.Contains("Version 2026-1. Assessment details downloaded from the IUCN Red List API between 18 August and 1 September 2026.", text);
+        Assert.Contains("COL26.7 XR", text);
+        Assert.Contains("1 October 2026", text);
+        Assert.Contains("28 July 2026", text);
+        Assert.Contains("Cite the IUCN Red List as: IUCN 2026. The IUCN Red List of Threatened Species. Version 2026-1. https://www.iucnredlist.org", text);
+        Assert.Contains("<th scope=\"row\">Catalogue of Life</th>", html);
+    }
+
+    [Fact]
+    public async Task UnknownPathIs404Page() {
+        var response = await _client.GetAsync("/no/such/page");
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
+        var text = Html.Text(await response.Content.ReadAsStringAsync());
+        Assert.Contains("Page not found", text);
+        Assert.Contains("Check the address, or search for a taxon.", text);
+    }
+
+    [Fact]
+    public async Task PostIsNotAllowed() {
+        var response = await _client.PostAsync("/search?q=ursus", new StringContent("x"));
+        Assert.Equal(HttpStatusCode.MethodNotAllowed, response.StatusCode);
+    }
+
+    [Theory]
+    [InlineData("/")]
+    [InlineData("/species/22823")]
+    [InlineData("/no/such/page")]
+    [InlineData("/api/suggest?q=urs")]
+    [InlineData("/site.css")]
+    public async Task SecurityHeaders(string url) {
+        var response = await _client.GetAsync(url);
+        var headers = response.Headers;
+        var csp = string.Join(";", headers.GetValues("Content-Security-Policy"));
+        Assert.Contains("default-src 'self'", csp);
+        Assert.Contains("script-src 'self'", csp);
+        Assert.Contains("frame-ancestors 'none'", csp);
+        Assert.DoesNotContain("unsafe-inline", csp);
+        Assert.Equal("nosniff", headers.GetValues("X-Content-Type-Options").Single());
+        Assert.Equal("strict-origin-when-cross-origin", headers.GetValues("Referrer-Policy").Single());
+        Assert.Contains("camera=()", headers.GetValues("Permissions-Policy").Single());
+        Assert.Equal("DENY", headers.GetValues("X-Frame-Options").Single());
+    }
+
+    [Fact]
+    public async Task PagesHaveNoInlineScriptsOrStyles() {
+        foreach (var url in new[] { "/", "/species/22823", "/search?q=Fillerus", "/about", "/no/such/page" }) {
+            var html = await (await _client.GetAsync(url)).Content.ReadAsStringAsync();
+            Assert.DoesNotMatch("<script(?![^>]*\\bsrc=)", html);
+            Assert.DoesNotContain(" style=\"", html);
+            Assert.DoesNotContain("<style", html);
+            Assert.DoesNotMatch(" on[a-z]+=\"", html);
+        }
+    }
+
+    [Fact]
+    public async Task NoResponseContainsAssessmentNarrative() {
+        var urls = new List<string> { "/", "/about", "/search?q=Ursus&all=1", "/api/suggest?q=Urs", "/name/Big_cat" };
+        foreach (var id in new[] { FixtureDb.PolarBear, FixtureDb.HouseSparrow, FixtureDb.Baiji, FixtureDb.Tiger, FixtureDb.SumatranTiger,
+                     FixtureDb.Lion, FixtureDb.WestAfricanLion, FixtureDb.RegionalOnly, FixtureDb.Variety, FixtureDb.Koala }) {
+            urls.Add($"/species/{id}");
+            urls.Add($"/species/{id}?authors=lastfirst&access=none");
+        }
+        urls.Add($"/species/{FixtureDb.PolarBear}?assessment={FixtureDb.PolarBear2008}");
+        foreach (var url in urls) {
+            var body = await (await _client.GetAsync(url)).Content.ReadAsStringAsync();
+            Assert.DoesNotContain(FixtureDb.NarrativeMarker, body);
+        }
+    }
+
+    [Fact]
+    public async Task SpeciesPagesAreCacheable() {
+        var response = await _client.GetAsync($"/species/{FixtureDb.PolarBear}");
+        Assert.Contains("max-age=600", response.Headers.CacheControl?.ToString());
+        Assert.True(response.Headers.CacheControl?.Public);
+    }
+
+    [Fact]
+    public async Task StaticFilesAreServedWithVersionedLinks() {
+        var html = await _client.GetStringAsync("/");
+        Assert.Matches("<link rel=\"stylesheet\" href=\"/site.css\\?v=[^\"]+\">", html);
+        Assert.Matches("<script src=\"/site.js\\?v=[^\"]+\" defer></script>", html);
+        var js = await _client.GetAsync("/site.js");
+        Assert.Equal(HttpStatusCode.OK, js.StatusCode);
+    }
+}

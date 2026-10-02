@@ -119,7 +119,13 @@
         }
 
         @if (Model.Parts is null) {
-            <p class="note">@SiteText.NoCitationBefore<a href="@SiteFormat.IucnAssessmentUrl(selected.TaxonId, selected.AssessmentId)">@SiteText.NoCitationLink</a>@SiteText.NoCitationAfter</p>
+            <p class="note">
+                @SiteText.NoCitationReason
+                @if (IucnCategories.HasStatusTemplateCode(selected.Category)) {
+                    @SiteText.NoCitationStatusAvailable
+                }
+                @SiteText.NoCitationBefore<a href="@SiteFormat.IucnAssessmentUrl(selected.TaxonId, selected.AssessmentId)">@SiteText.NoCitationLink</a>@SiteText.NoCitationAfter
+            </p>
         }
 
         @foreach (var box in Model.Boxes) {
