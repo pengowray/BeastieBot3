@@ -62,6 +62,24 @@ namespace BeastieBot3.Configuration;
             return dir is null ? null : Path.Combine(dir, "wikidata_iucn_plan.sqlite");
         }
 
+        // GBIF's copy of the IUCN Red List checklist (Darwin Core Archive zips, downloaded by
+        // `iucn gbif-download`). Defaults to a gbif-iucn folder in the datasets folder.
+        public string? GetGbifIucnDir() {
+            var configured = _reader.Get("Datasets:GBIF_IUCN_dir");
+            if (!string.IsNullOrWhiteSpace(configured)) return configured;
+            var datasets = GetDatasetsDir();
+            return string.IsNullOrWhiteSpace(datasets) ? null : Path.Combine(datasets, "gbif-iucn");
+        }
+
+        // The public site's database (built by `site build-db`). Defaults to site.sqlite in the
+        // datastore folder.
+        public string? GetSiteDatabasePath() {
+            var configured = _reader.Get("Datastore:site_sqlite");
+            if (!string.IsNullOrWhiteSpace(configured)) return configured;
+            var datastore = GetDatastoreDir();
+            return string.IsNullOrWhiteSpace(datastore) ? null : Path.Combine(datastore, "site.sqlite");
+        }
+
         public string? GetReportOutputDirectory() =>
             _reader.Get("Datastore:reports_dir")
             ?? _reader.Get("reports_dir")

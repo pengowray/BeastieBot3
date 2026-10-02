@@ -1,0 +1,21 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <!-- The public species lookup site. Reads only the site database built by `site build-db`
+       (BeastieBot3.Shared.SiteData.SiteDbSchema), opened read-only. Shares no code with the CLI's
+       local web UI (BeastieBot3/Web), which runs commands and must never be exposed publicly. -->
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>BeastieBot3.Site</RootNamespace>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="BeastieBot3.Site.Tests" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\BeastieBot3.Shared\BeastieBot3.Shared.csproj" />
+  </ItemGroup>
+
+</Project>

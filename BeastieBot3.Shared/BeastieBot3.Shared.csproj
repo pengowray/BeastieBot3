@@ -1,0 +1,12 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!-- Pure code shared by the CLI (net9.0) and the public site (net10.0): the citation parts record,
+       the wikitext renderers and the site database schema. No package references, no I/O. -->
+  <PropertyGroup>
+    <TargetFramework>net9.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <RootNamespace>BeastieBot3.Shared</RootNamespace>
+  </PropertyGroup>
+
+</Project>

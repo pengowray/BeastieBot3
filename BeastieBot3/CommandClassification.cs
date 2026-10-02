@@ -13,6 +13,7 @@ using BeastieBot3;
 [assembly: CommandBranch("common-names", "Common name disambiguation and reporting commands")]
 [assembly: CommandBranch("sprat",        "Australian SPRAT (EPBC threatened species) dataset commands")]
 [assembly: CommandBranch("redlist",      "Unofficial IUCN Red List data-observation site generation")]
+[assembly: CommandBranch("site",         "Public species lookup site: build its database")]
 
 namespace BeastieBot3;
 

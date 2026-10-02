@@ -18,6 +18,10 @@
   </ItemGroup>
 
   <ItemGroup>
+    <ProjectReference Include="..\BeastieBot3.Shared\BeastieBot3.Shared.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="CXuesong.MW.WikiClientLibrary" Version="0.8.0" />
     <PackageReference Include="CXuesong.MW.WikiClientLibrary.Wikibase" Version="0.8.0" />
     <PackageReference Include="CsvHelper" Version="32.0.2" />
