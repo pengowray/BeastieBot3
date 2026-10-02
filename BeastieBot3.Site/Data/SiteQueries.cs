@@ -68,7 +68,7 @@ public sealed class SiteQueries {
         command.CommandText = """
             SELECT assessment_id, taxon_id, scope, is_latest, category, possibly_extinct,
                    possibly_extinct_in_the_wild, criteria, criteria_version, year_published,
-                   assessment_date, population_trend, citation_json
+                   assessment_date, population_trend, citation_json, replaced_by_assessment_id
             FROM assessment
             WHERE taxon_id = @id
             ORDER BY year_published DESC, assessment_date DESC, assessment_id DESC
@@ -90,7 +90,8 @@ public sealed class SiteQueries {
                 reader.IsDBNull(9) ? null : reader.GetInt32(9),
                 Text(reader, 10),
                 Text(reader, 11),
-                Text(reader, 12)));
+                Text(reader, 12),
+                Long(reader, 13)));
         }
         return rows;
     }

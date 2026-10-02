@@ -4,6 +4,7 @@ using System.Text.Json.Nodes;
 using BeastieBot3.Shared.SiteData;
 using BeastieBot3.Shared.Wikitext;
 using Microsoft.Data.Sqlite;
+using Author = BeastieBot3.Shared.Wikitext.CitationAuthor;
 
 namespace BeastieBot3.Site.Tests;
 
@@ -40,6 +41,29 @@ public static class FixtureDb {
 
     public const long Variety = 34010;
 
+    // An errata pair: the latest assessment is the errata version of an assessment published the
+    // same year, which is still listed. The Europe assessment has an errata version too.
+    public const long Micropyropsis = 162107;
+    public const long MicropyropsisLatest = 85140439;
+    public const long MicropyropsisReplaced = 5539282;
+    public const long MicropyropsisEurope = 85140183;
+    public const long MicropyropsisEuropeReplaced = 5539452;
+
+    // A plant subspecies (its species is not in the database), with an "NT" from 1998 that has no
+    // criteria version.
+    public const long PlantSubspecies = 32277;
+    public const long PlantSubspeciesLatest = 2812588;
+    public const long PlantSubspecies1998Nt = 9692717;
+    public const long PlantSubspecies1998Vu = 9692643;
+
+    // Extinct in the Wild, with an "EX" from 1998 that has no criteria version.
+    public const long Bromus = 165247;
+    public const long BromusLatest = 5995954;
+    public const long Bromus1998Ex = 5996068;
+
+    // The house sparrow's 2018 assessment, replaced by the amended version published in 2019.
+    public const long HouseSparrow2018 = 129643357;
+
     public const long Koala = 16892;
     public const long KoalaLatest = 166496779;
     public const long KoalaSprat = 85104;
@@ -59,8 +83,11 @@ public static class FixtureDb {
     public static string Path => Default.Value;
 
     /// Creates a fixture database in a new temporary folder and returns its path. The folder is
-    /// deleted when the test run ends. schemaVersion and dropTable make the broken variants.
-    public static string Create(string name, string? schemaVersion = null, string? dropTable = null) {
+    /// deleted when the test run ends. schemaVersion and dropTable make the broken variants;
+    /// release sets meta iucn_release; withSourceCitations=false leaves out the GBIF and Catalogue
+    /// of Life citation and DOI meta keys.
+    public static string Create(string name, string? schemaVersion = null, string? dropTable = null, string release = "2026-1",
+        bool withSourceCitations = true) {
         var dir = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "beastiebot-site-tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(dir);
         AppDomain.CurrentDomain.ProcessExit += (_, _) => {
@@ -80,7 +107,7 @@ public static class FixtureDb {
             Exec(connection, SiteDbSchema.Ddl);
             using var tx = connection.BeginTransaction();
             var writer = new Writer(connection, tx);
-            Populate(writer, schemaVersion ?? SiteDbSchema.Version.ToString(CultureInfo.InvariantCulture));
+            Populate(writer, schemaVersion ?? SiteDbSchema.Version.ToString(CultureInfo.InvariantCulture), release, withSourceCitations);
             tx.Commit();
             Exec(connection, "INSERT INTO name_fts(name_fts) VALUES('rebuild')");
             if (dropTable is not null) {
@@ -90,7 +117,7 @@ public static class FixtureDb {
         return path;
     }
 
-    private static void Populate(Writer w, string schemaVersion) {
+    private static void Populate(Writer w, string schemaVersion, string release, bool withSourceCitations) {
         // Polar bear: a species with a global history, a citation with a DOI from GBIF, an
         // unsplit author, common names in three languages and synonyms.
         w.Taxon(PolarBear, "Ursus maritimus", "species", "ANIMALIA", "CHORDATA", "MAMMALIA", "CARNIVORA", "URSIDAE", "Ursus",
@@ -107,7 +134,8 @@ public static class FixtureDb {
             citation: Citation(PolarBear, PolarBear2008, 2008, "Ursus maritimus", [Person("Schliebe", "S.")], etAl: true,
                 doi: null, doiSource: DoiSource.None, text: null));
         w.Assessment(PolarBear1996, PolarBear, "Global", false, "LR/cd", criteriaVersion: "2.3", year: 1996, date: "1996-06-30");
-        w.Assessment(PolarBear1988Nt, PolarBear, "Global", false, "nt", criteriaVersion: "Earlier Version", year: 1988);
+        // site build-db stores IUCN's "Earlier Version" as a NULL criteria version.
+        w.Assessment(PolarBear1988Nt, PolarBear, "Global", false, "nt", year: 1988);
         w.Name(PolarBear, "Ursus maritimus", "scientific", null, "iucn");
         w.Name(PolarBear, "Polar bear", "common", "en", "iucn", preferred: true);
         w.Name(PolarBear, "Polar Bear", "common", "en", "wikidata");
@@ -115,6 +143,9 @@ public static class FixtureDb {
         w.Name(PolarBear, "Ours polaire", "common", "fr", "iucn");
         w.Name(PolarBear, "Ours blanc", "common", "fr", "wikidata");
         w.Name(PolarBear, "Oso polar", "common", "es", "iucn");
+        // An ISO 639-2 code for English, and the code for an undetermined language.
+        w.Name(PolarBear, "Ice bear", "common", "eng", "iucn");
+        w.Name(PolarBear, "Nanuq", "common", "und", "iucn");
         w.Name(PolarBear, "Thalarctos maritimus", "synonym", null, "iucn");
         w.Name(PolarBear, "Ursus marinus Pallas, 1776", "synonym", null, "col");
 
@@ -123,7 +154,12 @@ public static class FixtureDb {
             authority: "(Linnaeus, 1758)", commonEn: "House sparrow", enwiki: "House sparrow", qid: "Q28922", latest: HouseSparrowLatest);
         w.Assessment(HouseSparrowLatest, HouseSparrow, "Global", true, "LC", criteriaVersion: "3.1", year: 2019, date: "2018-08-07", trend: "Decreasing",
             citation: Citation(HouseSparrow, HouseSparrowLatest, 2019, "Passer domesticus", [Organisation("BirdLife International")],
-                doi: "10.2305/IUCN.UK.2019-3.RLTS.T103818789A155522130.en", doiSource: DoiSource.Citation, text: "BirdLife International. 2019. Passer domesticus."));
+                doi: "10.2305/IUCN.UK.2019-3.RLTS.T103818789A155522130.en", doiSource: DoiSource.Citation, text: "BirdLife International. 2019. Passer domesticus.",
+                amendsYear: 2018));
+        w.Assessment(HouseSparrow2018, HouseSparrow, "Global", false, "LC", criteriaVersion: "3.1", year: 2018, date: "2016-10-01",
+            replacedBy: HouseSparrowLatest,
+            citation: Citation(HouseSparrow, HouseSparrow2018, 2018, "Passer domesticus", [Organisation("BirdLife International")],
+                doi: null, doiSource: DoiSource.None, text: null));
         w.Assessment(HouseSparrowEurope, HouseSparrow, "Europe", true, "LC", criteriaVersion: "3.1", year: 2021, date: "2021-03-01",
             citation: Citation(HouseSparrow, HouseSparrowEurope, 2021, "Passer domesticus", [Organisation("BirdLife International")],
                 doi: null, doiSource: DoiSource.None, text: null, region: "Europe"));
@@ -138,7 +174,7 @@ public static class FixtureDb {
             citation: Citation(Baiji, BaijiLatest, 2017, "Lipotes vexillifer",
                 [Person("Smith", "B.D."), Person("Wang", "D."), Person("Braulik", "G.T."), Person("Reeves", "R.")],
                 doi: "10.2305/IUCN.UK.2017-3.RLTS.T12119A50358152.en", doiSource: DoiSource.Wikidata, text: null));
-        w.Assessment(Baiji1986Ex, Baiji, "Global", false, "Ex", criteriaVersion: "Earlier Version", year: 1986);
+        w.Assessment(Baiji1986Ex, Baiji, "Global", false, "Ex", year: 1986);
         w.Name(Baiji, "Lipotes vexillifer", "scientific", null, "iucn");
         w.Name(Baiji, "Baiji", "common", "en", "iucn", preferred: true);
 
@@ -153,6 +189,8 @@ public static class FixtureDb {
         w.Name(Tiger, "Tiger", "common", "en", "iucn", preferred: true);
         w.Name(Tiger, "Big cat", "common", "en", "wikidata");
         w.Name(Tiger, "Felis tigris", "synonym", null, "iucn");
+        // IUCN's collective code for Austronesian languages.
+        w.Name(Tiger, "Harimau", "common", "map", "iucn");
 
         w.Taxon(SumatranTiger, "Panthera tigris ssp. sumatrae", "subspecies", "ANIMALIA", "CHORDATA", "MAMMALIA", "CARNIVORA", "FELIDAE", "Panthera",
             authority: "Pocock, 1929", commonEn: "Sumatran tiger", enwiki: "Sumatran tiger", parent: Tiger, latest: SumatranTigerLatest,
@@ -191,6 +229,54 @@ public static class FixtureDb {
         w.Assessment(RegionalOnlyMediterranean, RegionalOnly, "Mediterranean", true, "DD", criteriaVersion: "3.1", year: 2010, date: "2010-01-01");
         w.Name(RegionalOnly, "Gobio kovatschevi", "scientific", null, "iucn");
 
+        // Micropyropsis tuberosa: a plant whose latest global and Europe assessments are errata versions
+        // of assessments published the same year.
+        w.Taxon(Micropyropsis, "Micropyropsis tuberosa", "species", "PLANTAE", "TRACHEOPHYTA", "LILIOPSIDA", "POALES", "POACEAE", "Micropyropsis",
+            authority: "Romero-Zarco & Cabezudo", latest: MicropyropsisLatest);
+        Author[] rhazi = [Person("Rhazi", "L."), Person("Grillas", "P."), Person("Rhazi", "M."), Person("Flanagan", "D.")];
+        w.Assessment(MicropyropsisLatest, Micropyropsis, "Global", true, "EN", criteria: "B1ab(i,ii,iii,v)+2ab(i,ii,iii,v)", criteriaVersion: "3.1",
+            year: 2010, date: "2009-02-12",
+            citation: Citation(Micropyropsis, MicropyropsisLatest, 2010, "Micropyropsis tuberosa", rhazi,
+                doi: "10.2305/IUCN.UK.2010-2.RLTS.T162107A5539282.en", doiSource: DoiSource.Gbif, text: null, errataYear: 2016));
+        w.Assessment(MicropyropsisReplaced, Micropyropsis, "Global", false, "EN", criteria: "B1ab(i,ii,iii,v)+2ab(i,ii,iii,v)", criteriaVersion: "3.1",
+            year: 2010, date: "2009-02-12", replacedBy: MicropyropsisLatest,
+            citation: Citation(Micropyropsis, MicropyropsisReplaced, 2010, "Micropyropsis tuberosa", rhazi,
+                doi: null, doiSource: DoiSource.None, text: null));
+        Author[] deVega = [Person("de Vega Durán", "C."), Person("Berjano Pérez", "R.")];
+        w.Assessment(MicropyropsisEurope, Micropyropsis, "Europe", true, "EN", criteria: "B1ab(iii)+2ab(iii)", criteriaVersion: "3.1",
+            year: 2011, date: "2011-03-23",
+            citation: Citation(Micropyropsis, MicropyropsisEurope, 2011, "Micropyropsis tuberosa", deVega,
+                doi: null, doiSource: DoiSource.None, text: null, region: "Europe", errataYear: 2016));
+        w.Assessment(MicropyropsisEuropeReplaced, Micropyropsis, "Europe", false, "EN", criteria: "B1ab(iii)+2ab(iii)", criteriaVersion: "3.1",
+            year: 2011, date: "2011-03-23", replacedBy: MicropyropsisEurope,
+            citation: Citation(Micropyropsis, MicropyropsisEuropeReplaced, 2011, "Micropyropsis tuberosa", deVega,
+                doi: null, doiSource: DoiSource.None, text: null, region: "Europe"));
+        w.Name(Micropyropsis, "Micropyropsis tuberosa", "scientific", null, "iucn");
+
+        // A plant subspecies with an "NT" from 1998 that has no criteria version.
+        w.Taxon(PlantSubspecies, "Hirtella zanzibarica subsp. megacarpa", "subspecies", "PLANTAE", "TRACHEOPHYTA", "MAGNOLIOPSIDA", "MALPIGHIALES",
+            "CHRYSOBALANACEAE", "Hirtella", authority: "(R.A.Graham) Prance", latest: PlantSubspeciesLatest, infraRank: "subsp.", infraName: "megacarpa");
+        w.Assessment(PlantSubspeciesLatest, PlantSubspecies, "Global", true, "NT", criteria: "B1a+2a", criteriaVersion: "3.1", year: 2020, date: "2007-03-07",
+            citation: Citation(PlantSubspecies, PlantSubspeciesLatest, 2020, "Hirtella zanzibarica subsp. megacarpa", [Person("Lovett", "J.")],
+                doi: null, doiSource: DoiSource.None, text: null));
+        w.Assessment(PlantSubspecies1998Nt, PlantSubspecies, "Global", false, "NT", year: 1998, date: "1997-01-01",
+            citation: Citation(PlantSubspecies, PlantSubspecies1998Nt, 1998, "Hirtella zanzibarica subsp. megacarpa",
+                [Organisation("World Conservation Monitoring Centre")], doi: null, doiSource: DoiSource.None, text: null));
+        w.Assessment(PlantSubspecies1998Vu, PlantSubspecies, "Global", false, "VU", criteria: "B1+2b", criteriaVersion: "2.3", year: 1998, date: "1998-01-01");
+        w.Name(PlantSubspecies, "Hirtella zanzibarica subsp. megacarpa", "scientific", null, "iucn");
+        w.Name(PlantSubspecies, "Hirtella megacarpa", "synonym", null, "iucn");
+
+        // Bromus interruptus: Extinct in the Wild, with an "EX" from 1998 that has no criteria version.
+        w.Taxon(Bromus, "Bromus interruptus", "species", "PLANTAE", "TRACHEOPHYTA", "LILIOPSIDA", "POALES", "POACEAE", "Bromus",
+            authority: "(Hack.) Druce", commonEn: "Interrupted brome", enwiki: "Bromus interruptus", latest: BromusLatest);
+        w.Assessment(BromusLatest, Bromus, "Global", true, "EW", criteriaVersion: "3.1", year: 2011, date: "2011-01-10",
+            citation: Citation(Bromus, BromusLatest, 2011, "Bromus interruptus", [Person("Rumsey", "F.")], doi: null, doiSource: DoiSource.None, text: null));
+        w.Assessment(Bromus1998Ex, Bromus, "Global", false, "EX", year: 1998, date: "1997-01-01",
+            citation: Citation(Bromus, Bromus1998Ex, 1998, "Bromus interruptus", [Organisation("World Conservation Monitoring Centre")],
+                doi: null, doiSource: DoiSource.None, text: null));
+        w.Name(Bromus, "Bromus interruptus", "scientific", null, "iucn");
+        w.Name(Bromus, "Interrupted brome", "common", "en", "iucn", preferred: true);
+
         // Koala: SPRAT profile and EPBC listing.
         w.Taxon(Koala, "Phascolarctos cinereus", "species", "ANIMALIA", "CHORDATA", "MAMMALIA", "DIPROTODONTIA", "PHASCOLARCTIDAE", "Phascolarctos",
             authority: "(Goldfuss, 1817)", commonEn: "Koala", enwiki: "Koala", qid: "Q36101", latest: KoalaLatest, spratId: KoalaSprat, epbc: "EN");
@@ -217,34 +303,49 @@ public static class FixtureDb {
 
         w.Meta(SiteDbSchema.MetaKeys.SchemaVersion, schemaVersion);
         w.Meta(SiteDbSchema.MetaKeys.BuiltAtUtc, "2026-10-02T09:00:00Z");
-        w.Meta(SiteDbSchema.MetaKeys.IucnRelease, "2026-1");
+        w.Meta(SiteDbSchema.MetaKeys.IucnRelease, release);
         w.Meta(SiteDbSchema.MetaKeys.IucnApiDownloadedFrom, "2026-08-18");
         w.Meta(SiteDbSchema.MetaKeys.IucnApiDownloadedTo, "2026-09-01");
         w.Meta(SiteDbSchema.MetaKeys.GbifChecklistVersion, "2026-1");
         w.Meta(SiteDbSchema.MetaKeys.GbifChecklistPublished, "2026-07-28");
+        if (withSourceCitations) {
+            w.Meta(SiteDbSchema.MetaKeys.GbifChecklistCitation, GbifCitation);
+            w.Meta(SiteDbSchema.MetaKeys.GbifChecklistDoi, "10.15468/0qnb58");
+            w.Meta(SiteDbSchema.MetaKeys.ColCitation, ColCitation);
+            w.Meta(SiteDbSchema.MetaKeys.ColDoi, "10.48580/dgykv");
+        }
         w.Meta(SiteDbSchema.MetaKeys.ColRelease, "COL26.7 XR");
         w.Meta(SiteDbSchema.MetaKeys.SpratReport, "01102026-023504-report.csv");
         w.Meta(SiteDbSchema.MetaKeys.TaxonCount, w.TaxonCount.ToString(CultureInfo.InvariantCulture));
         w.Meta(SiteDbSchema.MetaKeys.AssessmentCount, w.AssessmentCount.ToString(CultureInfo.InvariantCulture));
     }
 
-    public static int GlobalTaxonCount => 9 + FillerCount;
+    public static int GlobalTaxonCount => 12 + FillerCount;
 
-    private static CitationAuthor Person(string last, string initials) =>
+    public const string GbifCitation =
+        "IUCN (2026). The IUCN Red List of Threatened Species. Version 2026-1. https://www.iucnredlist.org. Downloaded on 2026-07-28. https://doi.org/10.15468/0qnb58";
+
+    public const string ColCitation =
+        "Bánki, O., Roskov, Y., Döring, M. et al. (2026). Catalogue of Life (Version 2026-07-14 XR). Catalogue of Life, Amsterdam, Netherlands. https://doi.org/10.48580/dgykv";
+
+    private static Author Person(string last, string initials) =>
         new(CitationAuthorKind.Person, $"{last}, {initials}", last, initials);
 
-    private static CitationAuthor Organisation(string name) => new(CitationAuthorKind.Organisation, name);
+    private static Author Organisation(string name) => new(CitationAuthorKind.Organisation, name);
 
-    private static CitationAuthor Verbatim(string name) => new(CitationAuthorKind.Verbatim, name);
+    private static Author Verbatim(string name) => new(CitationAuthorKind.Verbatim, name);
 
-    private static string Citation(long taxonId, long assessmentId, int year, string name, IReadOnlyList<CitationAuthor> authors,
-        string? doi, DoiSource doiSource, string? text, bool etAl = false, string? region = null, bool narrative = false) {
+    private static string Citation(long taxonId, long assessmentId, int year, string name, IReadOnlyList<Author> authors,
+        string? doi, DoiSource doiSource, string? text, bool etAl = false, string? region = null, bool narrative = false,
+        int? errataYear = null, int? amendsYear = null) {
         var parts = new IucnCitationParts {
             TaxonId = taxonId,
             AssessmentId = assessmentId,
             Year = year,
             ScientificName = name,
             RegionalScope = region,
+            ErrataYear = errataYear,
+            AmendsYear = amendsYear,
             Authors = authors,
             AuthorsEtAl = etAl,
             Doi = doi,
@@ -292,14 +393,16 @@ public static class FixtureDb {
 
         public void Assessment(long id, long taxonId, string scope, bool latest, string category, bool possiblyExtinct = false,
             string? criteria = null, string? criteriaVersion = null, int? year = null, string? date = null, string? trend = null,
-            string? citation = null) {
+            string? citation = null, long? replacedBy = null) {
             AssessmentCount++;
             Run("""
                 INSERT INTO assessment(assessment_id, taxon_id, scope, is_latest, category, possibly_extinct,
-                    possibly_extinct_in_the_wild, criteria, criteria_version, year_published, assessment_date, population_trend, citation_json)
-                VALUES (@a, @b, @c, @d, @e, @f, 0, @g, @h, @i, @j, @k, @l)
+                    possibly_extinct_in_the_wild, criteria, criteria_version, year_published, assessment_date, population_trend, citation_json,
+                    replaced_by_assessment_id)
+                VALUES (@a, @b, @c, @d, @e, @f, 0, @g, @h, @i, @j, @k, @l, @m)
                 """,
-                id, taxonId, scope, latest ? 1 : 0, category, possiblyExtinct ? 1 : 0, criteria, criteriaVersion, year, date, trend, citation);
+                id, taxonId, scope, latest ? 1 : 0, category, possiblyExtinct ? 1 : 0, criteria, criteriaVersion, year, date, trend, citation,
+                replacedBy);
         }
 
         public void Name(long taxonId, string name, string type, string? language, string source, bool preferred = false) {

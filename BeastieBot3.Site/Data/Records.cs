@@ -36,7 +36,8 @@ public sealed record AssessmentRow(
     int? YearPublished,
     string? AssessmentDate,
     string? PopulationTrend,
-    string? CitationJson) {
+    string? CitationJson,
+    long? ReplacedByAssessmentId = null) {
     public bool IsGlobal => string.Equals(Scope.Trim(), "Global", StringComparison.OrdinalIgnoreCase);
 }
 
