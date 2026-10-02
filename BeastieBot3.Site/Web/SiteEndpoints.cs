@@ -13,9 +13,11 @@ public static class SiteEndpoints {
     public const int MaxQueryLength = 100;
 
     public static void MapSiteEndpoints(this IEndpointRouteBuilder endpoints) {
+        // "ok", or "unavailable: " and the reason (no file paths). The database file is checked
+        // again at most every 30 seconds (SiteDatabase), so this is cheap to poll.
         endpoints.MapGet("/healthz", (SiteDatabase db) => db.IsReady
             ? Results.Text("ok", "text/plain")
-            : Results.Text("unavailable", "text/plain", statusCode: StatusCodes.Status503ServiceUnavailable));
+            : Results.Text("unavailable: " + db.PublicNotReadyReason, "text/plain", statusCode: StatusCodes.Status503ServiceUnavailable));
 
         endpoints.MapGet("/api/suggest", (SiteQueries queries, HttpContext context, CancellationToken cancellationToken) => {
             context.Response.Headers.CacheControl = "public, max-age=300";

@@ -1,4 +1,8 @@
 using System.Net;
+using Microsoft.AspNetCore.Hosting;
+using Microsoft.AspNetCore.TestHost;
+using Microsoft.Data.Sqlite;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace BeastieBot3.Site.Tests;
 
@@ -10,7 +14,7 @@ public sealed class SchemaMismatchTests(SchemaMismatchSiteFactory factory) : ICl
         var response = await _client.GetAsync("/healthz");
         Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
         var body = await response.Content.ReadAsStringAsync();
-        Assert.Equal("unavailable", body);
+        Assert.Equal("unavailable: database schema version 999, this build of the site needs 2", body);
     }
 
     [Theory]
@@ -75,5 +79,98 @@ public sealed class RateLimitTests(RateLimitedSiteFactory factory) : IClassFixtu
 
         // Health checks are never limited.
         Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/healthz")).StatusCode);
+    }
+}
+
+/// A clock the test moves by hand.
+public sealed class ManualTime : TimeProvider {
+    private DateTimeOffset _now = new(2026, 10, 3, 9, 0, 0, TimeSpan.Zero);
+    public override DateTimeOffset GetUtcNow() => _now;
+    public void Advance(TimeSpan by) => _now += by;
+}
+
+/// A site over its own copy of the fixture, which the test replaces and removes, with a manual
+/// clock for the 30-second recheck.
+public sealed class ReplaceableSiteFactory : SiteFactory {
+    public ManualTime Time { get; } = new();
+    public string LivePath { get; } = FixtureDb.Create("live");
+    protected override string DatabasePath => LivePath;
+
+    protected override void ConfigureWebHost(IWebHostBuilder builder) {
+        base.ConfigureWebHost(builder);
+        builder.ConfigureTestServices(services => services.AddSingleton<TimeProvider>(Time));
+    }
+}
+
+public sealed class DatabaseFileChangeTests(ReplaceableSiteFactory factory) : IClassFixture<ReplaceableSiteFactory> {
+    private readonly HttpClient _client = factory.Client();
+
+    private static readonly TimeSpan AfterRecheck = TimeSpan.FromSeconds(31);
+
+    [Fact]
+    public async Task AReplacedFileIsServedAndARemovedOneMakesHealthzFail() {
+        var page = $"/species/{FixtureDb.PolarBear}";
+        Assert.Contains("Data from IUCN Red List version 2026-1", Html.Text(await _client.GetStringAsync(page)));
+        var cached = await _client.GetAsync(page);
+        Assert.NotNull(cached.Headers.Age);
+
+        // A new file moved into place: picked up after the recheck, and the cached page is evicted.
+        // Its taxon data differs too, which shows that pooled connections to the old file are gone.
+        var next = FixtureDb.Create("next", release: "2026-2");
+        using (var connection = new SqliteConnection($"Data Source={next};Pooling=False")) {
+            connection.Open();
+            using var update = connection.CreateCommand();
+            update.CommandText = $"UPDATE taxon SET common_name_en = 'Sea bear' WHERE taxon_id = {FixtureDb.PolarBear}";
+            update.ExecuteNonQuery();
+        }
+        File.Move(next, factory.LivePath, overwrite: true);
+        factory.Time.Advance(AfterRecheck);
+        Assert.Equal("ok", await _client.GetStringAsync("/healthz"));
+        var replaced = await _client.GetAsync(page);
+        Assert.Null(replaced.Headers.Age);
+        var replacedText = Html.Text(await replaced.Content.ReadAsStringAsync());
+        Assert.Contains("Data from IUCN Red List version 2026-2", replacedText);
+        Assert.Contains("Ursus maritimus Phipps, 1774 Sea bear", replacedText);
+
+        // The file removed: /healthz says so after the recheck, and pages answer 503.
+        var aside = factory.LivePath + ".aside";
+        File.Move(factory.LivePath, aside);
+        Assert.Equal(HttpStatusCode.OK, (await _client.GetAsync("/healthz")).StatusCode);
+        factory.Time.Advance(AfterRecheck);
+        var health = await _client.GetAsync("/healthz");
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, health.StatusCode);
+        Assert.Equal("unavailable: database file not found", await health.Content.ReadAsStringAsync());
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, (await _client.GetAsync(page)).StatusCode);
+
+        // Put back: ready again at the next check.
+        File.Move(aside, factory.LivePath);
+        factory.Time.Advance(AfterRecheck);
+        Assert.Equal("ok", await _client.GetStringAsync("/healthz"));
+        Assert.Equal(HttpStatusCode.OK, (await _client.GetAsync(page)).StatusCode);
+    }
+
+    [Fact]
+    public async Task AFileWithTheWrongSchemaIsNotServed() {
+        // Runs on its own copy, so the other test's moves do not matter.
+        var path = FixtureDb.Create("wrong-later");
+        await using var site = new SingleFileSiteFactory(path);
+        var client = site.Client();
+        Assert.Equal("ok", await client.GetStringAsync("/healthz"));
+
+        File.Move(FixtureDb.Create("wrong", schemaVersion: "1"), path, overwrite: true);
+        site.Time.Advance(AfterRecheck);
+        var health = await client.GetAsync("/healthz");
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, health.StatusCode);
+        Assert.Equal("unavailable: database schema version 1, this build of the site needs 2", await health.Content.ReadAsStringAsync());
+    }
+
+    private sealed class SingleFileSiteFactory(string path) : SiteFactory {
+        public ManualTime Time { get; } = new();
+        protected override string DatabasePath => path;
+
+        protected override void ConfigureWebHost(IWebHostBuilder builder) {
+            base.ConfigureWebHost(builder);
+            builder.ConfigureTestServices(services => services.AddSingleton<TimeProvider>(Time));
+        }
     }
 }

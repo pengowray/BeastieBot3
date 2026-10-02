@@ -5,6 +5,7 @@ using BeastieBot3.Site;
 using BeastieBot3.Site.Data;
 using BeastieBot3.Site.Web;
 using Microsoft.AspNetCore.HttpOverrides;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.WebEncoders;
 
 var builder = WebApplication.CreateBuilder(args);
@@ -18,6 +19,7 @@ builder.WebHost.ConfigureKestrel(kestrel => {
 });
 
 builder.Services.Configure<SiteOptions>(builder.Configuration.GetSection(SiteOptions.Section));
+builder.Services.TryAddSingleton(TimeProvider.System);
 builder.Services.AddSingleton<SiteDatabase>();
 builder.Services.AddSingleton<SiteQueries>();
 
