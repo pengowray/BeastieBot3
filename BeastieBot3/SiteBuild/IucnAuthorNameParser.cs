@@ -29,6 +29,11 @@ using BeastieBot3.WikidataEdits;
 // Verbatim. Everything else: names written given name first ("Neil Cox", and Ethiopian names, which
 // are a given name and a father's name with no surname: "Sebsebe Demissew"), single names
 // ("Kadarusman"), typos ("Gadsden. H.", "Disi, M., A.M.") and whole lists the splitter could not split.
+// A list kept whole that names a person as "Surname, I." outside parentheses is Verbatim even when it
+// also has an organisation word ("Loiselle, P. & participants of the ... workshop, Mantasoa,
+// Madagascar 2001"): it is several names, and the site asks editors to check names kept as published.
+// A person in parentheses after an organisation ("NatureServe (Hammerson, G.)") is a credit note, so
+// that name stays an organisation.
 
 namespace BeastieBot3.SiteBuild;
 
@@ -92,6 +97,8 @@ internal static class IucnAuthorNameParser {
     private static readonly Regex Acronym = new(@"^[^\s]*\p{Lu}{2}[^\s]*$", RegexOptions.CultureInvariant | RegexOptions.Compiled);
     private static readonly Regex MiddleInitial = new(@"^\p{Lu}\.$", RegexOptions.CultureInvariant | RegexOptions.Compiled);
     private static readonly Regex Words = new(@"[\p{L}]+", RegexOptions.CultureInvariant | RegexOptions.Compiled);
+    private static readonly Regex Parenthesised = new(@"\([^()]*\)", RegexOptions.CultureInvariant | RegexOptions.Compiled);
+    private static readonly Regex ListSeparator = new(@"[,;&]|\s+and\s+", RegexOptions.CultureInvariant | RegexOptions.Compiled);
 
     // Lower-case only, as in the splitter: capitalised "Das", "Do", "Van" are surnames in their own right.
     private static readonly HashSet<string> Particles = new(StringComparer.Ordinal) {
@@ -119,6 +126,7 @@ internal static class IucnAuthorNameParser {
     public static ParsedAuthorName Parse(string name) {
         var display = Clean(name);
         if (TryPerson(display) is { } person) return person;
+        if (NamesAPersonOutsideParentheses(display)) return Make(CitationAuthorKind.Verbatim, display, AuthorNameShape.Unknown);
         if (IsOrganisation(display)) return Make(CitationAuthorKind.Organisation, display, AuthorNameShape.Organisation);
 
         var compact = CompactSurnameFirst.Match(display);
@@ -206,6 +214,24 @@ internal static class IucnAuthorNameParser {
         }
         var first = suffix is null ? initials : $"{initials}, {suffix}";
         return Make(CitationAuthorKind.Person, display, shape, surname, first);
+    }
+
+    // True when, with any text in parentheses removed, a surname is followed by initials somewhere in
+    // the list: "Carter, R.L., Hayes, W.K. & West Indian Iguana Specialist Group".
+    private static bool NamesAPersonOutsideParentheses(string display) {
+        var text = display;
+        string previous;
+        do {
+            previous = text;
+            text = Parenthesised.Replace(text, " ");
+        } while (text.Length != previous.Length);
+        var tokens = ListSeparator.Split(text).Select(t => t.Trim()).ToArray();
+        for (var i = 0; i + 1 < tokens.Length; i++) {
+            if (tokens[i].Length > 0 && LooksLikeSurname(tokens[i]) && IucnAssessmentCitationParser.IsInitials(tokens[i + 1])) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static bool LooksLikeSurname(string surname) {

@@ -548,6 +548,7 @@ internal static class CitationCheckReport {
         IucnAssessmentCitationParser.CreditSplitRule.CountStandalone => "Pairs and stand-alone names, confirmed by value[] count",
         IucnAssessmentCitationParser.CreditSplitRule.CountGiven => "Pairs with given names, confirmed by value[] count",
         IucnAssessmentCitationParser.CreditSplitRule.GivenFirst => "Every name given name first",
+        IucnAssessmentCitationParser.CreditSplitRule.PairsAndOrganisations => "Pairs and organisation names, no value[] count",
         IucnAssessmentCitationParser.CreditSplitRule.EtAl => "\"et al.\" taken off, the rest split",
         IucnAssessmentCitationParser.CreditSplitRule.Whole => "Kept whole: no rule matched and value[] was empty",
         IucnAssessmentCitationParser.CreditSplitRule.WholeCountMismatch => "Kept whole: no split matched the value[] count",

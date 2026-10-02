@@ -384,6 +384,30 @@ public class IucnCitationPartsParserTests {
     }
 
     [Fact]
+    public void PersonAndOrganisation_SplitWithoutACount() {
+        var parse = Parse(Payload(39803, 9500227, "1996",
+            "Eudey, A. & Members of the Primate Specialist Group 1996. Rhinopithecus roxellana. The IUCN Red List of Threatened Species 1996: e.T39803A9500227. Accessed on 20 August 2026.",
+            "Rhinopithecus roxellana", "Eudey, A. & Members of the Primate Specialist Group"));
+
+        Assert.Equal(IucnAssessmentCitationParser.CreditSplitRule.PairsAndOrganisations, parse.SplitRule);
+        Assert.Equal(new[] { Person("Eudey, A.", "Eudey", "A."), Organisation("Members of the Primate Specialist Group") },
+            parse.Parts!.Authors);
+    }
+
+    [Fact]
+    public void ListKeptWholeWithAPersonAndAWorkshop_IsKeptAsPublished() {
+        // aid 9303466. "Mantasoa" and "Madagascar 2001" are not organisations, so the list stays whole;
+        // it names Loiselle, P., so it is not one organisation either.
+        const string assessor = "Loiselle, P. & participants of the CBSG/ANGAP CAMP \"Faune de Madagascar\" workshop, Mantasoa, Madagascar 2001";
+        var parse = Parse(Payload(16862, 9303466, "2004",
+            $"{assessor}. 2004. Paretroplus maculatus. The IUCN Red List of Threatened Species 2004: e.T16862A9303466. Accessed on 20 August 2026.",
+            "Paretroplus maculatus", assessor));
+
+        Assert.Equal(IucnAssessmentCitationParser.CreditSplitRule.Whole, parse.SplitRule);
+        Assert.Equal(new[] { Verbatim(assessor) }, parse.Parts!.Authors);
+    }
+
+    [Fact]
     public void SingleLetterSurname_IsKeptAsPublished() {
         // aid 7928819: "G, Ntakimazi" is one person written the wrong way round.
         var parse = Parse(Payload(4991, 7928819, "2006",

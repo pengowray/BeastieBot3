@@ -57,6 +57,8 @@ public class IucnAuthorNameParserTests {
     [InlineData("Instituto Chico Mendes de Conservação da Biodiversidade (ICMBio)")]
     [InlineData("Tortoise & Freshwater Turtle Specialist Group")]
     [InlineData("NatureServe (Whittaker, J.C., Hammerson, G., Master, L. & Norris, S.J.)")]
+    [InlineData("NatureServe (Hammerson, G.)")]
+    [InlineData("Working Group, C.")]
     [InlineData("Missouri Botanical Garden, -.")]
     [InlineData("Sri Lankan Red List Group")]
     [InlineData("Asociación Herpetológica Española")]
@@ -83,6 +85,11 @@ public class IucnAuthorNameParserTests {
     [InlineData("Disi, M., A.M.", "Unknown")]
     [InlineData("Bidau, & Ojeda, R.", "Unknown")]
     [InlineData("Weber, O. & Sebsebe Demissew", "Unknown")]
+    // Lists kept whole that name a person outside parentheses, with organisation words too.
+    [InlineData("Loiselle, P. & participants of the CBSG/ANGAP CAMP \"Faune de Madagascar\" workshop, Mantasoa, Madagascar 2001", "Unknown")]
+    [InlineData("Eastern Arc Mountains & Coastal Forests CEPF Plant Assessment Project & Bösenberg, J.D.", "Unknown")]
+    [InlineData("Carter, R.L., Hayes, W.K. & West Indian Iguana Specialist Group", "Unknown")]
+    [InlineData("Magombo, Z.L.K., Mbeiza Mutekanga, N. & Ndiritu, G.G. (Freshwater Biodiversity Assessment workshop, Uganda. Dec' 2003)", "Unknown")]
     // A single-letter surname: a typo for "Ntakimazi, G.".
     [InlineData("G, Ntakimazi", "Unknown")]
     [InlineData("Kry�tufek, B.", "Unknown")]

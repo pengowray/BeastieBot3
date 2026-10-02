@@ -311,6 +311,14 @@ public class IucnAssessmentCitationParserTests {
     [InlineData("Seddon, M. & Seddon, M. & Allen, D. (IUCN Freshwater Biodiversity Unit)", "Seddon, M.|Allen, D.")]
     // People written given name first, with no organisation words.
     [InlineData("Neil Cox and Helen Temple", "Neil Cox|Helen Temple")]
+    // People and organisations: every name that pairs with nothing has an organisation word.
+    [InlineData("Eudey, A. & Members of the Primate Specialist Group", "Eudey, A.|Members of the Primate Specialist Group")]
+    [InlineData("Carter, R.L., Hayes, W.K. & West Indian Iguana Specialist Group", "Carter, R.L.|Hayes, W.K.|West Indian Iguana Specialist Group")]
+    [InlineData("Hero, J.-M. & IUCN SSC Australian Amphibian Assessment Workshop participants",
+        "Hero, J.-M.|IUCN SSC Australian Amphibian Assessment Workshop participants")]
+    [InlineData("Linzey, A.V. & NatureServe (Hammerson, G.)", "Linzey, A.V.|NatureServe (Hammerson, G.)")]
+    // A suffix with a note after it stays with its person; the note is dropped, as after initials.
+    [InlineData("Kirkland, G.L., Jr. (Rodent Specialist Group)", "Kirkland, G.L., Jr.")]
     [InlineData("Thomas K. Kristensen & Anne-Sofie Stensgaard", "Thomas K. Kristensen|Anne-Sofie Stensgaard")]
     // Kept whole.
     [InlineData("IUCN SSC Antelope Specialist Group", "IUCN SSC Antelope Specialist Group")]
@@ -325,6 +333,13 @@ public class IucnAssessmentCitationParserTests {
     [InlineData("Qin, Hai-Ning & Kohorn, L. (China Plants Red List Authority)", "Qin, Hai-Ning & Kohorn, L. (China Plants Red List Authority)")]
     [InlineData("Weber, O. & Sebsebe Demissew", "Weber, O. & Sebsebe Demissew")]
     [InlineData("Marshall, B.E & Tweddle, D., R Bills", "Marshall, B.E & Tweddle, D., R Bills")]
+    // A stand-alone name with no organisation word ("Mantasoa", "Eastern Arc Mountains") keeps the list whole.
+    [InlineData("Loiselle, P. & participants of the CBSG/ANGAP CAMP \"Faune de Madagascar\" workshop, Mantasoa, Madagascar 2001",
+        "Loiselle, P. & participants of the CBSG/ANGAP CAMP \"Faune de Madagascar\" workshop, Mantasoa, Madagascar 2001")]
+    [InlineData("Eastern Arc Mountains & Coastal Forests CEPF Plant Assessment Project & Bösenberg, J.D.",
+        "Eastern Arc Mountains & Coastal Forests CEPF Plant Assessment Project & Bösenberg, J.D.")]
+    // "of" and "the" alone don't make an organisation.
+    [InlineData("Smith, J. & Friends of the Forest", "Smith, J. & Friends of the Forest")]
     [InlineData("GTA Singapore Southeast Asia Trees Workshop 2023, P.", "GTA Singapore Southeast Asia Trees Workshop 2023, P.")]
     public void SplitCreditNames_WithoutCount(string full, string expected) {
         Assert.Equal(expected.Split('|'), IucnAssessmentCitationParser.SplitCreditNames(full));
@@ -371,6 +386,8 @@ public class IucnAssessmentCitationParserTests {
     [InlineData("Neam, K., Hobin, L. & NatureServe", 3, "CountStandalone")]
     [InlineData("Reid, A., Rogers, Alex & Bohm, M.", 3, "CountGiven")]
     [InlineData("Neil Cox and Helen Temple", null, "GivenFirst")]
+    [InlineData("Eudey, A. & Members of the Primate Specialist Group", null, "PairsAndOrganisations")]
+    [InlineData("Kirkland, G.L., Jr. (Rodent Specialist Group)", null, "Strict")]
     [InlineData("Weber, O. & Sebsebe Demissew", null, "Whole")]
     [InlineData("IUCN SSC Anteater, Sloth and Armadillo Specialist Group", 1, "WholeCountMismatch")]
     [InlineData(" ", null, "Empty")]

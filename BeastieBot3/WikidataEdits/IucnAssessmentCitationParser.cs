@@ -229,7 +229,12 @@ internal static class IucnAssessmentCitationParser {
     //  3. People written given-name first. With no count to check against, a list with no pairs at
     //     all splits only if every part looks like a person's name: 2-4 capitalised words and none of
     //     the words organisations use ("Neil Cox and Helen Temple").
-    //  4. Otherwise the whole string is one name. So "Tortoise & Freshwater Turtle Specialist Group",
+    //  4. People and organisations. With no count, a list with pairs and stand-alone names splits if
+    //     every stand-alone name has a word only organisations use ("Eudey, A. & Members of the
+    //     Primate Specialist Group"). Other stand-alone names are not split off: "Mantasoa" in
+    //     "Loiselle, P. & participants of the ... workshop, Mantasoa, Madagascar 2001" is part of a
+    //     workshop's name, and "Eastern Arc Mountains & Coastal Forests ..." is one organisation.
+    //  5. Otherwise the whole string is one name. So "Tortoise & Freshwater Turtle Specialist Group",
     //     "Royal Botanic Gardens, Kew", "Jaffré, T. et al." and "Qin, Hai-Ning & Kohorn, L." stay whole.
 
     private const string Particle = @"(?:de|da|do|dos|das|du|van|von|der|den|la|le|di|del|el|y)";
@@ -262,6 +267,14 @@ internal static class IucnAssessmentCitationParser {
 
     // Organisation names with a comma in them, kept whole before the string is tokenised.
     private static readonly string[] CommaNames = { "Royal Botanic Gardens, Kew" };
+
+    // Organisation words too common in other text to show on their own that a name is an
+    // organisation's (rule 4).
+    private static readonly HashSet<string> WeakOrganisationWords = new(StringComparer.OrdinalIgnoreCase) {
+        "the", "of", "for", "and",
+    };
+
+    private static readonly Regex Letters = new(@"\p{L}+", RegexOptions.CultureInvariant | RegexOptions.Compiled);
 
     // Lower-case only: capitalised "Das", "Do", "Van" are surnames in their own right.
     private static readonly HashSet<string> Particles = new(StringComparer.Ordinal) {
@@ -297,9 +310,11 @@ internal static class IucnAssessmentCitationParser {
         CountGiven,
         /// Rule 3, every part written given name first.
         GivenFirst,
-        /// Rule 4, kept whole: no rule applied and there was no count to check against.
+        /// Rule 4, surname and initials pairs plus stand-alone organisation names, with no count.
+        PairsAndOrganisations,
+        /// Rule 5, kept whole: no rule applied and there was no count to check against.
         Whole,
-        /// Rule 4, kept whole: no split gave as many names as value[] has entries.
+        /// Rule 5, kept whole: no split gave as many names as value[] has entries.
         WholeCountMismatch,
     }
 
@@ -342,14 +357,19 @@ internal static class IucnAssessmentCitationParser {
         if (loose is not null && !loose.AnyPaired && loose.Names.All(LooksLikePersonName)) {
             return new CreditSplit(Distinct(loose.Names), CreditSplitRule.GivenFirst);
         }
+        if (loose is not null && loose.AnyPaired && loose.Standalone.Count > 0 && loose.Standalone.All(HasOrganisationWord)) {
+            return new CreditSplit(Distinct(loose.Names), CreditSplitRule.PairsAndOrganisations);
+        }
         return new CreditSplit(new[] { text }, CreditSplitRule.Whole);
     }
 
-    private sealed record PairedNames(List<string> Names, bool AnyPaired);
+    /// Standalone: the names that paired with nothing and were not a person written in one token.
+    private sealed record PairedNames(List<string> Names, bool AnyPaired, List<string> Standalone);
 
     private static PairedNames? PairNames(IReadOnlyList<string> input, bool allowGivenNames, bool allowStandalone) {
         var tokens = input.ToList();
         var names = new List<string>();
+        var standalone = new List<string>();
         var anyPaired = false;
         var lastWasPair = false;
         var i = 0;
@@ -357,8 +377,11 @@ internal static class IucnAssessmentCitationParser {
             var token = tokens[i];
             var next = i + 1 < tokens.Count ? StripNotes(tokens[i + 1]) : null;
 
-            if (lastWasPair && NameSuffix.IsMatch(token) && !(next is not null && IsInitials(next))) {
-                names[^1] = $"{names[^1]}, {token}";
+            // "Golamco, A., Jr."; a note after the suffix is dropped, as after initials:
+            // "Kirkland, G.L., Jr. (Rodent Specialist Group)".
+            var suffix = StripNotes(token);
+            if (lastWasPair && NameSuffix.IsMatch(suffix) && !(next is not null && IsInitials(next))) {
+                names[^1] = $"{names[^1]}, {suffix}";
                 i++;
                 continue;
             }
@@ -402,10 +425,11 @@ internal static class IucnAssessmentCitationParser {
             }
             if (!allowStandalone || IsInitials(bare)) return null;
             names.Add(token);
+            standalone.Add(token);
             lastWasPair = false;
             i++;
         }
-        return new PairedNames(names, anyPaired);
+        return new PairedNames(names, anyPaired, standalone);
     }
 
     private static string NormalizeCreditText(string? full) {
@@ -507,6 +531,10 @@ internal static class IucnAssessmentCitationParser {
         }
         return !words[^1].EndsWith('.');
     }
+
+    // A word only organisations use, leaving out "the", "of", "for" and "and".
+    private static bool HasOrganisationWord(string token) =>
+        Letters.Matches(token).Any(m => OrganisationWords.Contains(m.Value) && !WeakOrganisationWords.Contains(m.Value));
 
     private static IReadOnlyList<string> Distinct(List<string> names) =>
         names.Distinct(StringComparer.Ordinal).ToList();
