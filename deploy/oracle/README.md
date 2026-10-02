@@ -7,8 +7,13 @@ for HTTPS.
 ShellCheck 0.10.0, and the whole cycle ran in an Ubuntu 24.04 container (podman, systemd as PID 1,
 x86_64, with the INPUT rules from Oracle's tutorial): server setup (run three times), database deploys,
 automatic database rollback, manual rollbacks, app deploys with the real BeastieBot3.Site build
-running under the hardened systemd unit, release pruning, and HTTPS through Caddy. See
-[What was not tested](#what-was-not-tested) before the first real deploy.
+running under the hardened systemd unit, release pruning, and HTTPS through Caddy. A second run on
+2026-10-03, with schema version 2 databases and the site's real `/healthz`, also covered: ACCEPT
+rules for ports 80 and 443 added by hand after the REJECT rule (moved), the switch of Caddy's admin
+API from `localhost:2019` to its socket on a server set up by the earlier scripts, `systemctl reload
+caddy` afterwards, uploads through `.upload-` folders (an hour-old one deleted, a recent one kept),
+a rollback that skips a folder without the app, and pruning that keeps the release that was live
+before a deploy. See [What was not tested](#what-was-not-tested) before the first real deploy.
 
 ## What you get
 
@@ -364,8 +369,11 @@ connection serves a whole run.
   tutorial), the VCN security list, arm64, and the iptables rules surviving a reboot.
 - A Let's Encrypt certificate. The test used a `.localhost` name, for which Caddy uses its own
   internal certificate authority.
-- The real `/healthz`: the site skeleton has none yet, so the database tests used a stand-in app
-  that answers `/healthz` from the database's `schema_version`.
+- An upload interrupted partway through. The test made the `.upload-` folders by hand; the rename
+  into place was tested only after uploads that finished.
+- `Site__BaseUrl` and the site's check of the database file every 30 seconds. They came with a
+  change to the site made at the same time as these scripts, and the container ran a site build
+  from before it.
 - The swap file (the test machine had more than 2 GB of RAM).
 - In the rootless container, systemd's sandboxing options needed `--cap-add SYS_ADMIN` (they use
   mount namespaces). On a VM, systemd runs as root and has this. If the site fails to start with
