@@ -103,7 +103,7 @@
         @if (!selected.IsGlobal) {
             <p class="note note-selected">
                 @SiteText.RegionalAssessment(selected.Scope, selectedCategory, selected.YearPublished)
-                @SiteText.SpeciesboxGlobalOnly
+                @SiteText.TaxoboxGlobalOnly(Model.Taxobox.Label)
                 @if (Model.LatestGlobal is not null) {
                     <a href="@(Model.OptionsUrl(null))#wikitext">@SiteText.ShowLatestWikitext</a>
                 }
@@ -115,9 +115,9 @@
             </p>
         }
         @if (IucnCategories.IsEarlierVersionCode(selected)) {
-            <p class="note">@SiteText.NoTemplateEarlierVersion</p>
+            <p class="note">@SiteText.NoTemplateEarlierVersion(Model.Taxobox.Name)</p>
         } else if (!IucnCategories.HasStatusTemplateCode(selected)) {
-            <p class="note">@SiteText.NoTemplateCode</p>
+            <p class="note">@SiteText.NoTemplateCode(Model.Taxobox.Noun)</p>
         }
 
         @if (Model.Parts is null) {

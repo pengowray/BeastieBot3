@@ -59,6 +59,9 @@ public sealed class SpeciesModel : PageModel {
     public string? DownloadDateText { get; private set; }
     public string TodayText { get; private set; } = string.Empty;
 
+    /// The taxobox an article about this taxon most likely uses, which names the status parameters box.
+    public TaxoboxTemplate Taxobox { get; private set; } = TaxoboxTemplate.Speciesbox;
+
     public IReadOnlyList<EnglishCommonName> EnglishNames { get; private set; } = [];
     public IReadOnlyList<LanguageGroup> OtherLanguages { get; private set; } = [];
     public IReadOnlyList<string> Synonyms { get; private set; } = [];
@@ -87,6 +90,7 @@ public sealed class SpeciesModel : PageModel {
         LoadAssessments(assessment);
         Options = WikitextOptions.FromQuery(authors, access, opts, wrapRef, refname, amp,
             Selected is null ? DefaultRefNames.LatestGlobal : DefaultRefNameFor(Selected));
+        Taxobox = TaxoboxTemplate.For(Taxon.Kind, Taxon.Kingdom);
         BuildWikitext();
         LoadNames();
         Children = _queries.GetChildren(Taxon.TaxonId).Select(c => new TaxonListItem(c)).ToList();
@@ -183,7 +187,7 @@ public sealed class SpeciesModel : PageModel {
             var statusRef = CiteIucnRenderer.Render(Parts, citeOptions with { WrapInRef = true });
             var lines = SpeciesboxStatus.Render(Selected.Category, Selected.PossiblyExtinct, Selected.PossiblyExtinctInTheWild,
                 Selected.CriteriaVersion, statusRef);
-            boxes.Add(new WikitextBox("wikitext-speciesbox", SiteText.LabelSpeciesbox, "{{Speciesbox}}", lines, Rows: 5));
+            boxes.Add(new WikitextBox("wikitext-speciesbox", Taxobox.Label, Taxobox.Name, lines, Rows: 5));
         }
         Boxes = boxes;
     }

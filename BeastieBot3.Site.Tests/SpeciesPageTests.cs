@@ -211,6 +211,16 @@ public sealed class SpeciesPageTests(SiteFactory factory) : IClassFixture<SiteFa
         Assert.DoesNotContain("{{IUCN status|EX", baiji);
     }
 
+    [Theory]
+    [InlineData(FixtureDb.PolarBear, "{{Speciesbox}}")]
+    [InlineData(FixtureDb.SumatranTiger, "{{Subspeciesbox}}")]
+    [InlineData(FixtureDb.PlantSubspecies, "{{Infraspeciesbox}}")]
+    public async Task TaxoboxLabelFollowsTheKindOfTaxon(long taxonId, string taxobox) {
+        var html = await _client.GetStringAsync($"/species/{taxonId}");
+        Assert.Contains($"<label for=\"wikitext-speciesbox\">{taxobox} status parameters</label>", html);
+        Assert.Contains($"aria-label=\"Copy {taxobox} wikitext\"", html);
+    }
+
     [Fact]
     public async Task CurrentCodesOnEarlierVersionRowsGetNoTemplates() {
         var subspecies = await _client.GetStringAsync($"/species/{FixtureDb.PlantSubspecies}");
@@ -221,7 +231,7 @@ public sealed class SpeciesPageTests(SiteFactory factory) : IClassFixture<SiteFa
         var nt = await _client.GetStringAsync($"/species/{FixtureDb.PlantSubspecies}?assessment={FixtureDb.PlantSubspecies1998Nt}");
         var ntText = Html.Text(nt);
         Assert.Contains("Wikitext for an earlier assessment: No name given by IUCN (1994 or earlier categories), published 1998.", ntText);
-        Assert.Contains("This assessment uses an earlier version of the IUCN categories, so no {{IUCN status}} or", ntText);
+        Assert.Contains("This assessment uses an earlier version of the IUCN categories, so no {{IUCN status}} or {{Infraspeciesbox}} wikitext is given for it.", ntText);
         Assert.DoesNotContain("have no code for this category", ntText);
         Assert.NotNull(Html.Textarea(nt, "wikitext-cite"));
         Assert.Null(Html.Textarea(nt, "wikitext-status"));

@@ -99,6 +99,21 @@ public sealed class DisplayTests {
         Assert.True(IucnCategories.HasStatusTemplateCode(Row("NT", "3.1", latest: false)));
     }
 
+    [Theory]
+    [InlineData("species", "ANIMALIA", "{{Speciesbox}} status parameters", "{{IUCN status}} and {{Speciesbox}} have no code for this category.")]
+    [InlineData("species", "PLANTAE", "{{Speciesbox}} status parameters", "{{IUCN status}} and {{Speciesbox}} have no code for this category.")]
+    [InlineData("subspecies", "ANIMALIA", "{{Subspeciesbox}} status parameters", "{{IUCN status}} and {{Subspeciesbox}} have no code for this category.")]
+    [InlineData("subspecies", "PLANTAE", "{{Infraspeciesbox}} status parameters", "{{IUCN status}} and {{Infraspeciesbox}} have no code for this category.")]
+    [InlineData("subspecies", "FUNGI", "{{Infraspeciesbox}} status parameters", "{{IUCN status}} and {{Infraspeciesbox}} have no code for this category.")]
+    [InlineData("variety", "PLANTAE", "{{Infraspeciesbox}} status parameters", "{{IUCN status}} and {{Infraspeciesbox}} have no code for this category.")]
+    [InlineData("subpopulation", "ANIMALIA", "Taxobox status parameters", "{{IUCN status}} and the taxobox have no code for this category.")]
+    public void TaxoboxByKind(string kind, string kingdom, string label, string noCode) {
+        var taxobox = TaxoboxTemplate.For(kind, kingdom);
+        Assert.Equal(label, taxobox.Label);
+        Assert.Equal(noCode, SiteText.NoTemplateCode(taxobox.Noun));
+        Assert.Equal($"{label} are given for global assessments only.", SiteText.TaxoboxGlobalOnly(taxobox.Label));
+    }
+
     [Fact]
     public void PossiblyExtinct() {
         Assert.Equal("Critically Endangered (Possibly Extinct)", IucnCategories.Describe("CR", true, false).Label);

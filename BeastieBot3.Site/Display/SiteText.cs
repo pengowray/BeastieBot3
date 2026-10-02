@@ -22,7 +22,7 @@ public static class SiteText {
     public const string ExamplesLabel = "Examples:";
     public const string WhatHeading = "On each taxon page:";
     public const string What1 = "The category, criteria and population trend of the latest global assessment";
-    public const string What2 = "{{cite iucn}}, {{IUCN status}} and Speciesbox wikitext to copy into Wikipedia";
+    public const string What2 = "{{cite iucn}}, {{IUCN status}} and taxobox wikitext to copy into Wikipedia";
     public const string What3 = "Earlier and regional assessments, names, and links to Wikipedia, Wikidata and the Catalogue of Life";
 
     public static string DatasetSummary(string version, long globalTaxa, long assessments) =>
@@ -121,7 +121,9 @@ public static class SiteText {
     // Taxon page: wikitext boxes
     public const string LabelCite = "{{cite iucn}} citation";
     public const string LabelStatus = "{{IUCN status}} template";
-    public const string LabelSpeciesbox = "{{Speciesbox}} status parameters";
+    /// "{{Speciesbox}} status parameters", "{{Subspeciesbox}} status parameters", "Taxobox status
+    /// parameters" (TaxoboxTemplate).
+    public static string TaxoboxLabel(string taxobox) => $"{char.ToUpperInvariant(taxobox[0])}{taxobox[1..]} status parameters";
     public const string Copy = "Copy";
     public const string Copied = "Copied";
     public const string CopyFailed = "Copy failed. Select the wikitext and copy it by hand.";
@@ -153,11 +155,14 @@ public static class SiteText {
         year is null ? $"Wikitext for an earlier assessment: {category}." : $"Wikitext for an earlier assessment: {category}, published {year}.";
     public static string RegionalAssessment(string region, string category, int? year) =>
         year is null ? $"Wikitext for the {region} assessment: {category}." : $"Wikitext for the {region} assessment: {category}, published {year}.";
-    public const string SpeciesboxGlobalOnly = "{{Speciesbox}} status parameters are given for global assessments only.";
+    /// taxoboxLabel: TaxoboxTemplate.Label.
+    public static string TaxoboxGlobalOnly(string taxoboxLabel) => $"{taxoboxLabel} are given for global assessments only.";
     public const string ShowLatestWikitext = "Show wikitext for the latest assessment";
-    public const string NoTemplateCode = "{{IUCN status}} and {{Speciesbox}} have no code for this category.";
-    public const string NoTemplateEarlierVersion =
-        "This assessment uses an earlier version of the IUCN categories, so no {{IUCN status}} or {{Speciesbox}} wikitext is given for it.";
+    /// taxobox: TaxoboxTemplate.Noun ("{{Speciesbox}}", "the taxobox").
+    public static string NoTemplateCode(string taxobox) => $"{{{{IUCN status}}}} and {taxobox} have no code for this category.";
+    /// taxobox: TaxoboxTemplate.Name ("{{Speciesbox}}", "taxobox").
+    public static string NoTemplateEarlierVersion(string taxobox) =>
+        $"This assessment uses an earlier version of the IUCN categories, so no {{{{IUCN status}}}} or {taxobox} wikitext is given for it.";
 
     /// The no-citation note: reason, then (when there is an {{IUCN status}} box) the available
     /// line, then "To cite the assessment, use " + link("its page on the IUCN Red List website") + ".".
