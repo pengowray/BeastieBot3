@@ -474,9 +474,10 @@ button:hover {
 
 .wikitext-box-head {
     display: flex;
+    flex-wrap: wrap;
     align-items: center;
     justify-content: space-between;
-    gap: 1rem;
+    gap: 0.3rem 1rem;
     margin-bottom: 0.3rem;
 }
 
@@ -529,8 +530,32 @@ textarea {
     margin: 0.3rem 0 0;
 }
 
+/* Each box's copy status. While it only repeats what the button says ("Copied") it is read out
+   but not shown; a failure message is shown on its own line under the label and button. */
 .copy-status {
-    min-height: 1.5em;
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+.copy-status.copy-status-failed {
+    position: static;
+    width: auto;
+    height: auto;
+    margin: 0;
+    overflow: visible;
+    clip: auto;
+    white-space: normal;
+    flex-basis: 100%;
+    padding: 0.4rem 0.6rem;
+    background: var(--note-bg);
+    border-left: 4px solid var(--note-border);
     font-size: 0.9rem;
 }
 

@@ -126,7 +126,9 @@ public static class SiteText {
     public static string TaxoboxLabel(string taxobox) => $"{char.ToUpperInvariant(taxobox[0])}{taxobox[1..]} status parameters";
     public const string Copy = "Copy";
     public const string Copied = "Copied";
-    public const string CopyFailed = "Copy failed. Select the wikitext and copy it by hand.";
+    // site.js selects the wikitext when copying fails, so the message says it is selected.
+    public const string CopyFailed = "Copy failed. The wikitext is selected: copy it with Ctrl+C (⌘C on a Mac) or your browser's Copy command.";
+    public const string CopyFailedButton = "Copy failed";
     public static string CopyAccessible(string template) => $"Copy {template} wikitext";
 
     // Taxon page: citation options form. Strings ending in Html contain markup.
@@ -136,7 +138,7 @@ public static class SiteText {
     public const string AuthorsLastFirstHtml = "<code>|last1=Surname</code> <code>|first1=I.</code> (as in the {{cite iucn}} documentation)";
     public const string AccessLabel = "Access date";
     public static string AccessDownload(string date) => $"Date downloaded from IUCN ({date})";
-    public static string AccessToday(string date) => $"Today ({date})";
+    public static string AccessToday(string date) => $"Today ({date}, UTC)";
     public const string AccessNone = "No access date";
     public const string AccessHelp = "Date downloaded from IUCN: the date this site downloaded the details of this assessment from the IUCN Red List API.";
     public const string RefWrapHtml = "Wrap the citation in <code>&lt;ref&gt;</code> tags";

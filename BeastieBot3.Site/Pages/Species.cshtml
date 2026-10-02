@@ -45,7 +45,8 @@
         <p class="parent-line">@parentPrefix <a href="/species/@parent.TaxonId">@Html.Raw(ScientificNameMarkup.ToHtml(parent.ScientificName, parent.SubpopulationName))</a></p>
     }
     @if (ranks.Any(r => !string.IsNullOrWhiteSpace(r))) {
-        <nav class="classification" aria-labelledby="classification-heading">
+        @* The ranks are plain text, so they sit in a div with a hidden heading (a nav landmark is for links). *@
+        <div class="classification">
             <h2 id="classification-heading" class="visually-hidden">@SiteText.HeadingClassification</h2>
             <ol>
                 @for (var i = 0; i < ranks.Length; i++) {
@@ -56,7 +57,7 @@
                     <li><span class="rank">@SiteText.RankLabels[i]</span> @if (i == ranks.Length - 1) {<i>@value</i>} else {<text>@value</text>}</li>
                 }
             </ol>
-        </nav>
+        </div>
     }
 </header>
 
@@ -97,7 +98,8 @@
 </section>
 
 @if (selected is not null) {
-    <section class="wikitext" id="wikitext" aria-labelledby="wikitext-heading">
+    <section class="wikitext" id="wikitext" aria-labelledby="wikitext-heading"
+             data-copied="@SiteText.Copied" data-copy-label="@SiteText.Copy" data-copy-failed="@SiteText.CopyFailed" data-copy-failed-button="@SiteText.CopyFailedButton">
         <h2 id="wikitext-heading">@SiteText.HeadingWikitext</h2>
         @{
             var selectedCategory = IucnCategories.Describe(selected).Label;
@@ -137,6 +139,7 @@
                 <div class="wikitext-box-head">
                     <label for="@box.Id">@box.Label</label>
                     <button type="button" class="copy-button" data-copy="@box.Id" aria-label="@SiteText.CopyAccessible(box.Template)" hidden>@SiteText.Copy</button>
+                    <p class="copy-status" role="status" aria-live="polite"></p>
                 </div>
                 <textarea id="@box.Id" readonly rows="@box.Rows" spellcheck="false" autocapitalize="off" autocomplete="off">@box.Text</textarea>
                 @if (box.Id == "wikitext-cite") {
@@ -157,7 +160,6 @@
                 }
             </div>
         }
-        <p class="copy-status" role="status" aria-live="polite" data-copied="@SiteText.Copied" data-copy-label="@SiteText.Copy" data-copy-failed="@SiteText.CopyFailed"></p>
 
         @if (Model.Parts is not null) {
             <form class="options-form" method="get" action="/species/@taxon.TaxonId#wikitext">

@@ -97,8 +97,31 @@ public sealed class SpeciesPageTests(SiteFactory factory) : IClassFixture<SiteFa
     [Fact]
     public async Task TodayAsAccessDate() {
         var today = DateTime.UtcNow.ToString("d MMMM yyyy", System.Globalization.CultureInfo.InvariantCulture);
-        var cite = Html.Textarea(await Page("?access=today"), "wikitext-cite")!;
+        var html = await Page("?access=today");
+        var cite = Html.Textarea(html, "wikitext-cite")!;
         Assert.Contains($"|access-date={today}}}", cite);
+        // The date is the server's UTC date, and the label says so.
+        Assert.Contains($"Today ({today}, UTC)", Html.Text(html));
+    }
+
+    [Fact]
+    public async Task EachWikitextBoxHasItsOwnCopyStatus() {
+        var html = await Page();
+        var boxes = System.Text.RegularExpressions.Regex.Matches(html, "<div class=\"wikitext-box-head\">").Count;
+        Assert.Equal(3, boxes);
+        Assert.Equal(boxes, System.Text.RegularExpressions.Regex.Matches(html,
+            "hidden>Copy</button>\\s*<p class=\"copy-status\" role=\"status\" aria-live=\"polite\"></p>\\s*</div>").Count);
+        var failed = System.Text.RegularExpressions.Regex.Match(html, "data-copy-failed=\"([^\"]*)\"").Groups[1].Value;
+        Assert.Equal("Copy failed. The wikitext is selected: copy it with Ctrl+C (⌘C on a Mac) or your browser's Copy command.", WebUtility.HtmlDecode(failed));
+        Assert.Contains("data-copy-failed-button=\"Copy failed\"", html);
+    }
+
+    [Fact]
+    public async Task ClassificationIsNotANavigationLandmark() {
+        var html = await Page();
+        Assert.DoesNotContain("<nav class=\"classification\"", html);
+        Assert.Contains("<div class=\"classification\">", html);
+        Assert.Contains("<h2 id=\"classification-heading\" class=\"visually-hidden\">Classification</h2>", html);
     }
 
     [Fact]

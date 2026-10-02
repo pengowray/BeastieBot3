@@ -6,8 +6,9 @@ using BeastieBot3.Site.Display;
 namespace BeastieBot3.Site.Pages;
 
 /// The search form. Variant "header" is the compact form in the page header (label visually
-/// hidden); "main" is the full form on the home, search and error pages.
-public sealed record SearchFormModel(string? Query, string Variant) {
+/// hidden); "main" is the full form on the home, search and error pages. HideLabel keeps the
+/// label for screen readers only, on a page whose heading already says the same.
+public sealed record SearchFormModel(string? Query, string Variant, bool HideLabel = false) {
     public bool IsHeader => Variant == "header";
     public string InputId => $"q-{Variant}";
     public string ListId => $"suggest-{Variant}";

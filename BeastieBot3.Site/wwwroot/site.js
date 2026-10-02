@@ -4,38 +4,67 @@
     "use strict";
 
     // Copy buttons are rendered hidden and shown here, so a page without JavaScript has no dead
-    // buttons. The status line carries the texts so every string comes from the server.
+    // buttons. The wikitext section carries the texts so every string comes from the server. Each
+    // box has its own status line beside its button: "Copied" is read out by screen readers (the
+    // button shows it too); a failure message is shown, and the button says the copy failed.
     function setUpCopyButtons() {
-        var status = document.querySelector(".copy-status");
+        var section = document.querySelector("[data-copy-failed]");
         var buttons = document.querySelectorAll("button[data-copy]");
-        if (!status || buttons.length === 0) {
+        if (!section || buttons.length === 0) {
             return;
         }
-        var copiedText = status.getAttribute("data-copied") || "Copied";
-        var copyText = status.getAttribute("data-copy-label") || "Copy";
-        var failedText = status.getAttribute("data-copy-failed") || "";
+        var copiedText = section.getAttribute("data-copied") || "Copied";
+        var copyText = section.getAttribute("data-copy-label") || "Copy";
+        var failedText = section.getAttribute("data-copy-failed") || "";
+        var failedButtonText = section.getAttribute("data-copy-failed-button") || copyText;
 
         buttons.forEach(function (button) {
             var box = document.getElementById(button.getAttribute("data-copy"));
-            if (!box) {
+            var status = button.parentNode.querySelector(".copy-status");
+            if (!box || !status) {
                 return;
             }
             button.hidden = false;
+            var timer = 0;
             button.addEventListener("click", function () {
+                window.clearTimeout(timer);
+                button.textContent = copyText;
+                setStatus(status, "", false);
                 copy(box).then(function () {
                     button.textContent = copiedText;
-                    status.textContent = copiedText;
-                    window.setTimeout(function () {
-                        button.textContent = copyText;
-                        status.textContent = "";
+                    setStatus(status, copiedText, false);
+                    timer = window.setTimeout(function () {
+                        // Clear only the success message, never a later failure message.
+                        if (status.textContent === copiedText) {
+                            setStatus(status, "", false);
+                        }
+                        if (button.textContent === copiedText) {
+                            button.textContent = copyText;
+                        }
                     }, 2000);
                 }, function () {
-                    box.focus();
-                    box.select();
-                    status.textContent = failedText;
+                    selectAll(box);
+                    button.textContent = failedButtonText;
+                    setStatus(status, failedText, true);
                 });
             });
         });
+    }
+
+    function setStatus(status, text, failed) {
+        status.textContent = text;
+        status.classList.toggle("copy-status-failed", failed);
+    }
+
+    // select() alone often selects nothing visible in a read-only textarea on iOS.
+    function selectAll(box) {
+        box.focus();
+        box.select();
+        try {
+            box.setSelectionRange(0, box.value.length);
+        } catch (e) {
+            // Selection is a convenience; the failure message still tells the visitor what to do.
+        }
     }
 
     // The Clipboard API first; when it is missing or refuses (plain http, no permission), the
@@ -51,8 +80,7 @@
 
     function copyBySelection(box) {
         return new Promise(function (resolve, reject) {
-            box.focus();
-            box.select();
+            selectAll(box);
             var ok = false;
             try {
                 ok = document.execCommand("copy");

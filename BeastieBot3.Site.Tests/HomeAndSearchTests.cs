@@ -168,6 +168,17 @@ public sealed class HomeAndSearchTests(SiteFactory factory) : IClassFixture<Site
         Assert.Equal(0, suggest.RootElement.GetArrayLength());
     }
 
+    [Theory]
+    [InlineData("/search")]
+    [InlineData("/search?q=a")]
+    public async Task SearchPageWithoutResultsHasAHeading(string url) {
+        var html = await _client.GetStringAsync(url);
+        Assert.Contains("<h1>Search for a taxon</h1>", html);
+        // The heading says what the label says, so the label is for screen readers only.
+        Assert.Contains("<label for=\"q-main\" class=\"visually-hidden\">Search for a taxon</label>", html);
+        Assert.True(html.IndexOf("<h1>", StringComparison.Ordinal) < html.IndexOf("<form class=\"search-form search-form-main\"", StringComparison.Ordinal));
+    }
+
     [Fact]
     public async Task MultiWordQueryEndingInOneLetterStillSearches() {
         var html = await _client.GetStringAsync("/search?q=Panthera+t&all=1");
