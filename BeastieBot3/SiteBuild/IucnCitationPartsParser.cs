@@ -50,7 +50,8 @@ internal enum CitationParseFailure {
     IdMismatch,
     /// "<year>. <scientific name>" doesn't appear before the Red List sentence.
     TitleMismatch,
-    /// Text after the scientific name that is not one of IUCN's annotations.
+    /// Text after the scientific name that is not one of IUCN's annotations, or a region that is
+    /// not one of the assessment's scopes.
     UnknownTitleSuffix,
 }
 
@@ -89,8 +90,6 @@ internal sealed record IucnCitationParse {
     public bool HasErrataAnnotation { get; init; }
     /// The year after "Threatened Species" differs from year_published.
     public bool VolumeDiffersFromYear { get; init; }
-    /// scopes[0].description.en, which IUCN's "(<Region> assessment)" repeats.
-    public string? FirstScopeDescription { get; init; }
 
     /// The DOI in the citation text, canonical when it is an IUCN Red List DOI, else as written.
     public string? CitationDoi { get; init; }
@@ -130,7 +129,6 @@ internal static class IucnCitationPartsParser {
         var result = new IucnCitationParse {
             AssessmentId = assessmentId,
             TaxonId = taxonId,
-            FirstScopeDescription = FirstScopeDescription(assessment),
         };
         var scientificName = CollapseWhitespace(taxon is { } t2 ? ReadString(t2, "scientific_name") : null);
         if (scientificName.Length == 0) return result with { Failure = CitationParseFailure.MissingName };
@@ -159,7 +157,10 @@ internal static class IucnCitationPartsParser {
         var authorPrefix = head[..titleAt].Trim();
         var annotationText = head[(titleAt + yearText.Length + 2 + scientificName.Length)..].Trim();
         var annotations = Annotations.Match(annotationText);
-        if (!annotations.Success) {
+        var region = NullIfEmpty(annotations.Groups["scope"].Value);
+        // "(Europe assessment)" names one of the assessment's scopes; anything else in that place
+        // ("(Green Status assessment)") is not a region.
+        if (!annotations.Success || (region is not null && !ScopeDescriptions(assessment).Contains(region, StringComparer.Ordinal))) {
             return result with { Failure = CitationParseFailure.UnknownTitleSuffix, FailureDetail = annotationText };
         }
 
@@ -170,7 +171,7 @@ internal static class IucnCitationPartsParser {
             Year = year,
             ScientificName = scientificName,
             SubpopulationName = SubpopulationName(taxon),
-            RegionalScope = NullIfEmpty(annotations.Groups["scope"].Value),
+            RegionalScope = region,
             ErrataYear = ParseYear(annotations.Groups["errata"].Value),
             AmendsYear = ParseYear(annotations.Groups["amends"].Value),
             Authors = authors.Names.Select(n => n.Author).ToList(),
@@ -310,17 +311,19 @@ internal static class IucnCitationPartsParser {
 
     private static string? NullIfEmpty(string? text) => string.IsNullOrWhiteSpace(text) ? null : text.Trim();
 
-    private static string? FirstScopeDescription(JsonElement assessment) {
-        if (!assessment.TryGetProperty("scopes", out var scopes) || scopes.ValueKind != JsonValueKind.Array) return null;
+    // scopes[].description.en: "Global", "Europe", "Gulf of Mexico".
+    private static List<string> ScopeDescriptions(JsonElement assessment) {
+        var descriptions = new List<string>();
+        if (!assessment.TryGetProperty("scopes", out var scopes) || scopes.ValueKind != JsonValueKind.Array) return descriptions;
         foreach (var scope in scopes.EnumerateArray()) {
             if (scope.ValueKind == JsonValueKind.Object
                 && scope.TryGetProperty("description", out var description)
-                && description.ValueKind == JsonValueKind.Object) {
-                return NullIfEmpty(ReadString(description, "en"));
+                && description.ValueKind == JsonValueKind.Object
+                && NullIfEmpty(ReadString(description, "en")) is { } text) {
+                descriptions.Add(text);
             }
-            return null;
         }
-        return null;
+        return descriptions;
     }
 
     private static long? ReadLong(JsonElement element, string property) {

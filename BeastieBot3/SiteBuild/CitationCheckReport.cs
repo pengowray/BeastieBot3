@@ -57,8 +57,6 @@ internal sealed class CitationCheckTally {
     public int ExtraAssessorBlocks { get; private set; }
 
     public int Regional { get; private set; }
-    public int RegionalScopeDiffers { get; private set; }
-    public List<string> RegionalScopeExamples { get; } = new();
     public int AmendedWithYear { get; private set; }
     public int AmendedNoYear { get; private set; }
     public int ErrataWithYear { get; private set; }
@@ -99,8 +97,8 @@ internal sealed class CitationCheckTally {
         var parts = parse.Parts;
         if (parts is null) {
             Increment(Failures, parse.Failure);
-            AddExample(FailureExamples, parse.Failure,
-                $"{parse.AssessmentId} {parse.ScientificName}: {Shorten(parse.FailureDetail)}");
+            var detail = string.IsNullOrWhiteSpace(parse.FailureDetail) ? "" : $": {Shorten(parse.FailureDetail)}";
+            AddExample(FailureExamples, parse.Failure, $"{parse.AssessmentId} {parse.ScientificName}{detail}");
             return;
         }
         Parsed++;
@@ -140,13 +138,7 @@ internal sealed class CitationCheckTally {
         }
         if (parse.ExtraAssessorBlocksAddingNames > 0) ExtraAssessorBlocks++;
 
-        if (parts.RegionalScope is not null) {
-            Regional++;
-            if (!string.Equals(parts.RegionalScope, parse.FirstScopeDescription, StringComparison.Ordinal)) {
-                RegionalScopeDiffers++;
-                AddExample(RegionalScopeExamples, $"{parts.AssessmentId}: title \"{parts.RegionalScope}\", scopes[0] \"{parse.FirstScopeDescription}\"");
-            }
-        }
+        if (parts.RegionalScope is not null) Regional++;
         if (parse.HasAmendedAnnotation) {
             if (parts.AmendsYear is null) AmendedNoYear++; else AmendedWithYear++;
         }
@@ -416,7 +408,6 @@ internal static class CitationCheckReport {
         sb.AppendLine("| Annotation | Assessments |");
         sb.AppendLine("| --- | ---: |");
         sb.AppendLine($"| (<Region> assessment) | {N(t.Regional)} |");
-        sb.AppendLine($"| … region differs from the assessment's first scope | {N(t.RegionalScopeDiffers)} |");
         sb.AppendLine($"| (amended version of YYYY assessment) | {N(t.AmendedWithYear)} |");
         sb.AppendLine($"| (amended version of assessment), no year | {N(t.AmendedNoYear)} |");
         sb.AppendLine($"| (errata version published in YYYY) | {N(t.ErrataWithYear)} |");
@@ -424,7 +415,6 @@ internal static class CitationCheckReport {
         sb.AppendLine($"| Subpopulation | {N(t.Subpopulations)} |");
         sb.AppendLine($"| Year after \"Threatened Species\" differs from the year published | {N(t.VolumeDiffers)} |");
         sb.AppendLine();
-        Examples(sb, "Region differs from the first scope", t.RegionalScopeExamples);
     }
 
     private static void Dois(StringBuilder sb, CitationCheckTally t) {
