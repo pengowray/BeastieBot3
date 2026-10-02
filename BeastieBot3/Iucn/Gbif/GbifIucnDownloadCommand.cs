@@ -70,6 +70,9 @@ public sealed class GbifIucnDownloadCommand : AsyncCommand<GbifIucnDownloadComma
             File.Delete(partFile);
             AnsiConsole.MarkupLineInterpolated($"[red]Not the IUCN checklist archive:[/] {ex.Message} The download was deleted.");
             return -3;
+        } catch (OperationCanceledException) {
+            File.Delete(partFile);
+            throw;
         }
 
         var newest = GbifIucnChecklistFiles.FindNewest(outputDir);
