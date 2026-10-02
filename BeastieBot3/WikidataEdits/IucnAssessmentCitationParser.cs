@@ -19,10 +19,16 @@ using System.Text.RegularExpressions;
 // Credits. `full` holds the names as the citation prints them, often many people in one string
 // ("Stuart, B.L., Grismer, L. & Achyuthan, N.S."). `value` holds one entry per credited person or
 // organisation, but in a different order and mixed with email addresses and postal addresses, so
-// only its length is used, as a count that can confirm an otherwise doubtful split. IUCN's type
-// names are "assessor", "evaluator", "contributor", "facilitators" and "institutions" (plural, as
-// sent). A few payloads repeat the whole credits block, sometimes reordered; names are deduplicated
-// per type, first occurrence wins, which keeps the citation's order.
+// only its count of distinct entries is used, as a count that can confirm an otherwise doubtful
+// split. IUCN's type names are "assessor", "evaluator", "contributor", "facilitators" and
+// "institutions" (plural, as sent).
+//
+// The same short name can belong to two people: "Alemu, S., Alemu, S." is Shambel Alemu and Sisay
+// Alemu. A name listed twice in one `full` string is kept twice when value[] has as many distinct
+// entries as the split has names, and listed once otherwise. value[] sometimes repeats one person
+// word for word ("Suzanne Livingstone (GMSA)" twice), which is why the count is of distinct entries.
+// A few payloads repeat a whole credits block, sometimes reordered or with a name added; a repeated
+// block of a type adds only the names the earlier blocks of that type don't already hold.
 
 namespace BeastieBot3.WikidataEdits;
 
@@ -160,17 +166,12 @@ internal static class IucnAssessmentCitationParser {
             var full = GetString(credit, "full");
             if (string.IsNullOrEmpty(type) || string.IsNullOrWhiteSpace(full)) continue;
 
-            int? count = credit.TryGetProperty("value", out var value) && value.ValueKind == JsonValueKind.Array
-                ? value.GetArrayLength()
-                : null;
             if (!byType.TryGetValue(type, out var names)) {
                 names = new List<string>();
                 byType[type] = names;
                 typeOrder.Add(type);
             }
-            foreach (var name in SplitCreditNames(full, count)) {
-                if (!names.Contains(name, StringComparer.Ordinal)) names.Add(name);
-            }
+            AddNamesNotYetHeld(names, SplitCreditNames(full, DistinctValueCount(credit)));
         }
 
         var result = new List<IucnCredit>();
@@ -181,6 +182,32 @@ internal static class IucnAssessmentCitationParser {
             }
         }
         return result;
+    }
+
+    /// The number of distinct non-blank entries in a credit's value[] (one per credited person or
+    /// organisation), or null when the credit has no value[] array. Entries are compared after
+    /// trimming; IUCN sometimes repeats one person's entry word for word.
+    internal static int? DistinctValueCount(JsonElement credit) {
+        if (!credit.TryGetProperty("value", out var value) || value.ValueKind != JsonValueKind.Array) return null;
+        var distinct = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var entry in value.EnumerateArray()) {
+            if (entry.ValueKind != JsonValueKind.String) continue;
+            var text = entry.GetString()?.Trim();
+            if (!string.IsNullOrEmpty(text)) distinct.Add(text);
+        }
+        return distinct.Count;
+    }
+
+    /// Adds the names of a later credits block of the same type, skipping each name as many times as
+    /// the earlier blocks already hold it. A whole block repeated (in any order) adds nothing; a
+    /// block that repeats the list with one more person adds that person.
+    internal static void AddNamesNotYetHeld(List<string> held, IReadOnlyList<string> block) {
+        var heldCounts = held.GroupBy(n => n, StringComparer.Ordinal).ToDictionary(g => g.Key, g => g.Count(), StringComparer.Ordinal);
+        var blockCounts = new Dictionary<string, int>(StringComparer.Ordinal);
+        foreach (var name in block) {
+            blockCounts[name] = blockCounts.GetValueOrDefault(name) + 1;
+            if (blockCounts[name] > heldCounts.GetValueOrDefault(name)) held.Add(name);
+        }
     }
 
     // ------------------------------------------------------------ credit name splitting
@@ -196,9 +223,9 @@ internal static class IucnAssessmentCitationParser {
     //     a suffix token after a pair ("Golamco, A., Jr."), a missing comma between two people
     //     ("Ng, P. Yeo, D." reads as Ng, P. and Yeo, D.), and parenthetical notes after the initials,
     //     which are dropped ("Suhling, F. (SSC Odonata Specialist Group)" -> "Suhling, F.").
-    //  2. Confirmed by count. When the credit's value[] length is known, a parse that also allows
-    //     stand-alone names (organisations) or a full given name after the comma ("Rogers, Alex") is
-    //     accepted only if it yields exactly that many names.
+    //  2. Confirmed by count. When the number of distinct entries in the credit's value[] is known, a
+    //     parse that also allows stand-alone names (organisations) or a full given name after the
+    //     comma ("Rogers, Alex") is accepted only if it yields exactly that many names.
     //  3. People written given-name first. With no count to check against, a list with no pairs at
     //     all splits only if every part looks like a person's name: 2-4 capitalised words and none of
     //     the words organisations use ("Neil Cox and Helen Temple").
@@ -254,34 +281,68 @@ internal static class IucnAssessmentCitationParser {
         "expert", "experts",
     };
 
+    /// Which rule of the ladder above produced a split.
+    internal enum CreditSplitRule {
+        /// Nothing left after cleaning.
+        Empty,
+        /// "et al." in the string: kept whole.
+        EtAl,
+        /// One token: kept whole (most organisations).
+        Single,
+        /// Rule 1, surname and initials pairs.
+        Strict,
+        /// Rule 2, stand-alone names allowed, confirmed by the value[] count.
+        CountStandalone,
+        /// Rule 2, given names after the comma allowed, confirmed by the value[] count.
+        CountGiven,
+        /// Rule 3, every part written given name first.
+        GivenFirst,
+        /// Rule 4, kept whole: no rule applied and there was no count to check against.
+        Whole,
+        /// Rule 4, kept whole: no split gave as many names as value[] has entries.
+        WholeCountMismatch,
+    }
+
+    internal readonly record struct CreditSplit(IReadOnlyList<string> Names, CreditSplitRule Rule);
+
     public static IReadOnlyList<string> SplitCreditNames(string full) => SplitCreditNames(full, null);
 
-    /// Splits one credits[].full string into names. expectedCount is the length of that credit's
-    /// value[] array when known (0 counts as unknown); it only ever confirms a doubtful split.
-    public static IReadOnlyList<string> SplitCreditNames(string full, int? expectedCount) {
+    /// Splits one credits[].full string into names. expectedCount is the number of distinct entries
+    /// in that credit's value[] array when known (0 counts as unknown); it confirms a doubtful split,
+    /// and a name the split finds twice is kept twice only when the count confirms it.
+    public static IReadOnlyList<string> SplitCreditNames(string full, int? expectedCount) =>
+        SplitCreditNamesWithRule(full, expectedCount).Names;
+
+    internal static CreditSplit SplitCreditNamesWithRule(string full, int? expectedCount) {
         var text = NormalizeCreditText(full);
-        if (text.Length == 0) return Array.Empty<string>();
-        if (EtAl.IsMatch(text)) return new[] { text };
+        if (text.Length == 0) return new CreditSplit(Array.Empty<string>(), CreditSplitRule.Empty);
+        if (EtAl.IsMatch(text)) return new CreditSplit(new[] { text }, CreditSplitRule.EtAl);
 
         var tokens = TokenizeCredit(text);
-        if (tokens.Count <= 1) return new[] { text };
+        if (tokens.Count <= 1) return new CreditSplit(new[] { text }, CreditSplitRule.Single);
 
         var strict = PairNames(tokens, allowGivenNames: false, allowStandalone: false);
-        if (strict is not null) return Distinct(strict.Names);
+        if (strict is not null) return new CreditSplit(KeepConfirmedRepeats(strict.Names, expectedCount), CreditSplitRule.Strict);
 
         if (expectedCount is > 0) {
+            // Both rules here accept a split only when its name count equals expectedCount, so any
+            // name repeated in it is confirmed.
             var standalone = PairNames(tokens, allowGivenNames: false, allowStandalone: true);
-            if (standalone is not null && standalone.Names.Count == expectedCount) return Distinct(standalone.Names);
+            if (standalone is not null && standalone.Names.Count == expectedCount) {
+                return new CreditSplit(standalone.Names, CreditSplitRule.CountStandalone);
+            }
             var given = PairNames(tokens, allowGivenNames: true, allowStandalone: true);
-            if (given is not null && given.Names.Count == expectedCount) return Distinct(given.Names);
-            return new[] { text };
+            if (given is not null && given.Names.Count == expectedCount) {
+                return new CreditSplit(given.Names, CreditSplitRule.CountGiven);
+            }
+            return new CreditSplit(new[] { text }, CreditSplitRule.WholeCountMismatch);
         }
 
         var loose = PairNames(tokens, allowGivenNames: false, allowStandalone: true);
         if (loose is not null && !loose.AnyPaired && loose.Names.All(LooksLikePersonName)) {
-            return Distinct(loose.Names);
+            return new CreditSplit(Distinct(loose.Names), CreditSplitRule.GivenFirst);
         }
-        return new[] { text };
+        return new CreditSplit(new[] { text }, CreditSplitRule.Whole);
     }
 
     private sealed record PairedNames(List<string> Names, bool AnyPaired);
@@ -405,7 +466,8 @@ internal static class IucnAssessmentCitationParser {
         return token;
     }
 
-    private static bool IsInitials(string token) =>
+    /// True for the initials part of a "Surname, Initials" name: "R.", "J.-P.", "C. de C.", "CD".
+    internal static bool IsInitials(string token) =>
         token.Length is > 0 and <= 16 && !UppercaseRun.IsMatch(token) && InitialsPattern.IsMatch(token);
 
     private static bool LooksLikeSurname(string token) {
@@ -441,6 +503,12 @@ internal static class IucnAssessmentCitationParser {
 
     private static IReadOnlyList<string> Distinct(List<string> names) =>
         names.Distinct(StringComparer.Ordinal).ToList();
+
+    // A name listed twice is two people when value[] has as many distinct entries as there are
+    // names ("Harold, A. & Harold, A." is Anthony and Antony Harold); otherwise it is one person
+    // listed twice.
+    private static IReadOnlyList<string> KeepConfirmedRepeats(List<string> names, int? expectedCount) =>
+        expectedCount is > 0 && names.Count == expectedCount ? names : Distinct(names);
 
     // ------------------------------------------------------------ JSON helpers
 
