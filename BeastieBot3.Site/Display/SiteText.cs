@@ -295,4 +295,8 @@ public static class SiteText {
 
     public const string SpratLicensor =
         "Department of Climate Change, Energy, the Environment and Water (DCCEEW), Australian Government";
+
+    /// About page, Version cell of Wikidata and English Wikipedia: their data comes from caches
+    /// downloaded over time, so the date is the latest it can be, the day the database was built.
+    public static string CachedUpTo(string date) => $"Downloaded on various dates up to {date}";
 }
