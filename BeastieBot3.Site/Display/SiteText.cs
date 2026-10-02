@@ -151,10 +151,14 @@ public static class SiteText {
     public const string DoiWikidata = "DOI from Wikidata.";
     public const string NoDoi = "No DOI found in IUCN's citation text, GBIF or Wikidata. {{cite iucn}} works without a DOI.";
     public const string AuthorsUnsplit = "Check these author names, given exactly as IUCN wrote them:";
-    public static string EarlierAssessment(string category, int? year) =>
-        year is null ? $"Wikitext for an earlier assessment: {category}." : $"Wikitext for an earlier assessment: {category}, published {year}.";
-    public static string RegionalAssessment(string region, string category, int? year) =>
-        year is null ? $"Wikitext for the {region} assessment: {category}." : $"Wikitext for the {region} assessment: {category}, published {year}.";
+    /// versionNote: VersionNote's text ("Replaced by the errata version"), added as a sentence.
+    public static string EarlierAssessment(string category, int? year, string? versionNote = null) =>
+        (year is null ? $"Wikitext for an earlier assessment: {category}." : $"Wikitext for an earlier assessment: {category}, published {year}.")
+        + WithNote(versionNote);
+    public static string RegionalAssessment(string region, string category, int? year, string? versionNote = null) =>
+        (year is null ? $"Wikitext for the {region} assessment: {category}." : $"Wikitext for the {region} assessment: {category}, published {year}.")
+        + WithNote(versionNote);
+    private static string WithNote(string? note) => note is null ? string.Empty : $" {note}.";
     /// taxoboxLabel: TaxoboxTemplate.Label.
     public static string TaxoboxGlobalOnly(string taxoboxLabel) => $"{taxoboxLabel} are given for global assessments only.";
     public const string ShowLatestWikitext = "Show wikitext for the latest assessment";
@@ -182,8 +186,23 @@ public static class SiteText {
     public const string ColRegion = "Region";
     public const string ColAssessment = "Assessment";
     public const string ShowWikitext = "Show wikitext";
-    public static string ShowWikitextAccessible(int? year) =>
-        year is null ? "Show wikitext for this assessment" : $"Show wikitext for the assessment published in {year}";
+    /// The accessible name of a row's "Show wikitext" link. region: null for a global assessment.
+    /// versionNote: the row's VersionNote, so an errata version and the assessment it replaced
+    /// have different names.
+    public static string ShowWikitextAccessible(string? region, int? year, string? versionNote = null) {
+        var assessment = region is null ? "the assessment" : $"the {region} assessment";
+        var text = year is null ? $"Show wikitext for {assessment}" : $"Show wikitext for {assessment} published in {year}";
+        return versionNote is null ? text : $"{text} ({char.ToLowerInvariant(versionNote[0])}{versionNote[1..]})";
+    }
+
+    // Notes on errata and amended versions in the assessment tables. IUCN publishes an errata
+    // version with the year of the assessment it corrects; an amended version usually has a later
+    // year. Both replace the earlier assessment, which IUCN still lists.
+    public static string ErrataVersion(int publishedYear) => $"Errata version, published {publishedYear}";
+    public static string AmendedVersion(int amendsYear) => $"Amended version of the {amendsYear} assessment";
+    public const string ReplacedByErrata = "Replaced by the errata version";
+    public const string ReplacedByAmended = "Replaced by the amended version";
+    public const string ReplacedByLater = "Replaced by a later version";
     public const string Shown = "Shown";
     public const string Latest = "Latest";
     public const string IucnSiteLink = "IUCN Red List website";

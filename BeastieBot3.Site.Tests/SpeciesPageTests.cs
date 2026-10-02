@@ -264,6 +264,29 @@ public sealed class SpeciesPageTests(SiteFactory factory) : IClassFixture<SiteFa
     }
 
     [Fact]
+    public async Task ErrataVersionAndTheAssessmentItReplacedAreTold() {
+        var html = await _client.GetStringAsync($"/species/{FixtureDb.Micropyropsis}");
+        var text = Html.Text(html);
+        Assert.Contains("2010 Latest Errata version, published 2016", text);
+        Assert.Contains("2010 Replaced by the errata version", text);
+        Assert.Contains($"href=\"/species/{FixtureDb.Micropyropsis}?assessment={FixtureDb.MicropyropsisReplaced}#wikitext\" aria-label=\"Show wikitext for the assessment published in 2010 (replaced by the errata version)\"", html);
+        // Regional rows carry the region and the note in the link's name.
+        Assert.Contains("Europe EN Endangered B1ab(iii)+2ab(iii) 2011 Errata version, published 2016", text);
+        Assert.Contains("aria-label=\"Show wikitext for the Europe assessment published in 2011 (errata version, published 2016)\"", html);
+
+        var replaced = await _client.GetStringAsync($"/species/{FixtureDb.Micropyropsis}?assessment={FixtureDb.MicropyropsisReplaced}");
+        Assert.Contains("Wikitext for an earlier assessment: Endangered, published 2010. Replaced by the errata version.", Html.Text(replaced));
+        Assert.Contains("aria-label=\"Show wikitext for the assessment published in 2010 (errata version, published 2016)\"", replaced);
+    }
+
+    [Fact]
+    public async Task AmendedVersionAndTheAssessmentItReplacedAreTold() {
+        var text = Html.Text(await _client.GetStringAsync($"/species/{FixtureDb.HouseSparrow}"));
+        Assert.Contains("2019 Latest Amended version of the 2018 assessment", text);
+        Assert.Contains("2018 Replaced by the amended version", text);
+    }
+
+    [Fact]
     public async Task NamesAndLinks() {
         var html = await Page();
         var text = Html.Text(html);

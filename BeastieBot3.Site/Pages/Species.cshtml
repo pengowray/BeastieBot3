@@ -102,7 +102,7 @@
         }
         @if (!selected.IsGlobal) {
             <p class="note note-selected">
-                @SiteText.RegionalAssessment(selected.Scope, selectedCategory, selected.YearPublished)
+                @SiteText.RegionalAssessment(selected.Scope, selectedCategory, selected.YearPublished, Model.VersionNote(selected))
                 @SiteText.TaxoboxGlobalOnly(Model.Taxobox.Label)
                 @if (Model.LatestGlobal is not null) {
                     <a href="@(Model.OptionsUrl(null))#wikitext">@SiteText.ShowLatestWikitext</a>
@@ -110,7 +110,7 @@
             </p>
         } else if (!Model.SelectedIsDefault) {
             <p class="note note-selected">
-                @SiteText.EarlierAssessment(selectedCategory, selected.YearPublished)
+                @SiteText.EarlierAssessment(selectedCategory, selected.YearPublished, Model.VersionNote(selected))
                 <a href="@(Model.OptionsUrl(null))#wikitext">@SiteText.ShowLatestWikitext</a>
             </p>
         }
@@ -216,8 +216,9 @@
                     @foreach (var a in Model.GlobalHistory) {
                         var isShown = selected?.AssessmentId == a.AssessmentId;
                         var isLatest = a.AssessmentId == Model.LatestGlobal?.AssessmentId;
+                        var versionNote = Model.VersionNote(a);
                         <tr class="@(isShown ? "shown" : null)">
-                            <th scope="row">@a.YearPublished @if (isLatest) {<span class="tag">@SiteText.Latest</span>}</th>
+                            <th scope="row">@a.YearPublished @if (isLatest) {<span class="tag">@SiteText.Latest</span>}@if (versionNote is not null) {<text> </text><span class="version-note">@versionNote</span>}</th>
                             <td><partial name="_Badge" model="@BadgeModel.For(a)" /></td>
                             <td>@a.Criteria</td>
                             <td class="narrow-hide">@SiteFormat.Date(a.AssessmentDate)</td>
@@ -225,7 +226,7 @@
                                 @if (isShown) {
                                     <span class="shown-label">@SiteText.Shown</span>
                                 } else {
-                                    <a href="@(Model.OptionsUrl(isLatest ? null : a.AssessmentId))#wikitext" aria-label="@SiteText.ShowWikitextAccessible(a.YearPublished)">@SiteText.ShowWikitext</a>
+                                    <a href="@(Model.OptionsUrl(isLatest ? null : a.AssessmentId))#wikitext" aria-label="@SiteText.ShowWikitextAccessible(null, a.YearPublished, versionNote)">@SiteText.ShowWikitext</a>
                                 }
                             </td>
                             <td><a href="@SiteFormat.IucnAssessmentUrl(a.TaxonId, a.AssessmentId)">@SiteText.IucnSiteLink</a></td>
@@ -256,16 +257,17 @@
                     @foreach (var a in Model.RegionalLatest) {
                         var isShown = selected?.AssessmentId == a.AssessmentId;
                         var isDefault = a.AssessmentId == Model.StatusAssessment?.AssessmentId;
+                        var versionNote = Model.VersionNote(a);
                         <tr class="@(isShown ? "shown" : null)">
                             <th scope="row">@a.Scope</th>
                             <td><partial name="_Badge" model="@BadgeModel.For(a)" /></td>
                             <td>@a.Criteria</td>
-                            <td>@a.YearPublished</td>
+                            <td>@a.YearPublished@if (versionNote is not null) {<text> </text><span class="version-note">@versionNote</span>}</td>
                             <td>
                                 @if (isShown) {
                                     <span class="shown-label">@SiteText.Shown</span>
                                 } else {
-                                    <a href="@(Model.OptionsUrl(isDefault ? null : a.AssessmentId))#wikitext" aria-label="@SiteText.ShowWikitextAccessible(a.YearPublished)">@SiteText.ShowWikitext</a>
+                                    <a href="@(Model.OptionsUrl(isDefault ? null : a.AssessmentId))#wikitext" aria-label="@SiteText.ShowWikitextAccessible(a.Scope, a.YearPublished, versionNote)">@SiteText.ShowWikitext</a>
                                 }
                             </td>
                             <td><a href="@SiteFormat.IucnAssessmentUrl(a.TaxonId, a.AssessmentId)">@SiteText.IucnSiteLink</a></td>

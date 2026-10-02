@@ -202,6 +202,37 @@ public sealed class SpeciesModel : PageModel {
         }
     }
 
+    private readonly Dictionary<long, IucnCitationParts?> _partsById = [];
+
+    private IucnCitationParts? PartsOf(AssessmentRow assessment) {
+        if (!_partsById.TryGetValue(assessment.AssessmentId, out var parts)) {
+            parts = ReadParts(assessment.CitationJson);
+            _partsById[assessment.AssessmentId] = parts;
+        }
+        return parts;
+    }
+
+    /// A short note for the assessment tables when the assessment is an errata or amended version,
+    /// or was replaced by one ("Replaced by the errata version"); null otherwise. An errata version
+    /// keeps the year of the assessment it replaces, so without the note the two rows look the same.
+    public string? VersionNote(AssessmentRow assessment) {
+        if (assessment.ReplacedByAssessmentId is { } replacedBy) {
+            var replacing = _assessments.FirstOrDefault(a => a.AssessmentId == replacedBy);
+            var replacingParts = replacing is null ? null : PartsOf(replacing);
+            return replacingParts?.ErrataYear is not null ? SiteText.ReplacedByErrata
+                : replacingParts?.AmendsYear is not null ? SiteText.ReplacedByAmended
+                : SiteText.ReplacedByLater;
+        }
+        var parts = PartsOf(assessment);
+        if (parts?.ErrataYear is { } errataYear) {
+            return SiteText.ErrataVersion(errataYear);
+        }
+        if (parts?.AmendsYear is { } amendsYear) {
+            return SiteText.AmendedVersion(amendsYear);
+        }
+        return null;
+    }
+
     private void LoadNames() {
         var names = _queries.GetNames(Taxon!.TaxonId);
 
