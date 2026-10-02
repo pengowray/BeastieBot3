@@ -33,6 +33,16 @@ defaults:
     max_depth: 1               # Maximum auto-split nesting levels (prevents heading depth violations)
     min_meaningful_groups: 3   # Need at least 3 real (non-Other/Unknown) groups to accept a split
     reject_unknown_groups: true # Reject any split that produces "Unknown X" headings
+  # Headings from Catalogue of Life nodes between two grouping levels, such as suborder Serpentes
+  # between order Squamata and the snake families. Shown only when every gate passes. A list can
+  # set its own intermediate_groups: (or auto_split:) block, which replaces this one.
+  intermediate_groups:
+    enabled: true
+    min_items: 30              # The parent heading holds at least 30 species
+    min_anchors: 6             # ...in at least 6 groups of the level below (e.g. 6 families)
+    max_groups: 12             # At most 12 CoL groups
+    max_dominance: 0.85        # No CoL group holds more than 85% of the species
+    min_group_size: 5          # At least one CoL group has 5 or more species
   display:
     prefer_common_names: true
     italicize_scientific: true

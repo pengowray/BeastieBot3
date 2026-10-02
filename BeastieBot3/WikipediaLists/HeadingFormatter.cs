@@ -31,7 +31,17 @@ internal sealed class HeadingFormatter {
         _storeBackedProvider = storeBackedProvider;
     }
 
-    public HeadingInfo FormatHeading(string? raw, string? rank = null, string? kingdom = null) {
+    /// <summary>
+    /// Heading text "{Rank} {Name}" plus the common-name sentence and blurb for a taxon. With
+    /// <paramref name="showRank"/> false the heading is the name alone and the sentence has no rank
+    /// word ("Members of [[Cetacea]] are called cetaceans."), for a Catalogue of Life node shown
+    /// inside an IUCN taxon of the same rank (order Cetacea inside order Artiodactyla).
+    /// </summary>
+    public HeadingInfo FormatHeading(string? raw, string? rank = null, string? kingdom = null, bool showRank = true) {
+        if (!showRank) {
+            rank = null;
+        }
+
         if (string.IsNullOrWhiteSpace(raw)) {
             return new HeadingInfo("Unassigned", null);
         }

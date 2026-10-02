@@ -56,6 +56,7 @@ internal sealed class ListStructureMetrics {
     [JsonPropertyName("max_heading_depth")]
     public int MaxHeadingDepth { get; set; }
 
+    /// <summary>Groups large enough for auto-split that it considered (one per closing decision).</summary>
     [JsonPropertyName("auto_split_attempts")]
     public int AutoSplitAttempts { get; set; }
 
@@ -64,6 +65,16 @@ internal sealed class ListStructureMetrics {
 
     [JsonPropertyName("decisions")]
     public List<AutoSplitDecisionRecord> Decisions { get; init; } = new();
+
+    /// <summary>Places where the Catalogue of Life offered a layer of headings between two levels.</summary>
+    [JsonPropertyName("intermediate_layers_tried")]
+    public int IntermediateLayersTried { get; set; }
+
+    [JsonPropertyName("intermediate_layers_shown")]
+    public int IntermediateLayersShown { get; set; }
+
+    [JsonPropertyName("layer_decisions")]
+    public List<IntermediateLayerDecisionRecord> LayerDecisions { get; init; } = new();
 
     [JsonPropertyName("problems")]
     public List<string> Problems { get; init; } = new();
@@ -106,6 +117,58 @@ internal sealed class AutoSplitDecisionRecord {
         MeaningfulGroups = d.MeaningfulGroups,
         OtherFraction = d.OtherFraction,
         LargestGroup = d.LargestGroup
+    };
+}
+
+/// <summary>
+/// JSON-serializable version of an intermediate-layer decision.
+/// </summary>
+internal sealed class IntermediateLayerDecisionRecord {
+    [JsonPropertyName("parent")]
+    public string ParentPath { get; init; } = string.Empty;
+
+    [JsonPropertyName("items")]
+    public int ItemCount { get; init; }
+
+    [JsonPropertyName("ranks")]
+    public string Ranks { get; init; } = string.Empty;
+
+    [JsonPropertyName("level")]
+    public string Level { get; init; } = string.Empty;
+
+    [JsonPropertyName("outcome")]
+    public string Outcome { get; init; } = string.Empty;
+
+    [JsonPropertyName("named_groups")]
+    public int NamedGroups { get; init; }
+
+    [JsonPropertyName("loose_values")]
+    public int LooseValues { get; init; }
+
+    [JsonPropertyName("anchors")]
+    public int Anchors { get; init; }
+
+    [JsonPropertyName("headings")]
+    public int Headings { get; init; }
+
+    [JsonPropertyName("largest_share")]
+    public double LargestShare { get; init; }
+
+    [JsonPropertyName("groups")]
+    public string Groups { get; init; } = string.Empty;
+
+    public static IntermediateLayerDecisionRecord From(IntermediateLayerDecision d) => new() {
+        ParentPath = d.ParentPath,
+        ItemCount = d.ItemCount,
+        Ranks = d.Ranks,
+        Level = d.Level,
+        Outcome = d.Outcome,
+        NamedGroups = d.NamedGroups,
+        LooseValues = d.LooseValues,
+        Anchors = d.Anchors,
+        Headings = d.Headings,
+        LargestShare = d.LargestShare,
+        Groups = d.Groups,
     };
 }
 

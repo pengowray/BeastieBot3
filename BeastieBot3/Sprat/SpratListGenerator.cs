@@ -68,7 +68,7 @@ internal sealed class SpratListGenerator {
         // as overrides, rather than via the formatter's id-keyed lookups.
         var lineFormatter = new SpeciesLineFormatter(legacyRules, storeBackedProvider: null, commonNameProvider: null);
         var headingFormatter = new HeadingFormatter(legacyRules, taxonRules: null, storeBackedProvider: null);
-        _renderer = new SectionBodyRenderer(colEnricher: null, taxonRules: null, lineFormatter, headingFormatter);
+        _renderer = new SectionBodyRenderer(placement: null, taxonRules: null, lineFormatter, headingFormatter);
     }
 
     public SpratListResult Generate(SpratListGroup group, string outputDirectory, int? limit) {
@@ -79,7 +79,7 @@ internal sealed class SpratListGenerator {
         // status. Each taxon's CR/EN/VU/NT/Rare standing is carried inline in its multi-system status
         // annotation, so no per-status sections are emitted.
         var (body, _) = _renderer.BuildSectionBody(
-            records, Grouping, display, statusContext: null, customGroups: null, startHeading: 2, autoSplit: null);
+            records, Grouping, display, statusContext: null, customGroups: null, startHeading: 2);
         body = InjectOrderNotes(body, group);
 
         var content = new StringBuilder();

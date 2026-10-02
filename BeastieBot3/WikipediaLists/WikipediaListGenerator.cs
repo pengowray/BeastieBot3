@@ -19,7 +19,7 @@ using static BeastieBot3.WikipediaLists.TaxonGroupingHelper;
 
 // Main engine for generating Wikipedia species list wikitext. Workflow:
 // 1. IucnListQueryService fetches matching species from IUCN database
-// 2. ColTaxonomyEnricher adds COL ranks for grouping
+// 2. ITaxonPlacement supplies Catalogue of Life ranks between the IUCN ranks for grouping
 // 3. StoreBackedCommonNameProvider resolves vernacular names
 // 4. TaxonRulesService applies exclusions/overrides
 // 5. TaxonomyTreeBuilder groups by taxonomy hierarchy
@@ -35,7 +35,8 @@ internal sealed class WikipediaListGenerator {
     private readonly TaxonRulesService? _taxonRules;
     private readonly CommonNameProvider? _commonNameProvider;
     private readonly StoreBackedCommonNameProvider? _storeBackedProvider;
-    private readonly ColTaxonomyEnricher? _colEnricher;
+    // Catalogue of Life nodes between IUCN ranks (suborders, subfamilies). Optional; null = IUCN ranks only.
+    private readonly ITaxonPlacement? _placement;
     // Resolves a cleaned CoL spelling for a formatting-equivalent (mojibake/diacritic/encoding) slip
     // in an IUCN name, so the list can display the clean binomial. Optional; null = no correction.
     private readonly ColNameResolver? _colNameResolver;
@@ -63,14 +64,14 @@ internal sealed class WikipediaListGenerator {
         _legacyRules = legacyRules ?? throw new ArgumentNullException(nameof(legacyRules));
         _commonNameProvider = commonNameProvider;
         _storeBackedProvider = null;
-        _colEnricher = null;
+        _placement = null;
         _colNameResolver = null;
         _taxonRules = taxonRules;
         _chartData = chartData;
         _introProse = new IntroProseBuilder(_queryService);
         _lineFormatter = new SpeciesLineFormatter(_legacyRules, _storeBackedProvider, _commonNameProvider);
         _headingFormatter = new HeadingFormatter(_legacyRules, _taxonRules, _storeBackedProvider);
-        _renderer = new SectionBodyRenderer(_colEnricher, _taxonRules, _lineFormatter, _headingFormatter);
+        _renderer = new SectionBodyRenderer(_placement, _taxonRules, _lineFormatter, _headingFormatter);
     }
 
     /// <summary>
@@ -81,7 +82,7 @@ internal sealed class WikipediaListGenerator {
         WikipediaTemplateRenderer templateRenderer,
         LegacyTaxaRuleList legacyRules,
         StoreBackedCommonNameProvider? storeBackedProvider,
-        ColTaxonomyEnricher? colEnricher = null,
+        ITaxonPlacement? placement = null,
         TaxonRulesService? taxonRules = null,
         IucnChartDataBuilder? chartData = null,
         ColNameResolver? colNameResolver = null) {
@@ -90,14 +91,14 @@ internal sealed class WikipediaListGenerator {
         _legacyRules = legacyRules ?? throw new ArgumentNullException(nameof(legacyRules));
         _commonNameProvider = null;
         _storeBackedProvider = storeBackedProvider;
-        _colEnricher = colEnricher;
+        _placement = placement;
         _colNameResolver = colNameResolver;
         _taxonRules = taxonRules;
         _chartData = chartData;
         _introProse = new IntroProseBuilder(_queryService);
         _lineFormatter = new SpeciesLineFormatter(_legacyRules, _storeBackedProvider, _commonNameProvider);
         _headingFormatter = new HeadingFormatter(_legacyRules, _taxonRules, _storeBackedProvider);
-        _renderer = new SectionBodyRenderer(_colEnricher, _taxonRules, _lineFormatter, _headingFormatter);
+        _renderer = new SectionBodyRenderer(_placement, _taxonRules, _lineFormatter, _headingFormatter);
     }
 
     public WikipediaListResult Generate(
@@ -154,6 +155,9 @@ internal sealed class WikipediaListGenerator {
         // child sections instead of the flat species body. Requires the count aggregator.
         var isParent = definition.SubLists.Count > 0 && _chartData != null;
         var parentTableEmitted = false;
+        var autoSplitConfig = ResolveAutoSplitConfig(definition, defaults);
+        var intermediateConfig = ResolveIntermediateGroupsConfig(definition, defaults);
+        var diagnostics = new AutoSplitDiagnosticCollector();
 
         var totalHeadingCount = 0;
         foreach (var section in sections) {
@@ -173,16 +177,21 @@ internal sealed class WikipediaListGenerator {
 
             int sectionHeadingCount;
             string sectionBody;
-            var autoSplitConfig = ResolveAutoSplitConfig(definition, defaults);
+            var tree = new SectionTreeOptions {
+                AutoSplit = autoSplitConfig,
+                IntermediateGroups = intermediateConfig,
+                Diagnostics = diagnostics,
+                SectionLabel = section.Definition.Heading,
+            };
             if (isParent) {
                 (sectionBody, sectionHeadingCount) = BuildParentSectionBody(
-                    section, definition, grouping, display, autoSplitConfig, datasetYear,
+                    section, definition, grouping, display, tree, datasetYear,
                     startHeading: 3, includeTable: !parentTableEmitted);
                 parentTableEmitted = true;
             } else {
                 (sectionBody, sectionHeadingCount) = _renderer.BuildSectionBody(
                     section.Records, grouping, display, section.StatusContext, definition.CustomGroups,
-                    autoSplit: autoSplitConfig);
+                    tree: tree);
             }
             totalHeadingCount += sectionHeadingCount;
             builder.AppendLine(sectionBody);
@@ -213,7 +222,13 @@ internal sealed class WikipediaListGenerator {
             TotalTaxa = totalCount,
             HeadingCount = totalHeadingCount,
             IsParent = isParent,
-            FileBytes = System.Text.Encoding.UTF8.GetByteCount(content)
+            FileBytes = System.Text.Encoding.UTF8.GetByteCount(content),
+            AutoSplitAttempts = diagnostics.Decisions.Count(d => d.ClosesAttempt),
+            AutoSplitAccepted = diagnostics.Decisions.Count(d => d.Outcome == "accepted"),
+            Decisions = diagnostics.Decisions.Select(AutoSplitDecisionRecord.From).ToList(),
+            IntermediateLayersTried = diagnostics.Layers.Count,
+            IntermediateLayersShown = diagnostics.Layers.Count(d => d.Outcome == "accepted"),
+            LayerDecisions = diagnostics.Layers.Select(IntermediateLayerDecisionRecord.From).ToList(),
         };
         WikitextMetricsCollector.CollectFromWikitext(content, metrics);
         WikitextMetricsCollector.DetectProblems(metrics);
@@ -314,7 +329,7 @@ internal sealed class WikipediaListGenerator {
         WikipediaListDefinition definition,
         IReadOnlyList<GroupingLevelDefinition> grouping,
         DisplayPreferences display,
-        AutoSplitConfig? autoSplit,
+        SectionTreeOptions tree,
         string datasetYear,
         int startHeading,
         bool includeTable) {
@@ -400,9 +415,12 @@ internal sealed class WikipediaListGenerator {
                 headingCount++;
                 // Reuse the standard list-generation path so an orphan class splits into orders/families
                 // (and auto-splits) exactly when a normal list would — no bespoke rendering for these.
+                var orphanTree = tree with {
+                    SectionLabel = $"{tree.SectionLabel} → {(string.IsNullOrWhiteSpace(grp.Key) ? "Unassigned" : grp.Key)}",
+                };
                 var (body, hc) = _renderer.BuildSectionBody(
                     grp.ToList(), grouping, display, section.StatusContext, definition.CustomGroups,
-                    startHeading: Math.Min(startHeading, 6) + 1, autoSplit: autoSplit);
+                    startHeading: Math.Min(startHeading, 6) + 1, tree: orphanTree);
                 headingCount += hc;
                 sb.AppendLine(body);
                 sb.AppendLine();

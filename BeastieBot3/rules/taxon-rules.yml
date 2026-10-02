@@ -24,7 +24,13 @@
 #
 # Virtual groups example:
 #   For Squamata, instead of just splitting by family, we can define
-#   logical groups like "Snakes" and "Lizards" based on superfamily/clade membership.
+#   logical groups like "Snakes" and "Lizards". A taxon is matched in three passes:
+#   1. clades: the Catalogue of Life nodes between the order and the family
+#      (suborder Serpentes, order Cetacea); headings below the group continue after
+#      the matched node (Cetaceans: then Odontoceti / Mysticeti).
+#   2. families: used when no clade matches, e.g. when CoL has no node for the family.
+#   3. the default group takes the rest.
+#   Each group becomes a heading only when the taxon's items fall into two or more groups.
 
 # Global exclusion patterns (regex)
 # Taxa matching any pattern are excluded from all lists
@@ -33,25 +39,19 @@ global_exclusions:
   # - "^Fossil "
 
 # Virtual groups define custom taxonomic groupings
-# These override the normal rank-based grouping for specific parent taxa
+# These split a parent taxon's species into curated groups before its families
 virtual_groups:
   # Squamata: organize into Snakes, Lizards, and Worm lizards
   Squamata:
-    # Groups are checked in order; first match wins
+    # Groups are checked in order within each pass; first match wins
     groups:
       - name: Snakes
         common_name: snake
         common_plural: snakes
         main_article: Snake
-        # Match by superfamily (from COL enrichment)
-        superfamilies:
-          - Colubroidea
-          - Booidea
-          - Pythonoidea
-          - Typhlopoidea
-          - Uropeltoidea
-          - Acrochordoidea
-        # Or by family if superfamily not available
+        clades:
+          - Serpentes
+        # Fallback for families with no CoL suborder
         families:
           - Viperidae
           - Colubridae
@@ -79,11 +79,30 @@ virtual_groups:
           - Psammophiidae
           - Dipsadidae
           - Calamariidae
+          - Natricidae
+          - Gerrhopilidae
+          - Erycidae
+          - Pseudoxenodontidae
+          - Sibynophiidae
+          - Cyclocoridae
+          - Candoiidae
+          - Charinaidae
+          - Grayiidae
+          - Micrelapidae
+          - Pseudaspididae
+          - Sanziniidae
+          - Ungaliophiidae
+          - Xenopeltidae
+          - Xenotyphlopidae
+          - Calabariidae
+          - Loxocemidae
 
       - name: Worm lizards
         common_name: worm lizard
         common_plural: worm lizards
         main_article: Amphisbaenia
+        clades:
+          - Amphisbaenia
         families:
           - Amphisbaenidae
           - Blanidae
@@ -96,14 +115,9 @@ virtual_groups:
         common_name: lizard
         common_plural: lizards
         main_article: Lizard
-        # Default group for anything else in Squamata
+        # Default group for anything else in Squamata. It has no clades, so the CoL
+        # suborders of lizards (Autarchoglossa, Gekkota, Iguania) can become headings below it.
         default: true
-        # Can also explicitly list families/superfamilies for lizards
-        superfamilies:
-          - Lacertoidea
-          - Shinisauroidea
-        clades:
-          - Iguania
 
   # Artiodactyla/Cetartiodactyla: separate cetaceans from even-toed ungulates
   # IUCN uses both "ARTIODACTYLA" and "CETARTIODACTYLA" depending on the taxon
@@ -113,6 +127,9 @@ virtual_groups:
         common_name: cetacean
         common_plural: cetaceans
         main_article: Cetacea
+        clades:
+          - Cetacea
+        # Fallback for families with no CoL placement
         families:
           # Baleen whales (Mysticeti)
           - Balaenidae        # right whales
@@ -155,6 +172,8 @@ virtual_groups:
         common_name: cetacean
         common_plural: cetaceans
         main_article: Cetacea
+        clades:
+          - Cetacea
         families:
           - Balaenidae
           - Balaenopteridae

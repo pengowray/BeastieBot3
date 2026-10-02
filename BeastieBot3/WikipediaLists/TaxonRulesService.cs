@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Text.RegularExpressions;
 using YamlDotNet.Serialization;
 using YamlDotNet.Serialization.NamingConventions;
@@ -116,6 +117,7 @@ internal sealed class TaxonRulesService {
             Blurb = rule.Blurb,
             Comprises = rule.Comprises,
             ForceSplit = rule.ForceSplit,
+            UseVirtualGroups = rule.UseVirtualGroups,
             Exclude = listOverride.Exclude
         };
     }
@@ -166,13 +168,6 @@ internal sealed class TaxonRulesService {
     }
 
     /// <summary>
-    /// Check if any virtual groups are defined at all.
-    /// </summary>
-    public bool HasAnyVirtualGroups() {
-        return _virtualGroups.Count > 0;
-    }
-
-    /// <summary>
     /// Check if virtual groups are defined for a parent taxon.
     /// </summary>
     public bool HasVirtualGroups(string parentTaxon) {
@@ -187,51 +182,45 @@ internal sealed class TaxonRulesService {
     }
 
     /// <summary>
-    /// Resolve which virtual group a record belongs to, based on its family/superfamily/clade.
-    /// Returns null if no virtual groups are defined or no match is found.
+    /// Resolve which virtual group a taxon belongs to under <paramref name="parentTaxon"/>.
+    /// <paramref name="cladeNames"/> are the names of the Catalogue of Life nodes between the parent
+    /// and the taxon's family, broad to narrow (e.g. Serpentes, Alethinophidia). Matching runs in
+    /// three passes, each over the groups in order: a group's <c>clades</c> (and <c>superfamilies</c>,
+    /// which are path nodes too) against those names, then its <c>families</c> against the family,
+    /// then the default group. Returns null if the parent has no groups or nothing matches.
     /// </summary>
-    public VirtualGroup? ResolveVirtualGroup(string parentTaxon, string? family, string? superfamily, string? clade) {
+    public VirtualGroupResolution? ResolveVirtualGroup(string parentTaxon, string? family, IReadOnlyList<string> cladeNames) {
         if (!_virtualGroups.TryGetValue(parentTaxon, out var config) || config.Groups.Count == 0) {
             return null;
         }
 
-        VirtualGroup? defaultGroup = null;
-
-        foreach (var group in config.Groups) {
-            if (group.Default) {
-                defaultGroup = group;
-                continue;
-            }
-
-            // Check superfamilies
-            if (!string.IsNullOrEmpty(superfamily) && group.Superfamilies.Count > 0) {
-                foreach (var sf in group.Superfamilies) {
-                    if (string.Equals(sf, superfamily, StringComparison.OrdinalIgnoreCase)) {
-                        return group;
-                    }
-                }
-            }
-
-            // Check families
-            if (!string.IsNullOrEmpty(family) && group.Families.Count > 0) {
-                foreach (var f in group.Families) {
-                    if (string.Equals(f, family, StringComparison.OrdinalIgnoreCase)) {
-                        return group;
-                    }
-                }
-            }
-
-            // Check clades
-            if (!string.IsNullOrEmpty(clade) && group.Clades.Count > 0) {
-                foreach (var c in group.Clades) {
-                    if (string.Equals(c, clade, StringComparison.OrdinalIgnoreCase)) {
-                        return group;
+        if (cladeNames.Count > 0) {
+            foreach (var group in config.Groups) {
+                foreach (var clade in group.Clades.Concat(group.Superfamilies)) {
+                    for (var i = 0; i < cladeNames.Count; i++) {
+                        if (string.Equals(clade, cladeNames[i], StringComparison.OrdinalIgnoreCase)) {
+                            return new VirtualGroupResolution(group, i);
+                        }
                     }
                 }
             }
         }
 
-        // Return default group if no match found
-        return defaultGroup;
+        if (!string.IsNullOrWhiteSpace(family)) {
+            foreach (var group in config.Groups) {
+                if (group.Families.Any(f => string.Equals(f, family.Trim(), StringComparison.OrdinalIgnoreCase))) {
+                    return new VirtualGroupResolution(group, -1);
+                }
+            }
+        }
+
+        var defaultGroup = config.Groups.FirstOrDefault(g => g.Default);
+        return defaultGroup is null ? null : new VirtualGroupResolution(defaultGroup, -1);
     }
 }
+
+/// <summary>The virtual group a taxon belongs to.</summary>
+/// <param name="Group">The matched group.</param>
+/// <param name="CladeIndex">Index in the clade names of the node that matched, or -1 when the group
+/// matched by family or as the default.</param>
+internal sealed record VirtualGroupResolution(VirtualGroup Group, int CladeIndex);

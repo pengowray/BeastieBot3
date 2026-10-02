@@ -106,6 +106,8 @@ internal sealed class WikipediaListDefinitionLoader {
                         Grouping = rawList.Grouping,
                         Display = rawList.Display,
                         CustomGroups = rawList.CustomGroups,
+                        AutoSplit = rawList.AutoSplit,
+                        IntermediateGroups = rawList.IntermediateGroups,
                     };
                     var expanded = ExpandFromReference(syntheticRaw, taxaGroups, presets);
                     if (expanded != null) {
@@ -306,6 +308,8 @@ internal sealed class WikipediaListDefinitionLoader {
             Grouping = raw.Grouping,
             Display = mergedDisplay,
             CustomGroups = raw.CustomGroups ?? taxaGroup.CustomGroups,
+            AutoSplit = raw.AutoSplit,
+            IntermediateGroups = raw.IntermediateGroups,
             TaxaGroup = raw.TaxaGroup,
             Preset = raw.Preset,
             TaxaAdjective = taxaGroup.Adjective,
@@ -402,6 +406,8 @@ internal sealed class WikipediaListDefinitionLoader {
             Grouping = raw.Grouping,
             Display = raw.Display,
             CustomGroups = raw.CustomGroups,
+            AutoSplit = raw.AutoSplit,
+            IntermediateGroups = raw.IntermediateGroups,
         };
     }
 
@@ -459,6 +465,12 @@ internal sealed class WikipediaListDefinitionRaw {
     /// Custom family-based grouping (for paraphyletic groups like marine mammals).
     /// </summary>
     public List<CustomGroupDefinition>? CustomGroups { get; init; }
+
+    /// <summary>Per-list <c>auto_split:</c>, replacing the defaults' block.</summary>
+    public AutoSplitConfig? AutoSplit { get; init; }
+
+    /// <summary>Per-list <c>intermediate_groups:</c>, replacing the defaults' block.</summary>
+    public IntermediateGroupsConfig? IntermediateGroups { get; init; }
 }
 
 // ==================== Supporting file structures ====================
