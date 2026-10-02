@@ -1,13 +1,17 @@
 using BeastieBot3.CommonNames;
+using BeastieBot3.WikipediaLists;
+using BeastieBot3.WikipediaLists.Legacy;
 using Microsoft.Data.Sqlite;
 
 // Reads the common names store (common_names.sqlite) for `site build-db`, read-only:
 //   - every English common name of each IUCN taxon, with its source mapped to the site's sources
 //     (wikipedia_title and wikipedia_taxobox -> wikipedia, wikidata_label and wikidata -> wikidata,
 //     col -> col, iucn -> iucn);
-//   - the best English name, chosen exactly as the Wikipedia lists choose it
-//     (CommonNameStore.ChooseBest over the same candidates GetBestCommonNameForTaxon reads, with
-//     ambiguous names skipped) and capitalised with the store's caps rules;
+//   - the best English name, chosen exactly as the Wikipedia lists choose it: a manual override
+//     in rules-list.txt ("Panthera leo = lion") first, else CommonNameStore.ChooseBest over the
+//     same candidates GetBestCommonNameForTaxon reads (ambiguous names skipped) capitalised with
+//     the store's caps rules; and dropped when the lists would drop it
+//     (SpeciesLineFormatter.IsUnusableCommonName: the scientific name again, or a working name);
 //   - Catalogue of Life synonyms (synonym_type 'synonym'; 'ambiguous_synonym' rows and the
 //     constructed rank variants are left out; IUCN's synonyms come from the API records instead);
 //   - Catalogue of Life ids from taxon_cross_references, the fallback for col_id.
@@ -16,8 +20,8 @@ using Microsoft.Data.Sqlite;
 namespace BeastieBot3.SiteBuild;
 
 internal static class SiteCommonNamesReader {
-    public static void Read(string path, IReadOnlyDictionary<long, SiteTaxon> taxa, SiteBuildStats stats,
-        Dictionary<long, string> colCrossReferences, CancellationToken cancellationToken) {
+    public static void Read(string path, IReadOnlyDictionary<long, SiteTaxon> taxa, LegacyTaxaRuleList? overrides,
+        SiteBuildStats stats, Dictionary<long, string> colCrossReferences, CancellationToken cancellationToken) {
         using var store = CommonNameStore.OpenReadOnly(path);
         var ambiguous = store.GetAmbiguousNames("en");
         var capsRules = store.GetAllCapsRules();
@@ -55,15 +59,28 @@ internal static class SiteCommonNamesReader {
             }
         }
 
-        foreach (var (taxonId, list) in candidates) {
-            var best = CommonNameStore.ChooseBest(list, ambiguous);
-            if (best is null) {
+        foreach (var taxon in taxa.Values) {
+            string? name;
+            var fromRules = false;
+            if (overrides?.Get(taxon.ScientificName)?.CommonName is { Length: > 0 } manual) {
+                name = ProseFormat.Uppercase(manual);
+                fromRules = true;
+            } else if (candidates.TryGetValue(taxon.TaxonId, out var list)
+                       && CommonNameStore.ChooseBest(list, ambiguous) is { } best) {
+                name = CommonNameNormalizer.ApplyCapitalization(SiteBuildRules.CleanName(best.RawName), capsRules);
+            } else {
                 continue;
             }
-            var name = CommonNameNormalizer.ApplyCapitalization(SiteBuildRules.CleanName(best.RawName), capsRules);
-            if (!string.IsNullOrWhiteSpace(name)) {
-                taxa[taxonId].CommonNameEn = name.Trim();
-                stats.CommonNameEn++;
+            // The lists show no common name when the best one is the scientific name again or a
+            // working name ("sp. nov.", an authority with a year); neither does the site.
+            if (SpeciesLineFormatter.IsUnusableCommonName(name, taxon.ScientificName, taxon.Genus, taxon.SpeciesEpithet)) {
+                stats.CommonNameEnUnusable++;
+                continue;
+            }
+            taxon.CommonNameEn = name!.Trim();
+            stats.CommonNameEn++;
+            if (fromRules) {
+                stats.CommonNameEnFromRules++;
             }
         }
 

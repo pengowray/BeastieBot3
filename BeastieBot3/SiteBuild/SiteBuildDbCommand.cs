@@ -60,6 +60,10 @@ internal sealed class SiteBuildDbCommand : Command<SiteBuildDbCommand.Settings> 
         [Description("SPRAT database. Default: Datastore:SPRAT_sqlite in paths.ini.")]
         public string? SpratDatabase { get; init; }
 
+        [CommandOption("--rules <PATH>")]
+        [Description("rules-list.txt, whose common name lines override the best English name as they do in the Wikipedia lists. Default: rules/rules-list.txt beside the program, as wikipedia generate-lists uses.")]
+        public string? RulesList { get; init; }
+
         [CommandOption("--gbif-zip <PATH>")]
         [Description("GBIF's copy of the IUCN checklist. Default: the newest zip in Datasets:GBIF_IUCN_dir.")]
         public string? GbifChecklist { get; init; }
@@ -88,6 +92,7 @@ internal sealed class SiteBuildDbCommand : Command<SiteBuildDbCommand.Settings> 
                 ColDatabase = Full(colDatabase),
                 SpratDatabase = Full(settings.SpratDatabase ?? paths.GetSpratDatabasePath()),
                 GbifChecklist = Full(settings.GbifChecklist ?? GbifIucnChecklistReader.FindNewest(paths.GetGbifIucnDir())),
+                RulesList = Full(settings.RulesList ?? Path.Combine(paths.BaseDirectory, "rules", "rules-list.txt")),
                 Output = Path.GetFullPath(output),
                 Limit = settings.Limit,
             };
@@ -175,6 +180,8 @@ internal sealed class SiteBuildDbCommand : Command<SiteBuildDbCommand.Settings> 
         Row("... of which English", s.CommonNamesEnglish);
         Row("Synonyms", s.NamesByType.GetValueOrDefault(SiteNameType.Synonym));
         Row("Taxa with a best English name", s.CommonNameEn);
+        Row("... of which set in rules-list.txt", s.CommonNameEnFromRules);
+        Row("Best English name dropped (the scientific name again, or a working name)", s.CommonNameEnUnusable);
 
         Section("Links");
         Row("English Wikipedia articles", s.EnwikiTitles);

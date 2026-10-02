@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using System.Globalization;
 using BeastieBot3.Shared.SiteData;
+using BeastieBot3.WikipediaLists.Legacy;
 using Microsoft.Data.Sqlite;
 using Spectre.Console;
 
@@ -110,7 +111,13 @@ internal sealed class SiteDbBuild {
         // 6. Common names store.
         var colCrossReferences = new Dictionary<long, string>();
         Optional("Common names store", _inputs.CommonNames, path => {
-            SiteCommonNamesReader.Read(path, taxa, _stats, colCrossReferences, ct);
+            LegacyTaxaRuleList? overrides = null;
+            if (_inputs.RulesList is { } rules && File.Exists(rules)) {
+                overrides = new LegacyTaxaRuleList(rules);
+            } else {
+                _stats.MissingSources.Add("rules-list.txt");
+            }
+            SiteCommonNamesReader.Read(path, taxa, overrides, _stats, colCrossReferences, ct);
             return $"{_stats.CommonNameEn:N0} best English names";
         });
 

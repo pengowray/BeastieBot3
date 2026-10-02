@@ -16,6 +16,9 @@ internal sealed record SiteBuildInputs {
     /// The CoL database itself; only its file name is read, for the release when there is no placement file.
     public string? ColDatabase { get; init; }
     public string? SpratDatabase { get; init; }
+    /// rules-list.txt, whose "Scientific name = common name" lines override the best English name,
+    /// as they do in the Wikipedia lists.
+    public string? RulesList { get; init; }
     /// GBIF's copy of the IUCN checklist (a Darwin Core Archive zip).
     public string? GbifChecklist { get; init; }
     /// The site database to replace.
@@ -120,6 +123,8 @@ internal sealed class SiteBuildStats {
     public readonly Dictionary<string, int> NamesByType = new(StringComparer.Ordinal);
     public int CommonNamesEnglish;
     public int CommonNameEn;
+    public int CommonNameEnUnusable;
+    public int CommonNameEnFromRules;
     public int SynonymsBuiltFromFullName;
 
     public int EnwikiTitles;

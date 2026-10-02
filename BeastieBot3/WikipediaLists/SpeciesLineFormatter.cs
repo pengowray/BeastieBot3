@@ -608,7 +608,14 @@ internal sealed class SpeciesLineFormatter {
 
     // Returns true when the resolved "common name" is not actually a usable vernacular: a working
     // placeholder, an authority/homonym string, or simply the scientific name repeated.
-    private static bool IsUnusableCommonName(string? candidate, IucnSpeciesRecord record) {
+    private static bool IsUnusableCommonName(string? candidate, IucnSpeciesRecord record) =>
+        IsUnusableCommonName(candidate, ResolveScientificName(record), record.GenusName, record.SpeciesName);
+
+    /// <summary>
+    /// The same check for callers without an <see cref="IucnSpeciesRecord"/> (`site build-db`
+    /// applies it to the best English name so the site and the lists agree).
+    /// </summary>
+    internal static bool IsUnusableCommonName(string? candidate, string? scientificName, string? genusName, string? speciesName) {
         if (string.IsNullOrWhiteSpace(candidate)) {
             return true;
         }
@@ -621,13 +628,12 @@ internal sealed class SpeciesLineFormatter {
         if (AuthorityYearPattern.IsMatch(name)) return true;
 
         // A "common name" that is really just the scientific name repeated.
-        var scientific = ResolveScientificName(record);
-        if (!string.IsNullOrWhiteSpace(scientific) &&
-            string.Equals(name, scientific, StringComparison.OrdinalIgnoreCase)) {
+        if (!string.IsNullOrWhiteSpace(scientificName) &&
+            string.Equals(name, scientificName, StringComparison.OrdinalIgnoreCase)) {
             return true;
         }
 
-        var binomial = BuildBinomial(record);
+        var binomial = BuildBinomial(genusName, speciesName);
         if (!string.IsNullOrWhiteSpace(binomial) &&
             string.Equals(FirstTwoTokens(name), binomial, StringComparison.OrdinalIgnoreCase)) {
             return true;
@@ -636,9 +642,9 @@ internal sealed class SpeciesLineFormatter {
         return false;
     }
 
-    private static string? BuildBinomial(IucnSpeciesRecord record) {
-        var genus = record.GenusName?.Trim();
-        var species = record.SpeciesName?.Trim();
+    private static string? BuildBinomial(string? genusName, string? speciesName) {
+        var genus = genusName?.Trim();
+        var species = speciesName?.Trim();
         if (string.IsNullOrWhiteSpace(genus) || string.IsNullOrWhiteSpace(species)) {
             return null;
         }

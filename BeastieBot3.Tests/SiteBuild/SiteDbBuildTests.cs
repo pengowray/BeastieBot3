@@ -168,11 +168,18 @@ public sealed class SiteDbBuildTests : IDisposable {
         // A language the API does not give is stored without one.
         Assert.Contains(("Bear of the north", "common", null, "iucn", 0L), names);
 
-        // The best English name is the Wikipedia title (highest source priority), capitalised.
-        Assert.Equal("Polar bear", Scalar(db, $"SELECT common_name_en FROM taxon WHERE taxon_id = {PolarBear}"));
-        // "Shared name" belongs to two taxa, so it is never the best name.
-        Assert.Null(Scalar(db, $"SELECT common_name_en FROM taxon WHERE taxon_id = {NoScopeTaxon}"));
+        // The best English name is the Wikipedia title (highest source priority).
+        Assert.Equal("Polar bear", BestName(db, PolarBear));
+        // "Shared name" belongs to several taxa, so the next name is used, capitalised by the caps rules.
+        Assert.Equal("Test bear", BestName(db, Subpopulation));
+        // The best name is the scientific name again, so the taxon gets none, as in the lists.
+        Assert.Null(BestName(db, Subspecies));
+        // rules-list.txt overrides the store.
+        Assert.Equal("Nemo bear", BestName(db, NoScopeTaxon));
     }
+
+    private static string? BestName(SqliteConnection db, long taxonId) =>
+        Scalar(db, $"SELECT common_name_en FROM taxon WHERE taxon_id = {taxonId}");
 
     [Fact]
     public void Build_ThatFails_LeavesTheOldDatabaseAndNoTemporaryFile() {
@@ -216,15 +223,18 @@ public sealed class SiteDbBuildTests : IDisposable {
         var iucn = Path.Combine(_dir, "iucn.sqlite");
         var cache = Path.Combine(_dir, "cache.sqlite");
         var names = Path.Combine(_dir, "common_names.sqlite");
+        var rules = Path.Combine(_dir, "rules-list.txt");
         if (!File.Exists(iucn)) {
             WriteIucn(iucn);
             WriteCache(cache);
             WriteCommonNames(names);
+            File.WriteAllText(rules, "// manual common names\nUrsus nemo = nemo bear\n");
         }
         return new SiteBuildInputs {
             IucnDatabase = iucn,
             ApiCache = cache,
             CommonNames = names,
+            RulesList = rules,
             WikidataCache = Path.Combine(_dir, "missing-wikidata.sqlite"),
             Output = output,
         };
@@ -345,13 +355,17 @@ public sealed class SiteDbBuildTests : IDisposable {
             INSERT INTO taxa (id, canonical_name, original_name, rank, kingdom, validity_status, primary_source, primary_source_id, created_at, updated_at) VALUES
                 (1, 'ursus maritimus', 'Ursus maritimus', 'species', 'ANIMALIA', 'valid', 'iucn', '22823', 'x', 'x'),
                 (2, 'ursus nemo', 'Ursus nemo', 'species', 'ANIMALIA', 'valid', 'iucn', '900003', 'x', 'x'),
-                (3, 'ursus maritimus testus', 'Ursus maritimus ssp. testus', 'subspecies', 'ANIMALIA', 'valid', 'iucn', '900001', 'x', 'x');
+                (3, 'ursus maritimus testus', 'Ursus maritimus ssp. testus', 'subspecies', 'ANIMALIA', 'valid', 'iucn', '900001', 'x', 'x'),
+                (4, 'ursus maritimus', 'Ursus maritimus Test subpopulation', 'species', 'ANIMALIA', 'valid', 'iucn', '900002', 'x', 'x');
             INSERT INTO common_names (taxon_id, raw_name, normalized_name, language, source, source_identifier, is_preferred, created_at) VALUES
                 (1, 'Polar Bear', 'polarbear', 'en', 'iucn', '22823', 1, 'x'),
                 (1, 'Polar bear', 'polarbear', 'en', 'wikipedia_title', 'Polar bear', 1, 'x'),
                 (1, 'Ours polaire', 'ourspolaire', 'fr', 'iucn', '22823', 0, 'x'),
                 (2, 'Shared name', 'sharedname', 'en', 'col', 'C1', 0, 'x'),
-                (3, 'Shared name', 'sharedname', 'en', 'col', 'C2', 0, 'x');
+                (3, 'Shared name', 'sharedname', 'en', 'col', 'C2', 0, 'x'),
+                (3, 'Ursus maritimus testus', 'ursusmaritimustestus', 'en', 'wikidata_label', 'Q1', 0, 'x'),
+                (4, 'Shared name', 'sharedname', 'en', 'wikipedia_title', 'Shared name', 1, 'x'),
+                (4, 'Test Bear', 'testbear', 'en', 'col', 'C3', 0, 'x');
             INSERT INTO scientific_name_synonyms (taxon_id, normalized_name, original_name, source, synonym_type, created_at) VALUES
                 (1, 'ursus marinus', 'Ursus marinus', 'col', 'synonym', 'x'),
                 (1, 'thalarctos maritimus', 'Thalarctos maritimus', 'col', 'synonym', 'x'),
