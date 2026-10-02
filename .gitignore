@@ -374,3 +374,6 @@ run-single-log.txt
 
 # Generated audit-site bundles (default output is the configured reports_dir, but guard the fallback)
 /reports/
+
+# Settings for the Oracle Cloud deploy scripts (server address, domain)
+deploy/oracle/deploy.env

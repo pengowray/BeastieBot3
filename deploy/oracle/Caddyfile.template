@@ -1,0 +1,40 @@
+# Caddy configuration for the BeastieBot3 public site.
+# setup-server.sh writes /etc/caddy/Caddyfile from deploy/oracle/Caddyfile.template, filling in
+# DOMAIN and ACME_EMAIL from deploy.env (the email line is left out when ACME_EMAIL is empty).
+# Edit the template, not the file on the server, then run setup-server.sh again.
+#
+# Caddy gets and renews the Let's Encrypt certificate for the domain itself, and redirects
+# http:// requests to https://.
+{
+	email __ACME_EMAIL__
+}
+
+__DOMAIN__ {
+	encode zstd gzip
+
+	# The site has no uploads, so Caddy refuses request bodies over 1 MB.
+	request_body {
+		max_size 1MB
+	}
+
+	header {
+		Strict-Transport-Security "max-age=31536000"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		X-Frame-Options "DENY"
+		# Removes the Server header from Caddy and from the app (Kestrel).
+		-Server
+	}
+
+	# Caddy adds X-Forwarded-For, X-Forwarded-Proto and X-Forwarded-Host to each request.
+	reverse_proxy 127.0.0.1:5080
+
+	# Access log in JSON. Caddy starts a new file at 50 MB and deletes files older than 14 days.
+	log {
+		output file /var/log/caddy/access.log {
+			roll_size 50MiB
+			roll_keep 10
+			roll_keep_for 336h
+		}
+	}
+}
