@@ -90,8 +90,16 @@ public sealed class HomeAndSearchTests(SiteFactory factory) : IClassFixture<Site
 
     [Fact]
     public async Task CommonNameInAnotherLanguageShowsTheLanguage() {
-        var text = Html.Text(await _client.GetStringAsync("/search?q=Ours+bl"));
-        Assert.Contains("Matched common name: Ours blanc (French)", text);
+        var html = await _client.GetStringAsync("/search?q=Ours+bl");
+        Assert.Contains("Matched common name: Ours blanc (French)", Html.Text(html));
+        Assert.Contains("<span lang=\"fr\">Ours blanc</span> (French)", html);
+
+        var collective = Html.Text(await _client.GetStringAsync("/search?q=Harim"));
+        Assert.Contains("Matched common name: Harimau (Austronesian languages)", collective);
+
+        // A name with the code "und" has no language to show.
+        var undetermined = await _client.GetStringAsync("/search?q=Nanu");
+        Assert.Contains("Matched common name: Nanuq</div>", undetermined);
     }
 
     [Fact]

@@ -38,7 +38,10 @@ public sealed record TaxonListItem(TaxonSummary Taxon, string? MatchNoteLabel = 
                     return new TaxonListItem(taxon);
                 }
                 var name = SiteHtml.Encode(hit.MatchedName);
-                var html = string.IsNullOrWhiteSpace(hit.MatchedLanguage)
+                if (LanguageNames.LangAttribute(hit.MatchedLanguage) is { } lang) {
+                    name = $"<span lang=\"{SiteHtml.Encode(lang)}\">{name}</span>";
+                }
+                var html = LanguageNames.Key(hit.MatchedLanguage).Length == 0
                     ? name
                     : $"{name} ({SiteHtml.Encode(LanguageNames.Name(hit.MatchedLanguage))})";
                 return new TaxonListItem(taxon, SiteText.MatchCommonNameLabel, html);

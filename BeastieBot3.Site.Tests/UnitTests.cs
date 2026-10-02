@@ -114,6 +114,49 @@ public sealed class DisplayTests {
         Assert.Equal($"{label} are given for global assessments only.", SiteText.TaxoboxGlobalOnly(taxobox.Label));
     }
 
+    [Theory]
+    [InlineData(null, "Language not given")]
+    [InlineData("", "Language not given")]
+    [InlineData("und", "Language not given")]
+    [InlineData("UND", "Language not given")]
+    [InlineData("mis", "Language not given")]
+    [InlineData("zxx", "Language not given")]
+    [InlineData("en", "English")]
+    [InlineData("eng", "English")]
+    [InlineData("fr", "French")]
+    [InlineData("phi", "Philippine languages")]
+    [InlineData("map", "Austronesian languages")]
+    [InlineData("sai", "South American Indian languages")]
+    [InlineData("cpf", "French-based creoles")]
+    public void LanguageNamesForCodes(string? code, string expected) => Assert.Equal(expected, LanguageNames.Name(code));
+
+    [Fact]
+    public void LanguageNamesNeverShowTheInvariantCulture() {
+        foreach (var code in new[] { "und", "mul", "qaa", "xx", "zz-zz" }) {
+            Assert.DoesNotContain("Invariant", LanguageNames.Name(code));
+        }
+    }
+
+    [Theory]
+    [InlineData("en", true)]
+    [InlineData("eng", true)]
+    [InlineData("EN-gb", true)]
+    [InlineData(" en ", true)]
+    [InlineData("fr", false)]
+    [InlineData(null, false)]
+    public void EnglishCodes(string? code, bool expected) => Assert.Equal(expected, LanguageNames.IsEnglish(code));
+
+    [Theory]
+    [InlineData("fr", "fr")]
+    [InlineData("pt-BR", "pt-br")]
+    [InlineData("map", "map")]
+    [InlineData("und", null)]
+    [InlineData("", null)]
+    [InlineData(null, null)]
+    [InlineData("x\"y", null)]
+    [InlineData("toolongcode", null)]
+    public void LangAttributes(string? code, string? expected) => Assert.Equal(expected, LanguageNames.LangAttribute(code));
+
     [Fact]
     public void PossiblyExtinct() {
         Assert.Equal("Critically Endangered (Possibly Extinct)", IucnCategories.Describe("CR", true, false).Label);

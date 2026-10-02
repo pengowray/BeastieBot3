@@ -13,7 +13,8 @@ namespace BeastieBot3.Site.Pages;
 
 public sealed record EnglishCommonName(string Name, IReadOnlyList<string> Sources, bool IsIucnMain);
 
-public sealed record LanguageGroup(string Language, IReadOnlyList<string> Names);
+/// Common names in one language. Lang: the code for the lang attribute, or null.
+public sealed record LanguageGroup(string Language, string? Lang, IReadOnlyList<string> Names, bool NotGiven = false);
 
 /// One wikitext box: its label, the template name used in the copy button's accessible name, and
 /// the text.
@@ -237,7 +238,7 @@ public sealed class SpeciesModel : PageModel {
         var names = _queries.GetNames(Taxon!.TaxonId);
 
         EnglishNames = names
-            .Where(n => n.NameType == NameTypes.Common && IsEnglish(n.Language))
+            .Where(n => n.NameType == NameTypes.Common && LanguageNames.IsEnglish(n.Language))
             .GroupBy(n => SiteNameKey.Fold(n.Name))
             .Select(g => {
                 var rows = g.ToList();
@@ -250,15 +251,17 @@ public sealed class SpeciesModel : PageModel {
             .ThenBy(n => n.Name, StringComparer.CurrentCultureIgnoreCase)
             .ToList();
 
+        // Grouped by code, not by display name, so each group can carry its lang attribute.
+        // Names with no language ("und" included) come last.
         OtherLanguages = names
-            .Where(n => n.NameType == NameTypes.Common && !IsEnglish(n.Language))
-            .GroupBy(n => string.IsNullOrWhiteSpace(n.Language) ? SiteText.LanguageNotGiven : LanguageNames.Name(n.Language))
-            .Select(g => new LanguageGroup(g.Key, g
+            .Where(n => n.NameType == NameTypes.Common && !LanguageNames.IsEnglish(n.Language))
+            .GroupBy(n => LanguageNames.Key(n.Language))
+            .Select(g => new LanguageGroup(LanguageNames.Name(g.Key), LanguageNames.LangAttribute(g.Key), g
                 .GroupBy(n => SiteNameKey.Fold(n.Name))
                 .Select(ng => ng.First().Name)
                 .OrderBy(n => n, StringComparer.CurrentCultureIgnoreCase)
-                .ToList()))
-            .OrderBy(g => g.Language == SiteText.LanguageNotGiven)
+                .ToList(), NotGiven: g.Key.Length == 0))
+            .OrderBy(g => g.NotGiven)
             .ThenBy(g => g.Language, StringComparer.CurrentCultureIgnoreCase)
             .ToList();
 
@@ -269,10 +272,6 @@ public sealed class SpeciesModel : PageModel {
             .OrderBy(n => n, StringComparer.Ordinal)
             .ToList();
     }
-
-    private static bool IsEnglish(string? language) =>
-        string.Equals(language?.Trim(), "en", StringComparison.OrdinalIgnoreCase)
-        || (language?.Trim().StartsWith("en-", StringComparison.OrdinalIgnoreCase) ?? false);
 
     private static int SourceOrder(string source) => source switch {
         "iucn" => 0,

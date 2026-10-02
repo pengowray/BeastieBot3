@@ -296,6 +296,11 @@ public sealed class SpeciesPageTests(SiteFactory factory) : IClassFixture<SiteFa
         Assert.Contains("Common names in other languages", text);
         Assert.Contains("French Ours blanc, Ours polaire", text);
         Assert.Contains("Spanish Oso polar", text);
+        Assert.Contains("<dd lang=\"fr\">Ours blanc, Ours polaire</dd>", html);
+        // "eng" is English; "und" is listed last, as no language, with no lang attribute.
+        Assert.Contains("Ice bear IUCN Red List", text);
+        Assert.DoesNotContain("Invariant", text);
+        Assert.Matches("<dt>Language not given</dt>\\s*<dd>Nanuq</dd>\\s*</dl>", html);
         Assert.Contains("<li><i>Thalarctos maritimus</i></li>", html);
         Assert.Contains("<li><i>Ursus marinus</i> Pallas, 1776</li>", html);
         Assert.Contains("<a href=\"https://en.wikipedia.org/wiki/Polar_bear\">Polar bear</a>", html);
