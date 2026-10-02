@@ -11,7 +11,7 @@ using Microsoft.Data.Sqlite;
 // Data access for the COL nameusage table (from NameUsage.tsv). Provides lookups by ID, scientific
 // name, and parent traversal for building full taxonomic hierarchies. Used by
 // IucnColCrosscheckCommand to compare IUCN vs COL classifications, and by
-// ColTaxonomyEnricher to supplement IUCN taxa with intermediate ranks.
+// the CoL crosscheck reports. List headings use ColLineageMatcher instead.
 
 namespace BeastieBot3.Col;
 

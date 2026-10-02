@@ -106,10 +106,30 @@ The legacy code used:
 ### New Behavior
 
 Similar to legacy but with enhancements:
-- COL enrichment provides additional ranks (superfamily, subfamily, tribe, etc.)
+- Catalogue of Life nodes between IUCN's ranks can become headings (suborder, infraclass, superfamily,
+  subfamily, tribe). See "Catalogue of Life groups between IUCN ranks" below.
 - `min_items` parameter in YAML to control merging threshold
 - `other_label` parameter to customize the "Other" bucket name
 - Virtual groups for paraphyletic groupings (e.g., Cetaceans vs Even-toed ungulates)
+
+### Catalogue of Life groups between IUCN ranks
+
+`col build-placement` decides, once per IUCN release, which CoL nodes sit between each IUCN class and
+order, order and family, and family and genus: a node is kept for an IUCN taxon when 80% of its
+matched species have it, and only under an IUCN parent that holds 90% of the node's species. The list
+tree then shows one layer of those nodes as headings where it makes the page easier to read
+(`intermediate_groups:` in `wikipedia-lists.yml`). Examples from IUCN 2026-1 / COL26.7:
+
+- LC reptiles: Order Squamata > Lizards > Suborder Autarchoglossa / Gekkota / Iguania > families.
+- Threatened mammals: Order Artiodactyla > Cetaceans > Suborder Mysticeti / Odontoceti > families.
+- Threatened sharks and rays: Infraclass Batoidea / Infraclass Selachii > orders, with Chimaeriformes beside them.
+- LC Odonata: Suborder Anisoptera / Zygoptera > families.
+- LC Myrtales: Family Myrtaceae > Tribe Myrteae / Eucalypteae / ... (the subfamily split was rejected
+  because Myrtoideae holds 94% of the family).
+
+A CoL node with the same rank as the IUCN taxon above it (order Cetacea inside IUCN order
+Artiodactyla) is shown by name only. The lists keep IUCN's ranks where CoL has nothing between them:
+birds, ray-finned fish orders, flowering plants above family.
 
 ### Heading Format
 
@@ -287,7 +307,7 @@ All entries include the status template:
 | Feature | Legacy (2016) | New |
 |---------|---------------|-----|
 | Config format | rules-list.txt | YAML (wikipedia-lists.yml, taxon-rules.yml) |
-| Intermediate ranks | Manual via `below` rule | COL enrichment automatic |
+| Intermediate ranks | Manual via `below` rule | Catalogue of Life nodes between IUCN ranks, shown where they pass the size gates |
 | Virtual groups | Hardcoded | YAML configurable |
 | Merge threshold | Fixed (5 groups, 4 items) | Configurable via `min_items` |
 | Listing styles | Hardcoded per kingdom | YAML configurable per list |
@@ -375,4 +395,6 @@ the shared per-taxon resolver; IUCN stays the name of record throughout):
 
 ### Pending Features
 
-- Integration of COL-enriched hierarchy with rank labels
+- Page splits by a Catalogue of Life group (e.g. separate LC snakes and LC lizards pages): the
+  placement file is designed to be joined from SQL, but `TaxonFilterSql` and the sub-group code
+  only accept IUCN ranks so far.

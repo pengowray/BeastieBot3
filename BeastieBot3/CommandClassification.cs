@@ -61,7 +61,7 @@ public enum CommandKind {
 public enum RerunEffect {
     Default,        // unset: allowed only on ReadOnly commands, where it means ReadOnly
     ReadOnly,       // reads data and shows or writes results; changes no downloaded or imported data. A
-                    // rebuildable lookup file is allowed (generate-lists writes <CoL db>.enrich-cache.sqlite)
+                    // rebuildable lookup file is allowed (generate-lists builds <CoL db>.placement.sqlite when it is missing or stale)
     IdempotentAdd,  // adds what is missing and may update what is already there (downloads, queues, upserts,
                     // match results); cache-all --full also rebuilds the projection
     Discovers,      // searches the IUCN Red List API or Wikidata; adds what it finds to a cache or the download queue

@@ -109,6 +109,35 @@ public class FlowColProbeTests {
     public void Repoint_NoDatabaseAtAll_IsTodo() =>
         Assert.Equal("todo", FlowStepProbes.ColRepointStep(State(loaded: Loaded(exists: false)))!.Status);
 
+    // ---- CoL placement ----
+
+    [Fact]
+    public void Placement_SaysNothingWithoutADatabaseToBuildFrom() =>
+        Assert.Null(FlowStepProbes.ColPlacementStep(null));
+
+    [Fact]
+    public void Placement_IsOkWhenCurrent() {
+        var r = FlowStepProbes.ColPlacementStep(new ColPlacementSummary {
+            State = "current", BuiltAtUtc = new DateTime(2026, 10, 2, 0, 59, 0, DateTimeKind.Utc), Species = 175_923, Matched = 174_411,
+        })!;
+        Assert.Equal("ok", r.Status);
+        Assert.Contains("175,923 IUCN species", r.Detail);
+    }
+
+    [Theory]
+    [InlineData("no-file", "No placement for this IUCN database yet")]
+    [InlineData("iucn-changed", "the IUCN database changed")]
+    [InlineData("col-changed", "the CoL database changed")]
+    [InlineData("rules-changed", "older version")]
+    public void Placement_OutOfDate_SaysRegeneratingRebuildsIt(string state, string expected) {
+        var r = FlowStepProbes.ColPlacementStep(new ColPlacementSummary {
+            State = state, BuiltAtUtc = new DateTime(2026, 10, 2, 0, 59, 0, DateTimeKind.Utc),
+        })!;
+        Assert.Equal("todo", r.Status);
+        Assert.Contains(expected, r.Detail);
+        Assert.Contains("Regenerating the Wikipedia lists", r.Detail);
+    }
+
     // ---- leftovers ----
 
     [Fact]

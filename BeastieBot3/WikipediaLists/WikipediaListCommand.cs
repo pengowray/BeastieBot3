@@ -166,7 +166,7 @@ public sealed class WikipediaListCommand : Command<WikipediaListCommand.Settings
                     colNameResolver = new Col.ColNameResolver(colDbPath!);
                     (placement, placementToDispose) = LoadPlacement(paths, databasePath, colDbPath!);
                     if (placement is null) {
-                        AnsiConsole.MarkupLine($"[grey]Catalogue of Life ranks are not loaded. {IucnRanksOnlyNote}[/]");
+                        AnsiConsole.MarkupLine($"[yellow]{IucnRanksOnlyNote}[/]");
                     }
                 }
                 generator = new WikipediaListGenerator(query, templates, rules, storeProvider, placement, taxonRules, chartData, colNameResolver);
@@ -227,7 +227,7 @@ public sealed class WikipediaListCommand : Command<WikipediaListCommand.Settings
             if (status.IsCurrent) {
                 return (TaxonPlacementStore.LoadOrBuild(iucnDbPath, colDbPath, force: false, progress: null, CancellationToken.None), null);
             }
-            AnsiConsole.MarkupLine($"[grey]Catalogue of Life placement {Markup.Escape(ColBuildPlacementCommand.StatusText(status))}. Building it now.[/]");
+            AnsiConsole.MarkupLine($"[grey]Building the Catalogue of Life placement before generating the lists: {Markup.Escape(RebuildReason(status))}.[/]");
             TaxonPlacementIndex index = TaxonPlacementIndex.Empty;
             ProgressConsole.Run("Reading IUCN species", 0, handle => {
                 index = TaxonPlacementStore.LoadOrBuild(iucnDbPath, colDbPath, force: false,
@@ -238,6 +238,18 @@ public sealed class WikipediaListCommand : Command<WikipediaListCommand.Settings
             AnsiConsole.MarkupLine($"[yellow]Could not load the Catalogue of Life placement:[/] {Markup.Escape(ex.Message)}");
             return (null, null);
         }
+    }
+
+    private static string RebuildReason(TaxonPlacementStatus status) {
+        var built = status.Source?.BuiltAtUtc.ToLocalTime().ToString("d MMM yyyy HH:mm", System.Globalization.CultureInfo.InvariantCulture);
+        return status.State switch {
+            PlacementState.IucnChanged => $"the IUCN database changed after the placement was last built on {built}",
+            PlacementState.ColChanged => $"the Catalogue of Life database changed after the placement was last built on {built}",
+            PlacementState.RulesChanged or PlacementState.ThresholdsChanged =>
+                $"the saved placement was built on {built} by an older version of BeastieBot3",
+            PlacementState.Unreadable => $"the placement file could not be read ({status.Error})",
+            _ => "there is none for this IUCN database yet",
+        };
     }
 
     /// <summary>Why the Common names store is not used.</summary>
@@ -302,7 +314,7 @@ public sealed class WikipediaListCommand : Command<WikipediaListCommand.Settings
 
     private const string IucnOnlyNamesNote = "Section headings use only the ranks in the IUCN data (kingdom, phylum, class, order, family and genus), and species names keep the IUCN spelling even where it has an error.";
 
-    private const string IucnRanksOnlyNote = "Section headings use only the ranks in the IUCN data (kingdom, phylum, class, order, family and genus).";
+    private const string IucnRanksOnlyNote = "Section headings in this run use only IUCN's ranks (kingdom, phylum, class, order, family and genus).";
 
     /// <summary>
     /// Prints why the Common names store is not used, which caches the common names come from

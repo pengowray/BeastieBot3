@@ -33,7 +33,7 @@ internal static class TaxonPlacementReport {
         sb.AppendLine($"- **Vote:** at least {Percent(options.VoteThreshold)} of that IUCN taxon's species matched in CoL are in the group.");
         sb.AppendLine($"- **Containment:** at least {Percent(options.ContainmentThreshold)} of the group's matched species are under the same IUCN class (for a group between class and order), order (between order and family) or family (between family and genus).");
         sb.AppendLine();
-        sb.AppendLine("Species that CoL does not match take the groups of their IUCN order, family or genus. A group whose CoL rank is not between the two IUCN ranks, such as CoL's order Cetacea inside IUCN's order Artiodactyla, is placed but shown in headings without its rank.");
+        sb.AppendLine("Species that CoL does not match take the groups of their IUCN order, family or genus. When a group's CoL rank is not between the ranks of the IUCN taxa above and below it, such as CoL's order Cetacea inside IUCN's order Artiodactyla, headings show the group's name without a rank word.");
         sb.AppendLine();
 
         WriteSummary(sb, output, matching);
@@ -80,9 +80,9 @@ internal static class TaxonPlacementReport {
             yield return (label, N(m.ByKind.GetValueOrDefault(kind)), true);
         }
         yield return ("Not found in CoL", N(m.ByKind.GetValueOrDefault(ColMatchKind.NotFound)), false);
-        yield return ("Found, but no CoL classification (parent row missing)", N(m.NoClassification), false);
+        yield return ("Found, but no CoL classification (parent taxon missing from CoL)", N(m.NoClassification), false);
         yield return ("Found, with a CoL classification (used to choose the CoL groups)", Share(m.Matched), false);
-        yield return ("of which the classification is incomplete (a higher CoL row is missing)", N(m.CutShort), true);
+        yield return ("of which the classification is incomplete (a higher taxon is missing from CoL)", N(m.CutShort), true);
     }
 
     // ---- class to order, order to family: one tree per IUCN parent ----

@@ -38,6 +38,7 @@ public static class FlowStepProbes {
     public const string ColRebuildNames = "col-rebuild-names";
     public const string ColRebuildAudit = "col-rebuild-audit";
     public const string ColRebuildLists = "col-rebuild-lists";
+    public const string ColPlacement = "col-placement";
 
     // The Wikidata/Wikipedia ladder: how much work each priority step has left.
     public const string WikidataSweep = "wiki-wd-sweep";
@@ -216,7 +217,7 @@ public static class FlowStepProbes {
 
     public static bool IsColProbe(string probe) =>
         probe is ColImport or ColRepoint or ColCleanup
-            or ColRebuildNames or ColRebuildAudit or ColRebuildLists;
+            or ColRebuildNames or ColRebuildAudit or ColRebuildLists or ColPlacement;
 
     public static FlowProbeResult? EvaluateCol(string probe, ColUpdateState state, ColArtifacts artifacts) => probe switch {
         ColImport => ColImportStep(state),
@@ -225,6 +226,7 @@ public static class FlowStepProbes {
         ColRebuildNames => ColRebuild(state, artifacts.CommonNamesModified),
         ColRebuildAudit => ColRebuild(state, artifacts.AuditSiteModified),
         ColRebuildLists => ColRebuild(state, artifacts.WikipediaListsModified),
+        ColPlacement => ColPlacementStep(state.Placement),
         _ => null,
     };
 
@@ -553,6 +555,28 @@ public static class FlowStepProbes {
             s.Leftovers.Count == 1
                 ? $"{biggest.FileName} ({Bytes(biggest.Bytes)}) is left over from an earlier release and is never read again."
                 : $"{s.Leftovers.Count} files from earlier releases are left on disk and never read again, {Bytes(s.LeftoverBytes)} in total (largest: {biggest.FileName}).");
+    }
+
+    // The saved CoL placement for list headings. Out of date is amber, but the detail says that
+    // regenerating the lists rebuilds it, because the next step does that by itself.
+    internal static FlowProbeResult? ColPlacementStep(ColPlacementSummary? p) {
+        if (p is null) return null;
+        var built = Stamp(p.BuiltAtUtc);
+        const string Rebuilds = "Regenerating the Wikipedia lists rebuilds the placement first.";
+        return p.State switch {
+            "current" => new FlowProbeResult("ok",
+                $"Built {built}: {p.Species:n0} IUCN species, {p.Matched:n0} of them with a CoL classification"),
+            "no-file" or "not-built" => new FlowProbeResult("todo",
+                "No placement for this IUCN database yet. Regenerating the Wikipedia lists builds one first."),
+            "iucn-changed" => new FlowProbeResult("todo",
+                $"Out of date: the IUCN database changed after the placement was built on {built}. {Rebuilds}"),
+            "col-changed" => new FlowProbeResult("todo",
+                $"Out of date: the CoL database changed after the placement was built on {built}. {Rebuilds}"),
+            "rules-changed" or "thresholds-changed" => new FlowProbeResult("todo",
+                $"Out of date: the placement was built on {built} by an older version of BeastieBot3. {Rebuilds}"),
+            _ => new FlowProbeResult("todo",
+                $"Could not read the placement file: {p.Error}. Delete the .placement.sqlite file and regenerate the lists to build it again."),
+        };
     }
 
     // Was this output written since the release now being read was imported? Nothing else notices

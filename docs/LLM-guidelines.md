@@ -257,7 +257,7 @@ Use `GroupedUnderSpecies` for all-assessments lists (preset `all-status`), and `
 
 ### Taxa grouping headings
 
-When there are >30 species under a single heading, add intermediate taxonomy headings (Family, Superfamily) using COL enrichment. Headings include rank labels:
+When a heading holds many species, the list tree adds one layer of Catalogue of Life headings between two IUCN ranks (suborder, superfamily, infraclass) where they pass the gates in `intermediate_groups:`, and splits a family of 30 or more by subfamily or tribe (`auto_split:`). The CoL nodes come from `col build-placement` (see CLAUDE.md, "Catalogue of Life groups in headings"). Headings include rank labels:
 
 ```
 ==== Superfamily Ctenodactyloidea ====

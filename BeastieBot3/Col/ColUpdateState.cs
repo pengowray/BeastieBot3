@@ -48,6 +48,17 @@ public sealed record ColLeftover {
     public string FileName => System.IO.Path.GetFileName(Path);
 }
 
+// The saved CoL placement for list headings (`col build-placement`) for the configured IUCN CSV
+// database: whether it is current, and if not, why.
+public sealed record ColPlacementSummary {
+    // "current" | "no-file" | "not-built" | "iucn-changed" | "col-changed" | "rules-changed" | "thresholds-changed" | "unreadable"
+    public required string State { get; init; }
+    public DateTime? BuiltAtUtc { get; init; }
+    public int Species { get; init; }
+    public int Matched { get; init; }
+    public string? Error { get; init; }
+}
+
 public sealed record ColUpdateState {
     public ColLoadedRelease? Loaded { get; init; }
     public ColInputRelease? Input { get; init; }
@@ -68,6 +79,9 @@ public sealed record ColUpdateState {
 
     public IReadOnlyList<ColLeftover> Leftovers { get; init; } = Array.Empty<ColLeftover>();
     public long LeftoverBytes => Leftovers.Sum(l => l.Bytes);
+
+    // Null when there is no CoL or IUCN database to build it from.
+    public ColPlacementSummary? Placement { get; init; }
 
     // When the release now being read finished importing. Anything built from CoL before this
     // reflects a different release.
@@ -112,6 +126,7 @@ public static class ColUpdateStateReader {
             ConfigDisagrees = !pending && ConfigDisagrees(loaded, input),
             Leftovers = FindLeftovers(loaded),
             CurrentSince = CurrentSince(loaded),
+            Placement = ReadPlacement(paths, loaded),
         };
     }
 
@@ -129,8 +144,9 @@ public static class ColUpdateStateReader {
     private static DateTime? CurrentSince(ColLoadedRelease? loaded) =>
         loaded is { Exists: true } ? loaded.ImportedAt : null;
 
-    // The previous release's database and its enrich-cache sidecar sit beside the current one and
-    // are never read again.
+    // The previous release's database and its sidecars sit beside the current one and are never
+    // read again. Nothing reads an .enrich-cache.sqlite sidecar any more, including the current
+    // release's; list headings read the .placement.sqlite sidecar instead.
     private static IReadOnlyList<ColLeftover> FindLeftovers(ColLoadedRelease? loaded) {
         if (loaded is not { Exists: true }) return Array.Empty<ColLeftover>();
         var dir = Path.GetDirectoryName(loaded.Path);
@@ -140,13 +156,40 @@ public static class ColUpdateStateReader {
             var current = Path.GetFileName(loaded.Path);
             return new DirectoryInfo(dir)
                 .EnumerateFiles("col_coldp_*.sqlite*", SearchOption.TopDirectoryOnly)
-                .Where(f => !f.Name.StartsWith(current, StringComparison.OrdinalIgnoreCase))
+                .Where(f => !f.Name.StartsWith(current, StringComparison.OrdinalIgnoreCase)
+                    || f.Name.Contains(".enrich-cache.sqlite", StringComparison.OrdinalIgnoreCase))
                 .OrderByDescending(f => f.Length)
                 .Select(f => new ColLeftover { Path = f.FullName, Bytes = f.Length })
                 .ToList();
         } catch {
             return Array.Empty<ColLeftover>();
         }
+    }
+
+    // Status only reads file sizes and times and the placement file's own small tables.
+    private static ColPlacementSummary? ReadPlacement(PathsService paths, ColLoadedRelease? loaded) {
+        if (loaded is not { Exists: true }) return null;
+        string iucnPath;
+        try { iucnPath = paths.ResolveIucnDatabasePath(null, null); } catch { return null; }
+        if (string.IsNullOrWhiteSpace(iucnPath) || !File.Exists(iucnPath)) return null;
+
+        var status = TaxonPlacementBuild.Status(iucnPath, loaded.Path);
+        return new ColPlacementSummary {
+            State = status.State switch {
+                PlacementState.Current => "current",
+                PlacementState.NoFile => "no-file",
+                PlacementState.NotBuilt => "not-built",
+                PlacementState.IucnChanged => "iucn-changed",
+                PlacementState.ColChanged => "col-changed",
+                PlacementState.RulesChanged => "rules-changed",
+                PlacementState.ThresholdsChanged => "thresholds-changed",
+                _ => "unreadable",
+            },
+            BuiltAtUtc = status.Source?.BuiltAtUtc,
+            Species = status.Source?.Species ?? 0,
+            Matched = status.Source?.Matched ?? 0,
+            Error = status.Error,
+        };
     }
 
     internal static ColLoadedRelease? ReadLoaded(PathsService paths) {

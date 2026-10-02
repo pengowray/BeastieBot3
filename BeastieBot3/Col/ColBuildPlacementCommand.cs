@@ -19,9 +19,9 @@ using Spectre.Console.Cli;
 namespace BeastieBot3.Col;
 
 [CommandInfo("col build-placement", CommandKind.Mutates,
-    "Find the Catalogue of Life groups, such as suborders and subfamilies, that come between IUCN's class, order, family and genus, and save them for Wikipedia list headings.",
+    "Find the Catalogue of Life groups, such as suborders and subfamilies, that fall between IUCN's class, order, family and genus ranks, and save this placement for Wikipedia list headings.",
     Rerun = RerunEffect.Rebuilds,
-    RerunNote = "The first run matches every IUCN species to Catalogue of Life, which takes a few minutes. Later runs reuse the saved matches until the Catalogue of Life database changes, and take seconds.",
+    RerunNote = "The first run matches every IUCN species (about 176,000) to Catalogue of Life and takes about 2 minutes. Later runs reuse the saved matches and take about 5 seconds, until the Catalogue of Life database changes and the next run matches every species again.",
     ReportOnlyWith = new[] { "--status" },
     Examples = new[] {
         "col build-placement",
@@ -33,15 +33,15 @@ namespace BeastieBot3.Col;
 internal sealed class ColBuildPlacementCommand : Command<ColBuildPlacementCommand.Settings> {
     public sealed class Settings : CommonSettings {
         [CommandOption("--status")]
-        [Description("Only show whether the saved placement is up to date, then exit without building anything.")]
+        [Description("Only show whether the saved placement is up to date, then exit.")]
         public bool StatusOnly { get; init; }
 
         [CommandOption("--force")]
-        [Description("Build the placement again even when the saved one is up to date.")]
+        [Description("Build the placement again even when the saved one is up to date. The saved matches are reused.")]
         public bool Force { get; init; }
 
         [CommandOption("--report")]
-        [Description("Also write a Markdown report: the CoL groups placed under each IUCN class and order with species counts, and the groups left out and why. The report needs a fresh build, which uses the saved matches and takes seconds.")]
+        [Description("Also write a Markdown report that lists, for each IUCN class and order, the CoL groups placed under it with their species counts, and the CoL groups that were not placed, with the reason for each. With --report the placement is always built again, which reuses the saved matches and takes about 5 seconds.")]
         public bool Report { get; init; }
 
         [CommandOption("--output <FILE>")]
@@ -119,8 +119,8 @@ internal sealed class ColBuildPlacementCommand : Command<ColBuildPlacementComman
         if (result.Matching is { } matching) {
             AnsiConsole.Write(MatchingTable(matching));
             AnsiConsole.MarkupLine(matching.ColQueries == 0
-                ? "[grey]Every match came from the saved matches; the Catalogue of Life database was not read.[/]"
-                : $"[grey]{matching.FromCache:N0} matches came from the saved matches and {matching.Species - matching.FromCache:N0} were looked up in the Catalogue of Life database.[/]");
+                ? $"[grey]Reused the saved Catalogue of Life matches for all {matching.Species:N0} IUCN species.[/]"
+                : $"[grey]Reused the saved Catalogue of Life matches for {matching.FromCache:N0} IUCN species and looked up {matching.Species - matching.FromCache:N0} in the Catalogue of Life database.[/]");
             AnsiConsole.WriteLine();
         }
         AnsiConsole.Write(GroupsTable(result.Index, result.Output));
