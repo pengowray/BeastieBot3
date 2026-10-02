@@ -55,6 +55,11 @@ internal sealed class CitationCheckTally {
     public int CreditDiffersFromCitation { get; private set; }
     public List<string> CreditDiffersExamples { get; } = new();
     public int ExtraAssessorBlocks { get; private set; }
+    /// Author names with a letter lost to an encoding error: repaired (from, to), and not repaired.
+    public Dictionary<(string From, string To), int> AuthorNameRepairs { get; } = new();
+    public Dictionary<string, int> AuthorNamesNotRepaired { get; } = new(StringComparer.Ordinal);
+    /// Earlier assessments read only for their assessor names, to repair damaged names.
+    public int NamePoolPayloads { get; set; }
 
     public int Regional { get; private set; }
     public int AmendedWithYear { get; private set; }
@@ -137,6 +142,8 @@ internal sealed class CitationCheckTally {
             AddExample(CreditDiffersExamples, $"{parts.AssessmentId}: {Shorten(parts.IucnCitationText)}");
         }
         if (parse.ExtraAssessorBlocksAddingNames > 0) ExtraAssessorBlocks++;
+        foreach (var repair in parse.RepairedAuthorNames) Increment(AuthorNameRepairs, (repair.From, repair.To));
+        foreach (var name in parse.DamagedAuthorNames) Increment(AuthorNamesNotRepaired, name);
 
         if (parts.RegionalScope is not null) Regional++;
         if (parse.HasAmendedAnnotation) {
@@ -268,6 +275,8 @@ internal static class CitationCheckReport {
         Row(sb, "Not parsed (see Parse failures)", failed, read);
         Row(sb, "Every author identified as a person or organisation", t.AllAuthorsStructured, t.Parsed);
         Row(sb, "At least one author name left as published", t.SomeAuthorsVerbatim, t.Parsed);
+        Row(sb, "Author names with a lost letter, repaired", t.AuthorNameRepairs.Values.Sum(), null);
+        Row(sb, "Author names with a lost letter, not repaired", t.AuthorNamesNotRepaired.Values.Sum(), null);
         Row(sb, "DOI from IUCN's citation accepted", Count(t.CitationDoiVerdicts, DoiVerdict.Accepted) + Count(t.CitationDoiVerdicts, DoiVerdict.AcceptedPredecessor), t.Parsed);
         if (t.WikiCompared) {
             var sameAuthors = Count(t.AuthorAgreements, AuthorAgreement.Same);
@@ -400,6 +409,33 @@ internal static class CitationCheckReport {
         sb.AppendLine($"| The same name twice, kept because value[] has one entry per name | {N(t.RepeatedNamesKept)} |");
         sb.AppendLine();
         Examples(sb, "The same name twice", t.RepeatedNameExamples);
+        LostLetters(sb, t);
+    }
+
+    private static void LostLetters(StringBuilder sb, CitationCheckTally t) {
+        const char replacement = (char)0xFFFD;
+        var notRepaired = t.AuthorNamesNotRepaired.Values.Sum();
+        var visible = t.AuthorNamesNotRepaired.Where(p => p.Key.Contains(replacement)).Sum(p => p.Value);
+        sb.AppendLine("### Letters lost to an encoding error");
+        sb.AppendLine();
+        sb.AppendLine("Some author names lost a letter outside ASCII when IUCN's data passed through the wrong character encoding: the");
+        sb.AppendLine("letter is now U+FFFD, the replacement character, or a \"?\" inside a word. A name is restored when exactly one undamaged");
+        sb.AppendLine("name from an assessor credit in the cache matches it, with a letter outside ASCII in each damaged place. A name that");
+        sb.AppendLine("cannot be restored is kept as IUCN wrote it; one with U+FFFD shows a red error in the citation on Wikipedia.");
+        if (t.NamePoolPayloads > 0) {
+            sb.AppendLine($"The names of {N(t.NamePoolPayloads)} earlier assessments were read too, as `site build-db` reads them.");
+        }
+        sb.AppendLine();
+        sb.AppendLine("| | Names |");
+        sb.AppendLine("| --- | ---: |");
+        sb.AppendLine($"| Restored from another assessor credit | {N(t.AuthorNameRepairs.Values.Sum())} |");
+        sb.AppendLine($"| Not restored | {N(notRepaired)} |");
+        sb.AppendLine($"| … with U+FFFD (a visible error in the citation) | {N(visible)} |");
+        sb.AppendLine();
+        Examples(sb, "Restored", t.AuthorNameRepairs.OrderByDescending(p => p.Value)
+            .Select(p => $"{p.Key.From} → {p.Key.To} ({N(p.Value)})").ToList());
+        Examples(sb, "Not restored", t.AuthorNamesNotRepaired.OrderByDescending(p => p.Value)
+            .Select(p => $"{p.Key} ({N(p.Value)})").ToList());
     }
 
     private static void Titles(StringBuilder sb, CitationCheckTally t) {

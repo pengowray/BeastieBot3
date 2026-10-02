@@ -27,7 +27,9 @@ using BeastieBot3.WikidataEdits;
 // distinct value[] entries, then read one by one by IucnAuthorNameParser. "et al." is taken off and
 // sets AuthorsEtAl; the names before it are split without a count, since value[] counts everyone.
 // A "Surname, Given Names" read stays a person only when the count confirmed that split (see
-// ConfirmsGivenNames); otherwise the name is kept as published.
+// ConfirmsGivenNames); otherwise the name is kept as published. A name with a character lost to an
+// encoding error ("Kry?tufek, B.") is repaired by the caller's function when one is given
+// (AssessorNamePool.Repair); the parse lists the names repaired and the names still damaged.
 //
 // The DOI in the citation goes into the parts only when IucnDoiSelector accepts it for this
 // assessment. A payload with no year_published is an unpublished draft and gives no parts.
@@ -85,6 +87,11 @@ internal sealed record IucnCitationParse {
     public bool CreditDiffersFromCitation { get; init; }
     /// Further assessor credits that added names to the first (a repeated credits block that adds a person).
     public int ExtraAssessorBlocksAddingNames { get; init; }
+    /// Author names with a lost character (AssessorNamePool.IsDamaged) that the repair function fixed.
+    public IReadOnlyList<AuthorNameRepair> RepairedAuthorNames { get; init; } = [];
+    /// Author names with a lost character that were not repaired, as cleaned for display. One with
+    /// U+FFFD gives a visible CS1 error.
+    public IReadOnlyList<string> DamagedAuthorNames { get; init; } = [];
 
     /// "(amended version of … assessment)" present, with or without a year.
     public bool HasAmendedAnnotation { get; init; }
@@ -119,8 +126,10 @@ internal static class IucnCitationPartsParser {
         IReadOnlyCollection<long>? predecessorAssessmentIds = null) =>
         Parse(assessment, downloadedAtUtc, predecessorAssessmentIds).Parts;
 
+    /// repairAuthorName gets an author name with a lost character and returns the repaired name, or
+    /// null to keep it as it is.
     public static IucnCitationParse Parse(JsonElement assessment, DateTime? downloadedAtUtc,
-        IReadOnlyCollection<long>? predecessorAssessmentIds = null) {
+        IReadOnlyCollection<long>? predecessorAssessmentIds = null, Func<string, string?>? repairAuthorName = null) {
         if (assessment.ValueKind != JsonValueKind.Object) return Fail(CitationParseFailure.MissingIds);
 
         var taxon = assessment.TryGetProperty("taxon", out var t) && t.ValueKind == JsonValueKind.Object ? t : (JsonElement?)null;
@@ -166,7 +175,7 @@ internal static class IucnCitationPartsParser {
             return result with { Failure = CitationParseFailure.UnknownTitleSuffix, FailureDetail = annotationText };
         }
 
-        var authors = ReadAuthors(assessment, authorPrefix);
+        var authors = ReadAuthors(assessment, authorPrefix, repairAuthorName);
         var parts = new IucnCitationParts {
             TaxonId = taxonId.Value,
             AssessmentId = assessmentId.Value,
@@ -196,6 +205,8 @@ internal static class IucnCitationPartsParser {
             CreditDiffersFromCitation = authors.Source == CitationAuthorSource.AssessorCredit
                 && !string.Equals(authors.CreditText, CleanText(authorPrefix), StringComparison.Ordinal),
             ExtraAssessorBlocksAddingNames = authors.ExtraBlocksAddingNames,
+            RepairedAuthorNames = authors.Repaired,
+            DamagedAuthorNames = authors.Damaged,
             HasAmendedAnnotation = annotations.Groups["amended"].Success,
             HasErrataAnnotation = annotations.Groups["erratum"].Success,
             VolumeDiffersFromYear = tail.Groups["volume"].Value != yearText,
@@ -241,9 +252,11 @@ internal static class IucnCitationPartsParser {
         CitationAuthorSource Source,
         IucnAssessmentCitationParser.CreditSplitRule? Rule,
         string? CreditText,
-        int ExtraBlocksAddingNames);
+        int ExtraBlocksAddingNames,
+        IReadOnlyList<AuthorNameRepair> Repaired,
+        IReadOnlyList<string> Damaged);
 
-    private static AuthorRead ReadAuthors(JsonElement assessment, string authorPrefix) {
+    private static AuthorRead ReadAuthors(JsonElement assessment, string authorPrefix, Func<string, string?>? repairAuthorName) {
         var blocks = AssessorCredits(assessment);
         string text;
         int? count;
@@ -257,7 +270,7 @@ internal static class IucnCitationPartsParser {
             count = null;
             source = CitationAuthorSource.CitationPrefix;
         } else {
-            return new AuthorRead(Array.Empty<ParsedAuthorName>(), false, CitationAuthorSource.None, null, null, 0);
+            return new AuthorRead(Array.Empty<ParsedAuthorName>(), false, CitationAuthorSource.None, null, null, 0, [], []);
         }
 
         var cleaned = CleanText(text);
@@ -286,10 +299,24 @@ internal static class IucnCitationPartsParser {
             }
         }
 
-        var parsed = names.Select(name => KeepGivenNamesOnlyIfConfirmed(IucnAuthorNameParser.Parse(name), givenNamesConfirmed.Contains(name)))
-            .ToList();
+        var parsed = new List<ParsedAuthorName>(names.Count);
+        var repaired = new List<AuthorNameRepair>();
+        var damaged = new List<string>();
+        foreach (var name in names) {
+            var read = name;
+            if (AssessorNamePool.IsDamaged(name)) {
+                var display = IucnAuthorNameParser.Clean(name);
+                if (repairAuthorName?.Invoke(display) is { } fixedName) {
+                    repaired.Add(new AuthorNameRepair(display, fixedName));
+                    read = fixedName;
+                } else {
+                    damaged.Add(display);
+                }
+            }
+            parsed.Add(KeepGivenNamesOnlyIfConfirmed(IucnAuthorNameParser.Parse(read), givenNamesConfirmed.Contains(name)));
+        }
         return new AuthorRead(parsed, etAl, source, rule,
-            source == CitationAuthorSource.AssessorCredit ? cleaned : null, extraBlocks);
+            source == CitationAuthorSource.AssessorCredit ? cleaned : null, extraBlocks, repaired, damaged);
     }
 
     // "Mohd Yusof, Nur Adillah" (one person, surname then given names) and "Djoko Iskandar, Mumpuni"
