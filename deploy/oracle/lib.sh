@@ -48,9 +48,10 @@ Copy deploy/oracle/deploy.env.example to deploy/oracle/deploy.env and fill it in
     mkdir -p "$WORK_DIR"
     TARGET="$SSH_USER@$HOST"
     # One SSH connection is opened and reused by every ssh and rsync call in a run, so a key
-    # passphrase is asked for once.
+    # passphrase is asked for once. The socket path must stay under about 100 characters.
+    local socket_dir="${XDG_RUNTIME_DIR:-$WORK_DIR}"
     SSH_OPTS=(-p "$SSH_PORT" -o ConnectTimeout=15 -o ServerAliveInterval=30
-        -o ControlMaster=auto -o "ControlPath=$WORK_DIR/ssh-%C" -o ControlPersist=60)
+        -o ControlMaster=auto -o "ControlPath=$socket_dir/beastie-ssh-%r@%h:%p" -o ControlPersist=60)
     if [[ -n "$SSH_KEY" ]]; then
         SSH_OPTS+=(-i "$SSH_KEY")
     fi
@@ -108,15 +109,19 @@ expected_schema_version() {
 }
 
 # Checks https://DOMAIN/healthz from this computer. Only reports: DNS changes and the first
-# certificate can take a while, and the loopback check on the server decides success.
+# certificate can take a while. Pass "loopback-ok" when the check on the server has just passed,
+# which narrows down where the problem is; status.sh passes "status-only".
 check_public_health() {
-    local url="https://$DOMAIN/healthz"
-    if curl -fsS --max-time 15 -o /dev/null "$url" 2>/dev/null; then
+    local url="https://$DOMAIN/healthz" error
+    if error="$(curl -fsS --max-time 15 -o /dev/null "$url" 2>&1)"; then
         say "Public check passed: $url"
-    else
-        warn "Public check failed: $url
-The app is healthy on the server, so the problem is between the internet and Caddy. Check that:
-  - the DNS A record for $DOMAIN points at the VM's public IP,
+        return 0
+    fi
+    warn "Public check failed: $url
+  ${error}"
+    if [[ "${1:-}" == loopback-ok ]]; then
+        say "The site answers on the server itself, so check the path from the internet to Caddy:
+  - the DNS A record for $DOMAIN points at the VM's public IP ($HOST if HOST is that IP),
   - the VCN security list allows TCP 80 and 443 from 0.0.0.0/0,
   - Caddy has its certificate: ssh to the server and run  sudo journalctl -u caddy -n 50"
     fi

@@ -9,7 +9,7 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
 case "${1:-}" in
     "") ;;
-    -h|--help) sed -n '2,5p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help) awk 'NR > 1 && /^#/ { sub(/^# ?/, ""); print; next } NR > 1 { exit }' "${BASH_SOURCE[0]}"; exit 0 ;;
     *) die "Unknown option: $1" ;;
 esac
 
@@ -17,4 +17,4 @@ load_env
 step "Server $HOST"
 remote_task status
 step "Public check"
-check_public_health
+check_public_health status-only

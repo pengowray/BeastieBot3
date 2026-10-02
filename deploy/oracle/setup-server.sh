@@ -43,7 +43,7 @@ run_from_workstation() {
     remote_cmd="set -e; d=\$(mktemp -d); trap 'rm -rf \"\$d\"' EXIT; tar -xf - -C \"\$d\"; sudo bash \"\$d/setup-server.sh\" $(printf '%q ' "${args[@]}")"
     tar -C "$DEPLOY_DIR" -cf - "${files[@]}" | remote "bash -c $(printf '%q' "$remote_cmd")"
 
-    step "Next steps"
+    step "Next steps (skip any you have already done)"
     say "1. Make sure the DNS A record for $DOMAIN points at $HOST."
     say "2. Deploy the database: deploy/oracle/deploy-db.sh"
     say "3. Deploy the app:      deploy/oracle/deploy-app.sh"
@@ -131,7 +131,7 @@ install_packages() {
     [[ -n "$icu" ]] || fail "Could not find a libicu package. The .NET app needs ICU."
     # curl, gnupg, keyrings: adding Caddy's apt repository. zstd, rsync, python3: deploy-db.sh and
     # server-tasks.sh. libicu, libssl, libstdc++6, zlib1g, libgcc-s1: the self-contained .NET app.
-    apt_get install ca-certificates curl gnupg debian-keyring debian-archive-keyring apt-transport-https \
+    apt_get -qq install ca-certificates curl gnupg debian-keyring debian-archive-keyring apt-transport-https \
         unattended-upgrades iptables iptables-persistent netfilter-persistent \
         zstd rsync python3 \
         "$icu" ${ssl:+"$ssl"} libstdc++6 zlib1g libgcc-s1
@@ -237,7 +237,11 @@ configure_firewall() {
             open_port ip6tables "$port"
         done
     fi
-    netfilter-persistent save >/dev/null
+    local output
+    if ! output="$(netfilter-persistent save 2>&1)"; then
+        printf '%s\n' "$output" >&2
+        fail "netfilter-persistent save failed. The new rules are active but will be lost at the next reboot."
+    fi
     info "Saved the rules to /etc/iptables/rules.v4 and rules.v6 (netfilter-persistent)."
 }
 
@@ -359,6 +363,6 @@ run_on_server() {
 case "${1:-}" in
     --on-server) run_on_server "$@" ;;
     "") run_from_workstation ;;
-    -h|--help) sed -n '2,15p' "$0" | sed 's/^# \{0,1\}//' ;;
+    -h|--help) awk 'NR > 1 && /^#/ { sub(/^# ?/, ""); print; next } NR > 1 { exit }' "$0" ;;
     *) printf 'Unknown option: %s (use --on-server on the server, or no options on your computer)\n' "$1" >&2; exit 1 ;;
 esac

@@ -9,9 +9,10 @@
 # Steps: check the file (SQLite, meta table, PRAGMA quick_check); copy it to rollback journal mode
 # when it is in WAL mode; compress it with zstd (gzip when zstd is missing); upload it to
 # /srv/beastie/incoming with rsync --partial, so an interrupted upload resumes when you run the
-# script again; on the server, decompress it, compare its SHA-256 with the local file, keep the live
-# database as site.sqlite.prev, move the new file into place and restart the site. When /healthz
-# fails, the server puts the previous database back and keeps the new one as site.sqlite.failed.
+# script again; on the server, decompress it, compare its SHA-256 with the local file, move it into
+# place and restart the site. When /healthz passes, the database it replaced becomes
+# site.sqlite.prev. When /healthz fails, the server puts the replaced database back and keeps the
+# new one as site.sqlite.failed.
 #
 # Do not run it while `site build-db` is still writing the file.
 set -euo pipefail
@@ -19,7 +20,7 @@ set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
 usage() {
-    sed -n '2,17p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+    awk 'NR > 1 && /^#/ { sub(/^# ?/, ""); print; next } NR > 1 { exit }' "${BASH_SOURCE[0]}"
 }
 
 # Path of the site database: the argument, else SITE_DB, else paths.ini.
@@ -184,14 +185,12 @@ main() {
     step "Installing on the server"
     local rc=0
     remote_task install-db "$name" "$sha" "$size" || rc=$?
-    if (( rc != 0 )); then
-        exit "$rc"
-    fi
-
-    check_public_health
+    case "$rc" in
+        0) check_public_health loopback-ok ;;
+        3) ;;
+        *) exit "$rc" ;;
+    esac
     rm -f -- "$WORK_DIR"/site-*.sqlite.zst "$WORK_DIR"/site-*.sqlite.gz "$WORK_DIR/site-snapshot.sqlite"
-    say ""
-    say "To go back to the previous database: deploy/oracle/rollback-db.sh"
 }
 
 main "$@"

@@ -1,7 +1,7 @@
 # Caddy configuration for the BeastieBot3 public site.
-# setup-server.sh writes /etc/caddy/Caddyfile from this template: it replaces __DOMAIN__ with DOMAIN
-# from deploy.env and __ACME_EMAIL__ with ACME_EMAIL, and removes the email line when ACME_EMAIL is
-# empty. Edit the template, not the file on the server, then run setup-server.sh again.
+# setup-server.sh writes /etc/caddy/Caddyfile from deploy/oracle/Caddyfile.template, filling in
+# DOMAIN and ACME_EMAIL from deploy.env (the email line is left out when ACME_EMAIL is empty).
+# Edit the template, not the file on the server, then run setup-server.sh again.
 #
 # Caddy gets and renews the Let's Encrypt certificate for the domain itself, and redirects
 # http:// requests to https://.

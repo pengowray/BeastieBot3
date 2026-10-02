@@ -46,8 +46,12 @@ EOF
 
 # --- Health ---------------------------------------------------------------------------------
 
+# A failed start does not stop the task: the health check that follows reports the failure with
+# the service log, and systemd tries the start again every 5 seconds (Restart=always).
 restart_service() {
-    systemctl restart "$SERVICE" </dev/null
+    if ! systemctl restart "$SERVICE" </dev/null; then
+        warn "systemctl restart $SERVICE reported an error. Waiting for the health check anyway."
+    fi
 }
 
 # Polls the site's /healthz on the loopback port until it answers 200 or HEALTH_TIMEOUT seconds pass.
@@ -65,14 +69,17 @@ wait_healthy() {
 
 # One line: "ok", or what /healthz answered, or why it could not be reached.
 health_summary() {
-    local body
-    if body="$(curl -sS --max-time 5 -w ' (HTTP %{http_code})' "$HEALTH_URL" 2>&1)"; then
-        case "$body" in
-            *"(HTTP 200)") say "ok" ;;
-            *) say "failed: ${body:0:300}" ;;
-        esac
+    local out code body
+    if out="$(curl -sS --max-time 5 -w '\n%{http_code}' "$HEALTH_URL" 2>&1)"; then
+        code="${out##*$'\n'}"
+        body="${out%$'\n'*}"
+        if [[ "$code" == 200 ]]; then
+            say "ok"
+        else
+            say "failed: HTTP $code${body:+, response: ${body:0:300}}"
+        fi
     else
-        say "failed: ${body:0:300}"
+        say "failed: ${out:0:300}"
     fi
 }
 
@@ -154,9 +161,12 @@ app_deployed() {
     [[ -x "$APP_LINK/BeastieBot3.Site" ]]
 }
 
-# Decompresses an uploaded database from /srv/beastie/incoming, checks it, keeps the live database
-# as site.sqlite.prev, moves the new file into place and restarts the site. When the health check
-# fails, the previous database is put back.
+# Decompresses an uploaded database from /srv/beastie/incoming, checks it, moves it into place and
+# restarts the site. When the health check passes, the database it replaced becomes
+# site.sqlite.prev; when it fails, the replaced database is put back and the new one is kept as
+# site.sqlite.failed.
+# Exit codes: 0 live and healthy (or already live), 2 health check failed, 3 installed but no app
+# is deployed yet.
 install_db() {
     local name="${1:-}" sha="${2:-}" size="${3:-}"
     [[ "$name" =~ ^site-[0-9a-f]{12}\.sqlite\.(zst|gz)$ ]] || die "Unexpected upload file name: $name"
@@ -201,21 +211,27 @@ install_db() {
     sync "$new"
 
     # The live file is replaced in one rename, so site.sqlite exists at every moment. The running
-    # site keeps reading the old file until it restarts.
-    local had_previous=no
+    # site keeps reading the old file until it restarts. The old live file waits as
+    # site.sqlite.outgoing and becomes site.sqlite.prev only when the new one passes the health
+    # check, so a failed deploy leaves site.sqlite.prev as it was.
+    local outgoing="$DB.outgoing" had_live=no
+    rm -f -- "$outgoing"
     if [[ -f "$DB" ]]; then
-        ln -f "$DB" "$DB.prev"
-        had_previous=yes
+        ln "$DB" "$outgoing"
+        had_live=yes
     fi
     mv -f "$new" "$DB"
     rm -f -- "$upload"
     say "Installed the new database as $DB."
     say "  New:      $(db_info "$DB")"
-    say "  Previous: $(db_info "$DB.prev")"
+    say "  Replaced: $(db_info "$outgoing")"
 
     if ! app_deployed; then
+        if [[ "$had_live" == yes ]]; then
+            mv -f "$outgoing" "$DB.prev"
+        fi
         say "The app is not deployed yet, so the site was not restarted. Deploy it with deploy-app.sh."
-        return 0
+        exit 3
     fi
 
     say "Restarting $SERVICE ..."
@@ -223,23 +239,28 @@ install_db() {
     if wait_healthy; then
         rm -f -- "$DB.failed"
         say "Health check passed: $HEALTH_URL"
+        if [[ "$had_live" == yes ]]; then
+            mv -f "$outgoing" "$DB.prev"
+            say "The replaced database is kept as $DB.prev."
+            say "To go back to it: deploy/oracle/rollback-db.sh (on the server: sudo beastie-site rollback-db)"
+        fi
         return 0
     fi
 
     report_unhealthy
-    if [[ "$had_previous" == no ]]; then
-        warn "There is no previous database to go back to, so the new database stays in place."
+    if [[ "$had_live" == no ]]; then
+        warn "There was no database before this one, so the new database stays in place."
         exit 2
     fi
     say ""
-    say "Putting the previous database back. The new one is kept as $DB.failed."
+    say "Putting back the database that was live before. The new one is kept as $DB.failed."
     ln -f "$DB" "$DB.failed"
-    mv -f "$DB.prev" "$DB"
+    mv -f "$outgoing" "$DB"
     restart_service
     if wait_healthy; then
-        say "The previous database is live again and the health check passed."
+        say "The database that was live before is live again, and the health check passed."
     else
-        warn "The site is also unhealthy with the previous database, so the cause is probably the app or the server, not the new database."
+        warn "The site also fails its health check with the database that was live before, so the cause is probably the app or the server, not the new database."
         say "Health check: $(health_summary)"
     fi
     exit 2
@@ -257,7 +278,7 @@ rollback_db() {
     say "  Previous now: $(db_info "$DB.prev")"
     if ! app_deployed; then
         say "The app is not deployed yet, so the site was not restarted."
-        return 0
+        exit 3
     fi
     say "Restarting $SERVICE ..."
     restart_service

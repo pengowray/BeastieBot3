@@ -16,7 +16,7 @@ set -euo pipefail
 source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
 usage() {
-    sed -n '2,13p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'
+    awk 'NR > 1 && /^#/ { sub(/^# ?/, ""); print; next } NR > 1 { exit }' "${BASH_SOURCE[0]}"
 }
 
 rollback() {
@@ -24,7 +24,7 @@ rollback() {
     local rc=0
     remote_task rollback-app || rc=$?
     case "$rc" in
-        0) check_public_health ;;
+        0) check_public_health loopback-ok ;;
         3) exit 3 ;;
         *) exit "$rc" ;;
     esac
@@ -106,7 +106,7 @@ The health check will fail until you deploy a database with schema version $expe
     remote_task activate-app "$id" || rc=$?
     case "$rc" in
         0)
-            check_public_health
+            check_public_health loopback-ok
             say ""
             say "Deployed release $id."
             say "To switch back to the previous release: deploy/oracle/deploy-app.sh --rollback"

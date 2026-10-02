@@ -9,11 +9,16 @@ source "$(dirname "${BASH_SOURCE[0]}")/lib.sh"
 
 case "${1:-}" in
     "") ;;
-    -h|--help) sed -n '2,5p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//'; exit 0 ;;
+    -h|--help) awk 'NR > 1 && /^#/ { sub(/^# ?/, ""); print; next } NR > 1 { exit }' "${BASH_SOURCE[0]}"; exit 0 ;;
     *) die "Unknown option: $1" ;;
 esac
 
 load_env
 step "Switching $DOMAIN back to the previous database"
-remote_task rollback-db
-check_public_health
+rc=0
+remote_task rollback-db || rc=$?
+case "$rc" in
+    0) check_public_health loopback-ok ;;
+    3) ;;
+    *) exit "$rc" ;;
+esac
