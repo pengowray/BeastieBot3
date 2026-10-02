@@ -79,6 +79,26 @@ public sealed class DisplayTests {
         Assert.Equal(code, display.BadgeText);
     }
 
+    private static AssessmentRow Row(string category, string? version, bool latest) =>
+        new(1, 1, "Global", latest, category, false, false, null, version, 1998, null, null, null);
+
+    [Fact]
+    public void CurrentCodesWithNoCriteriaVersion() {
+        var nt = IucnCategories.Describe(Row("NT", null, latest: false));
+        Assert.Equal("NT", nt.BadgeText);
+        Assert.Equal("No name given by IUCN (1994 or earlier categories)", nt.Label);
+        Assert.Equal("cat-other", nt.CssClass);
+        Assert.Equal("Extinct", IucnCategories.Describe(Row("EX", null, latest: false)).Label);
+        Assert.False(IucnCategories.HasStatusTemplateCode(Row("NT", null, latest: false)));
+        Assert.False(IucnCategories.HasTaxoboxCode(Row("EX", null, latest: false)));
+
+        // Never a latest assessment, and never an LR code (the code says which version it is).
+        Assert.Equal("Near Threatened", IucnCategories.Describe(Row("NT", null, latest: true)).Label);
+        Assert.True(IucnCategories.HasStatusTemplateCode(Row("NT", null, latest: true)));
+        Assert.True(IucnCategories.HasStatusTemplateCode(Row("LR/lc", null, latest: false)));
+        Assert.True(IucnCategories.HasStatusTemplateCode(Row("NT", "3.1", latest: false)));
+    }
+
     [Fact]
     public void PossiblyExtinct() {
         Assert.Equal("Critically Endangered (Possibly Extinct)", IucnCategories.Describe("CR", true, false).Label);

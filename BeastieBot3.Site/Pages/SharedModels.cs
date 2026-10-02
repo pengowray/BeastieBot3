@@ -22,7 +22,7 @@ public sealed record BadgeModel(CategoryDisplay Category, bool Large = false, bo
             : new BadgeModel(IucnCategories.Describe(taxon.Category, taxon.PossiblyExtinct, taxon.PossiblyExtinctInTheWild), large);
 
     public static BadgeModel For(AssessmentRow assessment, bool large = false, bool showLabel = true) =>
-        new(IucnCategories.Describe(assessment.Category, assessment.PossiblyExtinct, assessment.PossiblyExtinctInTheWild), large, showLabel);
+        new(IucnCategories.Describe(assessment), large, showLabel);
 }
 
 /// One taxon in a list of results (search, name lookup) or of child taxa, with a note saying which

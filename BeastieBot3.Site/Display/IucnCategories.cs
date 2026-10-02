@@ -1,3 +1,5 @@
+using BeastieBot3.Site.Data;
+
 namespace BeastieBot3.Site.Display;
 
 /// How a category looks on the page: the code shown in the badge, the full label, and the CSS class
@@ -76,11 +78,45 @@ public static class IucnCategories {
         return new CategoryDisplay(code, code, SiteText.UnknownCategoryLabel(code), "cat-other");
     }
 
+    /// How an assessment's category looks. An earlier-version row (IsEarlierVersionCode) coded "NT"
+    /// gets a grey badge that keeps the code and says IUCN gives it no name: IUCN's API describes
+    /// these rows as "Unknown", and they may be the pre-1994 Not Threatened. Other codes keep their
+    /// label ("EX" is Extinct in every version of the categories).
+    public static CategoryDisplay Describe(AssessmentRow assessment) {
+        var code = assessment.Category.Trim();
+        if (code == "NT" && IsEarlierVersionCode(assessment)) {
+            return new CategoryDisplay(code, code, SiteText.OldCategoryLabel(SiteText.CategoryNotNamed), "cat-other");
+        }
+        return Describe(assessment.Category, assessment.PossiblyExtinct, assessment.PossiblyExtinctInTheWild);
+    }
+
+    /// True for an assessment that is not the latest, has no criteria version (IUCN's "Earlier
+    /// Version", stored as NULL) and yet has a code of the current categories ("NT", "EX"). In the
+    /// 2026-1 data that is 12 rows from 1986 to 1998. Their category system is not the one the
+    /// templates mean by these codes, so they get no {{IUCN status}} or taxobox wikitext. The LR
+    /// codes are not included: they exist only in the 1994 categories, so the code itself says which
+    /// version it is. A latest assessment is never treated this way.
+    public static bool IsEarlierVersionCode(AssessmentRow assessment) {
+        var code = assessment.Category.Trim();
+        return !assessment.IsLatest
+            && string.IsNullOrWhiteSpace(assessment.CriteriaVersion)
+            && Current.ContainsKey(code)
+            && !code.StartsWith("LR/", StringComparison.Ordinal);
+    }
+
     /// Whether {{IUCN status}} has a code for this category.
     public static bool HasStatusTemplateCode(string category) => StatusTemplateCodes.Contains(category.Trim());
 
     /// Whether the taxobox status parameters have a code for this category.
     public static bool HasTaxoboxCode(string category) => TaxoboxCodes.Contains(category.Trim());
+
+    /// Whether {{IUCN status}} wikitext is given for this assessment.
+    public static bool HasStatusTemplateCode(AssessmentRow assessment) =>
+        !IsEarlierVersionCode(assessment) && HasStatusTemplateCode(assessment.Category);
+
+    /// Whether taxobox status wikitext is given for this assessment (global assessments only).
+    public static bool HasTaxoboxCode(AssessmentRow assessment) =>
+        assessment.IsGlobal && !IsEarlierVersionCode(assessment) && HasTaxoboxCode(assessment.Category);
 
     /// EPBC Act categories as the Act names them.
     public static string? EpbcLabel(string? code) => code?.Trim().ToUpperInvariant() switch {

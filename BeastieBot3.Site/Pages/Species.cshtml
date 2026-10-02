@@ -98,7 +98,7 @@
     <section class="wikitext" id="wikitext" aria-labelledby="wikitext-heading">
         <h2 id="wikitext-heading">@SiteText.HeadingWikitext</h2>
         @{
-            var selectedCategory = IucnCategories.Describe(selected.Category, selected.PossiblyExtinct, selected.PossiblyExtinctInTheWild).Label;
+            var selectedCategory = IucnCategories.Describe(selected).Label;
         }
         @if (!selected.IsGlobal) {
             <p class="note note-selected">
@@ -114,14 +114,16 @@
                 <a href="@(Model.OptionsUrl(null))#wikitext">@SiteText.ShowLatestWikitext</a>
             </p>
         }
-        @if (!IucnCategories.HasStatusTemplateCode(selected.Category)) {
+        @if (IucnCategories.IsEarlierVersionCode(selected)) {
+            <p class="note">@SiteText.NoTemplateEarlierVersion</p>
+        } else if (!IucnCategories.HasStatusTemplateCode(selected)) {
             <p class="note">@SiteText.NoTemplateCode</p>
         }
 
         @if (Model.Parts is null) {
             <p class="note">
                 @SiteText.NoCitationReason
-                @if (IucnCategories.HasStatusTemplateCode(selected.Category)) {
+                @if (IucnCategories.HasStatusTemplateCode(selected)) {
                     @SiteText.NoCitationStatusAvailable
                 }
                 @SiteText.NoCitationBefore<a href="@SiteFormat.IucnAssessmentUrl(selected.TaxonId, selected.AssessmentId)">@SiteText.NoCitationLink</a>@SiteText.NoCitationAfter

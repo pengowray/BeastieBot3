@@ -109,6 +109,9 @@ public static class SiteText {
     public const string CategoryCrPew = "Critically Endangered (Possibly Extinct in the Wild)";
     public static string OldCategoryLabel(string iucnName) => $"{iucnName} (1994 or earlier categories)";
     public static string UnknownCategoryLabel(string code) => $"{code} (old IUCN category)";
+    /// With OldCategoryLabel: the label of a code such as "NT" on an assessment that uses an earlier
+    /// version of the categories, which IUCN gives no name.
+    public const string CategoryNotNamed = "No name given by IUCN";
 
     /// "No global assessment. This taxon has " + link("{n} regional assessments") + ".".
     public const string NoGlobalBefore = "No global assessment. This taxon has ";
@@ -153,6 +156,8 @@ public static class SiteText {
     public const string SpeciesboxGlobalOnly = "{{Speciesbox}} status parameters are given for global assessments only.";
     public const string ShowLatestWikitext = "Show wikitext for the latest assessment";
     public const string NoTemplateCode = "{{IUCN status}} and {{Speciesbox}} have no code for this category.";
+    public const string NoTemplateEarlierVersion =
+        "This assessment uses an earlier version of the IUCN categories, so no {{IUCN status}} or {{Speciesbox}} wikitext is given for it.";
 
     /// The no-citation note: reason, then (when there is an {{IUCN status}} box) the available
     /// line, then "To cite the assessment, use " + link("its page on the IUCN Red List website") + ".".

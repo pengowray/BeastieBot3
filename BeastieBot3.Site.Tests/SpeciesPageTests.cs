@@ -212,6 +212,29 @@ public sealed class SpeciesPageTests(SiteFactory factory) : IClassFixture<SiteFa
     }
 
     [Fact]
+    public async Task CurrentCodesOnEarlierVersionRowsGetNoTemplates() {
+        var subspecies = await _client.GetStringAsync($"/species/{FixtureDb.PlantSubspecies}");
+        // The latest NT is Near Threatened; the 1998 NT with no criteria version is not named.
+        Assert.Contains("<span class=\"badge cat-nt\">NT</span> <span class=\"category-label\">Near Threatened</span>", subspecies);
+        Assert.Contains("<span class=\"badge cat-other\">NT</span> <span class=\"category-label\">No name given by IUCN (1994 or earlier categories)</span>", subspecies);
+
+        var nt = await _client.GetStringAsync($"/species/{FixtureDb.PlantSubspecies}?assessment={FixtureDb.PlantSubspecies1998Nt}");
+        var ntText = Html.Text(nt);
+        Assert.Contains("Wikitext for an earlier assessment: No name given by IUCN (1994 or earlier categories), published 1998.", ntText);
+        Assert.Contains("This assessment uses an earlier version of the IUCN categories, so no {{IUCN status}} or", ntText);
+        Assert.DoesNotContain("have no code for this category", ntText);
+        Assert.NotNull(Html.Textarea(nt, "wikitext-cite"));
+        Assert.Null(Html.Textarea(nt, "wikitext-status"));
+        Assert.Null(Html.Textarea(nt, "wikitext-speciesbox"));
+
+        var ex = await _client.GetStringAsync($"/species/{FixtureDb.Bromus}?assessment={FixtureDb.Bromus1998Ex}");
+        Assert.Contains("<span class=\"badge cat-ex\">EX</span> <span class=\"category-label\">Extinct</span>", ex);
+        Assert.Contains("This assessment uses an earlier version of the IUCN categories", Html.Text(ex));
+        Assert.Null(Html.Textarea(ex, "wikitext-status"));
+        Assert.Null(Html.Textarea(ex, "wikitext-speciesbox"));
+    }
+
+    [Fact]
     public async Task AssessmentOfAnotherTaxonIsIgnored() {
         var html = await Page($"?assessment={FixtureDb.LionLatest}");
         Assert.Equal("{{IUCN status|VU|22823/14871490|1|year=2015}}", Html.Textarea(html, "wikitext-status"));

@@ -172,13 +172,13 @@ public sealed class SpeciesModel : PageModel {
                 .ToList();
         }
 
-        if (IucnCategories.HasStatusTemplateCode(Selected.Category)) {
+        if (IucnCategories.HasStatusTemplateCode(Selected)) {
             var status = IucnStatusTemplate.Render(Selected.Category, Selected.PossiblyExtinct, Selected.PossiblyExtinctInTheWild,
                 Selected.TaxonId, Selected.AssessmentId, Selected.YearPublished?.ToString(System.Globalization.CultureInfo.InvariantCulture));
             boxes.Add(new WikitextBox("wikitext-status", SiteText.LabelStatus, "{{IUCN status}}", status, Rows: 2));
         }
 
-        if (Parts is not null && citeOptions is not null && Selected.IsGlobal && IucnCategories.HasTaxoboxCode(Selected.Category)) {
+        if (Parts is not null && citeOptions is not null && IucnCategories.HasTaxoboxCode(Selected)) {
             // status_ref is always a <ref>, whatever the citation box shows.
             var statusRef = CiteIucnRenderer.Render(Parts, citeOptions with { WrapInRef = true });
             var lines = SpeciesboxStatus.Render(Selected.Category, Selected.PossiblyExtinct, Selected.PossiblyExtinctInTheWild,
