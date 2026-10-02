@@ -64,6 +64,18 @@ internal sealed record GbifIucnTaxon(
     /// The taxon and assessment ids in the DOI. For an errata version published 2015 to 2018 the
     /// DOI's assessment id is the predecessor's, not <see cref="AssessmentId"/>.
     public IucnDoiParts? DoiParts => IucnDoi.Parse(Doi);
+
+    /// <summary>
+    /// The category in the wording of the IUCN CSV's redlistCategory column. GBIF writes the old
+    /// Lower Risk categories in lower case and without "Lower Risk/" ("near threatened"); every
+    /// other category is written the same way in both (checked against all 178,011 taxa of 2026-1).
+    /// </summary>
+    public string? RedlistCategory => ThreatStatus switch {
+        "near threatened" => "Lower Risk/near threatened",
+        "least concern" => "Lower Risk/least concern",
+        "conservation dependent" => "Lower Risk/conservation dependent",
+        _ => ThreatStatus,
+    };
 }
 
 /// <summary>A synonym row. Its id is the archive's own ("158236_1"), not an IUCN id.</summary>

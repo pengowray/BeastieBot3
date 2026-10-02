@@ -211,6 +211,14 @@ public class GbifIucnChecklistReaderTests {
     }
 
     [Fact]
+    public void RedlistCategory_GivesTheCsvWordingForLowerRisk() {
+        var checklist = ReadSample();
+
+        Assert.Equal("Lower Risk/near threatened", checklist.Taxa[61674].RedlistCategory);
+        Assert.Equal("Vulnerable", checklist.Taxa[22823].RedlistCategory);
+    }
+
+    [Fact]
     public void Read_ParsesTheDatasetDescription() {
         var dataset = ReadSample().Summary.Dataset;
 
