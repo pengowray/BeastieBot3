@@ -119,9 +119,28 @@ internal static class TaxonGroupingHelper {
                 definition.OtherLabel,
                 definition.MinGroupsForOther,
                 Intermediates: placement is null ? null : BuildIntermediates(keys, i, placement),
-                Key: keys[i]));
+                Key: keys[i],
+                IntermediatesOwner: placement is null ? null : OwnerOf(keys[i])));
         }
         return levels;
+    }
+
+    // The IUCN taxon a level's intermediate path hangs under: the class for order, the order for
+    // family (and for a CoL rank between them), the family for genus.
+    private static Func<IucnSpeciesRecord, string?>? OwnerOf(string key) {
+        var span = key switch {
+            "order" => PlacementSpan.ClassToOrder,
+            "family" => PlacementSpan.OrderToFamily,
+            "genus" => PlacementSpan.FamilyToGenus,
+            _ when IsIucnRank(key) => (PlacementSpan?)null,
+            _ => SpanOf(key),
+        };
+        return span switch {
+            PlacementSpan.ClassToOrder => r => $"{r.KingdomName}|{r.ClassName}",
+            PlacementSpan.OrderToFamily => r => $"{r.KingdomName}|{r.ClassName}|{r.OrderName}",
+            PlacementSpan.FamilyToGenus => r => $"{r.KingdomName}|{r.FamilyName}",
+            _ => null,
+        };
     }
 
     private static Func<IucnSpeciesRecord, IReadOnlyList<PlacementNode>>? BuildIntermediates(

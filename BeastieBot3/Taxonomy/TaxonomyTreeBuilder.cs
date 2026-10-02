@@ -341,6 +341,13 @@ internal static class TaxonomyTreeBuilder {
             var valueOf = (Func<T, string>)(item => level.Selector(item)?.Trim().ToUpperInvariant() ?? string.Empty);
             var current = entries;
 
+            if (level.IntermediatesOwner is { } ownerOf
+                && entries.Select(e => ownerOf(e.Item) ?? string.Empty).Distinct(StringComparer.OrdinalIgnoreCase).Skip(1).Any()) {
+                _diagnostics?.RecordLayer(new IntermediateLayerDecision(
+                    path, entries.Count, string.Empty, level.KeyOrLabel, "rejected:mixed_parents"));
+                return false;
+            }
+
             while (true) {
                 var (named, loose) = SplitByNode(current, pathOf);
                 if (named.Count == 0) {
@@ -701,6 +708,9 @@ internal sealed class TaxonomyTreeNode<T> {
 /// <param name="Intermediates">The Catalogue of Life nodes between the previous level and this one for
 /// an item, broad to narrow; null when the level gets no intermediate layers.</param>
 /// <param name="Key">The rank key, lower case (e.g. "family"). Defaults to the lower-cased label.</param>
+/// <param name="IntermediatesOwner">The taxon an item's intermediate path hangs under (its class for
+/// the order level). A layer is only tried when every item has the same owner: on a page that mixes
+/// classes, a superclass Actinopteri heading beside mollusc orders would group fish without saying so.</param>
 internal sealed record TaxonomyTreeLevel<T>(
     string Label,
     Func<T, string?> Selector,
@@ -710,7 +720,8 @@ internal sealed record TaxonomyTreeLevel<T>(
     string? OtherLabel = null,
     int MinGroupsForOther = 0,
     Func<T, IReadOnlyList<PlacementNode>>? Intermediates = null,
-    string? Key = null) {
+    string? Key = null,
+    Func<T, string?>? IntermediatesOwner = null) {
     public string KeyOrLabel => Key ?? Label.ToLowerInvariant();
 }
 

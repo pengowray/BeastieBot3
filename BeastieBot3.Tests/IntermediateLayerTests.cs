@@ -138,6 +138,26 @@ public class IntermediateLayerTests {
     }
 
     [Fact]
+    public void PageMixingClasses_GetsNoClassToOrderLayer() {
+        // Animals extinct in the wild: fish orders sit under superclass Actinopteri, the snail and
+        // bird orders have no CoL node there. Without a class heading, an "Actinopteri" heading would
+        // group the fish without naming them, so no layer is tried.
+        var fishOrders = new[] { "CYPRINIFORMES", "CYPRINODONTIFORMES", "PERCIFORMES", "SILURIFORMES", "CICHLIFORMES", "ATHERINIFORMES" };
+        var records = fishOrders.SelectMany(o => Family("ACTINOPTERYGII", o, o[..4] + "IDAE", 10))
+            .Concat(Family("GASTROPODA", "STYLOMMATOPHORA", "PARTULIDAE", 9))
+            .Concat(Family("AVES", "PASSERIFORMES", "CORVIDAE", 2))
+            .ToList();
+        var placement = new TaxonPlacementIndex(fishOrders.Select(o =>
+            ClassToOrder("ACTINOPTERYGII", o, NameOnly("Actinopteri", "superclass"))));
+        var diagnostics = new AutoSplitDiagnosticCollector();
+
+        var root = BuildTree(records, placement, diagnostics: diagnostics);
+
+        Assert.All(root.Children, c => Assert.Equal("order", c.Key));
+        Assert.Equal("rejected:mixed_parents", Assert.Single(diagnostics.Layers, d => d.Level == "order").Outcome);
+    }
+
+    [Fact]
     public void NodeSharedByEveryItem_IsSkippedWithoutAHeading() {
         // Every family sits under infraorder Alethinophidia below suborder Serpentes: Serpentes adds
         // nothing, and the next node down is read instead.
