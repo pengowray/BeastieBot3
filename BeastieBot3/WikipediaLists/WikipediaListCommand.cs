@@ -10,6 +10,7 @@ using BeastieBot3.Configuration;
 using System.Threading;
 using BeastieBot3.Col;
 using BeastieBot3.Infrastructure;
+using BeastieBot3.Iucn;
 using BeastieBot3.Taxonomy;
 
 namespace BeastieBot3.WikipediaLists;
@@ -112,9 +113,19 @@ public sealed class WikipediaListCommand : Command<WikipediaListCommand.Settings
             AnsiConsole.MarkupLine($"[grey]Filtered to[/] [cyan]{definitions.Count}[/] [grey]list(s) by[/] {summary}.");
         }
 
-        using var query = new IucnListQueryService(databasePath);
+        // Orders and families for taxa that IUCN marks "NOT ASSIGNED", read from the same folder as
+        // the other rules. Applied to every IUCN query below and to the CoL placement.
+        IucnNotAssignedRules notAssigned;
+        try {
+            notAssigned = IucnNotAssignedRules.LoadFromRulesDir(Path.GetDirectoryName(rulesPath));
+        } catch (InvalidOperationException ex) {
+            AnsiConsole.MarkupLine($"[red]Could not read {IucnNotAssignedRules.FileName}:[/] {Markup.Escape(ex.Message)}");
+            return -1;
+        }
+
+        using var query = new IucnListQueryService(databasePath, notAssigned);
         // Read-only per-child status aggregator for parent (nested) lists. Shares the same IUCN DB.
-        using var chartData = new IucnChartDataBuilder(databasePath);
+        using var chartData = new IucnChartDataBuilder(databasePath, notAssigned);
         var templates = new WikipediaTemplateRenderer(templatesDir);
         var rules = new Legacy.LegacyTaxaRuleList(rulesPath);
 
@@ -164,7 +175,7 @@ public sealed class WikipediaListCommand : Command<WikipediaListCommand.Settings
                     AnsiConsole.MarkupLine($"[grey]Using Catalogue of Life database:[/] {Markup.Escape(colDbPath!)}");
                     // Cleans formatting-equivalent slips in the displayed scientific name.
                     colNameResolver = new Col.ColNameResolver(colDbPath!);
-                    (placement, placementToDispose) = LoadPlacement(paths, databasePath, colDbPath!);
+                    (placement, placementToDispose) = LoadPlacement(databasePath, colDbPath!, notAssigned);
                     if (placement is null) {
                         AnsiConsole.MarkupLine($"[yellow]{IucnRanksOnlyNote}[/]");
                     }
@@ -220,18 +231,17 @@ public sealed class WikipediaListCommand : Command<WikipediaListCommand.Settings
     /// ranks when this returns no placement.
     /// </summary>
     private static (ITaxonPlacement? Placement, IDisposable? ToDispose) LoadPlacement(
-        PathsService paths, string iucnDbPath, string colDbPath) {
-        _ = paths;
+        string iucnDbPath, string colDbPath, IucnNotAssignedRules notAssigned) {
         try {
-            var status = TaxonPlacementBuild.Status(iucnDbPath, colDbPath);
+            var status = TaxonPlacementBuild.Status(iucnDbPath, colDbPath, notAssigned: notAssigned);
             if (status.IsCurrent) {
-                return (TaxonPlacementStore.LoadOrBuild(iucnDbPath, colDbPath, force: false, progress: null, CancellationToken.None), null);
+                return (TaxonPlacementStore.LoadOrBuild(iucnDbPath, colDbPath, force: false, progress: null, CancellationToken.None, notAssigned), null);
             }
             AnsiConsole.MarkupLine($"[grey]Building the Catalogue of Life placement before generating the lists: {Markup.Escape(RebuildReason(status))}.[/]");
             TaxonPlacementIndex index = TaxonPlacementIndex.Empty;
             ProgressConsole.Run("Reading IUCN species", 0, handle => {
                 index = TaxonPlacementStore.LoadOrBuild(iucnDbPath, colDbPath, force: false,
-                    new ColBuildPlacementCommand.ProgressAdapter(handle), CancellationToken.None);
+                    new ColBuildPlacementCommand.ProgressAdapter(handle), CancellationToken.None, notAssigned);
             });
             return (index, null);
         } catch (Exception ex) when (ex is InvalidOperationException or Microsoft.Data.Sqlite.SqliteException or IOException) {
@@ -245,6 +255,7 @@ public sealed class WikipediaListCommand : Command<WikipediaListCommand.Settings
         return status.State switch {
             PlacementState.IucnChanged => $"the IUCN database changed after the placement was last built on {built}",
             PlacementState.ColChanged => $"the Catalogue of Life database changed after the placement was last built on {built}",
+            PlacementState.NotAssignedRulesChanged => $"{IucnNotAssignedRules.FileName} changed after the placement was last built on {built}",
             PlacementState.RulesChanged or PlacementState.ThresholdsChanged =>
                 $"the saved placement was built on {built} by an older version of BeastieBot3",
             PlacementState.Unreadable => $"the placement file could not be read ({status.Error})",

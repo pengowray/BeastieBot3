@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using BeastieBot3.Infrastructure;
+using BeastieBot3.Iucn;
 using BeastieBot3.Taxonomy;
 using BeastieBot3.WikipediaLists;
 using Spectre.Console;
@@ -85,7 +86,15 @@ internal sealed class ColBuildPlacementCommand : Command<ColBuildPlacementComman
             return -1;
         }
 
-        var status = TaxonPlacementBuild.Status(iucnPath, colPath);
+        IucnNotAssignedRules notAssigned;
+        try {
+            notAssigned = IucnNotAssignedRules.LoadFromRulesDir(Path.Combine(paths.BaseDirectory, "rules"));
+        } catch (InvalidOperationException ex) {
+            AnsiConsole.MarkupLine($"[red]Could not read {IucnNotAssignedRules.FileName}:[/] {Markup.Escape(ex.Message)}");
+            return -1;
+        }
+
+        var status = TaxonPlacementBuild.Status(iucnPath, colPath, notAssigned: notAssigned);
         AnsiConsole.MarkupLine($"[grey]IUCN database:[/] {Markup.Escape(iucnPath)}");
         AnsiConsole.MarkupLine($"[grey]Catalogue of Life database:[/] {Markup.Escape(colPath)}");
         AnsiConsole.MarkupLine($"[grey]Placement file:[/] {Markup.Escape(status.SidecarPath)}");
@@ -96,7 +105,7 @@ internal sealed class ColBuildPlacementCommand : Command<ColBuildPlacementComman
             return 0;
         }
         if (status.IsCurrent && !settings.Force && !settings.Report) {
-            var loaded = TaxonPlacementBuild.Run(iucnPath, colPath, new PlacementRunOptions(), null, cancellationToken);
+            var loaded = TaxonPlacementBuild.Run(iucnPath, colPath, new PlacementRunOptions { NotAssigned = notAssigned }, null, cancellationToken);
             AnsiConsole.MarkupLine("The saved placement is up to date. Run with [yellow]--force[/] to build it again.");
             AnsiConsole.WriteLine();
             AnsiConsole.Write(GroupsTable(loaded.Index, totals: null));
@@ -104,7 +113,7 @@ internal sealed class ColBuildPlacementCommand : Command<ColBuildPlacementComman
         }
 
         PlacementRunResult result = null!;
-        var options = new PlacementRunOptions { Force = true, WantDiagnostics = settings.Report };
+        var options = new PlacementRunOptions { Force = true, WantDiagnostics = settings.Report, NotAssigned = notAssigned };
         try {
             ProgressConsole.Run("Reading IUCN species", 0, handle => {
                 result = TaxonPlacementBuild.Run(iucnPath, colPath, options, new ProgressAdapter(handle), cancellationToken);
@@ -145,6 +154,7 @@ internal sealed class ColBuildPlacementCommand : Command<ColBuildPlacementComman
             PlacementState.ColChanged => $"out of date: the Catalogue of Life database has changed since the build on {built}",
             PlacementState.RulesChanged => $"out of date: built on {built} by an older version of this command",
             PlacementState.ThresholdsChanged => $"out of date: built on {built} with different vote or containment thresholds",
+            PlacementState.NotAssignedRulesChanged => $"out of date: {IucnNotAssignedRules.FileName} has changed since the build on {built}",
             PlacementState.Unreadable => $"the placement file could not be read: {status.Error}",
             _ => status.State.ToString(),
         };

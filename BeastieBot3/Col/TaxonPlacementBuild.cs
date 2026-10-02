@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using System.Threading;
 using Microsoft.Data.Sqlite;
+using BeastieBot3.Iucn;
 using BeastieBot3.Taxonomy;
 using BeastieBot3.WikipediaLists;
 
@@ -34,6 +35,7 @@ internal enum PlacementState {
     ColChanged,
     RulesChanged,
     ThresholdsChanged,
+    NotAssignedRulesChanged,
     Unreadable,
 }
 
@@ -52,6 +54,9 @@ internal sealed record PlacementRunOptions {
     public bool WantDiagnostics { get; init; }
 
     public PlacementBuilderOptions Builder { get; init; } = PlacementBuilderOptions.Default;
+
+    /// <summary>The rules from rules/iucn-not-assigned.yml, applied to the IUCN species before the vote.</summary>
+    public IucnNotAssignedRules NotAssigned { get; init; } = IucnNotAssignedRules.None;
 }
 
 /// <summary>How the IUCN species were matched to CoL in one build.</summary>
@@ -79,7 +84,30 @@ internal sealed record PlacementRunResult(
     PlacementMatchStats? Matching,
     TaxonPlacementStatus StatusBefore,
     PlacementSourceRow? Source,
-    TimeSpan Elapsed);
+    TimeSpan Elapsed,
+    IReadOnlyList<NotAssignedTaxon>? NotAssigned = null);
+
+/// <summary>
+/// An IUCN taxon whose order or family IUCN marks "NOT ASSIGNED", the value a rule in
+/// rules/iucn-not-assigned.yml gives it, and where Catalogue of Life places its species.
+/// </summary>
+/// <param name="Rank">"order" for a family with no IUCN order, "family" for a genus with no IUCN family.</param>
+/// <param name="GenusName">Set for a "family" row only.</param>
+/// <param name="RuleValue">The order or family the rules give it, or null when no rule covers it.</param>
+/// <param name="ColValue">The CoL order or family most of its matched species are in, or null.</param>
+/// <param name="ColSpecies">Matched species in <paramref name="ColValue"/>.</param>
+internal sealed record NotAssignedTaxon(
+    string Rank,
+    string Kingdom,
+    string? ClassName,
+    string? OrderName,
+    string? FamilyName,
+    string? GenusName,
+    int Species,
+    string? RuleValue,
+    string? ColValue,
+    int ColSpecies,
+    int Matched);
 
 internal static class TaxonPlacementBuild {
     /// <summary>
@@ -87,10 +115,16 @@ internal static class TaxonPlacementBuild {
     /// IUCN file, this CoL file, the current algorithm and these thresholds. Opens the file
     /// read-only and changes nothing.
     /// </summary>
-    public static TaxonPlacementStatus Status(string iucnDatabasePath, string colDatabasePath, PlacementBuilderOptions? options = null) {
+    public static TaxonPlacementStatus Status(
+        string iucnDatabasePath,
+        string colDatabasePath,
+        PlacementBuilderOptions? options = null,
+        IucnNotAssignedRules? notAssigned = null) {
         options ??= PlacementBuilderOptions.Default;
+        notAssigned ??= IucnNotAssignedRules.None;
         var sidecar = TaxonPlacementStore.SidecarPath(colDatabasePath);
-        var sourceKey = TaxonPlacementStore.SourceKey(iucnDatabasePath, TaxonPlacementStore.IucnStamp(iucnDatabasePath));
+        var iucnStamp = TaxonPlacementStore.IucnStamp(iucnDatabasePath, notAssigned);
+        var sourceKey = TaxonPlacementStore.SourceKey(iucnDatabasePath, iucnStamp);
         if (!File.Exists(sidecar)) {
             return new TaxonPlacementStatus(PlacementState.NoFile, sidecar, sourceKey, null);
         }
@@ -102,7 +136,11 @@ internal static class TaxonPlacementBuild {
             var source = TaxonPlacementStore.ReadSource(connection, sourceKey);
             if (source is null) {
                 var earlier = TaxonPlacementStore.ReadSourceForPath(connection, Path.GetFullPath(iucnDatabasePath));
-                return new TaxonPlacementStatus(earlier is null ? PlacementState.NotBuilt : PlacementState.IucnChanged, sidecar, sourceKey, earlier);
+                var changed = earlier is null ? PlacementState.NotBuilt
+                    : TaxonPlacementStore.IucnFileStamp(earlier.IucnStamp) == TaxonPlacementStore.IucnFileStamp(iucnStamp)
+                        ? PlacementState.NotAssignedRulesChanged
+                        : PlacementState.IucnChanged;
+                return new TaxonPlacementStatus(changed, sidecar, sourceKey, earlier);
             }
             var state = source.ColStamp != TaxonPlacementStore.ColStamp(colDatabasePath) ? PlacementState.ColChanged
                 : source.AlgorithmVersion != TaxonPlacementStore.RulesVersion ? PlacementState.RulesChanged
@@ -125,7 +163,7 @@ internal static class TaxonPlacementBuild {
         IPlacementBuildProgress? progress,
         CancellationToken cancellationToken) {
         var clock = Stopwatch.StartNew();
-        var status = Status(iucnDatabasePath, colDatabasePath, options.Builder);
+        var status = Status(iucnDatabasePath, colDatabasePath, options.Builder, options.NotAssigned);
         if (status.IsCurrent && !options.Force && !options.WantDiagnostics) {
             using var connection = OpenReadOnly(status.SidecarPath);
             var loaded = TaxonPlacementStore.LoadPlacement(connection, status.SourceKey);
@@ -134,14 +172,14 @@ internal static class TaxonPlacementBuild {
 
         // Stamps are taken before reading, so a file that changes during the build reads as changed next time.
         var colStamp = TaxonPlacementStore.ColStamp(colDatabasePath);
-        var iucnStamp = TaxonPlacementStore.IucnStamp(iucnDatabasePath);
+        var iucnStamp = TaxonPlacementStore.IucnStamp(iucnDatabasePath, options.NotAssigned);
         var sourceKey = TaxonPlacementStore.SourceKey(iucnDatabasePath, iucnStamp);
 
         using var store = TaxonPlacementStore.Open(status.SidecarPath);
         var cachesReset = store.ResetCachesUnlessFor(colStamp);
 
         progress?.Phase("Reading IUCN species", 0);
-        var species = ReadIucnSpecies(iucnDatabasePath, cancellationToken);
+        var species = ReadIucnSpecies(iucnDatabasePath, options.NotAssigned, cancellationToken);
         if (species.Count == 0) {
             throw new InvalidOperationException(
                 $"No species found in {iucnDatabasePath}. The placement needs IUCN species-level global assessments.");
@@ -172,7 +210,10 @@ internal static class TaxonPlacementBuild {
             output.Index.Count,
             clock.Elapsed.TotalSeconds);
         store.SavePlacement(source, output);
-        return new PlacementRunResult(output.Index, true, output, stats, status, source, clock.Elapsed);
+        var notAssigned = options.WantDiagnostics
+            ? SummarizeNotAssigned(iucnDatabasePath, options.NotAssigned, species, samples, cancellationToken)
+            : null;
+        return new PlacementRunResult(output.Index, true, output, stats, status, source, clock.Elapsed, notAssigned);
     }
 
     private static (List<PlacementSample> Samples, PlacementMatchStats Stats, ColLineageMatcher Matcher) MatchAll(
@@ -239,6 +280,64 @@ internal static class TaxonPlacementBuild {
         }
     }
 
+    /// <summary>
+    /// Every IUCN taxon marked "NOT ASSIGNED" at order or family, read from IUCN's own values, with
+    /// the rule that covers it and where CoL places its matched species.
+    /// </summary>
+    private static List<NotAssignedTaxon> SummarizeNotAssigned(
+        string iucnDatabasePath,
+        IucnNotAssignedRules rules,
+        IReadOnlyList<IucnSpeciesKey> species,
+        IReadOnlyList<PlacementSample> samples,
+        CancellationToken cancellationToken) {
+        var lineageOf = new Dictionary<string, IReadOnlyList<ColLineageNode>?>(StringComparer.Ordinal);
+        for (var i = 0; i < species.Count; i++) {
+            lineageOf[TaxonPlacementStore.MatchKey(species[i].Kingdom, species[i].Genus, species[i].Species)] = samples[i].Lineage;
+        }
+
+        var raw = ReadIucnSpecies(iucnDatabasePath, IucnNotAssignedRules.None, cancellationToken);
+        var result = new List<NotAssignedTaxon>();
+
+        void Add(string rank, IEnumerable<IucnSpeciesKey> group, IucnSpeciesKey first, string? genus) {
+            var list = group.ToList();
+            var lineages = list
+                .Select(s => lineageOf.GetValueOrDefault(TaxonPlacementStore.MatchKey(s.Kingdom, s.Genus, s.Species)))
+                .Where(l => l is { Count: > 0 })
+                .ToList();
+            var colVotes = lineages
+                .Select(l => l!.FirstOrDefault(n => string.Equals(n.Rank, rank, StringComparison.OrdinalIgnoreCase))?.Name)
+                .Where(name => name is not null)
+                .GroupBy(name => name!, StringComparer.OrdinalIgnoreCase)
+                .OrderByDescending(g => g.Count())
+                .FirstOrDefault();
+            var (order, family) = rules.Resolve(first.ClassName, first.OrderName, first.FamilyName, first.Genus);
+            var ruleValue = rank == "order"
+                ? (IucnNotAssignedRules.IsNotAssigned(order) ? null : order)
+                : (IucnNotAssignedRules.IsNotAssigned(family) ? null : family);
+            result.Add(new NotAssignedTaxon(rank, first.Kingdom, first.ClassName, first.OrderName, first.FamilyName, genus,
+                list.Count, ruleValue, colVotes?.Key, colVotes?.Count() ?? 0, lineages.Count));
+        }
+
+        foreach (var group in raw.Where(s => IucnNotAssignedRules.IsNotAssigned(s.OrderName))
+                     .GroupBy(s => (s.Kingdom, s.ClassName, s.FamilyName))) {
+            var first = group.First();
+            Add("order", group, first, IucnNotAssignedRules.IsNotAssigned(first.FamilyName) ? first.Genus : null);
+        }
+        foreach (var group in raw.Where(s => IucnNotAssignedRules.IsNotAssigned(s.FamilyName))
+                     .GroupBy(s => (s.Kingdom, s.ClassName, s.OrderName, s.Genus))) {
+            Add("family", group, group.First(), group.First().Genus);
+        }
+
+        return result
+            .OrderBy(r => r.Rank == "order" ? 0 : 1)
+            .ThenBy(r => r.Kingdom, StringComparer.Ordinal)
+            .ThenBy(r => r.ClassName, StringComparer.Ordinal)
+            .ThenBy(r => r.OrderName, StringComparer.Ordinal)
+            .ThenBy(r => r.FamilyName, StringComparer.Ordinal)
+            .ThenBy(r => r.GenusName, StringComparer.Ordinal)
+            .ToList();
+    }
+
     // A cached match stands unless it was a choice between several CoL targets and the IUCN
     // ranks that broke the tie have changed since.
     private static bool StillValid(CachedSpeciesMatch hit, IucnSpeciesKey s) =>
@@ -252,13 +351,14 @@ internal static class TaxonPlacementBuild {
         Math.Abs(source.VoteThreshold - options.VoteThreshold) < 1e-9
         && Math.Abs(source.ContainmentThreshold - options.ContainmentThreshold) < 1e-9;
 
-    /// <summary>One entry per distinct IUCN species (global, species-level assessments only).</summary>
-    internal static List<IucnSpeciesKey> ReadIucnSpecies(string iucnDatabasePath, CancellationToken cancellationToken) {
-        using var connection = new SqliteConnection(new SqliteConnectionStringBuilder {
-            DataSource = iucnDatabasePath,
-            Mode = SqliteOpenMode.ReadOnly,
-        }.ConnectionString);
+    /// <summary>
+    /// One entry per distinct IUCN species (global, species-level assessments only), with the order
+    /// and family from rules/iucn-not-assigned.yml where IUCN has "NOT ASSIGNED".
+    /// </summary>
+    internal static List<IucnSpeciesKey> ReadIucnSpecies(string iucnDatabasePath, IucnNotAssignedRules notAssigned, CancellationToken cancellationToken) {
+        using var connection = new SqliteConnection(IucnNotAssignedRules.ConnectionString(iucnDatabasePath));
         connection.Open();
+        notAssigned.ApplyTo(connection);
         using var command = connection.CreateCommand();
         command.CommandText = $"""
             SELECT DISTINCT v.kingdomName, v.className, v.orderName, v.familyName, v.genusName, v.speciesName

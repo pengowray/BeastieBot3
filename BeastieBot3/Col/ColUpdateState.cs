@@ -5,6 +5,7 @@ using System.Globalization;
 using System.IO;
 using System.Linq;
 using BeastieBot3.Configuration;
+using BeastieBot3.Iucn;
 using Microsoft.Data.Sqlite;
 
 // Where a Catalogue of Life update has got to: which release is in the input folder, which one the
@@ -51,7 +52,8 @@ public sealed record ColLeftover {
 // The saved CoL placement for list headings (`col build-placement`) for the configured IUCN CSV
 // database: whether it is current, and if not, why.
 public sealed record ColPlacementSummary {
-    // "current" | "no-file" | "not-built" | "iucn-changed" | "col-changed" | "rules-changed" | "thresholds-changed" | "unreadable"
+    // "current" | "no-file" | "not-built" | "iucn-changed" | "col-changed" | "rules-changed" | "thresholds-changed"
+    // | "not-assigned-changed" | "unreadable"
     public required string State { get; init; }
     public DateTime? BuiltAtUtc { get; init; }
     public int Species { get; init; }
@@ -173,7 +175,13 @@ public static class ColUpdateStateReader {
         try { iucnPath = paths.ResolveIucnDatabasePath(null, null); } catch { return null; }
         if (string.IsNullOrWhiteSpace(iucnPath) || !File.Exists(iucnPath)) return null;
 
-        var status = TaxonPlacementBuild.Status(iucnPath, loaded.Path);
+        IucnNotAssignedRules notAssigned;
+        try {
+            notAssigned = IucnNotAssignedRules.LoadFromRulesDir(Path.Combine(paths.BaseDirectory, "rules"));
+        } catch (InvalidOperationException) {
+            notAssigned = IucnNotAssignedRules.None;
+        }
+        var status = TaxonPlacementBuild.Status(iucnPath, loaded.Path, notAssigned: notAssigned);
         return new ColPlacementSummary {
             State = status.State switch {
                 PlacementState.Current => "current",
@@ -183,6 +191,7 @@ public static class ColUpdateStateReader {
                 PlacementState.ColChanged => "col-changed",
                 PlacementState.RulesChanged => "rules-changed",
                 PlacementState.ThresholdsChanged => "thresholds-changed",
+                PlacementState.NotAssignedRulesChanged => "not-assigned-changed",
                 _ => "unreadable",
             },
             BuiltAtUtc = status.Source?.BuiltAtUtc,

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Data;
 using System.IO;
 using System.Text;
+using BeastieBot3.Iucn;
 using Microsoft.Data.Sqlite;
 
 // Builds and executes SQL queries against IUCN CSV-imported database for
@@ -16,7 +17,9 @@ namespace BeastieBot3.WikipediaLists;
 internal sealed class IucnListQueryService : IDisposable {
     private readonly SqliteConnection _connection;
 
-    public IucnListQueryService(string databasePath) {
+    /// <param name="notAssigned">Rules from rules/iucn-not-assigned.yml applied to every query on
+    /// this connection; null for IUCN's values as stored.</param>
+    public IucnListQueryService(string databasePath, IucnNotAssignedRules? notAssigned = null) {
         if (string.IsNullOrWhiteSpace(databasePath)) {
             throw new ArgumentException("Database path was not provided.", nameof(databasePath));
         }
@@ -26,13 +29,10 @@ internal sealed class IucnListQueryService : IDisposable {
             throw new FileNotFoundException($"IUCN SQLite database not found: {fullPath}", fullPath);
         }
 
-        var builder = new SqliteConnectionStringBuilder {
-            DataSource = fullPath,
-            Mode = SqliteOpenMode.ReadOnly
-        };
-
-        _connection = new SqliteConnection(builder.ToString());
+        // Pooling is off so the temporary view from the rules never outlives this connection.
+        _connection = new SqliteConnection(IucnNotAssignedRules.ConnectionString(fullPath));
         _connection.Open();
+        notAssigned?.ApplyTo(_connection);
     }
 
     public string GetDatasetVersion() {

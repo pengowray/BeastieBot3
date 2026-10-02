@@ -186,7 +186,10 @@ internal static class TaxonomyTreeBuilder {
         /// <summary>Groups <paramref name="entries"/> under <paramref name="parent"/> by the level at <paramref name="levelIndex"/>.</summary>
         /// <param name="layers">How many intermediate layers already have headings between the previous
         /// configured level and this one (<see cref="IntermediateLayerOptions.MaxLayers"/>).</param>
-        private void Process(TaxonomyTreeNode<T> parent, int parentDepth, IReadOnlyList<Entry> entries, int levelIndex, string path, int layers = 0) {
+        /// <param name="keepSingleGroup">Give the level a heading even when every item has the same value:
+        /// set for items whose own value at the level above got no heading but sit beside headings
+        /// that did (a family whose IUCN order is "NOT ASSIGNED", beside the order headings).</param>
+        private void Process(TaxonomyTreeNode<T> parent, int parentDepth, IReadOnlyList<Entry> entries, int levelIndex, string path, int layers = 0, bool keepSingleGroup = false) {
             if (entries.Count == 0) {
                 return;
             }
@@ -209,7 +212,7 @@ internal static class TaxonomyTreeBuilder {
                 return;
             }
 
-            GroupByLevel(parent, parentDepth, ItemsOf(entries), levelIndex, keepSingleGroup: false, path);
+            GroupByLevel(parent, parentDepth, ItemsOf(entries), levelIndex, keepSingleGroup, path);
         }
 
         /// <summary>
@@ -219,13 +222,14 @@ internal static class TaxonomyTreeBuilder {
         /// </summary>
         private void GroupByLevel(TaxonomyTreeNode<T> parent, int parentDepth, IReadOnlyList<T> items, int levelIndex, bool keepSingleGroup, string path) {
             var level = _levels[levelIndex];
-            var groups = CreateGroups(items, level);
+            var (kept, skipped) = SplitSkipped(items, level);
+            var groups = CreateGroups(kept, level);
             if (groups.Count == 0) {
                 Process(parent, parentDepth, ToEntries(items), levelIndex + 1, path);
                 return;
             }
 
-            if (groups.Count == 1 && !level.AlwaysDisplay && !keepSingleGroup) {
+            if (groups.Count == 1 && skipped.Count == 0 && !level.AlwaysDisplay && !keepSingleGroup) {
                 if (groups[0].Lumped) {
                     // Every value was small and went into one "Other" bucket, which gets no heading.
                     // The node remembers the level so each item can still name its family.
@@ -236,13 +240,7 @@ internal static class TaxonomyTreeBuilder {
                 return;
             }
 
-            var skipItems = new List<T>();
             foreach (var group in groups) {
-                if (_options.ShouldSkipGroup != null && _options.ShouldSkipGroup(group.DisplayValue)) {
-                    skipItems.AddRange(group.Items);
-                    continue;
-                }
-
                 if (group.IsResidual && group.Items.Count <= 1) {
                     // A one-item "Other" bucket is not worth a heading; the item sits on the parent.
                     Process(parent, parentDepth, ToEntries(group.Items), levelIndex + 1, path);
@@ -253,9 +251,33 @@ internal static class TaxonomyTreeBuilder {
                 Descend(child, parentDepth + 1, group.DisplayValue, group.Items, levelIndex, Extend(path, group.DisplayValue));
             }
 
-            if (skipItems.Count > 0) {
-                Process(parent, parentDepth, ToEntries(skipItems), levelIndex + 1, path);
+            if (skipped.Count > 0) {
+                Process(parent, parentDepth, ToEntries(skipped), levelIndex + 1, path, keepSingleGroup: groups.Count > 0);
             }
+        }
+
+        /// <summary>
+        /// Takes out the items whose value at the level gets no heading (<c>ShouldSkipGroup</c>: an
+        /// IUCN "NOT ASSIGNED" rank, a force-split taxon) before any lumping, so they never end up in
+        /// an "Other" bucket; they are grouped by the next level under the same parent.
+        /// </summary>
+        private (IReadOnlyList<T> Kept, List<T> Skipped) SplitSkipped(IReadOnlyList<T> items, TaxonomyTreeLevel<T> level) {
+            var skip = _options.ShouldSkipGroup;
+            if (skip is null) {
+                return (items, new List<T>());
+            }
+
+            var kept = new List<T>(items.Count);
+            var skipped = new List<T>();
+            foreach (var item in items) {
+                var value = level.Selector(item)?.Trim();
+                if (!string.IsNullOrEmpty(value) && skip(value)) {
+                    skipped.Add(item);
+                } else {
+                    kept.Add(item);
+                }
+            }
+            return (kept, skipped);
         }
 
         /// <summary>Continues below a value of the level at <paramref name="levelIndex"/>: virtual groups first, then the next level.</summary>
@@ -792,7 +814,7 @@ internal sealed record TaxonomyTreeOptions<T> {
 internal sealed record IntermediateLayerOptions(
     int MinItems = 30,
     int MinAnchors = 6,
-    int MaxGroups = 12,
+    int MaxGroups = 15,
     double MaxDominance = 0.9,
     int MinGroupSize = 5,
     bool LookThroughDominant = true,

@@ -130,7 +130,9 @@ internal sealed class SectionBodyRenderer {
         }
 
         var options = new TaxonomyTreeOptions<IucnSpeciesRecord> {
-            ShouldSkipGroup = _taxonRules != null ? taxon => _taxonRules.ShouldForceSplit(taxon) : null,
+            // An IUCN "NOT ASSIGNED" order or family that rules/iucn-not-assigned.yml does not cover
+            // gets no heading: its species are grouped under the heading above.
+            ShouldSkipGroup = taxon => IucnNotAssignedRules.IsNotAssigned(taxon) || (_taxonRules?.ShouldForceSplit(taxon) ?? false),
             AutoSplit = BuildAutoSplitOptions(tree.AutoSplit, grouping, _placement),
             Intermediate = _placement != null ? BuildIntermediateOptions(tree.IntermediateGroups) : null,
             VirtualGroups = BuildVirtualGroupOptions(_taxonRules),
@@ -370,7 +372,7 @@ internal sealed class SectionBodyRenderer {
         var map = new Dictionary<long, string>();
         foreach (var record in CollectRecords(node)) {
             var value = selector(record);
-            if (!string.IsNullOrWhiteSpace(value)) {
+            if (!string.IsNullOrWhiteSpace(value) && !IucnNotAssignedRules.IsNotAssigned(value)) {
                 map[record.TaxonId] = value;
             }
         }

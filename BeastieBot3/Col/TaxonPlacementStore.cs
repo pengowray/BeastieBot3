@@ -6,6 +6,7 @@ using System.Linq;
 using System.Threading;
 using Microsoft.Data.Sqlite;
 using BeastieBot3.Infrastructure;
+using BeastieBot3.Iucn;
 using BeastieBot3.Taxonomy;
 
 // SQLite file beside the CoL database ("<COL_sqlite>.placement.sqlite") that keeps the Catalogue of
@@ -54,12 +55,15 @@ internal sealed class TaxonPlacementStore : SqliteStore {
         string colDatabasePath,
         bool force,
         IPlacementBuildProgress? progress,
-        CancellationToken cancellationToken) =>
-        TaxonPlacementBuild.Run(iucnDatabasePath, colDatabasePath, new PlacementRunOptions { Force = force }, progress, cancellationToken).Index;
+        CancellationToken cancellationToken,
+        IucnNotAssignedRules? notAssigned = null) =>
+        TaxonPlacementBuild.Run(iucnDatabasePath, colDatabasePath,
+            new PlacementRunOptions { Force = force, NotAssigned = notAssigned ?? IucnNotAssignedRules.None },
+            progress, cancellationToken).Index;
 
     /// <summary>Whether a current placement is stored for these two databases. Read-only; builds nothing.</summary>
-    public static TaxonPlacementStatus Status(string iucnDatabasePath, string colDatabasePath) =>
-        TaxonPlacementBuild.Status(iucnDatabasePath, colDatabasePath);
+    public static TaxonPlacementStatus Status(string iucnDatabasePath, string colDatabasePath, IucnNotAssignedRules? notAssigned = null) =>
+        TaxonPlacementBuild.Status(iucnDatabasePath, colDatabasePath, notAssigned: notAssigned);
 
     public static TaxonPlacementStore Open(string databasePath) {
         var connection = OpenConnection(databasePath);
@@ -171,6 +175,23 @@ internal sealed class TaxonPlacementStore : SqliteStore {
     public static string ColStamp(string colDatabasePath) => FileStamp(colDatabasePath);
 
     public static string IucnStamp(string iucnDatabasePath) => FileStamp(iucnDatabasePath, includeWal: true);
+
+    /// <summary>
+    /// The IUCN file's stamp plus a hash of the rules in rules/iucn-not-assigned.yml, which change
+    /// the IUCN order and family the placement votes over.
+    /// </summary>
+    public static string IucnStamp(string iucnDatabasePath, IucnNotAssignedRules notAssigned) =>
+        notAssigned.IsEmpty
+            ? IucnStamp(iucnDatabasePath)
+            : IucnStamp(iucnDatabasePath) + NotAssignedStampPrefix + notAssigned.Fingerprint;
+
+    internal const string NotAssignedStampPrefix = "|not-assigned:";
+
+    /// <summary>The file part of a stamp from <see cref="IucnStamp(string, IucnNotAssignedRules)"/>.</summary>
+    public static string IucnFileStamp(string stamp) {
+        var at = stamp.IndexOf(NotAssignedStampPrefix, StringComparison.Ordinal);
+        return at < 0 ? stamp : stamp[..at];
+    }
 
     /// <summary>Identifies one IUCN database file at one moment: full path plus its stamp.</summary>
     public static string SourceKey(string iucnDatabasePath, string iucnStamp) =>

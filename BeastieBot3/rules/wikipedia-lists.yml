@@ -41,7 +41,7 @@ defaults:
     enabled: true
     min_items: 30              # The parent heading holds at least 30 species
     min_anchors: 6             # ...in at least 6 groups of the level below (e.g. 6 families)
-    max_groups: 12             # At most 12 CoL groups
+    max_groups: 15             # At most 15 CoL groups
     max_dominance: 0.9         # No CoL group holds more than 90% of the species
     min_group_size: 5          # At least one CoL group has 5 or more species, and 5 or more are outside the largest
     look_through_dominant: true # When one CoL group is over max_dominance, try the CoL groups inside it

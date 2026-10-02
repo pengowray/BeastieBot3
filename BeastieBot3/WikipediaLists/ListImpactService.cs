@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
+using BeastieBot3.Iucn;
 
 namespace BeastieBot3.WikipediaLists;
 
@@ -67,7 +68,8 @@ internal static class ListImpactService {
         var budget = budgetOverride ?? groupLists[0].SizeBudgetMaxEntries;
         var metrics = LoadMetrics(metricsDir);
 
-        using var chart = new IucnChartDataBuilder(databasePath);
+        using var chart = new IucnChartDataBuilder(databasePath,
+            IucnNotAssignedRules.LoadFromRulesDir(Path.GetDirectoryName(configPath)));
         var species = TotalsByCode(chart.BuildChildBreakdown(filters, "kingdom"));
         var render = TotalsByCode(chart.BuildChildBreakdown(filters, "kingdom",
             wherePredicate: TaxonFilterSql.RenderablePredicate()));

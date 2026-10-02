@@ -560,8 +560,8 @@ internal sealed class IntermediateGroupsConfig {
     /// <summary>The taxa must span at least this many values of the level below (e.g. families). Default 6.</summary>
     public int MinAnchors { get; init; } = 6;
 
-    /// <summary>At most this many CoL groups in the layer. Default 12.</summary>
-    public int MaxGroups { get; init; } = 12;
+    /// <summary>At most this many CoL groups in the layer. Default 15.</summary>
+    public int MaxGroups { get; init; } = 15;
 
     /// <summary>No CoL group may hold more than this share of the taxa. Default 0.9.</summary>
     public double MaxDominance { get; init; } = 0.9;

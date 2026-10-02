@@ -5,6 +5,7 @@ using System.IO;
 using System.Linq;
 using BeastieBot3.Configuration;
 using BeastieBot3.Infrastructure;
+using BeastieBot3.Iucn;
 using Spectre.Console;
 using Spectre.Console.Cli;
 using YamlDotNet.Serialization;
@@ -91,7 +92,9 @@ internal sealed class ChartGeneratorCommand : Command<ChartGeneratorCommand.Sett
         AnsiConsole.MarkupLine($"[grey]Groups:[/] {groupsToGenerate.Count}");
         AnsiConsole.WriteLine();
 
-        using var builder = new IucnChartDataBuilder(databasePath);
+        // The chart counts use the same orders and families as the lists (rules/iucn-not-assigned.yml).
+        using var builder = new IucnChartDataBuilder(databasePath,
+            IucnNotAssignedRules.LoadFromRulesDir(Path.GetDirectoryName(chartConfigPath)));
         var version = builder.GetDatasetVersion();
         AnsiConsole.MarkupLine($"[grey]Dataset version:[/] {version}");
         AnsiConsole.WriteLine();

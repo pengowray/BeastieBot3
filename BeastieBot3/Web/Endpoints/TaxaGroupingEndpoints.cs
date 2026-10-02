@@ -7,6 +7,7 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using System.Threading.Tasks;
 using BeastieBot3.Configuration;
+using BeastieBot3.Iucn;
 using BeastieBot3.WikipediaLists;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
@@ -74,7 +75,7 @@ public static class TaxaGroupingEndpoints {
             Dictionary<string, IReadOnlyList<StatusCount>> breakdown;
             try {
                 var dbPath = paths.ResolveIucnDatabasePath(null);
-                using var chart = new IucnChartDataBuilder(dbPath);
+                using var chart = new IucnChartDataBuilder(dbPath, LoadDraftNotAssigned(paths));
                 breakdown = chart.BuildChildBreakdown(def.Filters, rank);
             } catch (Exception ex) {
                 return Results.Json(new { error = "Counting species in the IUCN Red List database: " + ex.Message }, statusCode: 500);
@@ -282,6 +283,13 @@ public static class TaxaGroupingEndpoints {
         LoadDraftGroupsExpanded(paths, out path).Groups;
 
     // The draft of taxa-groups.yml if there is one, otherwise the rules/ file.
+    // The draft rules/iucn-not-assigned.yml when there is one, else the source file, so counts match
+    // what a generation run from the Rules editor would produce.
+    private static IucnNotAssignedRules LoadDraftNotAssigned(PathsService paths) {
+        var path = RulesDrafts.For(RulesPaths.Resolve(paths)).EffectivePath(IucnNotAssignedRules.FileName);
+        return path is null ? IucnNotAssignedRules.None : IucnNotAssignedRules.Load(path);
+    }
+
     private static ExpandedTaxaGroups LoadDraftGroupsExpanded(PathsService paths, out string path) {
         var drafts = RulesDrafts.For(RulesPaths.Resolve(paths));
         path = drafts.EffectivePath("taxa-groups.yml") ?? "taxa-groups.yml";

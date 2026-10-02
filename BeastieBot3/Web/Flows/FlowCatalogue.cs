@@ -700,6 +700,7 @@ public static class FlowCatalogue {
                 new FlowResource { Label = "Taxa groups",    Root = "rules", Path = "taxa-groups.yml",       Kind = "yaml" },
                 new FlowResource { Label = "Chart groups",   Root = "rules", Path = "chart-groups.yml",      Kind = "yaml" },
                 new FlowResource { Label = "Taxon rules",    Root = "rules", Path = "taxon-rules.yml",       Kind = "yaml" },
+                new FlowResource { Label = "Orders and families for NOT ASSIGNED", Root = "rules", Path = "iucn-not-assigned.yml", Kind = "yaml" },
                 new FlowResource { Label = "Rule list (legacy)", Root = "rules", Path = "rules-list.txt",   Kind = "template" },
                 new FlowResource { Label = "Caps rules",     Root = "rules", Path = "caps.txt",              Kind = "template" },
                 new FlowResource { Label = "Templates dir",  Root = "rules", Path = "wikipedia/templates",   Kind = "directory" },

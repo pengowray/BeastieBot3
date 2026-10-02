@@ -399,7 +399,7 @@ internal sealed class WikipediaListGenerator {
                     var v = TaxonFilterSql.NormalizeValue(childRank, selector(r));
                     return v == null || !childValueSet.Contains(v);
                 })
-                .GroupBy(r => selector(r) ?? string.Empty)
+                .GroupBy(r => selector(r) is { } value && !IucnNotAssignedRules.IsNotAssigned(value) ? value : string.Empty)
                 .OrderByDescending(g => g.Count())
                 .ThenBy(g => g.Key, StringComparer.Ordinal);
 

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Text;
+using BeastieBot3.Iucn;
 using BeastieBot3.Taxonomy;
 
 // Markdown report for `col build-placement --report`: which Catalogue of Life groups were placed
@@ -42,7 +43,50 @@ internal static class TaxonPlacementReport {
         WriteFamilyToGenus(sb, output);
         WriteContainmentDrops(sb, output);
         WriteSplits(sb, output);
+        WriteNotAssigned(sb, result.NotAssigned);
         return sb.ToString();
+    }
+
+    // ---- IUCN "NOT ASSIGNED" ----
+
+    private static void WriteNotAssigned(StringBuilder sb, IReadOnlyList<NotAssignedTaxon>? taxa) {
+        if (taxa is null) {
+            return;
+        }
+
+        sb.AppendLine("## IUCN taxa marked NOT ASSIGNED");
+        sb.AppendLine();
+        if (taxa.Count == 0) {
+            sb.AppendLine("No order or family is marked NOT ASSIGNED in this IUCN database.");
+            sb.AppendLine();
+            return;
+        }
+
+        sb.AppendLine($"IUCN gives these taxa no order or family. A rule in `rules/{IucnNotAssignedRules.FileName}` gives one in the lists; a taxon with no rule gets no heading at that rank, and its species are listed under the heading above. The Catalogue of Life column shows the CoL order or family that most of the taxon's matched species are in. The last column is a rule in the file's format, for a taxon with no rule, to copy into the file if the CoL placement is right.");
+        sb.AppendLine();
+        sb.AppendLine("| IUCN has no | IUCN class | IUCN order | IUCN family | Genus | Species | Rule gives | Catalogue of Life | Rule to copy |");
+        sb.AppendLine("|---|---|---|---|---|---:|---|---|---|");
+        foreach (var t in taxa) {
+            var col = t.ColValue is null
+                ? (t.Matched == 0 ? "not matched" : $"no {t.Rank}")
+                : $"{t.ColValue} ({N(t.ColSpecies)} of {N(t.Matched)})";
+            var suggestion = t.RuleValue is null && t.ColValue is not null ? Suggestion(t) : null;
+            sb.AppendLine($"| {t.Rank} | {Title(t.ClassName)} | {Title(t.OrderName)} | {Title(t.FamilyName)} | {(t.GenusName is null ? "" : $"*{t.GenusName}*")} | {N(t.Species)} | {(t.RuleValue is null ? "no rule" : Title(t.RuleValue))} | {col} | {(suggestion is null ? "" : $"`{suggestion}`")} |");
+        }
+        sb.AppendLine();
+    }
+
+    // A rule line in the file's format. Null when the rule would need a value IUCN also leaves unassigned.
+    private static string? Suggestion(NotAssignedTaxon t) {
+        var colValue = t.ColValue!.ToUpperInvariant();
+        if (t.Rank == "order") {
+            return IucnNotAssignedRules.IsNotAssigned(t.FamilyName) || IucnNotAssignedRules.IsNotAssigned(t.ClassName)
+                ? null
+                : $"- {{ class: {t.ClassName}, family: {t.FamilyName}, order: {colValue} }}";
+        }
+        return IucnNotAssignedRules.IsNotAssigned(t.OrderName) || IucnNotAssignedRules.IsNotAssigned(t.ClassName)
+            ? null
+            : $"- {{ class: {t.ClassName}, order: {t.OrderName}, genus: {t.GenusName}, family: {colValue} }}";
     }
 
     // ---- summary ----

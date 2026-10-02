@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
+using BeastieBot3.Iucn;
 using Microsoft.Data.Sqlite;
 
 // Queries the IUCN SQLite database for aggregate species counts per Red List
@@ -84,7 +85,9 @@ internal sealed record StatusCount(string Code, string Label, int Count);
 internal sealed class IucnChartDataBuilder : IDisposable {
     private readonly SqliteConnection _connection;
 
-    public IucnChartDataBuilder(string databasePath) {
+    /// <param name="notAssigned">Rules from rules/iucn-not-assigned.yml applied to every query on
+    /// this connection; null for IUCN's values as stored.</param>
+    public IucnChartDataBuilder(string databasePath, IucnNotAssignedRules? notAssigned = null) {
         if (string.IsNullOrWhiteSpace(databasePath))
             throw new ArgumentException("Database path was not provided.", nameof(databasePath));
 
@@ -92,12 +95,10 @@ internal sealed class IucnChartDataBuilder : IDisposable {
         if (!File.Exists(fullPath))
             throw new FileNotFoundException($"IUCN SQLite database not found: {fullPath}", fullPath);
 
-        var builder = new SqliteConnectionStringBuilder {
-            DataSource = fullPath,
-            Mode = SqliteOpenMode.ReadOnly
-        };
-        _connection = new SqliteConnection(builder.ToString());
+        // Pooling is off so the temporary view from the rules never outlives this connection.
+        _connection = new SqliteConnection(IucnNotAssignedRules.ConnectionString(fullPath));
         _connection.Open();
+        notAssigned?.ApplyTo(_connection);
     }
 
     public string GetDatasetVersion() {

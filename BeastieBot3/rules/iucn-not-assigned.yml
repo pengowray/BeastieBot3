@@ -1,0 +1,34 @@
+# Orders and families for taxa that IUCN marks "NOT ASSIGNED".
+#
+# The IUCN data gives some taxa no order or family: the value is the text "NOT ASSIGNED". Each rule
+# below gives such a taxon an order or a family in the generated Wikipedia lists. The rule decides
+# the section heading, the list page the species are on, and the counts in intros, summary tables,
+# charts and the Catalogue of Life (CoL) placement. The IUCN database is not changed, and the audit
+# site still reports IUCN's own values.
+#
+# A "NOT ASSIGNED" order or family that no rule covers gets no heading: its species are listed under
+# the heading above it. `col build-placement --report` lists every "NOT ASSIGNED" taxon, the rule
+# that covers it, and where Catalogue of Life places it, as a starting point for a new rule.
+#
+# Values are matched without regard to case. After editing this file, `wikipedia generate-lists`
+# rebuilds the CoL placement (about 5 seconds) before generating.
+
+# Families whose IUCN order is "NOT ASSIGNED": the order to use.
+orders:
+  # Catalogue of Life 26.7 places these six families in order Perciformes, suborder Percoidei.
+  # Placing them in Perciformes also lets the Percoidei heading appear in the Perciformes lists:
+  # without these rules, 350 of the species CoL puts in Percoidei are outside IUCN's Perciformes,
+  # and a CoL group is only used when one IUCN taxon holds at least 90% of its species.
+  - { class: ACTINOPTERYGII, family: AMBASSIDAE, order: PERCIFORMES }
+  - { class: ACTINOPTERYGII, family: GRAMMATIDAE, order: PERCIFORMES }
+  - { class: ACTINOPTERYGII, family: OPISTOGNATHIDAE, order: PERCIFORMES }
+  - { class: ACTINOPTERYGII, family: PLESIOPIDAE, order: PERCIFORMES }
+  - { class: ACTINOPTERYGII, family: POLYCENTRIDAE, order: PERCIFORMES }
+  - { class: ACTINOPTERYGII, family: PSEUDOCHROMIDAE, order: PERCIFORMES }
+  # Catalogue of Life 26.7 places these two in order Perciformes with no suborder.
+  - { class: ACTINOPTERYGII, family: EMBIOTOCIDAE, order: PERCIFORMES }
+  - { class: ACTINOPTERYGII, family: POMACENTRIDAE, order: PERCIFORMES }
+
+# Genera whose IUCN family is "NOT ASSIGNED": the family to use.
+# Example: - { class: ANTHOZOA, order: SCLERACTINIA, genus: Pachyseris, family: PACHYSERIDAE }
+families: []

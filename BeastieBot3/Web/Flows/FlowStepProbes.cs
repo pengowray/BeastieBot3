@@ -572,6 +572,8 @@ public static class FlowStepProbes {
                 $"Out of date: the IUCN database changed after the placement was built on {built}. {Rebuilds}"),
             "col-changed" => new FlowProbeResult("todo",
                 $"Out of date: the CoL database changed after the placement was built on {built}. {Rebuilds}"),
+            "not-assigned-changed" => new FlowProbeResult("todo",
+                $"Out of date: rules/iucn-not-assigned.yml changed after the placement was built on {built}. {Rebuilds}"),
             "rules-changed" or "thresholds-changed" => new FlowProbeResult("todo",
                 $"Out of date: the placement was built on {built} by an older version of BeastieBot3. {Rebuilds}"),
             _ => new FlowProbeResult("todo",

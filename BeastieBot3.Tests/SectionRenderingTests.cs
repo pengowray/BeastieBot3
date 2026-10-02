@@ -141,4 +141,26 @@ public sealed class SectionRenderingTests : IDisposable {
         Assert.Contains("Felidae", felid);
         Assert.DoesNotContain(lines, l => l.Contains("Other Carnivora", StringComparison.Ordinal));
     }
+
+    [Fact]
+    public void NotAssignedOrderAndFamily_GetNoHeading_AndAreNotLumpedIntoOther() {
+        // IUCN's "NOT ASSIGNED" values with no rule: no "Order Not assigned" or "Family Not assigned"
+        // heading, and the species are not merged into an "Other" bucket with real small families.
+        var records = Family("ACTINOPTERYGII", "NOT ASSIGNED", "POMACENTRIDAE", 6)
+            .Concat(Family("ACTINOPTERYGII", "CYPRINIFORMES", "CYPRINIDAE", 6))
+            .Concat(Family("ACTINOPTERYGII", "CYPRINIFORMES", "NOT ASSIGNED", 2))
+            .Concat(Family("ACTINOPTERYGII", "CYPRINIFORMES", "BALITORIDAE", 1))
+            .Concat(Family("ACTINOPTERYGII", "CYPRINIFORMES", "COBITIDAE", 1))
+            .ToList();
+        var display = new DisplayPreferences { ListingStyle = ListingStyle.ScientificNameFocus, IncludeFamilyInOtherBucket = true };
+
+        var (body, _) = Renderer(placement: null, rules: null).BuildSectionBody(records, DefaultGrouping(), display, "LC");
+        var lines = Lines(body);
+
+        Assert.True(lines.Contains("=== Family Pomacentridae ==="), body);
+        Assert.DoesNotContain(lines, l => l.StartsWith("=", StringComparison.Ordinal) && l.Contains("assigned", StringComparison.OrdinalIgnoreCase));
+        Assert.Contains("=== Family Pomacentridae ===", lines);
+        Assert.Contains(lines, l => l.Contains("Not assigned species1", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(lines, l => l.Contains("Family: Not", StringComparison.OrdinalIgnoreCase));
+    }
 }
