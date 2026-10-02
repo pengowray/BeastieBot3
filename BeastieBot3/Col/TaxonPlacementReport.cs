@@ -80,9 +80,9 @@ internal static class TaxonPlacementReport {
             yield return (label, N(m.ByKind.GetValueOrDefault(kind)), true);
         }
         yield return ("Not found in CoL", N(m.ByKind.GetValueOrDefault(ColMatchKind.NotFound)), false);
-        yield return ("Found, but with no CoL classification (its parent row is missing from the CoL database)", N(m.NoClassification), false);
-        yield return ("Found, with part of the CoL classification (a row above is missing from the CoL database)", N(m.CutShort), false);
-        yield return ("Found, with a CoL classification: these species vote", Share(m.Matched), false);
+        yield return ("Found, but no CoL classification (parent row missing)", N(m.NoClassification), false);
+        yield return ("Found, with a CoL classification (these species vote)", Share(m.Matched), false);
+        yield return ("of which the classification is incomplete (a higher CoL row is missing)", N(m.CutShort), true);
     }
 
     // ---- class to order, order to family: one tree per IUCN parent ----

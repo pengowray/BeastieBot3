@@ -105,9 +105,14 @@ internal sealed class ColBuildPlacementCommand : Command<ColBuildPlacementComman
 
         PlacementRunResult result = null!;
         var options = new PlacementRunOptions { Force = true, WantDiagnostics = settings.Report };
-        ProgressConsole.Run("Reading IUCN species", 0, handle => {
-            result = TaxonPlacementBuild.Run(iucnPath, colPath, options, new ProgressAdapter(handle), cancellationToken);
-        });
+        try {
+            ProgressConsole.Run("Reading IUCN species", 0, handle => {
+                result = TaxonPlacementBuild.Run(iucnPath, colPath, options, new ProgressAdapter(handle), cancellationToken);
+            });
+        } catch (InvalidOperationException ex) {
+            AnsiConsole.MarkupLine($"[red]{Markup.Escape(ex.Message)}[/]");
+            return -1;
+        }
 
         AnsiConsole.MarkupLine($"[green]Built the placement in {Elapsed(result.Elapsed)}.[/]");
         AnsiConsole.WriteLine();
@@ -134,7 +139,7 @@ internal sealed class ColBuildPlacementCommand : Command<ColBuildPlacementComman
         var built = status.Source is { } s ? s.BuiltAtUtc.ToLocalTime().ToString("yyyy-MM-dd HH:mm", CultureInfo.InvariantCulture) : null;
         return status.State switch {
             PlacementState.Current =>
-                $"up to date, built {built} ({status.Source!.Species:N0} IUCN species, {status.Source.Matched:N0} matched to Catalogue of Life)",
+                $"up to date, built {built} ({status.Source!.Species:N0} IUCN species, {status.Source.Matched:N0} with a Catalogue of Life classification)",
             PlacementState.NoFile or PlacementState.NotBuilt => "not built yet for this IUCN database",
             PlacementState.IucnChanged => $"out of date: the IUCN database has changed since the build on {built}",
             PlacementState.ColChanged => $"out of date: the Catalogue of Life database has changed since the build on {built}",
