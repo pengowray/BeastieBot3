@@ -279,3 +279,23 @@ public sealed class SearchCancellationTests(SiteFactory factory) : IClassFixture
         Assert.Equal(1L, command.ExecuteScalar());
     }
 }
+
+public sealed class SiteUrlsTests {
+    private static HttpRequest Request(string scheme, string host) {
+        var context = new DefaultHttpContext();
+        context.Request.Scheme = scheme;
+        context.Request.Host = new HostString(host);
+        return context.Request;
+    }
+
+    [Theory]
+    [InlineData(null, "https", "SPECIES.Example.org", "https://species.example.org/species/1")]
+    [InlineData(null, "https", "species.example.org:443", "https://species.example.org/species/1")]
+    [InlineData(null, "http", "localhost:5080", "http://localhost:5080/species/1")]
+    [InlineData("https://Species.Example.org", "http", "127.0.0.1:5080", "https://species.example.org/species/1")]
+    [InlineData("https://species.example.org/", "http", "x", "https://species.example.org/species/1")]
+    [InlineData("not a url", "http", "Host.Example", "http://host.example/species/1")]
+    [InlineData("ftp://species.example.org", "http", "host.example", "http://host.example/species/1")]
+    public void Absolute(string? baseUrl, string scheme, string host, string expected) =>
+        Assert.Equal(expected, SiteUrls.Absolute(baseUrl, Request(scheme, host), "/species/1"));
+}

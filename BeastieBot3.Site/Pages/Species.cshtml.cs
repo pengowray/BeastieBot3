@@ -7,6 +7,7 @@ using BeastieBot3.Site.Web;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
 using Microsoft.AspNetCore.OutputCaching;
+using Microsoft.Extensions.Options;
 
 namespace BeastieBot3.Site.Pages;
 
@@ -26,10 +27,12 @@ public sealed class SpeciesModel : PageModel {
 
     private readonly SiteDatabase _db;
     private readonly SiteQueries _queries;
+    private readonly SiteOptions _options;
 
-    public SpeciesModel(SiteDatabase db, SiteQueries queries) {
+    public SpeciesModel(SiteDatabase db, SiteQueries queries, IOptions<SiteOptions> options) {
         _db = db;
         _queries = queries;
+        _options = options.Value;
     }
 
     public long RequestedTaxonId { get; private set; }
@@ -88,7 +91,7 @@ public sealed class SpeciesModel : PageModel {
         Children = _queries.GetChildren(Taxon.TaxonId).Select(c => new TaxonListItem(c)).ToList();
         LoadArrival(q);
         DataDateRange = ReadDataDateRange(snapshot);
-        ViewData["Canonical"] = $"{Request.Scheme}://{Request.Host}/species/{Taxon.TaxonId}";
+        ViewData["Canonical"] = SiteUrls.Absolute(_options.BaseUrl, Request, $"/species/{Taxon.TaxonId}");
         return Page();
     }
 

@@ -37,6 +37,16 @@ public sealed class BrokenSiteFactory : SiteFactory {
     protected override string DatabasePath => Db.Value;
 }
 
+/// Site:BaseUrl set, as in production.
+public sealed class BaseUrlSiteFactory : SiteFactory {
+    public const string BaseUrl = "https://species.example.org/";
+
+    protected override void ConfigureWebHost(IWebHostBuilder builder) {
+        base.ConfigureWebHost(builder);
+        builder.UseSetting("Site:BaseUrl", BaseUrl);
+    }
+}
+
 public sealed class RateLimitedSiteFactory : SiteFactory {
     public const int Limit = 3;
     protected override int PagesPerMinute => Limit;

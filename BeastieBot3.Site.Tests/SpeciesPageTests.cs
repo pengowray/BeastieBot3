@@ -50,6 +50,21 @@ public sealed class SpeciesPageTests(SiteFactory factory) : IClassFixture<SiteFa
     }
 
     [Fact]
+    public async Task CanonicalHostIsLowerCaseWhateverTheFirstVisitorSent() {
+        async Task<string> Get(string host) {
+            using var request = new HttpRequestMessage(HttpMethod.Get, $"/species/{FixtureDb.Koala}");
+            request.Headers.Host = host;
+            var response = await _client.SendAsync(request);
+            return await response.Content.ReadAsStringAsync();
+        }
+        var expected = $"<link rel=\"canonical\" href=\"http://species.example.org/species/{FixtureDb.Koala}\">";
+        Assert.Contains(expected, await Get("SpEcIeS.Example.ORG"));
+        // The second request is answered from the output cache, which ignores the host's case.
+        Assert.Contains(expected, await Get("species.example.org"));
+        Assert.Contains($"<link rel=\"canonical\" href=\"http://species.example.org:8080/species/{FixtureDb.Koala}\">", await Get("Species.Example.org:8080"));
+    }
+
+    [Fact]
     public async Task DefaultWikitext() {
         var html = await Page();
         var cite = Html.Textarea(html, "wikitext-cite");
@@ -293,5 +308,15 @@ public sealed class SpeciesPageTests(SiteFactory factory) : IClassFixture<SiteFa
         var text = Html.Text(await response.Content.ReadAsStringAsync());
         Assert.Contains("Page not found", text);
         Assert.Contains("Check the address, or search for a taxon.", text);
+    }
+}
+
+public sealed class BaseUrlTests(BaseUrlSiteFactory factory) : IClassFixture<BaseUrlSiteFactory> {
+    [Fact]
+    public async Task CanonicalUsesTheConfiguredAddress() {
+        using var request = new HttpRequestMessage(HttpMethod.Get, $"/species/{FixtureDb.PolarBear}");
+        request.Headers.Host = "other.example:8080";
+        var html = await (await factory.Client().SendAsync(request)).Content.ReadAsStringAsync();
+        Assert.Contains($"<link rel=\"canonical\" href=\"https://species.example.org/species/{FixtureDb.PolarBear}\">", html);
     }
 }

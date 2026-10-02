@@ -17,6 +17,10 @@ public sealed class SiteOptions {
     /// Optional link to the site's source code, shown in the footer.
     public string? SourceUrl { get; set; }
 
+    /// The site's public address ("https://species.example.org"), used for canonical links. When it
+    /// is not set, the request's scheme and host are used, with the host in lower case.
+    public string? BaseUrl { get; set; }
+
     public RateLimitOptions RateLimits { get; set; } = new();
 }
 
