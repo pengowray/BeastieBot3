@@ -476,6 +476,7 @@ groups:
   chromista:
     name: "Chromista"
     adjective: "chromist"
+    keep_name_case: true  # a kingdom name with no common English form: "List of Chromista by conservation status"
     display:
       listing_style: ScientificNameFocus
     filters:

@@ -204,9 +204,9 @@ presets:
 
   all-status:
     name: "By conservation status"
-    description_template: "All {taxa_name} assessments, grouped by IUCN category."
-    title_template: "List of {taxa_name} by conservation status"
-    output_template: "List_of_{taxa_name}_by_conservation_status.wikitext"
+    description_template: "All {taxa_name_lower} assessments, grouped by IUCN category."
+    title_template: "List of {taxa_name_lower} by conservation status"
+    output_template: "List_of_{taxa_slug}_by_conservation_status.wikitext"
     templates:
       header: taxonomy-status-summary
     display:
