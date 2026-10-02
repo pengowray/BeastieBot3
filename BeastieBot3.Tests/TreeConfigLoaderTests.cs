@@ -22,9 +22,11 @@ public sealed class TreeConfigLoaderTests : IDisposable {
         Assert.Equal(30, groups.MinItems);
         Assert.Equal(6, groups.MinAnchors);
         Assert.Equal(12, groups.MaxGroups);
-        Assert.Equal(0.85, groups.MaxDominance);
+        Assert.Equal(0.9, groups.MaxDominance);
         Assert.Equal(5, groups.MinGroupSize);
-        Assert.False(groups.LookThroughDominant);
+        Assert.True(groups.LookThroughDominant);
+        Assert.Equal(1, groups.MaxLayers);
+        Assert.Equal(0.8, groups.MaxHeadingShare);
     }
 
     [Fact]

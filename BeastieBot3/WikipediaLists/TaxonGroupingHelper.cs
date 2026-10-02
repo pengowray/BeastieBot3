@@ -203,7 +203,7 @@ internal static class TaxonGroupingHelper {
 
         return new IntermediateLayerOptions(
             config.MinItems, config.MinAnchors, config.MaxGroups, config.MaxDominance, config.MinGroupSize,
-            config.LookThroughDominant);
+            config.LookThroughDominant, config.MaxLayers, config.MaxHeadingShare);
     }
 
     /// <summary>
@@ -256,7 +256,8 @@ internal static class TaxonGroupingHelper {
             MaxGroups: config.MaxGroups,
             MaxDepth: config.MaxDepth,
             MinMeaningfulGroups: config.MinMeaningfulGroups,
-            RejectUnknownGroups: config.RejectUnknownGroups);
+            RejectUnknownGroups: config.RejectUnknownGroups,
+            MaxDominance: config.MaxDominance);
     }
 
     /// <summary>

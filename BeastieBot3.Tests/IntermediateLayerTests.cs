@@ -75,8 +75,8 @@ public class IntermediateLayerTests {
         records.AddRange(Family(Reptilia, Squamata, "VIPERIDAE", 10));
         records.AddRange(Family(Reptilia, Squamata, "NATRICIDAE", 10));
         records.AddRange(Family(Reptilia, Squamata, "DIPSADIDAE", 10));
-        records.AddRange(Family(Reptilia, Squamata, "GEKKONIDAE", 5));
-        records.AddRange(Family(Reptilia, Squamata, "PHYLLODACTYLIDAE", 5));
+        records.AddRange(Family(Reptilia, Squamata, "GEKKONIDAE", 3));
+        records.AddRange(Family(Reptilia, Squamata, "PHYLLODACTYLIDAE", 2));
         var placement = new TaxonPlacementIndex(new[] {
             OrderToFamily(Reptilia, Squamata, "COLUBRIDAE", Suborder("Serpentes")),
             OrderToFamily(Reptilia, Squamata, "ELAPIDAE", Suborder("Serpentes")),
@@ -93,7 +93,7 @@ public class IntermediateLayerTests {
         Assert.All(root.Children, c => Assert.Equal(TreeNodeKind.Level, c.Kind));
         var decision = Assert.Single(diagnostics.Layers);
         Assert.Equal("rejected:dominant_group", decision.Outcome);
-        Assert.Equal(0.9, decision.LargestShare);
+        Assert.Equal(0.947, decision.LargestShare);
     }
 
     // Sharks and rays share subclass Neoselachii; only the chimaeras lie outside it.
@@ -111,11 +111,12 @@ public class IntermediateLayerTests {
     }
 
     [Fact]
-    public void DominantNode_BlocksTheLayerByDefault() {
+    public void DominantNode_BlocksTheLayer_WithoutLookThrough() {
         var (records, placement) = SharksAndRays();
         var diagnostics = new AutoSplitDiagnosticCollector();
 
-        var root = BuildTree(records, placement, diagnostics: diagnostics);
+        var root = BuildTree(records, placement, diagnostics: diagnostics,
+            layers: new IntermediateLayerOptions(LookThroughDominant: false));
 
         Assert.All(root.Children, c => Assert.Equal("order", c.Key));
         Assert.Equal("rejected:dominant_group", Assert.Single(diagnostics.Layers).Outcome);
@@ -153,10 +154,21 @@ public class IntermediateLayerTests {
     }
 
     [Fact]
-    public void Cetacea_IsShownByName_ThenItsSuborders() {
+    public void Cetacea_IsShownByName_WithFamiliesBelowIt_ByDefault() {
+        // One layer of CoL headings between order and family: Cetacea, not Cetacea and its suborders.
+        var root = BuildTree(ArtiodactylaRecords(), ArtiodactylaPlacement());
+
+        var cetacea = Child(Child(root, Artiodactyla), "Cetacea");
+        Assert.False(cetacea.ShowRank);
+        Assert.All(cetacea.Children, c => Assert.Equal("family", c.Key));
+    }
+
+    [Fact]
+    public void Cetacea_IsShownByName_ThenItsSuborders_WithTwoLayers() {
         var diagnostics = new AutoSplitDiagnosticCollector();
 
-        var root = BuildTree(ArtiodactylaRecords(), ArtiodactylaPlacement(), diagnostics: diagnostics);
+        var root = BuildTree(ArtiodactylaRecords(), ArtiodactylaPlacement(), diagnostics: diagnostics,
+            layers: new IntermediateLayerOptions(MaxLayers: 2));
 
         var artiodactyla = Child(root, Artiodactyla);
         Assert.Equal(
@@ -193,7 +205,8 @@ public class IntermediateLayerTests {
     public void StartingAtH4_ANestedLayerThatWouldPassH6_IsNotShown() {
         var diagnostics = new AutoSplitDiagnosticCollector();
 
-        var root = BuildTree(ArtiodactylaRecords(), ArtiodactylaPlacement(), startHeading: 4, diagnostics: diagnostics);
+        var root = BuildTree(ArtiodactylaRecords(), ArtiodactylaPlacement(), startHeading: 4, diagnostics: diagnostics,
+            layers: new IntermediateLayerOptions(MaxLayers: 2));
 
         Assert.True(root.Height <= 3);
         var cetacea = Child(Child(root, Artiodactyla), "Cetacea");

@@ -83,7 +83,8 @@ internal static class TaxonomyTreeBuilder {
     /// <summary>
     /// Groups items by the level's selector. Items with a blank value go to the level's unknown
     /// bucket. When <c>MinItems</c> &gt; 1, groups below that size are lumped into an "Other" bucket,
-    /// unless there are fewer than <c>MinGroupsForOther</c> of them. Named groups are sorted
+    /// unless there are fewer than <c>MinGroupsForOther</c> of them and no "Other" bucket exists
+    /// already (taxa with no value at the rank go to it). Named groups are sorted
     /// alphabetically and residual buckets come last.
     /// </summary>
     private static List<TreeGroup<T>> CreateGroups<T>(IEnumerable<T> items, TaxonomyTreeLevel<T> level) {
@@ -108,9 +109,10 @@ internal static class TaxonomyTreeBuilder {
 
         if (level.MinItems > 1) {
             var smallGroups = buckets.Values.Where(g => g.Items.Count < level.MinItems).ToList();
-            var enoughToLump = level.MinGroupsForOther <= 0 || smallGroups.Count >= level.MinGroupsForOther;
+            var otherLabel = level.OtherLabel ?? DefaultOtherLabel(level.Label);
+            var otherExists = buckets.TryGetValue(otherLabel, out var existingOther) && existingOther.IsResidual;
+            var enoughToLump = otherExists || level.MinGroupsForOther <= 0 || smallGroups.Count >= level.MinGroupsForOther;
             if (smallGroups.Count > 0 && enoughToLump) {
-                var otherLabel = level.OtherLabel ?? DefaultOtherLabel(level.Label);
                 foreach (var small in smallGroups) {
                     buckets.Remove(small.DisplayValue);
                 }
@@ -176,7 +178,9 @@ internal static class TaxonomyTreeBuilder {
         private int LevelsFrom(int levelIndex) => Math.Max(0, _levels.Count - levelIndex);
 
         /// <summary>Groups <paramref name="entries"/> under <paramref name="parent"/> by the level at <paramref name="levelIndex"/>.</summary>
-        private void Process(TaxonomyTreeNode<T> parent, int parentDepth, IReadOnlyList<Entry> entries, int levelIndex, string path) {
+        /// <param name="layers">How many intermediate layers already have headings between the previous
+        /// configured level and this one (<see cref="IntermediateLayerOptions.MaxLayers"/>).</param>
+        private void Process(TaxonomyTreeNode<T> parent, int parentDepth, IReadOnlyList<Entry> entries, int levelIndex, string path, int layers = 0) {
             if (entries.Count == 0) {
                 return;
             }
@@ -193,8 +197,9 @@ internal static class TaxonomyTreeBuilder {
             }
 
             var level = _levels[levelIndex];
-            if (level.Intermediates != null && _options.Intermediate != null
-                && TryLayer(parent, parentDepth, entries, levelIndex, path)) {
+            if (level.Intermediates != null && _options.Intermediate is { } intermediate
+                && layers < intermediate.MaxLayers
+                && TryLayer(parent, parentDepth, entries, levelIndex, path, layers)) {
                 return;
             }
 
@@ -329,7 +334,7 @@ internal static class TaxonomyTreeBuilder {
         /// then Odontoceti / Mysticeti); items with no node are grouped by the level beside them.
         /// Returns false when the layer is not shown, so the caller groups by the level as usual.
         /// </summary>
-        private bool TryLayer(TaxonomyTreeNode<T> parent, int parentDepth, IReadOnlyList<Entry> entries, int levelIndex, string path) {
+        private bool TryLayer(TaxonomyTreeNode<T> parent, int parentDepth, IReadOnlyList<Entry> entries, int levelIndex, string path, int layers) {
             var level = _levels[levelIndex];
             var options = _options.Intermediate!;
             var pathOf = level.Intermediates!;
@@ -372,14 +377,16 @@ internal static class TaxonomyTreeBuilder {
                     outcome = "rejected:few_items";
                 } else if (anchors < options.MinAnchors) {
                     outcome = "rejected:few_anchors";
-                } else if (headings >= anchors) {
-                    outcome = "rejected:no_fewer_headings";
+                } else if (headings > options.MaxHeadingShare * anchors) {
+                    outcome = "rejected:headings_not_reduced";
                 } else if (named.Count > options.MaxGroups) {
                     outcome = "rejected:too_many_groups";
                 } else if (largestShare > options.MaxDominance) {
                     outcome = "rejected:dominant_group";
                 } else if (largest < options.MinGroupSize) {
                     outcome = "rejected:groups_too_small";
+                } else if (itemCount - largest < options.MinGroupSize) {
+                    outcome = "rejected:little_outside_largest";
                 } else if (parentDepth + 1 + LevelsFrom(levelIndex) > _budget) {
                     outcome = "rejected:heading_depth";
                 } else {
@@ -423,7 +430,7 @@ internal static class TaxonomyTreeBuilder {
                     var child = parent.AddChild(
                         node.ShowRank ? node.ColRank : null, node.Name, TreeNodeKind.Intermediate, node.ColRank, showRank: node.ShowRank);
                     var deeper = group.Entries.Select(e => e with { Depth = e.Depth + 1 }).ToList();
-                    Process(child, parentDepth + 1, deeper, levelIndex, Extend(path, node.Name));
+                    Process(child, parentDepth + 1, deeper, levelIndex, Extend(path, node.Name), layers + 1);
                 }
 
                 if (loose.Count > 0) {
@@ -485,6 +492,7 @@ internal static class TaxonomyTreeBuilder {
         ///         exception at 4+ groups); higher ranks need one group at half that (at least 5).</item>
         ///   <item>Other fraction: at most <c>MaxOtherFraction</c> of the items in residual buckets.</item>
         ///   <item>Max groups: at most <c>MaxGroups</c> buckets.</item>
+        ///   <item>Dominance: no named group holds more than <c>MaxDominance</c> of the items.</item>
         /// </list>
         /// Each call records exactly one closing decision: "accepted" for the rank used, or a
         /// "(all)" rejection, so attempts and acceptances can be counted from the decisions.
@@ -550,6 +558,16 @@ internal static class TaxonomyTreeBuilder {
                 if (groups.Count > autoSplit.MaxGroups) {
                     Record(new AutoSplitDecision(path, items.Count, rank, "rejected:too_many_groups",
                         GroupCount: groups.Count, MeaningfulGroups: meaningful.Count, OtherFraction: otherFraction));
+                    continue;
+                }
+
+                // A split where one group keeps nearly everything (Myrtoideae: 1,411 of Myrtaceae's
+                // 1,504) adds headings without dividing the list; the next rank may divide it better.
+                var largestShare = items.Count > 0 ? (double)meaningful.Max(g => g.Items.Count) / items.Count : 0;
+                if (largestShare > autoSplit.MaxDominance) {
+                    Record(new AutoSplitDecision(path, items.Count, rank, "rejected:dominant_group",
+                        GroupCount: groups.Count, MeaningfulGroups: meaningful.Count, OtherFraction: otherFraction,
+                        LargestGroup: meaningful.Max(g => g.Items.Count)));
                     continue;
                 }
 
@@ -731,17 +749,24 @@ internal sealed record TaxonomyTreeOptions<T> {
 /// <param name="MinAnchors">D must be at least this.</param>
 /// <param name="MaxGroups">At most this many named groups.</param>
 /// <param name="MaxDominance">No named group may hold more than this share of the N items.</param>
-/// <param name="MinGroupSize">At least one named group must have this many items.</param>
+/// <param name="MinGroupSize">At least one named group must have this many items, and so must the
+/// items outside the largest named group.</param>
 /// <param name="LookThroughDominant">When a group is rejected for holding more than
 /// <paramref name="MaxDominance"/>, read its items one node further down and try again, instead of
 /// giving up on the layer.</param>
+/// <param name="MaxLayers">At most this many layers get headings between two configured levels
+/// (1: order Testudines gets suborder headings, not suborder and superfamily headings).</param>
+/// <param name="MaxHeadingShare">F may be at most this share of D, so a layer has to remove a real
+/// number of headings at that point, not one or two of fifty.</param>
 internal sealed record IntermediateLayerOptions(
     int MinItems = 30,
     int MinAnchors = 6,
     int MaxGroups = 12,
-    double MaxDominance = 0.85,
+    double MaxDominance = 0.9,
     int MinGroupSize = 5,
-    bool LookThroughDominant = false);
+    bool LookThroughDominant = true,
+    int MaxLayers = 1,
+    double MaxHeadingShare = 0.8);
 
 /// <summary>The curated group an item belongs to.</summary>
 /// <param name="Group">The group name.</param>
@@ -779,7 +804,9 @@ internal sealed record AutoSplitOptions<T>(
     /// <summary>Minimum number of meaningful (non-Other/Unknown) groups required. Default 3.</summary>
     int MinMeaningfulGroups = 3,
     /// <summary>When true, reject splits that produce "Unknown" groups. Default true.</summary>
-    bool RejectUnknownGroups = true);
+    bool RejectUnknownGroups = true,
+    /// <summary>Reject a split where one named group holds more than this share of the items. Default 0.85.</summary>
+    double MaxDominance = 0.85);
 
 /// <summary>Plural rank names for headings such as "Other families".</summary>
 internal static class RankNames {

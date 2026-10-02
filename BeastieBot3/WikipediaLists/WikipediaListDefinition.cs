@@ -538,6 +538,12 @@ internal sealed class AutoSplitConfig {
     /// Unknown groupings create confusion for editors. Default is true.
     /// </summary>
     public bool RejectUnknownGroups { get; init; } = true;
+
+    /// <summary>
+    /// Reject a split where one group holds more than this share of the taxa, and try the next rank.
+    /// Default 0.85.
+    /// </summary>
+    public double MaxDominance { get; init; } = 0.85;
 }
 
 /// <summary>
@@ -557,16 +563,28 @@ internal sealed class IntermediateGroupsConfig {
     /// <summary>At most this many CoL groups in the layer. Default 12.</summary>
     public int MaxGroups { get; init; } = 12;
 
-    /// <summary>No CoL group may hold more than this share of the taxa. Default 0.85.</summary>
-    public double MaxDominance { get; init; } = 0.85;
+    /// <summary>No CoL group may hold more than this share of the taxa. Default 0.9.</summary>
+    public double MaxDominance { get; init; } = 0.9;
 
-    /// <summary>At least one CoL group must hold this many taxa. Default 5.</summary>
+    /// <summary>
+    /// At least one CoL group must hold this many taxa, and so must the taxa outside the largest
+    /// CoL group. Default 5.
+    /// </summary>
     public int MinGroupSize { get; init; } = 5;
 
     /// <summary>
     /// When one CoL group holds more than <see cref="MaxDominance"/> of the taxa, read its taxa one
     /// node further down and try again (subclass Neoselachii, then infraclasses Batoidea and
-    /// Selachii). Default false.
+    /// Selachii). Default true.
     /// </summary>
-    public bool LookThroughDominant { get; init; }
+    public bool LookThroughDominant { get; init; } = true;
+
+    /// <summary>At most this many layers of CoL headings between two grouping levels. Default 1.</summary>
+    public int MaxLayers { get; init; } = 1;
+
+    /// <summary>
+    /// The headings left after the layer may be at most this share of the headings without it
+    /// (e.g. 3 suborders instead of 30 families passes; 47 instead of 49 does not). Default 0.8.
+    /// </summary>
+    public double MaxHeadingShare { get; init; } = 0.8;
 }

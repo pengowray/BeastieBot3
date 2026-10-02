@@ -7,6 +7,9 @@ using Spectre.Console;
 using Spectre.Console.Cli;
 using BeastieBot3.CommonNames;
 using BeastieBot3.Configuration;
+using System.Threading;
+using BeastieBot3.Col;
+using BeastieBot3.Infrastructure;
 using BeastieBot3.Taxonomy;
 
 namespace BeastieBot3.WikipediaLists;
@@ -218,12 +221,23 @@ public sealed class WikipediaListCommand : Command<WikipediaListCommand.Settings
     /// </summary>
     private static (ITaxonPlacement? Placement, IDisposable? ToDispose) LoadPlacement(
         PathsService paths, string iucnDbPath, string colDbPath) {
-        // TODO(integration): TaxonPlacementStore.LoadOrBuild(paths, iucnDbPath, colDbPath) returns the
-        // placement built from these two databases; return it here (and the store, if it must be disposed).
         _ = paths;
-        _ = iucnDbPath;
-        _ = colDbPath;
-        return (null, null);
+        try {
+            var status = TaxonPlacementBuild.Status(iucnDbPath, colDbPath);
+            if (status.IsCurrent) {
+                return (TaxonPlacementStore.LoadOrBuild(iucnDbPath, colDbPath, force: false, progress: null, CancellationToken.None), null);
+            }
+            AnsiConsole.MarkupLine($"[grey]Catalogue of Life placement {Markup.Escape(ColBuildPlacementCommand.StatusText(status))}. Building it now.[/]");
+            TaxonPlacementIndex index = TaxonPlacementIndex.Empty;
+            ProgressConsole.Run("Reading IUCN species", 0, handle => {
+                index = TaxonPlacementStore.LoadOrBuild(iucnDbPath, colDbPath, force: false,
+                    new ColBuildPlacementCommand.ProgressAdapter(handle), CancellationToken.None);
+            });
+            return (index, null);
+        } catch (Exception ex) when (ex is InvalidOperationException or Microsoft.Data.Sqlite.SqliteException or IOException) {
+            AnsiConsole.MarkupLine($"[yellow]Could not load the Catalogue of Life placement:[/] {Markup.Escape(ex.Message)}");
+            return (null, null);
+        }
     }
 
     /// <summary>Why the Common names store is not used.</summary>

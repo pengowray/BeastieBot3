@@ -190,8 +190,9 @@ internal sealed class ColBuildPlacementCommand : Command<ColBuildPlacementComman
             : $"{elapsed.TotalSeconds:0.0}s";
 
     // Shows the matching phase on the progress bar. The phases after it take a few seconds and
-    // leave the bar at 100%, so a non-interactive log ends with the matching count.
-    private sealed class ProgressAdapter : IPlacementBuildProgress {
+    // leave the bar at 100%, so a non-interactive log ends with the matching count. Also used by
+    // wikipedia generate-lists when it builds a missing placement.
+    internal sealed class ProgressAdapter : IPlacementBuildProgress {
         private readonly IProgressHandle _handle;
         private bool _counting;
 

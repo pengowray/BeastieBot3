@@ -58,9 +58,9 @@ public class TaxonomyTreeBuilderTests {
     }
 
     [Fact]
-    public void FewerSmallGroupsThanTheMinimum_AreNotLumped_AndOtherStillSortsLast() {
-        // Two small groups (below MinGroupsForOther = 3) keep their own headings. A blank family
-        // goes to the unknown bucket, which is labelled "Other ..." and must still sort last.
+    public void FewerSmallGroupsThanTheMinimum_JoinAnOtherBucketThatExists_WhichSortsLast() {
+        // Two small groups are below MinGroupsForOther = 3, but the blank family already makes an
+        // "Other families" bucket, so they join it instead of keeping one- and two-item headings.
         var items = Family("X", "ZETIDAE", 6)
             .Concat(Family("X", "BETIDAE", 1))
             .Concat(Family("X", "GAMMIDAE", 2))
@@ -71,8 +71,22 @@ public class TaxonomyTreeBuilderTests {
         var tree = TaxonomyTreeBuilder.Build(items, new[] { level });
 
         Assert.Equal(
-            new[] { "BETIDAE", "GAMMIDAE", "ZETIDAE", "Other families" },
+            new[] { "ZETIDAE", "Other families" },
             tree.Children.Select(c => c.Value));
+        Assert.Equal(9, tree.Children.Single(c => c.Value == "Other families").ItemCount);
+    }
+
+    [Fact]
+    public void FewerSmallGroupsThanTheMinimum_AreNotLumped_WhenNoOtherBucketExists() {
+        var items = Family("X", "ZETIDAE", 6)
+            .Concat(Family("X", "BETIDAE", 1))
+            .Concat(Family("X", "GAMMIDAE", 2))
+            .ToList();
+        var level = FamilyLevel(minItems: 5, minGroupsForOther: 3);
+
+        var tree = TaxonomyTreeBuilder.Build(items, new[] { level });
+
+        Assert.Equal(new[] { "BETIDAE", "GAMMIDAE", "ZETIDAE" }, tree.Children.Select(c => c.Value));
     }
 
     [Fact]
