@@ -295,6 +295,23 @@ public class CiteIucnRendererTests {
         Assert.Equal(2, output.Count(c => c == '}'));
     }
 
+    // CS1 shows "invisible character" errors for these. Whitespace ones become a space; the rest are
+    // dropped. U+FFFD stays: it marks a lost letter, which a silent deletion would hide.
+    [Fact]
+    public void Values_LoseTheInvisibleCharactersCs1Reports() {
+        var parts = HouseSparrow with {
+            Authors = [
+                Verbatim("Sm\u200Bith, J."), Verbatim("Jo\u00ADnes\u200D, A."), Verbatim("Br\u0007own\u007F\u0085, B."),
+                Verbatim("Gr\u0090ey\u2060\uFEFF, C."), Verbatim("Kry\uFFFDtufek, B."), Verbatim("Tab\tand\u00A0space"),
+            ],
+            Doi = null,
+        };
+        Assert.StartsWith(
+            "{{cite iucn |author=Smith, J. |author2=Jones, A. |author3=Brown , B. |author4=Grey, C. |author5=Kry\uFFFDtufek, B. " +
+            "|author6=Tab and space |year=2019",
+            CiteIucnRenderer.Render(parts));
+    }
+
     [Fact]
     public void NeverWritesPageUrlOrLanguage() {
         foreach (var parts in new[] { PolarBear, GiantPanda, HouseSparrow, EuropeanRabbit }) {
