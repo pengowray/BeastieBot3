@@ -78,7 +78,7 @@ internal sealed class SiteDbBuild {
         var apiTaxa = new SiteApiTaxaReader(taxa, _stats);
         Phase("Reading IUCN API taxon records", () => {
             apiTaxa.Read(cache, readAll: _inputs.Limit is null, ct);
-            return $"{apiTaxa.Records.Count:N0} of the taxa have a record";
+            return $"{apiTaxa.Records.Count:N0} taxa have their own record";
         });
 
         // 3. Plan.
@@ -99,18 +99,18 @@ internal sealed class SiteDbBuild {
         });
         Optional("Wikidata cache", _inputs.WikidataCache, path => {
             SiteLinkReaders.ReadWikidata(path, taxa, _stats, dois, ct);
-            return $"{_stats.QidsFromP627 + _stats.QidsFromNameMatch:N0} items, {dois.Wikidata.Count:N0} assessment DOIs";
+            return $"{_stats.QidsFromP627 + _stats.QidsFromNameMatch:N0} taxa with an item, {dois.Wikidata.Count:N0} assessments with a DOI";
         });
 
         // 5. Payloads; the assessment rows are written here.
         Phase("Reading IUCN API assessment payloads", () => {
             assessments.WriteAll(cache, writer, dois, ct);
-            return $"{_stats.CitationsParsed:N0} citations parsed";
+            return $"{_stats.CitationsParsed:N0} citations parsed, {_stats.AssessmentsGlobalLatest + _stats.AssessmentsRegionalLatest + _stats.AssessmentsHistory:N0} assessments written";
         });
 
         // 6. Common names store.
         var colCrossReferences = new Dictionary<long, string>();
-        Optional("Common names store", _inputs.CommonNames, path => {
+        Optional("common names store", _inputs.CommonNames, path => {
             LegacyTaxaRuleList? overrides = null;
             if (_inputs.RulesList is { } rules && File.Exists(rules)) {
                 overrides = new LegacyTaxaRuleList(rules);
@@ -118,23 +118,23 @@ internal sealed class SiteDbBuild {
                 _stats.MissingSources.Add("rules-list.txt");
             }
             SiteCommonNamesReader.Read(path, taxa, overrides, _stats, colCrossReferences, ct);
-            return $"{_stats.CommonNameEn:N0} best English names";
+            return $"{_stats.CommonNameEn:N0} taxa with an English name for display";
         });
 
         // 7. Links.
         Optional("Wikipedia cache", _inputs.WikipediaCache, path => {
             SiteLinkReaders.ReadWikipedia(path, taxa, _stats, ct);
-            return $"{_stats.EnwikiTitles:N0} articles";
+            return $"{_stats.EnwikiTitles:N0} taxa with an article";
         });
-        Optional("Catalogue of Life placement", _inputs.ColPlacement, path => {
+        Optional("Catalogue of Life placement file", _inputs.ColPlacement, path => {
             _stats.ColRelease = SiteLinkReaders.ReadColPlacement(path, taxa, _stats, ct);
-            return $"{_stats.ColIdsFromPlacement:N0} species";
+            return $"{_stats.ColIdsFromPlacement:N0} species with a Catalogue of Life id";
         });
         SiteLinkReaders.ApplyColCrossReferences(taxa, colCrossReferences, _stats);
         _stats.ColRelease ??= SiteBuildRules.ColReleaseFromPath(_inputs.ColDatabase);
         Optional("SPRAT database", _inputs.SpratDatabase, path => {
             _stats.SpratReport = SiteLinkReaders.ReadSprat(path, taxa, _stats, ct);
-            return $"{_stats.SpratMatched:N0} taxa matched, {_stats.EpbcStatuses:N0} listed";
+            return $"{_stats.SpratMatched:N0} taxa matched by name, {_stats.EpbcStatuses:N0} with an EPBC status";
         });
 
         // 8. Parents, taxa, names, meta.

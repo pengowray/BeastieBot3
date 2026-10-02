@@ -137,7 +137,7 @@ internal sealed class SiteBuildDbCommand : Command<SiteBuildDbCommand.Settings> 
     private static string? Full(string? path) => string.IsNullOrWhiteSpace(path) ? null : Path.GetFullPath(path);
 
     private static void WriteSummary(SiteBuildStats s) {
-        var table = new Table().AddColumn("What").AddColumn(new TableColumn("Count").RightAligned());
+        var table = new Table().AddColumn("Measure").AddColumn(new TableColumn("Value").RightAligned());
         void Row(string label, long value) => table.AddRow(Markup.Escape(label), value.ToString("N0", CultureInfo.InvariantCulture));
         void Text(string label, string? value) => table.AddRow(Markup.Escape(label), Markup.Escape(value ?? "-"));
         void Section(string label) => table.AddRow($"[bold]{Markup.Escape(label)}[/]", string.Empty);
@@ -147,51 +147,51 @@ internal sealed class SiteBuildDbCommand : Command<SiteBuildDbCommand.Settings> 
         Row("Subspecies", s.TaxaByKind.GetValueOrDefault(SiteTaxonKind.Subspecies));
         Row("Varieties", s.TaxaByKind.GetValueOrDefault(SiteTaxonKind.Variety));
         Row("Subpopulations", s.TaxaByKind.GetValueOrDefault(SiteTaxonKind.Subpopulation));
-        Row("Parent found by name", s.ParentsByName);
-        Row("Parent found from the API record", s.ParentsFromApi);
-        Row("Parent not in the database", s.ParentsMissing);
+        Row("Parent taxon found by name", s.ParentsByName);
+        Row("Parent taxon found from the IUCN API record", s.ParentsFromApi);
+        Row("Parent taxon not in the database", s.ParentsMissing);
 
         Section("Assessments");
         Row("Latest global", s.AssessmentsGlobalLatest);
         Row("Latest regional", s.AssessmentsRegionalLatest);
         Row("Earlier (history)", s.AssessmentsHistory);
-        Row("Left out: CSV row with no scope", s.CsvAssessmentsNoScope);
-        Row("Left out: API header with no scope", s.ApiHeadersNoScope);
-        Row("Left out: API header with no year (unpublished)", s.ApiHeadersUnpublished);
-        Row("Left out: API header for another taxon id", s.ApiHeadersOtherTaxon);
-        Row("API latest, but the CSV has that scope (stored as earlier)", s.ApiLatestCoveredByCsv);
-        Row("API latest, not in the CSV (stored as latest)", s.ApiLatestNotInCsv);
-        Row("CSV category differs from the API header", s.CsvCategoryDiffersFromApi);
+        Row("Left out: CSV rows with no scope", s.CsvAssessmentsNoScope);
+        Row("Left out: assessments in API taxon records with no scope", s.ApiHeadersNoScope);
+        Row("Left out: assessments in API taxon records with no year published", s.ApiHeadersUnpublished);
+        Row("Left out: assessments in API taxon records for another taxon id", s.ApiHeadersOtherTaxon);
+        Row("Flagged latest by the API, but the CSV has that scope (stored as earlier)", s.ApiLatestCoveredByCsv);
+        Row("Flagged latest by the API and missing from the CSV (stored as latest)", s.ApiLatestNotInCsv);
+        Row("Category in the CSV differs from the API taxon record", s.CsvCategoryDiffersFromApi);
 
         Section("Citations");
-        Row("Parsed from the cached payload", s.CitationsParsed);
-        Row("No payload cached (citation left empty)", s.CitationsNotCached);
-        Row("Payload could not be parsed", s.CitationFailures.Values.Sum() + s.PayloadsUnreadable);
-        Row("DOI from IUCN's citation", s.DoisBySource.GetValueOrDefault(DoiSource.Citation));
-        Row("DOI from GBIF", s.DoisBySource.GetValueOrDefault(DoiSource.Gbif));
-        Row("DOI from Wikidata", s.DoisBySource.GetValueOrDefault(DoiSource.Wikidata));
-        Row("No DOI", s.DoisBySource.GetValueOrDefault(DoiSource.None));
-        Text("Payloads downloaded", s.DownloadedFrom is null ? null
+        Row("Citations parsed from cached API assessments", s.CitationsParsed);
+        Row("Assessments not in the API cache (no citation)", s.CitationsNotCached);
+        Row("Citations that could not be parsed", s.CitationFailures.Values.Sum() + s.PayloadsUnreadable);
+        Row("DOIs from IUCN's citation text", s.DoisBySource.GetValueOrDefault(DoiSource.Citation));
+        Row("DOIs from GBIF", s.DoisBySource.GetValueOrDefault(DoiSource.Gbif));
+        Row("DOIs from Wikidata", s.DoisBySource.GetValueOrDefault(DoiSource.Wikidata));
+        Row("Citations with no DOI", s.DoisBySource.GetValueOrDefault(DoiSource.None));
+        Text("API assessments downloaded", s.DownloadedFrom is null ? null
             : $"{s.DownloadedFrom:yyyy-MM-dd} to {s.DownloadedTo:yyyy-MM-dd}");
 
         Section("Names");
         Row("Scientific names", s.NamesByType.GetValueOrDefault(SiteNameType.Scientific));
         Row("Common names", s.NamesByType.GetValueOrDefault(SiteNameType.Common));
-        Row("... of which English", s.CommonNamesEnglish);
+        Row("Common names in English", s.CommonNamesEnglish);
         Row("Synonyms", s.NamesByType.GetValueOrDefault(SiteNameType.Synonym));
-        Row("Taxa with a best English name", s.CommonNameEn);
-        Row("... of which set in rules-list.txt", s.CommonNameEnFromRules);
-        Row("Best English name dropped (the scientific name again, or a working name)", s.CommonNameEnUnusable);
+        Row("Taxa with an English name for display", s.CommonNameEn);
+        Row("Of those, names set in rules-list.txt", s.CommonNameEnFromRules);
+        Row("English names not used: the scientific name again, or a working name", s.CommonNameEnUnusable);
 
         Section("Links");
-        Row("English Wikipedia articles", s.EnwikiTitles);
-        Row("Wikidata items stating the IUCN id (P627)", s.QidsFromP627);
-        Row("... of which chosen from several items", s.QidTieBreaks);
-        Row("Wikidata items matched by name", s.QidsFromNameMatch);
+        Row("Taxa with an English Wikipedia article", s.EnwikiTitles);
+        Row("Taxa with a Wikidata item that states their IUCN taxon id (P627)", s.QidsFromP627);
+        Row("Of those, items chosen from several", s.QidTieBreaks);
+        Row("Taxa with a Wikidata item matched by name", s.QidsFromNameMatch);
         Row("Catalogue of Life ids from the placement file", s.ColIdsFromPlacement);
         Row("Catalogue of Life ids from the common names store", s.ColIdsFromCrossReference);
-        Row("SPRAT taxa matched", s.SpratMatched);
-        Row("EPBC statuses", s.EpbcStatuses);
+        Row("Taxa matched to SPRAT by name", s.SpratMatched);
+        Row("Taxa with an EPBC status", s.EpbcStatuses);
 
         Section("Sources");
         Text("IUCN release", s.IucnRelease);
@@ -199,7 +199,7 @@ internal sealed class SiteBuildDbCommand : Command<SiteBuildDbCommand.Settings> 
         Text("Catalogue of Life release", s.ColRelease);
         Text("SPRAT report", s.SpratReport);
         if (s.MissingSources.Count > 0) {
-            Text("Skipped (not found)", string.Join(", ", s.MissingSources));
+            Text("Sources not found (skipped)", string.Join(", ", s.MissingSources));
         }
 
         Section("File");

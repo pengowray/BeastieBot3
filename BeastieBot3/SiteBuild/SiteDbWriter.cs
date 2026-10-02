@@ -129,7 +129,7 @@ internal sealed class SiteDbWriter : IDisposable {
     /// Writes name_key, commits, builds the indexes and the full-text index, and compacts the file.
     /// Each step is reported to onStep so the command can time it.
     public void Finish(Action<string, Action> step) {
-        step("Writing name keys", () => {
+        step("Writing the exact-name lookup table", () => {
             _nameKeys.Sort((a, b) => {
                 var byKey = string.CompareOrdinal(a.Key, b.Key);
                 return byKey != 0 ? byKey : a.NameId.CompareTo(b.NameId);
@@ -151,8 +151,8 @@ internal sealed class SiteDbWriter : IDisposable {
             }
         });
         step("Building the search index", () => Execute("INSERT INTO name_fts(name_fts) VALUES('rebuild');"));
-        step("Analysing", () => Execute("ANALYZE;"));
-        step("Compacting", () => {
+        step("Running ANALYZE", () => Execute("ANALYZE;"));
+        step("Compacting the file (VACUUM)", () => {
             Execute("PRAGMA journal_mode = DELETE;");
             Execute("VACUUM;");
         });
