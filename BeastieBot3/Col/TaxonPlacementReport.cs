@@ -81,7 +81,7 @@ internal static class TaxonPlacementReport {
         }
         yield return ("Not found in CoL", N(m.ByKind.GetValueOrDefault(ColMatchKind.NotFound)), false);
         yield return ("Found, but no CoL classification (parent row missing)", N(m.NoClassification), false);
-        yield return ("Found, with a CoL classification (these species vote)", Share(m.Matched), false);
+        yield return ("Found, with a CoL classification (used to choose the CoL groups)", Share(m.Matched), false);
         yield return ("of which the classification is incomplete (a higher CoL row is missing)", N(m.CutShort), true);
     }
 
