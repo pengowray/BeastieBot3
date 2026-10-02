@@ -33,6 +33,23 @@ internal sealed class CommonNameStore : SqliteStore {
     }
 
     /// <summary>
+    /// Opens an existing store for reading only: no folder is created, no WAL pragma is set and no
+    /// schema work is done, so a reader such as `site build-db` cannot change a store other
+    /// commands are using. Any write through it fails.
+    /// </summary>
+    public static CommonNameStore OpenReadOnly(string databasePath) {
+        if (!File.Exists(databasePath)) {
+            throw new FileNotFoundException($"Common names store not found: {databasePath}", databasePath);
+        }
+        var connection = new SqliteConnection(new SqliteConnectionStringBuilder {
+            DataSource = databasePath,
+            Mode = SqliteOpenMode.ReadOnly,
+        }.ConnectionString);
+        connection.Open();
+        return new CommonNameStore(connection);
+    }
+
+    /// <summary>
     /// Test/advanced seam (R5): build a store over a caller-owned, already-open connection — e.g. a
     /// shared <c>:memory:</c> SQLite connection — so the store can be exercised without a file.
     /// </summary>
@@ -572,16 +589,27 @@ internal sealed class CommonNameStore : SqliteStore {
         }
 
         // Get set of ambiguous normalized names (names that refer to multiple taxa)
-        var ambiguousNames = allowAmbiguous ? new HashSet<string>() : GetAmbiguousNamesSet(language);
+        IReadOnlySet<string> ambiguousNames = allowAmbiguous ? new HashSet<string>() : GetAmbiguousNamesSet(language);
 
-        // Sort by: source priority ASC, is_preferred DESC (within source), raw_name ASC (for determinism)
+        return ChooseBest(
+            candidates.Select(c => new CommonNameCandidate(c.RawName, c.NormalizedName, c.Source, c.IsPreferred)),
+            ambiguousNames, allowAmbiguous);
+    }
+
+    /// <summary>
+    /// The one ranking of a taxon's common names: source priority (<see cref="GetSourcePriority"/>),
+    /// then preferred names first, then raw name for determinism; the first name that is not in
+    /// <paramref name="ambiguousNames"/> wins (any name when <paramref name="allowAmbiguous"/>).
+    /// List generation reaches it through <see cref="GetBestCommonNameForTaxon"/>; `site build-db`
+    /// calls it directly over every taxon's names read in one pass, so both pick the same name.
+    /// </summary>
+    internal static CommonNameResult? ChooseBest(IEnumerable<CommonNameCandidate> candidates,
+        IReadOnlySet<string> ambiguousNames, bool allowAmbiguous = false) {
         var sorted = candidates
             .OrderBy(c => GetSourcePriority(c.Source, c.IsPreferred))
             .ThenByDescending(c => c.IsPreferred)
-            .ThenBy(c => c.RawName, StringComparer.OrdinalIgnoreCase)
-            .ToList();
+            .ThenBy(c => c.RawName, StringComparer.OrdinalIgnoreCase);
 
-        // Find first non-ambiguous name
         foreach (var candidate in sorted) {
             var isAmbiguous = ambiguousNames.Contains(candidate.NormalizedName);
             if (!isAmbiguous || allowAmbiguous) {
@@ -839,25 +867,11 @@ internal sealed class CommonNameStore : SqliteStore {
         // Select best name for each taxon
         var results = new Dictionary<long, CommonNameResult>();
         foreach (var (taxonId, candidates) in byTaxon) {
-            var sorted = candidates
-                .OrderBy(c => GetSourcePriority(c.Source, c.IsPreferred))
-                .ThenByDescending(c => c.IsPreferred)
-                .ThenBy(c => c.RawName, StringComparer.OrdinalIgnoreCase)
-                .ToList();
-
-            foreach (var candidate in sorted) {
-                var isAmbiguous = ambiguousNames.Contains(candidate.NormalizedName);
-                if (!isAmbiguous || allowAmbiguous) {
-                    results[taxonId] = new CommonNameResult(
-                        RawName: candidate.RawName,
-                        DisplayName: candidate.RawName,
-                        NormalizedName: candidate.NormalizedName,
-                        Source: candidate.Source,
-                        IsPreferred: candidate.IsPreferred,
-                        IsAmbiguous: isAmbiguous
-                    );
-                    break;
-                }
+            var best = ChooseBest(
+                candidates.Select(c => new CommonNameCandidate(c.RawName, c.NormalizedName, c.Source, c.IsPreferred)),
+                ambiguousNames, allowAmbiguous);
+            if (best is not null) {
+                results[taxonId] = best;
             }
         }
 
@@ -1367,6 +1381,11 @@ public record ImportRunSummary(
     int TotalAdded,
     bool HasCompleted
 );
+
+/// <summary>
+/// One common name offered to <see cref="CommonNameStore.ChooseBest"/>: the fields the ranking reads.
+/// </summary>
+internal readonly record struct CommonNameCandidate(string RawName, string NormalizedName, string Source, bool IsPreferred);
 
 /// <summary>
 /// Result of a best common name lookup.
