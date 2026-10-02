@@ -447,9 +447,12 @@ VALUES (@import_id, @label, @key, @title, @alias, @description, @issued, @versio
         RegisterTableColumns(tableName, existingColumns);
         _console.MarkupLine($"    {tableName}: inserted {inserted:N0} rows (columns: {existingColumns.Count}).");
         if (mismatchedRows > 0) {
+            var linesLabel = mismatchedRows > mismatchedLines.Count
+                ? $"First {mismatchedLines.Count} line numbers"
+                : "Line numbers";
             _console.MarkupLine(
-                $"[yellow]    {tableName}: {mismatchedRows:N0} rows have a different number of fields from the header ({headers.Count}); " +
-                $"values in those rows may be in the wrong columns. First line numbers in {Markup.Escape(entry.FullName)}: " +
+                $"[yellow]    {tableName}: {mismatchedRows:N0} rows have a different number of fields than the header, which has {headers.Count} fields. " +
+                $"Values in those rows may be in the wrong columns. {linesLabel} in {Markup.Escape(entry.FullName)}: " +
                 $"{string.Join(", ", mismatchedLines)}.[/]");
         }
     }

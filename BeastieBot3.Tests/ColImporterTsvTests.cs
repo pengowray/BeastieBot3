@@ -60,8 +60,8 @@ public class ColImporterTsvTests {
 
         Assert.Equal(4, fx.Scalar("SELECT COUNT(*) FROM nameusage;"));
         Assert.Contains(
-            "nameusage: 2 rows have a different number of fields from the header (3); " +
-            "values in those rows may be in the wrong columns. First line numbers in NameUsage.tsv: 3, 4.",
+            "nameusage: 2 rows have a different number of fields than the header, which has 3 fields. " +
+            "Values in those rows may be in the wrong columns. Line numbers in NameUsage.tsv: 3, 4.",
             fx.Output);
     }
 
