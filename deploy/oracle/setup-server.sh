@@ -396,14 +396,18 @@ install_service() {
     install -m 755 -o root -g root "$SCRIPT_DIR/server-tasks.sh" /usr/local/sbin/beastie-site
     info "Installed /usr/local/sbin/beastie-site (run: sudo beastie-site status)."
 
-    local unit=/etc/systemd/system/$SERVICE.service changed=no
-    if ! [[ -f "$unit" ]] || ! cmp -s "$SCRIPT_DIR/beastie-site.service" "$unit"; then
-        install -m 644 -o root -g root "$SCRIPT_DIR/beastie-site.service" "$unit"
+    # The unit gets the domain for the site's canonical links (Site__BaseUrl).
+    local unit=/etc/systemd/system/$SERVICE.service changed=no tmp
+    tmp="$(mktemp)"
+    sed -e "s|__DOMAIN__|$DOMAIN|g" "$SCRIPT_DIR/beastie-site.service" > "$tmp"
+    if ! [[ -f "$unit" ]] || ! cmp -s "$tmp" "$unit"; then
+        install -m 644 -o root -g root "$tmp" "$unit"
         changed=yes
         info "Installed $unit."
     else
         info "$unit is up to date."
     fi
+    rm -f "$tmp"
     if ! systemd_running; then
         warn "systemd is not running here. Skipping systemctl."
         return 0

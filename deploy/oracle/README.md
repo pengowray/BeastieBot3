@@ -277,7 +277,12 @@ On the server (`ssh ubuntu@<HOST>`):
 | `sudo tail -f /var/log/caddy/access.log` | Requests, one JSON object per line. Caddy starts a new file at 50 MB and deletes files after 14 days. |
 
 To be told when the site goes down, point an external uptime checker at
-`https://<DOMAIN>/healthz`.
+`https://<DOMAIN>/healthz`. It answers 200 "ok" when the site has opened the database and the
+database's schema version matches `SiteDbSchema.Version`, and 503 otherwise. The site checks the
+database file again every 30 seconds: if the file has been deleted or moved, `/healthz` answers 503
+within 30 seconds, and if it has been replaced, the site opens the new file and checks it the same
+way, without a restart. `deploy-db.sh` and `rollback-db.sh` still restart the site, so a new
+database is live at once.
 
 ## Rolling back to the previous database
 
@@ -330,8 +335,9 @@ To roll back the app instead, see [Deploying the app](#deploying-the-app).
   configuration. `sudo systemctl reload caddy` still works. The script reloads Caddy after a
   change, and restarts it instead when Caddy does not answer on the socket yet (the first run
   with this setting) or the drop-in changed.
-- `/etc/systemd/system/beastie-site.service`, enabled to start at boot. systemd creates
-  `/var/lib/beastie-site` for the service.
+- `/etc/systemd/system/beastie-site.service`, enabled to start at boot, with `__DOMAIN__` replaced
+  by `DOMAIN`, so that the site's canonical links use `https://<DOMAIN>` (`Site__BaseUrl`).
+  systemd creates `/var/lib/beastie-site` for the service.
 - `/usr/local/sbin/beastie-site`, a copy of `server-tasks.sh`.
 
 The deploy scripts:
