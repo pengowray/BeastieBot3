@@ -26,11 +26,12 @@ public sealed class SiteDbBuildTests : IDisposable {
     private const long Subpopulation = 900002;
     private const long SubpopulationLatest = 900102;
     private const long NoScopeTaxon = 900003;
-    // Earlier polar bear assessments: an amended version, and an errata version.
+    // Earlier polar bear assessments: an amended version, and two errata versions in a chain.
     private const long PolarBear2005 = 9390905;
     private const long PolarBear2006Amended = 9390906;
     private const long PolarBear2008 = 9390950;
     private const long PolarBear2008Errata = 9390951;
+    private const long PolarBear2008Errata2 = 9390952;
 
     // The replacement character, written this way so it stays visible in the source.
     private const char Lost = (char)0xFFFD;
@@ -96,8 +97,11 @@ public sealed class SiteDbBuildTests : IDisposable {
             meta[SiteDbSchema.MetaKeys.ColCitation]);
     }
 
-    // An errata version replaced the earlier assessment of the same year; an amended version replaced
-    // the one of the year its title names. The column is set on the older row.
+    // An errata version replaced an earlier assessment of the same year; an amended version replaced
+    // the one of the year its title names. The column is set on the older row. The second errata
+    // version has both 2008 assessments as candidates; the first errata version already replaced the
+    // original, so the second replaced the first. All three are earlier assessments here, so only the
+    // ids tell which came first.
     [Fact]
     public void Build_LinksEachReplacedAssessmentToTheVersionThatReplacedIt() {
         using var db = OpenReadOnly(Build());
@@ -107,6 +111,7 @@ public sealed class SiteDbBuildTests : IDisposable {
         Assert.Equal(new Dictionary<long, long> {
             [PolarBear2005] = PolarBear2006Amended,
             [PolarBear2008] = PolarBear2008Errata,
+            [PolarBear2008Errata] = PolarBear2008Errata2,
         }, links);
     }
 
@@ -154,8 +159,8 @@ public sealed class SiteDbBuildTests : IDisposable {
             FROM assessment WHERE taxon_id = @id ORDER BY assessment_id
             """, ("@id", PolarBear)).ToDictionary(r => (long)r[0]!);
 
-        Assert.Equal(new[] { PolarBear2005, PolarBear2006Amended, PolarBear1996, PolarBear2008, PolarBear2008Errata, PolarBearGlobal, PolarBearEurope },
-            rows.Keys.Order());
+        Assert.Equal(new[] { PolarBear2005, PolarBear2006Amended, PolarBear1996, PolarBear2008, PolarBear2008Errata, PolarBear2008Errata2,
+            PolarBearGlobal, PolarBearEurope }, rows.Keys.Order());
 
         var global = rows[PolarBearGlobal];
         Assert.Equal(("Global", 1L, "VU", "3.1", 2015L, "2015-08-27", "Unknown"),
@@ -449,6 +454,7 @@ public sealed class SiteDbBuildTests : IDisposable {
                {{Header(PolarBear2006Amended, PolarBear, false, "2006", "2005-01-01T00:00:00.000+00:00", "VU", global)}},
                {{Header(PolarBear2008, PolarBear, false, "2008", "2008-06-30T00:00:00.000+00:00", "VU", global)}},
                {{Header(PolarBear2008Errata, PolarBear, false, "2008", "2008-06-30T00:00:00.000+00:00", "VU", global)}},
+               {{Header(PolarBear2008Errata2, PolarBear, false, "2008", "2008-06-30T00:00:00.000+00:00", "VU", global)}},
                {{Header(PolarBearDraft, PolarBear, false, null, "2027-01-01T00:00:00.000+00:00", "EN", global)}},
                {{Header(PolarBearNoScope, PolarBear, false, "2001", "2001-01-01T00:00:00.000+00:00", "EN", "[]")}}]}
             """;
@@ -483,6 +489,10 @@ public sealed class SiteDbBuildTests : IDisposable {
             (PolarBear2008Errata, PolarBear, "2026-08-23T00:00:00Z", Payload(PolarBear2008Errata, PolarBear, "2008",
                 $"Wiig, Ø. & Mo{Lost}brucker, H. 2008. Ursus maritimus (errata version published in 2009). The IUCN Red List of Threatened Species 2008: e.T22823A9390951. Accessed on 23 August 2026.",
                 $"Wiig, Ø. & Mo{Lost}brucker, H.", 2, "3.1", null, global)),
+            // Both 2008 assessments are candidates; they are settled after every payload is read.
+            (PolarBear2008Errata2, PolarBear, "2026-08-23T00:00:00Z", Payload(PolarBear2008Errata2, PolarBear, "2008",
+                "Wiig, Ø. 2008. Ursus maritimus (errata version published in 2010). The IUCN Red List of Threatened Species 2008: e.T22823A9390952. Accessed on 23 August 2026.",
+                "Wiig, Ø.", 1, "3.1", null, global)),
         };
         foreach (var (id, taxon, downloaded, json) in payloads) {
             Execute(c, "INSERT INTO assessments (assessment_id, sis_id, downloaded_at, json) VALUES (@id, @taxon, @downloaded, @json)",

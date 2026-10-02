@@ -24,10 +24,14 @@ using Microsoft.Data.Sqlite;
 //     been read, so the few rows with such a name are parsed again and written at the end.
 //   - replaced_by_assessment_id is set on the assessment an errata or amended version replaced,
 //     pointing at the newer one. An errata version (its title says "errata version published in")
-//     replaced the one assessment IucnTaxaHeaders.PredecessorIds gives that is also a row here. An
-//     amended version replaced the one earlier assessment of the taxon, same scope, published in the
-//     year its title names. With none or several candidates, or when two newer versions name the
-//     same assessment, nothing is set.
+//     replaced one of the assessments IucnTaxaHeaders.PredecessorIds gives that are also rows here.
+//     An amended version replaced an earlier assessment of the taxon, same scope, published in the
+//     year its title names. Either way the replaced assessment has a lower id: IUCN numbers
+//     assessments in the order they are made, and without this the two errata versions of the 2022
+//     Pelophylax cerigensis assessment (published in 2022 and 2024, both since replaced) would each
+//     be taken for the other's predecessor. With several candidates, one that another candidate
+//     replaced is dropped (SettleChains). With none or still several, or when two newer versions name
+//     the same assessment, nothing is set.
 
 namespace BeastieBot3.SiteBuild;
 
@@ -49,6 +53,8 @@ internal sealed class SiteAssessmentPass {
     // The assessment each replaced assessment was replaced by (null when two newer versions name it),
     // and whether that newer one is an errata version or an amended one.
     private readonly Dictionary<long, (long? By, bool ByErrata)> _replacedBy = new();
+    // Versions with several candidates for the assessment they replaced, settled by SettleChains.
+    private readonly List<(long Newer, List<long> Candidates, bool ByErrata)> _unsettled = new();
 
     private readonly AssessorNamePool _names = new();
     // Rows with a damaged author name, parsed again once _names is complete.
@@ -204,6 +210,7 @@ internal sealed class SiteAssessmentPass {
         }
         _plan.Clear();
 
+        SettleChains();
         foreach (var (replaced, (by, byErrata)) in _replacedBy) {
             if (by is not { } newer) {
                 continue;
@@ -286,31 +293,63 @@ internal sealed class SiteAssessmentPass {
     private void LinkReplaced(SiteAssessment assessment, IucnCitationParse parse, IReadOnlyList<long> predecessors) {
         _rowsByTaxon.TryGetValue(assessment.TaxonId, out var rows);
         rows ??= new();
+        var newer = assessment.AssessmentId;
         List<long> candidates;
         if (parse.HasErrataAnnotation) {
-            candidates = predecessors.Where(id => rows.Any(r => r.AssessmentId == id)).Distinct().ToList();
+            candidates = predecessors.Where(id => id < newer && rows.Any(r => r.AssessmentId == id)).Distinct().ToList();
         } else if (parse.Parts?.AmendsYear is { } amendsYear) {
             candidates = rows
-                .Where(r => r.AssessmentId != assessment.AssessmentId && !r.IsLatest && r.YearPublished == amendsYear
+                .Where(r => r.AssessmentId < newer && !r.IsLatest && r.YearPublished == amendsYear
                     && string.Equals(r.Scope, assessment.Scope, StringComparison.Ordinal))
                 .Select(r => r.AssessmentId)
                 .ToList();
         } else {
             return;
         }
-        if (candidates.Count != 1) {
-            if (candidates.Count == 0) _stats.ReplacedNoCandidate++; else _stats.ReplacedSeveralCandidates++;
-            return;
+        if (candidates.Count == 0) {
+            _stats.ReplacedNoCandidate++;
+        } else if (candidates.Count > 1) {
+            _unsettled.Add((newer, candidates, parse.HasErrataAnnotation));
+        } else {
+            Claim(candidates[0], newer, parse.HasErrataAnnotation);
         }
-        var replaced = candidates[0];
+    }
+
+    private void Claim(long replaced, long newer, bool byErrata) {
         if (_replacedBy.TryGetValue(replaced, out var existing)) {
-            if (existing.By is { } other && other != assessment.AssessmentId) {
+            if (existing.By is { } other && other != newer) {
                 _replacedBy[replaced] = (null, false);
                 _stats.ReplacedClaimedTwice++;
             }
             return;
         }
-        _replacedBy[replaced] = (assessment.AssessmentId, parse.HasErrataAnnotation);
+        _replacedBy[replaced] = (newer, byErrata);
+    }
+
+    // A version with several candidates is usually the end of a chain. The giant panda's 2016
+    // assessment 45033386 was replaced by the errata version 102080907, which the errata version
+    // 121745669 replaced in turn; both earlier ones are candidates for the last. A candidate that
+    // another candidate replaced is not the one this version replaced, so it is dropped, and a version
+    // left with one candidate is linked to it. Each link can settle another, so this repeats.
+    private void SettleChains() {
+        bool settledAny;
+        do {
+            settledAny = false;
+            for (var i = _unsettled.Count - 1; i >= 0; i--) {
+                var (newer, candidates, byErrata) = _unsettled[i];
+                var left = candidates
+                    .Where(c => !(_replacedBy.TryGetValue(c, out var link) && link.By is { } by && candidates.Contains(by)))
+                    .ToList();
+                if (left.Count != 1) {
+                    continue;
+                }
+                Claim(left[0], newer, byErrata);
+                _unsettled.RemoveAt(i);
+                settledAny = true;
+            }
+        } while (settledAny);
+        _stats.ReplacedSeveralCandidates += _unsettled.Count;
+        _unsettled.Clear();
     }
 
     private void Write(SiteDbWriter writer, SiteAssessment assessment) {
