@@ -142,9 +142,9 @@ internal sealed class CommonNameReportCommand : AsyncCommand<CommonNameReportCom
             sb.AppendLine($"Generated: {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss} UTC");
             sb.AppendLine();
 
-            // The same verdicts list generation uses (no default limit)
-            var verdicts = store.GetAmbiguousCommonNames(settings.Kingdom);
-            var ambiguousNames = settings.Limit is { } limit ? verdicts.Names.Take(limit).ToList() : verdicts.Names;
+            // No default limit.
+            var (sharedNames, verdicts) = AmbiguousReportScope(store, settings.Kingdom);
+            var ambiguousNames = settings.Limit is { } limit ? sharedNames.Take(limit).ToList() : sharedNames;
             var conflictingNames = new List<(string NormalizedName, List<CommonNameRecord> Records)>();
 
             ProgressConsole.Run("[green]Loading conflicts[/]", ambiguousNames.Count, progress => {
@@ -212,6 +212,17 @@ internal sealed class CommonNameReportCommand : AsyncCommand<CommonNameReportCom
             AnsiConsole.MarkupLine($"[green]{Markup.Escape(AmbiguousReportText.Counts(conflictingNames.Count, keptCount))}[/]");
             return 0;
         }, cancellationToken);
+    }
+
+    /// <summary>
+    /// The names `--report ambiguous` lists and the verdicts its Uses This Name column shows. With
+    /// a kingdom, only names shared within that kingdom are listed, but the column still shows the
+    /// all-kingdom verdict the lists and the site use: an animal with a better source keeps a name
+    /// that two plants also have, so neither plant row is Yes.
+    /// </summary>
+    internal static (IReadOnlyList<string> Names, AmbiguousNames Verdicts) AmbiguousReportScope(CommonNameStore store, string? kingdom) {
+        var verdicts = store.GetAmbiguousNames("en");
+        return (kingdom is null ? verdicts.Names : store.GetAmbiguousCommonNames(kingdom).Names, verdicts);
     }
 
     private static Task<int> GenerateCapsReportAsync(CommonNameStore store, Settings settings, PathsService paths, CancellationToken cancellationToken) {

@@ -318,6 +318,25 @@ public class CommonNameAmbiguityTests {
     }
 
     [Fact]
+    public void AmbiguousReport_WithAKingdom_ShowsTheVerdictTheListsUse() {
+        // An animal with "Oak" as its Wikipedia title keeps the name, so neither plant uses it, even
+        // though the plants alone would leave the IUCN holder as the keeper.
+        using var store = OpenInMemory();
+        var oak = AddTaxon(store, "quercus robur", "1", "PLANTAE");
+        var holmOak = AddTaxon(store, "quercus ilex", "2", "PLANTAE");
+        var moth = AddTaxon(store, "oakmothus testus", "3", "ANIMALIA");
+        AddName(store, oak, "Oak", "iucn");
+        AddName(store, holmOak, "Oak", "col");
+        AddName(store, moth, "Oak", "wikipedia_title", preferred: true);
+
+        var (names, verdicts) = CommonNameReportCommand.AmbiguousReportScope(store, "Plantae");
+
+        Assert.Equal(new[] { "oak" }, names);
+        Assert.Equal(moth, verdicts.KeptBy("oak"));
+        Assert.Equal(oak, store.GetAmbiguousCommonNames(kingdom: "Plantae").KeptBy("oak"));
+    }
+
+    [Fact]
     public void AmbiguousReport_ListsTheMostSharedNamesFirst() {
         using var store = OpenInMemory();
         var a = AddTaxon(store, "panthera leo", "1");
