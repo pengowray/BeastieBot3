@@ -55,12 +55,17 @@ internal sealed record PlacementRunOptions {
 }
 
 /// <summary>How the IUCN species were matched to CoL in one build.</summary>
-/// <param name="CutShort">Matched species whose CoL chain ends at a parent row missing from the CoL database.</param>
+/// <param name="Found">Species matched to an accepted CoL usage.</param>
+/// <param name="Matched">Found species with a CoL classification (at least one node above the species); these vote.</param>
+/// <param name="NoClassification">Found species whose CoL parent row is missing from the CoL database, so they have no classification.</param>
+/// <param name="CutShort">Matched species whose CoL chain ends partway, at a parent row missing from the CoL database.</param>
 /// <param name="FromCache">Species whose match came from the match cache.</param>
 /// <param name="ColQueries">Queries sent to the CoL database (0 when everything came from the caches).</param>
 internal sealed record PlacementMatchStats(
     int Species,
+    int Found,
     int Matched,
+    int NoClassification,
     IReadOnlyDictionary<ColMatchKind, int> ByKind,
     int CutShort,
     int FromCache,
@@ -183,7 +188,7 @@ internal static class TaxonPlacementBuild {
             var samples = new List<PlacementSample>(species.Count);
             var newMatches = new List<(IucnSpeciesKey, ColSpeciesMatch)>();
             var byKind = new Dictionary<ColMatchKind, int>();
-            int matched = 0, cutShort = 0, fromCache = 0, pending = 0;
+            int found = 0, matched = 0, noClassification = 0, cutShort = 0, fromCache = 0, pending = 0;
 
             progress?.Phase("Matching IUCN species to Catalogue of Life", species.Count);
             foreach (var s in species) {
@@ -202,6 +207,7 @@ internal static class TaxonPlacementBuild {
 
                 IReadOnlyList<ColLineageNode>? nodes = null;
                 if (match.AcceptedId is { } id) {
+                    found++;
                     var lineage = matcher.LineageOf(id);
                     if (lineage.Nodes.Count > 0) {
                         nodes = lineage.Nodes;
@@ -209,6 +215,8 @@ internal static class TaxonPlacementBuild {
                         if (lineage.CutShort) {
                             cutShort++;
                         }
+                    } else {
+                        noClassification++;
                     }
                 }
                 samples.Add(new PlacementSample(s.Kingdom, s.ClassName, s.OrderName, s.FamilyName, s.Genus, nodes));
@@ -223,7 +231,7 @@ internal static class TaxonPlacementBuild {
             if (newMatches.Count > 0) {
                 store.SaveSpeciesMatches(newMatches);
             }
-            var stats = new PlacementMatchStats(species.Count, matched, byKind, cutShort, fromCache, matcher.ColQueries, cachesReset);
+            var stats = new PlacementMatchStats(species.Count, found, matched, noClassification, byKind, cutShort, fromCache, matcher.ColQueries, cachesReset);
             return (samples, stats, matcher);
         } catch {
             matcher.Dispose();
