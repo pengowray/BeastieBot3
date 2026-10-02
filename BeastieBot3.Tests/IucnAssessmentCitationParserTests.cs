@@ -6,7 +6,8 @@ namespace BeastieBot3.Tests;
 // Pins the IUCN side of the Wikidata status dry run: which assessment is a taxon's latest global
 // one, what a reference can cite from it, and how credits[].full strings split into names.
 // Fixtures are real 2026-1 API payloads cut down to the fields read here; credits[].value entries
-// (names with affiliations, email addresses) are replaced by placeholders, keeping only their count.
+// (names with affiliations, email addresses) are replaced by distinct placeholders, keeping only
+// their count.
 public class IucnAssessmentCitationParserTests {
     private static readonly DateTime Downloaded = new(2026, 8, 18, 15, 58, 27, DateTimeKind.Utc);
 
@@ -24,11 +25,11 @@ public class IucnAssessmentCitationParserTests {
                   "subpopulation_name":null,"species":true,"subpopulation":false,"infrarank":false},
          "red_list_category":{"version":"3.1","description":{"en":"Critically Endangered"},"code":"CR"},
          "credits":[
-           {"credit_type_name":"assessor","full":"BirdLife International","value":["x"]},
-           {"credit_type_name":"evaluator","full":"Berryman, A.","value":["x"]},
-           {"credit_type_name":"contributor","full":"Raust, P., Meyer, J.-Y., Blanvillain, C., Temple, H., Westrip, J.R.S., Derhé, M., Mahood, S., Symes, A., Khwaja, N., Thibault, J.-C. & Ghestemme, T.","value":["x","x","x","x","x","x","x","x","x","x","x"]},
-           {"credit_type_name":"facilitators","full":"Gray, F. & Vine, J.","value":["x","x"]},
-           {"credit_type_name":"institutions","full":"BirdLife International","value":["x"]}],
+           {"credit_type_name":"assessor","full":"BirdLife International","value":["x1"]},
+           {"credit_type_name":"evaluator","full":"Berryman, A.","value":["x1"]},
+           {"credit_type_name":"contributor","full":"Raust, P., Meyer, J.-Y., Blanvillain, C., Temple, H., Westrip, J.R.S., Derhé, M., Mahood, S., Symes, A., Khwaja, N., Thibault, J.-C. & Ghestemme, T.","value":["x1","x2","x3","x4","x5","x6","x7","x8","x9","x10","x11"]},
+           {"credit_type_name":"facilitators","full":"Gray, F. & Vine, J.","value":["x1","x2"]},
+           {"credit_type_name":"institutions","full":"BirdLife International","value":["x1"]}],
          "errata":[],
          "scopes":[{"description":{"en":"Global"},"code":"1"}]}
         """;
@@ -75,8 +76,8 @@ public class IucnAssessmentCitationParserTests {
                   "infra_name":"swaynei","subpopulation_name":null,"species":false,"subpopulation":false,"infrarank":true},
          "red_list_category":{"version":"3.1","description":{"en":"Endangered"},"code":"EN"},
          "credits":[
-           {"credit_type_name":"assessor","full":"IUCN SSC Antelope Specialist Group","value":["x"]},
-           {"credit_type_name":"evaluator","full":"Cooke, R.","value":["x"]}],
+           {"credit_type_name":"assessor","full":"IUCN SSC Antelope Specialist Group","value":["x1"]},
+           {"credit_type_name":"evaluator","full":"Cooke, R.","value":["x1"]}],
          "errata":[],
          "scopes":[{"description":{"en":"Global"},"code":"1"}]}
         """;
@@ -125,9 +126,9 @@ public class IucnAssessmentCitationParserTests {
          "taxon":{"sis_id":172707,"scientific_name":"Ahaetulla nasuta","infrarank":false},
          "red_list_category":{"version":"3.1","description":{"en":"Least Concern"},"code":"LC"},
          "credits":[
-           {"credit_type_name":"assessor","full":"Stuart, B.L., Grismer, L., Auliya, M., Chan-Ard, T., Srinivasulu, C., Srinivasulu, B., Mohapatra, P. & Achyuthan, N.S.","value":["x","x","x","x","x","x","x","x"]},
-           {"credit_type_name":"evaluator","full":"Cox, N.A.","value":["x"]},
-           {"credit_type_name":"facilitators","full":"Bowles, P.","value":["x"]}],
+           {"credit_type_name":"assessor","full":"Stuart, B.L., Grismer, L., Auliya, M., Chan-Ard, T., Srinivasulu, C., Srinivasulu, B., Mohapatra, P. & Achyuthan, N.S.","value":["x1","x2","x3","x4","x5","x6","x7","x8"]},
+           {"credit_type_name":"evaluator","full":"Cox, N.A.","value":["x1"]},
+           {"credit_type_name":"facilitators","full":"Bowles, P.","value":["x1"]}],
          "errata":[{"reason":"The assessment date has been corrected to 2019, the time of the final workshop which assessed this species under the concept described in the published Taxonomic Note (incorporating a taxonomic change made in 2017). The map has been corrected accordingly."}],
          "scopes":[{"description":{"en":"Global"},"code":"1"}]}
         """;
@@ -158,10 +159,10 @@ public class IucnAssessmentCitationParserTests {
          "taxon":{"sis_id":103890801,"scientific_name":"Gracupica jalla","infrarank":false},
          "red_list_category":{"version":"3.1","description":{"en":"Critically Endangered"},"code":"CR"},
          "credits":[
-           {"credit_type_name":"evaluator","full":"Vine, J.","value":["x"]},
-           {"credit_type_name":"assessor","full":"BirdLife International","value":["x"]},
-           {"credit_type_name":"facilitators","full":"Berryman, A.","value":["x"]},
-           {"credit_type_name":"institutions","full":"BirdLife International & IUCN SSC Asian Songbird Trade Specialist Group","value":["x","x"]}],
+           {"credit_type_name":"evaluator","full":"Vine, J.","value":["x1"]},
+           {"credit_type_name":"assessor","full":"BirdLife International","value":["x1"]},
+           {"credit_type_name":"facilitators","full":"Berryman, A.","value":["x1"]},
+           {"credit_type_name":"institutions","full":"BirdLife International & IUCN SSC Asian Songbird Trade Specialist Group","value":["x1","x2"]}],
          "errata":[],
          "scopes":[{"description":{"en":"Global"},"code":"1"}]}
         """;
@@ -219,12 +220,12 @@ public class IucnAssessmentCitationParserTests {
          "taxon":{"sis_id":275787647,"scientific_name":"Achondrostoma arcasii","infrarank":false},
          "red_list_category":{"version":"3.1","description":{"en":"Near Threatened"},"code":"NT"},
          "credits":[
-           {"credit_type_name":"assessor","full":"Ford, M.","value":["x"]},
-           {"credit_type_name":"evaluator","full":"Clavero, M., Perea, S., Filipe, A.F., Magalhães, M.F., Ribeiro, F., Doadrio, I. & Freyhof, J.","value":["x","x","x","x","x","x","x"]},
-           {"credit_type_name":"contributor","full":"Crivelli, A.J.","value":["x"]},
-           {"credit_type_name":"assessor","full":"Ford, M.","value":["x"]},
-           {"credit_type_name":"evaluator","full":"Clavero, M., Perea, S., Filipe, A.F., Magalhães, M.F., Ribeiro, F., Doadrio, I. & Freyhof, J.","value":["x","x","x","x","x","x","x"]},
-           {"credit_type_name":"contributor","full":"Crivelli, A.J.","value":["x"]}],
+           {"credit_type_name":"assessor","full":"Ford, M.","value":["x1"]},
+           {"credit_type_name":"evaluator","full":"Clavero, M., Perea, S., Filipe, A.F., Magalhães, M.F., Ribeiro, F., Doadrio, I. & Freyhof, J.","value":["x1","x2","x3","x4","x5","x6","x7"]},
+           {"credit_type_name":"contributor","full":"Crivelli, A.J.","value":["x1"]},
+           {"credit_type_name":"assessor","full":"Ford, M.","value":["x1"]},
+           {"credit_type_name":"evaluator","full":"Clavero, M., Perea, S., Filipe, A.F., Magalhães, M.F., Ribeiro, F., Doadrio, I. & Freyhof, J.","value":["x1","x2","x3","x4","x5","x6","x7"]},
+           {"credit_type_name":"contributor","full":"Crivelli, A.J.","value":["x1"]}],
          "errata":[{"reason":"This errata version of the assessment was created to publish the distribution map for this species."}],
          "scopes":[{"description":{"en":"Global"},"code":"1"},{"description":{"en":"Europe"},"code":"2"}]}
         """;
@@ -279,6 +280,11 @@ public class IucnAssessmentCitationParserTests {
     [InlineData("Kaewmuan, A., Tran, V.T., Lowry II, P.P. & Middleton, D.", "Kaewmuan, A.|Tran, V.T.|Lowry II, P.P.|Middleton, D.")]
     [InlineData("Evangelista, V., Malabrigo Jr., P.L. & Umali, A.", "Evangelista, V.|Malabrigo Jr., P.L.|Umali, A.")]
     [InlineData("Agoo, E.M.G., Cootes, J., Golamco, A., Jr., de Vogel, E.F. & Tiu, D.", "Agoo, E.M.G.|Cootes, J.|Golamco, A., Jr.|de Vogel, E.F.|Tiu, D.")]
+    // The suffix between surname and initials (aid 3121523).
+    [InlineData("Driggers, III, W.B. & Carlson, J.", "Driggers, III, W.B.|Carlson, J.")]
+    // Spanish "los" and "las" are particles, so this six-word surname still pairs.
+    [InlineData("Vacas, O., Baldeón, S., de los Ángeles La Torre Cuadros, M. & Reynel, C.",
+        "Vacas, O.|Baldeón, S.|de los Ángeles La Torre Cuadros, M.|Reynel, C.")]
     [InlineData("Fernandez, E., Negrão, R., Guimarães, A. & Neto, L.N.", "Fernandez, E.|Negrão, R.|Guimarães, A.|Neto, L.N.")]
     // Initials without dots, hyphenated, or with a particle inside.
     [InlineData("Ahissa, L, Decher, J. & Gazzard, A.", "Ahissa, L|Decher, J.|Gazzard, A.")]
@@ -340,10 +346,97 @@ public class IucnAssessmentCitationParserTests {
     [InlineData("IUCN SSC Anteater, Sloth and Armadillo Specialist Group", 1, "IUCN SSC Anteater, Sloth and Armadillo Specialist Group")]
     [InlineData("Chobanov, D.P., Hochkirch, A., Iorgu, I.S., Ivkovic, S., Kristin, A., Lemonnier-Darcemont, M., Pushkar, T., Sirin, D., Skejo, J. Skejo, Szovenyi, G., Vedenina, V. & Willemse, L.P.M.", 12,
         "Chobanov, D.P., Hochkirch, A., Iorgu, I.S., Ivkovic, S., Kristin, A., Lemonnier-Darcemont, M., Pushkar, T., Sirin, D., Skejo, J. Skejo, Szovenyi, G., Vedenina, V. & Willemse, L.P.M.")]
-    // A clean pair list doesn't need the count to agree (value[] sometimes lists a person twice).
-    [InlineData("Livingstone, S., Livingstone, S. & Neubert, E.", 3, "Livingstone, S.|Neubert, E.")]
+    // A clean pair list doesn't need the count to agree. Here value[] lists Suzanne Livingstone twice
+    // word for word, so it has 2 distinct entries for 3 names, and the repeat is one person.
+    [InlineData("Livingstone, S., Livingstone, S. & Neubert, E.", 2, "Livingstone, S.|Neubert, E.")]
+    // A name listed twice is kept twice when the count of distinct value[] entries confirms it.
+    // Anthony and Antony Harold (aid 141564386).
+    [InlineData("Harold, A. & Harold, A.", 2, "Harold, A.|Harold, A.")]
+    // Sung-Hwan and Si-Hyung Park (aid 113555367).
+    [InlineData("Chung, H.-Y., Lee, Y-W, Park, S.-H., Lim, C.-S., Park, S.-H., Hong, M.-H., Lee, Y.-S., Lee, D.-H., Shin, H.-S., Lee, S.-J., Oh, H.-K & Gwon, S.-A", 12,
+        "Chung, H.-Y.|Lee, Y-W|Park, S.-H.|Lim, C.-S.|Park, S.-H.|Hong, M.-H.|Lee, Y.-S.|Lee, D.-H.|Shin, H.-S.|Lee, S.-J.|Oh, H.-K|Gwon, S.-A")]
+    // Shambel and Sisay Alemu, in a list that only splits with the count (aid 223078443).
+    [InlineData("Alemu, S., Alemu, S., Atnafu, H., Awas, T., Birhanu Belay, Sebsebe Demissew, Luke, W.R.Q., Musili, P., Nemomissa, S., Bahdon, J. & Efrata Mekbib", 11,
+        "Alemu, S.|Alemu, S.|Atnafu, H.|Awas, T.|Birhanu Belay|Sebsebe Demissew|Luke, W.R.Q.|Musili, P.|Nemomissa, S.|Bahdon, J.|Efrata Mekbib")]
+    // Without a confirming count the repeat is one person.
+    [InlineData("Harold, A. & Harold, A.", 3, "Harold, A.")]
     public void SplitCreditNames_WithCount(string full, int count, string expected) {
         Assert.Equal(expected.Split('|'), IucnAssessmentCitationParser.SplitCreditNames(full, count));
+    }
+
+    [Theory]
+    [InlineData("Seddon, M. & Seddon, M.", null, "Strict")]
+    [InlineData("BirdLife International", null, "Single")]
+    [InlineData("Jaffré, T. <i>et al.</i>", null, "EtAl")]
+    [InlineData("Neam, K., Hobin, L. & NatureServe", 3, "CountStandalone")]
+    [InlineData("Reid, A., Rogers, Alex & Bohm, M.", 3, "CountGiven")]
+    [InlineData("Neil Cox and Helen Temple", null, "GivenFirst")]
+    [InlineData("Weber, O. & Sebsebe Demissew", null, "Whole")]
+    [InlineData("IUCN SSC Anteater, Sloth and Armadillo Specialist Group", 1, "WholeCountMismatch")]
+    [InlineData(" ", null, "Empty")]
+    public void SplitCreditNamesWithRule_NamesTheRuleThatApplied(string full, int? count, string rule) {
+        Assert.Equal(Enum.Parse<IucnAssessmentCitationParser.CreditSplitRule>(rule),
+            IucnAssessmentCitationParser.SplitCreditNamesWithRule(full, count).Rule);
+    }
+
+    // ------------------------------------------------------------ credits blocks and value[] counts
+
+    private static IReadOnlyList<IucnCredit> Credits(string creditsJson) {
+        using var document = System.Text.Json.JsonDocument.Parse($$"""{"credits":{{creditsJson}}}""");
+        return IucnAssessmentCitationParser.ReadCredits(document.RootElement);
+    }
+
+    [Fact]
+    public void ReadCredits_KeepsTwoPeopleWithTheSameShortName() {
+        // Commiphora ogadensis (aid 223078443): Shambel Alemu and Sisay Alemu.
+        var credits = Credits("""
+            [{"credit_type_name":"assessor","full":"Alemu, S., Alemu, S., Atnafu, H., Awas, T., Birhanu Belay, Sebsebe Demissew, Luke, W.R.Q., Musili, P., Nemomissa, S., Bahdon, J. & Efrata Mekbib",
+              "value":["Birhanu Belay (a)","Shambel Alemu (b)","Jamal Bahdon (c)","Sileshi Nemomissa (d)","Sebsebe Demissew (e)","Quentin Luke (f)","Paul Musili (g)","Tesfaye Awas (h)","Hailu Atnafu (i)","Efrata Mekbib (j)","Sisay Alemu (k)"]}]
+            """);
+
+        Assert.Equal(11, credits.Count);
+        Assert.Equal(new[] { 1, 2 }, credits.Where(c => c.Name == "Alemu, S.").Select(c => c.Order));
+    }
+
+    [Fact]
+    public void ReadCredits_ValueRepeatingOnePersonDoesNotConfirmARepeat() {
+        // Evaluators of aid 176828359: value[] lists Suzanne Livingstone twice, word for word.
+        var credits = Credits("""
+            [{"credit_type_name":"evaluator","full":"Livingstone, S., Livingstone, S. & Neubert, E.",
+              "value":["Eike Neubert (Bern)","Suzanne Livingstone (GMSA)","Suzanne Livingstone (GMSA)"]}]
+            """);
+
+        Assert.Equal(new[] { "Livingstone, S.", "Neubert, E." }, credits.Select(c => c.Name));
+    }
+
+    [Fact]
+    public void ReadCredits_RepeatedBlockAddsOnlyNamesNotYetHeld() {
+        // Shapes seen in aids 221328142 and 275869011: the same assessor block reordered, an
+        // evaluator block repeated with one more person, and a block with two Harolds repeated whole.
+        var credits = Credits("""
+            [{"credit_type_name":"assessor","full":"Wood, T.J., Devalez, J. & Kierat, J.","value":["a","b","c"]},
+             {"credit_type_name":"evaluator","full":"Ghisbain, G., Put, S. & Bellotto, V.","value":["a","b","c"]},
+             {"credit_type_name":"contributor","full":"Harold, A. & Harold, A.","value":["Anthony Harold","Antony Harold"]},
+             {"credit_type_name":"assessor","full":"Wood, T.J., Kierat, J. & Devalez, J.","value":["a","b","c"]},
+             {"credit_type_name":"evaluator","full":"Ghisbain, G., Michez, D., Put, S. & Bellotto, V.","value":["a","b","c","d"]},
+             {"credit_type_name":"contributor","full":"Harold, A. & Harold, A.","value":["Anthony Harold","Antony Harold"]}]
+            """);
+
+        Assert.Equal(new[] { "Wood, T.J.", "Devalez, J.", "Kierat, J." }, credits.Where(c => c.Type == "assessor").Select(c => c.Name));
+        Assert.Equal(new[] { "Ghisbain, G.", "Put, S.", "Bellotto, V.", "Michez, D." }, credits.Where(c => c.Type == "evaluator").Select(c => c.Name));
+        Assert.Equal(new[] { "Harold, A.", "Harold, A." }, credits.Where(c => c.Type == "contributor").Select(c => c.Name));
+    }
+
+    [Fact]
+    public void DistinctValueCount_IgnoresNullsBlanksAndExactRepeats() {
+        using var document = System.Text.Json.JsonDocument.Parse("""
+            [{"value":["Suzanne Livingstone (GMSA)"," Suzanne Livingstone (GMSA) ",null,"","Eike Neubert"]},{"full":"x"},{"value":[]}]
+            """);
+        var credits = document.RootElement.EnumerateArray().ToList();
+
+        Assert.Equal(2, IucnAssessmentCitationParser.DistinctValueCount(credits[0]));
+        Assert.Null(IucnAssessmentCitationParser.DistinctValueCount(credits[1]));
+        Assert.Equal(0, IucnAssessmentCitationParser.DistinctValueCount(credits[2]));
     }
 
     [Fact]
@@ -499,7 +592,7 @@ public class IucnAssessmentCitationParserTests {
             {"assessment_id":{{assessmentId}},"sis_taxon_id":{{sisId}},"latest":{{(latest ? "true" : "false")}},
              "year_published":"2020","taxon":{"sis_id":{{sisId}},"scientific_name":"Acinonyx jubatus","infrarank":false},
              "red_list_category":{"version":"3.1","code":"VU"},"citation":"Someone, A. 2020. Acinonyx jubatus. Accessed on 1 January 2026.",
-             "credits":[{"credit_type_name":"assessor","full":"Someone, A.","value":["x"]}],"errata":[],"scopes":{{scopes}}}
+             "credits":[{"credit_type_name":"assessor","full":"Someone, A.","value":["x1"]}],"errata":[],"scopes":{{scopes}}}
             """);
         command.ExecuteNonQuery();
     }
