@@ -88,7 +88,7 @@ internal sealed class ColBuildPlacementCommand : Command<ColBuildPlacementComman
 
         IucnNotAssignedRules notAssigned;
         try {
-            notAssigned = IucnNotAssignedRules.LoadFromRulesDir(Path.Combine(paths.BaseDirectory, "rules"));
+            notAssigned = IucnNotAssignedRules.LoadForPaths(paths);
         } catch (InvalidOperationException ex) {
             AnsiConsole.MarkupLine($"[red]Could not read {IucnNotAssignedRules.FileName}:[/] {Markup.Escape(ex.Message)}");
             return -1;

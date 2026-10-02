@@ -5,6 +5,8 @@ using System.IO;
 using System.Linq;
 using System.Security.Cryptography;
 using System.Text;
+using BeastieBot3.Configuration;
+using BeastieBot3.Web.Endpoints;
 using Microsoft.Data.Sqlite;
 using YamlDotNet.Core;
 using YamlDotNet.Serialization;
@@ -67,6 +69,14 @@ internal sealed class IucnNotAssignedRules {
         }
     }
 
+    /// <summary>
+    /// The rules file in the editable rules folder (the repo copy the Rules editor applies to), or the
+    /// build-output copy when there is no source tree. generate-lists without --rules, col
+    /// build-placement and the workflow light all read this one, so they agree on the placement.
+    /// </summary>
+    public static IucnNotAssignedRules LoadForPaths(PathsService paths) =>
+        LoadFromRulesDir(RulesPaths.Resolve(paths).SourceRulesDir);
+
     /// <summary>The rules file in a rules folder; no rules when the folder or file is missing.</summary>
     public static IucnNotAssignedRules LoadFromRulesDir(string? rulesDir) =>
         string.IsNullOrWhiteSpace(rulesDir) ? None : Load(Path.Combine(rulesDir, FileName));
@@ -120,7 +130,50 @@ internal sealed class IucnNotAssignedRules {
                 Required(r.Genus, "genus", i, "families"),
                 Required(r.Family, "family", i, "families").ToUpperInvariant()))
             .ToList();
+        RejectDuplicates(orders, r => (r.Class, r.Family, ""), "orders", r => $"family {r.Family} in class {r.Class}", sourcePath);
+        RejectDuplicates(families, r => (r.Class, r.Order, r.Genus.ToUpperInvariant()), "families", r => $"genus {r.Genus} in order {r.Order}", sourcePath);
         return new IucnNotAssignedRules(orders, families, sourcePath);
+    }
+
+    // Two rules for one taxon would make the result depend on their order in the file, which the
+    // placement fingerprint does not see.
+    private static void RejectDuplicates<TRule>(
+        IReadOnlyList<TRule> rules, Func<TRule, (string, string, string)> keyOf, string list, Func<TRule, string> describe, string? sourcePath) {
+        var seen = new Dictionary<(string, string, string), int>();
+        for (var i = 0; i < rules.Count; i++) {
+            if (!seen.TryAdd(keyOf(rules[i]), i)) {
+                throw new InvalidOperationException(
+                    $"{sourcePath ?? FileName}: rules {seen[keyOf(rules[i])] + 1} and {i + 1} under '{list}' are both for {describe(rules[i])}.");
+            }
+        }
+    }
+
+    /// <summary>The IUCN rank below <paramref name="rank"/>, or null below genus.</summary>
+    public static string? NextRank(string rank) => rank.Trim().ToLowerInvariant() switch {
+        "kingdom" => "phylum",
+        "phylum" => "class",
+        "class" => "order",
+        "order" => "family",
+        "family" => "genus",
+        _ => null,
+    };
+
+    private const string SplitPrefix = NotAssigned + "|";
+
+    /// <summary>
+    /// A key for the taxa of a "NOT ASSIGNED" value, split by the next rank: on a parent page split
+    /// by order, an order that is not assigned is listed (and counted) by family.
+    /// </summary>
+    public static string SplitKey(string nextValue) => SplitPrefix + nextValue;
+
+    /// <summary>The next-rank value in a key from <see cref="SplitKey"/>.</summary>
+    public static bool TryReadSplitKey(string key, out string nextValue) {
+        if (key.StartsWith(SplitPrefix, StringComparison.Ordinal)) {
+            nextValue = key[SplitPrefix.Length..];
+            return true;
+        }
+        nextValue = string.Empty;
+        return false;
     }
 
     /// <summary>

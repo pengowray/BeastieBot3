@@ -353,7 +353,7 @@ internal sealed class WikipediaListGenerator {
         // are seeded so zero-count children still appear; other classes/orders under the parent appear too.
         Dictionary<string, IReadOnlyList<StatusCount>>? breakdown = null;
         if (childRank != null && _chartData != null) {
-            breakdown = _chartData.BuildChildBreakdown(definition.Filters, childRank, orderedKeys);
+            breakdown = _chartData.BuildChildBreakdown(definition.Filters, childRank, orderedKeys, splitNotAssigned: true);
         }
 
         if (includeTable && breakdown is { Count: > 0 }) {
@@ -392,6 +392,18 @@ internal sealed class WikipediaListGenerator {
         // dropped, so the sub-lists + orphan sections together cover the whole parent scope.
         if (childRank != null) {
             var selector = BuildSelector(childRank);
+            var nextSelector = IucnNotAssignedRules.NextRank(childRank) is { } nextRank ? BuildSelector(nextRank) : null;
+            // A child value IUCN marks "NOT ASSIGNED" (with no rule in rules/iucn-not-assigned.yml) gets
+            // no section of its own: its taxa are listed by the next rank, as the summary table counts
+            // them. Only taxa with no value at either rank share the "Unassigned" section.
+            string OrphanKey(IucnSpeciesRecord r) {
+                var value = selector(r);
+                if (!IucnNotAssignedRules.IsNotAssigned(value)) {
+                    return value ?? string.Empty;
+                }
+                var next = nextSelector?.Invoke(r);
+                return string.IsNullOrWhiteSpace(next) || IucnNotAssignedRules.IsNotAssigned(next) ? string.Empty : next.Trim();
+            }
             var childValueSet = new HashSet<string>(orderedKeys, StringComparer.Ordinal);
             var orphanGroups = section.Records
                 .Where(r => !IsRegionalAssessment(r))
@@ -399,7 +411,7 @@ internal sealed class WikipediaListGenerator {
                     var v = TaxonFilterSql.NormalizeValue(childRank, selector(r));
                     return v == null || !childValueSet.Contains(v);
                 })
-                .GroupBy(r => selector(r) is { } value && !IucnNotAssignedRules.IsNotAssigned(value) ? value : string.Empty)
+                .GroupBy(OrphanKey)
                 .OrderByDescending(g => g.Count())
                 .ThenBy(g => g.Key, StringComparer.Ordinal);
 

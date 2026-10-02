@@ -225,14 +225,25 @@ internal sealed class IucnChartDataBuilder : IDisposable {
         string childRank,
         IReadOnlyList<string>? curatedChildren = null,
         IReadOnlyDictionary<string, string>? memberToGroup = null,
-        string? wherePredicate = null) {
+        string? wherePredicate = null,
+        bool splitNotAssigned = false) {
 
         var column = TaxonFilterSql.ResolveColumn(childRank)
             ?? throw new ArgumentException($"Unknown child rank '{childRank}'.", nameof(childRank));
 
+        // With splitNotAssigned, a "NOT ASSIGNED" child value is counted per value of the next rank
+        // (an order that is not assigned, per family), keyed by IucnNotAssignedRules.SplitKey, so a
+        // parent page's table rows match its sections.
+        var childExpression = $"v.{column}";
+        if (splitNotAssigned && IucnNotAssignedRules.NextRank(childRank) is { } nextRank
+            && TaxonFilterSql.ResolveColumn(nextRank) is { } nextColumn) {
+            childExpression = $"CASE WHEN v.{column} = '{IucnNotAssignedRules.NotAssigned}' " +
+                $"THEN '{IucnNotAssignedRules.SplitKey(string.Empty)}' || IFNULL(v.{nextColumn}, '') ELSE v.{column} END";
+        }
+
         var parameters = new List<SqliteParameter>();
         var sql = new StringBuilder();
-        sql.AppendLine($"SELECT v.{column} AS childVal, v.redlistCategory, v.possiblyExtinct, v.possiblyExtinctInTheWild, COUNT(*) AS n");
+        sql.AppendLine($"SELECT {childExpression} AS childVal, v.redlistCategory, v.possiblyExtinct, v.possiblyExtinctInTheWild, COUNT(*) AS n");
         sql.AppendLine("FROM view_assessments_html_taxonomy_html v");
         // Default = canonical species count (the prose headline); callers pass RenderablePredicate to
         // get the renderable-row ("bullet") weight, which also counts subspecies/varieties.
@@ -242,7 +253,7 @@ internal sealed class IucnChartDataBuilder : IDisposable {
                 TaxonFilterSql.AppendFilter(sql, parameters, parentFilters[i], i, paramPrefix: "b");
             }
         }
-        sql.AppendLine($"GROUP BY v.{column}, v.redlistCategory, v.possiblyExtinct, v.possiblyExtinctInTheWild");
+        sql.AppendLine("GROUP BY childVal, v.redlistCategory, v.possiblyExtinct, v.possiblyExtinctInTheWild");
 
         // childKey -> (chart code -> count). Ordinal compare keeps DB-uppercase keys exact.
         var acc = new Dictionary<string, Dictionary<string, int>>(StringComparer.Ordinal);

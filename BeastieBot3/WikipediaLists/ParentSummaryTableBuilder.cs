@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
+using BeastieBot3.Iucn;
 using static BeastieBot3.WikipediaLists.ProseFormat;
 
 namespace BeastieBot3.WikipediaLists;
@@ -58,7 +59,7 @@ internal static class ParentSummaryTableBuilder {
             sb.AppendLine("|-");
             var label = linkByValue.TryGetValue(key, out var link)
                 ? $"[[{link.WikiTitle}|{link.DisplayName}]]"
-                : ToTitleCase(key);
+                : ToTitleCase(IucnNotAssignedRules.TryReadSplitKey(key, out var next) ? next : key);
             var cells = new StringBuilder($"| {label}");
             var rowTotal = 0;
             var rowCr = 0;

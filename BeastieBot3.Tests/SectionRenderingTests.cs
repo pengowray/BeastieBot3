@@ -163,4 +163,39 @@ public sealed class SectionRenderingTests : IDisposable {
         Assert.Contains(lines, l => l.Contains("Not assigned species1", StringComparison.OrdinalIgnoreCase));
         Assert.DoesNotContain(lines, l => l.Contains("Family: Not", StringComparison.OrdinalIgnoreCase));
     }
+
+    [Fact]
+    public void SmallFamiliesPlusNotAssigned_GetNoOtherHeading_AndKeepFamilyNotes() {
+        // Every real Russulales family is small, and some species have no IUCN family: no lone
+        // "Other Russulales" heading, the species sit under the order with their family named.
+        var records = Family("AGARICOMYCETES", "RUSSULALES", "ALBATRELLACEAE", 1)
+            .Concat(Family("AGARICOMYCETES", "RUSSULALES", "STEREACEAE", 1))
+            .Concat(Family("AGARICOMYCETES", "RUSSULALES", "NOT ASSIGNED", 2))
+            .Concat(Family("AGARICOMYCETES", "AGARICALES", "AGARICACEAE", 6))
+            .ToList();
+        var display = new DisplayPreferences { ListingStyle = ListingStyle.ScientificNameFocus, IncludeFamilyInOtherBucket = true };
+
+        var (body, _) = Renderer(placement: null, rules: null).BuildSectionBody(records, DefaultGrouping(), display, "LC");
+        var lines = Lines(body);
+
+        Assert.False(lines.Any(l => l.StartsWith("=", StringComparison.Ordinal) && l.Contains("Other", StringComparison.Ordinal)), body);
+        Assert.Contains(lines, l => l.Contains("Albatrellaceae species1", StringComparison.Ordinal) && l.Contains("Family:", StringComparison.Ordinal));
+        Assert.DoesNotContain(lines, l => l.Contains("assigned", StringComparison.OrdinalIgnoreCase) && l.Contains("Family:", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void FamiliesWithNoIucnOrder_EachGetAHeading_NotAnOtherBucketAmongTheOrders() {
+        var records = Family("LECANOROMYCETES", "NOT ASSIGNED", "SARRAMEANACEAE", 1)
+            .Concat(Family("LECANOROMYCETES", "NOT ASSIGNED", "TRAPELIACEAE", 1))
+            .Concat(Family("LECANOROMYCETES", "NOT ASSIGNED", "MYCOPORACEAE", 1))
+            .Concat(Family("LECANOROMYCETES", "LECANORALES", "LECANORACEAE", 6))
+            .Concat(Family("LECANOROMYCETES", "PELTIGERALES", "PELTIGERACEAE", 6))
+            .ToList();
+
+        var (body, _) = Renderer(placement: null, rules: null).BuildSectionBody(records, DefaultGrouping(), Display, "LC");
+        var lines = Lines(body);
+
+        Assert.True(lines.Contains("=== Family Trapeliaceae ==="), body);
+        Assert.DoesNotContain(lines, l => l.StartsWith("=", StringComparison.Ordinal) && l.Contains("Other", StringComparison.Ordinal));
+    }
 }

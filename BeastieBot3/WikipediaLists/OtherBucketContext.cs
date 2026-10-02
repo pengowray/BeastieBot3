@@ -27,13 +27,16 @@ internal sealed class OtherBucketContext {
     /// <summary>
     /// Gets the rank value for a record. Looks up the per-taxon map first,
     /// then falls back to FamilyName only if the rank IS family.
-    /// Returns null if the rank-specific value is unknown (avoids redundant annotations).
+    /// Returns null if the rank-specific value is unknown (avoids redundant annotations), including
+    /// a family IUCN marks "NOT ASSIGNED".
     /// </summary>
     public string? GetRankValue(IucnSpeciesRecord record) {
         if (_valuesByTaxonId != null && _valuesByTaxonId.TryGetValue(record.TaxonId, out var value)) {
             return value;
         }
-        return RankLabel.Equals("Family", StringComparison.OrdinalIgnoreCase) ? record.FamilyName : null;
+        return RankLabel.Equals("Family", StringComparison.OrdinalIgnoreCase) && !IucnNotAssignedRules.IsNotAssigned(record.FamilyName)
+            ? record.FamilyName
+            : null;
     }
 
     /// <summary>

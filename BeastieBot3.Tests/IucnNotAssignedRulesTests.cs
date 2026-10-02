@@ -96,6 +96,25 @@ public sealed class IucnNotAssignedRulesTests : IDisposable {
         Assert.Throws<InvalidOperationException>(() => IucnNotAssignedRules.FromYaml(Yaml).ApplyTo(pooled));
     }
 
+    [Fact]
+    public void TwoRulesForOneTaxon_AreRejected() {
+        var ex = Assert.Throws<InvalidOperationException>(() => IucnNotAssignedRules.FromYaml("""
+            orders:
+              - { class: ACTINOPTERYGII, family: POMACENTRIDAE, order: PERCIFORMES }
+              - { class: actinopterygii, family: Pomacentridae, order: OVALENTARIA }
+            """));
+        Assert.Contains("rules 1 and 2 under 'orders'", ex.Message);
+    }
+
+    [Fact]
+    public void SplitKey_RoundTrips_AndPlainValuesAreNotSplitKeys() {
+        Assert.True(IucnNotAssignedRules.TryReadSplitKey(IucnNotAssignedRules.SplitKey("POMACENTRIDAE"), out var family));
+        Assert.Equal("POMACENTRIDAE", family);
+        Assert.False(IucnNotAssignedRules.TryReadSplitKey("PERCIFORMES", out _));
+        Assert.Equal("family", IucnNotAssignedRules.NextRank("Order"));
+        Assert.Null(IucnNotAssignedRules.NextRank("genus"));
+    }
+
     private string CreateIucnDatabase() {
         var db = Path.Combine(_dir, "iucn.sqlite");
         using var connection = new SqliteConnection(new SqliteConnectionStringBuilder { DataSource = db, Pooling = false }.ToString());

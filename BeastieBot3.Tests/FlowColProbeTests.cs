@@ -138,6 +138,14 @@ public class FlowColProbeTests {
         Assert.Contains("Regenerating the Wikipedia lists", r.Detail);
     }
 
+    [Fact]
+    public void Placement_UnreadableRulesFile_SaysToFixTheFile() {
+        var r = FlowStepProbes.ColPlacementStep(new ColPlacementSummary { State = "not-assigned-unreadable", Error = "bad key" })!;
+        Assert.Equal("todo", r.Status);
+        Assert.Contains("iucn-not-assigned.yml: bad key", r.Detail);
+        Assert.DoesNotContain("Delete", r.Detail);
+    }
+
     // ---- leftovers ----
 
     [Fact]

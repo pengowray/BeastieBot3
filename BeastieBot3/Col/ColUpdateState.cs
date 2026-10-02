@@ -53,7 +53,7 @@ public sealed record ColLeftover {
 // database: whether it is current, and if not, why.
 public sealed record ColPlacementSummary {
     // "current" | "no-file" | "not-built" | "iucn-changed" | "col-changed" | "rules-changed" | "thresholds-changed"
-    // | "not-assigned-changed" | "unreadable"
+    // | "not-assigned-changed" | "not-assigned-unreadable" | "unreadable"
     public required string State { get; init; }
     public DateTime? BuiltAtUtc { get; init; }
     public int Species { get; init; }
@@ -177,9 +177,10 @@ public static class ColUpdateStateReader {
 
         IucnNotAssignedRules notAssigned;
         try {
-            notAssigned = IucnNotAssignedRules.LoadFromRulesDir(Path.Combine(paths.BaseDirectory, "rules"));
-        } catch (InvalidOperationException) {
-            notAssigned = IucnNotAssignedRules.None;
+            notAssigned = IucnNotAssignedRules.LoadForPaths(paths);
+        } catch (InvalidOperationException ex) {
+            // Not "unreadable": that state's advice is to delete the placement file.
+            return new ColPlacementSummary { State = "not-assigned-unreadable", Error = ex.Message };
         }
         var status = TaxonPlacementBuild.Status(iucnPath, loaded.Path, notAssigned: notAssigned);
         return new ColPlacementSummary {

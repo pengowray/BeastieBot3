@@ -113,11 +113,15 @@ public sealed class WikipediaListCommand : Command<WikipediaListCommand.Settings
             AnsiConsole.MarkupLine($"[grey]Filtered to[/] [cyan]{definitions.Count}[/] [grey]list(s) by[/] {summary}.");
         }
 
-        // Orders and families for taxa that IUCN marks "NOT ASSIGNED", read from the same folder as
-        // the other rules. Applied to every IUCN query below and to the CoL placement.
+        // Orders and families for taxa that IUCN marks "NOT ASSIGNED". Applied to every IUCN query
+        // below and to the CoL placement. With --rules they come from that folder; otherwise from the
+        // editable rules folder, which col build-placement and the workflow light also read, so all
+        // three agree on whether the placement is current.
         IucnNotAssignedRules notAssigned;
         try {
-            notAssigned = IucnNotAssignedRules.LoadFromRulesDir(Path.GetDirectoryName(rulesPath));
+            notAssigned = settings.RulesPath is null
+                ? IucnNotAssignedRules.LoadForPaths(paths)
+                : IucnNotAssignedRules.LoadFromRulesDir(Path.GetDirectoryName(rulesPath));
         } catch (InvalidOperationException ex) {
             AnsiConsole.MarkupLine($"[red]Could not read {IucnNotAssignedRules.FileName}:[/] {Markup.Escape(ex.Message)}");
             return -1;

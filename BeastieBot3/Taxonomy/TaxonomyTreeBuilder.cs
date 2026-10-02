@@ -87,7 +87,7 @@ internal static class TaxonomyTreeBuilder {
     /// already (taxa with no value at the rank go to it). Named groups are sorted
     /// alphabetically and residual buckets come last.
     /// </summary>
-    private static List<TreeGroup<T>> CreateGroups<T>(IEnumerable<T> items, TaxonomyTreeLevel<T> level) {
+    private static List<TreeGroup<T>> CreateGroups<T>(IEnumerable<T> items, TaxonomyTreeLevel<T> level, bool lump = true, int extraSmallGroups = 0) {
         var comparer = StringComparer.OrdinalIgnoreCase;
         var buckets = new Dictionary<string, TreeGroup<T>>(comparer);
         var unknownLabel = level.UnknownLabel ?? $"Unknown {level.Label}";
@@ -107,11 +107,12 @@ internal static class TaxonomyTreeBuilder {
             bucket.Items.Add(item);
         }
 
-        if (level.MinItems > 1) {
+        if (lump && level.MinItems > 1) {
             var smallGroups = buckets.Values.Where(g => g.Items.Count < level.MinItems).ToList();
             var otherLabel = level.OtherLabel ?? DefaultOtherLabel(level.Label);
             var otherExists = buckets.TryGetValue(otherLabel, out var existingOther) && existingOther.IsResidual;
-            var enoughToLump = otherExists || level.MinGroupsForOther <= 0 || smallGroups.Count >= level.MinGroupsForOther;
+            var enoughToLump = otherExists || level.MinGroupsForOther <= 0
+                || (smallGroups.Count > 0 && smallGroups.Count + extraSmallGroups >= level.MinGroupsForOther);
             if (smallGroups.Count > 0 && enoughToLump) {
                 foreach (var small in smallGroups) {
                     buckets.Remove(small.DisplayValue);
@@ -186,10 +187,10 @@ internal static class TaxonomyTreeBuilder {
         /// <summary>Groups <paramref name="entries"/> under <paramref name="parent"/> by the level at <paramref name="levelIndex"/>.</summary>
         /// <param name="layers">How many intermediate layers already have headings between the previous
         /// configured level and this one (<see cref="IntermediateLayerOptions.MaxLayers"/>).</param>
-        /// <param name="keepSingleGroup">Give the level a heading even when every item has the same value:
-        /// set for items whose own value at the level above got no heading but sit beside headings
-        /// that did (a family whose IUCN order is "NOT ASSIGNED", beside the order headings).</param>
-        private void Process(TaxonomyTreeNode<T> parent, int parentDepth, IReadOnlyList<Entry> entries, int levelIndex, string path, int layers = 0, bool keepSingleGroup = false) {
+        /// <param name="besideSkipped">The items are skipped items placed beside other headings: their
+        /// groups at this level each keep a heading and are not lumped into "Other" (an "Other
+        /// families" heading among the order headings would not say what it holds).</param>
+        private void Process(TaxonomyTreeNode<T> parent, int parentDepth, IReadOnlyList<Entry> entries, int levelIndex, string path, int layers = 0, bool besideSkipped = false) {
             if (entries.Count == 0) {
                 return;
             }
@@ -212,7 +213,7 @@ internal static class TaxonomyTreeBuilder {
                 return;
             }
 
-            GroupByLevel(parent, parentDepth, ItemsOf(entries), levelIndex, keepSingleGroup, path);
+            GroupByLevel(parent, parentDepth, ItemsOf(entries), levelIndex, keepSingleGroup: besideSkipped, path, lump: !besideSkipped);
         }
 
         /// <summary>
@@ -220,23 +221,28 @@ internal static class TaxonomyTreeBuilder {
         /// <paramref name="keepSingleGroup"/> or <c>AlwaysDisplay</c>). A one-item residual bucket and
         /// force-split groups give their items to the next level under the same parent.
         /// </summary>
-        private void GroupByLevel(TaxonomyTreeNode<T> parent, int parentDepth, IReadOnlyList<T> items, int levelIndex, bool keepSingleGroup, string path) {
+        private void GroupByLevel(TaxonomyTreeNode<T> parent, int parentDepth, IReadOnlyList<T> items, int levelIndex, bool keepSingleGroup, string path, bool lump = true) {
             var level = _levels[levelIndex];
             var (kept, skipped) = SplitSkipped(items, level);
-            var groups = CreateGroups(kept, level);
+            // Skipped items still count as one small group towards MinGroupsForOther, as they did
+            // when a "NOT ASSIGNED" family was lumped with the others.
+            var groups = CreateGroups(kept, level, lump, extraSmallGroups: skipped.Count > 0 ? 1 : 0);
             if (groups.Count == 0) {
                 Process(parent, parentDepth, ToEntries(items), levelIndex + 1, path);
                 return;
             }
 
-            if (groups.Count == 1 && skipped.Count == 0 && !level.AlwaysDisplay && !keepSingleGroup) {
+            // One group and no heading: every item shares the value, or every value was small and went
+            // into one "Other" bucket. Skipped items join a lumped bucket's items on the parent, so an
+            // "Other {parent}" heading never stands with no named group beside it.
+            if (groups.Count == 1 && (skipped.Count == 0 || groups[0].Lumped) && !level.AlwaysDisplay && !keepSingleGroup) {
                 if (groups[0].Lumped) {
-                    // Every value was small and went into one "Other" bucket, which gets no heading.
                     // The node remembers the level so each item can still name its family.
                     parent.LumpedLabel = level.Label;
                     parent.LumpedKey = level.KeyOrLabel;
                 }
-                Descend(parent, parentDepth, groups[0].DisplayValue, groups[0].Items, levelIndex, path);
+                var all = skipped.Count == 0 ? groups[0].Items : groups[0].Items.Concat(skipped).ToList();
+                Descend(parent, parentDepth, groups[0].DisplayValue, all, levelIndex, path);
                 return;
             }
 
@@ -252,7 +258,7 @@ internal static class TaxonomyTreeBuilder {
             }
 
             if (skipped.Count > 0) {
-                Process(parent, parentDepth, ToEntries(skipped), levelIndex + 1, path, keepSingleGroup: groups.Count > 0);
+                Process(parent, parentDepth, ToEntries(skipped), levelIndex + 1, path, besideSkipped: true);
             }
         }
 

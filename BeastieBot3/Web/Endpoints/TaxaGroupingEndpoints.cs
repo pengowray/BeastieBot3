@@ -283,8 +283,8 @@ public static class TaxaGroupingEndpoints {
         LoadDraftGroupsExpanded(paths, out path).Groups;
 
     // The draft of taxa-groups.yml if there is one, otherwise the rules/ file.
-    // The draft rules/iucn-not-assigned.yml when there is one, else the source file, so counts match
-    // what a generation run from the Rules editor would produce.
+    // The draft rules/iucn-not-assigned.yml when there is one, else the source file: the page shows
+    // the counts the rules being edited would give.
     private static IucnNotAssignedRules LoadDraftNotAssigned(PathsService paths) {
         var path = RulesDrafts.For(RulesPaths.Resolve(paths)).EffectivePath(IucnNotAssignedRules.FileName);
         return path is null ? IucnNotAssignedRules.None : IucnNotAssignedRules.Load(path);
