@@ -340,6 +340,8 @@ public class IucnAssessmentCitationParserTests {
         "Eastern Arc Mountains & Coastal Forests CEPF Plant Assessment Project & Bösenberg, J.D.")]
     // "of" and "the" alone don't make an organisation.
     [InlineData("Smith, J. & Friends of the Forest", "Smith, J. & Friends of the Forest")]
+    // Nor does an affiliation in parentheses after a person's name (aid 12463382).
+    [InlineData("Shuk Man, C. & Ng Wai Chuen (Grouper & Wrasse Specialist Group)", "Shuk Man, C. & Ng Wai Chuen (Grouper & Wrasse Specialist Group)")]
     [InlineData("GTA Singapore Southeast Asia Trees Workshop 2023, P.", "GTA Singapore Southeast Asia Trees Workshop 2023, P.")]
     public void SplitCreditNames_WithoutCount(string full, string expected) {
         Assert.Equal(expected.Split('|'), IucnAssessmentCitationParser.SplitCreditNames(full));

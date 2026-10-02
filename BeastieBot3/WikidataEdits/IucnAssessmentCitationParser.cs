@@ -532,9 +532,11 @@ internal static class IucnAssessmentCitationParser {
         return !words[^1].EndsWith('.');
     }
 
-    // A word only organisations use, leaving out "the", "of", "for" and "and".
+    // A word only organisations use, leaving out "the", "of", "for" and "and", and leaving out a note
+    // in parentheses: "Ng Wai Chuen (Grouper & Wrasse Specialist Group)" is a person with an
+    // affiliation, while "NatureServe (Hammerson, G.)" is an organisation.
     private static bool HasOrganisationWord(string token) =>
-        Letters.Matches(token).Any(m => OrganisationWords.Contains(m.Value) && !WeakOrganisationWords.Contains(m.Value));
+        Letters.Matches(StripNotes(token)).Any(m => OrganisationWords.Contains(m.Value) && !WeakOrganisationWords.Contains(m.Value));
 
     private static IReadOnlyList<string> Distinct(List<string> names) =>
         names.Distinct(StringComparer.Ordinal).ToList();
