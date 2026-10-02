@@ -1,3 +1,5 @@
+using System.IO.Compression;
+using System.Text;
 using System.Text.Json;
 using BeastieBot3.CommonNames;
 using BeastieBot3.Shared.SiteData;
@@ -8,9 +10,10 @@ using Spectre.Console;
 
 namespace BeastieBot3.Tests.SiteBuild;
 
-// `site build-db` end to end over tiny source databases: an IUCN CSV export, an IUCN API cache and a
-// common names store, with the other sources missing. Checks the contract the public site depends
-// on (BeastieBot3.Site reads only what SiteDbSchema describes).
+// `site build-db` end to end over tiny source databases: an IUCN CSV export, an IUCN API cache, a
+// common names store, GBIF's checklist and a Catalogue of Life ColDP zip, with the other sources
+// missing. Checks the contract the public site depends on (BeastieBot3.Site reads only what
+// SiteDbSchema describes).
 public sealed class SiteDbBuildTests : IDisposable {
     private const long PolarBear = 22823;
     private const long PolarBearGlobal = 14871490;
@@ -23,6 +26,15 @@ public sealed class SiteDbBuildTests : IDisposable {
     private const long Subpopulation = 900002;
     private const long SubpopulationLatest = 900102;
     private const long NoScopeTaxon = 900003;
+    // Earlier polar bear assessments: an amended version, and two errata versions in a chain.
+    private const long PolarBear2005 = 9390905;
+    private const long PolarBear2006Amended = 9390906;
+    private const long PolarBear2008 = 9390950;
+    private const long PolarBear2008Errata = 9390951;
+    private const long PolarBear2008Errata2 = 9390952;
+
+    // The replacement character, written this way so it stays visible in the source.
+    private const char Lost = (char)0xFFFD;
 
     private readonly string _dir = Path.Combine(Path.GetTempPath(), "beastiebot-sitebuild-tests", Guid.NewGuid().ToString("N"));
 
@@ -68,6 +80,55 @@ public sealed class SiteDbBuildTests : IDisposable {
     }
 
     [Fact]
+    public void Build_StoresTheGbifAndCatalogueOfLifeCitations() {
+        using var db = OpenReadOnly(Build());
+        var meta = Rows(db, "SELECT key, value FROM meta").ToDictionary(r => (string)r[0]!, r => (string)r[1]!);
+
+        Assert.Equal("2026-1", meta[SiteDbSchema.MetaKeys.GbifChecklistVersion]);
+        Assert.Equal("2026-07-28", meta[SiteDbSchema.MetaKeys.GbifChecklistPublished]);
+        Assert.Equal("IUCN (2026). The IUCN Red List of Threatened Species. Version 2026-1. https://www.iucnredlist.org. Downloaded on 2026-07-28. https://doi.org/10.15468/0qnb58",
+            meta[SiteDbSchema.MetaKeys.GbifChecklistCitation]);
+        Assert.Equal("10.15468/0qnb58", meta[SiteDbSchema.MetaKeys.GbifChecklistDoi]);
+
+        Assert.Equal("COL26.7 XR", meta[SiteDbSchema.MetaKeys.ColRelease]);
+        Assert.Equal("10.48580/dgykv", meta[SiteDbSchema.MetaKeys.ColDoi]);
+        Assert.Equal("Bánki, O., Roskov, Y., & Hernández Robles, D. R. (2026). Catalogue of Life (2026-07-17 XR). "
+            + "Catalogue of Life Foundation, Amsterdam, Netherlands. https://doi.org/10.48580/dgykv",
+            meta[SiteDbSchema.MetaKeys.ColCitation]);
+    }
+
+    // An errata version replaced an earlier assessment of the same year; an amended version replaced
+    // the one of the year its title names. The column is set on the older row. The second errata
+    // version has both 2008 assessments as candidates; the first errata version already replaced the
+    // original, so the second replaced the first. All three are earlier assessments here, so only the
+    // ids tell which came first.
+    [Fact]
+    public void Build_LinksEachReplacedAssessmentToTheVersionThatReplacedIt() {
+        using var db = OpenReadOnly(Build());
+        var links = Rows(db, "SELECT assessment_id, replaced_by_assessment_id FROM assessment WHERE replaced_by_assessment_id IS NOT NULL")
+            .ToDictionary(r => (long)r[0]!, r => (long)r[1]!);
+
+        Assert.Equal(new Dictionary<long, long> {
+            [PolarBear2005] = PolarBear2006Amended,
+            [PolarBear2008] = PolarBear2008Errata,
+            [PolarBear2008Errata] = PolarBear2008Errata2,
+        }, links);
+    }
+
+    // "Kry?tufek, B." lost a letter to an encoding error; the 2006 assessment, read after it, credits
+    // "Kryštufek, B.". A name no other credit matches keeps its U+FFFD.
+    [Fact]
+    public void Build_RepairsAuthorNamesThatLostALetter() {
+        using var db = OpenReadOnly(Build());
+        var repaired = IucnCitationParts.FromJson(Scalar(db, $"SELECT citation_json FROM assessment WHERE assessment_id = {PolarBear2005}"))!;
+        var kept = IucnCitationParts.FromJson(Scalar(db, $"SELECT citation_json FROM assessment WHERE assessment_id = {PolarBear2008Errata}"))!;
+
+        Assert.Equal(new CitationAuthor(CitationAuthorKind.Person, "Kryštufek, B.", "Kryštufek", "B."), Assert.Single(repaired.Authors));
+        Assert.Equal(new CitationAuthor(CitationAuthorKind.Verbatim, $"Mo{Lost}brucker, H."), kept.Authors[1]);
+        Assert.Equal(2009, kept.ErrataYear);
+    }
+
+    [Fact]
     public void Build_PutsEveryScientificNameInNameAndNameKey_AndTheSearchIndexWorks() {
         using var db = OpenReadOnly(Build());
 
@@ -98,7 +159,8 @@ public sealed class SiteDbBuildTests : IDisposable {
             FROM assessment WHERE taxon_id = @id ORDER BY assessment_id
             """, ("@id", PolarBear)).ToDictionary(r => (long)r[0]!);
 
-        Assert.Equal(new[] { PolarBear1996, PolarBearGlobal, PolarBearEurope }, rows.Keys.Order());
+        Assert.Equal(new[] { PolarBear2005, PolarBear2006Amended, PolarBear1996, PolarBear2008, PolarBear2008Errata, PolarBear2008Errata2,
+            PolarBearGlobal, PolarBearEurope }, rows.Keys.Order());
 
         var global = rows[PolarBearGlobal];
         Assert.Equal(("Global", 1L, "VU", "3.1", 2015L, "2015-08-27", "Unknown"),
@@ -239,11 +301,17 @@ public sealed class SiteDbBuildTests : IDisposable {
         var cache = Path.Combine(_dir, "cache.sqlite");
         var names = Path.Combine(_dir, "common_names.sqlite");
         var rules = Path.Combine(_dir, "rules-list.txt");
+        var gbif = Path.Combine(_dir, "iucn-checklist-2026-07-28.zip");
+        var colDir = Path.Combine(_dir, "col");
         if (!File.Exists(iucn)) {
             WriteIucn(iucn);
             WriteCache(cache);
             WriteCommonNames(names);
             File.WriteAllText(rules, "// manual common names\nUrsus nemo = nemo bear\n");
+            using (var archive = Gbif.GbifIucnChecklistReaderTests.BuildArchive()) {
+                File.WriteAllBytes(gbif, archive.ToArray());
+            }
+            WriteColZip(colDir);
         }
         return new SiteBuildInputs {
             IucnDatabase = iucn,
@@ -251,8 +319,58 @@ public sealed class SiteDbBuildTests : IDisposable {
             CommonNames = names,
             RulesList = rules,
             WikidataCache = Path.Combine(_dir, "missing-wikidata.sqlite"),
+            GbifChecklist = gbif,
+            // Only the file name is read, for the release.
+            ColDatabase = Path.Combine(_dir, "col_coldp_COL26.7_XR.sqlite"),
+            ColDir = colDir,
             Output = output,
         };
+    }
+
+    // A ColDP zip with an older release beside it; metadata.yaml cut down to the fields the citation uses.
+    private static void WriteColZip(string folder) {
+        Directory.CreateDirectory(folder);
+        foreach (var (file, alias, version, issued) in new[] {
+                     ("bf2146be.zip", "COL26.7 XR", "2026-07-17 XR", "2026-07-17"),
+                     ("a1b2c3d4.zip", "COL26.5 XR", "2026-05-15 XR", "2026-05-15"),
+                 }) {
+            using var zip = ZipFile.Open(Path.Combine(folder, file), ZipArchiveMode.Create);
+            using var writer = new StreamWriter(zip.CreateEntry("metadata.yaml").Open(), new UTF8Encoding(false));
+            writer.Write($$"""
+                ---
+                key: 315834
+                doi: {{(alias == "COL26.7 XR" ? "10.48580/dgykv" : "10.48580/dgyxx")}}
+                title: Catalogue of Life
+                alias: {{alias}}
+                description: "The Catalogue of Life is building a comprehensive catalogue\
+                  \ of all known species."
+                issued: {{issued}}
+                version: {{version}}
+                creator:
+                 -
+                  orcid: 0000-0001-6197-9951
+                  given: Olaf
+                  family: Bánki
+                  organisation: Catalogue of Life Foundation
+                 -
+                  given: Yury
+                  family: Roskov
+                 -
+                  given: Diana Raquel
+                  family: Hernández Robles
+                publisher:
+                  city: Amsterdam
+                  country: NL
+                  address: "Amsterdam, Netherlands"
+                  organisation: Catalogue of Life Foundation
+                license: cc by
+                url: https://www.checklistbank.org/dataset/315834
+                source:
+                 -
+                  id: 1
+                  type: [this is not valid yaml and must not be read
+                """);
+        }
     }
 
     private static IAnsiConsole QuietConsole() => AnsiConsole.Create(new AnsiConsoleSettings {
@@ -332,6 +450,11 @@ public sealed class SiteDbBuildTests : IDisposable {
                {{Header(PolarBearEurope, PolarBear, true, "2025", "2022-12-09T00:00:00.000+00:00", "VU", europe)}},
                {{Header(PolarBearGlobal, PolarBear, true, "2015", "2015-08-27T01:00:00.000+01:00", "VU", global)}},
                {{Header(PolarBear1996, PolarBear, false, "1996", "1996-08-01T01:00:00.000+01:00", "LR/cd", global)}},
+               {{Header(PolarBear2005, PolarBear, false, "2005", "2005-01-01T00:00:00.000+00:00", "VU", global)}},
+               {{Header(PolarBear2006Amended, PolarBear, false, "2006", "2005-01-01T00:00:00.000+00:00", "VU", global)}},
+               {{Header(PolarBear2008, PolarBear, false, "2008", "2008-06-30T00:00:00.000+00:00", "VU", global)}},
+               {{Header(PolarBear2008Errata, PolarBear, false, "2008", "2008-06-30T00:00:00.000+00:00", "VU", global)}},
+               {{Header(PolarBear2008Errata2, PolarBear, false, "2008", "2008-06-30T00:00:00.000+00:00", "VU", global)}},
                {{Header(PolarBearDraft, PolarBear, false, null, "2027-01-01T00:00:00.000+00:00", "EN", global)}},
                {{Header(PolarBearNoScope, PolarBear, false, "2001", "2001-01-01T00:00:00.000+00:00", "EN", "[]")}}]}
             """;
@@ -353,6 +476,23 @@ public sealed class SiteDbBuildTests : IDisposable {
             (PolarBear1996, PolarBear, "2026-08-24T03:15:26.3246382Z", Payload(PolarBear1996, PolarBear, "1996",
                 "Polar Bear Specialist Group 1996. Ursus maritimus. The IUCN Red List of Threatened Species 1996: e.T22823A9390941. Accessed on 24 August 2026.",
                 "Polar Bear Specialist Group", 1, "2.3", null, global)),
+            // Read before the 2006 assessment that has the name right, so it waits for the name pool.
+            (PolarBear2005, PolarBear, "2026-08-23T00:00:00Z", Payload(PolarBear2005, PolarBear, "2005",
+                "Kry?tufek, B. 2005. Ursus maritimus. The IUCN Red List of Threatened Species 2005: e.T22823A9390905. Accessed on 23 August 2026.",
+                "Kry?tufek, B.", 1, "3.1", null, global)),
+            (PolarBear2006Amended, PolarBear, "2026-08-23T00:00:00Z", Payload(PolarBear2006Amended, PolarBear, "2006",
+                "Kryštufek, B. 2006. Ursus maritimus (amended version of 2005 assessment). The IUCN Red List of Threatened Species 2006: e.T22823A9390906. Accessed on 23 August 2026.",
+                "Kryštufek, B.", 1, "3.1", null, global)),
+            (PolarBear2008, PolarBear, "2026-08-23T00:00:00Z", Payload(PolarBear2008, PolarBear, "2008",
+                "Wiig, Ø. 2008. Ursus maritimus. The IUCN Red List of Threatened Species 2008: e.T22823A9390950. Accessed on 23 August 2026.",
+                "Wiig, Ø.", 1, "3.1", null, global)),
+            (PolarBear2008Errata, PolarBear, "2026-08-23T00:00:00Z", Payload(PolarBear2008Errata, PolarBear, "2008",
+                $"Wiig, Ø. & Mo{Lost}brucker, H. 2008. Ursus maritimus (errata version published in 2009). The IUCN Red List of Threatened Species 2008: e.T22823A9390951. Accessed on 23 August 2026.",
+                $"Wiig, Ø. & Mo{Lost}brucker, H.", 2, "3.1", null, global)),
+            // Both 2008 assessments are candidates; they are settled after every payload is read.
+            (PolarBear2008Errata2, PolarBear, "2026-08-23T00:00:00Z", Payload(PolarBear2008Errata2, PolarBear, "2008",
+                "Wiig, Ø. 2008. Ursus maritimus (errata version published in 2010). The IUCN Red List of Threatened Species 2008: e.T22823A9390952. Accessed on 23 August 2026.",
+                "Wiig, Ø.", 1, "3.1", null, global)),
         };
         foreach (var (id, taxon, downloaded, json) in payloads) {
             Execute(c, "INSERT INTO assessments (assessment_id, sis_id, downloaded_at, json) VALUES (@id, @taxon, @downloaded, @json)",

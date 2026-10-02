@@ -46,10 +46,14 @@ internal static class IucnLanguageCodes {
     };
 
     // Codes that say the language is unknown or that there is none: undetermined, no linguistic
-    // content, uncoded, several languages, and the range reserved for local use.
+    // content, uncoded and several languages. The range qaa to qtz, reserved for local use, is
+    // tested in IsLocalUse.
     private static readonly HashSet<string> NoLanguage = new(StringComparer.Ordinal) {
-        "und", "zxx", "mis", "mul", "qaa-qtz",
+        "und", "zxx", "mis", "mul",
     };
+
+    private static bool IsLocalUse(string code) =>
+        code.Length == 3 && code[0] == 'q' && code[1] is >= 'a' and <= 't' && code[2] is >= 'a' and <= 'z';
 
     private static readonly Dictionary<string, string> ToIso1 = BuildMap();
 
@@ -66,13 +70,13 @@ internal static class IucnLanguageCodes {
 
     /// The code to store for a common name: the ISO 639-1 code when the language has one, the
     /// code as given (lower case) when it has none, and null when the code says the language is
-    /// unknown or missing. A byte order mark (one IUCN record has "﻿aar") is removed.
+    /// unknown or missing. A byte order mark (one IUCN record has "\uFEFFaar") is removed.
     public static string? Normalise(string? code) {
         if (code is null) {
             return null;
         }
-        var trimmed = code.Trim().TrimStart('﻿').Trim().ToLowerInvariant();
-        if (trimmed.Length == 0 || NoLanguage.Contains(trimmed)) {
+        var trimmed = code.Trim().TrimStart('\uFEFF').Trim().ToLowerInvariant();
+        if (trimmed.Length == 0 || NoLanguage.Contains(trimmed) || IsLocalUse(trimmed)) {
             return null;
         }
         return ToIso1.TryGetValue(trimmed, out var iso1) ? iso1 : trimmed;

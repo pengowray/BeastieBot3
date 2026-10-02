@@ -101,7 +101,7 @@ public static partial class CiteIucnRenderer {
                 n++;
                 p.Add(($"last{n}", last));
                 if (initials.Length > 0) {
-                    p.Add(($"first{n}", initials));
+                    p.Add(($"first{n}", SuffixWithoutComma(initials)));
                 }
                 continue;
             }
@@ -125,6 +125,12 @@ public static partial class CiteIucnRenderer {
         }
         return n;
     }
+
+    // IucnCitationParts stores a generational suffix after the initials with a comma ("P.P., II",
+    // "A., Jr."). CS1 allows no comma at all in |firstN= and adds "CS1 maint: multiple names" for one,
+    // so the suffix is written as MOS:JR does: "P.P. II", "A. Jr.". Done here rather than in the parser
+    // so that site databases built before this change render correctly too.
+    private static string SuffixWithoutComma(string initials) => TrailingSuffix().Replace(initials, " ${suffix}");
 
     // CS1 reports "multiple names" for a name with more than one comma or any semicolon, and "numeric
     // names" for one containing a digit. Those are false alarms for an organisation or for one person
@@ -203,6 +209,9 @@ public static partial class CiteIucnRenderer {
     }
 
     // Quotes and angle brackets would end the attribute or the tag; "/" would make <ref name=x/>.
+    // Cite rejects a name made only of the digits 0-9 ("Cite error: The <ref> tag name cannot be a
+    // simple integer"), so such a name gets a prefix rather than being dropped, which would break any
+    // reuse the editor meant: "1" becomes "iucn-1".
     private static string SanitizeRefName(string? name) {
         if (string.IsNullOrWhiteSpace(name)) {
             return string.Empty;
@@ -214,7 +223,8 @@ public static partial class CiteIucnRenderer {
             }
             sb.Append(c);
         }
-        return WikitextValue.CollapseWhitespace(sb.ToString());
+        var cleaned = WikitextValue.CollapseWhitespace(sb.ToString());
+        return cleaned.Length > 0 && cleaned.All(char.IsAsciiDigit) ? "iucn-" + cleaned : cleaned;
     }
 
     [GeneratedRegex(@"\s*\(errata version published in\s*(\d{4})?\s*\)", RegexOptions.IgnoreCase)]
@@ -231,6 +241,10 @@ public static partial class CiteIucnRenderer {
     // CS1's own "et al." patterns, simplified: "et al", "et al.", "et alii", "and others" at the end.
     [GeneratedRegex(@"[;,]?\s*\b(?:et\.?\s*al(?:ii|ia|iae)?\.?|and others)\s*$", RegexOptions.IgnoreCase)]
     private static partial Regex EtAl();
+
+    // The suffixes the site-build name parser recognises (IucnAuthorNameParser.SuffixPattern).
+    [GeneratedRegex(@"\s*,\s*(?<suffix>(?:Jr|Jnr|Sr|Snr|II|III|IV)\.?)$")]
+    private static partial Regex TrailingSuffix();
 
     [GeneratedRegex(@"^(?:https?://(?:dx\.)?doi\.org/|doi:\s*)", RegexOptions.IgnoreCase)]
     private static partial Regex DoiPrefix();

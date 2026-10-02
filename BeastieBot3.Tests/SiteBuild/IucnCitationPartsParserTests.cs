@@ -358,6 +358,65 @@ public class IucnCitationPartsParserTests {
         Assert.Equal(Person("Tamanyan K.", "Tamanyan", "K."), surnameFirst.Authors.Single());
     }
 
+    // "Surname, Given Names" and two people written given name first look the same. Only a value[]
+    // count of two or more that the split matched keeps the name a person.
+    [Fact]
+    public void SurnameGivenNames_WithoutACount_IsKeptAsPublished() {
+        // aid 89373345: Djoko Iskandar and Mumpuni, value null.
+        var parse = Parse(Payload(58713, 89373345, "2004",
+            "Djoko Iskandar, Mumpuni 2004. Bufo biporcatus. The IUCN Red List of Threatened Species 2004: e.T58713A89373345. Accessed on 20 August 2026.",
+            "Bufo biporcatus", "Djoko Iskandar, Mumpuni"));
+
+        Assert.Equal(new[] { Verbatim("Djoko Iskandar, Mumpuni") }, parse.Parts!.Authors);
+        Assert.Equal(new[] { AuthorNameShape.SurnameGivenNamesUnconfirmed }, parse.AuthorShapes);
+    }
+
+    [Fact]
+    public void SurnameGivenNames_WithACountOfOne_IsKeptAsPublished() {
+        // Celsa Señaris and Enrique La Marca; the only value[] entry is the Amphibian Specialist Group.
+        var parse = Parse(Payload(55358, 11281813, "2004",
+            "Celsa Señaris, Enrique La Marca 2004. Atelopus carbonerensis. The IUCN Red List of Threatened Species 2004: e.T55358A11281813. Accessed on 20 August 2026.",
+            "Atelopus carbonerensis", "Celsa Señaris, Enrique La Marca", 1));
+
+        Assert.Equal(IucnAssessmentCitationParser.CreditSplitRule.CountGiven, parse.SplitRule);
+        Assert.Equal(new[] { Verbatim("Celsa Señaris, Enrique La Marca") }, parse.Parts!.Authors);
+        Assert.Equal(new[] { AuthorNameShape.SurnameGivenNamesUnconfirmed }, parse.AuthorShapes);
+    }
+
+    [Fact]
+    public void PersonAndOrganisation_SplitWithoutACount() {
+        var parse = Parse(Payload(39803, 9500227, "1996",
+            "Eudey, A. & Members of the Primate Specialist Group 1996. Rhinopithecus roxellana. The IUCN Red List of Threatened Species 1996: e.T39803A9500227. Accessed on 20 August 2026.",
+            "Rhinopithecus roxellana", "Eudey, A. & Members of the Primate Specialist Group"));
+
+        Assert.Equal(IucnAssessmentCitationParser.CreditSplitRule.PairsAndOrganisations, parse.SplitRule);
+        Assert.Equal(new[] { Person("Eudey, A.", "Eudey", "A."), Organisation("Members of the Primate Specialist Group") },
+            parse.Parts!.Authors);
+    }
+
+    [Fact]
+    public void ListKeptWholeWithAPersonAndAWorkshop_IsKeptAsPublished() {
+        // aid 9303466. "Mantasoa" and "Madagascar 2001" are not organisations, so the list stays whole;
+        // it names Loiselle, P., so it is not one organisation either.
+        const string assessor = "Loiselle, P. & participants of the CBSG/ANGAP CAMP \"Faune de Madagascar\" workshop, Mantasoa, Madagascar 2001";
+        var parse = Parse(Payload(16862, 9303466, "2004",
+            $"{assessor}. 2004. Paretroplus maculatus. The IUCN Red List of Threatened Species 2004: e.T16862A9303466. Accessed on 20 August 2026.",
+            "Paretroplus maculatus", assessor));
+
+        Assert.Equal(IucnAssessmentCitationParser.CreditSplitRule.Whole, parse.SplitRule);
+        Assert.Equal(new[] { Verbatim(assessor) }, parse.Parts!.Authors);
+    }
+
+    [Fact]
+    public void SingleLetterSurname_IsKeptAsPublished() {
+        // aid 7928819: "G, Ntakimazi" is one person written the wrong way round.
+        var parse = Parse(Payload(4991, 7928819, "2006",
+            "G, Ntakimazi 2006. Barbus alluaudi. The IUCN Red List of Threatened Species 2006: e.T4991A7928819. Accessed on 20 August 2026.",
+            "Barbus alluaudi", "G, Ntakimazi"));
+
+        Assert.Equal(CitationAuthorKind.Verbatim, Assert.Single(parse.Parts!.Authors).Kind);
+    }
+
     [Fact]
     public void OrganisationWithACommaAndAListKeptWhole() {
         var ministry = Parts(Payload(90230615, 223035828, "2022",

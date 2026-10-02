@@ -75,6 +75,27 @@ public class CiteIucnRendererTests {
             CiteIucnRenderer.Render(parts, new CiteIucnOptions { AuthorStyle = CiteAuthorStyle.LastFirst }));
     }
 
+    // CS1 allows no comma in |firstN=: "P.P., II" adds "CS1 maint: multiple names". Lowry II (aid
+    // 2006234) and Golamco Jr. (aid 11046733) parse clean on en.wikipedia with the comma left out.
+    [Theory]
+    [InlineData("P.P., II", "P.P. II")]
+    [InlineData("A., Jr.", "A. Jr.")]
+    [InlineData("W.B., III", "W.B. III")]
+    [InlineData("R.L. , Sr", "R.L. Sr")]
+    [InlineData("P.P.", "P.P.")]
+    [InlineData("Nur Adillah", "Nur Adillah")]
+    public void LastFirst_WritesAGenerationalSuffixWithoutTheComma(string initials, string first) {
+        var parts = PolarBear with { Authors = [Person("Lowry", initials)] };
+        Assert.StartsWith($"{{{{cite iucn |last1=Lowry |first1={first} |year=2015",
+            CiteIucnRenderer.Render(parts, new CiteIucnOptions { AuthorStyle = CiteAuthorStyle.LastFirst }));
+    }
+
+    [Fact]
+    public void AuthorN_KeepsTheSuffixAsIucnWritesIt() {
+        var parts = PolarBear with { Authors = [new CitationAuthor(CitationAuthorKind.Person, "Lowry II, P.P.", "Lowry", "P.P., II")] };
+        Assert.StartsWith("{{cite iucn |author=Lowry II, P.P. |year=2015", CiteIucnRenderer.Render(parts));
+    }
+
     [Fact]
     public void LastFirst_LeadingOrganisationIsAuthor1() {
         var output = CiteIucnRenderer.Render(HouseSparrow, new CiteIucnOptions { AuthorStyle = CiteAuthorStyle.LastFirst });
@@ -274,6 +295,23 @@ public class CiteIucnRendererTests {
         Assert.Equal(2, output.Count(c => c == '}'));
     }
 
+    // CS1 shows "invisible character" errors for these. Whitespace ones become a space; the rest are
+    // dropped. U+FFFD stays: it marks a lost letter, which a silent deletion would hide.
+    [Fact]
+    public void Values_LoseTheInvisibleCharactersCs1Reports() {
+        var parts = HouseSparrow with {
+            Authors = [
+                Verbatim("Sm\u200Bith, J."), Verbatim("Jo\u00ADnes\u200D, A."), Verbatim("Br\u0007own\u007F\u0085, B."),
+                Verbatim("Gr\u0090ey\u2060\uFEFF, C."), Verbatim("Kry\uFFFDtufek, B."), Verbatim("Tab\tand\u00A0space"),
+            ],
+            Doi = null,
+        };
+        Assert.StartsWith(
+            "{{cite iucn |author=Smith, J. |author2=Jones, A. |author3=Brown , B. |author4=Grey, C. |author5=Kry\uFFFDtufek, B. " +
+            "|author6=Tab and space |year=2019",
+            CiteIucnRenderer.Render(parts));
+    }
+
     [Fact]
     public void NeverWritesPageUrlOrLanguage() {
         foreach (var parts in new[] { PolarBear, GiantPanda, HouseSparrow, EuropeanRabbit }) {
@@ -292,6 +330,13 @@ public class CiteIucnRendererTests {
     [InlineData(null, "<ref>")]
     [InlineData("  ", "<ref>")]
     [InlineData("\"/\"", "<ref>")]
+    // Cite rejects an all-digit name; other names with digits are fine.
+    [InlineData("1", "<ref name=\"iucn-1\">")]
+    [InlineData(" 2026 ", "<ref name=\"iucn-2026\">")]
+    [InlineData("\"01\"", "<ref name=\"iucn-01\">")]
+    [InlineData("iucn 2026", "<ref name=\"iucn 2026\">")]
+    [InlineData("20 26", "<ref name=\"20 26\">")]
+    [InlineData("٢٠٢٦", "<ref name=\"٢٠٢٦\">")]
     public void WrapInRef_SanitizesTheName(string? refName, string opening) {
         var output = CiteIucnRenderer.Render(HouseSparrow, new CiteIucnOptions { WrapInRef = true, RefName = refName });
         Assert.Equal(opening + CiteIucnRenderer.Render(HouseSparrow) + "</ref>", output);

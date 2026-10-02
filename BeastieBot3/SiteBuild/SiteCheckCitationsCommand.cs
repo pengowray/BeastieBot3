@@ -19,6 +19,10 @@ using Spectre.Console.Cli;
 //      those assessments. About 2 seconds once the file is in the disk cache.
 //   3. `assessments`: each latest assessment's record, read in row order, parsed and, where an
 //      article cites it, compared.
+//   4. Only when some author name has a letter lost to an encoding error: the other assessments'
+//      records, for their assessor names, so the damaged names are repaired from the same names
+//      `site build-db` uses (AssessorNamePool). The latest assessments with such a name are parsed
+//      again after that.
 
 namespace BeastieBot3.SiteBuild;
 
@@ -219,6 +223,8 @@ internal sealed class SiteCheckCitationsCommand : Command<SiteCheckCitationsComm
         tally.PayloadMissing = latest.Count - rows.Count;
         rows.Sort((a, b) => a.RowId.CompareTo(b.RowId));
 
+        var names = new AssessorNamePool();
+        var waiting = new List<(LatestAssessment Assessment, string DownloadedAt, string Json)>();
         using var command = cache.CreateCommand();
         command.CommandText = "SELECT downloaded_at, json FROM assessments WHERE id = @id";
         var idParameter = command.Parameters.Add("@id", SqliteType.Integer);
@@ -247,15 +253,55 @@ internal sealed class SiteCheckCitationsCommand : Command<SiteCheckCitationsComm
                         tally.PayloadLatestFlagFalse++;
                     }
                     var parse = IucnCitationPartsParser.Parse(root, StoredUtc.Parse(downloadedAt), assessment.Predecessors);
-                    tally.AddParse(parse, assessment.Scope);
-                    if (parse.Parts is { } parts && wikiCites.TryGetValue(assessment.AssessmentId, out var cites)) {
-                        foreach (var cite in cites) {
-                            tally.AddComparison(parts, cite.ArticleTitle, WikiCitationComparer.Compare(parts, cite.Cite, assessment.Predecessors));
-                        }
+                    if (parse.DamagedAuthorNames.Count > 0) {
+                        waiting.Add((assessment, downloadedAt, json));
+                        continue;
                     }
+                    names.AddFrom(parse);
+                    AddParse(tally, parse, assessment, wikiCites);
                 }
             }
         });
+        if (waiting.Count == 0) {
+            return;
+        }
+
+        // The repair must use the same names as `site build-db`, which reads earlier assessments too.
+        var latestRows = rows.Select(r => r.RowId).ToHashSet();
+        using (var others = cache.CreateCommand()) {
+            others.CommandText = "SELECT id, json FROM assessments ORDER BY id";
+            others.CommandTimeout = 0;
+            using var reader = others.ExecuteReader();
+            ProgressConsole.Run("Reading the other assessments' author names", 0, progress => {
+                while (reader.Read()) {
+                    cancellationToken.ThrowIfCancellationRequested();
+                    if (latestRows.Contains(reader.GetInt64(0))) continue;
+                    progress.Increment();
+                    try {
+                        using var document = JsonDocument.Parse(reader.GetString(1));
+                        names.AddFrom(IucnCitationPartsParser.Parse(document.RootElement, null));
+                        tally.NamePoolPayloads++;
+                    } catch (JsonException) {
+                        // An unreadable earlier record only gives no names.
+                    }
+                }
+            });
+        }
+        foreach (var (assessment, downloadedAt, json) in waiting) {
+            using var document = JsonDocument.Parse(json);
+            AddParse(tally, IucnCitationPartsParser.Parse(document.RootElement, StoredUtc.Parse(downloadedAt), assessment.Predecessors, names.Repair),
+                assessment, wikiCites);
+        }
+    }
+
+    private static void AddParse(CitationCheckTally tally, IucnCitationParse parse, LatestAssessment assessment,
+        Dictionary<long, List<WikiCite>> wikiCites) {
+        tally.AddParse(parse, assessment.Scope);
+        if (parse.Parts is { } parts && wikiCites.TryGetValue(assessment.AssessmentId, out var cites)) {
+            foreach (var cite in cites) {
+                tally.AddComparison(parts, cite.ArticleTitle, WikiCitationComparer.Compare(parts, cite.Cite, assessment.Predecessors));
+            }
+        }
     }
 
     private static void WriteSummary(CitationCheckTally tally) {
@@ -264,6 +310,8 @@ internal sealed class SiteCheckCitationsCommand : Command<SiteCheckCitationsComm
         table.AddRow("Not parsed", $"{tally.Failures.Values.Sum():N0}");
         table.AddRow("Every author identified as a person or organisation", $"{tally.AllAuthorsStructured:N0}");
         table.AddRow("At least one author name left as published", $"{tally.SomeAuthorsVerbatim:N0}");
+        table.AddRow("Author names with a lost letter, repaired", $"{tally.AuthorNameRepairs.Values.Sum():N0}");
+        table.AddRow("Author names with a lost letter, not repaired", $"{tally.AuthorNamesNotRepaired.Values.Sum():N0}");
         if (tally.WikiCompared) {
             table.AddRow("En-wiki {{cite iucn}} templates compared", $"{tally.WikiTemplatesMatched:N0}");
             table.AddRow("… identical authors", $"{tally.AuthorAgreements.GetValueOrDefault(AuthorAgreement.Same):N0}");

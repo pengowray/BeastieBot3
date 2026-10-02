@@ -23,6 +23,7 @@ internal sealed class SiteDbWriter : IDisposable {
     private readonly SqliteCommand _taxon;
     private readonly SqliteCommand _assessment;
     private readonly SqliteCommand _name;
+    private readonly SqliteCommand _replacedBy;
     private long _nextNameId = 1;
     private bool _finished;
 
@@ -62,6 +63,8 @@ internal sealed class SiteDbWriter : IDisposable {
             VALUES (@name_id, @taxon_id, @name, @name_type, @language, @source, @is_preferred)
             """,
             "@name_id", "@taxon_id", "@name", "@name_type", "@language", "@source", "@is_preferred");
+        _replacedBy = Prepare("UPDATE assessment SET replaced_by_assessment_id = @replaced_by WHERE assessment_id = @assessment_id",
+            "@replaced_by", "@assessment_id");
     }
 
     /// Creates the file, replacing any file already at the path.
@@ -101,6 +104,12 @@ internal sealed class SiteDbWriter : IDisposable {
             a.PossiblyExtinctInTheWild ? 1 : 0, a.Criteria, a.CriteriaVersion, a.YearPublished, a.AssessmentDate,
             a.PopulationTrend, a.CitationJson);
         _assessment.ExecuteNonQuery();
+    }
+
+    /// Sets replaced_by_assessment_id on an assessment already written.
+    public void SetReplacedBy(long assessmentId, long replacedBy) {
+        Bind(_replacedBy, replacedBy, assessmentId);
+        _replacedBy.ExecuteNonQuery();
     }
 
     /// Writes one name and remembers its folded key for name_key.
@@ -200,6 +209,7 @@ internal sealed class SiteDbWriter : IDisposable {
         _taxon.Dispose();
         _assessment.Dispose();
         _name.Dispose();
+        _replacedBy.Dispose();
         if (!_finished && _transaction is not null) {
             try {
                 _transaction.Rollback();
