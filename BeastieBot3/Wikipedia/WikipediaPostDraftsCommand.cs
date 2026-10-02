@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel;
 using System.IO;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Spectre.Console;
@@ -24,9 +25,9 @@ using BeastieBot3.WikipediaLists;
 namespace BeastieBot3.Wikipedia;
 
 [CommandInfo("wikipedia post-drafts", CommandKind.Mutates,
-    "Post the generated IUCN Red List and Australian lists to English Wikipedia as draft pages in user space, with an index page that links them all. Each draft goes to <base>/<article title>, for example \"User:Beastie Bot/Draft 2026/List of critically endangered mammals\". Run wikipedia generate-lists and sprat generate-lists first. Without --apply, the command only reads Wikipedia and shows which drafts it would create or update.",
+    "Post the generated IUCN Red List and Australian lists to English Wikipedia as draft pages in user space, with an index page that links them all. Each draft goes to <base>/<article title>, for example \"User:Beastie Bot/Draft 2026/List of critically endangered mammals\". Run wikipedia generate-lists and sprat generate-lists first. An old draft that no list produces any more is moved to the list's new title when only capital letters changed, and blanked otherwise. Without --apply, the command only reads Wikipedia and shows which drafts it would create, update, move or blank.",
     Rerun = RerunEffect.Publishes,
-    RerunNote = "Without --apply, the command saves nothing. With --apply, it saves only the drafts whose text differs from the page on Wikipedia, so a second run after an interrupted one posts only the drafts that are still missing or out of date.",
+    RerunNote = "Without --apply, the command saves nothing. With --apply, it saves only the drafts whose text differs from the page on Wikipedia, so a second run after an interrupted one posts only the drafts that are still missing or out of date. An old draft that was moved or blanked is not touched again.",
     ChangesOnlyWith = new[] { "--apply" },
     Examples = new[] {
         "wikipedia post-drafts",
@@ -97,7 +98,13 @@ internal sealed class WikipediaPostDraftsCommand : AsyncCommand<WikipediaPostDra
             toSave = toSave.Take(Math.Max(0, limit)).ToList();
         }
 
-        PrintPlan(selected.Count, toSave, onWiki, unchanged, tooLarge, settings);
+        // Old drafts: pages below the base title that no current list produces (a renamed list).
+        IReadOnlyList<OldDraftStep> oldSteps = Array.Empty<OldDraftStep>();
+        if (settings.TitleFilter is null) {
+            oldSteps = await PlanOldDraftsAsync(client, drafts, onWiki, baseTitle, cancellationToken).ConfigureAwait(false);
+        }
+
+        PrintPlan(selected.Count, toSave, onWiki, unchanged, tooLarge, settings, oldSteps);
 
         if (!string.IsNullOrWhiteSpace(settings.WriteDirectory)) {
             WritePages(settings.WriteDirectory, selected, BuildIndexText(drafts, baseTitle, d => toSave.Contains(d) || (onWiki.TryGetValue(d.DraftTitle, out var page) && page.Exists)));
@@ -127,6 +134,23 @@ internal sealed class WikipediaPostDraftsCommand : AsyncCommand<WikipediaPostDra
         var counts = new Dictionary<EditStatus, int>();
         var failures = new List<(string Title, string Message)>();
         var savedTitles = new HashSet<string>(StringComparer.Ordinal);
+
+        // Moves go first: a move needs its new title free, and saving the new draft would take it.
+        // A failed move falls back to blanking the old draft; the note says why.
+        var toBlank = oldSteps.Where(s => s.Action == OldDraftAction.Blank).Select(s => (Title: s.Title, Note: (string?)null)).ToList();
+        var moves = oldSteps.Where(s => s.Action == OldDraftAction.Move).ToList();
+        for (var i = 0; i < moves.Count; i++) {
+            cancellationToken.ThrowIfCancellationRequested();
+            var move = moves[i];
+            var moved = await client.MoveAsync(move.Title, move.NewTitle!, DraftPageBuilder.MoveReason, cancellationToken).ConfigureAwait(false);
+            if (moved.Status == EditStatus.Failed) {
+                toBlank.Add((move.Title, $"move to {move.NewTitle} failed: {moved.Message}"));
+            } else {
+                AnsiConsole.MarkupLineInterpolated($"[grey][[{i + 1}/{moves.Count}]][/] [green]moved[/] {move.Title} → {move.NewTitle}");
+            }
+            await Task.Delay(delay, cancellationToken).ConfigureAwait(false);
+        }
+
         for (var i = 0; i < toSave.Count; i++) {
             cancellationToken.ThrowIfCancellationRequested();
             var draft = toSave[i];
@@ -141,6 +165,24 @@ internal sealed class WikipediaPostDraftsCommand : AsyncCommand<WikipediaPostDra
                 savedTitles.Add(draft.DraftTitle);
             }
             if (outcome.Status != EditStatus.Unchanged && i < toSave.Count - 1) {
+                await Task.Delay(delay, cancellationToken).ConfigureAwait(false);
+            }
+        }
+
+        var retiredText = DraftPageBuilder.RetiredDraftText(baseTitle);
+        for (var i = 0; i < toBlank.Count; i++) {
+            cancellationToken.ThrowIfCancellationRequested();
+            var (title, note) = toBlank[i];
+            var blanked = await client.EditAsync(title, retiredText, DraftPageBuilder.RetiredEditSummary(baseTitle), cancellationToken).ConfigureAwait(false);
+            if (blanked.Status == EditStatus.Failed) {
+                failures.Add((title, blanked.Message ?? "failed"));
+                AnsiConsole.MarkupLineInterpolated($"[grey][[{i + 1}/{toBlank.Count}]][/] [red]failed[/] {title} ({blanked.Message}{(note is null ? "" : $"; {note}")})");
+            } else if (note is null) {
+                AnsiConsole.MarkupLineInterpolated($"[grey][[{i + 1}/{toBlank.Count}]][/] [green]blanked[/] {title}");
+            } else {
+                AnsiConsole.MarkupLineInterpolated($"[grey][[{i + 1}/{toBlank.Count}]][/] [green]blanked[/] {title} [yellow]({note})[/]");
+            }
+            if (i < toBlank.Count - 1) {
                 await Task.Delay(delay, cancellationToken).ConfigureAwait(false);
             }
         }
@@ -249,7 +291,25 @@ internal sealed class WikipediaPostDraftsCommand : AsyncCommand<WikipediaPostDra
         }
     }
 
-    private static void PrintPlan(int selectedCount, List<Draft> toSave, IReadOnlyDictionary<string, PageRevisionInfo> onWiki, int unchanged, List<Draft> tooLarge, Settings settings) {
+    private static async Task<IReadOnlyList<OldDraftStep>> PlanOldDraftsAsync(
+        WikipediaEditClient client,
+        List<Draft> drafts,
+        IReadOnlyDictionary<string, PageRevisionInfo> onWiki,
+        string baseTitle,
+        CancellationToken cancellationToken) {
+        var subpages = await client.GetSubpagesAsync(baseTitle, cancellationToken).ConfigureAwait(false);
+        var draftTitles = drafts.Select(d => d.DraftTitle).ToList();
+        var current = new HashSet<string>(draftTitles, StringComparer.Ordinal);
+        var candidates = subpages.Where(p => !p.IsRedirect && !current.Contains(p.Title)).Select(p => p.Title).ToList();
+        var texts = candidates.Count == 0
+            ? new Dictionary<string, string?>()
+            : await client.GetTextsAsync(candidates, cancellationToken).ConfigureAwait(false);
+        return OldDraftPlanner.Plan(subpages, texts, draftTitles,
+            title => onWiki.TryGetValue(title, out var page) && page.Exists,
+            DraftPageBuilder.RetiredDraftText(baseTitle));
+    }
+
+    private static void PrintPlan(int selectedCount, List<Draft> toSave, IReadOnlyDictionary<string, PageRevisionInfo> onWiki, int unchanged, List<Draft> tooLarge, Settings settings, IReadOnlyList<OldDraftStep> oldSteps) {
         var create = toSave.Count(d => !(onWiki.TryGetValue(d.DraftTitle, out var p) && p.Exists));
         var update = toSave.Count - create;
 
@@ -262,6 +322,28 @@ internal sealed class WikipediaPostDraftsCommand : AsyncCommand<WikipediaPostDra
         table.AddRow("Too large to post (over 2 MB)", tooLarge.Count.ToString("N0"));
         table.AddRow("[grey]Total[/]", selectedCount.ToString("N0"));
         AnsiConsole.Write(table);
+
+        // Pages under the base title that no current list produces.
+        if (oldSteps.Count > 0) {
+            var old = new Table().Border(TableBorder.Rounded);
+            old.AddColumn("Old drafts");
+            old.AddColumn(new TableColumn("Pages").RightAligned());
+            old.AddRow("To move to a new title", oldSteps.Count(s => s.Action == OldDraftAction.Move).ToString("N0"));
+            old.AddRow("To blank", oldSteps.Count(s => s.Action == OldDraftAction.Blank).ToString("N0"));
+            old.AddRow("Left alone (no draft banner)", oldSteps.Count(s => s.Action == OldDraftAction.LeaveAlone).ToString("N0"));
+            AnsiConsole.Write(old);
+        }
+        foreach (var step in oldSteps) {
+            var line = step.Action switch {
+                OldDraftAction.Move => $"[green]To move:[/] {Markup.Escape(step.Title)} → {Markup.Escape(step.NewTitle!)}",
+                OldDraftAction.Blank => $"[yellow]To blank:[/] {Markup.Escape(step.Title)}",
+                _ => $"[grey]Left alone:[/] {Markup.Escape(step.Title)} (no draft banner)",
+            };
+            AnsiConsole.MarkupLine(line);
+        }
+        if (settings.TitleFilter is not null) {
+            AnsiConsole.MarkupLine("[grey]Skipping old drafts: --title is set. Run without --title to move or blank old drafts.[/]");
+        }
 
         foreach (var draft in tooLarge) {
             AnsiConsole.MarkupLineInterpolated($"[yellow]Too large:[/] {draft.ArticleTitle} ({DraftPageBuilder.FormatMegabytes(draft.Bytes)})");

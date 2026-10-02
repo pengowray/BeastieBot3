@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
@@ -32,6 +33,9 @@ internal enum EditStatus {
 }
 
 internal sealed record EditOutcome(EditStatus Status, string? Message = null);
+
+/// <summary>A page below a base title, and whether it is a redirect.</summary>
+internal sealed record SubpageInfo(string Title, bool IsRedirect);
 
 internal sealed class WikipediaEditClient : IDisposable {
     private const int MaxTitlesPerQuery = 50;
@@ -116,6 +120,106 @@ internal sealed class WikipediaEditClient : IDisposable {
             }
         }
         return result;
+    }
+
+    /// <summary>
+    /// Every page whose title starts with "<paramref name="baseTitle"/>/", in the base title's
+    /// namespace, with its redirect flag. Works without logging in.
+    /// </summary>
+    public async Task<IReadOnlyList<SubpageInfo>> GetSubpagesAsync(string baseTitle, CancellationToken ct) {
+        using var nsDoc = await PostFormAsync(new Dictionary<string, string> {
+            ["action"] = "query",
+            ["titles"] = baseTitle,
+        }, ReadTimeout, ct).ConfigureAwait(false);
+        var basePage = nsDoc.RootElement.GetProperty("query").GetProperty("pages")[0];
+        var ns = basePage.GetProperty("ns").GetInt32();
+        var fullTitle = basePage.GetProperty("title").GetString() ?? baseTitle;
+        // allpages takes the prefix without the namespace: "Beastie Bot/Draft 2026/".
+        var prefix = (ns == 0 ? fullTitle : fullTitle[(fullTitle.IndexOf(':') + 1)..]) + "/";
+
+        var result = new List<SubpageInfo>();
+        var fields = new Dictionary<string, string> {
+            ["action"] = "query",
+            ["list"] = "allpages",
+            ["apnamespace"] = ns.ToString(),
+            ["apprefix"] = prefix,
+            ["aplimit"] = "500",
+        };
+        var nonRedirects = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var filter in new[] { "nonredirects", "redirects" }) {
+            fields["apfilterredir"] = filter;
+            fields.Remove("apcontinue");
+            while (true) {
+                using var doc = await PostFormAsync(new Dictionary<string, string>(fields), ReadTimeout, ct).ConfigureAwait(false);
+                foreach (var page in doc.RootElement.GetProperty("query").GetProperty("allpages").EnumerateArray()) {
+                    var title = page.GetProperty("title").GetString()!;
+                    result.Add(new SubpageInfo(title, filter == "redirects"));
+                }
+                if (doc.RootElement.TryGetProperty("continue", out var cont) && cont.TryGetProperty("apcontinue", out var next)) {
+                    fields["apcontinue"] = next.GetString()!;
+                } else {
+                    break;
+                }
+            }
+        }
+        return result;
+    }
+
+    /// <summary>The current text of each page, keyed by the title as given; null for a missing page. Works without logging in.</summary>
+    public async Task<IReadOnlyDictionary<string, string?>> GetTextsAsync(IReadOnlyList<string> titles, CancellationToken ct) {
+        var result = new Dictionary<string, string?>(StringComparer.Ordinal);
+        // Full page text can be large, so a few titles per request.
+        const int batchSize = 10;
+        for (var start = 0; start < titles.Count; start += batchSize) {
+            var batch = titles.Skip(start).Take(batchSize).ToList();
+            using var doc = await PostFormAsync(new Dictionary<string, string> {
+                ["action"] = "query",
+                ["prop"] = "revisions",
+                ["rvprop"] = "content",
+                ["rvslots"] = "main",
+                ["titles"] = string.Join('|', batch),
+            }, ReadTimeout, ct).ConfigureAwait(false);
+            var query = doc.RootElement.GetProperty("query");
+            var askedFor = batch.ToDictionary(t => t, t => t, StringComparer.Ordinal);
+            if (query.TryGetProperty("normalized", out var normalized)) {
+                foreach (var n in normalized.EnumerateArray()) {
+                    askedFor[n.GetProperty("to").GetString()!] = n.GetProperty("from").GetString()!;
+                }
+            }
+            foreach (var page in query.GetProperty("pages").EnumerateArray()) {
+                var title = page.GetProperty("title").GetString()!;
+                var key = askedFor.TryGetValue(title, out var original) ? original : title;
+                result[key] = page.TryGetProperty("revisions", out var revisions)
+                    ? revisions[0].GetProperty("slots").GetProperty("main").GetProperty("content").GetString()
+                    : null;
+            }
+        }
+        return result;
+    }
+
+    /// <summary>
+    /// Moves a page with its history. MediaWiki leaves a redirect at the old title unless the account
+    /// may suppress it; the command does not ask to. Fails if the new title already exists.
+    /// </summary>
+    public async Task<EditOutcome> MoveAsync(string from, string to, string reason, CancellationToken ct) {
+        if (_csrfToken is null) {
+            throw new InvalidOperationException("Log in before moving pages.");
+        }
+
+        using var doc = await PostFormAsync(new Dictionary<string, string> {
+            ["action"] = "move",
+            ["from"] = from,
+            ["to"] = to,
+            ["reason"] = reason,
+            ["assert"] = "user",
+            ["watchlist"] = "nochange",
+            ["token"] = _csrfToken,
+        }, ReadTimeout, ct).ConfigureAwait(false);
+        var root = doc.RootElement;
+        if (root.TryGetProperty("error", out var error)) {
+            return new EditOutcome(EditStatus.Failed, DescribeError(error));
+        }
+        return new EditOutcome(EditStatus.Updated);
     }
 
     public async Task<EditOutcome> EditAsync(string title, string text, string summary, CancellationToken ct) {
