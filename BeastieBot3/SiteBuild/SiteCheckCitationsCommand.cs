@@ -23,7 +23,7 @@ using Spectre.Console.Cli;
 namespace BeastieBot3.SiteBuild;
 
 [CommandInfo("site check-citations", CommandKind.ReadOnly,
-    "Read the citation of every latest assessment in the IUCN API cache into the parts the public site builds {{cite iucn}} from (authors, title annotations, DOI), and compare them with the {{cite iucn}} templates in cached English Wikipedia articles that cite the same assessment. Writes a Markdown report of parse failures, kinds of author name, splitting rules, DOI checks and each kind of disagreement with Wikipedia.",
+    "Parse IUCN's citation of every latest assessment in the IUCN API cache into authors, title annotations and DOI, the parts the public site uses to build {{cite iucn}}. Compares the result with the {{cite iucn}} templates in cached English Wikipedia articles that cite the same assessment, and writes a Markdown report: parse failures, kinds of author name, how author lists were split, DOI checks, and each kind of difference from Wikipedia.",
     Examples = new[] {
         "site check-citations",
         "site check-citations --limit 5000",
@@ -40,15 +40,15 @@ internal sealed class SiteCheckCitationsCommand : Command<SiteCheckCitationsComm
         public string? WikiCacheDatabase { get; init; }
 
         [CommandOption("--no-wiki")]
-        [Description("Only read the IUCN citations; don't compare them with Wikipedia.")]
+        [Description("Parse the IUCN citations without comparing them with Wikipedia.")]
         public bool NoWiki { get; init; }
 
         [CommandOption("--limit <N>")]
-        [Description("Read only the first N latest assessments, in taxon record order.")]
+        [Description("Parse only the first N latest assessments, in the order of the cached taxon records.")]
         public int? Limit { get; init; }
 
         [CommandOption("--examples <N>")]
-        [Description("Examples listed for each kind of result in the report. Default: 10.")]
+        [Description("Number of examples the report lists for each kind of result. Default: 10.")]
         public int Examples { get; init; } = 10;
 
         [CommandOption("-o|--output <PATH>")]
@@ -260,12 +260,12 @@ internal sealed class SiteCheckCitationsCommand : Command<SiteCheckCitationsComm
 
     private static void WriteSummary(CitationCheckTally tally) {
         var table = new Table().AddColumn("Measure").AddColumn(new TableColumn("Count").RightAligned());
-        table.AddRow("Read into citation parts", $"{tally.Parsed:N0}");
-        table.AddRow("Not read into parts", $"{tally.Failures.Values.Sum():N0}");
-        table.AddRow("Every author a person or organisation", $"{tally.AllAuthorsStructured:N0}");
-        table.AddRow("At least one author kept as published", $"{tally.SomeAuthorsVerbatim:N0}");
+        table.AddRow("Parsed into citation parts", $"{tally.Parsed:N0}");
+        table.AddRow("Not parsed", $"{tally.Failures.Values.Sum():N0}");
+        table.AddRow("Every author identified as a person or organisation", $"{tally.AllAuthorsStructured:N0}");
+        table.AddRow("At least one author name left as published", $"{tally.SomeAuthorsVerbatim:N0}");
         if (tally.WikiCompared) {
-            table.AddRow("Wikipedia templates compared", $"{tally.WikiTemplatesMatched:N0}");
+            table.AddRow("En-wiki {{cite iucn}} templates compared", $"{tally.WikiTemplatesMatched:N0}");
             table.AddRow("… identical authors", $"{tally.AuthorAgreements.GetValueOrDefault(AuthorAgreement.Same):N0}");
             table.AddRow("… same DOI", $"{tally.DoiAgreements.GetValueOrDefault(DoiAgreement.Same):N0}");
         }

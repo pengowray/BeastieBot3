@@ -35,7 +35,7 @@ public class CitationCheckReportTests {
 
         var report = CitationCheckReport.Build(tally, new CitationCheckInputs("/cache.sqlite", "/wiki.sqlite", null, DateTimeOffset.UnixEpoch, TimeSpan.FromSeconds(3)));
 
-        Assert.Contains("| Read into citation parts | 1 | 50.0% |", report);
+        Assert.Contains("| Parsed into citation parts | 1 | 50.0% |", report);
         Assert.Contains("| No year published (not published) | 1 | 291011372 Gorilla beringei |", report);
         Assert.Contains("| (amended version of YYYY assessment) | 1 |", report);
         Assert.Contains("| Accepted: this assessment | 1 |", report);

@@ -249,7 +249,7 @@ internal static class CitationCheckReport {
 
         sb.AppendLine("# IUCN citation parts check");
         sb.AppendLine();
-        sb.AppendLine("Checks how `site build-db` will read IUCN's citation of each latest assessment into the parts the public site uses for");
+        sb.AppendLine("Checks how `site build-db` will parse IUCN's citation of each latest assessment into the parts the public site uses for");
         sb.AppendLine("`{{cite iucn}}`: the authors, the title annotations and the DOI. It then compares those parts with the `{{cite iucn}}`");
         sb.AppendLine("templates in cached English Wikipedia articles that cite the same assessment.");
         sb.AppendLine();
@@ -264,17 +264,17 @@ internal static class CitationCheckReport {
         sb.AppendLine("| Measure | Count | Share |");
         sb.AppendLine("| --- | ---: | ---: |");
         Row(sb, "Latest assessments read", read, null);
-        Row(sb, "Read into citation parts", t.Parsed, read);
-        Row(sb, "Not read into parts (see Parse failures)", failed, read);
-        Row(sb, "Every author read as a person or organisation", t.AllAuthorsStructured, t.Parsed);
-        Row(sb, "At least one author kept as published", t.SomeAuthorsVerbatim, t.Parsed);
-        Row(sb, "DOI in IUCN's citation, accepted", Count(t.CitationDoiVerdicts, DoiVerdict.Accepted) + Count(t.CitationDoiVerdicts, DoiVerdict.AcceptedPredecessor), t.Parsed);
+        Row(sb, "Parsed into citation parts", t.Parsed, read);
+        Row(sb, "Not parsed (see Parse failures)", failed, read);
+        Row(sb, "Every author identified as a person or organisation", t.AllAuthorsStructured, t.Parsed);
+        Row(sb, "At least one author name left as published", t.SomeAuthorsVerbatim, t.Parsed);
+        Row(sb, "DOI from IUCN's citation accepted", Count(t.CitationDoiVerdicts, DoiVerdict.Accepted) + Count(t.CitationDoiVerdicts, DoiVerdict.AcceptedPredecessor), t.Parsed);
         if (t.WikiCompared) {
             var sameAuthors = Count(t.AuthorAgreements, AuthorAgreement.Same);
             var looseAuthors = sameAuthors + Count(t.AuthorAgreements, AuthorAgreement.SameIgnoringPunctuation);
             var withAuthors = t.WikiTemplatesMatched - Count(t.AuthorAgreements, AuthorAgreement.WikiNoAuthors);
             var bothDoi = Count(t.DoiAgreements, DoiAgreement.Same) + Count(t.DoiAgreements, DoiAgreement.Different);
-            Row(sb, "En-wiki {{cite iucn}} templates citing an assessment read here", t.WikiTemplatesMatched, null);
+            Row(sb, "En-wiki {{cite iucn}} templates citing a parsed assessment", t.WikiTemplatesMatched, null);
             Row(sb, "… author lists identical (of templates with authors)", sameAuthors, withAuthors);
             Row(sb, "… author lists the same ignoring punctuation", looseAuthors, withAuthors);
             Row(sb, "… DOIs identical (where both have one)", Count(t.DoiAgreements, DoiAgreement.Same), bothDoi);
@@ -308,9 +308,9 @@ internal static class CitationCheckReport {
         sb.AppendLine($"| Assessment record not valid JSON | {N(t.PayloadUnreadable)} |");
         sb.AppendLine($"| Assessment record says it is not the latest (downloaded before a newer one was published) | {N(t.PayloadLatestFlagFalse)} |");
         sb.AppendLine();
-        sb.AppendLine("Read into parts, by scope:");
+        sb.AppendLine("Parsed into citation parts, by scope:");
         sb.AppendLine();
-        sb.AppendLine("| Scope | Read into parts |");
+        sb.AppendLine("| Scope | Parsed |");
         sb.AppendLine("| --- | ---: |");
         foreach (var scope in Enum.GetValues<AssessmentScopeKind>()) {
             sb.AppendLine($"| {ScopeLabel(scope)} | {N(Count(t.ParsedByScope, scope))} |");
@@ -322,7 +322,7 @@ internal static class CitationCheckReport {
         sb.AppendLine("## Parse failures");
         sb.AppendLine();
         if (t.Failures.Count == 0) {
-            sb.AppendLine("None: every assessment record read gave citation parts.");
+            sb.AppendLine("None: every assessment record was parsed into citation parts.");
             sb.AppendLine();
             return;
         }
@@ -352,7 +352,7 @@ internal static class CitationCheckReport {
 
         sb.AppendLine("### How the author string was split");
         sb.AppendLine();
-        sb.AppendLine("Rules of `IucnAssessmentCitationParser.SplitCreditNames`, strictest first. P = person, O = organisation, V = kept as published.");
+        sb.AppendLine("Rules of `IucnAssessmentCitationParser.SplitCreditNames`, strictest first. P = person, O = organisation, V = name left as published.");
         sb.AppendLine();
         sb.AppendLine("| Rule | Assessments | Examples |");
         sb.AppendLine("| --- | ---: | --- |");
@@ -375,7 +375,7 @@ internal static class CitationCheckReport {
             sb.AppendLine($"| {ShapeLabel(shape)} | {ShapeKind(shape)} | {N(count)} |");
         }
         sb.AppendLine();
-        sb.AppendLine("Names kept as published, most frequent first:");
+        sb.AppendLine("Names left as published, most frequent first:");
         sb.AppendLine();
         sb.AppendLine("| Shape | Distinct names | Most frequent (occurrences) |");
         sb.AppendLine("| --- | ---: | --- |");
@@ -391,13 +391,13 @@ internal static class CitationCheckReport {
         sb.AppendLine("| | Assessments |");
         sb.AppendLine("| --- | ---: |");
         sb.AppendLine($"| Every author a person or organisation | {N(t.AllAuthorsStructured)} |");
-        sb.AppendLine($"| At least one author kept as published | {N(t.SomeAuthorsVerbatim)} |");
+        sb.AppendLine($"| At least one author name left as published | {N(t.SomeAuthorsVerbatim)} |");
         sb.AppendLine($"| No authors | {N(t.NoAuthors)} |");
         sb.AppendLine($"| Ends \"et al.\" | {N(t.EtAl)} |");
         sb.AppendLine($"| More than 8 authors | {N(t.MoreThan8Authors)} |");
         sb.AppendLine($"| More than 20 authors | {N(t.MoreThan20Authors)} |");
         sb.AppendLine($"| Most authors in one citation | {N(t.MaxAuthors)} |");
-        sb.AppendLine($"| The same name twice, kept because value[] lists both people | {N(t.RepeatedNamesKept)} |");
+        sb.AppendLine($"| The same name twice, kept because value[] has one entry per name | {N(t.RepeatedNamesKept)} |");
         sb.AppendLine();
         Examples(sb, "The same name twice", t.RepeatedNameExamples);
     }
@@ -439,8 +439,8 @@ internal static class CitationCheckReport {
         sb.AppendLine($"| … with a {{{{cite iucn}}}} | {N(t.WikiPagesWithTemplate)} |");
         sb.AppendLine($"| {{{{cite iucn}}}} templates | {N(t.WikiTemplates)} |");
         sb.AppendLine($"| … with no e.T…A… in article-number or page | {N(t.WikiTemplatesWithoutIds)} |");
-        sb.AppendLine($"| … citing an assessment not read here (an older one, or left out by --limit) | {N(t.WikiTemplatesOtherAssessment)} |");
-        sb.AppendLine($"| … citing an assessment read here | {N(t.WikiTemplatesMatched)} |");
+        sb.AppendLine($"| … citing an assessment not parsed here (an older one, or one left out by --limit) | {N(t.WikiTemplatesOtherAssessment)} |");
+        sb.AppendLine($"| … citing a parsed assessment | {N(t.WikiTemplatesMatched)} |");
         sb.AppendLine($"| Distinct assessments cited | {N(t.WikiAssessmentsMatched.Count)} |");
         sb.AppendLine();
 
@@ -460,7 +460,7 @@ internal static class CitationCheckReport {
 
         sb.AppendLine("### DOIs");
         sb.AppendLine();
-        sb.AppendLine("\"Ours\" is the DOI from IUCN's citation when it is accepted. The wiki's DOI is also checked against the same rule.");
+        sb.AppendLine("\"Ours\" is the DOI in IUCN's citation, when the DOI check accepts it. The wiki's DOI goes through the same check; its result is in Wiki DOI verdict.");
         sb.AppendLine();
         sb.AppendLine("| Class | Wiki DOI verdict | Templates |");
         sb.AppendLine("| --- | --- | ---: |");
@@ -546,7 +546,7 @@ internal static class CitationCheckReport {
         IucnAssessmentCitationParser.CreditSplitRule.CountGiven => "Pairs with given names, confirmed by value[] count",
         IucnAssessmentCitationParser.CreditSplitRule.GivenFirst => "Every name given name first",
         IucnAssessmentCitationParser.CreditSplitRule.EtAl => "\"et al.\" taken off, the rest split",
-        IucnAssessmentCitationParser.CreditSplitRule.Whole => "Kept whole: no rule applied, no count",
+        IucnAssessmentCitationParser.CreditSplitRule.Whole => "Kept whole: no rule matched and value[] was empty",
         IucnAssessmentCitationParser.CreditSplitRule.WholeCountMismatch => "Kept whole: no split matched the value[] count",
         IucnAssessmentCitationParser.CreditSplitRule.Empty => "Empty",
         _ => rule.ToString(),
@@ -597,7 +597,7 @@ internal static class CitationCheckReport {
         AuthorAgreement.SameIgnoringPunctuation => "Same ignoring case, accents and punctuation",
         AuthorAgreement.WikiNoAuthors => "Wiki names no authors",
         AuthorAgreement.WikiSeveralInOneParameter => "Wiki puts several names in one parameter",
-        AuthorAgreement.WikiCollaborationParameter => "Wiki moves the bracketed part to |collaboration=",
+        AuthorAgreement.WikiCollaborationParameter => "Wiki puts the part in brackets in |collaboration=",
         AuthorAgreement.OursKeptWhole => "We kept a list whole; the wiki splits it",
         AuthorAgreement.WikiSplitsAName => "Wiki splits one name in two",
         AuthorAgreement.WikiFewer => "Wiki lists only the first names",
