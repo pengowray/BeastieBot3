@@ -137,6 +137,7 @@ public sealed class OtherEndpointTests(SiteFactory factory) : IClassFixture<Site
         Assert.Equal("strict-origin-when-cross-origin", headers.GetValues("Referrer-Policy").Single());
         Assert.Contains("camera=()", headers.GetValues("Permissions-Policy").Single());
         Assert.Equal("DENY", headers.GetValues("X-Frame-Options").Single());
+        Assert.False(headers.Contains("Set-Cookie"));
     }
 
     [Fact]

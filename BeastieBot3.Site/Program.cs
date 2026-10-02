@@ -37,11 +37,12 @@ builder.Services.AddRazorPages();
 builder.Services.AddSiteRateLimits();
 builder.Services.AddOutputCache(options => {
     options.SizeLimit = 128 * 1024 * 1024;
-    // Taxon pages are the same for everyone with the same query string. "Today" as the access date
-    // makes them depend on the date too (the server's UTC date).
+    // Taxon pages are the same for everyone with the same options. Only the parameters the page
+    // reads are part of the key, so made-up parameters cannot fill the cache with copies. "Today" as
+    // the access date makes a page depend on the date too (the server's UTC date).
     options.AddPolicy(SiteCachePolicies.Species, policy => policy
         .Expire(TimeSpan.FromHours(1))
-        .SetVaryByQuery("*")
+        .SetVaryByQuery(SiteCachePolicies.SpeciesQueryKeys)
         .VaryByValue(_ => new KeyValuePair<string, string>("utc-day", DateTime.UtcNow.ToString("yyyy-MM-dd"))));
 });
 

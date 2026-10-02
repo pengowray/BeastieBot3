@@ -129,6 +129,20 @@ public sealed class WikitextOptionsTests {
     public void RoundTrip() {
         var options = new WikitextOptions(CiteAuthorStyle.LastFirst, WikitextOptions.AccessNone, false, "my ref", true);
         Assert.Equal("?assessment=5&authors=lastfirst&access=none&opts=1&amp=1&refname=my%20ref", options.ToQuery(5));
+        Assert.Equal(options, WikitextOptions.FromQuery("lastfirst", "none", "1", null, "my ref", "1"));
+    }
+
+    [Fact]
+    public void EmptyAndMissingRefNameMeanTheSame() {
+        // The output cache keys on query values, and an empty value looks like a missing one.
+        Assert.Equal(string.Empty, WikitextOptions.FromQuery(null, null, "1", "1", "", null).RefName);
+        Assert.Equal(string.Empty, WikitextOptions.FromQuery(null, null, "1", "1", null, null).RefName);
+        Assert.Equal(WikitextOptions.DefaultRefName, WikitextOptions.FromQuery(null, null, null, null, "", null).RefName);
+        Assert.Equal(WikitextOptions.DefaultRefName, WikitextOptions.FromQuery(null, null, null, null, null, null).RefName);
+
+        var plainRef = WikitextOptions.Default with { RefName = string.Empty };
+        Assert.Equal("?opts=1&ref=1", plainRef.ToQuery(null));
+        Assert.Equal(plainRef, WikitextOptions.FromQuery(null, null, "1", "1", null, null));
     }
 
     [Fact]
