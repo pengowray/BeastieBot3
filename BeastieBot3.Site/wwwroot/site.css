@@ -483,6 +483,9 @@ button:hover {
 
 .wikitext-box-head label {
     font-weight: 600;
+    /* Shrinks and wraps its text, so the button stays beside it at phone width. */
+    flex: 1 1 0;
+    min-width: 0;
 }
 
 .copy-button {
