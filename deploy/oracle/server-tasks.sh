@@ -398,7 +398,7 @@ rollback_app() {
 
 show_status() {
     local releases
-    releases="$(list_releases | tr '\n' ' ')"
+    releases="$(list_releases | paste -sd ' ' -)"
     say "App release:       $(current_release || true)"
     say "Releases on disk:  ${releases:-none}"
     say "Service:           $(systemctl is-active "$SERVICE" </dev/null || true)"
