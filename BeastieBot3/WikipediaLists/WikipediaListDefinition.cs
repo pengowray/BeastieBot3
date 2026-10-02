@@ -35,6 +35,7 @@ internal sealed class WikipediaListDefaults {
     public List<GroupingLevelDefinition>? Grouping { get; init; }
     public DisplayPreferences Display { get; init; } = new();
     public AutoSplitConfig? AutoSplit { get; init; }
+    public IntermediateGroupsConfig? IntermediateGroups { get; init; }
 }
 
 internal sealed class WikipediaListDefinition {
@@ -110,9 +111,16 @@ internal sealed class WikipediaListDefinition {
     public List<CustomGroupDefinition>? CustomGroups { get; init; }
 
     /// <summary>
-    /// Auto-split configuration for this list. Overrides defaults if specified.
+    /// Auto-split configuration for this list (<c>auto_split:</c>). Replaces the defaults' block as a
+    /// whole when set; a field left out takes the class default, not the defaults' value.
     /// </summary>
     public AutoSplitConfig? AutoSplit { get; init; }
+
+    /// <summary>
+    /// Intermediate-layer configuration for this list (<c>intermediate_groups:</c>). Replaces the
+    /// defaults' block as a whole when set.
+    /// </summary>
+    public IntermediateGroupsConfig? IntermediateGroups { get; init; }
 
     /// <summary>
     /// Resolved phylogenetic child lists this list summarizes and links down to (e.g.
@@ -468,9 +476,9 @@ internal sealed class DisplayPreferencesConfig {
 }
 
 /// <summary>
-/// Configuration for automatic section splitting of large groups.
-/// When a leaf group exceeds the threshold, the tree builder tries CoL-enriched
-/// intermediate ranks to insert finer-grained headings.
+/// Configuration for automatic section splitting of large groups. When a group below the last
+/// grouping level reaches the threshold, the tree builder tries finer ranks in turn: subfamily,
+/// tribe and subtribe from the Catalogue of Life placement, then genus.
 /// </summary>
 internal sealed class AutoSplitConfig {
     /// <summary>
@@ -532,3 +540,33 @@ internal sealed class AutoSplitConfig {
     public bool RejectUnknownGroups { get; init; } = true;
 }
 
+/// <summary>
+/// Configuration for headings from Catalogue of Life nodes between two configured levels, such as
+/// suborders between an order and its families (<c>intermediate_groups:</c>). A layer is shown only
+/// when every gate passes; see <see cref="BeastieBot3.Taxonomy.IntermediateLayerOptions"/>.
+/// </summary>
+internal sealed class IntermediateGroupsConfig {
+    public bool Enabled { get; init; } = true;
+
+    /// <summary>The node must hold at least this many taxa. Default 30.</summary>
+    public int MinItems { get; init; } = 30;
+
+    /// <summary>The taxa must span at least this many values of the level below (e.g. families). Default 6.</summary>
+    public int MinAnchors { get; init; } = 6;
+
+    /// <summary>At most this many CoL groups in the layer. Default 12.</summary>
+    public int MaxGroups { get; init; } = 12;
+
+    /// <summary>No CoL group may hold more than this share of the taxa. Default 0.85.</summary>
+    public double MaxDominance { get; init; } = 0.85;
+
+    /// <summary>At least one CoL group must hold this many taxa. Default 5.</summary>
+    public int MinGroupSize { get; init; } = 5;
+
+    /// <summary>
+    /// When one CoL group holds more than <see cref="MaxDominance"/> of the taxa, read its taxa one
+    /// node further down and try again (subclass Neoselachii, then infraclasses Batoidea and
+    /// Selachii). Default false.
+    /// </summary>
+    public bool LookThroughDominant { get; init; }
+}

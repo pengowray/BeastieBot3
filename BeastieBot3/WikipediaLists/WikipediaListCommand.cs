@@ -7,6 +7,7 @@ using Spectre.Console;
 using Spectre.Console.Cli;
 using BeastieBot3.CommonNames;
 using BeastieBot3.Configuration;
+using BeastieBot3.Taxonomy;
 
 namespace BeastieBot3.WikipediaLists;
 
@@ -118,8 +119,8 @@ public sealed class WikipediaListCommand : Command<WikipediaListCommand.Settings
         var taxonRulesPath = ResolveTaxonRulesPath(paths, rulesPath);
         TaxonRulesService? taxonRules = taxonRulesPath != null ? TaxonRulesService.Load(taxonRulesPath) : null;
 
-        // Decide the common-name source first: Catalogue of Life enrichment is only wired into the
-        // store-backed generator, so it depends on that choice.
+        // Decide the common-name source first: the Catalogue of Life placement and name fixes are only
+        // wired into the store-backed generator, so they depend on that choice.
         string? commonNamesDbPath = null;
         string? storeNotConfiguredMessage = null;
         if (!settings.UseLegacyNames) {
@@ -138,7 +139,8 @@ public sealed class WikipediaListCommand : Command<WikipediaListCommand.Settings
             colDbPath,
             !string.IsNullOrWhiteSpace(colDbPath) && File.Exists(colDbPath));
 
-        ColTaxonomyEnricher? colEnricher = null;
+        ITaxonPlacement? placement = null;
+        IDisposable? placementToDispose = null;
         Col.ColNameResolver? colNameResolver = null;
         WikipediaListGenerator generator;
         IDisposable? providerToDispose = null;
@@ -156,12 +158,15 @@ public sealed class WikipediaListCommand : Command<WikipediaListCommand.Settings
                     AnsiConsole.MarkupLine($"[grey]Using Wikipedia cache from:[/] {Markup.Escape(wikipediaCachePath)}");
                 }
                 if (plan.Col == ColEnrichment.On) {
-                    AnsiConsole.MarkupLine($"[grey]Using COL taxonomy enrichment from:[/] {Markup.Escape(colDbPath!)}");
-                    colEnricher = new ColTaxonomyEnricher(colDbPath!);
-                    // Same CoL DB, used to clean formatting-equivalent slips in the displayed scientific name.
+                    AnsiConsole.MarkupLine($"[grey]Using Catalogue of Life database:[/] {Markup.Escape(colDbPath!)}");
+                    // Cleans formatting-equivalent slips in the displayed scientific name.
                     colNameResolver = new Col.ColNameResolver(colDbPath!);
+                    (placement, placementToDispose) = LoadPlacement(paths, databasePath, colDbPath!);
+                    if (placement is null) {
+                        AnsiConsole.MarkupLine($"[grey]Catalogue of Life ranks are not loaded. {IucnRanksOnlyNote}[/]");
+                    }
                 }
-                generator = new WikipediaListGenerator(query, templates, rules, storeProvider, colEnricher, taxonRules, chartData, colNameResolver);
+                generator = new WikipediaListGenerator(query, templates, rules, storeProvider, placement, taxonRules, chartData, colNameResolver);
             } else {
                 var wikidataCachePath = paths.GetWikidataCachePath();
                 var iucnApiCachePath = paths.GetIucnApiCachePath();
@@ -201,9 +206,24 @@ public sealed class WikipediaListCommand : Command<WikipediaListCommand.Settings
         }
         finally {
             providerToDispose?.Dispose();
-            colEnricher?.Dispose();
+            placementToDispose?.Dispose();
             colNameResolver?.Dispose();
         }
+    }
+
+    /// <summary>
+    /// The Catalogue of Life nodes between IUCN ranks (suborders, subfamilies) for this IUCN release
+    /// and CoL database, and anything to dispose after generation. Section headings use only IUCN
+    /// ranks when this returns no placement.
+    /// </summary>
+    private static (ITaxonPlacement? Placement, IDisposable? ToDispose) LoadPlacement(
+        PathsService paths, string iucnDbPath, string colDbPath) {
+        // TODO(integration): TaxonPlacementStore.LoadOrBuild(paths, iucnDbPath, colDbPath) returns the
+        // placement built from these two databases; return it here (and the store, if it must be disposed).
+        _ = paths;
+        _ = iucnDbPath;
+        _ = colDbPath;
+        return (null, null);
     }
 
     /// <summary>Why the Common names store is not used.</summary>
@@ -226,9 +246,9 @@ public sealed class WikipediaListCommand : Command<WikipediaListCommand.Settings
     internal readonly record struct NameSourcePlan(bool UseStore, StoreFallback StoreFallback, ColEnrichment Col);
 
     /// <summary>
-    /// Chooses the common-name source and whether Catalogue of Life enrichment is used. Only the
-    /// store-backed generator takes the CoL enricher, so CoL is used only when the Common names
-    /// store is. The CoL checks run in the order a user would fix them: an explicit
+    /// Chooses the common-name source and whether the Catalogue of Life database is used. Only the
+    /// store-backed generator takes the CoL placement and name resolver, so CoL is used only when
+    /// the Common names store is. The CoL checks run in the order a user would fix them: an explicit
     /// --no-col-enrichment or --use-legacy-names (whose help says the CoL database is ignored,
     /// so a missing CoL file is not worth a warning), then a missing path or file, then the
     /// missing store.
@@ -267,6 +287,8 @@ public sealed class WikipediaListCommand : Command<WikipediaListCommand.Settings
         : null;
 
     private const string IucnOnlyNamesNote = "Section headings use only the ranks in the IUCN data (kingdom, phylum, class, order, family and genus), and species names keep the IUCN spelling even where it has an error.";
+
+    private const string IucnRanksOnlyNote = "Section headings use only the ranks in the IUCN data (kingdom, phylum, class, order, family and genus).";
 
     /// <summary>
     /// Prints why the Common names store is not used, which caches the common names come from

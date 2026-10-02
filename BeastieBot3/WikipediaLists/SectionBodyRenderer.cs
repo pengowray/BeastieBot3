@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using System.Text;
-using System.Threading;
 using BeastieBot3.Iucn;
 using BeastieBot3.Taxonomy;
 using static BeastieBot3.WikipediaLists.RecordClassification;
@@ -13,13 +12,26 @@ using static BeastieBot3.WikipediaLists.SpeciesLineFormatter;
 
 namespace BeastieBot3.WikipediaLists;
 
-// The taxonomy-tree rendering engine: turns a section's records into wikitext, choosing among the
-// flat / custom-group / COL-enriched / virtual-group / infraspecific-partition paths, building the
-// TaxonomyTreeBuilder tree, and walking it to emit headings + species lines. Extracted from
-// WikipediaListGenerator (R2 carve-up) so the generator is a thin orchestrator. Holds the COL enricher
-// and taxon rules it needs, plus the line + heading formatters it delegates leaf/heading rendering to.
+/// <summary>
+/// Settings for the heading tree of one section: auto-split, intermediate layers, and where to
+/// record their decisions.
+/// </summary>
+internal sealed record SectionTreeOptions {
+    public AutoSplitConfig? AutoSplit { get; init; }
+    public IntermediateGroupsConfig? IntermediateGroups { get; init; }
+    public IAutoSplitDiagnostics? Diagnostics { get; init; }
+
+    /// <summary>Start of every path in the diagnostics, e.g. the status section heading.</summary>
+    public string? SectionLabel { get; init; }
+}
+
+// The taxonomy-tree rendering engine: turns a section's records into wikitext. Custom groups (marine
+// mammals) and flat lists have their own small paths; everything else goes through one tree:
+// TaxonomyTreeBuilder groups the records (configured levels, Catalogue of Life layers from the
+// placement, curated virtual groups, auto-split), then AppendTree writes headings and species lines.
+// Extracted from WikipediaListGenerator (R2 carve-up) so the generator is a thin orchestrator.
 internal sealed class SectionBodyRenderer {
-    private readonly ColTaxonomyEnricher? _colEnricher;
+    private readonly ITaxonPlacement? _placement;
     private readonly TaxonRulesService? _taxonRules;
     private readonly SpeciesLineFormatter _lineFormatter;
     private readonly HeadingFormatter _headingFormatter;
@@ -28,16 +40,22 @@ internal sealed class SectionBodyRenderer {
     // families read better as a plain bulleted list than as a sparse multi-column block.
     private const int DivColMinItems = 5;
 
+    // MediaWiki's deepest heading level.
+    private const int DeepestHeading = 6;
+
     public SectionBodyRenderer(
-        ColTaxonomyEnricher? colEnricher,
+        ITaxonPlacement? placement,
         TaxonRulesService? taxonRules,
         SpeciesLineFormatter lineFormatter,
         HeadingFormatter headingFormatter) {
-        _colEnricher = colEnricher;
+        _placement = placement;
         _taxonRules = taxonRules;
         _lineFormatter = lineFormatter ?? throw new ArgumentNullException(nameof(lineFormatter));
         _headingFormatter = headingFormatter ?? throw new ArgumentNullException(nameof(headingFormatter));
     }
+
+    /// <summary>The number of heading levels from <paramref name="startHeading"/> down to H6.</summary>
+    public static int HeadingLevelsFrom(int startHeading) => Math.Max(0, DeepestHeading - startHeading + 1);
 
     public (string Body, int HeadingCount) BuildSectionBody(
         IReadOnlyList<IucnSpeciesRecord> records,
@@ -46,7 +64,7 @@ internal sealed class SectionBodyRenderer {
         string? statusContext,
         IReadOnlyList<CustomGroupDefinition>? customGroups = null,
         int startHeading = 3,
-        AutoSplitConfig? autoSplit = null) {
+        SectionTreeOptions? tree = null) {
 
         if (records.Count == 0) {
             return ("''No taxa currently listable.''", 0);
@@ -63,77 +81,20 @@ internal sealed class SectionBodyRenderer {
             return ("''No taxa currently listable (all filtered as regional assessments).''", 0);
         }
 
-        var infraspecificMode = ResolveInfraspecificMode(display);
-
-        // If separating infraspecific sections is enabled, partition and render each section
-        if (infraspecificMode == InfraspecificDisplayMode.SeparateSections && display.SeparateInfraspecificSections) {
-            return BuildInfraspecificSections(filteredRecords, grouping, display, statusContext, customGroups, startHeading, autoSplit);
-        }
-
-        // If custom groups are defined, use custom grouping instead of taxonomic grouping
-        if (customGroups != null && customGroups.Count > 0) {
-            return BuildCustomGroupedSectionBody(filteredRecords, customGroups, grouping, display, statusContext, startHeading);
-        }
-
-        if (grouping.Count == 0) {
-            return (BuildFlatListBody(filteredRecords, display, statusContext), 0);
-        }
-
-        // Check if we need COL enrichment:
-        // 1. Any grouping level uses COL-specific ranks
-        // 2. Any taxon uses virtual groups (which rely on COL superfamily/family)
-        // 3. Auto-split is enabled (needs COL intermediate ranks as candidates)
-        var needsEnrichment = _colEnricher != null &&
-            (grouping.Any(g => IsColEnrichedRank(g.Level)) || HasVirtualGroupsInGrouping(grouping)
-             || (autoSplit != null && autoSplit.Enabled));
-
-        if (needsEnrichment) {
-            return BuildEnrichedSectionBody(filteredRecords, grouping, display, statusContext, startHeading, autoSplit);
-        }
-
-        var levels = grouping
-            .Select(level => new TaxonomyTreeLevel<IucnSpeciesRecord>(
-                level.Label ?? level.Level,
-                BuildSelector(level.Level),
-                level.AlwaysDisplay,
-                level.UnknownLabel,
-                level.MinItems,
-                level.OtherLabel,
-                level.MinGroupsForOther))
-            .ToList();
-
-        // Build auto-split options for non-enriched path (limited to genus)
-        var autoSplitOptions = BuildAutoSplitOptionsIucn(autoSplit, grouping);
-
-        Func<string, bool>? shouldSkip = _taxonRules != null
-            ? taxon => _taxonRules.ShouldForceSplit(taxon)
-            : null;
-        var tree = TaxonomyTreeBuilder.Build(filteredRecords, levels, shouldSkip, autoSplitOptions);
-        var builder = new StringBuilder();
-        var headingCount = 0;
-        AppendTree(builder, tree, startHeading, display, statusContext, ref headingCount, grouping, groupingIndex: 0, otherContext: null, parentTaxon: null);
-        return (builder.ToString().TrimEnd(), headingCount);
+        return RenderBody(filteredRecords, grouping, PerNodeDisplay(display), statusContext, customGroups, startHeading, tree ?? new SectionTreeOptions());
     }
 
     /// <summary>
-    /// Build section body with infraspecific taxa (subspecies, varieties, populations)
-    /// rendered within each taxonomy heading rather than as separate global sections.
-    /// Delegates to the normal taxonomy tree path with a flag that triggers per-node partitioning.
+    /// With separate infraspecific sections, subspecies, varieties and populations are not split off
+    /// into sections of their own: every record goes through the tree, and each node's items are
+    /// partitioned under bold sub-labels. The returned copy says so to the item renderer.
     /// </summary>
-    private (string Body, int HeadingCount) BuildInfraspecificSections(
-        IReadOnlyList<IucnSpeciesRecord> records,
-        IReadOnlyList<GroupingLevelDefinition> grouping,
-        DisplayPreferences display,
-        string? statusContext,
-        IReadOnlyList<CustomGroupDefinition>? customGroups,
-        int startHeading,
-        AutoSplitConfig? autoSplit = null) {
+    private static DisplayPreferences PerNodeDisplay(DisplayPreferences display) {
+        if (ResolveInfraspecificMode(display) != InfraspecificDisplayMode.SeparateSections || !display.SeparateInfraspecificSections) {
+            return display;
+        }
 
-        // Create a display settings copy that signals per-node infraspecific partitioning
-        // SeparateInfraspecificSections = false prevents re-entering this method,
-        // while InfraspecificDisplayMode stays SeparateSections so AppendTree knows
-        // to partition items within each leaf node.
-        var innerDisplay = new DisplayPreferences {
+        return new DisplayPreferences {
             PreferCommonNames = display.PreferCommonNames,
             ItalicizeScientific = display.ItalicizeScientific,
             IncludeStatusTemplate = display.IncludeStatusTemplate,
@@ -141,112 +102,64 @@ internal sealed class SectionBodyRenderer {
             GroupSubspecies = false,
             ListingStyle = display.ListingStyle,
             InfraspecificDisplayMode = InfraspecificDisplayMode.SeparateSections,
-            SeparateInfraspecificSections = false,  // Prevent recursion back here
-            ExcludeRegionalAssessments = false,     // Already filtered above
+            SeparateInfraspecificSections = false,
+            ExcludeRegionalAssessments = false,     // Already filtered
             IncludeFamilyInOtherBucket = display.IncludeFamilyInOtherBucket
         };
-
-        // Pass ALL records (species + infraspecific) through the normal tree path
-        return BuildSectionBodyCore(records, grouping, innerDisplay, statusContext, customGroups, startHeading, autoSplit);
     }
 
-    /// <summary>
-    /// Core section body building logic (without infraspecific section separation).
-    /// </summary>
-    private (string Body, int HeadingCount) BuildSectionBodyCore(
+    private (string Body, int HeadingCount) RenderBody(
         IReadOnlyList<IucnSpeciesRecord> records,
         IReadOnlyList<GroupingLevelDefinition> grouping,
         DisplayPreferences display,
         string? statusContext,
-        IReadOnlyList<CustomGroupDefinition>? customGroups = null,
-        int startHeading = 3,
-        AutoSplitConfig? autoSplit = null) {
+        IReadOnlyList<CustomGroupDefinition>? customGroups,
+        int startHeading,
+        SectionTreeOptions tree) {
 
         if (records.Count == 0) {
             return ("''No taxa currently listable.''", 0);
         }
 
-        // If custom groups are defined, use custom grouping instead of taxonomic grouping
         if (customGroups != null && customGroups.Count > 0) {
-            return BuildCustomGroupedSectionBody(records, customGroups, grouping, display, statusContext, startHeading);
+            return BuildCustomGroupedSectionBody(records, customGroups, grouping, display, statusContext, startHeading, tree);
         }
 
         if (grouping.Count == 0) {
             return (BuildFlatListBody(records, display, statusContext), 0);
         }
 
-        // Check if we need COL enrichment:
-        // 1. Any grouping level uses COL-specific ranks
-        // 2. Any taxon uses virtual groups (which rely on COL superfamily/family)
-        // 3. Auto-split is enabled (needs COL intermediate ranks as candidates)
-        var needsEnrichment = _colEnricher != null &&
-            (grouping.Any(g => IsColEnrichedRank(g.Level)) || HasVirtualGroupsInGrouping(grouping)
-             || (autoSplit != null && autoSplit.Enabled));
+        var options = new TaxonomyTreeOptions<IucnSpeciesRecord> {
+            ShouldSkipGroup = _taxonRules != null ? taxon => _taxonRules.ShouldForceSplit(taxon) : null,
+            AutoSplit = BuildAutoSplitOptions(tree.AutoSplit, grouping, _placement),
+            Intermediate = _placement != null ? BuildIntermediateOptions(tree.IntermediateGroups) : null,
+            VirtualGroups = BuildVirtualGroupOptions(_taxonRules),
+            HeadingLevels = HeadingLevelsFrom(startHeading),
+            Diagnostics = tree.Diagnostics,
+            RootLabel = tree.SectionLabel,
+        };
+        var root = TaxonomyTreeBuilder.Build(records, BuildLevels(grouping, _placement), options);
 
-        if (needsEnrichment) {
-            return BuildEnrichedSectionBody(records, grouping, display, statusContext, startHeading, autoSplit);
-        }
-
-        var levels = grouping
-            .Select(level => new TaxonomyTreeLevel<IucnSpeciesRecord>(
-                level.Label ?? level.Level,
-                BuildSelector(level.Level),
-                level.AlwaysDisplay,
-                level.UnknownLabel,
-                level.MinItems,
-                level.OtherLabel,
-                level.MinGroupsForOther))
-            .ToList();
-
-        // Build auto-split options for non-enriched path (limited to genus)
-        var autoSplitOptions = BuildAutoSplitOptionsIucn(autoSplit, grouping);
-
-        Func<string, bool>? shouldSkip = _taxonRules != null
-            ? taxon => _taxonRules.ShouldForceSplit(taxon)
-            : null;
-        var tree = TaxonomyTreeBuilder.Build(records, levels, shouldSkip, autoSplitOptions);
         var builder = new StringBuilder();
         var headingCount = 0;
-        AppendTree(builder, tree, startHeading, display, statusContext, ref headingCount, grouping, groupingIndex: 0, otherContext: null, parentTaxon: null);
+        AppendTree(builder, root, startHeading, display, statusContext, ref headingCount, otherContext: null);
         return (builder.ToString().TrimEnd(), headingCount);
     }
 
     /// <summary>
-    /// Check if any taxa in the grouping hierarchy might use virtual groups.
-    /// </summary>
-    private bool HasVirtualGroupsInGrouping(IReadOnlyList<GroupingLevelDefinition> grouping) {
-        if (_taxonRules == null) {
-            return false;
-        }
-
-        // Check if any grouping level might have virtual groups defined
-        foreach (var level in grouping) {
-            var levelName = level.Level.ToLowerInvariant();
-            // Order level is the most likely to have virtual groups
-            if (levelName == "order") {
-                // Check if we have any virtual groups defined for any order
-                // (Squamata, Artiodactyla, Cetartiodactyla, Carnivora, etc.)
-                if (_taxonRules.HasAnyVirtualGroups()) {
-                    return true;
-                }
-            }
-        }
-        return false;
-    }
-
-
-    /// <summary>
     /// Build section body using custom family-based groups instead of taxonomic hierarchy.
-    /// Used for paraphyletic groups like marine mammals.
+    /// Used for paraphyletic groups like marine mammals. Within each group the remaining grouping
+    /// levels go through the normal tree, without auto-split or intermediate layers.
     /// </summary>
     private (string Body, int HeadingCount) BuildCustomGroupedSectionBody(
-        IReadOnlyList<IucnSpeciesRecord> records, 
+        IReadOnlyList<IucnSpeciesRecord> records,
         IReadOnlyList<CustomGroupDefinition> customGroups,
         IReadOnlyList<GroupingLevelDefinition> subGrouping,
-        DisplayPreferences display, 
+        DisplayPreferences display,
         string? statusContext,
-        int startHeading = 3) {
-        
+        int startHeading,
+        SectionTreeOptions tree) {
+
         var builder = new StringBuilder();
         var headingCount = 0;
 
@@ -255,7 +168,6 @@ internal sealed class SectionBodyRenderer {
         CustomGroupDefinition? defaultGroup = null;
         List<IucnSpeciesRecord>? unmatchedRecords = null;
 
-        // Initialize groups
         foreach (var group in customGroups) {
             groupedRecords[group] = new List<IucnSpeciesRecord>();
             if (group.Default) {
@@ -263,7 +175,6 @@ internal sealed class SectionBodyRenderer {
             }
         }
 
-        // Assign records to groups
         foreach (var record in records) {
             var matchedGroup = FindMatchingCustomGroup(record, customGroups);
             if (matchedGroup != null) {
@@ -277,20 +188,19 @@ internal sealed class SectionBodyRenderer {
         }
 
         // Build remaining grouping levels (skip first level since custom groups replace it)
-        var remainingGrouping = subGrouping.Count > 1 
-            ? subGrouping.Skip(1).ToList() 
+        var remainingGrouping = subGrouping.Count > 1
+            ? subGrouping.Skip(1).ToList()
             : new List<GroupingLevelDefinition>();
+        var innerTree = tree with { AutoSplit = null, IntermediateGroups = null };
 
-        // Render each custom group
+        var headingLevel = Math.Min(startHeading, DeepestHeading);
+        var headingMarkup = new string('=', headingLevel);
         foreach (var group in customGroups) {
             var groupRecords = groupedRecords[group];
             if (groupRecords.Count == 0) {
                 continue;
             }
 
-            // Group heading at startHeading level
-            var headingLevel = Math.Min(startHeading, 6);
-            var headingMarkup = new string('=', headingLevel);
             var displayName = !string.IsNullOrWhiteSpace(group.CommonPlural)
                 ? Uppercase(group.CommonPlural)!
                 : group.Name;
@@ -301,24 +211,19 @@ internal sealed class SectionBodyRenderer {
                 builder.AppendLine($"{{{{main|{group.MainArticle}}}}}");
             }
 
-            // Render records with remaining grouping (e.g., by family) at next heading level
             if (remainingGrouping.Count > 0) {
-                var (groupBody, groupHeadingCount) = BuildSectionBody(
-                    groupRecords, remainingGrouping, display, statusContext, 
-                    customGroups: null, startHeading: headingLevel + 1);
+                var (groupBody, groupHeadingCount) = RenderBody(
+                    groupRecords, remainingGrouping, display, statusContext,
+                    customGroups: null, startHeading: headingLevel + 1, innerTree);
                 headingCount += groupHeadingCount;
                 builder.AppendLine(groupBody);
             } else {
-                // No sub-grouping, just output records
                 builder.AppendLine(BuildFlatListBody(groupRecords, display, statusContext));
             }
             builder.AppendLine();
         }
 
-        // Handle any unmatched records
         if (unmatchedRecords != null && unmatchedRecords.Count > 0) {
-            var headingLevel = Math.Min(startHeading, 6);
-            var headingMarkup = new string('=', headingLevel);
             builder.AppendLine($"{headingMarkup} Other {headingMarkup}");
             headingCount++;
             builder.AppendLine(BuildFlatListBody(unmatchedRecords, display, statusContext));
@@ -332,411 +237,174 @@ internal sealed class SectionBodyRenderer {
     /// Find which custom group a record belongs to based on family membership.
     /// </summary>
     private static CustomGroupDefinition? FindMatchingCustomGroup(
-        IucnSpeciesRecord record, 
+        IucnSpeciesRecord record,
         IReadOnlyList<CustomGroupDefinition> customGroups) {
-        
+
         var family = record.FamilyName;
         if (string.IsNullOrWhiteSpace(family)) {
             return null;
         }
 
-        // Check non-default groups first (in order)
         foreach (var group in customGroups.Where(g => !g.Default)) {
             if (group.Families.Any(f => f.Equals(family, StringComparison.OrdinalIgnoreCase))) {
                 return group;
             }
         }
 
-        return null; // Let caller assign to default group
-    }
-
-    private (string Body, int HeadingCount) BuildEnrichedSectionBody(
-        IReadOnlyList<IucnSpeciesRecord> records,
-        IReadOnlyList<GroupingLevelDefinition> grouping,
-        DisplayPreferences display,
-        string? statusContext,
-        int startHeading = 3,
-        AutoSplitConfig? autoSplit = null) {
-
-        // Enrich records with COL taxonomy
-        var enrichedRecords = _colEnricher!.Enrich(records, CancellationToken.None);
-
-        var levels = grouping
-            .Select(level => new TaxonomyTreeLevel<EnrichedSpeciesRecord>(
-                level.Label ?? level.Level,
-                BuildEnrichedSelector(level.Level),
-                level.AlwaysDisplay,
-                level.UnknownLabel,
-                level.MinItems,
-                level.OtherLabel,
-                level.MinGroupsForOther))
-            .ToList();
-
-        // Build auto-split options with COL intermediate rank candidates
-        var autoSplitOptions = BuildAutoSplitOptionsEnriched(autoSplit, grouping);
-
-        Func<string, bool>? shouldSkip = _taxonRules != null
-            ? taxon => _taxonRules.ShouldForceSplit(taxon)
-            : null;
-        var tree = TaxonomyTreeBuilder.Build(enrichedRecords, levels, shouldSkip, autoSplitOptions);
-        var builder = new StringBuilder();
-        var headingCount = 0;
-        AppendEnrichedTree(builder, tree, startHeading, display, statusContext, ref headingCount, grouping, groupingIndex: 0, otherContext: null, parentTaxon: null);
-        return (builder.ToString().TrimEnd(), headingCount);
-    }
-
-    private void AppendEnrichedTree(
-        StringBuilder builder,
-        TaxonomyTreeNode<EnrichedSpeciesRecord> node,
-        int startHeading,
-        DisplayPreferences display,
-        string? statusContext,
-        ref int headingCount) {
-        AppendEnrichedTree(builder, node, startHeading, display, statusContext, ref headingCount, grouping: null, groupingIndex: 0, otherContext: null, parentTaxon: null);
-    }
-
-    private void AppendEnrichedTree(
-        StringBuilder builder, 
-        TaxonomyTreeNode<EnrichedSpeciesRecord> node, 
-        int startHeading, 
-        DisplayPreferences display, 
-        string? statusContext, 
-        ref int headingCount,
-        IReadOnlyList<GroupingLevelDefinition>? grouping,
-        int groupingIndex,
-        OtherBucketContext? otherContext,
-        string? parentTaxon) {
-        
-        foreach (var child in node.Children) {
-            // Rule 7: Skip empty headings (no items and no children)
-            if (child.ItemCount == 0) {
-                continue;
-            }
-
-            var taxonName = child.Value;
-            var headingLevel = Math.Min(startHeading, 6);
-            var headingMarkup = new string('=', headingLevel);
-
-            // Get grouping configuration for current level
-            var currentGrouping = grouping != null && groupingIndex < grouping.Count
-                ? grouping[groupingIndex]
-                : null;
-            var heading = _headingFormatter.FormatHeading(taxonName, child.Label, GetKingdomName(child));
-            var headingText = heading.Text;
-            if (IsOtherOrUnknownHeading(taxonName ?? string.Empty) &&
-                currentGrouping?.Level.Equals("family", StringComparison.OrdinalIgnoreCase) == true &&
-                !string.IsNullOrWhiteSpace(parentTaxon)) {
-                headingText = $"Other {ToTitleCase(parentTaxon)}";
-            }
-
-            builder.AppendLine($"{headingMarkup} {headingText} {headingMarkup}");
-            headingCount++;
-            if (!string.IsNullOrWhiteSpace(heading.CommonNameSentence)) {
-                builder.AppendLine(heading.CommonNameSentence);
-            } else if (!string.IsNullOrWhiteSpace(heading.MainLink) && !IsOtherOrUnknownHeading(headingText)) {
-                builder.AppendLine($"{{{{main|{heading.MainLink}}}}}");
-            }
-            if (!string.IsNullOrWhiteSpace(heading.Description)) {
-                builder.AppendLine(heading.Description);
-            }
-
-            // Detect if this is an "Other" bucket
-            var isOtherBucket = IsOtherOrUnknownHeading(taxonName ?? "");
-            var childOtherContext = isOtherBucket && display.IncludeFamilyInOtherBucket
-                ? BuildEnrichedOtherContext(child)
-                : otherContext;
-
-            // Check if this taxon uses virtual groups
-            if (!string.IsNullOrWhiteSpace(taxonName) &&
-                _taxonRules != null &&
-                _taxonRules.ShouldUseVirtualGroups(taxonName) &&
-                _taxonRules.HasVirtualGroups(taxonName)) {
-                // Render virtual groups instead of normal children
-                AppendVirtualGroups(builder, child, taxonName, headingLevel + 1, display, statusContext, ref headingCount, grouping, groupingIndex + 1, childOtherContext);
-            } else {
-                AppendEnrichedTree(builder, child, headingLevel + 1, display, statusContext, ref headingCount, grouping, groupingIndex + 1, childOtherContext, parentTaxon: taxonName);
-            }
-        }
-
-        // Convert enriched records to IUCN records for output
-        var iucnRecords = node.Items.Select(r => r.ToIucnRecord()).ToList();
-        var infraspecificMode = ResolveInfraspecificMode(display);
-        if (infraspecificMode == InfraspecificDisplayMode.GroupedUnderSpecies) {
-            AppendItemsWithInfraspecificGrouping(builder, iucnRecords, display, statusContext, otherContext);
-        } else if (infraspecificMode == InfraspecificDisplayMode.SeparateSections) {
-            AppendPartitionedItems(builder, iucnRecords, display, statusContext, otherContext);
-        } else {
-            if (iucnRecords.Count >= DivColMinItems) builder.AppendLine("{{div col|colwidth=30em}}");
-            foreach (var record in OrderRecordsForOutput(iucnRecords, display, otherContext)) {
-                builder.AppendLine(_lineFormatter.FormatSpeciesLine(record, display, statusContext, otherContext));
-            }
-            if (iucnRecords.Count >= DivColMinItems) builder.AppendLine("{{div col end}}");
-        }
+        return null;
     }
 
     /// <summary>
-    /// Appends items grouped by virtual groups (e.g., Snakes, Lizards, Worm lizards for Squamata).
+    /// Writes a node's own items, then a heading and the subtree for each child. Items come first
+    /// because wikitext gives everything after a heading to that heading: an item written after the
+    /// last child section would read as part of it.
     /// </summary>
-    private void AppendVirtualGroups(
-        StringBuilder builder,
-        TaxonomyTreeNode<EnrichedSpeciesRecord> parentNode,
-        string parentTaxon,
-        int headingLevel,
-        DisplayPreferences display,
-        string? statusContext,
-        ref int headingCount,
-        IReadOnlyList<GroupingLevelDefinition>? grouping,
-        int groupingIndex,
-        OtherBucketContext? otherContext) {
-        
-        // Collect all enriched records from this node and its descendants
-        var allRecords = CollectAllEnrichedRecords(parentNode);
-
-        // Group by virtual group
-        var groupedRecords = new Dictionary<VirtualGroup, List<EnrichedSpeciesRecord>>();
-        VirtualGroup? defaultGroup = null;
-        List<EnrichedSpeciesRecord>? unmatchedRecords = null;
-
-        foreach (var record in allRecords) {
-            var virtualGroup = _taxonRules!.ResolveVirtualGroup(
-                parentTaxon, 
-                record.FamilyName, 
-                record.Superfamily, 
-                clade: null); // TODO: We don't have clade in enriched record yet
-
-            if (virtualGroup == null) {
-                // No match, collect for later
-                unmatchedRecords ??= new List<EnrichedSpeciesRecord>();
-                unmatchedRecords.Add(record);
-            } else if (virtualGroup.Default) {
-                defaultGroup = virtualGroup;
-                if (!groupedRecords.ContainsKey(virtualGroup)) {
-                    groupedRecords[virtualGroup] = new List<EnrichedSpeciesRecord>();
-                }
-                groupedRecords[virtualGroup].Add(record);
-            } else {
-                if (!groupedRecords.ContainsKey(virtualGroup)) {
-                    groupedRecords[virtualGroup] = new List<EnrichedSpeciesRecord>();
-                }
-                groupedRecords[virtualGroup].Add(record);
-            }
-        }
-
-        // Add unmatched records to the default group
-        if (unmatchedRecords != null && defaultGroup != null && groupedRecords.ContainsKey(defaultGroup)) {
-            groupedRecords[defaultGroup].AddRange(unmatchedRecords);
-            unmatchedRecords = null;
-        }
-
-        // Render each virtual group as a heading
-        var virtualGroupConfig = _taxonRules!.GetVirtualGroups(parentTaxon);
-        if (virtualGroupConfig != null) {
-            foreach (var vg in virtualGroupConfig.Groups) {
-                if (!groupedRecords.TryGetValue(vg, out var records) || records.Count == 0) {
-                    continue;
-                }
-
-                var headingMarkup = new string('=', Math.Min(headingLevel, 6));
-                var groupHeading = _headingFormatter.FormatVirtualGroupHeading(vg);
-                builder.AppendLine($"{headingMarkup} {groupHeading.Text} {headingMarkup}");
-                headingCount++;
-                if (!string.IsNullOrWhiteSpace(groupHeading.MainLink)) {
-                    builder.AppendLine($"{{{{main|{groupHeading.MainLink}}}}}");
-                }
-
-                // Sort and output records for this group, grouped by family
-                var recordsByFamily = records
-                    .GroupBy(r => r.FamilyName ?? "Unknown")
-                    .OrderBy(g => g.Key, StringComparer.OrdinalIgnoreCase)
-                    .ToList();
-
-                // If multiple families, add family subheadings
-                if (recordsByFamily.Count > 1) {
-                    foreach (var familyGroup in recordsByFamily) {
-                        var familyHeadingLevel = Math.Min(headingLevel + 1, 6);
-                        var familyHeadingMarkup = new string('=', familyHeadingLevel);
-                        var familyHeading = _headingFormatter.FormatHeading(familyGroup.Key, "family", GetKingdomName(familyGroup));
-                        builder.AppendLine($"{familyHeadingMarkup} {familyHeading.Text} {familyHeadingMarkup}");
-                        headingCount++;
-                        if (!string.IsNullOrWhiteSpace(familyHeading.CommonNameSentence)) {
-                            builder.AppendLine(familyHeading.CommonNameSentence);
-                        } else if (!string.IsNullOrWhiteSpace(familyHeading.MainLink)) {
-                            builder.AppendLine($"{{{{main|{familyHeading.MainLink}}}}}");
-                        }
-
-                        OutputEnrichedRecords(builder, familyGroup.ToList(), display, statusContext, otherContext);
-                    }
-                } else {
-                    // Single family, no extra heading needed
-                    OutputEnrichedRecords(builder, records, display, statusContext, otherContext);
-                }
-            }
-        }
-
-        // Handle any remaining unmatched records (shouldn't happen if default group is defined)
-        if (unmatchedRecords != null && unmatchedRecords.Count > 0) {
-            var headingMarkup = new string('=', Math.Min(headingLevel, 6));
-            builder.AppendLine($"{headingMarkup} Other {headingMarkup}");
-            headingCount++;
-            // Create an Other context for these unmatched records
-            var unmatchedOtherContext = display.IncludeFamilyInOtherBucket 
-                ? new OtherBucketContext(true) 
-                : otherContext;
-            OutputEnrichedRecords(builder, unmatchedRecords, display, statusContext, unmatchedOtherContext);
-        }
-    }
-
-    /// <summary>
-    /// Collects all enriched records from a node and all its descendants.
-    /// </summary>
-    private static List<EnrichedSpeciesRecord> CollectAllEnrichedRecords(TaxonomyTreeNode<EnrichedSpeciesRecord> node) {
-        var result = new List<EnrichedSpeciesRecord>();
-        CollectRecordsRecursive(node, result);
-        return result;
-    }
-
-    private static void CollectRecordsRecursive<T>(TaxonomyTreeNode<T> node, List<T> result) {
-        result.AddRange(node.Items);
-        foreach (var child in node.Children) {
-            CollectRecordsRecursive(child, result);
-        }
-    }
-
-    /// <summary>
-    /// Builds an OtherBucketContext for an enriched "Other" node, capturing the rank label
-    /// and each record's value for that rank (e.g., Subfamily name) so parenthetical
-    /// annotations show the correct rank instead of always "Family".
-    /// </summary>
-    private static OtherBucketContext BuildEnrichedOtherContext(TaxonomyTreeNode<EnrichedSpeciesRecord> node) {
-        var rankLabel = node.Label ?? "Family";
-        var selector = BuildEnrichedSelector(rankLabel.ToLowerInvariant());
-        var map = new Dictionary<long, string>();
-        foreach (var record in CollectAllEnrichedRecords(node)) {
-            var value = selector(record);
-            if (!string.IsNullOrWhiteSpace(value)) {
-                map[record.TaxonId] = value;
-            }
-        }
-        return new OtherBucketContext(true, rankLabel, map);
-    }
-
-    /// <summary>
-    /// Builds an OtherBucketContext for an IUCN-only "Other" node.
-    /// </summary>
-    private static OtherBucketContext BuildIucnOtherContext(TaxonomyTreeNode<IucnSpeciesRecord> node) {
-        var rankLabel = node.Label ?? "Family";
-        var selector = BuildSelector(rankLabel.ToLowerInvariant());
-        var map = new Dictionary<long, string>();
-        var records = new List<IucnSpeciesRecord>();
-        CollectRecordsRecursive(node, records);
-        foreach (var record in records) {
-            var value = selector(record);
-            if (!string.IsNullOrWhiteSpace(value)) {
-                map[record.TaxonId] = value;
-            }
-        }
-        return new OtherBucketContext(true, rankLabel, map);
-    }
-
-    /// <summary>
-    /// Output enriched records (converted to IUCN records for compatibility).
-    /// </summary>
-    private void OutputEnrichedRecords(
-        StringBuilder builder,
-        IReadOnlyList<EnrichedSpeciesRecord> records,
-        DisplayPreferences display,
-        string? statusContext,
-        OtherBucketContext? otherContext = null) {
-        
-        var iucnRecords = records.Select(r => r.ToIucnRecord()).ToList();
-        var infraspecificMode = ResolveInfraspecificMode(display);
-        if (infraspecificMode == InfraspecificDisplayMode.GroupedUnderSpecies) {
-            AppendItemsWithInfraspecificGrouping(builder, iucnRecords, display, statusContext, otherContext);
-        } else if (infraspecificMode == InfraspecificDisplayMode.SeparateSections) {
-            AppendPartitionedItems(builder, iucnRecords, display, statusContext, otherContext);
-        } else {
-            if (iucnRecords.Count >= DivColMinItems) builder.AppendLine("{{div col|colwidth=30em}}");
-            foreach (var record in OrderRecordsForOutput(iucnRecords, display, otherContext)) {
-                builder.AppendLine(_lineFormatter.FormatSpeciesLine(record, display, statusContext, otherContext));
-            }
-            if (iucnRecords.Count >= DivColMinItems) builder.AppendLine("{{div col end}}");
-        }
-    }
-
-
-
-    private void AppendTree(StringBuilder builder, TaxonomyTreeNode<IucnSpeciesRecord> node, int startHeading, DisplayPreferences display, string? statusContext, ref int headingCount) {
-        AppendTree(builder, node, startHeading, display, statusContext, ref headingCount, grouping: null, groupingIndex: 0, otherContext: null, parentTaxon: null);
-    }
-
     private void AppendTree(
-        StringBuilder builder, 
-        TaxonomyTreeNode<IucnSpeciesRecord> node, 
-        int startHeading, 
-        DisplayPreferences display, 
-        string? statusContext, 
+        StringBuilder builder,
+        TaxonomyTreeNode<IucnSpeciesRecord> node,
+        int childHeading,
+        DisplayPreferences display,
+        string? statusContext,
         ref int headingCount,
-        IReadOnlyList<GroupingLevelDefinition>? grouping,
-        int groupingIndex,
-        OtherBucketContext? otherContext,
-        string? parentTaxon) {
-        
+        OtherBucketContext? otherContext) {
+
+        if (node.Items.Count > 0) {
+            AppendItems(builder, node.Items, display, statusContext, otherContext);
+        }
+
         foreach (var child in node.Children) {
-            // Rule 7: Skip empty headings (no items and no children)
             if (child.ItemCount == 0) {
                 continue;
             }
 
-            var headingLevel = Math.Min(startHeading, 6);
-            var headingMarkup = new string('=', headingLevel);
-
-            // Get grouping configuration for current level
-            var currentGrouping = grouping != null && groupingIndex < grouping.Count
-                ? grouping[groupingIndex]
-                : null;
-            var heading = _headingFormatter.FormatHeading(child.Value, child.Label, GetKingdomName(child));
-            var headingText = heading.Text;
-            if (IsOtherOrUnknownHeading(child.Value ?? string.Empty) &&
-                currentGrouping?.Level.Equals("family", StringComparison.OrdinalIgnoreCase) == true &&
-                !string.IsNullOrWhiteSpace(parentTaxon)) {
-                headingText = $"Other {ToTitleCase(parentTaxon)}";
-            }
-
-            builder.AppendLine($"{headingMarkup} {headingText} {headingMarkup}");
+            // The tree builder keeps the tree within the heading budget; the clamp is a guard only.
+            var headingMarkup = new string('=', Math.Min(childHeading, DeepestHeading));
+            var heading = FormatNodeHeading(child, node);
+            builder.AppendLine($"{headingMarkup} {heading.Text} {headingMarkup}");
             headingCount++;
+
+            var isResidual = child.Kind != TreeNodeKind.Virtual && IsOtherOrUnknownHeading(child.Value ?? string.Empty);
             if (!string.IsNullOrWhiteSpace(heading.CommonNameSentence)) {
                 builder.AppendLine(heading.CommonNameSentence);
-            } else if (!string.IsNullOrWhiteSpace(heading.MainLink) && !IsOtherOrUnknownHeading(headingText)) {
+            } else if (!string.IsNullOrWhiteSpace(heading.MainLink) && !isResidual) {
                 builder.AppendLine($"{{{{main|{heading.MainLink}}}}}");
             }
             if (!string.IsNullOrWhiteSpace(heading.Description)) {
                 builder.AppendLine(heading.Description);
             }
 
-            // Detect if this is an "Other" bucket
-            var isOtherBucket = IsOtherOrUnknownHeading(child.Value ?? "");
-            var childOtherContext = isOtherBucket && display.IncludeFamilyInOtherBucket
-                ? BuildIucnOtherContext(child)
+            var childOtherContext = isResidual && display.IncludeFamilyInOtherBucket
+                ? BuildOtherContext(child)
                 : otherContext;
-
-            AppendTree(builder, child, headingLevel + 1, display, statusContext, ref headingCount, grouping, groupingIndex + 1, childOtherContext, parentTaxon: child.Value);
+            AppendTree(builder, child, childHeading + 1, display, statusContext, ref headingCount, childOtherContext);
         }
+    }
 
-        if (node.Items.Count == 0) {
-            return;
-        }
-
-        var infraspecificMode = ResolveInfraspecificMode(display);
-        if (infraspecificMode == InfraspecificDisplayMode.GroupedUnderSpecies) {
-            AppendItemsWithInfraspecificGrouping(builder, node.Items, display, statusContext, otherContext);
-        } else if (infraspecificMode == InfraspecificDisplayMode.SeparateSections) {
-            AppendPartitionedItems(builder, node.Items, display, statusContext, otherContext);
-        } else {
-            if (node.Items.Count >= DivColMinItems) builder.AppendLine("{{div col|colwidth=30em}}");
-            foreach (var record in OrderRecordsForOutput(node.Items, display, otherContext)) {
-                builder.AppendLine(_lineFormatter.FormatSpeciesLine(record, display, statusContext, otherContext));
+    /// <summary>
+    /// The heading for a tree node:
+    /// <list type="bullet">
+    ///   <item>Virtual group: the group's common plural with its {{main}} link.</item>
+    ///   <item>Catalogue of Life node: "Suborder Serpentes", or just "Cetacea" when its rank is not shown.</item>
+    ///   <item>Level and auto-split values: "Family Felidae". A family-level "Other" bucket under a
+    ///         named parent reads "Other {parent}" ("Other Testudines", "Other snakes").</item>
+    /// </list>
+    /// </summary>
+    private HeadingInfo FormatNodeHeading(TaxonomyTreeNode<IucnSpeciesRecord> child, TaxonomyTreeNode<IucnSpeciesRecord> parent) {
+        switch (child.Kind) {
+            case TreeNodeKind.Virtual: {
+                var group = FindVirtualGroup(child);
+                return group != null
+                    ? _headingFormatter.FormatVirtualGroupHeading(group)
+                    : new HeadingInfo(child.Value ?? "Other", null);
             }
-            if (node.Items.Count >= DivColMinItems) builder.AppendLine("{{div col end}}");
+            case TreeNodeKind.Intermediate:
+                return _headingFormatter.FormatHeading(child.Value, child.Key, GetKingdomName(child), showRank: child.ShowRank);
+        }
+
+        var heading = _headingFormatter.FormatHeading(child.Value, child.Label, GetKingdomName(child));
+        if (string.Equals(child.Key, "family", StringComparison.OrdinalIgnoreCase)
+            && IsOtherOrUnknownHeading(child.Value ?? string.Empty)
+            && ParentName(parent) is { } parentName) {
+            heading = heading with { Text = $"Other {parentName}" };
+        }
+        return heading;
+    }
+
+    /// <summary>The parent's name for an "Other {parent}" heading, or null for the root.</summary>
+    private string? ParentName(TaxonomyTreeNode<IucnSpeciesRecord> parent) {
+        if (string.IsNullOrWhiteSpace(parent.Value)) {
+            return null;
+        }
+
+        if (parent.Kind == TreeNodeKind.Virtual) {
+            var group = FindVirtualGroup(parent);
+            return group != null
+                ? _headingFormatter.FormatVirtualGroupHeading(group).Text.ToLowerInvariant()
+                : null;
+        }
+
+        return ToTitleCase(parent.Value);
+    }
+
+    private VirtualGroup? FindVirtualGroup(TaxonomyTreeNode<IucnSpeciesRecord> node) {
+        if (_taxonRules is null || string.IsNullOrWhiteSpace(node.VirtualOwner)) {
+            return null;
+        }
+
+        return _taxonRules.GetVirtualGroups(node.VirtualOwner)?.Groups
+            .FirstOrDefault(g => string.Equals(g.Name, node.Value, StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>
+    /// The annotation context for an "Other" bucket: each record's value at the bucket's rank, so
+    /// lines can read "(Family: X)" or "(subfamily: Y)". CoL ranks are read from the placement.
+    /// </summary>
+    private OtherBucketContext BuildOtherContext(TaxonomyTreeNode<IucnSpeciesRecord> node) {
+        var rankLabel = node.Label ?? "Family";
+        var selector = BuildSelector(node.Key ?? rankLabel.ToLowerInvariant(), _placement);
+        var map = new Dictionary<long, string>();
+        foreach (var record in CollectRecords(node)) {
+            var value = selector(record);
+            if (!string.IsNullOrWhiteSpace(value)) {
+                map[record.TaxonId] = value;
+            }
+        }
+        return new OtherBucketContext(true, rankLabel, map);
+    }
+
+    private static List<IucnSpeciesRecord> CollectRecords(TaxonomyTreeNode<IucnSpeciesRecord> node) {
+        var result = new List<IucnSpeciesRecord>();
+        Collect(node);
+        return result;
+
+        void Collect(TaxonomyTreeNode<IucnSpeciesRecord> current) {
+            result.AddRange(current.Items);
+            foreach (var child in current.Children) {
+                Collect(child);
+            }
+        }
+    }
+
+    private string BuildFlatListBody(
+        IReadOnlyList<IucnSpeciesRecord> records,
+        DisplayPreferences display,
+        string? statusContext) {
+        var builder = new StringBuilder();
+        AppendItems(builder, records, display, statusContext, otherContext: null);
+        return builder.ToString().TrimEnd();
+    }
+
+    /// <summary>Writes species lines in the display's infraspecific mode.</summary>
+    private void AppendItems(
+        StringBuilder builder,
+        IReadOnlyList<IucnSpeciesRecord> items,
+        DisplayPreferences display,
+        string? statusContext,
+        OtherBucketContext? otherContext) {
+        if (ResolveInfraspecificMode(display) == InfraspecificDisplayMode.GroupedUnderSpecies) {
+            AppendItemsWithInfraspecificGrouping(builder, items, display, statusContext, otherContext);
+        } else {
+            AppendPartitionedItems(builder, items, display, statusContext, otherContext);
         }
     }
 
@@ -832,27 +500,6 @@ internal sealed class SectionBodyRenderer {
             // Shouldn't happen since we checked node.Items.Count > 0 above,
             // but guard anyway
         }
-    }
-
-    private string BuildFlatListBody(
-        IReadOnlyList<IucnSpeciesRecord> records,
-        DisplayPreferences display,
-        string? statusContext,
-        OtherBucketContext? otherContext = null) {
-        var builder = new StringBuilder();
-        var infraspecificMode = ResolveInfraspecificMode(display);
-        if (infraspecificMode == InfraspecificDisplayMode.GroupedUnderSpecies) {
-            AppendItemsWithInfraspecificGrouping(builder, records, display, statusContext, otherContext);
-        } else if (infraspecificMode == InfraspecificDisplayMode.SeparateSections) {
-            AppendPartitionedItems(builder, records, display, statusContext, otherContext);
-        } else {
-            if (records.Count >= DivColMinItems) builder.AppendLine("{{div col|colwidth=30em}}");
-            foreach (var record in OrderRecordsForOutput(records, display, otherContext)) {
-                builder.AppendLine(_lineFormatter.FormatSpeciesLine(record, display, statusContext, otherContext));
-            }
-            if (records.Count >= DivColMinItems) builder.AppendLine("{{div col end}}");
-        }
-        return builder.ToString().TrimEnd();
     }
 
     /// <summary>
@@ -1054,28 +701,6 @@ internal sealed class SectionBodyRenderer {
             var value = GetKingdomName(child);
             if (!string.IsNullOrWhiteSpace(value)) {
                 return value;
-            }
-        }
-        return null;
-    }
-
-    private static string? GetKingdomName(TaxonomyTreeNode<EnrichedSpeciesRecord> node) {
-        if (node.Items.Count > 0) {
-            return node.Items[0].KingdomName;
-        }
-        foreach (var child in node.Children) {
-            var value = GetKingdomName(child);
-            if (!string.IsNullOrWhiteSpace(value)) {
-                return value;
-            }
-        }
-        return null;
-    }
-
-    private static string? GetKingdomName(IEnumerable<EnrichedSpeciesRecord> records) {
-        foreach (var record in records) {
-            if (!string.IsNullOrWhiteSpace(record.KingdomName)) {
-                return record.KingdomName;
             }
         }
         return null;

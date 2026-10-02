@@ -44,7 +44,7 @@ internal sealed class VirtualGroupConfig {
 }
 
 /// <summary>
-/// A virtual group that organizes taxa by family/superfamily/clade membership.
+/// A virtual group that organizes taxa by clade or family membership.
 /// </summary>
 internal sealed class VirtualGroup {
     /// <summary>
@@ -68,17 +68,21 @@ internal sealed class VirtualGroup {
     public string? MainArticle { get; init; }
     
     /// <summary>
-    /// Superfamilies that belong to this group.
+    /// Superfamilies that belong to this group. Matched like <see cref="Clades"/>, against the names
+    /// of the Catalogue of Life nodes between the parent and the family.
     /// </summary>
     public List<string> Superfamilies { get; init; } = new();
     
     /// <summary>
-    /// Families that belong to this group.
+    /// Families that belong to this group. Used when no clade matches, e.g. when the Catalogue of
+    /// Life has no node for a family.
     /// </summary>
     public List<string> Families { get; init; } = new();
     
     /// <summary>
-    /// Unranked clades that belong to this group (e.g., Iguania).
+    /// Catalogue of Life nodes that belong to this group, at any rank (e.g. suborder Serpentes,
+    /// order Cetacea), matched against the nodes between the parent and the family. Headings below
+    /// the group continue after the matched node.
     /// </summary>
     public List<string> Clades { get; init; } = new();
     
