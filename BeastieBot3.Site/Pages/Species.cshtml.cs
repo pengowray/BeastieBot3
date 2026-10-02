@@ -72,6 +72,11 @@ public sealed class SpeciesModel : PageModel {
     public string? ArrivedQuery { get; private set; }
     public string? ArrivedNameType { get; private set; }
 
+    /// True when the visitor searched for the common name shown under the heading. The page then
+    /// leaves out the sentence saying it is a common name of this taxon and keeps only the link to
+    /// all the results, as the search list leaves out its match note in the same case.
+    public bool ArrivedNameIsShown { get; private set; }
+
     public string? DataDateRange { get; private set; }
 
     public IActionResult OnGet(long taxonId, long? assessment, string? authors, string? access, string? opts,
@@ -292,6 +297,8 @@ public sealed class SpeciesModel : PageModel {
         if (type is NameTypes.Synonym or NameTypes.Common) {
             ArrivedQuery = text;
             ArrivedNameType = type;
+            ArrivedNameIsShown = type == NameTypes.Common && Taxon.CommonNameEn is not null
+                && SiteNameKey.Fold(Taxon.CommonNameEn) == SiteNameKey.Fold(text);
         }
     }
 

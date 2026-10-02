@@ -56,6 +56,17 @@ public sealed class HomeAndSearchTests(SiteFactory factory) : IClassFixture<Site
     }
 
     [Fact]
+    public async Task ArrivingByTheShownCommonNameKeepsOnlyTheResultsLink() {
+        var shown = await _client.GetStringAsync($"/species/{FixtureDb.PolarBear}?q=polar+BEAR");
+        Assert.DoesNotContain("is a common name of this taxon", Html.Text(shown));
+        Assert.Contains("href=\"/search?q=polar%20BEAR&amp;all=1\">See all search results for “polar BEAR”</a>", shown);
+
+        // Another common name is not on the page, so the sentence stays.
+        var other = Html.Text(await _client.GetStringAsync($"/species/{FixtureDb.PolarBear}?q=White+bear"));
+        Assert.Contains("“White bear” is a common name of this taxon. See all search results for “White bear”", other);
+    }
+
+    [Fact]
     public async Task AllResultsLinkDoesNotRedirect() {
         var response = await _client.GetAsync("/search?q=Thalarctos+maritimus&all=1");
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);

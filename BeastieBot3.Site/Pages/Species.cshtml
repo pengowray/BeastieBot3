@@ -24,7 +24,9 @@
 
 @if (Model.ArrivedQuery is { } arrived) {
     <p class="arrival">
-        @(Model.ArrivedNameType == NameTypes.Synonym ? SiteText.ArrivedSynonym(arrived) : SiteText.ArrivedCommonName(arrived))
+        @if (!Model.ArrivedNameIsShown) {
+            @(Model.ArrivedNameType == NameTypes.Synonym ? SiteText.ArrivedSynonym(arrived) : SiteText.ArrivedCommonName(arrived))
+        }
         <a href="/search?q=@Uri.EscapeDataString(arrived)&amp;all=1">@SiteText.ArrivedAllResults(arrived)</a>
     </p>
 }
@@ -317,7 +319,7 @@
         </dl>
         @if (hiddenGroups.Count > 0) {
             <details>
-                <summary>@SiteText.ShowMore(hiddenGroups.Count)</summary>
+                <summary>@SiteText.ShowMoreLanguages(hiddenGroups.Count)</summary>
                 <dl class="language-names">
                     @foreach (var g in hiddenGroups) {
                         <dt>@g.Language</dt>
@@ -337,7 +339,7 @@
         </ul>
         @if (Model.Synonyms.Count > SpeciesModel.ShortListLength) {
             <details>
-                <summary>@SiteText.ShowMore(Model.Synonyms.Count - SpeciesModel.ShortListLength)</summary>
+                <summary>@SiteText.ShowMoreSynonyms(Model.Synonyms.Count - SpeciesModel.ShortListLength)</summary>
                 <ul class="synonyms">
                     @foreach (var s in Model.Synonyms.Skip(SpeciesModel.ShortListLength)) {
                         <li>@Html.Raw(ScientificNameMarkup.ToHtml(s))</li>
