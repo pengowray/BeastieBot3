@@ -198,22 +198,74 @@ create_user_and_folders() {
     info "$BASE/releases and $BASE/incoming: writable by $DEPLOY_USER for uploads."
 }
 
+# Rule numbers below count the "-A INPUT" lines that "-S INPUT" prints, in order. They are the
+# numbers that "-L INPUT --line-numbers" shows and that -I, -D and "-S INPUT <number>" take.
+
+# Number and target of the first REJECT or DROP rule in the INPUT chain ("7 REJECT"), or nothing
+# when there is none.
+first_reject_rule() {
+    "$1" -S INPUT | awk '$1 == "-A" { n++; if ($0 ~ / -j (REJECT|DROP)( |$)/) { print n, ($0 ~ / -j REJECT/ ? "REJECT" : "DROP"); exit } }'
+}
+
+# Number and text (separated by a tab) of the first INPUT rule that accepts new TCP connections to
+# a port from anywhere, as "-S INPUT" prints it, or nothing. The text is matched loosely because
+# iptables may print the state match in another form than the one it was added with.
+accept_rule_for_port() {
+    "$1" -S INPUT | awk -v port="$2" '
+        $1 == "-A" {
+            n++
+            line = $0 " "
+            if (line ~ (" --dport " port " ") && line ~ / -p tcp / && line ~ / -j ACCEPT $/ &&
+                line ~ /NEW/ && line !~ / (-s|-d|-i|-o|!) /) {
+                print n "\t" $0
+                exit
+            }
+        }'
+}
+
 # Adds an ACCEPT rule for a TCP port to the INPUT chain of iptables or ip6tables when it is missing.
 # Oracle's Ubuntu images end the INPUT chain with a REJECT rule, so the new rule goes in just
-# before the first REJECT or DROP rule. Existing rules are never removed.
+# before the first REJECT or DROP rule. An ACCEPT rule that is already there but comes after the
+# first REJECT or DROP rule never matches (a common mistake when the rule is added by hand with -A),
+# so it is moved: a copy goes in before the REJECT or DROP rule and the old one is deleted. No
+# other rule is removed.
 open_port() {
     local tool="$1" port="$2"
     local rule=(-p tcp -m state --state NEW -m tcp --dport "$port" -j ACCEPT)
+    local reject reject_n="" target="" policy
+    reject="$(first_reject_rule "$tool")"
+    if [[ -n "$reject" ]]; then
+        reject_n="${reject%% *}"
+        target="${reject#* }"
+    fi
     if "$tool" -C INPUT "${rule[@]}" 2>/dev/null; then
-        info "$tool: port $port is already open."
+        local found accept_n accept_text
+        found="$(accept_rule_for_port "$tool" "$port")"
+        if [[ -z "$found" ]]; then
+            info "$tool: port $port is already open."
+            warn "Could not tell where the $tool rule for port $port is. It only works if it comes before the first REJECT rule; check with: sudo $tool -L INPUT --line-numbers -n"
+            return 0
+        fi
+        accept_n="${found%%$'\t'*}"
+        accept_text="${found#*$'\t'}"
+        if [[ -z "$reject_n" ]] || (( accept_n < reject_n )); then
+            info "$tool: port $port is already open."
+            return 0
+        fi
+        "$tool" -I INPUT "$reject_n" "${rule[@]}"
+        # The insert moved the old rule down by one. Delete it only if it is still the same rule.
+        if [[ "$("$tool" -S INPUT $(( accept_n + 1 )))" == "$accept_text" ]]; then
+            "$tool" -D INPUT $(( accept_n + 1 ))
+            info "$tool: port $port had an ACCEPT rule (rule $accept_n) after the $target rule (rule $reject_n), so it had no effect. Moved it to rule $reject_n, before the $target rule."
+        else
+            info "$tool: port $port had an ACCEPT rule (rule $accept_n) after the $target rule (rule $reject_n), so it had no effect. Added a copy as rule $reject_n, before the $target rule. The old rule, now rule $(( accept_n + 1 )), is still there and has no effect."
+        fi
         return 0
     fi
-    local line policy
-    line="$("$tool" -L INPUT --line-numbers -n | awk '$2 == "REJECT" || $2 == "DROP" { print $1; exit }')"
     policy="$("$tool" -S INPUT | awk '$1 == "-P" { print $3 }')"
-    if [[ -n "$line" ]]; then
-        "$tool" -I INPUT "$line" "${rule[@]}"
-        info "$tool: opened port $port (rule $line, before the first REJECT or DROP rule)."
+    if [[ -n "$reject_n" ]]; then
+        "$tool" -I INPUT "$reject_n" "${rule[@]}"
+        info "$tool: opened port $port (rule $reject_n, before the first REJECT or DROP rule)."
     elif [[ "$policy" != ACCEPT ]]; then
         "$tool" -A INPUT "${rule[@]}"
         info "$tool: opened port $port (appended; the INPUT policy is $policy)."

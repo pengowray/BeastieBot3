@@ -310,10 +310,13 @@ To roll back the app instead, see [Deploying the app](#deploying-the-app).
 - `/srv/beastie` and `/srv/beastie/data`, owned by root. `/srv/beastie/releases` and
   `/srv/beastie/incoming`, owned by the SSH user so that uploads need no sudo.
 - iptables: an ACCEPT rule for new TCP connections to port 80 and to port 443 in the INPUT chain,
-  inserted before the first REJECT or DROP rule, and only if missing. The same for ip6tables when
-  its INPUT chain rejects or drops anything. Then `netfilter-persistent save` writes all current
-  rules to `/etc/iptables/rules.v4` and `rules.v6`. No rule is removed and nothing is flushed. If
-  ufw is active, the script stops before changing anything.
+  inserted before the first REJECT or DROP rule, and only if missing. If the same ACCEPT rule is
+  already there but comes after the first REJECT or DROP rule, where it has no effect (a common
+  mistake when the rule is added by hand with `-A`), the script inserts a copy before that rule,
+  deletes the old one and says so. The same for ip6tables when its INPUT chain rejects or drops
+  anything. Then `netfilter-persistent save` writes all current rules to `/etc/iptables/rules.v4`
+  and `rules.v6`. No other rule is removed and nothing is flushed. If ufw is active, the script
+  stops before changing anything.
 - Caddy's apt repository: `/usr/share/keyrings/caddy-stable-archive-keyring.gpg` and
   `/etc/apt/sources.list.d/caddy-stable.list`.
 - `/etc/caddy/Caddyfile`, written from `Caddyfile.template` when it differs. The old file is kept
