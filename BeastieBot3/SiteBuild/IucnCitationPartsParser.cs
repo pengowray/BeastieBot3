@@ -26,6 +26,8 @@ using BeastieBot3.WikidataEdits;
 // fallback). They are split by IucnAssessmentCitationParser.SplitCreditNames with the count of
 // distinct value[] entries, then read one by one by IucnAuthorNameParser. "et al." is taken off and
 // sets AuthorsEtAl; the names before it are split without a count, since value[] counts everyone.
+// A "Surname, Given Names" read stays a person only when the count confirmed that split (see
+// ConfirmsGivenNames); otherwise the name is kept as published.
 //
 // The DOI in the citation goes into the parts only when IucnDoiSelector accepts it for this
 // assessment. A payload with no year_published is an unpublished draft and gives no parts.
@@ -263,6 +265,8 @@ internal static class IucnCitationPartsParser {
         List<string> names;
         IucnAssessmentCitationParser.CreditSplitRule rule;
         var extraBlocks = 0;
+        // Names from a split that a value[] count of two or more confirmed with given names allowed.
+        var givenNamesConfirmed = new HashSet<string>(StringComparer.Ordinal);
         if (etAl) {
             var before = EtAl.Replace(cleaned, string.Empty).Trim().TrimEnd(',', ';', '&').Trim();
             names = IucnAssessmentCitationParser.SplitCreditNames(before, null).ToList();
@@ -271,18 +275,34 @@ internal static class IucnCitationPartsParser {
             var split = IucnAssessmentCitationParser.SplitCreditNamesWithRule(text, count);
             names = split.Names.ToList();
             rule = split.Rule;
+            if (ConfirmsGivenNames(split.Rule, count)) givenNamesConfirmed.UnionWith(split.Names);
             foreach (var block in blocks.Skip(1)) {
                 var before = names.Count;
-                IucnAssessmentCitationParser.AddNamesNotYetHeld(names,
-                    IucnAssessmentCitationParser.SplitCreditNames(ReadString(block, "full")!, IucnAssessmentCitationParser.DistinctValueCount(block)));
+                var blockCount = IucnAssessmentCitationParser.DistinctValueCount(block);
+                var blockSplit = IucnAssessmentCitationParser.SplitCreditNamesWithRule(ReadString(block, "full")!, blockCount);
+                if (ConfirmsGivenNames(blockSplit.Rule, blockCount)) givenNamesConfirmed.UnionWith(blockSplit.Names);
+                IucnAssessmentCitationParser.AddNamesNotYetHeld(names, blockSplit.Names);
                 if (names.Count > before) extraBlocks++;
             }
         }
 
-        var parsed = names.Select(IucnAuthorNameParser.Parse).ToList();
+        var parsed = names.Select(name => KeepGivenNamesOnlyIfConfirmed(IucnAuthorNameParser.Parse(name), givenNamesConfirmed.Contains(name)))
+            .ToList();
         return new AuthorRead(parsed, etAl, source, rule,
             source == CitationAuthorSource.AssessorCredit ? cleaned : null, extraBlocks);
     }
+
+    // "Mohd Yusof, Nur Adillah" (one person, surname then given names) and "Djoko Iskandar, Mumpuni"
+    // (two people, each given name first) have the same shape. Only a count of value[] entries tells
+    // them apart: a split with given names allowed that gave exactly that many names, two or more.
+    // A count of one confirms nothing ("Celsa Señaris, Enrique La Marca" with one value[] entry).
+    private static bool ConfirmsGivenNames(IucnAssessmentCitationParser.CreditSplitRule rule, int? count) =>
+        rule == IucnAssessmentCitationParser.CreditSplitRule.CountGiven && count >= 2;
+
+    private static ParsedAuthorName KeepGivenNamesOnlyIfConfirmed(ParsedAuthorName parsed, bool confirmed) =>
+        parsed.Shape == AuthorNameShape.SurnameGivenNames && !confirmed
+            ? new ParsedAuthorName(new CitationAuthor(CitationAuthorKind.Verbatim, parsed.Author.Display), AuthorNameShape.SurnameGivenNamesUnconfirmed)
+            : parsed;
 
     private static List<JsonElement> AssessorCredits(JsonElement assessment) {
         var blocks = new List<JsonElement>();

@@ -83,6 +83,8 @@ public class IucnAuthorNameParserTests {
     [InlineData("Disi, M., A.M.", "Unknown")]
     [InlineData("Bidau, & Ojeda, R.", "Unknown")]
     [InlineData("Weber, O. & Sebsebe Demissew", "Unknown")]
+    // A single-letter surname: a typo for "Ntakimazi, G.".
+    [InlineData("G, Ntakimazi", "Unknown")]
     [InlineData("Kry�tufek, B.", "Unknown")]
     public void KeptAsPublished(string name, string shape) {
         var parsed = IucnAuthorNameParser.Parse(name);

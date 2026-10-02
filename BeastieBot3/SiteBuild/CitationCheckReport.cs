@@ -560,6 +560,7 @@ internal static class CitationCheckReport {
         AuthorNameShape.SurnameInitialsNoDots => "Surname, initials without dots",
         AuthorNameShape.SurnameInitialsSuffix => "Surname, initials with Jr. or II",
         AuthorNameShape.SurnameGivenNames => "Surname, given names",
+        AuthorNameShape.SurnameGivenNamesUnconfirmed => "Surname, given names, not confirmed by a value[] count",
         AuthorNameShape.CompactSurnameFirst => "Surname initials (no comma)",
         AuthorNameShape.CompactInitialsFirst => "Initials surname",
         AuthorNameShape.Organisation => "Organisation",
@@ -570,7 +571,8 @@ internal static class CitationCheckReport {
 
     private static string ShapeKind(AuthorNameShape shape) => shape switch {
         AuthorNameShape.Organisation => "Organisation",
-        AuthorNameShape.GivenNameFirst or AuthorNameShape.SingleName or AuthorNameShape.Unknown => "Verbatim",
+        AuthorNameShape.GivenNameFirst or AuthorNameShape.SingleName or AuthorNameShape.SurnameGivenNamesUnconfirmed
+            or AuthorNameShape.Unknown => "Verbatim",
         _ => "Person",
     };
 

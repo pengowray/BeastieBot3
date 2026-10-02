@@ -10,7 +10,9 @@ using BeastieBot3.WikidataEdits;
 // "van Swaay, C."), several words ("Martínez Salas, E."), hyphens and apostrophes; the initials may
 // carry particles ("Nogueira, C. de C."), hyphens ("Samain, M.-S.") or no dots ("DoNascimiento, CD").
 // A full given name after the comma ("Mohd Yusof, Nur Adillah") is a person too: Initials then holds
-// the given name, as |first= would. Names already in one token are people when they fit the compact
+// the given name, as |first= would. Two people written given name first have the same shape
+// ("Djoko Iskandar, Mumpuni"), so IucnCitationPartsParser keeps this read only when the credit's
+// value[] count confirmed the split. Names already in one token are people when they fit the compact
 // patterns the splitter accepts ("Tamanyan K.", "N.H. Rakotoarivelo").
 //
 // Generational suffixes ("Lowry II, P.P.", "Brownell Jr., R.L.", "Golamco, A., Jr.") follow the CS1
@@ -40,6 +42,10 @@ internal enum AuthorNameShape {
     SurnameInitialsSuffix,
     /// "Mohd Yusof, Nur Adillah", "Rogers, Alex"
     SurnameGivenNames,
+    /// The SurnameGivenNames shape where no value[] count confirmed the split, so possibly two
+    /// people: "Djoko Iskandar, Mumpuni". Kept as published (IucnCitationPartsParser decides this,
+    /// since only it knows the count).
+    SurnameGivenNamesUnconfirmed,
     /// "Tamanyan K."
     CompactSurnameFirst,
     /// "N.H. Rakotoarivelo"
@@ -185,6 +191,8 @@ internal static class IucnAuthorNameParser {
             }
         }
         if (!LooksLikeSurname(surname)) return null;
+        // "G, Ntakimazi" is a typo for one name; no real surname is a single letter.
+        if (surname.Count(char.IsLetter) == 1) return null;
 
         AuthorNameShape shape;
         if (IucnAssessmentCitationParser.IsInitials(initials)) {
