@@ -204,7 +204,7 @@
                         <th scope="col">@SiteText.ColPublished</th>
                         <th scope="col">@SiteText.ColCategory</th>
                         <th scope="col">@SiteText.ColCriteria</th>
-                        <th scope="col">@SiteText.ColAssessed</th>
+                        <th scope="col" class="narrow-hide">@SiteText.ColAssessed</th>
                         <th scope="col">@SiteText.ColWikitext</th>
                         <th scope="col">@SiteText.ColAssessment</th>
                     </tr>
@@ -217,7 +217,7 @@
                             <th scope="row">@a.YearPublished @if (isLatest) {<span class="tag">@SiteText.Latest</span>}</th>
                             <td><partial name="_Badge" model="@BadgeModel.For(a)" /></td>
                             <td>@a.Criteria</td>
-                            <td>@SiteFormat.Date(a.AssessmentDate)</td>
+                            <td class="narrow-hide">@SiteFormat.Date(a.AssessmentDate)</td>
                             <td>
                                 @if (isShown) {
                                     <span class="shown-label">@SiteText.Shown</span>

@@ -58,11 +58,20 @@ public static class FixtureDb {
     /// The shared fixture database (created once per test run).
     public static string Path => Default.Value;
 
-    /// Creates a fixture database in a new temporary folder and returns its path.
-    /// schemaVersion and dropTable make the broken variants.
+    /// Creates a fixture database in a new temporary folder and returns its path. The folder is
+    /// deleted when the test run ends. schemaVersion and dropTable make the broken variants.
     public static string Create(string name, string? schemaVersion = null, string? dropTable = null) {
         var dir = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "beastiebot-site-tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(dir);
+        AppDomain.CurrentDomain.ProcessExit += (_, _) => {
+            try {
+                SqliteConnection.ClearAllPools();
+                Directory.Delete(dir, recursive: true);
+            } catch (IOException) {
+                // Left for the system's temp cleanup.
+            } catch (UnauthorizedAccessException) {
+            }
+        };
         var path = System.IO.Path.Combine(dir, name + ".sqlite");
 
         var builder = new SqliteConnectionStringBuilder { DataSource = path, Mode = SqliteOpenMode.ReadWriteCreate, Pooling = false };

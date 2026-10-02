@@ -240,6 +240,15 @@ h3 {
     padding: 0.35rem 0.55rem;
 }
 
+/* On phones the header search box takes a line of its own, under the site name and About. */
+@media (max-width: 40rem) {
+    .search-form-header {
+        order: 3;
+        flex: 1 1 100%;
+        max-width: none;
+    }
+}
+
 button {
     font: inherit;
     padding: 0.45rem 0.9rem;
@@ -588,6 +597,12 @@ thead th {
 
 tbody th {
     font-weight: 400;
+}
+
+@media (max-width: 40rem) {
+    .narrow-hide {
+        display: none;
+    }
 }
 
 tr.shown {

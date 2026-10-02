@@ -38,11 +38,18 @@
         });
     }
 
+    // The Clipboard API first; when it is missing or refuses (plain http, no permission), the
+    // older execCommand("copy") on the selected text.
     function copy(box) {
         if (navigator.clipboard && window.isSecureContext) {
-            return navigator.clipboard.writeText(box.value);
+            return navigator.clipboard.writeText(box.value).catch(function () {
+                return copyBySelection(box);
+            });
         }
-        // Older browsers and pages served over plain http.
+        return copyBySelection(box);
+    }
+
+    function copyBySelection(box) {
         return new Promise(function (resolve, reject) {
             box.focus();
             box.select();
@@ -117,6 +124,25 @@
         });
     }
 
+    // Wikitext boxes grow to fit their text, so nothing is hidden behind a scroll bar.
+    function fitTextareas() {
+        document.querySelectorAll(".wikitext-box textarea").forEach(function (box) {
+            box.rows = 1;
+            box.style.height = "auto";
+            box.style.height = (box.scrollHeight + 2) + "px";
+        });
+    }
+
+    function setUpTextareas() {
+        fitTextareas();
+        var timer = 0;
+        window.addEventListener("resize", function () {
+            window.clearTimeout(timer);
+            timer = window.setTimeout(fitTextareas, 150);
+        });
+    }
+
     setUpCopyButtons();
     setUpSuggestions();
+    setUpTextareas();
 })();
