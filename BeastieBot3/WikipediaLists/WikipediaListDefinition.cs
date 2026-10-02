@@ -476,9 +476,9 @@ internal sealed class DisplayPreferencesConfig {
 }
 
 /// <summary>
-/// Configuration for automatic section splitting of large groups.
-/// When a leaf group exceeds the threshold, the tree builder tries CoL-enriched
-/// intermediate ranks to insert finer-grained headings.
+/// Configuration for automatic section splitting of large groups. When a group below the last
+/// grouping level reaches the threshold, the tree builder tries finer ranks in turn: subfamily,
+/// tribe and subtribe from the Catalogue of Life placement, then genus.
 /// </summary>
 internal sealed class AutoSplitConfig {
     /// <summary>

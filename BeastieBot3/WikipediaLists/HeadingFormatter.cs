@@ -198,11 +198,5 @@ internal sealed class HeadingFormatter {
         return $"Members of {wikilink} are called {commonNameOrPlural}.";
     }
 
-    public static bool IsOtherOrUnknownHeading(string raw) {
-        var trimmed = raw.Trim();
-        return trimmed.StartsWith("Other ", StringComparison.OrdinalIgnoreCase)
-            || trimmed.StartsWith("Unknown ", StringComparison.OrdinalIgnoreCase)
-            || trimmed.Equals("Other", StringComparison.OrdinalIgnoreCase)
-            || trimmed.Equals("Unknown", StringComparison.OrdinalIgnoreCase);
-    }
+    public static bool IsOtherOrUnknownHeading(string raw) => BeastieBot3.Taxonomy.TaxonomyTreeBuilder.IsResidualLabel(raw);
 }

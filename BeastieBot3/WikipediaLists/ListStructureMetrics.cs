@@ -352,13 +352,7 @@ internal static class WikitextMetricsCollector {
             || trimmed.Equals("Further reading", StringComparison.OrdinalIgnoreCase);
     }
 
-    private static bool IsOtherOrUnknownLabel(string value) {
-        var trimmed = value.Trim();
-        return trimmed.StartsWith("Other ", StringComparison.OrdinalIgnoreCase)
-            || trimmed.StartsWith("Unknown ", StringComparison.OrdinalIgnoreCase)
-            || trimmed.Equals("Other", StringComparison.OrdinalIgnoreCase)
-            || trimmed.Equals("Unknown", StringComparison.OrdinalIgnoreCase);
-    }
+    private static bool IsOtherOrUnknownLabel(string value) => TaxonomyTreeBuilder.IsResidualLabel(value);
 
     /// <summary>
     /// Tracks state for a heading during wikitext parsing. <c>HasChildHeadings</c> distinguishes
