@@ -25,7 +25,7 @@ running under the hardened systemd unit, release pruning, and HTTPS through Cadd
 
   | Script | What it does |
   |---|---|
-  | `setup-server.sh` | Prepares the VM. Run once, and again after changing `deploy.env`, `Caddyfile.template` or `beastie-site.service`. |
+  | `setup-server.sh` | Prepares the VM. Run once, and again after changing `deploy.env`, `Caddyfile.template`, `caddy-admin-socket.conf` or `beastie-site.service`. |
   | `deploy-app.sh` | Builds the site, uploads it as a new release, switches to it and checks `/healthz`. `--rollback` switches back to the release built before the current one. |
   | `deploy-db.sh` | Uploads a new `site.sqlite`, switches to it and checks `/healthz`. Puts the old database back when the check fails. |
   | `rollback-db.sh` | Swaps the live database with the previous one. |
@@ -244,7 +244,7 @@ space for about 1.1 times the database size, plus 100 MB.
 | Caddy | Comes from Caddy's own apt repository, which the daily updates do not cover. Run `setup-server.sh` again (it runs `apt-get upgrade`), or `ssh ubuntu@<HOST> sudo apt-get upgrade`. |
 | .NET runtime | Part of the self-contained app. Security fixes reach the server only when you update the .NET 10 SDK on your computer and run `deploy-app.sh`. Microsoft releases .NET patches monthly. |
 | The site | `deploy-app.sh`. |
-| The domain, Caddy settings or the systemd unit | Edit `deploy.env`, `Caddyfile.template` or `beastie-site.service`, then run `setup-server.sh` again. It changes only what differs and restarts what it changed. |
+| The domain, Caddy settings or the systemd unit | Edit `deploy.env`, `Caddyfile.template`, `caddy-admin-socket.conf` or `beastie-site.service`, then run `setup-server.sh` again. It changes only what differs and reloads or restarts what it changed. |
 
 **When the database schema version changes** (`SiteDbSchema.Version`), the site refuses a database
 with a different version, so the app and the database have to change together:
@@ -319,9 +319,17 @@ To roll back the app instead, see [Deploying the app](#deploying-the-app).
   stops before changing anything.
 - Caddy's apt repository: `/usr/share/keyrings/caddy-stable-archive-keyring.gpg` and
   `/etc/apt/sources.list.d/caddy-stable.list`.
+- `/etc/systemd/system/caddy.service.d/beastie-admin-socket.conf`, a copy of
+  `caddy-admin-socket.conf`. It makes systemd create `/run/caddy`, owned by the `caddy` user and
+  closed to other users, each time Caddy starts.
 - `/etc/caddy/Caddyfile`, written from `Caddyfile.template` when it differs. The old file is kept
   as `/etc/caddy/Caddyfile.previous`. Caddy writes `/var/log/caddy/access.log` and keeps its
-  certificates under `/var/lib/caddy`.
+  certificates under `/var/lib/caddy`. The Caddyfile moves Caddy's admin API from
+  `localhost:2019` to the unix socket `/run/caddy/admin.sock`, because the admin API has no
+  password and any process on the VM, the site included, could otherwise change Caddy's
+  configuration. `sudo systemctl reload caddy` still works. The script reloads Caddy after a
+  change, and restarts it instead when Caddy does not answer on the socket yet (the first run
+  with this setting) or the drop-in changed.
 - `/etc/systemd/system/beastie-site.service`, enabled to start at boot. systemd creates
   `/var/lib/beastie-site` for the service.
 - `/usr/local/sbin/beastie-site`, a copy of `server-tasks.sh`.

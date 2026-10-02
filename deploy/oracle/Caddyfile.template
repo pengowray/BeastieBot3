@@ -6,6 +6,9 @@
 # Caddy gets and renews the Let's Encrypt certificate for the domain itself, and redirects
 # http:// requests to https://.
 {
+	# The admin API listens on a unix socket that only the caddy user can open, not on
+	# localhost:2019, where the site could reach it. caddy-admin-socket.conf creates /run/caddy.
+	admin unix//run/caddy/admin.sock
 	email __ACME_EMAIL__
 }
 

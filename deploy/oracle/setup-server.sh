@@ -5,9 +5,9 @@
 #
 # On your computer, run it with no arguments:
 #   deploy/oracle/setup-server.sh
-# It reads deploy.env, copies this script, server-tasks.sh, Caddyfile.template and
-# beastie-site.service to a temporary folder on the server, runs the script there with sudo, and
-# deletes the folder.
+# It reads deploy.env, copies this script, server-tasks.sh, Caddyfile.template,
+# caddy-admin-socket.conf and beastie-site.service to a temporary folder on the server, runs the
+# script there with sudo, and deletes the folder.
 #
 # On the server it runs with --on-server (as root):
 #   sudo bash setup-server.sh --on-server --domain species.example.org [--email you@example.org]
@@ -23,7 +23,7 @@ run_from_workstation() {
     source "$SCRIPT_DIR/lib.sh"
     load_env
 
-    local files=(setup-server.sh server-tasks.sh Caddyfile.template beastie-site.service) f
+    local files=(setup-server.sh server-tasks.sh Caddyfile.template caddy-admin-socket.conf beastie-site.service) f
     for f in "${files[@]}"; do
         [[ -f "$DEPLOY_DIR/$f" ]] || die "Missing file: $DEPLOY_DIR/$f"
     done
@@ -59,6 +59,8 @@ AUTO_REBOOT_AT=""
 BASE=/srv/beastie
 SERVICE=beastie-site
 SERVICE_USER=beastie
+CADDY_DROPIN=/etc/systemd/system/caddy.service.d/beastie-admin-socket.conf
+CADDY_ADMIN_SOCKET=/run/caddy/admin.sock
 
 log()  { printf '\n== %s\n' "$*"; }
 info() { printf '%s\n' "$*"; }
@@ -99,7 +101,7 @@ check_system() {
     [[ -n "$DEPLOY_USER" ]] || fail "--deploy-user is required when the script is not run with sudo."
     [[ "$DEPLOY_USER" != root ]] || fail "--deploy-user must be the SSH user you deploy with, not root."
     id "$DEPLOY_USER" >/dev/null 2>&1 || fail "User $DEPLOY_USER does not exist on this server."
-    for f in server-tasks.sh Caddyfile.template beastie-site.service; do
+    for f in server-tasks.sh Caddyfile.template caddy-admin-socket.conf beastie-site.service; do
         [[ -f "$SCRIPT_DIR/$f" ]] || fail "Missing file next to this script: $SCRIPT_DIR/$f"
     done
     # Installing iptables-persistent removes ufw, and Oracle advises against ufw on its images.
@@ -324,7 +326,22 @@ render_caddyfile() {
 }
 
 configure_caddy() {
-    log "Caddyfile for $DOMAIN"
+    log "Caddy settings for $DOMAIN"
+    # The drop-in goes in first: the new Caddyfile puts the admin API in /run/caddy, which systemd
+    # creates only when the drop-in is in place.
+    local dropin_changed=no caddyfile_changed=no
+    if [[ -f "$CADDY_DROPIN" ]] && cmp -s "$SCRIPT_DIR/caddy-admin-socket.conf" "$CADDY_DROPIN"; then
+        info "$CADDY_DROPIN is up to date."
+    else
+        install -d -m 755 -o root -g root "$(dirname "$CADDY_DROPIN")"
+        install -m 644 -o root -g root "$SCRIPT_DIR/caddy-admin-socket.conf" "$CADDY_DROPIN"
+        dropin_changed=yes
+        info "Installed $CADDY_DROPIN."
+        if systemd_running; then
+            systemctl daemon-reload
+        fi
+    fi
+
     local target=/etc/caddy/Caddyfile tmp
     tmp="$(mktemp)"
     render_caddyfile "$tmp"
@@ -332,27 +349,46 @@ configure_caddy() {
     if [[ -f "$target" ]] && cmp -s "$tmp" "$target"; then
         rm -f "$tmp"
         info "$target is up to date."
-        return 0
-    fi
-    # Validate as the caddy user: run as root, caddy validate would create the access log file
-    # owned by root, and the caddy service could not write to it.
-    if ! runuser -u caddy -- caddy validate --config "$tmp" --adapter caddyfile >/tmp/caddy-validate.log 2>&1; then
-        cat /tmp/caddy-validate.log >&2
+    else
+        # Validate as the caddy user: run as root, caddy validate would create the access log file
+        # owned by root, and the caddy service could not write to it.
+        if ! runuser -u caddy -- caddy validate --config "$tmp" --adapter caddyfile >/tmp/caddy-validate.log 2>&1; then
+            cat /tmp/caddy-validate.log >&2
+            rm -f "$tmp"
+            fail "The new Caddyfile is not valid. $target was not changed."
+        fi
+        if [[ -f "$target" ]]; then
+            cp -p "$target" "$target.previous"
+            info "Saved the old file as $target.previous."
+        fi
+        install -m 644 -o root -g root "$tmp" "$target"
         rm -f "$tmp"
-        fail "The new Caddyfile is not valid. $target was not changed."
+        caddyfile_changed=yes
+        info "Wrote $target."
     fi
-    if [[ -f "$target" ]]; then
-        cp -p "$target" "$target.previous"
-        info "Saved the old file as $target.previous."
+
+    systemd_running || return 0
+    systemctl enable caddy >/dev/null 2>&1 || true
+    # A reload sends the new configuration to the running Caddy through the admin socket named in
+    # the new Caddyfile. When Caddy does not answer there (the first run with the socket setting,
+    # when Caddy still listens on localhost:2019, or Caddy is not running) or the drop-in changed,
+    # Caddy has to be restarted instead. A restart keeps the certificates, which are stored on disk.
+    if [[ "$dropin_changed" == yes ]] || ! caddy_admin_answers; then
+        systemctl restart caddy
+        info "Restarted Caddy. It requests the certificate for $DOMAIN once DNS points at this server."
+    elif [[ "$caddyfile_changed" == yes ]]; then
+        systemctl reload caddy
+        info "Reloaded Caddy. It requests the certificate for $DOMAIN once DNS points at this server."
     fi
-    install -m 644 -o root -g root "$tmp" "$target"
-    rm -f "$tmp"
-    info "Wrote $target."
-    if systemd_running; then
-        systemctl enable caddy >/dev/null 2>&1 || true
-        systemctl reload-or-restart caddy
-        info "Caddy reloaded. It requests the certificate for $DOMAIN once DNS points at this server."
+    if ! caddy_admin_answers; then
+        warn "Caddy's admin API does not answer on $CADDY_ADMIN_SOCKET, so systemctl reload caddy will fail. Check: sudo journalctl -u caddy -n 50"
     fi
+}
+
+# Whether the running Caddy answers on its admin socket. A socket file alone proves nothing: Caddy
+# can leave one behind when it stops.
+caddy_admin_answers() {
+    curl -fsS --max-time 5 --unix-socket "$CADDY_ADMIN_SOCKET" -o /dev/null http://localhost/config/ 2>/dev/null
 }
 
 install_service() {
