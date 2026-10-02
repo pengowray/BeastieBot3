@@ -85,7 +85,8 @@ public sealed class SpeciesModel : PageModel {
             Parent = _queries.GetSummary(parentId);
         }
         LoadAssessments(assessment);
-        Options = WikitextOptions.FromQuery(authors, access, opts, wrapRef, refname, amp);
+        Options = WikitextOptions.FromQuery(authors, access, opts, wrapRef, refname, amp,
+            Selected is null ? DefaultRefNames.LatestGlobal : DefaultRefNameFor(Selected));
         BuildWikitext();
         LoadNames();
         Children = _queries.GetChildren(Taxon.TaxonId).Select(c => new TaxonListItem(c)).ToList();
@@ -95,11 +96,23 @@ public sealed class SpeciesModel : PageModel {
         return Page();
     }
 
-    /// The query string for this page with the current options and the given assessment.
-    public string OptionsUrl(long? assessmentId) => $"/species/{Taxon?.TaxonId}{Options.ToQuery(assessmentId)}";
+    /// The URL of this page with the current options and the given assessment (null: the default
+    /// one). The ref name goes along only when the visitor chose it; otherwise that assessment's
+    /// own default applies.
+    public string OptionsUrl(long? assessmentId) {
+        var target = (assessmentId is { } id ? _assessments.FirstOrDefault(a => a.AssessmentId == id) : null) ?? StatusAssessment;
+        var targetDefault = target is null ? DefaultRefNames.LatestGlobal : DefaultRefNameFor(target);
+        return $"/species/{Taxon?.TaxonId}{Options.ToQuery(assessmentId, targetDefault)}";
+    }
+
+    public string DefaultRefNameFor(AssessmentRow assessment) =>
+        DefaultRefNames.For(assessment, LatestGlobal?.AssessmentId, GlobalHistory);
+
+    private IReadOnlyList<AssessmentRow> _assessments = [];
 
     private void LoadAssessments(long? requested) {
         var all = _queries.GetAssessments(Taxon!.TaxonId);
+        _assessments = all;
         GlobalHistory = all.Where(a => a.IsGlobal).ToList();
         LatestGlobal = GlobalHistory.FirstOrDefault(a => a.AssessmentId == Taxon.LatestGlobalAssessmentId)
             ?? (Taxon.LatestGlobalAssessmentId is null ? null : GlobalHistory.FirstOrDefault(a => a.IsLatest));

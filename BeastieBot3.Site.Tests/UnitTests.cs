@@ -143,7 +143,7 @@ public sealed class WikitextOptionsTests {
     public void DefaultsWhenNothingIsGiven() {
         var options = WikitextOptions.FromQuery(null, null, null, null, null, null);
         Assert.Equal(WikitextOptions.Default, options);
-        Assert.Equal(string.Empty, options.ToQuery(null));
+        Assert.Equal(string.Empty, options.ToQuery(null, "iucn"));
     }
 
     [Fact]
@@ -154,9 +154,9 @@ public sealed class WikitextOptionsTests {
 
     [Fact]
     public void RoundTrip() {
-        var options = new WikitextOptions(CiteAuthorStyle.LastFirst, WikitextOptions.AccessNone, false, "my ref", true);
-        Assert.Equal("?assessment=5&authors=lastfirst&access=none&opts=1&amp=1&refname=my%20ref", options.ToQuery(5));
-        Assert.Equal(options, WikitextOptions.FromQuery("lastfirst", "none", "1", null, "my ref", "1"));
+        var options = new WikitextOptions(CiteAuthorStyle.LastFirst, WikitextOptions.AccessNone, false, "my ref", true, "iucn");
+        Assert.Equal("?assessment=5&authors=lastfirst&access=none&opts=1&amp=1&refname=my%20ref", options.ToQuery(5, "iucn2008"));
+        Assert.Equal(options with { DefaultRefName = "iucn2008" }, WikitextOptions.FromQuery("lastfirst", "none", "1", null, "my ref", "1", "iucn2008"));
     }
 
     [Fact]
@@ -164,12 +164,64 @@ public sealed class WikitextOptionsTests {
         // The output cache keys on query values, and an empty value looks like a missing one.
         Assert.Equal(string.Empty, WikitextOptions.FromQuery(null, null, "1", "1", "", null).RefName);
         Assert.Equal(string.Empty, WikitextOptions.FromQuery(null, null, "1", "1", null, null).RefName);
-        Assert.Equal(WikitextOptions.DefaultRefName, WikitextOptions.FromQuery(null, null, null, null, "", null).RefName);
-        Assert.Equal(WikitextOptions.DefaultRefName, WikitextOptions.FromQuery(null, null, null, null, null, null).RefName);
+        Assert.Equal("iucn", WikitextOptions.FromQuery(null, null, null, null, "", null).RefName);
+        Assert.Equal("iucn", WikitextOptions.FromQuery(null, null, null, null, null, null).RefName);
 
         var plainRef = WikitextOptions.Default with { RefName = string.Empty };
-        Assert.Equal("?opts=1&ref=1", plainRef.ToQuery(null));
+        Assert.Equal("?opts=1&ref=1", plainRef.ToQuery(null, "iucn"));
         Assert.Equal(plainRef, WikitextOptions.FromQuery(null, null, "1", "1", null, null));
+    }
+
+    [Fact]
+    public void TheDefaultRefNameIsThatOfTheAssessmentShown() {
+        Assert.Equal("iucn2008", WikitextOptions.FromQuery(null, null, null, null, null, null, "iucn2008").RefName);
+        // The form sends the pre-filled default back; it stays the default, not the visitor's choice.
+        var submitted = WikitextOptions.FromQuery("lastfirst", null, "1", "1", "iucn", null, "iucn");
+        Assert.Null(submitted.CustomRefName);
+        Assert.Equal("?assessment=5&authors=lastfirst", submitted.ToQuery(5, "iucn2008"));
+    }
+
+    [Fact]
+    public void LinksToOtherAssessmentsUseTheirOwnDefault() {
+        var onEurope = WikitextOptions.FromQuery(null, null, null, null, null, null, "iucn-europe");
+        // To the latest global assessment: no refname, so its default "iucn" applies.
+        Assert.Equal(string.Empty, onEurope.ToQuery(null, "iucn"));
+
+        // When the form part is needed for another option, the target's default is written out,
+        // because with opts=1 a missing refname means a plain <ref>.
+        var withAmp = onEurope with { Amp = true };
+        Assert.Equal("?assessment=9&opts=1&ref=1&amp=1&refname=iucn2008", withAmp.ToQuery(9, "iucn2008"));
+        Assert.Equal("iucn2008", WikitextOptions.FromQuery(null, null, "1", "1", "iucn2008", "1", "iucn2008").RefName);
+
+        // A name the visitor chose goes along.
+        var chosen = onEurope with { RefName = "sparrow" };
+        Assert.Equal("?opts=1&ref=1&refname=sparrow", chosen.ToQuery(null, "iucn"));
+        // A plain <ref> goes along too.
+        var plain = onEurope with { RefName = string.Empty };
+        Assert.Equal("?opts=1&ref=1", plain.ToQuery(null, "iucn"));
+    }
+
+    private static AssessmentRow Row(long id, string scope, int? year, bool latest = false) =>
+        new(id, 1, scope, latest, "LC", false, false, null, "3.1", year, null, null, null);
+
+    [Fact]
+    public void DefaultRefNameRules() {
+        var latest = Row(10, "Global", 2019, latest: true);
+        var replaced = Row(11, "Global", 2019);
+        var older = Row(12, "Global", 2008);
+        var noYear = Row(13, "Global", null);
+        AssessmentRow[] history = [latest, replaced, older, noYear];
+        Assert.Equal("iucn", Pages.DefaultRefNames.For(latest, 10, history));
+        Assert.Equal("iucn2019-11", Pages.DefaultRefNames.For(replaced, 10, history));
+        Assert.Equal("iucn2008", Pages.DefaultRefNames.For(older, 10, history));
+        Assert.Equal("iucn-13", Pages.DefaultRefNames.For(noYear, 10, history));
+        Assert.Equal("iucn-gulf-of-mexico", Pages.DefaultRefNames.For(Row(20, "Gulf of Mexico", 2015), 10, history));
+        Assert.Equal("iucn-s-africa-fw", Pages.DefaultRefNames.For(Row(21, "S. Africa FW", 2015), 10, history));
+        Assert.Equal("iucn-global-pan-africa-western-africa", Pages.DefaultRefNames.For(Row(22, "Global, Pan-Africa & Western Africa", 2015), 10, history));
+        Assert.Equal("iucn-reunion", Pages.DefaultRefNames.For(Row(23, "Réunion", 2015), 10, history));
+        var longName = Pages.DefaultRefNames.For(Row(24, "Northern and Western Africa and the Mediterranean coast", 2015), 10, history);
+        Assert.True(longName.Length <= WikitextOptions.MaxRefNameLength);
+        Assert.False(longName.EndsWith('-'));
     }
 
     [Fact]

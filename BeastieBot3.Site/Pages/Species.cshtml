@@ -181,7 +181,8 @@
                     </fieldset>
                     <div class="option-group">
                         <label><input type="checkbox" name="ref" value="1" checked="@Model.Options.WrapInRef"> @Html.Raw(SiteText.RefWrapHtml)</label>
-                        <label class="ref-name">@SiteText.RefName <input type="text" name="refname" value="@Model.Options.RefName" maxlength="@WikitextOptions.MaxRefNameLength" size="12" spellcheck="false"></label>
+                        <label class="ref-name">@SiteText.RefName <input type="text" name="refname" value="@Model.Options.RefName" maxlength="@WikitextOptions.MaxRefNameLength" size="20" spellcheck="false" aria-describedby="refname-help"></label>
+                        <p class="help" id="refname-help">@SiteText.RefNameHelp</p>
                     </div>
                     <div class="option-group">
                         <label><input type="checkbox" name="amp" value="1" checked="@Model.Options.Amp" aria-describedby="amp-help"> @Html.Raw(SiteText.AmpHtml)</label>

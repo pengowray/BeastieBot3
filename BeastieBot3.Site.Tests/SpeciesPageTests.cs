@@ -122,6 +122,42 @@ public sealed class SpeciesPageTests(SiteFactory factory) : IClassFixture<SiteFa
     }
 
     [Fact]
+    public async Task DefaultRefNameDependsOnTheAssessment() {
+        var latest = await Page();
+        Assert.Contains("name=\"refname\" value=\"iucn\"", latest);
+        Assert.Contains("Use a ref name that no other citation in the article uses, unless this citation replaces the citation with that name.", Html.Text(latest));
+        // The link to an earlier assessment does not carry "iucn" to it.
+        Assert.Contains($"href=\"/species/22823?assessment={FixtureDb.PolarBear2008}#wikitext\"", latest);
+
+        var earlier = await Page($"?assessment={FixtureDb.PolarBear2008}");
+        Assert.StartsWith("<ref name=\"iucn2008\">{{cite iucn ", Html.Textarea(earlier, "wikitext-cite"));
+        Assert.Contains("| status_ref = <ref name=\"iucn2008\">", Html.Textarea(earlier, "wikitext-speciesbox"));
+        Assert.Contains("name=\"refname\" value=\"iucn2008\"", earlier);
+        Assert.Contains("<a href=\"/species/22823#wikitext\">Show wikitext for the latest assessment</a>", earlier);
+
+        var regional = await _client.GetStringAsync($"/species/{FixtureDb.HouseSparrow}?assessment={FixtureDb.HouseSparrowEurope}");
+        Assert.StartsWith("<ref name=\"iucn-europe\">{{cite iucn ", Html.Textarea(regional, "wikitext-cite"));
+        Assert.Contains($"<a href=\"/species/{FixtureDb.HouseSparrow}#wikitext\">Show wikitext for the latest assessment</a>", regional);
+
+        // Two global assessments published in 2010: the replaced one's name has its id.
+        var replaced = await _client.GetStringAsync($"/species/{FixtureDb.Micropyropsis}?assessment={FixtureDb.MicropyropsisReplaced}");
+        Assert.StartsWith($"<ref name=\"iucn2010-{FixtureDb.MicropyropsisReplaced}\">", Html.Textarea(replaced, "wikitext-cite"));
+        var errata = await _client.GetStringAsync($"/species/{FixtureDb.Micropyropsis}");
+        Assert.StartsWith("<ref name=\"iucn\">", Html.Textarea(errata, "wikitext-cite"));
+    }
+
+    [Fact]
+    public async Task ARefNameTheVisitorChoseGoesToOtherAssessments() {
+        var chosen = await Page("?opts=1&ref=1&refname=polar");
+        Assert.Contains($"href=\"/species/22823?assessment={FixtureDb.PolarBear2008}&amp;opts=1&amp;ref=1&amp;refname=polar#wikitext\"", chosen);
+
+        // The form sends the pre-filled default back with another option: the link to the 2008
+        // assessment names that assessment's default.
+        var submitted = await Page("?opts=1&ref=1&refname=iucn&amp=1");
+        Assert.Contains($"href=\"/species/22823?assessment={FixtureDb.PolarBear2008}&amp;opts=1&amp;ref=1&amp;amp=1&amp;refname=iucn2008#wikitext\"", submitted);
+    }
+
+    [Fact]
     public async Task OptionsFormKeepsTheChoices() {
         var html = await Page("?authors=lastfirst&access=today&opts=1&amp=1");
         Assert.Contains("value=\"lastfirst\" checked=\"checked\"", html);

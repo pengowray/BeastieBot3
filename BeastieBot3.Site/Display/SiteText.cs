@@ -136,6 +136,7 @@ public static class SiteText {
     public const string AccessHelp = "Date downloaded from IUCN: the date this site downloaded the details of this assessment from the IUCN Red List API.";
     public const string RefWrapHtml = "Wrap the citation in <code>&lt;ref&gt;</code> tags";
     public const string RefName = "Ref name";
+    public const string RefNameHelp = "Use a ref name that no other citation in the article uses, unless this citation replaces the citation with that name.";
     public const string AmpHtml = "Add <code>|name-list-style=amp</code>";
     public const string AmpHelp = "Puts “&” before the last author, as IUCN does.";
     public const string UpdateWikitext = "Update wikitext";
