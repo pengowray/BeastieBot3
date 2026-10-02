@@ -26,7 +26,6 @@ internal sealed class IntroProseBuilder {
         WikipediaListDefinition definition,
         IReadOnlyList<IucnSpeciesRecord> allRecords,
         int totalCount,
-        string scopeLabel,
         string sectionSummary,
         string datasetVersion,
         string datasetYear) {
@@ -95,12 +94,14 @@ internal sealed class IntroProseBuilder {
             ["title"] = definition.Title,
             ["description"] = definition.Description,
             ["categories"] = definition.Categories.Count > 0 ? string.Join("\n", definition.Categories) : null,
-            ["scope_label"] = scopeLabel,
             ["dataset_version"] = datasetVersion,
             ["dataset_year"] = datasetYear,
             ["generated_at"] = generatedNow.ToString("d MMMM yyyy", CultureInfo.InvariantCulture),
             ["generated_month_year"] = generatedNow.ToString("MMMM yyyy", CultureInfo.InvariantCulture),
             ["total_entries"] = totalCount,
+            // "850 conifer [[taxon|taxa]]": the number of taxa the page lists, for the lead sentence.
+            ["count_taxa"] = CountTaxaPhrase(totalCount, string.IsNullOrEmpty(taxaAdj) ? KingdomAdjective(definition.Filters) : taxaAdj),
+            ["status_phrase"] = StatusPhrase(definition.Sections),
             ["sections_summary"] = sectionSummary,
             // Intro text variables
             ["species_count"] = NewspaperNumber(speciesCount),
@@ -214,5 +215,78 @@ internal sealed class IntroProseBuilder {
         note += " Where possible common names for taxa are given while links point to the scientific name used by the IUCN.";
 
         return note;
+    }
+
+    // "850 conifer [[taxon|taxa]]", "one [[taxon]]", "53 [[taxon|taxa]]" when there is no adjective.
+    internal static string CountTaxaPhrase(int count, string? adjective) {
+        var noun = count == 1 ? "[[taxon]]" : "[[taxon|taxa]]";
+        return string.IsNullOrWhiteSpace(adjective)
+            ? $"{NewspaperNumber(count)} {noun}"
+            : $"{NewspaperNumber(count)} {adjective.Trim()} {noun}";
+    }
+
+    // The attributive form of a list's single kingdom ("animal"), for lists defined without a taxa group.
+    internal static string? KingdomAdjective(IReadOnlyList<TaxonFilterDefinition> filters) {
+        var kingdoms = filters
+            .Where(f => string.Equals(f.Rank?.Trim(), "kingdom", StringComparison.OrdinalIgnoreCase)
+                && string.IsNullOrWhiteSpace(f.System) && (f.Exclude is null || f.Exclude.Count == 0))
+            .SelectMany(f => f.Values is { Count: > 0 } ? f.Values : new List<string> { f.Value ?? string.Empty })
+            .Select(v => v.Trim().ToUpperInvariant())
+            .Where(v => v.Length > 0)
+            .Distinct()
+            .ToList();
+        return kingdoms.Count != 1 ? null : kingdoms[0] switch {
+            "ANIMALIA" => "animal",
+            "PLANTAE" => "plant",
+            "FUNGI" => "fungus",
+            "CHROMISTA" => "chromist",
+            _ => null,
+        };
+    }
+
+    private static readonly Dictionary<string, string> StatusLinks = new(StringComparer.OrdinalIgnoreCase) {
+        ["EX"] = "[[Extinction|extinct]]",
+        ["EW"] = "[[Extinct in the wild|extinct in the wild]]",
+        ["CR"] = "[[Critically endangered species|critically endangered]]",
+        ["EN"] = "[[Endangered species|endangered]]",
+        ["VU"] = "[[Vulnerable species|vulnerable]]",
+        ["NT"] = "[[Near-threatened species|near threatened]]",
+        ["LC"] = "[[Least-concern species|least concern]]",
+        ["DD"] = "[[Data deficient|data deficient]]",
+        ["LR/cd"] = "[[Conservation-dependent species|conservation dependent]]",
+    };
+
+    /// <summary>
+    /// The categories a list's sections cover, for "has assessed 53 animal taxa as …":
+    /// "extinct in the wild", "critically endangered, endangered or vulnerable". A tagged code whose
+    /// category is not listed itself adds ", or as critically endangered and possibly extinct in the
+    /// wild"; a tagged code under a listed category adds nothing, since those taxa are in it.
+    /// </summary>
+    internal static string StatusPhrase(IReadOnlyList<WikipediaSectionDefinition> sections) {
+        var codes = sections.SelectMany(s => s.Statuses).Select(s => s.Code.Trim())
+            .Where(c => c.Length > 0).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+        var categories = codes.Where(c => !c.Contains('(')).ToList();
+        string Link(string code) =>
+            StatusLinks.TryGetValue(code, out var link) ? link : IucnRedlistStatus.Describe(code).Category.ToLowerInvariant();
+
+        var parts = categories.Select(Link).ToList();
+        var phrase = parts.Count switch {
+            0 => string.Empty,
+            1 => parts[0],
+            _ => string.Join(", ", parts.Take(parts.Count - 1)) + " or " + parts[^1],
+        };
+
+        foreach (var tagged in codes.Where(c => c.Contains('('))) {
+            var category = tagged[..tagged.IndexOf('(')];
+            if (categories.Contains(category, StringComparer.OrdinalIgnoreCase)) {
+                continue;
+            }
+            var tag = tagged.EndsWith("(PEW)", StringComparison.OrdinalIgnoreCase) ? "possibly extinct in the wild" : "possibly extinct";
+            phrase = phrase.Length == 0
+                ? $"{Link(category)} and {tag}"
+                : $"{phrase}, or as {Link(category)} and {tag}";
+        }
+
+        return phrase;
     }
 }

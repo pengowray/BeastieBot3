@@ -125,18 +125,23 @@ internal sealed class WikipediaListGenerator {
             section.Records.AddRange(records.Where(record => section.StatusSet.Contains(record.StatusCode)));
         }
 
-        var totalCount = sections.Sum(section => section.Records.Count);
+        // Resolve the list's per-field display overrides against the global defaults baseline.
+        var display = definition.Display?.ResolveAgainst(defaults.Display) ?? defaults.Display;
+
+        // The number of taxa the page lists, which the intro states: the body leaves out regional and
+        // subpopulation assessments unless the list keeps them (the SPRAT lists do).
+        var totalCount = sections.Sum(section =>
+            section.Records.Count(r => !display.ExcludeRegionalAssessments || !IsRegionalAssessment(r)));
         var datasetVersion = _queryService.GetDatasetVersion();
         var datasetYear = datasetVersion.IndexOf('-') is var dash and >= 0
             ? datasetVersion[..dash]
             : datasetVersion;
 
-        var scopeLabel = BuildScopeLabel(definition);
         var sectionSummary = string.Join("; ", sections.Select(section => $"{section.Definition.Heading} ({section.Records.Count})"));
 
         var allRecords = sections.SelectMany(s => s.Records).ToList();
         var context = _introProse.BuildContext(
-            definition, allRecords, totalCount, scopeLabel, sectionSummary, datasetVersion, datasetYear);
+            definition, allRecords, totalCount, sectionSummary, datasetVersion, datasetYear);
 
         var headerTemplate = definition.Templates.Header ?? defaults.HeaderTemplate;
         var footerTemplate = definition.Templates.Footer ?? defaults.FooterTemplate;
@@ -148,9 +153,6 @@ internal sealed class WikipediaListGenerator {
         var grouping = (IReadOnlyList<GroupingLevelDefinition>)(definition.Grouping
             ?? defaults.Grouping
             ?? new List<GroupingLevelDefinition>());
-        // Resolve the list's per-field display overrides against the global defaults baseline.
-        var display = definition.Display?.ResolveAgainst(defaults.Display) ?? defaults.Display;
-
         // A parent list (one with resolved phylogenetic children) renders a summary table + bare-bones
         // child sections instead of the flat species body. Requires the count aggregator.
         var isParent = definition.SubLists.Count > 0 && _chartData != null;
@@ -245,41 +247,6 @@ internal sealed class WikipediaListGenerator {
         ["genus"] = 6,
         ["species"] = 7
     };
-
-    private static string BuildScopeLabel(WikipediaListDefinition definition) {
-        if (definition.Filters.Count == 0) {
-            return "global";
-        }
-
-        var parts = definition.Filters
-            .OrderBy(filter => RankOrder.GetValueOrDefault(filter.Rank?.Trim().ToLowerInvariant() ?? "", 99))
-            .Select(FilterScopeLabel)
-            .Where(s => !string.IsNullOrWhiteSpace(s))
-            .ToList();
-
-        return parts.Count > 0 ? string.Join(" › ", parts!) : "global";
-    }
-
-    /// <summary>
-    /// A human-readable breadcrumb segment for one filter. Handles System tags, multi-value (Values)
-    /// includes, and exclude-only filters so virtual parents (Fish = several classes; Invertebrates =
-    /// Animalia minus Chordata) and System-filter groups (marine mammals) never render blank segments.
-    /// </summary>
-    private static string? FilterScopeLabel(TaxonFilterDefinition filter) {
-        if (!string.IsNullOrWhiteSpace(filter.System)) {
-            return filter.System.Trim();
-        }
-        if (filter.Values is { Count: > 0 }) {
-            var joined = string.Join("/", filter.Values.Select(v => v.Trim()).Where(v => v.Length > 0));
-            return string.IsNullOrWhiteSpace(joined) ? null : joined;
-        }
-        var value = filter.Value?.Trim();
-        var hasExclude = filter.Exclude is { Count: > 0 };
-        if (!string.IsNullOrWhiteSpace(value)) {
-            return hasExclude ? $"{value} (excl. {string.Join(", ", filter.Exclude!)})" : value;
-        }
-        return hasExclude ? $"excl. {string.Join(", ", filter.Exclude!)}" : null;
-    }
 
     private static List<SectionRuntime> PrepareSections(WikipediaListDefinition definition) {
         var list = new List<SectionRuntime>();
