@@ -37,6 +37,9 @@ internal static class ListTreeFixtures {
     public static PlacementPath OrderToFamily(string className, string order, string family, params PlacementNode[] nodes) =>
         new(PlacementSpan.OrderToFamily, TaxonPlacementIndex.FamilyKey(Animalia, className, order, family), nodes);
 
+    public static PlacementPath ClassToOrder(string className, string order, params PlacementNode[] nodes) =>
+        new(PlacementSpan.ClassToOrder, TaxonPlacementIndex.OrderKey(Animalia, className, order), nodes);
+
     public static PlacementPath FamilyToGenus(string family, string genus, params PlacementNode[] nodes) =>
         new(PlacementSpan.FamilyToGenus, TaxonPlacementIndex.GenusKey(Animalia, family, genus), nodes);
 
@@ -55,10 +58,11 @@ internal static class ListTreeFixtures {
         int startHeading = 3,
         IAutoSplitDiagnostics? diagnostics = null,
         TaxonRulesService? taxonRules = null,
-        IReadOnlyList<GroupingLevelDefinition>? grouping = null) {
+        IReadOnlyList<GroupingLevelDefinition>? grouping = null,
+        IntermediateLayerOptions? layers = null) {
         grouping ??= DefaultGrouping();
         var options = new TaxonomyTreeOptions<IucnSpeciesRecord> {
-            Intermediate = new IntermediateLayerOptions(),
+            Intermediate = layers ?? new IntermediateLayerOptions(),
             VirtualGroups = TaxonGroupingHelper.BuildVirtualGroupOptions(taxonRules),
             HeadingLevels = BeastieBot3.WikipediaLists.SectionBodyRenderer.HeadingLevelsFrom(startHeading),
             Diagnostics = diagnostics,

@@ -96,6 +96,46 @@ public class IntermediateLayerTests {
         Assert.Equal(0.9, decision.LargestShare);
     }
 
+    // Sharks and rays share subclass Neoselachii; only the chimaeras lie outside it.
+    private static (List<IucnSpeciesRecord> Records, TaxonPlacementIndex Placement) SharksAndRays() {
+        const string chondrichthyes = "CHONDRICHTHYES";
+        var orders = new[] {
+            ("CARCHARHINIFORMES", 20, "Selachii"), ("LAMNIFORMES", 8, "Selachii"), ("SQUALIFORMES", 10, "Selachii"),
+            ("MYLIOBATIFORMES", 15, "Batoidea"), ("RAJIFORMES", 12, "Batoidea"), ("RHINOPRISTIFORMES", 6, "Batoidea"),
+            ("CHIMAERIFORMES", 3, (string?)null),
+        };
+        var records = orders.SelectMany(o => Family(chondrichthyes, o.Item1, o.Item1[..4] + "IDAE", o.Item2)).ToList();
+        var placement = new TaxonPlacementIndex(orders.Where(o => o.Item3 != null).Select(o => ClassToOrder(
+            chondrichthyes, o.Item1, new PlacementNode("Neoselachii", "subclass", true), new PlacementNode(o.Item3!, "infraclass", true))));
+        return (records, placement);
+    }
+
+    [Fact]
+    public void DominantNode_BlocksTheLayerByDefault() {
+        var (records, placement) = SharksAndRays();
+        var diagnostics = new AutoSplitDiagnosticCollector();
+
+        var root = BuildTree(records, placement, diagnostics: diagnostics);
+
+        Assert.All(root.Children, c => Assert.Equal("order", c.Key));
+        Assert.Equal("rejected:dominant_group", Assert.Single(diagnostics.Layers).Outcome);
+    }
+
+    [Fact]
+    public void LookThroughDominant_ReachesSharksAndRays() {
+        var (records, placement) = SharksAndRays();
+        var diagnostics = new AutoSplitDiagnosticCollector();
+
+        var root = BuildTree(records, placement, diagnostics: diagnostics,
+            layers: new IntermediateLayerOptions(LookThroughDominant: true));
+
+        Assert.Equal(new[] { "Batoidea", "Selachii", "CHIMAERIFORMES" }, Values(root));
+        Assert.Equal("infraclass", Child(root, "Batoidea").Label);
+        Assert.Equal(
+            new[] { "looked_through:dominant_group", "accepted" },
+            diagnostics.Layers.Select(d => d.Outcome));
+    }
+
     [Fact]
     public void NodeSharedByEveryItem_IsSkippedWithoutAHeading() {
         // Every family sits under infraorder Alethinophidia below suborder Serpentes: Serpentes adds

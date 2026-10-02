@@ -202,7 +202,8 @@ internal static class TaxonGroupingHelper {
         }
 
         return new IntermediateLayerOptions(
-            config.MinItems, config.MinAnchors, config.MaxGroups, config.MaxDominance, config.MinGroupSize);
+            config.MinItems, config.MinAnchors, config.MaxGroups, config.MaxDominance, config.MinGroupSize,
+            config.LookThroughDominant);
     }
 
     /// <summary>

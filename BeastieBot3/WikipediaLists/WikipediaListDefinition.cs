@@ -562,4 +562,11 @@ internal sealed class IntermediateGroupsConfig {
 
     /// <summary>At least one CoL group must hold this many taxa. Default 5.</summary>
     public int MinGroupSize { get; init; } = 5;
+
+    /// <summary>
+    /// When one CoL group holds more than <see cref="MaxDominance"/> of the taxa, read its taxa one
+    /// node further down and try again (subclass Neoselachii, then infraclasses Batoidea and
+    /// Selachii). Default false.
+    /// </summary>
+    public bool LookThroughDominant { get; init; }
 }

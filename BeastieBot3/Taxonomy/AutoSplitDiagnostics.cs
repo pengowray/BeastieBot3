@@ -44,7 +44,8 @@ internal sealed record AutoSplitDecision(
 /// <param name="Ranks">CoL ranks of the candidate groups, e.g. "suborder".</param>
 /// <param name="Level">The configured level the layer sits above, e.g. "family".</param>
 /// <param name="Outcome">"accepted", or "rejected:" plus single_value_groups, few_items, few_anchors,
-/// no_fewer_headings, too_many_groups, dominant_group, groups_too_small or heading_depth.</param>
+/// no_fewer_headings, too_many_groups, dominant_group, groups_too_small or heading_depth, or
+/// "looked_through:dominant_group" when the next record is the same place one node further down.</param>
 /// <param name="NamedGroups">CoL groups left after demoting groups with one value of the level.</param>
 /// <param name="LooseValues">Distinct values of the level among items in no CoL group.</param>
 /// <param name="Anchors">D: distinct values of the level among all N items.</param>

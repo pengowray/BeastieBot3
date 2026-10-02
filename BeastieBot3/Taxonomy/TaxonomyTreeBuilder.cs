@@ -321,6 +321,9 @@ internal static class TaxonomyTreeBuilder {
         ///   <item>A named group whose items share one value of the level (a suborder with one
         ///         family) is demoted: its items are grouped by the level directly.</item>
         ///   <item>The layer is shown only when every gate passes; the decision is recorded.</item>
+        ///   <item>With <c>LookThroughDominant</c>, a group rejected for holding too large a share is
+        ///         skipped like a shared node: its items move one node down, the others stay, and
+        ///         the gates run again (subclass Neoselachii, then infraclasses Batoidea / Selachii).</item>
         /// </list>
         /// When shown, each named group becomes a child and is tried again one node deeper (Cetacea,
         /// then Odontoceti / Mysticeti); items with no node are grouped by the level beside them.
@@ -330,12 +333,11 @@ internal static class TaxonomyTreeBuilder {
             var level = _levels[levelIndex];
             var options = _options.Intermediate!;
             var pathOf = level.Intermediates!;
+            var valueOf = (Func<T, string>)(item => level.Selector(item)?.Trim().ToUpperInvariant() ?? string.Empty);
             var current = entries;
 
-            List<LayerGroup> named;
-            List<Entry> loose;
             while (true) {
-                (named, loose) = SplitByNode(current, pathOf);
+                var (named, loose) = SplitByNode(current, pathOf);
                 if (named.Count == 0) {
                     return false;
                 }
@@ -345,77 +347,91 @@ internal static class TaxonomyTreeBuilder {
                     continue;
                 }
 
-                break;
-            }
+                var offered = named.Select(g => g.Node.ColRank).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
 
-            var offered = named.Select(g => g.Node.ColRank).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
-            var valueOf = (Func<T, string>)(item => level.Selector(item)?.Trim().ToUpperInvariant() ?? string.Empty);
-
-            // A named group whose items all share one value of the level only repeats that value's heading.
-            foreach (var group in named.ToList()) {
-                if (group.Entries.Select(e => valueOf(e.Item)).Distinct().Count() == 1) {
-                    named.Remove(group);
-                    loose.AddRange(group.Entries);
+                // A named group whose items all share one value of the level only repeats that value's heading.
+                foreach (var group in named.ToList()) {
+                    if (group.Entries.Select(e => valueOf(e.Item)).Distinct().Count() == 1) {
+                        named.Remove(group);
+                        loose.AddRange(group.Entries);
+                    }
                 }
+
+                var itemCount = current.Count;
+                var anchors = current.Select(e => valueOf(e.Item)).Distinct().Count();
+                var looseValues = loose.Select(e => valueOf(e.Item)).Distinct().Count();
+                var headings = named.Count + looseValues;
+                var largestGroup = named.OrderByDescending(g => g.Entries.Count).FirstOrDefault();
+                var largest = largestGroup?.Entries.Count ?? 0;
+                var largestShare = itemCount > 0 ? (double)largest / itemCount : 0;
+
+                string outcome;
+                if (named.Count == 0) {
+                    outcome = "rejected:single_value_groups";
+                } else if (itemCount < options.MinItems) {
+                    outcome = "rejected:few_items";
+                } else if (anchors < options.MinAnchors) {
+                    outcome = "rejected:few_anchors";
+                } else if (headings >= anchors) {
+                    outcome = "rejected:no_fewer_headings";
+                } else if (named.Count > options.MaxGroups) {
+                    outcome = "rejected:too_many_groups";
+                } else if (largestShare > options.MaxDominance) {
+                    outcome = "rejected:dominant_group";
+                } else if (largest < options.MinGroupSize) {
+                    outcome = "rejected:groups_too_small";
+                } else if (parentDepth + 1 + LevelsFrom(levelIndex) > _budget) {
+                    outcome = "rejected:heading_depth";
+                } else {
+                    outcome = "accepted";
+                }
+
+                // Look through a dominant group when its items have a node one step further down.
+                var lookThrough = outcome == "rejected:dominant_group"
+                    && options.LookThroughDominant
+                    && largestGroup!.Entries.Any(e => e.Depth + 1 < pathOf(e.Item).Count);
+                if (lookThrough) {
+                    outcome = "looked_through:dominant_group";
+                }
+
+                var ranks = named.Count > 0
+                    ? named.Select(g => g.Node.ColRank).Distinct(StringComparer.OrdinalIgnoreCase).ToList()
+                    : offered;
+                _diagnostics?.RecordLayer(new IntermediateLayerDecision(
+                    path, itemCount, string.Join("/", ranks), level.KeyOrLabel, outcome,
+                    NamedGroups: named.Count,
+                    LooseValues: looseValues,
+                    Anchors: anchors,
+                    Headings: headings,
+                    LargestShare: Math.Round(largestShare, 3),
+                    Groups: string.Join(", ", named.Select(g => g.Node.Name).OrderBy(n => n, StringComparer.OrdinalIgnoreCase))));
+
+                if (lookThrough) {
+                    current = largestGroup!.Entries.Select(e => e with { Depth = e.Depth + 1 })
+                        .Concat(named.Where(g => !ReferenceEquals(g, largestGroup)).SelectMany(g => g.Entries))
+                        .Concat(loose)
+                        .ToList();
+                    continue;
+                }
+
+                if (outcome != "accepted") {
+                    return false;
+                }
+
+                foreach (var group in named.OrderBy(g => g.Node.Name, StringComparer.OrdinalIgnoreCase)) {
+                    var node = group.Node;
+                    var child = parent.AddChild(
+                        node.ShowRank ? node.ColRank : null, node.Name, TreeNodeKind.Intermediate, node.ColRank, showRank: node.ShowRank);
+                    var deeper = group.Entries.Select(e => e with { Depth = e.Depth + 1 }).ToList();
+                    Process(child, parentDepth + 1, deeper, levelIndex, Extend(path, node.Name));
+                }
+
+                if (loose.Count > 0) {
+                    GroupByLevel(parent, parentDepth, ItemsOf(loose), levelIndex, keepSingleGroup: true, path);
+                }
+
+                return true;
             }
-
-            var itemCount = current.Count;
-            var anchors = current.Select(e => valueOf(e.Item)).Distinct().Count();
-            var looseValues = loose.Select(e => valueOf(e.Item)).Distinct().Count();
-            var headings = named.Count + looseValues;
-            var largest = named.Count > 0 ? named.Max(g => g.Entries.Count) : 0;
-            var largestShare = itemCount > 0 ? (double)largest / itemCount : 0;
-
-            string outcome;
-            if (named.Count == 0) {
-                outcome = "rejected:single_value_groups";
-            } else if (itemCount < options.MinItems) {
-                outcome = "rejected:few_items";
-            } else if (anchors < options.MinAnchors) {
-                outcome = "rejected:few_anchors";
-            } else if (headings >= anchors) {
-                outcome = "rejected:no_fewer_headings";
-            } else if (named.Count > options.MaxGroups) {
-                outcome = "rejected:too_many_groups";
-            } else if (largestShare > options.MaxDominance) {
-                outcome = "rejected:dominant_group";
-            } else if (largest < options.MinGroupSize) {
-                outcome = "rejected:groups_too_small";
-            } else if (parentDepth + 1 + LevelsFrom(levelIndex) > _budget) {
-                outcome = "rejected:heading_depth";
-            } else {
-                outcome = "accepted";
-            }
-
-            var ranks = named.Count > 0
-                ? named.Select(g => g.Node.ColRank).Distinct(StringComparer.OrdinalIgnoreCase).ToList()
-                : offered;
-            _diagnostics?.RecordLayer(new IntermediateLayerDecision(
-                path, itemCount, string.Join("/", ranks), level.KeyOrLabel, outcome,
-                NamedGroups: named.Count,
-                LooseValues: looseValues,
-                Anchors: anchors,
-                Headings: headings,
-                LargestShare: Math.Round(largestShare, 3),
-                Groups: string.Join(", ", named.Select(g => g.Node.Name).OrderBy(n => n, StringComparer.OrdinalIgnoreCase))));
-
-            if (outcome != "accepted") {
-                return false;
-            }
-
-            foreach (var group in named.OrderBy(g => g.Node.Name, StringComparer.OrdinalIgnoreCase)) {
-                var node = group.Node;
-                var child = parent.AddChild(
-                    node.ShowRank ? node.ColRank : null, node.Name, TreeNodeKind.Intermediate, node.ColRank, showRank: node.ShowRank);
-                var deeper = group.Entries.Select(e => e with { Depth = e.Depth + 1 }).ToList();
-                Process(child, parentDepth + 1, deeper, levelIndex, Extend(path, node.Name));
-            }
-
-            if (loose.Count > 0) {
-                GroupByLevel(parent, parentDepth, ItemsOf(loose), levelIndex, keepSingleGroup: true, path);
-            }
-
-            return true;
         }
 
         private sealed record LayerGroup(PlacementNode Node, List<Entry> Entries);
@@ -716,12 +732,16 @@ internal sealed record TaxonomyTreeOptions<T> {
 /// <param name="MaxGroups">At most this many named groups.</param>
 /// <param name="MaxDominance">No named group may hold more than this share of the N items.</param>
 /// <param name="MinGroupSize">At least one named group must have this many items.</param>
+/// <param name="LookThroughDominant">When a group is rejected for holding more than
+/// <paramref name="MaxDominance"/>, read its items one node further down and try again, instead of
+/// giving up on the layer.</param>
 internal sealed record IntermediateLayerOptions(
     int MinItems = 30,
     int MinAnchors = 6,
     int MaxGroups = 12,
     double MaxDominance = 0.85,
-    int MinGroupSize = 5);
+    int MinGroupSize = 5,
+    bool LookThroughDominant = false);
 
 /// <summary>The curated group an item belongs to.</summary>
 /// <param name="Group">The group name.</param>
