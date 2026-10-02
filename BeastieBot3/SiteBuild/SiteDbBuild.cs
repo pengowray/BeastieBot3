@@ -41,6 +41,13 @@ internal sealed class SiteDbBuild {
             BuildInto(tempPath, cancellationToken);
             cancellationToken.ThrowIfCancellationRequested();
             SqliteConnection.ClearAllPools();
+            // A journal left beside the old file would be applied to the new one when it is next
+            // opened, so remove any before the new file takes the name.
+            foreach (var sibling in new[] { "-journal", "-wal", "-shm" }) {
+                if (File.Exists(_inputs.Output + sibling)) {
+                    File.Delete(_inputs.Output + sibling);
+                }
+            }
             File.Move(tempPath, _inputs.Output, overwrite: true);
             _stats.FileBytes = new FileInfo(_inputs.Output).Length;
         } finally {

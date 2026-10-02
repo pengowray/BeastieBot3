@@ -182,6 +182,21 @@ public sealed class SiteDbBuildTests : IDisposable {
         Scalar(db, $"SELECT common_name_en FROM taxon WHERE taxon_id = {taxonId}");
 
     [Fact]
+    public void Build_RemovesJournalFilesLeftBesideTheOldDatabase() {
+        var output = Path.Combine(_dir, "site.sqlite");
+        File.WriteAllText(output, "old database");
+        File.WriteAllText(output + "-journal", "stale journal");
+        File.WriteAllText(output + "-wal", "stale wal");
+
+        new SiteDbBuild(Inputs(output), QuietConsole()).Run(CancellationToken.None);
+
+        Assert.False(File.Exists(output + "-journal"));
+        Assert.False(File.Exists(output + "-wal"));
+        using var db = OpenReadOnly(output);
+        Assert.Equal("4", Scalar(db, "SELECT COUNT(*) FROM taxon"));
+    }
+
+    [Fact]
     public void Build_ThatFails_LeavesTheOldDatabaseAndNoTemporaryFile() {
         var output = Path.Combine(_dir, "site.sqlite");
         File.WriteAllText(output, "old database");
