@@ -2,9 +2,11 @@ using BeastieBot3.Site.Data;
 using BeastieBot3.Site.Web;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
+using Microsoft.AspNetCore.OutputCaching;
 
 namespace BeastieBot3.Site.Pages;
 
+[OutputCache(PolicyName = SiteCachePolicies.Search)]
 public sealed class SearchModel : PageModel {
     public const int MaxResults = 50;
 
@@ -21,17 +23,19 @@ public sealed class SearchModel : PageModel {
 
     /// q: the search text. all=1 lists the results even when the text names exactly one taxon (the
     /// "See all search results" link on a taxon page uses it, so it does not redirect straight back).
-    public IActionResult OnGet(string? q, string? all) {
-        Query = SiteEndpoints.NormalizeQuery(q);
+    public IActionResult OnGet() {
+        // Read the way the output cache key reads them (the first value of each).
+        Query = SiteEndpoints.QueryText(Request);
+        var all = SiteEndpoints.FirstQueryValue(Request, "all");
         if (Query.Length == 0) {
             return Page();
         }
-        if (Query.Length < 2) {
+        if (FtsQuery.IsTooShort(Query)) {
             TooShort = true;
             return Page();
         }
 
-        var result = _queries.Search(Query, MaxResults);
+        var result = _queries.Search(Query, MaxResults, cancellationToken: HttpContext.RequestAborted);
         var exact = result.Hits.Where(h => h.IsExactMatch).ToList();
         if (exact.Count == 1 && all != "1") {
             var hit = exact[0];

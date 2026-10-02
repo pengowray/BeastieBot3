@@ -169,15 +169,42 @@ public sealed class SiteQueries {
     /// before infraspecific taxa and subpopulations; then shorter names first.
     /// With exactOnly, only group 1 is searched. TotalTaxa is counted only when countAll is set and
     /// the limit was reached; otherwise it is the number of hits returned.
-    public SearchResult Search(string text, int limit, bool exactOnly = false, bool countAll = true) {
+    /// When cancellationToken is cancelled (the visitor closed the page), the running query is
+    /// interrupted and OperationCanceledException is thrown.
+    public SearchResult Search(string text, int limit, bool exactOnly = false, bool countAll = true,
+        CancellationToken cancellationToken = default) {
         var key = SiteNameKey.Fold(text);
         if (key.Length == 0) {
             return SearchResult.Empty;
         }
+        cancellationToken.ThrowIfCancellationRequested();
         var match = exactOnly ? null : FtsQuery.Build(text);
         var hitsSql = BuildHitsSql(match is not null);
 
         using var connection = _db.OpenConnection();
+        // Declared after the connection so it is disposed first: no interrupt can reach the
+        // connection once it is back in the pool.
+        using var interrupt = InterruptOnCancel(connection, cancellationToken);
+        try {
+            return RunSearch(connection, hitsSql, key, text, match, limit, countAll);
+        } catch (SqliteException ex) when (ex.SqliteErrorCode == SqliteInterruptCode && cancellationToken.IsCancellationRequested) {
+            throw new OperationCanceledException("The search was cancelled.", ex, cancellationToken);
+        }
+    }
+
+    // SQLITE_INTERRUPT: the statement was stopped by sqlite3_interrupt.
+    internal const int SqliteInterruptCode = 9;
+
+    // Microsoft.Data.Sqlite does not cancel a running statement (SqliteCommand.Cancel does nothing),
+    // so a cancelled token calls sqlite3_interrupt on the connection. Interrupting a connection
+    // with no statement running has no effect.
+    internal static CancellationTokenRegistration InterruptOnCancel(SqliteConnection connection, CancellationToken cancellationToken) =>
+        cancellationToken.CanBeCanceled
+            ? cancellationToken.Register(static state => SQLitePCL.raw.sqlite3_interrupt(((SqliteConnection)state!).Handle), connection)
+            : default;
+
+    private static SearchResult RunSearch(SqliteConnection connection, string hitsSql, string key, string text, string? match,
+        int limit, bool countAll) {
         var hits = new List<SearchHit>();
         using (var command = connection.CreateCommand()) {
             command.CommandText = $"""

@@ -25,7 +25,7 @@ public sealed class NameModel : PageModel {
         if (Name.Length == 0) {
             return Redirect("/search");
         }
-        var result = _queries.Search(Name, MaxListed, exactOnly: true, countAll: false);
+        var result = _queries.Search(Name, MaxListed, exactOnly: true, countAll: false, cancellationToken: HttpContext.RequestAborted);
         if (result.Hits.Count == 0) {
             return Redirect("/search?q=" + Uri.EscapeDataString(Name));
         }

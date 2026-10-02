@@ -1,9 +1,13 @@
 using System.Net;
+using System.Threading.RateLimiting;
 using BeastieBot3.Shared.Wikitext;
 using BeastieBot3.Site.Data;
 using BeastieBot3.Site.Display;
 using BeastieBot3.Site.Pages;
 using BeastieBot3.Site.Web;
+using Microsoft.AspNetCore.Http;
+using Microsoft.Data.Sqlite;
+using Microsoft.Extensions.DependencyInjection;
 
 namespace BeastieBot3.Site.Tests;
 
@@ -16,7 +20,30 @@ public sealed class FtsQueryTests {
     [InlineData("\"quoted\"", "\"quoted\"*")]
     [InlineData("Wilson's storm-petrel", "\"Wilson\" \"s\" \"storm\" \"petrel\"*")]
     [InlineData("Ours blé", "\"Ours\" \"blé\"*")]
+    [InlineData("va", "\"va\"*")]
+    [InlineData("Panthera t", "\"Panthera\" \"t\"*")]
+    // A lone 1-character word is never a prefix: name_fts has no 1-character prefix index.
+    [InlineData("a", "\"a\"")]
+    [InlineData("s.", "\"s\"")]
+    [InlineData("á", "\"á\"")]
+    [InlineData("x̃", "\"x̃\"")]
     public void Build(string input, string expected) => Assert.Equal(expected, FtsQuery.Build(input));
+
+    [Theory]
+    [InlineData("", true)]
+    [InlineData("**", true)]
+    [InlineData("a", true)]
+    [InlineData("a.", true)]
+    [InlineData("s-", true)]
+    [InlineData("-s", true)]
+    [InlineData("á", true)]
+    [InlineData("x̃", true)]
+    [InlineData("1", true)]
+    [InlineData("va", false)]
+    [InlineData("18", false)]
+    [InlineData("s s", false)]
+    [InlineData("Panthera t", false)]
+    public void TooShort(string input, bool expected) => Assert.Equal(expected, FtsQuery.IsTooShort(input));
 
     [Theory]
     [InlineData("")]
@@ -160,6 +187,48 @@ public sealed class RateLimitKeyTests {
         Assert.NotEqual(a, c);
     }
 
+    private static HttpContext Request(string path, string ip) {
+        var context = new DefaultHttpContext();
+        context.Request.Path = path;
+        context.Connection.RemoteIpAddress = IPAddress.Parse(ip);
+        return context;
+    }
+
+    [Fact]
+    public void SearchesAcrossAllClientsShareOneConcurrencyLimit() {
+        var limits = new RateLimitOptions { SearchPerMinute = 1000, SuggestPerMinute = 1000, PagesPerMinute = 1000, ConcurrentSearches = 2, SearchQueueLength = 0 };
+        using var limiter = SiteRateLimits.BuildGlobalLimiter(limits);
+
+        using var first = limiter.AttemptAcquire(Request("/search", "203.0.113.1"));
+        using var second = limiter.AttemptAcquire(Request("/api/suggest", "203.0.113.2"));
+        Assert.True(first.IsAcquired);
+        Assert.True(second.IsAcquired);
+
+        // A third search from yet another client waits for a slot; with no queue it is turned away.
+        using (var third = limiter.AttemptAcquire(Request("/search", "203.0.113.3"))) {
+            Assert.False(third.IsAcquired);
+        }
+        // Other pages are not affected.
+        using (var page = limiter.AttemptAcquire(Request("/species/22823", "203.0.113.3"))) {
+            Assert.True(page.IsAcquired);
+        }
+
+        first.Dispose();
+        using var fourth = limiter.AttemptAcquire(Request("/search", "203.0.113.3"));
+        Assert.True(fourth.IsAcquired);
+    }
+
+    [Fact]
+    public void AClientOverItsLimitIsTurnedAwayBeforeTheSharedLimit() {
+        var limits = new RateLimitOptions { SearchPerMinute = 1, ConcurrentSearches = 10, SearchQueueLength = 0 };
+        using var limiter = SiteRateLimits.BuildGlobalLimiter(limits);
+        using var first = limiter.AttemptAcquire(Request("/search", "203.0.113.9"));
+        Assert.True(first.IsAcquired);
+        using var second = limiter.AttemptAcquire(Request("/search", "203.0.113.9"));
+        Assert.False(second.IsAcquired);
+        Assert.True(second.TryGetMetadata(MetadataName.RetryAfter, out _));
+    }
+
     [Fact]
     public void Ipv4ClientsAreCountedOneByOne() {
         Assert.Equal("203.0.113.7", SiteRateLimits.ClientKey(IPAddress.Parse("203.0.113.7")));
@@ -181,5 +250,32 @@ public sealed class DatabasePathTests {
     public void SpratReportDate() {
         Assert.Equal("1 October 2026", AboutModel.SpratReportDate("01102026-023504-report.csv"));
         Assert.Equal("report.csv", AboutModel.SpratReportDate("report.csv"));
+    }
+}
+
+public sealed class SearchCancellationTests(SiteFactory factory) : IClassFixture<SiteFactory> {
+    [Fact]
+    public void ACancelledSearchThrows() {
+        var queries = factory.Services.GetRequiredService<SiteQueries>();
+        using var cancelled = new CancellationTokenSource();
+        cancelled.Cancel();
+        Assert.Throws<OperationCanceledException>(() => queries.Search("Ursus", 10, cancellationToken: cancelled.Token));
+    }
+
+    [Fact]
+    public void CancellingInterruptsARunningStatement() {
+        using var connection = new SqliteConnection("Data Source=:memory:");
+        connection.Open();
+        using var command = connection.CreateCommand();
+        // Counts for ever unless interrupted.
+        command.CommandText = "WITH RECURSIVE c(x) AS (SELECT 1 UNION ALL SELECT x + 1 FROM c) SELECT COUNT(*) FROM c";
+        using var source = new CancellationTokenSource(TimeSpan.FromMilliseconds(200));
+        using (SiteQueries.InterruptOnCancel(connection, source.Token)) {
+            var ex = Assert.Throws<SqliteException>(() => command.ExecuteScalar());
+            Assert.Equal(SiteQueries.SqliteInterruptCode, ex.SqliteErrorCode);
+        }
+        // The connection still works afterwards.
+        command.CommandText = "SELECT 1";
+        Assert.Equal(1L, command.ExecuteScalar());
     }
 }

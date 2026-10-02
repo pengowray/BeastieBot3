@@ -37,7 +37,7 @@ public static class SiteText {
     public const string MatchCommonNameLabel = "Matched common name:";
     public static string NoResults(string query) =>
         $"No taxa found for “{query}”. Check the spelling, or search for the scientific name. If the spelling is right, the taxon may not be on the IUCN Red List.";
-    public const string TooShort = "Search term too short. Enter at least 2 characters.";
+    public const string TooShort = "Search term too short. Enter at least 2 letters or digits.";
     public const string NoGlobalShort = "No global assessment";
 
     public static string? KindLabel(string kind) => kind switch {

@@ -3,13 +3,13 @@
 @{
     ViewData["HideHeaderSearch"] = true;
     ViewData["NoIndex"] = true;
-    ViewData["Title"] = Model.Query.Length >= 2 ? SiteText.SearchHeading(Model.Query) : SiteText.SearchLabel;
+    ViewData["Title"] = Model.Query.Length > 0 && !Model.TooShort ? SiteText.SearchHeading(Model.Query) : SiteText.SearchLabel;
 }
 <partial name="_SearchForm" model="@(new SearchFormModel(Model.Query, "main"))" />
 
 @if (Model.TooShort) {
     <p class="message">@SiteText.TooShort</p>
-} else if (Model.Query.Length >= 2) {
+} else if (Model.Query.Length > 0) {
     <h1>@SiteText.SearchHeading(Model.Query)</h1>
     @if (Model.Items.Count == 0) {
         <p class="message">@SiteText.NoResults(Model.Query)</p>

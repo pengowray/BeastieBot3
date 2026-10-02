@@ -1,4 +1,5 @@
 using System.Net;
+using System.Text.Json;
 
 namespace BeastieBot3.Site.Tests;
 
@@ -127,13 +128,64 @@ public sealed class HomeAndSearchTests(SiteFactory factory) : IClassFixture<Site
         Assert.Contains("No global assessment", gobio);
     }
 
-    [Fact]
-    public async Task TooShortQueryRunsNoSearch() {
-        var response = await _client.GetAsync("/search?q=a");
+    [Theory]
+    [InlineData("a")]
+    [InlineData("a.")]
+    [InlineData("s-")]
+    [InlineData(".s")]
+    [InlineData("á")]
+    [InlineData("x̃")]
+    [InlineData("**")]
+    public async Task TooShortQueryRunsNoSearch(string query) {
+        var response = await _client.GetAsync("/search?q=" + Uri.EscapeDataString(query));
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
-        var text = Html.Text(await response.Content.ReadAsStringAsync());
-        Assert.Contains("Search term too short. Enter at least 2 characters.", text);
+        var html = await response.Content.ReadAsStringAsync();
+        var text = Html.Text(html);
+        Assert.Contains("Search term too short. Enter at least 2 letters or digits.", text);
         Assert.DoesNotContain("Results for", text);
+        Assert.Contains("<title>Search for a taxon | Beastie Bot Species Status</title>", html);
+
+        using var suggest = JsonDocument.Parse(await _client.GetStringAsync("/api/suggest?q=" + Uri.EscapeDataString(query)));
+        Assert.Equal(0, suggest.RootElement.GetArrayLength());
+    }
+
+    [Fact]
+    public async Task MultiWordQueryEndingInOneLetterStillSearches() {
+        var html = await _client.GetStringAsync("/search?q=Panthera+t&all=1");
+        Assert.Contains($"/species/{FixtureDb.Tiger}\"", html);
+        Assert.Contains($"/species/{FixtureDb.SumatranTiger}\"", html);
+    }
+
+    [Fact]
+    public async Task SearchPagesAreCachedByTheQueryAsTyped() {
+        var first = await _client.GetAsync("/search?q=Ursus+ma");
+        var second = await _client.GetAsync("/search?q=Ursus%20%20ma");
+        Assert.Null(first.Headers.Age);
+        Assert.NotNull(second.Headers.Age);
+
+        // Another spelling of the same words gets its own entry, so the page shows what this
+        // visitor typed.
+        var upper = await _client.GetAsync("/search?q=URSUS+MA");
+        Assert.Null(upper.Headers.Age);
+        Assert.Contains("Results for “URSUS MA”", Html.Text(await upper.Content.ReadAsStringAsync()));
+
+        // A second q parameter is ignored by the page and by the cache key alike.
+        var extra = await _client.GetAsync("/search?q=Ursus+ma&q=zzz");
+        Assert.NotNull(extra.Headers.Age);
+        Assert.Contains("Results for “Ursus ma”", Html.Text(await extra.Content.ReadAsStringAsync()));
+    }
+
+    [Fact]
+    public async Task SuggestionsAreCachedByTheFoldedQuery() {
+        var first = await _client.GetAsync("/api/suggest?q=Lipot");
+        var second = await _client.GetAsync("/api/suggest?q=LIPOT");
+        Assert.Null(first.Headers.Age);
+        Assert.NotNull(second.Headers.Age);
+        Assert.Equal(await first.Content.ReadAsStringAsync(), await second.Content.ReadAsStringAsync());
+
+        var other = await _client.GetAsync("/api/suggest?q=Lipot&q=Ursus");
+        using var doc = JsonDocument.Parse(await other.Content.ReadAsStringAsync());
+        Assert.Equal(FixtureDb.Baiji, doc.RootElement[0].GetProperty("taxonId").GetInt64());
     }
 
     [Fact]

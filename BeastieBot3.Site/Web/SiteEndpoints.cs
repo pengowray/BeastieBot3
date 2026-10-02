@@ -17,21 +17,21 @@ public static class SiteEndpoints {
             ? Results.Text("ok", "text/plain")
             : Results.Text("unavailable", "text/plain", statusCode: StatusCodes.Status503ServiceUnavailable));
 
-        endpoints.MapGet("/api/suggest", (string? q, SiteQueries queries, HttpContext context) => {
+        endpoints.MapGet("/api/suggest", (SiteQueries queries, HttpContext context, CancellationToken cancellationToken) => {
             context.Response.Headers.CacheControl = "public, max-age=300";
             context.Response.Headers["X-Robots-Tag"] = "noindex";
-            var text = NormalizeQuery(q);
-            if (text.Length < 2) {
+            var text = QueryText(context.Request);
+            if (FtsQuery.IsTooShort(text)) {
                 return Results.Json(Array.Empty<Suggestion>());
             }
-            var result = queries.Search(text, MaxSuggestions, countAll: false);
+            var result = queries.Search(text, MaxSuggestions, countAll: false, cancellationToken: cancellationToken);
             var suggestions = result.Hits.Select(h => new Suggestion(
                 h.Taxon.TaxonId,
                 h.Taxon.ScientificName,
                 h.Taxon.CommonNameEn,
                 SuggestCode(h.Taxon)));
             return Results.Json(suggestions);
-        });
+        }).CacheOutput(SiteCachePolicies.Suggest);
     }
 
     // The stored code with its case ("LR/nt", "nt" and "NT" are different categories), and CR(PE)
@@ -42,6 +42,15 @@ public static class SiteEndpoints {
         "CR" when taxon.PossiblyExtinctInTheWild => "CR(PEW)",
         var code => code,
     };
+
+    /// The search text of a request: the first "q" parameter, normalised. The search page,
+    /// /api/suggest and their output cache keys all read it this way, so a cached response always
+    /// belongs to its key (a second "q" parameter cannot change the response but not the key).
+    public static string QueryText(HttpRequest request) => NormalizeQuery(FirstQueryValue(request, "q"));
+
+    /// The first value of a query parameter, or null.
+    public static string? FirstQueryValue(HttpRequest request, string name) =>
+        request.Query.TryGetValue(name, out var values) && values.Count > 0 ? values[0] : null;
 
     /// Trimmed, with runs of whitespace collapsed, and at most MaxQueryLength characters.
     public static string NormalizeQuery(string? q) {
