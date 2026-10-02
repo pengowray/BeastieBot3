@@ -13,6 +13,8 @@ dotnet run --project BeastieBot3/BeastieBot3.csproj -- show-paths   # verify INI
 
 The `BeastieBot3.Tests` xUnit project pins the pure count/status logic (TaxonFilterSql count scope, IUCN status mapping, prose/classification helpers) and the in-memory store seam. It's young — coverage is the pure logic + one store, not full CLI flows — so still verify behavioural CLI changes by building and running the relevant command. Internal types are visible to the test project via `<InternalsVisibleTo>`; a store can be exercised over `:memory:` through `SqliteStore.EnableForeignKeys` + a store's `OpenFromConnection`.
 
+The public species site has its own test project, `BeastieBot3.Site.Tests` (net10.0, WebApplicationFactory over a fixture database built from `SiteDbSchema.Ddl`); `dotnet test` runs it and `BeastieBot3.Tests`. Building the solution needs the .NET 10 SDK (installed in `~/.dotnet` beside .NET 9).
+
 For the local web UI (`serve`), read-only Playwright smoke tests live in `e2e/` (`cd e2e && npm install && npm test`). They launch `serve` on a throwaway port and only issue read-only GETs — a network guard aborts any `POST /api/jobs` so they never run a command, download, or mutate anything.
 
 ## Project Overview
@@ -23,7 +25,7 @@ For the local web UI (`serve`), read-only Playwright smoke tests live in `e2e/` 
 
 ### Command Tree
 
-Commands **self-register via attributes** — `Program.cs` no longer hand-wires the tree (it configures only the error handler and the lone `ServeCommand`). Each command class carries a `[CommandInfo("branch sub", CommandKind.X, "description", ...)]` attribute; `CommandRegistry.ConfigureAll` (`Web/Commands/CommandRegistry.cs`) scans the assembly for these at startup and builds the entire Spectre.Console.Cli branch tree. Branches are declared once as assembly attributes in `CommandClassification.cs` (`[assembly: CommandBranch("iucn api", "...")]`). Top-level branches: `col`, `iucn`, `iucn api`, `wikidata`, `wikipedia`, `common-names`, `sprat`, `redlist`.
+Commands **self-register via attributes** — `Program.cs` no longer hand-wires the tree (it configures only the error handler and the lone `ServeCommand`). Each command class carries a `[CommandInfo("branch sub", CommandKind.X, "description", ...)]` attribute; `CommandRegistry.ConfigureAll` (`Web/Commands/CommandRegistry.cs`) scans the assembly for these at startup and builds the entire Spectre.Console.Cli branch tree. Branches are declared once as assembly attributes in `CommandClassification.cs` (`[assembly: CommandBranch("iucn api", "...")]`). Top-level branches: `col`, `iucn`, `iucn api`, `wikidata`, `wikipedia`, `common-names`, `sprat`, `redlist`, `site`.
 
 `CommandClassification.cs` is the **single source of truth** for the command tree. The same attributes drive the web UI catalogue (`/api/commands`): `CommandKind` (`ReadOnly` | `Mutates` | `Destructive`), and the orthogonal `RerunEffect` (`ReadOnly` | `IdempotentAdd` | `Discovers` | `Rebuilds` | `PlansDownloads` | `ClearsCache` | `Imports`), which is the pill and hover hint on the Run command page and beside Workflows command buttons (labels and hints in `app.js` `EFFECTS`; each hint must be true for every command with that effect, and `RerunNote` carries the command-specific part; a sentence several commands share is a const in `RerunNotes`, such as `RerunNotes.DuringIucnRefresh`, which every `iucn api` download command adds because each one falls back to the open refresh's cutoff). Every `Mutates`/`Destructive` command sets `Rerun` explicitly; a `ReadOnly` command may leave it unset, meaning `ReadOnly`. `ReportOnlyWith` names options that make a run only report (`--status` on `iucn api cache-all`, `wikipedia update`, `wikidata iucn-assessment-items`) and `ChangesOnlyWith` options without which a run only reports (`wikipedia prune-queue --apply`); a Workflows button for such a run is styled read-only and has no effect pill. `CommandClassificationTests` pins all of this, that every named option is one the command has, and that every effect has an `EFFECTS` entry.
 
@@ -89,6 +91,11 @@ Use `ReportPathResolver` to resolve output paths. Priority: explicit CLI `--outp
 | `BeastieBot3/WikidataEdits/` | `wikidata iucn-status-plan` dry run: IUCN status (P141) edits for Wikidata taxon items, link confidence tiers, rank variants, wbeditentity payload builders, plan store |
 | `BeastieBot3/Audit/` | `redlist audit-site` generator: unified `AuditFinding` model, per-report producers, shared `HtmlListRenderer`/CSV writer, release-pinned commentary |
 | `BeastieBot3/rules/` | YAML rule files and Mustache templates for list generation (`rules/audit/commentary.yml` for the audit site) |
+| `BeastieBot3.Shared/` | Code shared by the CLI and the public site: `IucnCitationParts`, the `{{cite iucn}}` / `{{IUCN status}}` / taxobox status / name-italics renderers, and the site database schema (`SiteDbSchema`) |
+| `BeastieBot3/SiteBuild/` | `site build-db` builds the public site's database; `site check-citations` reports on citation parsing; IUCN citation parsing (authors, title annotations, DOI selection) |
+| `BeastieBot3/Iucn/Gbif/` | `iucn gbif-download` and the reader for GBIF's CC BY 4.0 copy of the IUCN checklist (the main DOI source) |
+| `BeastieBot3.Site/` | The public species site (net10.0 Razor Pages). Opens the site database read-only. References only `BeastieBot3.Shared`, never the `BeastieBot3` project, whose local web UI (`BeastieBot3/Web`) runs commands |
+| `deploy/oracle/` | Scripts and README for running the site on an Oracle Cloud Always Free VM behind Caddy |
 | `BeastieBot3/BeastieLegacy/` | Legacy code — read for output format reference only; do not reuse directly |
 
 ## IUCN SQLite Rules
@@ -204,6 +211,16 @@ IUCN classifies only by kingdom, phylum, class, order, family and genus, so a li
 
 `wikipedia post-drafts` posts every generated list (IUCN and `australia/`) to `User:Beastie Bot/Draft 2026/<article title>` (`--base`) plus an index at the base title. Which files are posted comes from the list definitions (`wikipedia-lists.yml`, `SpratListGroups`), never a folder listing. `DraftPageBuilder` (pure, pinned by `DraftPageBuilderTests`) moves `[[Category:]]` links into `{{Draft categories}}` (user pages must not be in article categories) and adds `__NOINDEX__` and a banner dated from the file's mtime, so reposting an unchanged file gives identical text and the sha1 comparison against the live revision skips it. Lists over 2048 KiB are not posted and are named on the index. Without `--apply` it only reads Wikipedia. `--apply` logs in with a bot password from `WIKIPEDIA_BOT_USERNAME` / `WIKIPEDIA_BOT_PASSWORD` (shell env or `.env`); saves use `assert=user`, `maxlag=5`, `watchlist=nochange` and a 10 s delay.
 
+## Public Species Site
+
+`BeastieBot3.Site` is an unofficial public site (Beastie Bot Species Status) that shows each IUCN Red List taxon's latest global assessment, history, regional assessments, names and links, and generates `{{cite iucn}}` (with the assessment's authors and a DOI), `{{IUCN status}}` and taxobox status wikitext. Full notes: `docs/public-site.md`; deployment: `deploy/oracle/README.md`.
+
+- `site build-db` writes `Datastore:site_sqlite` from the CSV export (taxa and latest assessments), the API cache (history and citations), GBIF's checklist (DOIs; `Datasets:GBIF_IUCN_dir`), the common names store (English names), the Wikidata and Wikipedia caches (Wikidata items, article titles), the CoL placement file (Catalogue of Life ids) and SPRAT (EPBC listings). It replaces the file only when the build finishes. Increase `SiteDbSchema.Version` whenever a table or column is added, removed, renamed or changes what it holds; the site answers 503 for any other version, so deploy the new site and the rebuilt database together.
+- The IUCN Red List Terms of Use limit what the site may hold and offer: the site database must not contain narrative text or coded threats, habitats or countries, and the site must not offer downloads or an API that returns assessment fields. Leave such fields out of the database itself; hiding them on the page is not enough.
+- A DOI is only taken from a source (IUCN's citation text, GBIF, Wikidata), and only when the taxon id and assessment id inside it match the assessment's (`IucnDoiSelector`); never build one from a year.
+- `common_name_en` uses the lists' own rule (`CommonNameStore.ChooseBest`), so a change to the ambiguity rule changes the English names on the site too.
+- Site UI strings are in `BeastieBot3.Site/Display/SiteText.cs`, the About page text in `Pages/About.cshtml`, and category labels in `Display/IucnCategories.cs`. Load the `ui-text` and `no-riddlespeak` skills before changing them, and ask the user to sign off new or changed strings.
+
 ## Wikipedia Chart Generation
 
 The `wikipedia generate-charts` command produces IUCN Red List bar chart files for the MediaWiki Extension:Chart format. For each chart group defined in `chart-groups.yml`, it generates:
@@ -258,6 +275,7 @@ A `taxa_group` of `~` (null) means no taxonomic filter — counts all species in
 | `docs/wikipedia-chart-generation.md` | Chart generation workflow, Extension:Chart format, output files |
 | `docs/wikidata-iucn-status.md` | Wikidata IUCN status dry run: decisions (references, item per assessment, rank variants, coordination), tiers, safety properties, what's not built |
 | `docs/redlist-audit-site.md` | `redlist audit-site` generator: producers, unified model, commentary mechanism, output structure |
+| `docs/public-site.md` | Public species site: parts, release update steps, site database contract, citation parsing and DOI rules, site settings, known gaps |
 
 ## Code Conventions
 
