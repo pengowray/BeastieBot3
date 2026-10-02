@@ -75,6 +75,27 @@ public class CiteIucnRendererTests {
             CiteIucnRenderer.Render(parts, new CiteIucnOptions { AuthorStyle = CiteAuthorStyle.LastFirst }));
     }
 
+    // CS1 allows no comma in |firstN=: "P.P., II" adds "CS1 maint: multiple names". Lowry II (aid
+    // 2006234) and Golamco Jr. (aid 11046733) parse clean on en.wikipedia with the comma left out.
+    [Theory]
+    [InlineData("P.P., II", "P.P. II")]
+    [InlineData("A., Jr.", "A. Jr.")]
+    [InlineData("W.B., III", "W.B. III")]
+    [InlineData("R.L. , Sr", "R.L. Sr")]
+    [InlineData("P.P.", "P.P.")]
+    [InlineData("Nur Adillah", "Nur Adillah")]
+    public void LastFirst_WritesAGenerationalSuffixWithoutTheComma(string initials, string first) {
+        var parts = PolarBear with { Authors = [Person("Lowry", initials)] };
+        Assert.StartsWith($"{{{{cite iucn |last1=Lowry |first1={first} |year=2015",
+            CiteIucnRenderer.Render(parts, new CiteIucnOptions { AuthorStyle = CiteAuthorStyle.LastFirst }));
+    }
+
+    [Fact]
+    public void AuthorN_KeepsTheSuffixAsIucnWritesIt() {
+        var parts = PolarBear with { Authors = [new CitationAuthor(CitationAuthorKind.Person, "Lowry II, P.P.", "Lowry", "P.P., II")] };
+        Assert.StartsWith("{{cite iucn |author=Lowry II, P.P. |year=2015", CiteIucnRenderer.Render(parts));
+    }
+
     [Fact]
     public void LastFirst_LeadingOrganisationIsAuthor1() {
         var output = CiteIucnRenderer.Render(HouseSparrow, new CiteIucnOptions { AuthorStyle = CiteAuthorStyle.LastFirst });

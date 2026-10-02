@@ -101,7 +101,7 @@ public static partial class CiteIucnRenderer {
                 n++;
                 p.Add(($"last{n}", last));
                 if (initials.Length > 0) {
-                    p.Add(($"first{n}", initials));
+                    p.Add(($"first{n}", SuffixWithoutComma(initials)));
                 }
                 continue;
             }
@@ -125,6 +125,12 @@ public static partial class CiteIucnRenderer {
         }
         return n;
     }
+
+    // IucnCitationParts stores a generational suffix after the initials with a comma ("P.P., II",
+    // "A., Jr."). CS1 allows no comma at all in |firstN= and adds "CS1 maint: multiple names" for one,
+    // so the suffix is written as MOS:JR does: "P.P. II", "A. Jr.". Done here rather than in the parser
+    // so that site databases built before this change render correctly too.
+    private static string SuffixWithoutComma(string initials) => TrailingSuffix().Replace(initials, " ${suffix}");
 
     // CS1 reports "multiple names" for a name with more than one comma or any semicolon, and "numeric
     // names" for one containing a digit. Those are false alarms for an organisation or for one person
@@ -231,6 +237,10 @@ public static partial class CiteIucnRenderer {
     // CS1's own "et al." patterns, simplified: "et al", "et al.", "et alii", "and others" at the end.
     [GeneratedRegex(@"[;,]?\s*\b(?:et\.?\s*al(?:ii|ia|iae)?\.?|and others)\s*$", RegexOptions.IgnoreCase)]
     private static partial Regex EtAl();
+
+    // The suffixes the site-build name parser recognises (IucnAuthorNameParser.SuffixPattern).
+    [GeneratedRegex(@"\s*,\s*(?<suffix>(?:Jr|Jnr|Sr|Snr|II|III|IV)\.?)$")]
+    private static partial Regex TrailingSuffix();
 
     [GeneratedRegex(@"^(?:https?://(?:dx\.)?doi\.org/|doi:\s*)", RegexOptions.IgnoreCase)]
     private static partial Regex DoiPrefix();
