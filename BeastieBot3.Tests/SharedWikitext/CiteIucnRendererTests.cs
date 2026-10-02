@@ -313,6 +313,13 @@ public class CiteIucnRendererTests {
     [InlineData(null, "<ref>")]
     [InlineData("  ", "<ref>")]
     [InlineData("\"/\"", "<ref>")]
+    // Cite rejects an all-digit name; other names with digits are fine.
+    [InlineData("1", "<ref name=\"iucn-1\">")]
+    [InlineData(" 2026 ", "<ref name=\"iucn-2026\">")]
+    [InlineData("\"01\"", "<ref name=\"iucn-01\">")]
+    [InlineData("iucn 2026", "<ref name=\"iucn 2026\">")]
+    [InlineData("20 26", "<ref name=\"20 26\">")]
+    [InlineData("٢٠٢٦", "<ref name=\"٢٠٢٦\">")]
     public void WrapInRef_SanitizesTheName(string? refName, string opening) {
         var output = CiteIucnRenderer.Render(HouseSparrow, new CiteIucnOptions { WrapInRef = true, RefName = refName });
         Assert.Equal(opening + CiteIucnRenderer.Render(HouseSparrow) + "</ref>", output);
