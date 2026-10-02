@@ -269,7 +269,10 @@ internal sealed class SectionBodyRenderer {
         OtherBucketContext? otherContext) {
 
         if (node.Items.Count > 0) {
-            AppendItems(builder, node.Items, display, statusContext, otherContext);
+            var itemsContext = node.LumpedKey is { } lumpedKey && display.IncludeFamilyInOtherBucket
+                ? BuildOtherContext(node, node.LumpedLabel ?? lumpedKey, lumpedKey)
+                : otherContext;
+            AppendItems(builder, node.Items, display, statusContext, itemsContext);
         }
 
         foreach (var child in node.Children) {
@@ -318,7 +321,7 @@ internal sealed class SectionBodyRenderer {
                     : new HeadingInfo(child.Value ?? "Other", null);
             }
             case TreeNodeKind.Intermediate:
-                return _headingFormatter.FormatHeading(child.Value, child.Key, GetKingdomName(child), showRank: child.ShowRank);
+                return _headingFormatter.FormatHeading(child.Value, ColRankOrder.DisplayName(child.Key), GetKingdomName(child), showRank: child.ShowRank);
         }
 
         var heading = _headingFormatter.FormatHeading(child.Value, child.Label, GetKingdomName(child));
@@ -359,9 +362,11 @@ internal sealed class SectionBodyRenderer {
     /// The annotation context for an "Other" bucket: each record's value at the bucket's rank, so
     /// lines can read "(Family: X)" or "(subfamily: Y)". CoL ranks are read from the placement.
     /// </summary>
-    private OtherBucketContext BuildOtherContext(TaxonomyTreeNode<IucnSpeciesRecord> node) {
-        var rankLabel = node.Label ?? "Family";
-        var selector = BuildSelector(node.Key ?? rankLabel.ToLowerInvariant(), _placement);
+    private OtherBucketContext BuildOtherContext(TaxonomyTreeNode<IucnSpeciesRecord> node) =>
+        BuildOtherContext(node, node.Label ?? "Family", node.Key ?? (node.Label ?? "Family").ToLowerInvariant());
+
+    private OtherBucketContext BuildOtherContext(TaxonomyTreeNode<IucnSpeciesRecord> node, string rankLabel, string rankKey) {
+        var selector = BuildSelector(rankKey, _placement);
         var map = new Dictionary<long, string>();
         foreach (var record in CollectRecords(node)) {
             var value = selector(record);

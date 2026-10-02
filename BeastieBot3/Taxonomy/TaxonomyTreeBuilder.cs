@@ -124,6 +124,9 @@ internal static class TaxonomyTreeBuilder {
 
                 foreach (var small in smallGroups) {
                     otherBucket.Items.AddRange(small.Items);
+                    if (!small.IsResidual) {
+                        otherBucket.Lumped = true;
+                    }
                 }
             }
         }
@@ -144,6 +147,9 @@ internal static class TaxonomyTreeBuilder {
         public string DisplayValue { get; }
         public bool IsResidual { get; }
         public List<T> Items { get; }
+
+        /// <summary>True when small named groups were merged into this bucket.</summary>
+        public bool Lumped { get; set; }
     }
 
     /// <summary>
@@ -220,6 +226,12 @@ internal static class TaxonomyTreeBuilder {
             }
 
             if (groups.Count == 1 && !level.AlwaysDisplay && !keepSingleGroup) {
+                if (groups[0].Lumped) {
+                    // Every value was small and went into one "Other" bucket, which gets no heading.
+                    // The node remembers the level so each item can still name its family.
+                    parent.LumpedLabel = level.Label;
+                    parent.LumpedKey = level.KeyOrLabel;
+                }
                 Descend(parent, parentDepth, groups[0].DisplayValue, groups[0].Items, levelIndex, path);
                 return;
             }
@@ -655,6 +667,14 @@ internal sealed class TaxonomyTreeNode<T> {
 
     /// <summary>For a <see cref="TreeNodeKind.Virtual"/> node: the taxon whose curated group this is (e.g. "SQUAMATA").</summary>
     public string? VirtualOwner { get; private init; }
+
+    /// <summary>
+    /// Set when every value of a level below this node was small and merged into one bucket that got
+    /// no heading: the level's label and key ("Family", "family"), so the renderer can still note
+    /// each item's value for that level.
+    /// </summary>
+    public string? LumpedLabel { get; set; }
+    public string? LumpedKey { get; set; }
 
     public IReadOnlyList<TaxonomyTreeNode<T>> Children => _children;
     public IReadOnlyList<T> Items => _items;

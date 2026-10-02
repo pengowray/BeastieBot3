@@ -127,6 +127,20 @@ internal static class ColRankOrder {
     public static string Clean(string? rank) =>
         string.IsNullOrWhiteSpace(rank) ? "unranked" : Normalize(rank);
 
+    /// <summary>
+    /// The rank as a heading word: ColDP qualifies a few ranks by code ("section zoology", "series
+    /// botany"), and a heading says only "Section". Comparisons keep using the qualified string.
+    /// </summary>
+    public static string DisplayName(string? rank) {
+        var clean = Clean(rank);
+        foreach (var suffix in new[] { " zoology", " botany" }) {
+            if (clean.EndsWith(suffix, StringComparison.Ordinal)) {
+                return clean[..^suffix.Length];
+            }
+        }
+        return clean;
+    }
+
     private static string Normalize(string rank) =>
         string.Join(' ', rank.Trim().Replace('_', ' ').ToLowerInvariant()
             .Split(' ', StringSplitOptions.RemoveEmptyEntries));

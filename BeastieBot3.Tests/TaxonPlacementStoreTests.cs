@@ -149,7 +149,7 @@ public class TaxonPlacementStoreTests {
     }
 
     private static PlacementSourceRow Source(string key, string path) =>
-        new(key, path, "1:1", "/col.sqlite", "9:9", TaxonPlacementStore.AlgorithmVersion, 0.8, 0.9,
+        new(key, path, "1:1", "/col.sqlite", "9:9", TaxonPlacementStore.RulesVersion, 0.8, 0.9,
             new DateTime(2026, 10, 2, 0, 0, 0, DateTimeKind.Utc), 4, 3, 3, 1.5);
 
     [Fact]

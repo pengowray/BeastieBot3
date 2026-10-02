@@ -82,4 +82,12 @@ public class ColRankOrderTests {
         Assert.Equal("unranked", ColRankOrder.Clean(" "));
         Assert.Equal("clade", ColRankOrder.Clean("Clade"));
     }
+
+    [Theory]
+    [InlineData("section zoology", "section")]
+    [InlineData("Series botany", "series")]
+    [InlineData("suborder", "suborder")]
+    [InlineData("", "unranked")]
+    public void DisplayName_DropsTheCodeQualifier(string rank, string expected) =>
+        Assert.Equal(expected, ColRankOrder.DisplayName(rank));
 }

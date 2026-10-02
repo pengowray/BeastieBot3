@@ -33,6 +33,12 @@ internal sealed class TaxonPlacementStore : SqliteStore {
     /// <summary>Bump when the CoL matching rules change; the match and node caches are then refilled.</summary>
     public const int MatcherVersion = 1;
 
+    /// <summary>
+    /// The version a placement is stamped with: a change to either the voting rules or the matching
+    /// rules makes a stored placement out of date. Stored in placement_source.algorithm_version.
+    /// </summary>
+    public const int RulesVersion = AlgorithmVersion * 1000 + MatcherVersion;
+
     private TaxonPlacementStore(SqliteConnection connection) : base(connection) {
     }
 

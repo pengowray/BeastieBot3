@@ -121,4 +121,24 @@ public sealed class SectionRenderingTests : IDisposable {
         Assert.Contains("==== Other Testudines ====", Lines(twoOrders));
         Assert.Contains("=== Other families ===", Lines(oneOrder));
     }
+
+    [Fact]
+    public void FamiliesAllMergedIntoOneBucket_StillNameEachSpeciesFamily() {
+        // Every Carnivora family is below min_items, so all go into one "Other" bucket, which gets no
+        // heading because it is the only group. Each species still shows its family.
+        var records = Family(Mammalia, "CARNIVORA", "FELIDAE", 2)
+            .Concat(Family(Mammalia, "CARNIVORA", "CANIDAE", 2))
+            .Concat(Family(Mammalia, "CARNIVORA", "URSIDAE", 1))
+            .Concat(Family(Mammalia, "PRIMATES", "HOMINIDAE", 6))
+            .ToList();
+        var display = new DisplayPreferences { ListingStyle = ListingStyle.ScientificNameFocus, IncludeFamilyInOtherBucket = true };
+
+        var (body, _) = Renderer(placement: null, rules: null).BuildSectionBody(records, DefaultGrouping(), display, "LC");
+        var lines = Lines(body);
+
+        var felid = Assert.Single(lines, l => l.Contains("Felus species1", StringComparison.Ordinal));
+        Assert.Contains("Family", felid);
+        Assert.Contains("Felidae", felid);
+        Assert.DoesNotContain(lines, l => l.Contains("Other Carnivora", StringComparison.Ordinal));
+    }
 }

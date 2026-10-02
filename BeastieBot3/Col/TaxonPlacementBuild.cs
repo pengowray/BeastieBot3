@@ -105,7 +105,7 @@ internal static class TaxonPlacementBuild {
                 return new TaxonPlacementStatus(earlier is null ? PlacementState.NotBuilt : PlacementState.IucnChanged, sidecar, sourceKey, earlier);
             }
             var state = source.ColStamp != TaxonPlacementStore.ColStamp(colDatabasePath) ? PlacementState.ColChanged
-                : source.AlgorithmVersion != TaxonPlacementStore.AlgorithmVersion ? PlacementState.RulesChanged
+                : source.AlgorithmVersion != TaxonPlacementStore.RulesVersion ? PlacementState.RulesChanged
                 : !SameThresholds(source, options) ? PlacementState.ThresholdsChanged
                 : PlacementState.Current;
             return new TaxonPlacementStatus(state, sidecar, sourceKey, source);
@@ -163,7 +163,7 @@ internal static class TaxonPlacementBuild {
             iucnStamp,
             Path.GetFullPath(colDatabasePath),
             colStamp,
-            TaxonPlacementStore.AlgorithmVersion,
+            TaxonPlacementStore.RulesVersion,
             options.Builder.VoteThreshold,
             options.Builder.ContainmentThreshold,
             DateTime.UtcNow,

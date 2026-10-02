@@ -20,8 +20,8 @@ namespace BeastieBot3.Col;
 
 [CommandInfo("col build-placement", CommandKind.Mutates,
     "Find the Catalogue of Life groups, such as suborders and subfamilies, that fall between IUCN's class, order, family and genus ranks, and save this placement for Wikipedia list headings.",
-    Rerun = RerunEffect.Rebuilds,
-    RerunNote = "The first run matches every IUCN species (about 176,000) to Catalogue of Life and takes about 2 minutes. Later runs reuse the saved matches and take about 5 seconds, until the Catalogue of Life database changes and the next run matches every species again.",
+    Rerun = RerunEffect.IdempotentAdd,
+    RerunNote = "A run builds the placement only when none is saved for this IUCN database, or when the IUCN or Catalogue of Life database has changed since the last build; otherwise it shows the saved placement. --force and --report always build it. The first build matches every IUCN species (about 176,000) to Catalogue of Life and takes about 2 minutes. Later builds reuse the saved matches and take about 5 seconds, until the Catalogue of Life database changes.",
     ReportOnlyWith = new[] { "--status" },
     Examples = new[] {
         "col build-placement",

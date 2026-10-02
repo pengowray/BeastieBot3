@@ -1,3 +1,4 @@
+using System;
 using System.Collections.Generic;
 
 namespace BeastieBot3.Taxonomy;
@@ -43,9 +44,11 @@ internal sealed record AutoSplitDecision(
 /// <param name="ItemCount">N: items under that node.</param>
 /// <param name="Ranks">CoL ranks of the candidate groups, e.g. "suborder".</param>
 /// <param name="Level">The configured level the layer sits above, e.g. "family".</param>
-/// <param name="Outcome">"accepted", or "rejected:" plus single_value_groups, few_items, few_anchors,
-/// no_fewer_headings, too_many_groups, dominant_group, groups_too_small or heading_depth, or
-/// "looked_through:dominant_group" when the next record is the same place one node further down.</param>
+/// <param name="Outcome">"accepted", or "rejected:" plus mixed_parents (the entries have different IUCN
+/// parents, recorded before any CoL node is read), single_value_groups, few_items, few_anchors,
+/// headings_not_reduced, too_many_groups, dominant_group, groups_too_small, little_outside_largest or
+/// heading_depth, or "looked_through:dominant_group" when the next record is the same place one node
+/// further down.</param>
 /// <param name="NamedGroups">CoL groups left after demoting groups with one value of the level.</param>
 /// <param name="LooseValues">Distinct values of the level among items in no CoL group.</param>
 /// <param name="Anchors">D: distinct values of the level among all N items.</param>
@@ -63,7 +66,14 @@ internal sealed record IntermediateLayerDecision(
     int Anchors = 0,
     int Headings = 0,
     double LargestShare = 0,
-    string Groups = "");
+    string Groups = "") {
+    /// <summary>
+    /// True for the record that ends the decision at one place. A look-through record is followed by
+    /// another record for the same place, and mixed_parents is recorded before any CoL node is read.
+    /// </summary>
+    public bool ClosesAttempt =>
+        !Outcome.StartsWith("looked_through:", StringComparison.Ordinal) && Outcome != "rejected:mixed_parents";
+}
 
 /// <summary>
 /// Collects decisions into lists for reporting.

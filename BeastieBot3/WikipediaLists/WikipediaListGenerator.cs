@@ -226,7 +226,7 @@ internal sealed class WikipediaListGenerator {
             AutoSplitAttempts = diagnostics.Decisions.Count(d => d.ClosesAttempt),
             AutoSplitAccepted = diagnostics.Decisions.Count(d => d.Outcome == "accepted"),
             Decisions = diagnostics.Decisions.Select(AutoSplitDecisionRecord.From).ToList(),
-            IntermediateLayersTried = diagnostics.Layers.Count,
+            IntermediateLayersTried = diagnostics.Layers.Count(d => d.ClosesAttempt),
             IntermediateLayersShown = diagnostics.Layers.Count(d => d.Outcome == "accepted"),
             LayerDecisions = diagnostics.Layers.Select(IntermediateLayerDecisionRecord.From).ToList(),
         };
