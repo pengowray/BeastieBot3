@@ -1,0 +1,645 @@
+/* Beastie Bot Species Status. No external fonts or frameworks. */
+
+:root {
+    --bg: #ffffff;
+    --fg: #1b1b1b;
+    --muted: #4f5359;
+    --link: #0645ad;
+    --link-visited: #4b2e83;
+    --border: #c8ccd1;
+    --surface: #f5f6f7;
+    --code-bg: #f2f3f4;
+    --note-bg: #fdf6e3;
+    --note-border: #d9b44a;
+    --focus: #1d5fd1;
+    --grey-badge: #5c5c5c;
+    --shown-bg: #eaf1fb;
+    --badge-ring: transparent;
+    color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+        --bg: #111418;
+        --fg: #e6e8eb;
+        --muted: #aab1b9;
+        --link: #8db7f7;
+        --link-visited: #c3a6f2;
+        --border: #3b424b;
+        --surface: #1a1f25;
+        --code-bg: #1d232a;
+        --note-bg: #2a2516;
+        --note-border: #8c7330;
+        --focus: #8db7f7;
+        --grey-badge: #a6a6a6;
+        --shown-bg: #1c2a3d;
+        --badge-ring: rgba(255, 255, 255, 0.35);
+        color-scheme: dark;
+    }
+}
+
+:root[data-theme="dark"] {
+    --bg: #111418;
+    --fg: #e6e8eb;
+    --muted: #aab1b9;
+    --link: #8db7f7;
+    --link-visited: #c3a6f2;
+    --border: #3b424b;
+    --surface: #1a1f25;
+    --code-bg: #1d232a;
+    --note-bg: #2a2516;
+    --note-border: #8c7330;
+    --focus: #8db7f7;
+    --grey-badge: #a6a6a6;
+    --shown-bg: #1c2a3d;
+    --badge-ring: rgba(255, 255, 255, 0.35);
+    color-scheme: dark;
+}
+
+*, *::before, *::after {
+    box-sizing: border-box;
+}
+
+html {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+}
+
+body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    font-size: 1rem;
+    line-height: 1.5;
+}
+
+a {
+    color: var(--link);
+}
+
+a:visited {
+    color: var(--link-visited);
+}
+
+:focus-visible {
+    outline: 3px solid var(--focus);
+    outline-offset: 2px;
+}
+
+main:focus {
+    outline: none;
+}
+
+code, textarea {
+    font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, "Liberation Mono", monospace;
+}
+
+code {
+    background: var(--code-bg);
+    padding: 0 0.2em;
+    border-radius: 3px;
+    font-size: 0.9em;
+}
+
+h1 {
+    font-size: 1.75rem;
+    line-height: 1.25;
+    margin: 1.25rem 0 0.5rem;
+}
+
+h2 {
+    font-size: 1.3rem;
+    line-height: 1.3;
+    margin: 2rem 0 0.75rem;
+    padding-bottom: 0.25rem;
+    border-bottom: 1px solid var(--border);
+}
+
+h3 {
+    font-size: 1.05rem;
+    margin: 1.25rem 0 0.5rem;
+}
+
+.small-heading {
+    font-size: 1rem;
+    border: 0;
+    margin: 1.5rem 0 0.25rem;
+    padding: 0;
+}
+
+.wrap {
+    max-width: 60rem;
+    margin: 0 auto;
+    padding: 0 16px;
+}
+
+.visually-hidden {
+    position: absolute !important;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
+}
+
+.skip-link {
+    position: absolute;
+    left: 16px;
+    top: -3rem;
+    background: var(--bg);
+    padding: 0.5rem 0.75rem;
+    z-index: 10;
+}
+
+.skip-link:focus {
+    top: 0.5rem;
+}
+
+/* Header and footer */
+
+.site-header {
+    border-bottom: 1px solid var(--border);
+    background: var(--surface);
+}
+
+.header-row {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem 1rem;
+    padding-top: 0.6rem;
+    padding-bottom: 0.6rem;
+}
+
+.site-name {
+    font-weight: 700;
+    color: var(--fg);
+    text-decoration: none;
+}
+
+.site-name:visited {
+    color: var(--fg);
+}
+
+.site-nav {
+    margin-left: auto;
+}
+
+.site-footer {
+    margin-top: 3rem;
+    border-top: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--muted);
+    font-size: 0.9rem;
+    padding: 0.75rem 0;
+}
+
+.site-footer p {
+    margin: 0.4rem 0;
+}
+
+/* Search */
+
+.search-form-main {
+    margin: 1rem 0;
+}
+
+.search-label {
+    display: block;
+    font-weight: 600;
+    margin-bottom: 0.3rem;
+}
+
+.search-row {
+    display: flex;
+    gap: 0.5rem;
+}
+
+.search-row input {
+    flex: 1;
+    min-width: 0;
+    font: inherit;
+    font-size: 1rem;
+    padding: 0.5rem 0.65rem;
+    border: 1px solid var(--muted);
+    border-radius: 4px;
+    background: var(--bg);
+    color: var(--fg);
+}
+
+.search-form-header {
+    flex: 1 1 18rem;
+    max-width: 30rem;
+}
+
+.search-form-header .search-row input {
+    padding: 0.35rem 0.55rem;
+}
+
+button {
+    font: inherit;
+    padding: 0.45rem 0.9rem;
+    border: 1px solid var(--muted);
+    border-radius: 4px;
+    background: var(--surface);
+    color: var(--fg);
+    cursor: pointer;
+}
+
+button:hover {
+    background: var(--code-bg);
+}
+
+.examples, .lead, .dataset-summary, .result-count {
+    color: var(--muted);
+}
+
+.lead {
+    font-size: 1.1rem;
+    margin-top: 0;
+}
+
+.message {
+    padding: 0.75rem 1rem;
+    background: var(--surface);
+    border-left: 4px solid var(--border);
+}
+
+/* Category badges, coloured as in en-wiki Module:IUCN status. The code and the label are always
+   both shown, so the colour is never the only cue. */
+
+.category {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: baseline;
+    gap: 0.4em;
+}
+
+.badge {
+    display: inline-block;
+    font-weight: 700;
+    font-size: 0.85em;
+    line-height: 1.4;
+    padding: 0 0.4em;
+    border-radius: 3px;
+    white-space: nowrap;
+    box-shadow: inset 0 0 0 1px var(--badge-ring);
+}
+
+.category-large .badge {
+    font-size: 1.25rem;
+    padding: 0.1em 0.5em;
+}
+
+.category-large .category-label {
+    font-size: 1.15rem;
+    font-weight: 600;
+}
+
+.cat-ex { background: #000; color: #f66; }
+.cat-ew { background: #000; color: #fff; }
+.cat-cr { background: #c33; color: #fee; }
+.cat-en { background: #b40; color: #fed; }
+.cat-vu { background: #937006; color: #ffe; }
+.cat-nt { background: #073; color: #efe; }
+.cat-lc { background: #066; color: #eff; }
+.cat-other { background: #048; color: #fff; }
+.cat-grey { background: transparent; color: var(--grey-badge); box-shadow: inset 0 0 0 1px currentColor; }
+
+.no-global {
+    color: var(--muted);
+    font-style: italic;
+}
+
+/* Lists of taxa (search results, name lookups, children) */
+
+.taxon-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.taxon-list li {
+    display: flex;
+    flex-direction: column;
+    gap: 0.2rem;
+    padding: 0.6rem 0;
+    border-bottom: 1px solid var(--border);
+}
+
+.taxon-list-name {
+    order: -1;
+}
+
+.common-name {
+    margin-left: 0.4em;
+}
+
+.kind, .tag {
+    display: inline-block;
+    margin-left: 0.4em;
+    padding: 0 0.4em;
+    font-size: 0.8rem;
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    color: var(--muted);
+    font-weight: 400;
+}
+
+.match-note {
+    font-size: 0.9rem;
+    color: var(--muted);
+}
+
+@media (min-width: 40rem) {
+    .taxon-list li {
+        display: grid;
+        grid-template-columns: 16rem 1fr;
+        gap: 0.75rem;
+        align-items: baseline;
+    }
+
+    .taxon-list-name {
+        order: 0;
+    }
+}
+
+/* Taxon page */
+
+.arrival {
+    font-size: 0.95rem;
+    color: var(--muted);
+    margin: 1rem 0 0;
+}
+
+.taxon-header h1 {
+    margin-bottom: 0.25rem;
+}
+
+.authority {
+    font-weight: 400;
+    font-size: 1.1rem;
+    color: var(--muted);
+}
+
+.taxon-common-name {
+    font-size: 1.2rem;
+    margin: 0;
+}
+
+.parent-line {
+    margin: 0.25rem 0 0;
+}
+
+.classification ol {
+    list-style: none;
+    padding: 0;
+    margin: 0.5rem 0 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.2rem 0;
+    font-size: 0.9rem;
+}
+
+.classification li:not(:last-child)::after {
+    content: "›";
+    padding: 0 0.5em;
+    color: var(--muted);
+}
+
+.rank {
+    color: var(--muted);
+}
+
+.facts {
+    display: grid;
+    grid-template-columns: 1fr;
+    margin: 0;
+}
+
+.facts dt {
+    font-weight: 600;
+    margin-top: 0.5rem;
+}
+
+.facts dd {
+    margin: 0;
+}
+
+@media (min-width: 40rem) {
+    .facts {
+        grid-template-columns: 14rem 1fr;
+        gap: 0.4rem 1rem;
+    }
+
+    .facts dt {
+        margin-top: 0;
+    }
+}
+
+.iucn-link {
+    margin-top: 1rem;
+}
+
+.no-global-line {
+    font-weight: 600;
+}
+
+/* Wikitext boxes */
+
+.wikitext-box {
+    margin: 1rem 0 1.25rem;
+}
+
+.wikitext-box-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    margin-bottom: 0.3rem;
+}
+
+.wikitext-box-head label {
+    font-weight: 600;
+}
+
+.copy-button {
+    padding: 0.25rem 0.8rem;
+    min-width: 5.5rem;
+}
+
+textarea {
+    display: block;
+    width: 100%;
+    font-size: 0.875rem;
+    line-height: 1.45;
+    padding: 0.5rem 0.6rem;
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    background: var(--code-bg);
+    color: var(--fg);
+    resize: vertical;
+    overflow-wrap: anywhere;
+}
+
+.note {
+    font-size: 0.9rem;
+    margin: 0.4rem 0;
+}
+
+.note-selected {
+    padding: 0.6rem 0.8rem;
+    background: var(--note-bg);
+    border-left: 4px solid var(--note-border);
+    font-size: 0.95rem;
+}
+
+.citation-notes {
+    color: var(--muted);
+}
+
+.iucn-citation summary {
+    cursor: pointer;
+    font-size: 0.9rem;
+}
+
+.iucn-citation p {
+    font-size: 0.9rem;
+    margin: 0.3rem 0 0;
+}
+
+.copy-status {
+    min-height: 1.5em;
+    font-size: 0.9rem;
+}
+
+.options-form fieldset {
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    margin: 0;
+    padding: 0.5rem 1rem 1rem;
+}
+
+.options-form > fieldset > legend {
+    font-weight: 600;
+    padding: 0 0.3rem;
+}
+
+.options-form .option-group {
+    border: 0;
+    padding: 0;
+    margin: 0.75rem 0;
+}
+
+.options-form .option-group legend {
+    font-weight: 600;
+    padding: 0;
+    margin-bottom: 0.2rem;
+}
+
+.options-form label {
+    display: block;
+    margin: 0.2rem 0;
+}
+
+.options-form input[type="text"] {
+    font: inherit;
+    padding: 0.2rem 0.4rem;
+    margin-left: 0.4rem;
+    border: 1px solid var(--muted);
+    border-radius: 3px;
+    background: var(--bg);
+    color: var(--fg);
+}
+
+.help {
+    font-size: 0.85rem;
+    color: var(--muted);
+    margin: 0.2rem 0 0;
+}
+
+/* Tables */
+
+.table-scroll {
+    overflow-x: auto;
+}
+
+table {
+    border-collapse: collapse;
+    width: 100%;
+    font-size: 0.95rem;
+}
+
+th, td {
+    text-align: left;
+    vertical-align: top;
+    padding: 0.4rem 0.6rem 0.4rem 0;
+    border-bottom: 1px solid var(--border);
+}
+
+thead th {
+    font-weight: 600;
+    border-bottom-width: 2px;
+}
+
+tbody th {
+    font-weight: 400;
+}
+
+tr.shown {
+    background: var(--shown-bg);
+}
+
+.shown-label {
+    font-weight: 600;
+}
+
+.language-names {
+    display: grid;
+    grid-template-columns: max-content 1fr;
+    gap: 0.25rem 1rem;
+    margin: 0;
+}
+
+.language-names dt {
+    color: var(--muted);
+}
+
+.language-names dd {
+    margin: 0;
+}
+
+.synonyms {
+    margin: 0;
+    padding-left: 1.25rem;
+}
+
+details summary {
+    cursor: pointer;
+    margin: 0.4rem 0;
+}
+
+.data-note {
+    margin-top: 2.5rem;
+    font-size: 0.9rem;
+    color: var(--muted);
+}
+
+abbr[title] {
+    text-decoration: underline dotted;
+    cursor: help;
+}
+
+/* About page */
+
+.prose {
+    max-width: 46rem;
+}
+
+.prose li {
+    margin: 0.25rem 0;
+}

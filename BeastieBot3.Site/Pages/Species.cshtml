@@ -1,0 +1,389 @@
+@page "/species/{taxonId:long}"
+@model SpeciesModel
+@{
+    var taxon = Model.Taxon;
+    if (taxon is null) {
+        ViewData["Title"] = SiteText.TaxonNotFoundHeading(Model.RequestedTaxonId);
+        ViewData["HideHeaderSearch"] = true;
+    } else {
+        ViewData["Title"] = taxon.CommonNameEn is null ? taxon.ScientificName : $"{taxon.ScientificName} ({taxon.CommonNameEn})";
+    }
+}
+@if (taxon is null) {
+    <h1>@SiteText.TaxonNotFoundHeading(Model.RequestedTaxonId)</h1>
+    <p>@(Model.Version is null ? SiteText.TaxonNotFoundLineNoVersion : SiteText.TaxonNotFoundLine(Model.Version))</p>
+    <partial name="_SearchForm" model="@(new SearchFormModel(null, "main"))" />
+    return;
+}
+@{
+    var status = Model.StatusAssessment;
+    var selected = Model.Selected;
+    var parentPrefix = SiteText.ParentLinePrefix(taxon.Kind);
+    var ranks = new[] { taxon.Kingdom, taxon.Phylum, taxon.ClassName, taxon.OrderName, taxon.Family, taxon.Genus };
+}
+
+@if (Model.ArrivedQuery is { } arrived) {
+    <p class="arrival">
+        @(Model.ArrivedNameType == NameTypes.Synonym ? SiteText.ArrivedSynonym(arrived) : SiteText.ArrivedCommonName(arrived))
+        <a href="/search?q=@Uri.EscapeDataString(arrived)&amp;all=1">@SiteText.ArrivedAllResults(arrived)</a>
+    </p>
+}
+
+<header class="taxon-header">
+    <h1>
+        <span class="sci-name">@Html.Raw(ScientificNameMarkup.ToHtml(taxon.ScientificName, taxon.SubpopulationName))</span>
+        @if (!string.IsNullOrWhiteSpace(taxon.Authority)) {
+            <span class="authority">@taxon.Authority</span>
+        }
+    </h1>
+    @if (taxon.CommonNameEn is not null) {
+        <p class="taxon-common-name">@taxon.CommonNameEn</p>
+    }
+    @if (parentPrefix is not null && Model.Parent is { } parent) {
+        <p class="parent-line">@parentPrefix <a href="/species/@parent.TaxonId">@Html.Raw(ScientificNameMarkup.ToHtml(parent.ScientificName, parent.SubpopulationName))</a></p>
+    }
+    @if (ranks.Any(r => !string.IsNullOrWhiteSpace(r))) {
+        <nav class="classification" aria-labelledby="classification-heading">
+            <h2 id="classification-heading" class="visually-hidden">@SiteText.HeadingClassification</h2>
+            <ol>
+                @for (var i = 0; i < ranks.Length; i++) {
+                    if (string.IsNullOrWhiteSpace(ranks[i])) {
+                        continue;
+                    }
+                    var value = SiteFormat.TitleCase(ranks[i]!);
+                    <li><span class="rank">@SiteText.RankLabels[i]</span> @if (i == ranks.Length - 1) {<i>@value</i>} else {<text>@value</text>}</li>
+                }
+            </ol>
+        </nav>
+    }
+</header>
+
+<section class="status" aria-labelledby="status-heading">
+    <h2 id="status-heading">@(Model.LatestGlobal is null ? SiteText.HeadingStatusNoGlobal : SiteText.HeadingStatus)</h2>
+    @if (Model.LatestGlobal is null && Model.RegionalLatest.Count > 0) {
+        <p class="no-global-line">@SiteText.NoGlobalBefore<a href="#regional">@SiteText.NoGlobalLinkText(Model.RegionalLatest.Count)</a>@SiteText.NoGlobalAfter</p>
+    }
+    @if (status is not null) {
+        <dl class="facts">
+            @if (!status.IsGlobal) {
+                <dt>@SiteText.LabelRegion</dt>
+                <dd>@status.Scope</dd>
+            }
+            <dt>@SiteText.LabelCategory</dt>
+            <dd><partial name="_Badge" model="@BadgeModel.For(status, large: true)" /></dd>
+            <dt>@SiteText.LabelCriteria</dt>
+            <dd>@(string.IsNullOrWhiteSpace(status.Criteria) ? SiteText.CriteriaNone : status.Criteria)</dd>
+            @if (!string.IsNullOrWhiteSpace(status.PopulationTrend)) {
+                <dt>@SiteText.LabelTrend</dt>
+                <dd>@status.PopulationTrend</dd>
+            }
+            @if (!string.IsNullOrWhiteSpace(status.AssessmentDate)) {
+                <dt>@SiteText.LabelAssessed</dt>
+                <dd>@SiteFormat.Date(status.AssessmentDate)</dd>
+            }
+            @if (status.YearPublished is { } published) {
+                <dt>@SiteText.LabelPublished</dt>
+                <dd>@published</dd>
+            }
+            @if (Model.Version is not null) {
+                <dt>@SiteText.LabelVersion</dt>
+                <dd>@Model.Version</dd>
+            }
+        </dl>
+        <p class="iucn-link"><a href="@SiteFormat.IucnAssessmentUrl(status.TaxonId, status.AssessmentId)">@SiteText.IucnLink</a></p>
+    }
+</section>
+
+@if (selected is not null) {
+    <section class="wikitext" id="wikitext" aria-labelledby="wikitext-heading">
+        <h2 id="wikitext-heading">@SiteText.HeadingWikitext</h2>
+        @{
+            var selectedCategory = IucnCategories.Describe(selected.Category, selected.PossiblyExtinct, selected.PossiblyExtinctInTheWild).Label;
+        }
+        @if (!selected.IsGlobal) {
+            <p class="note note-selected">
+                @SiteText.RegionalAssessment(selected.Scope, selectedCategory, selected.YearPublished)
+                @SiteText.SpeciesboxGlobalOnly
+                @if (Model.LatestGlobal is not null) {
+                    <a href="@(Model.OptionsUrl(null))#wikitext">@SiteText.ShowLatestWikitext</a>
+                }
+            </p>
+        } else if (!Model.SelectedIsDefault) {
+            <p class="note note-selected">
+                @SiteText.EarlierAssessment(selectedCategory, selected.YearPublished)
+                <a href="@(Model.OptionsUrl(null))#wikitext">@SiteText.ShowLatestWikitext</a>
+            </p>
+        }
+        @if (!IucnCategories.HasStatusTemplateCode(selected.Category)) {
+            <p class="note">@SiteText.NoTemplateCode</p>
+        }
+
+        @if (Model.Parts is null) {
+            <p class="note">@SiteText.NoCitationBefore<a href="@SiteFormat.IucnAssessmentUrl(selected.TaxonId, selected.AssessmentId)">@SiteText.NoCitationLink</a>@SiteText.NoCitationAfter</p>
+        }
+
+        @foreach (var box in Model.Boxes) {
+            <div class="wikitext-box">
+                <div class="wikitext-box-head">
+                    <label for="@box.Id">@box.Label</label>
+                    <button type="button" class="copy-button" data-copy="@box.Id" aria-label="@SiteText.CopyAccessible(box.Template)" hidden>@SiteText.Copy</button>
+                </div>
+                <textarea id="@box.Id" readonly rows="@box.Rows" spellcheck="false" autocapitalize="off" autocomplete="off">@box.Text</textarea>
+                @if (box.Id == "wikitext-cite") {
+                    <div class="citation-notes">
+                        @if (Model.DoiNote is not null) {
+                            <p class="note">@Model.DoiNote</p>
+                        }
+                        @if (Model.UnsplitAuthors.Count > 0) {
+                            <p class="note">@SiteText.AuthorsUnsplit @string.Join("; ", Model.UnsplitAuthors)</p>
+                        }
+                        @if (!string.IsNullOrWhiteSpace(Model.Parts?.IucnCitationText)) {
+                            <details class="iucn-citation">
+                                <summary>@SiteText.IucnCitationLabel</summary>
+                                <p>@Model.Parts.IucnCitationText</p>
+                            </details>
+                        }
+                    </div>
+                }
+            </div>
+        }
+        <p class="copy-status" role="status" aria-live="polite" data-copied="@SiteText.Copied" data-copy-label="@SiteText.Copy" data-copy-failed="@SiteText.CopyFailed"></p>
+
+        @if (Model.Parts is not null) {
+            <form class="options-form" method="get" action="/species/@taxon.TaxonId#wikitext">
+                <fieldset>
+                    <legend>@SiteText.OptionsLegend</legend>
+                    <input type="hidden" name="opts" value="1">
+                    @if (!Model.SelectedIsDefault) {
+                        <input type="hidden" name="assessment" value="@selected.AssessmentId">
+                    }
+                    <fieldset class="option-group">
+                        <legend>@SiteText.AuthorsLabel</legend>
+                        <label><input type="radio" name="authors" value="author" checked="@(Model.Options.AuthorStyle == CiteAuthorStyle.AuthorN)"> @Html.Raw(SiteText.AuthorsAuthorHtml)</label>
+                        <label><input type="radio" name="authors" value="lastfirst" checked="@(Model.Options.AuthorStyle == CiteAuthorStyle.LastFirst)"> @Html.Raw(SiteText.AuthorsLastFirstHtml)</label>
+                    </fieldset>
+                    <fieldset class="option-group">
+                        <legend>@SiteText.AccessLabel</legend>
+                        @if (Model.DownloadDateText is not null) {
+                            <label><input type="radio" name="access" value="download" checked="@(Model.Options.Access == WikitextOptions.AccessDownload)" aria-describedby="access-help"> @SiteText.AccessDownload(Model.DownloadDateText)</label>
+                        }
+                        <label><input type="radio" name="access" value="today" checked="@(Model.Options.Access == WikitextOptions.AccessToday)"> @SiteText.AccessToday(Model.TodayText)</label>
+                        <label><input type="radio" name="access" value="none" checked="@(Model.Options.Access == WikitextOptions.AccessNone || (Model.DownloadDateText is null && Model.Options.Access == WikitextOptions.AccessDownload))"> @SiteText.AccessNone</label>
+                        @if (Model.DownloadDateText is not null) {
+                            <p class="help" id="access-help">@SiteText.AccessHelp</p>
+                        }
+                    </fieldset>
+                    <div class="option-group">
+                        <label><input type="checkbox" name="ref" value="1" checked="@Model.Options.WrapInRef"> @Html.Raw(SiteText.RefWrapHtml)</label>
+                        <label class="ref-name">@SiteText.RefName <input type="text" name="refname" value="@Model.Options.RefName" maxlength="@WikitextOptions.MaxRefNameLength" size="12" spellcheck="false"></label>
+                    </div>
+                    <div class="option-group">
+                        <label><input type="checkbox" name="amp" value="1" checked="@Model.Options.Amp" aria-describedby="amp-help"> @Html.Raw(SiteText.AmpHtml)</label>
+                        <p class="help" id="amp-help">@SiteText.AmpHelp</p>
+                    </div>
+                    <button type="submit">@SiteText.UpdateWikitext</button>
+                </fieldset>
+            </form>
+        }
+    </section>
+}
+
+@if (Model.GlobalHistory.Count > 0) {
+    <section class="history" aria-labelledby="history-heading">
+        <h2 id="history-heading">@SiteText.HeadingHistory</h2>
+        <div class="table-scroll">
+            <table>
+                <thead>
+                    <tr>
+                        <th scope="col">@SiteText.ColPublished</th>
+                        <th scope="col">@SiteText.ColCategory</th>
+                        <th scope="col">@SiteText.ColCriteria</th>
+                        <th scope="col">@SiteText.ColAssessed</th>
+                        <th scope="col">@SiteText.ColWikitext</th>
+                        <th scope="col">@SiteText.ColAssessment</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var a in Model.GlobalHistory) {
+                        var isShown = selected?.AssessmentId == a.AssessmentId;
+                        var isLatest = a.AssessmentId == Model.LatestGlobal?.AssessmentId;
+                        <tr class="@(isShown ? "shown" : null)">
+                            <th scope="row">@a.YearPublished @if (isLatest) {<span class="tag">@SiteText.Latest</span>}</th>
+                            <td><partial name="_Badge" model="@BadgeModel.For(a)" /></td>
+                            <td>@a.Criteria</td>
+                            <td>@SiteFormat.Date(a.AssessmentDate)</td>
+                            <td>
+                                @if (isShown) {
+                                    <span class="shown-label">@SiteText.Shown</span>
+                                } else {
+                                    <a href="@(Model.OptionsUrl(isLatest ? null : a.AssessmentId))#wikitext" aria-label="@SiteText.ShowWikitextAccessible(a.YearPublished)">@SiteText.ShowWikitext</a>
+                                }
+                            </td>
+                            <td><a href="@SiteFormat.IucnAssessmentUrl(a.TaxonId, a.AssessmentId)">@SiteText.IucnSiteLink</a></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </section>
+}
+
+@if (Model.RegionalLatest.Count > 0) {
+    <section class="regional" id="regional" aria-labelledby="regional-heading">
+        <h2 id="regional-heading">@SiteText.HeadingRegional</h2>
+        <div class="table-scroll">
+            <table>
+                <thead>
+                    <tr>
+                        <th scope="col">@SiteText.ColRegion</th>
+                        <th scope="col">@SiteText.ColCategory</th>
+                        <th scope="col">@SiteText.ColCriteria</th>
+                        <th scope="col">@SiteText.ColPublished</th>
+                        <th scope="col">@SiteText.ColWikitext</th>
+                        <th scope="col">@SiteText.ColAssessment</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var a in Model.RegionalLatest) {
+                        var isShown = selected?.AssessmentId == a.AssessmentId;
+                        var isDefault = a.AssessmentId == Model.StatusAssessment?.AssessmentId;
+                        <tr class="@(isShown ? "shown" : null)">
+                            <th scope="row">@a.Scope</th>
+                            <td><partial name="_Badge" model="@BadgeModel.For(a)" /></td>
+                            <td>@a.Criteria</td>
+                            <td>@a.YearPublished</td>
+                            <td>
+                                @if (isShown) {
+                                    <span class="shown-label">@SiteText.Shown</span>
+                                } else {
+                                    <a href="@(Model.OptionsUrl(isDefault ? null : a.AssessmentId))#wikitext" aria-label="@SiteText.ShowWikitextAccessible(a.YearPublished)">@SiteText.ShowWikitext</a>
+                                }
+                            </td>
+                            <td><a href="@SiteFormat.IucnAssessmentUrl(a.TaxonId, a.AssessmentId)">@SiteText.IucnSiteLink</a></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </section>
+}
+
+<section class="names" aria-labelledby="names-heading">
+    <h2 id="names-heading">@SiteText.HeadingNames</h2>
+    <h3>@SiteText.NamesEnglish</h3>
+    @if (Model.EnglishNames.Count == 0) {
+        <p>@SiteText.NoEnglishName</p>
+    } else {
+        <div class="table-scroll">
+            <table class="names-table">
+                <thead>
+                    <tr>
+                        <th scope="col">@SiteText.ColName</th>
+                        <th scope="col">@SiteText.ColSource</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var n in Model.EnglishNames) {
+                        <tr>
+                            <th scope="row">@n.Name @if (n.IsIucnMain) {<span class="tag">@SiteText.IucnMainName</span>}</th>
+                            <td>@string.Join(", ", n.Sources)</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+
+    @if (Model.OtherLanguages.Count > 0) {
+        <h3>@SiteText.NamesOtherLanguages</h3>
+        var visibleGroups = Model.OtherLanguages.Take(SpeciesModel.ShortListLength).ToList();
+        var hiddenGroups = Model.OtherLanguages.Skip(SpeciesModel.ShortListLength).ToList();
+        <dl class="language-names">
+            @foreach (var g in visibleGroups) {
+                <dt>@g.Language</dt>
+                <dd>@string.Join(", ", g.Names)</dd>
+            }
+        </dl>
+        @if (hiddenGroups.Count > 0) {
+            <details>
+                <summary>@SiteText.ShowMore(hiddenGroups.Count)</summary>
+                <dl class="language-names">
+                    @foreach (var g in hiddenGroups) {
+                        <dt>@g.Language</dt>
+                        <dd>@string.Join(", ", g.Names)</dd>
+                    }
+                </dl>
+            </details>
+        }
+    }
+
+    @if (Model.Synonyms.Count > 0) {
+        <h3>@SiteText.NamesSynonyms</h3>
+        <ul class="synonyms">
+            @foreach (var s in Model.Synonyms.Take(SpeciesModel.ShortListLength)) {
+                <li>@Html.Raw(ScientificNameMarkup.ToHtml(s))</li>
+            }
+        </ul>
+        @if (Model.Synonyms.Count > SpeciesModel.ShortListLength) {
+            <details>
+                <summary>@SiteText.ShowMore(Model.Synonyms.Count - SpeciesModel.ShortListLength)</summary>
+                <ul class="synonyms">
+                    @foreach (var s in Model.Synonyms.Skip(SpeciesModel.ShortListLength)) {
+                        <li>@Html.Raw(ScientificNameMarkup.ToHtml(s))</li>
+                    }
+                </ul>
+            </details>
+        }
+    }
+</section>
+
+<section class="links" aria-labelledby="links-heading">
+    <h2 id="links-heading">@SiteText.HeadingLinks</h2>
+    <dl class="facts">
+        <dt>@SiteText.LinkWikipedia</dt>
+        <dd>
+            @if (taxon.EnwikiTitle is not null) {
+                <a href="@SiteFormat.WikipediaUrl(taxon.EnwikiTitle)">@taxon.EnwikiTitle</a>
+            } else {
+                @SiteText.LinkWikipediaNone
+            }
+        </dd>
+        @if (taxon.WikidataQid is not null) {
+            <dt>@SiteText.LinkWikidata</dt>
+            <dd><a href="@SiteFormat.WikidataUrl(taxon.WikidataQid)">@taxon.WikidataQid</a></dd>
+        }
+        @if (taxon.ColId is not null) {
+            <dt>@SiteText.LinkCol</dt>
+            <dd><a href="@SiteFormat.CatalogueOfLifeUrl(taxon.ColId)">@Html.Raw(ScientificNameMarkup.ToHtml(taxon.ScientificName, taxon.SubpopulationName))</a></dd>
+        }
+        @if (taxon.SpratTaxonId is { } sprat) {
+            <dt><abbr title="@SiteText.SpratFullName">@SiteText.LinkSprat</abbr></dt>
+            <dd>
+                <a href="@SiteFormat.SpratUrl(sprat)">@Html.Raw(ScientificNameMarkup.ToHtml(taxon.ScientificName, taxon.SubpopulationName))</a>
+                @if (IucnCategories.EpbcLabel(taxon.EpbcStatus) is { } epbc) {
+                    <br>@SiteText.EpbcBefore(epbc)<abbr title="@SiteText.EpbcFullName">@SiteText.EpbcAbbr</abbr>
+                }
+            </dd>
+        }
+    </dl>
+</section>
+
+@if (Model.Children.Count > 0) {
+    <section class="children" aria-labelledby="children-heading">
+        <h2 id="children-heading">@SiteText.HeadingChildren(
+            Model.Children.Any(c => c.Taxon.Kind == TaxonKinds.Subspecies),
+            Model.Children.Any(c => c.Taxon.Kind == TaxonKinds.Variety),
+            Model.Children.Any(c => c.Taxon.Kind == TaxonKinds.Subpopulation))</h2>
+        <partial name="_TaxonList" model="Model.Children" />
+    </section>
+}
+
+@if (Model.Version is not null) {
+    <p class="data-note">
+        @if (Model.DataDateRange is not null) {
+            @SiteText.DataNoteBefore(Model.Version, Model.DataDateRange)
+        } else {
+            @SiteText.DataNoteBeforeNoDates(Model.Version)
+        }<a href="/about">@SiteText.AboutPageLink</a>@SiteText.DataNoteAfter
+    </p>
+}

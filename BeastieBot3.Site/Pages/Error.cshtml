@@ -1,0 +1,26 @@
+@page "/error/{code:int}"
+@model ErrorModel
+@{
+    ViewData["Title"] = Model.Heading;
+    ViewData["NoIndex"] = true;
+    ViewData["HideHeaderSearch"] = Model.ShowSearch;
+    var contact = Model.ContactText ?? SiteText.ContactFallback;
+}
+<h1>@Model.Heading</h1>
+@if (Model.IsServerError) {
+    @* The contact is the only value in the line, so it is linked on its own. *@
+    var line = SiteText.ServerErrorLine(contact);
+    var at = line.IndexOf(contact, StringComparison.Ordinal);
+    <p>
+        @if (Model.ContactUrl is not null && at >= 0) {
+            @line[..at]<a href="@Model.ContactUrl">@contact</a>@line[(at + contact.Length)..]
+        } else {
+            @line
+        }
+    </p>
+} else {
+    <p>@Model.Line</p>
+}
+@if (Model.ShowSearch) {
+    <partial name="_SearchForm" model="@(new SearchFormModel(null, "main"))" />
+}

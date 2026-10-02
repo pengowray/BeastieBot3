@@ -1,0 +1,22 @@
+@page "/search"
+@model SearchModel
+@{
+    ViewData["HideHeaderSearch"] = true;
+    ViewData["NoIndex"] = true;
+    ViewData["Title"] = Model.Query.Length >= 2 ? SiteText.SearchHeading(Model.Query) : SiteText.SearchLabel;
+}
+<partial name="_SearchForm" model="@(new SearchFormModel(Model.Query, "main"))" />
+
+@if (Model.TooShort) {
+    <p class="message">@SiteText.TooShort</p>
+} else if (Model.Query.Length >= 2) {
+    <h1>@SiteText.SearchHeading(Model.Query)</h1>
+    @if (Model.Items.Count == 0) {
+        <p class="message">@SiteText.NoResults(Model.Query)</p>
+    } else {
+        <p class="result-count">@(Model.TotalTaxa > Model.Items.Count
+            ? SiteText.SearchTruncated(Model.Items.Count, Model.TotalTaxa)
+            : SiteText.SearchCount(Model.Items.Count))</p>
+        <partial name="_TaxonList" model="Model.Items" />
+    }
+}

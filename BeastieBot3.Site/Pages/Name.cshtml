@@ -1,0 +1,9 @@
+@page "/name/{*name}"
+@model NameModel
+@{
+    ViewData["Title"] = SiteText.LookupHeading(Model.Name);
+    ViewData["NoIndex"] = true;
+}
+<h1>@SiteText.LookupHeading(Model.Name)</h1>
+<p>@SiteText.LookupLine(Model.Items.Count, Model.Name)</p>
+<partial name="_TaxonList" model="Model.Items" />

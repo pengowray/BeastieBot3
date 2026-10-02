@@ -1,0 +1,11 @@
+@model SearchFormModel
+<form class="search-form @(Model.IsHeader ? "search-form-header" : "search-form-main")" action="/search" method="get" role="search">
+    <label for="@Model.InputId" class="@(Model.IsHeader ? "visually-hidden" : "search-label")">@SiteText.SearchLabel</label>
+    <div class="search-row">
+        <input id="@Model.InputId" name="q" type="search" value="@Model.Query" placeholder="@SiteText.SearchPlaceholder"
+               autocomplete="off" spellcheck="false" maxlength="100" required minlength="2"
+               list="@Model.ListId" data-suggest>
+        <datalist id="@Model.ListId"></datalist>
+        <button type="submit">@SiteText.SearchButton</button>
+    </div>
+</form>

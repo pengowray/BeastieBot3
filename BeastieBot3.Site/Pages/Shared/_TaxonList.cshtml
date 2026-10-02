@@ -1,0 +1,29 @@
+@model IReadOnlyList<TaxonListItem>
+<ul class="taxon-list">
+    @foreach (var item in Model) {
+        var taxon = item.Taxon;
+        var badge = BadgeModel.For(taxon);
+        var kind = SiteText.KindLabel(taxon.Kind);
+        <li>
+            <div class="taxon-list-status">
+                @if (badge is not null) {
+                    <partial name="_Badge" model="badge" />
+                } else {
+                    <span class="no-global">@SiteText.NoGlobalShort</span>
+                }
+            </div>
+            <div class="taxon-list-name">
+                <a href="/species/@taxon.TaxonId">@Html.Raw(ScientificNameMarkup.ToHtml(taxon.ScientificName, taxon.SubpopulationName))</a>
+                @if (taxon.CommonNameEn is not null) {
+                    <span class="common-name">@taxon.CommonNameEn</span>
+                }
+                @if (kind is not null) {
+                    <span class="kind">@kind</span>
+                }
+                @if (item.MatchNoteLabel is not null) {
+                    <div class="match-note">@item.MatchNoteLabel @Html.Raw(item.MatchedNameHtml)</div>
+                }
+            </div>
+        </li>
+    }
+</ul>

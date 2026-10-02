@@ -1,0 +1,115 @@
+@page "/about"
+@model AboutModel
+@{
+    ViewData["Title"] = SiteText.NavAbout;
+    var site = SiteText.SiteName;
+}
+@functions {
+    // The contact as text, or linked when Site:ContactUrl is set.
+    private Microsoft.AspNetCore.Html.IHtmlContent ContactHtml() =>
+        Model.ContactUrl is null
+            ? new Microsoft.AspNetCore.Html.HtmlString(SiteHtml.Encode(Model.Contact))
+            : new Microsoft.AspNetCore.Html.HtmlString($"<a href=\"{SiteHtml.Encode(Model.ContactUrl)}\">{SiteHtml.Encode(Model.Contact)}</a>");
+}
+<article class="prose">
+    <h1>About @site</h1>
+
+    <h2>What this site is</h2>
+    <p>@site is an unofficial website for looking up IUCN Red List assessments and citing them on English Wikipedia. It is not affiliated with or endorsed by IUCN. It is free and has no ads.</p>
+    <p>Each taxon on the IUCN Red List has a page with:</p>
+    <ul>
+        <li>the category, criteria and population trend of its latest global assessment, with the date assessed and the year published</li>
+        <li>wikitext to copy into Wikipedia: a {{cite iucn}} citation, an {{IUCN status}} template, and the Speciesbox status parameters (status, status_system and status_ref)</li>
+        <li>its earlier assessments and its regional assessments</li>
+        <li>common names and synonyms</li>
+        <li>links to the assessment on the IUCN Red List website, the English Wikipedia article, the Wikidata item and the Catalogue of Life page, and for Australian species the SPRAT profile and the listing under Australia's EPBC Act</li>
+    </ul>
+    <p>Search matches scientific names, common names in any language, and synonyms.</p>
+
+    <h2>Who runs this site</h2>
+    <p>This site is run by an English Wikipedia editor who also runs the Wikipedia bot account Beastie Bot.</p>
+    <p>To report a wrong citation, a wrong link or another problem with this site, contact @ContactHtml(). Include the address of the taxon page.</p>
+    <p>If a category or another detail is also wrong on the IUCN Red List website, the error is in IUCN's data. Report it to IUCN through the IUCN Red List website.</p>
+
+    <h2>Data sources</h2>
+    <div class="table-scroll">
+        <table>
+            <thead>
+                <tr>
+                    <th scope="col">Source</th>
+                    <th scope="col">Used for</th>
+                    <th scope="col">Licence</th>
+                    <th scope="col">Version</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <th scope="row">IUCN Red List</th>
+                    <td>Assessments: category, criteria, population trend, dates, authors, IUCN's citation text, regional assessments, names and classification</td>
+                    <td><a href="@SiteText.TermsUrl">IUCN Red List Terms of Use</a></td>
+                    <td>Version @Model.Version.@if (Model.ApiDateRange is not null) {<text> Assessment details downloaded from the IUCN Red List API @Model.ApiDateRange.</text>}</td>
+                </tr>
+                <tr>
+                    <th scope="row">GBIF: IUCN checklist, published by IUCN</th>
+                    <td>DOIs of assessments</td>
+                    <td>CC BY 4.0</td>
+                    <td>@Model.GbifVersion</td>
+                </tr>
+                <tr>
+                    <th scope="row">Wikidata</th>
+                    <td>Wikidata items, and DOIs not found in IUCN's citation text or GBIF</td>
+                    <td>CC0</td>
+                    <td>@Model.BuiltDate</td>
+                </tr>
+                <tr>
+                    <th scope="row">English Wikipedia</th>
+                    <td>Article titles</td>
+                    <td>CC BY-SA 4.0</td>
+                    <td>@Model.BuiltDate</td>
+                </tr>
+                <tr>
+                    <th scope="row">Catalogue of Life</th>
+                    <td>Links to Catalogue of Life pages</td>
+                    <td>CC BY 4.0</td>
+                    <td>@Model.ColRelease</td>
+                </tr>
+                <tr>
+                    <th scope="row">Species Profile and Threats Database (SPRAT), Australian Government</th>
+                    <td>SPRAT profiles and EPBC Act listings of Australian species</td>
+                    <td>CC BY 4.0</td>
+                    <td>@Model.SpratDate</td>
+                </tr>
+            </tbody>
+        </table>
+    </div>
+
+    <h2>How the wikitext is made</h2>
+    <p><strong>Authors.</strong> IUCN gives the authors of an assessment as a single list, such as "Wiig, Ø., Amstrup, S. &amp; Thiemann, G.". This site splits the list into one parameter for each author. About 1% of author names cannot be split with confidence. Those names are given exactly as IUCN wrote them, and a note under the citation asks you to check them.</p>
+    <p><strong>DOI.</strong> The DOI comes from the first of these sources that has one:</p>
+    <ol>
+        <li>IUCN's own citation text, which includes a DOI for about 12% of assessments</li>
+        <li>GBIF's copy of the IUCN checklist</li>
+        <li>Wikidata</li>
+    </ol>
+    <p>A note under the citation says when the DOI came from GBIF or Wikidata, or when no DOI was found. {{cite iucn}} works without a DOI.</p>
+    <p><strong>Access date.</strong> By default, <code>|access-date=</code> is the date this site downloaded the details of the assessment from the IUCN Red List API@(Model.ApiDateRange is null ? "" : ", " + Model.ApiDateRange). If you check the assessment on the IUCN Red List website yourself, choose today's date. You can also leave the access date out.</p>
+    <p><strong>Citation options.</strong> On each taxon page you can choose:</p>
+    <ul>
+        <li>the author format: <code>|author=Surname, I.</code> with <code>|author2=</code>, <code>|author3=</code> and so on, which most articles use, or <code>|last1=</code> and <code>|first1=</code>, which the {{cite iucn}} documentation shows</li>
+        <li>the access date: the date downloaded from IUCN (the default), today's date, or no access date</li>
+        <li>whether to wrap the citation in <code>&lt;ref&gt;</code> tags, and the ref name (default "iucn")</li>
+        <li>whether to add <code>|name-list-style=amp</code>, which puts "&amp;" before the last author, as IUCN does</li>
+    </ul>
+    <p>Select <strong>@SiteText.UpdateWikitext</strong> to reload the page with the new wikitext.</p>
+    <p><strong>Earlier assessments.</strong> To cite an earlier assessment, select <strong>@SiteText.ShowWikitext</strong> in its row of the Assessment history table. The page then shows the wikitext for that assessment and says which assessment it is.</p>
+    <p><strong>Subpopulations.</strong> About 300 subpopulation assessments have no citation yet, because their details have not been downloaded from IUCN. The {{IUCN status}} wikitext is available for them.</p>
+
+    <h2>IUCN Red List Terms of Use</h2>
+    <p>The IUCN Red List data on this site is used under the <a href="@SiteText.TermsUrl">IUCN Red List Terms of Use</a> and remains subject to those terms.</p>
+    <p>Cite the IUCN Red List as: IUCN @(Model.ReleaseYear ?? "?"). The IUCN Red List of Threatened Species. Version @Model.Version. https://www.iucnredlist.org</p>
+    <p>The terms do not allow IUCN data to be redistributed, so this site has no downloads.</p>
+
+    <h2>Full assessments and data downloads</h2>
+    <p>Each taxon page on this site shows a summary of the assessment. The full assessment, including the rationale, threats and conservation actions, is on the IUCN Red List website at <a href="https://www.iucnredlist.org">https://www.iucnredlist.org</a>. Each taxon page links to its assessment there.</p>
+    <p>To download IUCN Red List data, use the IUCN Red List website. Downloads there need an account and are subject to IUCN's terms.</p>
+</article>

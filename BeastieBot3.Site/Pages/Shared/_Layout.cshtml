@@ -1,0 +1,57 @@
+@inject SiteDatabase Db
+@inject Microsoft.Extensions.Options.IOptions<SiteOptions> SiteOptions
+@{
+    var title = ViewData["Title"] as string;
+    var pageTitle = string.IsNullOrEmpty(title) ? SiteText.SiteName : $"{title} | {SiteText.SiteName}";
+    var hideHeaderSearch = ViewData["HideHeaderSearch"] is true;
+    var canonical = ViewData["Canonical"] as string;
+    var version = Db.Snapshot?.IucnRelease;
+    var sourceUrl = SiteOptions.Value.SourceUrl;
+}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="color-scheme" content="light dark">
+    <title>@pageTitle</title>
+    <meta name="description" content="@SiteText.Description">
+    @if (!string.IsNullOrEmpty(canonical)) {
+        <link rel="canonical" href="@canonical">
+    }
+    @if (ViewData["NoIndex"] is true) {
+        <meta name="robots" content="noindex">
+    }
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="~/site.css" asp-append-version="true">
+    <script src="~/site.js" asp-append-version="true" defer></script>
+</head>
+<body>
+    <a class="skip-link" href="#main">@SiteText.SkipToContent</a>
+    <header class="site-header">
+        <div class="wrap header-row">
+            <a class="site-name" href="/">@SiteText.SiteName</a>
+            @if (!hideHeaderSearch) {
+                <partial name="_SearchForm" model="@(new SearchFormModel(ViewData["Query"] as string, "header"))" />
+            }
+            <nav class="site-nav" aria-label="Site">
+                <a href="/about">@SiteText.NavAbout</a>
+            </nav>
+        </div>
+    </header>
+    <main id="main" class="wrap" tabindex="-1">
+        @RenderBody()
+    </main>
+    <footer class="site-footer">
+        <div class="wrap">
+            <p>@SiteText.FooterLine1</p>
+            @if (version is not null) {
+                <p>@SiteText.FooterLine2Before(version)<a href="@SiteText.TermsUrl">@SiteText.TermsLink</a>@SiteText.FooterLine2Middle<a href="/about">@SiteText.AboutPageLink</a>.</p>
+            }
+            @if (!string.IsNullOrWhiteSpace(sourceUrl)) {
+                <p><a href="@sourceUrl">@SiteText.SourceCode</a></p>
+            }
+        </div>
+    </footer>
+</body>
+</html>

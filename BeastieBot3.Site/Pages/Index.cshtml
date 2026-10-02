@@ -1,0 +1,32 @@
+@page
+@model IndexModel
+@{
+    ViewData["HideHeaderSearch"] = true;
+    var snapshot = Model.Snapshot;
+}
+<section class="home-intro">
+    <h1>@SiteText.SiteName</h1>
+    <p class="lead">@SiteText.Description</p>
+</section>
+
+<partial name="_SearchForm" model="@(new SearchFormModel(null, "main"))" />
+
+<p class="examples">
+    @SiteText.ExamplesLabel
+    <a href="/search?q=Polar+bear">Polar bear</a>,
+    <a href="/search?q=Panthera+tigris"><i>Panthera tigris</i></a>,
+    <a href="/search?q=Wollemia+nobilis"><i>Wollemia nobilis</i></a>
+</p>
+
+<section class="home-what" aria-labelledby="what-heading">
+    <h2 id="what-heading" class="small-heading">@SiteText.WhatHeading</h2>
+    <ul>
+        <li>@SiteText.What1</li>
+        <li>@SiteText.What2</li>
+        <li>@SiteText.What3</li>
+    </ul>
+</section>
+
+@if (snapshot?.IucnRelease is { } release && snapshot.AssessmentCount is { } assessments) {
+    <p class="dataset-summary">@SiteText.DatasetSummary(release, snapshot.GlobalTaxonCount, assessments)</p>
+}
