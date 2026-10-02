@@ -232,7 +232,8 @@ public sealed class SiteDbBuildTests : IDisposable {
 
         // The best English name is the Wikipedia title (highest source priority).
         Assert.Equal("Polar bear", BestName(db, PolarBear));
-        // "Shared name" belongs to several taxa, so the next name is used, capitalised by the caps rules.
+        // "Shared name" is the Wikipedia title of two taxa, so neither uses it and the next name is
+        // used, capitalised by the caps rules.
         Assert.Equal("Test bear", BestName(db, Subpopulation));
         // The best name is the scientific name again, so the taxon gets none, as in the lists.
         Assert.Null(BestName(db, Subspecies));
@@ -516,7 +517,7 @@ public sealed class SiteDbBuildTests : IDisposable {
                 (1, 'Polar Bear', 'polarbear', 'en', 'iucn', '22823', 1, 'x'),
                 (1, 'Polar bear', 'polarbear', 'en', 'wikipedia_title', 'Polar bear', 1, 'x'),
                 (1, 'Ours polaire', 'ourspolaire', 'fr', 'iucn', '22823', 0, 'x'),
-                (2, 'Shared name', 'sharedname', 'en', 'col', 'C1', 0, 'x'),
+                (2, 'Shared name', 'sharedname', 'en', 'wikipedia_title', 'Shared name', 1, 'x'),
                 (3, 'Shared name', 'sharedname', 'en', 'col', 'C2', 0, 'x'),
                 (3, 'Ursus maritimus testus', 'ursusmaritimustestus', 'en', 'wikidata_label', 'Q1', 0, 'x'),
                 (4, 'Shared name', 'sharedname', 'en', 'wikipedia_title', 'Shared name', 1, 'x'),

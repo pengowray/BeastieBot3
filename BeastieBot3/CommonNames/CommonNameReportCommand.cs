@@ -104,7 +104,7 @@ internal sealed class CommonNameReportCommand : AsyncCommand<CommonNameReportCom
             table.AddRow("Taxa", stats.TaxaCount.ToString("N0"));
             table.AddRow("Scientific Name Synonyms", stats.SynonymCount.ToString("N0"));
             table.AddRow("Common Names (total)", stats.CommonNameCount.ToString("N0"));
-            table.AddRow("Ambiguous English Names (skipped by wikipedia generate-lists)", store.GetAmbiguousNames("en").Count.ToString("N0"));
+            table.AddRow(AmbiguousReportText.SummaryLabel, store.GetAmbiguousNames("en").Count.ToString("N0"));
             table.AddRow("Caps Rules", store.GetCapsRuleCount().ToString("N0"));
             AnsiConsole.Write(table);
 
@@ -142,8 +142,9 @@ internal sealed class CommonNameReportCommand : AsyncCommand<CommonNameReportCom
             sb.AppendLine($"Generated: {DateTime.UtcNow:yyyy-MM-dd HH:mm:ss} UTC");
             sb.AppendLine();
 
-            // Use efficient SQL query to find ambiguous names directly (no default limit)
-            var ambiguousNames = store.GetAmbiguousCommonNames(settings.Limit, settings.Kingdom);
+            // The same verdicts list generation uses (no default limit)
+            var verdicts = store.GetAmbiguousCommonNames(settings.Kingdom);
+            var ambiguousNames = settings.Limit is { } limit ? verdicts.Names.Take(limit).ToList() : verdicts.Names;
             var conflictingNames = new List<(string NormalizedName, List<CommonNameRecord> Records)>();
 
             ProgressConsole.Run("[green]Loading conflicts[/]", ambiguousNames.Count, progress => {
@@ -166,23 +167,37 @@ internal sealed class CommonNameReportCommand : AsyncCommand<CommonNameReportCom
                     }
                 });
 
-            sb.AppendLine($"## Ambiguous Names ({conflictingNames.Count} found)");
+            var keptCount = conflictingNames.Count(c => verdicts.KeptBy(c.NormalizedName) is not null);
+
+            sb.AppendLine(AmbiguousReportText.Intro);
+            sb.AppendLine();
+            sb.AppendLine(AmbiguousReportText.Counts(conflictingNames.Count, keptCount));
+            sb.AppendLine();
+            sb.AppendLine(AmbiguousReportText.Heading(conflictingNames.Count));
             sb.AppendLine();
 
             foreach (var (normalizedName, records) in conflictingNames) {
+                var keeper = verdicts.KeptBy(normalizedName);
                 var displayName = records.FirstOrDefault()?.RawName ?? normalizedName;
                 sb.AppendLine($"### {displayName}");
                 sb.AppendLine();
-                sb.AppendLine("| Scientific Name | Kingdom | Source | Preferred |");
-                sb.AppendLine("|-----------------|---------|--------|-----------|");
+                sb.AppendLine($"| Scientific Name | Kingdom | Sources | Preferred | {AmbiguousReportText.UsesNameColumn} |");
+                sb.AppendLine("|-----------------|---------|---------|-----------|-----|");
 
-                var groupedByTaxon = records.GroupBy(r => r.TaxonId);
-                foreach (var taxonGroup in groupedByTaxon) {
+                // The taxon that keeps the name first, then the others by their best source.
+                var byTaxon = records
+                    .GroupBy(r => r.TaxonId)
+                    .OrderByDescending(g => g.Key == keeper)
+                    .ThenBy(g => g.Min(r => CommonNameStore.GetSourcePriority(r.Source, r.IsPreferred)));
+                foreach (var taxonGroup in byTaxon) {
                     var first = taxonGroup.First();
-                    var sources = string.Join(", ", taxonGroup.Select(r => r.Source).Distinct());
+                    var sources = string.Join(", ", taxonGroup
+                        .OrderBy(r => CommonNameStore.GetSourcePriority(r.Source, r.IsPreferred))
+                        .Select(r => r.Source).Distinct());
                     var isPreferred = taxonGroup.Any(r => r.IsPreferred) ? "Yes" : "No";
                     var scientificName = CapitalizeFirst(first.TaxonCanonicalName);
-                    sb.AppendLine($"| {scientificName} | {first.TaxonKingdom ?? "?"} | {sources} | {isPreferred} |");
+                    var usesName = taxonGroup.Key == keeper ? "Yes" : "No";
+                    sb.AppendLine($"| {scientificName} | {first.TaxonKingdom ?? "?"} | {sources} | {isPreferred} | {usesName} |");
                 }
                 sb.AppendLine();
             }
@@ -194,7 +209,7 @@ internal sealed class CommonNameReportCommand : AsyncCommand<CommonNameReportCom
 
             File.WriteAllText(outputPath, sb.ToString());
             AnsiConsole.MarkupLine($"[green]Report written to:[/] {outputPath}");
-            AnsiConsole.MarkupLine($"[green]Found {conflictingNames.Count} ambiguous common names[/]");
+            AnsiConsole.MarkupLine($"[green]{Markup.Escape(AmbiguousReportText.Counts(conflictingNames.Count, keptCount))}[/]");
             return 0;
         }, cancellationToken);
     }
@@ -491,7 +506,7 @@ internal sealed class CommonNameReportCommand : AsyncCommand<CommonNameReportCom
             sb.AppendLine();
 
             var issues = new List<TraceIssue>();
-            var ambiguousSet = store.GetAmbiguousNames("en");
+            var ambiguousNames = store.GetAmbiguousNames("en");
             var capsRules = store.GetAllCapsRules();
 
             foreach (var group in groups) {
@@ -518,7 +533,7 @@ internal sealed class CommonNameReportCommand : AsyncCommand<CommonNameReportCom
                     var scientificNormalized = BuildScientificNormalizedSet(scientificNames);
 
                     var traceCandidates = candidates
-                        .Select(record => BuildTraceCandidate(record, taxon, ambiguousSet, scientificNormalized))
+                        .Select(record => BuildTraceCandidate(record, taxon, ambiguousNames, scientificNormalized))
                         .ToList();
 
                     var englishCandidates = traceCandidates.Where(c => c.IsEnglish).ToList();
@@ -675,7 +690,7 @@ internal sealed class CommonNameReportCommand : AsyncCommand<CommonNameReportCom
     private static TraceCandidate BuildTraceCandidate(
         CommonNameRecord record,
         TaxonTraceRow taxon,
-        IReadOnlySet<string> ambiguousSet,
+        AmbiguousNames ambiguousNames,
         HashSet<string> scientificNormalized) {
         var isEnglish = record.Language.Equals("en", StringComparison.OrdinalIgnoreCase);
         var cleaned = CommonNameNormalizer.RemoveDisambiguationSuffix(record.RawName);
@@ -685,7 +700,7 @@ internal sealed class CommonNameReportCommand : AsyncCommand<CommonNameReportCom
         var matchesScientific = scientificNormalized.Contains(normalizedCandidate)
             || CommonNameNormalizer.LooksLikeScientificName(cleaned, taxon.GenusName, taxon.SpeciesName);
 
-        var isAmbiguous = isEnglish && ambiguousSet.Contains(normalizedCandidate);
+        var isAmbiguous = isEnglish && ambiguousNames.IsAmbiguousFor(record.TaxonId, normalizedCandidate);
         var priority = CommonNameStore.GetSourcePriority(record.Source, record.IsPreferred);
 
         return new TraceCandidate(
@@ -780,7 +795,8 @@ internal sealed class CommonNameReportCommand : AsyncCommand<CommonNameReportCom
             sb.AppendLine();
 
             // Use efficient SQL query to find ambiguous names (no default limit)
-            var ambiguousNames = store.GetAmbiguousCommonNames(settings.Limit, settings.Kingdom);
+            var sharedNames = store.GetAmbiguousCommonNames(settings.Kingdom).Names;
+            var ambiguousNames = settings.Limit is { } limit ? sharedNames.Take(limit).ToList() : sharedNames;
             var conflictingNames = new List<(string NormalizedName, List<CommonNameRecord> Records)>();
 
             ProgressConsole.Run("[green]Loading conflicts[/]", ambiguousNames.Count, progress => {
@@ -982,4 +998,27 @@ internal sealed class CommonNameReportCommand : AsyncCommand<CommonNameReportCom
             return 0;
         }, cancellationToken);
     }
+}
+
+/// <summary>
+/// Text of `common-names report --report ambiguous` and the store summaries, kept together so the
+/// wording of the ambiguity rule (<see cref="AmbiguousNames"/>) is in one place.
+/// </summary>
+internal static class AmbiguousReportText {
+    public const string SummaryLabel = "Ambiguous English Names (shared by 2+ taxa)";
+
+    public const string Intro =
+        "This report has one table for each ambiguous common name: an English common name that two or more taxa in the "
+        + "Common names store have (names are compared ignoring case, spaces and punctuation). Each row is a taxon that has "
+        + "the name. Uses This Name is Yes for the taxon that the Wikipedia lists and the public site use the name for: the "
+        + "taxon that has the name from the highest-priority source. If two or more taxa have the name from sources of equal "
+        + "priority, every row in that table is No, except that a species takes priority over its own subspecies, varieties "
+        + "and subpopulations.";
+
+    public const string UsesNameColumn = "Uses This Name";
+
+    public static string Heading(int shared) => $"## Ambiguous Common Names ({shared:N0})";
+
+    public static string Counts(int shared, int kept) =>
+        $"{shared:N0} ambiguous common names: {kept:N0} used for one taxon each, {shared - kept:N0} used for no taxon (equal-priority ties).";
 }

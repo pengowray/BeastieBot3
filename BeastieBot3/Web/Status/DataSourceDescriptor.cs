@@ -133,8 +133,8 @@ public static class DataSourceCatalogue {
             Kind = "sqlite",
             Description = "Common names for IUCN taxa from IUCN, Wikidata, Wikipedia and Catalogue of Life, combined by `common-names aggregate`. `wikipedia generate-lists` reads its common names from this store.",
             ResolvePath = p => p.GetCommonNameStorePath(),
-            // No count of ambiguous names: generate-lists works them out with a GROUP BY over every
-            // common name (about 0.65s on the full store), too slow for a card polled every 10s.
+            // No count of shared names: generate-lists works them out by reading every English
+            // common name (about 1s on the full store), too slow for a card polled every 10s.
             // `common-names report --report ambiguous` lists them.
             Metrics = new[] {
                 new MetricSpec { Label = "taxa",         Sql = "SELECT COUNT(*) FROM taxa" },

@@ -388,7 +388,7 @@ public static class FlowCatalogue {
                     OutputSourceIds = Array.Empty<string>(),
                     Group = "4 · Regenerate outputs",
                     Probe = FlowStepProbes.ColRebuildLists,
-                    Note = "Run 'Re-aggregate common names' and the steps under '3 · Search for new matches (downloads)' first, so the lists get the new common names and article links. Then run `wikipedia generate-lists` for every list, without --list, --status or --taxa-group: this step's status line checks only the newest .wikitext file, so it shows done even when some lists still use the previous CoL release. The first run after a CoL update also builds the CoL placement, which takes about 2 minutes, unless 'Build the CoL placement and report' has run since the update. `wikipedia generate-charts` does not use CoL, so charts need no re-run. `wikipedia generate-lists` skips every common name shared by two or more taxa in the Common names store, and works out these ambiguous names each time it runs; `common-names report --report ambiguous` lists them.",
+                    Note = "Run 'Re-aggregate common names' and the steps under '3 · Search for new matches (downloads)' first, so the lists get the new common names and article links. Then run `wikipedia generate-lists` for every list, without --list, --status or --taxa-group: this step's status line checks only the newest .wikitext file, so it shows done even when some lists still use the previous CoL release. The first run after a CoL update also builds the CoL placement, which takes about 2 minutes, unless 'Build the CoL placement and report' has run since the update. `wikipedia generate-charts` does not use CoL, so charts need no re-run. `wikipedia generate-lists` works out the ambiguous common names (names shared by two or more taxa in the Common names store) each time it runs, and uses each of these names for at most one taxon: the taxon that has the name from the highest-priority source. `common-names report --report ambiguous` lists these names and shows which taxon each name is used for.",
                     OutputPatterns = new[] {
                         new FlowOutputPattern { Root = "wikipedia-output", Pattern = "*.wikitext", Label = "Lists" },
                     },
@@ -592,18 +592,18 @@ public static class FlowCatalogue {
                 // Replaces the old "Find ambiguous common names" step. Its command,
                 // `common-names detect-conflicts`, has been removed: it filled a table nothing read.
                 // generate-lists works out ambiguous names from the common names on each run, and
-                // this report reads the same query (CommonNameStore.QueryAmbiguousNames), so it
-                // lists exactly the names the lists skip.
+                // this report reads the same verdicts (CommonNameStore.QueryAmbiguousNames,
+                // AmbiguousNames), so it shows exactly which taxon the lists give each shared name.
                 new FlowStep {
                     Id = "ambiguous-names-report",
                     Title = "List ambiguous common names",
-                    Description = "Write a report of the ambiguous English common names that `wikipedia generate-lists` skips: names shared by two or more taxa in the Common names store.",
+                    Description = "Write a report of the ambiguous common names (names shared by two or more taxa in the Common names store), showing which taxon the Wikipedia lists and the public site use each name for.",
                     Commands = new[] { "common-names report --report ambiguous" },
                     InputSourceIds = new[] { "common-names" },
                     OutputSourceIds = new[] { "reports" },
                     Optional = true,
                     Group = "3 \u00b7 Common names",
-                    Note = "The report lists each ambiguous name with the taxa that share it, their kingdoms, and the sources of the name. It uses the same rule as `wikipedia generate-lists`, so it lists exactly the names the lists skip, including names shared by taxa in different kingdoms. `wikipedia generate-lists` works out these names each time it runs, so run this step only when you want to read them.",
+                    Note = "The report has a table for each ambiguous name, with a row for each taxon that shares it: the taxon's kingdom, the sources of the name, and whether the Wikipedia lists and the public site use the name for that taxon (Uses This Name). The report uses the same rule as `wikipedia generate-lists`, `sprat generate-lists` and `site build-db`, including for names shared by taxa in different kingdoms. These commands work out the ambiguous names each time they run, so run this step only when you want to read the report.",
                     OutputPatterns = new[] {
                         new FlowOutputPattern { Root = "reports", Pattern = "common-name-ambiguous-*.md", Label = "Ambiguous names" },
                     },
@@ -627,7 +627,7 @@ public static class FlowCatalogue {
                     InputSourceIds = new[] { "iucn-main", "wikipedia-cache", "common-names", "col-sqlite" },
                     OutputSourceIds = Array.Empty<string>(),
                     Group = "4 \u00b7 Generate",
-                    Note = "Uses rules/wikipedia-lists.yml, rules/chart-groups.yml, rules/rules-list.txt, and templates under rules/wikipedia/templates/. These (and taxon-rules.yml) are read fresh each run — no import step. Edited caps.txt? Run \"Refresh capitalization rules\" above first. Common names come from the Common names store. `wikipedia generate-lists` skips every common name shared by two or more taxa in the store, and works out these ambiguous names each time it runs. The Wikipedia list then shows another common name for the taxon, or only its scientific name if all of the taxon's common names are ambiguous. A common name set for a taxon in rules/rules-list.txt is used even if it is ambiguous. \"List ambiguous common names\" in group 3 writes the ambiguous names to a report.",
+                    Note = "Uses rules/wikipedia-lists.yml, rules/chart-groups.yml, rules/rules-list.txt, and templates under rules/wikipedia/templates/. These (and taxon-rules.yml) are read fresh each run — no import step. Edited caps.txt? Run \"Refresh capitalization rules\" above first. Common names come from the Common names store. When two or more taxa in the store have the same common name, `wikipedia generate-lists` uses the name for at most one taxon: the taxon that has the name from the highest-priority source. The sources, highest priority first, are Wikipedia article title, Wikipedia taxobox, Wikidata label, IUCN main name, other IUCN names, other Wikidata names and Catalogue of Life. If two or more taxa have the name from sources of equal priority, the name is skipped for all of them, except that a species takes priority over its own subspecies, varieties and subpopulations. Each of the other taxa that have the name is shown with its next common name in source order, or with only its scientific name if all of its common names are skipped. A common name set for a taxon in rules/rules-list.txt is always used. `wikipedia generate-lists` works out these ambiguous names each time it runs, and \"List ambiguous common names\" in group 3 writes the ambiguous names to a report that shows which taxon each name is used for.",
                     OutputPatterns = new[] {
                         new FlowOutputPattern { Root = "wikipedia-output", Pattern = "*.wikitext", Label = "Lists" },
                         new FlowOutputPattern { Root = "wikipedia-output", Pattern = "*.tab",      Label = "Chart data" },

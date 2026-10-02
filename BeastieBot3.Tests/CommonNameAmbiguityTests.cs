@@ -5,10 +5,12 @@ using Microsoft.Data.Sqlite;
 
 namespace BeastieBot3.Tests;
 
-// Pins the rule `wikipedia generate-lists` uses to skip ambiguous common names, and that
-// `common-names report --report ambiguous` lists the same names. The workflow page and the
-// generate-lists help say both of these. Both read CommonNameStore.QueryAmbiguousNames; the
-// report test below fails if the two sets ever differ on its fixture.
+// Pins the one ambiguity rule (AmbiguousNames, built by CommonNameStore.QueryAmbiguousNames):
+// a name that two or more taxa have is kept by the taxon with the best source priority for it,
+// a species beats its own subspecies, varieties and subpopulations at the same priority, and
+// every other taxon skips the name. `wikipedia generate-lists`, `site build-db` and
+// `common-names report --report ambiguous` all read these verdicts; the report test below fails
+// if the report and the lists ever disagree on its fixture.
 public class CommonNameAmbiguityTests {
     private static CommonNameStore OpenInMemory() {
         var conn = new SqliteConnection("Data Source=:memory:");
@@ -16,27 +18,179 @@ public class CommonNameAmbiguityTests {
         return CommonNameStore.OpenFromConnection(conn);
     }
 
-    private static long AddTaxon(CommonNameStore store, string canonical, string sourceId, string kingdom = "ANIMALIA") =>
-        store.InsertOrUpdateTaxon(canonical, canonical, "species", kingdom,
+    private static long AddTaxon(CommonNameStore store, string canonical, string sourceId, string kingdom = "ANIMALIA",
+        string rank = "species") =>
+        store.InsertOrUpdateTaxon(canonical, canonical, rank, kingdom,
             isExtinct: false, isFossil: false, validityStatus: "valid",
             primarySource: "iucn", primarySourceId: sourceId);
 
     private static void AddName(CommonNameStore store, long taxon, string raw, string source, bool preferred = false) =>
         store.InsertCommonName(taxon, raw, raw.ToLowerInvariant().Replace(" ", ""), "en", source, null, preferred);
 
+    private static string? Best(CommonNameStore store, long taxon) => store.GetBestCommonNameForTaxon(taxon)?.RawName;
+
     [Fact]
-    public void NameOnTwoTaxa_InDifferentKingdoms_IsAmbiguous() {
+    public void Lion_IsKeptByTheSpecies_WhoseWikipediaTitleItIs() {
+        // 2026 data: "Lion" is Panthera leo's Wikipedia title and IUCN main name, and one of the
+        // IUCN names (not the main one) of Panthera leo ssp. leo. The species fell back to
+        // "Lioness" while any second taxon made a name ambiguous.
+        using var store = OpenInMemory();
+        var lion = AddTaxon(store, "panthera leo", "15951");
+        var nominate = AddTaxon(store, "panthera leo ssp. leo", "280668607", rank: "subspecies");
+        AddName(store, lion, "Lion", "wikipedia_title", preferred: true);
+        AddName(store, lion, "Lion", "iucn", preferred: true);
+        AddName(store, lion, "Lioness", "col");
+        AddName(store, nominate, "Lion", "iucn");
+        AddName(store, nominate, "Barbary lion", "wikipedia_title", preferred: true);
+
+        var verdicts = store.GetAmbiguousNames("en");
+
+        Assert.Equal(lion, verdicts.KeptBy("lion"));
+        Assert.False(verdicts.IsAmbiguousFor(lion, "lion"));
+        Assert.True(verdicts.IsAmbiguousFor(nominate, "lion"));
+        Assert.Equal("Lion", Best(store, lion));
+        Assert.Equal("Barbary lion", Best(store, nominate));
+    }
+
+    [Fact]
+    public void Tiger_IsKeptByTheSpecies_OverAnUnrelatedTaxonWithOnlyACatalogueOfLifeName() {
+        // 2026 data: Plectropomus oligacanthus has "Tiger" from the Catalogue of Life only;
+        // Panthera tigris fell back to "Malayan tiger".
+        using var store = OpenInMemory();
+        var tiger = AddTaxon(store, "panthera tigris", "15955");
+        var grouper = AddTaxon(store, "plectropomus oligacanthus", "132776");
+        AddName(store, tiger, "Tiger", "wikipedia_title", preferred: true);
+        AddName(store, tiger, "Malayan tiger", "wikidata_label");
+        AddName(store, grouper, "Tiger", "col");
+        AddName(store, grouper, "Highfin Coral Grouper", "iucn", preferred: true);
+
+        Assert.Equal("Tiger", Best(store, tiger));
+        Assert.Equal("Highfin Coral Grouper", Best(store, grouper));
+        Assert.True(store.GetAmbiguousNames("en").IsAmbiguousFor(grouper, "tiger"));
+    }
+
+    [Fact]
+    public void TwoUnrelatedTaxa_AtTheSamePriority_BothSkipTheName() {
+        using var store = OpenInMemory();
+        var a = AddTaxon(store, "sclerophrys regularis", "1");
+        var b = AddTaxon(store, "sclerophrys gutturalis", "2");
+        AddName(store, a, "African common toad", "iucn");
+        AddName(store, b, "African common toad", "iucn");
+
+        var verdicts = store.GetAmbiguousNames("en");
+
+        Assert.Null(verdicts.KeptBy("africancommontoad"));
+        Assert.True(verdicts.IsAmbiguousFor(a, "africancommontoad"));
+        Assert.True(verdicts.IsAmbiguousFor(b, "africancommontoad"));
+        Assert.Null(Best(store, a));
+        Assert.Equal("African common toad", store.GetBestCommonNameForTaxon(a, allowAmbiguous: true)!.RawName);
+    }
+
+    [Fact]
+    public void ThePreferredIucnName_BeatsAnotherTaxonsOtherIucnName() {
+        using var store = OpenInMemory();
+        var purple = AddTaxon(store, "porphyrio martinicus", "1");
+        var swamphen = AddTaxon(store, "porphyrio porphyrio", "2");
+        AddName(store, purple, "Purple Gallinule", "iucn", preferred: true);
+        AddName(store, swamphen, "Purple Gallinule", "iucn");
+        AddName(store, swamphen, "Purple Swamphen", "iucn", preferred: true);
+
+        Assert.Equal(purple, store.GetAmbiguousNames("en").KeptBy("purplegallinule"));
+        Assert.Equal("Purple Gallinule", Best(store, purple));
+    }
+
+    [Fact]
+    public void AtTheSamePriority_ASpecies_BeatsItsOwnSubspecies() {
+        // 2026 data: IUCN gives the nominate subspecies the species' main name.
+        using var store = OpenInMemory();
+        var species = AddTaxon(store, "lagothrix lagothricha", "1");
+        var nominate = AddTaxon(store, "lagothrix lagothricha ssp. lagothricha", "2", rank: "subspecies");
+        AddName(store, species, "Common Woolly Monkey", "iucn", preferred: true);
+        AddName(store, species, "lugens", "col");
+        AddName(store, nominate, "Common Woolly Monkey", "iucn", preferred: true);
+
+        Assert.Equal(species, store.GetAmbiguousNames("en").KeptBy("commonwoollymonkey"));
+        Assert.Equal("Common Woolly Monkey", Best(store, species));
+        Assert.Null(Best(store, nominate));
+    }
+
+    [Fact]
+    public void AtTheSamePriority_ASpecies_BeatsItsOwnVarietyAndSubpopulation() {
+        // The store ranks a subpopulation as a species; its name begins with the species' name.
+        using var store = OpenInMemory();
+        var pine = AddTaxon(store, "pinus nigra", "1", "PLANTAE");
+        var variety = AddTaxon(store, "pinus nigra var. caramanica", "2", "PLANTAE", rank: "variety");
+        var whale = AddTaxon(store, "megaptera novaeangliae", "3");
+        var subpopulation = AddTaxon(store, "megaptera novaeangliae arabian sea subpopulation", "4");
+        AddName(store, pine, "Black pine", "iucn", preferred: true);
+        AddName(store, variety, "Black pine", "iucn", preferred: true);
+        AddName(store, whale, "Humpback Whale", "iucn", preferred: true);
+        AddName(store, subpopulation, "Humpback Whale", "iucn", preferred: true);
+
+        var verdicts = store.GetAmbiguousNames("en");
+
+        Assert.Equal(pine, verdicts.KeptBy("blackpine"));
+        Assert.Equal(whale, verdicts.KeptBy("humpbackwhale"));
+    }
+
+    [Fact]
+    public void ASubspecies_KeepsTheName_WhenItHasItFromABetterSourceThanItsSpecies() {
+        // 2026 data: "Austrian pine" is the Wikidata label of Pinus nigra subsp. nigra and an IUCN
+        // name of Pinus nigra. The species only wins ties.
+        using var store = OpenInMemory();
+        var pine = AddTaxon(store, "pinus nigra", "1", "PLANTAE");
+        var austrian = AddTaxon(store, "pinus nigra subsp. nigra", "2", "PLANTAE", rank: "subspecies");
+        AddName(store, pine, "Austrian Pine", "iucn", preferred: true);
+        AddName(store, pine, "European black pine", "iucn");
+        AddName(store, austrian, "Austrian pine", "wikidata_label");
+
+        Assert.Equal(austrian, store.GetAmbiguousNames("en").KeptBy("austrianpine"));
+        Assert.Equal("European black pine", Best(store, pine));
+    }
+
+    [Fact]
+    public void ASpeciesTiedWithItsSubspecies_AndAnUnrelatedTaxon_DoesNotKeepTheName() {
+        using var store = OpenInMemory();
+        var species = AddTaxon(store, "oreochromis placidus", "1");
+        var subspecies = AddTaxon(store, "oreochromis placidus ssp. rovumae", "2", rank: "subspecies");
+        var other = AddTaxon(store, "oreochromis mossambicus", "3");
+        AddName(store, species, "Black Tilapia", "iucn", preferred: true);
+        AddName(store, subspecies, "Black Tilapia", "iucn", preferred: true);
+        AddName(store, other, "Black Tilapia", "iucn", preferred: true);
+
+        Assert.Null(store.GetAmbiguousNames("en").KeptBy("blacktilapia"));
+    }
+
+    [Theory]
+    [InlineData("panthera leo", "panthera leo ssp. leo", true)]
+    [InlineData("pinus nigra", "pinus nigra subsp. nigra", true)]
+    [InlineData("pinus nigra", "pinus nigra var. caramanica", true)]
+    [InlineData("megaptera novaeangliae", "megaptera novaeangliae arabian sea subpopulation", true)]
+    [InlineData("panthera leo", "panthera leo", false)]
+    [InlineData("panthera leo", "panthera leonis", false)]
+    [InlineData("panthera leo ssp. leo", "panthera leo ssp. leo x", false)]
+    [InlineData("panthera leo ssp. leo", "panthera leo", false)]
+    [InlineData("panthera", "panthera leo", false)]
+    public void IsSpeciesOf_MatchesATwoWordNameThatTheOtherNameBeginsWith(string species, string other, bool expected) {
+        Assert.Equal(expected, AmbiguousNames.IsSpeciesOf(species, other));
+    }
+
+    [Fact]
+    public void NameOnTwoTaxa_InDifferentKingdoms_IsShared() {
         using var store = OpenInMemory();
         var tree = AddTaxon(store, "pochota fendleri", "1", "PLANTAE");
         var moth = AddTaxon(store, "conistra vaccinii", "2", "ANIMALIA");
         AddName(store, tree, "Chestnut", "iucn");
         AddName(store, moth, "Chestnut", "col");
 
-        Assert.Contains("chestnut", store.GetAmbiguousNames("en"));
+        var verdicts = store.GetAmbiguousNames("en");
+
+        Assert.Contains("chestnut", verdicts.Names);
+        Assert.Equal(tree, verdicts.KeptBy("chestnut"));
     }
 
     [Fact]
-    public void NameOnTwoTaxa_ThatShareASynonym_IsAmbiguous() {
+    public void NameOnTwoTaxa_ThatShareASynonym_IsShared() {
         using var store = OpenInMemory();
         var a = AddTaxon(store, "sclerophrys regularis", "1");
         var b = AddTaxon(store, "sclerophrys gutturalis", "2");
@@ -46,22 +200,26 @@ public class CommonNameAmbiguityTests {
         AddName(store, b, "African common toad", "iucn");
 
         Assert.True(store.AreSynonyms(a, b));
-        Assert.Contains("africancommontoad", store.GetAmbiguousNames("en"));
+        Assert.Contains("africancommontoad", store.GetAmbiguousNames("en").Names);
     }
 
     [Fact]
-    public void NameOnOneTaxon_FromSeveralSources_IsNotAmbiguous() {
+    public void NameOnOneTaxon_FromSeveralSources_IsNotShared() {
         using var store = OpenInMemory();
         var adder = AddTaxon(store, "vipera berus", "1");
         AddName(store, adder, "Adder", "iucn");
         AddName(store, adder, "Adder", "wikidata");
         AddName(store, adder, "Adder", "col");
 
-        Assert.Empty(store.GetAmbiguousNames("en"));
+        var verdicts = store.GetAmbiguousNames("en");
+
+        Assert.Empty(verdicts.Names);
+        Assert.False(verdicts.IsShared("adder"));
+        Assert.False(verdicts.IsAmbiguousFor(adder, "adder"));
     }
 
     [Fact]
-    public void AmbiguousReport_ListsTheSameNamesTheListsSkip() {
+    public void AmbiguousReport_GivesTheSameVerdictsTheListsUse() {
         using var store = OpenInMemory();
         var tree = AddTaxon(store, "pochota fendleri", "1", "PLANTAE");
         var moth = AddTaxon(store, "conistra vaccinii", "2");
@@ -74,23 +232,27 @@ public class CommonNameAmbiguityTests {
         AddName(store, cougar, "Mountain lion", "iucn");
         AddName(store, cougar, "Cougar", "wikipedia_title");
 
-        var skippedByLists = store.GetAmbiguousNames("en").OrderBy(n => n).ToList();
-        var listedByReport = store.GetAmbiguousCommonNames(limit: null).OrderBy(n => n).ToList();
+        var usedByLists = store.GetAmbiguousNames("en");
+        var listedByReport = store.GetAmbiguousCommonNames();
 
-        Assert.Equal(new[] { "chestnut", "mountainlion" }, skippedByLists);
-        Assert.Equal(skippedByLists, listedByReport);
+        Assert.Equal(new[] { "chestnut", "mountainlion" }, usedByLists.Names.OrderBy(n => n));
+        Assert.Equal(usedByLists.Names.OrderBy(n => n), listedByReport.Names.OrderBy(n => n));
+        foreach (var name in usedByLists.Names) {
+            Assert.Equal(usedByLists.KeptBy(name), listedByReport.KeptBy(name));
+        }
+        Assert.Equal(cougar, listedByReport.KeptBy("mountainlion"));
     }
 
     [Fact]
-    public void BestName_SkipsAnAmbiguousName_AndTakesTheNextOne() {
+    public void BestName_SkipsANameAnotherTaxonKeeps_AndTakesTheNextOne() {
         using var store = OpenInMemory();
         var lion = AddTaxon(store, "panthera leo", "1");
         var cougar = AddTaxon(store, "puma concolor", "2");
-        // wikipedia_title is the first source in priority order, so "Mountain lion" would win
-        // for the cougar if it were not ambiguous.
-        AddName(store, cougar, "Mountain lion", "wikipedia_title");
-        AddName(store, cougar, "Cougar", "iucn", preferred: true);
-        AddName(store, lion, "Mountain lion", "col");
+        // The IUCN main name is the cougar's first name in priority order, but the lion has
+        // "Mountain lion" from a better source, so the lion keeps it.
+        AddName(store, cougar, "Mountain lion", "iucn", preferred: true);
+        AddName(store, cougar, "Cougar", "iucn");
+        AddName(store, lion, "Mountain lion", "wikipedia_taxobox");
 
         var best = store.GetBestCommonNameForTaxon(cougar);
 
@@ -100,20 +262,43 @@ public class CommonNameAmbiguityTests {
     }
 
     [Fact]
-    public void BestName_IsNull_WhenEveryNameIsAmbiguous() {
+    public void BatchLookup_GivesTheSameNamesAsSingleLookups() {
         using var store = OpenInMemory();
-        var a = AddTaxon(store, "sclerophrys regularis", "1");
-        var b = AddTaxon(store, "sclerophrys gutturalis", "2");
-        AddName(store, a, "African common toad", "iucn");
-        AddName(store, b, "African common toad", "iucn");
+        var lion = AddTaxon(store, "panthera leo", "15951");
+        var nominate = AddTaxon(store, "panthera leo ssp. leo", "280668607", rank: "subspecies");
+        AddName(store, lion, "Lion", "wikipedia_title", preferred: true);
+        AddName(store, lion, "Lioness", "col");
+        AddName(store, nominate, "Lion", "iucn");
+        AddName(store, nominate, "Northern Lion", "iucn", preferred: true);
 
-        Assert.Null(store.GetBestCommonNameForTaxon(a));
-        Assert.Equal("African common toad", store.GetBestCommonNameForTaxon(a, allowAmbiguous: true)!.RawName);
+        var batch = store.GetBestCommonNamesForTaxa(new[] { lion, nominate });
+
+        Assert.Equal("Lion", batch[lion].RawName);
+        Assert.Equal("Northern Lion", batch[nominate].RawName);
+    }
+
+    [Fact]
+    public void ChooseBest_ReadsTheVerdictForTheTaxonItIsGiven() {
+        // site build-db calls ChooseBest with the store's taxa.id; a different id gets the other
+        // taxon's verdict.
+        using var store = OpenInMemory();
+        var tiger = AddTaxon(store, "panthera tigris", "15955");
+        var grouper = AddTaxon(store, "plectropomus oligacanthus", "132776");
+        AddName(store, tiger, "Tiger", "wikipedia_title", preferred: true);
+        AddName(store, grouper, "Tiger", "col");
+        var verdicts = store.GetAmbiguousNames("en");
+        var candidates = new[] {
+            new CommonNameCandidate("Tiger", "tiger", "wikipedia_title", true),
+            new CommonNameCandidate("Malayan tiger", "malayantiger", "wikidata_label", false),
+        };
+
+        Assert.Equal("Tiger", CommonNameStore.ChooseBest(tiger, candidates, verdicts)!.RawName);
+        Assert.Equal("Malayan tiger", CommonNameStore.ChooseBest(grouper, candidates, verdicts)!.RawName);
     }
 
     [Fact]
     public void AmbiguousReport_WithAKingdom_CountsOnlyThatKingdomsTaxa() {
-        // A name shared by a plant and an animal is skipped by the lists, but is not ambiguous
+        // A name shared by a plant and an animal is shared for the lists, but is not shared
         // within either kingdom, so `--kingdom` leaves it out of the report.
         using var store = OpenInMemory();
         var tree = AddTaxon(store, "pochota fendleri", "1", "PLANTAE");
@@ -125,11 +310,11 @@ public class CommonNameAmbiguityTests {
         AddName(store, oak, "Oak", "iucn");
         AddName(store, holmOak, "Oak", "col");
 
-        Assert.Equal(new[] { "oak" }, store.GetAmbiguousCommonNames(limit: null, kingdom: "PLANTAE"));
+        Assert.Equal(new[] { "oak" }, store.GetAmbiguousCommonNames(kingdom: "PLANTAE").Names);
         // The --kingdom help gives "Plantae"; the store holds kingdoms in upper case.
-        Assert.Equal(new[] { "oak" }, store.GetAmbiguousCommonNames(limit: null, kingdom: "Plantae"));
-        Assert.Empty(store.GetAmbiguousCommonNames(limit: null, kingdom: "ANIMALIA"));
-        Assert.Equal(new[] { "chestnut", "oak" }, store.GetAmbiguousNames("en").OrderBy(n => n));
+        Assert.Equal(new[] { "oak" }, store.GetAmbiguousCommonNames(kingdom: "Plantae").Names);
+        Assert.Empty(store.GetAmbiguousCommonNames(kingdom: "ANIMALIA").Names);
+        Assert.Equal(new[] { "chestnut", "oak" }, store.GetAmbiguousNames("en").Names.OrderBy(n => n));
     }
 
     [Fact]
@@ -144,28 +329,27 @@ public class CommonNameAmbiguityTests {
         AddName(store, b, "Big cat", "col");
         AddName(store, c, "Big cat", "col");
 
-        Assert.Equal(new[] { "bigcat", "mountainlion" }, store.GetAmbiguousCommonNames(limit: null));
-        Assert.Equal(new[] { "bigcat" }, store.GetAmbiguousCommonNames(limit: 1));
+        Assert.Equal(new[] { "bigcat", "mountainlion" }, store.GetAmbiguousCommonNames().Names);
     }
 
     [Fact]
     public void AmbiguousNames_AreWorkedOutAgain_AfterASourceIsReplaced() {
         // `common-names aggregate --replace` purges a source in the same store instance that then
-        // prints the ambiguous-name count, so the cached set must not outlive the purge.
+        // prints the shared-name count, so the cached verdicts must not outlive the purge.
         using var store = OpenInMemory();
         var lion = AddTaxon(store, "panthera leo", "1");
         var cougar = AddTaxon(store, "puma concolor", "2");
         AddName(store, lion, "Mountain lion", "col");
         AddName(store, cougar, "Mountain lion", "iucn");
-        Assert.Single(store.GetAmbiguousNames("en"));
+        Assert.Equal(1, store.GetAmbiguousNames("en").Count);
 
         store.PurgeSource("col");
 
-        Assert.Empty(store.GetAmbiguousNames("en"));
+        Assert.Equal(0, store.GetAmbiguousNames("en").Count);
     }
 
     [Fact]
-    public void ListsProvider_CountsTheNamesItSkips() {
+    public void ListsProvider_CountsTheSharedNames() {
         // generate-lists prints this count under the store path.
         using var store = OpenInMemory();
         var lion = AddTaxon(store, "panthera leo", "1");

@@ -142,7 +142,7 @@ Aggregate commands import data from external sources into the common names datab
 #### Reports
 
 - `common-names report --report summary` &mdash; Displays statistics about the common names database (taxa count, name count, conflicts detected).
-- `common-names report --report ambiguous` &mdash; Lists common names that map to multiple species. Use `--limit` to cap results and `--kingdom` to filter by taxonomic kingdom.
+- `common-names report --report ambiguous` &mdash; Lists common names that map to multiple species, and which taxon the Wikipedia lists use each name for. Use `--limit` to cap results and `--kingdom` to filter by taxonomic kingdom.
 - `common-names report --report ambiguous-iucn` &mdash; Lists IUCN-sourced common names that map to multiple species (higher confidence conflicts).
 - `common-names report --report caps` &mdash; Reports capitalization inconsistencies where the same normalized name appears with different casing across sources.
 - `common-names report --report wiki-disambig` &mdash; Identifies Wikipedia article titles that could refer to multiple species, useful for finding articles that may need disambiguation.

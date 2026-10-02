@@ -9,7 +9,8 @@ using Microsoft.Data.Sqlite;
 //     col -> col, iucn -> iucn);
 //   - the best English name, chosen exactly as the Wikipedia lists choose it: a manual override
 //     in rules-list.txt ("Panthera leo = lion") first, else CommonNameStore.ChooseBest over the
-//     same candidates GetBestCommonNameForTaxon reads (ambiguous names skipped) capitalised with
+//     same candidates GetBestCommonNameForTaxon reads (names ambiguous for the taxon skipped, by
+//     the store's taxa.id, as AmbiguousNames decides) capitalised with
 //     the store's caps rules; and dropped when the lists would drop it
 //     (SpeciesLineFormatter.IsUnusableCommonName: the scientific name again, or a working name);
 //   - Catalogue of Life synonyms (synonym_type 'synonym'; 'ambiguous_synonym' rows and the
@@ -28,11 +29,11 @@ internal static class SiteCommonNamesReader {
 
         using var connection = SiteIucnCsvReader.OpenReadOnly(path);
 
-        // English names, grouped by taxon.
-        var candidates = new Dictionary<long, List<CommonNameCandidate>>();
+        // English names, grouped by IUCN taxon id, with the store's taxa.id the ambiguity verdicts use.
+        var candidates = new Dictionary<long, (long StoreTaxonId, List<CommonNameCandidate> Names)>();
         using (var command = connection.CreateCommand()) {
             command.CommandText = """
-                SELECT t.primary_source_id, cn.raw_name, cn.normalized_name, cn.source, cn.is_preferred
+                SELECT t.primary_source_id, cn.raw_name, cn.normalized_name, cn.source, cn.is_preferred, t.id
                 FROM common_names cn
                 JOIN taxa t ON t.id = cn.taxon_id
                 WHERE cn.language = 'en' AND t.primary_source = 'iucn'
@@ -48,10 +49,10 @@ internal static class SiteCommonNamesReader {
                 var raw = reader.GetString(1);
                 var source = reader.GetString(3);
                 var preferred = reader.GetInt64(4) == 1;
-                if (!candidates.TryGetValue(taxonId, out var list)) {
-                    candidates[taxonId] = list = new List<CommonNameCandidate>();
+                if (!candidates.TryGetValue(taxonId, out var entry)) {
+                    candidates[taxonId] = entry = (reader.GetInt64(5), new List<CommonNameCandidate>());
                 }
-                list.Add(new CommonNameCandidate(raw, reader.GetString(2), source, preferred));
+                entry.Names.Add(new CommonNameCandidate(raw, reader.GetString(2), source, preferred));
                 if (SiteSource(source) is { } siteSource) {
                     // Only IUCN's own main name is marked preferred on the site.
                     taxon.EnglishNames.Add((raw, siteSource, siteSource == SiteNameSource.Iucn && preferred));
@@ -65,8 +66,8 @@ internal static class SiteCommonNamesReader {
             if (overrides?.Get(taxon.ScientificName)?.CommonName is { Length: > 0 } manual) {
                 name = ProseFormat.Uppercase(manual);
                 fromRules = true;
-            } else if (candidates.TryGetValue(taxon.TaxonId, out var list)
-                       && CommonNameStore.ChooseBest(list, ambiguous) is { } best) {
+            } else if (candidates.TryGetValue(taxon.TaxonId, out var entry)
+                       && CommonNameStore.ChooseBest(entry.StoreTaxonId, entry.Names, ambiguous) is { } best) {
                 name = CommonNameNormalizer.ApplyCapitalization(SiteBuildRules.CleanName(best.RawName), capsRules);
             } else {
                 continue;

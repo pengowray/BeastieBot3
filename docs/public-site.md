@@ -74,9 +74,11 @@ Rules the site depends on (pinned by `SiteDbBuildTests` and the site tests):
 - Language codes are ISO 639-1 where one exists, otherwise IUCN's ISO 639-2 code; `und`, `zxx`,
   `mis`, `mul` and the local-use range (`qaa` to `qtz`) become NULL.
 - `common_name_en`, the English name shown on each page, is chosen exactly as the Wikipedia lists
-  choose it (`CommonNameStore.ChooseBest` with the ambiguous-name set, the capitalisation rules,
-  `rules-list.txt` overrides and `SpeciesLineFormatter.IsUnusableCommonName`), so a wrong English
-  name appears both on the site and in the lists.
+  choose it: `CommonNameStore.ChooseBest` with the store's taxon id and the ambiguity rule
+  (`AmbiguousNames`, which gives a name that several taxa have to the taxon with the best source
+  for it), the capitalisation rules, `rules-list.txt` overrides and
+  `SpeciesLineFormatter.IsUnusableCommonName`. So a wrong English name appears both on the site and
+  in the lists.
 
 ## Citations
 

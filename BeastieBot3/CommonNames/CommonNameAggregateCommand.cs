@@ -174,7 +174,7 @@ internal sealed class CommonNameAggregateCommand : AsyncCommand<CommonNameAggreg
         table.AddRow("Taxa", stats.TaxaCount.ToString("N0"));
         table.AddRow("Synonyms", stats.SynonymCount.ToString("N0"));
         table.AddRow("Common Names", stats.CommonNameCount.ToString("N0"));
-        table.AddRow("Ambiguous English Names (skipped by wikipedia generate-lists)", store.GetAmbiguousNames("en").Count.ToString("N0"));
+        table.AddRow(AmbiguousReportText.SummaryLabel, store.GetAmbiguousNames("en").Count.ToString("N0"));
         AnsiConsole.Write(table);
 
         return 0;
