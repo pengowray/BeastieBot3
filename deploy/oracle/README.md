@@ -26,7 +26,7 @@ running under the hardened systemd unit, release pruning, and HTTPS through Cadd
   | Script | What it does |
   |---|---|
   | `setup-server.sh` | Prepares the VM. Run once, and again after changing `deploy.env`, `Caddyfile.template` or `beastie-site.service`. |
-  | `deploy-app.sh` | Builds the site, uploads it as a new release, switches to it and checks `/healthz`. `--rollback` switches back to the previous release. |
+  | `deploy-app.sh` | Builds the site, uploads it as a new release, switches to it and checks `/healthz`. `--rollback` switches back to the release built before the current one. |
   | `deploy-db.sh` | Uploads a new `site.sqlite`, switches to it and checks `/healthz`. Puts the old database back when the check fails. |
   | `rollback-db.sh` | Swaps the live database with the previous one. |
   | `status.sh` | Shows the release, service state, health check, databases and free disk space. |
@@ -170,12 +170,15 @@ deploy/oracle/deploy-app.sh
 2. Builds the site: `dotnet publish -c Release -r <RID> --self-contained` into
    `~/.cache/beastiebot-deploy/publish/<RID>` (set `WORK_DIR` to change the folder; keep it out of
    Dropbox).
-3. Uploads it to `/srv/beastie/releases/<UTC time>-<git commit>`. Files that are the same as in the
-   current release are hard-linked on the server instead of uploaded, so after the first deploy an
-   upload is usually a few MB. A commit name ending in `-dirty` means the checkout had uncommitted
-   changes.
-4. Points `/srv/beastie/app` at the new release (one rename) and deletes old releases, keeping
-   the newest 3.
+3. Uploads it to `/srv/beastie/releases/.upload-<UTC time>-<git commit>`, and renames that folder
+   to `/srv/beastie/releases/<UTC time>-<git commit>` once the upload has finished and the folder
+   has the app's executable. An interrupted upload therefore never counts as a release; the next
+   deploy deletes it once it has been left for an hour. Files that are the same as in the current
+   release are hard-linked on the server instead of uploaded, so after the first deploy an upload is
+   usually a few MB. A commit name ending in `-dirty` means the checkout had uncommitted changes.
+4. Points `/srv/beastie/app` at the new release (one rename) and deletes old releases. It keeps
+   the newest 3, and always keeps the release that was live before this deploy, so that release is
+   still there to go back to if the new one fails.
 5. Restarts the service and checks `http://127.0.0.1:5080/healthz` on the server for up to 60
    seconds (`HEALTH_TIMEOUT`).
 6. Checks `https://<DOMAIN>/healthz` from your computer. A failure here only gives a warning,
@@ -190,8 +193,11 @@ the new app and the new database have to go out one after the other (see
 deploy/oracle/deploy-app.sh --rollback
 ```
 
-This switches to the release before the current one. Running it again goes back one more release,
-up to the 3 that are kept.
+This switches to the newest release whose name (its UTC build time) is older than the current
+one, skipping any folder without the app's executable. It goes back by release name, not to the
+release that was live before: if you have already rolled back once and then deployed again, the
+first rollback can land on a release that failed before. Running it again goes back one more
+release. `status.sh` lists the releases on disk.
 
 ## Deploying a new database after each IUCN release
 
@@ -319,8 +325,10 @@ To roll back the app instead, see [Deploying the app](#deploying-the-app).
 
 The deploy scripts:
 
-- `deploy-app.sh` adds folders under `/srv/beastie/releases`, deletes all but the newest 3, and
-  points the symbolic link `/srv/beastie/app` at the current one.
+- `deploy-app.sh` uploads into a folder `/srv/beastie/releases/.upload-<release>`, renames it to
+  `/srv/beastie/releases/<release>` when the upload has finished, and points the symbolic link
+  `/srv/beastie/app` at it. It deletes all releases but the newest 3 and the one that was live
+  before the switch, and deletes `.upload-` folders that have been left for over an hour.
 - `deploy-db.sh` uploads to `/srv/beastie/incoming` (the file is deleted after it is installed) and
   writes `/srv/beastie/data/site.sqlite`, `site.sqlite.prev` and, after a failed deploy,
   `site.sqlite.failed`. While it works it also uses `site.sqlite.new` and `site.sqlite.outgoing`.

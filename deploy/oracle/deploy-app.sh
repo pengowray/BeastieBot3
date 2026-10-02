@@ -2,10 +2,13 @@
 # Builds BeastieBot3.Site for the server, uploads it as a new release and switches the site to it.
 #
 #   deploy/oracle/deploy-app.sh              build, upload, switch, restart and check /healthz
-#   deploy/oracle/deploy-app.sh --rollback   switch back to the previous release and restart
+#   deploy/oracle/deploy-app.sh --rollback   switch back to the release built before the current one
+#                                            and restart
 #
 # Each release is a folder /srv/beastie/releases/<UTC build time>-<git commit>, and
-# /srv/beastie/app is a symbolic link to the current one. The server keeps the newest 3 releases.
+# /srv/beastie/app is a symbolic link to the current one. A release is uploaded into
+# /srv/beastie/releases/.upload-<release> and renamed into place only when the upload has finished.
+# The server keeps the newest 3 releases and the release that was live before the last switch.
 # Files that are the same as in the current release are hard-linked instead of uploaded again.
 #
 # When the health check fails, this script does not switch back by itself, because a new app and a
@@ -20,7 +23,7 @@ usage() {
 }
 
 rollback() {
-    step "Switching $DOMAIN back to the previous release"
+    step "Switching $DOMAIN back to the release built before the current one"
     local rc=0
     remote_task rollback-app || rc=$?
     case "$rc" in
@@ -94,12 +97,15 @@ The health check will fail until you deploy a database with schema version $expe
     # -c compares file contents rather than times, so files that did not change are hard-linked
     # from the current release (--link-dest) instead of being uploaded again. Times are not kept
     # (no -t), because hard-linking needs every kept attribute to match.
+    # The upload goes into a hidden folder, which the server renames to releases/<id> in
+    # activate-app. An interrupted upload is never listed as a release, and the server deletes it
+    # once it has been left for an hour.
     local link_dest=()
     if [[ -n "$current" ]]; then
         link_dest=(--link-dest="/srv/beastie/releases/$current/")
     fi
     rsync_to_server -rlpcz --delete --chmod=go+rX,go-w -h --info=stats1 ${link_dest[@]+"${link_dest[@]}"} \
-        "$out/" "$TARGET:/srv/beastie/releases/$id/"
+        "$out/" "$TARGET:/srv/beastie/releases/.upload-$id/"
 
     step "Switching the site to release $id"
     local rc=0
@@ -109,7 +115,7 @@ The health check will fail until you deploy a database with schema version $expe
             check_public_health loopback-ok
             say ""
             say "Deployed release $id."
-            say "To switch back to the previous release: deploy/oracle/deploy-app.sh --rollback"
+            say "To switch back to the release built before this one: deploy/oracle/deploy-app.sh --rollback"
             ;;
         3)
             say ""
@@ -119,7 +125,7 @@ The health check will fail until you deploy a database with schema version $expe
         *)
             say ""
             say "Release $id is live but failed its health check (details above)."
-            say "To switch back to the previous release: deploy/oracle/deploy-app.sh --rollback"
+            say "To switch back to the release built before this one: deploy/oracle/deploy-app.sh --rollback"
             exit 2
             ;;
     esac
