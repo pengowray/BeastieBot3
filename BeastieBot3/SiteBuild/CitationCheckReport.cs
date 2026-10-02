@@ -390,7 +390,7 @@ internal static class CitationCheckReport {
         sb.AppendLine();
         sb.AppendLine("| | Assessments |");
         sb.AppendLine("| --- | ---: |");
-        sb.AppendLine($"| Every author a person or organisation | {N(t.AllAuthorsStructured)} |");
+        sb.AppendLine($"| Every author identified as a person or organisation | {N(t.AllAuthorsStructured)} |");
         sb.AppendLine($"| At least one author name left as published | {N(t.SomeAuthorsVerbatim)} |");
         sb.AppendLine($"| No authors | {N(t.NoAuthors)} |");
         sb.AppendLine($"| Ends \"et al.\" | {N(t.EtAl)} |");
@@ -451,7 +451,7 @@ internal static class CitationCheckReport {
         sb.AppendLine("| Class | Templates | Share |");
         sb.AppendLine("| --- | ---: | ---: |");
         foreach (var (agreement, count) in t.AuthorAgreements.OrderByDescending(p => p.Value)) {
-            sb.AppendLine($"| {AgreementLabel(agreement)} | {N(count)} | {Share(count, t.WikiTemplatesMatched)} |");
+            sb.AppendLine($"| {Pipes(AgreementLabel(agreement))} | {N(count)} | {Share(count, t.WikiTemplatesMatched)} |");
         }
         sb.AppendLine();
         foreach (var (agreement, examples) in t.AuthorAgreementExamples.OrderByDescending(p => Count(t.AuthorAgreements, p.Key))) {
@@ -488,7 +488,7 @@ internal static class CitationCheckReport {
     }
 
     private static void YearRow(StringBuilder sb, string label, Dictionary<YearAgreement, int> counts) =>
-        sb.AppendLine($"| {label.Replace("|", "\\|", StringComparison.Ordinal)} | {N(Count(counts, YearAgreement.Same))} | {N(Count(counts, YearAgreement.Different))} | "
+        sb.AppendLine($"| {Pipes(label)} | {N(Count(counts, YearAgreement.Same))} | {N(Count(counts, YearAgreement.Different))} | "
             + $"{N(Count(counts, YearAgreement.WikiMissing))} | {N(Count(counts, YearAgreement.OursMissing))} | {N(Count(counts, YearAgreement.BothMissing))} |");
 
     private static void Examples(StringBuilder sb, string heading, IReadOnlyCollection<string>? examples) {
@@ -506,7 +506,10 @@ internal static class CitationCheckReport {
         total <= 0 ? "" : (100.0 * count / total).ToString("F1", CultureInfo.InvariantCulture) + "%";
 
     private static string Cell(IEnumerable<string>? items) =>
-        items is null ? "" : string.Join("<br>", items.Select(i => Escape(i).Replace("|", "\\|", StringComparison.Ordinal)));
+        items is null ? "" : string.Join("<br>", items.Select(i => Pipes(Escape(i))));
+
+    // A "|" inside a Markdown table cell.
+    private static string Pipes(string text) => text.Replace("|", "\\|", StringComparison.Ordinal);
 
     private static string Escape(string text) =>
         text.Replace("<", "&lt;", StringComparison.Ordinal).Replace("\n", " ", StringComparison.Ordinal);
