@@ -278,4 +278,21 @@ public static class SiteText {
     public const string ContactFallback = "the person who runs this site";
 
     public const string TermsUrl = "https://www.iucnredlist.org/terms/terms-of-use";
+
+    // About page: the data sources, their licences and their citations. The rest of the About
+    // page text is in Pages/About.cshtml.
+    public const string LicenceCcBy = "https://creativecommons.org/licenses/by/4.0/";
+    public const string LicenceCcBySa = "https://creativecommons.org/licenses/by-sa/4.0/";
+    public const string LicenceCc0 = "https://creativecommons.org/publicdomain/zero/1.0/";
+    public const string IucnRedListUrl = "https://www.iucnredlist.org";
+    public const string WikidataUrl = "https://www.wikidata.org";
+    public const string EnglishWikipediaUrl = "https://en.wikipedia.org";
+    public const string CatalogueOfLifeUrl = "https://www.catalogueoflife.org";
+    public const string SpratUrl = "https://www.environment.gov.au/cgi-bin/sprat/public/sprat.pl";
+
+    /// DOI of GBIF's copy of the IUCN checklist, used when the database has none in its meta table.
+    public const string GbifChecklistDoi = "10.15468/0qnb58";
+
+    public const string SpratLicensor =
+        "Department of Climate Change, Energy, the Environment and Water (DCCEEW), Australian Government";
 }

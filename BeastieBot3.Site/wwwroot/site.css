@@ -691,3 +691,8 @@ abbr[title] {
 .prose li {
     margin: 0.25rem 0;
 }
+
+/* Citations contain long URLs and DOIs, which must wrap at phone width. */
+.source-citations li {
+    overflow-wrap: anywhere;
+}

@@ -1,4 +1,5 @@
 using System.Net;
+using System.Text.RegularExpressions;
 using System.Text.Json;
 
 namespace BeastieBot3.Site.Tests;
@@ -101,7 +102,52 @@ public sealed class OtherEndpointTests(SiteFactory factory) : IClassFixture<Site
         Assert.Contains("1 October 2026", text);
         Assert.Contains("28 July 2026", text);
         Assert.Contains("Cite the IUCN Red List as: IUCN 2026. The IUCN Red List of Threatened Species. Version 2026-1. https://www.iucnredlist.org", text);
-        Assert.Contains("<th scope=\"row\">Catalogue of Life</th>", html);
+        Assert.Contains("<th scope=\"row\"><a href=\"https://doi.org/10.48580/dgykv\">Catalogue of Life</a></th>", html);
+    }
+
+    [Fact]
+    public async Task AboutPageAttributesEverySource() {
+        var html = await _client.GetStringAsync("/about");
+        var text = Html.Text(html);
+        Assert.Contains("This site reformats and combines the data from these sources.", text);
+
+        // Every licence cell links to its licence.
+        Assert.Equal(3, Regex.Matches(html, "<td><a href=\"https://creativecommons.org/licenses/by/4.0/\">CC BY 4.0</a></td>").Count);
+        Assert.Contains("<td><a href=\"https://creativecommons.org/licenses/by-sa/4.0/\">CC BY-SA 4.0</a></td>", html);
+        Assert.Contains("<td><a href=\"https://creativecommons.org/publicdomain/zero/1.0/\">CC0</a></td>", html);
+        Assert.Contains("<td><a href=\"https://www.iucnredlist.org/terms/terms-of-use\">IUCN Red List Terms of Use</a></td>", html);
+
+        // Every source the taxon pages name beside an English common name says it supplies names.
+        foreach (var source in new[] { "IUCN Red List", "Wikidata", "English Wikipedia", "Catalogue of Life" }) {
+            Assert.Matches($">{Regex.Escape(source)}</a></th>\\s*<td>[^<]*common names", html);
+        }
+        Assert.Contains("English common names, synonyms, and links to Catalogue of Life pages", text);
+        Assert.Contains("DOIs of the latest global assessments", text);
+
+        // Citations with links to the material.
+        Assert.Contains("<th scope=\"row\"><a href=\"https://doi.org/10.15468/0qnb58\">GBIF: IUCN checklist, published by IUCN</a></th>", html);
+        Assert.Contains("GBIF: " + FixtureDb.GbifCitation, text);
+        Assert.Contains("<a href=\"https://doi.org/10.15468/0qnb58\">https://doi.org/10.15468/0qnb58</a>", html);
+        Assert.Contains("Catalogue of Life: " + FixtureDb.ColCitation, text);
+        Assert.Contains("<a href=\"https://doi.org/10.48580/dgykv\">https://doi.org/10.48580/dgykv</a>", html);
+        Assert.Contains("Department of Climate Change, Energy, the Environment and Water (DCCEEW), Australian Government", text);
+        Assert.Contains("<a href=\"https://www.environment.gov.au/cgi-bin/sprat/public/sprat.pl\">", html);
+    }
+
+    [Fact]
+    public async Task AboutPageWithoutSourceCitationsInTheDatabase() {
+        await using var site = new NoCitationsSiteFactory();
+        var html = await site.Client().GetStringAsync("/about");
+        var text = Html.Text(html);
+        Assert.Contains("<a href=\"https://doi.org/10.15468/0qnb58\">GBIF: IUCN checklist, published by IUCN</a>", html);
+        Assert.Contains("GBIF: IUCN checklist on GBIF, published by IUCN. https://doi.org/10.15468/0qnb58", text);
+        Assert.Contains("<th scope=\"row\"><a href=\"https://www.catalogueoflife.org\">Catalogue of Life</a></th>", html);
+        Assert.Contains("Catalogue of Life: Catalogue of Life, release COL26.7 XR. https://www.catalogueoflife.org", text);
+    }
+
+    private sealed class NoCitationsSiteFactory : SiteFactory {
+        private static readonly Lazy<string> Db = new(() => FixtureDb.Create("no-citations", withSourceCitations: false));
+        protected override string DatabasePath => Db.Value;
     }
 
     [Fact]

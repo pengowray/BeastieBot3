@@ -23,6 +23,18 @@ public sealed class AboutModel : PageModel {
     public string? ColRelease { get; private set; }
     public string? SpratDate { get; private set; }
     public string? BuiltDate { get; private set; }
+
+    /// GBIF's recommended citation of its copy of the IUCN checklist, when the database has it.
+    public string? GbifCitation { get; private set; }
+
+    /// https://doi.org/ and the checklist's DOI (the known DOI when the database has none).
+    public string GbifUrl { get; private set; } = DoiUrl(SiteText.GbifChecklistDoi);
+
+    /// The Catalogue of Life release's recommended citation, when the database has it.
+    public string? ColCitation { get; private set; }
+
+    /// https://doi.org/ and the release's DOI, or the Catalogue of Life website when there is none.
+    public string ColUrl { get; private set; } = SiteText.CatalogueOfLifeUrl;
     public string Contact { get; private set; } = SiteText.ContactFallback;
     public string? ContactUrl { get; private set; }
 
@@ -45,10 +57,37 @@ public sealed class AboutModel : PageModel {
             ? SiteFormat.Date(gbif)
             : snapshot.Get(SiteDbSchema.MetaKeys.GbifChecklistVersion);
         ColRelease = snapshot.Get(SiteDbSchema.MetaKeys.ColRelease);
+        GbifCitation = snapshot.Get(SiteDbSchema.MetaKeys.GbifChecklistCitation);
+        if (snapshot.Get(SiteDbSchema.MetaKeys.GbifChecklistDoi) is { } gbifDoi) {
+            GbifUrl = DoiUrl(gbifDoi);
+        }
+        ColCitation = snapshot.Get(SiteDbSchema.MetaKeys.ColCitation);
+        if (snapshot.Get(SiteDbSchema.MetaKeys.ColDoi) is { } colDoi) {
+            ColUrl = DoiUrl(colDoi);
+        }
         SpratDate = SpratReportDate(snapshot.Get(SiteDbSchema.MetaKeys.SpratReport));
         if (SiteFormat.TryParseDate(snapshot.Get(SiteDbSchema.MetaKeys.BuiltAtUtc), out var built)) {
             BuiltDate = SiteFormat.Date(built);
         }
+    }
+
+    /// "10.15468/0qnb58" -> "https://doi.org/10.15468/0qnb58". A value that is already a URL is kept.
+    internal static string DoiUrl(string doi) {
+        var trimmed = doi.Trim();
+        return trimmed.StartsWith("http://", StringComparison.OrdinalIgnoreCase) || trimmed.StartsWith("https://", StringComparison.OrdinalIgnoreCase)
+            ? trimmed
+            : "https://doi.org/" + trimmed;
+    }
+
+    /// A citation with links, followed by the source's URL when the citation does not include it.
+    public static string CitationHtml(string? citation, string url) {
+        if (string.IsNullOrWhiteSpace(citation)) {
+            return SiteHtml.Linkify(url);
+        }
+        var text = citation.Trim();
+        return text.Contains(url, StringComparison.OrdinalIgnoreCase)
+            ? SiteHtml.Linkify(text)
+            : SiteHtml.Linkify(text) + " " + SiteHtml.Linkify(url);
     }
 
     // SPRAT report files are named "ddMMyyyy-HHmmss-report.csv"; the date is shown when it parses,

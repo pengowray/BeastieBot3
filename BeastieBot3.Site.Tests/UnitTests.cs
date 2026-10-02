@@ -381,6 +381,19 @@ public sealed class DatabasePathTests {
     }
 
     [Fact]
+    public void Citations() {
+        Assert.Equal("https://doi.org/10.15468/0qnb58", AboutModel.DoiUrl(" 10.15468/0qnb58 "));
+        Assert.Equal("https://doi.org/10.48580/dgykv", AboutModel.DoiUrl("https://doi.org/10.48580/dgykv"));
+        Assert.Equal(
+            "A &amp; B. <a href=\"https://www.iucnredlist.org\">https://www.iucnredlist.org</a>. See (<a href=\"https://doi.org/10.1/x\">https://doi.org/10.1/x</a>).",
+            SiteHtml.Linkify("A & B. https://www.iucnredlist.org. See (https://doi.org/10.1/x)."));
+        Assert.Equal("&lt;script&gt;", SiteHtml.Linkify("<script>"));
+        // The DOI link is added only when the citation lacks it.
+        Assert.Equal("Cited. <a href=\"https://doi.org/10.1/x\">https://doi.org/10.1/x</a>", AboutModel.CitationHtml("Cited.", "https://doi.org/10.1/x"));
+        Assert.Equal("Cited <a href=\"https://doi.org/10.1/x\">https://doi.org/10.1/x</a>", AboutModel.CitationHtml("Cited https://doi.org/10.1/x", "https://doi.org/10.1/x"));
+    }
+
+    [Fact]
     public void SpratReportDate() {
         Assert.Equal("1 October 2026", AboutModel.SpratReportDate("01102026-023504-report.csv"));
         Assert.Equal("report.csv", AboutModel.SpratReportDate("report.csv"));

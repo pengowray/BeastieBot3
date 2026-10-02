@@ -32,6 +32,7 @@
     <p>If a category or another detail is also wrong on the IUCN Red List website, the error is in IUCN's data. Report it to IUCN through the IUCN Red List website.</p>
 
     <h2>Data sources</h2>
+    <p>This site reformats and combines the data from these sources.</p>
     <div class="table-scroll">
         <table>
             <thead>
@@ -44,44 +45,52 @@
             </thead>
             <tbody>
                 <tr>
-                    <th scope="row">IUCN Red List</th>
-                    <td>Assessments: category, criteria, population trend, dates, authors, IUCN's citation text, regional assessments, names and classification</td>
+                    <th scope="row"><a href="@SiteText.IucnRedListUrl">IUCN Red List</a></th>
+                    <td>Scientific names, common names, synonyms, classification, and global and regional assessments: category, criteria, population trend, dates, authors and IUCN's citation text</td>
                     <td><a href="@SiteText.TermsUrl">IUCN Red List Terms of Use</a></td>
                     <td>Version @Model.Version.@if (Model.ApiDateRange is not null) {<text> Assessment details downloaded from the IUCN Red List API @Model.ApiDateRange.</text>}</td>
                 </tr>
                 <tr>
-                    <th scope="row">GBIF: IUCN checklist, published by IUCN</th>
-                    <td>DOIs of assessments</td>
-                    <td>CC BY 4.0</td>
+                    <th scope="row"><a href="@Model.GbifUrl">GBIF: IUCN checklist, published by IUCN</a></th>
+                    <td>DOIs of the latest global assessments</td>
+                    <td><a href="@SiteText.LicenceCcBy">CC BY 4.0</a></td>
                     <td>@Model.GbifVersion</td>
                 </tr>
                 <tr>
-                    <th scope="row">Wikidata</th>
-                    <td>Wikidata items, and DOIs not found in IUCN's citation text or GBIF</td>
-                    <td>CC0</td>
+                    <th scope="row"><a href="@SiteText.WikidataUrl">Wikidata</a></th>
+                    <td>Wikidata items, common names, and DOIs not found in IUCN's citation text or GBIF</td>
+                    <td><a href="@SiteText.LicenceCc0">CC0</a></td>
                     <td>@Model.BuiltDate</td>
                 </tr>
                 <tr>
-                    <th scope="row">English Wikipedia</th>
-                    <td>Article titles</td>
-                    <td>CC BY-SA 4.0</td>
+                    <th scope="row"><a href="@SiteText.EnglishWikipediaUrl">English Wikipedia</a></th>
+                    <td>Article titles and English common names</td>
+                    <td><a href="@SiteText.LicenceCcBySa">CC BY-SA 4.0</a></td>
                     <td>@Model.BuiltDate</td>
                 </tr>
                 <tr>
-                    <th scope="row">Catalogue of Life</th>
-                    <td>Links to Catalogue of Life pages</td>
-                    <td>CC BY 4.0</td>
+                    <th scope="row"><a href="@Model.ColUrl">Catalogue of Life</a></th>
+                    <td>English common names, synonyms, and links to Catalogue of Life pages</td>
+                    <td><a href="@SiteText.LicenceCcBy">CC BY 4.0</a></td>
                     <td>@Model.ColRelease</td>
                 </tr>
                 <tr>
-                    <th scope="row">Species Profile and Threats Database (SPRAT), Australian Government</th>
-                    <td>SPRAT profiles and EPBC Act listings of Australian species</td>
-                    <td>CC BY 4.0</td>
+                    <th scope="row"><a href="@SiteText.SpratUrl">Species Profile and Threats Database (SPRAT)</a>, @SiteText.SpratLicensor</th>
+                    <td>Links to SPRAT profiles, and EPBC Act listings of Australian species</td>
+                    <td><a href="@SiteText.LicenceCcBy">CC BY 4.0</a></td>
                     <td>@Model.SpratDate</td>
                 </tr>
             </tbody>
         </table>
     </div>
+
+    <h3>Citations of the data sources</h3>
+    <ul class="source-citations">
+        <li><strong>GBIF:</strong> @Html.Raw(AboutModel.CitationHtml(Model.GbifCitation ?? "IUCN checklist on GBIF, published by IUCN.", Model.GbifUrl))</li>
+        <li><strong>Catalogue of Life:</strong> @Html.Raw(AboutModel.CitationHtml(Model.ColCitation ?? (Model.ColRelease is null ? "Catalogue of Life." : $"Catalogue of Life, release {Model.ColRelease}."), Model.ColUrl))</li>
+        <li><strong>SPRAT:</strong> @Html.Raw(AboutModel.CitationHtml($"Species Profile and Threats Database, {SiteText.SpratLicensor}.", SiteText.SpratUrl))</li>
+    </ul>
+    <p>For the citation of the IUCN Red List, see <a href="#iucn-terms">IUCN Red List Terms of Use</a>.</p>
 
     <h2>How the wikitext is made</h2>
     <p><strong>Authors.</strong> IUCN gives the authors of an assessment as a single list, such as "Wiig, Ø., Amstrup, S. &amp; Thiemann, G.". This site splits the list into one parameter for each author. About 1% of author names cannot be split with confidence. Those names are given exactly as IUCN wrote them, and a note under the citation asks you to check them.</p>
@@ -104,7 +113,7 @@
     <p><strong>Earlier assessments.</strong> To cite an earlier assessment, select <strong>@SiteText.ShowWikitext</strong> in its row of the Assessment history table. The page then shows the wikitext for that assessment and says which assessment it is.</p>
     <p><strong>Subpopulations.</strong> About 300 subpopulation assessments have no citation yet, because their details have not been downloaded from IUCN. The {{IUCN status}} wikitext is available for them.</p>
 
-    <h2>IUCN Red List Terms of Use</h2>
+    <h2 id="iucn-terms">IUCN Red List Terms of Use</h2>
     <p>The IUCN Red List data on this site is used under the <a href="@SiteText.TermsUrl">IUCN Red List Terms of Use</a> and remains subject to those terms.</p>
     <p>Cite the IUCN Red List as: IUCN @(Model.ReleaseYear ?? "?"). The IUCN Red List of Threatened Species. Version @Model.Version. https://www.iucnredlist.org</p>
     <p>The terms do not allow IUCN data to be redistributed, so this site has no downloads.</p>
