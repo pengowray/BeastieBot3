@@ -8,7 +8,7 @@ namespace BeastieBot3.Shared.SiteData;
 // narrative text (rationale, range, threats ...), no coded threats/habitats/countries, no downloads.
 // Keep such fields out of this database rather than hiding them in the site.
 public static class SiteDbSchema {
-    public const int Version = 1;
+    public const int Version = 2;
 
     public const string Ddl = """
         CREATE TABLE meta (
@@ -56,7 +56,8 @@ public static class SiteDbSchema {
             year_published               INTEGER,
             assessment_date              TEXT,                -- 'yyyy-MM-dd'
             population_trend             TEXT,                -- 'Increasing' | 'Decreasing' | 'Stable' | 'Unknown'; NULL when not given
-            citation_json                TEXT                 -- IucnCitationParts as JSON; NULL when the API payload is not cached
+            citation_json                TEXT,                -- IucnCitationParts as JSON; NULL when the API payload is not cached
+            replaced_by_assessment_id    INTEGER              -- the errata or amended version that replaced this assessment; NULL otherwise
         );
         CREATE INDEX assessment_taxon ON assessment(taxon_id, year_published);
 
@@ -65,7 +66,7 @@ public static class SiteDbSchema {
             taxon_id     INTEGER NOT NULL,
             name         TEXT NOT NULL,
             name_type    TEXT NOT NULL,                       -- 'scientific' | 'common' | 'synonym'
-            language     TEXT,                                -- ISO 639 code of a common name ('en', 'fr', ...)
+            language     TEXT,                                -- ISO 639-1 code where one exists ('en', 'fr'), else IUCN's ISO 639-2 code; NULL when not given
             source       TEXT NOT NULL,                       -- 'iucn' | 'col' | 'wikidata' | 'wikipedia'
             is_preferred INTEGER NOT NULL DEFAULT 0
         );
@@ -102,8 +103,15 @@ public static class SiteDbSchema {
         /// GBIF's copy of the IUCN checklist: version text from its metadata, and its publication date.
         public const string GbifChecklistVersion = "gbif_checklist_version";
         public const string GbifChecklistPublished = "gbif_checklist_published";
+        /// GBIF's recommended citation of the checklist (from its eml.xml) and the dataset DOI
+        /// without a resolver prefix ("10.15468/0qnb58").
+        public const string GbifChecklistCitation = "gbif_checklist_citation";
+        public const string GbifChecklistDoi = "gbif_checklist_doi";
         /// Catalogue of Life release used for CoL ids ("COL26.7 XR").
         public const string ColRelease = "col_release";
+        /// The release's recommended citation and DOI from the ColDP metadata ("10.48580/dgykv").
+        public const string ColCitation = "col_citation";
+        public const string ColDoi = "col_doi";
         /// SPRAT report file name the EPBC statuses came from.
         public const string SpratReport = "sprat_report";
         public const string TaxonCount = "taxon_count";
