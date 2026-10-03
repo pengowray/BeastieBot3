@@ -48,13 +48,15 @@ internal static class WikipediaPageMatch {
             return all;
         }
 
-        var subject = ScientificNameNormalizer.Normalize(subjectName);
+        // Compared without rank markers: the store keeps "nanger granti ssp. granti", a
+        // Subspeciesbox gives "Nanger granti granti".
+        var subject = WithoutRankMarkers(ScientificNameNormalizer.Normalize(subjectName));
         if (subject is not null) {
-            var byAcceptedName = taxa.Where(t => t.Names.Canonical == subject).ToList();
+            var byAcceptedName = taxa.Where(t => WithoutRankMarkers(t.Names.Canonical) == subject).ToList();
             if (byAcceptedName.Count > 0) {
                 return byAcceptedName.Select(t => t.TaxonIdentifier).ToHashSet(StringComparer.Ordinal);
             }
-            var bySynonym = taxa.Where(t => t.Names.Synonyms.Contains(subject)).ToList();
+            var bySynonym = taxa.Where(t => t.Names.Synonyms.Any(s => WithoutRankMarkers(s) == subject)).ToList();
             if (bySynonym.Count > 0) {
                 return bySynonym.Select(t => t.TaxonIdentifier).ToHashSet(StringComparer.Ordinal);
             }
@@ -65,6 +67,9 @@ internal static class WikipediaPageMatch {
             ? byOwnName.Select(t => t.TaxonIdentifier).ToHashSet(StringComparer.Ordinal)
             : all;
     }
+
+    private static string? WithoutRankMarkers(string? name) =>
+        name is null ? null : string.Join(' ', ScientificNameCheck.WithoutRankMarkers(name.Split(' ', StringSplitOptions.RemoveEmptyEntries)));
 
     private const RegexOptions Options = RegexOptions.Compiled | RegexOptions.CultureInvariant;
     private static readonly Regex Ref = new(@"<ref[^>]*/>|<ref[^>]*>.*?</ref\s*>", Options | RegexOptions.Singleline | RegexOptions.IgnoreCase);

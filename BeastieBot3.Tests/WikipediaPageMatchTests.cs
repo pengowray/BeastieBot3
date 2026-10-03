@@ -38,6 +38,18 @@ public class WikipediaPageMatchTests {
     }
 
     [Fact]
+    public void ASubspeciesboxName_MatchesTheStoresNameWithItsRankMarker() {
+        // "Grant's gazelle" is Nanger granti's page; on a page for the subspecies the taxobox gives
+        // "Nanger granti granti" and the store "nanger granti ssp. granti".
+        var taxa = new[] {
+            Taxon("8971", "iucn-taxonomy", "nanger granti"),
+            Taxon("51187222", "col-accepted", "nanger granti ssp. granti"),
+        };
+        Assert.Equal(["8971"], WikipediaPageMatch.TaxaGivenNames(taxa, "Nanger granti"));
+        Assert.Equal(["51187222"], WikipediaPageMatch.TaxaGivenNames(taxa, "Nanger granti granti"));
+    }
+
+    [Fact]
     public void TheTaxoboxNameAsASynonym_GivesTheNamesToThatTaxon() {
         var taxa = new[] {
             Taxon("1", "iucn-taxonomy", "pholidoscelis polops", "ameiva polops"),
