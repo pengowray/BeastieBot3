@@ -14,7 +14,9 @@ using BeastieBot3.Shared.SiteData;
 // The first spelling added is kept; a later copy can only turn is_preferred on.
 // Common names in every language go through CommonNameQuality first: junk (wiki markup, author
 // citations, OCR errors, names cut off at a bracket) is left out, and a name with a fixable extra
-// ("Sunda slow loris{sfn|...}", "Mountain_gorilla") is added repaired.
+// ("Sunda slow loris{sfn|...}", "Mountain_gorilla") is added repaired. The set counts both for the
+// build summary: junk once per name, language and source (the store repeats IUCN's names, so the
+// same junk name can be offered twice), and a repaired name only when it is added.
 
 namespace BeastieBot3.SiteBuild;
 
@@ -24,8 +26,18 @@ internal sealed class SiteNameSet {
     private readonly List<SiteName> _names = new();
     private readonly Dictionary<(string Key, string Type, string? Language, string? Source), int> _index = new();
     private readonly HashSet<string> _scientificKeys = new(StringComparer.Ordinal);
+    private readonly HashSet<(string Key, string? Language, string Source)> _junkCommonNames = new();
 
     public IReadOnlyList<SiteName> Names => _names;
+
+    /// Common names left out because CommonNameQuality found them to be junk, counted once per
+    /// folded name, language and source.
+    public int JunkCommonNames => _junkCommonNames.Count;
+
+    /// Common names added with CommonNameQuality's repair. A repaired name that repeats one already
+    /// added is not added, so is not counted. SiteBuildRules.CleanName's tidying, which comes first
+    /// (HTML tags and entities, leading backslashes), is not counted as a repair.
+    public int RepairedCommonNames { get; private set; }
 
     /// Adds the name unless it repeats one already added; true when it was added. Empty names
     /// (after cleaning) are never added. A common name that CommonNameQuality finds is junk is not
@@ -35,11 +47,14 @@ internal sealed class SiteNameSet {
         if (cleaned.Length == 0) {
             return false;
         }
+        var repaired = false;
         if (nameType == SiteNameType.Common) {
             var quality = CommonNameQuality.Assess(cleaned, language);
             if (quality.IsJunk) {
+                _junkCommonNames.Add((SiteNameKey.Fold(cleaned), language, source));
                 return false;
             }
+            repaired = quality.IsRepaired;
             cleaned = quality.Name;
         }
         var key = SiteNameKey.Fold(cleaned);
@@ -69,6 +84,9 @@ internal sealed class SiteNameSet {
         }
         _index[lookup] = _names.Count;
         _names.Add(new SiteName(cleaned, nameType, language, source, isPreferred));
+        if (repaired) {
+            RepairedCommonNames++;
+        }
         return true;
     }
 

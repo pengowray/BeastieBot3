@@ -209,6 +209,8 @@ internal sealed class SiteBuildDbCommand : Command<SiteBuildDbCommand.Settings> 
         Row("Scientific names", s.NamesByType.GetValueOrDefault(SiteNameType.Scientific));
         Row("Common names", s.NamesByType.GetValueOrDefault(SiteNameType.Common));
         Row("Common names in English", s.CommonNamesEnglish);
+        Row("Common names left out as junk (wiki markup, author citations, OCR errors)", s.CommonNamesJunk);
+        Row("Common names repaired before storing (wiki markup or extra text removed, OCR errors fixed)", s.CommonNamesRepaired);
         Row("Synonyms", s.NamesByType.GetValueOrDefault(SiteNameType.Synonym));
         Row("Taxa with an English name for display", s.CommonNameEn);
         Row("Of those, names set in rules-list.txt", s.CommonNameEnFromRules);

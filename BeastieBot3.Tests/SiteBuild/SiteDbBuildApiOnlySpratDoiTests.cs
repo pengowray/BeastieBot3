@@ -189,6 +189,21 @@ public sealed class SiteDbBuildApiOnlySpratDoiTests : IDisposable {
             IucnDoiSelector.Select(parts, null, null, null, null, "10.2305/IUCN.UK.2016-1.RLTS.T16893A166496779.en"));
     }
 
+    // ------------------------------------------------------------ common names left out or repaired
+
+    // The koala's record lists an author citation as a name (junk, left out) and a name with a
+    // citation template after it (stored as "Native bear"); the summary counts one of each.
+    [Fact]
+    public void Build_CountsCommonNamesLeftOutAsJunkAndRepaired() {
+        var output = _sources.PathOf("site-names.sqlite");
+        var stats = new SiteDbBuild(Inputs(output), QuietConsole()).Run(CancellationToken.None);
+
+        Assert.Equal((1, 1), (stats.CommonNamesJunk, stats.CommonNamesRepaired));
+        using var db = OpenReadOnly(output);
+        Assert.Equal(new[] { "Koala", "Native bear" },
+            Rows(db, $"SELECT name FROM name WHERE taxon_id = {Koala} AND name_type = 'common' ORDER BY name_id").Select(r => (string)r[0]!));
+    }
+
     // ------------------------------------------------------------ the build
 
     private const long TaxonCount = 5;
@@ -259,7 +274,8 @@ public sealed class SiteDbBuildApiOnlySpratDoiTests : IDisposable {
         var koala = $$"""
             {"sis_id":16892,"taxon":{"sis_id":16892,"scientific_name":"Phascolarctos cinereus","species_taxa":[],"subpopulation_taxa":[],
               "species":true,"subpopulation":false,"infrarank":false,
-              "common_names":[{"main":true,"name":"Koala","language":"eng"}],"synonyms":[]},
+              "common_names":[{"main":true,"name":"Koala","language":"eng"},{"main":false,"name":"Calvert, 1902","language":"eng"},
+                              {"main":false,"name":"Native bear{sfn|Troughton|1941}","language":"eng"}],"synonyms":[]},
              "assessments":[{{Header(KoalaLatest, Koala, true, "2016", "VU")}}]}
             """;
 
