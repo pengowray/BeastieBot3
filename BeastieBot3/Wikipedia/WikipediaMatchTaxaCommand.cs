@@ -27,7 +27,7 @@ namespace BeastieBot3.Wikipedia;
     "Attempt to match IUCN taxa to cached Wikipedia pages using Wikidata sitelinks and synonyms.",
     Reason = "Writes IUCN taxon -> Wikipedia page matches into the cache.",
     Rerun = RerunEffect.IdempotentAdd,
-    RerunNote = "Taxa already matched to an article are skipped, unless the article is about a taxon in another kingdom. Every other taxon is checked again. --pending-only also skips taxa already found to have no article.",
+    RerunNote = "Taxa already matched to an article are skipped, unless the article is about a taxon in another kingdom. All other taxa are checked, including taxa where no article was found before. With --pending-only, taxa where no article was found before are skipped too.",
     Examples = new[] {
         "wikipedia match-taxa",
         "wikipedia match-taxa --limit 500",
@@ -296,10 +296,10 @@ public sealed class WikipediaMatchTaxaCommand : AsyncCommand<WikipediaMatchTaxaC
         Row("Matched to an article", stats.Matched);
         Row("Waiting on a page download", stats.Pending);
         Row("No article found", stats.Missing);
-        Row("Only disambiguation pages or pages about another kingdom", stats.Rejected);
+        Row("No article: only disambiguation pages, set-index pages or pages about a taxon in another kingdom", stats.Rejected);
         Row("No names to look up", stats.NoCandidates);
         table.AddRow("[grey]Already matched, not re-checked[/]", $"[grey]{stats.AlreadyMatched:n0}[/]", "");
-        table.AddRow("Already matched to a page about another kingdom, checked again", stats.WrongKingdomRechecked.ToString("n0"), "");
+        table.AddRow("Re-checked: earlier match was a page about a taxon in another kingdom", stats.WrongKingdomRechecked.ToString("n0"), "");
         if (stats.NotRechecked > 0) {
             table.AddRow("[grey]Checked before, skipped (--pending-only)[/]", $"[grey]{stats.NotRechecked:n0}[/]", "");
         }

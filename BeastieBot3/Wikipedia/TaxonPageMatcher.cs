@@ -184,10 +184,10 @@ internal static class TaxonPageMatcher {
                 null,
                 null,
                 null,
-                "All candidate pages were disambiguation pages, set-index pages or pages about another kingdom",
+                "All candidate pages were disambiguation pages, set-index pages or pages about a taxon in another kingdom",
                 DateTime.UtcNow));
             if (!Unchanged(TaxonWikiMatchStatus.Rejected)) {
-                AnsiConsole.MarkupLineInterpolated($"[yellow]Rejected[/] SIS {Markup.Escape(taxonId)} (only disambiguation pages, set-index pages or pages about another kingdom)");
+                AnsiConsole.MarkupLineInterpolated($"[yellow]Rejected[/] SIS {Markup.Escape(taxonId)}: no article, only disambiguation pages, set-index pages or pages about a taxon in another kingdom");
             }
             return TaxonProcessResult.Rejected;
         }
