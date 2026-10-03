@@ -470,6 +470,9 @@ public sealed class IucnApiCacheFullCommand : AsyncCommand<IucnApiCacheFullSetti
     }
 
     private static string ProjectionPlanText(IucnProjectionState? p) {
+        if (p is { Exists: false, UnfinishedBuildStartedAt: { } started }) {
+            return $"empty: the last build, started {IucnRefreshMath.Stamp(started)}, did not finish; rebuilt at the end of this run";
+        }
         if (p is null || !p.Exists) return "not built yet";
         if (p.IsPartial) return $"currently incomplete ({p.LatestNotDownloaded:N0} taxa missing their latest assessment); rebuilt at the end of this run";
         return $"rebuilt from whatever this run finishes with (currently {p.ProjectedTaxa:N0} taxa)";
@@ -488,7 +491,9 @@ public sealed class IucnApiCacheFullCommand : AsyncCommand<IucnApiCacheFullSetti
             $"[grey]API cache:[/] {s.TaxaCached:N0} taxa · {s.AssessmentsCached:N0} assessments{age} · {s.TombstonedTaxa:N0} ids recorded as gone");
 
         var p = s.Projection;
-        var projection = p is null || !p.Exists ? "not built yet"
+        var projection = p is { Exists: false, UnfinishedBuildStartedAt: { } started }
+                ? $"empty: the last build, started {IucnRefreshMath.Stamp(started)}, did not finish"
+            : p is null || !p.Exists ? "not built yet"
             : p.IsPartial ? $"incomplete ({p.LatestNotDownloaded:N0} taxa missing their latest assessment)"
             : $"complete · {p.ProjectedTaxa:N0} taxa · built {IucnRefreshMath.Stamp(p.BuiltAt ?? DateTime.MinValue)}";
         AnsiConsole.MarkupLineInterpolated($"[grey]Projection:[/] {projection}");

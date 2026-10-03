@@ -16,7 +16,11 @@ namespace BeastieBot3.Iucn;
 
 public sealed record IucnProjectionState {
     public required string Path { get; init; }
+    // True when the file holds a finished build. Every build empties the projection before it
+    // writes, so a build that was stopped part way leaves it empty: that reads as not built, with
+    // UnfinishedBuildStartedAt set, never as a complete projection of 0 taxa.
     public required bool Exists { get; init; }
+    public DateTime? UnfinishedBuildStartedAt { get; init; }
     public string? RedlistVersion { get; init; }
     public DateTime? BuiltAt { get; init; }
     public bool IsPartial { get; init; }
@@ -107,24 +111,37 @@ public static class IucnApiCacheStateReader {
         try { path = paths.ResolveIucnApiProjectedPath(null); } catch { return null; }
         if (string.IsNullOrWhiteSpace(path)) return null;
 
-        var full = Path.GetFullPath(path);
+        return ReadProjectionFile(Path.GetFullPath(path));
+    }
+
+    // The newest build recorded in the file. project-view deletes the data and the build records
+    // before it starts, so the newest record says what the file holds: a record with no end time
+    // is a build that stopped part way (or is running now), and the tables are empty.
+    internal static IucnProjectionState ReadProjectionFile(string full) {
         var state = new IucnProjectionState { Path = full, Exists = File.Exists(full) };
         if (!state.Exists) return state;
 
         try {
-            var csb = new SqliteConnectionStringBuilder { DataSource = full, Mode = SqliteOpenMode.ReadOnly };
+            var csb = new SqliteConnectionStringBuilder { DataSource = full, Mode = SqliteOpenMode.ReadOnly, Pooling = false };
             using var conn = new SqliteConnection(csb.ConnectionString);
             conn.Open();
             using var cmd = conn.CreateCommand();
-            cmd.CommandText = @"SELECT redlist_version, ended_at, is_partial, latest_not_downloaded, projected_taxa
-FROM import_metadata WHERE ended_at IS NOT NULL ORDER BY rowid DESC LIMIT 1";
+            cmd.CommandText = @"SELECT redlist_version, ended_at, is_partial, latest_not_downloaded, projected_taxa, started_at
+FROM import_metadata ORDER BY rowid DESC LIMIT 1";
             cmd.CommandTimeout = 5;
             using var reader = cmd.ExecuteReader();
-            if (!reader.Read()) return state;
+            if (!reader.Read()) return state with { Exists = false };
+
+            if (reader.IsDBNull(1)) {
+                return state with {
+                    Exists = false,
+                    UnfinishedBuildStartedAt = reader.IsDBNull(5) ? null : StoredUtc.Parse(reader.GetString(5)),
+                };
+            }
 
             return state with {
                 RedlistVersion = reader.IsDBNull(0) ? null : reader.GetString(0),
-                BuiltAt = reader.IsDBNull(1) ? null : StoredUtc.Parse(reader.GetString(1)),
+                BuiltAt = StoredUtc.Parse(reader.GetString(1)),
                 IsPartial = !reader.IsDBNull(2) && reader.GetInt64(2) != 0,
                 LatestNotDownloaded = reader.IsDBNull(3) ? 0 : reader.GetInt64(3),
                 ProjectedTaxa = reader.IsDBNull(4) ? 0 : reader.GetInt64(4),
