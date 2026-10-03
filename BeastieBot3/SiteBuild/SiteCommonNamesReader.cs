@@ -4,8 +4,8 @@ using Microsoft.Data.Sqlite;
 
 // Reads the common names store (common_names.sqlite) for `site build-db`, read-only:
 //   - every English common name of each IUCN taxon, with its source mapped to the site's sources
-//     (wikipedia_title and wikipedia_taxobox -> wikipedia, wikidata_label and wikidata -> wikidata,
-//     col -> col, iucn -> iucn);
+//     (wikipedia_title -> wikipedia, wikipedia_taxobox -> wikipedia-taxobox, wikidata_label and
+//     wikidata -> wikidata, col -> col, iucn -> iucn);
 //   - the best English name, chosen by CommonNameChooser as the Wikipedia lists choose it: a
 //     manual override in rules-list.txt ("Panthera leo = lion") first, else the best of the
 //     taxon's names (junk names and names ambiguous for the taxon skipped, by the store's taxa.id,
@@ -121,7 +121,8 @@ internal static class SiteCommonNamesReader {
 
     /// The site's source for a common names store source; null for a source the site does not show.
     public static string? SiteSource(string storeSource) => storeSource.Trim().ToLowerInvariant() switch {
-        "wikipedia_title" or "wikipedia_taxobox" => SiteNameSource.Wikipedia,
+        "wikipedia_title" => SiteNameSource.Wikipedia,
+        "wikipedia_taxobox" => SiteNameSource.WikipediaTaxobox,
         "wikidata_label" or "wikidata" => SiteNameSource.Wikidata,
         "col" => SiteNameSource.Col,
         "iucn" => SiteNameSource.Iucn,

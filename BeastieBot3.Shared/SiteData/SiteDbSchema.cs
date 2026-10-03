@@ -102,7 +102,7 @@ public static class SiteDbSchema {
             name         TEXT NOT NULL,
             name_type    TEXT NOT NULL,                       -- 'scientific' | 'common' | 'synonym'
             language     TEXT,                                -- ISO 639-1 code where one exists ('en', 'fr'), else IUCN's ISO 639-2 code; NULL when not given
-            source       TEXT NOT NULL,                       -- 'iucn' | 'col' | 'wikidata' | 'wikipedia'
+            source       TEXT NOT NULL,                       -- 'iucn' | 'col' | 'wikidata' | 'wikipedia' (an article title) | 'wikipedia-taxobox' (the English name in an article's taxobox)
             is_preferred INTEGER NOT NULL DEFAULT 0
         );
         CREATE INDEX name_taxon ON name(taxon_id);

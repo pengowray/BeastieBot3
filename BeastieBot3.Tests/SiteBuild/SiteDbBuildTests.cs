@@ -211,6 +211,9 @@ public sealed class SiteDbBuildTests : IDisposable {
         Assert.Equal(("Polar Bear", "common", "en", "iucn", 1L), names[1]);
         Assert.Contains(("Ours blanc", "common", "fr", "iucn", 0L), names);
         Assert.Contains(("Polar bear", "common", "en", "wikipedia", 0L), names);
+        // A taxobox name has a source of its own, listed after the article title.
+        Assert.Contains(("Sea bear", "common", "en", "wikipedia-taxobox", 0L), names);
+        Assert.True(names.FindIndex(n => n.Item4 == "wikipedia") < names.FindIndex(n => n.Item4 == "wikipedia-taxobox"));
         Assert.Contains(("Thalarctos maritimus", "synonym", null, "iucn", 0L), names);
         Assert.Contains(("Ursus marinus", "synonym", null, "col", 0L), names);
         // The store's IUCN copy of "Polar Bear" is the same row as the API's.
@@ -451,6 +454,7 @@ public sealed class SiteDbBuildTests : IDisposable {
             INSERT INTO common_names (taxon_id, raw_name, normalized_name, language, source, source_identifier, is_preferred, created_at) VALUES
                 (1, 'Polar Bear', 'polarbear', 'en', 'iucn', '22823', 1, 'x'),
                 (1, 'Polar bear', 'polarbear', 'en', 'wikipedia_title', 'Polar bear', 1, 'x'),
+                (1, 'Sea bear', 'seabear', 'en', 'wikipedia_taxobox', 'Polar bear', 0, 'x'),
                 (1, 'Ours polaire', 'ourspolaire', 'fr', 'iucn', '22823', 0, 'x'),
                 (2, 'Shared name', 'sharedname', 'en', 'wikipedia_title', 'Shared name', 1, 'x'),
                 (3, 'Shared name', 'sharedname', 'en', 'col', 'C2', 0, 'x'),

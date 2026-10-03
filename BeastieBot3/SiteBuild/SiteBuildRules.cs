@@ -25,7 +25,10 @@ internal static class SiteNameSource {
     public const string Iucn = "iucn";
     public const string Col = "col";
     public const string Wikidata = "wikidata";
+    /// A Wikipedia article title.
     public const string Wikipedia = "wikipedia";
+    /// The English name in a Wikipedia article's taxobox.
+    public const string WikipediaTaxobox = "wikipedia-taxobox";
 }
 
 internal static class SiteBuildRules {

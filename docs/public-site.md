@@ -171,6 +171,15 @@ Rules the site depends on (pinned by `SiteDbBuildTests` and the site tests):
   storing" (rows stored; the HTML and leading-backslash tidying in `SiteBuildRules.CleanName` is
   not counted). In an October 2026 build of release 2026-1, about 450 common names were left out
   and about 110 were repaired.
+- `name.source` for an English name from the common names store is `wikipedia` for a Wikipedia
+  article title, `wikipedia-taxobox` for the English name in an article's taxobox (since October
+  2026; before, both were `wikipedia`), `wikidata` for a Wikidata label or other Wikidata name,
+  `col` or `iucn`. The names table on a taxon page shows these as "Wikipedia", "Wikipedia
+  taxobox", "Wikidata", "Catalogue of Life" and "IUCN Red List" (`SiteText.SourceLabel`), so a
+  taxobox name that differs from the name the page shows is listed with its source.
+  `common-names aggregate` stores a taxobox name only when it differs from the article title. A
+  site older than this change shows the source `wikipedia-taxobox` as it is written, so deploy the
+  site before or with a database built by the new `site build-db`.
 - When the build reads the DOI cache, it sets the meta key `iucn_doi_checked_to` to the newest
   `checked_at` date in the cache's `doi_check` table.
 - `assessment.wikidata_item_qid` is the assessment's Wikidata item and
@@ -638,11 +647,15 @@ of `dotnet test`. To run it:
   a taxon has an article only when the Wikipedia cache still has a match made for it earlier, and
   it has an English name only when the common names store has one for it. The Amur leopard
   (*Panthera pardus* ssp. *orientalis*, 15957) has neither.
-- The ambiguity rule gives a Wikipedia article title or taxobox name priority over an IUCN main
-  name. So for about 445 taxa in the release, the name that IUCN gives as the taxon's main name is
-  used for another taxon instead, one that has the name as its Wikipedia article title or taxobox
-  name. The count leaves out a taxon whose IUCN main name is used for its own species or for one
-  of its own subspecies. A decision on changing the source priority is pending.
+- The ambiguity rule gives a Wikipedia article title priority over an IUCN main name (see
+  "Ambiguous common names" in `docs/common-names.md`). So for 286 taxa in the release, the name
+  that IUCN gives as the taxon's main name is used for another taxon instead, one that has the
+  name as its Wikipedia article title. For 127 more, the other taxon also has the name as its IUCN
+  main name and wins because it also has the name from its taxobox (89) or as its Wikidata label
+  (38). The counts leave out a taxon whose IUCN main name is used for its own species or for one
+  of its own subspecies, and are from the common names store of 3 October 2026. Until October
+  2026 a taxobox name and a Wikidata label also had priority over an IUCN main name, and the first
+  count was about 445.
 - A taxon can still be linked to the Wikipedia article or the Wikidata item of a taxon in another
   kingdom when the page or item does not name its group. `wikipedia match-taxa` finds that a page
   is about another kingdom only when its taxobox, its title or its "<group> described in <year>"

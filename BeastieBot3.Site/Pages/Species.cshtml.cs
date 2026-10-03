@@ -371,7 +371,8 @@ public sealed class SpeciesModel : PageModel {
         "wikidata" => 1,
         "col" => 2,
         "wikipedia" => 3,
-        _ => 4,
+        "wikipedia-taxobox" => 4,
+        _ => 5,
     };
 
     private void LoadArrival(string? q) {

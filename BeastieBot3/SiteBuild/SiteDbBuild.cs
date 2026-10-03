@@ -294,9 +294,10 @@ internal sealed class SiteDbBuild {
     private static int SourceOrder(string source) => source switch {
         SiteNameSource.Iucn => 0,
         SiteNameSource.Wikipedia => 1,
-        SiteNameSource.Wikidata => 2,
-        SiteNameSource.Col => 3,
-        _ => 4,
+        SiteNameSource.WikipediaTaxobox => 2,
+        SiteNameSource.Wikidata => 3,
+        SiteNameSource.Col => 4,
+        _ => 5,
     };
 
     // ------------------------------------------------------------ meta

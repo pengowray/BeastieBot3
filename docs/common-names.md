@@ -228,23 +228,75 @@ has, and a repairable name counts under its repaired form.
 (`CommonNameStore.QueryAmbiguousNames`, `AmbiguousNames`), and work out the names from the store
 each time they run, so there is nothing to rebuild after aggregating.
 
-Each ambiguous name is used for the taxon that has it from the highest-priority source, and
-skipped for all the other taxa that have it. The sources, highest priority first:
+Each ambiguous name is used for at most one taxon, and skipped for all the other taxa that have
+it (a name set for a taxon in `rules/rules-list.txt` is used even so; see below). `AmbiguousNames`
+decides which taxon may use it:
 
-1. Wikipedia article title
-2. Wikipedia taxobox
-3. Wikidata label
-4. IUCN main name
-5. Other IUCN names
-6. Other Wikidata names
-7. Catalogue of Life
+1. The taxon that has the name from the highest-priority source may use it, unless step 2 applies.
+   The sources, highest priority first (`AmbiguousNames.KeeperPriority`):
+   1. Wikipedia article title
+   2. IUCN main name
+   3. Wikipedia taxobox
+   4. Wikidata label
+   5. Other IUCN names
+   6. Other Wikidata names
+   7. Catalogue of Life
+2. One Wikipedia article can be about two or more IUCN taxa, for example when IUCN has split a
+   species and Wikipedia still has one article for it. Step 2 applies when the highest-priority
+   source is the title of such an article. The candidates are then the taxa that have the name as
+   the article's title, and the other taxa that have the name from any source and are matched to
+   the same article (a `wikipedia` cross-reference, usually `other_taxon_page`). These rules are
+   tried in order on all the candidates, and the first rule that picks one taxon decides:
+   - a species takes priority over its own subspecies, varieties and subpopulations;
+   - the one candidate that has the name as its IUCN main name may use it (if two or more
+     candidates have it as their IUCN main name, the taxobox and then the Wikidata label choose
+     between them, as in step 3);
+   - otherwise the taxon that has the name as the article's title may use it, as in step 1 (if two
+     or more taxa have the name as the article's title, step 4 applies to them).
+3. When two or more taxa have the name as their IUCN main name, and no taxon has it as a
+   Wikipedia article title, the one taxon among them that also has the name from its Wikipedia
+   taxobox may use it. If that does not pick one taxon, the one taxon among them that also has the
+   name as its Wikidata label may use it (`AmbiguousNames.IucnMainTieBreak`).
+4. If two or more taxa still have the name at equal priority, the name is skipped for all of them,
+   except that a species takes priority over its own subspecies, varieties and subpopulations.
 
-If two or more taxa have the name from sources of equal priority, the name is skipped for all of
-them, except that a species takes priority over its own subspecies, varieties and subpopulations.
-For example, Panthera leo has "Lion" as its Wikipedia article title and Panthera leo ssp. leo has
-it only as one of its other IUCN names, so Panthera leo is listed as "Lion". Panthera tigris has
-"Tiger" as its Wikipedia article title, so it is listed as "Tiger", although a grouper also has
-"Tiger" from the Catalogue of Life.
+A taxon that may use a name is not always listed under it: the chooser (below) tries the taxon's
+own names in its own order and takes the first one that is not skipped for the taxon.
+
+Examples from the store of 3 October 2026:
+
+- *Panthera leo* has "Lion" as its Wikipedia article title, and *Panthera leo* ssp. *leo* has it
+  only as one of its other IUCN names, so *Panthera leo* is listed as "Lion".
+- *Lithobates sylvaticus* has "Wood frog" as its Wikipedia article title, so it is listed as
+  "Wood frog", although "Wood frog" is also the IUCN main name of *Papurana daemeli*.
+- "Torchwood" is the IUCN main name of *Amyris ignea* and the taxobox name of *Balanites
+  maughamii*, so *Amyris ignea* is listed as "Torchwood" and *Balanites maughamii* as "Manduro",
+  one of its Wikidata common names (P1843). Until October 2026, *Balanites maughamii* was listed
+  as "Torchwood" and *Amyris ignea* had no English name.
+- "White oak" is the IUCN main name of both *Quercus alba* and *Grevillea baileyana*, and only
+  *Quercus alba* also has it from its taxobox, so *Quercus alba* is listed as "White oak".
+- "Silver wattle" is the IUCN main name of both *Acacia dealbata* and *Acacia neriifolia*, and
+  neither has it from a taxobox or as a Wikidata label, so no taxon is listed as "Silver wattle".
+  *Acacia rivalis*, which has it from its taxobox, is listed as "Creek wattle", its IUCN main name.
+- The article "Scarlet-bellied mountain tanager" has *Anisognathus igniventris* in its taxobox, and
+  *Anisognathus lunulatus* is matched to the same article. "Scarlet-bellied mountain-tanager" is the
+  IUCN main name of *A. lunulatus*, so *A. lunulatus* is listed by that name, and *A. igniventris*
+  is listed by its IUCN main name, "Fire-bellied mountain-tanager".
+- The article "Golden tanager" has *Tangara arthus* in its taxobox, and "Golden tanager" is the
+  IUCN main name of *Tangara aurulenta*. English Wikipedia has no page or redirect with the title
+  "Tangara aurulenta", so *T. aurulenta* is not matched to the article, step 2 does not apply, and
+  *T. arthus* is listed as "Golden tanager".
+- "Water opal" is a taxobox name of *Chrysoritis palmus* and the IUCN main name of its subspecies
+  *Chrysoritis palmus* ssp. *palmus*. The IUCN main name has the higher priority, so the subspecies
+  is listed as "Water opal". Outside step 2, a species takes priority over its own subspecies only
+  when both have the name at equal priority (step 4). The species has no other English name, so
+  it is listed by its scientific name.
+
+Until October 2026, the order of the sources in step 1 was the order in which the chooser tries a
+taxon's own names (below), with the Wikipedia taxobox and the Wikidata label before the IUCN main
+name, and there were no steps 2 and 3. On the store of 3 October 2026, the change affected the
+English name of 313 taxa, counting the chooser's pick from the store without `rules-list.txt`: 84
+taxa gained an English name, 44 lost theirs, and 185 got a different one.
 
 `CommonNameChooser` is the one place a taxon's English name is chosen. `wikipedia generate-lists`,
 `sprat generate-lists`, `site build-db` and `common-names report --report trace` all use it. For a
@@ -252,8 +304,11 @@ species entry it takes the first of these that the taxon has:
 
 1. A common name set for the taxon in `rules/rules-list.txt`. It is used even if it is
    ambiguous.
-2. The taxon's first common name in source order that is not junk and not skipped for it,
-   repaired where `CommonNameQuality` can repair it. A name from a Wikipedia article title keeps
+2. The taxon's first common name in this source order (`CommonNameStore.GetSourcePriority`) that
+   is not junk and not skipped for it: Wikipedia article title, Wikipedia taxobox, Wikidata label,
+   IUCN main name, other IUCN names, other Wikidata names, Catalogue of Life. This is a different
+   order from the one that decides which taxon uses an ambiguous name. The name is repaired where
+   `CommonNameQuality` can repair it. A name from a Wikipedia article title keeps
    the title's capitals, with the first letter upper case ("Large Palau flying fox", "Banded
    martin"). A name from another source that is one of the taxon's article titles apart from its
    capitals is shown with the title's capitals. Any other name, including a taxobox name, gets the
@@ -276,7 +331,7 @@ names, run `common-names report --report ambiguous`, which writes
 `common-name-ambiguous-<timestamp>.md` to the reports folder. The report has one table for each
 ambiguous name, and its "Uses This Name" column is Yes for the taxon the name is used for (on
 two rows when an old and a current IUCN id have the same scientific name). On the store of
-3 October 2026 it listed 10,371 names: 7,038 used for one taxon each and 3,333 used for no taxon
+3 October 2026 it listed 10,371 names: 7,078 used for one taxon each and 3,293 used for no taxon
 (equal-priority ties). With `--kingdom`, the report counts only the taxa in that kingdom,
 so it leaves out names shared by taxa in different kingdoms. In the web UI the report is the optional
 "List ambiguous common names" step of the "Wikipedia reports pipeline" workflow.

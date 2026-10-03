@@ -208,6 +208,7 @@ public static class FixtureDb {
         w.Name(PolarBear, "Polar bear", "common", "en", "iucn", preferred: true);
         w.Name(PolarBear, "Polar Bear", "common", "en", "wikidata");
         w.Name(PolarBear, "White bear", "common", "en", "col");
+        w.Name(PolarBear, "Thalassic bear", "common", "en", "wikipedia-taxobox");
         w.Name(PolarBear, "Ours polaire", "common", "fr", "iucn");
         w.Name(PolarBear, "Ours blanc", "common", "fr", "wikidata");
         w.Name(PolarBear, "Oso polar", "common", "es", "iucn");
