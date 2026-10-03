@@ -1,3 +1,4 @@
+using BeastieBot3.CommonNames;
 using BeastieBot3.Shared.SiteData;
 
 // The names of one taxon on their way into the site database's `name` table, without repeats.
@@ -11,6 +12,9 @@ using BeastieBot3.Shared.SiteData;
 //     ("Polar bear": IUCN Red List, Wikidata, Catalogue of Life), and it can only do that from one
 //     row per source.
 // The first spelling added is kept; a later copy can only turn is_preferred on.
+// Common names in every language go through CommonNameQuality first: junk (wiki markup, author
+// citations, OCR errors, names cut off at a bracket) is left out, and a name with a fixable extra
+// ("Sunda slow loris{sfn|...}", "Mountain_gorilla") is added repaired.
 
 namespace BeastieBot3.SiteBuild;
 
@@ -24,11 +28,19 @@ internal sealed class SiteNameSet {
     public IReadOnlyList<SiteName> Names => _names;
 
     /// Adds the name unless it repeats one already added; true when it was added. Empty names
-    /// (after cleaning) are never added.
+    /// (after cleaning) are never added. A common name that CommonNameQuality finds is junk is not
+    /// added, and one it can repair is added repaired.
     public bool Add(string? name, string nameType, string? language, string source, bool isPreferred = false) {
         var cleaned = SiteBuildRules.CleanName(name);
         if (cleaned.Length == 0) {
             return false;
+        }
+        if (nameType == SiteNameType.Common) {
+            var quality = CommonNameQuality.Assess(cleaned, language);
+            if (quality.IsJunk) {
+                return false;
+            }
+            cleaned = quality.Name;
         }
         var key = SiteNameKey.Fold(cleaned);
         if (key.Length == 0) {

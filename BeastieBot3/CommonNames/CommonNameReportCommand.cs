@@ -152,8 +152,11 @@ internal sealed class CommonNameReportCommand : AsyncCommand<CommonNameReportCom
                         cancellationToken.ThrowIfCancellationRequested();
                         progress.Increment(1);
 
+                        // A junk name does not count as having the name, as for the verdicts.
                         var records = store.GetCommonNamesByNormalized(normalizedName, "en")
                             .Where(r => r.TaxonValidityStatus == "valid" && !r.TaxonIsFossil)
+                            .Where(r => CommonNameChooser.UsableName(new CommonNameCandidate(r.RawName, r.NormalizedName, r.Source, r.IsPreferred))
+                                ?.NormalizedName == normalizedName)
                             .ToList();
 
                         if (!string.IsNullOrWhiteSpace(settings.Kingdom)) {
@@ -517,8 +520,8 @@ internal sealed class CommonNameReportCommand : AsyncCommand<CommonNameReportCom
             sb.AppendLine();
 
             var issues = new List<TraceIssue>();
-            var ambiguousNames = store.GetAmbiguousNames("en");
-            var capsRules = store.GetAllCapsRules();
+            var chooser = CommonNameChooser.ForStore(store);
+            var ambiguousNames = chooser.Ambiguous;
 
             foreach (var group in groups) {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -548,7 +551,13 @@ internal sealed class CommonNameReportCommand : AsyncCommand<CommonNameReportCom
                         .ToList();
 
                     var englishCandidates = traceCandidates.Where(c => c.IsEnglish).ToList();
-                    var selected = SelectBestCandidate(englishCandidates);
+                    // The name the lists would show: the chooser's pick from the store (rules-list.txt
+                    // is not read here), then its unusable check.
+                    var chosen = chooser.FromStore(storeTaxonId.Value,
+                        CommonNameStore.ToCandidates(englishCandidates.Select(c => c.Record)), taxon.ScientificName);
+                    var selected = chosen is null
+                        ? null
+                        : englishCandidates.FirstOrDefault(c => c.Record.RawName == chosen.RawName && c.Record.Source == chosen.Source);
 
                     sb.AppendLine($"### {taxon.ScientificName}");
                     sb.AppendLine();
@@ -558,9 +567,12 @@ internal sealed class CommonNameReportCommand : AsyncCommand<CommonNameReportCom
                     if (!string.IsNullOrWhiteSpace(taxon.FamilyName)) sb.AppendLine($"- Family: {taxon.FamilyName}");
 
                     if (selected != null) {
-                        var displayName = GetDisplayName(selected.Record, capsRules);
+                        var displayName = chosen!.DisplayName;
                         sb.AppendLine($"- Selected common name: **{selected.Record.RawName}** (source: {selected.Record.Source}, preferred: {(selected.Record.IsPreferred ? "yes" : "no")}, priority: {selected.Priority})");
                         sb.AppendLine($"- Selected display name: **{displayName}**");
+                        if (CommonNameChooser.IsUnusable(displayName, taxon.ScientificName, taxon.GenusName, taxon.SpeciesName)) {
+                            sb.AppendLine("- The Wikipedia lists show no common name for this taxon: the selected name is the scientific name again, a working name or an authority.");
+                        }
                     } else {
                         sb.AppendLine("- Selected common name: **(none)**");
                     }
@@ -723,20 +735,6 @@ internal sealed class CommonNameReportCommand : AsyncCommand<CommonNameReportCom
             matchesScientific,
             hasDisambigSuffix
         );
-    }
-
-    private static TraceCandidate? SelectBestCandidate(IReadOnlyList<TraceCandidate> candidates) {
-        return candidates
-            .Where(c => !c.MatchesScientific && !c.IsAmbiguous)
-            .OrderBy(c => c.Priority)
-            .ThenByDescending(c => c.Record.IsPreferred)
-            .ThenBy(c => c.Record.RawName, StringComparer.OrdinalIgnoreCase)
-            .FirstOrDefault();
-    }
-
-    private static string GetDisplayName(CommonNameRecord record, IReadOnlyDictionary<string, string> capsRules) {
-        var baseName = record.RawName;
-        return CommonNameNormalizer.ApplyCapitalization(baseName, capsRules);
     }
 
     private static void AddTraceIssues(

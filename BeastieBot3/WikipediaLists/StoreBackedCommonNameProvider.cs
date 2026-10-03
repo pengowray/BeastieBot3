@@ -6,11 +6,10 @@ using BeastieBot3.CommonNames;
 using BeastieBot3.Taxonomy;
 using BeastieBot3.Wikipedia;
 
-// CommonNameStore-backed provider for Wikipedia list generation. Queries
-// aggregated common names with source priority (IUCN > Wikipedia > Wikidata).
-// Handles ambiguity detection (names shared by multiple taxa). Applies
-// caps-list.txt overrides for display capitalization. Uses WikipediaCacheStore
-// to check if common name matches Wikipedia article title.
+// CommonNameStore-backed provider for Wikipedia list generation: finds a taxon's names in the
+// store and has CommonNameChooser pick and capitalise the best one (source priority, ambiguous
+// names skipped, caps.txt rules). Also gives Wikipedia article titles from the store and redirect
+// targets from the Wikipedia cache.
 
 namespace BeastieBot3.WikipediaLists;
 
@@ -23,7 +22,6 @@ internal sealed class StoreBackedCommonNameProvider : IDisposable {
     private readonly bool _ownsStore;
     private readonly WikipediaCacheStore? _wikiCache;
     private readonly bool _ownsWikiCache;
-    private readonly Dictionary<string, string> _capsRules;
     private readonly bool _allowAmbiguous;
 
     // Per-run memoization. Generation resolves the same taxon's id/name/article several times per
@@ -36,13 +34,13 @@ internal sealed class StoreBackedCommonNameProvider : IDisposable {
     private readonly Dictionary<string, string?> _articleByScientificCache = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
-    /// Creates a provider that owns and will dispose the store.
+    /// Creates a provider that owns and will dispose the store, which it opens read-only.
     /// </summary>
     public StoreBackedCommonNameProvider(string commonNameDbPath, string? wikipediaCachePath = null, bool allowAmbiguous = false) {
-        _store = CommonNameStore.Open(commonNameDbPath);
+        _store = CommonNameStore.OpenReadOnly(commonNameDbPath);
         _ownsStore = true;
-        _capsRules = _store.GetAllCapsRules();
         _allowAmbiguous = allowAmbiguous;
+        Chooser = CommonNameChooser.ForStore(_store, allowAmbiguous: allowAmbiguous);
 
         if (!string.IsNullOrWhiteSpace(wikipediaCachePath) && File.Exists(wikipediaCachePath)) {
             _wikiCache = WikipediaCacheStore.Open(wikipediaCachePath);
@@ -59,8 +57,8 @@ internal sealed class StoreBackedCommonNameProvider : IDisposable {
     public StoreBackedCommonNameProvider(CommonNameStore store, WikipediaCacheStore? wikiCache = null, bool allowAmbiguous = false) {
         _store = store ?? throw new ArgumentNullException(nameof(store));
         _ownsStore = false;
-        _capsRules = _store.GetAllCapsRules();
         _allowAmbiguous = allowAmbiguous;
+        Chooser = CommonNameChooser.ForStore(_store, allowAmbiguous: allowAmbiguous);
         _wikiCache = wikiCache;
         _ownsWikiCache = false;
     }
@@ -72,6 +70,12 @@ internal sealed class StoreBackedCommonNameProvider : IDisposable {
     /// so reading this before generation costs nothing extra.
     /// </summary>
     public int AmbiguousNameCount => _allowAmbiguous ? 0 : _store.GetAmbiguousNames("en").Count;
+
+    /// <summary>
+    /// The chooser this provider picks store names with; it has no rules-list.txt
+    /// (<see cref="CommonNameChooser.WithRules"/> adds one).
+    /// </summary>
+    public CommonNameChooser Chooser { get; }
 
     /// <summary>
     /// Get the best common name for a species record.
@@ -87,13 +91,10 @@ internal sealed class StoreBackedCommonNameProvider : IDisposable {
 
         // Look up by taxon_id (which maps to IUCN sis_id as primary_source_id)
         var taxonId = FindTaxonId(record);
-        string? resolved = null;
-        if (taxonId.HasValue) {
-            var result = _store.GetBestCommonNameForTaxon(taxonId.Value, "en", _allowAmbiguous);
-            if (result is not null) {
-                resolved = ApplyCapitalization(result.DisplayName);
-            }
-        }
+        var binomial = !string.IsNullOrWhiteSpace(record.GenusName) && !string.IsNullOrWhiteSpace(record.SpeciesName)
+            ? $"{record.GenusName} {record.SpeciesName}"
+            : record.ScientificNameTaxonomy;
+        var resolved = taxonId.HasValue ? BestStoreName(taxonId.Value, binomial) : null;
 
         _commonNameCache[record.TaxonId] = resolved;
         return resolved;
@@ -108,62 +109,19 @@ internal sealed class StoreBackedCommonNameProvider : IDisposable {
         }
 
         var taxonId = FindTaxonIdByScientificName(scientificName, kingdom);
-        if (!taxonId.HasValue) {
-            return null;
-        }
-
-        var result = _store.GetBestCommonNameForTaxon(taxonId.Value, "en", _allowAmbiguous);
-        if (result is null) {
-            return null;
-        }
-
-        return ApplyCapitalization(result.DisplayName);
+        return taxonId.HasValue ? BestStoreName(taxonId.Value, scientificName) : null;
     }
 
-    /// <summary>
-    /// Get the best common name for a taxon by its IUCN taxon ID.
-    /// </summary>
-    public string? GetBestCommonNameByTaxonId(long iucnTaxonId) {
-        // The taxa table uses primary_source_id = taxon_id for IUCN taxa
-        var taxonId = _store.FindTaxonBySourceId("iucn", iucnTaxonId.ToString());
-        if (!taxonId.HasValue) {
-            return null;
-        }
-
-        var result = _store.GetBestCommonNameForTaxon(taxonId.Value, "en", _allowAmbiguous);
-        if (result is null) {
-            return null;
-        }
-
-        return ApplyCapitalization(result.DisplayName);
-    }
+    // The store's best English name for a store taxon, repaired and capitalised; null when it has
+    // none that is usable and not ambiguous for it. scientificName lets the chooser skip a name
+    // that is the scientific name with a subgenus.
+    private string? BestStoreName(long storeTaxonId, string? scientificName) =>
+        Chooser.FromStore(storeTaxonId, CommonNameStore.ToCandidates(_store.GetCommonNamesForTaxon(storeTaxonId, "en")),
+            scientificName)?.DisplayName;
 
     /// <summary>
-    /// Get the full result including source and ambiguity info.
-    /// </summary>
-    public CommonNameResult? GetBestCommonNameResult(IucnSpeciesRecord record) {
-        if (record is null) {
-            return null;
-        }
-
-        var taxonId = FindTaxonId(record);
-        if (!taxonId.HasValue) {
-            return null;
-        }
-
-        var result = _store.GetBestCommonNameForTaxon(taxonId.Value, "en", _allowAmbiguous);
-        if (result is null) {
-            return null;
-        }
-
-        // Apply capitalization and return updated result
-        var displayName = ApplyCapitalization(result.DisplayName);
-        return result with { DisplayName = displayName };
-    }
-
-    /// <summary>
-    /// Get the Wikipedia article title for a species record.
-    /// Returns the article title from wikipedia_title or wikipedia_taxobox sources.
+    /// Get the Wikipedia article title for a species record: the page its wikipedia_title or
+    /// wikipedia_taxobox name came from (<see cref="CommonNameStore.GetWikipediaArticleTitle"/>).
     /// </summary>
     public string? GetWikipediaArticleTitle(IucnSpeciesRecord record) {
         if (record is null) {
@@ -223,36 +181,6 @@ internal sealed class StoreBackedCommonNameProvider : IDisposable {
         return summary.RedirectTarget;
     }
 
-    /// <summary>
-    /// Batch lookup for multiple records.
-    /// </summary>
-    public Dictionary<long, string> GetBestCommonNames(IEnumerable<IucnSpeciesRecord> records) {
-        var results = new Dictionary<long, string>();
-        var taxonIdMap = new Dictionary<long, long>(); // iucnTaxonId -> store taxonId
-
-        foreach (var record in records) {
-            var taxonId = FindTaxonId(record);
-            if (taxonId.HasValue) {
-                taxonIdMap[record.TaxonId] = taxonId.Value;
-            }
-        }
-
-        if (taxonIdMap.Count == 0) {
-            return results;
-        }
-
-        var storeResults = _store.GetBestCommonNamesForTaxa(taxonIdMap.Values, "en", _allowAmbiguous);
-
-        // Map back to IUCN taxon IDs
-        foreach (var (iucnTaxonId, storeTaxonId) in taxonIdMap) {
-            if (storeResults.TryGetValue(storeTaxonId, out var result)) {
-                results[iucnTaxonId] = ApplyCapitalization(result.DisplayName);
-            }
-        }
-
-        return results;
-    }
-
     private long? FindTaxonId(IucnSpeciesRecord record) {
         if (_storeTaxonIdCache.TryGetValue(record.TaxonId, out var cached)) {
             return cached;
@@ -290,20 +218,6 @@ internal sealed class StoreBackedCommonNameProvider : IDisposable {
 
         // Fall back to kingdom-agnostic lookup
         return _store.FindTaxonByScientificName(scientificName);
-    }
-
-    private string ApplyCapitalization(string name) {
-        if (string.IsNullOrWhiteSpace(name)) {
-            return name;
-        }
-
-        // Delegate to the shared caps.txt-driven normalizer (same path the common-names report uses):
-        // the first word is title-cased; subsequent words are lowercased unless caps.txt — including
-        // multi-word phrase rules like "guinea pig" — or an internal-caps / possessive signal keeps
-        // them capitalized. It also straightens apostrophes and collapses stray double-spaces. This
-        // replaces the old "leave mixed case alone" behaviour that leaked IUCN house-style
-        // capitalization such as "African banded Barb".
-        return CommonNameNormalizer.ApplyCapitalization(name, _capsRules);
     }
 
     public void Dispose() {

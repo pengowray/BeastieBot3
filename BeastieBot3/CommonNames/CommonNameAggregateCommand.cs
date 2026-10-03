@@ -808,7 +808,7 @@ internal sealed class CommonNameAggregateCommand : AsyncCommand<CommonNameAggreg
 
                         // Extract common name from taxobox "name" field
                         if (!string.IsNullOrWhiteSpace(taxoboxJson)) {
-                            var taxoboxName = ExtractTaxoboxName(taxoboxJson);
+                            var taxoboxName = ExtractTaxoboxName(taxoboxJson, pageTitle);
                             if (!string.IsNullOrWhiteSpace(taxoboxName) && !LooksLikeScientificName(taxoboxName)) {
                                 var taxoboxNormalized = CommonNameNormalizer.NormalizeForMatching(taxoboxName);
                                 var cleanTitleNormalized = CommonNameNormalizer.NormalizeForMatching(cleanTitle);
@@ -836,31 +836,15 @@ internal sealed class CommonNameAggregateCommand : AsyncCommand<CommonNameAggreg
         }, cancellationToken);
     }
 
-    private static string? ExtractTaxoboxName(string json) {
+    private static string? ExtractTaxoboxName(string json, string pageTitle) {
         try {
             using var document = JsonDocument.Parse(json);
             var root = document.RootElement;
 
-            // The taxobox "name" field typically contains the common name
+            // The taxobox "name" field typically contains the common name, as wikitext that can
+            // hold several names, templates, references and the next parameter (TaxoboxCommonName).
             if (root.TryGetProperty("name", out var nameProp) && nameProp.ValueKind == JsonValueKind.String) {
-                var name = nameProp.GetString()?.Trim();
-                if (string.IsNullOrWhiteSpace(name)) return null;
-
-                // Clean up wiki markup if present
-                // Remove things like [[...]], {{...}}, <ref>...</ref>
-                name = System.Text.RegularExpressions.Regex.Replace(name, @"\[\[([^\]|]*\|)?([^\]]*)\]\]", "$2");
-                name = System.Text.RegularExpressions.Regex.Replace(name, @"\{\{[^}]*\}\}", "");
-                name = System.Text.RegularExpressions.Regex.Replace(name, @"<ref[^>]*>.*?</ref>", "", System.Text.RegularExpressions.RegexOptions.Singleline);
-                name = System.Text.RegularExpressions.Regex.Replace(name, @"<[^>]+>", "");
-                name = name.Trim();
-
-                // Skip if it looks like a scientific name (italic binomial)
-                if (name.Contains("''")) return null;
-
-                // Skip if empty after cleanup
-                if (string.IsNullOrWhiteSpace(name)) return null;
-
-                return name;
+                return TaxoboxCommonName.FromNameField(nameProp.GetString(), pageTitle);
             }
         } catch (JsonException) {
             // Ignore malformed JSON
