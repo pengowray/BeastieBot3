@@ -232,7 +232,7 @@ public static class FlowCatalogue {
                     Optional = true,
                     Section = FlowSection.StepByStep,
                     Group = "From the IUCN API",
-                    Note = "`iucn api cache-all` runs this after cache-assessments on every run, with or without --full. For release 2026-1 it found 304 assessments: 303 subpopulations and 1 variety. Assessments the API answered \"not found\" (HTTP 404) for are left out unless you add --retry-tombstones.",
+                    Note = "`iucn api cache-all` runs this step after cache-assessments on every run, with or without --full. For release 2026-1, this step downloaded 304 assessments: 303 subpopulations and 1 variety. Assessments the API answered \"not found\" (HTTP 404) for are left out unless you add --retry-tombstones.",
                 },
                 new FlowStep {
                     Id = "api-stale-latest",
@@ -244,7 +244,7 @@ public static class FlowCatalogue {
                     Optional = true,
                     Section = FlowSection.StepByStep,
                     Group = "From the IUCN API",
-                    Note = "It reads every cached assessment, which can take a minute. `iucn api cache-all` runs it when given --full or --stale-latest. When the taxon record is the older copy, the command lists those taxa and the `iucn api cache-taxa --refresh-before` command that downloads their taxon records again. Assessments the API answered \"not found\" (HTTP 404) for are left out unless you add --retry-tombstones.",
+                    Note = "This step reads every cached assessment, which can take a minute. `iucn api cache-all` runs this step when given --full or --stale-latest. When the taxon record is the older copy, the command lists those taxa and the `iucn api cache-taxa --refresh-before` command that downloads their taxon records again. Assessments the API answered \"not found\" (HTTP 404) for are left out unless you add --retry-tombstones.",
                 },
                 new FlowStep {
                     Id = "api-project-view",
