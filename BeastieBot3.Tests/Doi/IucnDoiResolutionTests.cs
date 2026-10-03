@@ -66,6 +66,16 @@ public class IucnDoiResolutionTests {
     }
 
     [Fact]
+    public void Crossref_ErrataVersion_TakesALinkedDoiNamingAnAssessmentFromAnotherYear() {
+        // Pinus pinea: errata version 129160976 (published 2018) of the 2013 assessment 2977175, which
+        // the same-year predecessor rule does not find.
+        var target = Target(42391, 129160976, 2013, errataYear: 2018, predecessors: []);
+        var choice = IucnDoiResolution.ChooseFromCrossref(target, [Work("2013-1", 42391, 2977175, 129160976)]);
+        Assert.Equal("10.2305/IUCN.UK.2013-1.RLTS.T42391A2977175.en", choice.Doi);
+        Assert.Contains("2977175", choice.Note);
+    }
+
+    [Fact]
     public void Crossref_OtherTaxon_IsNotUsed() {
         var choice = IucnDoiResolution.ChooseFromCrossref(Target(5, 10, 2020), [Work("2020-1", 6, 10, 10)]);
         Assert.Null(choice.Doi);

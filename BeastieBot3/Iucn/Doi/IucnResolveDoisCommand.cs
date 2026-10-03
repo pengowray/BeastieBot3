@@ -187,15 +187,15 @@ internal sealed class IucnResolveDoisCommand : AsyncCommand<IucnResolveDoisComma
             summary.RateLimited = doiOrg.RateLimited;
         } catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) {
             AnsiConsole.MarkupLine("[yellow]Stopped. Every result found so far is saved; run the command again to continue.[/]");
-            WriteSummary(scopeName, summary, plan);
+            WriteSummary(scopeName, summary, DoiRunPlan.Make(found.Targets, store.ReadChecks(), false, null, DateTime.UtcNow));
             return 1;
         } catch (PoliteHttpException ex) {
             AnsiConsole.MarkupLineInterpolated($"[red]Stopped: {ex.Message}[/] ({ex.Url})");
             AnsiConsole.MarkupLine("Every result found so far is saved; run the command again to continue.");
-            WriteSummary(scopeName, summary, plan);
+            WriteSummary(scopeName, summary, DoiRunPlan.Make(found.Targets, store.ReadChecks(), false, null, DateTime.UtcNow));
             return 2;
         }
-        WriteSummary(scopeName, summary, plan);
+        WriteSummary(scopeName, summary, DoiRunPlan.Make(found.Targets, store.ReadChecks(), false, null, DateTime.UtcNow));
         return summary.StoppedByErrors ? 2 : 0;
     }
 
@@ -280,6 +280,7 @@ internal sealed class IucnResolveDoisCommand : AsyncCommand<IucnResolveDoisComma
             summary.NotFound++;
             return true;
         }
+        summary.Probed++;
         var result = await IucnDoiResolution.ProbeAsync(target, candidates, lookup, () => DateTime.UtcNow, cancellationToken).ConfigureAwait(false);
         year.Lookups += result.Tried;
         if (!result.Complete) {
@@ -331,7 +332,7 @@ internal sealed class IucnResolveDoisCommand : AsyncCommand<IucnResolveDoisComma
         }
     }
 
-    private static void WriteSummary(string scopeName, DoiRunSummary summary, DoiRunPlan plan) {
+    private static void WriteSummary(string scopeName, DoiRunSummary summary, DoiRunPlan cache) {
         var table = new Table().Title($"DOI checks this run, scope {scopeName}")
             .AddColumn("Year published")
             .AddColumn(new TableColumn("Checked").RightAligned())
@@ -359,10 +360,9 @@ internal sealed class IucnResolveDoisCommand : AsyncCommand<IucnResolveDoisComma
         Row("Total", summary.Totals());
         AnsiConsole.Write(table);
 
-        var saved = summary.FoundCrossref + summary.FoundDoiOrg + summary.NotFound;
-        var probed = summary.FoundDoiOrg + summary.NotFound + summary.Errors;
-        AnsiConsole.MarkupLineInterpolated($"Requests to doi.org: {summary.DoiOrgRequests:N0} ({(probed == 0 ? 0 : (double)summary.DoiOrgRequests / probed):0.##} for each assessment checked at doi.org). HTTP 429 answers: {summary.RateLimited:N0}.");
-        AnsiConsole.MarkupLineInterpolated($"Still to check in scope {scopeName}: {plan.ToCheck.Count - saved:N0} assessments.");
+        var perAssessment = summary.Probed == 0 ? 0 : (double)summary.DoiOrgRequests / summary.Probed;
+        AnsiConsole.MarkupLineInterpolated($"Requests to doi.org: {summary.DoiOrgRequests:N0} for {summary.Probed:N0} assessments ({perAssessment:0.##} each). HTTP 429 answers: {summary.RateLimited:N0}.");
+        AnsiConsole.MarkupLineInterpolated($"DOI cache, scope {scopeName}: {cache.CheckedFound:N0} assessments with a DOI, {cache.CheckedNotFound:N0} with no DOI found, {cache.ToCheck.Count:N0} not checked yet.");
     }
 }
 
@@ -410,6 +410,8 @@ internal sealed class DoiRunSummary {
     public int NotInCrossref { get; set; }
     public int Errors { get; set; }
     public int CrossrefNotes { get; set; }
+    /// Assessments with at least one doi.org lookup.
+    public int Probed { get; set; }
     public int DoiOrgRequests { get; set; }
     public int RateLimited { get; set; }
     public bool StoppedByErrors { get; set; }

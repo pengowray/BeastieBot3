@@ -95,6 +95,20 @@ internal static class IucnDoiResolution {
         if (accepted.Count > 0) {
             return new CrossrefChoice(accepted[0].Doi, accepted.Count > 1 ? $"Crossref lists {accepted.Count} DOIs pointing to this page: {string.Join(", ", accepted.Select(w => w.Doi))}" : null);
         }
+        // An errata version whose replaced assessment IucnTaxaHeaders.PredecessorIds does not find
+        // (published in another year, or missing from the taxon record): Crossref's link from the DOI
+        // to this page shows which assessment it replaced. 5 of the 2026-1 latest global assessments
+        // (Pinus pinea, errata 2018 of 2013: 10.2305/IUCN.UK.2013-1.RLTS.T42391A2977175.en).
+        if (target.ErrataYear is not null) {
+            var linked = redirected
+                .Where(w => w.TaxonId == target.TaxonId
+                    && IucnDoiSelector.IsAccepted(IucnDoiSelector.Check(PartsFor(target), w.Doi, target.PredecessorIds.Append(w.AssessmentId).ToList())))
+                .ToList();
+            if (linked.Count > 0) {
+                return new CrossrefChoice(linked[0].Doi,
+                    $"Crossref links {linked[0].Doi} to this errata version's page; it names assessment {linked[0].AssessmentId.ToString(CultureInfo.InvariantCulture)}, which this errata version replaced.");
+            }
+        }
         if (redirected.Count > 0) {
             return new CrossrefChoice(null,
                 $"Crossref lists {string.Join(", ", redirected.Select(w => w.Doi))} pointing to this assessment's page, but its ids do not fit this assessment (not an errata version, or not one it replaced)");
