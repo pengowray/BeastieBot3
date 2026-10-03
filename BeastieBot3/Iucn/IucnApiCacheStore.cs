@@ -743,6 +743,96 @@ FROM refresh_sessions WHERE {where} ORDER BY id DESC LIMIT 1";
         return list;
     }
 
+    // ---- assessments outside the backlog ----------------------------------------------------
+    // The backlog holds the assessment ids listed in cached taxon records. Some assessments in the
+    // CSV export are listed in none: a subpopulation has no taxon record of its own (taxa_lookup
+    // maps it to its species' row, whose assessments[] leaves it out), and a few taxa answer 404.
+    // cache-assessments --csv-missing downloads those by id, so the assessments table can hold
+    // payloads that no backlog row points at.
+
+    /// <summary>Every assessment id with a cached payload. Reads only the unique index.</summary>
+    public HashSet<long> GetCachedAssessmentIds() {
+        using var command = _connection.CreateCommand();
+        command.CommandText = "SELECT assessment_id FROM assessments";
+        var ids = new HashSet<long>();
+        using var reader = command.ExecuteReader();
+        while (reader.Read()) ids.Add(reader.GetInt64(0));
+        return ids;
+    }
+
+    /// <summary>
+    /// Cached payloads that no taxon record lists, with the payload's own <c>latest</c> flag (false
+    /// when the payload has none). A refresh counts these like every other payload older than its
+    /// cutoff, so cache-assessments has to queue them, or the refresh never closes.
+    /// </summary>
+    // Two queries rather than one: the NOT EXISTS scan reads only the assessment_id index (0.16 s on
+    // the live cache), and a single query that also returned downloaded_at and the JSON made SQLite
+    // scan the table itself. The second query looks up the few rows the first one found.
+    public IReadOnlyList<AssessmentQueueRow> GetAssessmentsNoTaxonRecordLists() {
+        var ids = new List<long>();
+        using (var command = _connection.CreateCommand()) {
+            command.CommandText = @"SELECT a.assessment_id FROM assessments a
+WHERE NOT EXISTS (SELECT 1 FROM taxa_assessment_backlog b WHERE b.assessment_id = a.assessment_id)
+ORDER BY a.assessment_id";
+            using var reader = command.ExecuteReader();
+            while (reader.Read()) ids.Add(reader.GetInt64(0));
+        }
+
+        var rows = new List<AssessmentQueueRow>(ids.Count);
+        if (ids.Count == 0) return rows;
+
+        using var detail = _connection.CreateCommand();
+        detail.CommandText = @"SELECT sis_id, downloaded_at,
+       CASE WHEN json_valid(json) THEN json_type(json, '$.latest') = 'true' END
+FROM assessments WHERE assessment_id = @id";
+        var idParam = detail.Parameters.Add("@id", SqliteType.Integer);
+        foreach (var id in ids) {
+            idParam.Value = id;
+            using var reader = detail.ExecuteReader();
+            if (!reader.Read()) continue;
+            var sisId = reader.GetInt64(0);
+            var downloadedAt = StoredUtc.Parse(reader.IsDBNull(1) ? null : reader.GetString(1));
+            var latest = !reader.IsDBNull(2) && reader.GetInt64(2) != 0;
+            rows.Add(new AssessmentQueueRow(id, sisId, 0, latest, null, downloadedAt));
+        }
+        return rows;
+    }
+
+    /// <summary>
+    /// Cached payloads whose own <c>latest</c> flag disagrees with the header for the same
+    /// assessment in their taxon record, with both download times. A payload with no boolean
+    /// <c>latest</c> is left out: there is nothing to compare.
+    /// </summary>
+    // This reads every payload's JSON (about 4.5 GB on the live cache). CROSS JOIN keeps SQLite
+    // scanning assessments in rowid order and looking each backlog and taxa row up by its primary
+    // key: in that order the scan took 7.8 s warm, against 56 s cold when SQLite walked the backlog
+    // index and fetched each payload at random. For a download run only, never a polled reader.
+    public IReadOnlyList<StaleLatestRow> GetAssessmentsWithDisagreeingLatestFlag() {
+        using var command = _connection.CreateCommand();
+        // json_valid first, inside the CASE, so one malformed payload is skipped rather than
+        // aborting the whole scan with "malformed JSON".
+        command.CommandText = @"SELECT p.assessment_id, b.sis_id, b.root_sis_id, b.latest, b.year_published,
+       p.downloaded_at, t.downloaded_at, t.root_sis_id
+FROM (SELECT a.assessment_id, a.downloaded_at,
+             CASE WHEN json_valid(a.json) THEN json_type(a.json, '$.latest') END AS payload_latest
+      FROM assessments a) p
+CROSS JOIN taxa_assessment_backlog b ON b.assessment_id = p.assessment_id
+JOIN taxa t ON t.id = b.taxa_id
+WHERE p.payload_latest IN ('true', 'false')
+  AND (p.payload_latest = 'true') <> (b.latest <> 0)";
+        var rows = new List<StaleLatestRow>();
+        using var reader = command.ExecuteReader();
+        while (reader.Read()) {
+            var headerLatest = reader.GetInt64(3) != 0;
+            int? year = reader.IsDBNull(4) ? null : reader.GetInt32(4);
+            var payloadAt = StoredUtc.Parse(reader.IsDBNull(5) ? null : reader.GetString(5));
+            var taxonAt = StoredUtc.Parse(reader.IsDBNull(6) ? null : reader.GetString(6));
+            var row = new AssessmentQueueRow(reader.GetInt64(0), reader.GetInt64(1), reader.GetInt64(2), headerLatest, year, payloadAt);
+            rows.Add(new StaleLatestRow(row, PayloadLatest: !headerLatest, taxonAt, reader.GetInt64(7)));
+        }
+        return rows;
+    }
+
     public long CountTaxa() => Scalar("SELECT COUNT(*) FROM taxa");
     public long CountAssessments() => Scalar("SELECT COUNT(*) FROM assessments");
     // Queued assessments not downloaded yet, split by what a normal cache-assessments run does with
@@ -817,3 +907,10 @@ internal readonly record struct RefreshRemainingCounts(long Remaining, long NotF
 internal sealed record TaxaLookupRow(long SisId, long RootSisId, string Scope);
 
 internal sealed record AssessmentQueueRow(long AssessmentId, long SisId, long RootSisId, bool Latest, int? YearPublished, DateTime? DownloadedAt);
+
+/// <summary>
+/// A cached payload whose <c>latest</c> flag disagrees with its taxon record. <c>Row.Latest</c> is the
+/// taxon record's header; <see cref="PayloadLatest"/> is the payload's own flag.
+/// <see cref="TaxonDownloadedAt"/> says which copy is older, and so which one to download again.
+/// </summary>
+internal sealed record StaleLatestRow(AssessmentQueueRow Row, bool PayloadLatest, DateTime? TaxonDownloadedAt, long TaxonRootSisId);

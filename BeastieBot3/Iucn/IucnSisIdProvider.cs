@@ -7,6 +7,7 @@ using Microsoft.Data.Sqlite;
 // database (taxonomy table). Returns IDs in ascending order, supporting
 // optional limit for testing. Used by IucnApiCacheTaxaCommand to determine
 // which taxa to fetch from API. Yields lazily to handle ~200K species.
+// Also lists the CSV's assessment ids, for cache-assessments --csv-missing.
 
 namespace BeastieBot3.Iucn;
 
@@ -62,6 +63,31 @@ internal sealed class IucnSisIdProvider {
         if (limit.HasValue) {
             command.Parameters.AddWithValue("@limit", limit.Value);
         }
+
+        using var reader = command.ExecuteReader();
+        while (reader.Read()) {
+            cancellationToken.ThrowIfCancellationRequested();
+            yield return reader.GetInt64(0);
+        }
+    }
+
+    /// <summary>
+    /// Every assessment id in the CSV export, in ascending order: species, subspecies, varieties and
+    /// subpopulations alike. Used by <c>cache-assessments --csv-missing</c> to find assessments no
+    /// cached taxon record lists. Read lazily, so a run that never enumerates it never opens the file.
+    /// </summary>
+    public IEnumerable<long> ReadAssessmentIds(CancellationToken cancellationToken) {
+        var builder = new SqliteConnectionStringBuilder {
+            DataSource = _databasePath,
+            Mode = SqliteOpenMode.ReadOnly
+        };
+
+        using var connection = new SqliteConnection(builder.ConnectionString);
+        connection.Open();
+
+        var table = ObjectExists(connection, "assessments_html") ? "assessments_html" : "assessments";
+        using var command = connection.CreateCommand();
+        command.CommandText = $"SELECT DISTINCT assessmentId FROM {table} ORDER BY assessmentId";
 
         using var reader = command.ExecuteReader();
         while (reader.Read()) {
