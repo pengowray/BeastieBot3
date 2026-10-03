@@ -271,8 +271,11 @@ internal sealed class IucnResolveDoisCommand : AsyncCommand<IucnResolveDoisComma
         DoiYearCounts year, DoiRunSummary summary, CancellationToken cancellationToken) {
         var candidates = IucnDoiCandidates.For(target.CandidateRequest());
         if (candidates.Count == 0) {
+            var reason = target.YearPublished is null
+                ? "No year published, so no DOI to check."
+                : $"Published before {IucnDoiCandidates.FirstDoiYear}, the first year with IUCN Red List DOIs.";
             store.SaveCheck(new DoiCheckRow(target.AssessmentId, target.TaxonId, null, DateTime.UtcNow, 0),
-                null, target.Scope, target.YearPublished, "No year published, so no DOI to check.", Array.Empty<DoiLookupLogRow>());
+                null, target.Scope, target.YearPublished, reason, Array.Empty<DoiLookupLogRow>());
             year.NotFound++;
             summary.NotFound++;
             return true;
@@ -356,9 +359,10 @@ internal sealed class IucnResolveDoisCommand : AsyncCommand<IucnResolveDoisComma
         Row("Total", summary.Totals());
         AnsiConsole.Write(table);
 
-        var left = plan.ToCheck.Count - summary.Checked + summary.Errors + summary.NotInCrossref;
-        AnsiConsole.MarkupLineInterpolated($"Requests to doi.org: {summary.DoiOrgRequests:N0} ({(summary.Checked == 0 ? 0 : (double)summary.DoiOrgRequests / summary.Checked):0.##} per assessment checked). HTTP 429 answers: {summary.RateLimited:N0}.");
-        AnsiConsole.MarkupLineInterpolated($"Left to check in scope {scopeName}: {left:N0} of {plan.ToCheck.Count:N0}.");
+        var saved = summary.FoundCrossref + summary.FoundDoiOrg + summary.NotFound;
+        var probed = summary.FoundDoiOrg + summary.NotFound + summary.Errors;
+        AnsiConsole.MarkupLineInterpolated($"Requests to doi.org: {summary.DoiOrgRequests:N0} ({(probed == 0 ? 0 : (double)summary.DoiOrgRequests / probed):0.##} for each assessment checked at doi.org). HTTP 429 answers: {summary.RateLimited:N0}.");
+        AnsiConsole.MarkupLineInterpolated($"Still to check in scope {scopeName}: {plan.ToCheck.Count - saved:N0} assessments.");
     }
 }
 

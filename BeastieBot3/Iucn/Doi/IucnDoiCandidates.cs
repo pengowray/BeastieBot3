@@ -9,6 +9,8 @@ using System.Globalization;
 // DOIs of that year use each one (counted over 64,484 assessments whose DOI is known from IUCN's
 // citations and Wikidata, October 2026):
 //
+//   before 1996   none: no Crossref DOI names an assessment published before 1996 (31,000 earlier
+//                 assessments from 1965 to 1994 checked in October 2026)
 //   1996 to 2008  the bare year ("2004")
 //   2009          2009-2 1,236; 2009 226; 2009-1 1
 //   2010          2010-3 3,063; 2010-4 1,659; 2010-2 610; 2010-1 30; 2010 1
@@ -79,6 +81,9 @@ internal static class IucnDoiCandidates {
     /// table does not list are tried after the listed ones.
     public const int NewestKnownYear = 2026;
 
+    /// The first year with IUCN Red List DOIs.
+    public const int FirstDoiYear = 1996;
+
     private static readonly Dictionary<int, string[]> KnownReleases = new() {
         [2009] = ["2009-2", "2009", "2009-1"],
         [2010] = ["2010-3", "2010-4", "2010-2", "2010-1", "2010"],
@@ -103,6 +108,9 @@ internal static class IucnDoiCandidates {
     /// The release tokens of one year, most likely first.
     public static IReadOnlyList<string> ReleasesFor(int year) {
         var y = year.ToString(CultureInfo.InvariantCulture);
+        if (year < FirstDoiYear) {
+            return [];
+        }
         if (year <= 2008) {
             return [y];
         }
@@ -147,7 +155,8 @@ internal static class IucnDoiCandidates {
     /// Whether an errata version published this year kept its predecessor's DOI (2015 to 2018).
     public static bool ErrataKeepsPredecessorDoi(int? errataYear) => errataYear is >= 2015 and <= 2018;
 
-    /// Every candidate DOI, most likely first, without repeats. Empty when the year published is unknown.
+    /// Every candidate DOI, most likely first, without repeats. Empty when the year published is
+    /// unknown or before 1996.
     public static IReadOnlyList<DoiCandidate> For(DoiCandidateRequest request) {
         if (request.YearPublished is not { } year) {
             return Array.Empty<DoiCandidate>();
