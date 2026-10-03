@@ -15,7 +15,7 @@ public class CrossrefAndStoreTests {
     private const string Page1 = """
         {"status":"ok","message-type":"work-list","message":{"total-results":4,"next-cursor":"abc+/=","items":[
           {"DOI":"10.2305\/iucn.ch.2005.3.en","resource":{"primary":{"URL":"http:\/\/www.iucn.org\/bookstore\/cover.html"}}},
-          {"DOI":"10.2305\/iucn.uk.2015-4.rlts.t22823a14871490.en","resource":{"primary":{"URL":"https:\/\/www.iucnredlist.org\/species\/22823\/14871490"}}},
+          {"DOI":"10.2305\/iucn.uk.2015-4.rlts.t22823a14871490.en","resource":{"primary":{"URL":"https:\/\/www.iucnredlist.org\/species\/22823\/14871490"}},"title":["Ursus maritimus: Wiig, \u00d8., Amstrup, S. &amp; Atwood, T."]},
           {"DOI":"10.2305\/iucn.uk.2016-2.rlts.t712a45033386.en","resource":{"primary":{"URL":"https:\/\/www.iucnredlist.org\/species\/712\/121745669"}}}
         ]}}
         """;
@@ -38,10 +38,12 @@ public class CrossrefAndStoreTests {
         Assert.Equal(2, page.Works.Count);
         var bear = page.Works[0];
         Assert.Equal(new CrossrefIucnWork("10.2305/IUCN.UK.2015-4.RLTS.T22823A14871490.en", 22823, 14871490, "2015-4", "en",
-            "https://www.iucnredlist.org/species/22823/14871490", 22823, 14871490), bear);
+            "https://www.iucnredlist.org/species/22823/14871490", 22823, 14871490,
+            "Ursus maritimus: Wiig, \u00d8., Amstrup, S. &amp; Atwood, T."), bear);
         var panda = page.Works[1];
         Assert.Equal(45033386, panda.AssessmentId);
         Assert.Equal(121745669, panda.UrlAssessmentId);
+        Assert.Null(panda.Title);
         Assert.Empty(page.UnreadRlts);
     }
 
@@ -67,7 +69,7 @@ public class CrossrefAndStoreTests {
         var listingId = await CrossrefIucnWorks.DownloadAsync(new PoliteHttpGetter(http, TimeSpan.Zero), store, pages.Add, CancellationToken.None);
 
         Assert.Equal(3, handler.Urls.Count);
-        Assert.Equal("https://api.crossref.org/prefixes/10.2305/works?rows=1000&select=DOI,resource&cursor=%2A", handler.Urls[0]);
+        Assert.Equal("https://api.crossref.org/prefixes/10.2305/works?rows=1000&select=DOI,resource,title&cursor=%2A", handler.Urls[0]);
         Assert.EndsWith("cursor=abc%2B%2F%3D", handler.Urls[1]);
         Assert.Equal(2, store.CountCrossrefWorks());
         var listing = Assert.IsType<CrossrefListing>(store.LastCompletedListing());
@@ -99,10 +101,31 @@ public class CrossrefAndStoreTests {
         var listing = store.StartListing(DateTime.UtcNow);
         store.AddListingPage(listing, CrossrefIucnWorks.ParsePage(Page1).Works, 4, 3);
 
-        Assert.Single(store.CrossrefWorksFor(14871490));
+        Assert.Equal("Ursus maritimus: Wiig, \u00d8., Amstrup, S. &amp; Atwood, T.", Assert.Single(store.CrossrefWorksFor(14871490)).Title);
         Assert.Single(store.CrossrefWorksFor(45033386));
         Assert.Equal("10.2305/IUCN.UK.2016-2.RLTS.T712A45033386.en", Assert.Single(store.CrossrefWorksFor(121745669)).Doi);
         Assert.Empty(store.CrossrefWorksFor(1));
+    }
+
+    [Fact]
+    public void Store_CacheFromBeforeTitles_GetsTheColumn_AndTheNextListingFillsIt() {
+        using var connection = new SqliteConnection("Data Source=:memory:");
+        connection.Open();
+        using (var create = connection.CreateCommand()) {
+            create.CommandText = """
+                CREATE TABLE crossref_works (doi TEXT PRIMARY KEY, taxon_id INTEGER NOT NULL, assessment_id INTEGER NOT NULL,
+                    release TEXT, language TEXT, url TEXT, url_taxon_id INTEGER, url_assessment_id INTEGER, listing_id INTEGER NOT NULL);
+                INSERT INTO crossref_works VALUES ('10.2305/IUCN.UK.2015-4.RLTS.T22823A14871490.en', 22823, 14871490, '2015-4', 'en', NULL, NULL, NULL, 1);
+                """;
+            create.ExecuteNonQuery();
+        }
+        Assert.False(IucnDoiCacheStore.HasCrossrefTitles(connection));
+        using var store = IucnDoiCacheStore.OpenFromConnection(connection);
+        Assert.True(IucnDoiCacheStore.HasCrossrefTitles(connection));
+        Assert.Null(Assert.Single(store.CrossrefWorksFor(14871490)).Title);
+
+        store.AddListingPage(store.StartListing(DateTime.UtcNow), CrossrefIucnWorks.ParsePage(Page1).Works, 4, 3);
+        Assert.StartsWith("Ursus maritimus:", Assert.Single(store.CrossrefWorksFor(14871490)).Title);
     }
 
     [Fact]
