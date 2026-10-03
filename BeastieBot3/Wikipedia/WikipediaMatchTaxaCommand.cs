@@ -27,7 +27,7 @@ namespace BeastieBot3.Wikipedia;
     "Attempt to match IUCN taxa to cached Wikipedia pages using Wikidata sitelinks and synonyms.",
     Reason = "Writes IUCN taxon -> Wikipedia page matches into the cache.",
     Rerun = RerunEffect.IdempotentAdd,
-    RerunNote = "Taxa already matched to an article are skipped, and every other taxon is checked again. --pending-only also skips taxa already found to have no article.",
+    RerunNote = "Taxa already matched to an article are skipped, unless the article is about a taxon in another kingdom. Every other taxon is checked again. --pending-only also skips taxa already found to have no article.",
     Examples = new[] {
         "wikipedia match-taxa",
         "wikipedia match-taxa --limit 500",
@@ -171,10 +171,14 @@ public sealed class WikipediaMatchTaxaCommand : AsyncCommand<WikipediaMatchTaxaC
             stats.Evaluated++;
 
             var existing = wikipediaStore.GetTaxonMatch(TaxonSources.Iucn, rowTaxonId);
-            var result = TaxonPageMatcher.ProcessTaxon(rowTaxonId, existing, wikipediaStore,
-                () => TaxonPageMatcher.BuildCandidates(wikidataLookup.GetCandidate(rowTaxonId), synonymService.GetCandidates(row, cancellationToken)),
+            var outcome = TaxonPageMatcher.ProcessTaxon(rowTaxonId, row.KingdomName, existing, wikipediaStore,
+                () => TaxonPageMatcher.BuildCandidates(wikidataLookup.GetCandidate(rowTaxonId), synonymService.GetCandidates(row, cancellationToken),
+                    name => TaxonPageMatcher.KingdomQualifiedTitles(wikipediaStore, name, row.KingdomName)),
                 settings.ReprocessMatched, settings.PendingOnly, cancellationToken);
-            stats.Record(result, existing?.MatchStatus);
+            stats.Record(outcome.Result, existing?.MatchStatus);
+            if (outcome.WrongKingdom is not null) {
+                stats.WrongKingdomRechecked++;
+            }
 
             if (processed >= limit) {
                 break;
@@ -292,9 +296,10 @@ public sealed class WikipediaMatchTaxaCommand : AsyncCommand<WikipediaMatchTaxaC
         Row("Matched to an article", stats.Matched);
         Row("Waiting on a page download", stats.Pending);
         Row("No article found", stats.Missing);
-        Row("Only disambiguation pages", stats.Rejected);
+        Row("Only disambiguation pages or pages about another kingdom", stats.Rejected);
         Row("No names to look up", stats.NoCandidates);
         table.AddRow("[grey]Already matched, not re-checked[/]", $"[grey]{stats.AlreadyMatched:n0}[/]", "");
+        table.AddRow("Already matched to a page about another kingdom, checked again", stats.WrongKingdomRechecked.ToString("n0"), "");
         if (stats.NotRechecked > 0) {
             table.AddRow("[grey]Checked before, skipped (--pending-only)[/]", $"[grey]{stats.NotRechecked:n0}[/]", "");
         }
@@ -313,6 +318,9 @@ public sealed class WikipediaMatchTaxaCommand : AsyncCommand<WikipediaMatchTaxaC
 
     private sealed class WikipediaMatchStats {
         public long Evaluated { get; set; }
+        // Taxa whose earlier match was to a page about a taxon in another kingdom; also counted
+        // under the result of the new check.
+        public long WrongKingdomRechecked { get; set; }
         public TransitionCount Matched { get; } = new();
         public TransitionCount Pending { get; } = new();
         public TransitionCount Missing { get; } = new();

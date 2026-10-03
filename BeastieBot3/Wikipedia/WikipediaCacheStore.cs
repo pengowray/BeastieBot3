@@ -17,6 +17,8 @@ using BeastieBot3.Infrastructure;
 namespace BeastieBot3.Wikipedia;
 
 internal sealed class WikipediaCacheStore : HttpCacheSqliteStore {
+    private bool? _hasTitleList;
+
     private WikipediaCacheStore(SqliteConnection connection) : base(connection) {
     }
 
@@ -743,6 +745,116 @@ LIMIT 1
         command.Parameters.AddWithValue("@id", pageRowId);
         using var reader = command.ExecuteReader(CommandBehavior.SingleRow);
         return reader.Read() ? ReadTaxobox(reader, 0) : null;
+    }
+
+    /// <summary>
+    /// What the page with row id <paramref name="pageRowId"/> says about its kingdom: its title, its
+    /// taxobox kingdom, genus and taxon parameters, and its "&lt;group&gt; described in &lt;year&gt;"
+    /// categories (<see cref="WikiPageKingdom"/>). Null when there is no such row.
+    /// </summary>
+    public WikiPageKingdomEvidence? GetPageKingdomEvidence(long pageRowId) {
+        string title;
+        string? kingdom, genus, taxon;
+        using (var command = _connection.CreateCommand()) {
+            command.CommandText =
+                """
+                SELECT p.page_title, t.kingdom,
+                       CASE WHEN json_valid(t.data_json) THEN json_extract(t.data_json, '$.genus') END,
+                       t.genus,
+                       CASE WHEN json_valid(t.data_json) THEN json_extract(t.data_json, '$.taxon') END
+                FROM wiki_pages p
+                LEFT JOIN wiki_taxobox_data t ON t.page_row_id = p.id
+                WHERE p.id = @id
+                """;
+            command.Parameters.AddWithValue("@id", pageRowId);
+            using var reader = command.ExecuteReader(CommandBehavior.SingleRow);
+            if (!reader.Read()) {
+                return null;
+            }
+            string? Text(int ordinal) => reader.IsDBNull(ordinal) ? null : Convert.ToString(reader.GetValue(ordinal), CultureInfo.InvariantCulture);
+            title = reader.GetString(0);
+            kingdom = Text(1);
+            genus = Text(2) ?? Text(3);
+            taxon = Text(4);
+        }
+
+        var categories = new List<string>();
+        using (var command = _connection.CreateCommand()) {
+            command.CommandText =
+                "SELECT category_name FROM wiki_page_categories WHERE page_row_id = @id AND category_name LIKE '% described in %'";
+            command.Parameters.AddWithValue("@id", pageRowId);
+            using var reader = command.ExecuteReader();
+            while (reader.Read()) {
+                categories.Add(reader.GetString(0));
+            }
+        }
+        return new WikiPageKingdomEvidence(title, kingdom, genus, taxon, categories);
+    }
+
+    /// <summary>
+    /// Titles that start with <paramref name="normalizedName"/> followed by " (", such as "Ficus
+    /// variegata (plant)": the downloaded pages and redirects with such a title, and, when
+    /// <paramref name="includeTitleList"/> is set, the titles in the list of every article title
+    /// (enwiki_dump_titles). <see cref="WikiPageKingdom.QualifiedTitlesFor"/> picks the ones for a
+    /// taxon's kingdom.
+    /// </summary>
+    public IReadOnlyList<string> FindTitlesWithQualifier(string normalizedName, bool includeTitleList = true) {
+        if (string.IsNullOrWhiteSpace(normalizedName)) {
+            return [];
+        }
+        // Every title that starts with "<name> (" sorts at or after it and before "<name> )".
+        var from = normalizedName + " (";
+        var to = normalizedName + " )";
+        var titles = new SortedSet<string>(StringComparer.Ordinal);
+        using (var command = _connection.CreateCommand()) {
+            // The status is tested here, not in SQL: with "download_status = ?" in the WHERE clause
+            // SQLite reads every downloaded page through the status index instead of the title range.
+            command.CommandText =
+                "SELECT normalized_title, download_status FROM wiki_pages WHERE normalized_title >= @from AND normalized_title < @to";
+            command.Parameters.AddWithValue("@from", from);
+            command.Parameters.AddWithValue("@to", to);
+            using var reader = command.ExecuteReader();
+            while (reader.Read()) {
+                if (reader.GetString(1) == WikiPageDownloadStatus.Cached) {
+                    titles.Add(reader.GetString(0));
+                }
+            }
+        }
+        if (includeTitleList && HasTitleList()) {
+            using var command = _connection.CreateCommand();
+            command.CommandText = "SELECT title FROM enwiki_dump_titles WHERE title >= @from AND title < @to";
+            command.Parameters.AddWithValue("@from", from);
+            command.Parameters.AddWithValue("@to", to);
+            using var reader = command.ExecuteReader();
+            while (reader.Read()) {
+                titles.Add(reader.GetString(0));
+            }
+        }
+        return titles.ToList();
+    }
+
+    /// <summary>
+    /// Whether the cache has the list of every article title (enwiki_dump_titles). A cache opened
+    /// read-only from a file made before the list existed has no such table.
+    /// </summary>
+    internal bool HasTitleList() {
+        if (_hasTitleList is null) {
+            using var command = _connection.CreateCommand();
+            command.CommandText = "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'enwiki_dump_titles'";
+            _hasTitleList = command.ExecuteScalar() is not null;
+        }
+        return _hasTitleList.Value;
+    }
+
+    /// <summary>Whether the list of every article title (enwiki_dump_titles) has <paramref name="normalizedTitle"/>.</summary>
+    public bool IsInTitleList(string normalizedTitle) {
+        if (string.IsNullOrWhiteSpace(normalizedTitle) || !HasTitleList()) {
+            return false;
+        }
+        using var command = _connection.CreateCommand();
+        command.CommandText = "SELECT 1 FROM enwiki_dump_titles WHERE title = @title";
+        command.Parameters.AddWithValue("@title", normalizedTitle);
+        return command.ExecuteScalar() is not null;
     }
 
     /// <summary>
