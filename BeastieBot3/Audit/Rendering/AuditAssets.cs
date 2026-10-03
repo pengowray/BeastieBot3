@@ -296,9 +296,26 @@ footer.site { border-top: 1px solid var(--line); background: var(--bg); color: v
 footer.site .wrap { padding: 22px 20px 40px; }
 footer.site a { color: var(--accent); }
 
+/* The unit of a count and the heading of the change since the previous release, for a stacked row
+   (below). On a wider screen the column headings say the same. */
+.stack-label { display: none; }
+
 @media (max-width: 640px) {
   header.site h1 { font-size: 1.25rem; }
   section { padding: 16px; border-radius: 8px; }
+  /* The report index and the list of crosscheck pages show each row as a block instead of
+     columns, so a phone does not scroll the page sideways: the title on its own line, then the
+     action, the count, the change since the previous release and the links. The column headings
+     are hidden from view but kept for screen readers. */
+  table.index, table.index tbody, table.summary.family, table.summary.family tbody { display: block; }
+  table.index thead, table.summary.family thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; }
+  table.index tr, table.summary.family tr { display: flex; flex-wrap: wrap; align-items: baseline; gap: 4px 14px; padding: 10px 0; border-bottom: 1px solid var(--line-soft); }
+  table.index td, table.summary.family td, table.summary.family th { display: block; padding: 0; border-bottom: 0; text-align: left; }
+  table.index td.kind, table.index td.count, table.summary.family td.num { width: auto; text-align: left; }
+  table.index td:first-child, table.summary.family td:first-child, table.summary.family td:last-child { flex: 1 1 100%; }
+  table.index td.since:empty, table.summary.family td.since:empty { display: none; }
+  table.summary.family tr.here { padding-left: 8px; padding-right: 8px; }
+  .stack-label { display: inline; }
 }
 @media print {
   body { background: var(--bg); }
