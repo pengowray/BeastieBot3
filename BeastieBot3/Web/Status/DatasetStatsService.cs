@@ -13,6 +13,9 @@ using BeastieBot3.WikipediaLists;
 // Results are cached in-process keyed by (path, file-mtime, file-size) so the 10s
 // dashboard poller never re-runs the GROUP BY scan until the underlying DB changes
 // — the "freely-updated-as-needed" statistics cache, without a second DB file.
+// The -wal file's time and size are part of the key: a database in WAL mode can hold
+// its latest writes there for weeks (the API projection had a 55 MB -wal file newer
+// than the main file in October 2026), and the main file's time does not change then.
 
 namespace BeastieBot3.Web.Status;
 
@@ -51,17 +54,24 @@ public static class DatasetStatsService {
         }
 
         var info = new FileInfo(full);
-        var key = $"{info.LastWriteTimeUtc.Ticks}:{info.Length}";
+        var wal = new FileInfo(full + "-wal");
+        var walKey = wal.Exists ? $"{wal.LastWriteTimeUtc.Ticks}:{wal.Length}" : "-";
+        var key = $"{info.LastWriteTimeUtc.Ticks}:{info.Length}:{walKey}";
         if (_cache.TryGetValue(full, out var cached) && cached.Key == key) {
             return cached.Stats;
         }
 
-        var stats = ComputeUncached(full, info);
+        // When the database last changed: the -wal file counts when it has content, since an
+        // empty one is touched just by opening the database read-write.
+        var changedAt = wal.Exists && wal.Length > 0 && wal.LastWriteTimeUtc > info.LastWriteTimeUtc
+            ? wal.LastWriteTimeUtc
+            : info.LastWriteTimeUtc;
+        var stats = ComputeUncached(full, info, changedAt);
         _cache[full] = (key, stats);
         return stats;
     }
 
-    private static DatasetStats ComputeUncached(string path, FileInfo info) {
+    private static DatasetStats ComputeUncached(string path, FileInfo info, DateTime changedAt) {
         try {
             var csb = new SqliteConnectionStringBuilder {
                 DataSource = path,
@@ -77,7 +87,7 @@ public static class DatasetStatsService {
 
             // Without the view this isn't an IUCN relational DB — bail cleanly.
             if (!HasView(conn, "view_assessments_html_taxonomy_html")) {
-                return new DatasetStats { Exists = true, Path = path, LastModified = info.LastWriteTimeUtc, SizeBytes = info.Length,
+                return new DatasetStats { Exists = true, Path = path, LastModified = changedAt, SizeBytes = info.Length,
                     Error = "No view_assessments_html_taxonomy_html (not an IUCN relational dataset)." };
             }
 
@@ -106,7 +116,7 @@ public static class DatasetStatsService {
                 Exists = true,
                 Path = path,
                 Version = version,
-                LastModified = info.LastWriteTimeUtc,
+                LastModified = changedAt,
                 SizeBytes = info.Length,
                 TotalAssessments = total,
                 DistinctTaxa = distinct,
@@ -117,7 +127,7 @@ public static class DatasetStatsService {
             };
         }
         catch (Exception ex) {
-            return new DatasetStats { Exists = true, Path = path, LastModified = info.LastWriteTimeUtc, SizeBytes = info.Length, Error = ex.Message };
+            return new DatasetStats { Exists = true, Path = path, LastModified = changedAt, SizeBytes = info.Length, Error = ex.Message };
         }
     }
 

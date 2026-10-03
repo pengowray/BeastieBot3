@@ -562,17 +562,21 @@
     if (!csv.exists && !api.exists) { body.textContent = 'Neither IUCN dataset is available.'; return; }
     const num = (v) => (v == null ? '—' : Number(v).toLocaleString());
     let html = '<table class="compare-table"><thead><tr><th></th><th>CSV release</th><th>API projection</th><th>API minus CSV</th></tr></thead><tbody>';
-    html += '<tr><td class="ct-label">Version</td><td>' + escapeHtml(String(csv.version || '—')) +
-            '</td><td>' + escapeHtml(String(api.version || (api.exists ? '—' : 'not built'))) + '</td><td></td></tr>';
+    // "built" is false for a missing file, an unreadable one, and an API projection whose last
+    // build did not finish (project-view empties the projection first, so it holds nothing).
+    const apiUnfinished = !api.built && api.unfinishedBuildStartedAt;
+    html += '<tr><td class="ct-label">Version</td><td>' + escapeHtml(String(csv.built ? (csv.version || '—') : '—')) +
+            '</td><td>' + escapeHtml(String(api.built ? (api.version || '—') : 'not built')) + '</td><td></td></tr>';
     html += '<tr><td class="ct-label">Updated</td><td>' + (csv.lastModified ? formatRelative(csv.lastModified) : '—') +
             '</td><td>' + (api.lastModified ? formatRelative(api.lastModified) : '—') + '</td><td></td></tr>';
     // Coverage: the CSV release is always complete; the API projection may be partial
     // when some taxa's latest assessment JSON wasn't downloaded before project-view ran.
-    const apiCoverage = !api.exists ? '—'
+    const apiCoverage = apiUnfinished ? '<span class="agree warn">empty: the last build did not finish</span>'
+      : !api.built ? '—'
       : api.partial === true
         ? '<span class="agree warn">partial' + (api.latestNotDownloaded != null ? ' (' + num(api.latestNotDownloaded) + ' assessments not downloaded)' : '') + '</span>'
         : api.partial === false ? '<span class="agree ok">complete</span>' : '—';
-    html += '<tr><td class="ct-label">Coverage</td><td>' + (csv.exists ? '<span class="agree ok">complete</span>' : '—') +
+    html += '<tr><td class="ct-label">Coverage</td><td>' + (csv.built ? '<span class="agree ok">complete</span>' : '—') +
             '</td><td>' + apiCoverage + '</td><td></td></tr>';
     for (const row of (d.comparison || [])) {
       let mark = '';
@@ -585,7 +589,11 @@
               escapeHtml(row.label) + '</td><td>' + num(row.csv) + '</td><td>' + num(row.api) + '</td><td>' + mark + '</td></tr>';
     }
     html += '</tbody></table>';
-    if (!api.exists) {
+    if (apiUnfinished) {
+      html += '<p class="small reason">API projection is empty: its last build, started ' +
+              escapeHtml(formatAbsolute(api.unfinishedBuildStartedAt)) + ' (' + formatRelative(api.unfinishedBuildStartedAt) +
+              '), did not finish. Run <code>iucn api project-view</code> to build it again.</p>';
+    } else if (!api.built) {
       html += '<p class="small muted">API projection not built. Run <code>iucn api project-view</code> ' +
               '(after <code>iucn api cache-all</code>) to enable <code>--dataset api</code>.</p>';
     } else if (api.partial === true) {
