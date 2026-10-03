@@ -149,6 +149,8 @@ internal sealed class AmbiguousNames {
     private sealed class Holder(string canonicalName) {
         public string CanonicalName { get; } = canonicalName;
         public int Priority { get; private set; } = int.MaxValue;
+        // The best priority by the order a taxon uses for its own names (CommonNameStore.GetSourcePriority).
+        public int OwnNamePriority { get; private set; } = int.MaxValue;
         public int TieBreak { get; private set; } = int.MaxValue;
         public bool HasIucnMain { get; private set; }
         public bool HasTitleWithoutPage { get; private set; }
@@ -161,6 +163,7 @@ internal sealed class AmbiguousNames {
             }
             var priority = KeeperPriority(holding.Source, holding.IsPreferred);
             Priority = Math.Min(Priority, priority);
+            OwnNamePriority = Math.Min(OwnNamePriority, CommonNameStore.GetSourcePriority(holding.Source, holding.IsPreferred));
             TieBreak = Math.Min(TieBreak, IucnMainTieBreak(holding.Source));
             HasIucnMain |= priority == IucnMainPriority;
             if (priority == WikipediaTitlePriority) {
@@ -176,6 +179,16 @@ internal sealed class AmbiguousNames {
     // At most one holder can keep a name: of two holders at the best priority (and tie-break), at
     // most one is the species of the other.
     private static Holder? FindKeeper(IReadOnlyList<Holder> holders, IReadOnlyDictionary<string, HashSet<long>> taxaByPage) {
+        // A name held only by a species and its own subspecies, varieties or subpopulations is
+        // decided by the order a taxon uses for its own names (title, taxobox, Wikidata label, IUCN
+        // main ...), with the species winning ties. The keeper order ranks IUCN's main name above a
+        // taxobox name to settle names between unrelated taxa; between a species and its nominate
+        // subspecies it would hand the species' taxobox name ("Pyramus opal") to the subspecies.
+        if (SpeciesOfAll(holders.ToList()) is not null) {
+            var ownBest = holders.Min(h => h.OwnNamePriority);
+            var ownAtBest = holders.Where(h => h.OwnNamePriority == ownBest).ToList();
+            return ownAtBest.Count == 1 ? ownAtBest[0] : SpeciesOfAll(ownAtBest);
+        }
         var best = holders.Min(h => h.Priority);
         var atBest = holders.Where(h => h.Priority == best).ToList();
         if (best == WikipediaTitlePriority && TaxaOfOneArticle(atBest, holders, taxaByPage) is { } article) {

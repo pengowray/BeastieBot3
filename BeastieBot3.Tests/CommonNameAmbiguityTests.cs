@@ -55,6 +55,24 @@ public class CommonNameAmbiguityTests {
     }
 
     [Fact]
+    public void PyramusOpal_StaysWithTheSpeciesTaxoboxName_OverItsNominateSubspeciesIucnMainName() {
+        // 2026 data: Chrysoritis pyramus has "Pyramus opal" only from its Wikipedia taxobox; its
+        // nominate subspecies has it as IUCN's main name. IUCN main outranks a taxobox name between
+        // unrelated taxa; between a species and its own subspecies a taxobox name ranks first.
+        using var store = OpenInMemory();
+        var species = AddTaxon(store, "chrysoritis pyramus", "4615");
+        var nominate = AddTaxon(store, "chrysoritis pyramus ssp. pyramus", "4616", rank: "subspecies");
+        AddName(store, species, "Pyramus opal", "wikipedia_taxobox", preferred: true);
+        AddName(store, nominate, "Pyramus opal", "iucn", preferred: true);
+
+        var verdicts = store.GetAmbiguousNames("en");
+
+        Assert.Equal(species, verdicts.KeptBy("pyramusopal"));
+        Assert.Equal("Pyramus opal", Best(store, species));
+        Assert.Null(Best(store, nominate));
+    }
+
+    [Fact]
     public void Tiger_IsKeptByTheSpecies_OverAnUnrelatedTaxonWithOnlyACatalogueOfLifeName() {
         // 2026 data: Plectropomus oligacanthus has "Tiger" from the Catalogue of Life only;
         // Panthera tigris fell back to "Malayan tiger".
@@ -381,11 +399,11 @@ public class CommonNameAmbiguityTests {
     }
 
     [Fact]
-    public void WaterOpal_IsKeptByTheNominateSubspeciesIucnMainName_OverTheSpeciesTaxoboxName() {
+    public void WaterOpal_StaysWithTheSpeciesTaxoboxName_OverItsNominateSubspeciesIucnMainName() {
         // 2026 data: IUCN gives "Water Opal" to Chrysoritis palmus ssp. palmus and no English name
-        // to the species, whose taxobox has it. A species beats its own subspecies only at the
-        // same priority, so since October 2026 the subspecies keeps the name and the species has
-        // no English name left.
+        // to the species, whose taxobox has it. Between a species and its own subspecies the order
+        // a taxon uses for its own names decides (a taxobox name above IUCN's main name), so the
+        // species keeps its only English name.
         using var store = OpenInMemory();
         var species = AddTaxon(store, "chrysoritis palmus", "1");
         var nominate = AddTaxon(store, "chrysoritis palmus ssp. palmus", "180447782", rank: "subspecies");
@@ -393,8 +411,9 @@ public class CommonNameAmbiguityTests {
         AddName(store, species, "Water Opal", "col");
         AddName(store, nominate, "Water Opal", "iucn", preferred: true);
 
-        Assert.Equal(nominate, store.GetAmbiguousNames("en").KeptBy("wateropal"));
-        Assert.Null(Best(store, species));
+        Assert.Equal(species, store.GetAmbiguousNames("en").KeptBy("wateropal"));
+        Assert.Equal("Water opal", Best(store, species));
+        Assert.Null(Best(store, nominate));
     }
 
     // A Wikipedia title does not decide between the taxa that one article covers. In the store,
