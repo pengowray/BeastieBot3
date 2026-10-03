@@ -11,10 +11,11 @@ using Spectre.Console.Cli;
 
 // Builds a CSV-shaped relational projection of the IUCN API cache so that
 // `wikipedia generate-lists`/`generate-charts` can run on the API dataset
-// (via --dataset api). Reads the latest downloaded /api/v4/assessment payloads,
-// maps them through IucnAssessmentJsonParser + IucnRedlistStatus, and writes
-// taxonomy_html + assessments_html + view_assessments_html_taxonomy_html into a
-// derived DB (Datastore:IUCN_api_projected_sqlite). See IucnApiProjectionStore.
+// (via --dataset api). Reads the cached /api/v4/assessment payloads of current
+// assessments (Project says which ones count as current), maps them through
+// IucnAssessmentJsonParser + IucnRedlistStatus, and writes taxonomy_html +
+// assessments_html + view_assessments_html_taxonomy_html into a derived DB
+// (Datastore:IUCN_api_projected_sqlite). See IucnApiProjectionStore.
 
 namespace BeastieBot3.Iucn;
 
@@ -103,43 +104,10 @@ public sealed class IucnApiProjectViewCommand : AsyncCommand<IucnApiProjectViewC
         store.ResetData();
         var importId = store.InsertImport(Path.GetFileName(cachePath), version);
 
-        long processed = 0, latestRows = 0, skippedNoTaxon = 0, unknownCategory = 0;
-
-        using (var cmd = source.CreateCommand()) {
-            // Deterministic order so a re-run projects identical rows and the INSERT OR IGNORE
-            // dedupe (taxonomy_html keyed on taxonId) picks a stable winner.
-            cmd.CommandText = settings.Limit is > 0
-                ? $"SELECT json FROM assessments ORDER BY assessment_id LIMIT {settings.Limit.Value}"
-                : "SELECT json FROM assessments ORDER BY assessment_id";
-
-            using var reader = cmd.ExecuteReader();
-            using var writer = store.BeginWrite();
-
-            while (reader.Read()) {
-                cancellationToken.ThrowIfCancellationRequested();
-                processed++;
-                if (reader.IsDBNull(0)) continue;
-
-                var parsed = IucnAssessmentJsonParser.Parse(reader.GetString(0));
-                if (parsed is null || !parsed.Latest) continue;        // current snapshot only
-                if (parsed.TaxonId is null) { skippedNoTaxon++; continue; }
-
-                var (categoryText, known) = ResolveCategory(parsed);
-                if (!known) unknownCategory++;
-
-                writer.AddTaxonomy(importId, parsed.TaxonId.Value, parsed.ScientificName,
-                    parsed.KingdomName, parsed.PhylumName, parsed.ClassName, parsed.OrderName,
-                    parsed.FamilyName, parsed.GenusName, parsed.SpeciesName);
-                writer.AddAssessment(importId, parsed, categoryText);
-                latestRows++;
-
-                if (processed % 20000 == 0) {
-                    AnsiConsole.MarkupLineInterpolated($"[grey]…processed {processed:N0} / {total:N0} assessments ({latestRows:N0} latest)[/]");
-                }
-            }
-
-            writer.Commit();
-        }
+        var (processed, latestRows, skippedNoTaxon, unknownCategory) = Project(source, store, importId, settings.Limit,
+            (read, current) => AnsiConsole.MarkupLineInterpolated(
+                $"[grey]…processed {read:N0} / {total:N0} assessments ({current:N0} latest)[/]"),
+            cancellationToken);
 
         store.BuildView();
 
@@ -179,6 +147,68 @@ public sealed class IucnApiProjectViewCommand : AsyncCommand<IucnApiProjectViewC
             }
         }
         return Task.FromResult(0);
+    }
+
+    internal sealed record ProjectionCounts(long Processed, long LatestRows, long SkippedNoTaxon, long UnknownCategory);
+
+    internal const int ProgressEvery = 20_000;
+
+    // Writes the current assessments in the API cache (source) into the projection store.
+    //
+    // An assessment is current when its taxon record lists it as latest
+    // (taxa_assessment_backlog.latest). A payload keeps the latest flag it had when it was
+    // downloaded, so a payload that a newer assessment replaced can still say latest=true. In
+    // the 2026-1 cache 86378350, 2785108 and 4783813 did; the API answers 404 for all three, so
+    // downloading them again cannot correct them, and 86378350 gave taxon 193274 a second
+    // Global row. The payload's own flag decides only for a payload that no taxon record lists
+    // (those come from `cache-assessments --csv-missing`, and are mostly subpopulations).
+    //
+    // onProgress gets (rows read, current rows written) after every progressEvery rows read.
+    internal static ProjectionCounts Project(SqliteConnection source, IucnApiProjectionStore store, long importId,
+        int? limit, Action<long, long>? onProgress, CancellationToken cancellationToken, int progressEvery = ProgressEvery) {
+        long processed = 0, latestRows = 0, skippedNoTaxon = 0, unknownCategory = 0;
+
+        using var cmd = source.CreateCommand();
+        // Deterministic order so a re-run projects identical rows and the INSERT OR IGNORE
+        // dedupe (taxonomy_html keyed on taxonId) picks a stable winner.
+        cmd.CommandText = @"SELECT a.json, b.latest
+FROM assessments a
+LEFT JOIN taxa_assessment_backlog b ON b.assessment_id = a.assessment_id
+ORDER BY a.assessment_id" + (limit is > 0 ? $" LIMIT {limit.Value}" : string.Empty);
+
+        using var reader = cmd.ExecuteReader();
+        using var writer = store.BeginWrite();
+
+        void ProjectRow() {
+            if (reader.IsDBNull(0)) return;
+
+            var parsed = IucnAssessmentJsonParser.Parse(reader.GetString(0));
+            if (parsed is null) return;
+            var latest = reader.IsDBNull(1) ? parsed.Latest : reader.GetInt64(1) != 0;
+            if (!latest) return;                                    // current snapshot only
+            if (parsed.TaxonId is null) { skippedNoTaxon++; return; }
+
+            var (categoryText, known) = ResolveCategory(parsed);
+            if (!known) unknownCategory++;
+
+            writer.AddTaxonomy(importId, parsed.TaxonId.Value, parsed.ScientificName,
+                parsed.KingdomName, parsed.PhylumName, parsed.ClassName, parsed.OrderName,
+                parsed.FamilyName, parsed.GenusName, parsed.SpeciesName);
+            writer.AddAssessment(importId, parsed, categoryText);
+            latestRows++;
+        }
+
+        while (reader.Read()) {
+            cancellationToken.ThrowIfCancellationRequested();
+            ProjectRow();
+            processed++;
+            if (onProgress is not null && progressEvery > 0 && processed % progressEvery == 0) {
+                onProgress(processed, latestRows);
+            }
+        }
+
+        writer.Commit();
+        return new ProjectionCounts(processed, latestRows, skippedNoTaxon, unknownCategory);
     }
 
     // Map the API category code to the canonical CSV category text the consumers
