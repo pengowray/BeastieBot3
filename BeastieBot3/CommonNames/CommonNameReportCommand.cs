@@ -1022,7 +1022,7 @@ internal static class AmbiguousReportText {
     public const string SummaryLabel = "Ambiguous English Names (shared by 2+ taxa)";
 
     public const string Intro = """
-        An ambiguous common name is an English common name that two or more taxa in the Common names store have. Names are compared ignoring case, spaces and punctuation. This report has one table for each ambiguous common name, and each row is a taxon that has the name. Uses This Name is Yes for the taxon that the name is used for in the Wikipedia lists and on the public site. The Wikipedia lists and the public site show every other taxon in the table under another of its names, or under its scientific name only. Rows with the same scientific name count as one taxon, because the store can have a species under an old and a current IUCN id. Both rows are Yes when the name is used for that taxon.
+        An ambiguous common name is an English common name that two or more taxa in the Common names store have. Names are compared ignoring case, spaces and punctuation. This report has one table for each ambiguous common name, and each row is a taxon that has the name. Uses This Name is Yes for the taxon that the name is used for in the Wikipedia lists and on the public site. The Wikipedia lists and the public site show every other taxon in the table under another of its names, or under its scientific name only, unless rules/rules-list.txt sets the name for that taxon. Rows with the same scientific name count as one taxon, because the store can have a species under an old and a current IUCN id. Both rows are Yes when the name is used for that taxon.
 
         The name is used for the taxon that has it from the highest-priority source:
 
