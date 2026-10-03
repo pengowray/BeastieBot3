@@ -321,7 +321,7 @@ internal static class CitationCheckReport {
         Row(sb, "Author names with a lost letter, repaired", t.AuthorNameRepairs.Values.Sum(), null);
         Row(sb, "Author names with a lost letter, not repaired", t.AuthorNamesNotRepaired.Values.Sum(), null);
         var givenCandidates = t.GivenNameOutcomes.Where(p => p.Key != GivenNameOutcome.NotInitials).Sum(p => p.Value);
-        Row(sb, "Persons written with initials whose full given names value[] gives", GivenNamesMatched(t), givenCandidates);
+        Row(sb, "Persons written with initials: full given names found in value[]", GivenNamesMatched(t), givenCandidates);
         Row(sb, "DOI from IUCN's citation accepted", Count(t.CitationDoiVerdicts, DoiVerdict.Accepted) + Count(t.CitationDoiVerdicts, DoiVerdict.AcceptedPredecessor), t.Parsed);
         if (t.WikiCompared) {
             var sameAuthors = Count(t.AuthorAgreements, AuthorAgreement.Same);

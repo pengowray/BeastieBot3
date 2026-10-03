@@ -244,7 +244,7 @@ internal sealed class SiteBuildDbCommand : Command<SiteBuildDbCommand.Settings> 
         if (items.WithoutIds > 0) Row("Items kept with no taxon or assessment id (not used)", items.WithoutIds);
         if (items.SecondItemForAnAssessment > 0) Row("Items for an assessment that already has an item (not used)", items.SecondItemForAnAssessment);
         Row("Assessments with their own Wikidata item", s.AssessmentsWithOwnItem);
-        Row("Errata versions given the item of the assessment their DOI names", s.AssessmentsWithItemThroughDoi);
+        Row("Errata versions sharing the item of the assessment they correct (same DOI)", s.AssessmentsWithItemThroughDoi);
         Row("Items for an assessment not in the site database (not used)", items.ByAssessment.Count - items.Used.Count);
         Row("Items used with no author (P50 or P2093)", items.ByAssessment.Values.Count(i => items.Used.Contains(i.Qid) && !HasAuthors(i)));
         Row("Items used with no main subject (P921)", items.ByAssessment.Values.Count(i => items.Used.Contains(i.Qid) && !i.Properties.Split(' ').Contains("P921")));

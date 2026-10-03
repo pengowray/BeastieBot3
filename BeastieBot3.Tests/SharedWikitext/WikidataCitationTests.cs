@@ -248,7 +248,10 @@ public class WikidataCitationTests {
 
     [Fact]
     public void ShippedYaml_MatchesTheSharedModelDefaults() {
-        var config = WikidataIucnEditConfig.Load(Path.Combine(AppContext.BaseDirectory, "rules"));
+        var rules = Path.Combine(AppContext.BaseDirectory, "rules");
+        // Load falls back to the defaults when the file is missing, which would make this test pass on nothing.
+        Assert.True(File.Exists(WikidataIucnEditConfig.PathFor(rules)));
+        var config = WikidataIucnEditConfig.Load(rules);
         Assert.Equal(new WikidataItemModel(), config.ToItemModel());
         Assert.Equal(new WikidataItemModel(), new WikidataIucnEditConfig().ToItemModel());
     }
