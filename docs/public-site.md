@@ -75,7 +75,8 @@ must never be reachable from outside the machine.
 7. Run `deploy/oracle/deploy-db.sh` to deploy the new database.
 
 In the local web UI (`serve`), the "Update the public species site" workflow (`public-site`) has
-these steps in the same order. The steps in its "1 · Inputs" group are the same steps as in the
+these steps in the same order. Apart from "Find the Wikidata items of assessments", which runs
+`wikidata iucn-assessment-items`, the steps in its "1 · Inputs" group are the same steps as in the
 "Import IUCN data" workflow and the "Wikipedia reports pipeline", with the same lights.
 `PublicSiteStateReader` reads the files for the lights of the steps after them:
 
@@ -753,12 +754,13 @@ edition cites IUCN only when it also has an IUCN taxon ID or an IUCN reference U
 - The add command comes before the removals, so a batch that stops part way never leaves the item
   without a status.
 
-The `site build-db` summary has these rows for the status part: "Of those, items that state the id
-only at deprecated rank (no status commands)", "Of those, items downloaded to the Wikidata cache
-(IUCN status statements known)", "Of those, items with no IUCN status (P141)", "Editions of the
-IUCN Red List on Wikidata (a P141 reference stated in one cites IUCN)", "Items whose JSON was read
-for P141 references that the cache's index does not record", and two rows that count the
-statements found to cite IUCN in that JSON, by a reference URL and by a second or later stated in.
+The `site build-db` summary has these rows for the status part: "Of those, items downloaded to the
+Wikidata cache (IUCN status statements known)", "Of those, items with no IUCN status (P141)",
+"Items whose JSON was read for P141 references that the cache's index does not record", and two
+rows that count the statements found to cite IUCN in that JSON, by a reference URL and by a second
+or later stated in. When the Wikidata cache has the matching tables, it also has "Of those, items
+that state the id only at deprecated rank (no status commands)" and "Editions of the IUCN Red List
+on Wikidata (a P141 reference stated in one cites IUCN)".
 For the names in titles and labels it has "Citations with a title registered with Crossref for
 their DOI", "Of those, titles with a name other than IUCN's citation name (ssp./subsp., brackets
 and spaces ignored)", and, when the cache has not recorded some items' titles, "Items kept whose
