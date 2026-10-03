@@ -9,8 +9,15 @@ namespace BeastieBot3.Tests;
 public class ScientificNameCheckTests {
     private static TaxonScientificNames Taxon(string canonical, params string[] synonyms) => new(canonical, synonyms);
 
-    private static NameWordSets Words(string[]? genera = null, string[]? epithets = null, string[]? english = null) =>
-        new(new HashSet<string>(genera ?? []), new HashSet<string>(epithets ?? []), new HashSet<string>(english ?? []));
+    // english: words used in 100 English names; rareEnglish: in 5, enough for a word but not for an
+    // epithet (NameWordSets.MinCommonNamesForEnglishEpithet).
+    private static NameWordSets Words(string[]? genera = null, string[]? epithets = null, string[]? english = null,
+        string[]? rareEnglish = null) {
+        var counts = new Dictionary<string, int>();
+        foreach (var word in rareEnglish ?? []) counts[word] = 5;
+        foreach (var word in english ?? []) counts[word] = 100;
+        return new(new HashSet<string>(genera ?? []), new HashSet<string>(epithets ?? []), counts);
+    }
 
     private static bool IsScientific(string name, TaxonScientificNames taxon, NameWordSets? words = null) =>
         ScientificNameCheck.IsScientificName(name, taxon, words ?? NameWordSets.Empty);
@@ -128,9 +135,24 @@ public class ScientificNameCheckTests {
     }
 
     [Fact]
+    public void AHyphenatedWord_IsEnglishOnlyWhenEveryPartIs() {
+        var words = Words(genera: ["tillandsia", "popondetta"], english: ["walter", "blue", "eye"]);
+        Assert.True(IsScientific("Tillandsia walter-tillii", Taxon("vriesea tillii"), words));
+        Assert.False(IsScientific("Popondetta blue-eye", Taxon("pseudomugil connieae"), words));
+    }
+
+    [Fact]
+    public void AnEpithetCountsAsEnglishOnlyWhenManyEnglishNamesUseIt() {
+        var words = Words(genera: ["gazella", "aiouea", "ocotea"], epithets: ["gazelle", "dorcas", "montana", "falcata"],
+            english: ["gazelle"], rareEnglish: ["montana"]);
+        Assert.False(IsScientific("Dorcas gazelle", Taxon("gazella dorcas"), words));
+        Assert.True(IsScientific("Aiouea montana", Taxon("ocotea falcata"), words));
+    }
+
+    [Fact]
     public void AGenusThatIsAlsoAnEnglishWord_CountsAsAGenus() {
         // "Bulbophyllum" and "deshmukhii" are both words of English names in CoL.
-        var words = Words(genera: ["bulbophyllum"], epithets: ["deshmukhii"], english: ["bulbophyllum", "deshmukhii"]);
+        var words = Words(genera: ["bulbophyllum"], epithets: ["deshmukhii"], rareEnglish: ["bulbophyllum", "deshmukhii"]);
         Assert.True(IsScientific("Bulbophyllum deshmukhii", Taxon("genyorchis macrantha"), words));
     }
 
@@ -161,9 +183,11 @@ public class ScientificNameCheckTests {
         ]);
         Assert.True(words.IsEnglish("shrike"));
         Assert.True(words.IsEnglish("red"));
-        Assert.True(words.IsEnglish("red-necked"));
+        Assert.True(words.IsEnglish("red-shrike"));
+        Assert.False(words.IsEnglish("red-necked")); // no name has "necked"
         Assert.False(words.IsEnglish("gobio"));
         Assert.Equal(3, NameWordSets.MinCommonNamesForEnglishWord);
+        Assert.Equal(10, NameWordSets.MinCommonNamesForEnglishEpithet);
     }
 
     [Fact]

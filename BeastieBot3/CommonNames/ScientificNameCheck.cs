@@ -42,7 +42,7 @@ internal sealed record TaxonScientificNames(string? Canonical, IReadOnlyCollecti
 /// <summary>
 /// The words the check compares a name's words with: genus names and epithets from the store's
 /// scientific names, and words that appear in English common names from IUCN and the Catalogue of
-/// Life. All lower case.
+/// Life, with how many names use each. All lower case.
 /// </summary>
 internal sealed class NameWordSets {
     /// <summary>
@@ -52,28 +52,47 @@ internal sealed class NameWordSets {
     /// </summary>
     internal const int MinCommonNamesForEnglishWord = 3;
 
-    public static readonly NameWordSets Empty = new(new HashSet<string>(), new HashSet<string>(), new HashSet<string>());
+    /// <summary>
+    /// A word that is also an epithet somewhere in the store counts as English only when at least
+    /// this many English common names use it. Many epithets come from vernacular names ("gecko",
+    /// "chub", "tetra", "gazelle": hundreds of names each), while an epithet that appears in a few
+    /// English rows is usually part of a scientific name in them ("montana": 7, "elegans": 6).
+    /// </summary>
+    internal const int MinCommonNamesForEnglishEpithet = 10;
+
+    public static readonly NameWordSets Empty = new(new HashSet<string>(), new HashSet<string>(), new Dictionary<string, int>());
 
     private readonly HashSet<string> _genera;
     private readonly HashSet<string> _epithets;
-    private readonly HashSet<string> _english;
+    private readonly Dictionary<string, int> _namesUsingWord;
 
-    public NameWordSets(HashSet<string> genera, HashSet<string> epithets, HashSet<string> englishWords) {
+    /// <param name="namesUsingWord">For each word, how many English common names use it.</param>
+    public NameWordSets(HashSet<string> genera, HashSet<string> epithets, Dictionary<string, int> namesUsingWord) {
         _genera = genera;
         _epithets = epithets;
-        _english = englishWords;
+        _namesUsingWord = namesUsingWord;
     }
-
-    public int GenusCount => _genera.Count;
-    public int EpithetCount => _epithets.Count;
-    public int EnglishWordCount => _english.Count;
 
     public bool IsGenus(string word) => _genera.Contains(word);
     public bool IsEpithet(string word) => _epithets.Contains(word);
 
-    /// <summary>True when the word, or one part of a hyphenated word, is an English word.</summary>
-    public bool IsEnglish(string word) =>
-        _english.Contains(word) || (word.Contains('-') && word.Split('-').Any(_english.Contains));
+    /// <summary>
+    /// True when the word is an English word: used in at least
+    /// <see cref="MinCommonNamesForEnglishWord"/> English names, or hyphenated with every part an
+    /// English word ("blue-eye"; not "walter-tillii", an epithet named after a person).
+    /// </summary>
+    public bool IsEnglish(string word) => IsEnglish(word, MinCommonNamesForEnglishWord);
+
+    /// <summary>
+    /// <see cref="IsEnglish(string)"/> with the higher bar for a word that is an epithet in the store
+    /// (<see cref="MinCommonNamesForEnglishEpithet"/>); a word that is no epithet uses the lower bar.
+    /// </summary>
+    public bool IsEnglishRatherThanEpithet(string word) =>
+        IsEnglish(word, IsEpithet(word) ? MinCommonNamesForEnglishEpithet : MinCommonNamesForEnglishWord);
+
+    private bool IsEnglish(string word, int minNames) =>
+        _namesUsingWord.GetValueOrDefault(word) >= minNames
+        || (word.Contains('-') && word.Split('-').All(part => _namesUsingWord.GetValueOrDefault(part) >= minNames));
 
     private static readonly Regex CleanScientificName = new(@"^[a-z]+( [a-z][a-z\-]*){0,2}$", RegexOptions.Compiled);
     private static readonly Regex EnglishWord = new(@"[a-z]+(?:-[a-z]+)*", RegexOptions.Compiled);
@@ -113,10 +132,8 @@ internal sealed class NameWordSets {
                 namesUsingWord[word] = namesUsingWord.GetValueOrDefault(word) + 1;
             }
         }
-        var english = new HashSet<string>(
-            namesUsingWord.Where(kv => kv.Value >= MinCommonNamesForEnglishWord).Select(kv => kv.Key), StringComparer.Ordinal);
 
-        return new NameWordSets(genera, epithets, english);
+        return new NameWordSets(genera, epithets, namesUsingWord);
     }
 }
 
@@ -142,8 +159,11 @@ internal static class ScientificNameCheck {
     /// name.</item>
     /// <item>The first word is one of the taxon's genera ("Gobio gobio" for Gobio latus): a scientific
     /// name.</item>
-    /// <item>A word is an English word, and not a genus (first word) or an epithet (later words) in
-    /// the store or in the taxon's names ("Pygmy hippopotamus", "Alligator gar"): a common name.</item>
+    /// <item>A word is an English word ("Pygmy hippopotamus", "Alligator gar"): a common name. A
+    /// first word that is a genus in the store is not counted as English, nor is a later word that is
+    /// one of the taxon's epithets; a later word that is an epithet elsewhere in the store must be
+    /// used in more English names to count (<see cref="NameWordSets.MinCommonNamesForEnglishEpithet"/>:
+    /// "gazelle" in "Dorcas gazelle" counts, "montana" in "Aiouea montana" does not).</item>
     /// <item>A word is a genus or epithet in the store, or one of the taxon's epithets (a different
     /// combination of the same species, "Rubroshorea ovata"): a scientific name. An epithet that is
     /// also the taxon's genus does not count, so "Western gorilla" is a common name of Gorilla
@@ -206,7 +226,7 @@ internal static class ScientificNameCheck {
         if (!firstIsLatin && words.IsEnglish(first)) {
             return false;
         }
-        if (later.Any(w => !ownEpithets.Contains(w) && !words.IsEpithet(w) && words.IsEnglish(w))) {
+        if (later.Any(w => !ownEpithets.Contains(w) && words.IsEnglishRatherThanEpithet(w))) {
             return false;
         }
 
