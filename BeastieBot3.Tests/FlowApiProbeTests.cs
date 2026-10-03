@@ -222,6 +222,22 @@ public class FlowApiProbeTests {
     public void Projection_NotBuilt_IsTodo() {
         var r = FlowStepProbes.ApiProjection(State(projection: Projection(exists: false)))!;
         Assert.Equal("todo", r.Status);
+        Assert.StartsWith("Not built yet", r.Detail);
+    }
+
+    // project-view empties the projection first, so a build that stopped part way leaves an empty
+    // file (the 2026-09-01 build did). Both lights say so, with when that build started.
+    [Fact]
+    public void Projection_WhoseLastBuildDidNotFinish_SaysItIsEmpty() {
+        var unfinished = Projection(exists: false) with { UnfinishedBuildStartedAt = new DateTime(2026, 9, 1, 2, 37, 7, DateTimeKind.Utc) };
+
+        var step = FlowStepProbes.ApiProjection(State(projection: unfinished))!;
+        Assert.Equal("todo", step.Status);
+        Assert.Equal("Empty: the last build, started 2026-09-01 02:37 UTC, did not finish, so --dataset api has nothing to read. Run this step to build it again.", step.Detail);
+
+        var update = FlowStepProbes.ApiUpdate(State(projection: unfinished));
+        Assert.Equal("todo", update.Status);
+        Assert.Contains("The IUCN API projection is empty: its last build, started 2026-09-01 02:37 UTC, did not finish. Run this step to build it again before generating lists or charts with --dataset api.", update.Detail);
     }
 
     [Fact]

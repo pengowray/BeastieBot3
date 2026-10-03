@@ -278,8 +278,13 @@ public static class FlowStepProbes {
 
         if (s.Projection is { } p) {
             if (!p.Exists) {
+                // project-view empties the projection before it writes, so a build that stopped
+                // part way leaves nothing to read; say so rather than "not built yet".
+                var projection = p.UnfinishedBuildStartedAt is { } started
+                    ? $"The IUCN API projection is empty: its last build, started {Stamp(started)}, did not finish. Run this step to build it again"
+                    : "The IUCN API projection is not built yet: run this step to build it";
                 return new FlowProbeResult("todo",
-                    $"{s.TaxaCached:N0} taxa and {s.AssessmentsCached:N0} assessments cached. The IUCN API projection is not built yet: run this step to build it before generating lists or charts with --dataset api.");
+                    $"{s.TaxaCached:N0} taxa and {s.AssessmentsCached:N0} assessments cached. {projection} before generating lists or charts with --dataset api.");
             }
             if (p.IsPartial) {
                 return new FlowProbeResult("todo",
@@ -486,7 +491,9 @@ public static class FlowStepProbes {
         if (projection is null) return null;
 
         if (!projection.Exists) {
-            return new FlowProbeResult("todo", "Not built yet, so --dataset api has nothing to read.");
+            return new FlowProbeResult("todo", projection.UnfinishedBuildStartedAt is { } started
+                ? $"Empty: the last build, started {Stamp(started)}, did not finish, so --dataset api has nothing to read. Run this step to build it again."
+                : "Not built yet, so --dataset api has nothing to read.");
         }
 
         if (s.ActiveSession is { } session) {
