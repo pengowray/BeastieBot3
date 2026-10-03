@@ -11,8 +11,8 @@ using System.Globalization;
 namespace BeastieBot3.Iucn;
 
 internal static class IucnDownloadQueueSummary {
-    // e.g. "Taxa in the queue: 186,627. To download: 1,522. Downloaded after 2026-08-14 22:56 UTC:
-    // 185,104. Not found (HTTP 404) on an earlier run: 1."  Zero skip counts are left out.
+    // e.g. "Taxa in the queue: 186,627. To download: 1,522. Already downloaded after 2026-08-14
+    // 22:56 UTC: 185,104. Not found (HTTP 404) on an earlier run: 1."  Zero skip counts are left out.
     // notFoundAfterCutoff: the 404s skipped are only those recorded after the cutoff (the
     // --retry-tombstones re-check asks again about the ones recorded before it).
     public static string Describe(string itemsLabel, int queued, int toDownload, int upToDate, int notFoundEarlier, DateTime? cutoff,
@@ -23,7 +23,7 @@ internal static class IucnDownloadQueueSummary {
         };
         if (upToDate > 0) {
             parts.Add(cutoff is { } at
-                ? $"Downloaded after {IucnRefreshMath.Stamp(at)}: {N(upToDate)}."
+                ? $"Already downloaded after {IucnRefreshMath.Stamp(at)}: {N(upToDate)}."
                 : $"Already cached: {N(upToDate)}.");
         }
         if (notFoundEarlier > 0) {
