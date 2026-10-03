@@ -97,17 +97,31 @@ public sealed class IucnApiCacheTaxaCommand : AsyncCommand<IucnApiCacheTaxaSetti
             return 0;
         }
 
+        // Decided before the progress bar starts, so its total and time estimate count downloads
+        // only (see IucnDownloadQueueSummary).
+        var split = SplitDue(cacheStore, ids, refreshThreshold, settings);
+        var summary = IucnDownloadQueueSummary.Describe("Taxa", ids.Count, split.Due.Count, split.UpToDate, split.NotFoundEarlier, refreshThreshold,
+            notFoundAfterCutoff: settings.RetryTombstones);
+        if (split.Due.Count == 0) {
+            AnsiConsole.MarkupLineInterpolated($"[green]Nothing to download.[/] {summary}");
+            return 0;
+        }
+        if (split.Due.Count < ids.Count) {
+            AnsiConsole.MarkupLineInterpolated($"[grey]{summary}[/]");
+        }
+
         var sleep = Math.Clamp(settings.SleepBetweenRequests, 0, 5_000);
-        var totalCount = ids.Count;
         var downloaded = 0;
-        var skipped = 0;
+        var skipped = split.UpToDate + split.NotFoundEarlier;
         var notFound = 0;
         var failures = 0;
 
-        await ProgressConsole.RunAsync("Downloading taxa JSON", totalCount, async progress => {
-            foreach (var sisId in ids) {
+        await ProgressConsole.RunAsync("Downloading taxa JSON", split.Due.Count, async progress => {
+            foreach (var sisId in split.Due) {
                 cancellationToken.ThrowIfCancellationRequested();
 
+                // Asked again: a species downloaded earlier in this run rewrites its taxa_lookup
+                // rows, which can make a subspecies id later in the queue up to date.
                 if (!settings.Force && !ShouldDownload(cacheStore, sisId, refreshThreshold, settings.RetryTombstones)) {
                     skipped++;
                     progress.Increment(1);
@@ -199,7 +213,32 @@ public sealed class IucnApiCacheTaxaCommand : AsyncCommand<IucnApiCacheTaxaSetti
         return queue.GetRange(0, count);
     }
 
-    internal static bool ShouldDownload(IucnApiCacheStore cacheStore, long sisId, DateTime? refreshThreshold, bool retryTombstones = false) {
+    internal enum TaxonCandidate { Download, UpToDate, NotFoundEarlier }
+
+    internal sealed record DueSplit(List<long> Due, int UpToDate, int NotFoundEarlier);
+
+    // The queued ids to download, in queue order, and how many of the rest are skipped for each
+    // reason. --force downloads every queued id.
+    internal static DueSplit SplitDue(IucnApiCacheStore cacheStore, List<long> ids, DateTime? refreshThreshold, IucnApiCacheTaxaSettings settings) {
+        if (settings.Force) {
+            return new DueSplit(ids, 0, 0);
+        }
+        var due = new List<long>();
+        int upToDate = 0, notFoundEarlier = 0;
+        foreach (var sisId in ids) {
+            switch (Classify(cacheStore, sisId, refreshThreshold, settings.RetryTombstones)) {
+                case TaxonCandidate.Download: due.Add(sisId); break;
+                case TaxonCandidate.UpToDate: upToDate++; break;
+                default: notFoundEarlier++; break;
+            }
+        }
+        return new DueSplit(due, upToDate, notFoundEarlier);
+    }
+
+    internal static bool ShouldDownload(IucnApiCacheStore cacheStore, long sisId, DateTime? refreshThreshold, bool retryTombstones = false) =>
+        Classify(cacheStore, sisId, refreshThreshold, retryTombstones) == TaxonCandidate.Download;
+
+    internal static TaxonCandidate Classify(IucnApiCacheStore cacheStore, long sisId, DateTime? refreshThreshold, bool retryTombstones = false) {
         // A prior 404 means this id had no standalone record — don't re-probe it every run. That
         // verdict is only true of the release it was recorded against, so --retry-tombstones (and
         // --force) look again. The re-check decides by when the 404 was recorded, not by a
@@ -208,8 +247,10 @@ public sealed class IucnApiCacheTaxaCommand : AsyncCommand<IucnApiCacheTaxaSetti
         // re-check skipped almost every tombstone. With a cutoff, an id already asked about since
         // the cutoff is not asked again, so an interrupted re-check carries on where it stopped.
         if (cacheStore.TryGetPermanentFailure("taxa_sis", sisId, out var lastAttemptAt)) {
-            if (!retryTombstones) return false;
-            return refreshThreshold is null || lastAttemptAt is null || lastAttemptAt.Value < refreshThreshold.Value;
+            if (!retryTombstones) return TaxonCandidate.NotFoundEarlier;
+            return refreshThreshold is null || lastAttemptAt is null || lastAttemptAt.Value < refreshThreshold.Value
+                ? TaxonCandidate.Download
+                : TaxonCandidate.NotFoundEarlier;
         }
 
         // The id's own row when it has one. taxa_lookup also maps a subspecies or variety id to
@@ -217,10 +258,12 @@ public sealed class IucnApiCacheTaxaCommand : AsyncCommand<IucnApiCacheTaxaSetti
         // Without its own row (the API answered with a different root id), fall back to the lookup.
         var downloadedAt = cacheStore.GetTaxaDownloadedAtByRoot(sisId) ?? cacheStore.GetTaxaDownloadedAt(sisId);
         if (downloadedAt is null) {
-            return true;
+            return TaxonCandidate.Download;
         }
 
-        return refreshThreshold.HasValue && downloadedAt.Value < refreshThreshold.Value;
+        return refreshThreshold.HasValue && downloadedAt.Value < refreshThreshold.Value
+            ? TaxonCandidate.Download
+            : TaxonCandidate.UpToDate;
     }
 
     internal static async Task<DownloadOutcome> DownloadSingleAsync(IucnApiClient apiClient, IucnApiCacheStore cacheStore, long sisId, CancellationToken cancellationToken) {

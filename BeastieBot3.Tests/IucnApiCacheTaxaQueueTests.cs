@@ -131,6 +131,53 @@ public class IucnApiCacheTaxaQueueTests {
         Assert.True(IucnApiCacheTaxaCommand.ShouldDownload(store, 400, null));   // never downloaded
     }
 
+    // ---- the ids due before the progress bar starts ----
+
+    // The progress total counts only the ids SplitDue keeps. It used to be the whole queue, almost
+    // all skipped at once, and a 44-minute run showed "~73:10:06 left".
+    [Fact]
+    public void SplitDue_KeepsQueueOrder_AndCountsEachSkipReason() {
+        using var conn = new SqliteConnection("Data Source=:memory:");
+        conn.Open();
+        using var store = Seed(conn);
+        Tombstone(conn, store, 201, Old);
+
+        var split = IucnApiCacheTaxaCommand.SplitDue(store, new List<long> { 400, 100, 200, 201, 300 }, Cutoff, new IucnApiCacheTaxaSettings());
+
+        Assert.Equal(new long[] { 400, 200, 300 }, split.Due);
+        Assert.Equal(1, split.UpToDate);          // 100, downloaded after the cutoff
+        Assert.Equal(1, split.NotFoundEarlier);   // 201, tombstoned and not re-checked
+    }
+
+    [Fact]
+    public void SplitDue_WithForce_KeepsEveryId() {
+        using var conn = new SqliteConnection("Data Source=:memory:");
+        conn.Open();
+        using var store = Seed(conn);
+        Tombstone(conn, store, 201, Old);
+
+        var ids = new List<long> { 100, 201 };
+        var split = IucnApiCacheTaxaCommand.SplitDue(store, ids, null, new IucnApiCacheTaxaSettings { Force = true });
+
+        Assert.Equal(ids, split.Due);
+        Assert.Equal(0, split.UpToDate);
+        Assert.Equal(0, split.NotFoundEarlier);
+    }
+
+    [Fact]
+    public void QueueSummary_NamesTheCutoff_AndLeavesOutZeroCounts() {
+        Assert.Equal(
+            "Taxa in the queue: 186,627. To download: 1,522. Downloaded after 2026-08-14 00:00 UTC: 185,104. Not found (HTTP 404) on an earlier run: 1.",
+            IucnDownloadQueueSummary.Describe("Taxa", 186_627, 1_522, 185_104, 1, Cutoff));
+        Assert.Equal(
+            "Assessments in the queue: 10. To download: 0. Already cached: 10.",
+            IucnDownloadQueueSummary.Describe("Assessments", 10, 0, 10, 0, null));
+        // The --retry-tombstones re-check with a cutoff skips only the 404s recorded after it.
+        Assert.Equal(
+            "Taxa in the queue: 3. To download: 1. Not found (HTTP 404) after 2026-08-14 00:00 UTC: 2.",
+            IucnDownloadQueueSummary.Describe("Taxa", 3, 1, 0, 2, Cutoff, notFoundAfterCutoff: true));
+    }
+
     // ---- the tombstone re-check ----
 
     [Fact]
