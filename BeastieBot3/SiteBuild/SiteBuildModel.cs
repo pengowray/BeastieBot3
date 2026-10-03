@@ -148,6 +148,9 @@ internal sealed class SiteBuildStats {
     /// replaced_by_assessment_id values written, by the kind of version that replaced the assessment.
     public int ReplacedByErrata;
     public int ReplacedByAmended;
+    /// Errata versions whose replaced assessment PredecessorIds missed and was found from the DOI
+    /// that `iucn resolve-dois` gave them (included in ReplacedByErrata unless claimed twice).
+    public int ReplacedFoundFromDoi;
     /// Errata and amended versions whose replaced assessment was not found, or not one alone.
     public int ReplacedNoCandidate;
     public int ReplacedSeveralCandidates;

@@ -22,8 +22,11 @@ using BeastieBot3.Shared.Wikitext;
 // amends (Dugong 2019, "amended version of 2015 assessment", own id, release 2015-4).
 //
 // Sources in priority order: IUCN's own citation text, GBIF's copy of the IUCN checklist, Wikidata
-// (P356 on the assessment's item), then the DOI `iucn resolve-dois` found by checking candidate DOIs
-// at doi.org. The first DOI that passes wins.
+// (P356 on the assessment's item), then the DOI `iucn resolve-dois` found in Crossref's list of IUCN
+// DOIs or by checking candidate DOIs at doi.org. The first DOI that passes wins. For that last source
+// only, an errata version's predecessors also include the assessment its DOI names
+// (ErrataPredecessorNamedBy), because the resolver has already seen that DOI point to the errata
+// version's page; IucnDoiResolution.ChooseFromCrossref applies the same rule.
 
 namespace BeastieBot3.SiteBuild;
 
@@ -103,24 +106,42 @@ internal static class IucnDoiSelector {
     public static bool IsAccepted(DoiVerdict verdict) =>
         verdict is DoiVerdict.Accepted or DoiVerdict.AcceptedPredecessor;
 
-    /// The first acceptable DOI in priority order (citation, GBIF, Wikidata, found at doi.org), in
-    /// canonical spelling, with its source; (null, None) when none passes. parts.Doi is ignored.
+    /// The first acceptable DOI in priority order (citation, GBIF, Wikidata, then `iucn resolve-dois`:
+    /// Crossref's list or doi.org), in canonical spelling, with its source; (null, None) when none
+    /// passes. parts.Doi is ignored. resolvedPredecessorAssessmentIds, when given, replaces
+    /// predecessorAssessmentIds for the resolved DOI only (see ErrataPredecessorNamedBy).
     public static DoiChoice Select(
         IucnCitationParts parts,
         string? citationDoi,
         string? gbifDoi,
         IEnumerable<string>? wikidataDois,
         IReadOnlyCollection<long>? predecessorAssessmentIds,
-        string? resolvedDoi = null) {
-        if (TryAccept(citationDoi) is { } fromCitation) return new DoiChoice(fromCitation, DoiSource.Citation);
-        if (TryAccept(gbifDoi) is { } fromGbif) return new DoiChoice(fromGbif, DoiSource.Gbif);
+        string? resolvedDoi = null,
+        IReadOnlyCollection<long>? resolvedPredecessorAssessmentIds = null) {
+        if (TryAccept(citationDoi, predecessorAssessmentIds) is { } fromCitation) return new DoiChoice(fromCitation, DoiSource.Citation);
+        if (TryAccept(gbifDoi, predecessorAssessmentIds) is { } fromGbif) return new DoiChoice(fromGbif, DoiSource.Gbif);
         foreach (var doi in wikidataDois ?? Array.Empty<string>()) {
-            if (TryAccept(doi) is { } fromWikidata) return new DoiChoice(fromWikidata, DoiSource.Wikidata);
+            if (TryAccept(doi, predecessorAssessmentIds) is { } fromWikidata) return new DoiChoice(fromWikidata, DoiSource.Wikidata);
         }
-        if (TryAccept(resolvedDoi) is { } fromDoiOrg) return new DoiChoice(fromDoiOrg, DoiSource.Resolved);
+        if (TryAccept(resolvedDoi, resolvedPredecessorAssessmentIds ?? predecessorAssessmentIds) is { } fromResolver) {
+            return new DoiChoice(fromResolver, DoiSource.Resolved);
+        }
         return new DoiChoice(null, DoiSource.None);
 
-        string? TryAccept(string? doi) =>
-            IsAccepted(Check(parts, doi, predecessorAssessmentIds)) ? Normalise(doi) : null;
+        string? TryAccept(string? doi, IReadOnlyCollection<long>? predecessors) =>
+            IsAccepted(Check(parts, doi, predecessors)) ? Normalise(doi) : null;
     }
+
+    /// The other assessment of the same taxon that a DOI from `iucn resolve-dois` names, when the
+    /// assessment is an errata version (ErrataYear set); otherwise null. The resolver keeps such a
+    /// DOI only when it points to this errata version's page: Crossref links it there, or doi.org
+    /// redirects there (IucnDoiResolution). So the assessment it names is one this errata version
+    /// replaced, even when IucnTaxaHeaders.PredecessorIds misses it because IUCN now gives it another
+    /// scope (Pinus pinea: 2977175, now Europe, replaced by the global 129160976) or another year, or
+    /// the taxon record does not list it.
+    public static long? ErrataPredecessorNamedBy(IucnCitationParts parts, string? resolvedDoi) =>
+        parts.ErrataYear is not null && TryParse(resolvedDoi) is { } parsed
+            && parsed.TaxonId == parts.TaxonId && parsed.AssessmentId != parts.AssessmentId
+            ? parsed.AssessmentId
+            : null;
 }

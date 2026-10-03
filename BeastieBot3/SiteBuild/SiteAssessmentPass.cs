@@ -28,7 +28,9 @@ using Microsoft.Data.Sqlite;
 //     been read, so the few rows with such a name are parsed again and written at the end.
 //   - replaced_by_assessment_id is set on the assessment an errata or amended version replaced,
 //     pointing at the newer one. An errata version (its title says "errata version published in")
-//     replaced one of the assessments IucnTaxaHeaders.PredecessorIds gives that are also rows here.
+//     replaced one of the assessments IucnTaxaHeaders.PredecessorIds gives that are also rows here;
+//     when there is none, the assessment named by the DOI from `iucn resolve-dois` that the errata
+//     version uses (IucnDoiSelector.ErrataPredecessorNamedBy), when that is a row here.
 //     An amended version replaced an earlier assessment of the taxon, same scope, published in the
 //     year its title names. Either way the replaced assessment has a lower id: IUCN numbers
 //     assessments in the order they are made, and without this the two errata versions of the 2022
@@ -282,6 +284,9 @@ internal sealed class SiteAssessmentPass {
         foreach (var name in parse.DamagedAuthorNames) {
             _stats.Count(_stats.AuthorNamesNotRepaired, name);
         }
+        // The assessment named by the resolver's DOI, when this is an errata version and PredecessorIds
+        // misses it (IucnDoiSelector.ErrataPredecessorNamedBy). Kept only when that DOI is used.
+        long? doiNamedPredecessor = null;
         if (parts.Doi is null) {
             string? gbifDoi = null;
             if (dois.Gbif.TryGetValue(assessment.TaxonId, out var gbif) && gbif.AssessmentId == assessment.AssessmentId) {
@@ -289,24 +294,41 @@ internal sealed class SiteAssessmentPass {
             }
             dois.Wikidata.TryGetValue(assessment.AssessmentId, out var wikidataDois);
             dois.Resolved.TryGetValue(assessment.AssessmentId, out var resolvedDoi);
-            var choice = IucnDoiSelector.Select(parts, citationDoi: null, gbifDoi, wikidataDois, predecessors, resolvedDoi);
+            IReadOnlyList<long> resolvedPredecessors = predecessors;
+            if (IucnDoiSelector.ErrataPredecessorNamedBy(parts, resolvedDoi) is { } named && !predecessors.Contains(named)) {
+                resolvedPredecessors = predecessors.Append(named).ToList();
+                doiNamedPredecessor = named;
+            }
+            var choice = IucnDoiSelector.Select(parts, citationDoi: null, gbifDoi, wikidataDois, predecessors, resolvedDoi, resolvedPredecessors);
             parts = parts with { Doi = choice.Doi, DoiSource = choice.Source };
+            if (choice.Source != DoiSource.Resolved) {
+                doiNamedPredecessor = null;
+            }
         }
         _stats.Count(_stats.DoisBySource, parts.Doi is null ? DoiSource.None : parts.DoiSource);
         _stats.CitationsParsed++;
         assessment.CitationJson = parts.ToJson();
-        LinkReplaced(assessment, parse, predecessors);
+        LinkReplaced(assessment, parse, predecessors, doiNamedPredecessor);
         return true;
     }
 
     // Records which earlier assessment an errata or amended version replaced (see the file comment).
-    private void LinkReplaced(SiteAssessment assessment, IucnCitationParse parse, IReadOnlyList<long> predecessors) {
+    private void LinkReplaced(SiteAssessment assessment, IucnCitationParse parse, IReadOnlyList<long> predecessors,
+        long? doiNamedPredecessor) {
         _rowsByTaxon.TryGetValue(assessment.TaxonId, out var rows);
         rows ??= new();
         var newer = assessment.AssessmentId;
         List<long> candidates;
         if (parse.HasErrataAnnotation) {
             candidates = predecessors.Where(id => id < newer && rows.Any(r => r.AssessmentId == id)).Distinct().ToList();
+            // The assessment the DOI names is used only when the same-year rule finds none. Added to a
+            // list that already has one, it would make two candidates and neither would be linked:
+            // taxon 9530's errata version 85829841 replaced 12998880 by the same-year rule, while its
+            // DOI names the 2000 assessment 12998967.
+            if (candidates.Count == 0 && doiNamedPredecessor is { } named && named < newer && rows.Any(r => r.AssessmentId == named)) {
+                candidates.Add(named);
+                _stats.ReplacedFoundFromDoi++;
+            }
         } else if (parse.Parts?.AmendsYear is { } amendsYear) {
             candidates = rows
                 .Where(r => r.AssessmentId < newer && !r.IsLatest && r.YearPublished == amendsYear

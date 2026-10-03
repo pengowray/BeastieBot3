@@ -187,6 +187,7 @@ internal sealed class SiteBuildDbCommand : Command<SiteBuildDbCommand.Settings> 
         Row("Category in the CSV differs from the API taxon record", s.CsvCategoryDiffersFromApi);
         Row("Replaced by an errata version (replaced_by_assessment_id set)", s.ReplacedByErrata);
         Row("Replaced by an amended version (replaced_by_assessment_id set)", s.ReplacedByAmended);
+        Row("Errata versions whose replaced assessment was found from their DOI (another scope or year)", s.ReplacedFoundFromDoi);
         Row("Errata or amended versions with no earlier assessment to link", s.ReplacedNoCandidate);
         Row("Errata or amended versions with several earlier assessments that could be the one replaced", s.ReplacedSeveralCandidates);
         Row("Earlier assessments named by two newer versions (not linked)", s.ReplacedClaimedTwice);
