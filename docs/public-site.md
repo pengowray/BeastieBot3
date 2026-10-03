@@ -98,7 +98,29 @@ Rules the site depends on (pinned by `SiteDbBuildTests` and the site tests):
   the taxon's `latest_global_assessment_id` is always NULL.
 - `current_taxon_id` (only when `in_release = 0`) is the taxon in the release with the same
   scientific name: one in the same kingdom first, then one of the same kind, then the lowest id.
-  The `taxon_current` index lets a taxon page find the old ids that have its name.
+- `taxon_link` links each taxon not in the release (an old id) to taxa in the release, in two ways
+  (`SiteTaxonLinks`):
+  - `same-name`: the taxon in `current_taxon_id`;
+  - `iucn-synonym`: the one taxon in the release, in the same kingdom, whose IUCN synonyms (from its
+    API taxon record) include the old id's scientific name exactly. Both kingdoms must be known. A
+    name that two or more such taxa list gives no link.
+
+  An old id can have both links, to two taxa: after a split, its name stays with one part and is a
+  synonym of the other (*Platanista gangetica*, old id 41758, is linked to 41756 by its name and
+  to *Platanista minor*, 41757, as a synonym). The build of 3 October 2026 has 1,723 `same-name`
+  links and 1,298 `iucn-synonym` links (1,238 species, 7 subspecies and 1 variety with no
+  `same-name` link, and 52 old ids that have both); 21 old ids have a name that two or more taxa
+  list as a synonym and are not linked by it. Matching the names with case and accents folded
+  would add 6 links. Of 20 synonym links checked by eye, all were IUCN synonymies (a species
+  lumped into another, a genus change, a misspelled old name). The build summary rows are "Not in
+  the release, linked to the one taxon in the release whose IUCN synonyms list its name" and "Not
+  in the release, with a name that two or more taxa in the release list as a synonym (not
+  linked)". The `taxon_link_current` index lets a taxon page find the old ids linked to it.
+- `assessment.has_taxonomic_notes` is 1 when the cached payload's `documentation.taxonomic_notes`
+  has a letter or digit once its HTML tags are removed (`SiteBuildRules.HasText`; IUCN also stores
+  empty notes as markup such as `<em><br/></em>`), 0 when it has none, and NULL when the payload is
+  not cached. The notes are narrative text, so the database holds only this flag. In the build of
+  3 October 2026, 93,587 of the 366,258 assessments have notes.
 - `epbc_listing` has one row per SPRAT profile of a taxon (schema version 3; version 2 had the
   columns `taxon.sprat_taxon_id` and `taxon.epbc_status` instead). `applies_to` is `taxon` for the
   profile of the whole taxon (matched by the taxon's scientific name, or by one of the IUCN names
@@ -472,13 +494,51 @@ the citation options.
   a reason.
 - Species pages are output-cached for an hour, keyed on the query parameters the page reads.
 - The page of a taxon that is not in the release (`in_release = 0`) says "No current assessment in
-  IUCN Red List version X", names the taxon in the release with the same name (`current_taxon_id`)
-  when there is one, and lists the taxon's earlier assessments with the wikitext (such as
-  `{{cite iucn}}`) for each. Its Regional assessments table lists every regional assessment, by
-  region and then newest first. On the page of a taxon in the release, that table lists the latest
-  assessment in each region, and the history section links to each old id that has the same
-  scientific name. The page of a taxon in the release with no global assessment says "No global
-  assessment. This taxon has been assessed in N regions."
+  IUCN Red List version X", and names each taxon in the release it is linked to in `taxon_link`:
+  "IUCN Red List version X lists *name* under IUCN id N" (`same-name`), or "IUCN lists *old name*
+  as a synonym of *current name* (IUCN id N)" (`iucn-synonym`). It lists the taxon's earlier
+  assessments with the wikitext (such as `{{cite iucn}}`) for each. Its Regional assessments table
+  lists every regional assessment, by region and then newest first. On the page of a taxon in the
+  release, that table lists the latest assessment in each region. The page of a taxon in the
+  release with no global assessment says "No global assessment. This taxon has been assessed in N
+  regions."
+- Combined assessment history (`Pages/CombinedHistory.cs`, `Pages/Shared/_CombinedHistory.cshtml`):
+  when a taxon has a linked taxon (an old id linked to it, or, on an old id's page, a taxon in the
+  release it is linked to) with at least one global assessment, the history section is headed
+  "Combined assessment history" and replaces the taxon's own history table. The combined table has
+  every global assessment of the page's taxon and of each linked taxon (one link away, not the
+  other old ids of a linked taxon), newest first, so the reader can see where one id's assessments
+  stop and the other's start. A legend line for each id gives its scientific name, whether it is in
+  the release, the number and years of its global assessments, and how it is linked ("Same
+  scientific name as IUCN id N", or "IUCN lists X as a synonym of Y"). Taxa in the release come
+  first, then old ids, each by id, so a taxon in the release has the same colour on its own page
+  and on an old id's page. Columns: year published, IUCN id (linked to that id's page; the page's
+  own id is marked "This page"), a Name column only when the ids have different names, category,
+  criteria, date assessed, wikitext, and the IUCN Red List link. A row of another id links to that
+  id's page with `?assessment=` and the visitor's citation options (`OtherIdOptionsUrl`, with that
+  page's default ref name for the assessment), labelled "See IUCN id N".
+  - Each id's rows have a background and a mark on their left edge (`--id-tint-N` and
+    `--id-mark-N` in `site.css`, six of them), and the legend has a swatch of the same colours. The
+    colours only help: the IUCN id column names each row's id. A table with more than six ids has
+    no colours, so that no colour stands for two ids; in release 2026-1 that is 4 pages, such as
+    *Bythiospeum acicula* (292912196, 23 ids). The row whose wikitext is shown has an outline
+    instead of the usual background. Contrast, checked with a script: in both themes, text, links,
+    visited links, muted text and grey badges are at least 5.6:1 on every background (4.5:1
+    needed), and each mark is at least 3.9:1 against its background and 4.4:1 against the page.
+  - When the newest global assessment of an id has taxonomic notes (`has_taxonomic_notes = 1`), a
+    line under the table says that IUCN's taxonomic notes may explain why the assessments are under
+    more than one IUCN id, and links to those assessments on the IUCN Red List website. The site
+    never shows the notes and never says why an id changed (split, lump or new name): IUCN's data
+    has no field for the reason.
+  - Regional assessments stay in each taxon's own Regional assessments table: none of an old id's
+    regional assessments is current, and the table of a taxon in the release lists the latest
+    assessment in each region. Under the combined table, "Regional assessments of IUCN id N are on
+    its page" links to that section of each other id that has any (364 of the 2,969 linked old ids
+    in release 2026-1).
+  - When no linked taxon has a global assessment, the page of a taxon in the release keeps its own
+    history table and has a line for each old id: "Earlier assessments of a taxon with this name are
+    under IUCN id N." or "Earlier assessments of X are under IUCN id N. IUCN lists X as a synonym
+    of Y." (`_EarlierIds.cshtml`).
 - Search, `/name/{name}` and `/api/suggest` rank taxa in the release before taxa that are not,
   within each group of matches (exact name, name that starts with the text, any other match).
   Search and `/name/{name}` go straight to a taxon page when the text names one taxon exactly: the
