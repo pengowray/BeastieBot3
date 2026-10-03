@@ -135,6 +135,20 @@ public class ScientificNameCheckTests {
     }
 
     [Fact]
+    public void AGenusInQuotes_IsScientific() {
+        Assert.True(IsScientific("\"Hyla\" nicefori", Taxon("hyla nicefori")));
+        Assert.True(IsScientific("\"Bufo\" scorteccii", Taxon("duttaphrynus scorteccii")));
+    }
+
+    [Fact]
+    public void OneWordThatIsAGenusInTheStore_IsScientific_UnlessItIsAnEnglishWord() {
+        var words = Words(genera: ["strumigenys", "ornithorhynchus", "platypus"], english: ["platypus"]);
+        Assert.True(IsScientific("Strumigenys", Taxon("kyidris media"), words));
+        Assert.False(IsScientific("Platypus", Taxon("ornithorhynchus anatinus"), words));
+        Assert.False(IsScientific("Kinkajou", Taxon("potos flavus"), words));
+    }
+
+    [Fact]
     public void AHyphenatedWord_IsEnglishOnlyWhenEveryPartIs() {
         var words = Words(genera: ["tillandsia", "popondetta"], english: ["walter", "blue", "eye"]);
         Assert.True(IsScientific("Tillandsia walter-tillii", Taxon("vriesea tillii"), words));

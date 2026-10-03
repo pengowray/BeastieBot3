@@ -155,8 +155,10 @@ internal static class ScientificNameCheck {
     /// genus taken from a synonym is not counted when it is an English word ("Orca" for Orcinus
     /// orca).</item>
     /// <item>Otherwise only a name shaped like a scientific name can be one: two to four words, the
-    /// first a capitalised word of plain letters, the rest lower case. Anything else is a common
-    /// name.</item>
+    /// first a capitalised word of plain letters, the rest lower case. A single word is a scientific
+    /// name when it is a genus in the store and not an English word ("Strumigenys" for Kyidris
+    /// media; not "Platypus"). Anything else is a common name. Double quotes around a genus
+    /// ("\"Hyla\" nicefori") are ignored throughout.</item>
     /// <item>The first word is one of the taxon's genera ("Gobio gobio" for Gobio latus): a scientific
     /// name.</item>
     /// <item>A word is an English word ("Pygmy hippopotamus", "Alligator gar"): a common name. A
@@ -176,6 +178,9 @@ internal static class ScientificNameCheck {
         if (string.IsNullOrWhiteSpace(name)) {
             return false;
         }
+        // Wikipedia puts a genus in double quotes when the species no longer belongs in it
+        // ("\"Hyla\" nicefori").
+        name = name.Replace("\"", "");
         var normalized = ScientificNameNormalizer.Normalize(name);
         if (normalized is null) {
             return false;
@@ -194,9 +199,14 @@ internal static class ScientificNameCheck {
             }
         }
 
-        // 2. Shaped like a scientific name.
+        // 2. Shaped like a scientific name. One word is a genus name when the store has that genus
+        // and English names do not use the word ("Strumigenys", but not "Platypus" or "Orca").
         var parts = name.Trim().Split(' ', StringSplitOptions.RemoveEmptyEntries);
-        if (parts.Length is < 2 or > 4 || !GenusWord.IsMatch(parts[0])) {
+        if (parts.Length == 1) {
+            var word = parts[0].ToLowerInvariant();
+            return GenusWord.IsMatch(parts[0]) && words.IsGenus(word) && !words.IsEnglish(word);
+        }
+        if (parts.Length > 4 || !GenusWord.IsMatch(parts[0])) {
             return false;
         }
         var later = WithoutRankMarkers(parts.Skip(1));
