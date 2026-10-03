@@ -122,6 +122,80 @@ public class WikidataStatusEditTests {
         Assert.Equal(StatusEditChoice.Keep, WikidataStatusEdit.RecommendedChoice(statements));
     }
 
+    // Taxon 2058, Arctocephalus gazella (EN in 2026-1), item Q571449: endangered at preferred rank
+    // whose only reference is a reference URL to the pre-publication PDF on nc.iucnredlist.org, with
+    // start time April 2026, above least concern at normal rank, stated in Q115962546 with IUCN
+    // taxon ID 2058 and end time April 2026.
+    private static StatusEditRequest ArctocephalusGazella(WikidataStatusStatement preferredEndangered) => new() {
+        TaxonItemQid = "Q571449",
+        Statements = [
+            new("q571449$4D114D83-9B72-49BB-A754-8520B542576A", "Q211005", "normal", ["Q115962546"], TaxonIds: ["2058"], References: 1, CitesIucn: true),
+            preferredEndangered,
+        ],
+        Category = "EN",
+        TaxonId = 2058,
+        AssessmentId = 293563664,
+        Retrieved = new DateOnly(2026, 8, 18),
+    };
+
+    [Fact]
+    public void Agrees_PreferredValueCitedByIucnUrlOnly_TheHistoryStays() {
+        var endangered = new WikidataStatusStatement("Q571449$d351c0cb-4173-2e87-3086-98f1b0871894", "Q96377276", "preferred", [],
+            TaxonIds: [], References: 1, CitesIucn: true);
+        foreach (var choice in new[] { StatusEditChoice.Replace, StatusEditChoice.Keep }) {
+            var plan = WikidataStatusEdit.Plan(ArctocephalusGazella(endangered), choice);
+
+            Assert.Equal(StatusEditOutcome.Agrees, plan.Outcome);
+            Assert.Empty(plan.Removes);
+            Assert.Empty(plan.RankSteps);
+            Assert.False(plan.AddsValue);
+            // The URL-only reference has no IUCN taxon ID, so the reference is added to that statement.
+            Assert.True(plan.AddsReference);
+            Assert.Equal(new[] {
+                L("Q571449", "P141", "Q96377276", "S627", "\"2058\"", "S854", "\"https://www.iucnredlist.org/species/2058/293563664\"",
+                    "S813", "+2026-08-18T00:00:00Z/11"),
+            }, plan.Commands);
+        }
+    }
+
+    [Fact]
+    public void Differs_PreferredStatementFromAnotherSource_TheIucnStatementUnderItIsNeverRemoved() {
+        // The same item read with endangered's reference not counted as IUCN: the least concern
+        // statement is still under a preferred statement, so it is history and stays.
+        var endangered = new WikidataStatusStatement("Q571449$d351c0cb-4173-2e87-3086-98f1b0871894", "Q96377276", "preferred", [],
+            TaxonIds: [], References: 1, CitesIucn: false);
+        var plan = WikidataStatusEdit.Plan(ArctocephalusGazella(endangered), StatusEditChoice.Replace);
+
+        Assert.Equal(StatusEditOutcome.Differs, plan.Outcome);
+        Assert.Empty(plan.Removes);
+        Assert.Single(plan.Commands);
+        Assert.Empty(plan.RankSteps);
+
+        // A new value outranks both: the reader sets it to preferred and the old preferred one to normal.
+        var vulnerable = WikidataStatusEdit.Plan(ArctocephalusGazella(endangered) with { Category = "VU" }, StatusEditChoice.Replace);
+        Assert.Empty(vulnerable.Removes);
+        Assert.Equal(new[] {
+            new StatusRankStep(null, "Q278113", "preferred"),
+            new StatusRankStep("Q571449$d351c0cb-4173-2e87-3086-98f1b0871894", "Q96377276", "normal"),
+        }, vulnerable.RankSteps);
+    }
+
+    [Theory]
+    [InlineData("https://nc.iucnredlist.org/redlist/content/attachment_files/Arctocephalus_gazella_Pre-Publication_Assessment_RLTS_T2058A293563664_en.pdf", true)]
+    [InlineData("https://www.iucnredlist.org/species/33951/103192536", true)]
+    [InlineData("http://apiv3.iucnredlist.org/api/v3/species/id/22694", true)]
+    [InlineData("https://IUCNREDLIST.ORG/species/1/2", true)]
+    [InlineData("https://iucnredlist.org.example.com/species/1/2", false)]
+    [InlineData("https://notiucnredlist.org/species/1/2", false)]
+    [InlineData("https://birdsoftheworld.org/bow/species/sobtyr1", false)]
+    [InlineData("ftp://www.iucnredlist.org/x", false)]
+    [InlineData("www.iucnredlist.org/species/1/2", false)]
+    [InlineData("", false)]
+    [InlineData(null, false)]
+    public void IsIucnRedListUrl_IucnRedListOrASubdomain(string? url, bool expected) {
+        Assert.Equal(expected, WikidataStatusStatement.IsIucnRedListUrl(url));
+    }
+
     [Fact]
     public void Differs_TwoNormalValues_ReplaceRemovesBoth() {
         // With no preferred statement both are best-ranked, so both are the current status.

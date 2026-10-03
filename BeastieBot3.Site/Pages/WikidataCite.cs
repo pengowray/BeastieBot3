@@ -101,7 +101,8 @@ public sealed record WikidataStatusView {
     /// The plan whose commands are shown first: for a changed status, the recommended choice
     /// (WikidataStatusEdit.RecommendedChoice). Null outside Offered, or when WikidataStatusEdit failed.
     public StatusEditPlan? Plan { get; init; }
-    /// For a changed status: the plan for the other choice, shown in a details element.
+    /// For a changed status: the plan for the other choice, shown in a details element. Null when
+    /// its commands are the same as Plan's.
     public StatusEditPlan? AltPlan { get; init; }
     public WikitextBox? Commands { get; init; }
     public string? QuickStatementsUrl { get; init; }
@@ -195,7 +196,9 @@ public static partial class WikidataCite {
             onError?.Invoke("WikidataStatusEdit.Plan", e);
             return view;
         }
-        var showAlt = plan.Outcome == StatusEditOutcome.Differs;
+        // The other choice only when its commands differ: with nothing it may remove (every IUCN
+        // statement is under a preferred one), Replace makes the same commands as Keep.
+        var showAlt = plan.Outcome == StatusEditOutcome.Differs && !alt.Commands.SequenceEqual(plan.Commands);
         return view with {
             Plan = plan,
             AltPlan = showAlt ? alt : null,

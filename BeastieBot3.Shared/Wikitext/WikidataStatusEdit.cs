@@ -23,18 +23,23 @@ namespace BeastieBot3.Shared.Wikitext;
 //   can refer to an item created earlier in a batch (LAST works as a value in its source), but the
 //   help page does not document that use.
 // - Which statements count: only those with a reference that cites IUCN (CitesIucn: an IUCN taxon
-//   ID (P627) in the reference, or stated in (P248) the IUCN Red List, one of its editions or
-//   IUCN). Agrees, Differs and Missing are decided from them alone, by the best-ranked ones
-//   (preferred, else normal), as the dry run does. A statement with no reference, or with only
-//   references to another source (a national red book), is never removed and is listed to the
-//   reader as Others.
+//   ID (P627) in the reference, stated in (P248) the IUCN Red List, one of its editions, IUCN or
+//   an assessment's own item, or a reference URL (P854) on iucnredlist.org or a subdomain of it,
+//   such as a pre-publication PDF on nc.iucnredlist.org). Agrees, Differs and Missing are decided
+//   from them alone. The item's best rank is taken over every current statement (preferred when
+//   any is, else normal), and the IUCN statements at that rank are compared, as the dry run
+//   compares the best-ranked ones. When every IUCN statement is under a preferred statement that
+//   cites another source, the IUCN statements at their own best rank are compared instead. A
+//   statement with no reference, or with only references to another source (a national red book),
+//   is never removed and is listed to the reader as Others.
 // - Rank: QuickStatements v1 cannot set a statement's rank (Help:QuickStatements, Limitations).
 //   For a changed status there are the dry run's two conventions:
 //     Keep:    add the new value and remove nothing; the reader sets the new statement to
 //              preferred rank and the old preferred one to normal by hand (RankSteps).
-//     Replace: add the new value and remove the best-ranked IUCN statements with another value by
-//              statement id (-STATEMENT, so only the statements listed to the reader are removed).
-//              Normal-rank statements under a preferred one are history and are never removed.
+//     Replace: add the new value and remove the IUCN statements at the item's best rank that have
+//              another value, by statement id (-STATEMENT, so only the statements listed to the
+//              reader are removed). Normal-rank statements under a preferred one are history and
+//              are never removed, whatever source the preferred one cites.
 //   RecommendedChoice is Keep when the item already has a statement at preferred rank (the
 //   convention of the 2025.2 updates, which keep history), else Replace. Either plan lists the
 //   ranks still to set when the statements left would compete with the new one.
@@ -77,8 +82,8 @@ public enum StatusEditChoice { Replace, Keep }
 /// Value is the status item ("Q219127"); Rank is "preferred", "normal" or "deprecated"; StatedIn
 /// lists the stated in (P248) items of its references (the first of each reference); TaxonIds the
 /// IUCN taxon IDs (P627) in its references; References how many references it has; CitesIucn
-/// whether one of them cites IUCN (an IUCN taxon ID, or stated in the Red List, an edition of it,
-/// or IUCN).
+/// whether one of them cites IUCN (an IUCN taxon ID; stated in the Red List, an edition of it, IUCN
+/// or an assessment's item; or a reference URL on iucnredlist.org or a subdomain).
 public sealed record WikidataStatusStatement(
     [property: JsonPropertyName("id")] string Id,
     [property: JsonPropertyName("value")] string? Value,
@@ -95,6 +100,14 @@ public sealed record WikidataStatusStatement(
     /// The items that a reference stated in (P248) can name and still cite IUCN, besides the Red
     /// List's editions: the IUCN Red List (Q32059) and IUCN (Q48268).
     public static IReadOnlyList<string> IucnSourceItems { get; } = ["Q32059", "Q48268"];
+
+    /// True for a reference URL (P854) that cites IUCN: an absolute http or https URL on
+    /// iucnredlist.org or a subdomain of it (www., apiv3., or nc. for a pre-publication PDF).
+    public static bool IsIucnRedListUrl(string? url) =>
+        Uri.TryCreate(url?.Trim(), UriKind.Absolute, out var uri)
+        && (uri.Scheme == Uri.UriSchemeHttps || uri.Scheme == Uri.UriSchemeHttp)
+        && (uri.Host.Equals("iucnredlist.org", StringComparison.OrdinalIgnoreCase)
+            || uri.Host.EndsWith(".iucnredlist.org", StringComparison.OrdinalIgnoreCase));
 
     public static string ListToJson(IReadOnlyList<WikidataStatusStatement> statements) => JsonSerializer.Serialize(statements);
 
@@ -234,19 +247,26 @@ public static partial class WikidataStatusEdit {
             && ((existing.TaxonIds ?? []).Contains(taxonId, StringComparer.Ordinal)
                 || (assessmentItem is not null && (existing.StatedIn ?? []).Contains(assessmentItem, StringComparer.Ordinal)));
         var iucn = current.Where(s => s.CitesIucn).ToList();
-        var best = iucn.Where(s => s.IsPreferred).ToList() is { Count: > 0 } preferred ? preferred : iucn;
+        // The item's best rank is taken over every current statement, whatever its source. Only the
+        // IUCN statements at that rank can be removed: a normal statement under a preferred one is
+        // history, even when the preferred one cites another source.
+        var removable = current.Any(s => s.IsPreferred) ? iucn.Where(s => s.IsPreferred).ToList() : iucn;
+        // The verdict compares those; when every IUCN statement is under a preferred statement from
+        // another source, it compares the IUCN statements at their own best rank.
+        var compared = removable.Count > 0 ? removable
+            : iucn.Where(s => s.IsPreferred).ToList() is { Count: > 0 } preferred ? preferred : iucn;
 
         StatusEditOutcome outcome;
         var removes = new List<WikidataStatusStatement>();
         var rankSteps = new List<StatusRankStep>();
         if (iucn.Count == 0) {
             outcome = StatusEditOutcome.Missing;
-        } else if (best.All(s => s.Value == target)) {
+        } else if (compared.All(s => s.Value == target)) {
             outcome = StatusEditOutcome.Agrees;
         } else {
             outcome = StatusEditOutcome.Differs;
             if (choice == StatusEditChoice.Replace) {
-                removes.AddRange(best.Where(s => s.Value != target));
+                removes.AddRange(removable.Where(s => s.Value != target));
             }
             // The statements left with another value: the new one has to outrank them.
             var competing = current.Where(s => s != existing && s.Value != target && !removes.Contains(s)).ToList();
