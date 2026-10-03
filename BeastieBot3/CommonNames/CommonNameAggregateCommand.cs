@@ -692,6 +692,7 @@ internal sealed class CommonNameAggregateCommand : AsyncCommand<CommonNameAggreg
             var created = 0;
             var scientificTitles = 0;
             var scientificTaxoboxNames = 0;
+            var anotherTaxonsPage = 0;
 
             using var wikiConnection = new SqliteConnection($"Data Source={wikipediaPath};Mode=ReadOnly");
             wikiConnection.Open();
@@ -704,17 +705,21 @@ internal sealed class CommonNameAggregateCommand : AsyncCommand<CommonNameAggreg
             var useTaxonMatches = TableHasRows(wikiConnection, "taxon_wiki_matches",
                 $"match_status = 'matched' AND taxon_source = '{TaxonSources.Iucn}'");
 
+            // Pages some taxon is matched to by its own name; a taxon matched to one of them through
+            // a synonym or a CoL name gets no names from it (WikipediaPageMatch).
+            var pagesMatchedByOwnName = useTaxonMatches ? ReadPagesMatchedByOwnName(wikiConnection) : new HashSet<long>();
+
             using var command = wikiConnection.CreateCommand();
             if (useTaxonMatches) {
                 // Use pre-computed matches
                 command.CommandText = limit.HasValue
-                    ? @"SELECT m.taxon_identifier, p.page_title, p.normalized_title, t.data_json
+                    ? @"SELECT m.taxon_identifier, p.page_title, p.normalized_title, t.data_json, m.page_row_id, m.match_method
                         FROM taxon_wiki_matches m
                         JOIN wiki_pages p ON p.id = m.page_row_id
                         LEFT JOIN wiki_taxobox_data t ON t.page_row_id = p.id
                         WHERE m.taxon_source = @source AND m.match_status = 'matched'
                         LIMIT @limit"
-                    : @"SELECT m.taxon_identifier, p.page_title, p.normalized_title, t.data_json
+                    : @"SELECT m.taxon_identifier, p.page_title, p.normalized_title, t.data_json, m.page_row_id, m.match_method
                         FROM taxon_wiki_matches m
                         JOIN wiki_pages p ON p.id = m.page_row_id
                         LEFT JOIN wiki_taxobox_data t ON t.page_row_id = p.id
@@ -752,11 +757,15 @@ internal sealed class CommonNameAggregateCommand : AsyncCommand<CommonNameAggreg
                         string? taxonIdentifier;
                         string pageTitle;
                         string? taxoboxJson;
+                        var givesNames = true;
 
                         if (useTaxonMatches) {
                             taxonIdentifier = reader.GetString(0); // IUCN SIS ID
                             pageTitle = reader.GetString(1);
                             taxoboxJson = reader.IsDBNull(3) ? null : reader.GetString(3);
+                            givesNames = WikipediaPageMatch.GivesNames(
+                                reader.IsDBNull(5) ? null : reader.GetString(5),
+                                pagesMatchedByOwnName.Contains(reader.GetInt64(4)));
                         } else {
                             // Using taxobox scientific name - need to match to our taxa
                             var scientificName = reader.GetString(0);
@@ -768,12 +777,17 @@ internal sealed class CommonNameAggregateCommand : AsyncCommand<CommonNameAggreg
                             taxonIdentifier = scientificName; // Use as identifier for matching
                         }
 
-                        // Find the taxon. Cheapest probe first: did an earlier run resolve this page?
-                        long? taxonId = store.FindTaxonByCrossReference("wikipedia", pageTitle);
-                        if (!taxonId.HasValue) {
-                            taxonId = useTaxonMatches
-                                ? store.FindTaxonBySourceId("iucn", taxonIdentifier!)
-                                : store.FindTaxonByScientificName(taxonIdentifier!);
+                        // Find the taxon. A precomputed match names the IUCN taxon, so it is looked up
+                        // by that id: a page can be matched to several taxa, and looking it up by the
+                        // page's cross-reference gave every one of them to whichever came first.
+                        // Without matches, try the cheapest probe first: did an earlier run resolve
+                        // this page?
+                        long? taxonId;
+                        if (useTaxonMatches) {
+                            taxonId = store.FindTaxonBySourceId("iucn", taxonIdentifier!);
+                        } else {
+                            taxonId = store.FindTaxonByCrossReference("wikipedia", pageTitle)
+                                ?? store.FindTaxonByScientificName(taxonIdentifier!);
                         }
 
                         if (!taxonId.HasValue) {
@@ -787,6 +801,11 @@ internal sealed class CommonNameAggregateCommand : AsyncCommand<CommonNameAggreg
                         } else {
                             matched++;
                             store.InsertCrossReference(taxonId.Value, "wikipedia", pageTitle, "exact");
+                        }
+
+                        if (!givesNames) {
+                            anotherTaxonsPage++;
+                            continue;
                         }
 
                         // Add the page title (without its disambiguation) as a common name, unless it
@@ -843,10 +862,31 @@ internal sealed class CommonNameAggregateCommand : AsyncCommand<CommonNameAggreg
             var totalAdded = titleAdded + taxoboxAdded;
             store.CompleteImportRun(runId, processed, totalAdded, 0, 0,
                 $"Matched {matched} pages to taxa, {titleAdded} titles, {taxoboxAdded} taxobox names, created {created}, " +
-                $"skipped as scientific names: {scientificTitles} titles, {scientificTaxoboxNames} taxobox names");
+                $"skipped as scientific names: {scientificTitles} titles, {scientificTaxoboxNames} taxobox names, " +
+                $"{anotherTaxonsPage} taxa matched through a synonym to another taxon's page");
             AnsiConsole.MarkupLine($"[green]Wikipedia:[/] {titleAdded:N0} titles + {taxoboxAdded:N0} taxobox names from {matched:N0} matched pages, [blue]{created:N0}[/] taxa created");
             AnsiConsole.MarkupLine($"[grey]Not stored because they are scientific names: {scientificTitles:N0} titles, {scientificTaxoboxNames:N0} taxobox names[/]");
+            AnsiConsole.MarkupLine($"[grey]Taxa matched through a synonym to another taxon's page, so given no names from it: {anotherTaxonsPage:N0}[/]");
         }, cancellationToken);
+    }
+
+    // The pages in taxon_wiki_matches that at least one IUCN taxon is matched to by its own name.
+    private static HashSet<long> ReadPagesMatchedByOwnName(SqliteConnection wikiConnection) {
+        var pages = new HashSet<long>();
+        using var command = wikiConnection.CreateCommand();
+        command.CommandText =
+            """
+            SELECT page_row_id, match_method FROM taxon_wiki_matches
+            WHERE taxon_source = @source AND match_status = 'matched' AND page_row_id IS NOT NULL
+            """;
+        command.Parameters.AddWithValue("@source", TaxonSources.Iucn);
+        using var reader = command.ExecuteReader();
+        while (reader.Read()) {
+            if (!WikipediaPageMatch.IsThroughAnotherName(reader.IsDBNull(1) ? null : reader.GetString(1))) {
+                pages.Add(reader.GetInt64(0));
+            }
+        }
+        return pages;
     }
 
     private static string? ExtractTaxoboxName(string json, string pageTitle) {
