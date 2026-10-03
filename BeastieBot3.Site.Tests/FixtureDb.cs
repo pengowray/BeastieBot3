@@ -127,6 +127,7 @@ public static class FixtureDb {
     public const string LeopardOtherItem = "Q900000030";
     /// The cassowary's item, which states its IUCN taxon ID at deprecated rank (made up).
     public const string CassowaryItem = "Q190722";
+    public const string CassowaryLatestItem = "Q900000031";
     /// The woylie's item (made up): critically endangered with a reference that has its IUCN taxon
     /// ID, and endangered with a reference to another source.
     public const string WoylieItem = "Q900000040";
@@ -383,7 +384,12 @@ public static class FixtureDb {
             authority: "(Linnaeus, 1758)", commonEn: "Southern cassowary", latest: CassowaryLatest,
             qid: CassowaryItem, itemDownloaded: "2026-09-13", p627Deprecated: true,
             p141: P141(("Q190722$1A2B3C4D-0000-4000-8000-000000000009", "Q211005", "normal", "Q136547248")));
-        w.Assessment(CassowaryLatest, Cassowary, "Global", true, "LC", criteriaVersion: "3.1", year: 2016, date: "2016-10-01");
+        // Its assessment item lacks main subject (P921) and publication date (P577); the add commands
+        // leave out P921, since the taxon's item states the IUCN taxon ID only at deprecated rank.
+        w.Assessment(CassowaryLatest, Cassowary, "Global", true, "LC", criteriaVersion: "3.1", year: 2016, date: "2016-10-01",
+            citation: Citation(Cassowary, CassowaryLatest, 2016, "Casuarius casuarius", [Organisation("BirdLife International")],
+                doi: "10.2305/IUCN.UK.2016-3.RLTS.T22678108A155429591.en", doiSource: DoiSource.Gbif, text: null),
+            wikidataItem: CassowaryLatestItem, wikidataItemProperties: "P31 P1476 P1433 P953 P356 P2093 Len");
         w.EpbcListing(Cassowary, CassowarySprat, "Casuarius casuarius johnsonii", "EN", "taxon", null);
         w.Name(Cassowary, "Casuarius casuarius", "scientific", null, "iucn");
 
@@ -393,7 +399,9 @@ public static class FixtureDb {
             qid: LeopardItem, itemDownloaded: "2026-09-13", p141: "[]",
             otherItems: WikidataOtherTaxonItem.ListToJson([new WikidataOtherTaxonItem(LeopardOtherItem, false,
                 [new WikidataStatusStatement(LeopardOtherItem + "$1A2B3C4D-0000-4000-8000-00000000000A", "Q278113", "normal", ["Q136547248"], [], 1, true)])]));
-        w.Assessment(LeopardLatest, Leopard, "Global", true, "VU", criteria: "A2cd", criteriaVersion: "3.1", year: 2024, date: "2023-01-01");
+        w.Assessment(LeopardLatest, Leopard, "Global", true, "VU", criteria: "A2cd", criteriaVersion: "3.1", year: 2024, date: "2023-01-01",
+            citation: Citation(Leopard, LeopardLatest, 2024, "Panthera pardus", [Person("Stein", "A.B.")],
+                doi: "10.2305/IUCN.UK.2024-1.RLTS.T15954A50659089.en", doiSource: DoiSource.Gbif, text: null));
         w.Name(Leopard, "Panthera pardus", "scientific", null, "iucn");
         w.Name(Leopard, "Leopard", "common", "en", "iucn", preferred: true);
 

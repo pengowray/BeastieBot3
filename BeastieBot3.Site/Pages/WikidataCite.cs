@@ -42,6 +42,10 @@ public sealed record WikidataCiteView {
     /// name such as "Larus glaucoides_old", and Crossref's title is not known).
     public bool NoUsableName { get; init; }
 
+    /// Set when the commands leave out main subject (P921) because the taxon's Wikidata item is in
+    /// doubt (TaxonItemDoubt), and would otherwise have written it.
+    public TaxonItemDoubt? MainSubjectLeftOut { get; init; }
+
     /// For an errata version that shares the Wikidata item of the assessment it corrects (same DOI):
     /// that assessment's id. The page then offers no commands for the item.
     public long? ItemIsForAssessmentId { get; init; }
@@ -60,6 +64,36 @@ public sealed record WikidataCiteView {
     public string? SearchUrl { get; init; }
 
     public string? ItemUrl => ItemQid is null ? null : SiteFormat.WikidataUrl(ItemQid);
+}
+
+public enum TaxonItemDoubtKind {
+    /// More than one Wikidata item states the taxon's IUCN taxon ID (P627).
+    SeveralItems,
+    /// The taxon's item states the IUCN taxon ID only at deprecated rank.
+    TaxonIdDeprecated,
+}
+
+/// Why the taxon's Wikidata item may not be the item for the taxon: the Wikidata status dry run's
+/// tiers C and D. The IUCN status part then gives no commands, and the {{cite Q}} part's commands
+/// leave out main subject (P921). ItemCount: how many items state the IUCN taxon ID.
+public sealed record TaxonItemDoubt(TaxonItemDoubtKind Kind, long TaxonId, string TaxonItemQid, int ItemCount) {
+    /// Null when the taxon's item states its IUCN taxon ID and no other item does, or when the taxon
+    /// has no such item.
+    public static TaxonItemDoubt? Of(TaxonRow? taxon) {
+        if (taxon is null || !taxon.WikidataItemStatesTaxonId || WikidataCite.ItemId(taxon.WikidataQid) is not { } item) {
+            return null;
+        }
+        IReadOnlyList<WikidataOtherTaxonItem>? others;
+        try {
+            others = WikidataOtherTaxonItem.ListFromJson(taxon.WikidataOtherItems);
+        } catch (System.Text.Json.JsonException) {
+            others = null;
+        }
+        if (others is { Count: > 0 }) {
+            return new TaxonItemDoubt(TaxonItemDoubtKind.SeveralItems, taxon.TaxonId, item, others.Count + 1);
+        }
+        return taxon.WikidataP627Deprecated ? new TaxonItemDoubt(TaxonItemDoubtKind.TaxonIdDeprecated, taxon.TaxonId, item, 1) : null;
+    }
 }
 
 /// Why the IUCN status part shows no comparison: the commands are only for the latest global
@@ -218,12 +252,15 @@ public static partial class WikidataCite {
     /// The view for one assessment. parts: its citation parts, or null when its details were not
     /// downloaded (no commands can be made then). model: the item model from the site database, or
     /// null when it could not be read (no commands then either). hasPage: whether this site has a
-    /// page for an assessment id of the taxon. onError is told about any renderer that throws; only
-    /// the box that renderer makes is left out.
+    /// page for an assessment id of the taxon. taxonItemDoubt: set when the taxon's item may not be
+    /// the taxon's (TaxonItemDoubt.Of); the commands then leave out main subject (P921). onError is
+    /// told about any renderer that throws; only the box that renderer makes is left out.
     public static WikidataCiteView Build(AssessmentRow assessment, IucnCitationParts? parts, string? taxonQid, WikidataItemModel? model,
-        CiteQOptions citeQOptions, Action<string, Exception>? onError = null, Func<long, bool>? hasPage = null) {
+        CiteQOptions citeQOptions, Action<string, Exception>? onError = null, Func<long, bool>? hasPage = null,
+        TaxonItemDoubt? taxonItemDoubt = null) {
         var itemQid = ItemId(assessment.WikidataItemQid);
-        var taxonItem = ItemId(taxonQid);
+        var knownTaxonItem = ItemId(taxonQid);
+        var taxonItem = taxonItemDoubt is null ? knownTaxonItem : null;
         var citationName = parts is null ? null : WikidataCitation.NameText(parts.ScientificName) is { Length: > 0 } cleaned ? cleaned : null;
 
         T? Try<T>(string what, Func<T> make) where T : class {
@@ -255,11 +292,13 @@ public static partial class WikidataCite {
             }
             var titles = WikidataTitle.ListFromJson(assessment.WikidataItemTitles);
             IReadOnlyList<string> add = [];
+            var mainSubjectLeftOut = false;
             // With no list of the item's properties, what it lacks is not known, so nothing is
             // offered (rather than every statement).
             if (parts is not null && model is not null && !string.IsNullOrWhiteSpace(assessment.WikidataItemProperties)) {
                 var present = Properties(assessment.WikidataItemProperties);
                 add = Try("AddMissingCommands", () => WikidataCitation.AddMissingCommands(parts, itemQid, present, taxonItem, model, titles)) ?? [];
+                mainSubjectLeftOut = taxonItemDoubt is not null && knownTaxonItem is not null && !present.Contains("P921");
             }
             // A title is changed only when its exact text and language are known
             // (wikidata_item_titles); the label whenever it differs from the model's.
@@ -281,6 +320,7 @@ public static partial class WikidataCite {
                 Name = parts is null ? null : WikidataCitation.TitleNameFor(parts, titles),
                 CitationName = citationName,
                 CommandsUseName = fix.Changes.Count > 0 || add.Any(c => c.Split('\t') is [_, "P1476" or "Len", ..]),
+                MainSubjectLeftOut = mainSubjectLeftOut && commands is not null ? taxonItemDoubt : null,
             };
         }
 
@@ -298,6 +338,7 @@ public static partial class WikidataCite {
             QuickStatementsUrl = FittingUrl(Try("QuickStatementsUrl", () => WikidataCitation.QuickStatementsUrl(create))),
             Name = name,
             CommandsUseName = true,
+            MainSubjectLeftOut = knownTaxonItem is null ? null : taxonItemDoubt,
         };
     }
 

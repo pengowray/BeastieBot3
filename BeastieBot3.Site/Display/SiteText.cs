@@ -266,6 +266,14 @@ public static class SiteText {
     public static string NoUsableName(string cited) =>
         $"No commands: the only name this site has for this assessment is IUCN's citation name, {cited}, which IUCN uses as an internal name for a taxon it has replaced.";
 
+    // The commands leave out main subject (P921) when the taxon's item may not be the taxon's
+    // (TaxonItemDoubt). One line beside the commands box, shown only when the commands would
+    // otherwise write it.
+    public static string MainSubjectSeveralItems(int itemCount, long taxonId) =>
+        $"The commands do not include main subject (P921), because {itemCount} Wikidata items state IUCN taxon ID (P627) {taxonId}. First check which one is the item for this taxon.";
+    public static string MainSubjectDeprecated(string taxonItem, long taxonId) =>
+        $"The commands do not set main subject (P921) to {taxonItem}, because {taxonItem} states IUCN taxon ID (P627) {taxonId} only at deprecated rank. First check that {taxonItem} is the item for this taxon.";
+
     // An errata version that shares the Wikidata item of the assessment it corrects (same DOI).
     /// Before + link(BorrowedItemLink) + ".".
     public const string BorrowedItemBefore =

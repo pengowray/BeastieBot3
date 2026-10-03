@@ -1,0 +1,8 @@
+@model WikidataCiteView
+@* Why the commands leave out main subject (P921): the taxon's Wikidata item may not be the
+   taxon's (WikidataCiteView.MainSubjectLeftOut, TaxonItemDoubt). *@
+@if (Model.MainSubjectLeftOut is { } doubt) {
+    <p class="wikidata-main-subject">@(doubt.Kind == TaxonItemDoubtKind.SeveralItems
+        ? SiteText.MainSubjectSeveralItems(doubt.ItemCount, doubt.TaxonId)
+        : SiteText.MainSubjectDeprecated(doubt.TaxonItemQid, doubt.TaxonId))</p>
+}

@@ -261,7 +261,7 @@ public sealed class SpeciesModel : PageModel {
 
         Wikidata = WikidataCite.Build(Selected, Parts, Taxon?.WikidataQid, ReadItemModel(), Options.ToCiteQOptions(today, downloaded),
             (what, e) => _logger.LogWarning(e, "WikidataCitation.{Method} failed for assessment {AssessmentId}", what, Selected.AssessmentId),
-            hasPage: id => _assessments.Any(a => a.AssessmentId == id));
+            hasPage: id => _assessments.Any(a => a.AssessmentId == id), taxonItemDoubt: TaxonItemDoubt.Of(Taxon));
         if (Taxon is not null && Taxon.InRelease && LatestGlobal is not null && Selected.AssessmentId == LatestGlobal.AssessmentId) {
             WikidataStatus = WikidataCite.BuildStatus(Taxon, LatestGlobal, Parts,
                 (what, e) => _logger.LogWarning(e, "{Method} failed for taxon {TaxonId}", what, Taxon.TaxonId));

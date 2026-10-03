@@ -41,6 +41,51 @@ public sealed class WikidataSectionTests(SiteFactory factory) : IClassFixture<Si
         Assert.DoesNotContain("{{cite Q}} citation</label>", part);
     }
 
+    // Two items state the leopard's IUCN taxon ID, so the create commands leave out main subject
+    // (P921), and one line says why.
+    [Fact]
+    public async Task TaxonIdOnSeveralItems_CreateCommandsLeaveOutMainSubject() {
+        var html = await _client.GetStringAsync($"/species/{FixtureDb.Leopard}");
+        var box = Html.Textarea(html, WikidataCite.CommandsBoxId)!;
+        Assert.StartsWith("CREATE", box);
+        Assert.Contains("LAST\tP1433\tQ32059", box);
+        Assert.DoesNotContain("P921", box);
+        Assert.Contains(SiteText.MainSubjectSeveralItems(2, FixtureDb.Leopard), Html.Text(Part(html)));
+    }
+
+    // The cassowary's item states its IUCN taxon ID only at deprecated rank, so the add commands
+    // leave out main subject (P921), which the assessment item lacks.
+    [Fact]
+    public async Task TaxonIdAtDeprecatedRank_AddCommandsLeaveOutMainSubject() {
+        var html = await _client.GetStringAsync($"/species/{FixtureDb.Cassowary}");
+        var box = Html.Textarea(html, WikidataCite.CommandsBoxId)!;
+        Assert.Equal($"{FixtureDb.CassowaryLatestItem}\tP577\t+2016-00-00T00:00:00Z/9", box);
+        var text = Html.Text(Part(html));
+        Assert.Contains(SiteText.MainSubjectDeprecated(FixtureDb.CassowaryItem, FixtureDb.Cassowary), text);
+        Assert.Contains(SiteText.MissingStatements("publication date (P577)"), text);
+    }
+
+    // One item states the taxon's IUCN taxon ID: main subject (P921) is written, with no line.
+    [Fact]
+    public async Task OneItemWithTheTaxonId_CommandsHaveMainSubject() {
+        var html = await _client.GetStringAsync($"/species/{FixtureDb.PolarBear}");
+        Assert.Contains("LAST\tP921\tQ33609", Html.Textarea(html, WikidataCite.CommandsBoxId)!);
+        Assert.DoesNotContain("wikidata-main-subject", Part(html));
+    }
+
+    [Fact]
+    public void TaxonItemDoubt_FromTheTaxonsLinks() {
+        static TaxonRow Taxon(string? source = "p627", bool deprecated = false, string? others = null) =>
+            new(1, "Panthera pardus", TaxonKinds.Species, "ANIMALIA", null, null, null, null, null, null, null, null, null, null, "Q35694", null, null,
+                WikidataQidSource: source, WikidataP627Deprecated: deprecated, WikidataOtherItems: others);
+        Assert.Null(TaxonItemDoubt.Of(Taxon()));
+        Assert.Null(TaxonItemDoubt.Of(null));
+        Assert.Null(TaxonItemDoubt.Of(Taxon(source: "name-match", deprecated: true)));
+        Assert.Equal(new TaxonItemDoubt(TaxonItemDoubtKind.TaxonIdDeprecated, 1, "Q35694", 1), TaxonItemDoubt.Of(Taxon(deprecated: true)));
+        var others = WikidataOtherTaxonItem.ListToJson([new WikidataOtherTaxonItem("Q1"), new WikidataOtherTaxonItem("Q2", true)]);
+        Assert.Equal(new TaxonItemDoubt(TaxonItemDoubtKind.SeveralItems, 1, "Q35694", 3), TaxonItemDoubt.Of(Taxon(deprecated: true, others: others)));
+    }
+
     [Fact]
     public async Task ItemWithoutCitationParts() {
         // The West African lion's assessment has no citation, so there is no options form, but its
@@ -241,6 +286,7 @@ public sealed class WikidataCiteUnitTests {
         Assert.Equal("Copy QuickStatements commands",
             new WikitextBox("a", "b", "QuickStatements", "c", 2, CopyName: SiteText.CopyQuickStatements).CopyAccessibleName);
     }
+
     // Q56226968's assessment with no item and no Crossref title: IUCN's citation name is internal,
     // so there are no create commands, and the line says why.
     [Fact]
@@ -252,7 +298,6 @@ public sealed class WikidataCiteUnitTests {
         Assert.Equal("No commands: the only name this site has for this assessment is IUCN's citation name, Larus glaucoides_old, "
             + "which IUCN uses as an internal name for a taxon it has replaced.", SiteText.NoUsableName(view.CitationName!));
     }
-
 
     [Fact]
     public void PropertyLabels() {
