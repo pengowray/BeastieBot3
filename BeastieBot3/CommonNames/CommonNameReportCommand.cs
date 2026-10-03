@@ -1021,14 +1021,25 @@ internal sealed class CommonNameReportCommand : AsyncCommand<CommonNameReportCom
 internal static class AmbiguousReportText {
     public const string SummaryLabel = "Ambiguous English Names (shared by 2+ taxa)";
 
-    public const string Intro =
-        "This report has one table for each ambiguous common name: an English common name that two or more taxa in the "
-        + "Common names store have (names are compared ignoring case, spaces and punctuation). Each row is a taxon that has "
-        + "the name. Uses This Name is Yes for the taxon that the Wikipedia lists and the public site use the name for: the "
-        + "taxon that has the name from the highest-priority source. If two or more taxa have the name from sources of equal "
-        + "priority, every row in that table is No, except that a species takes priority over its own subspecies, varieties "
-        + "and subpopulations. Rows with the same scientific name count as one taxon, because the store can have a species "
-        + "under both an old and a current IUCN id.";
+    public const string Intro = """
+        An ambiguous common name is an English common name that two or more taxa in the Common names store have. Names are compared ignoring case, spaces and punctuation. This report has one table for each ambiguous common name, and each row is a taxon that has the name. Uses This Name is Yes for the taxon that the name is used for in the Wikipedia lists and on the public site. The Wikipedia lists and the public site show every other taxon in the table under another of its names, or under its scientific name only. Rows with the same scientific name count as one taxon, because the store can have a species under an old and a current IUCN id. Both rows are Yes when the name is used for that taxon.
+
+        The name is used for the taxon that has it from the highest-priority source:
+
+        1. Wikipedia article title
+        2. IUCN's main English name
+        3. Taxobox name
+        4. Wikidata label
+        5. IUCN's other English names
+        6. Wikidata's other names
+        7. Catalogue of Life
+
+        Exceptions and ties:
+
+        - **One article for several taxa.** One Wikipedia article can cover several taxa, for example when IUCN has split a species in two and Wikipedia still has one article for it. Among the taxa that have the name and are matched to that article, a species takes precedence over its own subspecies, varieties and subpopulations; otherwise the name is used for the one taxon that has it as IUCN's main English name; otherwise for the taxon that has it from the article title. Example: the article "Scarlet-bellied mountain tanager" covers *Anisognathus igniventris* and *A. lunulatus*, and the name is used for *A. lunulatus*, which has "Scarlet-bellied Mountain-tanager" as IUCN's main English name.
+        - **Two or more IUCN main names.** When two or more taxa have the name as IUCN's main English name and no taxon has it from an article title, the name is used for a taxon that also has it as a taxobox name, and failing that, for a taxon that also has it as a Wikidata label.
+        - **Any tie that remains.** Every row in the table is No, except that a species takes precedence over its own subspecies, varieties and subpopulations.
+        """;
 
     public const string UsesNameColumn = "Uses This Name";
 
