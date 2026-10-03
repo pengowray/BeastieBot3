@@ -129,13 +129,24 @@ public class FlowColProbeTests {
     [InlineData("iucn-changed", "the IUCN database changed")]
     [InlineData("col-changed", "the CoL database changed")]
     [InlineData("rules-changed", "older version")]
-    public void Placement_OutOfDate_SaysRegeneratingRebuildsIt(string state, string expected) {
+    public void Placement_OutOfDate_SaysThisStepBuildsIt_AndSoDoTheLists(string state, string expected) {
         var r = FlowStepProbes.ColPlacementStep(new ColPlacementSummary {
             State = state, BuiltAtUtc = new DateTime(2026, 10, 2, 0, 59, 0, DateTimeKind.Utc),
         })!;
         Assert.Equal("todo", r.Status);
         Assert.Contains(expected, r.Detail);
-        Assert.Contains("Regenerating the Wikipedia lists", r.Detail);
+        // The light is on a `col build-placement` step in the CoL update and the public site
+        // workflows, so it names this step first; only the CoL update workflow generates lists.
+        Assert.StartsWith("Run this step to", r.Detail!.Split(". ", 2)[1]);
+        Assert.Contains("(wikipedia generate-lists) also", r.Detail);
+        Assert.DoesNotContain("`", r.Detail);
+    }
+
+    [Fact]
+    public void Placement_UnreadableFile_SaysToRunThisStepAfterDeletingIt() {
+        var r = FlowStepProbes.ColPlacementStep(new ColPlacementSummary { State = "unreadable", Error = "file is not a database" })!;
+        Assert.Equal("todo", r.Status);
+        Assert.Contains("Delete the .placement.sqlite file, then run this step", r.Detail);
     }
 
     [Fact]

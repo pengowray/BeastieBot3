@@ -557,17 +557,20 @@ public static class FlowStepProbes {
                 : $"{s.Leftovers.Count} files from earlier releases are left on disk and never read again, {Bytes(s.LeftoverBytes)} in total (largest: {biggest.FileName}).");
     }
 
-    // The saved CoL placement for list headings. Out of date is amber, but the detail says that
-    // regenerating the lists rebuilds it, because the next step does that by itself.
+    // The saved CoL placement for list headings and the public site's CoL ids. Out of date is amber.
+    // The light is on a `col build-placement` step in both the CoL update and the public site
+    // workflows, so the detail names that step first; `wikipedia generate-lists` also rebuilds a
+    // missing or out-of-date placement before it generates, which matters only for the lists.
     internal static FlowProbeResult? ColPlacementStep(ColPlacementSummary? p) {
         if (p is null) return null;
         var built = Stamp(p.BuiltAtUtc);
-        const string Rebuilds = "Regenerating the Wikipedia lists rebuilds the placement first.";
+        // Plain text: the detail line is not rendered as Markdown, so no backticks.
+        const string Rebuilds = "Run this step to rebuild the placement. Generating the Wikipedia lists (wikipedia generate-lists) also rebuilds it first.";
         return p.State switch {
             "current" => new FlowProbeResult("ok",
                 $"Built {built}: {p.Species:n0} IUCN species, {p.Matched:n0} of them with a CoL classification"),
             "no-file" or "not-built" => new FlowProbeResult("todo",
-                "No placement for this IUCN database yet. Regenerating the Wikipedia lists builds one first."),
+                "No placement for this IUCN database yet. Run this step to build the placement. Generating the Wikipedia lists (wikipedia generate-lists) also builds it first."),
             "iucn-changed" => new FlowProbeResult("todo",
                 $"Out of date: the IUCN database changed after the placement was built on {built}. {Rebuilds}"),
             "col-changed" => new FlowProbeResult("todo",
@@ -579,7 +582,7 @@ public static class FlowStepProbes {
             "rules-changed" or "thresholds-changed" => new FlowProbeResult("todo",
                 $"Out of date: the placement was built on {built} by an older version of BeastieBot3. {Rebuilds}"),
             _ => new FlowProbeResult("todo",
-                $"Could not read the placement file: {p.Error}. Delete the .placement.sqlite file and regenerate the lists to build it again."),
+                $"Could not read the placement file: {p.Error}. Delete the .placement.sqlite file, then run this step to build the placement again."),
         };
     }
 
