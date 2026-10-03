@@ -143,7 +143,13 @@ public sealed class SpratImporter {
     // ==================== Indexes ====================
 
     private void CreateIndexes() {
+        // A report without one of these columns gets no index for it. (SQLite builds from 2025 on
+        // reject a double-quoted name that is not a column instead of reading it as a string.)
+        var existing = DelimitedTableImporter.GetTableColumns(_connection, SpratColumns.Table);
         foreach (var column in SpratColumns.IndexedColumns) {
+            if (existing is not null && !existing.Contains(column)) {
+                continue;
+            }
             using var cmd = _connection.CreateCommand();
             var indexName = $"idx_{SpratColumns.Table}_{column}";
             cmd.CommandText =

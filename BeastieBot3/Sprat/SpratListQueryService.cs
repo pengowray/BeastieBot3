@@ -34,6 +34,7 @@ internal sealed class SpratListQueryService : IDisposable {
     // read as a string literal.
     private readonly bool _hasIucnListedName;
     private readonly bool _hasEpbcDate;
+    private readonly IReadOnlySet<string> _columns;
 
     /// <summary>Distinct non-standard status values that passed through verbatim, for the report.</summary>
     public IReadOnlyCollection<StatusFinding> UnrecognizedStatuses => _unrecognizedStatuses.Values;
@@ -54,6 +55,7 @@ internal sealed class SpratListQueryService : IDisposable {
         _iucnResolver = iucnResolver;
         _hasIucnListedName = HasColumn(_connection, SpratColumns.IucnListedName);
         _hasEpbcDate = HasColumn(_connection, SpratColumns.EpbcDateEffective);
+        _columns = TableColumns(_connection);
     }
 
     private SpratListQueryService(SqliteConnection connection, IucnAssessmentResolver? iucnResolver = null) {
@@ -62,7 +64,17 @@ internal sealed class SpratListQueryService : IDisposable {
         _iucnResolver = iucnResolver;
         _hasIucnListedName = HasColumn(connection, SpratColumns.IucnListedName);
         _hasEpbcDate = HasColumn(connection, SpratColumns.EpbcDateEffective);
+        _columns = TableColumns(connection);
     }
+
+    private static IReadOnlySet<string> TableColumns(SqliteConnection connection) =>
+        DelimitedTableImporter.GetTableColumns(connection, SpratColumns.Table) is { } columns
+            ? new HashSet<string>(columns, StringComparer.OrdinalIgnoreCase)
+            : new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+    // A column the report does not have reads as NULL. SQLite builds from 2025 on reject a
+    // double-quoted name that is not a column; older builds silently read it as a string literal.
+    private string Col(string column) => _columns.Contains(column) ? Quote(column) : "NULL";
 
     private static bool HasColumn(SqliteConnection connection, string column) =>
         DelimitedTableImporter.GetTableColumns(connection, SpratColumns.Table)?.Contains(column) ?? false;
@@ -108,12 +120,12 @@ internal sealed class SpratListQueryService : IDisposable {
         }
 
         var sql = new StringBuilder();
-        sql.Append("SELECT ").Append(string.Join(", ", selectCols.Select(Quote)));
+        sql.Append("SELECT ").Append(string.Join(", ", selectCols.Select(Col)));
         sql.Append(" FROM ").Append(Quote(SpratColumns.Table));
         var parameters = new List<SqliteParameter>();
         AppendWhere(sql, filter, parameters);
         sql.Append(" ORDER BY ")
-           .Append($"{Quote(SpratColumns.OrderName)}, {Quote(SpratColumns.Family)}, {Quote(SpratColumns.Genus)}, {Quote(SpratColumns.ScientificName)}");
+           .Append($"{Col(SpratColumns.OrderName)}, {Col(SpratColumns.Family)}, {Col(SpratColumns.Genus)}, {Col(SpratColumns.ScientificName)}");
 
         using var cmd = _connection.CreateCommand();
         cmd.CommandText = sql.ToString();
@@ -423,12 +435,12 @@ internal sealed class SpratListQueryService : IDisposable {
         return hasLetter;
     }
 
-    private static void AppendWhere(StringBuilder sql, SpratTaxonFilter filter, List<SqliteParameter> parameters) {
+    private void AppendWhere(StringBuilder sql, SpratTaxonFilter filter, List<SqliteParameter> parameters) {
         var clauses = new List<string>();
         if (!string.IsNullOrWhiteSpace(filter.Kingdom)) {
             var p = new SqliteParameter("@kingdom", filter.Kingdom);
             parameters.Add(p);
-            clauses.Add($"{Quote(SpratColumns.Kingdom)} = {p.ParameterName}");
+            clauses.Add($"{Col(SpratColumns.Kingdom)} = {p.ParameterName}");
         }
         if (filter.Classes is { Count: > 0 }) {
             var names = new List<string>();
@@ -437,7 +449,7 @@ internal sealed class SpratListQueryService : IDisposable {
                 parameters.Add(p);
                 names.Add(p.ParameterName);
             }
-            clauses.Add($"{Quote(SpratColumns.ClassName)} IN ({string.Join(", ", names)})");
+            clauses.Add($"{Col(SpratColumns.ClassName)} IN ({string.Join(", ", names)})");
         }
         if (filter.ExcludeClasses is { Count: > 0 }) {
             var names = new List<string>();
@@ -446,7 +458,7 @@ internal sealed class SpratListQueryService : IDisposable {
                 parameters.Add(p);
                 names.Add(p.ParameterName);
             }
-            clauses.Add($"({Quote(SpratColumns.ClassName)} IS NULL OR {Quote(SpratColumns.ClassName)} NOT IN ({string.Join(", ", names)}))");
+            clauses.Add($"({Col(SpratColumns.ClassName)} IS NULL OR {Col(SpratColumns.ClassName)} NOT IN ({string.Join(", ", names)}))");
         }
         if (filter.Orders is { Count: > 0 }) {
             var names = new List<string>();
@@ -455,7 +467,7 @@ internal sealed class SpratListQueryService : IDisposable {
                 parameters.Add(p);
                 names.Add(p.ParameterName);
             }
-            clauses.Add($"{Quote(SpratColumns.OrderName)} IN ({string.Join(", ", names)})");
+            clauses.Add($"{Col(SpratColumns.OrderName)} IN ({string.Join(", ", names)})");
         }
         if (filter.ExcludeOrders is { Count: > 0 }) {
             var names = new List<string>();
@@ -464,7 +476,7 @@ internal sealed class SpratListQueryService : IDisposable {
                 parameters.Add(p);
                 names.Add(p.ParameterName);
             }
-            clauses.Add($"({Quote(SpratColumns.OrderName)} IS NULL OR {Quote(SpratColumns.OrderName)} NOT IN ({string.Join(", ", names)}))");
+            clauses.Add($"({Col(SpratColumns.OrderName)} IS NULL OR {Col(SpratColumns.OrderName)} NOT IN ({string.Join(", ", names)}))");
         }
         if (filter.ExcludePhyla is { Count: > 0 }) {
             var names = new List<string>();
@@ -473,7 +485,7 @@ internal sealed class SpratListQueryService : IDisposable {
                 parameters.Add(p);
                 names.Add(p.ParameterName);
             }
-            clauses.Add($"({Quote(SpratColumns.Phylum)} IS NULL OR {Quote(SpratColumns.Phylum)} NOT IN ({string.Join(", ", names)}))");
+            clauses.Add($"({Col(SpratColumns.Phylum)} IS NULL OR {Col(SpratColumns.Phylum)} NOT IN ({string.Join(", ", names)}))");
         }
         if (clauses.Count > 0) {
             sql.Append(" WHERE ").Append(string.Join(" AND ", clauses));
