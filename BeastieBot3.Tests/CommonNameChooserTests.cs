@@ -178,24 +178,6 @@ public sealed class CommonNameChooserTests : IDisposable {
         Assert.Equal("Mullus barbatus", store.GetWikipediaArticleTitle(mullet));
     }
 
-    [Fact]
-    public void ArticleTitle_WithoutAWikipediaName_IsThePageTheTaxonIsMatchedTo() {
-        // The article "Crenimugil buchanani" is a scientific name, so it is no common name of
-        // Moolgarda buchanani, and Wikipedia has no page "Moolgarda buchanani".
-        using var store = OpenInMemory();
-        var mullet = AddTaxon(store, "moolgarda buchanani", "1");
-        store.InsertCrossReference(mullet, "wikipedia", "Crenimugil buchanani");
-        var subspecies = AddTaxon(store, "cephalorhynchus hectori maui", "2");
-        store.InsertCrossReference(subspecies, "wikipedia", "Hector's dolphin", CommonNameStore.OtherTaxonsPageMatch);
-        var named = AddTaxon(store, "rocio octofasciata", "3");
-        store.InsertCrossReference(named, "wikipedia", "Cichlasoma octofasciatum");
-        store.InsertCommonName(named, "Jack Dempsey", "jackdempsey", "en", "wikipedia_title", "Jack Dempsey (fish)", true);
-
-        Assert.Equal("Crenimugil buchanani", store.GetWikipediaArticleTitle(mullet));
-        Assert.Null(store.GetWikipediaArticleTitle(subspecies));
-        Assert.Equal("Jack Dempsey (fish)", store.GetWikipediaArticleTitle(named));
-    }
-
     [Theory]
     [InlineData("Aus bus sp. nov. 'Kimberley'")]
     [InlineData("Aus spp. complex")]

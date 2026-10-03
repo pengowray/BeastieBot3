@@ -835,8 +835,8 @@ internal sealed class CommonNameStore : SqliteStore {
 
     /// <summary>
     /// The match_type of a Wikipedia cross-reference for a page that `common-names aggregate`
-    /// decided is about another taxon matched to the same page (WikipediaPageMatch): the taxon
-    /// takes no names from it, and <see cref="GetWikipediaArticleTitle"/> does not use it.
+    /// decided is about another taxon matched to the same page (WikipediaPageMatch); the taxon
+    /// takes no names from it. Other matched pages are recorded as "exact".
     /// </summary>
     internal const string OtherTaxonsPageMatch = "other_taxon_page";
 
@@ -845,49 +845,30 @@ internal sealed class CommonNameStore : SqliteStore {
     /// wikipedia_taxobox name came from (source_identifier). Not the name itself: a title name has
     /// its disambiguation removed ("Jack Dempsey" from "Jack Dempsey (fish)"), and a taxobox name is
     /// the infobox's name field ("Red mullet" on "Mullus barbatus", "Sunda slow
-    /// loris{sfn|Groves|2005|p=122}"), so neither is a link target. A taxon whose article title is a
-    /// scientific name has no such name, so the page it is matched to (its "exact" Wikipedia
-    /// cross-reference) is used: "Crenimugil buchanani" for Moolgarda buchanani, whose own name
-    /// has no page on Wikipedia.
+    /// loris{sfn|Groves|2005|p=122}"), so neither is a link target.
     /// </summary>
     public string? GetWikipediaArticleTitle(long taxonId, string language = "en") {
-        using (var command = _connection.CreateCommand()) {
-            command.CommandText =
-                """
-                SELECT COALESCE(cn.source_identifier, cn.raw_name)
-                FROM common_names cn
-                WHERE cn.taxon_id = @taxonId
-                  AND cn.language = @lang
-                  AND cn.source IN ('wikipedia_title', 'wikipedia_taxobox')
-                ORDER BY
-                  CASE cn.source
-                    WHEN 'wikipedia_title' THEN 1
-                    WHEN 'wikipedia_taxobox' THEN 2
-                  END,
-                  cn.is_preferred DESC
-                LIMIT 1;
-                """;
-            command.Parameters.AddWithValue("@taxonId", taxonId);
-            command.Parameters.AddWithValue("@lang", language);
-            if (command.ExecuteScalar() is string title) {
-                return title;
-            }
-        }
-
-        // English Wikipedia is the only one the aggregator reads.
-        if (!string.Equals(language, "en", StringComparison.OrdinalIgnoreCase)) {
-            return null;
-        }
-        using var crossReference = _connection.CreateCommand();
-        crossReference.CommandText =
+        using var command = _connection.CreateCommand();
+        command.CommandText =
             """
-            SELECT source_identifier FROM taxon_cross_references
-            WHERE taxon_id = @taxonId AND source = 'wikipedia' AND match_type = 'exact'
-            ORDER BY id DESC
+            SELECT COALESCE(cn.source_identifier, cn.raw_name)
+            FROM common_names cn
+            WHERE cn.taxon_id = @taxonId 
+              AND cn.language = @lang
+              AND cn.source IN ('wikipedia_title', 'wikipedia_taxobox')
+            ORDER BY 
+              CASE cn.source 
+                WHEN 'wikipedia_title' THEN 1 
+                WHEN 'wikipedia_taxobox' THEN 2 
+              END,
+              cn.is_preferred DESC
             LIMIT 1;
             """;
-        crossReference.Parameters.AddWithValue("@taxonId", taxonId);
-        return crossReference.ExecuteScalar() as string;
+        command.Parameters.AddWithValue("@taxonId", taxonId);
+        command.Parameters.AddWithValue("@lang", language);
+        
+        var result = command.ExecuteScalar();
+        return result as string;
     }
 
     #endregion
