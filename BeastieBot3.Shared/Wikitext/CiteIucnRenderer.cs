@@ -41,7 +41,7 @@ public static partial class CiteIucnRenderer {
         }
 
         var p = new List<(string Name, string Value)>();
-        var authorCount = AddAuthors(p, parts, options.AuthorStyle, out var etAlInNames);
+        var authorCount = AddAuthors(p, parts, options.AuthorStyle, options.FullGivenNames, out var etAlInNames);
         if (authorCount > 0 && (parts.AuthorsEtAl || etAlInNames)) {
             p.Add(("display-authors", "etal"));
         }
@@ -88,22 +88,36 @@ public static partial class CiteIucnRenderer {
     // Writes the author parameters and returns how many authors were written. An "et al." written
     // inside a name (IUCN's "Jaffré, T. <i>et al.</i>") is removed from the name and reported, since
     // CS1 flags a name containing it.
+    //
+    // With fullGivenNames, a person with GivenNames is named by them instead of the initials:
+    // |author=Sayer, Catherine, or |last1=Sayer |first1=Catherine. A generational suffix follows the
+    // given names as it follows the initials ("Lowry, Porter P. II"). A name IUCN wrote initials
+    // first ("N.H. Rakotoarivelo") becomes "Rakotoarivelo, Nirina Hasina". Everyone else keeps
+    // IUCN's form.
     private static int AddAuthors(List<(string Name, string Value)> p, IucnCitationParts parts,
-        CiteAuthorStyle style, out bool etAlInNames) {
+        CiteAuthorStyle style, bool fullGivenNames, out bool etAlInNames) {
         etAlInNames = false;
         var n = 0;
         foreach (var author in parts.Authors) {
             var display = StripEtAl(WikitextValue.Clean(author.Display), ref etAlInNames);
             var last = StripEtAl(WikitextValue.Clean(author.Last), ref etAlInNames);
             var initials = WikitextValue.Clean(author.Initials);
+            var given = fullGivenNames && author.Kind == CitationAuthorKind.Person && last.Length > 0
+                ? WikitextValue.Clean(author.GivenNames)
+                : string.Empty;
+            // The given names with the suffix the initials carry ("Porter P., II").
+            var first = given.Length > 0 ? WithSuffixOf(given, initials) : initials;
 
             if (style == CiteAuthorStyle.LastFirst && author.Kind == CitationAuthorKind.Person && last.Length > 0) {
                 n++;
                 p.Add(($"last{n}", last));
-                if (initials.Length > 0) {
-                    p.Add(($"first{n}", SuffixWithoutComma(initials)));
+                if (first.Length > 0) {
+                    p.Add(($"first{n}", SuffixWithoutComma(first)));
                 }
                 continue;
+            }
+            if (given.Length > 0) {
+                display = $"{last}, {SuffixWithoutComma(first)}";
             }
 
             if (display.Length == 0) {
@@ -131,6 +145,13 @@ public static partial class CiteIucnRenderer {
     // so the suffix is written as MOS:JR does: "P.P. II", "A. Jr.". Done here rather than in the parser
     // so that site databases built before this change render correctly too.
     private static string SuffixWithoutComma(string initials) => TrailingSuffix().Replace(initials, " ${suffix}");
+
+    // The given names with the generational suffix the initials end with, in the stored form
+    // ("Porter P., II").
+    private static string WithSuffixOf(string given, string initials) {
+        var suffix = TrailingSuffix().Match(initials);
+        return suffix.Success ? $"{given}, {suffix.Groups["suffix"].Value}" : given;
+    }
 
     // CS1 reports "multiple names" for a name with more than one comma or any semicolon, and "numeric
     // names" for one containing a digit. Those are false alarms for an organisation or for one person
