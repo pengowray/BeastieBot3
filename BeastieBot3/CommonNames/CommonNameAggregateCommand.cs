@@ -799,8 +799,8 @@ internal sealed class CommonNameAggregateCommand : AsyncCommand<CommonNameAggreg
                             created++;
                         } else {
                             matched++;
-                            // A page about another taxon is recorded with its own match type, so it
-                            // can be told apart from the taxon's own article.
+                            // A page about another taxon is recorded, but not as this taxon's article
+                            // (CommonNameStore.GetWikipediaArticleTitle reads only "exact").
                             store.InsertCrossReference(taxonId.Value, "wikipedia", pageTitle,
                                 givesNames ? "exact" : CommonNameStore.OtherTaxonsPageMatch);
                         }

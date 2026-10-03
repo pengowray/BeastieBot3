@@ -2,8 +2,10 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Text.RegularExpressions;
+using BeastieBot3.CommonNames;
 using BeastieBot3.WikipediaLists;
 using BeastieBot3.WikipediaLists.Legacy;
+using Microsoft.Data.Sqlite;
 
 namespace BeastieBot3.Tests;
 
@@ -106,5 +108,23 @@ public sealed class SpeciesLineFormatterTests : IDisposable {
         Assert.Contains("[[Crenimugil buchanani|", species);
         Assert.DoesNotContain("Crenimugil", VisibleText(species));
         Assert.DoesNotContain("Crenimugil", VisibleText(infraspecific));
+    }
+
+    [Fact]
+    public void StoreTaxonWithNoWikipediaName_LinksThePageItIsMatchedTo() {
+        // `common-names aggregate` stores no name from the title "Crenimugil buchanani", because it
+        // is a scientific name, but records the page as the taxon's article.
+        var connection = new SqliteConnection("Data Source=:memory:");
+        connection.Open();
+        using var store = CommonNameStore.OpenFromConnection(connection);
+        var mullet = store.InsertOrUpdateTaxon("moolgarda buchanani", "Moolgarda buchanani", "species", "ANIMALIA",
+            isExtinct: false, isFossil: false, validityStatus: "valid", primarySource: "iucn", primarySourceId: "1");
+        store.InsertCrossReference(mullet, "wikipedia", "Crenimugil buchanani");
+        using var provider = new StoreBackedCommonNameProvider(store);
+        var formatter = new SpeciesLineFormatter(new LegacyTaxaRuleList(_rulesPath), provider, commonNameProvider: null);
+
+        var line = formatter.FormatSpeciesLine(Mullet(), Style(ListingStyle.CommonNameFocus), null);
+
+        Assert.Equal("* [[Crenimugil buchanani|''Moolgarda buchanani'']]", line);
     }
 }
