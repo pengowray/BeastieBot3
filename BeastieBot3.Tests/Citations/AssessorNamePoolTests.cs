@@ -1,8 +1,9 @@
 using System.Text.Json;
+using BeastieBot3.Iucn.Citations;
 using BeastieBot3.Shared.Wikitext;
 using BeastieBot3.SiteBuild;
 
-namespace BeastieBot3.Tests.SiteBuild;
+namespace BeastieBot3.Tests.Citations;
 
 // Pins the repair of author names that lost a letter to an encoding error. The damaged names are
 // real ones from the IUCN API cache (Oct 2026); the replacement character is written as Lost so it

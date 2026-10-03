@@ -2,6 +2,7 @@ using System.Globalization;
 using System.Net;
 using System.Text.Json;
 using System.Text.RegularExpressions;
+using BeastieBot3.Iucn.Citations;
 using BeastieBot3.Shared.Wikitext;
 using BeastieBot3.WikidataEdits;
 
@@ -23,8 +24,8 @@ using BeastieBot3.WikidataEdits;
 //
 // Authors come from the assessor credit's `full`, which matches the citation's author prefix in all
 // but two of 179,191 latest global assessments (both have no assessor credit; the prefix is the
-// fallback). They are split by IucnAssessmentCitationParser.SplitCreditNames with the count of
-// distinct value[] entries, then read one by one by IucnAuthorNameParser. "et al." is taken off and
+// fallback). They are split by CreditNameSplitter.Split with the count of distinct value[]
+// entries, then read one by one by IucnAuthorNameParser. "et al." is taken off and
 // sets AuthorsEtAl; the names before it are split without a count, since value[] counts everyone.
 // A "Surname, Given Names" read stays a person only when the count confirmed that split (see
 // ConfirmsGivenNames); otherwise the name is kept as published. A name with a character lost to an
@@ -80,7 +81,7 @@ internal sealed record IucnCitationParse {
 
     public CitationAuthorSource AuthorSource { get; init; }
     /// The splitter rule for the assessor string; EtAl when "et al." was taken off first.
-    public IucnAssessmentCitationParser.CreditSplitRule? SplitRule { get; init; }
+    public CreditSplitRule? SplitRule { get; init; }
     /// One per author, in order.
     public IReadOnlyList<AuthorNameShape> AuthorShapes { get; init; } = [];
     /// The assessor credit and the citation's author prefix differ after HTML and whitespace cleanup.
@@ -250,7 +251,7 @@ internal static class IucnCitationPartsParser {
         IReadOnlyList<ParsedAuthorName> Names,
         bool EtAl,
         CitationAuthorSource Source,
-        IucnAssessmentCitationParser.CreditSplitRule? Rule,
+        CreditSplitRule? Rule,
         string? CreditText,
         int ExtraBlocksAddingNames,
         IReadOnlyList<AuthorNameRepair> Repaired,
@@ -263,7 +264,7 @@ internal static class IucnCitationPartsParser {
         CitationAuthorSource source;
         if (blocks.Count > 0) {
             text = ReadString(blocks[0], "full")!;
-            count = IucnAssessmentCitationParser.DistinctValueCount(blocks[0]);
+            count = CreditNameSplitter.DistinctValueCount(blocks[0]);
             source = CitationAuthorSource.AssessorCredit;
         } else if (authorPrefix.Length > 0) {
             text = authorPrefix;
@@ -276,25 +277,25 @@ internal static class IucnCitationPartsParser {
         var cleaned = CleanText(text);
         var etAl = EtAl.IsMatch(cleaned);
         List<string> names;
-        IucnAssessmentCitationParser.CreditSplitRule rule;
+        CreditSplitRule rule;
         var extraBlocks = 0;
         // Names from a split that a value[] count of two or more confirmed with given names allowed.
         var givenNamesConfirmed = new HashSet<string>(StringComparer.Ordinal);
         if (etAl) {
             var before = EtAl.Replace(cleaned, string.Empty).Trim().TrimEnd(',', ';', '&').Trim();
-            names = IucnAssessmentCitationParser.SplitCreditNames(before, null).ToList();
-            rule = IucnAssessmentCitationParser.CreditSplitRule.EtAl;
+            names = CreditNameSplitter.Split(before, null).ToList();
+            rule = CreditSplitRule.EtAl;
         } else {
-            var split = IucnAssessmentCitationParser.SplitCreditNamesWithRule(text, count);
+            var split = CreditNameSplitter.SplitWithRule(text, count);
             names = split.Names.ToList();
             rule = split.Rule;
             if (ConfirmsGivenNames(split.Rule, count)) givenNamesConfirmed.UnionWith(split.Names);
             foreach (var block in blocks.Skip(1)) {
                 var before = names.Count;
-                var blockCount = IucnAssessmentCitationParser.DistinctValueCount(block);
-                var blockSplit = IucnAssessmentCitationParser.SplitCreditNamesWithRule(ReadString(block, "full")!, blockCount);
+                var blockCount = CreditNameSplitter.DistinctValueCount(block);
+                var blockSplit = CreditNameSplitter.SplitWithRule(ReadString(block, "full")!, blockCount);
                 if (ConfirmsGivenNames(blockSplit.Rule, blockCount)) givenNamesConfirmed.UnionWith(blockSplit.Names);
-                IucnAssessmentCitationParser.AddNamesNotYetHeld(names, blockSplit.Names);
+                CreditNameSplitter.AddNamesNotYetHeld(names, blockSplit.Names);
                 if (names.Count > before) extraBlocks++;
             }
         }
@@ -323,8 +324,8 @@ internal static class IucnCitationPartsParser {
     // (two people, each given name first) have the same shape. Only a count of value[] entries tells
     // them apart: a split with given names allowed that gave exactly that many names, two or more.
     // A count of one confirms nothing ("Celsa Señaris, Enrique La Marca" with one value[] entry).
-    private static bool ConfirmsGivenNames(IucnAssessmentCitationParser.CreditSplitRule rule, int? count) =>
-        rule == IucnAssessmentCitationParser.CreditSplitRule.CountGiven && count >= 2;
+    private static bool ConfirmsGivenNames(CreditSplitRule rule, int? count) =>
+        rule == CreditSplitRule.CountGiven && count >= 2;
 
     private static ParsedAuthorName KeepGivenNamesOnlyIfConfirmed(ParsedAuthorName parsed, bool confirmed) =>
         parsed.Shape == AuthorNameShape.SurnameGivenNames && !confirmed
@@ -389,5 +390,17 @@ internal static class IucnCitationPartsParser {
             JsonValueKind.Number => value.GetRawText(),
             _ => null,
         };
+    }
+}
+
+internal static class AssessorNamePoolExtensions {
+    /// Adds the author names of a parse whose names came from an assessor credit.
+    public static void AddFrom(this AssessorNamePool pool, IucnCitationParse parse) {
+        if (parse.Parts is not { } parts || parse.AuthorSource != CitationAuthorSource.AssessorCredit) {
+            return;
+        }
+        foreach (var author in parts.Authors) {
+            pool.Add(author.Display);
+        }
     }
 }
