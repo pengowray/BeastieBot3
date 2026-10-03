@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
 using BeastieBot3.CommonNames;
 using BeastieBot3.WikipediaLists.Legacy;
@@ -161,6 +162,62 @@ public sealed class CommonNameChooserTests : IDisposable {
         var best = chooser.FromStore(phalarope, CommonNameStore.ToCandidates(store.GetCommonNamesForTaxon(phalarope)), "Phalaropus fulicarius");
 
         Assert.Equal("Grey (Red) Phalarope", best!.RawName);
+    }
+
+    [Theory]
+    [InlineData("Large Palau flying fox")]
+    [InlineData("Lake Mackay hare-wallaby")]
+    [InlineData("Black Sea bottlenose dolphin")]
+    [InlineData("Banded martin")]
+    public void AWikipediaTitle_KeepsTheTitlesCapitals(string title) {
+        // 2026 data: the caps rules have no rule for "Palau", "Mackay" or "Sea", so the lists showed
+        // "Large palau flying fox"; a rule capitalises "martin" (the surname), so they showed
+        // "Banded Martin" for the bird.
+        using var store = OpenInMemory();
+        store.InsertCapsRule("martin", "Martin");
+        var taxon = AddTaxon(store, "aus bus", "1");
+        AddName(store, taxon, title, "wikipedia_title", preferred: true);
+        AddName(store, taxon, title.ToUpperInvariant(), "iucn", preferred: true);
+        var chooser = CommonNameChooser.ForStore(store);
+
+        Assert.Equal(title, StoreName(chooser, store, taxon)());
+    }
+
+    [Fact]
+    public void AWikipediaTitle_GetsAFirstCapital() {
+        using var store = OpenInMemory();
+        var taxon = AddTaxon(store, "aus bus", "1");
+        AddName(store, taxon, "eastern Mud turtle", "wikipedia_title", preferred: true);
+        var chooser = CommonNameChooser.ForStore(store);
+
+        Assert.Equal("Eastern Mud turtle", StoreName(chooser, store, taxon)());
+    }
+
+    [Fact]
+    public void ATaxoboxName_StillGetsTheCapsRules() {
+        // About 590 taxobox names are in title case ("White Ash", "Nodding Yucca").
+        using var store = OpenInMemory();
+        var taxon = AddTaxon(store, "fraxinus americana", "1");
+        AddName(store, taxon, "White Ash", "wikipedia_taxobox");
+        var chooser = CommonNameChooser.ForStore(store);
+
+        Assert.Equal("White ash", StoreName(chooser, store, taxon)());
+    }
+
+    [Fact]
+    public void ANameFromAnotherSource_TakesTheCapitalsOfTheTaxonsWikipediaTitle() {
+        // The IUCN name is chosen here because the title is not; it is the title in other capitals.
+        var iucn = new CommonNameResult("Large Palau Flying Fox", "Large Palau Flying Fox", "largepalauflyingfox",
+            "iucn", IsPreferred: true, IsAmbiguous: false);
+        var candidates = new[] {
+            new CommonNameCandidate("Large Palau flying fox", "largepalauflyingfox", "wikipedia_title", true),
+            new CommonNameCandidate("Large Palau Flying Fox", "largepalauflyingfox", "iucn", true),
+        };
+        var lowerAfterFirst = (string name) => CommonNameNormalizer.ApplyCapitalization(name, new Dictionary<string, string>());
+
+        Assert.Equal("Large Palau flying fox", CommonNameChooser.DisplayCasing(iucn, candidates, lowerAfterFirst));
+        Assert.Equal("Palau fruit bat", CommonNameChooser.DisplayCasing(iucn with { DisplayName = "Palau Fruit Bat" },
+            candidates, lowerAfterFirst));
     }
 
     [Fact]

@@ -87,6 +87,56 @@ public class CommonNameAmbiguityTests {
     }
 
     [Fact]
+    public void AnOldIucnIdAndItsCurrentId_BothKeepTheTitleTheyShare() {
+        // 2026 data: the store has Arthroleptella bicolor under its old IUCN id 58057 and its
+        // current id 121376651, and both have the Wikipedia title "Bainskloof moss frog". The tie
+        // made the name ambiguous for both: the current taxon showed no common name and the old
+        // id showed "Bainskloof chirping frog".
+        using var store = OpenInMemory();
+        var old = AddTaxon(store, "arthroleptella bicolor", "58057");
+        var current = AddTaxon(store, "arthroleptella bicolor", "121376651");
+        AddName(store, old, "Bainskloof moss frog", "wikipedia_title", preferred: true);
+        AddName(store, old, "Bainskloof chirping frog", "col");
+        AddName(store, current, "Bainskloof moss frog", "wikipedia_title", preferred: true);
+
+        var verdicts = store.GetAmbiguousNames("en");
+
+        Assert.False(verdicts.IsShared("bainskloofmossfrog"));
+        Assert.False(verdicts.IsAmbiguousFor(old, "bainskloofmossfrog"));
+        Assert.False(verdicts.IsAmbiguousFor(current, "bainskloofmossfrog"));
+        Assert.Equal("Bainskloof moss frog", Best(store, current));
+        Assert.Equal("Bainskloof moss frog", Best(store, old));
+    }
+
+    [Fact]
+    public void AnOldIucnIdAndItsCurrentId_KeepAName_TogetherAgainstAnotherTaxon() {
+        // Both ids of Arthroleptella bicolor keep the name over an unrelated taxon with a
+        // lower-priority source; an unrelated taxon at the same priority still makes it ambiguous.
+        using var store = OpenInMemory();
+        var old = AddTaxon(store, "arthroleptella bicolor", "58057");
+        var current = AddTaxon(store, "arthroleptella bicolor", "121376651");
+        var other = AddTaxon(store, "arthroleptella landdrosia", "121377639");
+        var rival = AddTaxon(store, "arthroleptella drewesii", "58058");
+        AddName(store, old, "Moss frog", "wikipedia_title", preferred: true);
+        AddName(store, current, "Moss frog", "wikipedia_title", preferred: true);
+        AddName(store, other, "Moss frog", "col");
+        AddName(store, old, "Chirping frog", "iucn", preferred: true);
+        AddName(store, current, "Chirping frog", "iucn", preferred: true);
+        AddName(store, rival, "Chirping frog", "iucn", preferred: true);
+
+        var verdicts = store.GetAmbiguousNames("en");
+
+        Assert.True(verdicts.Keeps(old, "mossfrog"));
+        Assert.True(verdicts.Keeps(current, "mossfrog"));
+        Assert.Equal(old, verdicts.KeptBy("mossfrog"));
+        Assert.True(verdicts.IsAmbiguousFor(other, "mossfrog"));
+        Assert.Null(verdicts.KeptBy("chirpingfrog"));
+        Assert.True(verdicts.IsAmbiguousFor(old, "chirpingfrog"));
+        Assert.True(verdicts.IsAmbiguousFor(current, "chirpingfrog"));
+        Assert.True(verdicts.IsAmbiguousFor(rival, "chirpingfrog"));
+    }
+
+    [Fact]
     public void ThePreferredIucnName_BeatsAnotherTaxonsOtherIucnName() {
         using var store = OpenInMemory();
         var purple = AddTaxon(store, "porphyrio martinicus", "1");

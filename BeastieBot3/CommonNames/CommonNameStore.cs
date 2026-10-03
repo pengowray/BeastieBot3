@@ -673,7 +673,7 @@ internal sealed class CommonNameStore : SqliteStore {
         using var command = _connection.CreateCommand();
         var kingdomFilter = kingdom != null ? "AND t.kingdom = @kingdom" : "";
         command.CommandText = $@"
-            SELECT c.normalized_name, c.taxon_id, t.canonical_name, c.source, c.is_preferred, c.raw_name
+            SELECT c.normalized_name, c.taxon_id, t.canonical_name, c.source, c.is_preferred, c.raw_name, t.kingdom
             FROM common_names c
             JOIN taxa t ON c.taxon_id = t.id
             WHERE c.language = @lang
@@ -699,7 +699,8 @@ internal sealed class CommonNameStore : SqliteStore {
                 NormalizedName: usable.NormalizedName,
                 TaxonId: reader.GetInt64(1),
                 CanonicalName: reader.GetString(2),
-                Priority: GetSourcePriority(source, preferred)));
+                Priority: GetSourcePriority(source, preferred),
+                Kingdom: reader.IsDBNull(6) ? null : reader.GetString(6)));
         }
         return AmbiguousNames.Build(holdings);
     }
@@ -737,6 +738,38 @@ internal sealed class CommonNameStore : SqliteStore {
         }
 
         return results;
+    }
+
+    /// <summary>
+    /// How many species the store has in <paramref name="genus"/>: the distinct first two words of
+    /// the valid, non-fossil taxa whose canonical name is the genus followed by more words. A
+    /// subspecies counts as its species, and a working name ("pristoceuthophilus sp. nov.") as one
+    /// species. `common-names aggregate` uses it to tell a genus with one species from a larger one.
+    /// </summary>
+    public int CountSpeciesInGenus(string genus) {
+        var lower = genus.Trim().ToLowerInvariant();
+        if (lower.Length == 0) {
+            return 0;
+        }
+        using var command = _connection.CreateCommand();
+        // A range on the canonical name index: '!' is the character after the space.
+        command.CommandText =
+            """
+            SELECT canonical_name FROM taxa
+            WHERE canonical_name >= @from AND canonical_name < @to
+              AND validity_status = 'valid' AND is_fossil = 0;
+            """;
+        command.Parameters.AddWithValue("@from", lower + " ");
+        command.Parameters.AddWithValue("@to", lower + "!");
+        var species = new HashSet<string>(StringComparer.Ordinal);
+        using var reader = command.ExecuteReader();
+        while (reader.Read()) {
+            var words = reader.GetString(0).Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            if (words.Length >= 2) {
+                species.Add(words[1]);
+            }
+        }
+        return species.Count;
     }
 
     /// <summary>
@@ -842,55 +875,63 @@ internal sealed class CommonNameStore : SqliteStore {
     internal const string OtherTaxonsPageMatch = "other_taxon_page";
 
     /// <summary>
-    /// The title of the Wikipedia article matched to a taxon: the page a wikipedia_title or
-    /// wikipedia_taxobox name came from (source_identifier). Not the name itself: a title name has
-    /// its disambiguation removed ("Jack Dempsey" from "Jack Dempsey (fish)"), and a taxobox name is
-    /// the infobox's name field ("Red mullet" on "Mullus barbatus", "Sunda slow
-    /// loris{sfn|Groves|2005|p=122}"), so neither is a link target.
-    /// A taxon whose article title is a scientific name has no such name, so the page it is
-    /// matched to (its "exact" Wikipedia cross-reference) is used: "Crenimugil buchanani" for
-    /// Moolgarda buchanani, whose own name has no page on Wikipedia. A page about another taxon
-    /// (<see cref="OtherTaxonsPageMatch"/>) is not used. The lists only use the title as a link
-    /// target, never as the text of the line (SpeciesLineFormatter).
+    /// The title of the Wikipedia article matched to a taxon: the page its name came from
+    /// (<see cref="GetWikipediaNamePage"/>), else, for English, the page it is matched to
+    /// (<see cref="GetMatchedWikipediaPage"/>). The lists use
+    /// StoreBackedCommonNameProvider, which links the taxon's own scientific name instead of the
+    /// matched page when Wikipedia has a page or a redirect with that name.
     /// </summary>
-    public string? GetWikipediaArticleTitle(long taxonId, string language = "en") {
-        using (var command = _connection.CreateCommand()) {
-            command.CommandText =
-                """
-                SELECT COALESCE(cn.source_identifier, cn.raw_name)
-                FROM common_names cn
-                WHERE cn.taxon_id = @taxonId
-                  AND cn.language = @lang
-                  AND cn.source IN ('wikipedia_title', 'wikipedia_taxobox')
-                ORDER BY
-                  CASE cn.source
-                    WHEN 'wikipedia_title' THEN 1
-                    WHEN 'wikipedia_taxobox' THEN 2
-                  END,
-                  cn.is_preferred DESC
-                LIMIT 1;
-                """;
-            command.Parameters.AddWithValue("@taxonId", taxonId);
-            command.Parameters.AddWithValue("@lang", language);
-            if (command.ExecuteScalar() is string title) {
-                return title;
-            }
-        }
+    public string? GetWikipediaArticleTitle(long taxonId, string language = "en") =>
+        GetWikipediaNamePage(taxonId, language)
+        ?? (string.Equals(language, "en", StringComparison.OrdinalIgnoreCase) ? GetMatchedWikipediaPage(taxonId) : null);
 
-        // English Wikipedia is the only one `common-names aggregate` reads.
-        if (!string.Equals(language, "en", StringComparison.OrdinalIgnoreCase)) {
-            return null;
-        }
-        using var crossReference = _connection.CreateCommand();
-        crossReference.CommandText =
+    /// <summary>
+    /// The title of the page a taxon's wikipedia_title or wikipedia_taxobox name came from
+    /// (source_identifier), or null. Not the name itself: a title name has its disambiguation
+    /// removed ("Jack Dempsey" from "Jack Dempsey (fish)"), and a taxobox name is the infobox's name
+    /// field ("Red mullet" on "Mullus barbatus", "Sunda slow loris{sfn|Groves|2005|p=122}"), so
+    /// neither is a link target.
+    /// </summary>
+    public string? GetWikipediaNamePage(long taxonId, string language = "en") {
+        using var command = _connection.CreateCommand();
+        command.CommandText =
+            """
+            SELECT COALESCE(cn.source_identifier, cn.raw_name)
+            FROM common_names cn
+            WHERE cn.taxon_id = @taxonId
+              AND cn.language = @lang
+              AND cn.source IN ('wikipedia_title', 'wikipedia_taxobox')
+            ORDER BY
+              CASE cn.source
+                WHEN 'wikipedia_title' THEN 1
+                WHEN 'wikipedia_taxobox' THEN 2
+              END,
+              cn.is_preferred DESC
+            LIMIT 1;
+            """;
+        command.Parameters.AddWithValue("@taxonId", taxonId);
+        command.Parameters.AddWithValue("@lang", language);
+        return command.ExecuteScalar() as string;
+    }
+
+    /// <summary>
+    /// The English Wikipedia page a taxon is matched to (its "exact" Wikipedia cross-reference), or
+    /// null. It is the page the match ended on after following redirects: "Crenimugil buchanani"
+    /// for Moolgarda buchanani, but also the genus page "Leucoraja" for Leucoraja wallacei, whose
+    /// own name is a redirect to it. A page about another taxon (<see cref="OtherTaxonsPageMatch"/>)
+    /// is not used. English Wikipedia is the only one `common-names aggregate` reads.
+    /// </summary>
+    public string? GetMatchedWikipediaPage(long taxonId) {
+        using var command = _connection.CreateCommand();
+        command.CommandText =
             """
             SELECT source_identifier FROM taxon_cross_references
             WHERE taxon_id = @taxonId AND source = 'wikipedia' AND match_type = 'exact'
             ORDER BY id DESC
             LIMIT 1;
             """;
-        crossReference.Parameters.AddWithValue("@taxonId", taxonId);
-        return crossReference.ExecuteScalar() as string;
+        command.Parameters.AddWithValue("@taxonId", taxonId);
+        return command.ExecuteScalar() as string;
     }
 
     #endregion

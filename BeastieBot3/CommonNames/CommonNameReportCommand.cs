@@ -186,7 +186,6 @@ internal sealed class CommonNameReportCommand : AsyncCommand<CommonNameReportCom
             sb.AppendLine();
 
             foreach (var (normalizedName, records) in conflictingNames) {
-                var keeper = verdicts.KeptBy(normalizedName);
                 var displayName = records.FirstOrDefault()?.RawName ?? normalizedName;
                 sb.AppendLine($"### {displayName}");
                 sb.AppendLine();
@@ -196,7 +195,7 @@ internal sealed class CommonNameReportCommand : AsyncCommand<CommonNameReportCom
                 // The taxon that keeps the name first, then the others by their best source.
                 var byTaxon = records
                     .GroupBy(r => r.TaxonId)
-                    .OrderByDescending(g => g.Key == keeper)
+                    .OrderByDescending(g => verdicts.Keeps(g.Key, normalizedName))
                     .ThenBy(g => g.Min(r => CommonNameStore.GetSourcePriority(r.Source, r.IsPreferred)));
                 foreach (var taxonGroup in byTaxon) {
                     var first = taxonGroup.First();
@@ -205,7 +204,7 @@ internal sealed class CommonNameReportCommand : AsyncCommand<CommonNameReportCom
                         .Select(r => r.Source).Distinct());
                     var isPreferred = taxonGroup.Any(r => r.IsPreferred) ? "Yes" : "No";
                     var scientificName = CapitalizeFirst(first.TaxonCanonicalName);
-                    var usesName = taxonGroup.Key == keeper ? "Yes" : "No";
+                    var usesName = verdicts.Keeps(taxonGroup.Key, normalizedName) ? "Yes" : "No";
                     sb.AppendLine($"| {scientificName} | {first.TaxonKingdom ?? "?"} | {sources} | {isPreferred} | {usesName} |");
                 }
                 sb.AppendLine();
@@ -1028,7 +1027,8 @@ internal static class AmbiguousReportText {
         + "the name. Uses This Name is Yes for the taxon that the Wikipedia lists and the public site use the name for: the "
         + "taxon that has the name from the highest-priority source. If two or more taxa have the name from sources of equal "
         + "priority, every row in that table is No, except that a species takes priority over its own subspecies, varieties "
-        + "and subpopulations.";
+        + "and subpopulations. Rows with the same scientific name count as one taxon, because the store can have a species "
+        + "under both an old and a current IUCN id.";
 
     public const string UsesNameColumn = "Uses This Name";
 

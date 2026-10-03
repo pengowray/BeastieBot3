@@ -14,7 +14,8 @@ using BeastieBot3.WikipediaLists.Legacy;
 //   2. the best of the store's names for the taxon (ChooseBest): by source priority, skipping
 //      junk (CommonNameQuality: wiki markup, author citations, OCR errors...) and a name another
 //      taxon keeps (AmbiguousNames), repaired where CommonNameQuality can repair it ("Sunda slow
-//      loris{sfn|...}" is "Sunda slow loris"), capitalised with the caps rules;
+//      loris{sfn|...}" is "Sunda slow loris"), capitalised with the caps rules, except that a
+//      Wikipedia article title keeps the title's capitals (DisplayCasing);
 //   3. nothing, when the name from step 1 or 2 is not usable as a common name (IsUnusable): the
 //      scientific name again, a working name ("sp. nov."), or a name with an authority and year.
 // The lists have fallbacks of their own (a SPRAT name, the legacy Wikidata/IUCN provider) that
@@ -106,16 +107,52 @@ internal sealed class CommonNameChooser {
 
     /// <summary>
     /// Step 2: the best of a taxon's names (<see cref="ChooseBest"/>) with its
-    /// <see cref="CommonNameResult.DisplayName"/> capitalised by the caps rules; null when every
-    /// name is junk or ambiguous for the taxon, or it has none. <paramref name="storeTaxonId"/> is
-    /// the store's taxa.id; <paramref name="scientificName"/>, when given, is the taxon's name, so
-    /// a name that is it with a subgenus is skipped.
+    /// <see cref="CommonNameResult.DisplayName"/> capitalised (<see cref="DisplayCasing"/>); null
+    /// when every name is junk or ambiguous for the taxon, or it has none.
+    /// <paramref name="storeTaxonId"/> is the store's taxa.id; <paramref name="scientificName"/>,
+    /// when given, is the taxon's name, so a name that is it with a subgenus is skipped.
     /// </summary>
     public CommonNameResult? FromStore(long storeTaxonId, IEnumerable<CommonNameCandidate> candidates,
         string? scientificName = null) {
-        var best = ChooseBest(storeTaxonId, candidates, Ambiguous, scientificName);
-        return best is null ? null : best with { DisplayName = Capitalize(best.DisplayName) };
+        var all = candidates as IReadOnlyCollection<CommonNameCandidate> ?? candidates.ToList();
+        var best = ChooseBest(storeTaxonId, all, Ambiguous, scientificName);
+        return best is null ? null : best with { DisplayName = DisplayCasing(best, all, Capitalize) };
     }
+
+    /// <summary>
+    /// The capitalisation of the chosen name. A Wikipedia article title keeps the title's
+    /// capitals, with the first letter upper case: English Wikipedia titles are in sentence case
+    /// with proper nouns capitalised ("Large Palau flying fox", "Banded martin"), and the caps
+    /// rules would lower-case a place name they have no rule for ("Large palau flying fox") or
+    /// capitalise a word that a rule capitalises elsewhere ("Banded Martin"). A name from another
+    /// source that is one of the taxon's Wikipedia titles apart from its capitals is shown with the
+    /// title's capitals. Any other name gets the caps rules (<paramref name="capitalize"/>), so a
+    /// taxobox name in title case ("White Ash") is still lower-cased.
+    /// </summary>
+    internal static string DisplayCasing(CommonNameResult best, IEnumerable<CommonNameCandidate> candidates,
+        Func<string, string> capitalize) {
+        if (IsWikipediaTitle(best.Source)) {
+            return TitleCasing(best.DisplayName);
+        }
+        var shown = capitalize(best.DisplayName);
+        foreach (var candidate in candidates) {
+            if (IsWikipediaTitle(candidate.Source) && UsableName(candidate) is { } title
+                && TitleCasing(title.Name) is var titleForm
+                && string.Equals(titleForm, shown, StringComparison.OrdinalIgnoreCase)) {
+                return titleForm;
+            }
+        }
+        return shown;
+    }
+
+    private static bool IsWikipediaTitle(string source) =>
+        string.Equals(source, "wikipedia_title", StringComparison.OrdinalIgnoreCase);
+
+    // A Wikipedia title as a common name: without its disambiguation ("Jack Dempsey (fish)"),
+    // straight quotes and single spaces, first letter upper case, other capitals as in the title.
+    private static string TitleCasing(string title) =>
+        ProseFormat.Uppercase(CommonNameNormalizer.NormalizeDisplayTypography(
+            CommonNameNormalizer.RemoveDisambiguationSuffix(title))) ?? title;
 
     /// <summary>
     /// The caps rules applied to a name: the first word is title-cased; later words are lower-cased
