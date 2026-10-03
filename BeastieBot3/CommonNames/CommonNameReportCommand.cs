@@ -152,8 +152,11 @@ internal sealed class CommonNameReportCommand : AsyncCommand<CommonNameReportCom
                         cancellationToken.ThrowIfCancellationRequested();
                         progress.Increment(1);
 
+                        // A junk name does not count as having the name, as for the verdicts.
                         var records = store.GetCommonNamesByNormalized(normalizedName, "en")
                             .Where(r => r.TaxonValidityStatus == "valid" && !r.TaxonIsFossil)
+                            .Where(r => CommonNameChooser.UsableName(new CommonNameCandidate(r.RawName, r.NormalizedName, r.Source, r.IsPreferred))
+                                ?.NormalizedName == normalizedName)
                             .ToList();
 
                         if (!string.IsNullOrWhiteSpace(settings.Kingdom)) {
@@ -551,7 +554,7 @@ internal sealed class CommonNameReportCommand : AsyncCommand<CommonNameReportCom
                     // The name the lists would show: the chooser's pick from the store (rules-list.txt
                     // is not read here), then its unusable check.
                     var chosen = chooser.FromStore(storeTaxonId.Value,
-                        CommonNameStore.ToCandidates(englishCandidates.Select(c => c.Record)));
+                        CommonNameStore.ToCandidates(englishCandidates.Select(c => c.Record)), taxon.ScientificName);
                     var selected = chosen is null
                         ? null
                         : englishCandidates.FirstOrDefault(c => c.Record.RawName == chosen.RawName && c.Record.Source == chosen.Source);

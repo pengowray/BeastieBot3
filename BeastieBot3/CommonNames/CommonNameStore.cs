@@ -665,12 +665,15 @@ internal sealed class CommonNameStore : SqliteStore {
     /// a plant and an animal is not shared within either kingdom. The kingdom is upper-cased
     /// before binding, because taxa store it as IUCN writes it ("PLANTAE") and the report's
     /// --kingdom help suggests "Plantae".
+    /// Junk names (<see cref="CommonNameQuality"/>) are left out, and a repairable name counts
+    /// under its repaired name's key (<see cref="CommonNameChooser.UsableName"/>), the key the
+    /// chooser compares it by.
     /// </summary>
     private AmbiguousNames QueryAmbiguousNames(string language, string? kingdom = null) {
         using var command = _connection.CreateCommand();
         var kingdomFilter = kingdom != null ? "AND t.kingdom = @kingdom" : "";
         command.CommandText = $@"
-            SELECT c.normalized_name, c.taxon_id, t.canonical_name, c.source, c.is_preferred
+            SELECT c.normalized_name, c.taxon_id, t.canonical_name, c.source, c.is_preferred, c.raw_name
             FROM common_names c
             JOIN taxa t ON c.taxon_id = t.id
             WHERE c.language = @lang
@@ -686,11 +689,17 @@ internal sealed class CommonNameStore : SqliteStore {
         var holdings = new List<NameHolding>();
         using var reader = command.ExecuteReader();
         while (reader.Read()) {
+            var source = reader.GetString(3);
+            var preferred = reader.GetInt32(4) == 1;
+            var candidate = new CommonNameCandidate(reader.GetString(5), reader.GetString(0), source, preferred);
+            if (CommonNameChooser.UsableName(candidate, language) is not { } usable) {
+                continue;
+            }
             holdings.Add(new NameHolding(
-                NormalizedName: reader.GetString(0),
+                NormalizedName: usable.NormalizedName,
                 TaxonId: reader.GetInt64(1),
                 CanonicalName: reader.GetString(2),
-                Priority: GetSourcePriority(reader.GetString(3), reader.GetInt32(4) == 1)));
+                Priority: GetSourcePriority(source, preferred)));
         }
         return AmbiguousNames.Build(holdings);
     }

@@ -369,4 +369,37 @@ public class CommonNameAmbiguityTests {
         Assert.Null(WikipediaListCommand.AmbiguousNamesLine(0));
         Assert.Contains("common-names report --report ambiguous", WikipediaListCommand.AmbiguousNamesLine(1));
     }
+
+    [Fact]
+    public void JunkName_DoesNotMakeAGoodNameAmbiguous() {
+        // "Rooiberg girdled lizard)" is cut off at a bracket; its key is the good name's key, but a
+        // junk name is not counted as having the name, so the other taxon keeps it.
+        using var store = OpenInMemory();
+        var junkHolder = AddTaxon(store, "cordylus imkeae", "1");
+        var other = AddTaxon(store, "cordylus otherus", "2");
+        store.InsertCommonName(junkHolder, "Rooiberg girdled lizard)", "rooiberggirdledlizard", "en", "wikidata", null, false);
+        store.InsertCommonName(other, "Rooiberg girdled lizard", "rooiberggirdledlizard", "en", "col", null, false);
+
+        Assert.Empty(store.GetAmbiguousNames("en").Names);
+        Assert.Equal("Rooiberg girdled lizard", Best(store, other));
+        Assert.Null(Best(store, junkHolder));
+    }
+
+    [Fact]
+    public void RepairedName_CountsUnderItsRepairedKey() {
+        // The taxobox name repairs to "Sunda slow loris", so it is the same name as the other
+        // taxon's, and the taxobox (priority 2) beats the Catalogue of Life (priority 7).
+        using var store = OpenInMemory();
+        var loris = AddTaxon(store, "nycticebus coucang", "1");
+        var other = AddTaxon(store, "nycticebus otherus", "2");
+        store.InsertCommonName(loris, "Sunda slow loris{sfn|Groves|2005|p=122}", "sundaslowlorissfngroves2005p122",
+            "en", "wikipedia_taxobox", null, false);
+        AddName(store, other, "Sunda slow loris", "col");
+        AddName(store, other, "Other loris", "col");
+
+        var verdicts = store.GetAmbiguousNames("en");
+
+        Assert.Equal(loris, verdicts.KeptBy("sundaslowloris"));
+        Assert.Equal("Other loris", Best(store, other));
+    }
 }

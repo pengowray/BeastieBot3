@@ -11,8 +11,10 @@ using BeastieBot3.WikipediaLists.Legacy;
 // all choose it here, in this order:
 //   1. a common name set for the taxon in rules-list.txt ("Panthera leo = lion"), used even when
 //      another taxon has the same name;
-//   2. the best of the store's names for the taxon (ChooseBest): by source priority, skipping a
-//      name another taxon keeps (AmbiguousNames), capitalised with the caps rules;
+//   2. the best of the store's names for the taxon (ChooseBest): by source priority, skipping
+//      junk (CommonNameQuality: wiki markup, author citations, OCR errors...) and a name another
+//      taxon keeps (AmbiguousNames), repaired where CommonNameQuality can repair it ("Sunda slow
+//      loris{sfn|...}" is "Sunda slow loris"), capitalised with the caps rules;
 //   3. nothing, when the name from step 1 or 2 is not usable as a common name (IsUnusable): the
 //      scientific name again, a working name ("sp. nov."), or a name with an authority and year.
 // The lists have fallbacks of their own (a SPRAT name, the legacy Wikidata/IUCN provider) that
@@ -48,33 +50,30 @@ internal sealed class CommonNameChooser {
     private readonly Lazy<AmbiguousNames> _ambiguous;
     private readonly IReadOnlyDictionary<string, string> _capsRules;
     private readonly LegacyTaxaRuleList? _rules;
-    private readonly Func<string, string>? _tidyRawName;
 
     private CommonNameChooser(Lazy<AmbiguousNames> ambiguous, IReadOnlyDictionary<string, string> capsRules,
-        LegacyTaxaRuleList? rules, Func<string, string>? tidyRawName) {
+        LegacyTaxaRuleList? rules) {
         _ambiguous = ambiguous;
         _capsRules = capsRules;
         _rules = rules;
-        _tidyRawName = tidyRawName;
     }
 
     /// <summary>
     /// A chooser over <paramref name="store"/>'s English names and caps rules. The ambiguity
     /// verdicts are read from the store on first use (the store caches them); with
     /// <paramref name="allowAmbiguous"/> no name is skipped as ambiguous.
-    /// <paramref name="tidyRawName"/> is applied to the store's raw name before capitalisation.
     /// </summary>
     public static CommonNameChooser ForStore(CommonNameStore store, LegacyTaxaRuleList? rules = null,
-        bool allowAmbiguous = false, Func<string, string>? tidyRawName = null) =>
+        bool allowAmbiguous = false) =>
         new(allowAmbiguous ? new Lazy<AmbiguousNames>(AmbiguousNames.None) : new Lazy<AmbiguousNames>(() => store.GetAmbiguousNames("en")),
-            store.GetAllCapsRules(), rules, tidyRawName);
+            store.GetAllCapsRules(), rules);
 
     /// <summary>A chooser with only rules-list.txt, for list generation without the store.</summary>
     public static CommonNameChooser RulesOnly(LegacyTaxaRuleList? rules) =>
-        new(new Lazy<AmbiguousNames>(AmbiguousNames.None), new Dictionary<string, string>(), rules, null);
+        new(new Lazy<AmbiguousNames>(AmbiguousNames.None), new Dictionary<string, string>(), rules);
 
     /// <summary>The same chooser with <paramref name="rules"/> as its rules-list.txt.</summary>
-    public CommonNameChooser WithRules(LegacyTaxaRuleList? rules) => new(_ambiguous, _capsRules, rules, _tidyRawName);
+    public CommonNameChooser WithRules(LegacyTaxaRuleList? rules) => new(_ambiguous, _capsRules, rules);
 
     /// <summary>The ambiguity rule's verdicts this chooser skips names by.</summary>
     public AmbiguousNames Ambiguous => _ambiguous.Value;
@@ -108,16 +107,14 @@ internal sealed class CommonNameChooser {
     /// <summary>
     /// Step 2: the best of a taxon's names (<see cref="ChooseBest"/>) with its
     /// <see cref="CommonNameResult.DisplayName"/> capitalised by the caps rules; null when every
-    /// name is ambiguous for the taxon or it has none. <paramref name="storeTaxonId"/> is the
-    /// store's taxa.id.
+    /// name is junk or ambiguous for the taxon, or it has none. <paramref name="storeTaxonId"/> is
+    /// the store's taxa.id; <paramref name="scientificName"/>, when given, is the taxon's name, so
+    /// a name that is it with a subgenus is skipped.
     /// </summary>
-    public CommonNameResult? FromStore(long storeTaxonId, IEnumerable<CommonNameCandidate> candidates) {
-        var best = ChooseBest(storeTaxonId, candidates, Ambiguous);
-        if (best is null) {
-            return null;
-        }
-        var raw = _tidyRawName is null ? best.RawName : _tidyRawName(best.RawName);
-        return best with { DisplayName = Capitalize(raw) };
+    public CommonNameResult? FromStore(long storeTaxonId, IEnumerable<CommonNameCandidate> candidates,
+        string? scientificName = null) {
+        var best = ChooseBest(storeTaxonId, candidates, Ambiguous, scientificName);
+        return best is null ? null : best with { DisplayName = Capitalize(best.DisplayName) };
     }
 
     /// <summary>
@@ -131,31 +128,65 @@ internal sealed class CommonNameChooser {
     /// <summary>
     /// The one ranking of a taxon's common names: source priority
     /// (<see cref="CommonNameStore.GetSourcePriority"/>), then preferred names first, then raw name
-    /// for determinism; the first name that is not ambiguous for <paramref name="taxonId"/>
-    /// (<see cref="AmbiguousNames.IsAmbiguousFor"/>) wins. <paramref name="taxonId"/> is the store's
-    /// taxa.id. Pass <see cref="AmbiguousNames.None"/> to skip no name.
+    /// for determinism. The first name wins that is not junk (<see cref="CommonNameQuality"/>), not
+    /// the taxon's <paramref name="scientificName"/> with a subgenus, and not ambiguous for
+    /// <paramref name="taxonId"/> (<see cref="AmbiguousNames.IsAmbiguousFor"/>, by the repaired
+    /// name's key). <paramref name="taxonId"/> is the store's taxa.id. Pass
+    /// <see cref="AmbiguousNames.None"/> to skip no name as ambiguous. The result's RawName is the
+    /// name as stored; its DisplayName is the repaired name, not yet capitalised.
     /// </summary>
     internal static CommonNameResult? ChooseBest(long taxonId, IEnumerable<CommonNameCandidate> candidates,
-        AmbiguousNames ambiguousNames) {
+        AmbiguousNames ambiguousNames, string? scientificName = null) {
         var sorted = candidates
             .OrderBy(c => CommonNameStore.GetSourcePriority(c.Source, c.IsPreferred))
             .ThenByDescending(c => c.IsPreferred)
             .ThenBy(c => c.RawName, StringComparer.OrdinalIgnoreCase);
 
         foreach (var candidate in sorted) {
-            if (ambiguousNames.IsAmbiguousFor(taxonId, candidate.NormalizedName)) {
+            if (UsableName(candidate) is not { } usable
+                || IsScientificNameWithSubgenus(usable.Name, scientificName)
+                || ambiguousNames.IsAmbiguousFor(taxonId, usable.NormalizedName)) {
                 continue;
             }
             return new CommonNameResult(
                 RawName: candidate.RawName,
-                DisplayName: candidate.RawName,
-                NormalizedName: candidate.NormalizedName,
+                DisplayName: usable.Name,
+                NormalizedName: usable.NormalizedName,
                 Source: candidate.Source,
                 IsPreferred: candidate.IsPreferred,
                 IsAmbiguous: false);
         }
 
         return null;
+    }
+
+    /// <summary>
+    /// The name to use for an English name from the store and the key the ambiguity rule compares
+    /// it by: as stored when <see cref="CommonNameQuality"/> finds it good, repaired (with the
+    /// repaired name's key) when it can be repaired, and null when it is junk.
+    /// <see cref="CommonNameStore"/> builds <see cref="AmbiguousNames"/> from the same keys.
+    /// </summary>
+    internal static (string Name, string NormalizedName)? UsableName(CommonNameCandidate candidate, string language = "en") {
+        var quality = CommonNameQuality.Assess(candidate.RawName, language);
+        if (quality.IsJunk) {
+            return null;
+        }
+        if (!quality.IsRepaired) {
+            return (candidate.RawName, candidate.NormalizedName);
+        }
+        return CommonNameNormalizer.NormalizeForMatching(quality.Name) is { } key ? (quality.Name, key) : null;
+    }
+
+    // "Holothuria (Metriatyla) lessoni" for Holothuria lessoni: a Wikidata label that is the
+    // scientific name with its subgenus.
+    private static readonly Regex NameWithSubgenus = new(@"^(\S+) \([^()\s]+\) (\S+)$", RegexOptions.Compiled);
+
+    private static bool IsScientificNameWithSubgenus(string name, string? scientificName) {
+        if (string.IsNullOrWhiteSpace(scientificName) || NameWithSubgenus.Match(name.Trim()) is not { Success: true } match) {
+            return false;
+        }
+        return string.Equals($"{match.Groups[1].Value} {match.Groups[2].Value}", FirstTwoTokens(scientificName.Trim()),
+            StringComparison.OrdinalIgnoreCase);
     }
 
     // A 4-digit year (1600–2099) betrays a botanical/zoological authority citation rather than a

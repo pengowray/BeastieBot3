@@ -8,9 +8,11 @@ using Microsoft.Data.Sqlite;
 //     col -> col, iucn -> iucn);
 //   - the best English name, chosen by CommonNameChooser as the Wikipedia lists choose it: a
 //     manual override in rules-list.txt ("Panthera leo = lion") first, else the best of the
-//     taxon's names (names ambiguous for the taxon skipped, by the store's taxa.id, as
-//     AmbiguousNames decides) capitalised with the store's caps rules; and dropped when the lists
-//     would drop it (CommonNameChooser.IsUnusable: the scientific name again, or a working name);
+//     taxon's names (junk names and names ambiguous for the taxon skipped, by the store's taxa.id,
+//     as CommonNameQuality and AmbiguousNames decide; repairable names repaired) capitalised with
+//     the store's caps rules; and dropped when the lists would drop it
+//     (CommonNameChooser.IsUnusable: the scientific name again, or a working name);
+//     the site's name table leaves out junk and repairs the rest in SiteNameSet;
 //   - Catalogue of Life synonyms (synonym_type 'synonym'; 'ambiguous_synonym' rows and the
 //     constructed rank variants are left out; IUCN's synonyms come from the API records instead);
 //   - Catalogue of Life ids from taxon_cross_references, the fallback for col_id.
@@ -22,7 +24,7 @@ internal static class SiteCommonNamesReader {
     public static void Read(string path, IReadOnlyDictionary<long, SiteTaxon> taxa, LegacyTaxaRuleList? overrides,
         SiteBuildStats stats, Dictionary<long, string> colCrossReferences, CancellationToken cancellationToken) {
         using var store = CommonNameStore.OpenReadOnly(path);
-        var chooser = CommonNameChooser.ForStore(store, overrides, tidyRawName: SiteBuildRules.CleanName);
+        var chooser = CommonNameChooser.ForStore(store, overrides);
 
         using var connection = SiteIucnCsvReader.OpenReadOnly(path);
 
@@ -60,7 +62,7 @@ internal static class SiteCommonNamesReader {
         foreach (var taxon in taxa.Values) {
             var subject = new CommonNameSubject(taxon.ScientificName, taxon.ScientificName, taxon.Genus, taxon.SpeciesEpithet);
             Func<string?>? storeName = candidates.TryGetValue(taxon.TaxonId, out var entry)
-                ? () => chooser.FromStore(entry.StoreTaxonId, entry.Names)?.DisplayName
+                ? () => chooser.FromStore(entry.StoreTaxonId, entry.Names, taxon.ScientificName)?.DisplayName
                 : null;
             var choice = chooser.Choose(subject, storeName);
             switch (choice.Kind) {

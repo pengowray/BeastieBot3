@@ -91,7 +91,10 @@ internal sealed class StoreBackedCommonNameProvider : IDisposable {
 
         // Look up by taxon_id (which maps to IUCN sis_id as primary_source_id)
         var taxonId = FindTaxonId(record);
-        var resolved = taxonId.HasValue ? BestStoreName(taxonId.Value) : null;
+        var binomial = !string.IsNullOrWhiteSpace(record.GenusName) && !string.IsNullOrWhiteSpace(record.SpeciesName)
+            ? $"{record.GenusName} {record.SpeciesName}"
+            : record.ScientificNameTaxonomy;
+        var resolved = taxonId.HasValue ? BestStoreName(taxonId.Value, binomial) : null;
 
         _commonNameCache[record.TaxonId] = resolved;
         return resolved;
@@ -106,13 +109,15 @@ internal sealed class StoreBackedCommonNameProvider : IDisposable {
         }
 
         var taxonId = FindTaxonIdByScientificName(scientificName, kingdom);
-        return taxonId.HasValue ? BestStoreName(taxonId.Value) : null;
+        return taxonId.HasValue ? BestStoreName(taxonId.Value, scientificName) : null;
     }
 
-    // The store's best English name for a store taxon, capitalised; null when it has none that is
-    // not ambiguous for it.
-    private string? BestStoreName(long storeTaxonId) =>
-        Chooser.FromStore(storeTaxonId, CommonNameStore.ToCandidates(_store.GetCommonNamesForTaxon(storeTaxonId, "en")))?.DisplayName;
+    // The store's best English name for a store taxon, repaired and capitalised; null when it has
+    // none that is usable and not ambiguous for it. scientificName lets the chooser skip a name
+    // that is the scientific name with a subgenus.
+    private string? BestStoreName(long storeTaxonId, string? scientificName) =>
+        Chooser.FromStore(storeTaxonId, CommonNameStore.ToCandidates(_store.GetCommonNamesForTaxon(storeTaxonId, "en")),
+            scientificName)?.DisplayName;
 
     /// <summary>
     /// Get the Wikipedia article title for a species record.

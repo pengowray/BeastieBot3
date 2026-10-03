@@ -104,6 +104,65 @@ public sealed class CommonNameChooserTests : IDisposable {
         Assert.False(choice.Found);
     }
 
+    [Fact]
+    public void JunkNames_AreSkipped_AndTheNextNameIsUsed() {
+        // 2026 data: Argia percellulata has "Calvert, 1902" from Wikidata, an author citation.
+        using var store = OpenInMemory();
+        var damselfly = AddTaxon(store, "argia percellulata", "1");
+        AddName(store, damselfly, "Calvert, 1902", "wikidata_label");
+        AddName(store, damselfly, "Mexican Dancer", "col");
+        var chooser = CommonNameChooser.ForStore(store);
+
+        var choice = chooser.Choose(Subject("Argia percellulata"), StoreName(chooser, store, damselfly));
+
+        Assert.Equal("Mexican dancer", choice.Name);
+    }
+
+    [Fact]
+    public void RepairableNames_AreUsedRepaired() {
+        using var store = OpenInMemory();
+        var loris = AddTaxon(store, "nycticebus coucang", "1");
+        store.InsertCommonName(loris, "Sunda slow loris{sfn|Groves|2005|p=122}", "sundaslowlorissfngroves2005p122",
+            "en", "wikipedia_taxobox", null, false);
+        AddName(store, loris, "Greater Slow Loris", "iucn", preferred: true);
+        var chooser = CommonNameChooser.ForStore(store);
+
+        var best = chooser.FromStore(loris, CommonNameStore.ToCandidates(store.GetCommonNamesForTaxon(loris)));
+
+        Assert.NotNull(best);
+        Assert.Equal("Sunda slow loris", best!.DisplayName);
+        Assert.Equal("sundaslowloris", best.NormalizedName);
+        Assert.Equal("Sunda slow loris{sfn|Groves|2005|p=122}", best.RawName);
+    }
+
+    [Fact]
+    public void ScientificNameWithASubgenus_IsSkipped() {
+        // 2026 data: Holothuria lessoni's Wikidata label is "Holothuria (Metriatyla) lessoni", which
+        // the lists showed as its common name ahead of IUCN's "Golden Sandfish".
+        using var store = OpenInMemory();
+        var sandfish = AddTaxon(store, "holothuria lessoni", "1");
+        AddName(store, sandfish, "Holothuria (Metriatyla) lessoni", "wikidata_label");
+        AddName(store, sandfish, "Golden Sandfish", "iucn", preferred: true);
+        var chooser = CommonNameChooser.ForStore(store);
+
+        var choice = chooser.Choose(Subject("Holothuria lessoni"),
+            () => chooser.FromStore(sandfish, CommonNameStore.ToCandidates(store.GetCommonNamesForTaxon(sandfish)), "Holothuria lessoni")?.DisplayName);
+
+        Assert.Equal("Golden sandfish", choice.Name);
+    }
+
+    [Fact]
+    public void ANameInBracketsAfterTheGenus_IsKept_WhenItIsNotTheTaxonsScientificName() {
+        using var store = OpenInMemory();
+        var phalarope = AddTaxon(store, "phalaropus fulicarius", "1");
+        AddName(store, phalarope, "Grey (Red) Phalarope", "iucn", preferred: true);
+        var chooser = CommonNameChooser.ForStore(store);
+
+        var best = chooser.FromStore(phalarope, CommonNameStore.ToCandidates(store.GetCommonNamesForTaxon(phalarope)), "Phalaropus fulicarius");
+
+        Assert.Equal("Grey (Red) Phalarope", best!.RawName);
+    }
+
     [Theory]
     [InlineData("Aus bus sp. nov. 'Kimberley'")]
     [InlineData("Aus spp. complex")]
