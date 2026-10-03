@@ -47,6 +47,19 @@ public static class SiteDbSchema {
         CREATE INDEX taxon_parent ON taxon(parent_taxon_id);
         CREATE INDEX taxon_current ON taxon(current_taxon_id);
 
+        -- Links from a taxon not in the release (in_release = 0) to a taxon in the release. An old id
+        -- can have two links: the taxon with its name, and the one taxon whose IUCN synonyms list its
+        -- name (when a taxon was split).
+        CREATE TABLE taxon_link (
+            taxon_id         INTEGER NOT NULL,                -- the taxon not in the release
+            current_taxon_id INTEGER NOT NULL,                -- the taxon in the release
+            link_kind        TEXT NOT NULL,                   -- 'same-name': the same scientific name (taxon.current_taxon_id);
+                                                              -- 'iucn-synonym': the current taxon's IUCN synonyms include the old taxon's
+                                                              -- scientific name, and no other taxon in the release in that kingdom lists it
+            PRIMARY KEY (taxon_id, current_taxon_id)
+        ) WITHOUT ROWID;
+        CREATE INDEX taxon_link_current ON taxon_link(current_taxon_id);
+
         -- SPRAT profiles of the taxon (Australia's Species Profile and Threats Database) and their
         -- EPBC Act listings. One row per SPRAT profile: the profile whose name is the taxon's name (or
         -- lists it among its IUCN names), and every profile named after the taxon with a population in
@@ -76,7 +89,9 @@ public static class SiteDbSchema {
             population_trend             TEXT,                -- 'Increasing' | 'Decreasing' | 'Stable' | 'Unknown'; NULL when not given
             citation_json                TEXT,                -- IucnCitationParts as JSON; NULL when the API payload is not cached
             replaced_by_assessment_id    INTEGER,             -- the errata or amended version that replaced this assessment; NULL otherwise
-            wikidata_item_qid            TEXT,                -- Wikidata item for this assessment as a publication ('Q123'); NULL when none is known
+            has_taxonomic_notes          INTEGER,             -- 1: the cached payload's documentation.taxonomic_notes has text; 0: empty or missing;
+                                                              -- NULL when the payload is not cached. The notes themselves are narrative text and are not stored.
+            wikidata_item_qid           TEXT,                -- Wikidata item for this assessment as a publication ('Q123'); NULL when none is known
             wikidata_item_properties     TEXT                 -- space-separated properties that item already has, in WikidataCitation.JudgedProperties order ('P31 P356 P2093 Len'; Len = it has an English label); NULL when no item
         );
         CREATE INDEX assessment_taxon ON assessment(taxon_id, year_published);

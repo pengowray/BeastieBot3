@@ -182,6 +182,8 @@ internal sealed class SiteBuildDbCommand : Command<SiteBuildDbCommand.Settings> 
         Row("Not in the release: varieties", s.NotInReleaseByKind.GetValueOrDefault(SiteTaxonKind.Variety));
         Row("Not in the release: subpopulations", s.NotInReleaseByKind.GetValueOrDefault(SiteTaxonKind.Subpopulation));
         Row("Not in the release, with a taxon of the same name in the release", s.NotInReleaseWithCurrentTaxon);
+        Row("Not in the release, linked to the one taxon in the release whose IUCN synonyms list its name", s.NotInReleaseSynonymLinks);
+        Row("Not in the release, with a name that two or more taxa in the release list as a synonym (not linked)", s.NotInReleaseSynonymOfSeveral);
         Row("API taxon records not in the release with no scientific name (left out)", s.NotInReleaseRecordsUnusable);
 
         Section("Assessments");
@@ -206,6 +208,7 @@ internal sealed class SiteBuildDbCommand : Command<SiteBuildDbCommand.Settings> 
         Section("Citations");
         Row("Citations parsed from cached API assessments", s.CitationsParsed);
         Row("Assessments not in the API cache (no citation)", s.CitationsNotCached);
+        Row("Cached assessments with taxonomic notes (has_taxonomic_notes = 1)", s.PayloadsWithTaxonomicNotes);
         Row("Citations that could not be parsed", s.CitationFailures.Values.Sum() + s.PayloadsUnreadable);
         Row("DOIs from IUCN's citation text", s.DoisBySource.GetValueOrDefault(DoiSource.Citation));
         Row("DOIs from GBIF", s.DoisBySource.GetValueOrDefault(DoiSource.Gbif));

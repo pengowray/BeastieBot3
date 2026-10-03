@@ -25,6 +25,7 @@ internal sealed class SiteDbWriter : IDisposable {
     private readonly SqliteCommand _name;
     private readonly SqliteCommand _replacedBy;
     private readonly SqliteCommand _epbcListing;
+    private readonly SqliteCommand _taxonLink;
     private long _nextNameId = 1;
     private bool _finished;
 
@@ -54,14 +55,14 @@ internal sealed class SiteDbWriter : IDisposable {
         _assessment = Prepare("""
             INSERT INTO assessment (assessment_id, taxon_id, scope, is_latest, category, possibly_extinct,
                 possibly_extinct_in_the_wild, criteria, criteria_version, year_published, assessment_date, population_trend, citation_json,
-                wikidata_item_qid, wikidata_item_properties)
+                has_taxonomic_notes, wikidata_item_qid, wikidata_item_properties)
             VALUES (@assessment_id, @taxon_id, @scope, @is_latest, @category, @possibly_extinct,
                 @possibly_extinct_in_the_wild, @criteria, @criteria_version, @year_published, @assessment_date, @population_trend, @citation_json,
-                @wikidata_item_qid, @wikidata_item_properties)
+                @has_taxonomic_notes, @wikidata_item_qid, @wikidata_item_properties)
             """,
             "@assessment_id", "@taxon_id", "@scope", "@is_latest", "@category", "@possibly_extinct",
             "@possibly_extinct_in_the_wild", "@criteria", "@criteria_version", "@year_published", "@assessment_date", "@population_trend", "@citation_json",
-            "@wikidata_item_qid", "@wikidata_item_properties");
+            "@has_taxonomic_notes", "@wikidata_item_qid", "@wikidata_item_properties");
         _name = Prepare("""
             INSERT INTO name (name_id, taxon_id, name, name_type, language, source, is_preferred)
             VALUES (@name_id, @taxon_id, @name, @name_type, @language, @source, @is_preferred)
@@ -74,6 +75,8 @@ internal sealed class SiteDbWriter : IDisposable {
             VALUES (@taxon_id, @sprat_taxon_id, @listed_name, @status, @applies_to, @population)
             """,
             "@taxon_id", "@sprat_taxon_id", "@listed_name", "@status", "@applies_to", "@population");
+        _taxonLink = Prepare("INSERT INTO taxon_link (taxon_id, current_taxon_id, link_kind) VALUES (@taxon_id, @current_taxon_id, @link_kind)",
+            "@taxon_id", "@current_taxon_id", "@link_kind");
     }
 
     /// Creates the file, replacing any file already at the path.
@@ -116,8 +119,13 @@ internal sealed class SiteDbWriter : IDisposable {
     public void AddAssessment(SiteAssessment a) {
         Bind(_assessment, a.AssessmentId, a.TaxonId, a.Scope, a.IsLatest ? 1 : 0, a.Category, a.PossiblyExtinct ? 1 : 0,
             a.PossiblyExtinctInTheWild ? 1 : 0, a.Criteria, a.CriteriaVersion, a.YearPublished, a.AssessmentDate,
-            a.PopulationTrend, a.CitationJson, a.WikidataItemQid, a.WikidataItemProperties);
+            a.PopulationTrend, a.CitationJson, a.HasTaxonomicNotes is { } notes ? (notes ? 1 : 0) : null, a.WikidataItemQid, a.WikidataItemProperties);
         _assessment.ExecuteNonQuery();
+    }
+
+    public void AddTaxonLink(SiteTaxonLink link) {
+        Bind(_taxonLink, link.TaxonId, link.CurrentTaxonId, link.Kind);
+        _taxonLink.ExecuteNonQuery();
     }
 
     /// Sets replaced_by_assessment_id on an assessment already written.
@@ -225,6 +233,7 @@ internal sealed class SiteDbWriter : IDisposable {
         _name.Dispose();
         _replacedBy.Dispose();
         _epbcListing.Dispose();
+        _taxonLink.Dispose();
         if (!_finished && _transaction is not null) {
             try {
                 _transaction.Rollback();

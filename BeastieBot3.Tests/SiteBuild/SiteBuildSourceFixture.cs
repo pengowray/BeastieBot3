@@ -117,9 +117,10 @@ internal sealed class SiteBuildSourceFixture : IDisposable {
         $$"""{"assessment_id":{{id}},"sis_taxon_id":{{taxonId}},"latest":{{(latest ? "true" : "false")}},"year_published":{{(year is null ? "null" : $"\"{year}\"")}},"assessment_date":"{{date ?? $"{year}-01-01T00:00:00.000+00:00"}}","red_list_category_code":"{{code}}","criteria":null,"possibly_extinct":false,"possibly_extinct_in_the_wild":false,"scopes":{{scopes ?? GlobalScope}}}""";
 
     /// A cached assessment payload with one assessor credit, whose value[] lists `people` entries.
-    /// The documentation holds narrative text, which the build must not copy. The scopes default to Global.
+    /// The documentation holds narrative text, which the build must not copy: the rationale, and the
+    /// taxonomic notes when taxonomicNotes is given. The scopes default to Global.
     public static string Payload(long id, long taxonId, string name, string year, string citation, string assessor,
-        int people = 1, string version = "3.1", string? trend = null, string? scopes = null) =>
+        int people = 1, string version = "3.1", string? trend = null, string? scopes = null, string? taxonomicNotes = null) =>
         JsonSerializer.Serialize(new Dictionary<string, object?> {
             ["assessment_id"] = id,
             ["sis_taxon_id"] = taxonId,
@@ -134,7 +135,9 @@ internal sealed class SiteBuildSourceFixture : IDisposable {
             ["scopes"] = JsonSerializer.Deserialize<JsonElement>(scopes ?? GlobalScope),
             ["red_list_category"] = new Dictionary<string, object?> { ["version"] = version },
             ["population_trend"] = trend is null ? null : new Dictionary<string, object?> { ["description"] = new Dictionary<string, string> { ["en"] = trend } },
-            ["documentation"] = new Dictionary<string, string> { ["rationale"] = "NARRATIVE rationale" },
+            ["documentation"] = taxonomicNotes is null
+                ? new Dictionary<string, string> { ["rationale"] = "NARRATIVE rationale" }
+                : new Dictionary<string, string> { ["rationale"] = "NARRATIVE rationale", ["taxonomic_notes"] = taxonomicNotes },
         });
 
     // ------------------------------------------------------------ SQL helpers

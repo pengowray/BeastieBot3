@@ -66,7 +66,8 @@ internal sealed class SiteTaxon {
     /// or merged id, or a taxon IUCN no longer assesses). None of its assessments is latest.
     public bool InRelease { get; init; } = true;
 
-    /// For a taxon not in the release: the taxon in the release with the same scientific name.
+    /// For a taxon not in the release: the taxon in the release with the same scientific name
+    /// (SiteTaxonLinks).
     public long? CurrentTaxonId { get; set; }
 
     /// SPRAT profiles and EPBC Act listings (epbc_listing rows).
@@ -110,6 +111,8 @@ internal sealed class SiteAssessment {
     public string? AssessmentDate { get; init; }
     public string? PopulationTrend { get; set; }
     public string? CitationJson { get; set; }
+    /// Whether the cached payload's taxonomic notes have text; null when there is no payload.
+    public bool? HasTaxonomicNotes { get; set; }
     /// The Wikidata item for the assessment as a publication, and the properties it has
     /// (SiteWikidataItems).
     public string? WikidataItemQid { get; set; }
@@ -147,6 +150,8 @@ internal sealed class SiteBuildStats {
     public int PayloadsUnreadable;
     public int CitationsParsed;
     public int CitationsNotCached;
+    /// Payloads whose documentation.taxonomic_notes has text.
+    public int PayloadsWithTaxonomicNotes;
     public readonly Dictionary<CitationParseFailure, int> CitationFailures = new();
     public readonly Dictionary<Shared.Wikitext.DoiSource, int> DoisBySource = new();
     public DateTime? DownloadedFrom;
@@ -204,6 +209,10 @@ internal sealed class SiteBuildStats {
     public readonly Dictionary<string, int> NotInReleaseByKind = new(StringComparer.Ordinal);
     public int NotInReleaseRecordsUnusable;
     public int NotInReleaseWithCurrentTaxon;
+    /// Links from old ids to the one taxon in the release whose IUCN synonyms list their name, and
+    /// old ids whose name two or more taxa in the release list (left unlinked).
+    public int NotInReleaseSynonymLinks;
+    public int NotInReleaseSynonymOfSeveral;
     public int NotInReleaseLatestHeaders;
 
     /// `iucn resolve-dois`'s cache: assessments it checked, of those with a DOI, and its newest check.
