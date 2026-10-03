@@ -392,3 +392,15 @@ internal static class IucnCitationPartsParser {
         };
     }
 }
+
+internal static class AssessorNamePoolExtensions {
+    /// Adds the author names of a parse whose names came from an assessor credit.
+    public static void AddFrom(this AssessorNamePool pool, IucnCitationParse parse) {
+        if (parse.Parts is not { } parts || parse.AuthorSource != CitationAuthorSource.AssessorCredit) {
+            return;
+        }
+        foreach (var author in parts.Authors) {
+            pool.Add(author.Display);
+        }
+    }
+}

@@ -9,8 +9,11 @@
 // "U?ur Kaya" from matching "Ugur Kaya", which IUCN also has. The name is repaired when exactly one
 // undamaged assessor-credit name matches; with none or several it stays as it is, and the parse
 // reports it so `site check-citations` can list it.
+//
+// The site build fills the pool from parsed citations with AddFrom, an extension method in
+// IucnCitationPartsParser.cs, because it reads the site build's IucnCitationParse.
 
-namespace BeastieBot3.SiteBuild;
+namespace BeastieBot3.Iucn.Citations;
 
 /// An author name with a damaged character, and the name it was repaired to.
 internal sealed record AuthorNameRepair(string From, string To);
@@ -49,16 +52,6 @@ internal sealed class AssessorNamePool {
         if (names.Add(name)) {
             Count++;
             _repairs.Clear();
-        }
-    }
-
-    /// Adds the author names of a parse whose names came from an assessor credit.
-    public void AddFrom(IucnCitationParse parse) {
-        if (parse.Parts is not { } parts || parse.AuthorSource != CitationAuthorSource.AssessorCredit) {
-            return;
-        }
-        foreach (var author in parts.Authors) {
-            Add(author.Display);
         }
     }
 

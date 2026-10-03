@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
 using BeastieBot3.Infrastructure;
+using BeastieBot3.Iucn.Citations;
 using BeastieBot3.Shared.Wikitext;
 using Microsoft.Data.Sqlite;
 using Spectre.Console;

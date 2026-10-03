@@ -1,7 +1,7 @@
+using BeastieBot3.Iucn.Citations;
 using BeastieBot3.Shared.Wikitext;
-using BeastieBot3.SiteBuild;
 
-namespace BeastieBot3.Tests.SiteBuild;
+namespace BeastieBot3.Tests.Citations;
 
 // Pins how one split author name is read: person (surname and initials), organisation, or kept as
 // published. Names are real ones from the 2026-1 assessor credits.

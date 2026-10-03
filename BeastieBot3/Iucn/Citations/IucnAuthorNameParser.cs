@@ -1,5 +1,4 @@
 using System.Text.RegularExpressions;
-using BeastieBot3.Iucn.Citations;
 using BeastieBot3.Shared.Wikitext;
 
 // Reads one author name, as CreditNameSplitter.Split returns it, into a CitationAuthor: a person
@@ -35,7 +34,7 @@ using BeastieBot3.Shared.Wikitext;
 // A person in parentheses after an organisation ("NatureServe (Hammerson, G.)") is a credit note, so
 // that name stays an organisation.
 
-namespace BeastieBot3.SiteBuild;
+namespace BeastieBot3.Iucn.Citations;
 
 /// How a name was read; finer than CitationAuthorKind, for reports.
 internal enum AuthorNameShape {
