@@ -150,6 +150,10 @@ public class CommonNameQualityTests {
     [InlineData("!Xobo", "khi")]
     [InlineData("Coral D''água (falsa)", "pt")]
     [InlineData("Mexclapique (erronously: Mexcalpique) de Tamazula", "es")]
+    [InlineData("òjíjí ọrọ́ta = to wake on a stone", "yo")]
+    [InlineData("Τσιμούχα = Tsimoucha", "el")]
+    // Arabic with its brackets stored mirrored.
+    [InlineData("(قرش ماكو قصير الزعانف (الذيبة", "ar")]
     public void Kept_NamesInOtherLanguages(string name, string language) {
         var result = CommonNameQuality.Assess(name, language);
 
@@ -160,7 +164,8 @@ public class CommonNameQualityTests {
     [Theory]
     [InlineData("Espino herrero (TROPICOS, 2021)", "es", "Espino herrero")]
     [InlineData("Vara blanca (Honduras) (Pruski, 2018)", "es", "Vara blanca (Honduras)")]
-    [InlineData("òjíjí ọrọ́ta = to wake on a stone", "yo", "òjíjí ọrọ́ta")]
+    [InlineData("chabo-chidori (チャボチドリ, 矮鶏千鳥", "ja", "chabo-chidori (チャボチドリ, 矮鶏千鳥)")]
+    [InlineData("tu sun [兔狲", "zh", "tu sun [兔狲]")]
     public void Repaired_NamesInOtherLanguages(string name, string language, string repaired) {
         var result = CommonNameQuality.Assess(name, language);
 
@@ -169,9 +174,10 @@ public class CommonNameQualityTests {
     }
 
     [Theory]
-    [InlineData("chabo-chidori (チャボチドリ, 矮鶏千鳥", "ja", nameof(CommonNameFlaw.UnbalancedBrackets))]
     [InlineData("Weil 3 bauch-Graslandmaus", "de", null)]
     [InlineData("MalyiI AmudarinskiiI Lzhelopatonos", "ru", null)]
+    [InlineData("Planta (com nota)) estranha", "pt", nameof(CommonNameFlaw.UnbalancedBrackets))]
+    [InlineData("Species code: Rc", "fr", nameof(CommonNameFlaw.SpeciesCode))]
     public void OtherLanguages_UseEveryRuleButTheTwoOcrRules(string name, string language, string? flaw) {
         var result = CommonNameQuality.Assess(name, language);
 

@@ -58,18 +58,20 @@ internal enum CommonNameFlaw {
     Underscore,
     /// <summary>A possessive split by OCR ("Merriam' ’ s Wapiti").</summary>
     SplitApostrophe,
-    /// <summary>A translation after the name: "(meaning ...)", or "= ..." ("Da Xiong Mao (meaning large bear cat)").</summary>
+    /// <summary>A translation in brackets after the name ("Da Xiong Mao (meaning large bear cat)").</summary>
     MeaningGloss,
     /// <summary>An author and year in brackets after the name ("Mountain Ground Skink (Walters, 2008)").</summary>
     AuthorYearNote,
     /// <summary>A remark with an exclamation mark in brackets after the name ("(Smallest Mammal!)").</summary>
     ExclamationNote,
+    /// <summary>A bracket left open at the end, in a name not labelled English ("tu sun [兔狲"): closed.</summary>
+    UnclosedBracket,
 
     // Junk: the name is not used.
 
     /// <summary>Nothing is left: no letters, or only an infobox parameter ("| image = ...").</summary>
     Empty,
-    /// <summary>Wiki markup that cannot be removed: a template, link, pipe, '' italics or a stray '='.</summary>
+    /// <summary>Wiki markup that cannot be removed: a template, link, pipe, '' italics or an '=' between letters.</summary>
     WikiMarkup,
     /// <summary>A year, so an author citation rather than a name ("Calvert, 1902").</summary>
     AuthorCitation,
@@ -79,7 +81,8 @@ internal enum CommonNameFlaw {
     OcrArtefact,
     /// <summary>Two or more words with capitals inside them, in a name labelled English ("AtrcanTidenr Bat AfrcanTrdent nosed Bat").</summary>
     MixedCaseWords,
-    /// <summary>A bracket without its pair ("Pholidoscelis polops (Cope").</summary>
+    /// <summary>A bracket without its pair ("Pholidoscelis polops (Cope"). Not checked in Arabic or
+    /// Hebrew script, where brackets are often stored mirrored.</summary>
     UnbalancedBrackets,
     /// <summary>A gloss with no name ("meaning large bear cat").</summary>
     GlossOnly,
@@ -109,7 +112,6 @@ internal static class CommonNameQuality {
     private static readonly Regex UnderscoreInWord = new(@"(?<=\p{L})_(?=\p{L})", Options);
     private static readonly Regex SplitPossessive = new(@"(\p{L})(['’]) ['’] s\b", Options);
     private static readonly Regex MeaningNote = new(@"\s*\(\s*meaning\b[^()]*\)\s*$", Options | RegexOptions.IgnoreCase);
-    private static readonly Regex EqualsGloss = new(@"(?<!\()\s*=\s.*$", Options);
     private static readonly Regex AuthorYearBrackets = new(
         @"\s*\((?:after\s+)?\p{L}[\p{L}\p{M}.&,'’ -]*?,?\s+(?:1[6-9]\d{2}|20\d{2})\)\.?\s*$", Options | RegexOptions.IgnoreCase);
     private static readonly Regex ExclamationBrackets = new(@"\s*\([^()]*!\)\s*$", Options);
@@ -118,7 +120,8 @@ internal static class CommonNameQuality {
     private static readonly Regex SpeciesCodePattern = new(@"^species\s+code\s*:", Options | RegexOptions.IgnoreCase);
     private static readonly Regex GlossStart = new(@"^meaning\b", Options | RegexOptions.IgnoreCase);
     private static readonly Regex Italics = new(@"''[^']+''", Options);
-    private static readonly Regex StrayEquals = new(@"(?<!\()=", Options);
+    // "basket=grass"; not "European pilchard (=sardine)" or "Τσιμούχα = Tsimoucha".
+    private static readonly Regex StrayEquals = new(@"(?<=\p{L})=(?=\p{L})", Options);
     private static readonly Regex SlashForLetter = new(@"\(\s*\p{Ll}?\s*/\s*\p{Ll}", Options);
     private static readonly Regex Year = new(@"\b(?:1[6-9]\d{2}|20\d{2})\b", Options);
     // A digit between words standing for a letter: "Weil 3 bauch", "Gib 6 n", "Goeld 1 ’ s",
@@ -128,13 +131,13 @@ internal static class CommonNameQuality {
 
     /// <summary>
     /// The verdict on <paramref name="name"/> in <paramref name="language"/> (an ISO 639 code,
-    /// "en" for English; the two OCR rules only apply to English).
+    /// "en" for English; the two OCR rules only apply to English, so not to a name with no language).
     /// </summary>
     public static CommonNameAssessment Assess(string? name, string? language = "en") {
         if (string.IsNullOrWhiteSpace(name)) {
             return new CommonNameAssessment(CommonNameVerdict.Junk, name ?? string.Empty, CommonNameFlaw.Empty);
         }
-        var english = language is null || language.Equals("en", StringComparison.OrdinalIgnoreCase);
+        var english = string.Equals(language, "en", StringComparison.OrdinalIgnoreCase);
         if (!NeedsCheck(name, english)) {
             return new CommonNameAssessment(CommonNameVerdict.Good, name, CommonNameFlaw.None);
         }
@@ -226,9 +229,8 @@ internal static class CommonNameQuality {
             Repaired(CommonNameFlaw.SplitApostrophe);
         }
 
-        if (text.Contains('(') || text.Contains('=')) {
+        if (text.Contains('(')) {
             text = RemoveNote(text, MeaningNote, CommonNameFlaw.MeaningGloss, Repaired);
-            text = RemoveNote(text, EqualsGloss, CommonNameFlaw.MeaningGloss, Repaired);
             text = RemoveNote(text, AuthorYearBrackets, CommonNameFlaw.AuthorYearNote, Repaired);
             text = RemoveNote(text, ExclamationBrackets, CommonNameFlaw.ExclamationNote, Repaired);
         }
@@ -236,6 +238,13 @@ internal static class CommonNameQuality {
         text = Whitespace.Replace(text, " ").Trim();
         if (!HasLetter(text)) {
             return Junk(name, CommonNameFlaw.Empty);
+        }
+
+        // In other languages a bracket left open at the end is a typo in a real name
+        // ("chabo-chidori (チャボチドリ, 矮鶏千鳥"); in English names it is a name cut in two.
+        if (!english && !IsRightToLeft(text) && ClosedBrackets(text) is { } closed) {
+            text = closed;
+            Repaired(CommonNameFlaw.UnclosedBracket);
         }
 
         if (JunkFlaw(text, english) is { } junk) {
@@ -261,7 +270,7 @@ internal static class CommonNameQuality {
         if (text.Contains('\\') || text[0] == '/' || SlashForLetter.IsMatch(text)) {
             return CommonNameFlaw.OcrArtefact;
         }
-        if (!BracketsBalance(text)) {
+        if (!IsRightToLeft(text) && !BracketsBalance(text)) {
             return CommonNameFlaw.UnbalancedBrackets;
         }
         if (Year.IsMatch(text)) {
@@ -341,6 +350,42 @@ internal static class CommonNameQuality {
             }
         }
         return round == 0 && square == 0;
+    }
+
+    // The text with its open brackets closed at the end, when the only fault is brackets left open;
+    // null otherwise.
+    private static string? ClosedBrackets(string text) {
+        var open = new Stack<char>();
+        foreach (var c in text) {
+            switch (c) {
+                case '(' or '[':
+                    open.Push(c);
+                    break;
+                case ')' or ']':
+                    if (open.Count == 0 || open.Pop() != (c == ')' ? '(' : '[')) {
+                        return null;
+                    }
+                    break;
+            }
+        }
+        if (open.Count == 0) {
+            return null;
+        }
+        var closed = new System.Text.StringBuilder(text);
+        while (open.Count > 0) {
+            closed.Append(open.Pop() == '(' ? ')' : ']');
+        }
+        return closed.ToString();
+    }
+
+    // Hebrew, Arabic, Syriac, Thaana and N'Ko letters, and the Arabic and Hebrew presentation forms.
+    private static bool IsRightToLeft(string text) {
+        foreach (var c in text) {
+            if (c is >= '֐' and <= 'ࣿ' or >= 'יִ' and <= '﷿' or >= 'ﹰ' and <= '﻿') {
+                return true;
+            }
+        }
+        return false;
     }
 
     // Words with a capital after a run of three or more lower-case letters: OCR runs words
