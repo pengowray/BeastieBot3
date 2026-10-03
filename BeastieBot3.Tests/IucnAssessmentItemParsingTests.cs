@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using BeastieBot3.Shared.Wikitext;
 using BeastieBot3.Wikidata;
 using BeastieBot3.WikidataEdits;
 using Microsoft.Data.Sqlite;
@@ -300,8 +301,8 @@ public class IucnAssessmentItemParsingTests {
         // The best-ranked English title is unchanged; every statement is in TitleStatements.
         Assert.Equal("Batrachuperus karlschmidti: Xie Feng", row.Title);
         Assert.Equal(new[] {
-            new WikidataTitleStatement("Batrachuperus karlschmidti", "la", "deprecated"),
-            new WikidataTitleStatement("Batrachuperus karlschmidti: Xie Feng", "en", "normal"),
+            new WikidataTitle("Batrachuperus karlschmidti", "la", "deprecated"),
+            new WikidataTitle("Batrachuperus karlschmidti: Xie Feng", "en", "normal"),
         }, row.TitleStatements);
     }
 
@@ -420,10 +421,10 @@ public class IucnAssessmentItemParsingTests {
         connection.Open();
         using var store = WikidataCacheStore.OpenFromConnection(connection);
 
-        var titles = new[] { new WikidataTitleStatement("Rusa unicolor: Timmins, R. & Kawanishi, K. é", "en", "normal") };
+        var titles = new[] { new WikidataTitle("Rusa unicolor: Timmins, R. & Kawanishi, K. é", "en", "normal") };
         store.UpsertAssessmentItems(new[] {
             Row("Q1", 1, 10, "Q13442814") with { TitleStatements = titles },
-            Row("Q2", 2, 20, "Q13442814") with { TitleStatements = Array.Empty<WikidataTitleStatement>() },
+            Row("Q2", 2, 20, "Q13442814") with { TitleStatements = Array.Empty<WikidataTitle>() },
             Row("Q3", 3, 30, "Q13442814"),
         });
 

@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Microsoft.Data.Sqlite;
+using BeastieBot3.Shared.Wikitext;
 
 // The wikidata_iucn_assessment_items table of the Wikidata cache: IUCN assessment publication
 // items found on Wikidata (see WikidataAssessmentItems.cs). Kept in its own file so the table,
@@ -116,7 +117,7 @@ ON CONFLICT(qid) DO UPDATE SET
                 language.Value = Db(row.DoiLanguage);
                 idSource.Value = Db(row.IdSource);
                 title.Value = Db(row.Title);
-                titleStatements.Value = row.TitleStatements is null ? DBNull.Value : WikidataTitleStatement.ListToJson(row.TitleStatements);
+                titleStatements.Value = row.TitleStatements is null ? DBNull.Value : WikidataTitle.ListToJson(row.TitleStatements);
                 label.Value = Db(row.LabelEn);
                 instanceOf.Value = Db(WikidataAssessmentItemTable.JoinList(row.InstanceOf));
                 mainSubjects.Value = Db(WikidataAssessmentItemTable.JoinList(row.MainSubjects));

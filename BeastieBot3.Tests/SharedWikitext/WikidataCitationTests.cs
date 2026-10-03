@@ -244,6 +244,144 @@ public class WikidataCitationTests {
         Assert.False(WikidataCitation.QuickStatementsUrlFits(new string('a', WikidataCitation.MaxQuickStatementsUrlLength + 1)));
     }
 
+    // ------------------------------------------------------------ title and label fixes
+
+    // Q29010489, the item for Batrachuperus karlschmidti assessment 59115/11869436 (2004): SourceMD
+    // gave it "Name: author list" as its title and label (cached 3 October 2026).
+    private static readonly IucnCitationParts Karlschmidti = new() {
+        TaxonId = 59115,
+        AssessmentId = 11869436,
+        Year = 2004,
+        ScientificName = "Batrachuperus karlschmidti",
+        Authors = [Person("Xie", "F.")],
+    };
+
+    private const string KarlschmidtiOld = "Batrachuperus karlschmidti: Xie Feng";
+    private const string KarlschmidtiLabel = "Batrachuperus karlschmidti. The IUCN Red List of Threatened Species 2004: e.T59115A11869436";
+
+    [Fact]
+    public void FixCommands_SourceMdTitleAndLabel_AreReplaced() {
+        var fix = WikidataCitation.FixCommands(Karlschmidti, "Q29010489", [new WikidataTitle(KarlschmidtiOld, "en")], KarlschmidtiOld, Model);
+
+        // The new title goes in before the old one is removed, so a batch that stops early leaves a title.
+        Assert.Equal(new[] {
+            L("Q29010489", "P1476", "en:\"Batrachuperus karlschmidti\""),
+            L("-Q29010489", "P1476", "en:\"" + KarlschmidtiOld + "\""),
+            L("Q29010489", "Len", "\"" + KarlschmidtiLabel + "\""),
+        }, fix.Commands);
+        Assert.Equal(new[] {
+            new WikidataItemChange(WikidataItemChangeKind.Title, KarlschmidtiOld, "Batrachuperus karlschmidti", "en", "en"),
+            new WikidataItemChange(WikidataItemChangeKind.EnglishLabel, KarlschmidtiOld, KarlschmidtiLabel),
+        }, fix.Changes);
+    }
+
+    [Fact]
+    public void FixCommands_ModelTitleAndLabel_NothingToChange() {
+        var fix = WikidataCitation.FixCommands(Karlschmidti, "Q29010489",
+            [new WikidataTitle("Batrachuperus karlschmidti", "en")], KarlschmidtiLabel, Model);
+        Assert.Empty(fix.Commands);
+        Assert.Empty(fix.Changes);
+    }
+
+    [Fact]
+    public void FixCommands_TitlesNotRecorded_LeaveTheTitleAlone() {
+        var fix = WikidataCitation.FixCommands(Karlschmidti, "Q29010489", titles: null, KarlschmidtiLabel, Model);
+        Assert.Empty(fix.Commands);
+    }
+
+    [Fact]
+    public void FixCommands_OnlyALanguageDiffers_TheTitleIsReplaced() {
+        // Q56227924 has la:"Myrmecophaga tridactyla"; the model's title language is en.
+        var fix = WikidataCitation.FixCommands(Karlschmidti with { ScientificName = "Myrmecophaga tridactyla" }, "Q56227924",
+            [new WikidataTitle("Myrmecophaga tridactyla", "la")], labelEn: null, Model);
+        Assert.Equal(new[] {
+            L("Q56227924", "P1476", "en:\"Myrmecophaga tridactyla\""),
+            L("-Q56227924", "P1476", "la:\"Myrmecophaga tridactyla\""),
+        }, fix.Commands);
+    }
+
+    [Fact]
+    public void FixCommands_ModelTitleAlreadyThere_TheOtherTitlesStay() {
+        // Q113815710: the model's title, plus the SourceMD one at deprecated rank.
+        var fix = WikidataCitation.FixCommands(Karlschmidti, "Q1", [
+            new WikidataTitle("Batrachuperus karlschmidti", "en"),
+            new WikidataTitle(KarlschmidtiOld, "en", "deprecated"),
+        ], KarlschmidtiLabel, Model);
+        Assert.Empty(fix.Commands);
+    }
+
+    [Fact]
+    public void FixCommands_SeveralTitles_NoneIsRemoved() {
+        var fix = WikidataCitation.FixCommands(Karlschmidti, "Q1", [
+            new WikidataTitle(KarlschmidtiOld, "en"),
+            new WikidataTitle("Batrachuperus karlschmidti: Xie, F.", "en"),
+        ], KarlschmidtiLabel, Model);
+        Assert.Empty(fix.Commands);
+    }
+
+    [Fact]
+    public void FixCommands_OnlyTitleDeprecated_IsLeftToTheAddBatch() {
+        // wdt:P1476 leaves the deprecated title out, so P1476 is missing and AddMissingCommands adds the title.
+        var fix = WikidataCitation.FixCommands(Karlschmidti, "Q1", [new WikidataTitle(KarlschmidtiOld, "en", "deprecated")],
+            KarlschmidtiLabel, Model);
+        Assert.Empty(fix.Commands);
+    }
+
+    [Theory]
+    [InlineData("Name: A\tB", "en")]
+    [InlineData("Name: A || B", "en")]
+    [InlineData(" Name: A", "en")]
+    [InlineData("Name: A ", "en")]
+    [InlineData("Name: A", "be-x-old2")]
+    [InlineData("Name: A", "")]
+    public void FixCommands_OldTitleQuickStatementsCannotMatch_IsLeftAlone(string text, string language) {
+        var fix = WikidataCitation.FixCommands(Karlschmidti, "Q1", [new WikidataTitle(text, language)], KarlschmidtiLabel, Model);
+        Assert.Empty(fix.Commands);
+    }
+
+    [Fact]
+    public void FixCommands_OldTitleWithQuotesAndAmpersandEntity_IsWrittenExactly() {
+        // SourceMD left "&amp;" in some titles; the removal has to name the text as stored.
+        const string old = "Muscardinus avellanarius: Hutterer, R. &amp; \"Juškaitis\", R.";
+        var fix = WikidataCitation.FixCommands(Karlschmidti, "Q1", [new WikidataTitle(old, "en")], KarlschmidtiLabel, Model);
+        Assert.Equal(L("-Q1", "P1476", "en:\"" + old + "\""), fix.Commands[1]);
+    }
+
+    [Fact]
+    public void FixCommands_LabelOnly_WhenTheTitleIsRight() {
+        var fix = WikidataCitation.FixCommands(Karlschmidti, "Q1", [new WikidataTitle("Batrachuperus karlschmidti", "en")],
+            "Spiny Giant Frog, Batrachuperus karlschmidti", Model);
+        Assert.Equal(new[] { L("Q1", "Len", "\"" + KarlschmidtiLabel + "\"") }, fix.Commands);
+        Assert.Equal(WikidataItemChangeKind.EnglishLabel, Assert.Single(fix.Changes).Kind);
+    }
+
+    [Fact]
+    public void FixCommands_NoLabel_IsLeftToTheAddBatch() {
+        var fix = WikidataCitation.FixCommands(Karlschmidti, "Q1", [new WikidataTitle("Batrachuperus karlschmidti", "en")], labelEn: null, Model);
+        Assert.Empty(fix.Commands);
+        var add = WikidataCitation.AddMissingCommands(Karlschmidti, "Q1", new HashSet<string> { "P31", "P1476" }, null, Model);
+        Assert.Contains(L("Q1", "Len", "\"" + KarlschmidtiLabel + "\""), add);
+    }
+
+    [Fact]
+    public void FixCommands_LinkKeepsTheTabsOfALineWithAPipe() {
+        var fix = WikidataCitation.FixCommands(Karlschmidti, "Q1", [new WikidataTitle("Name: A | B", "en")], KarlschmidtiLabel, Model);
+        var url = WikidataCitation.QuickStatementsUrl(fix.Commands);
+        var data = Uri.UnescapeDataString(url[WikidataCitation.QuickStatementsBase.Length..]);
+        Assert.Contains("-Q1\tP1476\ten:\"Name: A | B\"", data);
+    }
+
+    [Fact]
+    public void WikidataTitle_JsonRoundTrip() {
+        IReadOnlyList<WikidataTitle> titles = [new("Rusa unicolor: Timmins, R.", "en"), new("Rusa unicolor", "la", "deprecated")];
+        var json = WikidataTitle.ListToJson(titles);
+        Assert.Contains("\"lang\":\"la\"", json);
+        Assert.Equal(titles, WikidataTitle.ListFromJson(json));
+        Assert.Null(WikidataTitle.ListFromJson(null));
+        Assert.Null(WikidataTitle.ListFromJson("not json"));
+        Assert.Empty(WikidataTitle.ListFromJson("[]")!);
+    }
+
     // ------------------------------------------------------------ model
 
     [Fact]

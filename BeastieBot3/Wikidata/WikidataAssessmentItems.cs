@@ -2,9 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
-using System.Text.Json;
-using System.Text.Json.Serialization;
 using Microsoft.Data.Sqlite;
+using BeastieBot3.Shared.Wikitext;
 using BeastieBot3.WikidataEdits;
 
 // Wikidata items that are IUCN Red List assessment publications (most are scholarly articles a
@@ -41,7 +40,7 @@ internal sealed record WikidataAssessmentItemRow {
     public string? Title { get; init; }
     /// Every P1476 statement, any rank, duplicates kept. Null when not recorded (a row written
     /// before title_statements existed).
-    public IReadOnlyList<WikidataTitleStatement>? TitleStatements { get; init; }
+    public IReadOnlyList<WikidataTitle>? TitleStatements { get; init; }
     public string? LabelEn { get; init; }
     public IReadOnlyList<string> InstanceOf { get; init; } = Array.Empty<string>();
     /// P921 main subject.
@@ -171,7 +170,7 @@ CREATE INDEX IF NOT EXISTS idx_wikidata_iucn_assessment_items_assessment ON wiki
                 ModifiedAt = NullableString(reader, 20),
                 FetchedAtUtc = ParseUtc(reader.GetString(21)) ?? DateTime.MinValue,
                 FirstSeenAtUtc = ParseUtc(NullableString(reader, 22)),
-                TitleStatements = WikidataTitleStatement.ListFromJson(NullableString(reader, 23)),
+                TitleStatements = WikidataTitle.ListFromJson(NullableString(reader, 23)),
             });
         }
 
@@ -193,29 +192,6 @@ CREATE INDEX IF NOT EXISTS idx_wikidata_iucn_assessment_items_assessment ON wiki
 
     private static string? NullableString(SqliteDataReader reader, int ordinal) =>
         reader.IsDBNull(ordinal) ? null : reader.GetString(ordinal);
-}
-
-/// One title (P1476) statement: its monolingual text, language code and rank ("preferred",
-/// "normal" or "deprecated").
-internal sealed record WikidataTitleStatement(
-    [property: JsonPropertyName("text")] string Text,
-    [property: JsonPropertyName("lang")] string? Language,
-    [property: JsonPropertyName("rank")] string Rank) {
-    public static string ListToJson(IReadOnlyList<WikidataTitleStatement> titles) => JsonSerializer.Serialize(titles);
-
-    /// Null for a NULL or blank column; an unreadable value reads as null too (not recorded).
-    public static IReadOnlyList<WikidataTitleStatement>? ListFromJson(string? json) {
-        if (string.IsNullOrWhiteSpace(json)) {
-            return null;
-        }
-
-        try {
-            return JsonSerializer.Deserialize<List<WikidataTitleStatement>>(json);
-        }
-        catch (JsonException) {
-            return null;
-        }
-    }
 }
 
 /// One statement value read from the query service: Property is "P31", "label" or "modified", or
@@ -293,15 +269,15 @@ internal static class WikidataAssessmentItemBuilder {
     }
 
     // One entry per statement node, sorted so a re-run writes the same JSON for the same item.
-    private static IReadOnlyList<WikidataTitleStatement> TitleStatements(Dictionary<string, List<WikidataTriple>> byProperty) {
+    private static IReadOnlyList<WikidataTitle> TitleStatements(Dictionary<string, List<WikidataTriple>> byProperty) {
         if (!byProperty.TryGetValue(WikidataAssessmentItemQueries.TitleStatementProperty, out var list)) {
-            return Array.Empty<WikidataTitleStatement>();
+            return Array.Empty<WikidataTitle>();
         }
 
         return list
             .GroupBy(t => t.Statement ?? $"{t.Value}\u0000{t.Language}\u0000{t.Rank}", StringComparer.Ordinal)
             .Select(g => g.First())
-            .Select(t => new WikidataTitleStatement(t.Value, t.Language, t.Rank ?? "normal"))
+            .Select(t => new WikidataTitle(t.Value, t.Language, t.Rank ?? "normal"))
             .OrderBy(t => t.Text, StringComparer.Ordinal)
             .ThenBy(t => t.Language, StringComparer.Ordinal)
             .ThenBy(t => t.Rank, StringComparer.Ordinal)

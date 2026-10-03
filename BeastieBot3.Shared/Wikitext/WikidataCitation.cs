@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 
 namespace BeastieBot3.Shared.Wikitext;
@@ -95,6 +96,41 @@ public sealed record CiteQOptions {
     public string? RefName { get; init; }
 }
 
+/// One title (P1476) statement of an item: its monolingual text, language code and rank
+/// ("preferred", "normal" or "deprecated"). `wikidata iucn-assessment-items` stores an item's
+/// titles in this form, and `site build-db` copies them into assessment.wikidata_item_titles.
+public sealed record WikidataTitle(
+    [property: JsonPropertyName("text")] string Text,
+    [property: JsonPropertyName("lang")] string? Language,
+    [property: JsonPropertyName("rank")] string Rank = "normal") {
+    [JsonIgnore]
+    public bool IsDeprecated => string.Equals(Rank, "deprecated", StringComparison.Ordinal);
+
+    public static string ListToJson(IReadOnlyList<WikidataTitle> titles) => JsonSerializer.Serialize(titles);
+
+    /// Null for a NULL or blank value, or one that cannot be read: the titles are not known.
+    public static IReadOnlyList<WikidataTitle>? ListFromJson(string? json) {
+        if (string.IsNullOrWhiteSpace(json)) {
+            return null;
+        }
+        try {
+            return JsonSerializer.Deserialize<List<WikidataTitle>>(json);
+        } catch (JsonException) {
+            return null;
+        }
+    }
+}
+
+public enum WikidataItemChangeKind { Title, EnglishLabel }
+
+/// A value FixCommands replaces. The languages are set for a title only.
+public sealed record WikidataItemChange(WikidataItemChangeKind Kind, string Old, string New, string? OldLanguage = null, string? NewLanguage = null);
+
+/// What FixCommands changes on an item, and the commands that do it (empty when nothing).
+public sealed record WikidataItemFix(IReadOnlyList<WikidataItemChange> Changes, IReadOnlyList<string> Commands) {
+    public static WikidataItemFix None { get; } = new([], []);
+}
+
 public static partial class WikidataCitation {
     /// The token for "the item has an English label" in a set of present properties
     /// (assessment.wikidata_item_properties). It is the QuickStatements command that sets the label.
@@ -175,6 +211,53 @@ public static partial class WikidataCitation {
         }
         return commands;
     }
+
+    /// QuickStatements v1 commands that replace an existing item's title (P1476) and English label
+    /// when they differ from the model's: the title is the scientific name in model.TitleLanguage,
+    /// the label comes from model.LabelTemplate. Most items made by SourceMD in 2017 and 2018 have
+    /// "Name: author list" as both, which {{cite Q}} prints as the title of the work.
+    ///
+    /// The title is replaced only when the item's titles are known exactly (titles is not null)
+    /// and the item has one title that is not deprecated: the commands add the new title, then
+    /// remove the old one by its exact text and language ("-Q1\tP1476\ten:\"old\""), which is how
+    /// QuickStatements finds a statement to remove. Nothing is changed when any title, of any rank,
+    /// already equals the model's, or when the old text cannot be written so that QuickStatements
+    /// matches it (a control character, "||", or space at either end). The label is set with
+    /// "Len", which replaces the old one; a missing label is AddMissingCommands' job.
+    public static WikidataItemFix FixCommands(IucnCitationParts parts, string itemQid, IReadOnlyList<WikidataTitle>? titles,
+        string? labelEn, WikidataItemModel model) {
+        var item = itemQid.Trim();
+        var changes = new List<WikidataItemChange>();
+        var commands = new List<string>();
+
+        var newTitle = CleanValue(parts.ScientificName);
+        var language = CleanLanguageCode(model.TitleLanguage);
+        if (titles is not null && newTitle.Length > 0
+            && !titles.Any(t => t.Text == newTitle && t.Language == language)) {
+            var live = titles.Where(t => !t.IsDeprecated).ToList();
+            if (live is [var old] && CanMatchExactly(old)) {
+                commands.Add(Line(item, "P1476", $"{language}:{Quote(newTitle)}"));
+                commands.Add(Line("-" + item, "P1476", $"{old.Language}:{Quote(old.Text)}"));
+                changes.Add(new WikidataItemChange(WikidataItemChangeKind.Title, old.Text, newTitle, old.Language, language));
+            }
+        }
+
+        if (labelEn is not null && Label(parts, model) is { } label && labelEn != label) {
+            commands.Add(Line(item, "Len", Quote(label)));
+            changes.Add(new WikidataItemChange(WikidataItemChangeKind.EnglishLabel, labelEn, label));
+        }
+        return new WikidataItemFix(changes, commands);
+    }
+
+    // QuickStatements trims a value and takes the language as letters, "_" and "-", and a link's
+    // commands are split at "||"; an old title that any of that would alter can't be matched.
+    private static bool CanMatchExactly(WikidataTitle title) =>
+        title.Text.Length > 0
+        && title.Text == title.Text.Trim()
+        && !title.Text.Any(char.IsControl)
+        && !title.Text.Contains("||", StringComparison.Ordinal)
+        && title.Language is { Length: > 0 } language
+        && QuickStatementsLanguage().IsMatch(language);
 
     /// A link that opens QuickStatements with the commands filled in. Commands are joined with "||"
     /// and each tab becomes "|", the form Help:QuickStatements documents; the result is
@@ -300,6 +383,10 @@ public static partial class WikidataCitation {
 
     [GeneratedRegex(@"^[a-z]{2,3}(?:-[a-z0-9]+)*$")]
     private static partial Regex LanguageCode();
+
+    // The language part of a monolingual value in quickstatements.php's parseValueV1.
+    [GeneratedRegex(@"^[a-zA-Z_-]+$")]
+    private static partial Regex QuickStatementsLanguage();
 
     [GeneratedRegex(@"<[^<>]*>")]
     private static partial Regex HtmlTag();
