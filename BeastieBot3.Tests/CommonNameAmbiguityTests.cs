@@ -245,23 +245,27 @@ public class CommonNameAmbiguityTests {
     }
 
     [Fact]
-    public void DwarfWhipray_IsKeptByIucnsMainName_OverAnotherTaxonsTaxoboxName() {
-        // Brevitrygon walga kept the name from its taxobox until October 2026.
+    public void Torchwood_IsKeptByIucnsMainName_OverAnotherTaxonsTaxoboxName() {
+        // Balanites maughamii kept the name from its taxobox until October 2026, and Amyris ignea
+        // had no English name.
         using var store = OpenInMemory();
-        var heterura = AddTaxon(store, "brevitrygon heterura", "104179262");
-        var imbricata = AddTaxon(store, "brevitrygon imbricata", "1");
-        var walga = AddTaxon(store, "brevitrygon walga", "104176764");
-        AddName(store, heterura, "Dwarf Whipray", "iucn", preferred: true);
-        AddName(store, heterura, "Dwarf whipray", "col");
-        AddName(store, imbricata, "Dwarf Whipray", "col");
-        AddName(store, walga, "Dwarf whipray", "wikipedia_taxobox");
-        AddName(store, walga, "Dwarf Whipray", "iucn");
-        AddName(store, walga, "Dwarf Whipray", "col");
-        AddName(store, walga, "Scaly Whipray", "iucn", preferred: true);
+        var elemifera = AddTaxon(store, "amyris elemifera", "156771939", "PLANTAE");
+        var ignea = AddTaxon(store, "amyris ignea", "206268034", "PLANTAE");
+        var maughamii = AddTaxon(store, "balanites maughamii", "158067", "PLANTAE");
+        var jacquinia = AddTaxon(store, "jacquinia armillaris", "153744415", "PLANTAE");
+        AddName(store, elemifera, "torchwood", "col");
+        AddName(store, ignea, "Torchwood", "iucn", preferred: true);
+        AddName(store, ignea, "Torchwood", "col");
+        AddName(store, maughamii, "Torchwood", "wikipedia_taxobox");
+        AddName(store, maughamii, "Torchwood", "wikidata");
+        AddName(store, maughamii, "manduro", "wikidata");
+        AddName(store, maughamii, "torchwood", "col");
+        AddName(store, maughamii, "manduro", "col");
+        AddName(store, jacquinia, "torchwood", "col");
 
-        Assert.Equal(heterura, store.GetAmbiguousNames("en").KeptBy("dwarfwhipray"));
-        Assert.Equal("Dwarf Whipray", Best(store, heterura));
-        Assert.Equal("Scaly Whipray", Best(store, walga));
+        Assert.Equal(ignea, store.GetAmbiguousNames("en").KeptBy("torchwood"));
+        Assert.Equal("Torchwood", Best(store, ignea));
+        Assert.Equal("manduro", Best(store, maughamii));
     }
 
     [Fact]
