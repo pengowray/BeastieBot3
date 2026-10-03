@@ -96,8 +96,9 @@
     }
 
     // Suggestions from /api/suggest fill the input's <datalist>, so the browser shows them with
-    // its own accessible list. Choosing one puts the name in the box; searching for it goes
-    // straight to the taxon page.
+    // its own accessible list. Choosing one puts its name in the box, and the search for that name
+    // opens a taxon page when one taxon in the release has the name (an old IUCN id with the same
+    // scientific name opens the taxon in the release), or the results list when several do.
     function setUpSuggestions() {
         var inputs = document.querySelectorAll("input[data-suggest]");
         inputs.forEach(function (input) {
@@ -134,13 +135,23 @@
             list.removeChild(list.firstChild);
         }
         var lower = query.toLowerCase();
+        // Two options with the same name, ignoring letter case, open the same search result, so only
+        // the first is kept. Taxa in the release are listed first, so an old IUCN id with the
+        // scientific name of a taxon in the release is the one left out.
+        var seen = {};
         items.forEach(function (item) {
-            var option = document.createElement("option");
             // Offer the name the visitor is typing: the common name when it starts with the text,
             // otherwise the scientific name. The other name and the category are the label.
             var common = item.commonName || "";
             var useCommon = common && common.toLowerCase().indexOf(lower) === 0;
-            option.value = useCommon ? common : item.name;
+            var value = useCommon ? common : item.name;
+            var key = value.toLowerCase();
+            if (Object.prototype.hasOwnProperty.call(seen, key)) {
+                return;
+            }
+            seen[key] = true;
+            var option = document.createElement("option");
+            option.value = value;
             var label = useCommon ? item.name : common;
             if (item.category) {
                 label = label ? label + " (" + item.category + ")" : item.category;
