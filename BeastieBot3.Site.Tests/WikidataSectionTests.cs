@@ -102,7 +102,9 @@ public sealed class UnreadableItemModelTests(UnreadableItemModelSiteFactory fact
         var html = await response.Content.ReadAsStringAsync();
         Assert.Contains("No Wikidata item found for this assessment.", html);
         Assert.DoesNotContain("id=\"wikidata-commands\"", html);
-        Assert.DoesNotContain("QuickStatements", html);
+        Assert.DoesNotContain("QuickStatements commands to create the item", html);
+        // The status commands follow no item model, so they are still offered.
+        Assert.Contains("id=\"wikidata-status-commands\"", html);
 
         var tiger = await client.GetStringAsync($"/species/{FixtureDb.Tiger}");
         Assert.Contains($"wikidata.org/wiki/{FixtureDb.TigerLatestItem}", tiger);
@@ -237,6 +239,20 @@ public sealed class WikidataCiteUnitTests {
     public void SchemaHasTheColumnsTheSiteReads() {
         Assert.Contains("wikidata_item_qid", SiteDbSchema.Ddl);
         Assert.Contains("wikidata_item_properties", SiteDbSchema.Ddl);
+        Assert.Contains("wikidata_item_titles", SiteDbSchema.Ddl);
+        Assert.Contains("wikidata_item_label_en", SiteDbSchema.Ddl);
+        Assert.Contains("wikidata_p141", SiteDbSchema.Ddl);
+        Assert.Contains("wikidata_item_downloaded", SiteDbSchema.Ddl);
+    }
+
+    [Fact]
+    public void StatementsAdded_SkipsRemovals() {
+        string[] commands = [
+            "Q5\tP1476\ten:\"Ursus maritimus\"",
+            "-Q5\tP1476\ten:\"Ursus maritimus: Wiig, Ø.\"",
+            "-STATEMENT\tQ5$1A2B3C4D-0000-4000-8000-000000000001",
+        ];
+        Assert.Equal(["title (P1476)"], WikidataCite.StatementsAdded(commands));
     }
 
     [Fact]

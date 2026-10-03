@@ -102,6 +102,10 @@ public sealed class SpeciesModel : PageModel {
     /// is selected.
     public WikidataCiteView? Wikidata { get; private set; }
 
+    /// The "IUCN conservation status on Wikidata" part; null unless the wikitext shown is for the
+    /// latest global assessment of a taxon in the release.
+    public WikidataStatusView? WikidataStatus { get; private set; }
+
     /// This page with the current options, as a link to it would give them.
     public string CurrentOptionsUrl => OptionsUrl(SelectedIsDefault || Selected is null ? null : Selected.AssessmentId);
 
@@ -257,6 +261,10 @@ public sealed class SpeciesModel : PageModel {
 
         Wikidata = WikidataCite.Build(Selected, Parts, Taxon?.WikidataQid, ReadItemModel(), Options.ToCiteQOptions(today, downloaded),
             (what, e) => _logger.LogWarning(e, "WikidataCitation.{Method} failed for assessment {AssessmentId}", what, Selected.AssessmentId));
+        if (Taxon is not null && Taxon.InRelease && LatestGlobal is not null && Selected.AssessmentId == LatestGlobal.AssessmentId) {
+            WikidataStatus = WikidataCite.BuildStatus(Taxon, LatestGlobal, Parts,
+                (what, e) => _logger.LogWarning(e, "{Method} failed for taxon {TaxonId}", what, Taxon.TaxonId));
+        }
     }
 
     // The assessment item model `site build-db` stored; the defaults when it stored none. Null when

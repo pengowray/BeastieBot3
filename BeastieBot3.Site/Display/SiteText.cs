@@ -1,3 +1,5 @@
+using BeastieBot3.Shared.Wikitext;
+
 namespace BeastieBot3.Site.Display;
 
 // Every sentence and label the site shows, in one place so the wording can be reviewed and changed
@@ -223,6 +225,107 @@ public static class SiteText {
     public const string LabelCreateItem = "QuickStatements commands to create the item";
     public const string OpenInQuickStatements = "Open in QuickStatements";
     public const string CopyQuickStatements = "Copy QuickStatements commands";
+
+    // The item's title and English label, when they differ from the ones the item model gives
+    // (WikidataCitation.FixCommands). Shown as a table: what, on Wikidata now, after the commands.
+    /// also: the item is missing statements too, listed just above. title, label: what changes.
+    public static string ReplacesLine(bool also, bool title, bool label) {
+        var what = (title, label) switch {
+            (true, true) => "the item's title and English label",
+            (true, false) => "the item's title",
+            _ => "the item's English label",
+        };
+        return also ? $"The commands also replace {what}:" : $"The commands replace {what}:";
+    }
+    public const string ColChange = "Replaced";
+    public const string ColNow = "On Wikidata now";
+    public const string ColAfter = "After the commands";
+    /// A title value with its language, when the language changes too: "Myrmecophaga tridactyla (la)".
+    public static string TitleWithLanguage(string text, string? language) => $"{text} ({language})";
+    /// Under the table when the title changes.
+    public const string TitleChangeNote = "{{cite Q}} shows the item's title as the title of the work.";
+    public const string RunCommandsLine = "Run these commands in QuickStatements with your Wikidata account.";
+    public const string LabelUpdateItem = "QuickStatements commands to update the item";
+
+    // Taxon page: the taxon item's IUCN conservation status (P141) beside the latest global
+    // assessment, after the {{cite Q}} part. Wikidata's own English labels name the status values
+    // ("critically endangered (Q219127)").
+    public const string HeadingWikidataStatus = "IUCN conservation status on Wikidata";
+    public const string StatusColSource = "Source";
+    public const string StatusColValue = "IUCN conservation status (P141)";
+    public static string StatusRowIucn(string? release) => release is null ? "IUCN Red List" : $"IUCN Red List {release}";
+    /// Before a link to the taxon item, then StatusRowWikidataAfter.
+    public const string StatusRowWikidataBefore = "Wikidata item ";
+    public static string StatusRowWikidataAfter(string? downloaded) => downloaded is null ? string.Empty : $", downloaded {downloaded}";
+    /// A P141 value: Wikidata's English label and the item id, or the id alone for a value not in
+    /// the P141 list.
+    public static string StatusValue(string? qid) {
+        if (qid is null) {
+            return "no value";
+        }
+        return WikidataStatusValues.Describe(qid) is { } value ? $"{value.LabelEn} ({value.Qid})" : qid;
+    }
+    public static string StatusValueWithRank(string? qid, string rank) => $"{StatusValue(qid)}, {rank} rank";
+    public const string StatusNone = "none";
+    /// The IUCN row when the category has no P141 value: "no value for LR/cd".
+    public static string StatusNoValueFor(string code) => $"no value for {code}";
+
+    /// Under the table: the IUCN category has no value of its own on Wikidata.
+    public static string StatusMappedPossiblyExtinct(string iucnLabel, string value) =>
+        $"{iucnLabel} is {value} on Wikidata, which has no value for possibly extinct.";
+    public static string StatusMappedPossiblyExtinctInTheWild(string iucnLabel, string value) =>
+        $"{iucnLabel} is {value} on Wikidata, which has no value for possibly extinct in the wild.";
+    public static string StatusMappedLowerRisk(string iucnLabel, string value) =>
+        $"{iucnLabel} is {value} on Wikidata, which has no Lower Risk values.";
+
+    public const string StatusAgrees = "Wikidata gives the same status.";
+    public const string StatusAgreesCited = "Wikidata gives the same status, with a reference to this assessment's Wikidata item. No commands needed.";
+    public const string StatusDiffers = "Wikidata gives a different status.";
+    public const string StatusMissing = "Wikidata gives no IUCN conservation status for this taxon.";
+    public static string StatusNoValue(string iucnLabel, string code) =>
+        $"No commands: Wikidata has no IUCN conservation status value for {iucnLabel} ({code}).";
+    public static string StatusBlockedSeveral(int count, string value) =>
+        $"No commands: {count} statements on the item have {value}, and QuickStatements cannot be told which one gets the reference.";
+    public static string StatusBlockedDeprecated(string value) =>
+        $"No commands: a deprecated statement on the item has {value}, and QuickStatements could add the reference to that statement.";
+    public const string StatusNotSpecies = "No commands: this site offers them for species and subspecies only.";
+    public static string StatusNoItem(long taxonId) => $"No commands: no Wikidata item found that states IUCN taxon ID (P627) {taxonId}.";
+    /// Before + link(item) + StatusMatchedByNameAfter.
+    public const string StatusMatchedByNameBefore = "No commands: the Wikidata item ";
+    public static string StatusMatchedByNameAfter(long taxonId) =>
+        $" was matched to this taxon by name and does not state IUCN taxon ID (P627) {taxonId}.";
+    /// Before + link(item) + ".".
+    public const string StatusNotDownloadedBefore = "No commands: this site has not downloaded the Wikidata item ";
+
+    public const string StatusCommandsDo = "The commands:";
+    public static string StatusAddValue(string value) => $"add {value} with the reference below";
+    public static string StatusAddReference(string value) => $"add the reference below to the {value} statement";
+    public static string StatusRemove(string value) => $"remove {value}";
+    public const string StatusReplaceReason =
+        "Most taxon items on Wikidata have one IUCN conservation status statement, so these commands replace the old status.";
+
+    public const string ReferenceLabel = "The reference:";
+    /// Before + link(item) + RefStatedInAfter.
+    public const string RefStatedInBefore = "stated in (P248): ";
+    public const string RefStatedInAfter = ", this assessment's Wikidata item";
+    public static string RefTaxonId(long taxonId) => $"IUCN taxon ID (P627): {taxonId}";
+    /// Before + link(url).
+    public const string RefUrlBefore = "reference URL (P854): ";
+    public static string RefRetrieved(string date) => $"retrieved (P813): {date}, when this site downloaded the assessment";
+    public const string LeftOutLabel = "Left out of the reference:";
+    public static string LeftOutRelease(string? release) =>
+        $"stated in (P248) for IUCN Red List {release ?? "release"}: this site has no Wikidata item for the release";
+    public const string LeftOutAssessmentItem = "stated in (P248) for this assessment's own Wikidata item: this site's data has none";
+    public const string LabelStatusCommands = "QuickStatements commands to update the IUCN conservation status";
+
+    public const string KeepSummary = "Keep the old status on the item instead";
+    public static string KeepIntro(string value) =>
+        $"These commands add {value} with the same reference and remove nothing.";
+    /// steps: "set endangered (Q96377276) to preferred rank and near threatened (Q719675) to normal rank".
+    public static string KeepRankSteps(string steps) =>
+        $"QuickStatements cannot set ranks. After the commands run, on the item's page {steps}.";
+    public static string RankStep(string value, string rank) => $"set {value} to {rank} rank";
+    public const string LabelStatusKeepCommands = "QuickStatements commands that keep the old status";
 
     /// The English labels of the properties the assessment item model uses, as Wikidata gives them.
     public static string WikidataPropertyLabel(string property) {

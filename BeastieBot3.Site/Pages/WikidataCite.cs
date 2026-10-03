@@ -25,6 +25,9 @@ public sealed record WikidataCiteView {
     /// What the add commands add, as "publisher (P123)"; empty for the create commands.
     public IReadOnlyList<string> AddedStatements { get; init; } = [];
 
+    /// The title and label the commands replace (WikidataCitation.FixCommands); empty when none.
+    public IReadOnlyList<WikidataItemChange> Changes { get; init; } = [];
+
     /// A Wikidata search for an item for the assessment, shown when the site's data has none, so the
     /// reader can check that none was made after the data was downloaded.
     public string? SearchUrl { get; init; }
@@ -32,9 +35,123 @@ public sealed record WikidataCiteView {
     public string? ItemUrl => ItemQid is null ? null : SiteFormat.WikidataUrl(ItemQid);
 }
 
+/// Why the IUCN status part shows no comparison: the commands are only for the latest global
+/// assessment of a species or subspecies whose Wikidata item states its IUCN taxon id (P627), as in
+/// the Wikidata status dry run.
+public enum WikidataStatusScope {
+    /// The comparison is shown, with commands when WikidataStatusEdit can make them.
+    Offered,
+    /// A variety or a subpopulation.
+    NotSpeciesOrSubspecies,
+    /// No Wikidata item for the taxon.
+    NoItem,
+    /// The taxon's item was matched by name and does not state the taxon's IUCN taxon id.
+    MatchedByName,
+    /// The Wikidata cache had not downloaded the item, so its statements are not known.
+    StatementsUnknown,
+}
+
+/// The "IUCN conservation status on Wikidata" part of the wikitext section: the taxon item's P141
+/// beside the latest global assessment's category, and QuickStatements commands that bring it up
+/// to date (WikidataStatusEdit).
+public sealed record WikidataStatusView {
+    public required WikidataStatusScope Scope { get; init; }
+    public required long TaxonId { get; init; }
+    public string? TaxonItemQid { get; init; }
+    /// "20 August 2026": when the Wikidata cache downloaded the taxon item.
+    public string? DownloadedText { get; init; }
+    /// The assessment's own Wikidata item, cited in the reference; null when there is none.
+    public string? AssessmentItemQid { get; init; }
+    /// The plan whose commands are shown first: for a changed status, the one that replaces the old
+    /// values. Null outside Offered, or when WikidataStatusEdit failed.
+    public StatusEditPlan? Plan { get; init; }
+    /// For a changed status: the plan that keeps the old values, for the reader who sets ranks by hand.
+    public StatusEditPlan? KeepPlan { get; init; }
+    public WikitextBox? Commands { get; init; }
+    public string? QuickStatementsUrl { get; init; }
+    public WikitextBox? KeepCommands { get; init; }
+    public string? KeepQuickStatementsUrl { get; init; }
+
+    public string? TaxonItemUrl => TaxonItemQid is null ? null : SiteFormat.WikidataUrl(TaxonItemQid);
+
+    /// False when the comparison could not be made (WikidataStatusEdit threw): the page then leaves
+    /// the part out rather than show its heading alone.
+    public bool HasContent => Scope != WikidataStatusScope.Offered || Plan is not null;
+}
+
+/// The model of the _WikidataStatus partial: the view, the latest global assessment it compares,
+/// and the Red List version ("2026-1").
+public sealed record WikidataStatusPartial(WikidataStatusView View, AssessmentRow Latest, string? Release);
+
 public static partial class WikidataCite {
     public const string CiteQBoxId = "wikitext-cite-q";
     public const string CommandsBoxId = "wikidata-commands";
+    public const string StatusCommandsBoxId = "wikidata-status-commands";
+    public const string StatusKeepCommandsBoxId = "wikidata-status-keep-commands";
+
+    /// The IUCN status part for a taxon's latest global assessment. parts gives the date the
+    /// assessment was downloaded (retrieved, P813); null leaves it out. onError is told when
+    /// WikidataStatusEdit throws; the part then shows the comparison scope with no commands.
+    public static WikidataStatusView BuildStatus(TaxonRow taxon, AssessmentRow latestGlobal, IucnCitationParts? parts,
+        Action<string, Exception>? onError = null) {
+        var item = ItemId(taxon.WikidataQid);
+        var view = new WikidataStatusView { Scope = WikidataStatusScope.Offered, TaxonId = taxon.TaxonId, TaxonItemQid = item };
+        if (taxon.Kind is not (TaxonKinds.Species or TaxonKinds.Subspecies)) {
+            return view with { Scope = WikidataStatusScope.NotSpeciesOrSubspecies };
+        }
+        if (item is null) {
+            return view with { Scope = WikidataStatusScope.NoItem };
+        }
+        if (!taxon.WikidataItemStatesTaxonId) {
+            return view with { Scope = WikidataStatusScope.MatchedByName };
+        }
+        IReadOnlyList<WikidataStatusStatement>? statements;
+        try {
+            statements = WikidataStatusStatement.ListFromJson(taxon.WikidataP141);
+        } catch (System.Text.Json.JsonException e) {
+            onError?.Invoke("WikidataStatusStatement.ListFromJson", e);
+            statements = null;
+        }
+        if (statements is null) {
+            return view with { Scope = WikidataStatusScope.StatementsUnknown };
+        }
+
+        var request = new StatusEditRequest {
+            TaxonItemQid = item,
+            Statements = statements,
+            Category = latestGlobal.Category,
+            TaxonId = latestGlobal.TaxonId,
+            AssessmentId = latestGlobal.AssessmentId,
+            AssessmentItemQid = ItemId(latestGlobal.WikidataItemQid),
+            Retrieved = parts?.DownloadedAtUtc is { } at ? DateOnly.FromDateTime(at) : null,
+        };
+        view = view with {
+            DownloadedText = taxon.WikidataItemDownloaded is { } day ? SiteFormat.Date(day) : null,
+            AssessmentItemQid = request.AssessmentItemQid,
+        };
+        StatusEditPlan plan, keep;
+        try {
+            plan = WikidataStatusEdit.Plan(request, StatusEditChoice.Replace);
+            keep = WikidataStatusEdit.Plan(request, StatusEditChoice.Keep);
+        } catch (Exception e) {
+            onError?.Invoke("WikidataStatusEdit.Plan", e);
+            return view;
+        }
+        var showKeep = plan.Outcome == StatusEditOutcome.Differs;
+        return view with {
+            Plan = plan,
+            KeepPlan = showKeep ? keep : null,
+            Commands = plan.Commands.Count == 0 ? null : StatusBox(StatusCommandsBoxId, SiteText.LabelStatusCommands, plan.Commands),
+            QuickStatementsUrl = plan.Commands.Count == 0 ? null : FittingUrl(WikidataCitation.QuickStatementsUrl(plan.Commands)),
+            KeepCommands = !showKeep || keep.Commands.Count == 0 ? null
+                : StatusBox(StatusKeepCommandsBoxId, SiteText.LabelStatusKeepCommands, keep.Commands),
+            KeepQuickStatementsUrl = !showKeep || keep.Commands.Count == 0 ? null : FittingUrl(WikidataCitation.QuickStatementsUrl(keep.Commands)),
+        };
+    }
+
+    private static WikitextBox StatusBox(string id, string label, IReadOnlyList<string> commands) =>
+        new(id, label, "QuickStatements", string.Join('\n', commands), Rows: Math.Clamp(commands.Count + 1, 2, 6),
+            CopyName: SiteText.CopyQuickStatements);
 
     /// The view for one assessment. parts: its citation parts, or null when its details were not
     /// downloaded (no commands can be made then). model: the item model from the site database, or
@@ -59,20 +176,29 @@ public static partial class WikidataCite {
             // reports "access-date without URL".
             var withUrl = citeQOptions with { ItemHasUrl = Properties(assessment.WikidataItemProperties).Contains("P953") };
             var citeQ = Try("CiteQ", () => WikidataCitation.CiteQ(itemQid, withUrl));
-            IReadOnlyList<string>? add = null;
+            IReadOnlyList<string> add = [];
             // With no list of the item's properties, what it lacks is not known, so nothing is
             // offered (rather than every statement).
             if (parts is not null && model is not null && !string.IsNullOrWhiteSpace(assessment.WikidataItemProperties)) {
                 var present = Properties(assessment.WikidataItemProperties);
-                add = Try("AddMissingCommands", () => WikidataCitation.AddMissingCommands(parts, itemQid, present, taxonItem, model));
+                add = Try("AddMissingCommands", () => WikidataCitation.AddMissingCommands(parts, itemQid, present, taxonItem, model)) ?? [];
             }
-            var commands = add is { Count: > 0 } ? add : null;
+            // A title is replaced only when its exact text and language are known
+            // (wikidata_item_titles); the label whenever it differs from the model's.
+            var fix = parts is null || model is null ? WikidataItemFix.None
+                : Try("FixCommands", () => WikidataCitation.FixCommands(parts, itemQid,
+                    WikidataTitle.ListFromJson(assessment.WikidataItemTitles), assessment.WikidataItemLabelEn, model)) ?? WikidataItemFix.None;
+            IReadOnlyList<string>? commands = add.Count + fix.Commands.Count > 0 ? [.. add, .. fix.Commands] : null;
             return new WikidataCiteView {
                 ItemQid = itemQid,
                 CiteQ = string.IsNullOrWhiteSpace(citeQ) ? null : new WikitextBox(CiteQBoxId, SiteText.LabelCiteQ, "{{cite Q}}", citeQ, Rows: 2),
-                Commands = commands is null ? null : CommandsBox(SiteText.LabelAddStatements, commands),
+                Commands = commands is null ? null
+                    : CommandsBox(fix.Changes.Count > 0 ? SiteText.LabelUpdateItem : SiteText.LabelAddStatements, commands),
                 QuickStatementsUrl = commands is null ? null : FittingUrl(Try("QuickStatementsUrl", () => WikidataCitation.QuickStatementsUrl(commands))),
-                AddedStatements = commands is null ? [] : StatementsAdded(commands),
+                // From the add commands only: the fix commands name P1476 and Len for a title and
+                // label the item already has.
+                AddedStatements = StatementsAdded(add),
+                Changes = fix.Changes,
             };
         }
 
@@ -120,7 +246,8 @@ public static partial class WikidataCite {
     /// in the order of first appearance: "publisher (P123)", "label (en)". A CREATE line adds nothing.
     public static IReadOnlyList<string> StatementsAdded(IEnumerable<string> commands) {
         var seen = new List<string>();
-        foreach (var line in commands) {
+        // A line that starts with "-" removes something, so it adds nothing.
+        foreach (var line in commands.Where(c => !c.StartsWith('-'))) {
             var fields = line.Split('\t');
             if (fields.Length < 2) {
                 continue;

@@ -1,0 +1,159 @@
+@model WikidataStatusPartial
+@* The taxon item's IUCN conservation status (P141) beside the latest global assessment, and the
+   QuickStatements commands that bring it up to date (WikidataCite.BuildStatus). *@
+@{
+    var view = Model.View;
+    var plan = view.Plan;
+    var latest = Model.Latest;
+    var iucnLabel = IucnCategories.Describe(latest).Label;
+}
+<section class="wikidata-status" id="wikidata-status" aria-labelledby="wikidata-status-heading">
+    <h3 id="wikidata-status-heading">@SiteText.HeadingWikidataStatus</h3>
+    @switch (view.Scope) {
+        case WikidataStatusScope.NotSpeciesOrSubspecies:
+            <p>@SiteText.StatusNotSpecies</p>
+            break;
+        case WikidataStatusScope.NoItem:
+            <p>@SiteText.StatusNoItem(view.TaxonId)</p>
+            break;
+        case WikidataStatusScope.MatchedByName:
+            <p>@SiteText.StatusMatchedByNameBefore<a href="@view.TaxonItemUrl">@view.TaxonItemQid</a>@SiteText.StatusMatchedByNameAfter(view.TaxonId)</p>
+            break;
+        case WikidataStatusScope.StatementsUnknown:
+            <p>@SiteText.StatusNotDownloadedBefore<a href="@view.TaxonItemUrl">@view.TaxonItemQid</a>.</p>
+            break;
+    }
+    @if (view.Scope == WikidataStatusScope.Offered && plan is not null) {
+        var showRanks = plan.Current.Count > 1;
+        <div class="table-scroll">
+            <table class="status-compare">
+                <thead>
+                    <tr>
+                        <th scope="col">@SiteText.StatusColSource</th>
+                        <th scope="col">@SiteText.StatusColValue</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    <tr>
+                        <th scope="row">@SiteText.StatusRowIucn(Model.Release)</th>
+                        <td>@(plan.TargetQid is null ? SiteText.StatusNoValueFor(latest.Category) : SiteText.StatusValue(plan.TargetQid))</td>
+                    </tr>
+                    <tr>
+                        <th scope="row">@SiteText.StatusRowWikidataBefore<a href="@view.TaxonItemUrl">@view.TaxonItemQid</a>@SiteText.StatusRowWikidataAfter(view.DownloadedText)</th>
+                        <td>
+                            @if (plan.Current.Count == 0) {
+                                @SiteText.StatusNone
+                            } else {
+                                <ul class="plain-list">
+                                    @foreach (var statement in plan.Current) {
+                                        <li>@(showRanks ? SiteText.StatusValueWithRank(statement.Value, statement.Rank) : SiteText.StatusValue(statement.Value))</li>
+                                    }
+                                </ul>
+                            }
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        @if (plan.TargetQid is { } mappedTarget) {
+            var value = SiteText.StatusValue(mappedTarget);
+            @if (latest.Category == "CR" && latest.PossiblyExtinct) {
+                <p class="help">@SiteText.StatusMappedPossiblyExtinct(iucnLabel, value)</p>
+            } else if (latest.Category == "CR" && latest.PossiblyExtinctInTheWild) {
+                <p class="help">@SiteText.StatusMappedPossiblyExtinctInTheWild(iucnLabel, value)</p>
+            } else if (latest.Category.StartsWith("LR/", StringComparison.Ordinal)) {
+                <p class="help">@SiteText.StatusMappedLowerRisk(iucnLabel, value)</p>
+            }
+        }
+
+        @switch (plan.Outcome) {
+            case StatusEditOutcome.Agrees:
+                <p class="status-verdict">@(plan.AlreadyCited ? SiteText.StatusAgreesCited : SiteText.StatusAgrees)</p>
+                break;
+            case StatusEditOutcome.Differs:
+                <p class="status-verdict">@SiteText.StatusDiffers</p>
+                break;
+            case StatusEditOutcome.Missing:
+                <p class="status-verdict">@SiteText.StatusMissing</p>
+                break;
+            case StatusEditOutcome.NoValue:
+                <p class="status-verdict">@SiteText.StatusNoValue(iucnLabel, latest.Category)</p>
+                break;
+            case StatusEditOutcome.Blocked:
+                var blockedValue = SiteText.StatusValue(plan.TargetQid);
+                <p class="status-verdict">
+                    @(plan.Block == StatusEditBlock.DeprecatedStatementHasTheValue
+                        ? SiteText.StatusBlockedDeprecated(blockedValue)
+                        : SiteText.StatusBlockedSeveral(plan.Current.Count(s => s.Value == plan.TargetQid), blockedValue))
+                </p>
+                break;
+        }
+
+        @if (view.Commands is { } box && plan.Reference is { } reference) {
+            var target = SiteText.StatusValue(plan.TargetQid);
+            <p class="status-commands-label">@SiteText.StatusCommandsDo</p>
+            <ul>
+                @if (plan.AddsValue) {
+                    <li>@SiteText.StatusAddValue(target)</li>
+                } else if (plan.AddsReference) {
+                    <li>@SiteText.StatusAddReference(target)</li>
+                }
+                @foreach (var removed in plan.Removes) {
+                    <li>@SiteText.StatusRemove(showRanks ? SiteText.StatusValueWithRank(removed.Value, removed.Rank) : SiteText.StatusValue(removed.Value))</li>
+                }
+            </ul>
+            @if (plan.Removes.Count > 0) {
+                <p class="help">@SiteText.StatusReplaceReason</p>
+            }
+            <p class="status-commands-label">@SiteText.ReferenceLabel</p>
+            <ul>
+                @if (reference.StatedIn is { } statedIn) {
+                    <li>@SiteText.RefStatedInBefore<a href="@SiteFormat.WikidataUrl(statedIn)">@statedIn</a>@SiteText.RefStatedInAfter</li>
+                }
+                <li>@SiteText.RefTaxonId(reference.TaxonId)</li>
+                <li>@SiteText.RefUrlBefore<a href="@reference.Url">@reference.Url</a></li>
+                @if (reference.Retrieved is { } retrieved) {
+                    <li>@SiteText.RefRetrieved(SiteFormat.Date(retrieved))</li>
+                }
+            </ul>
+            <p class="status-commands-label">@SiteText.LeftOutLabel</p>
+            <ul>
+                <li>@SiteText.LeftOutRelease(Model.Release)</li>
+                @if (reference.StatedIn is null) {
+                    <li>@SiteText.LeftOutAssessmentItem</li>
+                }
+            </ul>
+            <p>@SiteText.RunCommandsLine</p>
+            <div class="wikitext-box">
+                <partial name="_WikitextBoxContent" model="box" />
+            </div>
+            @if (view.QuickStatementsUrl is { } url) {
+                <p class="quickstatements-link"><a href="@url">@SiteText.OpenInQuickStatements</a></p>
+            }
+        }
+
+        @if (view.KeepPlan is { } keep) {
+            var keepTarget = SiteText.StatusValue(keep.TargetQid);
+            var steps = keep.RankSteps
+                .Select(s => SiteText.RankStep(s.StatementId is null ? keepTarget : SiteText.StatusValue(s.Value), s.Rank))
+                .ToList();
+            <details class="status-keep" id="wikidata-status-keep">
+                <summary>@SiteText.KeepSummary</summary>
+                @if (view.KeepCommands is { } keepBox) {
+                    <p>@SiteText.KeepIntro(keepTarget)</p>
+                }
+                @if (steps.Count > 0) {
+                    <p>@SiteText.KeepRankSteps(string.Join(" and ", steps))</p>
+                }
+                @if (view.KeepCommands is { } keepCommands) {
+                    <div class="wikitext-box">
+                        <partial name="_WikitextBoxContent" model="keepCommands" />
+                    </div>
+                    @if (view.KeepQuickStatementsUrl is { } keepUrl) {
+                        <p class="quickstatements-link"><a href="@keepUrl">@SiteText.OpenInQuickStatements</a></p>
+                    }
+                }
+            </details>
+        }
+    }
+</section>
