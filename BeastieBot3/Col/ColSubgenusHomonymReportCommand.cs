@@ -16,7 +16,9 @@ using BeastieBot3.Configuration;
 // full COL DB) rather than re-scanning per outer row. Genus/subgenus names are always
 // capitalized nomenclaturally, so a plain equality join is correct -- no LOWER()/COLLATE
 // needed (both of which defeated the index and made this report impractically slow).
-// Use --limit to cap the displayed rows.
+// Use --limit to cap the displayed rows. The limit is applied while reading, never as a SQL
+// LIMIT: with a LIMIT, SQLite (3.46 and 3.53 alike) drops the automatic index and scans every
+// genus for each subgenus, which took over 15 minutes instead of about 5 seconds.
 
 namespace BeastieBot3.Col;
 
@@ -129,15 +131,17 @@ ORDER BY shared_name, subgenus_name, genus_name";
         connection.Open();
 
         using var command = connection.CreateCommand();
-        command.CommandText = settings.Limit > 0 ? ReportSql + "\nLIMIT @limit" : ReportSql;
-        if (settings.Limit > 0) {
-            command.Parameters.AddWithValue("@limit", settings.Limit);
-        }
+        command.CommandText = ReportSql;
 
+        var total = 0;
         using var reader = command.ExecuteReader();
         while (reader.Read())
         {
             cancellationToken.ThrowIfCancellationRequested();
+            total++;
+            if (settings.Limit > 0 && rows.Count >= settings.Limit) {
+                continue;
+            }
             rows.Add(new ReportRow(
                 SharedName: ReadString(reader, "shared_name"),
                 SubgenusId: ReadString(reader, "subgenus_id"),
@@ -202,7 +206,12 @@ ORDER BY shared_name, subgenus_name, genus_name";
         }
 
         AnsiConsole.Write(table);
-        AnsiConsole.MarkupLine($"[grey]Potential homonyms found:[/] {rows.Count}");
+        if (rows.Count < total) {
+            AnsiConsole.MarkupLine(
+                $"[grey]Showing the first {rows.Count:N0} of {total:N0} homonyms. To show all {total:N0} homonyms, run without --limit.[/]");
+        }
+        // The col-update workflow note says this report's output ends with this line.
+        AnsiConsole.MarkupLine($"[grey]Potential homonyms found:[/] {total:N0}");
 
         return 0;
     }
