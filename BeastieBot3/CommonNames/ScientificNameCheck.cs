@@ -150,8 +150,9 @@ internal static class ScientificNameCheck {
     /// name or a Wikidata label) is a scientific name rather than a common name of the taxon with
     /// <paramref name="taxon"/> as its names. In order:
     /// <list type="number">
-    /// <item>The name is one of the taxon's names, or the first word or words of one (the genus of a
-    /// monotypic genus, the species of a subspecies), ignoring case, rank markers and a subgenus. A
+    /// <item>The name is one of the taxon's names, one of them followed by an authority or a note
+    /// ("Myristica fatua Sw."), or the first word or words of one (the genus of a monotypic genus,
+    /// the species of a subspecies), ignoring case, rank markers and a subgenus. A
     /// genus taken from a synonym is not counted when it is an English word ("Orca" for Orcinus
     /// orca).</item>
     /// <item>Otherwise only a name shaped like a scientific name can be one: two to four words, the
@@ -186,9 +187,10 @@ internal static class ScientificNameCheck {
             return false;
         }
 
-        // 1. One of the taxon's own names, or the first words of one.
+        // 1. One of the taxon's own names, the first words of one, or one followed by an authority
+        // or a note ("Myristica fatua Sw.", "Andrena pilipes s.s.").
         foreach (var own in taxon.All) {
-            if (own == normalized) {
+            if (own == normalized || normalized.StartsWith(own + " ", StringComparison.Ordinal)) {
                 return true;
             }
             if (own.Length > normalized.Length && own.StartsWith(normalized + " ", StringComparison.Ordinal)) {

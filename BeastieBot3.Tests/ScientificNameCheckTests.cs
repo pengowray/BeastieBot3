@@ -66,6 +66,14 @@ public class ScientificNameCheckTests {
         Assert.True(IsScientific("Holothuria (Metriatyla) lessoni", Taxon("holothuria lessoni")));
     }
 
+    [Theory]
+    [InlineData("Myristica fatua Sw.", "myristica fatua")]
+    [InlineData("Andrena pilipes s.s.", "andrena pilipes")]
+    [InlineData("Tabernaemontana albiflora (Miq.) Pulle", "tabernaemontana albiflora")]
+    public void TheTaxonsNameWithAnAuthorityOrNote_IsScientific(string label, string canonical) {
+        Assert.True(IsScientific(label, Taxon(canonical)));
+    }
+
     [Fact]
     public void TheGenusOfAMonotypicGenus_IsScientific() {
         Assert.True(IsScientific("Techmarscincus", Taxon("techmarscincus jigurru")));
