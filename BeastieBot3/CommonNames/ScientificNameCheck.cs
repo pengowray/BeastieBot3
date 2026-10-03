@@ -181,7 +181,8 @@ internal static class ScientificNameCheck {
         }
         // Wikipedia puts a genus in double quotes when the species no longer belongs in it
         // ("\"Hyla\" nicefori").
-        name = name.Replace("\"", "");
+        // Some Wikidata labels have a no-break space between the words ("Lycodon cathaya").
+        name = name.Replace("\"", "").Replace(' ', ' ');
         var normalized = ScientificNameNormalizer.Normalize(name);
         if (normalized is null) {
             return false;

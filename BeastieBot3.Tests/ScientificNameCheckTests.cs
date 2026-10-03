@@ -57,6 +57,11 @@ public class ScientificNameCheckTests {
     }
 
     [Fact]
+    public void TheTaxonsOwnName_WithANoBreakSpace_IsScientific() {
+        Assert.True(IsScientific("Lycodon cathaya", Taxon("lycodon cathaya")));
+    }
+
+    [Fact]
     public void ASynonym_IsScientific() {
         Assert.True(IsScientific("Hemidactylus tolampyae", Taxon("lygodactylus tolampyae", "hemidactylus tolampyae")));
     }
