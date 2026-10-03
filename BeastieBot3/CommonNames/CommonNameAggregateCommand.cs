@@ -799,7 +799,10 @@ internal sealed class CommonNameAggregateCommand : AsyncCommand<CommonNameAggreg
                             created++;
                         } else {
                             matched++;
-                            store.InsertCrossReference(taxonId.Value, "wikipedia", pageTitle, "exact");
+                            // A page about another taxon is recorded, but not as this taxon's article
+                            // (CommonNameStore.GetWikipediaArticleTitle reads only "exact").
+                            store.InsertCrossReference(taxonId.Value, "wikipedia", pageTitle,
+                                givesNames ? "exact" : CommonNameStore.OtherTaxonsPageMatch);
                         }
 
                         if (!givesNames) {
