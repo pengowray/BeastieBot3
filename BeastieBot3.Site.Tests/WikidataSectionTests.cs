@@ -177,6 +177,25 @@ public sealed class WikidataCiteUnitTests {
         Assert.Equal(0, calls);
     }
 
+    // Taxon 30321's 1998 assessment: Crossref registered "Apollonias barbujana ssp. ceballosi", and
+    // IUCN's citation has "subsp.". The names are the same, so there is no name note; the create
+    // commands keep Crossref's form, which is the registered title.
+    [Fact]
+    public void RegisteredNameThatDiffersOnlyInTheRankMarker_NoNameNote() {
+        var parts = new IucnCitationParts {
+            TaxonId = 30321, AssessmentId = 9535286, Year = 1998, ScientificName = "Apollonias barbujana subsp. ceballosi",
+            RegisteredName = "Apollonias barbujana ssp. ceballosi", Doi = "10.2305/IUCN.UK.1998.RLTS.T30321A9535286.en",
+        };
+        var view = WikidataCite.Build(Row(null), parts, "Q30252628", new WikidataItemModel(), new CiteQOptions());
+        Assert.Equal(new PublishedName("Apollonias barbujana ssp. ceballosi", PublishedNameSource.Crossref), view.Name);
+        Assert.False(view.ShowNameNote);
+        Assert.Contains("LAST\tP1476\ten:\"Apollonias barbujana ssp. ceballosi\"", view.Commands!.Text);
+
+        // A different name still gets the note.
+        Assert.True(WikidataCite.Build(Row(null), parts with { RegisteredName = "Apollonias ceballosi" }, "Q30252628",
+            new WikidataItemModel(), new CiteQOptions()).ShowNameNote);
+    }
+
     [Fact]
     public void NoModelGivesNoCommands() {
         var calls = 0;

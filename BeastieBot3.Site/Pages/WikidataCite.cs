@@ -52,7 +52,7 @@ public sealed record WikidataCiteView {
     /// Show the name note: the published name differs from IUCN's citation name, or the commands
     /// use IUCN's citation name because the published name is not known.
     public bool ShowNameNote => Name is { } name && CitationName is { } cited
-        && (name.Source == PublishedNameSource.IucnCitation ? CommandsUseName : name.Name != cited);
+        && (name.Source == PublishedNameSource.IucnCitation ? CommandsUseName : !WikidataCitation.SameName(name.Name, cited));
 
     /// A Wikidata search for an item for the assessment, shown when the site's data has none, so the
     /// reader can check that none was made after the data was downloaded.

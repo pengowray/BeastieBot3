@@ -454,6 +454,23 @@ public class WikidataCitationTests {
         Assert.Equal(name, WikidataCitation.NameFromTitle(title));
     }
 
+    [Theory]
+    // Taxon 30321 (1998): Crossref's title has "ssp.", IUCN's citation "subsp.".
+    [InlineData("Apollonias barbujana ssp. ceballosi", "Apollonias barbujana subsp. ceballosi", true)]
+    // Taxon 2468 (1996): Crossref's title has the subpopulation in brackets.
+    [InlineData("Balaena mysticetus (Bering-Chukchi-Beaufort Sea subpopulation)", "Balaena mysticetus Bering-Chukchi-Beaufort Sea subpopulation", true)]
+    [InlineData("Oncorhynchus nerka [Redfish Lk]", "Oncorhynchus  nerka Redfish Lk", true)]
+    [InlineData("<i>Myotis nattereri</i>", "Myotis nattereri", true)]
+    [InlineData("Canis mesomelas", "Lupulella mesomelas", false)]
+    [InlineData("Larus glaucoides", "Larus glaucoides_old", false)]
+    // Only the rank marker is read as "ssp.": an epithet that starts with "subsp" is a word.
+    [InlineData("Abies subspinosa", "Abies sspinosa", false)]
+    [InlineData("Apollonias barbujana var. ceballosi", "Apollonias barbujana subsp. ceballosi", false)]
+    public void SameName_SspIsSubspAndBracketsAndSpacesAreIgnored(string a, string b, bool same) {
+        Assert.Equal(same, WikidataCitation.SameName(a, b));
+        Assert.Equal(same, WikidataCitation.SameName(b, a));
+    }
+
     [Fact]
     public void PublishedNameFor_ItemTitleThenCrossrefThenIucn() {
         var registered = Lupulella with { RegisteredName = "Canis mesomelas" };

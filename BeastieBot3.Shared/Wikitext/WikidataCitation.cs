@@ -242,6 +242,20 @@ public static partial class WikidataCitation {
     /// A name as the commands write it: tags removed, entities decoded, spaces collapsed.
     public static string NameText(string? name) => CleanValue(name);
 
+    /// True when two names differ only in how they are written: "ssp." and "subsp." count as the
+    /// same, brackets are ignored, and a run of spaces counts as one. So "Apollonias barbujana ssp.
+    /// ceballosi" and "Apollonias barbujana subsp. ceballosi" are the same name, and so are "Balaena
+    /// mysticetus (Bering-Chukchi-Beaufort Sea subpopulation)" and "Balaena mysticetus
+    /// Bering-Chukchi-Beaufort Sea subpopulation". The name notes and the build's count of names
+    /// that differ use this; the commands keep each name as it is written.
+    public static bool SameName(string? a, string? b) => string.Equals(NameKey(a), NameKey(b), StringComparison.Ordinal);
+
+    private static string NameKey(string? name) {
+        var text = NameBracket().Replace(CleanValue(name), " ");
+        text = SubspMarker().Replace(text, "ssp.");
+        return WikitextValue.CollapseWhitespace(text).Trim();
+    }
+
     // The last ":" outside round brackets; -1 when there is none.
     private static int AuthorListColon(string text) {
         var depth = 0;
@@ -492,6 +506,13 @@ public static partial class WikidataCitation {
 
     [GeneratedRegex(@"<[^<>]*>")]
     private static partial Regex HtmlTag();
+
+    [GeneratedRegex(@"[()\[\]]")]
+    private static partial Regex NameBracket();
+
+    // "subsp." as a word of its own; "ssp." is the form the comparison keeps.
+    [GeneratedRegex(@"(?<!\p{L})subsp\.")]
+    private static partial Regex SubspMarker();
 
     [GeneratedRegex(@"\|{2,}")]
     private static partial Regex PipeRun();
