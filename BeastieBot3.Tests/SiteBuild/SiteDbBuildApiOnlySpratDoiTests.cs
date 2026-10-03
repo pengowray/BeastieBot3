@@ -12,7 +12,7 @@ namespace BeastieBot3.Tests.SiteBuild;
 //     (2785) whose name is now taxon 2790's;
 //   - SPRAT profiles and EPBC listings that apply to a population (the koala: profile 197 has no
 //     listing, profile 85104 lists "combined populations of Qld, NSW and the ACT" as Endangered);
-//   - DOIs found by checking doi.org (`iucn resolve-dois`'s doi_check table).
+//   - DOIs `iucn resolve-dois` found in Crossref's list or at doi.org (its doi_check table).
 // Ids and names are IUCN's and SPRAT's where they are known; the assessments are cut down.
 public sealed class SiteDbBuildApiOnlySpratDoiTests : IDisposable {
     private const long Leopard = 15954;
@@ -147,7 +147,7 @@ public sealed class SiteDbBuildApiOnlySpratDoiTests : IDisposable {
     public void KindFromApiFlags_ReadsTheRecordsFlags(bool infrarank, bool subpopulation, string name, string expected) =>
         Assert.Equal(expected, SiteBuildRules.KindFromApiFlags(infrarank, subpopulation, name));
 
-    // ------------------------------------------------------------ DOIs found by checking doi.org
+    // ------------------------------------------------------------ DOIs from `iucn resolve-dois`
 
     [Fact]
     public void Build_UsesADoiFoundAtDoiOrg_WhenNoOtherSourceHasOne() {

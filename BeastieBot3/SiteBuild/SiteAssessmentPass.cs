@@ -21,7 +21,7 @@ using Microsoft.Data.Sqlite;
 //   - The citation parts are parsed from every cached payload. The DOI is IUCN's own when its
 //     citation has one that fits; otherwise GBIF's, only for the assessment GBIF's checklist names
 //     as the taxon's current global one; otherwise Wikidata's; otherwise the one `iucn resolve-dois`
-//     found by checking doi.org (IucnDoiSelector checks each).
+//     found in Crossref's list of IUCN DOIs or at doi.org (IucnDoiSelector checks each).
 //     Assessments with no cached payload (the CSV's subpopulations) keep citation_json NULL.
 //   - An author name with a letter lost to an encoding error ("Kry?tufek, B.") is repaired from the
 //     other assessor credits (AssessorNamePool). The pool is complete only after every payload has
@@ -42,7 +42,7 @@ using Microsoft.Data.Sqlite;
 namespace BeastieBot3.SiteBuild;
 
 /// The DOIs other sources offer, by taxon (GBIF: the assessment it names and its DOI) and by
-/// assessment (Wikidata, and the DOIs `iucn resolve-dois` found by checking doi.org).
+/// assessment (Wikidata, and the DOIs `iucn resolve-dois` found in Crossref's list or at doi.org).
 internal sealed class SiteDoiSources {
     public Dictionary<long, (long? AssessmentId, string? Doi)> Gbif { get; } = new();
     public Dictionary<long, List<string>> Wikidata { get; } = new();

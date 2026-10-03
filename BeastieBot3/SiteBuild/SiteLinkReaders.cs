@@ -20,7 +20,8 @@ using Microsoft.Data.Sqlite;
 //                  name, then by each name in IUCN_Red_List_Listed_Names. Profiles of populations:
 //                  every row named after the taxon with a population in brackets
 //                  (SiteBuildRules.ClassifySpratName). Only an EPBC-listed row gives a status.
-//   DOI cache      iucn_doi_cache.sqlite doi_check: DOIs `iucn resolve-dois` found at doi.org.
+//   DOI cache      iucn_doi_cache.sqlite doi_check: DOIs `iucn resolve-dois` found in Crossref's list
+//                  of IUCN DOIs or at doi.org.
 //   DOIs           GBIF's copy of the IUCN checklist (the current global assessment of each taxon)
 //                  and Wikidata items for assessments (wikidata_iucn_assessment_items).
 //   GBIF citation  The checklist's recommended citation from its eml.xml, and the dataset DOI: the
@@ -327,7 +328,7 @@ internal static class SiteLinkReaders {
         return file.ExecuteScalar() is string fileName ? Path.GetFileName(fileName.Trim()) : null;
     }
 
-    // ------------------------------------------------------------ DOIs found by checking doi.org
+    // ------------------------------------------------------------ DOIs from `iucn resolve-dois`
 
     /// Reads `iucn resolve-dois`'s cache (table doi_check: assessment_id, taxon_id, doi, checked_at,
     /// candidates_tried; doi NULL when no candidate resolved) into dois.Resolved. A file without the
@@ -337,7 +338,7 @@ internal static class SiteLinkReaders {
         using (var exists = connection.CreateCommand()) {
             exists.CommandText = "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'doi_check'";
             if (Convert.ToInt64(exists.ExecuteScalar(), CultureInfo.InvariantCulture) == 0) {
-                stats.Warnings.Add($"The DOI cache {path} has no doi_check table, so no DOIs found by checking doi.org were used.");
+                stats.Warnings.Add($"The DOI cache {path} has no doi_check table, so no DOIs from `iucn resolve-dois` were used.");
                 return;
             }
         }
@@ -363,7 +364,7 @@ internal static class SiteLinkReaders {
             stats.DoiChecksRead = 0;
             stats.DoiChecksWithDoi = 0;
             stats.DoiCheckedTo = null;
-            stats.Warnings.Add($"The DOI cache {path} could not be read, so no DOIs found by checking doi.org were used: {ex.Message}");
+            stats.Warnings.Add($"The DOI cache {path} could not be read, so no DOIs from `iucn resolve-dois` were used: {ex.Message}");
         }
     }
 

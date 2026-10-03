@@ -132,8 +132,9 @@ public static class SiteDbSchema {
         public const string ColDoi = "col_doi";
         /// SPRAT report file name the EPBC statuses came from.
         public const string SpratReport = "sprat_report";
-        /// The newest date ('yyyy-MM-dd') on which `iucn resolve-dois` checked a DOI at doi.org, when
-        /// the build read its cache.
+        /// The newest checked_at date ('yyyy-MM-dd') of any row of `iucn resolve-dois`'s doi_check
+        /// table, whether the DOI was found in Crossref's list, found at doi.org or not found, when the
+        /// build read that cache.
         public const string IucnDoiCheckedTo = "iucn_doi_checked_to";
         public const string TaxonCount = "taxon_count";
         public const string AssessmentCount = "assessment_count";

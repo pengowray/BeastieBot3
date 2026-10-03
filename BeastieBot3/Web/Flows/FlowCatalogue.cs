@@ -1027,7 +1027,7 @@ public static class FlowCatalogue {
                     OutputSourceIds = new[] { "site-sqlite" },
                     Probe = PublicSiteProbes.Build,
                     Group = "2 · Build the site database",
-                    Note = "Only the IUCN Red List database and the IUCN API cache are required: the build leaves out any other input that is missing. For release 2026-1 the build takes about 65 seconds and writes about 410 MB. When the site database is older than its inputs, the status line under the step title names each input that changed after the build. --limit under Options builds a database of only the first N taxa. Unless you also set --output, that database replaces Datastore:site_sqlite, so build again without --limit before you deploy.",
+                    Note = "Only the IUCN Red List database and the IUCN API cache are required: the build leaves out any other input that is missing. For release 2026-1 the build takes about 65 seconds and writes about 450 MB. When the site database is older than its inputs, the status line under the step title names each input that changed after the build. --limit under Options builds a database of only the first N taxa. Unless you also set --output, that database replaces Datastore:site_sqlite, so build again without --limit before you deploy.",
                 },
                 new FlowStep {
                     Id = "site-check-citations",

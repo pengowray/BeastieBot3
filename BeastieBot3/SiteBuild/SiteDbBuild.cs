@@ -12,7 +12,8 @@ using Spectre.Console;
 //      that are only in the API cache (not in the release), each with the taxon in the release
 //      that has its name.
 //   3. Plan the assessment rows.
-//   4. DOI sources: GBIF's checklist, Wikidata, and the DOIs `iucn resolve-dois` found at doi.org.
+//   4. DOI sources: GBIF's checklist, Wikidata, and the DOIs `iucn resolve-dois` found in Crossref's
+//      list of IUCN DOIs or at doi.org.
 //   5. IUCN API assessment payloads: citation parts; the assessment rows are written here.
 //   6. Common names store: English names, the best English name, CoL synonyms.
 //   7. Links: English Wikipedia, Wikidata, Catalogue of Life (and the release's citation), SPRAT.

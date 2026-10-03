@@ -18,7 +18,8 @@ internal sealed record SiteBuildInputs {
     /// The CoL database itself; only its file name is read, for the release when there is no placement file.
     public string? ColDatabase { get; init; }
     public string? SpratDatabase { get; init; }
-    /// `iucn resolve-dois`'s cache (Datastore:IUCN_doi_cache_sqlite): DOIs found by checking doi.org.
+    /// `iucn resolve-dois`'s cache (Datastore:IUCN_doi_cache_sqlite): DOIs found in Crossref's list
+    /// of IUCN DOIs or at doi.org.
     public string? DoiCache { get; init; }
     /// rules-list.txt, whose "Scientific name = common name" lines override the best English name,
     /// as they do in the Wikipedia lists.

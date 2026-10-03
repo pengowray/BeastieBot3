@@ -73,7 +73,7 @@ internal sealed class SiteBuildDbCommand : Command<SiteBuildDbCommand.Settings> 
         public string? GbifChecklist { get; init; }
 
         [CommandOption("--doi-cache <PATH>")]
-        [Description("DOIs found by checking doi.org (iucn resolve-dois). Default: Datastore:IUCN_doi_cache_sqlite in paths.ini.")]
+        [Description("DOIs that iucn resolve-dois found in Crossref's list of IUCN DOIs or at doi.org. Default: Datastore:IUCN_doi_cache_sqlite in paths.ini.")]
         public string? DoiCache { get; init; }
     }
 
@@ -199,7 +199,7 @@ internal sealed class SiteBuildDbCommand : Command<SiteBuildDbCommand.Settings> 
         Row("DOIs from IUCN's citation text", s.DoisBySource.GetValueOrDefault(DoiSource.Citation));
         Row("DOIs from GBIF", s.DoisBySource.GetValueOrDefault(DoiSource.Gbif));
         Row("DOIs from Wikidata", s.DoisBySource.GetValueOrDefault(DoiSource.Wikidata));
-        Row("DOIs found by checking doi.org (iucn resolve-dois)", s.DoisBySource.GetValueOrDefault(DoiSource.Resolved));
+        Row("DOIs from Crossref's list or doi.org (iucn resolve-dois)", s.DoisBySource.GetValueOrDefault(DoiSource.Resolved));
         Row("Citations with no DOI", s.DoisBySource.GetValueOrDefault(DoiSource.None));
         Row("Author names repaired: a letter lost to an encoding error, restored from other assessor credits", s.AuthorNameRepairs.Values.Sum());
         Row("Author names with a lost letter that could not be repaired", s.AuthorNamesNotRepaired.Values.Sum());
@@ -237,7 +237,7 @@ internal sealed class SiteBuildDbCommand : Command<SiteBuildDbCommand.Settings> 
         Text("Catalogue of Life release", s.ColRelease);
         Text("Catalogue of Life release DOI", s.ColDoi);
         Text("SPRAT report", s.SpratReport);
-        Text("DOI checks at doi.org", s.DoiChecksRead == 0 ? null
+        Text("DOI checks (iucn resolve-dois)", s.DoiChecksRead == 0 ? null
             : $"{s.DoiChecksRead:N0} assessments, {s.DoiChecksWithDoi:N0} with a DOI, newest check {s.DoiCheckedTo:yyyy-MM-dd}");
         if (s.MissingSources.Count > 0) {
             Text("Sources not found (skipped)", string.Join(", ", s.MissingSources));
