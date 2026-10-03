@@ -8,7 +8,7 @@ namespace BeastieBot3.Tests;
 // Pins the IUCN API client's retry/backoff contract — in particular that a 429 (rate limit)
 // is waited out and retried on its own budget rather than failing fast, which is what bit a
 // long cache-infraranks run — and the pacing after a 429 (IucnApiPace). Uses an injected fake
-// handler so no real HTTP happens, and a fake clock whose delays are recorded, not slept.
+// handler so no real HTTP happens, and a fake TimeProvider whose delays are recorded, not slept.
 public class IucnApiClientRetryTests {
     private static IucnApiConfiguration Config(int maxRateLimitRetries = 10) => new(
         BaseUri: new Uri("https://example.test"),
@@ -21,7 +21,7 @@ public class IucnApiClientRetryTests {
         MaxRateLimitRetries: maxRateLimitRetries);
 
     private static IucnApiClient Client(ScriptedHandler handler, FakeClock clock, int maxRateLimitRetries = 10) =>
-        new(Config(maxRateLimitRetries), handler, clock.Delay, () => clock.Now);
+        new(Config(maxRateLimitRetries), handler, clock.Delay, clock);
 
     // ---- retries ----
 
@@ -152,6 +152,41 @@ public class IucnApiClientRetryTests {
         Assert.Equal(0.0, gaps[101]);
     }
 
+    // ---- setting the system clock back ----
+
+    // The gate measures time on the monotonic clock, so setting the system clock back an hour
+    // between two requests does not make the second one wait.
+    [Fact]
+    public async Task SystemClockSetBack_DoesNotDelayTheNextRequest() {
+        var clock = new FakeClock();
+        var handler = ScriptedHandler.Always(clock, HttpStatusCode.OK);
+        using var client = Client(handler, clock);
+
+        await client.GetTaxaSisAsync(1, CancellationToken.None);
+        clock.SetSystemClockBack(TimeSpan.FromHours(1));
+        await client.GetTaxaSisAsync(2, CancellationToken.None);
+
+        Assert.Empty(clock.Delays);
+        Assert.Equal(new[] { 0.0 }, Gaps(handler));
+    }
+
+    // The same after a 429: the pause and the paced slots ignore the system clock too. The
+    // handler sets the system clock back an hour on every request, the 429 included.
+    [Fact]
+    public async Task SystemClockSetBack_DuringAPause_WaitsOnlyThePause() {
+        var clock = new FakeClock();
+        var handler = new ScriptedHandler(clock, HttpStatusCode.OK, (HttpStatusCode)429, HttpStatusCode.OK) {
+            SetSystemClockBackOnEachCall = TimeSpan.FromHours(1),
+        };
+        using var client = Client(handler, clock);
+
+        for (var i = 0; i < 3; i++) await client.GetTaxaSisAsync(i, CancellationToken.None);
+
+        // OK, 429, retry after 60 s, then the next request 1 s later.
+        Assert.Equal(new[] { 0.0, 60.0, 1.0 }, Gaps(handler));
+        Assert.Equal(new[] { TimeSpan.FromSeconds(60), TimeSpan.FromSeconds(1) }, clock.Delays);
+    }
+
     // ---- IucnApiPace ----
 
     [Fact]
@@ -205,30 +240,46 @@ public class IucnApiClientRetryTests {
         Assert.Equal(800, answers);   // 1.5 × 0.95^7 ≈ 1.05 s; the 8th step goes under 1 s
     }
 
-    // Seconds between the starts of consecutive requests.
+    // Seconds between the starts of consecutive requests, on the monotonic clock.
     private static double[] Gaps(ScriptedHandler handler) =>
         handler.Starts.Zip(handler.Starts.Skip(1), (a, b) => Math.Round((b - a).TotalSeconds, 6)).ToArray();
 
-    private sealed class FakeClock {
-        public DateTimeOffset Now { get; private set; } = new(2026, 10, 3, 0, 0, 0, TimeSpan.Zero);
+    // Two clocks the test moves by hand: the monotonic timestamp (GetTimestamp, one tick per
+    // TimeSpan tick) and the system clock (GetUtcNow). A delay moves both forward; setting the
+    // system clock back moves only the system clock.
+    private sealed class FakeClock : TimeProvider {
+        private long _timestamp;
+        private DateTimeOffset _utcNow = new(2026, 10, 3, 0, 0, 0, TimeSpan.Zero);
+
         public List<TimeSpan> Delays { get; } = new();
+
+        // Time since the clock was created, on the monotonic clock.
+        public TimeSpan Elapsed => TimeSpan.FromTicks(_timestamp);
+
+        public override long TimestampFrequency => TimeSpan.TicksPerSecond;
+        public override long GetTimestamp() => _timestamp;
+        public override DateTimeOffset GetUtcNow() => _utcNow;
+
+        public void SetSystemClockBack(TimeSpan by) => _utcNow -= by;
 
         public Task Delay(TimeSpan wait, CancellationToken cancellationToken) {
             Delays.Add(wait);
-            Now += wait;
+            _timestamp += wait.Ticks;
+            _utcNow += wait;
             return Task.CompletedTask;
         }
     }
 
     // Returns a scripted sequence of status codes (last one repeats if exhausted) and records when
-    // each request started by the fake clock.
+    // each request started on the fake monotonic clock.
     private sealed class ScriptedHandler : HttpMessageHandler {
         private readonly FakeClock _clock;
         private readonly HttpStatusCode[] _sequence;
         private int _index;
         public int Calls { get; private set; }
-        public List<DateTimeOffset> Starts { get; } = new();
+        public List<TimeSpan> Starts { get; } = new();
         public TimeSpan? RetryAfter { get; init; }
+        public TimeSpan? SetSystemClockBackOnEachCall { get; init; }
 
         public ScriptedHandler(FakeClock clock, params HttpStatusCode[] sequence) {
             _clock = clock;
@@ -239,7 +290,8 @@ public class IucnApiClientRetryTests {
 
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) {
             Calls++;
-            Starts.Add(_clock.Now);
+            Starts.Add(_clock.Elapsed);
+            if (SetSystemClockBackOnEachCall is { } step) _clock.SetSystemClockBack(step);
             var code = _index < _sequence.Length ? _sequence[_index] : _sequence[^1];
             _index++;
             var response = new HttpResponseMessage(code) {
