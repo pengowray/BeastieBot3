@@ -24,6 +24,7 @@
         <li>common names and synonyms</li>
         <li>links to the assessment on the IUCN Red List website, the English Wikipedia article, the Wikidata item and the Catalogue of Life page, and for Australian species the SPRAT profile and the listing under Australia's EPBC Act</li>
     </ul>
+    <p>Some taxa with no current assessment also have pages: old IUCN ids of taxa that now have another id, and taxa that IUCN no longer assesses. These pages show the taxon's earlier assessments, with wikitext for each.</p>
     <p>Search matches scientific names, common names in any language, and synonyms.</p>
 
     <h2>Who runs this site</h2>
@@ -99,8 +100,9 @@
         <li>IUCN's own citation text, which includes a DOI for about 12% of assessments</li>
         <li>GBIF's copy of the IUCN checklist</li>
         <li>Wikidata</li>
+        <li>possible DOIs for the assessment, checked at doi.org@(Model.DoiCheckedDate is null ? "" : ", most recently on " + Model.DoiCheckedDate)</li>
     </ol>
-    <p>A note under the citation says when the DOI came from GBIF or Wikidata, or when no DOI was found. {{cite iucn}} works without a DOI.</p>
+    <p>A note under the citation says when the DOI came from GBIF, Wikidata or doi.org, or when no DOI was found. {{cite iucn}} works without a DOI.</p>
     <p><strong>Access date.</strong> By default, <code>|access-date=</code> is the date this site downloaded the details of the assessment from the IUCN Red List API@(Model.ApiDateRange is null ? "" : ", " + Model.ApiDateRange). If you check the assessment on the IUCN Red List website yourself, choose today's date. This site gives today's date in UTC. You can also leave the access date out.</p>
     <p><strong>Citation options.</strong> On each taxon page you can choose:</p>
     <ul>

@@ -216,7 +216,8 @@ public sealed class OtherEndpointTests(SiteFactory factory) : IClassFixture<Site
     public async Task NoResponseContainsAssessmentNarrative() {
         var urls = new List<string> { "/", "/about", "/search?q=Ursus&all=1", "/api/suggest?q=Urs", "/name/Big_cat" };
         foreach (var id in new[] { FixtureDb.PolarBear, FixtureDb.HouseSparrow, FixtureDb.Baiji, FixtureDb.Tiger, FixtureDb.SumatranTiger,
-                     FixtureDb.Lion, FixtureDb.WestAfricanLion, FixtureDb.RegionalOnly, FixtureDb.Variety, FixtureDb.Koala }) {
+                     FixtureDb.Lion, FixtureDb.WestAfricanLion, FixtureDb.RegionalOnly, FixtureDb.Variety, FixtureDb.Koala,
+                     FixtureDb.AmurLeopard, FixtureDb.WoylieOld, FixtureDb.Woylie }) {
             urls.Add($"/species/{id}");
             urls.Add($"/species/{id}?authors=lastfirst&access=none");
         }

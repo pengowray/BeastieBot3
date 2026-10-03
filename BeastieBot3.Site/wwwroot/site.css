@@ -699,3 +699,30 @@ abbr[title] {
 .source-citations li {
     overflow-wrap: anywhere;
 }
+
+/* site-data additions */
+
+/* SPRAT profiles in the links section: one item per profile, the EPBC Act listing under its link. */
+.sprat-profiles {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.sprat-profiles li + li {
+    margin-top: 0.5rem;
+}
+
+.epbc-listing {
+    display: block;
+}
+
+/* A taxon not in the release: the taxon in the release with the same name. */
+.current-taxon {
+    margin: 0.5rem 0 0;
+}
+
+/* Under the assessment history: an old IUCN id with the same name. */
+.earlier-id {
+    color: var(--muted);
+}

@@ -45,6 +45,7 @@ public static class SiteDbSchema {
                                                               -- name (same kingdom first); NULL when there is none
         );
         CREATE INDEX taxon_parent ON taxon(parent_taxon_id);
+        CREATE INDEX taxon_current ON taxon(current_taxon_id);
 
         -- SPRAT profiles of the taxon (Australia's Species Profile and Threats Database) and their
         -- EPBC Act listings. One row per SPRAT profile: the profile whose name is the taxon's name (or

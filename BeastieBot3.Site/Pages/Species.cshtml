@@ -63,7 +63,12 @@
 
 <section class="status" aria-labelledby="status-heading">
     <h2 id="status-heading">@(Model.LatestGlobal is null ? SiteText.HeadingStatusNoGlobal : SiteText.HeadingStatus)</h2>
-    @if (Model.LatestGlobal is null && Model.RegionalLatest.Count > 0) {
+    @if (!Model.InRelease) {
+        <p class="no-global-line">@SiteText.NoCurrentLine(Model.Version)</p>
+        @if (Model.CurrentTaxon is { } current) {
+            <p class="current-taxon">@SiteText.CurrentTaxonBefore(Model.Version)<span class="sci-name">@Html.Raw(ScientificNameMarkup.ToHtml(current.ScientificName, current.SubpopulationName))</span>@SiteText.CurrentTaxonMiddle<a href="/species/@current.TaxonId">@SiteText.IucnIdLink(current.TaxonId)</a>@SiteText.CurrentTaxonAfter</p>
+        }
+    } else if (Model.LatestGlobal is null && Model.RegionalLatest.Count > 0) {
         <p class="no-global-line">@SiteText.NoGlobalBefore<a href="#regional">@SiteText.NoGlobalLinkText(Model.RegionalLatest.Count)</a>@SiteText.NoGlobalAfter</p>
     }
     @if (status is not null) {
@@ -108,14 +113,16 @@
             <p class="note note-selected">
                 @SiteText.RegionalAssessment(selected.Scope, selectedCategory, selected.YearPublished, Model.VersionNote(selected))
                 @SiteText.TaxoboxGlobalOnly(Model.Taxobox.Label)
-                @if (Model.LatestGlobal is not null) {
+                @if (Model.LatestGlobal is not null && Model.InRelease) {
                     <a href="@(Model.OptionsUrl(null))#wikitext">@SiteText.ShowLatestWikitext</a>
                 }
             </p>
         } else if (!Model.SelectedIsDefault) {
             <p class="note note-selected">
                 @SiteText.EarlierAssessment(selectedCategory, selected.YearPublished, Model.VersionNote(selected))
-                <a href="@(Model.OptionsUrl(null))#wikitext">@SiteText.ShowLatestWikitext</a>
+                @if (Model.StatusAssessment is not null) {
+                    <a href="@(Model.OptionsUrl(null))#wikitext">@SiteText.ShowLatestWikitext</a>
+                }
             </p>
         }
         @if (IucnCategories.IsEarlierVersionCode(selected)) {
@@ -239,6 +246,16 @@
                 </tbody>
             </table>
         </div>
+        @foreach (var earlier in Model.EarlierIds) {
+            <p class="note earlier-id">@SiteText.EarlierIdBefore<a href="/species/@earlier.TaxonId">@SiteText.IucnIdLink(earlier.TaxonId)</a>@SiteText.EarlierIdAfter</p>
+        }
+    </section>
+} else if (Model.EarlierIds.Count > 0) {
+    <section class="history" aria-labelledby="history-heading">
+        <h2 id="history-heading">@SiteText.HeadingHistory</h2>
+        @foreach (var earlier in Model.EarlierIds) {
+            <p class="note earlier-id">@SiteText.EarlierIdBefore<a href="/species/@earlier.TaxonId">@SiteText.IucnIdLink(earlier.TaxonId)</a>@SiteText.EarlierIdAfter</p>
+        }
     </section>
 }
 
@@ -371,13 +388,29 @@
             <dt>@SiteText.LinkCol</dt>
             <dd><a href="@SiteFormat.CatalogueOfLifeUrl(taxon.ColId)">@Html.Raw(ScientificNameMarkup.ToHtml(taxon.ScientificName, taxon.SubpopulationName))</a></dd>
         }
-        @if (taxon.SpratTaxonId is { } sprat) {
-            <dt><abbr title="@SiteText.SpratFullName">@SiteText.LinkSprat</abbr></dt>
+        @if (Model.EpbcListings.Count > 0) {
+            <dt><abbr title="@SiteText.SpratFullName">@(Model.EpbcListings.Count == 1 ? SiteText.LinkSprat : SiteText.LinkSpratPlural)</abbr></dt>
             <dd>
-                <a href="@SiteFormat.SpratUrl(sprat)">@Html.Raw(ScientificNameMarkup.ToHtml(taxon.ScientificName, taxon.SubpopulationName))</a>
-                @if (IucnCategories.EpbcLabel(taxon.EpbcStatus) is { } epbc) {
-                    <br>@SiteText.EpbcBefore(epbc)<abbr title="@SiteText.EpbcFullName">@SiteText.EpbcAbbr</abbr>
-                }
+                <ul class="sprat-profiles">
+                    @foreach (var listing in Model.EpbcListings) {
+                        var nameHtml = ScientificNameMarkup.ToHtml(taxon.ScientificName, taxon.SubpopulationName);
+                        if (listing.IsPopulation && listing.Population is { } population) {
+                            nameHtml += " (" + SiteHtml.Encode(population) + ")";
+                        }
+                        var listedUnderOtherName = Model.ListedUnderOtherName(listing);
+                        <li>
+                            <a href="@SiteFormat.SpratUrl(listing.SpratTaxonId)">@Html.Raw(nameHtml)</a>
+                            @if (IucnCategories.EpbcLabel(listing.Status) is { } epbc) {
+                                <span class="epbc-listing">@SiteText.EpbcBefore(epbc)<abbr title="@SiteText.EpbcFullName">@SiteText.EpbcAbbr</abbr>@SiteText.EpbcAfter
+                                @if (listing.IsPopulation && listing.Population is { } listedPopulation) {
+                                    @SiteText.EpbcPopulationOnly(listedPopulation)
+                                } else if (listedUnderOtherName) {
+                                    @SiteText.EpbcListedNameBefore<span class="sci-name">@Html.Raw(SpeciesModel.ListedNameHtml(listing.ListedName))</span>@SiteText.EpbcAfter
+                                }</span>
+                            }
+                        </li>
+                    }
+                </ul>
             </dd>
         }
     </dl>

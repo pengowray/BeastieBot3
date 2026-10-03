@@ -64,9 +64,34 @@ public static class FixtureDb {
     // The house sparrow's 2018 assessment, replaced by the amended version published in 2019.
     public const long HouseSparrow2018 = 129643357;
 
+    // Koala: SPRAT profile 197 (no EPBC listing) and 85104, the Endangered listing of the combined
+    // populations of Queensland, New South Wales and the ACT.
     public const long Koala = 16892;
     public const long KoalaLatest = 166496779;
-    public const long KoalaSprat = 85104;
+    public const long KoalaSprat = 197;
+    public const long KoalaPopulationSprat = 85104;
+
+    // Southern cassowary: listed under the EPBC Act as Casuarius casuarius johnsonii.
+    public const long Cassowary = 22678108;
+    public const long CassowaryLatest = 155429591;
+    public const long CassowarySprat = 1096;
+
+    // Leopard (in the release) and the Amur leopard, a subspecies IUCN no longer assesses: not in the
+    // release, its newest assessment is Not Evaluated (2016).
+    public const long Leopard = 15954;
+    public const long LeopardLatest = 50659089;
+    public const long AmurLeopard = 15957;
+    public const long AmurLeopard2016Ne = 96947390;
+    public const long AmurLeopard2008 = 5333757;
+    public const long AmurLeopard1996 = 5333803;
+
+    // The woylie: taxon 2790 in the release, whose latest citation has a DOI found by checking
+    // doi.org, and an old id, 2785, with the same name, not in the release.
+    public const long Woylie = 2790;
+    public const long WoylieLatest = 2790001;
+    public const string WoylieDoi = "10.2305/IUCN.UK.2015-4.RLTS.T2790A2790001.en";
+    public const long WoylieOld = 2785;
+    public const long WoylieOld2008 = 6143;
 
     public const int FillerCount = 55;
     public const long FillerFirstId = 900000;
@@ -277,13 +302,62 @@ public static class FixtureDb {
         w.Name(Bromus, "Bromus interruptus", "scientific", null, "iucn");
         w.Name(Bromus, "Interrupted brome", "common", "en", "iucn", preferred: true);
 
-        // Koala: SPRAT profile and EPBC listing.
+        // Koala: a SPRAT profile with no listing, and the listing of some of its populations.
         w.Taxon(Koala, "Phascolarctos cinereus", "species", "ANIMALIA", "CHORDATA", "MAMMALIA", "DIPROTODONTIA", "PHASCOLARCTIDAE", "Phascolarctos",
-            authority: "(Goldfuss, 1817)", commonEn: "Koala", enwiki: "Koala", qid: "Q36101", latest: KoalaLatest, spratId: KoalaSprat, epbc: "EN");
+            authority: "(Goldfuss, 1817)", commonEn: "Koala", enwiki: "Koala", qid: "Q36101", latest: KoalaLatest);
+        w.EpbcListing(Koala, KoalaSprat, "Phascolarctos cinereus", null, "taxon", null);
+        w.EpbcListing(Koala, KoalaPopulationSprat, "Phascolarctos cinereus (combined populations of Qld, NSW and the ACT)", "EN", "population",
+            "combined populations of Qld, NSW and the ACT");
         w.Assessment(KoalaLatest, Koala, "Global", true, "VU", criteria: "A2bc", criteriaVersion: "3.1", year: 2016, date: "2014-07-08",
             trend: "Decreasing");
         w.Name(Koala, "Phascolarctos cinereus", "scientific", null, "iucn");
         w.Name(Koala, "Koala", "common", "en", "iucn", preferred: true);
+
+        // Southern cassowary: the EPBC Act lists the whole species under another name.
+        w.Taxon(Cassowary, "Casuarius casuarius", "species", "ANIMALIA", "CHORDATA", "AVES", "CASUARIIFORMES", "CASUARIIDAE", "Casuarius",
+            authority: "(Linnaeus, 1758)", commonEn: "Southern cassowary", latest: CassowaryLatest);
+        w.Assessment(CassowaryLatest, Cassowary, "Global", true, "LC", criteriaVersion: "3.1", year: 2016, date: "2016-10-01");
+        w.EpbcListing(Cassowary, CassowarySprat, "Casuarius casuarius johnsonii", "EN", "taxon", null);
+        w.Name(Cassowary, "Casuarius casuarius", "scientific", null, "iucn");
+
+        // Leopard and the Amur leopard, which is not in the release.
+        w.Taxon(Leopard, "Panthera pardus", "species", "ANIMALIA", "CHORDATA", "MAMMALIA", "CARNIVORA", "FELIDAE", "Panthera",
+            authority: "(Linnaeus, 1758)", commonEn: "Leopard", latest: LeopardLatest);
+        w.Assessment(LeopardLatest, Leopard, "Global", true, "VU", criteria: "A2cd", criteriaVersion: "3.1", year: 2024, date: "2023-01-01");
+        w.Name(Leopard, "Panthera pardus", "scientific", null, "iucn");
+        w.Name(Leopard, "Leopard", "common", "en", "iucn", preferred: true);
+
+        w.Taxon(AmurLeopard, "Panthera pardus ssp. orientalis", "subspecies", "ANIMALIA", "CHORDATA", "MAMMALIA", "CARNIVORA", "FELIDAE", "Panthera",
+            authority: "(Schlegel, 1857)", parent: Leopard, infraRank: "ssp.", infraName: "orientalis", inRelease: false);
+        w.Assessment(AmurLeopard2016Ne, AmurLeopard, "Global", false, "NE", criteriaVersion: "3.1", year: 2016, date: "2016-06-05",
+            citation: Citation(AmurLeopard, AmurLeopard2016Ne, 2016, "Panthera pardus ssp. orientalis", [Person("Stein", "A.B.")],
+                doi: null, doiSource: DoiSource.None, text: null));
+        w.Assessment(AmurLeopard2008, AmurLeopard, "Global", false, "CR", criteria: "C2a(ii); D", criteriaVersion: "3.1", year: 2008,
+            date: "2008-06-30",
+            citation: Citation(AmurLeopard, AmurLeopard2008, 2008, "Panthera pardus ssp. orientalis", [Person("Jackson", "P.")],
+                doi: null, doiSource: DoiSource.None, text: null));
+        w.Assessment(AmurLeopard1996, AmurLeopard, "Global", false, "CR", criteria: "A2c; D", criteriaVersion: "2.3", year: 1996,
+            date: "1996-09-01");
+        w.Name(AmurLeopard, "Panthera pardus ssp. orientalis", "scientific", null, "iucn");
+        w.Name(AmurLeopard, "Amur Leopard", "common", "en", "iucn", preferred: true);
+        w.Name(AmurLeopard, "Bars", "common", "ru", "iucn");
+
+        // The woylie, and an old id with its name.
+        w.Taxon(Woylie, "Bettongia penicillata", "species", "ANIMALIA", "CHORDATA", "MAMMALIA", "DIPROTODONTIA", "POTOROIDAE", "Bettongia",
+            authority: "Gray, 1837", commonEn: "Woylie", latest: WoylieLatest);
+        w.Assessment(WoylieLatest, Woylie, "Global", true, "CR", criteria: "A3e", criteriaVersion: "3.1", year: 2015, date: "2014-01-01",
+            citation: Citation(Woylie, WoylieLatest, 2015, "Bettongia penicillata", [Person("Woinarski", "J.")],
+                doi: WoylieDoi, doiSource: DoiSource.Resolved, text: null));
+        w.Name(Woylie, "Bettongia penicillata", "scientific", null, "iucn");
+        w.Name(Woylie, "Woylie", "common", "en", "iucn", preferred: true);
+
+        w.Taxon(WoylieOld, "Bettongia penicillata", "species", "ANIMALIA", "CHORDATA", "MAMMALIA", "DIPROTODONTIA", "POTOROIDAE", "Bettongia",
+            authority: "Gray, 1837", commonEn: "Woylie", inRelease: false, currentTaxon: Woylie);
+        w.Assessment(WoylieOld2008, WoylieOld, "Global", false, "CR", criteria: "A2ce", criteriaVersion: "3.1", year: 2008, date: "2008-06-30",
+            citation: Citation(WoylieOld, WoylieOld2008, 2008, "Bettongia penicillata", [Person("Woinarski", "J.")],
+                doi: null, doiSource: DoiSource.None, text: null));
+        w.Name(WoylieOld, "Bettongia penicillata", "scientific", null, "iucn");
+        w.Name(WoylieOld, "Woylie", "common", "en", "iucn", preferred: true);
 
         // A variety, for the kind label.
         w.Taxon(Variety, "Cupressus arizonica var. glabra", "variety", "PLANTAE", "TRACHEOPHYTA", "PINOPSIDA", "PINALES", "CUPRESSACEAE", "Cupressus",
@@ -316,11 +390,12 @@ public static class FixtureDb {
         }
         w.Meta(SiteDbSchema.MetaKeys.ColRelease, "COL26.7 XR");
         w.Meta(SiteDbSchema.MetaKeys.SpratReport, "01102026-023504-report.csv");
+        w.Meta(SiteDbSchema.MetaKeys.IucnDoiCheckedTo, "2026-09-30");
         w.Meta(SiteDbSchema.MetaKeys.TaxonCount, w.TaxonCount.ToString(CultureInfo.InvariantCulture));
         w.Meta(SiteDbSchema.MetaKeys.AssessmentCount, w.AssessmentCount.ToString(CultureInfo.InvariantCulture));
     }
 
-    public static int GlobalTaxonCount => 12 + FillerCount;
+    public static int GlobalTaxonCount => 15 + FillerCount;
 
     public const string GbifCitation =
         "IUCN (2026). The IUCN Red List of Threatened Species. Version 2026-1. https://www.iucnredlist.org. Downloaded on 2026-07-28. https://doi.org/10.15468/0qnb58";
@@ -379,17 +454,24 @@ public static class FixtureDb {
         public void Taxon(long id, string name, string kind, string kingdom, string phylum, string className, string order, string family,
             string genus, string? authority = null, string? commonEn = null, string? enwiki = null, string? qid = null, string? colId = null,
             long? parent = null, long? latest = null, string? subpopulation = null, string? infraRank = null, string? infraName = null,
-            long? spratId = null, string? epbc = null) {
+            bool inRelease = true, long? currentTaxon = null) {
             TaxonCount++;
             Run("""
                 INSERT INTO taxon(taxon_id, scientific_name, kind, kingdom, phylum, class_name, order_name, family, genus,
                     infra_rank, infra_name, subpopulation_name, authority, parent_taxon_id, common_name_en, enwiki_title,
-                    wikidata_qid, col_id, sprat_taxon_id, epbc_status, latest_global_assessment_id)
+                    wikidata_qid, col_id, latest_global_assessment_id, in_release, current_taxon_id)
                 VALUES (@a, @b, @c, @d, @e, @f, @g, @h, @i, @j, @k, @l, @m, @n, @o, @p, @q, @r, @s, @t, @u)
                 """,
                 id, name, kind, kingdom, phylum, className, order, family, genus, infraRank, infraName, subpopulation, authority,
-                parent, commonEn, enwiki, qid, colId, spratId, epbc, latest);
+                parent, commonEn, enwiki, qid, colId, latest, inRelease ? 1 : 0, currentTaxon);
         }
+
+        public void EpbcListing(long taxonId, long spratId, string listedName, string? status, string appliesTo, string? population) =>
+            Run("""
+                INSERT INTO epbc_listing(taxon_id, sprat_taxon_id, listed_name, status, applies_to, population)
+                VALUES (@a, @b, @c, @d, @e, @f)
+                """,
+                taxonId, spratId, listedName, status, appliesTo, population);
 
         public void Assessment(long id, long taxonId, string scope, bool latest, string category, bool possiblyExtinct = false,
             string? criteria = null, string? criteriaVersion = null, int? year = null, string? date = null, string? trend = null,

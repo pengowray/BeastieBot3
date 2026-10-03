@@ -36,9 +36,7 @@ public sealed class SearchModel : PageModel {
         }
 
         var result = _queries.Search(Query, MaxResults, cancellationToken: HttpContext.RequestAborted);
-        var exact = result.Hits.Where(h => h.IsExactMatch).ToList();
-        if (exact.Count == 1 && all != "1") {
-            var hit = exact[0];
+        if (all != "1" && SingleExactMatch(result.Hits) is { } hit) {
             var url = $"/species/{hit.Taxon.TaxonId}";
             if (hit.MatchedNameType != NameTypes.Scientific) {
                 // The taxon page says which name was matched, and links back to all the results.
@@ -50,5 +48,19 @@ public sealed class SearchModel : PageModel {
         Items = result.Hits.Select(TaxonListItem.FromHit).ToList();
         TotalTaxa = result.TotalTaxa;
         return Page();
+    }
+
+    /// The one taxon the text names exactly: the only exact match in the release, or, when no taxon
+    /// in the release matches exactly, the only exact match. Null when there is none or several. A
+    /// taxon not in the release with the same name as one in the release is linked from that
+    /// taxon's page.
+    public static SearchHit? SingleExactMatch(IReadOnlyList<SearchHit> hits) {
+        var exact = hits.Where(h => h.IsExactMatch).ToList();
+        var inRelease = exact.Where(h => h.Taxon.InRelease).ToList();
+        return inRelease.Count switch {
+            1 => inRelease[0],
+            0 when exact.Count == 1 => exact[0],
+            _ => null,
+        };
     }
 }

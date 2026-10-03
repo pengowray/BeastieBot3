@@ -403,13 +403,6 @@ public sealed class SpeciesPageTests(SiteFactory factory) : IClassFixture<SiteFa
         Assert.DoesNotContain("Assessment history", text);
     }
 
-    [Fact]
-    public async Task SpratAndEpbc() {
-        var html = await _client.GetStringAsync($"/species/{FixtureDb.Koala}");
-        Assert.Contains($"href=\"https://www.environment.gov.au/cgi-bin/sprat/public/publicspecies.pl?taxon_id={FixtureDb.KoalaSprat}\"", html);
-        Assert.Contains("Listed as Endangered under Australia's <abbr title=\"Environment Protection and Biodiversity Conservation Act 1999\">EPBC Act</abbr>", html.Replace("&#x27;", "'"));
-        Assert.Contains("<abbr title=\"Species Profile and Threats Database, Australian Government\">SPRAT profile</abbr>", html);
-    }
 
     [Fact]
     public async Task UnknownTaxonIs404WithTheTaxonText() {
@@ -417,7 +410,7 @@ public sealed class SpeciesPageTests(SiteFactory factory) : IClassFixture<SiteFa
         Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
         var text = Html.Text(await response.Content.ReadAsStringAsync());
         Assert.Contains("No taxon with IUCN id 999999999", text);
-        Assert.Contains("This site uses IUCN Red List version 2026-1. Check the id, or search for the taxon by name.", text);
+        Assert.Contains("This id is not in IUCN Red List version 2026-1, and this site has no earlier assessments with this id. Check the id, or search for the taxon by name.", text);
         Assert.Contains("Search for a taxon", text);
     }
 

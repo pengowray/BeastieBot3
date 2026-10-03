@@ -41,6 +41,19 @@ public sealed class SpeciesModel : PageModel {
     public TaxonRow? Taxon { get; private set; }
     public TaxonSummary? Parent { get; private set; }
 
+    /// False for a taxon that is not in the release: an old IUCN id, or a taxon IUCN no longer
+    /// assesses. Its page has no status summary and no latest assessment.
+    public bool InRelease => Taxon?.InRelease ?? true;
+
+    /// For a taxon not in the release: the taxon in the release with the same scientific name.
+    public TaxonSummary? CurrentTaxon { get; private set; }
+
+    /// For a taxon in the release: the taxa not in the release that have its scientific name.
+    public IReadOnlyList<TaxonSummary> EarlierIds { get; private set; } = [];
+
+    /// SPRAT profiles and EPBC Act listings: the whole taxon's first, then populations'.
+    public IReadOnlyList<EpbcListingRow> EpbcListings { get; private set; } = [];
+
     public IReadOnlyList<AssessmentRow> GlobalHistory { get; private set; } = [];
     public IReadOnlyList<AssessmentRow> RegionalLatest { get; private set; } = [];
     public AssessmentRow? LatestGlobal { get; private set; }
@@ -93,6 +106,13 @@ public sealed class SpeciesModel : PageModel {
         if (Taxon.ParentTaxonId is { } parentId) {
             Parent = _queries.GetSummary(parentId);
         }
+        if (!Taxon.InRelease && Taxon.CurrentTaxonId is { } currentId) {
+            CurrentTaxon = _queries.GetSummary(currentId);
+        }
+        if (Taxon.InRelease) {
+            EarlierIds = _queries.GetEarlierIds(Taxon.TaxonId);
+        }
+        EpbcListings = _queries.GetEpbcListings(Taxon.TaxonId);
         LoadAssessments(assessment);
         Options = WikitextOptions.FromQuery(authors, access, opts, wrapRef, refname, amp,
             Selected is null ? DefaultRefNames.LatestGlobal : DefaultRefNameFor(Selected));
@@ -124,8 +144,9 @@ public sealed class SpeciesModel : PageModel {
         var all = _queries.GetAssessments(Taxon!.TaxonId);
         _assessments = all;
         GlobalHistory = all.Where(a => a.IsGlobal).ToList();
-        LatestGlobal = GlobalHistory.FirstOrDefault(a => a.AssessmentId == Taxon.LatestGlobalAssessmentId)
-            ?? (Taxon.LatestGlobalAssessmentId is null ? null : GlobalHistory.FirstOrDefault(a => a.IsLatest));
+        LatestGlobal = !Taxon.InRelease ? null
+            : GlobalHistory.FirstOrDefault(a => a.AssessmentId == Taxon.LatestGlobalAssessmentId)
+                ?? (Taxon.LatestGlobalAssessmentId is null ? null : GlobalHistory.FirstOrDefault(a => a.IsLatest));
 
         // Latest per region: the row flagged latest, or the newest one when none is.
         RegionalLatest = all.Where(a => !a.IsGlobal)
@@ -134,7 +155,8 @@ public sealed class SpeciesModel : PageModel {
             .OrderBy(a => a.Scope, StringComparer.OrdinalIgnoreCase)
             .ToList();
 
-        StatusAssessment = LatestGlobal ?? RegionalLatest
+        // A taxon not in the release has no status summary: none of its assessments is current.
+        StatusAssessment = !Taxon.InRelease ? null : LatestGlobal ?? RegionalLatest
             .OrderByDescending(a => a.YearPublished ?? 0)
             .ThenByDescending(a => a.AssessmentDate)
             .FirstOrDefault();
@@ -173,6 +195,7 @@ public sealed class SpeciesModel : PageModel {
                 ? Parts.DoiSource switch {
                     DoiSource.Gbif => SiteText.DoiGbif,
                     DoiSource.Wikidata => SiteText.DoiWikidata,
+                    DoiSource.Resolved => SiteText.DoiResolved,
                     _ => null,
                 }
                 : SiteText.NoDoi;
@@ -300,6 +323,26 @@ public sealed class SpeciesModel : PageModel {
             ArrivedNameIsShown = type == NameTypes.Common && Taxon.CommonNameEn is not null
                 && SiteNameKey.Fold(Taxon.CommonNameEn) == SiteNameKey.Fold(text);
         }
+    }
+
+    /// True when the EPBC Act lists the whole taxon under a name other than its IUCN name
+    /// (the southern cassowary is listed as Casuarius casuarius johnsonii).
+    public bool ListedUnderOtherName(EpbcListingRow listing) =>
+        !listing.IsPopulation && Taxon is not null
+        && SiteNameKey.Fold(ScientificNameMarkupWords(listing.ListedName)) != SiteNameKey.Fold(ScientificNameMarkupWords(Taxon.ScientificName));
+
+    // The name without IUCN's rank markers, so "Panthera pardus ssp. orientalis" equals SPRAT's
+    // "Panthera pardus orientalis".
+    private static string ScientificNameMarkupWords(string name) =>
+        string.Join(' ', name.Split(' ', StringSplitOptions.RemoveEmptyEntries).Where(w => w is not ("ssp." or "subsp." or "var.")));
+
+    /// A name the EPBC Act lists a taxon under, as HTML: wholly italic when it is a plain binomial or
+    /// trinomial ("Casuarius casuarius johnsonii", which SPRAT writes without a rank marker), else
+    /// marked up as IUCN names are.
+    public static string ListedNameHtml(string name) {
+        var words = name.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        var plain = words.Length is 2 or 3 && words.Skip(1).All(w => w.All(c => char.IsLower(c) || c == '-'));
+        return plain ? "<i>" + SiteHtml.Encode(string.Join(' ', words)) + "</i>" : ScientificNameMarkup.ToHtml(name);
     }
 
     private static string? ReadDataDateRange(SiteSnapshot? snapshot) {

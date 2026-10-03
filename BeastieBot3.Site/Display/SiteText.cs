@@ -39,6 +39,8 @@ public static class SiteText {
         $"No taxa found for “{query}”. Check the spelling, or search for the scientific name. If the spelling is right, the taxon may not be on the IUCN Red List.";
     public const string TooShort = "Search term too short. Enter at least 2 letters or digits.";
     public const string NoGlobalShort = "No global assessment";
+    /// In a list of taxa, in place of the category, for a taxon that is not in the release.
+    public const string NoCurrentShort = "No current assessment";
 
     public static string? KindLabel(string kind) => kind switch {
         "subspecies" => "Subspecies",
@@ -118,6 +120,22 @@ public static class SiteText {
     public static string NoGlobalLinkText(int n) => n == 1 ? "1 regional assessment" : $"{SiteFormat.Number(n)} regional assessments";
     public const string NoGlobalAfter = ".";
 
+    // Taxon page: a taxon that is not in the release (an old IUCN id, or a taxon IUCN no longer
+    // assesses). The status section has the first line, and the second when a taxon in the release
+    // has the same name: before + italic name + middle + link("IUCN id {id}") + ".".
+    public static string NoCurrentLine(string? version) =>
+        version is null ? "No current assessment in the IUCN Red List." : $"No current assessment in IUCN Red List version {version}.";
+    public static string CurrentTaxonBefore(string? version) =>
+        version is null ? "The IUCN Red List lists " : $"IUCN Red List version {version} lists ";
+    public const string CurrentTaxonMiddle = " under ";
+    public static string IucnIdLink(long id) => $"IUCN id {id}";
+    public const string CurrentTaxonAfter = ".";
+
+    /// Under the assessment history of a taxon in the release, for each taxon with the same name that
+    /// is not in the release: before + link("IUCN id {id}") + after.
+    public const string EarlierIdBefore = "Earlier assessments of a taxon with this name are under ";
+    public const string EarlierIdAfter = ".";
+
     // Taxon page: wikitext boxes
     public const string LabelCite = "{{cite iucn}} citation";
     public const string LabelStatus = "{{IUCN status}} template";
@@ -151,6 +169,7 @@ public static class SiteText {
     // Taxon page: notes about the wikitext
     public const string DoiGbif = "DOI from GBIF's copy of the IUCN checklist.";
     public const string DoiWikidata = "DOI from Wikidata.";
+    public const string DoiResolved = "DOI found by checking possible DOIs at doi.org.";
     public const string NoDoi = "No DOI found in IUCN's citation text, GBIF or Wikidata. {{cite iucn}} works without a DOI.";
     public const string AuthorsUnsplit = "Check these author names, given exactly as IUCN wrote them:";
     /// versionNote: VersionNote's text ("Replaced by the errata version"), added as a sentence.
@@ -235,12 +254,19 @@ public static class SiteText {
     public const string LinkWikidata = "Wikidata item";
     public const string LinkCol = "Catalogue of Life";
     public const string LinkSprat = "SPRAT profile";
+    public const string LinkSpratPlural = "SPRAT profiles";
     public const string SpratFullName = "Species Profile and Threats Database, Australian Government";
     public const string EpbcFullName = "Environment Protection and Biodiversity Conservation Act 1999";
 
-    /// "Listed as Endangered under Australia's " + abbr("EPBC Act").
+    /// "Listed as Endangered under Australia's " + abbr("EPBC Act") + ".", then, for a listing of a
+    /// population, EpbcPopulationOnly; for a listing under another name, EpbcListedNameBefore +
+    /// italic name + ".".
     public static string EpbcBefore(string status) => $"Listed as {status} under Australia's ";
     public const string EpbcAbbr = "EPBC Act";
+    public const string EpbcAfter = ".";
+    /// population: the population as SPRAT names it ("combined populations of Qld, NSW and the ACT").
+    public static string EpbcPopulationOnly(string population) => $"This listing applies only to the {population}.";
+    public const string EpbcListedNameBefore = "The listing uses the name ";
 
     // Taxon page: data note. Before + link("About page") + after.
     public static string DataNoteBefore(string version, string dateRange) =>
@@ -264,8 +290,10 @@ public static class SiteText {
     public const string NotFoundHeading = "Page not found";
     public const string NotFoundLine = "Check the address, or search for a taxon.";
     public static string TaxonNotFoundHeading(long id) => $"No taxon with IUCN id {id}";
-    public static string TaxonNotFoundLine(string version) => $"This site uses IUCN Red List version {version}. Check the id, or search for the taxon by name.";
-    public const string TaxonNotFoundLineNoVersion = "Check the id, or search for the taxon by name.";
+    public static string TaxonNotFoundLine(string version) =>
+        $"This id is not in IUCN Red List version {version}, and this site has no earlier assessments with this id. Check the id, or search for the taxon by name.";
+    public const string TaxonNotFoundLineNoVersion =
+        "This site has no assessments with this id. Check the id, or search for the taxon by name.";
     public const string TooManyHeading = "Too many requests";
     public const string TooManyLine = "Try again in a minute.";
     public const string ServerErrorHeading = "Server error";

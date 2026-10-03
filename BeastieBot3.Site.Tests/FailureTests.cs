@@ -14,7 +14,7 @@ public sealed class SchemaMismatchTests(SchemaMismatchSiteFactory factory) : ICl
         var response = await _client.GetAsync("/healthz");
         Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
         var body = await response.Content.ReadAsStringAsync();
-        Assert.Equal("unavailable: database schema version 999, this build of the site needs 2", body);
+        Assert.Equal($"unavailable: database schema version 999, this build of the site needs {BeastieBot3.Shared.SiteData.SiteDbSchema.Version}", body);
     }
 
     [Theory]
@@ -161,7 +161,7 @@ public sealed class DatabaseFileChangeTests(ReplaceableSiteFactory factory) : IC
         site.Time.Advance(AfterRecheck);
         var health = await client.GetAsync("/healthz");
         Assert.Equal(HttpStatusCode.ServiceUnavailable, health.StatusCode);
-        Assert.Equal("unavailable: database schema version 1, this build of the site needs 2", await health.Content.ReadAsStringAsync());
+        Assert.Equal($"unavailable: database schema version 1, this build of the site needs {BeastieBot3.Shared.SiteData.SiteDbSchema.Version}", await health.Content.ReadAsStringAsync());
     }
 
     private sealed class SingleFileSiteFactory(string path) : SiteFactory {

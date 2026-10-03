@@ -6,7 +6,9 @@
         var kind = SiteText.KindLabel(taxon.Kind);
         <li>
             <div class="taxon-list-status">
-                @if (badge is not null) {
+                @if (!taxon.InRelease) {
+                    <span class="no-global">@SiteText.NoCurrentShort</span>
+                } else if (badge is not null) {
                     <partial name="_Badge" model="badge" />
                 } else {
                     <span class="no-global">@SiteText.NoGlobalShort</span>

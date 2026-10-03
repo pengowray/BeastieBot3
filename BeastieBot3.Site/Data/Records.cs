@@ -19,9 +19,9 @@ public sealed record TaxonRow(
     string? EnwikiTitle,
     string? WikidataQid,
     string? ColId,
-    long? SpratTaxonId,
-    string? EpbcStatus,
-    long? LatestGlobalAssessmentId);
+    long? LatestGlobalAssessmentId,
+    bool InRelease = true,
+    long? CurrentTaxonId = null);
 
 public sealed record AssessmentRow(
     long AssessmentId,
@@ -50,6 +50,7 @@ public sealed record NameRow(
     bool IsPreferred);
 
 /// A taxon with its category, as listed in search results, name lookups and the children of a taxon.
+/// InRelease: false for a taxon that is not in the release (no current assessment).
 public sealed record TaxonSummary(
     long TaxonId,
     string ScientificName,
@@ -58,7 +59,14 @@ public sealed record TaxonSummary(
     string? CommonNameEn,
     string? Category,
     bool PossiblyExtinct,
-    bool PossiblyExtinctInTheWild);
+    bool PossiblyExtinctInTheWild,
+    bool InRelease = true);
+
+/// One SPRAT profile of a taxon (epbc_listing). Status: the EPBC Act category code, null when the
+/// profile is not listed. Population: for a profile of one population, the population's name.
+public sealed record EpbcListingRow(long SpratTaxonId, string ListedName, string? Status, string AppliesTo, string? Population) {
+    public bool IsPopulation => AppliesTo == "population";
+}
 
 /// One search result: the taxon and the name that matched best.
 public sealed record SearchHit(

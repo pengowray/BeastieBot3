@@ -15,14 +15,17 @@ public sealed class SiteQueries {
     private const string TaxonColumns = """
         t.taxon_id, t.scientific_name, t.kind, t.kingdom, t.phylum, t.class_name, t.order_name, t.family,
         t.genus, t.subpopulation_name, t.authority, t.parent_taxon_id, t.common_name_en, t.enwiki_title,
-        t.wikidata_qid, t.col_id, t.sprat_taxon_id, t.epbc_status, t.latest_global_assessment_id
+        t.wikidata_qid, t.col_id, t.latest_global_assessment_id, t.in_release, t.current_taxon_id
         """;
 
     // A taxon with the category of its latest global assessment; the column order SummaryAt reads.
     private const string SummaryColumns = """
         t.taxon_id, t.scientific_name, t.subpopulation_name, t.kind, t.common_name_en,
-        a.category, a.possibly_extinct, a.possibly_extinct_in_the_wild
+        a.category, a.possibly_extinct, a.possibly_extinct_in_the_wild, t.in_release
         """;
+
+    // The number of columns in SummaryColumns, where the columns after them start.
+    private const int SummaryColumnCount = 9;
 
     private const string SummaryJoin = "LEFT JOIN assessment a ON a.assessment_id = t.latest_global_assessment_id";
 
@@ -48,8 +51,47 @@ public sealed class SiteQueries {
             Text(reader, 14),
             Text(reader, 15),
             Long(reader, 16),
-            Text(reader, 17),
+            reader.GetInt64(17) != 0,
             Long(reader, 18));
+    }
+
+    /// The taxon's SPRAT profiles and EPBC Act listings: the profile of the whole taxon first, then
+    /// the profiles of populations by name.
+    public IReadOnlyList<EpbcListingRow> GetEpbcListings(long taxonId) {
+        using var connection = _db.OpenConnection();
+        using var command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT sprat_taxon_id, listed_name, status, applies_to, population
+            FROM epbc_listing
+            WHERE taxon_id = @id
+            ORDER BY CASE applies_to WHEN 'taxon' THEN 0 ELSE 1 END, population, sprat_taxon_id
+            """;
+        command.Parameters.AddWithValue("@id", taxonId);
+        using var reader = command.ExecuteReader();
+        var rows = new List<EpbcListingRow>();
+        while (reader.Read()) {
+            rows.Add(new EpbcListingRow(reader.GetInt64(0), reader.GetString(1), Text(reader, 2), reader.GetString(3), Text(reader, 4)));
+        }
+        return rows;
+    }
+
+    /// Taxa not in the release whose name is this taxon's (their current_taxon_id is this one), by id.
+    public IReadOnlyList<TaxonSummary> GetEarlierIds(long taxonId) {
+        using var connection = _db.OpenConnection();
+        using var command = connection.CreateCommand();
+        command.CommandText = $"""
+            SELECT {SummaryColumns}
+            FROM taxon t {SummaryJoin}
+            WHERE t.current_taxon_id = @id
+            ORDER BY t.taxon_id
+            """;
+        command.Parameters.AddWithValue("@id", taxonId);
+        using var reader = command.ExecuteReader();
+        var rows = new List<TaxonSummary>();
+        while (reader.Read()) {
+            rows.Add(SummaryAt(reader, 0));
+        }
+        return rows;
     }
 
     public TaxonSummary? GetSummary(long taxonId) {
@@ -120,7 +162,8 @@ public sealed class SiteQueries {
         return rows;
     }
 
-    /// Taxa whose parent is this one: subspecies, then varieties, then subpopulations, each by name.
+    /// Taxa whose parent is this one: subspecies, then varieties, then subpopulations; within each,
+    /// taxa in the release first, then by name.
     public IReadOnlyList<TaxonSummary> GetChildren(long taxonId) {
         using var connection = _db.OpenConnection();
         using var command = connection.CreateCommand();
@@ -129,7 +172,7 @@ public sealed class SiteQueries {
             FROM taxon t {SummaryJoin}
             WHERE t.parent_taxon_id = @id
             ORDER BY CASE t.kind WHEN 'subspecies' THEN 0 WHEN 'variety' THEN 1 WHEN 'subpopulation' THEN 2 ELSE 3 END,
-                     t.scientific_name
+                     t.in_release DESC, t.scientific_name
             """;
         command.Parameters.AddWithValue("@id", taxonId);
         using var reader = command.ExecuteReader();
@@ -165,8 +208,9 @@ public sealed class SiteQueries {
     /// 1. a name equal to the text after folding (SiteNameKey.Fold);
     /// 2. a name that starts with the text;
     /// 3. any other name whose words start with the words typed (name_fts).
-    /// Within each group a scientific name beats a common name, which beats a synonym; species come
-    /// before infraspecific taxa and subpopulations; then shorter names first.
+    /// Within each group taxa in the release come before taxa that are not (no current assessment);
+    /// then a scientific name beats a common name, which beats a synonym; species come before
+    /// infraspecific taxa and subpopulations; then shorter names first.
     /// With exactOnly, only group 1 is searched. TotalTaxa is counted only when countAll is set and
     /// the limit was reached; otherwise it is the number of hits returned.
     /// When cancellationToken is cancelled (the visitor closed the page), the running query is
@@ -214,6 +258,7 @@ public sealed class SiteQueries {
                            MIN(CASE WHEN h.name_id IN (SELECT name_id FROM name_key WHERE key = @key) THEN 0
                                     WHEN h.name LIKE @prefix ESCAPE '\' THEN 1
                                     ELSE 2 END * 100000
+                               + CASE WHEN t.in_release = 1 THEN 0 ELSE 1 END * 50000
                                + CASE h.name_type WHEN 'scientific' THEN 0 WHEN 'common' THEN 1 ELSE 2 END * 10000
                                + CASE t.kind WHEN 'species' THEN 0 ELSE 1 END * 1000
                                + CASE WHEN LENGTH(h.name) > 999 THEN 999 ELSE LENGTH(h.name) END) AS score,
@@ -232,12 +277,13 @@ public sealed class SiteQueries {
             command.Parameters.AddWithValue("@limit", limit);
             using var reader = command.ExecuteReader();
             while (reader.Read()) {
+                const int next = SummaryColumnCount;
                 hits.Add(new SearchHit(
                     SummaryAt(reader, 0),
-                    reader.GetString(8),
-                    reader.GetString(9),
-                    Text(reader, 10),
-                    reader.GetInt64(11) < 100000));
+                    reader.GetString(next),
+                    reader.GetString(next + 1),
+                    Text(reader, next + 2),
+                    reader.GetInt64(next + 3) < 100000));
             }
         }
 
@@ -299,7 +345,8 @@ public sealed class SiteQueries {
         Text(reader, start + 4),
         Text(reader, start + 5),
         !reader.IsDBNull(start + 6) && reader.GetInt64(start + 6) != 0,
-        !reader.IsDBNull(start + 7) && reader.GetInt64(start + 7) != 0);
+        !reader.IsDBNull(start + 7) && reader.GetInt64(start + 7) != 0,
+        reader.GetInt64(start + 8) != 0);
 
     private static string? Text(SqliteDataReader reader, int i) =>
         reader.IsDBNull(i) ? null : reader.GetString(i);

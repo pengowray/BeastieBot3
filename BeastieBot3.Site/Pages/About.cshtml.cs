@@ -24,6 +24,9 @@ public sealed class AboutModel : PageModel {
     public string? SpratDate { get; private set; }
     public string? BuiltDate { get; private set; }
 
+    /// The newest date a DOI was checked at doi.org, when the database has it.
+    public string? DoiCheckedDate { get; private set; }
+
     /// GBIF's recommended citation of its copy of the IUCN checklist, when the database has it.
     public string? GbifCitation { get; private set; }
 
@@ -66,6 +69,9 @@ public sealed class AboutModel : PageModel {
             ColUrl = DoiUrl(colDoi);
         }
         SpratDate = SpratReportDate(snapshot.Get(SiteDbSchema.MetaKeys.SpratReport));
+        if (SiteFormat.TryParseDate(snapshot.Get(SiteDbSchema.MetaKeys.IucnDoiCheckedTo), out var doiChecked)) {
+            DoiCheckedDate = SiteFormat.Date(doiChecked);
+        }
         if (SiteFormat.TryParseDate(snapshot.Get(SiteDbSchema.MetaKeys.BuiltAtUtc), out var built)) {
             BuiltDate = SiteFormat.Date(built);
         }
