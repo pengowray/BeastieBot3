@@ -91,23 +91,41 @@ public sealed class IucnOrphanInfraranksReportCommand : Command<IucnOrphanInfrar
         return 0;
     }
 
+    /// <summary>
+    /// The orphan query over view_assessments_html_taxonomy_html (alias <c>i</c>), selecting
+    /// <paramref name="columns"/>, ordered by kingdom, class, order, family, scientific name and
+    /// taxon id. Shared with the audit site's OrphanInfraranksProducer.
+    /// </summary>
+    /// <remarks>
+    /// An infraspecific taxon (infraType set) is an orphan when no species-rank row (infraType and
+    /// subpopulationName both empty) has the same genusName and speciesName. The species-rank pairs
+    /// are read once into a materialised CTE, which SQLite searches through an automatic index.
+    /// A correlated NOT EXISTS against the view instead re-read assessments_html for every
+    /// infraspecific row: 77 s on 2026-1, against about 1 s this way, with the same rows.
+    /// </remarks>
+    internal static string OrphanQuery(string columns) => $"""
+        WITH species_keys AS MATERIALIZED (
+            SELECT DISTINCT p.genusName, p.speciesName
+            FROM view_assessments_html_taxonomy_html p
+            WHERE (p.infraType IS NULL OR TRIM(p.infraType) = '')
+              AND (p.subpopulationName IS NULL OR TRIM(p.subpopulationName) = '')
+        )
+        SELECT {columns}
+        FROM view_assessments_html_taxonomy_html i
+        WHERE i.infraType IS NOT NULL AND TRIM(i.infraType) <> ''
+          AND NOT EXISTS (
+            SELECT 1 FROM species_keys s
+            WHERE s.genusName = i.genusName AND s.speciesName = i.speciesName
+          )
+        ORDER BY i.kingdomName, i.className, i.orderName, i.familyName, i.scientificName, i.taxonId
+        """;
+
     private static List<OrphanRow> Query(SqliteConnection connection, CancellationToken cancellationToken) {
-        // An infraspecific taxon (infraType set) is an orphan when no species-rank row
-        // (infraType empty AND subpopulationName empty) shares its genus + species.
-        const string sql = @"
-SELECT i.taxonId, i.assessmentId, i.scientificName, i.infraType, i.infraName, i.subpopulationName,
-       i.redlistCategory, i.kingdomName, i.phylumName, i.className, i.orderName, i.familyName,
-       i.genusName, i.speciesName
-FROM view_assessments_html_taxonomy_html i
-WHERE i.infraType IS NOT NULL AND TRIM(i.infraType) <> ''
-  AND NOT EXISTS (
-    SELECT 1 FROM view_assessments_html_taxonomy_html p
-    WHERE p.genusName = i.genusName
-      AND p.speciesName = i.speciesName
-      AND (p.infraType IS NULL OR TRIM(p.infraType) = '')
-      AND (p.subpopulationName IS NULL OR TRIM(p.subpopulationName) = '')
-  )
-ORDER BY i.kingdomName, i.className, i.orderName, i.familyName, i.scientificName, i.taxonId";
+        var sql = OrphanQuery("""
+            i.taxonId, i.assessmentId, i.scientificName, i.infraType, i.infraName, i.subpopulationName,
+                   i.redlistCategory, i.kingdomName, i.phylumName, i.className, i.orderName, i.familyName,
+                   i.genusName, i.speciesName
+            """);
 
         using var command = connection.CreateCommand();
         command.CommandText = sql;
