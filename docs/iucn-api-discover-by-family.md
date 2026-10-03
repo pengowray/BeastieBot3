@@ -116,6 +116,7 @@ dotnet run --project BeastieBot3/BeastieBot3.csproj -- iucn api discover-by-fami
    beastiebot3 iucn api report-no-latest
    ```
    This generates a Markdown report (grouped by taxonomy) and a companion CSV listing every taxon that has no latest assessment — i.e. species that were removed, delisted, or reclassified.
+   When the CSV-imported IUCN database is configured (or given with `--database`), each taxon also lists the current taxa in that release with the same scientific name, and the current taxa that list its name as an IUCN synonym, in the same kingdom and with a current assessment in the same scope (`IucnSameNameTaxa`, shared with the audit site's `no-latest` page).
 
 ## Fetching Infraspecific Taxa (Subspecies & Varieties)
 

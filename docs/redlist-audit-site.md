@@ -95,7 +95,9 @@ release is final. A `--limit` run does neither, since its counts are partial.
   (`AuditCsvWriter.StableId`: `{report}:{Key}`) so a row can be cited and tracked across releases.
 - **`Model/AuditColumn` + `AuditColumns`** — column definitions and a factory of reusable columns
   (scientific name, status badge, taxonomy, ids, Red List link, field/current/suggested). Defined
-  once, rendered identically in HTML and CSV.
+  once, rendered identically in HTML and CSV. A column whose cell holds several links (one per
+  matched taxon on `no-latest`) sets `Parts`: the HTML table writes each part, linked when it has
+  an `Href`, and the CSV and the sort use `Value`, the same text without links.
 - **`TaxonGroups`** — the friendly `Group` column ("Mammals", "Mammals: Bats", "Plants: Cycads")
   that stands in for the raw `Class` and `Family` columns on every listing. A static class→group
   table plus a short curated order→detail table; the raw ladder columns are still written to the CSV
@@ -304,6 +306,33 @@ states this, so it stays true), so they are genuinely dropped taxa, not current 
 The page sorts most recently assessed first and adds "By year of last assessment" (2020+ are recent
 taxonomic changes; 1996/1998 have been in this state for every release) and "By scope of last
 assessment" (230 Europe-only and 48 Mediterranean-only taxa were never globally assessed).
+
+**`no-latest` matches to current taxa.** Two columns list the current taxa an old id's name now
+belongs to, matched by `Iucn/IucnSameNameTaxa.cs` (shared with `iucn api report-no-latest`, pinned
+by `IucnSameNameTaxaTests`). Current taxa and their current assessments come from the CSV export;
+the old id's name, authority, kingdom and the scopes of its last assessment come from its API
+cache record (`OldTaxonFromJson`, the same "latest year_published, first listed wins a tie" rule
+as the page). A match needs the same kingdom and a current assessment in the same scope: a Global
+last assessment needs a current Global one, a regional one a current assessment for one of its
+regions. "Same name" compares the scientific name after decoding HTML entities, collapsing
+whitespace, lower-casing and treating `ssp.` and `subsp.` as one marker. The synonym column uses
+IUCN's own synonym records of current taxa (the API cache's `taxon.synonyms[]`, read with
+`json_extract`, about 3 seconds), with the synonym's name rebuilt from genus (subgenus dropped),
+species, rank marker and infraspecific name, so `var. x` does not match `ssp. x`; it leaves out
+taxa already in the same-name column. A cell shows the id, the name and authority when they
+differ from the old taxon's (always, for a synonym), the current category and year, each linked to
+the current assessment; a synonym entry with another author or a note ("[in part]", "non
+Hilgendorf, 1891") is quoted as IUCN wrote it. On 2026-1 (4,223 old ids): 1,669 have a same-name
+match, 1,210 more only a synonym match (11 of them two taxa), 1,344 neither. 54 have a current
+taxon with the same name whose current assessments are all for other scopes (mostly dropped
+Mediterranean assessments beside current Global and Europe ones), so they show no match; 58
+same-name rows also have a synonym match, usually a split or a misapplied name. 25 random
+synonym matches, 20 whose synonym has a different authority and the 11 two-taxon ones were
+checked by hand: in each the current taxon lists the old name, and 884 of the 1,254 synonym
+entries behind the 1,210 synonym-only rows have IUCN status MERGE. Different authorities flag
+homonyms and misapplied names (`Medicago aculeata` Willd. against Gaertn.), which is why such a
+synonym is quoted in the cell. When the CSV database is missing, both columns are left out and the
+intro says the check did not run.
 
 **Wikidata and Wikipedia on `col-not-found` (and the `col-via-wiki` split).** `OtherSourceIndex` reads the Wikidata cache
 (`wikidata_p627_values` joined to `wikidata_entities` / `wikidata_scientific_names`, keyed on the IUCN
