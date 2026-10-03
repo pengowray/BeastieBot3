@@ -55,7 +55,10 @@ public static partial class WikidataCite {
         }
 
         if (itemQid is not null) {
-            var citeQ = Try("CiteQ", () => WikidataCitation.CiteQ(itemQid, citeQOptions));
+            // {{cite Q}} takes |access-date= only for an item with a URL (P953); without one CS1
+            // reports "access-date without URL".
+            var withUrl = citeQOptions with { ItemHasUrl = Properties(assessment.WikidataItemProperties).Contains("P953") };
+            var citeQ = Try("CiteQ", () => WikidataCitation.CiteQ(itemQid, withUrl));
             IReadOnlyList<string>? add = null;
             // With no list of the item's properties, what it lacks is not known, so nothing is
             // offered (rather than every statement).
@@ -68,7 +71,7 @@ public static partial class WikidataCite {
                 ItemQid = itemQid,
                 CiteQ = string.IsNullOrWhiteSpace(citeQ) ? null : new WikitextBox(CiteQBoxId, SiteText.LabelCiteQ, "{{cite Q}}", citeQ, Rows: 2),
                 Commands = commands is null ? null : CommandsBox(SiteText.LabelAddStatements, commands),
-                QuickStatementsUrl = commands is null ? null : Try("QuickStatementsUrl", () => WikidataCitation.QuickStatementsUrl(commands)),
+                QuickStatementsUrl = commands is null ? null : FittingUrl(Try("QuickStatementsUrl", () => WikidataCitation.QuickStatementsUrl(commands))),
                 AddedStatements = commands is null ? [] : StatementsAdded(commands),
             };
         }
@@ -83,9 +86,13 @@ public static partial class WikidataCite {
         }
         return view with {
             Commands = CommandsBox(SiteText.LabelCreateItem, create),
-            QuickStatementsUrl = Try("QuickStatementsUrl", () => WikidataCitation.QuickStatementsUrl(create)),
+            QuickStatementsUrl = FittingUrl(Try("QuickStatementsUrl", () => WikidataCitation.QuickStatementsUrl(create))),
         };
     }
+
+    // A link too long for browsers or the tool is left out; the commands box can still be copied.
+    private static string? FittingUrl(string? url) =>
+        url is not null && WikidataCitation.QuickStatementsUrlFits(url) ? url : null;
 
     private static WikitextBox CommandsBox(string label, IReadOnlyList<string> commands) =>
         new(CommandsBoxId, label, "QuickStatements", string.Join('\n', commands), Rows: Math.Min(commands.Count, 12),

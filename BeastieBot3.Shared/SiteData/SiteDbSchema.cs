@@ -77,7 +77,7 @@ public static class SiteDbSchema {
             citation_json                TEXT,                -- IucnCitationParts as JSON; NULL when the API payload is not cached
             replaced_by_assessment_id    INTEGER,             -- the errata or amended version that replaced this assessment; NULL otherwise
             wikidata_item_qid            TEXT,                -- Wikidata item for this assessment as a publication ('Q123'); NULL when none is known
-            wikidata_item_properties     TEXT                 -- space-separated properties that item already has ('P31 P356 P2093'); NULL when no item
+            wikidata_item_properties     TEXT                 -- space-separated properties that item already has, in WikidataCitation.JudgedProperties order ('P31 P356 P2093 Len'; Len = it has an English label); NULL when no item
         );
         CREATE INDEX assessment_taxon ON assessment(taxon_id, year_published);
 

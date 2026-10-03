@@ -973,6 +973,16 @@ public static class FlowCatalogue {
                     Group = "1 · Inputs",
                 },
                 new FlowStep {
+                    Id = "site-wikidata-assessment-items",
+                    Title = "Find the Wikidata items of assessments",
+                    Description = "The site's {{cite Q}} wikitext and its QuickStatements batches use the Wikidata items of individual assessments, which this step looks up and stores in the Wikidata cache.",
+                    Commands = new[] { "wikidata iucn-assessment-items" },
+                    InputSourceIds = new[] { "wikidata-cache" },
+                    OutputSourceIds = new[] { "wikidata-cache" },
+                    Group = "1 · Inputs",
+                    Note = "Run it after updating the caches. Until it runs again, the site offers a create batch for an assessment whose item someone has added since. It only reads from Wikidata.",
+                },
+                new FlowStep {
                     Id = "site-common-names",
                     Title = "Aggregate common names",
                     Description = "The site's English names come from the Common names store.",

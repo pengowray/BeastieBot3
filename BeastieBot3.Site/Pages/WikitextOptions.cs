@@ -69,8 +69,9 @@ public sealed record WikitextOptions(CiteAuthorStyle AuthorStyle, string Access,
         FullGivenNames = FullGivenNames,
     };
 
-    /// {{cite Q}} takes the same access date and ref options as {{cite iucn}}. Its authors come from
-    /// the Wikidata item, so the author options do not apply.
+    /// {{cite Q}} takes the same ref options as {{cite iucn}}, and the access date when the item has a
+    /// URL (WikidataCite sets ItemHasUrl). Its authors come from the Wikidata item, so the author
+    /// options do not apply.
     public CiteQOptions ToCiteQOptions(DateOnly today, DateOnly? downloaded) => new() {
         AccessDate = AccessDate(today, downloaded),
         WrapInRef = WrapInRef,

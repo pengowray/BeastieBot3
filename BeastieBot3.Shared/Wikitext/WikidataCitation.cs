@@ -108,7 +108,7 @@ public static partial class WikidataCitation {
     /// The longest QuickStatements link the site should offer. QuickStatements reads the commands
     /// from the URL's fragment, which the browser never sends to a server, so only the browser's own
     /// limit applies (Chrome and Firefox allow far more). 8,000 characters is a common safe ceiling
-    /// for any browser, and the longest batch in the 2026-1 data, 58 authors, is under 6,000.
+    /// for any browser, and the longest batch in the 2026-1 data (59 authors) gives a link of about 4,500 characters.
     public const int MaxQuickStatementsUrlLength = 8_000;
 
     /// The base of a QuickStatements link that opens the tool with a v1 batch filled in.
