@@ -673,7 +673,7 @@ internal sealed class CommonNameStore : SqliteStore {
         using var command = _connection.CreateCommand();
         var kingdomFilter = kingdom != null ? "AND t.kingdom = @kingdom" : "";
         command.CommandText = $@"
-            SELECT c.normalized_name, c.taxon_id, t.canonical_name, c.source, c.is_preferred, c.raw_name
+            SELECT c.normalized_name, c.taxon_id, t.canonical_name, c.source, c.is_preferred, c.raw_name, t.kingdom
             FROM common_names c
             JOIN taxa t ON c.taxon_id = t.id
             WHERE c.language = @lang
@@ -699,7 +699,8 @@ internal sealed class CommonNameStore : SqliteStore {
                 NormalizedName: usable.NormalizedName,
                 TaxonId: reader.GetInt64(1),
                 CanonicalName: reader.GetString(2),
-                Priority: GetSourcePriority(source, preferred)));
+                Priority: GetSourcePriority(source, preferred),
+                Kingdom: reader.IsDBNull(6) ? null : reader.GetString(6)));
         }
         return AmbiguousNames.Build(holdings);
     }
