@@ -25,7 +25,7 @@ namespace BeastieBot3.Iucn.Doi;
 [CommandInfo("iucn resolve-dois", CommandKind.Mutates,
     "Find the DOIs of IUCN Red List assessments that have no DOI in IUCN's citation, GBIF's checklist or Wikidata, and save them in Datastore:IUCN_doi_cache_sqlite. Looks each assessment up in Crossref's list of IUCN DOIs, then checks likely DOIs at doi.org.",
     Rerun = RerunEffect.IdempotentAdd,
-    RerunNote = "Skips assessments already checked. --recheck checks every assessment in the scope again, and --recheck-missing-after <DAYS> checks again the assessments with no DOI found at least that many days ago.",
+    RerunNote = "Skips assessments already checked. --recheck checks every assessment in the scope again, and --recheck-missing-after <DAYS> checks again the assessments whose last check, at least that many days ago, found no DOI.",
     ReportOnlyWith = new[] { "--status" },
     Examples = new[] {
         "iucn resolve-dois --status",
@@ -42,7 +42,7 @@ internal sealed class IucnResolveDoisCommand : AsyncCommand<IucnResolveDoisComma
 
     public sealed class Settings : CommonSettings {
         [CommandOption("--scope <SCOPE>")]
-        [Description("Which assessments to check: latest-global (default; includes subspecies, varieties and subpopulations), latest-regional, all-latest, or history (assessments that are no longer the latest).")]
+        [Description("Which assessments to check: latest-global (default; includes subspecies, varieties and subpopulations), latest-regional, all-latest, or history (earlier assessments, which the CSV export does not include).")]
         public string? Scope { get; init; }
 
         [CommandOption("--limit <N>")]
@@ -54,11 +54,11 @@ internal sealed class IucnResolveDoisCommand : AsyncCommand<IucnResolveDoisComma
         public bool Recheck { get; init; }
 
         [CommandOption("--recheck-missing-after <DAYS>")]
-        [Description("Check again the assessments with no DOI found by a check at least this many days ago.")]
+        [Description("Check again the assessments whose last check found no DOI, when that check is at least this many days old.")]
         public int? RecheckMissingAfterDays { get; init; }
 
         [CommandOption("--delay <MS>")]
-        [Description("Time between the starts of two doi.org requests, in milliseconds. Default: 300.")]
+        [Description("Minimum time between the starts of two doi.org requests, in milliseconds. Default: 300.")]
         [DefaultValue(300)]
         public int DelayMs { get; init; } = 300;
 
@@ -83,7 +83,7 @@ internal sealed class IucnResolveDoisCommand : AsyncCommand<IucnResolveDoisComma
         public string? DatabasePath { get; init; }
 
         [CommandOption("--previous-iucn-db <PATH>")]
-        [Description("CSV export database of the previous Red List release. Default: the IUCN_<release>.sqlite beside the current one with the newest older release.")]
+        [Description("CSV export database of the previous Red List release. Default: the IUCN_<release>.sqlite with the newest older release, in the same folder as the current one.")]
         public string? PreviousIucnDatabase { get; init; }
 
         public override ValidationResult Validate() {
@@ -100,7 +100,7 @@ internal sealed class IucnResolveDoisCommand : AsyncCommand<IucnResolveDoisComma
                 return ValidationResult.Error("--delay must be 0 or more milliseconds.");
             }
             if (NoCrossref && NoDoiOrg) {
-                return ValidationResult.Error("--no-crossref and --no-doi-org together leave nothing to check with.");
+                return ValidationResult.Error("Use --no-crossref or --no-doi-org, not both.");
             }
             return ValidationResult.Success();
         }
@@ -148,7 +148,7 @@ internal sealed class IucnResolveDoisCommand : AsyncCommand<IucnResolveDoisComma
             AnsiConsole.MarkupLineInterpolated($"[yellow]Skipped {source}: no file is configured or the file does not exist. Its DOIs are not counted.[/]");
         }
         if (previous is null) {
-            AnsiConsole.MarkupLine("[yellow]No CSV export of the previous release was found, so no assessment is known to be new in this release.[/]");
+            AnsiConsole.MarkupLineInterpolated($"[yellow]No CSV export of the release before {release} found in the folder of {iucnDatabase}. Assessments new in {release} may need more doi.org lookups. Use --previous-iucn-db to name the file.[/]");
         }
 
         var now = DateTime.UtcNow;
@@ -345,7 +345,7 @@ internal sealed class IucnResolveDoisCommand : AsyncCommand<IucnResolveDoisComma
             .AddColumn(new TableColumn("Checked").RightAligned())
             .AddColumn(new TableColumn("Found in Crossref's list").RightAligned())
             .AddColumn(new TableColumn("Found at doi.org").RightAligned())
-            .AddColumn(new TableColumn("Not found").RightAligned())
+            .AddColumn(new TableColumn("No DOI found").RightAligned())
             .AddColumn(new TableColumn("doi.org lookups").RightAligned());
         if (summary.NotInCrossref > 0) {
             table.AddColumn(new TableColumn("Not in Crossref's list, not checked").RightAligned());

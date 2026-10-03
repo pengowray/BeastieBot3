@@ -322,7 +322,7 @@ internal static class IucnDoiScopeReader {
         }
         targets.Sort((a, b) => a.AssessmentId.CompareTo(b.AssessmentId));
         counts.Targets = targets.Count;
-        report($"Read {rowIds.Count:N0} cached assessment payloads ({watch.Elapsed.TotalSeconds:N0} s in all).");
+        report($"Read {rowIds.Count:N0} cached assessment payloads. Finding the assessments took {watch.Elapsed.TotalSeconds:N0} s.");
 
         var result = new DoiScopeResult {
             Release = release,
