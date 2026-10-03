@@ -8,6 +8,9 @@
 //   col-update   — bring in a new Catalogue of Life release and refresh everything
 //                  downstream that reads it (a step-by-step guide for non-experts).
 //   wiki-reports — the full Wikipedia list/chart generation pipeline.
+//   sprat-australia — the Australian threatened-species lists from SPRAT.
+//   wikidata-iucn-status — the dry run of IUCN status edits on Wikidata.
+//   public-site  — build the public species site's database and deploy it.
 //   wiki-quality — coverage and freshness reports on Wikipedia/Wikidata caches.
 //   iucn-quality — consistency and cleanup reports on the IUCN dataset.
 //
@@ -897,6 +900,133 @@ public static class FlowCatalogue {
             Outputs = new[] {
                 new FlowResource { Label = "Dry run settings", Root = "rules", Path = "wikidata/iucn-status.yml", Kind = "yaml",
                     Description = "The release item, the rank variants to plan, and how a new assessment item is modelled." },
+            },
+        },
+
+        // ---------------------------------------------------------------
+        // Public species site: the inputs (the same steps as in the other
+        // flows, with their lights), the DOI sources, the site database, the
+        // citation check, and the deploy script run by hand. The lights of
+        // the site's own steps compare the site database with its inputs
+        // (PublicSiteProbes).
+        // ---------------------------------------------------------------
+        new FlowDefinition {
+            Id = "public-site",
+            Title = "Update the public species site",
+            Description = "Build the database of the public species site (Beastie Bot Species Status) and upload it to the server. `site build-db` reads the IUCN data, the caches and the other databases as they are when it runs, so after a new Red List release, update them first (1 · Inputs). Each input step is the same step as in the Import IUCN data workflow or the Wikipedia reports pipeline. The SPRAT (EPBC) database changes rarely; the Australian threatened-species lists (SPRAT) workflow updates it.",
+            Steps = new[] {
+                // ===== 1 · Inputs: the same steps as in the other flows, for their lights =====
+                new FlowStep {
+                    Id = "site-iucn-import",
+                    Title = "Import the IUCN CSV release",
+                    Description = "The site's taxa and latest assessments come from the IUCN Red List database.",
+                    Commands = new[] { "iucn import" },
+                    InputSourceIds = new[] { "iucn-csv-input" },
+                    OutputSourceIds = new[] { "iucn-main" },
+                    Probe = FlowStepProbes.IucnCsvImport,
+                    Group = "1 · Inputs",
+                    Note = "The Import IUCN data workflow has the guide to downloading a new release, and the step that points paths.ini at the new database. `site build-db` reads the database that [Datastore] IUCN_sqlite_from_cvs in paths.ini points at.",
+                },
+                new FlowStep {
+                    Id = "site-api-dataset",
+                    Title = "Build or update the IUCN API dataset",
+                    Description = "The site's past assessments and its citations come from the IUCN API cache.",
+                    Commands = new[] { "iucn api cache-all --full", "iucn api cache-all --full --status" },
+                    InputSourceIds = new[] { "iucn-main" },
+                    OutputSourceIds = new[] { "iucn-api-cache" },
+                    Probe = FlowStepProbes.IucnApiUpdateAll,
+                    Group = "1 · Inputs",
+                    Note = "After a new Red List release, start a refresh first (\"Start a refresh of the API data\" in the Import IUCN data workflow), then run this step until the refresh is finished.",
+                },
+                new FlowStep {
+                    Id = "site-wiki-update",
+                    Title = "Update the Wikidata and Wikipedia caches",
+                    Description = "The site's Wikidata items and English Wikipedia article titles come from these caches.",
+                    Commands = new[] { "wikipedia update", "wikipedia update --status" },
+                    InputSourceIds = new[] { "iucn-main" },
+                    OutputSourceIds = new[] { "wikidata-cache", "wikipedia-cache" },
+                    Probe = FlowStepProbes.WikiUpdateAll,
+                    Group = "1 · Inputs",
+                },
+                new FlowStep {
+                    Id = "site-common-names",
+                    Title = "Aggregate common names",
+                    Description = "The site's English names come from the Common names store.",
+                    Commands = new[] { "common-names aggregate" },
+                    InputSourceIds = new[] { "iucn-main" },
+                    OutputSourceIds = new[] { "common-names" },
+                    Group = "1 · Inputs",
+                    Note = "Run it after updating the caches, so the store gets the names found in them. When the Common names store does not exist yet, run `common-names init` first (Wikipedia reports pipeline).",
+                },
+                new FlowStep {
+                    Id = "site-col-placement",
+                    Title = "Build the CoL placement",
+                    Description = "The site's Catalogue of Life ids come from the CoL placement, which covers the species of the IUCN release it was built from.",
+                    Commands = new[] { "col build-placement" },
+                    InputSourceIds = new[] { "iucn-main", "col-sqlite" },
+                    Probe = FlowStepProbes.ColPlacement,
+                    Group = "1 · Inputs",
+                },
+
+                // ===== 2 · Build the site database =====
+                new FlowStep {
+                    Id = "site-gbif-download",
+                    Title = "Download GBIF's copy of the IUCN checklist",
+                    Description = "`iucn gbif-download` downloads the IUCN Red List checklist that IUCN publishes on GBIF (CC BY 4.0) into the folder set in Datasets:GBIF_IUCN_dir. Most of the site's DOIs come from it: for nearly every globally assessed species, the checklist includes the citation of the latest global assessment with its DOI.",
+                    Commands = new[] { "iucn gbif-download" },
+                    Probe = PublicSiteProbes.Gbif,
+                    Group = "2 · Build the site database",
+                    Note = "The download is about 21 MB. The command keeps the new zip only when it differs from the newest checklist zip already in the folder, and `site build-db` reads the newest zip. The status line under the step title shows which Red List release the newest zip is from, and whether the IUCN Red List database holds the same release.",
+                },
+                new FlowStep {
+                    Id = "site-resolve-dois",
+                    Title = "Find missing DOIs on doi.org",
+                    Description = "`iucn resolve-dois` finds DOIs for assessments that no other source gives a DOI for (IUCN's citation text, the GBIF checklist, Wikidata) by checking possible DOIs against doi.org. It saves the DOIs it finds in the DOI cache (Datastore:IUCN_doi_cache_sqlite), which `site build-db` reads.",
+                    Commands = new[] { "iucn resolve-dois" },
+                    Probe = PublicSiteProbes.Dois,
+                    Group = "2 · Build the site database",
+                    Note = "--scope under Options sets which assessments to find DOIs for: latest-global (the default), latest-regional, all-latest or history. The status line under this step's title shows only whether the DOI cache exists, not how many assessments are left to check.",
+                },
+                new FlowStep {
+                    Id = "site-build-db",
+                    Title = "Build the site database",
+                    Description = "`site build-db` builds the site database (Datastore:site_sqlite) from the IUCN Red List database, the IUCN API cache, the GBIF checklist, the DOI cache, the Common names store, the Wikidata and Wikipedia caches, the CoL placement and the SPRAT (EPBC) database. It writes the new database to a separate file and replaces the old one only when the build finishes.",
+                    Commands = new[] { "site build-db" },
+                    InputSourceIds = new[] { "iucn-main", "iucn-api-cache" },
+                    Probe = PublicSiteProbes.Build,
+                    Group = "2 · Build the site database",
+                    Note = "Only the IUCN Red List database and the IUCN API cache are required: the build leaves out any other input that is missing. For release 2026-1 the build takes about 65 seconds and writes about 410 MB. When the site database is older than its inputs, the status line under the step title names each input that changed after the build. --limit under Options builds a database of only the first N taxa. Unless you also set --output, that database replaces Datastore:site_sqlite, so build again without --limit before you deploy.",
+                },
+                new FlowStep {
+                    Id = "site-check-citations",
+                    Title = "Check the citations",
+                    Description = "`site check-citations` parses IUCN's citation of every latest assessment in the IUCN API cache, as `site build-db` does, and compares the result with the {{cite iucn}} templates in the cached English Wikipedia articles. It writes a Markdown report and changes no data.",
+                    Commands = new[] { "site check-citations" },
+                    InputSourceIds = new[] { "iucn-api-cache" },
+                    Optional = true,
+                    Group = "2 · Build the site database",
+                    Note = "The report lists the citations that could not be parsed and each kind of difference from the {{cite iucn}} templates on Wikipedia. It compares with the local Wikipedia cache, not live Wikipedia; --no-wiki under Options leaves the comparison out.",
+                    OutputPatterns = new[] {
+                        new FlowOutputPattern { Root = "reports", Pattern = "site-citation-check-*.md", Label = "Report" },
+                    },
+                },
+
+                // ===== 3 · Deploy =====
+                new FlowStep {
+                    Id = "site-deploy-db",
+                    Title = "Upload the site database to the server (manual)",
+                    Description = "Run `deploy/oracle/deploy-db.sh` in a terminal, in the BeastieBot3 repository folder. It uploads the site database, switches the site on the server to it, and puts the previous database back if the site's health check fails.",
+                    Group = "3 · Deploy",
+                    Note = "The deploy scripts read the server's address from deploy/oracle/deploy.env. deploy/oracle/README.md explains how to set up the server and that file.",
+                    GuideTitle = "How to deploy the database",
+                    GuideSteps = new[] {
+                        "Wait until `site build-db` has finished. Do not run the script while a build is running.",
+                        "In a terminal, in the BeastieBot3 repository folder, run `deploy/oracle/deploy-db.sh`. It uploads the file named by SITE_DB in deploy/oracle/deploy.env or, when SITE_DB is not set, by [Datastore] site_sqlite in BeastieBot3/paths.ini. To upload another file, give its path: `deploy/oracle/deploy-db.sh /path/to/site.sqlite`. If site_sqlite in paths.ini is a relative path, give the path this way too.",
+                        "If the upload stops partway, run the script again. It continues the upload.",
+                        "If the schema version changed (before the rebuild, the status line of \"Build the site database\" showed two schema versions), deploy the new site first: run `deploy/oracle/deploy-app.sh`, then `deploy/oracle/deploy-db.sh` straight away. The site on the server refuses a database with a different schema version, so it shows errors until deploy-db.sh finishes.",
+                        "Check the site with `deploy/oracle/status.sh`. To go back to the previous database, run `deploy/oracle/rollback-db.sh`.",
+                    },
+                },
             },
         },
 

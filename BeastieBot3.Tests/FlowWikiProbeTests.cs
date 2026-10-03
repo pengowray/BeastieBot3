@@ -178,6 +178,20 @@ public class FlowWikiProbeTests {
         Assert.Contains("10,000 searched before", r.Detail);
     }
 
+    // The misses table also holds taxa a later release dropped, so "never searched" is counted
+    // directly. Taken as gap minus misses, this case would read as nothing left to search.
+    [Fact]
+    public void Wikidata_search_uses_the_direct_count_when_misses_include_dropped_taxa() {
+        var r = FlowStepProbes.WikiWikidataSearch(State(s => {
+            s.TaxaWithoutWikidata = 100;
+            s.BackfillMisses = 150;
+            s.NeverSearched = 10;
+        }));
+        Assert.Equal("todo", r.Status);
+        Assert.Contains("10 not searched for yet", r.Detail);
+        Assert.Contains("90 searched before", r.Detail);
+    }
+
     [Fact]
     public void Wikidata_search_is_done_when_every_taxon_has_an_item() {
         var r = FlowStepProbes.WikiWikidataSearch(State());
