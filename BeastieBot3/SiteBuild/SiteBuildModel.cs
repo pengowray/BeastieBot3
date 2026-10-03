@@ -214,6 +214,12 @@ internal sealed class SiteBuildStats {
     public int? QidsP627Deprecated;
     /// Edition items of the Red List read from the cache; null when the cache has no such table.
     public int? RedListEditions;
+    /// Items whose JSON was read for P141 references the index does not record, and the P141
+    /// statements found to cite IUCN that way: by a reference URL on iucnredlist.org, or by a
+    /// stated in after a reference's first.
+    public int P141ItemsReadAsJson;
+    public int P141CitesIucnByUrl;
+    public int P141CitesIucnByLaterStatedIn;
     /// Citations whose DOI has a title registered with Crossref (the name the assessment was
     /// published under), and of those, the ones whose name differs from IUCN's citation name.
     public int RegisteredNames;

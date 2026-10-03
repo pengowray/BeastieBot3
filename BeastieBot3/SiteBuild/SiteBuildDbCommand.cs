@@ -240,6 +240,9 @@ internal sealed class SiteBuildDbCommand : Command<SiteBuildDbCommand.Settings> 
         if (s.RedListEditions is { } editions) {
             Row("Editions of the IUCN Red List on Wikidata (a P141 reference stated in one cites IUCN)", editions);
         }
+        Row("Items whose JSON was read for P141 references that the cache's index does not record", s.P141ItemsReadAsJson);
+        Row("Of their P141 statements, ones that cite IUCN by a reference URL on iucnredlist.org", s.P141CitesIucnByUrl);
+        Row("Of their P141 statements, ones that cite IUCN in a reference's second or later stated in (P248)", s.P141CitesIucnByLaterStatedIn);
         Row("Taxa with a Wikidata item matched by name", s.QidsFromNameMatch);
         Row("Wikidata items matched by name but left out: the item is a taxon in another kingdom", s.QidsNameMatchOtherKingdom);
         var items = s.WikidataItems;

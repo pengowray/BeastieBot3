@@ -126,7 +126,7 @@ public sealed class SiteDbBuildErrataDoiTests : IDisposable {
         var taxon = Rows(db, $"SELECT wikidata_qid, wikidata_qid_source, wikidata_p141, wikidata_item_downloaded, wikidata_p627_deprecated FROM taxon WHERE taxon_id = {PinusPinea}").Single();
         Assert.Equal(("Q146992", "p627", "2026-08-20", 0L), ((string)taxon[0]!, (string)taxon[1]!, (string)taxon[3]!, (long)taxon[4]!));
         var statements = WikidataStatusStatement.ListFromJson((string)taxon[2]!)!;
-        Assert.Equal(3, statements.Count);
+        Assert.Equal(6, statements.Count);
         var iucn = statements.Single(s => s.Id == P141Statement);
         Assert.Equal(("Q211005", "normal"), (iucn.Value, iucn.Rank));
         Assert.Equal(new[] { "Q115962546", "Q136547248" }, iucn.StatedIn);
@@ -136,9 +136,19 @@ public sealed class SiteDbBuildErrataDoiTests : IDisposable {
         var edition = statements.Single(s => s.Id == P141EditionOnly);
         Assert.Equal((1, true), (edition.References, edition.CitesIucn));
         Assert.Empty(edition.TaxonIds!);
-        // A national red book: does not cite IUCN.
+        // A national red book, with a reference URL on another site: does not cite IUCN.
         var book = statements.Single(s => s.Id == P141Book);
         Assert.Equal((1, false), (book.References, book.CitesIucn));
+        // Stated in an assessment's item (wikidata_iucn_assessment_items), with no IUCN taxon ID.
+        Assert.True(statements.Single(s => s.Id == P141AssessmentItem).CitesIucn);
+        // The index has no reference URL and only a reference's first stated in, so these two are
+        // read from the item's JSON: a pre-publication PDF on nc.iucnredlist.org, and an edition of
+        // the Red List as the second stated in.
+        var url = statements.Single(s => s.Id == P141UrlOnly);
+        Assert.Equal((1, true), (url.References, url.CitesIucn));
+        Assert.Empty(url.StatedIn!);
+        Assert.True(statements.Single(s => s.Id == P141SecondStatedIn).CitesIucn);
+        Assert.Equal((1, 1, 1), (stats.P141ItemsReadAsJson, stats.P141CitesIucnByUrl, stats.P141CitesIucnByLaterStatedIn));
         Assert.Equal((1, 0), (stats.QidsWithP141Known, stats.QidsWithNoP141));
         Assert.Equal(0, stats.WikidataItems.TitlesNotRecorded);
     }
@@ -183,6 +193,24 @@ public sealed class SiteDbBuildErrataDoiTests : IDisposable {
     private const string P141Statement = "Q146992$0E7A3F55-2E7B-4C60-9F0B-2D8B54F1A001";
     private const string P141EditionOnly = "Q146992$0E7A3F55-2E7B-4C60-9F0B-2D8B54F1A002";
     private const string P141Book = "Q146992$0E7A3F55-2E7B-4C60-9F0B-2D8B54F1A003";
+    private const string P141UrlOnly = "q146992$0E7A3F55-2E7B-4C60-9F0B-2D8B54F1A005";
+    private const string P141SecondStatedIn = "Q146992$0E7A3F55-2E7B-4C60-9F0B-2D8B54F1A006";
+    private const string P141AssessmentItem = "Q146992$0E7A3F55-2E7B-4C60-9F0B-2D8B54F1A007";
+
+    // Q146992's JSON as the cache stores it, cut down to the P141 statements the index cannot decide:
+    // the book, the URL-only reference (a lower-case entity id, as some older statements have), and
+    // a reference whose first stated in is another source and whose second is the 2025.2 edition.
+    private const string StonePineJson = """
+        {"entities":{"Q146992":{"id":"Q146992","claims":{"P141":[
+          {"id":"Q146992$0E7A3F55-2E7B-4C60-9F0B-2D8B54F1A003","rank":"deprecated","mainsnak":{"datavalue":{"value":{"id":"Q219127"}}},
+           "references":[{"hash":"h4","snaks":{"P1476":[{"datavalue":{"value":{"text":"Red Book","language":"en"}}}],
+             "P854":[{"datavalue":{"value":"https://www.example.org/iucnredlist.org/red-book"}}]}}]},
+          {"id":"q146992$0E7A3F55-2E7B-4C60-9F0B-2D8B54F1A005","rank":"deprecated","mainsnak":{"datavalue":{"value":{"id":"Q96377276"}}},
+           "references":[{"hash":"h5","snaks":{"P854":[{"datavalue":{"value":"https://nc.iucnredlist.org/redlist/content/attachment_files/Pinus_pinea_Pre-Publication_Assessment_RLTS_T42391A1_en.pdf"}}]}}]},
+          {"id":"Q146992$0E7A3F55-2E7B-4C60-9F0B-2D8B54F1A006","rank":"deprecated","mainsnak":{"datavalue":{"value":{"id":"Q278113"}}},
+           "references":[{"hash":"h6","snaks":{"P248":[{"datavalue":{"value":{"id":"Q999"}}},{"snaktype":"somevalue"},{"datavalue":{"value":{"id":"Q136547248"}}}]}}]}
+        ]}}}}
+        """;
 
     private static void WriteWikidataCache(string path) {
         var fetched = new DateTime(2026, 10, 1, 0, 0, 0, DateTimeKind.Utc);
@@ -194,11 +222,13 @@ public sealed class SiteDbBuildErrataDoiTests : IDisposable {
         // Q146992, the stone pine's item: it states the IUCN taxon id, and its P141 (least concern)
         // has two references, stated in the 2022.2 and the 2025.2 release items. Made up: a second
         // statement whose one reference is stated in the 2025.2 edition with no IUCN taxon ID, a
-        // third whose reference is a book, and Q100, which states the id at deprecated rank.
+        // third whose reference is a book, three whose references the index cannot decide
+        // (StonePineJson) or that are stated in an assessment's item, and Q100, which states the id
+        // at deprecated rank.
         using var c = OpenWritable(path);
         Execute(c, $"""
             INSERT INTO wikidata_entities (entity_numeric_id, entity_id, discovered_at, last_seen_at, has_p141, has_p627, json_downloaded, downloaded_at, json)
-                VALUES (146992, 'Q146992', '2026-08-01T00:00:00.0000000Z', '2026-08-20T00:00:00.0000000Z', 1, 1, 1, '2026-08-20T03:04:05.0000000Z', '{"{}"}');
+                VALUES (146992, 'Q146992', '2026-08-01T00:00:00.0000000Z', '2026-08-20T00:00:00.0000000Z', 1, 1, 1, '2026-08-20T03:04:05.0000000Z', @json);
             INSERT INTO wikidata_entities (entity_numeric_id, entity_id, discovered_at, last_seen_at, has_p141, has_p627, json_downloaded, downloaded_at, json)
                 VALUES (100, 'Q100', '2026-08-01T00:00:00.0000000Z', '2026-08-20T00:00:00.0000000Z', 1, 1, 1, '2026-08-19T03:04:05.0000000Z', '{"{}"}');
             INSERT INTO wikidata_p627_values VALUES (146992, 'claim', '{PinusPinea}');
@@ -210,8 +240,14 @@ public sealed class SiteDbBuildErrataDoiTests : IDisposable {
             INSERT INTO wikidata_p141_references VALUES (146992, '{P141EditionOnly}', 'h3', 136547248, '');
             INSERT INTO wikidata_p141_statements VALUES (146992, '{P141Book}', 219127, 'Q219127', 'deprecated');
             INSERT INTO wikidata_p141_references VALUES (146992, '{P141Book}', 'h4', NULL, '');
+            INSERT INTO wikidata_p141_statements VALUES (146992, '{P141UrlOnly}', 96377276, 'Q96377276', 'deprecated');
+            INSERT INTO wikidata_p141_references VALUES (146992, '{P141UrlOnly}', 'h5', NULL, '');
+            INSERT INTO wikidata_p141_statements VALUES (146992, '{P141SecondStatedIn}', 278113, 'Q278113', 'deprecated');
+            INSERT INTO wikidata_p141_references VALUES (146992, '{P141SecondStatedIn}', 'h6', 999, '');
+            INSERT INTO wikidata_p141_statements VALUES (146992, '{P141AssessmentItem}', 211005, 'Q211005', 'deprecated');
+            INSERT INTO wikidata_p141_references VALUES (146992, '{P141AssessmentItem}', 'h7', 56000001, '');
             INSERT INTO wikidata_p141_statements VALUES (100, 'Q100$0E7A3F55-2E7B-4C60-9F0B-2D8B54F1A004', 278113, 'Q278113', 'normal');
-            """);
+            """, ("@json", StonePineJson));
     }
 
     private static void WriteAssessmentItems(WikidataCacheStore store, DateTime fetched) {

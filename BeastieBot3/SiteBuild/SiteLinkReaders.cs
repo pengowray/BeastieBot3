@@ -23,7 +23,8 @@ using Microsoft.Data.Sqlite;
 //                  from their references, the stated in (P248) items, the IUCN taxon IDs (P627), how
 //                  many there are, and whether one cites IUCN (wikidata_p141_statements and
 //                  wikidata_p141_references, plus the Red List editions in
-//                  wikidata_iucn_red_list_editions), and the day it was downloaded
+//                  wikidata_iucn_red_list_editions and the assessment items, and the item's JSON for
+//                  the few statements the index cannot decide), and the day it was downloaded
 //                  (wikidata_item_downloaded).
 //   col_id         the CoL placement file's species_match (species only; Accepted, Synonym and
 //                  ProvisionallyAccepted give the accepted usage id), keyed by IUCN's own kingdom,
@@ -183,7 +184,7 @@ internal static class SiteLinkReaders {
             }
         }
 
-        ReadP141(connection, taxa, otherItems, stats, cancellationToken);
+        ReadP141(connection, taxa, otherItems, hasAssessmentItems, stats, cancellationToken);
 
         if (!hasAssessmentItems) {
             stats.Warnings.Add("The Wikidata cache has no table of Wikidata items for IUCN assessments, so the build takes no DOIs and no assessment items from Wikidata. To fill the table, run wikidata iucn-assessment-items.");
@@ -231,14 +232,18 @@ internal static class SiteLinkReaders {
     // The IUCN conservation status (P141) statements of each item that states its taxon's IUCN id,
     // and of the other items that state it too, from the index tables the cache fills when it
     // downloads an item (wikidata_p141_statements and wikidata_p141_references), and the day it
-    // downloaded the item. Reading the items' JSON instead took 94 seconds for 4.2 GB in October
+    // downloaded the item. Reading every item's JSON instead took 94 seconds for 4.2 GB in October
     // 2026; the index tables take about a second, but record only the first stated in (P248) item
     // of each reference, its IUCN taxon IDs (P627), and no reference URL or retrieved date.
     //
-    // A reference cites IUCN when it has an IUCN taxon ID, or its stated in is the Red List
-    // (Q32059), IUCN (Q48268) or an edition of the Red List (wikidata_iucn_red_list_editions).
+    // A reference cites IUCN when it has an IUCN taxon ID; its stated in is the Red List (Q32059),
+    // IUCN (Q48268), an edition of the Red List (wikidata_iucn_red_list_editions) or an assessment's
+    // item (wikidata_iucn_assessment_items); or it has a reference URL (P854) on iucnredlist.org or
+    // a subdomain. For the URL and for a stated in after the first, the JSON of the items is read,
+    // but only for the statements whose references the index shows citing something else or nothing
+    // (P141JsonReferences; 89 statements in October 2026).
     private static void ReadP141(SqliteConnection connection, IReadOnlyDictionary<long, SiteTaxon> taxa,
-        IReadOnlyDictionary<long, List<(long NumericId, bool Deprecated)>> otherItems, SiteBuildStats stats,
+        IReadOnlyDictionary<long, List<(long NumericId, bool Deprecated)>> otherItems, bool hasAssessmentItems, SiteBuildStats stats,
         CancellationToken cancellationToken) {
         var byItem = new Dictionary<long, List<SiteTaxon>>();
         foreach (var taxon in taxa.Values) {
@@ -262,6 +267,14 @@ internal static class SiteLinkReaders {
         }
         var iucnSources = new HashSet<long>(WikidataStatusStatement.IucnSourceItems.Concat(editions ?? Enumerable.Empty<string>())
             .Select(q => long.Parse(q.AsSpan(1), NumberStyles.None, CultureInfo.InvariantCulture)));
+        if (hasAssessmentItems) {
+            using var command = connection.CreateCommand();
+            command.CommandText = "SELECT qid_numeric FROM wikidata_iucn_assessment_items";
+            using var reader = command.ExecuteReader();
+            while (reader.Read()) {
+                iucnSources.Add(reader.GetInt64(0));
+            }
+        }
 
         var downloaded = new Dictionary<long, string>();
         using (var command = connection.CreateCommand()) {
@@ -299,6 +312,30 @@ internal static class SiteLinkReaders {
                 if (taxonId.Length > 0) {
                     summary.TaxonIds.Add(taxonId);
                     summary.CitesIucn = true;
+                }
+            }
+        }
+
+        // Statements with references that the index shows citing something else or nothing: their
+        // items' JSON may show an IUCN reference URL or a later stated in.
+        var unsure = references.Where(r => !r.Value.CitesIucn && r.Value.Hashes.Count > 0)
+            .GroupBy(r => r.Key.Item, r => r.Key.Statement);
+        using (var command = connection.CreateCommand()) {
+            command.CommandText = "SELECT json FROM wikidata_entities WHERE entity_numeric_id = @id";
+            var idParameter = command.Parameters.Add("@id", SqliteType.Integer);
+            foreach (var group in unsure) {
+                cancellationToken.ThrowIfCancellationRequested();
+                idParameter.Value = group.Key;
+                var json = command.ExecuteScalar() as string;
+                stats.P141ItemsReadAsJson++;
+                var found = P141JsonReferences.StatementsCitingIucn(json, group.ToHashSet(StringComparer.Ordinal), iucnSources.Contains);
+                foreach (var (statementId, citation) in found) {
+                    references[(group.Key, statementId)].CitesIucn = true;
+                    if (citation == P141JsonCitation.ReferenceUrl) {
+                        stats.P141CitesIucnByUrl++;
+                    } else {
+                        stats.P141CitesIucnByLaterStatedIn++;
+                    }
                 }
             }
         }
