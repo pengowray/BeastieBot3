@@ -113,7 +113,7 @@ public static class DataSourceCatalogue {
             Id = "iucn-doi-cache",
             Name = "DOI cache",
             Kind = "sqlite",
-            Description = "DOIs found by `iucn resolve-dois` for assessments that have no DOI from IUCN's citation, the GBIF checklist or Wikidata. `site build-db` reads it.",
+            Description = "DOIs found by `iucn resolve-dois` for assessments that have no DOI from IUCN's citation, the GBIF checklist or Wikidata. `site build-db` reads its DOIs from this cache.",
             ResolvePath = p => p.GetIucnDoiCachePath(),
             // One row per assessment checked, with a NULL doi when none was found. About 0.1s cold
             // on 148k rows; doi is not indexed, so the two splits read the table too.
