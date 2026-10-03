@@ -22,8 +22,9 @@ using BeastieBot3.Shared.Wikitext;
 //     Swaay" for "van Swaay, C."). What comes before the surname is the given part. A trailing
 //     particle there ("Rogier de" from "Rogier de Kok" for "Kok, R.") belongs to the surname as
 //     value[] writes it and is dropped.
-//   - The given part has no digit, "@", bracket, comma, semicolon, slash or "&", no organisation
-//     word, and is not only initials ("D.R. Paulson").
+//   - The given part has no digit, "@", bracket, comma, semicolon, slash or "&", no letter lost to
+//     an encoding error ("Jos? Ralison"), no organisation word and no name starting with a small
+//     letter ("kelly Hare"), and is not only initials ("D.R. Paulson").
 //   - Each published initial, in order, is the start of the next given name ("J.-P." and "J.P." both
 //     fit "Jean-Pierre"; "Th." fits "Thomas"). Particles among the initials ("C. de C.") are skipped
 //     on both sides. People who go by a middle name fail here: "Liddle, T.A." is "Adam Liddle".
@@ -66,8 +67,9 @@ internal enum GivenNameOutcome {
     Ambiguous,
     /// The entry with the surname gives only initials.
     EntryInitialsOnly,
-    /// The entry with the surname has digits, "@", brackets, a comma or an organisation word in its
-    /// given part (or a semicolon, slash or "&").
+    /// The entry with the surname has digits, "@", brackets, a comma, a lost letter ("?" or U+FFFD),
+    /// an organisation word or a name starting with a small letter in its given part (or a
+    /// semicolon, slash or "&").
     EntryNotAName,
 }
 
@@ -168,7 +170,9 @@ internal static partial class AssessorGivenNames {
         if (words.Count == 0) return null;
         given = string.Join(' ', words);
 
-        if (NotAName().IsMatch(given) || IucnAuthorNameParser.HasOrganisationWord(given)) {
+        // A name written in small letters ("kelly Hare", "hai-Ning Qin") would print that way.
+        var smallLetter = words.Any(w => !Particles.Contains(w) && char.IsLower(w[0]));
+        if (smallLetter || NotAName().IsMatch(given) || IucnAuthorNameParser.HasOrganisationWord(given)) {
             return new GivenNameMatch(GivenNameOutcome.EntryNotAName, null, entry.Raw);
         }
         if (words.All(IsInitialWord)) {
@@ -284,7 +288,7 @@ internal static partial class AssessorGivenNames {
     [GeneratedRegex(@"^\S+@\S+$")]
     private static partial Regex EmailOnly();
 
-    [GeneratedRegex(@"[\d@()\[\],;/&]")]
+    [GeneratedRegex(@"[\d@()\[\],;/&?\uFFFD]")]
     private static partial Regex NotAName();
 
     // "D.", "D", "DR", "D.R.", "N.S", "J.-P.", "Th."; not "Evan" or "Al".

@@ -131,6 +131,12 @@ public class AssessorGivenNamesTests {
         // "Evan" is a name, although "E" + "van" reads as initials and a particle.
         AssertGiven("Evan", GivenNameOutcome.Matched, "Quah, E.", "Evan Quah (University Sains Malaysia)");
         Assert.Equal(GivenNameOutcome.EntryNotAName, Match("Campbell, R.", "Ruairidh (Roo) Campbell (NatureScot)").Outcome);
+        // A given name in small letters, as value[] has it for "Qin, h." and "Hare, K.".
+        Assert.Equal(GivenNameOutcome.EntryNotAName, Match("Qin, h.", "hai-Ning Qin").Outcome);
+        Assert.Equal(GivenNameOutcome.EntryNotAName, Match("Hare, K.", "kelly Hare").Outcome);
+        // A letter lost to an encoding error (aid 16114199, "Ralison, J.").
+        Assert.Equal(GivenNameOutcome.EntryNotAName, Match("Ralison, J.", "Jos\uFFFD Ralison").Outcome);
+        Assert.Equal(GivenNameOutcome.EntryNotAName, Match("Ralison, J.", "Jos? Ralison").Outcome);
         // Made up: a postal address before the name.
         Assert.Equal(GivenNameOutcome.EntryNotAName, Match("Smith, J.", "PO Box 12 John Smith").Outcome);
     }

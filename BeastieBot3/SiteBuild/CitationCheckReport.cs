@@ -503,7 +503,7 @@ internal static class CitationCheckReport {
         GivenNameOutcome.InitialsDisagree => "The entry with the surname has given names that don't fit the initials",
         GivenNameOutcome.Ambiguous => "Two entries fit",
         GivenNameOutcome.EntryInitialsOnly => "The entry with the surname gives only initials",
-        GivenNameOutcome.EntryNotAName => "The entry's given part has digits, @, brackets, a comma or an organisation word",
+        GivenNameOutcome.EntryNotAName => "The entry's given part has digits, @, brackets, a comma, a lost letter, an organisation word or a name in small letters",
         _ => outcome.ToString(),
     };
 
