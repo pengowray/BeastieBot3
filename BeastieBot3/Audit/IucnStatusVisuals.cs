@@ -3,7 +3,10 @@ using BeastieBot3.WikipediaLists;
 
 // Colour + label for a Red List category badge. Colours are ported from the project's legacy
 // palette (BeastieLegacy RedStatus.HexColor) and are used only to make long lists easier to
-// scan. They are not the official IUCN category colours; the audit pages say so.
+// scan. They are not the official IUCN category colours; the audit pages say so. Two were changed
+// so the badge text has at least 4.5:1 contrast: EN's orange is darker (#cc6633 was 3.8:1 with
+// white), and the grey for other codes has dark text (white was 2.9:1). The badges look the same
+// in the light and dark themes.
 
 namespace BeastieBot3.Audit;
 
@@ -39,13 +42,13 @@ internal static class IucnStatusVisuals {
 
         return templateCode.ToUpperInvariant() switch {
             "CR" or "CR(PE)" or "CR(PEW)" or "PE" or "PEW" => ("#cc3333", "#ffffff"),
-            "EN" => ("#cc6633", "#ffffff"),
+            "EN" => ("#b45a2d", "#ffffff"),
             "VU" => ("#cc9900", "#1d1d1d"),
             "NT" or "LR/NT" => ("#99cc99", "#173a17"),
             "LR/CD" or "CD" => ("#99cc99", "#173a17"),
             "LC" or "LR/LC" => ("#006666", "#ffffff"),
             "DD" => ("#aaaaaa", "#1d1d1d"),
-            _ => ("#999999", "#ffffff"),
+            _ => ("#999999", "#1d1d1d"),
         };
     }
 }

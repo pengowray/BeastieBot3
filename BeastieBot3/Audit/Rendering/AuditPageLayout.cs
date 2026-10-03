@@ -16,6 +16,10 @@ internal static class AuditPageLayout {
     // wrote, so it must stay byte-identical to what earlier versions wrote.
     public const string StylesheetLink = "<link rel=\"stylesheet\" href=\"assets/audit.css\">";
 
+    // Before the stylesheet and not deferred: theme.js sets the theme chosen in this browser
+    // before the page is drawn.
+    public const string ThemeScript = "<script src=\"assets/theme.js\"></script>";
+
     public static string Page(AuditDocument doc, string pageTitle, string? crumbsHtml, string bodyHtml, bool wide = false) {
         var cfg = doc.Config;
         var fullTitle = pageTitle.Length == 0 ? cfg.SiteTitle : $"{pageTitle} · {cfg.SiteTitle}";
@@ -27,13 +31,19 @@ internal static class AuditPageLayout {
         sb.Append("<meta charset=\"utf-8\">\n");
         sb.Append("<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n");
         sb.Append("<meta name=\"robots\" content=\"noindex\">\n");
+        sb.Append("<meta name=\"color-scheme\" content=\"light dark\">\n");
         sb.Append($"<title>{HtmlText.Escape(fullTitle)}</title>\n");
+        sb.Append(ThemeScript).Append('\n');
         sb.Append(StylesheetLink).Append('\n');
         sb.Append(wide ? "</head>\n<body class=\"wide\">\n" : "</head>\n<body>\n");
 
         sb.Append("<header class=\"site\">\n<div class=\"wrap\">\n");
+        sb.Append("<div class=\"site-top\">\n<div class=\"site-id\">\n");
         sb.Append($"<h1><a href=\"index.html\" style=\"color:inherit\">{HtmlText.Escape(cfg.SiteTitle)}</a></h1>\n");
         sb.Append($"<div class=\"release\">{HtmlText.Escape(cfg.Subtitle)} · IUCN Red List version {HtmlText.Escape(doc.Release)}</div>\n");
+        sb.Append("</div>\n");
+        sb.Append(ThemeControl);
+        sb.Append("</div>\n");
         if (!string.IsNullOrEmpty(crumbsHtml)) {
             sb.Append($"<nav class=\"crumbs\">{crumbsHtml}</nav>\n");
         }
@@ -58,6 +68,19 @@ internal static class AuditPageLayout {
         sb.Append("</body>\n</html>\n");
         return sb.ToString();
     }
+
+    // The Theme setting. Hidden until theme.js runs (audit.css), so a browser without JavaScript
+    // has no setting that does nothing. System is selected in the HTML; theme.js selects the
+    // choice saved in this browser.
+    public const string ThemeControl =
+        "<div class=\"theme-control\">\n"
+        + "<label for=\"theme-select\">Theme</label>\n"
+        + "<select id=\"theme-select\" autocomplete=\"off\">\n"
+        + "<option value=\"system\" selected>System</option>\n"
+        + "<option value=\"light\">Light</option>\n"
+        + "<option value=\"dark\">Dark</option>\n"
+        + "</select>\n"
+        + "</div>\n";
 
     // The notice at the top of every page of a --limit run, so a test build cannot be mistaken
     // for the full site. Empty for a full run. Reports whose producer ignores the limit

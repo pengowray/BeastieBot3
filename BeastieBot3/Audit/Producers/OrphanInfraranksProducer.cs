@@ -3,9 +3,10 @@ using System.Linq;
 using Microsoft.Data.Sqlite;
 using BeastieBot3.Audit.Model;
 using BeastieBot3.Infrastructure;
+using BeastieBot3.Iucn;
 
 // Assessed subspecies and varieties whose parent species has no species-level assessment.
-// Mirrors the query in IucnOrphanInfraranksReportCommand, extended to also read the year and
+// Uses the query from IucnOrphanInfraranksReportCommand.OrphanQuery, also reading the year and
 // the possibly-extinct flags so the status badge is exact.
 
 namespace BeastieBot3.Audit.Producers;
@@ -65,20 +66,11 @@ internal sealed class OrphanInfraranksProducer : IAuditReportProducer {
     }
 
     private static IReadOnlyList<AuditFinding> Query(SqliteConnection connection, AuditContext ctx) {
-        const string sql = @"
-SELECT i.taxonId, i.assessmentId, i.scientificName, i.infraType, i.infraName, i.subpopulationName,
-       i.redlistCategory, i.possiblyExtinct, i.possiblyExtinctInTheWild, i.yearPublished,
-       i.kingdomName, i.phylumName, i.className, i.orderName, i.familyName, i.genusName, i.speciesName
-FROM view_assessments_html_taxonomy_html i
-WHERE i.infraType IS NOT NULL AND TRIM(i.infraType) <> ''
-  AND NOT EXISTS (
-    SELECT 1 FROM view_assessments_html_taxonomy_html p
-    WHERE p.genusName = i.genusName
-      AND p.speciesName = i.speciesName
-      AND (p.infraType IS NULL OR TRIM(p.infraType) = '')
-      AND (p.subpopulationName IS NULL OR TRIM(p.subpopulationName) = '')
-  )
-ORDER BY i.kingdomName, i.className, i.orderName, i.familyName, i.scientificName, i.taxonId";
+        var sql = IucnOrphanInfraranksReportCommand.OrphanQuery("""
+            i.taxonId, i.assessmentId, i.scientificName, i.infraType, i.infraName, i.subpopulationName,
+                   i.redlistCategory, i.possiblyExtinct, i.possiblyExtinctInTheWild, i.yearPublished,
+                   i.kingdomName, i.phylumName, i.className, i.orderName, i.familyName, i.genusName, i.speciesName
+            """);
 
         using var command = connection.CreateCommand();
         command.CommandText = ctx.Limit is > 0 ? sql + "\nLIMIT " + ctx.Limit.Value : sql;

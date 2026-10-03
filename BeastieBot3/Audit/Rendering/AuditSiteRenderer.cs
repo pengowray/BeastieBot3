@@ -54,6 +54,7 @@ internal static class AuditSiteRenderer {
 
         Save(Path.Combine("assets", "audit.css"), AuditAssets.Css, Utf8NoBom);
         Save(Path.Combine("assets", "audit.js"), AuditAssets.Js, Utf8NoBom);
+        Save(Path.Combine("assets", "theme.js"), AuditAssets.ThemeJs, Utf8NoBom);
 
         foreach (var report in doc.Reports) {
             if (report.CsvRows.Count > 0) {

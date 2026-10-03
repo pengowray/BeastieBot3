@@ -1,6 +1,7 @@
 // The CSS and JS for the static audit bundle, embedded so the generator emits a self-contained
-// site (no build step, no external assets). audit.css is a clean light theme suited to a formal
-// document; audit.js gives every table click-to-sort and a filter box with no dependencies.
+// site (no build step, no external assets). audit.css has a light and a dark theme for a formal
+// document; audit.js gives every table click-to-sort and a filter box with no dependencies;
+// theme.js applies the Theme setting in the header (System, Light or Dark) before the page is drawn.
 
 namespace BeastieBot3.Audit.Rendering;
 
@@ -16,11 +17,100 @@ internal static class AuditAssets {
   --accent: #2a6f97;
   --accent-soft: #e7f0f5;
   --breaking: #b54034;
-  --fixable: #b5862a;
-  --advisory: #2a6f97;
-  --clear: #3a7a4a;
+  --clear: #387547;
+  --badge-by-hand-bg: #f7e4e1;
+  --badge-mechanical-bg: #e2f0e6;
+  --badge-policy-bg: #f6ecd6;
+  --badge-policy-ink: #86601a;
+  --badge-info-bg: #eceff1;
+  --notice-bg: #fff8ec;
+  --notice-border: #f0dca8;
+  --notice-border-strong: #e3bf6a;
+  --notice-ink: #5b4a25;
+  --notice-strong: #4a3a18;
+  --mark-bg: #fde7c2;
+  --mark-ink: #5b4a25;
+  --ws: #b9c1c9;
+  --control-border: #d9dee3;
+  --fade-start: rgba(255, 255, 255, 0);
+  --fade-end: rgba(255, 255, 255, 0.88);
+  --backdrop: rgba(20, 25, 30, 0.55);
+  --shadow: rgba(0, 0, 0, 0.32);
+  --badge-ring: transparent;
   --max: 1180px;
   --max-wide: 1680px;
+  color-scheme: light;
+}
+/* Dark theme: the system setting unless the reader chose Light, or the reader chose Dark (theme.js
+   sets data-theme on <html>). Keep the two blocks identical. Screen only, so a printed page is
+   always light. --ws (the dots that show spaces) is deliberately faint in both themes. */
+@media screen and (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --ink: #e6e8eb;
+    --ink-soft: #aab1b9;
+    --line: #3b424b;
+    --line-soft: #2a3038;
+    --bg: #181c21;
+    --bg-soft: #111418;
+    --accent: #7fb6d9;
+    --accent-soft: #1b2a36;
+    --breaking: #f0948a;
+    --clear: #7cc790;
+    --badge-by-hand-bg: #3d2421;
+    --badge-mechanical-bg: #1d3325;
+    --badge-policy-bg: #3a2e16;
+    --badge-policy-ink: #e8bf6a;
+    --badge-info-bg: #262c33;
+    --notice-bg: #2a2516;
+    --notice-border: #6b5a2c;
+    --notice-border-strong: #a88a3c;
+    --notice-ink: #e8d9b0;
+    --notice-strong: #f3e6c4;
+    --mark-bg: #5c4718;
+    --mark-ink: #fbe9c4;
+    --ws: #5d6670;
+    --control-border: #6f7882;
+    --fade-start: rgba(24, 28, 33, 0);
+    --fade-end: rgba(24, 28, 33, 0.88);
+    --backdrop: rgba(0, 0, 0, 0.65);
+    --shadow: rgba(0, 0, 0, 0.6);
+    --badge-ring: rgba(255, 255, 255, 0.35);
+    color-scheme: dark;
+  }
+}
+@media screen {
+  :root[data-theme="dark"] {
+    --ink: #e6e8eb;
+    --ink-soft: #aab1b9;
+    --line: #3b424b;
+    --line-soft: #2a3038;
+    --bg: #181c21;
+    --bg-soft: #111418;
+    --accent: #7fb6d9;
+    --accent-soft: #1b2a36;
+    --breaking: #f0948a;
+    --clear: #7cc790;
+    --badge-by-hand-bg: #3d2421;
+    --badge-mechanical-bg: #1d3325;
+    --badge-policy-bg: #3a2e16;
+    --badge-policy-ink: #e8bf6a;
+    --badge-info-bg: #262c33;
+    --notice-bg: #2a2516;
+    --notice-border: #6b5a2c;
+    --notice-border-strong: #a88a3c;
+    --notice-ink: #e8d9b0;
+    --notice-strong: #f3e6c4;
+    --mark-bg: #5c4718;
+    --mark-ink: #fbe9c4;
+    --ws: #5d6670;
+    --control-border: #6f7882;
+    --fade-start: rgba(24, 28, 33, 0);
+    --fade-end: rgba(24, 28, 33, 0.88);
+    --backdrop: rgba(0, 0, 0, 0.65);
+    --shadow: rgba(0, 0, 0, 0.6);
+    --badge-ring: rgba(255, 255, 255, 0.35);
+    color-scheme: dark;
+  }
 }
 * { box-sizing: border-box; }
 html { -webkit-text-size-adjust: 100%; }
@@ -41,22 +131,31 @@ header.site { background: var(--bg); border-bottom: 1px solid var(--line); }
 header.site .wrap { padding-top: 22px; padding-bottom: 18px; }
 header.site h1 { margin: 0 0 4px; font-size: 1.5rem; letter-spacing: -0.01em; }
 header.site .release { color: var(--ink-soft); font-size: 0.95rem; }
+/* Title and release on the left, the Theme setting on the right; on a narrow screen the setting
+   moves under the title. */
+.site-top { display: flex; flex-wrap: wrap; align-items: flex-start; justify-content: space-between; gap: 8px 20px; }
+/* Hidden until theme.js has set data-theme on <html>, so there is no setting without JavaScript;
+   invisible (but taking its space) until theme.js has selected the saved choice. */
+.theme-control { display: none; align-items: center; gap: 6px; margin-left: auto; font-size: 0.88rem; color: var(--ink-soft); }
+:root[data-theme] .theme-control { display: flex; visibility: hidden; }
+:root[data-theme-ready] .theme-control { visibility: visible; }
+.theme-control select { font: inherit; padding: 3px 6px; border: 1px solid var(--control-border); border-radius: 6px; background: var(--bg); color: var(--ink); }
 
 nav.crumbs { font-size: 0.9rem; color: var(--ink-soft); margin: 14px 0 0; }
 nav.crumbs a { color: var(--ink-soft); }
 
 /* .limited-notice: the notice at the top of every page of a --limit run. */
 .disclaimer, .limited-notice {
-  background: #fff8ec;
-  border: 1px solid #f0dca8;
+  background: var(--notice-bg);
+  border: 1px solid var(--notice-border);
   border-radius: 8px;
   padding: 12px 16px;
   margin: 18px 0;
   font-size: 0.92rem;
-  color: #5b4a25;
+  color: var(--notice-ink);
 }
-.disclaimer strong, .limited-notice strong { color: #4a3a18; }
-.limited-notice { border-color: #e3bf6a; font-size: 0.95rem; }
+.disclaimer strong, .limited-notice strong { color: var(--notice-strong); }
+.limited-notice { border-color: var(--notice-border-strong); font-size: 0.95rem; }
 .limited-notice code { white-space: nowrap; }
 
 main { padding: 8px 0 56px; }
@@ -85,10 +184,10 @@ table.index td.kind, table.index th.kind { white-space: nowrap; width: 1%; }
 p.legend { color: var(--ink-soft); font-size: 0.9rem; margin-top: 14px; padding-top: 12px; border-top: 1px solid var(--line-soft); }
 
 .badge { display: inline-block; padding: 1px 8px; border-radius: 999px; font-size: 0.74rem; font-weight: 600; letter-spacing: 0.02em; vertical-align: middle; white-space: nowrap; }
-.badge.by-hand { background: #f7e4e1; color: var(--breaking); }
-.badge.mechanical { background: #e2f0e6; color: var(--clear); }
-.badge.policy { background: #f6ecd6; color: var(--fixable); }
-.badge.informational { background: #eceff1; color: var(--ink-soft); }
+.badge.by-hand { background: var(--badge-by-hand-bg); color: var(--breaking); }
+.badge.mechanical { background: var(--badge-mechanical-bg); color: var(--clear); }
+.badge.policy { background: var(--badge-policy-bg); color: var(--badge-policy-ink); }
+.badge.informational { background: var(--badge-info-bg); color: var(--ink-soft); }
 table.index td.since { white-space: nowrap; color: var(--ink-soft); }
 table.index td.since.up { color: var(--breaking); }
 table.index td.since.down { color: var(--clear); }
@@ -99,11 +198,13 @@ ol.triage .triage-count { color: var(--ink-soft); }
 tr.appendix-head th { padding-top: 16px; font-weight: 600; color: var(--ink-soft); border-bottom: 0; }
 .badge.tier { background: var(--accent-soft); color: var(--accent); }
 
-.status-badge { display: inline-block; min-width: 2.6em; text-align: center; padding: 1px 7px; border-radius: 5px; font-size: 0.78rem; font-weight: 600; }
+/* The badge colours are inline (IucnStatusVisuals) and the same in both themes; the ring keeps a
+   black EX badge visible on the dark page. */
+.status-badge { display: inline-block; min-width: 2.6em; text-align: center; padding: 1px 7px; border-radius: 5px; font-size: 0.78rem; font-weight: 600; box-shadow: inset 0 0 0 1px var(--badge-ring); }
 
 /* Data tables */
 .table-controls { display: flex; align-items: center; gap: 14px; margin: 4px 0 10px; flex-wrap: wrap; }
-.table-filter { flex: 1 1 240px; max-width: 360px; padding: 7px 10px; border: 1px solid var(--line); border-radius: 7px; font-size: 0.92rem; }
+.table-filter { flex: 1 1 240px; max-width: 360px; padding: 7px 10px; border: 1px solid var(--control-border); border-radius: 7px; font-size: 0.92rem; background: var(--bg); color: var(--ink); }
 .row-count { color: var(--ink-soft); font-size: 0.88rem; font-variant-numeric: tabular-nums; }
 
 .table-wrap { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; }
@@ -125,7 +226,7 @@ table.audit-table.sortable tbody tr { content-visibility: auto; contain-intrinsi
    stretches its row and leaves giant gaps beside the short rows around it. */
 table.audit-table td.longtext { max-width: 620px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 table.audit-table td.ws-cell { font-family: "SFMono-Regular", Consolas, monospace; font-size: 0.82rem; white-space: pre-wrap; word-break: break-word; }
-.ws { color: #b9c1c9; }
+.ws { color: var(--ws); }
 .ws-bad { color: var(--breaking); font-weight: 700; }
 .ws-empty { color: var(--ink-soft); font-style: italic; }
 
@@ -145,8 +246,8 @@ table.summary.family tr.here td:first-child { font-weight: 600; }
    cut-off row shows there is more, and the toggle button below opens it. */
 .collapsible { position: relative; }
 .collapsible.collapsed { overflow: hidden; }
-/* Stops short of solid white so the clipped row stays faintly readable: a ghost row reads as cut off, a blank strip reads as the end of the table. The page is light-only, so white is safe here. */
-.collapsible.collapsed::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 46px; background: linear-gradient(to bottom, rgba(255, 255, 255, 0), rgba(255, 255, 255, 0.88)); pointer-events: none; }
+/* Stops short of the solid section colour so the clipped row stays faintly readable: a ghost row reads as cut off, a blank strip reads as the end of the table. */
+.collapsible.collapsed::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: 46px; background: linear-gradient(to bottom, var(--fade-start), var(--fade-end)); pointer-events: none; }
 .collapse-toggle { margin: 8px 0 4px; padding: 4px 11px; font: inherit; font-size: 0.86rem; color: var(--accent); background: var(--bg); border: 1px solid var(--line); border-radius: 7px; cursor: pointer; }
 .collapse-toggle:hover { background: var(--bg-soft); }
 
@@ -167,8 +268,8 @@ blockquote { margin: 10px 0; padding: 2px 14px; border-left: 3px solid var(--lin
 .view-cell:hover { background: var(--accent-soft); border-color: var(--accent); }
 .audit-modal { position: fixed; inset: 0; z-index: 60; display: flex; align-items: center; justify-content: center; padding: 22px; }
 .audit-modal[hidden] { display: none; }
-.audit-modal-backdrop { position: absolute; inset: 0; background: rgba(20, 25, 30, 0.55); }
-.audit-modal-card { position: relative; background: var(--bg); border-radius: 10px; width: 100%; max-width: 1040px; max-height: 88vh; overflow: auto; padding: 20px 24px 26px; box-shadow: 0 12px 44px rgba(0, 0, 0, 0.32); }
+.audit-modal-backdrop { position: absolute; inset: 0; background: var(--backdrop); }
+.audit-modal-card { position: relative; background: var(--bg); border-radius: 10px; width: 100%; max-width: 1040px; max-height: 88vh; overflow: auto; padding: 20px 24px 26px; box-shadow: 0 12px 44px var(--shadow); }
 .audit-modal-x { position: absolute; top: 8px; right: 12px; border: none; background: none; font-size: 1.6rem; line-height: 1; color: var(--ink-soft); cursor: pointer; }
 .audit-modal-x:hover { color: var(--ink); }
 .audit-modal-title { margin: 0 30px 4px 0; font-size: 1.05rem; }
@@ -186,7 +287,7 @@ blockquote { margin: 10px 0; padding: 2px 14px; border-left: 3px solid var(--lin
 .audit-pane.html { max-height: 46vh; }
 .audit-clean-note { margin: 0 0 8px; font-size: 0.82rem; color: var(--ink-soft); }
 .audit-clean-note.warn { color: var(--breaking); }
-.audit-pane mark { background: #fde7c2; color: #5b4a25; border-radius: 2px; }
+.audit-pane mark { background: var(--mark-bg); color: var(--mark-ink); border-radius: 2px; }
 .audit-pane .tok-tag { color: var(--accent); }
 .audit-pane .audit-empty { color: var(--ink-soft); font-style: italic; }
 @media (max-width: 720px) { .audit-modal-grid { grid-template-columns: 1fr; } }
@@ -200,11 +301,88 @@ footer.site a { color: var(--accent); }
   section { padding: 16px; border-radius: 8px; }
 }
 @media print {
-  body { background: #fff; }
-  .table-controls, .group-nav, nav.crumbs, .view-cell, .audit-modal { display: none; }
+  body { background: var(--bg); }
+  .table-controls, .group-nav, nav.crumbs, .view-cell, .audit-modal, :root[data-theme] .theme-control { display: none; }
   section { border: none; padding: 0; }
   .table-wrap { overflow: visible; }
 }
+""";
+
+    // The Theme setting in the header (System, Light or Dark). Every page loads it in <head>
+    // without defer, so data-theme is set on <html> before the page is drawn and a reader who chose
+    // Dark never sees the light colours first. audit.css reads data-theme: "light" and "dark"
+    // override the system setting, "system" follows it. The choice is kept in this browser's
+    // localStorage for the site's origin; a browser that gives each local file its own origin keeps
+    // it for that page only. The setting is hidden until setUp runs (audit.css), so without
+    // JavaScript there is no setting and the site follows the system setting.
+    public const string ThemeJs = """
+(function () {
+  "use strict";
+
+  var KEY = "theme";
+  var root = document.documentElement;
+
+  function read() {
+    try {
+      var value = window.localStorage.getItem(KEY);
+      return value === "light" || value === "dark" ? value : "system";
+    } catch (e) {
+      return "system";
+    }
+  }
+
+  function save(value) {
+    try {
+      if (value === "system") {
+        window.localStorage.removeItem(KEY);
+      } else {
+        window.localStorage.setItem(KEY, value);
+      }
+    } catch (e) {
+      // Storage is blocked: the theme applies to this page only.
+    }
+  }
+
+  function apply(value) {
+    root.setAttribute("data-theme", value === "light" || value === "dark" ? value : "system");
+  }
+
+  apply(read());
+
+  function setUp() {
+    var select = document.getElementById("theme-select");
+    if (!select) {
+      return;
+    }
+    select.value = root.getAttribute("data-theme");
+    select.addEventListener("change", function () {
+      apply(select.value);
+      save(select.value);
+    });
+    function refresh() {
+      apply(read());
+      select.value = root.getAttribute("data-theme");
+    }
+    // A choice made in another tab, or while this page was in the back/forward cache.
+    window.addEventListener("storage", function (event) {
+      if (event.key === KEY || event.key === null) {
+        refresh();
+      }
+    });
+    window.addEventListener("pageshow", function (event) {
+      if (event.persisted) {
+        refresh();
+      }
+    });
+    root.setAttribute("data-theme-ready", "");
+  }
+
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", setUp);
+  } else {
+    setUp();
+  }
+})();
 """;
 
     public const string Js = """
