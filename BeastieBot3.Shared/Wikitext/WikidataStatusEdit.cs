@@ -66,7 +66,9 @@ public sealed record WikidataStatusStatement(
     [property: JsonPropertyName("value")] string? Value,
     [property: JsonPropertyName("rank")] string Rank,
     [property: JsonPropertyName("statedIn")] IReadOnlyList<string>? StatedIn = null) {
+    [JsonIgnore]
     public bool IsDeprecated => string.Equals(Rank, "deprecated", StringComparison.Ordinal);
+    [JsonIgnore]
     public bool IsPreferred => string.Equals(Rank, "preferred", StringComparison.Ordinal);
 
     public static string ListToJson(IReadOnlyList<WikidataStatusStatement> statements) => JsonSerializer.Serialize(statements);

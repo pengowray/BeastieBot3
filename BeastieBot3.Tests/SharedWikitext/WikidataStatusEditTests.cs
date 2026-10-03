@@ -275,6 +275,8 @@ public class WikidataStatusEditTests {
         IReadOnlyList<WikidataStatusStatement> statements = [S(G1, "Q219127", "preferred", "Q115962546", "Q136547248")];
         var json = WikidataStatusStatement.ListToJson(statements);
         Assert.Contains("\"statedIn\":[\"Q115962546\",\"Q136547248\"]", json);
+        Assert.DoesNotContain("IsDeprecated", json);
+        Assert.DoesNotContain("IsPreferred", json);
         var back = WikidataStatusStatement.ListFromJson(json)!;
         Assert.Equal(statements[0].Id, back[0].Id);
         Assert.Equal(statements[0].StatedIn, back[0].StatedIn);
