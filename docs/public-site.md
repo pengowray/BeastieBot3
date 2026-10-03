@@ -342,8 +342,9 @@ each scope that have no DOI from IUCN's citation text, GBIF or Wikidata:
   article link (`taxon.enwiki_title`, read from the matcher's `taxon_wiki_matches`) still goes to
   those pages. The Wikipedia lists link the taxon's own scientific name when English Wikipedia has
   that title, so they link "Ficus variegata" and "Gaussia princeps". "Ficus variegata" is a
-  disambiguation page, and the plant's article is "Ficus variegata (plant)". The Wikipedia cache
-  has not downloaded "Gaussia princeps", so it may also be a disambiguation page; English
-  Wikipedia has the title "Gaussia princeps (plant)".
+  disambiguation page, and the plant's article is "Ficus variegata (plant)". English Wikipedia
+  has the titles "Gaussia princeps (plant)" and "Gaussia princeps (crustacean)", so "Gaussia
+  princeps" may also be a disambiguation page; the Wikipedia cache has not downloaded it, so this
+  was not checked.
 - Regional assessments have DOIs only when IUCN's citation text, Wikidata or the DOI cache
   (`iucn resolve-dois --scope latest-regional`) gives one.
