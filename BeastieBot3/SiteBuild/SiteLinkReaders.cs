@@ -38,7 +38,7 @@ using Microsoft.Data.Sqlite;
 //                  may lack them; they then read as empty (SpratTableColumns), with a warning.
 //   DOI cache     iucn_doi_cache.sqlite doi_check: DOIs `iucn resolve-dois` found in Crossref's list
 //                  of IUCN DOIs or at doi.org; crossref_works: the title Crossref registered for each
-//                  DOI, for the name each assessment was published under.
+//                  DOI, for the name in the titles of new Wikidata items for assessments.
 //   DOIs           GBIF's copy of the IUCN checklist (the current global assessment of each taxon)
 //                  and Wikidata items for assessments (wikidata_iucn_assessment_items).
 //   Wikidata items for assessments: the same table, items that are publications (SiteWikidataItems).
@@ -630,7 +630,7 @@ internal static class SiteLinkReaders {
         using (var exists = connection.CreateCommand()) {
             exists.CommandText = "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'crossref_works'";
             if (Convert.ToInt64(exists.ExecuteScalar(), CultureInfo.InvariantCulture) == 0 || !Iucn.Doi.IucnDoiCacheStore.HasCrossrefTitles(connection)) {
-                stats.Warnings.Add($"The DOI cache {path} has no titles from Crossref, so new Wikidata items use IUCN's citation name, which for an older assessment may be newer than the name it was published under. To add the titles, run iucn resolve-dois --refresh-crossref.");
+                stats.Warnings.Add($"The DOI cache {path} has no titles from Crossref, so new Wikidata items use IUCN's citation name, which for an older assessment may be newer than the name in the assessment's title. To add the titles, run iucn resolve-dois --refresh-crossref.");
                 return;
             }
         }

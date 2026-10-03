@@ -13,7 +13,7 @@ using Spectre.Console.Cli;
 //   2. Crossref's list of every DOI under IUCN's prefix (CrossrefIucnWorks, about 260 requests) is
 //      downloaded when the cache has none from the last 7 days, or always with --refresh-crossref
 //      (even when no assessment needs checking: `site build-db` reads the titles Crossref
-//      registered, for the name each assessment was published under). An assessment whose DOI is
+//      registered, for the name in the titles of new Wikidata items). An assessment whose DOI is
 //      in it is settled with no further request.
 //   3. For the rest, likely DOIs (IucnDoiCandidates) are checked one by one at doi.org's handle API
 //      until one exists (IucnDoiResolution). By default only assessments published in the year the

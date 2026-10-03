@@ -187,7 +187,7 @@ public sealed class WikidataCiteUnitTests {
             RegisteredName = "Apollonias barbujana ssp. ceballosi", Doi = "10.2305/IUCN.UK.1998.RLTS.T30321A9535286.en",
         };
         var view = WikidataCite.Build(Row(null), parts, "Q30252628", new WikidataItemModel(), new CiteQOptions());
-        Assert.Equal(new PublishedName("Apollonias barbujana ssp. ceballosi", PublishedNameSource.Crossref), view.Name);
+        Assert.Equal(new TitleName("Apollonias barbujana ssp. ceballosi", TitleNameSource.Crossref), view.Name);
         Assert.False(view.ShowNameNote);
         Assert.Contains("LAST\tP1476\ten:\"Apollonias barbujana ssp. ceballosi\"", view.Commands!.Text);
 
@@ -241,6 +241,18 @@ public sealed class WikidataCiteUnitTests {
         Assert.Equal("Copy QuickStatements commands",
             new WikitextBox("a", "b", "QuickStatements", "c", 2, CopyName: SiteText.CopyQuickStatements).CopyAccessibleName);
     }
+    // Q56226968's assessment with no item and no Crossref title: IUCN's citation name is internal,
+    // so there are no create commands, and the line says why.
+    [Fact]
+    public void OnlyAnInternalName_NoCreateCommands() {
+        var parts = new IucnCitationParts { TaxonId = 22694346, AssessmentId = 39183818, Year = 2012, ScientificName = "Larus glaucoides_old" };
+        var view = WikidataCite.Build(Row(null), parts, null, new WikidataItemModel(), new CiteQOptions());
+        Assert.True(view.NoUsableName);
+        Assert.Null(view.Commands);
+        Assert.Equal("No commands: the only name this site has for this assessment is IUCN's citation name, Larus glaucoides_old, "
+            + "which IUCN uses as an internal name for a taxon it has replaced.", SiteText.NoUsableName(view.CitationName!));
+    }
+
 
     [Fact]
     public void PropertyLabels() {

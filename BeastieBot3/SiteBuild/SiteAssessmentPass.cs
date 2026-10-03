@@ -27,8 +27,8 @@ using Microsoft.Data.Sqlite;
 //     other assessor credits (AssessorNamePool). The pool is complete only after every payload has
 //     been read, so the few rows with such a name are parsed again and written at the end.
 //   - The citation's RegisteredName is the name part of the title Crossref registered for its DOI
-//     ("Canis mesomelas: Hoffmann, M." gives "Canis mesomelas"): the name the assessment was
-//     published under, which the Wikidata item commands use. Only when the DOI names this
+//     ("Canis mesomelas: Hoffmann, M." gives "Canis mesomelas"), which the Wikidata item commands
+//     use when the item has no title of its own. Only when the DOI names this
 //     assessment's own id, so an errata version sharing the DOI of the assessment it corrects gets none.
 //   - wikidata_item_qid is the Wikidata item for the assessment as a publication: its own, or for an
 //     errata version, the item of the assessment its DOI names (SiteWikidataItems.Find), and

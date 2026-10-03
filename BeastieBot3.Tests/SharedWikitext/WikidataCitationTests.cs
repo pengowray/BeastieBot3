@@ -328,7 +328,7 @@ public class WikidataCitationTests {
     [Fact]
     public void FixCommands_IucnInternalName_IsNeverWritten() {
         // Q56226968: IUCN's citation calls taxon 22694346 "Larus glaucoides_old"; the item's title has
-        // the name it was published under.
+        // "Larus glaucoides".
         var parts = new IucnCitationParts {
             TaxonId = 22694346, AssessmentId = 39183818, Year = 2012, ScientificName = "Larus glaucoides_old",
             Authors = [new CitationAuthor(CitationAuthorKind.Organisation, "BirdLife International")],
@@ -436,7 +436,7 @@ public class WikidataCitationTests {
         Assert.Contains("-Q1\tP1476\ten:\"Name: A | B\"", data);
     }
 
-    // ------------------------------------------------------------ the published name
+    // ------------------------------------------------------------ the name in titles and labels
 
     [Theory]
     [InlineData("Canis mesomelas: Hoffmann, M.", "Canis mesomelas")]
@@ -472,19 +472,19 @@ public class WikidataCitationTests {
     }
 
     [Fact]
-    public void PublishedNameFor_ItemTitleThenCrossrefThenIucn() {
+    public void TitleNameFor_ItemTitleThenCrossrefThenIucn() {
         var registered = Lupulella with { RegisteredName = "Canis mesomelas" };
-        Assert.Equal(new PublishedName("Canis mesomelas", PublishedNameSource.ItemTitle),
-            WikidataCitation.PublishedNameFor(Lupulella, [new WikidataTitle("Canis mesomelas: Hoffmann, M", "en")]));
-        Assert.Equal(new PublishedName("Canis mesomelas", PublishedNameSource.Crossref), WikidataCitation.PublishedNameFor(registered));
+        Assert.Equal(new TitleName("Canis mesomelas", TitleNameSource.ItemTitle),
+            WikidataCitation.TitleNameFor(Lupulella, [new WikidataTitle("Canis mesomelas: Hoffmann, M", "en")]));
+        Assert.Equal(new TitleName("Canis mesomelas", TitleNameSource.Crossref), WikidataCitation.TitleNameFor(registered));
         // Several titles that are not deprecated: none is the item's title.
-        Assert.Equal(PublishedNameSource.Crossref, WikidataCitation.PublishedNameFor(registered,
+        Assert.Equal(TitleNameSource.Crossref, WikidataCitation.TitleNameFor(registered,
             [new WikidataTitle("A b: C", "en"), new WikidataTitle("D e: F", "en")])!.Source);
-        Assert.Equal(new PublishedName("Lupulella mesomelas", PublishedNameSource.IucnCitation), WikidataCitation.PublishedNameFor(Lupulella));
+        Assert.Equal(new TitleName("Lupulella mesomelas", TitleNameSource.IucnCitation), WikidataCitation.TitleNameFor(Lupulella));
         // "_old" names are skipped, wherever they come from.
-        Assert.Equal(PublishedNameSource.IucnCitation,
-            WikidataCitation.PublishedNameFor(Lupulella with { RegisteredName = "Canis mesomelas_old" })!.Source);
-        Assert.Null(WikidataCitation.PublishedNameFor(Lupulella with { ScientificName = "Larus glaucoides_old" }));
+        Assert.Equal(TitleNameSource.IucnCitation,
+            WikidataCitation.TitleNameFor(Lupulella with { RegisteredName = "Canis mesomelas_old" })!.Source);
+        Assert.Null(WikidataCitation.TitleNameFor(Lupulella with { ScientificName = "Larus glaucoides_old" }));
     }
 
     [Fact]
@@ -505,7 +505,7 @@ public class WikidataCitationTests {
     }
 
     [Fact]
-    public void AddMissingCommands_TitleAndLabelUseThePublishedName() {
+    public void AddMissingCommands_TitleAndLabelUseTheTitleName() {
         // No title: the registered name. A title but no label: the name in the title.
         var noTitle = WikidataCitation.AddMissingCommands(Lupulella with { RegisteredName = "Canis mesomelas" }, "Q1",
             new HashSet<string> { "P31" }, null, Model);

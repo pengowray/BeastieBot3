@@ -266,16 +266,17 @@ public sealed class WikidataStatusTests(SiteFactory factory) : IClassFixture<Sit
         var html = await _client.GetStringAsync(url);
         var text = Html.Text(await CiteQPart(url));
 
-        Assert.Contains($"This assessment was published under the name {FixtureDb.PolarBear2008RegisteredName}, which is the name in the title registered with Crossref for its DOI. IUCN's citation now gives the name Ursus maritimus. The commands use the published name.", text);
+        Assert.Contains($"The name in the title registered with Crossref for this assessment's DOI is {FixtureDb.PolarBear2008RegisteredName}. IUCN's citation gives a different name, Ursus maritimus. The commands use {FixtureDb.PolarBear2008RegisteredName}.", text);
+        Assert.DoesNotContain("published under", text);
         var commands = Html.Textarea(html, WikidataCite.CommandsBoxId)!.Split('\n');
         Assert.Contains($"LAST\tP1476\ten:\"{FixtureDb.PolarBear2008RegisteredName}\"", commands);
         Assert.Contains(commands, c => c.StartsWith($"LAST\tLen\t\"{FixtureDb.PolarBear2008RegisteredName}. The IUCN Red List", StringComparison.Ordinal));
     }
 
     [Fact]
-    public async Task NewItem_WithIucnsCitationName_SaysThePublishedNameIsNotKnown() {
+    public async Task NewItem_WithIucnsCitationName_SaysTheTitleNameIsNotKnown() {
         var text = Html.Text(await CiteQPart($"/species/{FixtureDb.Bromus}"));
-        Assert.Contains("The commands use the name in IUCN's citation, Bromus interruptus. This site does not know the name the assessment was published under, which for an older assessment can be an earlier name of the taxon.", text);
+        Assert.Contains("The commands use the name in IUCN's citation, Bromus interruptus. IUCN's citation gives the taxon's current name, even for an older assessment.", text);
     }
 
     [Fact]
@@ -286,7 +287,8 @@ public sealed class WikidataStatusTests(SiteFactory factory) : IClassFixture<Sit
         Assert.Contains("IUCN conservation status on Wikidata.", text);
         Assert.Contains("QuickStatements cannot set ranks, so you then set the ranks on the item's page.", text);
         Assert.Contains("Only statements with a reference to IUCN are compared, and the commands never remove the others.", text);
-        Assert.Contains("The name in the title and label is the name the assessment was published under", text);
+        Assert.Contains("which this site takes from the first of these it has: the name in the item's title (P1476)", text);
+        Assert.DoesNotContain("published under", text);
         Assert.Contains("An errata version that has the same DOI as the assessment it corrects shares that assessment's item", text);
     }
 }
@@ -357,10 +359,10 @@ public sealed class WikidataStatusUnitTests {
     [Fact]
     public void NameNote_SaysWhenIucnsNameIsAnInternalOne() {
         // Q56226968: IUCN's citation gives taxon 22694346 as "Larus glaucoides_old".
-        Assert.Equal("This assessment was published under the name Larus glaucoides, which is the name in the item's title. "
-            + "IUCN's citation now gives the name Larus glaucoides_old, which is IUCN's internal name for a replaced taxon.",
+        Assert.Equal("The name in the item's title (P1476) is Larus glaucoides. "
+            + "IUCN's citation gives a different name, Larus glaucoides_old, which IUCN uses as an internal name for a taxon it has replaced.",
             Display.SiteText.NameFromItemTitle("Larus glaucoides", "Larus glaucoides_old"));
-        Assert.EndsWith("IUCN's citation now gives the name Lupulella mesomelas.", Display.SiteText.NameRegistered("Canis mesomelas", "Lupulella mesomelas"));
+        Assert.EndsWith("IUCN's citation gives a different name, Lupulella mesomelas.", Display.SiteText.NameRegistered("Canis mesomelas", "Lupulella mesomelas"));
     }
 
     [Fact]

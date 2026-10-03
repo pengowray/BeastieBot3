@@ -247,23 +247,24 @@ public static class SiteText {
     public const string RunCommandsLine = "Run these commands in QuickStatements with your Wikidata account.";
     public const string LabelUpdateItem = "QuickStatements commands to update the item";
 
-    // The name in the item's title and label (WikidataCitation.PublishedNameFor), shown when it
-    // differs from IUCN's citation name, or when the commands use IUCN's citation name because the
-    // name the assessment was published under is not known.
-    public static string NameFromItemTitle(string published, string cited) =>
-        $"This assessment was published under the name {published}, which is the name in the item's title. {CitedName(cited)}";
-    public static string NameRegistered(string published, string cited) =>
-        $"This assessment was published under the name {published}, which is the name in the title registered with Crossref for its DOI. {CitedName(cited)}";
+    // The name in the item's title and label (WikidataCitation.TitleNameFor), shown when it
+    // differs from IUCN's citation name, or when the commands use IUCN's citation name because
+    // neither the item's title nor Crossref's title gives a name. The site says only which title a
+    // name was read from: neither title proves the name an assessment first appeared under.
+    public static string NameFromItemTitle(string name, string cited) =>
+        $"The name in the item's title (P1476) is {name}. {CitedName(cited)}";
+    public static string NameRegistered(string name, string cited) =>
+        $"The name in the title registered with Crossref for this assessment's DOI is {name}. {CitedName(cited)}";
     private static string CitedName(string cited) => WikidataCitation.IsIucnInternalName(cited)
-        ? $"IUCN's citation now gives the name {cited}, which is IUCN's internal name for a replaced taxon."
-        : $"IUCN's citation now gives the name {cited}.";
+        ? $"IUCN's citation gives a different name, {cited}, which IUCN uses as an internal name for a taxon it has replaced."
+        : $"IUCN's citation gives a different name, {cited}.";
     /// After NameFromItemTitle or NameRegistered, when the commands set the title or label.
-    public const string NameCommandsUsePublished = "The commands use the published name.";
+    public static string NameCommandsUse(string name) => $"The commands use {name}.";
     public static string NameFromIucnCitation(string cited) =>
-        $"The commands use the name in IUCN's citation, {cited}. This site does not know the name the assessment was published under, which for an older assessment can be an earlier name of the taxon.";
+        $"The commands use the name in IUCN's citation, {cited}. IUCN's citation gives the taxon's current name, even for an older assessment.";
     /// No item, and no usable name for a new one.
     public static string NoUsableName(string cited) =>
-        $"No commands: IUCN's citation gives the name as {cited}, which is IUCN's internal name for a replaced taxon, and this site does not know the name the assessment was published under.";
+        $"No commands: the only name this site has for this assessment is IUCN's citation name, {cited}, which IUCN uses as an internal name for a taxon it has replaced.";
 
     // An errata version that shares the Wikidata item of the assessment it corrects (same DOI).
     /// Before + link(BorrowedItemLink) + ".".

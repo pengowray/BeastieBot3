@@ -13,8 +13,10 @@ using GbifDoi = BeastieBot3.Iucn.Gbif.IucnDoi;
 // about 1,100 books, reports and journal articles. Each item gives the DOI (in lower case),
 // resource.primary.URL, the page it points to (https://www.iucnredlist.org/species/<taxon>/<assessment>),
 // and title, a list with one entry: the title IUCN registered for the assessment, "Name: author
-// list" with the name the assessment was published under ("Canis mesomelas: Hoffmann, M." for a
-// 2014 assessment of the taxon IUCN now calls Lupulella mesomelas), with HTML entities such as "&amp;".
+// list" ("Canis mesomelas: Hoffmann, M." for a 2014 assessment of the taxon IUCN now calls
+// Lupulella mesomelas), with HTML entities such as "&amp;". The name is the one current when the
+// record was last deposited, which is not always the name the assessment first appeared under:
+// the records for some 2008 and 2010 DOIs were made in 2015 with the names current then.
 // The list took 258 requests and about 3 minutes on 2026-10-03. Crossref's public pool allows 5 requests a second
 // and one at a time (x-rate-limit-limit, x-concurrency-limit); this sends one request at a time.
 //

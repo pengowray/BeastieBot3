@@ -28,9 +28,9 @@ public sealed record WikidataCiteView {
     /// The title and label the commands replace (WikidataCitation.FixCommands); empty when none.
     public IReadOnlyList<WikidataItemChange> Changes { get; init; } = [];
 
-    /// The name the assessment was published under, which the item's title and label use
-    /// (WikidataCitation.PublishedNameFor); null when not known or not usable.
-    public PublishedName? Name { get; init; }
+    /// The name the item's title and label use, and which title it was read from
+    /// (WikidataCitation.TitleNameFor); null when not known or not usable.
+    public TitleName? Name { get; init; }
 
     /// IUCN's citation name, which for an older assessment can be newer than Name.
     public string? CitationName { get; init; }
@@ -49,10 +49,11 @@ public sealed record WikidataCiteView {
     /// Whether this site has a page for ItemIsForAssessmentId.
     public bool ItemAssessmentHasPage { get; init; }
 
-    /// Show the name note: the published name differs from IUCN's citation name, or the commands
-    /// use IUCN's citation name because the published name is not known.
+    /// Show the name note: the name from the item's title or Crossref's title differs from IUCN's
+    /// citation name (WikidataCitation.SameName), or the commands use IUCN's citation name because
+    /// neither title is known.
     public bool ShowNameNote => Name is { } name && CitationName is { } cited
-        && (name.Source == PublishedNameSource.IucnCitation ? CommandsUseName : !WikidataCitation.SameName(name.Name, cited));
+        && (name.Source == TitleNameSource.IucnCitation ? CommandsUseName : !WikidataCitation.SameName(name.Name, cited));
 
     /// A Wikidata search for an item for the assessment, shown when the site's data has none, so the
     /// reader can check that none was made after the data was downloaded.
@@ -277,7 +278,7 @@ public static partial class WikidataCite {
                 QuickStatementsUrl = commands is null ? null : FittingUrl(Try("QuickStatementsUrl", () => WikidataCitation.QuickStatementsUrl(commands))),
                 AddedStatements = added,
                 Changes = fix.Changes,
-                Name = parts is null ? null : WikidataCitation.PublishedNameFor(parts, titles),
+                Name = parts is null ? null : WikidataCitation.TitleNameFor(parts, titles),
                 CitationName = citationName,
                 CommandsUseName = fix.Changes.Count > 0 || add.Any(c => c.Split('\t') is [_, "P1476" or "Len", ..]),
             };
@@ -287,7 +288,7 @@ public static partial class WikidataCite {
         if (parts is null || model is null) {
             return view;
         }
-        var name = WikidataCitation.PublishedNameFor(parts);
+        var name = WikidataCitation.TitleNameFor(parts);
         var create = Try("CreateItemCommands", () => WikidataCitation.CreateItemCommands(parts, taxonItem, model));
         if (create is not { Count: > 0 }) {
             return view with { NoUsableName = name is null };

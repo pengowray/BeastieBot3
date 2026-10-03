@@ -16,7 +16,7 @@ namespace BeastieBot3.Shared.Wikitext;
 // The statements, in the dry run's order:
 //
 //   P31 instance of      model.InstanceOf (scholarly article)
-//   P1476 title          the name the assessment was published under (PublishedNameFor),
+//   P1476 title          the name from TitleNameFor,
 //                        monolingual text in model.TitleLanguage
 //   P1433 published in   model.PublishedIn (IUCN Red List)
 //   P123 publisher       model.Publisher (IUCN)
@@ -39,14 +39,17 @@ namespace BeastieBot3.Shared.Wikitext;
 // with the same name. No statement gets a reference: the dry run adds none to the item's own
 // statements, since the item is the publication itself.
 //
-// The name. P1476 is the title the work was published under, so it is never changed to a newer
-// name: IUCN's citation gives the taxon's current name even for a 2008 assessment ("Lupulella
-// mesomelas" for the 2014 assessment published as "Canis mesomelas"). PublishedNameFor takes, in
-// order: the name part of the item's own title ("Canis mesomelas" from "Canis mesomelas: Hoffmann,
-// M"), the name part of the title registered with Crossref for the assessment's DOI
-// (IucnCitationParts.RegisteredName), and IUCN's citation name. A name with "_" is IUCN's internal
-// name for a replaced taxon ("Larus glaucoides_old") and is never used; with no usable name, a
-// create batch is not offered and the title and label are left out of an add batch.
+// The name. IUCN's citation gives the taxon's current name even for an older assessment
+// ("Lupulella mesomelas" for the 2014 assessment whose Crossref title has "Canis mesomelas"), so it
+// is used only when no title gives a name. TitleNameFor takes, in order: the name part of the item's
+// own title ("Canis mesomelas" from "Canis mesomelas: Hoffmann, M"), the name part of the title
+// registered with Crossref for the assessment's DOI (IucnCitationParts.RegisteredName), and IUCN's
+// citation name. Neither title proves the name an assessment first appeared under: Crossref's
+// records for some 2008 and 2010 DOIs were made in 2015 and deposited again with the names current
+// then (Q29037714, Q29393952), and SourceMD copied most item titles from Crossref in 2017 and 2018.
+// The commands and the page only say which title a name was read from. A name with "_" is IUCN's
+// internal name for a replaced taxon ("Larus glaucoides_old") and is never used; with no usable
+// name, a create batch is not offered and the title and label are left out of an add batch.
 //
 // AddMissingCommands judges what an existing item lacks from the properties the site database
 // records for it (assessment.wikidata_item_properties), which `site build-db` reads from the Wikidata
@@ -141,18 +144,18 @@ public sealed record WikidataItemFix(IReadOnlyList<WikidataItemChange> Changes, 
 }
 
 /// Where the name in an assessment item's title, label and description comes from.
-public enum PublishedNameSource {
+public enum TitleNameSource {
     /// The name part of the item's own title: "Canis mesomelas" from "Canis mesomelas: Hoffmann, M".
     ItemTitle,
     /// The name part of the title registered with Crossref for the assessment's DOI.
     Crossref,
     /// IUCN's citation name, used when neither of the others is known. For an older assessment it
-    /// may be a newer name than the one the assessment was published under.
+    /// may be a newer name than the one in the assessment's title.
     IucnCitation,
 }
 
-/// The name an assessment was published under, and where it was read.
-public sealed record PublishedName(string Name, PublishedNameSource Source);
+/// The name for an assessment item's title, label and description, and where it was read.
+public sealed record TitleName(string Name, TitleNameSource Source);
 
 public static partial class WikidataCitation {
     /// The token for "the item has an English label" in a set of present properties
@@ -199,21 +202,21 @@ public static partial class WikidataCitation {
             : $"<ref name=\"{refName}\">{template}</ref>";
     }
 
-    /// The name the assessment was published under, for the title, label and description of its
-    /// item: the name part of the item's one title that is not deprecated (itemTitles; null or
+    /// The name for the title, label and description of the assessment's item: the name part of
+    /// the item's one title that is not deprecated (itemTitles; null or
     /// empty for a new item), else the name part of the title registered with Crossref for its DOI
     /// (parts.RegisteredName), else IUCN's citation name. A name IUCN marks as internal ("_old") is
     /// skipped. Null when no usable name is known.
-    public static PublishedName? PublishedNameFor(IucnCitationParts parts, IReadOnlyList<WikidataTitle>? itemTitles = null) {
+    public static TitleName? TitleNameFor(IucnCitationParts parts, IReadOnlyList<WikidataTitle>? itemTitles = null) {
         if (itemTitles?.Where(t => !t.IsDeprecated).ToList() is [var title] && NameFromTitle(title.Text) is { } fromTitle
             && !IsIucnInternalName(fromTitle)) {
-            return new PublishedName(fromTitle, PublishedNameSource.ItemTitle);
+            return new TitleName(fromTitle, TitleNameSource.ItemTitle);
         }
         if (CleanValue(parts.RegisteredName) is { Length: > 0 } registered && !IsIucnInternalName(registered)) {
-            return new PublishedName(registered, PublishedNameSource.Crossref);
+            return new TitleName(registered, TitleNameSource.Crossref);
         }
         if (CleanValue(parts.ScientificName) is { Length: > 0 } cited && !IsIucnInternalName(cited)) {
-            return new PublishedName(cited, PublishedNameSource.IucnCitation);
+            return new TitleName(cited, TitleNameSource.IucnCitation);
         }
         return null;
     }
@@ -271,15 +274,15 @@ public static partial class WikidataCitation {
     }
 
     /// IUCN marks a taxon it has replaced with a suffix such as "_old" ("Larus glaucoides_old",
-    /// "Calonectris diomedea_old1"). No published name has "_".
+    /// "Calonectris diomedea_old1"). No name in a published title has "_".
     public static bool IsIucnInternalName(string name) => name.Contains('_', StringComparison.Ordinal);
 
     /// QuickStatements v1 commands (one per line, tab-separated) that create an item for the
     /// assessment: CREATE, then LAST lines for the label, description and statements. Empty when
-    /// no usable name is known (PublishedNameFor), since an item with no title or label could not
+    /// no usable name is known (TitleNameFor), since an item with no title or label could not
     /// be found again.
     public static IReadOnlyList<string> CreateItemCommands(IucnCitationParts parts, string? taxonQid, WikidataItemModel model) {
-        if (PublishedNameFor(parts) is not { } name) {
+        if (TitleNameFor(parts) is not { } name) {
             return [];
         }
         var commands = new List<string> { "CREATE" };
@@ -304,7 +307,7 @@ public static partial class WikidataCitation {
         IReadOnlyList<WikidataTitle>? itemTitles = null) {
         var item = itemQid.Trim();
         var commands = new List<string>();
-        var name = PublishedNameFor(parts, itemTitles)?.Name;
+        var name = TitleNameFor(parts, itemTitles)?.Name;
         if (!presentProperties.Contains(EnglishLabelToken) && name is not null && Label(parts, model, name) is { } label) {
             commands.Add(Line(item, "Len", Quote(label)));
         }
@@ -321,8 +324,8 @@ public static partial class WikidataCitation {
     /// QuickStatements v1 commands that take the author list out of an existing item's title (P1476)
     /// and set its English label from model.LabelTemplate. Most items made by SourceMD in 2017 and
     /// 2018 have "Name: author list" as both, which {{cite Q}} prints as the title of the work. The
-    /// name stays as the title has it, since P1476 is the title the work was published under; the
-    /// label uses the same name (PublishedNameFor).
+    /// name stays as the title has it, never IUCN's newer citation name; the label uses the same
+    /// name (TitleNameFor).
     ///
     /// The title is changed only when the item's titles are known exactly (titles is not null),
     /// the item has one title that is not deprecated, and that title is "Name: author list": the
@@ -356,7 +359,7 @@ public static partial class WikidataCitation {
             changes.Add(new WikidataItemChange(WikidataItemChangeKind.Title, old.Text, newTitle, old.Language, old.Language));
         }
 
-        if (labelEn is not null && PublishedNameFor(parts, titles) is { } name && Label(parts, model, name.Name) is { } label
+        if (labelEn is not null && TitleNameFor(parts, titles) is { } name && Label(parts, model, name.Name) is { } label
             && labelEn != label) {
             commands.Add(Line(item, "Len", Quote(label)));
             changes.Add(new WikidataItemChange(WikidataItemChangeKind.EnglishLabel, labelEn, label));
@@ -402,7 +405,7 @@ public static partial class WikidataCitation {
     }
 
     // includeUnjudged: P123 and P407, which a create batch writes and an add batch leaves out.
-    // name: the title (PublishedNameFor); null leaves P1476 out.
+    // name: the title (TitleNameFor); null leaves P1476 out.
     private static IEnumerable<Statement> Statements(IucnCitationParts parts, string? name, string? taxonQid, WikidataItemModel model,
         bool includeUnjudged) {
         var doi = OwnDoi(parts, out var doiLanguage);

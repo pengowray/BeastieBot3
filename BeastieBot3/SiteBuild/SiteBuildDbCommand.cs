@@ -258,8 +258,8 @@ internal sealed class SiteBuildDbCommand : Command<SiteBuildDbCommand.Settings> 
         if (items.TitlesNotRecorded > 0) Row("Items kept whose title statements are not recorded (run wikidata iucn-assessment-items)", items.TitlesNotRecorded);
         Row("Assessments with their own Wikidata item", s.AssessmentsWithOwnItem);
         Row("Errata versions sharing the item of the assessment they correct (same DOI)", s.AssessmentsWithItemThroughDoi);
-        Row("Citations with a title registered with Crossref for their DOI (the name the assessment was published under)", s.RegisteredNames);
-        Row("Of those, published under a name other than IUCN's citation name", s.RegisteredNamesDiffer);
+        Row("Citations with a title registered with Crossref for their DOI", s.RegisteredNames);
+        Row("Of those, titles with a name other than IUCN's citation name (ssp./subsp., brackets and spaces ignored)", s.RegisteredNamesDiffer);
         Row("Items for an assessment not in the site database (not used)", items.ByAssessment.Count - items.Used.Count);
         Row("Items used with no author (P50 or P2093)", items.ByAssessment.Values.Count(i => items.Used.Contains(i.Qid) && !HasAuthors(i)));
         Row("Items used with no main subject (P921)", items.ByAssessment.Values.Count(i => items.Used.Contains(i.Qid) && !i.Properties.Split(' ').Contains("P921")));

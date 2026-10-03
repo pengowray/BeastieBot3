@@ -220,8 +220,8 @@ internal sealed class SiteBuildStats {
     public int P141ItemsReadAsJson;
     public int P141CitesIucnByUrl;
     public int P141CitesIucnByLaterStatedIn;
-    /// Citations whose DOI has a title registered with Crossref (the name the assessment was
-    /// published under), and of those, the ones whose name differs from IUCN's citation name.
+    /// Citations whose DOI has a title registered with Crossref, and of those, the ones whose name
+    /// differs from IUCN's citation name (WikidataCitation.SameName).
     public int RegisteredNames;
     public int RegisteredNamesDiffer;
     public int ColIdsFromPlacement;
