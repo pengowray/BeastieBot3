@@ -110,12 +110,56 @@ public class PublicSiteProbeTests {
 
     // ---- DOI cache ----
 
-    // The light only knows whether the cache exists; with one, it leaves the step to run history.
+    // The numbers of release 2026-1 on 2026-10-03: 1,892 latest global assessments with no DOI from
+    // another source, all checked.
+    private static SiteDoiCount Dois(int notChecked = 0) => new() {
+        Release = "2026-1",
+        InScope = 179_494,
+        WithoutSourceDoi = 1_892,
+        Found = 1_702 - notChecked,
+        NotFound = 190,
+        NotChecked = notChecked,
+        CountedAtUtc = Built,
+    };
+
     [Fact]
-    public void Dois_todo_only_without_a_cache() {
-        Assert.Equal("todo", PublicSiteProbes.DoiStep(Site() with { DoiCacheExists = false })!.Status);
+    public void Dois_without_a_cache_is_todo_and_gives_the_count_once_known() {
+        var unknown = PublicSiteProbes.DoiStep(Site() with { DoiCacheExists = false })!;
+        Assert.Equal("todo", unknown.Status);
+        Assert.Equal("Not run yet: there is no DOI cache at /data/iucn_doi_cache.sqlite.", unknown.Detail);
+
+        var counted = PublicSiteProbes.DoiStep(Site() with { DoiCacheExists = false, DoiCount = Dois(notChecked: 1_892) with { Found = 0, NotFound = 0 } })!;
+        Assert.Equal("todo", counted.Status);
+        Assert.Equal("Not run yet: there is no DOI cache at /data/iucn_doi_cache.sqlite. 1,892 latest global assessments have no DOI from IUCN's citation, the GBIF checklist or Wikidata.", counted.Detail);
+    }
+
+    // The count is made in the background. Until it is, the light must not claim there is nothing
+    // left to check, so the step keeps its run history.
+    [Fact]
+    public void Dois_say_nothing_until_counted_or_without_a_path() {
         Assert.Null(PublicSiteProbes.DoiStep(Site()));
-        Assert.Null(PublicSiteProbes.DoiStep(Site() with { DoiCachePath = null, DoiCacheExists = false }));
+        Assert.Null(PublicSiteProbes.DoiStep(Site() with { DoiCachePath = null, DoiCacheExists = false, DoiCount = Dois() }));
+    }
+
+    [Fact]
+    public void Dois_not_checked_yet_is_backlog_with_the_count() {
+        var r = PublicSiteProbes.DoiStep(Site() with { DoiCount = Dois(notChecked: 412) })!;
+        Assert.Equal("backlog", r.Status);
+        Assert.Equal("Not checked yet: 412 of the 1,892 latest global assessments that have no DOI from IUCN's citation, the GBIF checklist or Wikidata.", r.Detail);
+    }
+
+    [Fact]
+    public void Dois_all_checked_is_ok_with_what_was_found() {
+        var r = PublicSiteProbes.DoiStep(Site() with { DoiCount = Dois() })!;
+        Assert.Equal("ok", r.Status);
+        Assert.Equal("Checked the 1,892 latest global assessments that have no DOI from IUCN's citation, the GBIF checklist or Wikidata: found a DOI for 1,702 and none for 190.", r.Detail);
+    }
+
+    [Fact]
+    public void Dois_every_assessment_with_a_source_doi_is_ok() {
+        var r = PublicSiteProbes.DoiStep(Site() with { DoiCount = Dois() with { WithoutSourceDoi = 0, Found = 0, NotFound = 0 } })!;
+        Assert.Equal("ok", r.Status);
+        Assert.Equal("Every latest global assessment has a DOI from IUCN's citation, the GBIF checklist or Wikidata.", r.Detail);
     }
 
     // ---- site database ----

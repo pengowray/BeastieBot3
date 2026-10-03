@@ -1004,12 +1004,13 @@ public static class FlowCatalogue {
                 },
                 new FlowStep {
                     Id = "site-resolve-dois",
-                    Title = "Find missing DOIs on doi.org",
-                    Description = "`iucn resolve-dois` finds DOIs for assessments that no other source gives a DOI for (IUCN's citation text, the GBIF checklist, Wikidata) by checking possible DOIs against doi.org. It saves the DOIs it finds in the DOI cache (Datastore:IUCN_doi_cache_sqlite), which `site build-db` reads.",
-                    Commands = new[] { "iucn resolve-dois" },
+                    Title = "Find missing DOIs",
+                    Description = "`iucn resolve-dois` finds DOIs for assessments that have no DOI from IUCN's citation text, the GBIF checklist or Wikidata. It looks each assessment up in Crossref's list of IUCN DOIs, and for recent assessments that are not in that list, it checks likely DOIs at doi.org. It saves the results in the DOI cache (Datastore:IUCN_doi_cache_sqlite), which `site build-db` reads.",
+                    Commands = new[] { "iucn resolve-dois", "iucn resolve-dois --scope latest-regional", "iucn resolve-dois --status" },
+                    InputSourceIds = new[] { "iucn-main", "iucn-api-cache" },
                     Probe = PublicSiteProbes.Dois,
                     Group = "2 · Build the site database",
-                    Note = "--scope under Options sets which assessments to find DOIs for: latest-global (the default), latest-regional, all-latest or history. The status line under this step's title shows only whether the DOI cache exists, not how many assessments are left to check.",
+                    Note = "Each run skips the assessments already in the DOI cache. The status line under this step's title counts latest global assessments only, the default --scope. --scope under Options also takes latest-regional, all-latest or history, and `site build-db` uses the DOIs found in every scope. After a new Red List release, run `iucn resolve-dois --refresh-crossref`, so that Crossref's list includes the new release's DOIs, then `iucn resolve-dois --scope latest-regional`. Without --refresh-crossref, a run downloads Crossref's list again (about 260 requests, 3 minutes) only when the cached copy is more than 7 days old. `iucn resolve-dois --status` prints the counts for a scope and sends no requests.",
                 },
                 new FlowStep {
                     Id = "site-build-db",

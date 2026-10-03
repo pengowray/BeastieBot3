@@ -57,7 +57,7 @@ public sealed class FlowEvaluator {
         var wikiState = new Lazy<WikiCoverageState>(() => WikiCoverageStateReader.Read(_paths));
         var wdIucnState = new Lazy<WikidataIucnFlowState>(() => WikidataIucnFlowStateReader.Read(_paths));
         // A meta table, two MAX() over indexed columns and some file times; the checklist zip's
-        // metadata is read once per file.
+        // metadata is read once per file, and the DOI step's count is a background snapshot.
         var siteState = new Lazy<PublicSiteState>(() => PublicSiteStateReader.Read(_paths));
 
         var steps = flow.Steps

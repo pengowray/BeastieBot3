@@ -14,9 +14,7 @@ namespace BeastieBot3.Tests;
 public class FlowCatalogueTests {
     // Commands a workflow step names before the command itself is merged. A command listed here
     // may be missing from the registry; once it is registered it is checked like any other.
-    private static readonly HashSet<string> PendingCommands = new(StringComparer.Ordinal) {
-        "iucn resolve-dois",
-    };
+    private static readonly HashSet<string> PendingCommands = new(StringComparer.Ordinal);
 
     private static IEnumerable<(FlowDefinition Flow, FlowStep Step, string Command)> StepCommands() =>
         from flow in FlowCatalogue.All

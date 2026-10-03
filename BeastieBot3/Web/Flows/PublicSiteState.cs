@@ -15,8 +15,9 @@ using Microsoft.Data.Sqlite;
 // `site build-db` last changed.
 //
 // Every read here is small (a meta table, two MAX() over indexed columns, a few file times), so it
-// runs on the poll directly. The one exception is the checklist's eml.xml: reading it means opening
-// the zip, so its result is kept until the file's size or modification time changes.
+// runs on the poll directly. The checklist's eml.xml is the first exception: reading it means opening
+// the zip, so its result is kept until the file's size or modification time changes. The DOI step's
+// count is the second: it takes about 17 seconds, so SiteDoiCountReader makes it in the background.
 //
 // File times of a SQLite database: the newest of the main file and its -wal file, but the -wal
 // file only when it has content. A database in WAL mode can hold its latest writes in the -wal
@@ -48,6 +49,9 @@ public sealed record PublicSiteState {
     // --- The DOI cache (`iucn resolve-dois`, Datastore:IUCN_doi_cache_sqlite) ---
     public string? DoiCachePath { get; init; }
     public bool DoiCacheExists { get; init; }
+    /// What the DOI cache has checked of the latest global assessments that need it. Null until
+    /// the background count has finished once, or when it could not be made (SiteDoiCountReader).
+    public SiteDoiCount? DoiCount { get; init; }
 
     // --- The site database (`site build-db`, Datastore:site_sqlite) ---
     public string? SitePath { get; init; }
@@ -116,7 +120,14 @@ public static class PublicSiteStateReader {
     public const string ColPlacementInput = "Catalogue of Life placement";
     public const string SpratInput = "SPRAT (EPBC) database";
 
-    public static PublicSiteState Read(PathsService paths) => Read(PublicSitePaths.From(paths));
+    /// The state for the workflow page, with the DOI step's count. That count comes from a
+    /// background task (SiteDoiCountReader), so this overload is for the poll only; tests read
+    /// through Read(PublicSitePaths), which starts no background work.
+    public static PublicSiteState Read(PathsService paths) {
+        var p = PublicSitePaths.From(paths);
+        var state = Read(p);
+        return state with { DoiCount = SiteDoiCountReader.Read(p, state) };
+    }
 
     /// Never throws: whatever cannot be read is left empty, with the reason where there is one.
     public static PublicSiteState Read(PublicSitePaths p) {

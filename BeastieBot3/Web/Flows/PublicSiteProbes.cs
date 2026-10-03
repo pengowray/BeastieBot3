@@ -8,8 +8,8 @@ using BeastieBot3.Shared.SiteData;
 // Step lights for the public species site workflow. Pure over PublicSiteState, pinned by
 // PublicSiteProbeTests.
 //
-// The DOI step has no count of the assessments still to check: `iucn resolve-dois` and its cache
-// were being written alongside this workflow, so its light only says whether the cache exists.
+// The DOI step's light counts the latest global assessments (the command's default --scope) that
+// have no DOI from another source and no result in the DOI cache (SiteDoiCountReader).
 // Checking the citations and deploying have no light: the report is read by a person, and the
 // deployed database is on the server.
 
@@ -86,10 +86,29 @@ public static class PublicSiteProbes {
 
     // ---- DOIs ----
 
-    internal static FlowProbeResult? DoiStep(PublicSiteState s) =>
-        s.DoiCachePath is not null && !s.DoiCacheExists
-            ? new FlowProbeResult("todo", $"Not run yet: there is no DOI cache at {s.DoiCachePath}.")
-            : null;
+    private const string OtherSources = "IUCN's citation, the GBIF checklist or Wikidata";
+
+    // "todo" without a DOI cache, "backlog" while some of the assessments that need a DOI have no
+    // result in it, "ok" once every one has. Null (the step shows its last run) until the background
+    // count has finished: a count not made yet must not read as nothing left to check.
+    internal static FlowProbeResult? DoiStep(PublicSiteState s) {
+        if (s.DoiCachePath is null) return null;
+        var c = s.DoiCount;
+        if (!s.DoiCacheExists) {
+            var work = c is null ? "" : $" {c.WithoutSourceDoi:n0} latest global assessments have no DOI from {OtherSources}.";
+            return new FlowProbeResult("todo", $"Not run yet: there is no DOI cache at {s.DoiCachePath}.{work}");
+        }
+        if (c is null) return null;
+        if (c.WithoutSourceDoi == 0) {
+            return new FlowProbeResult("ok", $"Every latest global assessment has a DOI from {OtherSources}.");
+        }
+        if (c.NotChecked > 0) {
+            return new FlowProbeResult("backlog",
+                $"Not checked yet: {c.NotChecked:n0} of the {c.WithoutSourceDoi:n0} latest global assessments that have no DOI from {OtherSources}.");
+        }
+        return new FlowProbeResult("ok",
+            $"Checked the {c.WithoutSourceDoi:n0} latest global assessments that have no DOI from {OtherSources}: found a DOI for {c.Found:n0} and none for {c.NotFound:n0}.");
+    }
 
     // ---- the site database ----
 
