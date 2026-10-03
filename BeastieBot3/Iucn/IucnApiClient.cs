@@ -9,10 +9,12 @@ using BeastieBot3.Configuration;
 using Spectre.Console;
 
 // HTTP client for IUCN Red List API v4 (api.iucnredlist.org). Configuration from
-// IucnApiConfiguration (IUCN_API_TOKEN env var required). Implements concurrency
-// limiting via semaphore and exponential backoff (2s→60s default) for 429/5xx responses.
+// IucnApiConfiguration (IUCN_API_TOKEN env var required). Limits concurrency with a semaphore,
+// retries 5xx/timeouts with exponential backoff (2s→60s default), and handles 429 Too Many
+// Requests by waiting (Retry-After, or IUCN_API_RATELIMIT_SECONDS when the header is missing)
+// and then sending requests further apart for the rest of the run (IucnApiPace).
 // Endpoints: /api/v4/taxa/sis/{sisId}, /api/v4/assessment/{assessmentId}.
-// Used by IucnApiCacheTaxaCommand and IucnApiCacheAssessmentsCommand.
+// Used by the `iucn api cache-*` and `discover-by-family` commands.
 
 namespace BeastieBot3.Iucn;
 
@@ -26,12 +28,17 @@ internal sealed class IucnApiClient : IDisposable {
     private readonly TimeSpan _maxDelay;
     private readonly TimeSpan _rateLimitWait;
     private readonly int _maxRateLimitRetries;
+    private readonly Func<TimeSpan, CancellationToken, Task> _delay;
+    private readonly Func<DateTimeOffset> _now;
 
-    // Shared rate-limit gate: when any request gets a 429, every worker waits until this
-    // instant before firing again, so concurrent requests back off together instead of all
-    // hammering through their own retries. Guarded by _rateLock.
+    // Shared gate, guarded by _rateLock. Every request start, retries included, takes the next
+    // free time slot: no earlier than _pausedUntil (set by a 429, so concurrent workers back off
+    // together instead of each using up its own retries), and at least _pace.Interval after the
+    // previous start (measured start to start, so a slow answer does not add to the wait).
     private readonly object _rateLock = new();
+    private readonly IucnApiPace _pace;
     private DateTimeOffset _pausedUntil = DateTimeOffset.MinValue;
+    private DateTimeOffset _nextSlot = DateTimeOffset.MinValue;
 
     public IucnApiClient(IucnApiConfiguration configuration)
         : this(configuration, new SocketsHttpHandler {
@@ -41,8 +48,13 @@ internal sealed class IucnApiClient : IDisposable {
     }
 
     // Test/advanced seam: inject the message handler (e.g. a fake that returns 429s) so the
-    // retry/backoff logic can be exercised without real HTTP.
-    internal IucnApiClient(IucnApiConfiguration configuration, HttpMessageHandler handler) {
+    // retry/backoff logic can be exercised without real HTTP, and the delay and clock so the
+    // waits can be recorded instead of slept.
+    internal IucnApiClient(IucnApiConfiguration configuration, HttpMessageHandler handler,
+        Func<TimeSpan, CancellationToken, Task>? delay = null, Func<DateTimeOffset>? now = null, IucnApiPace? pace = null) {
+        _delay = delay ?? Task.Delay;
+        _now = now ?? (() => DateTimeOffset.UtcNow);
+        _pace = pace ?? new IucnApiPace();
         _httpClient = new HttpClient(handler) {
             BaseAddress = configuration.BaseUri,
             Timeout = configuration.Timeout
@@ -88,9 +100,7 @@ internal sealed class IucnApiClient : IDisposable {
             while (true) {
                 cancellationToken.ThrowIfCancellationRequested();
 
-                // Honour a rate-limit pause any worker discovered, so concurrent requests
-                // don't all blow through their retries against a known-throttled endpoint.
-                await WaitForRateLimitWindowAsync(cancellationToken).ConfigureAwait(false);
+                await WaitForTurnAsync(cancellationToken).ConfigureAwait(false);
 
                 using var request = new HttpRequestMessage(HttpMethod.Get, url);
                 HttpResponseMessage response;
@@ -105,7 +115,7 @@ internal sealed class IucnApiClient : IDisposable {
                     if (++transientAttempt >= MaxTransientAttempts) {
                         throw new IucnApiException(url, null, ex.Message, transientAttempt, ex);
                     }
-                    await Task.Delay(delay, cancellationToken).ConfigureAwait(false);
+                    await _delay(delay, cancellationToken).ConfigureAwait(false);
                     delay = NextDelay(delay);
                     continue;
                 }
@@ -113,22 +123,24 @@ internal sealed class IucnApiClient : IDisposable {
                 using (response) {
                     var payload = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
 
-                    if (response.IsSuccessStatusCode) {
-                        return new IucnApiResponse(url, payload, response.StatusCode, response.Content.Headers.ContentLength ?? Encoding.UTF8.GetByteCount(payload));
-                    }
-
-                    // Rate limited: wait the Retry-After (or the configured window) and retry on a
-                    // separate, larger budget — a 429 is transient and clears once the window passes.
+                    // Rate limited: wait the Retry-After (or the configured window), send requests
+                    // further apart from now on, and retry on a separate, larger budget. A 429 is
+                    // transient and clears once the window passes.
                     if (response.StatusCode == HttpStatusCode.TooManyRequests) {
                         if (++rateLimitAttempt > _maxRateLimitRetries) {
                             throw new IucnApiException(url, response.StatusCode, payload, rateLimitAttempt);
                         }
                         var wait = RetryAfter(response) ?? _rateLimitWait;
-                        BeginRateLimitPause(wait);
+                        var interval = OnRateLimited(wait);
                         AnsiConsole.MarkupLineInterpolated(
-                            $"[yellow]IUCN API rate limited[/] — waiting {wait.TotalSeconds:N0}s then retrying ({rateLimitAttempt}/{_maxRateLimitRetries})…");
-                        await Task.Delay(wait, cancellationToken).ConfigureAwait(false);
-                        continue;
+                            $"[yellow]IUCN API answered 429 Too Many Requests.[/] Waiting {Seconds(wait)}, then sending at most one request every {Seconds(interval)}. Retry {rateLimitAttempt} of {_maxRateLimitRetries}.");
+                        continue;   // WaitForTurnAsync waits out the pause
+                    }
+
+                    OnAnswered();
+
+                    if (response.IsSuccessStatusCode) {
+                        return new IucnApiResponse(url, payload, response.StatusCode, response.Content.Headers.ContentLength ?? Encoding.UTF8.GetByteCount(payload));
                     }
 
                     // Other transient server errors: exponential backoff on the transient budget.
@@ -137,7 +149,7 @@ internal sealed class IucnApiClient : IDisposable {
                             throw new IucnApiException(url, response.StatusCode, payload, transientAttempt);
                         }
                         var wait = RetryAfter(response) ?? delay;
-                        await Task.Delay(wait, cancellationToken).ConfigureAwait(false);
+                        await _delay(wait, cancellationToken).ConfigureAwait(false);
                         delay = NextDelay(delay);
                         continue;
                     }
@@ -170,22 +182,40 @@ internal sealed class IucnApiClient : IDisposable {
         return null;
     }
 
-    private async Task WaitForRateLimitWindowAsync(CancellationToken cancellationToken) {
+    // Takes the next free time slot (see _rateLock) and waits for it.
+    private async Task WaitForTurnAsync(CancellationToken cancellationToken) {
         TimeSpan wait;
         lock (_rateLock) {
-            wait = _pausedUntil - DateTimeOffset.UtcNow;
+            var now = _now();
+            var slot = now;
+            if (_nextSlot > slot) slot = _nextSlot;
+            if (_pausedUntil > slot) slot = _pausedUntil;
+            _nextSlot = slot + _pace.Interval;
+            wait = slot - now;
         }
         if (wait > TimeSpan.Zero) {
-            await Task.Delay(wait, cancellationToken).ConfigureAwait(false);
+            await _delay(wait, cancellationToken).ConfigureAwait(false);
         }
     }
 
-    private void BeginRateLimitPause(TimeSpan wait) {
+    // Pauses every worker for `wait` and slows the pace. Returns the new interval between requests.
+    private TimeSpan OnRateLimited(TimeSpan wait) {
         lock (_rateLock) {
-            var until = DateTimeOffset.UtcNow + wait;
+            var until = _now() + wait;
             if (until > _pausedUntil) _pausedUntil = until;
+            _pace.OnRateLimited();
+            return _pace.Interval;
         }
     }
+
+    private void OnAnswered() {
+        lock (_rateLock) {
+            _pace.OnAnswered();
+        }
+    }
+
+    private static string Seconds(TimeSpan span) =>
+        span.TotalSeconds < 10 ? $"{span.TotalSeconds:0.##} s" : $"{span.TotalSeconds:N0} s";
 
     private TimeSpan NextDelay(TimeSpan current) {
         var doubled = TimeSpan.FromMilliseconds(current.TotalMilliseconds * 2);
@@ -195,6 +225,55 @@ internal sealed class IucnApiClient : IDisposable {
     public void Dispose() {
         _httpClient.Dispose();
         _semaphore.Dispose();
+    }
+}
+
+// The shortest time between the starts of two requests, raised by each 429 Too Many Requests.
+//
+// IUCN's API answers 429 without a Retry-After header. A 2026-10-03 run of 1,502 requests at the
+// commands' default --sleep-ms 250 (about 2 requests a second) got a 429 about every 100 requests;
+// the retry after a 60 s wait got a second 429 14 times out of 15, and the retry after 120 s
+// always worked. That fits a sliding limit of about 100 requests per 2 minutes, or one request
+// every 1.2 s. A simulation of that limit reproduces the run without pacing (44 minutes, 30 429s)
+// and gives about 38 minutes and 4 429s with the pacing below (20,000 requests: 9.8 hours and 404
+// 429s without, 8.5 hours and 26 with). The limit itself sets the floor: about 30 minutes.
+//
+//   - Until the first 429 the interval is zero: the commands' own --sleep-ms sets the pace.
+//   - Each 429 multiplies the interval by 1.5, starting at 1 s (anything shorter does nothing,
+//     because --sleep-ms 250 plus the answer time already spaces requests about 0.5 s apart),
+//     up to 5 s.
+//   - After every 100 answers in a row that are not 429, the interval shrinks by 5%. Once it is
+//     below 1 s it goes back to zero, so a single 429 does not slow the rest of a long run. From
+//     1.5 s that takes about 800 answers.
+//
+// The first 429 of a run still costs two waits whatever the pace: the requests sent before it are
+// still inside the server's window 60 s later. Only the later 429s are fewer and cheaper.
+// Not thread-safe; IucnApiClient calls it under its lock.
+internal sealed class IucnApiPace {
+    public static readonly TimeSpan MinInterval = TimeSpan.FromSeconds(1);
+    public static readonly TimeSpan MaxInterval = TimeSpan.FromSeconds(5);
+    public const double SlowerFactor = 1.5;
+    public const double FasterFactor = 0.95;
+    public const int AnswersBeforeFaster = 100;
+
+    private int _answersSince;
+
+    public TimeSpan Interval { get; private set; } = TimeSpan.Zero;
+
+    public void OnRateLimited() {
+        var slower = Interval * SlowerFactor;
+        if (slower < MinInterval) slower = MinInterval;
+        Interval = slower > MaxInterval ? MaxInterval : slower;
+        _answersSince = 0;
+    }
+
+    // Any answer other than a 429, including a 404 (a tombstone re-check is almost all 404s).
+    public void OnAnswered() {
+        if (Interval == TimeSpan.Zero) return;
+        if (++_answersSince < AnswersBeforeFaster) return;
+        _answersSince = 0;
+        var faster = Interval * FasterFactor;
+        Interval = faster < MinInterval ? TimeSpan.Zero : faster;
     }
 }
 
