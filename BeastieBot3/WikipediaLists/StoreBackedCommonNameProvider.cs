@@ -120,8 +120,8 @@ internal sealed class StoreBackedCommonNameProvider : IDisposable {
             scientificName)?.DisplayName;
 
     /// <summary>
-    /// Get the Wikipedia article title for a species record.
-    /// Returns the article title from wikipedia_title or wikipedia_taxobox sources.
+    /// Get the Wikipedia article title for a species record: the page its wikipedia_title or
+    /// wikipedia_taxobox name came from (<see cref="CommonNameStore.GetWikipediaArticleTitle"/>).
     /// </summary>
     public string? GetWikipediaArticleTitle(IucnSpeciesRecord record) {
         if (record is null) {

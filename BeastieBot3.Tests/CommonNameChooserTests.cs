@@ -163,6 +163,21 @@ public sealed class CommonNameChooserTests : IDisposable {
         Assert.Equal("Grey (Red) Phalarope", best!.RawName);
     }
 
+    [Fact]
+    public void ArticleTitle_IsThePageTheNameCameFrom() {
+        // 2026 data: "Jack Dempsey" is the title name of the page "Jack Dempsey (fish)", and
+        // "Red mullet" is the taxobox name on the page "Mullus barbatus"; the lists linked the
+        // name ([[Jack Dempsey]] is the boxer).
+        using var store = OpenInMemory();
+        var cichlid = AddTaxon(store, "rocio octofasciata", "1");
+        var mullet = AddTaxon(store, "mullus barbatus", "2");
+        store.InsertCommonName(cichlid, "Jack Dempsey", "jackdempsey", "en", "wikipedia_title", "Jack Dempsey (fish)", true);
+        store.InsertCommonName(mullet, "Red mullet", "redmullet", "en", "wikipedia_taxobox", "Mullus barbatus", false);
+
+        Assert.Equal("Jack Dempsey (fish)", store.GetWikipediaArticleTitle(cichlid));
+        Assert.Equal("Mullus barbatus", store.GetWikipediaArticleTitle(mullet));
+    }
+
     [Theory]
     [InlineData("Aus bus sp. nov. 'Kimberley'")]
     [InlineData("Aus spp. complex")]

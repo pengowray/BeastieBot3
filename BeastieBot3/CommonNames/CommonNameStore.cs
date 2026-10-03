@@ -787,14 +787,17 @@ internal sealed class CommonNameStore : SqliteStore {
     }
 
     /// <summary>
-    /// Get the Wikipedia article title for a taxon.
-    /// Returns the raw_name from wikipedia_title or wikipedia_taxobox sources.
+    /// The title of the Wikipedia article matched to a taxon: the page a wikipedia_title or
+    /// wikipedia_taxobox name came from (source_identifier). Not the name itself: a title name has
+    /// its disambiguation removed ("Jack Dempsey" from "Jack Dempsey (fish)"), and a taxobox name is
+    /// the infobox's name field ("Red mullet" on "Mullus barbatus", "Sunda slow
+    /// loris{sfn|Groves|2005|p=122}"), so neither is a link target.
     /// </summary>
     public string? GetWikipediaArticleTitle(long taxonId, string language = "en") {
         using var command = _connection.CreateCommand();
         command.CommandText =
             """
-            SELECT cn.raw_name
+            SELECT COALESCE(cn.source_identifier, cn.raw_name)
             FROM common_names cn
             WHERE cn.taxon_id = @taxonId 
               AND cn.language = @lang
