@@ -262,24 +262,8 @@ public class CommonNameAmbiguityTests {
     }
 
     [Fact]
-    public void BatchLookup_GivesTheSameNamesAsSingleLookups() {
-        using var store = OpenInMemory();
-        var lion = AddTaxon(store, "panthera leo", "15951");
-        var nominate = AddTaxon(store, "panthera leo ssp. leo", "280668607", rank: "subspecies");
-        AddName(store, lion, "Lion", "wikipedia_title", preferred: true);
-        AddName(store, lion, "Lioness", "col");
-        AddName(store, nominate, "Lion", "iucn");
-        AddName(store, nominate, "Northern Lion", "iucn", preferred: true);
-
-        var batch = store.GetBestCommonNamesForTaxa(new[] { lion, nominate });
-
-        Assert.Equal("Lion", batch[lion].RawName);
-        Assert.Equal("Northern Lion", batch[nominate].RawName);
-    }
-
-    [Fact]
     public void ChooseBest_ReadsTheVerdictForTheTaxonItIsGiven() {
-        // site build-db calls ChooseBest with the store's taxa.id; a different id gets the other
+        // site build-db calls the chooser with the store's taxa.id; a different id gets the other
         // taxon's verdict.
         using var store = OpenInMemory();
         var tiger = AddTaxon(store, "panthera tigris", "15955");
@@ -292,8 +276,8 @@ public class CommonNameAmbiguityTests {
             new CommonNameCandidate("Malayan tiger", "malayantiger", "wikidata_label", false),
         };
 
-        Assert.Equal("Tiger", CommonNameStore.ChooseBest(tiger, candidates, verdicts)!.RawName);
-        Assert.Equal("Malayan tiger", CommonNameStore.ChooseBest(grouper, candidates, verdicts)!.RawName);
+        Assert.Equal("Tiger", CommonNameChooser.ChooseBest(tiger, candidates, verdicts)!.RawName);
+        Assert.Equal("Malayan tiger", CommonNameChooser.ChooseBest(grouper, candidates, verdicts)!.RawName);
     }
 
     [Fact]

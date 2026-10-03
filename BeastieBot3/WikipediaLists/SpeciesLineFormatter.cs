@@ -564,97 +564,37 @@ internal sealed class SpeciesLineFormatter {
     /// </summary>
     public string? ResolveDisplayCommonName(IucnSpeciesRecord record) => ResolveCommonName(record);
 
+    // The common name chooser for this formatter's rules-list.txt and store (CommonNameChooser
+    // applies rules-list.txt, the store's best name and the unusable check); built on first use.
+    private CommonNameChooser? _commonNameChooser;
+    private CommonNameChooser NameChooser =>
+        _commonNameChooser ??= (_storeBackedProvider?.Chooser ?? CommonNameChooser.RulesOnly(null)).WithRules(_legacyRules);
+
     private string? ResolveCommonName(IucnSpeciesRecord record) {
-        var candidate = ResolveCommonNameCandidate(record);
-        // Drop candidates that are really the scientific name repeated, or carry working/authority
-        // strings ("sp. nov.", "(Author) 1993", " non ") — fall back to scientific-name styling instead.
-        return IsUnusableCommonName(candidate, record) ? null : candidate;
+        var subject = new CommonNameSubject(
+            RulesKey: record.ScientificNameTaxonomy ?? record.ScientificNameAssessments,
+            ScientificName: ResolveScientificName(record),
+            Genus: record.GenusName,
+            SpeciesEpithet: record.SpeciesName);
+        var provider = _storeBackedProvider;
+        var choice = NameChooser.Choose(subject, provider is null ? null : () => provider.GetBestCommonName(record));
+        if (choice.Found) {
+            // Null when the name is not usable: the list falls back to scientific-name styling.
+            return choice.Name;
+        }
+
+        // Neither rules-list.txt nor the store has a name. A name carried on the record itself
+        // (SPRAT's vernacular for an Australia list), else the legacy provider (--use-legacy-names).
+        var fallback = !string.IsNullOrWhiteSpace(record.CommonNameOverride)
+            ? record.CommonNameOverride
+            : _commonNameProvider?.GetBestCommonName(record.ToTaxonomyRow(), entityIds: null);
+        return IsUnusableCommonName(fallback, record) ? null : fallback;
     }
-
-    private string? ResolveCommonNameCandidate(IucnSpeciesRecord record) {
-        // First check legacy rules (highest priority - manual overrides)
-        var taxaRules = _legacyRules.Get(record.ScientificNameTaxonomy ?? record.ScientificNameAssessments ?? string.Empty);
-        if (!string.IsNullOrWhiteSpace(taxaRules?.CommonName)) {
-            return Uppercase(taxaRules!.CommonName);
-        }
-
-        // Try the new store-backed provider if available
-        if (_storeBackedProvider is not null) {
-            var resolved = _storeBackedProvider.GetBestCommonName(record);
-            if (!string.IsNullOrWhiteSpace(resolved)) {
-                return resolved;
-            }
-            // else fall through to the record's own override / legacy provider
-        }
-
-        // A name carried on the record itself (e.g. SPRAT's vernacular for an Australia list) — used
-        // when no aggregated provider resolved one, so SPRAT-only taxa still get a common name.
-        if (!string.IsNullOrWhiteSpace(record.CommonNameOverride)) {
-            return record.CommonNameOverride;
-        }
-
-        // Fall back to legacy provider
-        if (_commonNameProvider is null) {
-            return null;
-        }
-
-        var row = record.ToTaxonomyRow();
-        return _commonNameProvider.GetBestCommonName(row, entityIds: null);
-    }
-
-    // A 4-digit year (1600–2099) betrays a botanical/zoological authority citation rather than a
-    // vernacular name; common names effectively never contain one.
-    private static readonly Regex AuthorityYearPattern = new(@"\b(1[6-9]\d{2}|20\d{2})\b", RegexOptions.Compiled);
 
     // Returns true when the resolved "common name" is not actually a usable vernacular: a working
     // placeholder, an authority/homonym string, or simply the scientific name repeated.
     private static bool IsUnusableCommonName(string? candidate, IucnSpeciesRecord record) =>
-        IsUnusableCommonName(candidate, ResolveScientificName(record), record.GenusName, record.SpeciesName);
-
-    /// <summary>
-    /// The same check for callers without an <see cref="IucnSpeciesRecord"/> (`site build-db`
-    /// applies it to the best English name so the site and the lists agree).
-    /// </summary>
-    internal static bool IsUnusableCommonName(string? candidate, string? scientificName, string? genusName, string? speciesName) {
-        if (string.IsNullOrWhiteSpace(candidate)) {
-            return true;
-        }
-
-        var name = candidate.Trim();
-
-        if (name.Contains("sp. nov", StringComparison.OrdinalIgnoreCase)) return true;
-        if (name.Contains(" spp.", StringComparison.OrdinalIgnoreCase)) return true;
-        if (name.Contains(" non ", StringComparison.Ordinal)) return true;
-        if (AuthorityYearPattern.IsMatch(name)) return true;
-
-        // A "common name" that is really just the scientific name repeated.
-        if (!string.IsNullOrWhiteSpace(scientificName) &&
-            string.Equals(name, scientificName, StringComparison.OrdinalIgnoreCase)) {
-            return true;
-        }
-
-        var binomial = BuildBinomial(genusName, speciesName);
-        if (!string.IsNullOrWhiteSpace(binomial) &&
-            string.Equals(FirstTwoTokens(name), binomial, StringComparison.OrdinalIgnoreCase)) {
-            return true;
-        }
-
-        return false;
-    }
-
-    private static string? BuildBinomial(string? genusName, string? speciesName) {
-        var genus = genusName?.Trim();
-        var species = speciesName?.Trim();
-        if (string.IsNullOrWhiteSpace(genus) || string.IsNullOrWhiteSpace(species)) {
-            return null;
-        }
-        return $"{genus} {species}";
-    }
-
-    private static string FirstTwoTokens(string name) {
-        var parts = name.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries);
-        return parts.Length <= 2 ? string.Join(' ', parts) : parts[0] + " " + parts[1];
-    }
+        CommonNameChooser.IsUnusable(candidate, ResolveScientificName(record), record.GenusName, record.SpeciesName);
 
     public static string? ResolveScientificName(IucnSpeciesRecord record) {
         // A cleaned CoL spelling (set only for a formatting-equivalent slip in the IUCN name) is the
