@@ -166,7 +166,7 @@ public class IucnSameNameTaxaTests {
         var old = Old(13888, "Mormopterus planiceps", "(Peters, 1866)", "ANIMALIA", "Global");
         var match = Assert.Single(new IucnSameNameTaxa(new[] { current }, synonyms).ViaSynonym(old));
         Assert.Equal("Mormopterus planiceps Peters, 1888 [in part]", match.ListedAs);
-        Assert.EndsWith("(LC, 2021), listed as Mormopterus planiceps Peters, 1888 [in part]", IucnSameNameTaxa.Describe(match, old));
+        Assert.EndsWith("(LC, 2021), synonym entry: \"Mormopterus planiceps Peters, 1888 [in part]\"", IucnSameNameTaxa.Describe(match, old));
     }
 
     [Fact]

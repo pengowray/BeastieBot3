@@ -34,6 +34,10 @@ public sealed class IucnNoCurrentAssessmentReportCommand : Command<IucnNoCurrent
         [Description("Override path to the API cache SQLite database (defaults to Datastore:IUCN_api_cache_sqlite).")]
         public string? CacheDatabase { get; init; }
 
+        [CommandOption("-d|--database <PATH>")]
+        [Description("Override path to the CSV-imported IUCN SQLite database (defaults to Datastore:IUCN_sqlite_from_cvs). It gives the current taxa for the same-name and IUCN synonym columns.")]
+        public string? DatabasePath { get; init; }
+
         [CommandOption("-o|--output <PATH>")]
         [Description("Output path for the Markdown report. Defaults to a timestamped file in the reports directory.")]
         public string? OutputPath { get; init; }
@@ -53,19 +57,13 @@ public sealed class IucnNoCurrentAssessmentReportCommand : Command<IucnNoCurrent
         var cachePath = paths.ResolveIucnApiCachePath(settings.CacheDatabase);
 
         AnsiConsole.MarkupLine($"[grey]API cache database:[/] {Markup.Escape(cachePath)}");
+        if (!File.Exists(cachePath)) {
+            AnsiConsole.MarkupLine("[red]API cache database not found.[/] Run [yellow]iucn api cache-taxa[/] first to populate it.");
+            return -1;
+        }
 
-        // Open the store so EnsureSchema runs the migration (adds/renames the
-        // has_latest_flag_in_assessments column, backfills, creates indexes).
-        // We keep the same connection for queries to avoid WAL visibility gaps.
-        using var store = IucnApiCacheStore.Open(cachePath);
-
-        // Grab the underlying connection via a lightweight read query to verify tables.
-        var builder = new SqliteConnectionStringBuilder {
-            DataSource = cachePath,
-            Mode = SqliteOpenMode.ReadWrite
-        };
-        using var connection = new SqliteConnection(builder.ConnectionString);
-        connection.Open();
+        // Read-only: the scan needs only the taxa table and taxa_assessment_backlog.latest.
+        using var connection = OpenReadOnly(cachePath);
 
         if (!TableExists(connection, "taxa") || !TableExists(connection, "taxa_assessment_backlog")) {
             AnsiConsole.MarkupLine("[red]Required tables not found. Run cache-taxa first to populate the API cache.[/]");
@@ -82,6 +80,13 @@ public sealed class IucnNoCurrentAssessmentReportCommand : Command<IucnNoCurrent
         if (taxa.Count == 0) {
             AnsiConsole.MarkupLine("[green]All cached taxa have a latest assessment.[/]");
             return 0;
+        }
+
+        var sameNameTaxa = LoadSameNameTaxa(paths, settings.DatabasePath, connection);
+        if (sameNameTaxa is not null) {
+            taxa = taxa
+                .Select(t => t.Old is null ? t : t with { SameName = sameNameTaxa.SameName(t.Old), ViaSynonym = sameNameTaxa.ViaSynonym(t.Old) })
+                .ToList();
         }
 
         // Group phylogenetically
@@ -112,17 +117,17 @@ public sealed class IucnNoCurrentAssessmentReportCommand : Command<IucnNoCurrent
         }
 
         // Build and write Markdown report
-        var markdown = BuildMarkdownReport(cachePath, grouped);
+        var markdown = BuildMarkdownReport(cachePath, grouped, matchesChecked: sameNameTaxa is not null);
         File.WriteAllText(mdPath, markdown, Encoding.UTF8);
         AnsiConsole.MarkupLine($"[green]Markdown report written to:[/] {Markup.Escape(mdPath)}");
 
         // Build and write CSV
-        var csv = BuildCsvReport(grouped);
+        var csv = BuildCsvReport(grouped, matchesChecked: sameNameTaxa is not null);
         File.WriteAllText(csvPath, csv, Encoding.UTF8);
         AnsiConsole.MarkupLine($"[green]CSV report written to:[/] {Markup.Escape(csvPath)}");
 
         // Summary to console
-        PrintConsoleSummary(grouped);
+        PrintConsoleSummary(grouped, matchesChecked: sameNameTaxa is not null);
 
         return 0;
     }
@@ -171,11 +176,13 @@ ORDER BY t.root_sis_id";
                 : EmptyTaxonomy(rootSisId);
 
             AssessmentBrief? mostRecent = null;
+            IucnOldTaxon? old = null;
             if (json is not null) {
                 mostRecent = ExtractMostRecentAssessment(json, rootSisId);
+                old = IucnSameNameTaxa.OldTaxonFromJson(rootSisId, json);
             }
 
-            results.Add(new TaxonReportRow(rootSisId, taxonomy, mostRecent));
+            results.Add(new TaxonReportRow(rootSisId, taxonomy, mostRecent, old));
         }
 
         return (results, skipped);
@@ -245,16 +252,23 @@ ORDER BY t.root_sis_id";
         }
     }
 
-    private static string BuildMarkdownReport(string cachePath, List<TaxonReportRow> taxa) {
+    private static string BuildMarkdownReport(string cachePath, List<TaxonReportRow> taxa, bool matchesChecked) {
         var sb = new StringBuilder();
         sb.AppendLine("# IUCN Taxa With No Latest Assessment");
         sb.AppendLine();
         sb.AppendLine($"- **Generated:** {DateTimeOffset.Now:O}");
         sb.AppendLine($"- **Cache database:** `{EscapeMarkdown(cachePath)}`");
         sb.AppendLine($"- **Taxa with no latest assessment:** {taxa.Count:N0}");
+        if (matchesChecked) {
+            var (sameName, viaSynonymOnly) = MatchCounts(taxa);
+            sb.AppendLine($"- **{MdSameNameCountLabel}:** {sameName:N0}");
+            sb.AppendLine($"- **{MdViaSynonymCountLabel}:** {viaSynonymOnly:N0}");
+        }
         sb.AppendLine();
         sb.AppendLine("These are species in the IUCN API cache where no assessment has `\"latest\": true`. ");
         sb.AppendLine("They may have been removed from the Red List, merged into another taxon, or reclassified.");
+        sb.AppendLine();
+        sb.AppendLine(matchesChecked ? MdMatchesIntro : MdMatchesNotChecked);
         sb.AppendLine();
 
         // Summary statistics by class
@@ -356,16 +370,17 @@ ORDER BY t.root_sis_id";
                 parts.Add($"\u2014 [{EscapeMarkdown(assessmentLabel)}]({url})");
             }
 
-            sb.AppendLine($"- {string.Join(" ", parts)}");
+            sb.AppendLine($"- {string.Join(" ", parts)}{MarkdownMatches(row)}");
         }
 
         sb.AppendLine();
         return sb.ToString();
     }
 
-    private static string BuildCsvReport(List<TaxonReportRow> taxa) {
+    private static string BuildCsvReport(List<TaxonReportRow> taxa, bool matchesChecked) {
         var sb = new StringBuilder();
-        sb.AppendLine("root_sis_id,scientific_name,common_name,kingdom,phylum,class,order,family,genus,species,last_assessment_year,last_category,iucn_url");
+        sb.AppendLine("root_sis_id,scientific_name,common_name,kingdom,phylum,class,order,family,genus,species,last_assessment_year,last_category,iucn_url"
+            + (matchesChecked ? $",{CsvSameNameColumn},{CsvViaSynonymColumn}" : ""));
 
         foreach (var row in taxa) {
             var t = row.Taxonomy;
@@ -384,13 +399,16 @@ ORDER BY t.root_sis_id";
                 CsvEscape(t.SpeciesName ?? ""),
                 CsvEscape(a?.YearPublished?.ToString(CultureInfo.InvariantCulture) ?? ""),
                 CsvEscape(a?.Category ?? ""),
-                CsvEscape(url)));
+                CsvEscape(url))
+                + (matchesChecked
+                    ? "," + CsvEscape(Describe(row.SameName, row.Old)) + "," + CsvEscape(Describe(row.ViaSynonym, row.Old))
+                    : ""));
         }
 
         return sb.ToString();
     }
 
-    private static void PrintConsoleSummary(List<TaxonReportRow> taxa) {
+    private static void PrintConsoleSummary(List<TaxonReportRow> taxa, bool matchesChecked) {
         AnsiConsole.WriteLine();
         var table = new Table().Border(TableBorder.Rounded);
         table.AddColumn("Class");
@@ -407,7 +425,71 @@ ORDER BY t.root_sis_id";
 
         AnsiConsole.Write(table);
         AnsiConsole.MarkupLine($"[grey]Total taxa with no latest assessment:[/] {taxa.Count:N0}");
+        if (matchesChecked) {
+            var (sameName, viaSynonymOnly) = MatchCounts(taxa);
+            AnsiConsole.MarkupLine($"[grey]{ConsoleSameNameLabel}:[/] {sameName:N0}");
+            AnsiConsole.MarkupLine($"[grey]{ConsoleViaSynonymLabel}:[/] {viaSynonymOnly:N0}");
+        }
     }
+
+    // ---- Current taxa with the same name, or listing the name as an IUCN synonym ----
+
+    private const string MdSameNameCountLabel = "Current taxon with the same name";
+    private const string MdViaSynonymCountLabel = "Current taxon through an IUCN synonym only";
+    private const string MdMatchesIntro =
+        "After a taxon, \"same name:\" links the current taxa in the CSV export with the same scientific name, in the same kingdom and with a current assessment in the same scope as the taxon's last assessment. " +
+        "\"IUCN synonym of:\" links the current taxa that list the name as an IUCN synonym. " +
+        "Each link shows the SIS id, the name and authority if they differ from the taxon's, and the current category and year.";
+    private const string MdMatchesNotChecked = "Matches to current taxa with the same name or an IUCN synonym were not checked, because the IUCN CSV database was not found.";
+    private const string MdSameNameLead = "; same name: ";
+    private const string MdViaSynonymLead = "; IUCN synonym of: ";
+    private const string CsvSameNameColumn = "same_name_current";
+    private const string CsvViaSynonymColumn = "via_synonym_current";
+    private const string ConsoleSameNameLabel = "Current taxon with the same name";
+    private const string ConsoleViaSynonymLabel = "Current taxon through an IUCN synonym only";
+
+    // Old ids with a same-name match, and old ids with no same-name match but a synonym match.
+    private static (int SameName, int ViaSynonymOnly) MatchCounts(IEnumerable<TaxonReportRow> taxa) {
+        var sameName = 0;
+        var viaSynonymOnly = 0;
+        foreach (var row in taxa) {
+            if (row.SameName.Count > 0) {
+                sameName++;
+            } else if (row.ViaSynonym.Count > 0) {
+                viaSynonymOnly++;
+            }
+        }
+        return (sameName, viaSynonymOnly);
+    }
+
+    private static string Describe(IReadOnlyList<IucnSameNameMatch> matches, IucnOldTaxon? old) =>
+        old is null ? "" : IucnSameNameTaxa.DescribeAll(matches, old);
+
+    // The suffix on a taxon's Markdown line: each match linked to its current assessment.
+    private static string MarkdownMatches(TaxonReportRow row) {
+        if (row.Old is null) {
+            return "";
+        }
+        var sb = new StringBuilder();
+        AppendMarkdownMatches(sb, MdSameNameLead, row.SameName, row.Old);
+        AppendMarkdownMatches(sb, MdViaSynonymLead, row.ViaSynonym, row.Old);
+        return sb.ToString();
+    }
+
+    private static void AppendMarkdownMatches(StringBuilder sb, string lead, IReadOnlyList<IucnSameNameMatch> matches, IucnOldTaxon old) {
+        if (matches.Count == 0) {
+            return;
+        }
+        sb.Append(lead);
+        if (matches.Count > 1) {
+            sb.Append(IucnSameNameTaxa.SeveralPrefix(matches.Count));
+        }
+        sb.Append(string.Join(IucnSameNameTaxa.Separator,
+            matches.Select(m => $"[{EscapeMarkdownLinkText(IucnSameNameTaxa.Describe(m, old))}]({m.Url})")));
+    }
+
+    private static string EscapeMarkdownLinkText(string value) =>
+        EscapeMarkdown(value).Replace("[", "\\[").Replace("]", "\\]");
 
     private static TaxaTaxonomyInfo EmptyTaxonomy(long sisId) =>
         new(sisId, null, null, null, null, null, null, null, null, null);
@@ -423,6 +505,44 @@ ORDER BY t.root_sis_id";
         }
         return value;
     }
+
+    private static SqliteConnection OpenReadOnly(string path) {
+        var connection = new SqliteConnection(new SqliteConnectionStringBuilder {
+            DataSource = path,
+            Mode = SqliteOpenMode.ReadOnly,
+        }.ConnectionString);
+        connection.Open();
+        return connection;
+    }
+
+    // The current taxa from the CSV export and the synonyms IUCN lists for them. Null, with a
+    // message, when the CSV database is missing; the report is then written without the two columns.
+    private static IucnSameNameTaxa? LoadSameNameTaxa(PathsService paths, string? databaseOverride, SqliteConnection apiCache) {
+        string csvPath;
+        try {
+            csvPath = paths.ResolveIucnDatabasePath(databaseOverride, "--database");
+        } catch (InvalidOperationException ex) {
+            AnsiConsole.MarkupLineInterpolated($"[yellow]{ex.Message} {ColumnsLeftOut}[/]");
+            return null;
+        }
+        if (!File.Exists(csvPath)) {
+            AnsiConsole.MarkupLineInterpolated($"[yellow]{CsvMissingLine(csvPath)}[/]");
+            return null;
+        }
+        using var csv = OpenReadOnly(csvPath);
+        if (!TableExists(csv, "taxonomy_html") || !TableExists(csv, "assessments_html")) {
+            AnsiConsole.MarkupLineInterpolated($"[yellow]IUCN CSV database has no imported taxa: {csvPath}. {ColumnsLeftOut}[/]");
+            return null;
+        }
+        AnsiConsole.MarkupLineInterpolated($"[grey]IUCN CSV database:[/] {csvPath}");
+        AnsiConsole.MarkupLine("[grey]Reading current taxa and their IUCN synonyms...[/]");
+        return IucnSameNameTaxa.Load(csv, apiCache);
+    }
+
+    private static string CsvMissingLine(string path) =>
+        $"IUCN CSV database not found: {path}. {ColumnsLeftOut}";
+
+    private const string ColumnsLeftOut = "The report leaves out the same-name and IUCN synonym columns.";
 
     private static bool TableExists(SqliteConnection connection, string tableName) {
         using var command = connection.CreateCommand();
@@ -459,7 +579,10 @@ ORDER BY t.root_sis_id";
             : null;
     }
 
-    private sealed record TaxonReportRow(long RootSisId, TaxaTaxonomyInfo Taxonomy, AssessmentBrief? MostRecentAssessment);
+    private sealed record TaxonReportRow(long RootSisId, TaxaTaxonomyInfo Taxonomy, AssessmentBrief? MostRecentAssessment, IucnOldTaxon? Old) {
+        public IReadOnlyList<IucnSameNameMatch> SameName { get; init; } = Array.Empty<IucnSameNameMatch>();
+        public IReadOnlyList<IucnSameNameMatch> ViaSynonym { get; init; } = Array.Empty<IucnSameNameMatch>();
+    }
 
     private sealed record AssessmentBrief(long AssessmentId, int? YearPublished, string? Category, string? Url, long RootSisId);
 }

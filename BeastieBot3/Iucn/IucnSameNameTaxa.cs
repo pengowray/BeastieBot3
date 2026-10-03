@@ -250,7 +250,7 @@ internal sealed class IucnSameNameTaxa {
     /// One match as text: the taxon id, then the name and authority when they differ from the old
     /// taxon's (always for a synonym match, since the current name is a different name), then the
     /// current category and year. A synonym IUCN lists with a different author or a note adds the
-    /// synonym as IUCN lists it.
+    /// synonym entry as IUCN wrote it.
     /// </summary>
     public static string Describe(IucnSameNameMatch match, IucnOldTaxon old) {
         var sb = new StringBuilder();
@@ -260,19 +260,23 @@ internal sealed class IucnSameNameTaxa {
         }
         sb.Append(" (").Append(StatusAndYear(match.Assessment)).Append(')');
         if (match.ListedAs is { } listedAs) {
-            sb.Append(", listed as ").Append(Clean(listedAs));
+            sb.Append(", synonym entry: \"").Append(Clean(listedAs)).Append('"');
         }
         return sb.ToString();
     }
 
-    /// <summary>All matches for one old id, joined by "; ", with a count first when there are several.</summary>
+    /// <summary>All matches for one old id, joined by <see cref="Separator"/>, with a count first when there are several.</summary>
     public static string DescribeAll(IReadOnlyList<IucnSameNameMatch> matches, IucnOldTaxon old) {
         if (matches.Count == 0) {
             return string.Empty;
         }
-        var text = string.Join("; ", matches.Select(m => Describe(m, old)));
-        return matches.Count == 1 ? text : $"{matches.Count} taxa: {text}";
+        var text = string.Join(Separator, matches.Select(m => Describe(m, old)));
+        return matches.Count == 1 ? text : SeveralPrefix(matches.Count) + text;
     }
+
+    public const string Separator = "; ";
+
+    public static string SeveralPrefix(int count) => $"{count.ToString(CultureInfo.InvariantCulture)} taxa: ";
 
     public static string StatusAndYear(IucnCurrentAssessment assessment) {
         var status = string.IsNullOrWhiteSpace(assessment.StatusCode) ? "category unknown" : assessment.StatusCode!.Trim();
