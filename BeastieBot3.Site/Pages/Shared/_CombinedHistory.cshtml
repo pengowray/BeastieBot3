@@ -97,10 +97,11 @@
         </div>
     }
     @if (combined.WithNotes.Count > 0) {
+        @* <text> keeps the whitespace of the code lines out of the sentence ("2790 , the"). *@
         <p class="note taxonomic-notes">@SiteText.TaxonomicNotesBefore@for (var i = 0; i < combined.WithNotes.Count; i++) {
                 var id = combined.WithNotes[i];
                 var newest = id.NewestGlobal!;
-                @SiteText.ListSeparator(i, combined.WithNotes.Count)<a href="@SiteFormat.IucnAssessmentUrl(newest.TaxonId, newest.AssessmentId)">@SiteText.TaxonomicNotesLink(newest.YearPublished, id.TaxonId)</a>
+                <text>@SiteText.ListSeparator(i, combined.WithNotes.Count)<a href="@SiteFormat.IucnAssessmentUrl(newest.TaxonId, newest.AssessmentId)">@SiteText.TaxonomicNotesLink(newest.YearPublished, id.TaxonId)</a></text>
             }@SiteText.TaxonomicNotesAfter</p>
     }
     @foreach (var id in combined.Others.Where(i => i.RegionalCount > 0)) {

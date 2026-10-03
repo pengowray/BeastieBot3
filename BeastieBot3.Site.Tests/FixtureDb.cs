@@ -442,7 +442,7 @@ public static class FixtureDb {
         w.Taxon(Minor, "Platanista minor", "species", "ANIMALIA", "CHORDATA", "MAMMALIA", "CETARTIODACTYLA", "PLATANISTIDAE", "Platanista",
             authority: "Owen, 1853", latest: MinorLatest);
         w.Assessment(MinorLatest, Minor, "Global", true, "EN", criteria: "A2abc", criteriaVersion: "3.1", year: 2022, date: "2021-03-02",
-            taxonomicNotes: false);
+            taxonomicNotes: true);
         w.Name(Minor, "Platanista minor", "scientific", null, "iucn");
         w.Name(Minor, "Platanista gangetica", "synonym", null, "iucn");
         w.Taxon(GangeticaOld, "Platanista gangetica", "species", "ANIMALIA", "CHORDATA", "MAMMALIA", "CETARTIODACTYLA", "PLATANISTIDAE", "Platanista",

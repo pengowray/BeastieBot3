@@ -142,6 +142,9 @@ public sealed class CombinedHistoryPageTests(SiteFactory factory) : IClassFixtur
             + "IUCN lists Platanista gangetica as a synonym of Platanista minor.", Html.Text(html));
         // Its Asia assessment stays in its own Regional assessments table.
         Assert.Contains($"iucnredlist.org/species/{FixtureDb.GangeticaOld}/{FixtureDb.GangeticaOldAsia}\"", html);
+        // Three assessments with taxonomic notes, in the order of the legend.
+        Assert.Contains("see the 2022 assessment of IUCN id 41756, the 2022 assessment of IUCN id 41757 and the 2012 assessment of "
+            + "IUCN id 41758 on the IUCN Red List website.", Html.Text(html));
     }
 
     // The page of a taxon in the release names the regional assessments of a linked old id.
