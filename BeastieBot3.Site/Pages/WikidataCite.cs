@@ -57,7 +57,9 @@ public static partial class WikidataCite {
         if (itemQid is not null) {
             var citeQ = Try("CiteQ", () => WikidataCitation.CiteQ(itemQid, citeQOptions));
             IReadOnlyList<string>? add = null;
-            if (parts is not null && model is not null) {
+            // With no list of the item's properties, what it lacks is not known, so nothing is
+            // offered (rather than every statement).
+            if (parts is not null && model is not null && !string.IsNullOrWhiteSpace(assessment.WikidataItemProperties)) {
                 var present = Properties(assessment.WikidataItemProperties);
                 add = Try("AddMissingCommands", () => WikidataCitation.AddMissingCommands(parts, itemQid, present, taxonItem, model));
             }

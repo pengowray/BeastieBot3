@@ -185,6 +185,17 @@ public sealed class WikidataCiteUnitTests {
     }
 
     [Fact]
+    public void NoAddCommandsWhenTheItemsPropertiesAreNotKnown() {
+        var calls = new List<string>();
+        var view = WikidataCite.Build(Row("Q900000001", properties: null), Parts, "Q33609", new WikidataItemModel(), new CiteQOptions(),
+            (what, _) => calls.Add(what));
+        Assert.Equal("Q900000001", view.ItemQid);
+        Assert.Null(view.Commands);
+        Assert.Empty(view.AddedStatements);
+        Assert.DoesNotContain("AddMissingCommands", calls);
+    }
+
+    [Fact]
     public void AnItemIdThatIsNotOneIsIgnored() {
         var view = WikidataCite.Build(Row("not an item"), null, null, new WikidataItemModel(), new CiteQOptions());
         Assert.Null(view.ItemQid);
