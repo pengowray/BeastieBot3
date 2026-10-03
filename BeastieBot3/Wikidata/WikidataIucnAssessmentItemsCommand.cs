@@ -23,6 +23,10 @@ using BeastieBot3.WikidataEdits;
 //   doi-scan      P356 prefix scan, main graph only
 //   dataset-url   data set items linking iucnredlist.org, main graph
 // Then each item's statements are read from the graph it lives in.
+//
+// Two lists for `site build-db` are stored as well (WikidataIucnReferenceTables): the Red List's
+// editions, which the editions route already finds, and the taxon items whose IUCN taxon ID (P627)
+// is at deprecated rank.
 
 namespace BeastieBot3.Wikidata;
 
@@ -49,8 +53,8 @@ public sealed class WikidataIucnAssessmentItemsSettings : CommonSettings {
 }
 
 [CommandInfo("wikidata iucn-assessment-items", CommandKind.Mutates,
-    "Find the Wikidata items for individual IUCN Red List assessments (by DOI, published in, or Red List URL) and store them in the Wikidata cache, so the status dry run can cite them.",
-    Reason = "Writes the wikidata_iucn_assessment_items table of the Wikidata cache. Only reads from Wikidata (SPARQL).",
+    "Find the Wikidata items for individual IUCN Red List assessments (by DOI, published in, or Red List URL) and store them in the Wikidata cache, so the status dry run can cite them. Also stores the editions of the Red List and the items whose IUCN taxon ID is at deprecated rank, for site build-db.",
+    Reason = "Writes the wikidata_iucn_assessment_items, wikidata_iucn_red_list_editions and wikidata_deprecated_iucn_taxon_ids tables of the Wikidata cache. Only reads from Wikidata (SPARQL).",
     Rerun = RerunEffect.Discovers,
     RerunNote = "Re-reads every item and replaces its row; rows for items no longer found are kept.",
     ReportOnlyWith = new[] { "--status" },
@@ -140,7 +144,28 @@ public sealed class WikidataIucnAssessmentItemsCommand : AsyncCommand<WikidataIu
         }
 
         PrintSummary(rows, LoadRelease(paths, settings), LoadApiBacklog(paths, settings));
-        return discovery.Failures.Count > 0 || detail.Failed > 0 ? 1 : 0;
+
+        AnsiConsole.WriteLine();
+        AnsiConsole.WriteLine("Lists for site build-db");
+        if (discovery.Editions is { } editions) {
+            store.ReplaceRedListEditions(editions, runStartedUtc);
+            AnsiConsole.WriteLine($"  editions of the IUCN Red List: {editions.Count:N0} stored");
+        } else {
+            AnsiConsole.WriteLine("  editions of the IUCN Red List: not stored, because the query failed");
+        }
+        var deprecatedFailed = false;
+        var watch = Stopwatch.StartNew();
+        try {
+            var json = await mainClient.QuerySparqlAsync(WikidataIucnReferenceTables.DeprecatedTaxonIdsQuery(), cancellationToken).ConfigureAwait(false);
+            var pairs = WikidataIucnReferenceTables.ParseDeprecatedTaxonIds(json);
+            store.ReplaceDeprecatedIucnTaxonIds(pairs, runStartedUtc);
+            AnsiConsole.WriteLine($"  items with an IUCN taxon ID (P627) at deprecated rank: {pairs.Count:N0} stored, {Elapsed(watch.Elapsed)}");
+        }
+        catch (WikidataApiException ex) {
+            deprecatedFailed = true;
+            AnsiConsole.WriteLine($"  items with an IUCN taxon ID (P627) at deprecated rank: query failed after {Elapsed(watch.Elapsed)}, kept the stored list. {ex.Message}");
+        }
+        return discovery.Failures.Count > 0 || detail.Failed > 0 || deprecatedFailed || discovery.Editions is null ? 1 : 0;
     }
 
     // ------------------------------------------------------------------ discovery
@@ -148,6 +173,8 @@ public sealed class WikidataIucnAssessmentItemsCommand : AsyncCommand<WikidataIu
     private sealed class Discovery {
         public Dictionary<string, SortedSet<string>> Tags { get; } = new(StringComparer.Ordinal);
         public List<string> Failures { get; } = new();
+        /// The Red List's edition items; null when the editions query failed.
+        public IReadOnlyList<string>? Editions { get; set; }
 
         public void Add(IEnumerable<string> qids, string tag) {
             foreach (var qid in qids) {
@@ -170,6 +197,7 @@ public sealed class WikidataIucnAssessmentItemsCommand : AsyncCommand<WikidataIu
         }).ConfigureAwait(false);
         if (editions is not null) {
             publications.AddRange(editions.Where(e => e != WikidataAssessmentItemTable.RedListQid));
+            discovery.Editions = editions.Where(e => e != WikidataAssessmentItemTable.RedListQid).ToList();
         }
 
         foreach (var graph in new[] { WikidataGraph.Scholarly, WikidataGraph.Main }) {

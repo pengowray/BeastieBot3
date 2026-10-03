@@ -135,6 +135,7 @@ CREATE TABLE IF NOT EXISTS wikidata_backfill_misses (
 """;
         command.ExecuteNonQuery();
         EnsureAssessmentItemSchema();
+        EnsureIucnReferenceSchema();
     BackfillTaxonNameIndex();
     }
 
