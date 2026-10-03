@@ -4,20 +4,21 @@ Beastie Bot Species Status is an unofficial, free, read-only website for looking
 taxa, aimed at Wikipedia editors. Each taxon page shows the latest global assessment (category,
 criteria, population trend, dates), the assessment history, regional assessments, common names and
 synonyms, links to Wikipedia, Wikidata, the Catalogue of Life and SPRAT, and wikitext to copy:
-`{{cite iucn}}` with the assessment's authors and DOI, `{{IUCN status}}`, and the taxobox status
-parameters. Instructions for deploying it to an Oracle Cloud Always Free VM are in
+`{{cite iucn}}` with the assessment's authors and DOI, `{{IUCN status}}`, the taxobox status
+parameters, and `{{cite Q}}` for the assessment's Wikidata item (or, when the assessment has no
+item, QuickStatements commands to create one). Instructions for deploying it to an Oracle Cloud Always Free VM are in
 `deploy/oracle/README.md`.
 
 ## Parts
 
 | Part | Where | What it does |
 | --- | --- | --- |
-| Shared library | `BeastieBot3.Shared/` | Code both the CLI and the site use. Keep it on the same target framework as both (net10.0) and with no NuGet packages, so both can reference it. `Wikitext/`: `IucnCitationParts` (one assessment's citation, parsed by `site build-db` and stored as JSON in `citation_json`) and the renderers `CiteIucnRenderer`, `IucnStatusTemplate`, `SpeciesboxStatus`, `ScientificNameMarkup`. `SiteData/`: `SiteDbSchema` (the site database's DDL, `Version` and meta keys) and `SiteNameKey.Fold` (the folded form of a name used for exact lookups). |
+| Shared library | `BeastieBot3.Shared/` | Code both the CLI and the site use. Keep it on the same target framework as both (net10.0) and with no NuGet packages, so both can reference it. `Wikitext/`: `IucnCitationParts` (one assessment's citation, parsed by `site build-db` and stored as JSON in `citation_json`; each author is a `CitationAuthor`, with `GivenNames` when they are known), the renderers `CiteIucnRenderer` (with `CiteIucnOptions.FullGivenNames`), `IucnStatusTemplate`, `SpeciesboxStatus`, `ScientificNameMarkup`, and `WikidataCitation` (`{{cite Q}}`, and QuickStatements commands and links for an assessment's Wikidata item, following `WikidataItemModel`; see [Wikidata items of assessments](#wikidata-items-of-assessments)). `SiteData/`: `SiteDbSchema` (the site database's DDL, `Version` and meta keys) and `SiteNameKey.Fold` (the folded form of a name used for exact lookups). |
 | GBIF checklist | `BeastieBot3/Iucn/Gbif/` | `iucn gbif-download` downloads, and `GbifIucnChecklistReader` reads, GBIF's CC BY 4.0 copy of the IUCN checklist. |
-| IUCN citations | `BeastieBot3/Iucn/Citations/` | Code the site build and the Wikidata dry run share: `CreditNameSplitter` (splits a credit's `full` string into names), `IucnAuthorNameParser` (reads one name as a person, an organisation, or a name kept as IUCN wrote it), `AssessorNamePool` (repairs names with a letter lost to an encoding error) and `IucnCitationText` (removes IUCN's "Accessed on" sentence and reads the DOI in IUCN's citation text). |
+| IUCN citations | `BeastieBot3/Iucn/Citations/` | Code the site build and the Wikidata dry run share: `CreditNameSplitter` (splits a credit's `full` string into names), `IucnAuthorNameParser` (reads one name as a person, an organisation, or a name kept as IUCN wrote it), `AssessorNamePool` (repairs names with a letter lost to an encoding error), `AssessorGivenNames` (finds a person's full given names in the assessor credit's `value[]` list; see [Full given names](#full-given-names)) and `IucnCitationText` (removes IUCN's "Accessed on" sentence and reads the DOI in IUCN's citation text). |
 | DOI lookup | `BeastieBot3/Iucn/Doi/` | `iucn resolve-dois` looks for DOIs that IUCN's citation text, GBIF and Wikidata do not give, in Crossref's list of IUCN DOIs and at doi.org, and saves them in the DOI cache (`Datastore:IUCN_doi_cache_sqlite`). See [Missing DOIs](#missing-dois-iucn-resolve-dois). |
-| Site build | `BeastieBot3/SiteBuild/` | `site build-db` builds the site database; `site check-citations` writes a read-only report. Citation code: `IucnCitationPartsParser` (title annotations, and putting the parts together), `IucnDoiSelector` (choosing a DOI), `IucnTaxaHeaders` (each taxon's list of assessments). `SiteApiTaxaReader` reads the taxa that are only in the API cache. `SiteBuildRules.ClassifySpratName` matches SPRAT profiles to taxa, both whole-taxon profiles and population profiles. |
-| Site | `BeastieBot3.Site/` (net10.0, Razor Pages) | Opens the site database read-only and reads no other data. `wwwroot/theme.js` and the tokens at the top of `wwwroot/site.css` make the light and dark themes (see [Theme](#theme)). Tests in `BeastieBot3.Site.Tests/`. |
+| Site build | `BeastieBot3/SiteBuild/` | `site build-db` builds the site database; `site check-citations` writes a read-only report. Citation code: `IucnCitationPartsParser` (title annotations, and putting the parts together), `IucnDoiSelector` (choosing a DOI), `IucnTaxaHeaders` (each taxon's list of assessments). `SiteApiTaxaReader` reads the taxa that are only in the API cache. `SiteBuildRules.ClassifySpratName` matches SPRAT profiles to taxa, both whole-taxon profiles and population profiles. `SiteWikidataItems` chooses each assessment's Wikidata item. `SiteBuildRules.DescribesAnotherKingdom` decides whether a Wikidata item matched to a taxon by name is left out of `taxon.wikidata_qid`: it is left out when the item's English description names a group in another kingdom. |
+| Site | `BeastieBot3.Site/` (net10.0, Razor Pages) | Opens the site database read-only and reads no other data. `Pages/WikitextOptions.cs` reads and writes the citation options; `Pages/WikidataCite.cs` builds the `{{cite Q}}` part of the wikitext section; `wwwroot/site.js` updates the wikitext when an option changes (see [Citation options](#citation-options)). `wwwroot/theme.js` and the tokens at the top of `wwwroot/site.css` make the light and dark themes (see [Theme](#theme)). Tests in `BeastieBot3.Site.Tests/`, and a Playwright check of the wikitext updates in `BeastieBot3.Site.Tests/browser/live-update.cjs`. |
 | Deployment | `deploy/oracle/` | Server setup, app and database deploys, rollback, status. |
 
 `BeastieBot3.Site` references only `BeastieBot3.Shared`, never the `BeastieBot3` project, because
@@ -34,15 +35,20 @@ must never be reachable from outside the machine.
    Wikipedia articles), `common-names aggregate` (English names), and `col build-placement`
    (Catalogue of Life ids; the placement file only covers the species of the IUCN release it was
    built from). SPRAT changes rarely; run `sprat download` and `sprat import --force` when you want
-   newer EPBC listings.
+   newer EPBC listings. Run `wikidata iucn-assessment-items` to find the Wikidata items of
+   assessments, including the items readers created with the site's QuickStatements commands (see
+   [Wikidata items of assessments](#wikidata-items-of-assessments)). It is a step of the "Update
+   IUCN statuses on Wikidata" workflow (`wikidata-iucn-status`); `wikipedia update` and the
+   `public-site` workflow do not run it. Without it, `site build-db` uses the items from the last
+   time it ran.
 3. Run `iucn gbif-download`. It keeps the new checklist zip only when it differs from the newest
    zip (by the date in the file name) in `Datasets:GBIF_IUCN_dir`; `site build-db` reads the newest.
 4. Run `iucn resolve-dois --refresh-crossref`, then `iucn resolve-dois --scope latest-regional`.
    The first run downloads Crossref's list of IUCN DOIs again, so that it includes the new
    release's DOIs, and checks the latest global assessments. See
    [Missing DOIs](#missing-dois-iucn-resolve-dois).
-5. Run `site build-db`. For release 2026-1 it takes about 80 seconds and writes a database of about
-   450 MB. It writes `<Datastore:site_sqlite>.building` and replaces `Datastore:site_sqlite` only
+5. Run `site build-db`. For release 2026-1 on 3 October 2026 it took about 100 seconds and wrote a
+   database of about 463 MB. It writes `<Datastore:site_sqlite>.building` and replaces `Datastore:site_sqlite` only
    when the build finishes; a failed or cancelled build leaves the previous database in place. It
    reads the DOI cache from `Datastore:IUCN_doi_cache_sqlite` (`--doi-cache` gives another path),
    and uses the DOIs found in every scope.
@@ -145,6 +151,30 @@ Rules the site depends on (pinned by `SiteDbBuildTests` and the site tests):
   and about 110 were repaired.
 - When the build reads the DOI cache, it sets the meta key `iucn_doi_checked_to` to the newest
   `checked_at` date in the cache's `doi_check` table.
+- `assessment.wikidata_item_qid` is the assessment's Wikidata item and
+  `assessment.wikidata_item_properties` lists the properties that item has (schema version 4). The
+  meta key `wikidata_item_model` is the item model that the site's QuickStatements commands
+  follow. See [Wikidata items of assessments](#wikidata-items-of-assessments). `site build-db`
+  always writes `wikidata_item_properties` for a row that has `wikidata_item_qid`. The site relies
+  on this: for a row with an item and NULL properties, it cannot tell which statements the item
+  lacks, so it offers no commands to add them.
+- `taxon.wikidata_qid` is the item that states the taxon's IUCN taxon id (P627,
+  `wikidata_qid_source = 'p627'`), otherwise an item that `wikidata backfill-iucn` matched by the
+  taxon's name (`'name-match'`). The build leaves out a name-matched item whose English
+  description names a group in another kingdom, such as the insect item matched to the plant
+  *Clusia flava* ("species of insect"). `SiteBuildRules.DescribesAnotherKingdom` takes the group
+  from a description of the form "species of <group>" (or "genus of", "subspecies of" and other
+  ranks) and looks it up in the word table of `WikiPageKingdom`, the table the Wikipedia matcher
+  uses. The build of 3 October 2026 left out 13 items this way; the build summary row is
+  "Wikidata items matched by name but left out: the item is a taxon in another kingdom".
+- `taxon.enwiki_title` is the article that `wikipedia match-taxa` matched the taxon to. The
+  matcher rejects a page about a taxon in another kingdom, and tries the taxon's name followed by
+  a bracketed word for its kingdom, such as "Ficus variegata (plant)" or "Orestias elegans (fish)"
+  (see the CLAUDE.md section "Wikidata / Wikipedia cache priority"). In the build of 3 October
+  2026, the plants *Ficus variegata* and *Gaussia princeps* link "Ficus variegata (plant)" and
+  "Gaussia princeps (plant)"; before the check they were matched to the articles about a gastropod
+  and a crustacean with the same names. The plant *Beilschmiedia madagascariensis*, matched
+  before through a synonym to "Long-billed bernieria" (a bird), now has no article.
 
 Start new build tests from `BeastieBot3.Tests/SiteBuild/SiteBuildSourceFixture`, imported with
 `using static`. The fixture has the temporary folder, writers for the IUCN CSV database and the API
@@ -205,6 +235,52 @@ between anonymous POSTs. Use a User-Agent such as
 `BeastieBot3-site-dev/0.1 (https://en.wikipedia.org/wiki/User:Beastie_Bot)`, never one with an
 email address.
 
+### Full given names
+
+IUCN's citations print authors with initials ("Sayer, C."), but the assessor credit's `value[]`
+list often names each person in full ("Catherine Sayer (IUCN Red List Unit)"). For each person
+that IUCN wrote with initials, `IucnCitationPartsParser` asks `AssessorGivenNames` for the
+person's given names and stores them in `CitationAuthor.GivenNames` when exactly one `value[]`
+entry fits. An entry fits when:
+
+- after its trailing notes in brackets and a trailing Jr., Sr., II, III or IV are removed, it ends
+  with the author's surname as a whole word, ignoring case and accents ("Chris van Swaay" for
+  "van Swaay, C.");
+- each initial, in order, is the start of the next given name ("J.-P." and "J.P." both fit
+  "Jean-Pierre", and "Th." fits "Thomas"); particles among the initials, as in "C. de C.", are
+  skipped;
+- the given names contain no digit, "@", bracket, comma, semicolon, slash, "&" or letter lost to
+  an encoding error ("Jos? Ralison"), no word that marks an organisation ("University", "Museum",
+  "Specialist" and the other words in `IucnAuthorNameParser`), and no name that starts with a
+  lower-case letter ("hai-Ning Qin"), and they are not only initials (an entry "D.R. Paulson" does
+  not fit).
+
+When two entries fit, the person gets no given names: "Alemu, S." appears twice, and the entries
+for Shambel Alemu and Sisay Alemu both fit. A person known by a middle name gets none either: the
+entry for "Liddle, T.A." is "Adam Liddle", and "Adam" does not start with T. When the number of
+given names differs from the number of initials:
+
+- fewer given names than initials: the remaining initials are kept as IUCN printed them, so
+  "Paulson, D.R." gets "Dennis R." and "Nogueira, C. de C." gets "Cristiano de C.";
+- more given names than initials: only the given names that the initials stand for are kept, so
+  "Reppucci, J." gets "Juan", not "Juan Ignacio".
+
+The build of 3 October 2026 has given names for 384,383 of the 430,197 persons in the author
+lists of latest assessments, global and regional (89.4%), and for 446,501 of the 561,765 persons in
+the author lists of all assessments (79.5%). Each count is of author entries, so a person who
+assessed several taxa is counted once for each assessment. `site check-citations` has a section
+"Full given names from value[]" with the number of authors for each outcome (given names found,
+and each reason for finding none), examples, and a random sample of 100 matches (fixed seed) to
+check by eye.
+
+With `CiteIucnOptions.FullGivenNames`, `CiteIucnRenderer` writes a person with given names as
+`|author=Sayer, Catherine`, or `|last1=Sayer |first1=Catherine` in the last/first style. A
+generational suffix follows the given names ("Lowry, Porter P. II"), and a name IUCN wrote with
+the initials first, "N.H. Rakotoarivelo", becomes "Rakotoarivelo, Nirina Hasina". Organisations,
+names kept as IUCN wrote them, and persons without given names are written as in IUCN's citation.
+The site's option for this is "Full given names instead of initials" (see
+[Citation options](#citation-options)).
+
 ### Missing DOIs (`iucn resolve-dois`)
 
 `iucn resolve-dois` works on the assessments in a scope that have no DOI from IUCN's citation
@@ -260,6 +336,122 @@ each scope that have no DOI from IUCN's citation text, GBIF or Wikidata:
 | latest-regional | 6,377 | 10,965 |
 | history | 30,555 | 98,262 |
 
+## Wikidata items of assessments
+
+Wikidata has items for about 6,600 IUCN assessments as publications. The site gives `{{cite Q}}`
+for an assessment that has an item, and QuickStatements commands that add the statements the item
+lacks, or that create an item for an assessment that has none. The site never edits Wikidata: a
+reader runs the commands in QuickStatements with their own Wikidata account.
+
+### Which item an assessment gets (`SiteWikidataItems`)
+
+`site build-db` reads the items from the Wikidata cache's `wikidata_iucn_assessment_items` table,
+which `wikidata iucn-assessment-items` fills. That command reads Wikidata with SPARQL queries and
+edits nothing. It finds items that have an IUCN Red List DOI or assessment URL, and reads the
+taxon id and assessment id from that DOI or URL. The table was last filled on 13 September 2026
+and has 6,578 items. An item is kept when one of its classes (P31) is scholarly article
+(Q13442814), data set (Q1172284) or evaluation (Q1379672) and none is taxon (Q16521):
+
+| Class (P31) | Items | Kept |
+| --- | --- | --- |
+| Q13442814 scholarly article | 6,571 | yes |
+| Q1172284 data set | 5 | yes |
+| Q1379672 evaluation | 1 | yes |
+| Q16521 taxon and Q55808 seabird | 1 | no: Q1272830, the taxon item of Zino's petrel, which has an assessment DOI |
+
+The build summary names any other class it leaves out, so a new class shows up there and can be
+added to `SiteWikidataItems.PublicationClasses`. When the Wikidata cache has no such table, the
+build prints a warning and continues with no assessment items and no DOIs from Wikidata.
+
+An assessment gets the item whose taxon id and assessment id are the assessment's own. An errata
+version with no item of its own gets the item of the assessment that its DOI names. The two rows
+then share one item, just as they share one DOI, and the site never offers to create a second item
+with that DOI. In the build of 3 October 2026, 6,786 assessments have an item: 6,518 have their own
+item and 268 errata versions share one. The other 59 kept items are for assessments that are not
+in the site database. Of the 6,518 items, 6,501 have no author statement (P50 or P2093), 2,063
+have no main subject (P921), and 6 have a URL.
+
+`wikidata_item_properties` lists the properties that the item has, as recorded in the Wikidata
+cache, in the order of `WikidataCitation.JudgedProperties`: P31, P1476, P1433, P921, P953, P577,
+P356, P2093 and P50. It also has the token `Len` when the item has an English label; `Len` is the
+QuickStatements command that sets an English label. The cache's URL column has the item's P953,
+P854 and P856 values, and any of them counts as P953. A typical value is
+`P31 P1476 P1433 P921 P577 P356 Len`.
+
+### The item model
+
+The commands follow the assessment item model of the Wikidata status dry run
+(`docs/wikidata-iucn-status.md`). `site build-db` reads `rules/wikidata/iucn-status.yml` with
+`WikidataIucnEditConfig.LoadFromRules` and stores `ToItemModel()` as JSON in the meta key
+`wikidata_item_model`; the build summary row "Wikidata assessment item model" names the file it
+read. The defaults are in `WikidataItemModel` in `BeastieBot3.Shared`, and
+`WikidataCitationTests.ShippedYaml_MatchesTheSharedModelDefaults` checks that the YAML file has the
+same values. The site uses the defaults when the meta key is missing, and offers no commands when
+the stored JSON cannot be read.
+
+### What `WikidataCitation` writes
+
+`CiteQ` writes `{{cite Q|Q56227924}}`. When the ref option is on, it wraps the template in a
+`<ref>` and cleans the ref name as `{{cite iucn}}` does. It writes `|access-date=` only when
+`CiteQOptions.ItemHasUrl` is true, because `{{cite Q}}` takes its URL from the item and CS1 reports
+an access date without a URL as an error.
+
+`CreateItemCommands` writes QuickStatements v1 commands that create an item. The first command is
+`CREATE`; each command after it starts with `LAST` (the item just created) and adds, in this order:
+
+- the English label and description, from the model's templates (each is left out when it is over
+  250 characters);
+- instance of (P31), from the model;
+- title (P1476): the scientific name, as monolingual text;
+- published in (P1433): the IUCN Red List;
+- publisher (P123): IUCN;
+- main subject (P921): the taxon's item, when the site has one (`taxon.wikidata_qid`, from P627 or
+  a name match);
+- language (P407): from the DOI's last part (`.en` English, `.es` Spanish, `.fr` French, `.pt`
+  Portuguese), or the model's language when there is no such DOI;
+- full work available at URL (P953): the assessment's page on iucnredlist.org;
+- publication date (P577): the year the assessment was published, as `+2023-00-00T00:00:00Z/9`;
+- DOI (P356), in capitals, only when the DOI names the assessment's own taxon and assessment ids
+  (an errata version's DOI belongs on the item of the assessment it corrects);
+- one author name string (P2093) for each author, as IUCN's citation prints the name (never the
+  full given names), with a series ordinal (P1545) qualifier. A second author with the same
+  printed name is written with `!P2093`, so that its ordinal goes on a new statement and not on
+  the first author's.
+
+No statement has a reference.
+
+`AddMissingCommands` writes commands that add to an existing item what it lacks, judged from
+`wikidata_item_properties`: the English label when `Len` is missing, and each statement above
+whose property is missing. An item with an author item (P50) gets no author name strings (P2093).
+The commands never add publisher (P123), language (P407) or a description, because the cache does
+not record whether the item has them, and they never remove or change a statement. When the item
+lacks nothing, there are no commands.
+
+`QuickStatementsUrl` writes a link to `https://quickstatements.toolforge.org/#/v1=` with the
+commands joined by `||` and each tab written as `|`, percent-encoded. A command whose values
+contain `|` keeps its tabs (`%09`). `QuickStatementsUrlFits` checks that a link is no longer than
+`MaxQuickStatementsUrlLength`, 8,000 characters, a length every common browser accepts. The
+longest create batch in release 2026-1 is for an assessment with 59 authors, and its link was
+measured at 4,430 characters.
+
+### On the site (`Pages/WikidataCite.cs`)
+
+The subsection "{{cite Q}} citation from Wikidata" is the last part of the wikitext section, after
+the citation options.
+
+- When the assessment has an item, the subsection shows a link to the item, the `{{cite Q}}` box,
+  and a one-line summary of English Wikipedia's guidance on `{{cite Q}}`, linked to WP:Citing
+  sources#Wikidata. When `AddMissingCommands` returns commands, it also lists what they add (such
+  as "main subject (P921)"), shows the commands in a box, and links to QuickStatements with the
+  commands filled in.
+- When the assessment has no item, the subsection says "No Wikidata item found for this
+  assessment." It links to a Wikidata search, so that a reader can find an item made after the
+  site's data was downloaded: by the DOI (`haswbstatement:P356=`), or, when there is no DOI, by the
+  article number (`e.T<taxon id>A<assessment id>`) that assessment items have in their labels. It
+  then shows the create commands and a link that opens QuickStatements with them.
+- When a `WikidataCitation` call throws, the page leaves out only the box that call makes, and logs
+  a warning.
+
 ## The site
 
 - UI strings are in `BeastieBot3.Site/Display/SiteText.cs`, the About page text in
@@ -306,6 +498,61 @@ each scope that have no DOI from IUCN's citation text, GBIF or Wikidata:
 - Run locally with `dotnet run --project BeastieBot3.Site`. `appsettings.Development.json` points to
   `~/datasets/beastiebot/site.sqlite`; set `Site__DatabasePath` to use another file.
 
+### Citation options
+
+The options form in a taxon page's wikitext section is read from and written to the query string
+(`Pages/WikitextOptions.cs`): `authors=author|lastfirst`, `fullnames=1`,
+`access=download|today|none`, `ref=1`, `refname=...`, `amp=1` and `opts=1`. A browser does not
+send an unticked checkbox, so the form also sends `opts=1`: with it, a missing `ref` or `amp`
+means off; without it (a plain link), the defaults apply. The output cache stores a separate copy
+of the page for each combination of these parameters (`SiteCachePolicies.SpeciesQueryKeys`), and
+links to other assessments of the taxon keep the options.
+
+- `fullnames=1` turns on "Full given names instead of initials" (`CiteIucnOptions.FullGivenNames`;
+  see [Full given names](#full-given-names)). It is off by default, so it needs no `opts=1`. The
+  checkbox is shown only when at least one author of the selected citation has given names, with a
+  help line that gives how many authors have them and an example from the citation. When the
+  assessment shown has no authors with given names, a `fullnames=1` already chosen is kept in a
+  hidden field, so it still applies on the next assessment.
+- The `{{cite Q}}` box uses the same ref options as `{{cite iucn}}` (`ToCiteQOptions`). The access
+  date option has no effect on it, because the site never sets `CiteQOptions.ItemHasUrl` (see
+  [Known gaps](#known-gaps)).
+
+`wwwroot/site.js` updates the wikitext when an option changes:
+
+- An update starts when a radio button or checkbox changes, 400 ms after typing in the ref name
+  box stops, or when Enter is pressed in that box. When the page loads, the script hides the
+  Update wikitext button, which submits the form when JavaScript is off.
+- The script requests the page with the form's query, the same GET the form would send, so the
+  output cache answers a repeated set of options. It replaces each element marked
+  `data-live-region` (`#wikitext-output` and `#wikidata-cite`) with the element of the same id in
+  the new page. The form is not replaced, so the focus and the text in the ref name box stay.
+- It keeps the form at the same place on the screen when the boxes above it change height, keeps
+  open each `details` element (with an id) that was open, sets the address bar to the new page's
+  address for these options (`data-options-url`, with `history.replaceState`), updates the "Show
+  wikitext" links in the assessment tables (`data-options-link`), and shows "Wikitext updated" in
+  a status line for 4 seconds.
+- A new update cancels a request still running. When the server answers 429 (too many requests),
+  the script writes "Too many requests: the wikitext was not updated. Wait a minute, then select
+  Update wikitext." in the status line and shows the Update wikitext button again. The next change
+  to an option starts a new update. After any other failure, the browser goes to the page with the
+  new options, as it would without JavaScript. Typing a ref name can reach the limit of 60 pages a
+  minute for each client IP address (`Site:RateLimits:PagesPerMinute`).
+- Copy buttons use one click listener on the document, so they work on the replaced boxes.
+- The page has no inline script. The Content Security Policy (`Web/SiteMiddleware.cs`) has
+  `connect-src 'self'`, which allows the script's request.
+
+`BeastieBot3.Site.Tests/browser/live-update.cjs` checks the updates in a browser. It is not part
+of `dotnet test`. To run it:
+
+1. `SITE_FIXTURE_DB_OUT=/tmp/site-fixture.sqlite dotnet test BeastieBot3.Site.Tests --filter FixtureExport`
+   writes the test fixture database to a file.
+2. `ASPNETCORE_ENVIRONMENT=Production Site__DatabasePath=/tmp/site-fixture.sqlite Site__RateLimits__PagesPerMinute=10000 dotnet run --project BeastieBot3.Site --urls http://127.0.0.1:5391`
+   runs the site on that file.
+3. `node BeastieBot3.Site.Tests/browser/live-update.cjs` runs the checks. Playwright installed
+   globally is enough. `SITE_URL` sets another address, and `SHOTS` names a folder for
+   screenshots.
+
 ### Theme
 
 - The header has a Theme control: System (the default, which follows the system setting), Light
@@ -336,15 +583,26 @@ each scope that have no DOI from IUCN's citation text, GBIF or Wikidata:
   used for another taxon instead, one that has the name as its Wikipedia article title or taxobox
   name. The count leaves out a taxon whose IUCN main name is used for its own species or for one
   of its own subspecies. A decision on changing the source priority is pending.
-- The Wikipedia matcher (`wikipedia match-taxa`) can match a taxon to the article about a taxon of
-  the same name in another kingdom. It matches the plant *Ficus variegata* to "Ficus variegata
-  (gastropod)", and the palm *Gaussia princeps* to "Gaussia princeps (crustacean)". The site's
-  article link (`taxon.enwiki_title`, read from the matcher's `taxon_wiki_matches`) still goes to
-  those pages. The Wikipedia lists link the taxon's own scientific name when English Wikipedia has
-  that title, so they link "Ficus variegata" and "Gaussia princeps". "Ficus variegata" is a
-  disambiguation page, and the plant's article is "Ficus variegata (plant)". English Wikipedia
-  has the titles "Gaussia princeps (plant)" and "Gaussia princeps (crustacean)", so "Gaussia
-  princeps" may also be a disambiguation page; the Wikipedia cache has not downloaded it, so this
-  was not checked.
+- A taxon can still be linked to the Wikipedia article or the Wikidata item of a taxon in another
+  kingdom when the page or item does not name its group. `wikipedia match-taxa` finds that a page
+  is about another kingdom only when its taxobox, its title or its "<group> described in <year>"
+  categories name a group in the tables of `WikiPageKingdom`. `site build-db` finds that a
+  name-matched Wikidata item is about another kingdom only when its English description has the
+  form "species of <group>" (or another rank) with a group in those tables.
 - Regional assessments have DOIs only when IUCN's citation text, Wikidata or the DOI cache
   (`iucn resolve-dois --scope latest-regional`) gives one.
+- For 6,569 of the 6,578 cached assessment items, the title (P1476) has the form SourceMD gave
+  them, "Name: author list" ("Rusa unicolor: Timmins, R., ..."), and 6,566 have an English label of
+  that form too. `{{cite Q}}` shows that whole text as the title of the work. The site's commands cannot correct it, because they
+  never remove or replace a statement.
+- The commands that add missing statements never add publisher (P123), language (P407) or the
+  English description, because the Wikidata cache does not record whether an item has them. To
+  offer them, `wikidata iucn-assessment-items` would have to record them.
+- The site keeps offering the commands to create an item for an assessment until
+  `wikidata iucn-assessment-items` finds the new item and `site build-db` runs again. The search
+  link beside the commands is there so a reader can check first.
+- The site never sets `CiteQOptions.ItemHasUrl`, so its `{{cite Q}}` never has `|access-date=`,
+  even for the 6 items that have a URL.
+- The site does not check a QuickStatements link with `QuickStatementsUrlFits` before showing it.
+  The longest link in release 2026-1 is about 4,430 characters, under `MaxQuickStatementsUrlLength`
+  (8,000 characters).

@@ -180,10 +180,13 @@ beastiebot3 common-names aggregate --source col --replace
   So the line for *Leucoraja wallacei* links `[[Leucoraja wallacei]]`, a redirect to the genus
   article, not `[[Leucoraja]]`. *Moolgarda buchanani* has no page or redirect with its own name,
   so its line links the page of its cross-reference, "Crenimugil buchanani". The fig *Ficus
-  variegata* was matched to "Ficus variegata (gastropod)", and "Ficus variegata" is a
-  disambiguation page, so its line links `[[Ficus variegata (plant)|''Ficus variegata'']]`. In
-  October 2026 the palm *Gaussia princeps* still linked `[[Gaussia princeps]]`: the cache had not
-  downloaded that title, so the lists could not tell whether it is a disambiguation page.
+  variegata* and the palm *Gaussia princeps* link "Ficus variegata (plant)" and "Gaussia princeps
+  (plant)". The pages "Ficus variegata" and "Gaussia princeps" are cached disambiguation pages, so
+  step 2 skips those two titles. Since 3 October 2026, `wikipedia match-taxa` matches the two
+  plants to the "(plant)" pages, and `common-names aggregate` has stored those pages as their
+  `exact` cross-references, so step 3 gives the "(plant)" pages. Until then, the cross-references
+  were "Ficus variegata (gastropod)" and "Gaussia princeps (crustacean)"; step 3 skips such a page,
+  because it is about another kingdom, and step 4 gives the "(plant)" page.
   Section headings and links to a parent species use the same order
   (`StoreBackedCommonNameProvider.GetWikipediaArticleTitleByScientificName`). Without a
   Wikipedia cache the lists skip steps 2 and 4 and the kingdom check. `sprat generate-lists`

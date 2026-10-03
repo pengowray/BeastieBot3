@@ -15,8 +15,9 @@ Wikidata. The workflow page is "Update IUCN statuses on Wikidata" (`wikidata-iuc
   when the assessment JSON was downloaded; (2) the assessment: stated in (P248) an item for that
   assessment publication.
 - **Assessment items:** one item per assessment (chosen over inline citation snaks). ~6,600 exist
-  (2,703 cite a 2026-1 assessment); the rest would be created, modelled per `assessment_item` in
-  `rules/wikidata/iucn-status.yml`. The model needs agreement with WikiProject Taxonomy first.
+  (6,578 in the Wikidata cache on 13 September 2026; 2,703 cite a 2026-1 assessment); the rest
+  would be created, modelled per `assessment_item` in `rules/wikidata/iucn-status.yml`. The model
+  needs agreement with WikiProject Taxonomy first.
 - **Edit scope:** everything: changed and missing statuses, the release and assessment references on
   statuses that already agree, and P627 on items linked only by name search (after review).
 - **Rank:** Wikidata has two live conventions, so the plan records both: `preferred` (new preferred
@@ -41,8 +42,35 @@ Wikidata. The workflow page is "Update IUCN statuses on Wikidata" (`wikidata-iuc
 | `TaxonLinkClassifier.cs` | Pure: tier A-D + flags for a pair |
 | `IucnStatusEditPlanner.cs` | Pure: category + actions per rank variant |
 | `WbEditPayloadBuilder.cs`, `AssessmentItemPayloadBuilder.cs` | Pure: wbeditentity JSON from actions + the cached statement copies; `CREATE:` placeholders for items not yet on Wikidata |
+| `WikidataIucnEditConfig.cs` | `LoadFromRules` reads `rules/wikidata/iucn-status.yml` from the source rules folder, else the copy beside the program, and uses the defaults when neither has one; `ToItemModel()` gives the assessment item model as the shared `WikidataItemModel` |
 | `WikidataIucnPlanStore.cs` | `wikidata_iucn_plan.sqlite` beside the Wikidata cache: latest plan's pairs, run history with counts, review decisions (kept across re-plans) |
 | `WikidataIucnStatusPlanCommand.cs`, `WikidataIucnPlanReport.cs` | The dry run; report `.md`, `.csv` of every pair, sample edits `.jsonl`, sample assessment items `.jsonl` in the reports folder |
+
+## Assessment item model, shared with the public site
+
+The values for a new assessment item (class, published in, publisher, language, title language,
+label and description templates) have their defaults in `WikidataItemModel`
+(`BeastieBot3.Shared/Wikitext/WikidataCitation.cs`). `AssessmentItemConfig` takes its defaults
+from it, and `WikidataCitationTests.ShippedYaml_MatchesTheSharedModelDefaults` checks that
+`rules/wikidata/iucn-status.yml` has the same values. The dry run and `site build-db` both read
+the file with `WikidataIucnEditConfig.LoadFromRules`. `site build-db` stores `ToItemModel()` in the
+site database (meta key `wikidata_item_model`), and the public site's QuickStatements commands
+create an assessment item to this model (`WikidataCitation.CreateItemCommands`; see "Wikidata items
+of assessments" in `docs/public-site.md`). The site's commands differ from the dry run's payload
+in these ways:
+
+- language (P407) comes from the DOI's last part (`.es` Spanish, `.fr` French, `.pt` Portuguese),
+  because the site also offers commands for assessments published in those languages; the dry run
+  plans only latest global assessments, which are in English, and always writes the model's
+  language;
+- DOI (P356) is written only when the DOI names the assessment's own taxon and assessment ids, so
+  an errata version's commands leave out the DOI of the assessment it corrects; the dry run writes
+  the assessment's DOI whatever ids it names;
+- a second author with the same printed name is written as a new statement (`!P2093`), because
+  QuickStatements would otherwise add that author's series ordinal to the first author's
+  statement. The dry run's payload has a separate statement for each author already.
+
+Editing `iucn-status.yml` changes the site's commands after the next `site build-db`.
 
 ## Tiers
 
