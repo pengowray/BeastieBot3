@@ -270,7 +270,7 @@
   function renderImpact(d, group, rank, candidateBudget, ruleBudget) {
     const num = (n) => (n || 0).toLocaleString();
     const verdict = (o) => o.overBudget == null ? ''
-      : (o.overBudget ? `<span class="feat-no">over budget</span>` : `<span class="feat-yes">within budget</span>`);
+      : (o.overBudget ? `<span class="error">over budget</span>` : `<span class="feat-yes">within budget</span>`);
     const struct = (o) => {
       const s = o.structure;
       if (!s) return '<span class="muted">—</span>';
@@ -289,11 +289,11 @@
         if (singles) t += `, ${num(singles)} heading${singles === 1 ? '' : 's'} with 1 entry`;
       }
       if (s.problems && s.problems.length) {
-        t = `<span class="feat-no" title="${esc(s.problems.join('; '))}">${t}</span>`;
+        t = `<span class="error" title="${esc(s.problems.join('; '))}">${t}</span>`;
       }
       if (s.fileBytes) {
         const sz = s.fileBytes >= 1e6 ? (s.fileBytes / 1e6).toFixed(1) + ' MB' : (s.fileBytes / 1000).toFixed(0) + ' KB';
-        t += ` · <span class="${s.fileBytes > 2e6 ? 'feat-no' : 'muted'}">${sz}</span>`;
+        t += ` · <span class="${s.fileBytes > 2e6 ? 'error' : 'muted'}">${sz}</span>`;
       }
       return t;
     };
@@ -547,7 +547,7 @@
     try {
       const loc = await getJson('/api/rules/locations');
       const warn = loc.isBuildOutputFallback
-        ? ' <strong style="color:#b00">⚠ source rules dir not found — Apply is disabled. Set [Dirs] rules_source_dir in paths.ini.</strong>'
+        ? ' <strong class="error">⚠ source rules dir not found — Apply is disabled. Set [Dirs] rules_source_dir in paths.ini.</strong>'
         : '';
       const drafts = loc.draftCount === 1 ? '1 file with unapplied edits' : `${loc.draftCount} files with unapplied edits`;
       $('#rules-locations').innerHTML =
@@ -661,7 +661,7 @@
           : '(diff not available: git is not installed or returned no output)';
         const diff = f.diff ? `<pre class="terminal">${esc(f.diff)}</pre>` : `<p class="muted small">${noDiff}</p>`;
         const warn = f.status === 'source-changed' || f.status === 'unknown-base';
-        const label = `<span class="small ${warn ? '' : 'muted'}"${warn ? ' style="color:var(--warn)"' : ''}>[${esc(DRAFT_STATUS[f.status] || f.status)}]</span>`;
+        const label = `<span class="small ${warn ? 'text-warn' : 'muted'}">[${esc(DRAFT_STATUS[f.status] || f.status)}]</span>`;
         return `<div><strong>${esc(f.path)}</strong> ${label}${diff}</div>`;
       });
       $('#rules-diff-out').innerHTML = blocks.join('');

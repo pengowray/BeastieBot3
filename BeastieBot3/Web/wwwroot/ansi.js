@@ -2,10 +2,11 @@
 //
 // Supports the SGR (Select Graphic Rendition) subset Spectre.Console actually
 // emits: reset, bold, dim, italic, underline, 8/16-color foreground.
-//   - 256-color (38;5;n) and truecolor (38;2;r;g;b) are recognised and emitted
-//     as inline styles.
-//   - Background colors are recognised but ignored for now (terminal-on-dark
-//     palette already provides enough contrast).
+//   - The 16 colours become .ansi-fg-N classes, coloured by the theme's
+//     --ansi-N tokens (style.css). 256-color (38;5;n) values 0-15 use the same
+//     classes; other 256-color and truecolor (38;2;r;g;b) values set --ansi-rgb
+//     on the span, which style.css darkens in the light theme.
+//   - Background colors are recognised but ignored for now.
 //   - Cursor-movement, scroll, and erase escapes are stripped silently so
 //     progress-bar redraws don't poison the log.
 //
@@ -27,7 +28,10 @@
     if (state.underline) classes.push('ansi-underline');
     if (state.fgClass) classes.push(state.fgClass);
     let style = '';
-    if (state.fgStyle) style = ' style="color:' + state.fgStyle + '"';
+    if (state.fgStyle) {
+      classes.push('ansi-rgb');
+      style = ' style="--ansi-rgb:' + state.fgStyle + '"';
+    }
     if (classes.length === 0 && !style) return null;
     return '<span class="' + classes.join(' ') + '"' + style + '>';
   }
@@ -59,8 +63,14 @@
         // Compound: 38;5;N (256-color) or 38;2;R;G;B (truecolor)
         const mode = params[i + 1];
         if (mode === 5 && params.length > i + 2) {
-          state.fgClass = null;
-          state.fgStyle = ansi256(params[i + 2]);
+          const n256 = params[i + 2];
+          if (n256 < 16) {
+            state.fgClass = 'ansi-fg-' + (n256 < 8 ? 30 + n256 : 90 + n256 - 8);
+            state.fgStyle = null;
+          } else {
+            state.fgClass = null;
+            state.fgStyle = ansi256(n256);
+          }
           i += 2;
         } else if (mode === 2 && params.length > i + 4) {
           state.fgClass = null;
@@ -75,15 +85,9 @@
     }
   }
 
-  // Standard xterm 256-color palette approximation. The 6x6x6 color cube
-  // (16-231) and the greyscale ramp (232-255) are computed; 0-15 reuse the
-  // basic 16 colors but we just return a reasonable hex.
-  const BASIC_16 = [
-    '#000000','#cc0000','#4e9a06','#c4a000','#3465a4','#75507b','#06989a','#d3d7cf',
-    '#555753','#ef2929','#8ae234','#fce94f','#729fcf','#ad7fa8','#34e2e2','#eeeeec'
-  ];
+  // Standard xterm 256-color palette approximation for 16-255: the 6x6x6 color
+  // cube (16-231) and the greyscale ramp (232-255). 0-15 are classes (above).
   function ansi256(n) {
-    if (n < 16) return BASIC_16[n];
     if (n >= 232) {
       const v = 8 + (n - 232) * 10;
       return 'rgb(' + v + ',' + v + ',' + v + ')';

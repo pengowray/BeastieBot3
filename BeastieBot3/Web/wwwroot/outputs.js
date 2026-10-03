@@ -471,7 +471,7 @@
     // Link to the same-named Wikipedia article up front, before the render lands.
     popen.href = wikiUrl(f.title);
     popen.hidden = false;
-    frame.srcdoc = placeholderDoc('Rendering through Wikipedia&hellip;', '#555');
+    frame.srcdoc = placeholderDoc('Rendering through Wikipedia&hellip;', '--muted');
     try {
       const data = await fetch('/api/wikitext/preview?file=' + encodeURIComponent(f.name)).then(async (r) => {
         if (!r.ok) {
@@ -483,7 +483,7 @@
       frame.srcdoc = buildDoc(data.title, data.html);
       if (data.title) popen.href = wikiUrl(data.title);
     } catch (e) {
-      frame.srcdoc = placeholderDoc('Preview failed: ' + escapeHtml(e.message), '#b00');
+      frame.srcdoc = placeholderDoc('Preview failed: ' + escapeHtml(e.message), '--err');
     }
   }
 
@@ -502,9 +502,15 @@
       + '<div class="mw-parser-output">' + html + '</div></body></html>';
   }
 
-  function placeholderDoc(message, color) {
-    return '<!doctype html><body style="margin:0;padding:24px;font-family:sans-serif;color:'
-      + color + '">' + message + '</body>';
+  // The loading and error messages in the preview frame use the web UI's theme colours (read from
+  // style.css, since the frame's document cannot see them). The preview itself is always white, like
+  // the Wikipedia article.
+  function placeholderDoc(message, colorToken) {
+    const tokens = getComputedStyle(document.documentElement);
+    const bg = tokens.getPropertyValue('--panel').trim();
+    const fg = tokens.getPropertyValue(colorToken).trim();
+    return '<!doctype html><body style="margin:0;padding:24px;font-family:sans-serif;background:'
+      + bg + ';color:' + fg + '">' + message + '</body>';
   }
 
   function escapeHtml(s) {

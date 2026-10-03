@@ -15,6 +15,8 @@
     --grey-badge: #5c5c5c;
     --shown-bg: #eaf1fb;
     --badge-ring: transparent;
+    /* Borders of form controls: at least 3:1 against --bg and --code-bg. */
+    --control-border: #767c84;
     color-scheme: light;
 }
 
@@ -34,6 +36,7 @@
         --grey-badge: #a6a6a6;
         --shown-bg: #1c2a3d;
         --badge-ring: rgba(255, 255, 255, 0.35);
+        --control-border: #6f7882;
         color-scheme: dark;
     }
 }
@@ -53,6 +56,7 @@
     --grey-badge: #a6a6a6;
     --shown-bg: #1c2a3d;
     --badge-ring: rgba(255, 255, 255, 0.35);
+    --control-border: #6f7882;
     color-scheme: dark;
 }
 
@@ -189,6 +193,33 @@ h3 {
     margin-left: auto;
 }
 
+/* Theme control. Hidden until theme.js has set data-theme on <html>, so it never shows without
+   JavaScript; invisible (but taking its space) until theme.js has selected the saved choice. */
+.theme-control {
+    display: none;
+    align-items: center;
+    gap: 0.4rem;
+    font-size: 0.9rem;
+}
+
+:root[data-theme] .theme-control {
+    display: flex;
+    visibility: hidden;
+}
+
+:root[data-theme-ready] .theme-control {
+    visibility: visible;
+}
+
+.theme-control select {
+    font: inherit;
+    padding: 0.2rem 0.35rem;
+    border: 1px solid var(--muted);
+    border-radius: 4px;
+    background: var(--bg);
+    color: var(--fg);
+}
+
 .site-footer {
     margin-top: 3rem;
     border-top: 1px solid var(--border);
@@ -240,12 +271,33 @@ h3 {
     padding: 0.35rem 0.55rem;
 }
 
-/* On phones the header search box takes a line of its own, under the site name and About. */
+/* On phones the search box takes a line of its own, under the site name and About, and the theme
+   control goes on the line after it. */
 @media (max-width: 40rem) {
+    .header-row {
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        align-items: center;
+    }
+
+    .site-name {
+        grid-row: 1;
+        grid-column: 1;
+    }
+
+    .site-nav {
+        grid-row: 1;
+        grid-column: 2;
+    }
+
     .search-form-header {
-        order: 3;
-        flex: 1 1 100%;
+        grid-column: 1 / -1;
         max-width: none;
+    }
+
+    .theme-control {
+        grid-column: 1 / -1;
+        justify-self: end;
     }
 }
 
@@ -499,7 +551,7 @@ textarea {
     font-size: 0.875rem;
     line-height: 1.45;
     padding: 0.5rem 0.6rem;
-    border: 1px solid var(--border);
+    border: 1px solid var(--control-border);
     border-radius: 4px;
     background: var(--code-bg);
     color: var(--fg);
