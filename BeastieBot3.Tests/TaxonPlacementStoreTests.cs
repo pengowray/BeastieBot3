@@ -248,20 +248,23 @@ public class TaxonPlacementStoreTests {
 
     // ---- full build from files ----
 
-    private static void CreateIucn(string path) {
+    private static void CreateIucn(string path) => CreateIucn(path, """
+        ('ANIMALIA', 'REPTILIA', 'SQUAMATA', 'NATRICIDAE', 'Natrix', 'natrix', NULL, NULL, 'Global'),
+        ('ANIMALIA', 'REPTILIA', 'SQUAMATA', 'NATRICIDAE', 'Natrix', 'tessellata', NULL, NULL, 'Global'),
+        ('ANIMALIA', 'REPTILIA', 'SQUAMATA', 'NATRICIDAE', 'Tropidonotus', 'natrix', NULL, NULL, 'Global'),
+        ('ANIMALIA', 'REPTILIA', 'SQUAMATA', 'NATRICIDAE', 'Natrix', 'unknownus', NULL, NULL, 'Global'),
+        ('ANIMALIA', 'REPTILIA', 'SQUAMATA', 'NATRICIDAE', 'Natrix', 'natrix', 'ssp.', NULL, 'Global'),
+        ('ANIMALIA', 'REPTILIA', 'SQUAMATA', 'NATRICIDAE', 'Natrix', 'natrix', NULL, 'Europe', 'Global')
+        """);
+
+    private static void CreateIucn(string path, string values) {
         using var connection = new SqliteConnection($"Data Source={path}");
         connection.Open();
         using var command = connection.CreateCommand();
-        command.CommandText = """
+        command.CommandText = $"""
             CREATE TABLE view_assessments_html_taxonomy_html (kingdomName TEXT, className TEXT, orderName TEXT,
                 familyName TEXT, genusName TEXT, speciesName TEXT, infraType TEXT, subpopulationName TEXT, scopes TEXT);
-            INSERT INTO view_assessments_html_taxonomy_html VALUES
-                ('ANIMALIA', 'REPTILIA', 'SQUAMATA', 'NATRICIDAE', 'Natrix', 'natrix', NULL, NULL, 'Global'),
-                ('ANIMALIA', 'REPTILIA', 'SQUAMATA', 'NATRICIDAE', 'Natrix', 'tessellata', NULL, NULL, 'Global'),
-                ('ANIMALIA', 'REPTILIA', 'SQUAMATA', 'NATRICIDAE', 'Tropidonotus', 'natrix', NULL, NULL, 'Global'),
-                ('ANIMALIA', 'REPTILIA', 'SQUAMATA', 'NATRICIDAE', 'Natrix', 'unknownus', NULL, NULL, 'Global'),
-                ('ANIMALIA', 'REPTILIA', 'SQUAMATA', 'NATRICIDAE', 'Natrix', 'natrix', 'ssp.', NULL, 'Global'),
-                ('ANIMALIA', 'REPTILIA', 'SQUAMATA', 'NATRICIDAE', 'Natrix', 'natrix', NULL, 'Europe', 'Global');
+            INSERT INTO view_assessments_html_taxonomy_html VALUES {values};
             """;
         command.ExecuteNonQuery();
     }
@@ -301,6 +304,58 @@ public class TaxonPlacementStoreTests {
             Assert.Equal(4, forced.Matching!.FromCache);
             Assert.Equal(0, forced.Matching.ColQueries);
             Assert.Equal(new[] { "Serpentes" }, forced.Index.BetweenOrderAndFamily("ANIMALIA", "REPTILIA", "SQUAMATA", "NATRICIDAE").Select(n => n.Name));
+        } finally {
+            SqliteConnection.ClearAllPools();
+            try { Directory.Delete(dir, recursive: true); } catch (IOException) { }
+        }
+    }
+
+    // `wikipedia generate-lists --dataset api` builds a placement for the API projection database.
+    // It goes into the same placement file as the CSV database's placement, in its own row of
+    // placement_source, and leaves the CSV database's placement current and unchanged.
+    [Fact]
+    public void Run_ForASecondIucnDatabase_KeepsTheFirstOnesPlacementCurrent() {
+        var dir = Path.Combine(Path.GetTempPath(), "bb3-placement-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+        try {
+            var csv = Path.Combine(dir, "iucn.sqlite");
+            var api = Path.Combine(dir, "iucn_api_projected.sqlite");
+            var col = Path.Combine(dir, "col.sqlite");
+            CreateIucn(csv);
+            // A different IUCN family for the same snakes, so the two placements differ.
+            CreateIucn(api, """
+                ('ANIMALIA', 'REPTILIA', 'SQUAMATA', 'COLUBRIDAE', 'Natrix', 'natrix', NULL, NULL, 'Global'),
+                ('ANIMALIA', 'REPTILIA', 'SQUAMATA', 'COLUBRIDAE', 'Natrix', 'tessellata', NULL, NULL, 'Global')
+                """);
+            using (var colConnection = new SqliteConnection($"Data Source={col}")) {
+                colConnection.Open();
+                CreateCol(colConnection);
+            }
+            SqliteConnection.ClearAllPools();
+
+            var csvBuild = TaxonPlacementBuild.Run(csv, col, new PlacementRunOptions(), null, CancellationToken.None);
+            var csvSource = csvBuild.Source!;
+            var apiBuild = TaxonPlacementBuild.Run(api, col, new PlacementRunOptions(), null, CancellationToken.None);
+            Assert.True(apiBuild.Built);
+            Assert.Equal(new[] { "Serpentes" }, apiBuild.Index.BetweenOrderAndFamily("ANIMALIA", "REPTILIA", "SQUAMATA", "COLUBRIDAE").Select(n => n.Name));
+
+            var csvStatus = TaxonPlacementStore.Status(csv, col);
+            Assert.Equal(PlacementState.Current, csvStatus.State);
+            Assert.Equal(csvSource.SourceKey, csvStatus.Source!.SourceKey);
+            Assert.Equal(csvSource.BuiltAtUtc, csvStatus.Source.BuiltAtUtc);
+            Assert.Equal(PlacementState.Current, TaxonPlacementStore.Status(api, col).State);
+
+            var csvAgain = TaxonPlacementBuild.Run(csv, col, new PlacementRunOptions(), null, CancellationToken.None);
+            Assert.False(csvAgain.Built);
+            Assert.Equal(csvBuild.Index.Count, csvAgain.Index.Count);
+            Assert.Equal(new[] { "Serpentes" }, csvAgain.Index.BetweenOrderAndFamily("ANIMALIA", "REPTILIA", "SQUAMATA", "NATRICIDAE").Select(n => n.Name));
+            Assert.Empty(csvAgain.Index.BetweenOrderAndFamily("ANIMALIA", "REPTILIA", "SQUAMATA", "COLUBRIDAE"));
+
+            using var sidecar = new SqliteConnection($"Data Source={TaxonPlacementStore.SidecarPath(col)};Mode=ReadOnly");
+            sidecar.Open();
+            using var count = sidecar.CreateCommand();
+            count.CommandText = "SELECT COUNT(*) FROM placement_source";
+            Assert.Equal(2L, (long)count.ExecuteScalar()!);
         } finally {
             SqliteConnection.ClearAllPools();
             try { Directory.Delete(dir, recursive: true); } catch (IOException) { }
