@@ -12,8 +12,17 @@ public class WikidataStatusEditTests {
 
     private static string L(params string[] columns) => string.Join(Tab, columns);
 
+    // A statement with one reference that cites IUCN (stated in an edition of the Red List).
     private static WikidataStatusStatement S(string guid, string value, string rank = "normal", params string[] statedIn) =>
-        new($"Q309238${guid}", value, rank, statedIn);
+        new($"Q309238${guid}", value, rank, statedIn, TaxonIds: [], References: 1, CitesIucn: true);
+
+    // A statement whose references cite another source (references > 0), or that has none.
+    private static WikidataStatusStatement Other(string guid, string value, string rank = "normal", int references = 1) =>
+        new($"Q309238${guid}", value, rank, [], TaxonIds: [], References: references, CitesIucn: false);
+
+    // A statement with a reference that has this IUCN taxon ID (P627).
+    private static WikidataStatusStatement Cited(string guid, string value, string taxonId, string rank = "normal") =>
+        new($"Q309238${guid}", value, rank, ["Q115962546"], TaxonIds: [taxonId], References: 1, CitesIucn: true);
 
     private const string G1 = "11111111-1111-1111-1111-111111111111";
     private const string G2 = "22222222-2222-2222-2222-222222222222";
@@ -97,15 +106,32 @@ public class WikidataStatusEditTests {
     }
 
     [Fact]
-    public void Differs_TwoCurrentValues_ReplaceRemovesBoth() {
-        // Taxon 76109592 (VU): its item Q81849610 has near threatened (preferred) and critically endangered.
-        var plan = WikidataStatusEdit.Plan(Request("VU", S(G1, "Q219127"), S(G2, "Q719675", "preferred")));
+    public void Differs_PreferredAndHistory_ReplaceRemovesOnlyThePreferredOne() {
+        // Taxon 76109592 (VU): its item Q81849610 has near threatened (preferred, 2025.2) and
+        // critically endangered (normal, 2021.2), which is history kept under the preferred one.
+        IReadOnlyList<WikidataStatusStatement> statements = [S(G1, "Q219127", "normal", "Q108765945"), S(G2, "Q719675", "preferred", "Q136547248")];
+        var plan = WikidataStatusEdit.Plan(Request("VU", [.. statements]));
 
         Assert.Equal(StatusEditOutcome.Differs, plan.Outcome);
         Assert.Equal(new[] { "Q719675", "Q219127" }, plan.Current.Select(s => s.Value));   // preferred first
-        Assert.Equal(new[] { "Q309238$" + G2, "Q309238$" + G1 }, plan.Removes.Select(s => s.Id));
-        Assert.Equal(3, plan.Commands.Count);
+        Assert.Equal(new[] { "Q309238$" + G2 }, plan.Removes.Select(s => s.Id));
+        Assert.Equal(2, plan.Commands.Count);
         Assert.StartsWith("Q309238\tP141\tQ278113\t", plan.Commands[0]);
+        // The history statement stays at normal rank, so the new one has to be preferred.
+        Assert.Equal(new StatusRankStep(null, "Q278113", "preferred"), Assert.Single(plan.RankSteps));
+        Assert.Equal(StatusEditChoice.Keep, WikidataStatusEdit.RecommendedChoice(statements));
+    }
+
+    [Fact]
+    public void Differs_TwoNormalValues_ReplaceRemovesBoth() {
+        // With no preferred statement both are best-ranked, so both are the current status.
+        IReadOnlyList<WikidataStatusStatement> statements = [S(G1, "Q219127"), S(G2, "Q719675")];
+        var plan = WikidataStatusEdit.Plan(Request("VU", [.. statements]));
+
+        Assert.Equal(new[] { "Q309238$" + G1, "Q309238$" + G2 }, plan.Removes.Select(s => s.Id));
+        Assert.Equal(3, plan.Commands.Count);
+        Assert.Empty(plan.RankSteps);
+        Assert.Equal(StatusEditChoice.Replace, WikidataStatusEdit.RecommendedChoice(statements));
     }
 
     [Fact]
@@ -170,6 +196,57 @@ public class WikidataStatusEditTests {
         Assert.True(plan.AlreadyCited);
         Assert.False(plan.AddsReference);
         Assert.Empty(plan.Commands);
+    }
+
+    [Fact]
+    public void Agrees_AReferenceWithThisTaxonId_IsAlreadyCited() {
+        // Any date: the cache has no reference URL or retrieved date to compare, and a second
+        // reference that differs only in its date would be added after every download.
+        var plan = WikidataStatusEdit.Plan(Request("EN", Cited(G1, "Q96377276", "2725")));
+        Assert.Equal(StatusEditOutcome.Agrees, plan.Outcome);
+        Assert.True(plan.AlreadyCited);
+        Assert.Empty(plan.Commands);
+
+        // Another taxon's id does not count.
+        var other = WikidataStatusEdit.Plan(Request("EN", Cited(G1, "Q96377276", "999")));
+        Assert.False(other.AlreadyCited);
+        Assert.Single(other.Commands);
+    }
+
+    [Fact]
+    public void OtherSource_IsNeitherCountedNorRemoved() {
+        // Taxon 118263605 (EN): its item Q6782925 has endangered with an IUCN reference and
+        // critically endangered whose only reference is a national red book (ISBN).
+        var plan = WikidataStatusEdit.Plan(Request("EN", Cited(G1, "Q96377276", "2725"), Other(G2, "Q219127")));
+
+        Assert.Equal(StatusEditOutcome.Agrees, plan.Outcome);
+        Assert.Empty(plan.Commands);
+        Assert.Equal("Q309238$" + G2, Assert.Single(plan.Others).Id);
+
+        // When the IUCN statement differs, Replace removes it and leaves the other one, which then
+        // competes with the new value.
+        var differs = WikidataStatusEdit.Plan(Request("VU", Cited(G1, "Q96377276", "2725"), Other(G2, "Q219127")));
+        Assert.Equal(StatusEditOutcome.Differs, differs.Outcome);
+        Assert.Equal(new[] { "Q309238$" + G1 }, differs.Removes.Select(s => s.Id));
+        Assert.Equal(new StatusRankStep(null, "Q278113", "preferred"), Assert.Single(differs.RankSteps));
+    }
+
+    [Fact]
+    public void Missing_OnlyStatementsWithNoIucnReference() {
+        // The same value with no reference: QuickStatements adds the reference to that statement.
+        var same = WikidataStatusEdit.Plan(Request("LC", Other(G1, "Q211005", references: 0)));
+        Assert.Equal(StatusEditOutcome.Missing, same.Outcome);
+        Assert.False(same.AddsValue);
+        Assert.True(same.AddsReference);
+        Assert.Single(same.Commands);
+        Assert.Single(same.Others);
+
+        // Another value: the IUCN value is added and the other statement stays.
+        var other = WikidataStatusEdit.Plan(Request("EN", Other(G1, "Q219127", references: 0)));
+        Assert.Equal(StatusEditOutcome.Missing, other.Outcome);
+        Assert.True(other.AddsValue);
+        Assert.Empty(other.Removes);
+        Assert.Equal(new[] { L("Q309238", "P141", "Q96377276", Sources) }, other.Commands);
     }
 
     [Fact]
@@ -249,7 +326,7 @@ public class WikidataStatusEditTests {
     [Fact]
     public void MalformedIds_Throw() {
         Assert.Throws<ArgumentException>(() => WikidataStatusEdit.Plan(Request("VU") with { TaxonItemQid = "P141" }));
-        Assert.Throws<ArgumentException>(() => WikidataStatusEdit.Plan(Request("EN", new WikidataStatusStatement("Q309238$bad\tP31", "Q219127", "normal"))));
+        Assert.Throws<ArgumentException>(() => WikidataStatusEdit.Plan(Request("EN", new WikidataStatusStatement("Q309238$bad\tP31", "Q219127", "normal", CitesIucn: true))));
     }
 
     [Fact]
@@ -272,14 +349,19 @@ public class WikidataStatusEditTests {
 
     [Fact]
     public void Statements_JsonRoundTrip() {
-        IReadOnlyList<WikidataStatusStatement> statements = [S(G1, "Q219127", "preferred", "Q115962546", "Q136547248")];
+        IReadOnlyList<WikidataStatusStatement> statements = [
+            new("Q309238$" + G1, "Q219127", "preferred", ["Q115962546", "Q136547248"], ["2725"], 2, true),
+        ];
         var json = WikidataStatusStatement.ListToJson(statements);
         Assert.Contains("\"statedIn\":[\"Q115962546\",\"Q136547248\"]", json);
+        Assert.Contains("\"taxonIds\":[\"2725\"],\"references\":2,\"citesIucn\":true", json);
         Assert.DoesNotContain("IsDeprecated", json);
         Assert.DoesNotContain("IsPreferred", json);
         var back = WikidataStatusStatement.ListFromJson(json)!;
         Assert.Equal(statements[0].Id, back[0].Id);
         Assert.Equal(statements[0].StatedIn, back[0].StatedIn);
+        Assert.Equal(statements[0].TaxonIds, back[0].TaxonIds);
+        Assert.Equal((2, true), (back[0].References, back[0].CitesIucn));
         Assert.Null(WikidataStatusStatement.ListFromJson(null));
     }
 }

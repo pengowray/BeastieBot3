@@ -200,7 +200,7 @@ public sealed class WikidataStatusUnitTests {
         new(214862019, 15955, "Global", true, category, false, false, null, "3.1", 2022, null, null, null, null, item);
 
     private static string Statement(string value, string rank = "normal") =>
-        WikidataStatusStatement.ListToJson([new("Q132186$1A2B3C4D-0000-4000-8000-000000000001", value, rank, [])]);
+        WikidataStatusStatement.ListToJson([new("Q132186$1A2B3C4D-0000-4000-8000-000000000001", value, rank, [], [], 1, CitesIucn: true)]);
 
     [Theory]
     [InlineData(TaxonKinds.Variety)]
@@ -260,7 +260,7 @@ public sealed class WikidataStatusUnitTests {
     [Fact]
     public void MalformedStatementId_LeavesOutTheCommandsAndReportsIt() {
         var failed = new List<string>();
-        var bad = WikidataStatusStatement.ListToJson([new("Q132186$not-a-guid", "Q278113", "normal", [])]);
+        var bad = WikidataStatusStatement.ListToJson([new("Q132186$not-a-guid", "Q278113", "normal", [], [], 1, CitesIucn: true)]);
         var view = WikidataCite.BuildStatus(Taxon(p141: bad), Latest(), null, (what, _) => failed.Add(what));
         Assert.Equal(WikidataStatusScope.Offered, view.Scope);
         Assert.Null(view.Plan);

@@ -461,10 +461,12 @@ public static class FixtureDb {
     public const string ColCitation =
         "Bánki, O., Roskov, Y., Döring, M. et al. (2026). Catalogue of Life (Version 2026-07-14 XR). Catalogue of Life, Amsterdam, Netherlands. https://doi.org/10.48580/dgykv";
 
-    /// taxon.wikidata_p141 JSON: (statement id, value, rank, stated in item or null).
+    /// taxon.wikidata_p141 JSON: (statement id, value, rank, stated in item or null). Each statement
+    /// has one reference that cites IUCN, with no IUCN taxon ID in it.
     private static string P141(params (string Id, string Value, string Rank, string? StatedIn)[] statements) =>
         WikidataStatusStatement.ListToJson(statements
-            .Select(s => new WikidataStatusStatement(s.Id, s.Value, s.Rank, s.StatedIn is null ? [] : [s.StatedIn]))
+            .Select(s => new WikidataStatusStatement(s.Id, s.Value, s.Rank, s.StatedIn is null ? [] : [s.StatedIn],
+                TaxonIds: [], References: 1, CitesIucn: true))
             .ToList());
 
     private static Author Person(string last, string initials, string? givenNames = null) =>
