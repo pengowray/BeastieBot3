@@ -17,8 +17,25 @@ public sealed record EnglishCommonName(string Name, IReadOnlyList<string> Source
 public sealed record LanguageGroup(string Language, string? Lang, IReadOnlyList<string> Names, bool NotGiven = false);
 
 /// One wikitext box: its label, the template name used in the copy button's accessible name, and
-/// the text.
-public sealed record WikitextBox(string Id, string Label, string Template, string Text, int Rows);
+/// the text. CopyName replaces that accessible name, for a box that holds something other than
+/// wikitext.
+public sealed record WikitextBox(string Id, string Label, string Template, string Text, int Rows, string? CopyName = null) {
+    public string CopyAccessibleName => CopyName ?? SiteText.CopyAccessible(Template);
+}
+
+/// How many of a citation's authors have full given names (CitationAuthor.GivenNames), out of the
+/// authors who are people or names kept as published, with the first of them as an example.
+public sealed record GivenNamesCoverage(int WithGivenNames, int People, CitationAuthor Example) {
+    /// Null when no author has full given names, so the option is not shown.
+    public static GivenNamesCoverage? Of(IucnCitationParts parts) {
+        var named = parts.Authors.Where(a => !string.IsNullOrWhiteSpace(a.GivenNames)).ToList();
+        if (named.Count == 0) {
+            return null;
+        }
+        var people = parts.Authors.Count(a => a.Kind != CitationAuthorKind.Organisation || !string.IsNullOrWhiteSpace(a.GivenNames));
+        return new GivenNamesCoverage(named.Count, people, named[0]);
+    }
+}
 
 [OutputCache(PolicyName = SiteCachePolicies.Species)]
 [ResponseCache(Duration = 600, Location = ResponseCacheLocation.Any)]
@@ -29,11 +46,13 @@ public sealed class SpeciesModel : PageModel {
     private readonly SiteDatabase _db;
     private readonly SiteQueries _queries;
     private readonly SiteOptions _options;
+    private readonly ILogger<SpeciesModel> _logger;
 
-    public SpeciesModel(SiteDatabase db, SiteQueries queries, IOptions<SiteOptions> options) {
+    public SpeciesModel(SiteDatabase db, SiteQueries queries, IOptions<SiteOptions> options, ILogger<SpeciesModel> logger) {
         _db = db;
         _queries = queries;
         _options = options.Value;
+        _logger = logger;
     }
 
     public long RequestedTaxonId { get; private set; }
@@ -76,6 +95,20 @@ public sealed class SpeciesModel : PageModel {
     public string? DownloadDateText { get; private set; }
     public string TodayText { get; private set; } = string.Empty;
 
+    /// For the full given names option, which is shown only when this is not null.
+    public GivenNamesCoverage? GivenNames { get; private set; }
+
+    /// The "{{cite Q}} citation from Wikidata" part of the wikitext section; null when no assessment
+    /// is selected.
+    public WikidataCiteView? Wikidata { get; private set; }
+
+    /// This page with the current options, as a link to it would give them.
+    public string CurrentOptionsUrl => OptionsUrl(SelectedIsDefault || Selected is null ? null : Selected.AssessmentId);
+
+    /// The key of a "Show wikitext" link, so site.js can update its address after the options change.
+    public static string OptionsLinkKey(long? assessmentId) =>
+        assessmentId is { } id ? id.ToString(System.Globalization.CultureInfo.InvariantCulture) : "default";
+
     /// The taxobox an article about this taxon most likely uses, which names the status parameters box.
     public TaxoboxTemplate Taxobox { get; private set; } = TaxoboxTemplate.Speciesbox;
 
@@ -96,7 +129,7 @@ public sealed class SpeciesModel : PageModel {
     public string? DataDateRange { get; private set; }
 
     public IActionResult OnGet(long taxonId, long? assessment, string? authors, string? access, string? opts,
-        [FromQuery(Name = "ref")] string? wrapRef, string? refname, string? amp, string? q) {
+        [FromQuery(Name = "ref")] string? wrapRef, string? refname, string? amp, string? fullnames, string? q) {
         RequestedTaxonId = taxonId;
         var snapshot = _db.Snapshot;
         Version = snapshot?.IucnRelease;
@@ -118,7 +151,7 @@ public sealed class SpeciesModel : PageModel {
         EpbcListings = _queries.GetEpbcListings(Taxon.TaxonId);
         LoadAssessments(assessment);
         Options = WikitextOptions.FromQuery(authors, access, opts, wrapRef, refname, amp,
-            Selected is null ? DefaultRefNames.LatestGlobal : DefaultRefNameFor(Selected));
+            Selected is null ? DefaultRefNames.LatestGlobal : DefaultRefNameFor(Selected), fullnames);
         Taxobox = TaxoboxTemplate.For(Taxon.Kind, Taxon.Kingdom);
         BuildWikitext();
         LoadNames();
@@ -184,21 +217,12 @@ public sealed class SpeciesModel : PageModel {
         Parts = ReadParts(Selected.CitationJson);
         var boxes = new List<WikitextBox>();
         CiteIucnOptions? citeOptions = null;
+        DateOnly? downloaded = Parts?.DownloadedAtUtc is { } at ? DateOnly.FromDateTime(at) : null;
 
         if (Parts is not null) {
-            DateOnly? downloaded = Parts.DownloadedAtUtc is { } at ? DateOnly.FromDateTime(at) : null;
             DownloadDateText = downloaded is { } d ? SiteFormat.Date(d) : null;
-            citeOptions = new CiteIucnOptions {
-                AuthorStyle = Options.AuthorStyle,
-                AccessDate = Options.Access switch {
-                    WikitextOptions.AccessToday => today,
-                    WikitextOptions.AccessNone => null,
-                    _ => downloaded,
-                },
-                WrapInRef = Options.WrapInRef,
-                RefName = Options.RefName,
-                NameListStyleAmp = Options.Amp,
-            };
+            citeOptions = Options.ToCiteIucnOptions(today, downloaded);
+            GivenNames = GivenNamesCoverage.Of(Parts);
             var cite = CiteIucnRenderer.Render(Parts, citeOptions);
             boxes.Add(new WikitextBox("wikitext-cite", SiteText.LabelCite, "{{cite iucn}}", cite, Rows: 5));
 
@@ -230,6 +254,21 @@ public sealed class SpeciesModel : PageModel {
             boxes.Add(new WikitextBox("wikitext-speciesbox", Taxobox.Label, Taxobox.Name, lines, Rows: 5));
         }
         Boxes = boxes;
+
+        Wikidata = WikidataCite.Build(Selected, Parts, Taxon?.WikidataQid, ReadItemModel(), Options.ToCiteQOptions(today, downloaded),
+            (what, e) => _logger.LogWarning(e, "WikidataCitation.{Method} failed for assessment {AssessmentId}", what, Selected.AssessmentId));
+    }
+
+    // The assessment item model `site build-db` stored; the defaults when it stored none. Null when
+    // the stored model cannot be read, so the page offers no QuickStatements commands rather than
+    // commands for another model.
+    private WikidataItemModel? ReadItemModel() {
+        try {
+            return WikidataItemModel.FromJson(_db.Snapshot?.Get(SiteDbSchema.MetaKeys.WikidataItemModel));
+        } catch (JsonException e) {
+            _logger.LogWarning(e, "The site database's {Key} cannot be read", SiteDbSchema.MetaKeys.WikidataItemModel);
+            return null;
+        }
     }
 
     // citation_json written by `site build-db`. Unknown properties are ignored, so nothing but the

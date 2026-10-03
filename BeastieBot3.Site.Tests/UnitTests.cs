@@ -310,6 +310,92 @@ public sealed class WikitextOptionsTests {
     [Fact]
     public void LongRefNamesAreCut() =>
         Assert.Equal(WikitextOptions.MaxRefNameLength, WikitextOptions.FromQuery(null, null, null, null, new string('x', 200), null).RefName.Length);
+
+    [Fact]
+    public void FullGivenNamesIsOffUnlessAsked() {
+        Assert.False(WikitextOptions.Default.FullGivenNames);
+        Assert.False(WikitextOptions.FromQuery(null, null, "1", "1", "iucn", null).FullGivenNames);
+        Assert.False(WikitextOptions.FromQuery(null, null, null, null, null, null, fullNames: "0").FullGivenNames);
+        // Off by default, so it needs no opts=1 to turn it on.
+        Assert.True(WikitextOptions.FromQuery(null, null, null, null, null, null, fullNames: "1").FullGivenNames);
+        Assert.True(WikitextOptions.FromQuery(null, null, "1", "1", "iucn", null, fullNames: "1").FullGivenNames);
+    }
+
+    [Fact]
+    public void FullGivenNamesRoundTrip() {
+        var options = WikitextOptions.Default with { FullGivenNames = true };
+        Assert.Equal("?fullnames=1", options.ToQuery(null, "iucn"));
+        Assert.Equal("?assessment=5&authors=lastfirst&fullnames=1&access=none",
+            (options with { AuthorStyle = CiteAuthorStyle.LastFirst, Access = WikitextOptions.AccessNone }).ToQuery(5, "iucn2008"));
+        Assert.Equal(options, WikitextOptions.FromQuery(null, null, null, null, null, null, fullNames: "1"));
+    }
+
+    [Fact]
+    public void CiteIucnOptionsCarryEveryChoice() {
+        var today = new DateOnly(2026, 10, 3);
+        var downloaded = new DateOnly(2026, 8, 18);
+        var options = new WikitextOptions(CiteAuthorStyle.LastFirst, WikitextOptions.AccessDownload, true, "tiger", true, "iucn") {
+            FullGivenNames = true,
+        };
+        var cite = options.ToCiteIucnOptions(today, downloaded);
+        Assert.Equal(CiteAuthorStyle.LastFirst, cite.AuthorStyle);
+        Assert.Equal(downloaded, cite.AccessDate);
+        Assert.True(cite.WrapInRef);
+        Assert.Equal("tiger", cite.RefName);
+        Assert.True(cite.NameListStyleAmp);
+        Assert.True(cite.FullGivenNames);
+        Assert.False((options with { FullGivenNames = false }).ToCiteIucnOptions(today, downloaded).FullGivenNames);
+
+        Assert.Equal(today, (options with { Access = WikitextOptions.AccessToday }).ToCiteIucnOptions(today, downloaded).AccessDate);
+        Assert.Null((options with { Access = WikitextOptions.AccessNone }).ToCiteIucnOptions(today, downloaded).AccessDate);
+        Assert.Null(options.ToCiteIucnOptions(today, null).AccessDate);
+    }
+
+    [Fact]
+    public void CiteQOptionsUseTheSameAccessDateAndRef() {
+        var today = new DateOnly(2026, 10, 3);
+        var options = WikitextOptions.Default with { Access = WikitextOptions.AccessToday, RefName = "tiger" };
+        Assert.Equal(new CiteQOptions { AccessDate = today, WrapInRef = true, RefName = "tiger" }, options.ToCiteQOptions(today, null));
+        Assert.Equal(new CiteQOptions { AccessDate = null, WrapInRef = false, RefName = string.Empty },
+            (options with { Access = WikitextOptions.AccessNone, WrapInRef = false, RefName = string.Empty }).ToCiteQOptions(today, today));
+    }
+}
+
+public sealed class GivenNamesTests {
+    private static IucnCitationParts Parts(params CitationAuthor[] authors) => new() {
+        TaxonId = 1, AssessmentId = 2, Year = 2020, ScientificName = "Aus bus", Authors = authors,
+    };
+
+    private static CitationAuthor Person(string last, string initials, string? given = null) =>
+        new(CitationAuthorKind.Person, $"{last}, {initials}", last, initials, given);
+
+    [Fact]
+    public void NoOptionWithoutFullGivenNames() {
+        Assert.Null(GivenNamesCoverage.Of(Parts(Person("Sayer", "C."), Person("Lajus", "D."))));
+        Assert.Null(GivenNamesCoverage.Of(Parts(Person("Sayer", "C.", "  "))));
+        Assert.Null(GivenNamesCoverage.Of(Parts()));
+    }
+
+    [Fact]
+    public void OrganisationsAreNotCounted() {
+        var coverage = GivenNamesCoverage.Of(Parts(
+            new CitationAuthor(CitationAuthorKind.Organisation, "BirdLife International"),
+            Person("Sayer", "C.", "Catherine"),
+            Person("Lajus", "D."),
+            new CitationAuthor(CitationAuthorKind.Verbatim, "Jon Aars")))!;
+        Assert.Equal(1, coverage.WithGivenNames);
+        Assert.Equal(3, coverage.People);
+        Assert.Equal("Sayer, C.", coverage.Example.Display);
+    }
+
+    [Theory]
+    [InlineData(1, 1, "IUCN gives this author's full given names: “Catherine” for “Sayer, C.”.")]
+    [InlineData(2, 2, "IUCN gives full given names for both authors, such as “Catherine” for “Sayer, C.”.")]
+    [InlineData(3, 3, "IUCN gives full given names for all 3 authors, such as “Catherine” for “Sayer, C.”.")]
+    [InlineData(1, 2, "IUCN gives full given names for 1 of the 2 authors, such as “Catherine” for “Sayer, C.”. The other author is written as in IUCN's citation.")]
+    [InlineData(2, 5, "IUCN gives full given names for 2 of the 5 authors, such as “Catherine” for “Sayer, C.”. The other 3 authors are written as in IUCN's citation.")]
+    public void HelpLine(int withNames, int people, string expected) =>
+        Assert.Equal(expected, SiteText.FullGivenNamesHelp(withNames, people, "Catherine", "Sayer, C."));
 }
 
 public sealed class RateLimitKeyTests {

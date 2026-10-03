@@ -107,8 +107,11 @@ public sealed class SpeciesPageTests(SiteFactory factory) : IClassFixture<SiteFa
     [Fact]
     public async Task EachWikitextBoxHasItsOwnCopyStatus() {
         var html = await Page();
+        // The three boxes before the citation options; the {{cite Q}} part after them may add more.
+        var start = Html.IndexOf(html, "id=\"wikitext-output\"");
+        var main = html[start..Html.IndexOf(html, "<form class=\"options-form\"")];
+        Assert.Equal(3, System.Text.RegularExpressions.Regex.Matches(main, "<div class=\"wikitext-box-head\">").Count);
         var boxes = System.Text.RegularExpressions.Regex.Matches(html, "<div class=\"wikitext-box-head\">").Count;
-        Assert.Equal(3, boxes);
         Assert.Equal(boxes, System.Text.RegularExpressions.Regex.Matches(html,
             "hidden>Copy</button>\\s*<p class=\"copy-status\" role=\"status\" aria-live=\"polite\"></p>\\s*</div>").Count);
         var failed = System.Text.RegularExpressions.Regex.Match(html, "data-copy-failed=\"([^\"]*)\"").Groups[1].Value;

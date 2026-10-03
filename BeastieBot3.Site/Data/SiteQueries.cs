@@ -110,7 +110,8 @@ public sealed class SiteQueries {
         command.CommandText = """
             SELECT assessment_id, taxon_id, scope, is_latest, category, possibly_extinct,
                    possibly_extinct_in_the_wild, criteria, criteria_version, year_published,
-                   assessment_date, population_trend, citation_json, replaced_by_assessment_id
+                   assessment_date, population_trend, citation_json, replaced_by_assessment_id,
+                   wikidata_item_qid, wikidata_item_properties
             FROM assessment
             WHERE taxon_id = @id
             ORDER BY year_published DESC, assessment_date DESC, assessment_id DESC
@@ -133,7 +134,9 @@ public sealed class SiteQueries {
                 Text(reader, 10),
                 Text(reader, 11),
                 Text(reader, 12),
-                Long(reader, 13)));
+                Long(reader, 13),
+                Text(reader, 14),
+                Text(reader, 15)));
         }
         return rows;
     }

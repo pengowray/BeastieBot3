@@ -1,5 +1,6 @@
-// Beastie Bot Species Status: copy buttons for the wikitext boxes, and name suggestions for the
-// search boxes. The pages work without this file; it only adds these two conveniences.
+// Beastie Bot Species Status: copy buttons for the wikitext boxes, wikitext that updates as the
+// citation options change, and name suggestions for the search boxes. The pages work without this
+// file; it only adds these conveniences.
 (function () {
     "use strict";
 
@@ -7,10 +8,33 @@
     // buttons. The wikitext section carries the texts so every string comes from the server. Each
     // box has its own status line beside its button: "Copied" is read out by screen readers (the
     // button shows it too); a failure message is shown, and the button says the copy failed.
+    // One click listener on the document serves every button, including the buttons of wikitext
+    // that setUpLiveOptions puts in place later.
     function setUpCopyButtons() {
-        var section = document.querySelector("[data-copy-failed]");
-        var buttons = document.querySelectorAll("button[data-copy]");
-        if (!section || buttons.length === 0) {
+        showCopyButtons(document);
+        document.addEventListener("click", function (event) {
+            var button = event.target && event.target.closest ? event.target.closest("button[data-copy]") : null;
+            if (button) {
+                copyFromButton(button);
+            }
+        });
+    }
+
+    function showCopyButtons(root) {
+        root.querySelectorAll("button[data-copy]").forEach(function (button) {
+            if (document.getElementById(button.getAttribute("data-copy")) && button.parentNode.querySelector(".copy-status")) {
+                button.hidden = false;
+            }
+        });
+    }
+
+    var copyTimers = typeof WeakMap === "function" ? new WeakMap() : null;
+
+    function copyFromButton(button) {
+        var section = button.closest("[data-copy-failed]");
+        var box = document.getElementById(button.getAttribute("data-copy"));
+        var status = button.parentNode.querySelector(".copy-status");
+        if (!section || !box || !status) {
             return;
         }
         var copiedText = section.getAttribute("data-copied") || "Copied";
@@ -18,36 +42,222 @@
         var failedText = section.getAttribute("data-copy-failed") || "";
         var failedButtonText = section.getAttribute("data-copy-failed-button") || copyText;
 
-        buttons.forEach(function (button) {
-            var box = document.getElementById(button.getAttribute("data-copy"));
-            var status = button.parentNode.querySelector(".copy-status");
-            if (!box || !status) {
+        if (copyTimers && copyTimers.has(button)) {
+            window.clearTimeout(copyTimers.get(button));
+        }
+        button.textContent = copyText;
+        setStatus(status, "", false);
+        copy(box).then(function () {
+            button.textContent = copiedText;
+            setStatus(status, copiedText, false);
+            var timer = window.setTimeout(function () {
+                // Clear only the success message, never a later failure message.
+                if (status.textContent === copiedText) {
+                    setStatus(status, "", false);
+                }
+                if (button.textContent === copiedText) {
+                    button.textContent = copyText;
+                }
+            }, 2000);
+            if (copyTimers) {
+                copyTimers.set(button, timer);
+            }
+        }, function () {
+            selectAll(box);
+            button.textContent = failedButtonText;
+            setStatus(status, failedText, true);
+        });
+    }
+
+    // The citation options form updates the wikitext as soon as an option changes, and the ref
+    // name a moment after the visitor stops typing. The script asks the server for the page with
+    // the form's new query, the same request the form would make, and puts the new copy of each
+    // data-live-region element of the wikitext section in place of the old one. The form itself is
+    // not replaced, so focus and typing are not interrupted. The address bar gets the page's own
+    // address for the new options (data-options-url), and the "Show wikitext" links in the
+    // assessment tables get their new addresses. The update button is hidden; without JavaScript
+    // it submits the form. If anything goes wrong, the browser loads the page the normal way.
+    function setUpLiveOptions() {
+        var section = document.getElementById("wikitext");
+        var form = section ? section.querySelector("form.options-form") : null;
+        if (!form || !window.fetch || !window.DOMParser || !window.URLSearchParams || !window.FormData
+            || !window.history || !window.history.replaceState) {
+            return;
+        }
+        var button = form.querySelector("button[type=\"submit\"]");
+        var status = form.querySelector("[data-live-status]");
+        var updatedText = section.getAttribute("data-live-updated") || "";
+        if (button) {
+            button.hidden = true;
+        }
+        if (status) {
+            status.hidden = false;
+        }
+
+        var lastQuery = formQuery(form);
+        var typingTimer = 0;
+        var statusTimer = 0;
+        var sequence = 0;
+        var controller = null;
+
+        function update() {
+            window.clearTimeout(typingTimer);
+            var query = formQuery(form);
+            if (query === lastQuery) {
                 return;
             }
-            button.hidden = false;
-            var timer = 0;
-            button.addEventListener("click", function () {
-                window.clearTimeout(timer);
-                button.textContent = copyText;
-                setStatus(status, "", false);
-                copy(box).then(function () {
-                    button.textContent = copiedText;
-                    setStatus(status, copiedText, false);
-                    timer = window.setTimeout(function () {
-                        // Clear only the success message, never a later failure message.
-                        if (status.textContent === copiedText) {
-                            setStatus(status, "", false);
-                        }
-                        if (button.textContent === copiedText) {
-                            button.textContent = copyText;
-                        }
-                    }, 2000);
-                }, function () {
-                    selectAll(box);
-                    button.textContent = failedButtonText;
-                    setStatus(status, failedText, true);
+            var url = new URL(form.getAttribute("action") || window.location.pathname, window.location.href);
+            url.hash = "";
+            url.search = query;
+            var target = url.toString();
+            sequence += 1;
+            var mine = sequence;
+            if (controller) {
+                controller.abort();
+            }
+            controller = window.AbortController ? new AbortController() : null;
+            section.setAttribute("aria-busy", "true");
+
+            fetch(target, { credentials: "same-origin", signal: controller ? controller.signal : undefined })
+                .then(function (response) {
+                    if (!response.ok) {
+                        throw new Error("HTTP " + response.status);
+                    }
+                    return response.text();
+                })
+                .then(function (html) {
+                    if (mine !== sequence) {
+                        return;
+                    }
+                    var page = new DOMParser().parseFromString(html, "text/html");
+                    var next = page.getElementById("wikitext");
+                    if (!next || !replaceRegions(section, next, form)) {
+                        throw new Error("The page has no matching wikitext section");
+                    }
+                    updateOptionLinks(page);
+                    var address = next.getAttribute("data-options-url");
+                    if (address) {
+                        window.history.replaceState(window.history.state, "", address + window.location.hash);
+                    }
+                    lastQuery = query;
+                    section.removeAttribute("aria-busy");
+                    announce();
+                })
+                .catch(function (error) {
+                    if (mine !== sequence || (error && error.name === "AbortError")) {
+                        return;
+                    }
+                    section.removeAttribute("aria-busy");
+                    window.location.assign(target + "#wikitext");
                 });
+        }
+
+        function announce() {
+            if (!status) {
+                return;
+            }
+            window.clearTimeout(statusTimer);
+            // Emptied first, so the same text is read out again after the next change.
+            status.textContent = "";
+            window.setTimeout(function () {
+                status.textContent = updatedText;
+                statusTimer = window.setTimeout(function () {
+                    status.textContent = "";
+                }, 4000);
+            }, 50);
+        }
+
+        form.addEventListener("change", update);
+        form.addEventListener("input", function (event) {
+            if (event.target && event.target.type === "text") {
+                window.clearTimeout(typingTimer);
+                typingTimer = window.setTimeout(update, 400);
+            }
+        });
+        // Enter in the ref name box submits the form.
+        form.addEventListener("submit", function (event) {
+            event.preventDefault();
+            update();
+        });
+    }
+
+    // The query the form would send, as the browser would write it.
+    function formQuery(form) {
+        var params = new URLSearchParams();
+        new FormData(form).forEach(function (value, name) {
+            params.append(name, value);
+        });
+        return params.toString();
+    }
+
+    // Puts each data-live-region element of next (the wikitext section of the new page) in place
+    // of the element with the same id. Returns false, changing nothing, when the two sections do
+    // not have the same regions. Keeps the form where it is on the screen, the open state of
+    // details elements that have an id, and the focus when it was in a region.
+    function replaceRegions(section, next, form) {
+        var oldRegions = Array.prototype.slice.call(section.querySelectorAll("[data-live-region]"));
+        var newRegions = Array.prototype.slice.call(next.querySelectorAll("[data-live-region]"));
+        if (oldRegions.length !== newRegions.length) {
+            return false;
+        }
+        var pairs = [];
+        for (var i = 0; i < oldRegions.length; i++) {
+            var id = oldRegions[i].id;
+            var match = null;
+            for (var j = 0; j < newRegions.length; j++) {
+                if (newRegions[j].id === id) {
+                    match = newRegions[j];
+                }
+            }
+            if (!id || !match) {
+                return false;
+            }
+            pairs.push([oldRegions[i], match]);
+        }
+
+        var formTop = form.getBoundingClientRect().top;
+        var active = document.activeElement;
+        var focusId = null;
+        var focusCopy = null;
+        pairs.forEach(function (pair) {
+            var old = pair[0];
+            if (active && old.contains(active)) {
+                focusId = active.id || null;
+                focusCopy = active.getAttribute("data-copy");
+            }
+            var replacement = document.importNode(pair[1], true);
+            old.querySelectorAll("details[id]").forEach(function (details) {
+                var same = replacement.querySelector("details[id=\"" + details.id + "\"]");
+                if (same) {
+                    same.open = details.open;
+                }
             });
+            old.parentNode.replaceChild(replacement, old);
+            showCopyButtons(replacement);
+            fitTextareas(replacement);
+        });
+
+        var focusTarget = focusId ? document.getElementById(focusId)
+            : focusCopy ? section.querySelector("button[data-copy=\"" + focusCopy + "\"]") : null;
+        if (focusTarget) {
+            focusTarget.focus({ preventScroll: true });
+        }
+        var moved = form.getBoundingClientRect().top - formTop;
+        if (moved !== 0) {
+            window.scrollBy(0, moved);
+        }
+        return true;
+    }
+
+    // The "Show wikitext" links in the assessment tables carry the options; each takes the address
+    // its copy on the new page has.
+    function updateOptionLinks(page) {
+        document.querySelectorAll("a[data-options-link]").forEach(function (link) {
+            var key = link.getAttribute("data-options-link");
+            var fresh = page.querySelector("a[data-options-link=\"" + key + "\"]");
+            if (fresh) {
+                link.setAttribute("href", fresh.getAttribute("href"));
+            }
         });
     }
 
@@ -163,9 +373,10 @@
         });
     }
 
-    // Wikitext boxes grow to fit their text, so nothing is hidden behind a scroll bar.
-    function fitTextareas() {
-        document.querySelectorAll(".wikitext-box textarea").forEach(function (box) {
+    // Wikitext boxes grow to fit their text, so nothing is hidden behind a scroll bar. root: the
+    // element whose boxes to fit; the whole page when not given.
+    function fitTextareas(root) {
+        (root || document).querySelectorAll(".wikitext-box textarea").forEach(function (box) {
             box.rows = 1;
             box.style.height = "auto";
             box.style.height = (box.scrollHeight + 2) + "px";
@@ -177,11 +388,14 @@
         var timer = 0;
         window.addEventListener("resize", function () {
             window.clearTimeout(timer);
-            timer = window.setTimeout(fitTextareas, 150);
+            timer = window.setTimeout(function () {
+                fitTextareas();
+            }, 150);
         });
     }
 
     setUpCopyButtons();
+    setUpLiveOptions();
     setUpSuggestions();
     setUpTextareas();
 })();
