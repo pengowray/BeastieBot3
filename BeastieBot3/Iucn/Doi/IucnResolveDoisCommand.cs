@@ -331,7 +331,9 @@ internal sealed class IucnResolveDoisCommand : AsyncCommand<IucnResolveDoisComma
         var counts = found.Counts;
         var table = new Table().Title($"DOIs for scope {scopeName}, release {found.Release}").AddColumn("Assessments").AddColumn(new TableColumn("Count").RightAligned());
         table.AddRow("In scope", $"{counts.InScope:N0}");
-        table.AddRow("DOI from GBIF's checklist", $"{counts.FromGbif:N0}");
+        if (found.GbifRead) {
+            table.AddRow("DOI from GBIF's checklist", $"{counts.FromGbif:N0}");
+        }
         table.AddRow("DOI from Wikidata", $"{counts.FromWikidata:N0}");
         table.AddRow("DOI in IUCN's citation", $"{counts.FromCitation:N0}");
         table.AddRow("No DOI from these sources", $"{counts.Targets:N0}");

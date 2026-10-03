@@ -64,6 +64,8 @@ internal sealed class DoiScopeResult {
     public required List<DoiTarget> Targets { get; init; }
     public required DoiScopeCounts Counts { get; init; }
     public List<string> Skipped { get; } = new();
+    /// Whether GBIF's checklist was read; it is not for the history scope, since it has only latest assessments.
+    public bool GbifRead { get; init; }
 }
 
 internal static class IucnDoiScopeReader {
@@ -246,6 +248,7 @@ internal static class IucnDoiScopeReader {
         // 4. GBIF's checklist (latest assessments only) and Wikidata.
         var skipped = new List<string>();
         var gbif = new Dictionary<long, (long? AssessmentId, string Doi)>();
+        var gbifRead = false;
         if (scope != DoiScope.History) {
             if (sources.GbifChecklist is { } gbifPath && File.Exists(gbifPath)) {
                 var checklist = GbifIucnChecklistReader.Read(gbifPath, cancellationToken);
@@ -254,6 +257,7 @@ internal static class IucnDoiScopeReader {
                         gbif[taxonId] = (taxon.AssessmentId, doi);
                     }
                 }
+                gbifRead = true;
                 report($"Read GBIF's checklist {Path.GetFileName(gbifPath)}: {gbif.Count:N0} taxa with a DOI.");
             } else {
                 skipped.Add("GBIF's checklist");
@@ -329,6 +333,7 @@ internal static class IucnDoiScopeReader {
             PreviousRelease = previousRelease,
             Targets = targets,
             Counts = counts,
+            GbifRead = gbifRead,
         };
         result.Skipped.AddRange(skipped);
         return result;
