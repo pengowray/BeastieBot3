@@ -1,10 +1,10 @@
 using System.Text.RegularExpressions;
+using BeastieBot3.Iucn.Citations;
 using BeastieBot3.Shared.Wikitext;
-using BeastieBot3.WikidataEdits;
 
-// Reads one author name, as IucnAssessmentCitationParser.SplitCreditNames returns it, into a
-// CitationAuthor: a person with surname and initials, an organisation kept whole, or a name kept as
-// published because it can't be split with confidence.
+// Reads one author name, as CreditNameSplitter.Split returns it, into a CitationAuthor: a person
+// with surname and initials, an organisation kept whole, or a name kept as published because it
+// can't be split with confidence.
 //
 // Person. IUCN writes people "Surname, Initials". The surname may carry particles ("de Kok, R.",
 // "van Swaay, C."), several words ("Martínez Salas, E."), hyphens and apostrophes; the initials may
@@ -193,7 +193,7 @@ internal static class IucnAuthorNameParser {
         if (suffix is null) {
             // "Guerrero, R.D. III"
             var suffixed = InitialsWithSuffix.Match(initials);
-            if (suffixed.Success && IucnAssessmentCitationParser.IsInitials(suffixed.Groups["initials"].Value)) {
+            if (suffixed.Success && CreditNameSplitter.IsInitials(suffixed.Groups["initials"].Value)) {
                 initials = suffixed.Groups["initials"].Value;
                 suffix = suffixed.Groups["suffix"].Value;
             }
@@ -203,7 +203,7 @@ internal static class IucnAuthorNameParser {
         if (surname.Count(char.IsLetter) == 1) return null;
 
         AuthorNameShape shape;
-        if (IucnAssessmentCitationParser.IsInitials(initials)) {
+        if (CreditNameSplitter.IsInitials(initials)) {
             shape = suffix is not null ? AuthorNameShape.SurnameInitialsSuffix
                 : initials.Contains('.') ? AuthorNameShape.SurnameInitials
                 : AuthorNameShape.SurnameInitialsNoDots;
@@ -227,7 +227,7 @@ internal static class IucnAuthorNameParser {
         } while (text.Length != previous.Length);
         var tokens = ListSeparator.Split(text).Select(t => t.Trim()).ToArray();
         for (var i = 0; i + 1 < tokens.Length; i++) {
-            if (tokens[i].Length > 0 && LooksLikeSurname(tokens[i]) && IucnAssessmentCitationParser.IsInitials(tokens[i + 1])) {
+            if (tokens[i].Length > 0 && LooksLikeSurname(tokens[i]) && CreditNameSplitter.IsInitials(tokens[i + 1])) {
                 return true;
             }
         }

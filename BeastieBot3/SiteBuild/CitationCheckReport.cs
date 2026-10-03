@@ -1,7 +1,7 @@
 using System.Globalization;
 using System.Text;
+using BeastieBot3.Iucn.Citations;
 using BeastieBot3.Shared.Wikitext;
-using BeastieBot3.WikidataEdits;
 
 // Counts and examples for `site check-citations`, and the Markdown report built from them.
 // CitationCheckTally is filled as the command reads the cache; CitationCheckReport only formats.
@@ -37,8 +37,8 @@ internal sealed class CitationCheckTally {
     public Dictionary<CitationParseFailure, List<string>> FailureExamples { get; } = new();
 
     public Dictionary<CitationAuthorSource, int> AuthorSources { get; } = new();
-    public Dictionary<IucnAssessmentCitationParser.CreditSplitRule, int> SplitRules { get; } = new();
-    public Dictionary<IucnAssessmentCitationParser.CreditSplitRule, List<string>> SplitRuleExamples { get; } = new();
+    public Dictionary<CreditSplitRule, int> SplitRules { get; } = new();
+    public Dictionary<CreditSplitRule, List<string>> SplitRuleExamples { get; } = new();
     public Dictionary<CitationAuthorKind, int> AuthorKinds { get; } = new();
     public Dictionary<AuthorNameShape, int> AuthorShapes { get; } = new();
     /// Distinct names read as Verbatim, with how often each occurs, by shape.
@@ -361,7 +361,7 @@ internal static class CitationCheckReport {
 
         sb.AppendLine("### How the author string was split");
         sb.AppendLine();
-        sb.AppendLine("Rules of `IucnAssessmentCitationParser.SplitCreditNames`, strictest first. P = person, O = organisation, V = name left as published.");
+        sb.AppendLine("Rules of `CreditNameSplitter`, strictest first. P = person, O = organisation, V = name left as published.");
         sb.AppendLine();
         sb.AppendLine("| Rule | Assessments | Examples |");
         sb.AppendLine("| --- | ---: | --- |");
@@ -578,17 +578,17 @@ internal static class CitationCheckReport {
         _ => "None",
     };
 
-    private static string RuleLabel(IucnAssessmentCitationParser.CreditSplitRule rule) => rule switch {
-        IucnAssessmentCitationParser.CreditSplitRule.Strict => "Surname, initials pairs",
-        IucnAssessmentCitationParser.CreditSplitRule.Single => "One name",
-        IucnAssessmentCitationParser.CreditSplitRule.CountStandalone => "Pairs and stand-alone names, confirmed by value[] count",
-        IucnAssessmentCitationParser.CreditSplitRule.CountGiven => "Pairs with given names, confirmed by value[] count",
-        IucnAssessmentCitationParser.CreditSplitRule.GivenFirst => "Every name given name first",
-        IucnAssessmentCitationParser.CreditSplitRule.PairsAndOrganisations => "Pairs and organisation names, no value[] count",
-        IucnAssessmentCitationParser.CreditSplitRule.EtAl => "\"et al.\" taken off, the rest split",
-        IucnAssessmentCitationParser.CreditSplitRule.Whole => "Kept whole: no rule matched and value[] was empty",
-        IucnAssessmentCitationParser.CreditSplitRule.WholeCountMismatch => "Kept whole: no split matched the value[] count",
-        IucnAssessmentCitationParser.CreditSplitRule.Empty => "Empty",
+    private static string RuleLabel(CreditSplitRule rule) => rule switch {
+        CreditSplitRule.Strict => "Surname, initials pairs",
+        CreditSplitRule.Single => "One name",
+        CreditSplitRule.CountStandalone => "Pairs and stand-alone names, confirmed by value[] count",
+        CreditSplitRule.CountGiven => "Pairs with given names, confirmed by value[] count",
+        CreditSplitRule.GivenFirst => "Every name given name first",
+        CreditSplitRule.PairsAndOrganisations => "Pairs and organisation names, no value[] count",
+        CreditSplitRule.EtAl => "\"et al.\" taken off, the rest split",
+        CreditSplitRule.Whole => "Kept whole: no rule matched and value[] was empty",
+        CreditSplitRule.WholeCountMismatch => "Kept whole: no split matched the value[] count",
+        CreditSplitRule.Empty => "Empty",
         _ => rule.ToString(),
     };
 

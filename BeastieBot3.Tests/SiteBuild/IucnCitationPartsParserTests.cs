@@ -1,7 +1,7 @@
 using System.Text.Json;
+using BeastieBot3.Iucn.Citations;
 using BeastieBot3.Shared.Wikitext;
 using BeastieBot3.SiteBuild;
-using BeastieBot3.WikidataEdits;
 
 namespace BeastieBot3.Tests.SiteBuild;
 
@@ -77,7 +77,7 @@ public class IucnCitationPartsParserTests {
         Assert.Equal(DoiVerdict.Accepted, parse.CitationDoiVerdict);
         Assert.True(parse.HasAmendedAnnotation);
         Assert.Equal(CitationAuthorSource.AssessorCredit, parse.AuthorSource);
-        Assert.Equal(IucnAssessmentCitationParser.CreditSplitRule.Strict, parse.SplitRule);
+        Assert.Equal(CreditSplitRule.Strict, parse.SplitRule);
     }
 
     [Fact]
@@ -266,7 +266,7 @@ public class IucnCitationPartsParserTests {
             "Allen, G.R., Hammer, M. & Kadarusman 2020. Chilatherina sentaniensis. The IUCN Red List of Threatened Species 2020: e.T4631A147680762. Accessed on 20 August 2026.",
             "Chilatherina sentaniensis", "Allen, G.R., Hammer, M. & Kadarusman", 3));
 
-        Assert.Equal(IucnAssessmentCitationParser.CreditSplitRule.CountStandalone, parse.SplitRule);
+        Assert.Equal(CreditSplitRule.CountStandalone, parse.SplitRule);
         Assert.Equal(new[] { Person("Allen, G.R.", "Allen", "G.R."), Person("Hammer, M.", "Hammer", "M."), Verbatim("Kadarusman") }, parse.Parts!.Authors);
         Assert.Equal(new[] { AuthorNameShape.SurnameInitials, AuthorNameShape.SurnameInitials, AuthorNameShape.SingleName }, parse.AuthorShapes);
     }
@@ -280,7 +280,7 @@ public class IucnCitationPartsParserTests {
         var parts = parse.Parts!;
         Assert.True(parts.AuthorsEtAl);
         Assert.Equal(new[] { Person("Jaffré, T.", "Jaffré", "T.") }, parts.Authors);
-        Assert.Equal(IucnAssessmentCitationParser.CreditSplitRule.EtAl, parse.SplitRule);
+        Assert.Equal(CreditSplitRule.EtAl, parse.SplitRule);
         Assert.StartsWith("Jaffré, T. et al. 1998. Oxera macrocalyx.", parts.IucnCitationText);
         Assert.Equal("10.2305/IUCN.UK.1998.RLTS.T37427A10053658.en", parts.Doi);
     }
@@ -378,7 +378,7 @@ public class IucnCitationPartsParserTests {
             "Celsa Señaris, Enrique La Marca 2004. Atelopus carbonerensis. The IUCN Red List of Threatened Species 2004: e.T55358A11281813. Accessed on 20 August 2026.",
             "Atelopus carbonerensis", "Celsa Señaris, Enrique La Marca", 1));
 
-        Assert.Equal(IucnAssessmentCitationParser.CreditSplitRule.CountGiven, parse.SplitRule);
+        Assert.Equal(CreditSplitRule.CountGiven, parse.SplitRule);
         Assert.Equal(new[] { Verbatim("Celsa Señaris, Enrique La Marca") }, parse.Parts!.Authors);
         Assert.Equal(new[] { AuthorNameShape.SurnameGivenNamesUnconfirmed }, parse.AuthorShapes);
     }
@@ -389,7 +389,7 @@ public class IucnCitationPartsParserTests {
             "Eudey, A. & Members of the Primate Specialist Group 1996. Rhinopithecus roxellana. The IUCN Red List of Threatened Species 1996: e.T39803A9500227. Accessed on 20 August 2026.",
             "Rhinopithecus roxellana", "Eudey, A. & Members of the Primate Specialist Group"));
 
-        Assert.Equal(IucnAssessmentCitationParser.CreditSplitRule.PairsAndOrganisations, parse.SplitRule);
+        Assert.Equal(CreditSplitRule.PairsAndOrganisations, parse.SplitRule);
         Assert.Equal(new[] { Person("Eudey, A.", "Eudey", "A."), Organisation("Members of the Primate Specialist Group") },
             parse.Parts!.Authors);
     }
@@ -403,7 +403,7 @@ public class IucnCitationPartsParserTests {
             $"{assessor}. 2004. Paretroplus maculatus. The IUCN Red List of Threatened Species 2004: e.T16862A9303466. Accessed on 20 August 2026.",
             "Paretroplus maculatus", assessor));
 
-        Assert.Equal(IucnAssessmentCitationParser.CreditSplitRule.Whole, parse.SplitRule);
+        Assert.Equal(CreditSplitRule.Whole, parse.SplitRule);
         Assert.Equal(new[] { Verbatim(assessor) }, parse.Parts!.Authors);
     }
 
@@ -428,7 +428,7 @@ public class IucnCitationPartsParserTests {
 
         Assert.Equal(new[] { Organisation("Ministry of the Environment, Japan") }, ministry.Authors);
         Assert.Equal(new[] { Verbatim("Weber, O. & Sebsebe Demissew") }, whole.Parts!.Authors);
-        Assert.Equal(IucnAssessmentCitationParser.CreditSplitRule.Whole, whole.SplitRule);
+        Assert.Equal(CreditSplitRule.Whole, whole.SplitRule);
     }
 
     // ------------------------------------------------------------ no parts
