@@ -96,4 +96,42 @@ public class CommonNameCrossReferenceTests {
         Assert.Equal(a, store.FindTaxonByCrossReference("wikidata", "Q140"));
         Assert.Equal(b, store.FindTaxonByCrossReference("col", "Q140"));
     }
+
+    private static string WikidataItem(string id, string scientificName) =>
+        "{\"entities\":{\"" + id + "\":{\"claims\":{\"P225\":[{\"mainsnak\":{\"datavalue\":{\"value\":\"" + scientificName + "\"}}}]}}}}";
+
+    [Fact]
+    public void WikidataItem_GoesToTheTaxonOfItsCurrentIucnId_NotAnEarlierRunsTaxon() {
+        // An earlier aggregate run without --replace recorded Q1 for the lumped taxon; the item's
+        // P627 now names the split species.
+        using var store = OpenInMemory();
+        var lumped = AddTaxon(store, "aus bus", "100");
+        var split = AddTaxon(store, "aus cus", "200");
+        store.InsertCrossReference(lumped, "wikidata", "Q1");
+
+        var (taxonId, matchType, _) = CommonNameAggregateCommand.ResolveWikidataTaxon(store, "Q1", "999,200", WikidataItem("Q1", "Aus bus"));
+
+        Assert.Equal(split, taxonId);
+        Assert.Equal("exact", matchType);
+    }
+
+    [Fact]
+    public void WikidataItem_WithoutAKnownIucnId_UsesTheEarlierRunsTaxon_ThenItsScientificName() {
+        using var store = OpenInMemory();
+        var recorded = AddTaxon(store, "aus bus", "100");
+        var named = AddTaxon(store, "aus cus", "200");
+        var synonymised = AddTaxon(store, "aus dus", "300");
+        store.InsertCrossReference(recorded, "wikidata", "Q1");
+        store.InsertSynonym(synonymised, "aus eus", "Aus eus", "iucn");
+
+        Assert.Equal((recorded, "exact"), Found(CommonNameAggregateCommand.ResolveWikidataTaxon(store, "Q1", "999", WikidataItem("Q1", "Aus cus"))));
+        Assert.Equal((named, "exact"), Found(CommonNameAggregateCommand.ResolveWikidataTaxon(store, "Q2", null, WikidataItem("Q2", "Aus cus"))));
+        Assert.Equal((synonymised, "synonym"), Found(CommonNameAggregateCommand.ResolveWikidataTaxon(store, "Q3", null, WikidataItem("Q3", "Aus eus"))));
+
+        var (missing, _, createName) = CommonNameAggregateCommand.ResolveWikidataTaxon(store, "Q4", null, WikidataItem("Q4", "Aus fus"));
+        Assert.Null(missing);
+        Assert.Equal("Aus fus", createName);
+    }
+
+    private static (long?, string) Found((long? TaxonId, string MatchType, string? CreateName) result) => (result.TaxonId, result.MatchType);
 }
