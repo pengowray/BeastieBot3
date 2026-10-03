@@ -121,6 +121,48 @@ public sealed class SiteDbBuildApiOnlySpratDoiTests : IDisposable {
         Assert.Equal("0", Scalar(db, $"SELECT COUNT(*) FROM epbc_listing WHERE taxon_id = {WoylieOld} OR sprat_taxon_id = 90002"));
     }
 
+    // The two listed-name columns are named from the SPRAT report's header text, so a report can lack
+    // them. They then read as empty: the build warns, and each listing gives SPRAT's scientific name.
+    [Fact]
+    public void Build_WithoutTheSpratListedNameColumns_WarnsAndUsesTheScientificName() {
+        var sprat = _sources.PathOf("sprat-no-listed-names.sqlite");
+        using (var c = OpenWritable(sprat)) {
+            Execute(c, """
+                CREATE TABLE import_metadata (id INTEGER PRIMARY KEY AUTOINCREMENT, filename TEXT NOT NULL, redlist_version TEXT NOT NULL, started_at TEXT NOT NULL, ended_at TEXT);
+                INSERT INTO import_metadata (filename, redlist_version, started_at) VALUES ('25062026-070407-report.csv', 'x', 'x');
+                CREATE TABLE sprat_species (import_id INTEGER NOT NULL, sprat_taxon_id TEXT, scientific_name TEXT, epbc_status TEXT);
+                INSERT INTO sprat_species VALUES (1, '90001', 'Panthera pardus', 'Vulnerable');
+                """);
+        }
+        var output = _sources.PathOf("site-no-listed-names.sqlite");
+        var stats = new SiteDbBuild(Inputs(output) with { SpratDatabase = sprat }, QuietConsole()).Run(CancellationToken.None);
+
+        Assert.Contains(stats.Warnings, w => w.Contains("no IUCN_Red_List_Listed_Names column", StringComparison.Ordinal));
+        Assert.Contains(stats.Warnings, w => w.Contains("no EPBC_Threatened_Species_Listed_Name column", StringComparison.Ordinal));
+        using var db = OpenReadOnly(output);
+        Assert.Equal(new object?[] { 90001L, "Panthera pardus", "VU", "taxon" },
+            Assert.Single(Rows(db, $"SELECT sprat_taxon_id, listed_name, status, applies_to FROM epbc_listing WHERE taxon_id = {Leopard}")));
+        Assert.Equal("25062026-070407-report.csv", Scalar(db, $"SELECT value FROM meta WHERE key = '{SiteDbSchema.MetaKeys.SpratReport}'"));
+    }
+
+    // A SPRAT database with no sprat_species table (`sprat import` of an empty report) is skipped with
+    // a warning; the rest of the build carries on.
+    [Fact]
+    public void Build_WithASpratDatabaseThatHasNoTable_WarnsAndCarriesOn() {
+        var sprat = _sources.PathOf("sprat-empty.sqlite");
+        using (var c = OpenWritable(sprat)) {
+            Execute(c, "CREATE TABLE import_metadata (id INTEGER PRIMARY KEY AUTOINCREMENT, filename TEXT NOT NULL, redlist_version TEXT NOT NULL, started_at TEXT NOT NULL, ended_at TEXT);");
+        }
+        var output = _sources.PathOf("site-no-sprat.sqlite");
+        var stats = new SiteDbBuild(Inputs(output) with { SpratDatabase = sprat }, QuietConsole()).Run(CancellationToken.None);
+
+        Assert.Contains(stats.Warnings, w => w.Contains("has no sprat_species table", StringComparison.Ordinal));
+        using var db = OpenReadOnly(output);
+        Assert.Equal("0", Scalar(db, "SELECT COUNT(*) FROM epbc_listing"));
+        Assert.Null(Scalar(db, $"SELECT value FROM meta WHERE key = '{SiteDbSchema.MetaKeys.SpratReport}'"));
+        Assert.Equal(TaxonCount.ToString(), Scalar(db, "SELECT COUNT(*) FROM taxon"));
+    }
+
     [Theory]
     [InlineData("Phascolarctos cinereus", "Phascolarctos cinereus", "Taxon", null)]
     [InlineData("Phascolarctos cinereus (combined populations of Qld, NSW and the ACT)", "Phascolarctos cinereus",

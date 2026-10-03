@@ -30,11 +30,11 @@ internal sealed class SpratListQueryService : IDisposable {
     // to the full referenced {{IUCN status|CODE|taxonId/assessmentId|1|year=}} form. Null → bare form.
     private readonly IucnAssessmentResolver? _iucnResolver;
     // Whether the SPRAT table carries the IUCN listed-name and EPBC date-effective columns (the real
-    // import does; minimal test fixtures may not). Guards the SELECT so a missing column isn't silently
-    // read as a string literal.
+    // import does; minimal test fixtures may not). Guards the SELECT so a missing column is not named.
     private readonly bool _hasIucnListedName;
     private readonly bool _hasEpbcDate;
-    private readonly IReadOnlySet<string> _columns;
+    // The table's columns (none when the table is missing): a column the report does not have reads as NULL.
+    private readonly SpratTableColumns _columns;
 
     /// <summary>Distinct non-standard status values that passed through verbatim, for the report.</summary>
     public IReadOnlyCollection<StatusFinding> UnrecognizedStatuses => _unrecognizedStatuses.Values;
@@ -51,43 +51,27 @@ internal sealed class SpratListQueryService : IDisposable {
         _connection = new SqliteConnection(builder.ToString());
         _connection.Open();
         _ownsConnection = true;
-        _systems = ResolveAvailableSystems(_connection);
         _iucnResolver = iucnResolver;
-        _hasIucnListedName = HasColumn(_connection, SpratColumns.IucnListedName);
-        _hasEpbcDate = HasColumn(_connection, SpratColumns.EpbcDateEffective);
-        _columns = TableColumns(_connection);
+        _columns = SpratTableColumns.Read(_connection) ?? SpratTableColumns.None;
+        _systems = SpratColumns.Systems.Where(s => _columns.Has(s.Column)).ToList();
+        _hasIucnListedName = _columns.Has(SpratColumns.IucnListedName);
+        _hasEpbcDate = _columns.Has(SpratColumns.EpbcDateEffective);
     }
 
     private SpratListQueryService(SqliteConnection connection, IucnAssessmentResolver? iucnResolver = null) {
         _connection = connection;
-        _systems = ResolveAvailableSystems(connection);
         _iucnResolver = iucnResolver;
-        _hasIucnListedName = HasColumn(connection, SpratColumns.IucnListedName);
-        _hasEpbcDate = HasColumn(connection, SpratColumns.EpbcDateEffective);
-        _columns = TableColumns(connection);
+        _columns = SpratTableColumns.Read(connection) ?? SpratTableColumns.None;
+        _systems = SpratColumns.Systems.Where(s => _columns.Has(s.Column)).ToList();
+        _hasIucnListedName = _columns.Has(SpratColumns.IucnListedName);
+        _hasEpbcDate = _columns.Has(SpratColumns.EpbcDateEffective);
     }
 
-    private static IReadOnlySet<string> TableColumns(SqliteConnection connection) =>
-        DelimitedTableImporter.GetTableColumns(connection, SpratColumns.Table) is { } columns
-            ? new HashSet<string>(columns, StringComparer.OrdinalIgnoreCase)
-            : new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-
-    // A column the report does not have reads as NULL. SQLite builds from 2025 on reject a
-    // double-quoted name that is not a column; older builds silently read it as a string literal.
-    private string Col(string column) => _columns.Contains(column) ? Quote(column) : "NULL";
-
-    private static bool HasColumn(SqliteConnection connection, string column) =>
-        DelimitedTableImporter.GetTableColumns(connection, SpratColumns.Table)?.Contains(column) ?? false;
+    private string Col(string column) => _columns.Select(column);
 
     /// <summary>Test seam: query over a caller-owned connection (e.g. a shared <c>:memory:</c> DB).</summary>
     internal static SpratListQueryService OpenFromConnection(SqliteConnection connection, IucnAssessmentResolver? iucnResolver = null)
         => new(connection, iucnResolver);
-
-    private static IReadOnlyList<SpratColumns.ListingSystem> ResolveAvailableSystems(SqliteConnection connection) {
-        var existing = DelimitedTableImporter.GetTableColumns(connection, SpratColumns.Table)
-            ?? new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-        return SpratColumns.Systems.Where(s => existing.Contains(s.Column)).ToList();
-    }
 
     public string GetDatasetVersion() {
         using var cmd = _connection.CreateCommand();
@@ -121,7 +105,7 @@ internal sealed class SpratListQueryService : IDisposable {
 
         var sql = new StringBuilder();
         sql.Append("SELECT ").Append(string.Join(", ", selectCols.Select(Col)));
-        sql.Append(" FROM ").Append(Quote(SpratColumns.Table));
+        sql.Append(" FROM ").Append(SpratTableColumns.Quote(SpratColumns.Table));
         var parameters = new List<SqliteParameter>();
         AppendWhere(sql, filter, parameters);
         sql.Append(" ORDER BY ")
@@ -508,8 +492,6 @@ internal sealed class SpratListQueryService : IDisposable {
         var s = reader.GetString(ordinal);
         return string.IsNullOrWhiteSpace(s) ? null : s;
     }
-
-    private static string Quote(string identifier) => "\"" + identifier.Replace("\"", "\"\"") + "\"";
 
     public void Dispose() {
         if (_ownsConnection) {

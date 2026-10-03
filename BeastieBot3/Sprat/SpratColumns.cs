@@ -34,6 +34,12 @@ internal static class SpratColumns {
     /// year is used as the {{EPBC status}} reference label.</summary>
     public const string EpbcDateEffective = "EPBC_Threatened_Species_Date_Effective";
 
+    /// <summary>The name the taxon is listed under in the EPBC Act, which can differ from SPRAT's scientific
+    /// name; for a population, the name with the population in brackets. Named from the report's header
+    /// text, like IucnListedName and EpbcDateEffective, so a report may lack it: read it through
+    /// SpratTableColumns.Select.</summary>
+    public const string EpbcListedName = "EPBC_Threatened_Species_Listed_Name";
+
     // Conservation status, one column per listing system. Each holds the system's own raw category
     // text (e.g. "Critically Endangered", "Rare", "Near Threatened") or NULL/empty when unlisted.
     public const string EpbcStatus = "epbc_status";

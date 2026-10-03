@@ -1,6 +1,7 @@
 using System.Globalization;
 using BeastieBot3.Infrastructure;
 using BeastieBot3.Iucn.Gbif;
+using BeastieBot3.Sprat;
 using Microsoft.Data.Sqlite;
 
 // The links and outside identifiers of each taxon, and the outside DOIs, for `site build-db`. Every
@@ -20,7 +21,9 @@ using Microsoft.Data.Sqlite;
 //                  name, then by each name in IUCN_Red_List_Listed_Names. Profiles of populations:
 //                  every row named after the taxon with a population in brackets
 //                  (SiteBuildRules.ClassifySpratName). Only an EPBC-listed row gives a status.
-//   DOI cache      iucn_doi_cache.sqlite doi_check: DOIs `iucn resolve-dois` found in Crossref's list
+//                  The two listed-name columns are named from the report's header text, so a report
+//                  may lack them; they then read as empty (SpratTableColumns), with a warning.
+//   DOI cache     iucn_doi_cache.sqlite doi_check: DOIs `iucn resolve-dois` found in Crossref's list
 //                  of IUCN DOIs or at doi.org.
 //   DOIs           GBIF's copy of the IUCN checklist (the current global assessment of each taxon)
 //                  and Wikidata items for assessments (wikidata_iucn_assessment_items).
@@ -220,9 +223,33 @@ internal static class SiteLinkReaders {
 
     /// Fills each taxon's EpbcListings; returns the report file the SPRAT database was imported from.
     /// A name shared by several taxa goes to the taxon in the release with the lowest id, else the
-    /// lowest id of the others.
+    /// lowest id of the others. A database with no sprat_species table, or one without the SPRAT id,
+    /// scientific name or EPBC status column, gives no listings and a warning. A missing IUCN listed
+    /// names or EPBC listed name column reads as empty, with a warning.
     public static string? ReadSprat(string path, IReadOnlyDictionary<long, SiteTaxon> taxa, SiteBuildStats stats,
         CancellationToken cancellationToken) {
+        using var connection = OpenReadOnly(path);
+        var columns = SpratTableColumns.Read(connection);
+        if (columns is null) {
+            stats.Warnings.Add($"The SPRAT database {path} has no {SpratColumns.Table} table, so no SPRAT profiles or EPBC listings were used.");
+            return null;
+        }
+        var missingRequired = new[] { SpratColumns.SpratTaxonId, SpratColumns.ScientificName, SpratColumns.EpbcStatus }
+            .Where(c => !columns.Has(c)).ToList();
+        if (missingRequired.Count > 0) {
+            stats.Warnings.Add($"The SPRAT database {path} has no {string.Join(", ", missingRequired)} column in {SpratColumns.Table}, "
+                + "so no SPRAT profiles or EPBC listings were used.");
+            return null;
+        }
+        if (!columns.Has(SpratColumns.IucnListedName)) {
+            stats.Warnings.Add($"The SPRAT database {path} has no {SpratColumns.IucnListedName} column, "
+                + "so SPRAT profiles were matched by their scientific name only.");
+        }
+        if (!columns.Has(SpratColumns.EpbcListedName)) {
+            stats.Warnings.Add($"The SPRAT database {path} has no {SpratColumns.EpbcListedName} column, "
+                + "so each EPBC listing gives SPRAT's scientific name as the listed name.");
+        }
+
         var byName = new Dictionary<string, SiteTaxon>(StringComparer.Ordinal);
         foreach (var taxon in taxa.Values.OrderBy(t => t.InRelease ? 0 : 1).ThenBy(t => t.TaxonId)) {
             byName.TryAdd(taxon.ScientificName, taxon);
@@ -232,11 +259,12 @@ internal static class SiteLinkReaders {
         // which beats a listed-name match; then a profile with an EPBC listing; then the lowest SPRAT id.
         var best = new Dictionary<long, (int Rank, EpbcListing Listing)>();
         var populations = new Dictionary<long, List<EpbcListing>>();
-        using var connection = OpenReadOnly(path);
         using (var command = connection.CreateCommand()) {
-            command.CommandText = """
-                SELECT sprat_taxon_id, scientific_name, epbc_status, IUCN_Red_List_Listed_Names, EPBC_Threatened_Species_Listed_Name
-                FROM sprat_species
+            command.CommandText = $"""
+                SELECT {columns.Select(SpratColumns.SpratTaxonId)}, {columns.Select(SpratColumns.ScientificName)},
+                       {columns.Select(SpratColumns.EpbcStatus)}, {columns.Select(SpratColumns.IucnListedName)},
+                       {columns.Select(SpratColumns.EpbcListedName)}
+                FROM {SpratTableColumns.Quote(SpratColumns.Table)}
                 """;
             using var reader = command.ExecuteReader();
             while (reader.Read()) {
@@ -323,6 +351,10 @@ internal static class SiteLinkReaders {
             }
         }
 
+        // `sprat import` records the report file in import_metadata.
+        if (DelimitedTableImporter.GetTableColumns(connection, "import_metadata")?.Contains("filename") != true) {
+            return null;
+        }
         using var file = connection.CreateCommand();
         file.CommandText = "SELECT filename FROM import_metadata ORDER BY id DESC LIMIT 1";
         return file.ExecuteScalar() is string fileName ? Path.GetFileName(fileName.Trim()) : null;
