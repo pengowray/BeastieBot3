@@ -55,7 +55,10 @@ public sealed class SpeciesModel : PageModel {
     public IReadOnlyList<EpbcListingRow> EpbcListings { get; private set; } = [];
 
     public IReadOnlyList<AssessmentRow> GlobalHistory { get; private set; } = [];
-    public IReadOnlyList<AssessmentRow> RegionalLatest { get; private set; } = [];
+    /// The rows of the Regional assessments table. For a taxon in the release, the latest assessment
+    /// in each region. For a taxon not in the release, none is current, so every regional assessment,
+    /// by region and then newest first.
+    public IReadOnlyList<AssessmentRow> RegionalRows { get; private set; } = [];
     public AssessmentRow? LatestGlobal { get; private set; }
 
     /// The assessment in the status summary: the latest global one, or the latest regional one.
@@ -148,15 +151,23 @@ public sealed class SpeciesModel : PageModel {
             : GlobalHistory.FirstOrDefault(a => a.AssessmentId == Taxon.LatestGlobalAssessmentId)
                 ?? (Taxon.LatestGlobalAssessmentId is null ? null : GlobalHistory.FirstOrDefault(a => a.IsLatest));
 
-        // Latest per region: the row flagged latest, or the newest one when none is.
-        RegionalLatest = all.Where(a => !a.IsGlobal)
-            .GroupBy(a => a.Scope.Trim(), StringComparer.OrdinalIgnoreCase)
-            .Select(g => g.FirstOrDefault(a => a.IsLatest) ?? g.First())
-            .OrderBy(a => a.Scope, StringComparer.OrdinalIgnoreCase)
-            .ToList();
+        var regional = all.Where(a => !a.IsGlobal);
+        RegionalRows = Taxon.InRelease
+            // Latest per region: the row flagged latest, or the newest one when none is.
+            ? regional
+                .GroupBy(a => a.Scope.Trim(), StringComparer.OrdinalIgnoreCase)
+                .Select(g => g.FirstOrDefault(a => a.IsLatest) ?? g.First())
+                .OrderBy(a => a.Scope.Trim(), StringComparer.OrdinalIgnoreCase)
+                .ToList()
+            : regional
+                .OrderBy(a => a.Scope.Trim(), StringComparer.OrdinalIgnoreCase)
+                .ThenByDescending(a => a.YearPublished ?? 0)
+                .ThenByDescending(a => a.AssessmentDate, StringComparer.Ordinal)
+                .ThenByDescending(a => a.AssessmentId)
+                .ToList();
 
         // A taxon not in the release has no status summary: none of its assessments is current.
-        StatusAssessment = !Taxon.InRelease ? null : LatestGlobal ?? RegionalLatest
+        StatusAssessment = !Taxon.InRelease ? null : LatestGlobal ?? RegionalRows
             .OrderByDescending(a => a.YearPublished ?? 0)
             .ThenByDescending(a => a.AssessmentDate)
             .FirstOrDefault();

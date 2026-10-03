@@ -97,6 +97,8 @@ public sealed class OtherEndpointTests(SiteFactory factory) : IClassFixture<Site
         Assert.Contains("About Beastie Bot Species Status", text);
         Assert.Contains("Beastie Bot Species Status is an unofficial website for looking up IUCN Red List assessments and citing them on English Wikipedia.", text);
         Assert.Contains("contact User talk:Example on English Wikipedia. Include the address of the taxon page.", text);
+        Assert.Contains("its earlier global assessments, and its latest assessment in each region", text);
+        Assert.Contains("These pages show the taxon's earlier assessments, with wikitext for each.", text);
         Assert.Contains("Version 2026-1. Assessment details downloaded from the IUCN Red List API between 18 August and 1 September 2026.", text);
         Assert.Contains("COL26.7 XR", text);
         Assert.Contains("1 October 2026", text);

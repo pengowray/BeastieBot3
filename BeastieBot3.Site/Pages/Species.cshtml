@@ -68,8 +68,8 @@
         @if (Model.CurrentTaxon is { } current) {
             <p class="current-taxon">@SiteText.CurrentTaxonBefore(Model.Version)<span class="sci-name">@Html.Raw(ScientificNameMarkup.ToHtml(current.ScientificName, current.SubpopulationName))</span>@SiteText.CurrentTaxonMiddle<a href="/species/@current.TaxonId">@SiteText.IucnIdLink(current.TaxonId)</a>@SiteText.CurrentTaxonAfter</p>
         }
-    } else if (Model.LatestGlobal is null && Model.RegionalLatest.Count > 0) {
-        <p class="no-global-line">@SiteText.NoGlobalBefore<a href="#regional">@SiteText.NoGlobalLinkText(Model.RegionalLatest.Count)</a>@SiteText.NoGlobalAfter</p>
+    } else if (Model.LatestGlobal is null && Model.RegionalRows.Count > 0) {
+        <p class="no-global-line">@SiteText.NoGlobalBefore<a href="#regional">@SiteText.NoGlobalLinkText(Model.RegionalRows.Count)</a>@SiteText.NoGlobalAfter</p>
     }
     @if (status is not null) {
         <dl class="facts">
@@ -259,7 +259,7 @@
     </section>
 }
 
-@if (Model.RegionalLatest.Count > 0) {
+@if (Model.RegionalRows.Count > 0) {
     <section class="regional" id="regional" aria-labelledby="regional-heading">
         <h2 id="regional-heading">@SiteText.HeadingRegional</h2>
         <div class="table-scroll">
@@ -275,7 +275,7 @@
                     </tr>
                 </thead>
                 <tbody>
-                    @foreach (var a in Model.RegionalLatest) {
+                    @foreach (var a in Model.RegionalRows) {
                         var isShown = selected?.AssessmentId == a.AssessmentId;
                         var isDefault = a.AssessmentId == Model.StatusAssessment?.AssessmentId;
                         var versionNote = Model.VersionNote(a);

@@ -395,12 +395,15 @@ public sealed class SpeciesPageTests(SiteFactory factory) : IClassFixture<SiteFa
         var html = await _client.GetStringAsync($"/species/{FixtureDb.RegionalOnly}");
         var text = Html.Text(html);
         Assert.Contains("<h2 id=\"status-heading\">IUCN Red List status</h2>", html);
-        Assert.Contains("No global assessment. This taxon has <a href=\"#regional\">2 regional assessments</a>.", html);
+        Assert.Contains("No global assessment. This taxon has been assessed in <a href=\"#regional\">2 regions</a>.", html);
         // The latest regional assessment is the Mediterranean one (2010).
         Assert.Contains("Region Mediterranean", text);
         Assert.Contains("Wikitext for the Mediterranean assessment: Data Deficient, published 2010.", text);
         Assert.Contains("<section class=\"regional\" id=\"regional\"", html);
         Assert.DoesNotContain("Assessment history", text);
+        // The table lists the latest assessment in each region; the 2006 Europe one is left out.
+        Assert.Contains($"href=\"/species/{FixtureDb.RegionalOnly}?assessment={FixtureDb.RegionalOnlyEurope}", html);
+        Assert.DoesNotContain(FixtureDb.RegionalOnlyEurope2006.ToString(), html);
     }
 
 

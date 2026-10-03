@@ -203,7 +203,8 @@ public sealed class DisplayTests {
     public void Plurals() {
         Assert.Equal("1 taxon found", SiteText.SearchCount(1));
         Assert.Equal("1,234 taxa found", SiteText.SearchCount(1234));
-        Assert.Equal("1 regional assessment", SiteText.NoGlobalLinkText(1));
+        Assert.Equal("1 region", SiteText.NoGlobalLinkText(1));
+        Assert.Equal("2 regions", SiteText.NoGlobalLinkText(2));
         Assert.Equal("Show 1 more language", SiteText.ShowMoreLanguages(1));
         Assert.Equal("Show 15 more languages", SiteText.ShowMoreLanguages(15));
         Assert.Equal("Show 1 more synonym", SiteText.ShowMoreSynonyms(1));

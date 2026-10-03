@@ -122,9 +122,10 @@ public static class SiteText {
     /// version of the categories, which IUCN gives no name.
     public const string CategoryNotNamed = "No name given by IUCN";
 
-    /// "No global assessment. This taxon has " + link("{n} regional assessments") + ".".
-    public const string NoGlobalBefore = "No global assessment. This taxon has ";
-    public static string NoGlobalLinkText(int n) => n == 1 ? "1 regional assessment" : $"{SiteFormat.Number(n)} regional assessments";
+    /// "No global assessment. This taxon has been assessed in " + link("{n} regions") + ".". n is the
+    /// number of regions; the Regional assessments table lists the latest assessment in each.
+    public const string NoGlobalBefore = "No global assessment. This taxon has been assessed in ";
+    public static string NoGlobalLinkText(int regions) => regions == 1 ? "1 region" : $"{SiteFormat.Number(regions)} regions";
     public const string NoGlobalAfter = ".";
 
     // Taxon page: a taxon that is not in the release (an old IUCN id, or a taxon IUCN no longer

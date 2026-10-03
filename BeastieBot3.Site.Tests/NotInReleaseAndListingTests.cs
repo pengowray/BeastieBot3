@@ -39,6 +39,25 @@ public sealed class NotInReleaseAndListingTests(SiteFactory factory) : IClassFix
         Assert.Null(Html.Textarea(html, "wikitext-status"));
     }
 
+    // None of the regional assessments of a taxon not in the release is current, so the table lists
+    // all of them, not only the newest in each region.
+    [Fact]
+    public async Task TaxonNotInTheReleaseListsEveryRegionalAssessment() {
+        var html = await _client.GetStringAsync($"/species/{FixtureDb.BombusPyrrhopygus}");
+        var text = Html.Text(html);
+
+        Assert.Contains("<p class=\"no-global-line\">No current assessment in IUCN Red List version 2026-1.</p>", html);
+        Assert.DoesNotContain("No global assessment", text);
+        Assert.DoesNotContain("Assessment history", text);
+        var rows = new[] { FixtureDb.BombusEurope2016, FixtureDb.BombusEurope2015, FixtureDb.BombusEurope2013 }
+            .Select(id => Html.IndexOf(html, $"href=\"/species/{FixtureDb.BombusPyrrhopygus}?assessment={id}"))
+            .ToList();
+        Assert.All(rows, at => Assert.True(at > 0));
+        // Newest first.
+        Assert.Equal(rows.Order(), rows);
+        Assert.Contains("aria-label=\"Show wikitext for the Europe assessment published in 2013\"", html);
+    }
+
     [Fact]
     public async Task AmurLeopardEarlierAssessmentStillHasWikitext() {
         var html = await _client.GetStringAsync($"/species/{FixtureDb.AmurLeopard}?assessment={FixtureDb.AmurLeopard2008}");

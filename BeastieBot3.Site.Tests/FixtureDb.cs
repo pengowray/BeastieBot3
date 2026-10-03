@@ -38,6 +38,8 @@ public static class FixtureDb {
     public const long RegionalOnly = 135570;
     public const long RegionalOnlyEurope = 135570001;
     public const long RegionalOnlyMediterranean = 135570002;
+    /// An earlier Europe assessment of RegionalOnly, which its page does not list.
+    public const long RegionalOnlyEurope2006 = 135570000;
 
     public const long Variety = 34010;
 
@@ -84,6 +86,11 @@ public static class FixtureDb {
     public const long AmurLeopard2016Ne = 96947390;
     public const long AmurLeopard2008 = 5333757;
     public const long AmurLeopard1996 = 5333803;
+    // Bombus pyrrhopygus: not in the release, with three Europe assessments and no global one.
+    public const long BombusPyrrhopygus = 88120770;
+    public const long BombusEurope2013 = 13357670;
+    public const long BombusEurope2015 = 57368180;
+    public const long BombusEurope2016 = 95860837;
 
     // The woylie: taxon 2790 in the release, whose latest citation has a DOI found by checking
     // doi.org, and an old id, 2785, with the same name, not in the release.
@@ -252,6 +259,7 @@ public static class FixtureDb {
             citation: Citation(RegionalOnly, RegionalOnlyEurope, 2008, "Gobio kovatschevi", [Person("Freyhof", "J.")],
                 doi: null, doiSource: DoiSource.None, text: null, region: "Europe"));
         w.Assessment(RegionalOnlyMediterranean, RegionalOnly, "Mediterranean", true, "DD", criteriaVersion: "3.1", year: 2010, date: "2010-01-01");
+        w.Assessment(RegionalOnlyEurope2006, RegionalOnly, "Europe", false, "VU", criteriaVersion: "3.1", year: 2006, date: "2006-01-01");
         w.Name(RegionalOnly, "Gobio kovatschevi", "scientific", null, "iucn");
 
         // Micropyropsis tuberosa: a plant whose latest global and Europe assessments are errata versions
@@ -341,6 +349,13 @@ public static class FixtureDb {
         w.Name(AmurLeopard, "Panthera pardus ssp. orientalis", "scientific", null, "iucn");
         w.Name(AmurLeopard, "Amur Leopard", "common", "en", "iucn", preferred: true);
         w.Name(AmurLeopard, "Bars", "common", "ru", "iucn");
+
+        w.Taxon(BombusPyrrhopygus, "Bombus pyrrhopygus", "species", "ANIMALIA", "ARTHROPODA", "INSECTA", "HYMENOPTERA", "APIDAE", "Bombus",
+            inRelease: false);
+        w.Assessment(BombusEurope2015, BombusPyrrhopygus, "Europe", false, "VU", criteriaVersion: "3.1", year: 2015, date: "2015-01-01");
+        w.Assessment(BombusEurope2013, BombusPyrrhopygus, "Europe", false, "LC", criteriaVersion: "3.1", year: 2013, date: "2013-01-01");
+        w.Assessment(BombusEurope2016, BombusPyrrhopygus, "Europe", false, "VU", criteriaVersion: "3.1", year: 2016, date: "2016-01-01");
+        w.Name(BombusPyrrhopygus, "Bombus pyrrhopygus", "scientific", null, "iucn");
 
         // The woylie, and an old id with its name.
         w.Taxon(Woylie, "Bettongia penicillata", "species", "ANIMALIA", "CHORDATA", "MAMMALIA", "DIPROTODONTIA", "POTOROIDAE", "Bettongia",
