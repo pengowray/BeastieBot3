@@ -12,13 +12,12 @@ using System.Text.RegularExpressions;
 // scientific name), in a non-Latin script, naming a family ("Salamandridae") or repeating the page
 // title are skipped; a line that starts with a lower-case letter continues the line before
 // ("Hoogstraal's striped<br/>grass mouse"). CommonNameQuality repairs or rejects what is left:
-// templates, links, the next infobox parameter. The aggregator still drops a result that looks
-// like a scientific name (LooksLikeScientificName); that test is not applied line by line, because
-// it also takes sentence-case names such as "Chinese ephedra" for scientific names, and the next
-// line is then often a name in another language. The taxobox parser
-// (Taxonomy/TaxoboxParser) keeps one brace of a nested template ("{sfn|Groves|2005}" for
-// "{{sfn|Groves|2005}}") and runs on into the next parameter when it is on the same line, so the
-// field often has single-brace templates and "| image = ..." tails.
+// templates, links, the next infobox parameter. The aggregator then drops a result that is the
+// taxon's scientific name (ScientificNameCheck). Until October 2026 the taxobox parser
+// (Taxonomy/TaxoboxParser) kept one brace of a nested template ("{sfn|Groves|2005}" for
+// "{{sfn|Groves|2005}}") and ran on into the next parameter when it was on the same line. Pages
+// in the Wikipedia cache keep the fields that parser stored until they are downloaded again, so
+// single-brace templates and "| image = ..." tails are still repaired here.
 
 namespace BeastieBot3.CommonNames;
 
