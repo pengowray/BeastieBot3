@@ -674,7 +674,7 @@ internal sealed class CommonNameAggregateCommand : AsyncCommand<CommonNameAggreg
             store.CompleteImportRun(runId, processed, added, 0, errors,
                 $"Matched {matched} entities to taxa, created {created}, {scientificLabels} English labels skipped as scientific names");
             AnsiConsole.MarkupLine($"[green]Wikidata:[/] {added:N0} common names from {matched:N0} matched entities, [blue]{created:N0}[/] taxa created ({errors} errors)");
-            AnsiConsole.MarkupLine($"[grey]Wikidata labels not stored because they are scientific names: {scientificLabels:N0}[/]");
+            AnsiConsole.MarkupLine($"[grey]Skipped as scientific names: {scientificLabels:N0} English labels[/]");
         }, cancellationToken);
     }
 
@@ -865,8 +865,8 @@ internal sealed class CommonNameAggregateCommand : AsyncCommand<CommonNameAggreg
                 $"skipped as scientific names: {scientificTitles} titles, {scientificTaxoboxNames} taxobox names, " +
                 $"{anotherTaxonsPage} taxa matched through a synonym to another taxon's page");
             AnsiConsole.MarkupLine($"[green]Wikipedia:[/] {titleAdded:N0} titles + {taxoboxAdded:N0} taxobox names from {matched:N0} matched pages, [blue]{created:N0}[/] taxa created");
-            AnsiConsole.MarkupLine($"[grey]Not stored because they are scientific names: {scientificTitles:N0} titles, {scientificTaxoboxNames:N0} taxobox names[/]");
-            AnsiConsole.MarkupLine($"[grey]Taxa matched through a synonym to another taxon's page, so given no names from it: {anotherTaxonsPage:N0}[/]");
+            AnsiConsole.MarkupLine($"[grey]Skipped as scientific names: {scientificTitles:N0} titles, {scientificTaxoboxNames:N0} taxobox names[/]");
+            AnsiConsole.MarkupLine($"[grey]Skipped {anotherTaxonsPage:N0} taxa matched through a synonym to a page that is matched to another taxon by name[/]");
         }, cancellationToken);
     }
 
