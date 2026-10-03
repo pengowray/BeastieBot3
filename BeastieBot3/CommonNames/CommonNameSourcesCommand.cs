@@ -36,24 +36,29 @@ internal sealed class CommonNameSourcesCommand : AsyncCommand<CommonNameSourcesC
     /// (Wikidata labels arrive with the rest of Wikidata), and a replacement is recorded against
     /// that name.
     /// </param>
+    /// <param name="StoredAs">
+    /// The common_names.source values this row's names are stored under; its Records count is their
+    /// sum. Wikipedia stores article titles and taxobox names separately.
+    /// </param>
     private sealed record SourceDefinition(
         string Id,
         string Name,
         string ImportType,
         string AggregateSource,
+        string[] StoredAs,
         Func<PathsService, string?> GetPath
     );
 
     private static readonly SourceDefinition[] Sources = {
-        new("iucn", "IUCN Red List", "common_names_iucn", "iucn",
+        new("iucn", "IUCN Red List", "common_names_iucn", "iucn", ["iucn"],
             paths => paths.GetIucnApiCachePath()),
-        new("wikidata", "Wikidata", "common_names_wikidata", "wikidata",
+        new("wikidata", "Wikidata", "common_names_wikidata", "wikidata", ["wikidata"],
             paths => paths.GetWikidataCachePath()),
-        new("wikidata_label", "Wikidata item labels", "common_names_wikidata_labels", "wikidata",
+        new("wikidata_label", "Wikidata item labels", "common_names_wikidata_labels", "wikidata", ["wikidata_label"],
             paths => paths.GetWikidataCachePath()),
-        new("wikipedia", "Wikipedia", "common_names_wikipedia", "wikipedia",
+        new("wikipedia", "Wikipedia", "common_names_wikipedia", "wikipedia", ["wikipedia_title", "wikipedia_taxobox"],
             paths => paths.GetWikipediaCachePath()),
-        new("col", "Catalogue of Life", "common_names_col", "col",
+        new("col", "Catalogue of Life", "common_names_col", "col", ["col"],
             paths => paths.GetColSqlitePath()),
     };
 
@@ -105,7 +110,9 @@ internal sealed class CommonNameSourcesCommand : AsyncCommand<CommonNameSourcesC
             var availableText = isAvailable ? "[green]Yes[/]" : "[dim]No[/]";
 
             var hasRun = importRunsByType.TryGetValue(source.ImportType, out var runSummary) && runSummary.HasCompleted;
-            var rowCount = countsBySource.TryGetValue(source.Id, out var c) ? c : 0;
+            // The names stored now. The import runs' totals count every name each run added, so for
+            // Wikipedia, whose stored names did not match the row's Id, it showed the sum of all runs.
+            var rowCount = source.StoredAs.Sum(tag => countsBySource.GetValueOrDefault(tag));
             var aggregated = hasRun || rowCount > 0;
             var aggregatedText = aggregated ? "[green]Yes[/]" : "[dim]No[/]";
             var recordsText = rowCount > 0 ? rowCount.ToString("N0")
