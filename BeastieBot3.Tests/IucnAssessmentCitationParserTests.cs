@@ -247,25 +247,6 @@ public class IucnAssessmentCitationParserTests {
         Assert.Null(IucnAssessmentCitationParser.Parse("""{"assessment_id":1,"scopes":[{"code":"1"}]}""", Downloaded));
     }
 
-    // ------------------------------------------------------------ citation helpers
-
-    [Fact]
-    public void StripAccessedOn_RemovesOnlyTheAccessDate() {
-        Assert.Equal(
-            "Konan, K.M. 2025. Macrobrachium thysi (amended version of 2024 assessment). The IUCN Red List of Threatened Species 2025: e.T197913A286613460.",
-            IucnAssessmentCitationParser.StripAccessedOn("Konan, K.M. 2025. Macrobrachium thysi (amended version of 2024 assessment). The IUCN Red List of Threatened Species 2025: e.T197913A286613460. Accessed on 18 August 2026."));
-        Assert.Equal("No access date.", IucnAssessmentCitationParser.StripAccessedOn("No access date."));
-    }
-
-    [Fact]
-    public void ExtractDoi_KeepsLanguageSuffix_IgnoresDoiInsideSpeciesNames() {
-        Assert.Equal(
-            "10.2305/IUCN.UK.2025-2.RLTS.T218171971A286370469.es",
-            IucnAssessmentCitationParser.ExtractDoi("Example 2025. Example name. The IUCN Red List of Threatened Species 2025: e.T218171971A286370469. https://dx.doi.org/10.2305/IUCN.UK.2025-2.RLTS.T218171971A286370469.es. Accessed on 18 August 2026."));
-        Assert.Null(IucnAssessmentCitationParser.ExtractDoi("BirdLife International 2025. Turdoides leucopygia. The IUCN Red List of Threatened Species 2025: e.T22716443A280957797. Accessed on 18 August 2026."));
-        Assert.Null(IucnAssessmentCitationParser.ExtractDoi(null));
-    }
-
     // ------------------------------------------------------------ credits blocks and value[] counts
 
     private static IReadOnlyList<IucnCredit> Credits(string creditsJson) {

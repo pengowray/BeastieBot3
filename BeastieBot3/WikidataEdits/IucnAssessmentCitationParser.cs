@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
 using System.Text.Json;
-using System.Text.RegularExpressions;
 using BeastieBot3.Iucn.Citations;
 
 // Reads one cached /api/v4/assessment/{id} payload into an IucnGlobalAssessment: the fields a
@@ -58,7 +57,7 @@ internal static class IucnAssessmentCitationParser {
         }
 
         var rawCitation = GetString(root, "citation");
-        var citation = string.IsNullOrWhiteSpace(rawCitation) ? null : StripAccessedOn(rawCitation);
+        var citation = string.IsNullOrWhiteSpace(rawCitation) ? null : IucnCitationText.StripAccessedOn(rawCitation);
         var url = GetString(root, "url");
 
         return new IucnGlobalAssessment {
@@ -77,7 +76,7 @@ internal static class IucnAssessmentCitationParser {
                 ? $"https://www.iucnredlist.org/species/{taxonId.Value}/{assessmentId.Value}"
                 : url.Trim(),
             Citation = string.IsNullOrWhiteSpace(citation) ? null : citation,
-            Doi = ExtractDoi(rawCitation),
+            Doi = IucnCitationText.ExtractDoi(rawCitation),
             Credits = ReadCredits(root),
             DownloadedAtUtc = downloadedAtUtc,
             IsAmended = root.TryGetProperty("errata", out var errata)
@@ -102,26 +101,6 @@ internal static class IucnAssessmentCitationParser {
         || scopes.GetArrayLength() == 0;
 
     // ------------------------------------------------------------ citation
-
-    private static readonly Regex AccessedOnPattern = new(
-        @"\s*Accessed on\b[^.]*\.?\s*$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
-
-    private static readonly Regex DoiPattern = new(
-        @"doi\.org/(10\.\d{4,9}/\S+)", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant | RegexOptions.Compiled);
-
-    /// Removes IUCN's trailing "Accessed on 18 August 2026." (the date the payload was fetched).
-    public static string StripAccessedOn(string citation) =>
-        AccessedOnPattern.Replace(citation ?? string.Empty, string.Empty).Trim();
-
-    /// The DOI a citation links to ("10.2305/IUCN.UK.2025-2.RLTS.T22732931A250382422.en"), or null.
-    /// The DOI's own last segment is ".en"/".es"; a dot after that is the sentence's.
-    public static string? ExtractDoi(string? citation) {
-        if (string.IsNullOrWhiteSpace(citation)) return null;
-        var match = DoiPattern.Match(citation);
-        if (!match.Success) return null;
-        var doi = match.Groups[1].Value.TrimEnd('.', ',', ';', ')');
-        return doi.Length > "10.1/".Length ? doi : null;
-    }
 
     private static DateOnly? ParseAssessmentDate(string? text) {
         if (string.IsNullOrWhiteSpace(text)) return null;
