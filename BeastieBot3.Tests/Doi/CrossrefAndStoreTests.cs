@@ -167,6 +167,10 @@ public class CrossrefAndStoreTests {
         Assert.Equal(new long[] { 3 }, plain.ToCheck.Select(t => t.AssessmentId));
         Assert.Equal(1, plain.CheckedFound);
         Assert.Equal(1, plain.CheckedNotFound);
+        Assert.Equal(0, plain.NotFoundWithoutLookups);
+
+        var withoutLookups = new Dictionary<long, DoiCheckRow>(checks) { [3] = new(3, 1, null, now, 0) };
+        Assert.Equal(1, DoiRunPlan.Make(targets, withoutLookups, false, null, now).NotFoundWithoutLookups);
 
         var all = DoiRunPlan.Make(targets, checks, recheck: true, recheckMissingAfter: null, now);
         Assert.Equal(new long[] { 1, 2, 3 }, all.ToCheck.Select(t => t.AssessmentId));

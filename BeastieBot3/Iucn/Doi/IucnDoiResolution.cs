@@ -68,7 +68,36 @@ internal static class DoiLookupVerdicts {
     public const string FailsIdCheck = "exists, ids do not fit";
 }
 
+/// Which assessments that Crossref's list does not have are checked at doi.org.
+internal enum DoiOrgMode {
+    /// Those published in the year Crossref's list was downloaded or the year before, and those new
+    /// in the current release: the only ones a DOI registered after the download could belong to.
+    /// In October 2026 Crossref's list had every one of 382,000 IUCN DOIs known from IUCN's
+    /// citations, GBIF and Wikidata, and doi.org found none of the 185 latest global assessments
+    /// missing from it, so older assessments are not looked up.
+    Recent,
+    All,
+    Never,
+}
+
 internal static class IucnDoiResolution {
+    public static DoiOrgMode? ParseDoiOrgMode(string? text) => text?.Trim().ToLowerInvariant() switch {
+        null or "" or "recent" => DoiOrgMode.Recent,
+        "all" => DoiOrgMode.All,
+        "never" => DoiOrgMode.Never,
+        _ => null,
+    };
+
+    /// Whether an assessment Crossref's list does not have is checked at doi.org. Pure.
+    public static bool ShouldCheckAtDoiOrg(DoiTarget target, DoiOrgMode mode, DateTime listingDownloadedUtc) => mode switch {
+        DoiOrgMode.All => true,
+        DoiOrgMode.Never => false,
+        _ => target.NewInRelease is not null || target.YearPublished >= RecentFromYear(listingDownloadedUtc),
+    };
+
+    /// The first year a Recent check covers: the year before Crossref's list was downloaded.
+    public static int RecentFromYear(DateTime listingDownloadedUtc) => listingDownloadedUtc.Year - 1;
+
     /// Whether the DOI fits the assessment by IucnDoiSelector's id rules.
     public static bool FitsIds(DoiTarget target, string doi) =>
         IucnDoiSelector.IsAccepted(IucnDoiSelector.Check(PartsFor(target), doi, target.PredecessorIds));

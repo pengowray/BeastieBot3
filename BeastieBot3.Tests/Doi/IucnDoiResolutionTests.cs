@@ -86,6 +86,32 @@ public class IucnDoiResolutionTests {
         Assert.Equal(new CrossrefChoice(null, null), IucnDoiResolution.ChooseFromCrossref(Target(5, 10, 2020), []));
     }
 
+    // ------------------------------------------------------------ which assessments go to doi.org
+
+    [Theory]
+    [InlineData(null, "Recent")]
+    [InlineData("all", "All")]
+    [InlineData(" NEVER ", "Never")]
+    [InlineData("sometimes", null)]
+    public void ParseDoiOrgMode(string? text, string? expected) {
+        Assert.Equal(expected, IucnDoiResolution.ParseDoiOrgMode(text)?.ToString());
+    }
+
+    [Theory]
+    [InlineData(2026, null, true)]
+    [InlineData(2025, null, true)]
+    [InlineData(2024, null, false)]
+    [InlineData(2010, null, false)]
+    [InlineData(2010, "2026-1", true)]
+    [InlineData(null, null, false)]
+    public void Recent_ChecksThisYearAndLastYear_AndAssessmentsNewInThisRelease(int? year, string? newIn, bool expected) {
+        var listing = new DateTime(2026, 10, 3, 0, 39, 0, DateTimeKind.Utc);
+        var target = Target(1, 2, year) with { NewInRelease = newIn };
+        Assert.Equal(expected, IucnDoiResolution.ShouldCheckAtDoiOrg(target, DoiOrgMode.Recent, listing));
+        Assert.True(IucnDoiResolution.ShouldCheckAtDoiOrg(target, DoiOrgMode.All, listing));
+        Assert.False(IucnDoiResolution.ShouldCheckAtDoiOrg(target, DoiOrgMode.Never, listing));
+    }
+
     // ------------------------------------------------------------ doi.org
 
     [Fact]

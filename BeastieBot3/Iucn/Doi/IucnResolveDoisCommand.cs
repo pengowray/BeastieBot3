@@ -14,7 +14,9 @@ using Spectre.Console.Cli;
 //      downloaded when the cache has none from the last 7 days. An assessment whose DOI is in it is
 //      settled with no further request.
 //   3. For the rest, likely DOIs (IucnDoiCandidates) are checked one by one at doi.org's handle API
-//      until one exists (IucnDoiResolution).
+//      until one exists (IucnDoiResolution). By default only assessments published in the year the
+//      list was downloaded or the year before, or new in this release, are checked there
+//      (DoiOrgMode.Recent); the others are saved with no DOI and no lookups.
 //
 // Each assessment's result is saved as soon as it is known, so a stopped run loses nothing and the
 // next run starts where it stopped. Assessments already in doi_check are skipped unless --recheck
@@ -23,7 +25,7 @@ using Spectre.Console.Cli;
 namespace BeastieBot3.Iucn.Doi;
 
 [CommandInfo("iucn resolve-dois", CommandKind.Mutates,
-    "Find the DOIs of IUCN Red List assessments that have no DOI in IUCN's citation, GBIF's checklist or Wikidata, and save them in Datastore:IUCN_doi_cache_sqlite. Looks each assessment up in Crossref's list of IUCN DOIs, then checks likely DOIs at doi.org.",
+    "Find the DOIs of IUCN Red List assessments that have no DOI in IUCN's citation, GBIF's checklist or Wikidata, and save them in Datastore:IUCN_doi_cache_sqlite. Looks each assessment up in Crossref's list of IUCN DOIs. For recent assessments missing from that list, checks likely DOIs at doi.org.",
     Rerun = RerunEffect.IdempotentAdd,
     RerunNote = "Skips assessments already checked. --recheck checks every assessment in the scope again, and --recheck-missing-after <DAYS> checks again the assessments whose last check, at least that many days ago, found no DOI.",
     ReportOnlyWith = new[] { "--status" },
@@ -32,7 +34,8 @@ namespace BeastieBot3.Iucn.Doi;
         "iucn resolve-dois --limit 50",
         "iucn resolve-dois",
         "iucn resolve-dois --scope latest-regional",
-        "iucn resolve-dois --scope history --no-doi-org",
+        "iucn resolve-dois --scope history",
+        "iucn resolve-dois --scope latest-regional --doi-org all --recheck-missing-after 0",
     })]
 internal sealed class IucnResolveDoisCommand : AsyncCommand<IucnResolveDoisCommand.Settings> {
     public const string UserAgent = "BeastieBot3/1.0 (+https://en.wikipedia.org/wiki/User:Beastie_Bot)";
@@ -66,13 +69,13 @@ internal sealed class IucnResolveDoisCommand : AsyncCommand<IucnResolveDoisComma
         [Description("Skip Crossref's list of IUCN DOIs and check every assessment at doi.org.")]
         public bool NoCrossref { get; init; }
 
+        [CommandOption("--doi-org <WHEN>")]
+        [Description("Which assessments missing from Crossref's list to check at doi.org: recent (default: published this year or last year, or new in this release), all, or never. The others are saved with no DOI.")]
+        public string? DoiOrg { get; init; }
+
         [CommandOption("--refresh-crossref")]
         [Description("Download Crossref's list of IUCN DOIs again, even when the cache has a copy from the last 7 days.")]
         public bool RefreshCrossref { get; init; }
-
-        [CommandOption("--no-doi-org")]
-        [Description("Use only Crossref's list of IUCN DOIs. Assessments not in the list stay unchecked, so a later run can check them at doi.org.")]
-        public bool NoDoiOrg { get; init; }
 
         [CommandOption("--status")]
         [Description("Show how many assessments in the scope have a DOI, and from which source, then stop. Sends no requests and saves nothing.")]
@@ -99,8 +102,11 @@ internal sealed class IucnResolveDoisCommand : AsyncCommand<IucnResolveDoisComma
             if (DelayMs < 0) {
                 return ValidationResult.Error("--delay must be 0 or more milliseconds.");
             }
-            if (NoCrossref && NoDoiOrg) {
-                return ValidationResult.Error("Use --no-crossref or --no-doi-org, not both.");
+            if (IucnDoiResolution.ParseDoiOrgMode(DoiOrg) is not { } mode) {
+                return ValidationResult.Error("--doi-org must be recent, all or never.");
+            }
+            if (NoCrossref && mode == DoiOrgMode.Never) {
+                return ValidationResult.Error("Use --no-crossref or --doi-org never, not both.");
             }
             return ValidationResult.Success();
         }
@@ -193,7 +199,8 @@ internal sealed class IucnResolveDoisCommand : AsyncCommand<IucnResolveDoisComma
                 }
             }
 
-            await CheckAsync(store, toCheck, settings, lookup, summary, cancellationToken).ConfigureAwait(false);
+            var mode = settings.NoCrossref ? DoiOrgMode.All : IucnDoiResolution.ParseDoiOrgMode(settings.DoiOrg)!.Value;
+            await CheckAsync(store, toCheck, settings.NoCrossref, mode, listing?.CompletedAtUtc ?? now, lookup, summary, cancellationToken).ConfigureAwait(false);
         } catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) {
             AnsiConsole.MarkupLine("[yellow]Stopped. Every result found so far is saved; run the command again to continue.[/]");
             Finish();
@@ -228,8 +235,8 @@ internal sealed class IucnResolveDoisCommand : AsyncCommand<IucnResolveDoisComma
         }
     }
 
-    private static async Task CheckAsync(IucnDoiCacheStore store, IReadOnlyList<DoiTarget> toCheck, Settings settings,
-        IDoiHandleLookup lookup, DoiRunSummary summary, CancellationToken cancellationToken) {
+    private static async Task CheckAsync(IucnDoiCacheStore store, IReadOnlyList<DoiTarget> toCheck, bool noCrossref, DoiOrgMode mode,
+        DateTime listingUtc, IDoiHandleLookup lookup, DoiRunSummary summary, CancellationToken cancellationToken) {
         if (toCheck.Count == 0) {
             return;
         }
@@ -242,7 +249,7 @@ internal sealed class IucnResolveDoisCommand : AsyncCommand<IucnResolveDoisComma
                 summary.Checked++;
 
                 string? crossrefNote = null;
-                if (!settings.NoCrossref) {
+                if (!noCrossref) {
                     var choice = IucnDoiResolution.ChooseFromCrossref(target, store.CrossrefWorksFor(target.AssessmentId));
                     if (choice.Doi is { } crossrefDoi) {
                         store.SaveCheck(new DoiCheckRow(target.AssessmentId, target.TaxonId, crossrefDoi, DateTime.UtcNow, 0),
@@ -252,13 +259,17 @@ internal sealed class IucnResolveDoisCommand : AsyncCommand<IucnResolveDoisComma
                         Progress(progress, summary);
                         continue;
                     }
-                    if (settings.NoDoiOrg) {
-                        year.NotInCrossref++;
-                        summary.NotInCrossref++;
+                    crossrefNote = choice.Note;
+                    if (!IucnDoiResolution.ShouldCheckAtDoiOrg(target, mode, listingUtc)) {
+                        var note = $"Not in Crossref's list of IUCN DOIs downloaded {listingUtc:yyyy-MM-dd}; not checked at doi.org.";
+                        store.SaveCheck(new DoiCheckRow(target.AssessmentId, target.TaxonId, null, DateTime.UtcNow, 0),
+                            null, target.Scope, target.YearPublished, crossrefNote is null ? note : crossrefNote + " " + note, Array.Empty<DoiLookupLogRow>());
+                        year.NotFound++;
+                        summary.NotFound++;
+                        summary.NotLookedUp++;
                         Progress(progress, summary);
                         continue;
                     }
-                    crossrefNote = choice.Note;
                 }
                 var answered = await ProbeAndSaveAsync(store, target, lookup, crossrefNote, year, summary, cancellationToken).ConfigureAwait(false);
                 unexpectedInARow = answered ? 0 : unexpectedInARow + 1;
@@ -326,6 +337,9 @@ internal sealed class IucnResolveDoisCommand : AsyncCommand<IucnResolveDoisComma
         table.AddRow("No DOI from these sources", $"{counts.Targets:N0}");
         table.AddRow("  Checked, DOI found", $"{plan.CheckedFound:N0}");
         table.AddRow("  Checked, no DOI found", $"{plan.CheckedNotFound:N0}");
+        if (plan.NotFoundWithoutLookups > 0) {
+            table.AddRow("    of which not checked at doi.org", $"{plan.NotFoundWithoutLookups:N0}");
+        }
         table.AddRow("  To check", $"{plan.ToCheck.Count:N0}");
         if (counts.NoPayload > 0) {
             table.AddRow("  of which with no cached API payload", $"{counts.NoPayload:N0}");
@@ -342,14 +356,11 @@ internal sealed class IucnResolveDoisCommand : AsyncCommand<IucnResolveDoisComma
     private static void WriteSummary(string scopeName, DoiRunSummary summary, DoiRunPlan cache) {
         var table = new Table().Title($"DOI checks this run, scope {scopeName}")
             .AddColumn("Year published")
-            .AddColumn(new TableColumn("Checked").RightAligned())
-            .AddColumn(new TableColumn("Found in Crossref's list").RightAligned())
-            .AddColumn(new TableColumn("Found at doi.org").RightAligned())
-            .AddColumn(new TableColumn("No DOI found").RightAligned())
+            .AddColumn(new TableColumn("Assessments").RightAligned())
+            .AddColumn(new TableColumn("DOI in Crossref's list").RightAligned())
+            .AddColumn(new TableColumn("DOI found at doi.org").RightAligned())
+            .AddColumn(new TableColumn("No DOI").RightAligned())
             .AddColumn(new TableColumn("doi.org lookups").RightAligned());
-        if (summary.NotInCrossref > 0) {
-            table.AddColumn(new TableColumn("Not in Crossref's list, not checked").RightAligned());
-        }
         if (summary.Errors > 0) {
             table.AddColumn(new TableColumn("Unexpected answers").RightAligned());
         }
@@ -357,7 +368,6 @@ internal sealed class IucnResolveDoisCommand : AsyncCommand<IucnResolveDoisComma
             var cells = new List<string> {
                 label, $"{c.Checked:N0}", $"{c.FoundCrossref:N0}", $"{c.FoundDoiOrg:N0}", $"{c.NotFound:N0}", $"{c.Lookups:N0}",
             };
-            if (summary.NotInCrossref > 0) cells.Add($"{c.NotInCrossref:N0}");
             if (summary.Errors > 0) cells.Add($"{c.Errors:N0}");
             table.AddRow(cells.ToArray());
         }
@@ -368,30 +378,38 @@ internal sealed class IucnResolveDoisCommand : AsyncCommand<IucnResolveDoisComma
         AnsiConsole.Write(table);
 
         var perAssessment = summary.Probed == 0 ? 0 : (double)summary.DoiOrgRequests / summary.Probed;
+        if (summary.NotLookedUp > 0) {
+            AnsiConsole.MarkupLineInterpolated($"{summary.NotLookedUp:N0} of the assessments with no DOI were not checked at doi.org: they are not in Crossref's list and are older than --doi-org recent covers. To check them too, run again with --doi-org all --recheck-missing-after 0.");
+        }
         AnsiConsole.MarkupLineInterpolated($"Requests to doi.org: {summary.DoiOrgRequests:N0} for {summary.Probed:N0} assessments ({perAssessment:0.##} each). HTTP 429 answers: {summary.RateLimited:N0}.");
         AnsiConsole.MarkupLineInterpolated($"DOI cache, scope {scopeName}: {cache.CheckedFound:N0} assessments with a DOI, {cache.CheckedNotFound:N0} with no DOI found, {cache.ToCheck.Count:N0} not checked yet.");
     }
 }
 
 /// Which targets a run checks, and how many were settled by earlier runs.
-internal sealed record DoiRunPlan(IReadOnlyList<DoiTarget> ToCheck, int CheckedFound, int CheckedNotFound) {
+internal sealed record DoiRunPlan(IReadOnlyList<DoiTarget> ToCheck, int CheckedFound, int CheckedNotFound, int NotFoundWithoutLookups = 0) {
     /// Pure: a target is checked when it has no doi_check row, or with recheck, or when its row
     /// found no DOI and is at least recheckMissingAfter old.
     public static DoiRunPlan Make(IReadOnlyList<DoiTarget> targets, IReadOnlyDictionary<long, DoiCheckRow> checks, bool recheck,
         TimeSpan? recheckMissingAfter, DateTime nowUtc) {
         var toCheck = new List<DoiTarget>();
-        int found = 0, notFound = 0;
+        int found = 0, notFound = 0, withoutLookups = 0;
         foreach (var target in targets) {
             if (!checks.TryGetValue(target.AssessmentId, out var row)) {
                 toCheck.Add(target);
                 continue;
             }
-            if (row.Doi is null) notFound++; else found++;
+            if (row.Doi is null) {
+                notFound++;
+                if (row.CandidatesTried == 0) withoutLookups++;
+            } else {
+                found++;
+            }
             if (recheck || (row.Doi is null && recheckMissingAfter is { } age && nowUtc - row.CheckedAtUtc >= age)) {
                 toCheck.Add(target);
             }
         }
-        return new DoiRunPlan(toCheck, found, notFound);
+        return new DoiRunPlan(toCheck, found, notFound, withoutLookups);
     }
 }
 
@@ -400,7 +418,6 @@ internal sealed class DoiYearCounts {
     public int FoundCrossref { get; set; }
     public int FoundDoiOrg { get; set; }
     public int NotFound { get; set; }
-    public int NotInCrossref { get; set; }
     public int Errors { get; set; }
     public int Lookups { get; set; }
 }
@@ -414,8 +431,9 @@ internal sealed class DoiRunSummary {
     public int FoundCrossref { get; set; }
     public int FoundDoiOrg { get; set; }
     public int NotFound { get; set; }
-    public int NotInCrossref { get; set; }
     public int Errors { get; set; }
+    /// Assessments not in Crossref's list that --doi-org left out; saved with no DOI.
+    public int NotLookedUp { get; set; }
     /// Assessments with at least one doi.org lookup.
     public int Probed { get; set; }
     public int DoiOrgRequests { get; set; }
@@ -435,7 +453,6 @@ internal sealed class DoiRunSummary {
         FoundCrossref = ByYear.Values.Sum(c => c.FoundCrossref),
         FoundDoiOrg = ByYear.Values.Sum(c => c.FoundDoiOrg),
         NotFound = ByYear.Values.Sum(c => c.NotFound),
-        NotInCrossref = ByYear.Values.Sum(c => c.NotInCrossref),
         Errors = ByYear.Values.Sum(c => c.Errors),
         Lookups = ByYear.Values.Sum(c => c.Lookups),
     };
