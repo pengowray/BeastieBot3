@@ -643,6 +643,10 @@ textarea {
     margin: 0.2rem 0;
 }
 
+.options-form .option-extra {
+    margin-top: 0.6rem;
+}
+
 .options-form input[type="text"] {
     font: inherit;
     padding: 0.2rem 0.4rem;

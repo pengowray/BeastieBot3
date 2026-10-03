@@ -19,7 +19,7 @@ public static class SiteCachePolicies {
     public const string DatabaseTag = "site-db";
 
     /// The query parameters a taxon page reads (Species.cshtml.cs and WikitextOptions).
-    public static readonly string[] SpeciesQueryKeys = ["assessment", "authors", "access", "opts", "ref", "refname", "amp", "q"];
+    public static readonly string[] SpeciesQueryKeys = ["assessment", "authors", "fullnames", "access", "opts", "ref", "refname", "amp", "q"];
 
     private static readonly TimeSpan Lifetime = TimeSpan.FromHours(1);
 

@@ -20,6 +20,20 @@ public sealed record LanguageGroup(string Language, string? Lang, IReadOnlyList<
 /// the text.
 public sealed record WikitextBox(string Id, string Label, string Template, string Text, int Rows);
 
+/// How many of a citation's authors have full given names (CitationAuthor.GivenNames), out of the
+/// authors who are people or names kept as published, with the first of them as an example.
+public sealed record GivenNamesCoverage(int WithGivenNames, int People, CitationAuthor Example) {
+    /// Null when no author has full given names, so the option is not shown.
+    public static GivenNamesCoverage? Of(IucnCitationParts parts) {
+        var named = parts.Authors.Where(a => !string.IsNullOrWhiteSpace(a.GivenNames)).ToList();
+        if (named.Count == 0) {
+            return null;
+        }
+        var people = parts.Authors.Count(a => a.Kind != CitationAuthorKind.Organisation || !string.IsNullOrWhiteSpace(a.GivenNames));
+        return new GivenNamesCoverage(named.Count, people, named[0]);
+    }
+}
+
 [OutputCache(PolicyName = SiteCachePolicies.Species)]
 [ResponseCache(Duration = 600, Location = ResponseCacheLocation.Any)]
 public sealed class SpeciesModel : PageModel {
@@ -76,6 +90,9 @@ public sealed class SpeciesModel : PageModel {
     public string? DownloadDateText { get; private set; }
     public string TodayText { get; private set; } = string.Empty;
 
+    /// For the full given names option, which is shown only when this is not null.
+    public GivenNamesCoverage? GivenNames { get; private set; }
+
     /// The taxobox an article about this taxon most likely uses, which names the status parameters box.
     public TaxoboxTemplate Taxobox { get; private set; } = TaxoboxTemplate.Speciesbox;
 
@@ -96,7 +113,7 @@ public sealed class SpeciesModel : PageModel {
     public string? DataDateRange { get; private set; }
 
     public IActionResult OnGet(long taxonId, long? assessment, string? authors, string? access, string? opts,
-        [FromQuery(Name = "ref")] string? wrapRef, string? refname, string? amp, string? q) {
+        [FromQuery(Name = "ref")] string? wrapRef, string? refname, string? amp, string? fullnames, string? q) {
         RequestedTaxonId = taxonId;
         var snapshot = _db.Snapshot;
         Version = snapshot?.IucnRelease;
@@ -118,7 +135,7 @@ public sealed class SpeciesModel : PageModel {
         EpbcListings = _queries.GetEpbcListings(Taxon.TaxonId);
         LoadAssessments(assessment);
         Options = WikitextOptions.FromQuery(authors, access, opts, wrapRef, refname, amp,
-            Selected is null ? DefaultRefNames.LatestGlobal : DefaultRefNameFor(Selected));
+            Selected is null ? DefaultRefNames.LatestGlobal : DefaultRefNameFor(Selected), fullnames);
         Taxobox = TaxoboxTemplate.For(Taxon.Kind, Taxon.Kingdom);
         BuildWikitext();
         LoadNames();
@@ -188,17 +205,8 @@ public sealed class SpeciesModel : PageModel {
         if (Parts is not null) {
             DateOnly? downloaded = Parts.DownloadedAtUtc is { } at ? DateOnly.FromDateTime(at) : null;
             DownloadDateText = downloaded is { } d ? SiteFormat.Date(d) : null;
-            citeOptions = new CiteIucnOptions {
-                AuthorStyle = Options.AuthorStyle,
-                AccessDate = Options.Access switch {
-                    WikitextOptions.AccessToday => today,
-                    WikitextOptions.AccessNone => null,
-                    _ => downloaded,
-                },
-                WrapInRef = Options.WrapInRef,
-                RefName = Options.RefName,
-                NameListStyleAmp = Options.Amp,
-            };
+            citeOptions = Options.ToCiteIucnOptions(today, downloaded);
+            GivenNames = GivenNamesCoverage.Of(Parts);
             var cite = CiteIucnRenderer.Render(Parts, citeOptions);
             boxes.Add(new WikitextBox("wikitext-cite", SiteText.LabelCite, "{{cite iucn}}", cite, Rows: 5));
 

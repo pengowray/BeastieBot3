@@ -162,6 +162,25 @@ public static class SiteText {
     public const string AuthorsLabel = "Author names";
     public const string AuthorsAuthorHtml = "<code>|author=Surname, I.</code> <code>|author2=</code> … (used in most articles)";
     public const string AuthorsLastFirstHtml = "<code>|last1=Surname</code> <code>|first1=I.</code> (as in the {{cite iucn}} documentation)";
+    public const string FullGivenNames = "Full given names instead of initials";
+
+    /// Help line of the full given names option. withNames: how many authors IUCN gives full given
+    /// names for, out of people (authors who are not organisations). given and published: one of
+    /// them, as "Catherine" and "Sayer, C.".
+    public static string FullGivenNamesHelp(int withNames, int people, string given, string published) {
+        var example = $"“{given}” for “{published}”";
+        if (people <= 1) {
+            return $"IUCN gives this author's full given names: {example}.";
+        }
+        if (withNames >= people) {
+            return people == 2
+                ? $"IUCN gives full given names for both authors, such as {example}."
+                : $"IUCN gives full given names for all {people} authors, such as {example}.";
+        }
+        var others = people - withNames;
+        return $"IUCN gives full given names for {withNames} of the {people} authors, such as {example}. "
+            + (others == 1 ? "The other author is written as in IUCN's citation." : $"The other {others} authors are written as in IUCN's citation.");
+    }
     public const string AccessLabel = "Access date";
     public static string AccessDownload(string date) => $"Date downloaded from IUCN ({date})";
     public static string AccessToday(string date) => $"Today ({date}, UTC)";

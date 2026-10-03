@@ -6,11 +6,12 @@ using BeastieBot3.Site.Data;
 namespace BeastieBot3.Site.Pages;
 
 /// The citation options form on a taxon page, read from and written to the query string:
-///   authors=author|lastfirst   access=download|today|none   ref=1   refname=...   amp=1   opts=1
+///   authors=author|lastfirst   fullnames=1   access=download|today|none   ref=1   refname=...   amp=1   opts=1
 /// Unticked checkboxes are not sent by the browser, so the form also sends opts=1: with it, a
 /// missing ref or amp means "off" and a missing or empty refname means a plain <ref>; without it (a
-/// plain link) the defaults apply. An empty value and a missing one always mean the same thing,
-/// because the output cache cannot tell them apart.
+/// plain link) the defaults apply. fullnames is off by default, so it needs no opts=1: fullnames=1
+/// turns it on and anything else leaves it off. An empty value and a missing one always mean the
+/// same thing, because the output cache cannot tell them apart.
 ///
 /// DefaultRefName is the default ref name of the assessment the page shows (DefaultRefNames). A
 /// RefName equal to it is the default, not the visitor's choice, so links to other assessments
@@ -24,8 +25,11 @@ public sealed record WikitextOptions(CiteAuthorStyle AuthorStyle, string Access,
     public static readonly WikitextOptions Default =
         new(CiteAuthorStyle.AuthorN, AccessDownload, WrapInRef: true, DefaultRefNames.LatestGlobal, Amp: false, DefaultRefNames.LatestGlobal);
 
+    /// Full given names where IUCN lists them, instead of initials (CiteIucnOptions.FullGivenNames).
+    public bool FullGivenNames { get; init; }
+
     public static WikitextOptions FromQuery(string? authors, string? access, string? opts, string? wrapRef, string? refName, string? amp,
-        string defaultRefName = DefaultRefNames.LatestGlobal) {
+        string defaultRefName = DefaultRefNames.LatestGlobal, string? fullNames = null) {
         var formSent = opts == "1";
         var style = string.Equals(authors, "lastfirst", StringComparison.OrdinalIgnoreCase) ? CiteAuthorStyle.LastFirst : CiteAuthorStyle.AuthorN;
         var accessValue = access?.Trim().ToLowerInvariant() switch {
@@ -43,8 +47,35 @@ public sealed record WikitextOptions(CiteAuthorStyle AuthorStyle, string Access,
             formSent ? wrapRef == "1" : Default.WrapInRef,
             name,
             formSent ? amp == "1" : Default.Amp,
-            defaultRefName);
+            defaultRefName) {
+            FullGivenNames = fullNames == "1",
+        };
     }
+
+    /// The |access-date= these options give: today (the server's UTC date), the date the assessment
+    /// was downloaded from IUCN (null when that date is not known), or none.
+    public DateOnly? AccessDate(DateOnly today, DateOnly? downloaded) => Access switch {
+        AccessToday => today,
+        AccessNone => null,
+        _ => downloaded,
+    };
+
+    public CiteIucnOptions ToCiteIucnOptions(DateOnly today, DateOnly? downloaded) => new() {
+        AuthorStyle = AuthorStyle,
+        AccessDate = AccessDate(today, downloaded),
+        WrapInRef = WrapInRef,
+        RefName = RefName,
+        NameListStyleAmp = Amp,
+        FullGivenNames = FullGivenNames,
+    };
+
+    /// {{cite Q}} takes the same access date and ref options as {{cite iucn}}. Its authors come from
+    /// the Wikidata item, so the author options do not apply.
+    public CiteQOptions ToCiteQOptions(DateOnly today, DateOnly? downloaded) => new() {
+        AccessDate = AccessDate(today, downloaded),
+        WrapInRef = WrapInRef,
+        RefName = RefName,
+    };
 
     /// The ref name the visitor chose, or null when it is this page's default.
     public string? CustomRefName => RefName == DefaultRefName ? null : RefName;
@@ -59,6 +90,9 @@ public sealed record WikitextOptions(CiteAuthorStyle AuthorStyle, string Access,
         }
         if (AuthorStyle == CiteAuthorStyle.LastFirst) {
             parts.Add("authors=lastfirst");
+        }
+        if (FullGivenNames) {
+            parts.Add("fullnames=1");
         }
         if (Access != AccessDownload) {
             parts.Add("access=" + Access);
