@@ -38,9 +38,6 @@ public sealed class SiteQueries {
         return reader.Read() ? TaxonAt(reader) : null;
     }
 
-    // The number of columns in TaxonColumns, where the columns after them start.
-    private const int TaxonColumnCount = 19;
-
     private static TaxonRow TaxonAt(SqliteDataReader reader) => new(
         reader.GetInt64(0),
         reader.GetString(1),
@@ -63,21 +60,24 @@ public sealed class SiteQueries {
     public IReadOnlyList<TaxonLinkRow> GetLinkedTaxa(long taxonId) {
         using var connection = _db.OpenConnection();
         using var command = connection.CreateCommand();
+        // Ordered and read by column name, so columns added to TaxonColumns cannot shift them.
         command.CommandText = $"""
-            SELECT {TaxonColumns}, l.link_kind
-            FROM taxon_link l JOIN taxon t ON t.taxon_id = l.current_taxon_id
-            WHERE l.taxon_id = @id
-            UNION ALL
-            SELECT {TaxonColumns}, l.link_kind
-            FROM taxon_link l JOIN taxon t ON t.taxon_id = l.taxon_id
-            WHERE l.current_taxon_id = @id
-            ORDER BY 18 DESC, 1
+            SELECT * FROM (
+                SELECT {TaxonColumns}, l.link_kind AS link_kind
+                FROM taxon_link l JOIN taxon t ON t.taxon_id = l.current_taxon_id
+                WHERE l.taxon_id = @id
+                UNION ALL
+                SELECT {TaxonColumns}, l.link_kind AS link_kind
+                FROM taxon_link l JOIN taxon t ON t.taxon_id = l.taxon_id
+                WHERE l.current_taxon_id = @id)
+            ORDER BY in_release DESC, taxon_id
             """;
         command.Parameters.AddWithValue("@id", taxonId);
         using var reader = command.ExecuteReader();
+        var kind = reader.GetOrdinal("link_kind");
         var rows = new List<TaxonLinkRow>();
         while (reader.Read()) {
-            rows.Add(new TaxonLinkRow(TaxonAt(reader), reader.GetString(TaxonColumnCount)));
+            rows.Add(new TaxonLinkRow(TaxonAt(reader), reader.GetString(kind)));
         }
         return rows;
     }
