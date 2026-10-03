@@ -998,6 +998,7 @@ public static class FlowCatalogue {
                     Title = "Download GBIF's copy of the IUCN checklist",
                     Description = "`iucn gbif-download` downloads the IUCN Red List checklist that IUCN publishes on GBIF (CC BY 4.0) into the folder set in Datasets:GBIF_IUCN_dir. Most of the site's DOIs come from it: for nearly every globally assessed species, the checklist includes the citation of the latest global assessment with its DOI.",
                     Commands = new[] { "iucn gbif-download" },
+                    OutputSourceIds = new[] { "gbif-checklist" },
                     Probe = PublicSiteProbes.Gbif,
                     Group = "2 · Build the site database",
                     Note = "The download is about 21 MB. The command keeps the new zip only when it differs from the newest checklist zip already in the folder, and `site build-db` reads the newest zip. The status line under the step title shows which Red List release the newest zip is from, and whether the IUCN Red List database holds the same release.",
@@ -1007,7 +1008,10 @@ public static class FlowCatalogue {
                     Title = "Find missing DOIs",
                     Description = "`iucn resolve-dois` finds DOIs for assessments that have no DOI from IUCN's citation text, the GBIF checklist or Wikidata. It looks each assessment up in Crossref's list of IUCN DOIs, and for recent assessments that are not in that list, it checks likely DOIs at doi.org. It saves the results in the DOI cache (Datastore:IUCN_doi_cache_sqlite), which `site build-db` reads.",
                     Commands = new[] { "iucn resolve-dois", "iucn resolve-dois --scope latest-regional", "iucn resolve-dois --status" },
+                    // The GBIF checklist is read when it is there, so it is not an input: a missing
+                    // input blocks the step.
                     InputSourceIds = new[] { "iucn-main", "iucn-api-cache" },
+                    OutputSourceIds = new[] { "iucn-doi-cache" },
                     Probe = PublicSiteProbes.Dois,
                     Group = "2 · Build the site database",
                     Note = "Each run skips the assessments already in the DOI cache. The status line under this step's title counts latest global assessments only, the default --scope. --scope under Options also takes latest-regional, all-latest or history, and `site build-db` uses the DOIs found in every scope. After a new Red List release, run `iucn resolve-dois --refresh-crossref`, so that Crossref's list includes the new release's DOIs, then `iucn resolve-dois --scope latest-regional`. Without --refresh-crossref, a run downloads Crossref's list again (about 260 requests, 3 minutes) only when the cached copy is more than 7 days old. `iucn resolve-dois --status` prints the counts for a scope and sends no requests.",
@@ -1017,7 +1021,10 @@ public static class FlowCatalogue {
                     Title = "Build the site database",
                     Description = "`site build-db` builds the site database (Datastore:site_sqlite) from the IUCN Red List database, the IUCN API cache, the GBIF checklist, the DOI cache, the Common names store, the Wikidata and Wikipedia caches, the CoL placement and the SPRAT (EPBC) database. It writes the new database to a separate file and replaces the old one only when the build finishes.",
                     Commands = new[] { "site build-db" },
+                    // Only the required inputs: a missing input blocks the step, and the build
+                    // leaves out the others (GBIF checklist, DOI cache, ...) when they are missing.
                     InputSourceIds = new[] { "iucn-main", "iucn-api-cache" },
+                    OutputSourceIds = new[] { "site-sqlite" },
                     Probe = PublicSiteProbes.Build,
                     Group = "2 · Build the site database",
                     Note = "Only the IUCN Red List database and the IUCN API cache are required: the build leaves out any other input that is missing. For release 2026-1 the build takes about 65 seconds and writes about 410 MB. When the site database is older than its inputs, the status line under the step title names each input that changed after the build. --limit under Options builds a database of only the first N taxa. Unless you also set --output, that database replaces Datastore:site_sqlite, so build again without --limit before you deploy.",
@@ -1041,6 +1048,8 @@ public static class FlowCatalogue {
                     Id = "site-deploy-db",
                     Title = "Upload the site database to the server (manual)",
                     Description = "Run `deploy/oracle/deploy-db.sh` in a terminal, in the BeastieBot3 repository folder. It uploads the site database, switches the site on the server to it, and puts the previous database back if the site's health check fails.",
+                    // The file the script uploads unless deploy.env sets SITE_DB.
+                    InputSourceIds = new[] { "site-sqlite" },
                     Group = "3 · Deploy",
                     Note = "The deploy scripts read the server's address from deploy/oracle/deploy.env. deploy/oracle/README.md explains how to set up the server and that file.",
                     GuideTitle = "How to deploy the database",

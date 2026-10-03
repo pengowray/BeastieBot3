@@ -114,6 +114,8 @@ public sealed class FlowEvaluator {
             if (!string.IsNullOrWhiteSpace(first.Error)) return $"{first.Label}: count failed ({Brief(first.Error)})";
             return first.Label + ": n/a";
         }
+        // A folder holding one zip (the GBIF checklist, a CoL release) is the usual case.
+        if (first.Value == 1 && first.Label == StatusService.FilesLabel) return "1 file";
         return string.Format("{0:N0} {1}", first.Value, first.Label);
     }
 

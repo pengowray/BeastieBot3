@@ -27,6 +27,13 @@ public class FlowSourceHeadlineTests {
         })));
     }
 
+    [Theory]
+    [InlineData(1, "1 file")]
+    [InlineData(2, "2 files")]
+    public void A_folder_counts_its_files(long files, string expected) {
+        Assert.Equal(expected, FlowEvaluator.SummariseHeadline(Source(metrics: Metric("files", files)) with { Kind = "directory" }));
+    }
+
     [Fact]
     public void A_zero_count_is_still_shown_when_nothing_is_above_zero() {
         Assert.Equal("0 entities cached", FlowEvaluator.SummariseHeadline(Source(metrics: Metric("entities cached", 0))));

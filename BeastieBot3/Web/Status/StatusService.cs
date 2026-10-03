@@ -6,7 +6,10 @@ namespace BeastieBot3.Web.Status;
 // Collects a status snapshot for every data source in DataSourceCatalogue.
 //
 // SQLite databases are opened read-only with a short busy timeout, so dashboard
-// refreshes cannot contend with a running import (which uses WAL anyway).
+// refreshes cannot contend with a running import (which uses WAL anyway). They are
+// opened without pooling, so no handle stays open between refreshes: `site build-db`
+// replaces the site database by renaming a new file over it. A pooled handle kept
+// reading the old file on Linux and would block the rename on Windows.
 // Each metric query is wrapped in try/catch: missing tables in a freshly-
 // cloned environment are reported as null, not as fatal errors.
 //
@@ -19,6 +22,9 @@ namespace BeastieBot3.Web.Status;
 
 public sealed class StatusService {
     internal static readonly TimeSpan ReuseFor = TimeSpan.FromSeconds(5);
+
+    // The one count a folder's card has.
+    internal const string FilesLabel = "files";
 
     private readonly PathsService _paths;
     private readonly TimeProvider _clock;
@@ -91,7 +97,7 @@ public sealed class StatusService {
             var csb = new SqliteConnectionStringBuilder {
                 DataSource = path,
                 Mode = SqliteOpenMode.ReadOnly,
-                Cache = SqliteCacheMode.Shared,
+                Pooling = false,
             };
             using var conn = new SqliteConnection(csb.ConnectionString);
             conn.Open();
@@ -148,7 +154,7 @@ public sealed class StatusService {
                 SizeBytes = total,
                 LastModified = newest,
                 Metrics = new[] {
-                    new MetricResult { Label = "files", Value = files.Count },
+                    new MetricResult { Label = FilesLabel, Value = files.Count },
                 },
             };
         } catch (Exception ex) {
