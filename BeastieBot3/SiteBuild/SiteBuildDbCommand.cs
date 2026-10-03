@@ -233,6 +233,7 @@ internal sealed class SiteBuildDbCommand : Command<SiteBuildDbCommand.Settings> 
         Row("Taxa with a Wikidata item that states their IUCN taxon id (P627)", s.QidsFromP627);
         Row("Of those, items chosen from several", s.QidTieBreaks);
         Row("Taxa with a Wikidata item matched by name", s.QidsFromNameMatch);
+        Row("Wikidata items matched by name but left out: the item is a taxon in another kingdom", s.QidsNameMatchOtherKingdom);
         var items = s.WikidataItems;
         Row("Wikidata items for IUCN assessments in the Wikidata cache", items.Read);
         foreach (var (label, count) in items.KeptByClass.OrderByDescending(p => p.Value)) {

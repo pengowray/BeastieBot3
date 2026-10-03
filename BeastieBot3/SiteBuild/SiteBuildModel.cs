@@ -187,6 +187,7 @@ internal sealed class SiteBuildStats {
     public string? WikidataItemModelSource;
     public int QidsFromP627;
     public int QidsFromNameMatch;
+    public int QidsNameMatchOtherKingdom;
     public int QidTieBreaks;
     public int ColIdsFromPlacement;
     public int ColIdsFromCrossReference;

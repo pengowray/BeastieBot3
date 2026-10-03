@@ -365,6 +365,37 @@ internal static class SiteBuildRules {
     };
 
     private static string CollapseWhitespace(string text) => Whitespace.Replace(text, " ").Trim();
+
+    private static readonly System.Text.RegularExpressions.Regex RankOfGroup = new(
+        @"^(?:species|subspecies|genus|variety|form|subgenus) of (?:\w+ )*?(?<group>[^,;()]+?)\s*(?:[,;(]|$)",
+        System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.CultureInvariant);
+
+    /// <summary>
+    /// True when a Wikidata item's English description ("species of insect", "species of tree frog")
+    /// names a group that cannot be in <paramref name="taxonKingdom"/>, judged with the same word
+    /// table the Wikipedia matcher uses for bracketed qualifiers (WikiPageKingdom). An unknown group,
+    /// or no description, is not evidence.
+    /// </summary>
+    internal static bool DescribesAnotherKingdom(string? description, string? taxonKingdom) {
+        if (string.IsNullOrWhiteSpace(description) || string.IsNullOrWhiteSpace(taxonKingdom)) {
+            return false;
+        }
+        var match = RankOfGroup.Match(description.Trim());
+        if (!match.Success) {
+            return false;
+        }
+        var group = match.Groups["group"].Value.Trim();
+        var kingdoms = BeastieBot3.Wikipedia.WikiPageKingdom.FromQualifier($"x ({group})");
+        if (kingdoms is null && group.EndsWith('s')) {
+            // "genus of insects": the word table holds the singular.
+            kingdoms = BeastieBot3.Wikipedia.WikiPageKingdom.FromQualifier($"x ({group[..^1]})");
+        }
+        if (kingdoms is null || kingdoms.Count == 0) {
+            return false;
+        }
+        var own = taxonKingdom.Trim().ToUpperInvariant();
+        return !kingdoms.Contains(own, StringComparer.OrdinalIgnoreCase);
+    }
 }
 
 internal enum SpratNameKind {

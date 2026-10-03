@@ -129,14 +129,21 @@ internal static class SiteLinkReaders {
 
         using (var command = connection.CreateCommand()) {
             command.CommandText = """
-                SELECT iucn_taxon_id, entity_numeric_id
-                FROM wikidata_pending_iucn_matches
-                WHERE match_method IN ('TaxonName', 'CachedName') AND is_synonym = 0
+                SELECT m.iucn_taxon_id, m.entity_numeric_id, e.description_en
+                FROM wikidata_pending_iucn_matches m
+                LEFT JOIN wikidata_entities e ON e.entity_numeric_id = m.entity_numeric_id
+                WHERE m.match_method IN ('TaxonName', 'CachedName') AND m.is_synonym = 0
                 """;
             using var reader = command.ExecuteReader();
             while (reader.Read()) {
                 if (!long.TryParse(reader.GetString(0).Trim(), NumberStyles.None, CultureInfo.InvariantCulture, out var taxonId)
                     || !taxa.TryGetValue(taxonId, out var taxon) || taxon.WikidataQid is not null) {
+                    continue;
+                }
+                // A match by name alone can land on a same-named taxon in another kingdom (the plant
+                // Clusia flava on an insect's item). The item's description says what it is.
+                if (SiteBuildRules.DescribesAnotherKingdom(reader.IsDBNull(2) ? null : reader.GetString(2), taxon.Kingdom)) {
+                    stats.QidsNameMatchOtherKingdom++;
                     continue;
                 }
                 taxon.WikidataQid = "Q" + reader.GetInt64(1).ToString(CultureInfo.InvariantCulture);
