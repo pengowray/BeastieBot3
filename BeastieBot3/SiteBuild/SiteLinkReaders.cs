@@ -1,6 +1,7 @@
 using System.Globalization;
 using BeastieBot3.Infrastructure;
 using BeastieBot3.Iucn.Gbif;
+using BeastieBot3.Shared.Wikitext;
 using BeastieBot3.Sprat;
 using BeastieBot3.Wikidata;
 using Microsoft.Data.Sqlite;
@@ -14,6 +15,9 @@ using Microsoft.Data.Sqlite;
 //                  several items -> SiteBuildRules.ChooseP627Item. Otherwise an item matched by name
 //                  (wikidata_pending_iucn_matches, methods TaxonName and CachedName, not through a
 //                  synonym) -> 'name-match'.
+//   wikidata_p141  for a 'p627' item the cache has downloaded: its P141 statements with their rank and
+//                  the stated in (P248) items of their references (wikidata_p141_statements and
+//                  wikidata_p141_references), and the day it was downloaded (wikidata_item_downloaded).
 //   col_id         the CoL placement file's species_match (species only; Accepted, Synonym and
 //                  ProvisionallyAccepted give the accepted usage id), keyed by IUCN's own kingdom,
 //                  genus and species spelling; otherwise the common names store's CoL cross-reference.
@@ -152,6 +156,8 @@ internal static class SiteLinkReaders {
             }
         }
 
+        ReadP141(connection, taxa, stats, cancellationToken);
+
         if (!hasAssessmentItems) {
             stats.Warnings.Add("The Wikidata cache has no table of Wikidata items for IUCN assessments, so the build takes no DOIs and no assessment items from Wikidata. To fill the table, run wikidata iucn-assessment-items.");
             return;
@@ -193,6 +199,90 @@ internal static class SiteLinkReaders {
                 }
             }
         }
+    }
+
+    // The IUCN conservation status (P141) statements of each item that states its taxon's IUCN id,
+    // from the index tables the cache fills when it downloads an item (wikidata_p141_statements and
+    // wikidata_p141_references), and the day it downloaded the item. Reading the items' JSON
+    // instead took 94 seconds for 4.2 GB in October 2026; the index tables take about a second,
+    // but record only the first stated in (P248) item of each reference, and no reference URL.
+    private static void ReadP141(SqliteConnection connection, IReadOnlyDictionary<long, SiteTaxon> taxa, SiteBuildStats stats,
+        CancellationToken cancellationToken) {
+        var byItem = new Dictionary<long, List<SiteTaxon>>();
+        foreach (var taxon in taxa.Values) {
+            if (taxon.WikidataQidSource == "p627" && taxon.WikidataQid is { } qid
+                && long.TryParse(qid.AsSpan(1), NumberStyles.None, CultureInfo.InvariantCulture, out var numericId)) {
+                if (!byItem.TryGetValue(numericId, out var list)) {
+                    byItem[numericId] = list = new List<SiteTaxon>();
+                }
+                list.Add(taxon);
+            }
+        }
+
+        var downloaded = new Dictionary<long, string>();
+        using (var command = connection.CreateCommand()) {
+            command.CommandText = "SELECT entity_numeric_id, downloaded_at FROM wikidata_entities WHERE json_downloaded = 1";
+            using var reader = command.ExecuteReader();
+            while (reader.Read()) {
+                var numericId = reader.GetInt64(0);
+                if (byItem.ContainsKey(numericId)) {
+                    var at = reader.IsDBNull(1) ? null : StoredUtc.Parse(reader.GetString(1));
+                    downloaded[numericId] = at?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) ?? string.Empty;
+                }
+            }
+        }
+
+        var statedIn = new Dictionary<(long Item, string Statement), SortedSet<string>>();
+        using (var command = connection.CreateCommand()) {
+            command.CommandText = "SELECT entity_numeric_id, statement_id, source_qid FROM wikidata_p141_references WHERE source_qid IS NOT NULL";
+            using var reader = command.ExecuteReader();
+            while (reader.Read()) {
+                var key = (reader.GetInt64(0), reader.GetString(1));
+                if (!downloaded.ContainsKey(key.Item1)) {
+                    continue;
+                }
+                if (!statedIn.TryGetValue(key, out var set)) {
+                    statedIn[key] = set = new SortedSet<string>(StringComparer.Ordinal);
+                }
+                set.Add("Q" + reader.GetInt64(2).ToString(CultureInfo.InvariantCulture));
+            }
+        }
+
+        var statements = new Dictionary<long, List<WikidataStatusStatement>>();
+        using (var command = connection.CreateCommand()) {
+            command.CommandText = "SELECT entity_numeric_id, statement_id, status_entity_id, rank FROM wikidata_p141_statements";
+            using var reader = command.ExecuteReader();
+            while (reader.Read()) {
+                cancellationToken.ThrowIfCancellationRequested();
+                var numericId = reader.GetInt64(0);
+                if (!downloaded.ContainsKey(numericId)) {
+                    continue;
+                }
+                var statementId = reader.GetString(1);
+                if (!statements.TryGetValue(numericId, out var list)) {
+                    statements[numericId] = list = new List<WikidataStatusStatement>();
+                }
+                list.Add(new WikidataStatusStatement(statementId, reader.GetString(2), reader.GetString(3),
+                    statedIn.TryGetValue((numericId, statementId), out var sources) ? sources.ToList() : []));
+            }
+        }
+
+        foreach (var (numericId, day) in downloaded) {
+            var list = statements.TryGetValue(numericId, out var found)
+                ? found.OrderBy(s => RankOrder(s.Rank)).ThenBy(s => s.Id, StringComparer.Ordinal).ToList()
+                : [];
+            var json = WikidataStatusStatement.ListToJson(list);
+            foreach (var taxon in byItem[numericId]) {
+                taxon.WikidataP141 = json;
+                taxon.WikidataItemDownloaded = day.Length == 0 ? null : day;
+                stats.QidsWithP141Known++;
+                if (list.Count == 0) {
+                    stats.QidsWithNoP141++;
+                }
+            }
+        }
+
+        static int RankOrder(string rank) => rank switch { "preferred" => 0, "normal" => 1, _ => 2 };
     }
 
     // ------------------------------------------------------------ Catalogue of Life

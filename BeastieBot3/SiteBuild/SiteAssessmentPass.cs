@@ -409,6 +409,8 @@ internal sealed class SiteAssessmentPass {
         }
         assessment.WikidataItemQid = found.Item.Qid;
         assessment.WikidataItemProperties = found.Item.Properties;
+        assessment.WikidataItemTitles = found.Item.TitlesJson;
+        assessment.WikidataItemLabelEn = found.Item.LabelEn;
         _stats.WikidataItems.Used.Add(found.Item.Qid);
         if (found.ThroughDoi) _stats.AssessmentsWithItemThroughDoi++; else _stats.AssessmentsWithOwnItem++;
     }

@@ -8,7 +8,7 @@ namespace BeastieBot3.Shared.SiteData;
 // narrative text (rationale, range, threats ...), no coded threats/habitats/countries, no downloads.
 // Keep such fields out of this database rather than hiding them in the site.
 public static class SiteDbSchema {
-    public const int Version = 4;
+    public const int Version = 5;
 
     public const string Ddl = """
         CREATE TABLE meta (
@@ -36,6 +36,13 @@ public static class SiteDbSchema {
             enwiki_title                TEXT,                 -- English Wikipedia article (final title after redirects)
             wikidata_qid                TEXT,                 -- 'Q19939'
             wikidata_qid_source         TEXT,                 -- 'p627': the item states this IUCN taxon id; 'name-match': matched by name
+            wikidata_p141               TEXT,                 -- wikidata_qid_source = 'p627' only: the item's IUCN conservation status (P141)
+                                                              -- statements, any rank, as WikidataStatusStatement JSON
+                                                              -- ([{"id":"Q140$...","value":"Q278113","rank":"normal","statedIn":["Q115962546"]}];
+                                                              -- statedIn: the stated in (P248) items of its references). [] when the item has
+                                                              -- none; NULL when the Wikidata cache has not downloaded the item. Statements
+                                                              -- with no value or an unknown value are not in the cache, so not here either
+            wikidata_item_downloaded    TEXT,                 -- 'yyyy-MM-dd': when the Wikidata cache downloaded that item; NULL with wikidata_p141
             col_id                      TEXT,                 -- Catalogue of Life accepted name usage id
             latest_global_assessment_id INTEGER,              -- NULL when the taxon has regional assessments only, or is not in the release
             in_release                  INTEGER NOT NULL,     -- 1: in the Red List version's CSV export. 0: only in the IUCN API cache
@@ -77,7 +84,10 @@ public static class SiteDbSchema {
             citation_json                TEXT,                -- IucnCitationParts as JSON; NULL when the API payload is not cached
             replaced_by_assessment_id    INTEGER,             -- the errata or amended version that replaced this assessment; NULL otherwise
             wikidata_item_qid            TEXT,                -- Wikidata item for this assessment as a publication ('Q123'); NULL when none is known
-            wikidata_item_properties     TEXT                 -- space-separated properties that item already has, in WikidataCitation.JudgedProperties order ('P31 P356 P2093 Len'; Len = it has an English label); NULL when no item
+            wikidata_item_properties     TEXT,                -- space-separated properties that item already has, in WikidataCitation.JudgedProperties order ('P31 P356 P2093 Len'; Len = it has an English label); NULL when no item
+            wikidata_item_titles         TEXT,                -- that item's title (P1476) statements, any rank, as WikidataTitle JSON ([{"text":...,"lang":"en","rank":"normal"}]);
+                                                              -- NULL when no item, or when `wikidata iucn-assessment-items` has not recorded them
+            wikidata_item_label_en       TEXT                 -- that item's English label; NULL when no item or no label
         );
         CREATE INDEX assessment_taxon ON assessment(taxon_id, year_published);
 

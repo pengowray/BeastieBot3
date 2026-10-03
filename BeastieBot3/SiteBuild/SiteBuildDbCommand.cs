@@ -232,6 +232,8 @@ internal sealed class SiteBuildDbCommand : Command<SiteBuildDbCommand.Settings> 
         Row("Taxa with an English Wikipedia article", s.EnwikiTitles);
         Row("Taxa with a Wikidata item that states their IUCN taxon id (P627)", s.QidsFromP627);
         Row("Of those, items chosen from several", s.QidTieBreaks);
+        Row("Of those, items downloaded to the Wikidata cache (IUCN status statements known)", s.QidsWithP141Known);
+        Row("Of those, items with no IUCN status (P141)", s.QidsWithNoP141);
         Row("Taxa with a Wikidata item matched by name", s.QidsFromNameMatch);
         Row("Wikidata items matched by name but left out: the item is a taxon in another kingdom", s.QidsNameMatchOtherKingdom);
         var items = s.WikidataItems;
@@ -244,6 +246,7 @@ internal sealed class SiteBuildDbCommand : Command<SiteBuildDbCommand.Settings> 
         }
         if (items.WithoutIds > 0) Row("Items kept with no taxon or assessment id (not used)", items.WithoutIds);
         if (items.SecondItemForAnAssessment > 0) Row("Items for an assessment that already has an item (not used)", items.SecondItemForAnAssessment);
+        if (items.TitlesNotRecorded > 0) Row("Items kept whose title statements are not recorded (run wikidata iucn-assessment-items)", items.TitlesNotRecorded);
         Row("Assessments with their own Wikidata item", s.AssessmentsWithOwnItem);
         Row("Errata versions sharing the item of the assessment they correct (same DOI)", s.AssessmentsWithItemThroughDoi);
         Row("Items for an assessment not in the site database (not used)", items.ByAssessment.Count - items.Used.Count);

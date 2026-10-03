@@ -108,6 +108,27 @@ public sealed class SiteDbBuildErrataDoiTests : IDisposable {
         Assert.Equal(new WikidataItemModel().ToJson(), Scalar(db, $"SELECT value FROM meta WHERE key = '{SiteDbSchema.MetaKeys.WikidataItemModel}'"));
     }
 
+    // The assessment item's titles and label go to the rows that use it; the taxon item's P141
+    // statements, with the stated in items of their references, go to the taxon.
+    [Fact]
+    public void Build_StoresTheItemTitlesAndLabel_AndTheTaxonItemsStatus() {
+        var (output, stats) = Build(withEuropeHeader: true, withWikidata: true);
+        using var db = OpenReadOnly(output);
+
+        var titles = WikidataTitle.ListFromJson(Scalar(db, $"SELECT wikidata_item_titles FROM assessment WHERE assessment_id = {Errata2018}"));
+        Assert.Equal(new[] { new WikidataTitle("Pinus pinea: Farjon, A.", "en") }, titles);
+        Assert.Equal("Pinus pinea: Farjon, A.", Scalar(db, $"SELECT wikidata_item_label_en FROM assessment WHERE assessment_id = {Europe2013}"));
+        Assert.Null(Scalar(db, $"SELECT wikidata_item_titles FROM assessment WHERE assessment_id = {Global1998}"));
+
+        var taxon = Rows(db, $"SELECT wikidata_qid, wikidata_qid_source, wikidata_p141, wikidata_item_downloaded FROM taxon WHERE taxon_id = {PinusPinea}").Single();
+        Assert.Equal(("Q146992", "p627", "2026-08-20"), ((string)taxon[0]!, (string)taxon[1]!, (string)taxon[3]!));
+        var statement = Assert.Single(WikidataStatusStatement.ListFromJson((string)taxon[2]!)!);
+        Assert.Equal((P141Statement, "Q211005", "normal"), (statement.Id, statement.Value, statement.Rank));
+        Assert.Equal(new[] { "Q115962546", "Q136547248" }, statement.StatedIn);
+        Assert.Equal((1, 0), (stats.QidsWithP141Known, stats.QidsWithNoP141));
+        Assert.Equal(0, stats.WikidataItems.TitlesNotRecorded);
+    }
+
     [Fact]
     public void Build_WithoutAWikidataCache_HasNoItemsAndStoresTheModelItWasGiven() {
         var model = new WikidataItemModel { InstanceOf = "Q1172284" };
@@ -118,14 +139,33 @@ public sealed class SiteDbBuildErrataDoiTests : IDisposable {
         Assert.Equal(0, stats.AssessmentsWithOwnItem);
     }
 
+    private const string P141Statement = "Q146992$0E7A3F55-2E7B-4C60-9F0B-2D8B54F1A001";
+
     private static void WriteWikidataCache(string path) {
         var fetched = new DateTime(2026, 10, 1, 0, 0, 0, DateTimeKind.Utc);
-        using var store = WikidataCacheStore.Open(path);
+        using (var store = WikidataCacheStore.Open(path)) {
+            WriteAssessmentItems(store, fetched);
+        }
+        // Q146992, the stone pine's item: it states the IUCN taxon id, and its P141 (least concern)
+        // has two references, stated in the 2022.2 and the 2025.2 release items.
+        using var c = OpenWritable(path);
+        Execute(c, $"""
+            INSERT INTO wikidata_entities (entity_numeric_id, entity_id, discovered_at, last_seen_at, has_p141, has_p627, json_downloaded, downloaded_at, json)
+                VALUES (146992, 'Q146992', '2026-08-01T00:00:00.0000000Z', '2026-08-20T00:00:00.0000000Z', 1, 1, 1, '2026-08-20T03:04:05.0000000Z', '{"{}"}');
+            INSERT INTO wikidata_p627_values VALUES (146992, 'claim', '{PinusPinea}');
+            INSERT INTO wikidata_p141_statements VALUES (146992, '{P141Statement}', 211005, 'Q211005', 'normal');
+            INSERT INTO wikidata_p141_references VALUES (146992, '{P141Statement}', 'h1', 136547248, '{PinusPinea}');
+            INSERT INTO wikidata_p141_references VALUES (146992, '{P141Statement}', 'h2', 115962546, '{PinusPinea}');
+            """);
+    }
+
+    private static void WriteAssessmentItems(WikidataCacheStore store, DateTime fetched) {
         store.UpsertAssessmentItems(new[] {
             new WikidataAssessmentItemRow {
                 Qid = "Q56000001", Doi = Doi2013.ToUpperInvariant(), AllDois = [Doi2013.ToUpperInvariant()],
                 TaxonId = PinusPinea, AssessmentId = Europe2013, IdSource = "doi",
                 Title = "Pinus pinea: Farjon, A.", LabelEn = "Pinus pinea: Farjon, A.",
+                TitleStatements = [new WikidataTitle("Pinus pinea: Farjon, A.", "en")],
                 InstanceOf = ["Q13442814"], MainSubjects = ["Q146992"], PublishedIn = ["Q32059"],
                 PublicationDate = "2011-11-08T00:00:00Z", PublicationYear = 2011, FetchedAtUtc = fetched,
             },
@@ -137,7 +177,7 @@ public sealed class SiteDbBuildErrataDoiTests : IDisposable {
             // An assessment the site database does not have.
             new WikidataAssessmentItemRow {
                 Qid = "Q56000003", Doi = "10.2305/IUCN.UK.2008.RLTS.T42391A1234.EN", TaxonId = PinusPinea, AssessmentId = 1234,
-                IdSource = "doi", InstanceOf = ["Q13442814"], AuthorStringCount = 1, FetchedAtUtc = fetched,
+                IdSource = "doi", InstanceOf = ["Q13442814"], AuthorStringCount = 1, TitleStatements = [], FetchedAtUtc = fetched,
             },
         });
     }

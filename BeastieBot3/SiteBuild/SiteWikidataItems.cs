@@ -30,11 +30,17 @@ using BeastieBot3.Wikidata;
 // (main_subjects), P953 (urls, which also holds P854 and P856 values), P577 (publication_date), P356
 // (doi or all_dois), P2093 (author_string_count > 0), P50 (author_item_count > 0), and "Len" when it
 // has an English label.
+//
+// The item's title statements (title_statements, every rank, with their language) and English label
+// go into assessment.wikidata_item_titles and wikidata_item_label_en, for the site's commands that
+// replace a title or label that differs from the item model (WikidataCitation.FixCommands).
 
 namespace BeastieBot3.SiteBuild;
 
-/// One item kept for an assessment.
-internal sealed record SiteWikidataItem(string Qid, long TaxonId, long AssessmentId, string Properties);
+/// One item kept for an assessment. TitlesJson: its title statements (WikidataTitle JSON), null when
+/// the cache has not recorded them; LabelEn: its English label.
+internal sealed record SiteWikidataItem(string Qid, long TaxonId, long AssessmentId, string Properties,
+    string? TitlesJson = null, string? LabelEn = null);
 
 internal sealed class SiteWikidataItems {
     /// P31 classes that make an item a publication of the assessment.
@@ -56,6 +62,9 @@ internal sealed class SiteWikidataItems {
     /// Items with no taxon or assessment id, and further items for an assessment that already has one.
     public int WithoutIds { get; private set; }
     public int SecondItemForAnAssessment { get; private set; }
+    /// Items kept whose title statements the cache has not recorded (a table filled before
+    /// title_statements existed): the site offers no title change for them.
+    public int TitlesNotRecorded { get; private set; }
 
     /// Item Q-ids that some assessment row used.
     public HashSet<string> Used { get; } = new(StringComparer.Ordinal);
@@ -75,7 +84,11 @@ internal sealed class SiteWikidataItems {
             return;
         }
         var properties = Properties(row);
-        if (!ByAssessment.TryAdd(assessmentId, new SiteWikidataItem(row.Qid, taxonId, assessmentId, string.Join(' ', properties)))) {
+        var titles = row.TitleStatements is null ? null : WikidataTitle.ListToJson(row.TitleStatements);
+        if (row.TitleStatements is null) {
+            TitlesNotRecorded++;
+        }
+        if (!ByAssessment.TryAdd(assessmentId, new SiteWikidataItem(row.Qid, taxonId, assessmentId, string.Join(' ', properties), titles, row.LabelEn))) {
             SecondItemForAnAssessment++;
         }
     }

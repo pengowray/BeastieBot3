@@ -59,6 +59,11 @@ internal sealed class SiteTaxon {
     public string? EnwikiTitle { get; set; }
     public string? WikidataQid { get; set; }
     public string? WikidataQidSource { get; set; }
+    /// For an item that states the taxon's IUCN taxon id: its P141 statements as JSON
+    /// (WikidataStatusStatement), and the day the Wikidata cache downloaded it. Null when the
+    /// cache has not downloaded the item.
+    public string? WikidataP141 { get; set; }
+    public string? WikidataItemDownloaded { get; set; }
     public string? ColId { get; set; }
     public long? LatestGlobalAssessmentId { get; set; }
 
@@ -114,6 +119,9 @@ internal sealed class SiteAssessment {
     /// (SiteWikidataItems).
     public string? WikidataItemQid { get; set; }
     public string? WikidataItemProperties { get; set; }
+    /// That item's title statements as JSON (WikidataTitle; null when not recorded) and English label.
+    public string? WikidataItemTitles { get; set; }
+    public string? WikidataItemLabelEn { get; set; }
     /// True when the row came from the CSV, whose values win over the API's.
     public required bool FromCsv { get; init; }
 }
@@ -189,6 +197,10 @@ internal sealed class SiteBuildStats {
     public int QidsFromNameMatch;
     public int QidsNameMatchOtherKingdom;
     public int QidTieBreaks;
+    /// Taxa linked through P627 whose item the Wikidata cache has downloaded, so their P141
+    /// statements are known; and of those, items with no P141 statement.
+    public int QidsWithP141Known;
+    public int QidsWithNoP141;
     public int ColIdsFromPlacement;
     public int ColIdsFromCrossReference;
     public int SpratMatched;
