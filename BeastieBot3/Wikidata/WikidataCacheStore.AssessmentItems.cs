@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Linq;
 using Microsoft.Data.Sqlite;
+using BeastieBot3.Shared.Wikitext;
 
 // The wikidata_iucn_assessment_items table of the Wikidata cache: IUCN assessment publication
 // items found on Wikidata (see WikidataAssessmentItems.cs). Kept in its own file so the table,
@@ -27,6 +28,14 @@ internal sealed partial class WikidataCacheStore {
         using var command = _connection.CreateCommand();
         command.CommandText = WikidataAssessmentItemTable.Ddl;
         command.ExecuteNonQuery();
+
+        // Added October 2026; a table made before then gets the column here, NULL in every row
+        // until `wikidata iucn-assessment-items` reads the items again.
+        if (!WikidataAssessmentItemTable.HasTitleStatements(_connection)) {
+            using var alter = _connection.CreateCommand();
+            alter.CommandText = $"ALTER TABLE {WikidataAssessmentItemTable.TableName} ADD COLUMN {WikidataAssessmentItemTable.TitleStatementsColumn} TEXT";
+            alter.ExecuteNonQuery();
+        }
     }
 
     /// Inserts or replaces each item's row. first_seen_at is kept from the existing row.
@@ -39,12 +48,12 @@ internal sealed partial class WikidataCacheStore {
                 """
 INSERT INTO wikidata_iucn_assessment_items(
     qid, qid_numeric, doi, all_dois, taxon_id, assessment_id, doi_release, doi_language, id_source,
-    title, label_en, instance_of, main_subjects, published_in, publication_date, publication_year,
+    title, title_statements, label_en, instance_of, main_subjects, published_in, publication_date, publication_year,
     author_item_count, author_string_count, urls, found_by, source_endpoint, modified_at,
     fetched_at, first_seen_at)
 VALUES (
     @qid, @qidNumeric, @doi, @allDois, @taxon, @assessment, @release, @language, @idSource,
-    @title, @label, @instanceOf, @mainSubjects, @publishedIn, @date, @year,
+    @title, @titleStatements, @label, @instanceOf, @mainSubjects, @publishedIn, @date, @year,
     @authorItems, @authorStrings, @urls, @foundBy, @endpoint, @modified,
     @fetched, @fetched)
 ON CONFLICT(qid) DO UPDATE SET
@@ -57,6 +66,7 @@ ON CONFLICT(qid) DO UPDATE SET
     doi_language = excluded.doi_language,
     id_source = excluded.id_source,
     title = excluded.title,
+    title_statements = excluded.title_statements,
     label_en = excluded.label_en,
     instance_of = excluded.instance_of,
     main_subjects = excluded.main_subjects,
@@ -81,6 +91,7 @@ ON CONFLICT(qid) DO UPDATE SET
             var language = command.Parameters.Add("@language", SqliteType.Text);
             var idSource = command.Parameters.Add("@idSource", SqliteType.Text);
             var title = command.Parameters.Add("@title", SqliteType.Text);
+            var titleStatements = command.Parameters.Add("@titleStatements", SqliteType.Text);
             var label = command.Parameters.Add("@label", SqliteType.Text);
             var instanceOf = command.Parameters.Add("@instanceOf", SqliteType.Text);
             var mainSubjects = command.Parameters.Add("@mainSubjects", SqliteType.Text);
@@ -106,6 +117,7 @@ ON CONFLICT(qid) DO UPDATE SET
                 language.Value = Db(row.DoiLanguage);
                 idSource.Value = Db(row.IdSource);
                 title.Value = Db(row.Title);
+                titleStatements.Value = row.TitleStatements is null ? DBNull.Value : WikidataTitle.ListToJson(row.TitleStatements);
                 label.Value = Db(row.LabelEn);
                 instanceOf.Value = Db(WikidataAssessmentItemTable.JoinList(row.InstanceOf));
                 mainSubjects.Value = Db(WikidataAssessmentItemTable.JoinList(row.MainSubjects));

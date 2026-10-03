@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using System.Text.RegularExpressions;
 
 namespace BeastieBot3.Shared.Wikitext;
@@ -15,8 +16,8 @@ namespace BeastieBot3.Shared.Wikitext;
 // The statements, in the dry run's order:
 //
 //   P31 instance of      model.InstanceOf (scholarly article)
-//   P1476 title          the scientific name as IUCN's citation gives it, monolingual text in
-//                        model.TitleLanguage
+//   P1476 title          the name from TitleNameFor,
+//                        monolingual text in model.TitleLanguage
 //   P1433 published in   model.PublishedIn (IUCN Red List)
 //   P123 publisher       model.Publisher (IUCN)
 //   P921 main subject    the taxon's item, when the caller knows it
@@ -34,9 +35,21 @@ namespace BeastieBot3.Shared.Wikitext;
 //                        International"), never the full given names, with a P1545 series ordinal
 //                        qualifier ("1", "2" ...). Names before an "et al." only.
 //
-// plus the English label and description from model.LabelTemplate and model.DescriptionTemplate.
-// No statement gets a reference: the dry run adds none to the item's own statements, since the item
-// is the publication itself.
+// plus the English label and description from model.LabelTemplate and model.DescriptionTemplate,
+// with the same name. No statement gets a reference: the dry run adds none to the item's own
+// statements, since the item is the publication itself.
+//
+// The name. IUCN's citation gives the taxon's current name even for an older assessment
+// ("Lupulella mesomelas" for the 2014 assessment whose Crossref title has "Canis mesomelas"), so it
+// is used only when no title gives a name. TitleNameFor takes, in order: the name part of the item's
+// own title ("Canis mesomelas" from "Canis mesomelas: Hoffmann, M"), the name part of the title
+// registered with Crossref for the assessment's DOI (IucnCitationParts.RegisteredName), and IUCN's
+// citation name. Neither title proves the name an assessment first appeared under: Crossref's
+// records for some 2008 and 2010 DOIs were made in 2015 and deposited again with the names current
+// then (Q29037714, Q29393952), and SourceMD copied most item titles from Crossref in 2017 and 2018.
+// The commands and the page only say which title a name was read from. A name with "_" is IUCN's
+// internal name for a replaced taxon ("Larus glaucoides_old") and is never used; with no usable
+// name, a create batch is not offered and the title and label are left out of an add batch.
 //
 // AddMissingCommands judges what an existing item lacks from the properties the site database
 // records for it (assessment.wikidata_item_properties), which `site build-db` reads from the Wikidata
@@ -95,6 +108,55 @@ public sealed record CiteQOptions {
     public string? RefName { get; init; }
 }
 
+/// One title (P1476) statement of an item: its monolingual text, language code and rank
+/// ("preferred", "normal" or "deprecated"). `wikidata iucn-assessment-items` stores an item's
+/// titles in this form, and `site build-db` copies them into assessment.wikidata_item_titles.
+public sealed record WikidataTitle(
+    [property: JsonPropertyName("text")] string Text,
+    [property: JsonPropertyName("lang")] string? Language,
+    [property: JsonPropertyName("rank")] string Rank = "normal") {
+    [JsonIgnore]
+    public bool IsDeprecated => string.Equals(Rank, "deprecated", StringComparison.Ordinal);
+
+    public static string ListToJson(IReadOnlyList<WikidataTitle> titles) => JsonSerializer.Serialize(titles);
+
+    /// Null for a NULL or blank value, or one that cannot be read: the titles are not known.
+    public static IReadOnlyList<WikidataTitle>? ListFromJson(string? json) {
+        if (string.IsNullOrWhiteSpace(json)) {
+            return null;
+        }
+        try {
+            return JsonSerializer.Deserialize<List<WikidataTitle>>(json);
+        } catch (JsonException) {
+            return null;
+        }
+    }
+}
+
+public enum WikidataItemChangeKind { Title, EnglishLabel }
+
+/// A value FixCommands replaces. The languages are set for a title only.
+public sealed record WikidataItemChange(WikidataItemChangeKind Kind, string Old, string New, string? OldLanguage = null, string? NewLanguage = null);
+
+/// What FixCommands changes on an item, and the commands that do it (empty when nothing).
+public sealed record WikidataItemFix(IReadOnlyList<WikidataItemChange> Changes, IReadOnlyList<string> Commands) {
+    public static WikidataItemFix None { get; } = new([], []);
+}
+
+/// Where the name in an assessment item's title, label and description comes from.
+public enum TitleNameSource {
+    /// The name part of the item's own title: "Canis mesomelas" from "Canis mesomelas: Hoffmann, M".
+    ItemTitle,
+    /// The name part of the title registered with Crossref for the assessment's DOI.
+    Crossref,
+    /// IUCN's citation name, used when neither of the others is known. For an older assessment it
+    /// may be a newer name than the one in the assessment's title.
+    IucnCitation,
+}
+
+/// The name for an assessment item's title, label and description, and where it was read.
+public sealed record TitleName(string Name, TitleNameSource Source);
+
 public static partial class WikidataCitation {
     /// The token for "the item has an English label" in a set of present properties
     /// (assessment.wikidata_item_properties). It is the QuickStatements command that sets the label.
@@ -140,17 +202,97 @@ public static partial class WikidataCitation {
             : $"<ref name=\"{refName}\">{template}</ref>";
     }
 
+    /// The name for the title, label and description of the assessment's item: the name part of
+    /// the item's one title that is not deprecated (itemTitles; null or
+    /// empty for a new item), else the name part of the title registered with Crossref for its DOI
+    /// (parts.RegisteredName), else IUCN's citation name. A name IUCN marks as internal ("_old") is
+    /// skipped. Null when no usable name is known.
+    public static TitleName? TitleNameFor(IucnCitationParts parts, IReadOnlyList<WikidataTitle>? itemTitles = null) {
+        if (itemTitles?.Where(t => !t.IsDeprecated).ToList() is [var title] && NameFromTitle(title.Text) is { } fromTitle
+            && !IsIucnInternalName(fromTitle)) {
+            return new TitleName(fromTitle, TitleNameSource.ItemTitle);
+        }
+        if (CleanValue(parts.RegisteredName) is { Length: > 0 } registered && !IsIucnInternalName(registered)) {
+            return new TitleName(registered, TitleNameSource.Crossref);
+        }
+        if (CleanValue(parts.ScientificName) is { Length: > 0 } cited && !IsIucnInternalName(cited)) {
+            return new TitleName(cited, TitleNameSource.IucnCitation);
+        }
+        return null;
+    }
+
+    /// The name part of an assessment's title: the text before the ":" of "Name: author list"
+    /// (Crossref's titles and the titles SourceMD gave Wikidata items), or the whole title when it
+    /// has no ":". The ":" is the last one outside brackets, since a subpopulation's name can have
+    /// one inside them: "Oncorhynchus nerka (COLUMBIA RIVER: Redfish Lk): Rand, P.S." (66 of
+    /// Crossref's 255,060 titles in October 2026). Tags are removed, entities decoded and spaces
+    /// collapsed, so "&lt;i&gt;Myotis nattereri&lt;/i&gt;" gives "Myotis nattereri". Null for a blank
+    /// title or name.
+    public static string? NameFromTitle(string? title) {
+        var text = CleanValue(title);
+        var colon = AuthorListColon(text);
+        var name = (colon < 0 ? text : text[..colon]).Trim();
+        return name.Length > 0 ? name : null;
+    }
+
+    /// True for a title of the form "Name: author list", whose author list FixCommands removes.
+    public static bool TitleHasAuthorList(string? title) {
+        var text = CleanValue(title);
+        var colon = AuthorListColon(text);
+        return colon > 0 && text[(colon + 1)..].Trim().Length > 0;
+    }
+
+    /// A name as the commands write it: tags removed, entities decoded, spaces collapsed.
+    public static string NameText(string? name) => CleanValue(name);
+
+    /// True when two names differ only in how they are written: "ssp." and "subsp." count as the
+    /// same, brackets are ignored, and a run of spaces counts as one. So "Apollonias barbujana ssp.
+    /// ceballosi" and "Apollonias barbujana subsp. ceballosi" are the same name, and so are "Balaena
+    /// mysticetus (Bering-Chukchi-Beaufort Sea subpopulation)" and "Balaena mysticetus
+    /// Bering-Chukchi-Beaufort Sea subpopulation". The name notes and the build's count of names
+    /// that differ use this; the commands keep each name as it is written.
+    public static bool SameName(string? a, string? b) => string.Equals(NameKey(a), NameKey(b), StringComparison.Ordinal);
+
+    private static string NameKey(string? name) {
+        var text = NameBracket().Replace(CleanValue(name), " ");
+        text = SubspMarker().Replace(text, "ssp.");
+        return WikitextValue.CollapseWhitespace(text).Trim();
+    }
+
+    // The last ":" outside round brackets; -1 when there is none.
+    private static int AuthorListColon(string text) {
+        var depth = 0;
+        var found = -1;
+        for (var i = 0; i < text.Length; i++) {
+            switch (text[i]) {
+                case '(': depth++; break;
+                case ')': depth = Math.Max(0, depth - 1); break;
+                case ':' when depth == 0: found = i; break;
+            }
+        }
+        return found;
+    }
+
+    /// IUCN marks a taxon it has replaced with a suffix such as "_old" ("Larus glaucoides_old",
+    /// "Calonectris diomedea_old1"). No name in a published title has "_".
+    public static bool IsIucnInternalName(string name) => name.Contains('_', StringComparison.Ordinal);
+
     /// QuickStatements v1 commands (one per line, tab-separated) that create an item for the
-    /// assessment: CREATE, then LAST lines for the label, description and statements.
+    /// assessment: CREATE, then LAST lines for the label, description and statements. Empty when
+    /// no usable name is known (TitleNameFor), since an item with no title or label could not
+    /// be found again.
     public static IReadOnlyList<string> CreateItemCommands(IucnCitationParts parts, string? taxonQid, WikidataItemModel model) {
+        if (TitleNameFor(parts) is not { } name) {
+            return [];
+        }
         var commands = new List<string> { "CREATE" };
-        if (Label(parts, model) is { } label) {
+        if (Label(parts, model, name.Name) is { } label) {
             commands.Add(Line("LAST", "Len", Quote(label)));
         }
-        if (Description(parts, model) is { } description) {
+        if (Description(parts, model, name.Name) is { } description) {
             commands.Add(Line("LAST", "Den", Quote(description)));
         }
-        foreach (var statement in Statements(parts, taxonQid, model, includeUnjudged: true)) {
+        foreach (var statement in Statements(parts, name.Name, taxonQid, model, includeUnjudged: true)) {
             commands.Add(statement.ToLine("LAST"));
         }
         return commands;
@@ -159,15 +301,18 @@ public static partial class WikidataCitation {
     /// QuickStatements v1 commands that add to an existing item the statements it lacks, judged by
     /// the properties it already has (see JudgedProperties; "Len" stands for its English label).
     /// Never a property the item already has, and never a removal. Empty when nothing is missing.
+    /// itemTitles: the item's title statements, when known; a missing label uses the name in its title.
     public static IReadOnlyList<string> AddMissingCommands(IucnCitationParts parts, string itemQid,
-        IReadOnlySet<string> presentProperties, string? taxonQid, WikidataItemModel model) {
+        IReadOnlySet<string> presentProperties, string? taxonQid, WikidataItemModel model,
+        IReadOnlyList<WikidataTitle>? itemTitles = null) {
         var item = itemQid.Trim();
         var commands = new List<string>();
-        if (!presentProperties.Contains(EnglishLabelToken) && Label(parts, model) is { } label) {
+        var name = TitleNameFor(parts, itemTitles)?.Name;
+        if (!presentProperties.Contains(EnglishLabelToken) && name is not null && Label(parts, model, name) is { } label) {
             commands.Add(Line(item, "Len", Quote(label)));
         }
         var hasAuthors = presentProperties.Contains("P2093") || presentProperties.Contains("P50");
-        foreach (var statement in Statements(parts, taxonQid, model, includeUnjudged: false)) {
+        foreach (var statement in Statements(parts, name, taxonQid, model, includeUnjudged: false)) {
             var present = statement.Property == "P2093" ? hasAuthors : presentProperties.Contains(statement.Property);
             if (!present) {
                 commands.Add(statement.ToLine(item));
@@ -175,6 +320,62 @@ public static partial class WikidataCitation {
         }
         return commands;
     }
+
+    /// QuickStatements v1 commands that take the author list out of an existing item's title (P1476)
+    /// and set its English label from model.LabelTemplate. Most items made by SourceMD in 2017 and
+    /// 2018 have "Name: author list" as both, which {{cite Q}} prints as the title of the work. The
+    /// name stays as the title has it, never IUCN's newer citation name; the label uses the same
+    /// name (TitleNameFor).
+    ///
+    /// The title is changed only when the item's titles are known exactly (titles is not null),
+    /// the item has one title that is not deprecated, and that title is "Name: author list": the
+    /// commands add "Name" in the old title's language, then remove the old title by its exact text
+    /// and language ("-Q1\tP1476\ten:\"old\""), which is how QuickStatements finds a statement to
+    /// remove. Nothing is changed when:
+    ///   - any title, of any rank, already equals the new one (QuickStatements would add nothing and
+    ///     then remove the only title);
+    ///   - a deprecated title has the old title's text and language (QuickStatements removes the last
+    ///     statement with that value, which could be the deprecated one);
+    ///   - the old text cannot be written so that QuickStatements matches it (a control character,
+    ///     "||", or space at either end);
+    ///   - the name has an IUCN internal marker ("_old").
+    /// The label is set with "Len", which replaces the old one; a missing label is
+    /// AddMissingCommands' job.
+    public static WikidataItemFix FixCommands(IucnCitationParts parts, string itemQid, IReadOnlyList<WikidataTitle>? titles,
+        string? labelEn, WikidataItemModel model) {
+        var item = itemQid.Trim();
+        var changes = new List<WikidataItemChange>();
+        var commands = new List<string>();
+
+        if (titles?.Where(t => !t.IsDeprecated).ToList() is [var old]
+            && CanMatchExactly(old)
+            && TitleHasAuthorList(old.Text)
+            && NameFromTitle(old.Text) is { } newTitle
+            && !IsIucnInternalName(newTitle)
+            && !titles.Any(t => t.Text == newTitle && t.Language == old.Language)
+            && !titles.Any(t => t.IsDeprecated && t.Text == old.Text && t.Language == old.Language)) {
+            commands.Add(Line(item, "P1476", $"{old.Language}:{Quote(newTitle)}"));
+            commands.Add(Line("-" + item, "P1476", $"{old.Language}:{Quote(old.Text)}"));
+            changes.Add(new WikidataItemChange(WikidataItemChangeKind.Title, old.Text, newTitle, old.Language, old.Language));
+        }
+
+        if (labelEn is not null && TitleNameFor(parts, titles) is { } name && Label(parts, model, name.Name) is { } label
+            && labelEn != label) {
+            commands.Add(Line(item, "Len", Quote(label)));
+            changes.Add(new WikidataItemChange(WikidataItemChangeKind.EnglishLabel, labelEn, label));
+        }
+        return new WikidataItemFix(changes, commands);
+    }
+
+    // QuickStatements trims a value and takes the language as letters, "_" and "-", and a link's
+    // commands are split at "||"; an old title that any of that would alter can't be matched.
+    private static bool CanMatchExactly(WikidataTitle title) =>
+        title.Text.Length > 0
+        && title.Text == title.Text.Trim()
+        && !title.Text.Any(char.IsControl)
+        && !title.Text.Contains("||", StringComparison.Ordinal)
+        && title.Language is { Length: > 0 } language
+        && QuickStatementsLanguage().IsMatch(language);
 
     /// A link that opens QuickStatements with the commands filled in. Commands are joined with "||"
     /// and each tab becomes "|", the form Help:QuickStatements documents; the result is
@@ -204,13 +405,13 @@ public static partial class WikidataCitation {
     }
 
     // includeUnjudged: P123 and P407, which a create batch writes and an add batch leaves out.
-    private static IEnumerable<Statement> Statements(IucnCitationParts parts, string? taxonQid, WikidataItemModel model,
+    // name: the title (TitleNameFor); null leaves P1476 out.
+    private static IEnumerable<Statement> Statements(IucnCitationParts parts, string? name, string? taxonQid, WikidataItemModel model,
         bool includeUnjudged) {
-        var name = CleanValue(parts.ScientificName);
         var doi = OwnDoi(parts, out var doiLanguage);
 
         if (IsItemId(model.InstanceOf)) yield return new Statement("P31", model.InstanceOf.Trim());
-        if (name.Length > 0) yield return new Statement("P1476", $"{CleanLanguageCode(model.TitleLanguage)}:{Quote(name)}");
+        if (name is { Length: > 0 }) yield return new Statement("P1476", $"{CleanLanguageCode(model.TitleLanguage)}:{Quote(name)}");
         if (IsItemId(model.PublishedIn)) yield return new Statement("P1433", model.PublishedIn.Trim());
         if (includeUnjudged && IsItemId(model.Publisher)) yield return new Statement("P123", model.Publisher.Trim());
         if (taxonQid is not null && IsItemId(taxonQid)) yield return new Statement("P921", taxonQid.Trim());
@@ -237,17 +438,18 @@ public static partial class WikidataCitation {
         }
     }
 
-    private static string? Label(IucnCitationParts parts, WikidataItemModel model) => Fill(model.LabelTemplate, parts, 250);
+    private static string? Label(IucnCitationParts parts, WikidataItemModel model, string name) => Fill(model.LabelTemplate, parts, name, 250);
 
-    private static string? Description(IucnCitationParts parts, WikidataItemModel model) => Fill(model.DescriptionTemplate, parts, 250);
+    private static string? Description(IucnCitationParts parts, WikidataItemModel model, string name) =>
+        Fill(model.DescriptionTemplate, parts, name, 250);
 
     // Wikidata refuses a label or description over 250 characters, so a longer one is left out.
-    private static string? Fill(string? template, IucnCitationParts parts, int maxLength) {
+    private static string? Fill(string? template, IucnCitationParts parts, string name, int maxLength) {
         if (string.IsNullOrWhiteSpace(template)) {
             return null;
         }
         var text = CleanValue(template
-            .Replace("{name}", parts.ScientificName, StringComparison.Ordinal)
+            .Replace("{name}", name, StringComparison.Ordinal)
             .Replace("{year}", parts.Year.ToString(CultureInfo.InvariantCulture), StringComparison.Ordinal)
             .Replace("{taxon_id}", parts.TaxonId.ToString(CultureInfo.InvariantCulture), StringComparison.Ordinal)
             .Replace("{assessment_id}", parts.AssessmentId.ToString(CultureInfo.InvariantCulture), StringComparison.Ordinal));
@@ -301,8 +503,19 @@ public static partial class WikidataCitation {
     [GeneratedRegex(@"^[a-z]{2,3}(?:-[a-z0-9]+)*$")]
     private static partial Regex LanguageCode();
 
+    // The language part of a monolingual value in quickstatements.php's parseValueV1.
+    [GeneratedRegex(@"^[a-zA-Z_-]+$")]
+    private static partial Regex QuickStatementsLanguage();
+
     [GeneratedRegex(@"<[^<>]*>")]
     private static partial Regex HtmlTag();
+
+    [GeneratedRegex(@"[()\[\]]")]
+    private static partial Regex NameBracket();
+
+    // "subsp." as a word of its own; "ssp." is the form the comparison keeps.
+    [GeneratedRegex(@"(?<!\p{L})subsp\.")]
+    private static partial Regex SubspMarker();
 
     [GeneratedRegex(@"\|{2,}")]
     private static partial Regex PipeRun();

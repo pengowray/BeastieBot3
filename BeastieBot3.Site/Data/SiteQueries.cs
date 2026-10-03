@@ -15,7 +15,8 @@ public sealed class SiteQueries {
     private const string TaxonColumns = """
         t.taxon_id, t.scientific_name, t.kind, t.kingdom, t.phylum, t.class_name, t.order_name, t.family,
         t.genus, t.subpopulation_name, t.authority, t.parent_taxon_id, t.common_name_en, t.enwiki_title,
-        t.wikidata_qid, t.col_id, t.latest_global_assessment_id, t.in_release, t.current_taxon_id
+        t.wikidata_qid, t.col_id, t.latest_global_assessment_id, t.in_release, t.current_taxon_id,
+        t.wikidata_qid_source, t.wikidata_p141, t.wikidata_item_downloaded, t.wikidata_p627_deprecated, t.wikidata_other_items
         """;
 
     // A taxon with the category of its latest global assessment; the column order SummaryAt reads.
@@ -52,7 +53,12 @@ public sealed class SiteQueries {
         Text(reader, 15),
         Long(reader, 16),
         reader.GetInt64(17) != 0,
-        Long(reader, 18));
+        Long(reader, 18),
+        Text(reader, 19),
+        Text(reader, 20),
+        Text(reader, 21),
+        !reader.IsDBNull(22) && reader.GetInt64(22) != 0,
+        Text(reader, 23));
 
     /// The taxa linked to this one in taxon_link: for a taxon in the release, the taxa not in the
     /// release (old ids) linked to it; for a taxon not in the release, the taxa in the release it is
@@ -142,7 +148,7 @@ public sealed class SiteQueries {
             SELECT assessment_id, taxon_id, scope, is_latest, category, possibly_extinct,
                    possibly_extinct_in_the_wild, criteria, criteria_version, year_published,
                    assessment_date, population_trend, citation_json, replaced_by_assessment_id,
-                   wikidata_item_qid, wikidata_item_properties
+                   wikidata_item_qid, wikidata_item_properties, wikidata_item_titles, wikidata_item_label_en, wikidata_item_assessment_id
             FROM assessment
             WHERE taxon_id = @id
             ORDER BY year_published DESC, assessment_date DESC, assessment_id DESC
@@ -167,7 +173,10 @@ public sealed class SiteQueries {
                 Text(reader, 12),
                 Long(reader, 13),
                 Text(reader, 14),
-                Text(reader, 15)));
+                Text(reader, 15),
+                Text(reader, 16),
+                Text(reader, 17),
+                Long(reader, 18)));
         }
         return rows;
     }

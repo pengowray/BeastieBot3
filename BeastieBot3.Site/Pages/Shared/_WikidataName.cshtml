@@ -1,0 +1,22 @@
+@model WikidataCiteView
+@* The name in the assessment item's title and label, when it is not IUCN's citation name, or when
+   the commands use IUCN's citation name because no title gives a name
+   (WikidataCiteView.ShowNameNote). *@
+@if (Model.ShowNameNote && Model.Name is { } name && Model.CitationName is { } cited) {
+    <p class="wikidata-name">
+        @switch (name.Source) {
+            case TitleNameSource.ItemTitle:
+                @SiteText.NameFromItemTitle(name.Name, cited)
+                break;
+            case TitleNameSource.Crossref:
+                @SiteText.NameRegistered(name.Name, cited)
+                break;
+            default:
+                @SiteText.NameFromIucnCitation(cited)
+                break;
+        }
+        @if (Model.CommandsUseName && name.Source != TitleNameSource.IucnCitation) {
+            @(" ")@SiteText.NameCommandsUse(name.Name)
+        }
+    </p>
+}

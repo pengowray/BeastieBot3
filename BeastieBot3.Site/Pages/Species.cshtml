@@ -233,8 +233,26 @@
                         </div>
                         <p class="note"><a href="@SiteText.CiteQGuidanceUrl">@SiteText.CiteQGuidanceLink</a>@SiteText.CiteQGuidanceAfter</p>
                     }
+                    @if (wikidata.ItemIsForAssessmentId is { } owner) {
+                        @if (wikidata.ItemAssessmentHasPage) {
+                            <p class="wikidata-borrowed">@SiteText.BorrowedItemBefore<a href="@(Model.OptionsUrl(owner))#wikidata-cite">@SiteText.BorrowedItemLink</a>.</p>
+                        } else {
+                            <p class="wikidata-borrowed">@SiteText.BorrowedItemNoPage(owner)</p>
+                        }
+                    }
+                    <partial name="_WikidataName" model="wikidata" />
                     @if (wikidata.Commands is { } add) {
-                        <p class="wikidata-missing">@SiteText.MissingStatements(string.Join(", ", wikidata.AddedStatements)) @SiteText.AddStatementsLine</p>
+                        var changes = wikidata.Changes;
+                        @if (changes.Count == 0) {
+                            <p class="wikidata-missing">@SiteText.MissingStatements(string.Join(", ", wikidata.AddedStatements)) @SiteText.AddStatementsLine</p>
+                        } else {
+                            @if (wikidata.AddedStatements.Count > 0) {
+                                <p class="wikidata-missing">@SiteText.MissingStatements(string.Join(", ", wikidata.AddedStatements))</p>
+                            }
+                            <partial name="_WikidataItemChanges" model="wikidata" />
+                            <p>@SiteText.RunCommandsLine</p>
+                        }
+                        <partial name="_WikidataMainSubject" model="wikidata" />
                         <div class="wikitext-box">
                             <partial name="_WikitextBoxContent" model="add" />
                         </div>
@@ -244,6 +262,9 @@
                     }
                 } else {
                     <p class="wikidata-item">@SiteText.NoWikidataItem</p>
+                    @if (wikidata.NoUsableName && wikidata.CitationName is { } internalName) {
+                        <p>@SiteText.NoUsableName(internalName)</p>
+                    }
                     @if (wikidata.Commands is { } create) {
                         <p>
                             @if (wikidata.SearchUrl is { } searchUrl) {
@@ -251,6 +272,8 @@
                             }
                             @SiteText.CreateItemLine
                         </p>
+                        <partial name="_WikidataName" model="wikidata" />
+                        <partial name="_WikidataMainSubject" model="wikidata" />
                         <div class="wikitext-box">
                             <partial name="_WikitextBoxContent" model="create" />
                         </div>
@@ -260,6 +283,9 @@
                     }
                 }
             </section>
+        }
+        @if (Model.WikidataStatus is { HasContent: true } wikidataStatus && Model.LatestGlobal is { } latestGlobal) {
+            <partial name="_WikidataStatus" model="@(new WikidataStatusPartial(wikidataStatus, latestGlobal, Model.Version))" />
         }
     </section>
 }

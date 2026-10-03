@@ -7,11 +7,16 @@ using GbifDoi = BeastieBot3.Iucn.Gbif.IucnDoi;
 // Crossref (doi.org/ra/<doi> answers "Crossref"), and Crossref's REST API lists a prefix's works
 // 1,000 at a time with a cursor:
 //
-//   https://api.crossref.org/prefixes/10.2305/works?rows=1000&select=DOI,resource&cursor=*
+//   https://api.crossref.org/prefixes/10.2305/works?rows=1000&select=DOI,resource,title&cursor=*
 //
 // In October 2026 the prefix had 256,151 works: 255,060 Red List assessments (type "dataset") and
-// about 1,100 books, reports and journal articles. Each item gives the DOI (in lower case) and
-// resource.primary.URL, the page it points to: https://www.iucnredlist.org/species/<taxon>/<assessment>.
+// about 1,100 books, reports and journal articles. Each item gives the DOI (in lower case),
+// resource.primary.URL, the page it points to (https://www.iucnredlist.org/species/<taxon>/<assessment>),
+// and title, a list with one entry: the title IUCN registered for the assessment, "Name: author
+// list" ("Canis mesomelas: Hoffmann, M." for a 2014 assessment of the taxon IUCN now calls
+// Lupulella mesomelas), with HTML entities such as "&amp;". The name is the one current when the
+// record was last deposited, which is not always the name the assessment first appeared under:
+// the records for some 2008 and 2010 DOIs were made in 2015 with the names current then.
 // The list took 258 requests and about 3 minutes on 2026-10-03. Crossref's public pool allows 5 requests a second
 // and one at a time (x-rate-limit-limit, x-concurrency-limit); this sends one request at a time.
 //
@@ -31,7 +36,7 @@ internal static class CrossrefIucnWorks {
     public const string DefaultBaseUrl = "https://api.crossref.org/";
 
     public static string PageUrl(string cursor, string baseUrl = DefaultBaseUrl) =>
-        $"{(baseUrl.EndsWith('/') ? baseUrl : baseUrl + "/")}prefixes/{Prefix}/works?rows={PageSize.ToString(CultureInfo.InvariantCulture)}&select=DOI,resource&cursor={Uri.EscapeDataString(cursor)}";
+        $"{(baseUrl.EndsWith('/') ? baseUrl : baseUrl + "/")}prefixes/{Prefix}/works?rows={PageSize.ToString(CultureInfo.InvariantCulture)}&select=DOI,resource,title&cursor={Uri.EscapeDataString(cursor)}";
 
     /// Reads one page of Crossref's answer. Items that are not Red List assessment DOIs are counted
     /// in ItemCount but left out of Works. Pure.
@@ -75,9 +80,14 @@ internal static class CrossrefIucnWorks {
             && primary.TryGetProperty("URL", out var urlElement) && urlElement.ValueKind == JsonValueKind.String) {
             url = urlElement.GetString();
         }
+        string? title = null;
+        if (item.TryGetProperty("title", out var titles) && titles.ValueKind == JsonValueKind.Array) {
+            title = titles.EnumerateArray().Where(t => t.ValueKind == JsonValueKind.String)
+                .Select(t => t.GetString()).FirstOrDefault(t => !string.IsNullOrWhiteSpace(t));
+        }
         var page = GbifDoi.ParseAssessmentUrl(url);
         return new CrossrefIucnWork(doi.ToString(), doi.TaxonId, doi.AssessmentId, doi.Release, doi.Language, url,
-            page?.TaxonId, page?.AssessmentId);
+            page?.TaxonId, page?.AssessmentId, title);
     }
 
     /// Downloads the whole list into the store, one page per request, and marks the listing complete

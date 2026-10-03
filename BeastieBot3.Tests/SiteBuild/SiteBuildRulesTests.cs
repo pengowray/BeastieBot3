@@ -143,6 +143,18 @@ public class SiteBuildRulesTests {
     }
 
     [Fact]
+    public void ChooseP627Item_AnItemWithTheIdAtDeprecatedRank_IsChosenOnlyWhenEveryItemHasIt() {
+        // Taxon 96251644: Q3008560 is named like the taxon but keeps the id at deprecated rank.
+        var candidates = new[] {
+            new WikidataCandidate(3008560, "Ptyas semicarinatus", Array.Empty<string>(), TaxonIdDeprecated: true),
+            new WikidataCandidate(122932761, "Ptyas semicarinata", Array.Empty<string>()),
+        };
+        Assert.Equal(122932761, SiteBuildRules.ChooseP627Item(candidates, "Ptyas semicarinatus"));
+        var allDeprecated = candidates.Select(c => c with { TaxonIdDeprecated = true }).ToArray();
+        Assert.Equal(3008560, SiteBuildRules.ChooseP627Item(allDeprecated, "Ptyas semicarinatus"));
+    }
+
+    [Fact]
     public void ChooseP627Item_ComparesWithoutTheRankMarker_AndFallsBackToTheLowestItem() {
         var named = new[] {
             new WikidataCandidate(5, "something else", Array.Empty<string>()),

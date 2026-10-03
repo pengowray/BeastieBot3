@@ -1,0 +1,32 @@
+@model WikidataCiteView
+@* The assessment item's title and English label that the commands replace, beside the new ones. *@
+@{
+    var changes = Model.Changes;
+    var title = changes.Any(c => c.Kind == WikidataItemChangeKind.Title);
+    var label = changes.Any(c => c.Kind == WikidataItemChangeKind.EnglishLabel);
+}
+<p class="wikidata-changes-intro">@SiteText.ReplacesLine(Model.AddedStatements.Count > 0, title, label)</p>
+<div class="table-scroll">
+    <table class="wikidata-changes">
+        <thead>
+            <tr>
+                <th scope="col">@SiteText.ColChange</th>
+                <th scope="col">@SiteText.ColNow</th>
+                <th scope="col">@SiteText.ColAfter</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var change in changes) {
+                var languageChanges = change.Kind == WikidataItemChangeKind.Title && change.OldLanguage != change.NewLanguage;
+                <tr>
+                    <th scope="row">@(change.Kind == WikidataItemChangeKind.Title ? SiteText.WikidataPropertyLabel("P1476") : SiteText.WikidataTermLabel('L', "en"))</th>
+                    <td>@(languageChanges ? SiteText.TitleWithLanguage(change.Old, change.OldLanguage) : change.Old)</td>
+                    <td>@(languageChanges ? SiteText.TitleWithLanguage(change.New, change.NewLanguage) : change.New)</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>
+@if (title) {
+    <p class="help">@SiteText.TitleChangeNote</p>
+}

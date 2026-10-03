@@ -401,6 +401,14 @@
 
     function setUpTextareas() {
         fitTextareas();
+        // A box inside a closed details element has no height to measure until it is opened.
+        // toggle does not bubble, so the document listens in the capture phase.
+        document.addEventListener("toggle", function (event) {
+            var details = event.target;
+            if (details instanceof HTMLDetailsElement && details.open) {
+                fitTextareas(details);
+            }
+        }, true);
         var timer = 0;
         window.addEventListener("resize", function () {
             window.clearTimeout(timer);

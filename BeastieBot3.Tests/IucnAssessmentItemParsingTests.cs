@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using BeastieBot3.Shared.Wikitext;
 using BeastieBot3.Wikidata;
 using BeastieBot3.WikidataEdits;
 using Microsoft.Data.Sqlite;
@@ -262,6 +263,77 @@ public class IucnAssessmentItemParsingTests {
         Assert.Equal("Myrmecophaga tridactyla", row.ToExistingAssessmentItem().Title);
     }
 
+    // Two title statements of one item, as the Details query's second branch returns them: the
+    // statement node, the monolingual value and the rank. A third row repeats the first statement
+    // (the same node), as a join can.
+    private const string TitleStatementsJson = """
+{
+  "head": { "vars": ["item", "p", "v", "rank", "statement"] },
+  "results": { "bindings": [
+    { "item": { "type": "uri", "value": "http://www.wikidata.org/entity/Q29010489" },
+      "p": { "type": "uri", "value": "http://www.wikidata.org/prop/direct/P1476" },
+      "v": { "xml:lang": "en", "type": "literal", "value": "Batrachuperus karlschmidti: Xie Feng" } },
+    { "item": { "type": "uri", "value": "http://www.wikidata.org/entity/Q29010489" },
+      "p": { "type": "uri", "value": "http://www.wikidata.org/prop/statement/P1476" },
+      "v": { "xml:lang": "en", "type": "literal", "value": "Batrachuperus karlschmidti: Xie Feng" },
+      "rank": { "type": "uri", "value": "http://wikiba.se/ontology#NormalRank" },
+      "statement": { "type": "uri", "value": "http://www.wikidata.org/entity/statement/Q29010489-1A2B" } },
+    { "item": { "type": "uri", "value": "http://www.wikidata.org/entity/Q29010489" },
+      "p": { "type": "uri", "value": "http://www.wikidata.org/prop/statement/P1476" },
+      "v": { "xml:lang": "la", "type": "literal", "value": "Batrachuperus karlschmidti" },
+      "rank": { "type": "uri", "value": "http://wikiba.se/ontology#DeprecatedRank" },
+      "statement": { "type": "uri", "value": "http://www.wikidata.org/entity/statement/Q29010489-3C4D" } },
+    { "item": { "type": "uri", "value": "http://www.wikidata.org/entity/Q29010489" },
+      "p": { "type": "uri", "value": "http://www.wikidata.org/prop/statement/P1476" },
+      "v": { "xml:lang": "en", "type": "literal", "value": "Batrachuperus karlschmidti: Xie Feng" },
+      "rank": { "type": "uri", "value": "http://wikiba.se/ontology#NormalRank" },
+      "statement": { "type": "uri", "value": "http://www.wikidata.org/entity/statement/Q29010489-1A2B" } }
+  ] }
+}
+""";
+
+    [Fact]
+    public void Build_TitleStatements_KeepsEveryStatementWithLanguageAndRank() {
+        var triples = WikidataAssessmentItemQueries.ParseDetails(TitleStatementsJson);
+
+        var row = WikidataAssessmentItemBuilder.Build("Q29010489", triples["Q29010489"], new[] { "doi-search" }, "scholarly", DateTime.UtcNow);
+
+        // The best-ranked English title is unchanged; every statement is in TitleStatements.
+        Assert.Equal("Batrachuperus karlschmidti: Xie Feng", row.Title);
+        Assert.Equal(new[] {
+            new WikidataTitle("Batrachuperus karlschmidti", "la", "deprecated"),
+            new WikidataTitle("Batrachuperus karlschmidti: Xie Feng", "en", "normal"),
+        }, row.TitleStatements);
+    }
+
+    [Fact]
+    public void Build_NoTitleStatement_RecordsAnEmptyList() {
+        var triples = WikidataAssessmentItemQueries.ParseDetails(DetailsJson);
+
+        var row = WikidataAssessmentItemBuilder.Build("Q56227924", triples["Q56227924"], new[] { "doi-search" }, "scholarly", DateTime.UtcNow);
+
+        Assert.NotNull(row.TitleStatements);
+        Assert.Empty(row.TitleStatements);
+    }
+
+    [Fact]
+    public void Details_ReadsTitleStatementsWithTheirRank() {
+        var query = WikidataAssessmentItemQueries.Details(new[] { "Q29010489" });
+
+        Assert.Contains("?item p:P1476 ?statement", query);
+        Assert.Contains("wikibase:rank ?rank", query);
+        Assert.Contains("PREFIX ps: <http://www.wikidata.org/prop/statement/>", query);
+    }
+
+    [Theory]
+    [InlineData("http://wikiba.se/ontology#PreferredRank", "preferred")]
+    [InlineData("http://wikiba.se/ontology#NormalRank", "normal")]
+    [InlineData("http://wikiba.se/ontology#DeprecatedRank", "deprecated")]
+    [InlineData("http://wikiba.se/ontology#Other", null)]
+    public void ShortRank_ReadsTheRankIri(string iri, string? expected) {
+        Assert.Equal(expected, WikidataAssessmentItemQueries.ShortRank(iri));
+    }
+
     [Theory]
     [InlineData("http://www.wikidata.org/entity/Q56912428", "Q56912428")]
     [InlineData("Q56912428", "Q56912428")]
@@ -341,6 +413,51 @@ public class IucnAssessmentItemParsingTests {
         Assert.Equal("Q54800517", publication.Qid);
         Assert.Equal("Q54800517", Assert.Single(set.ByAssessmentId[22459833]).Qid);
         Assert.Empty(set.ByAssessmentId[132622973]);
+    }
+
+    [Fact]
+    public void Store_TitleStatements_RoundTripAndNullMeansNotRecorded() {
+        using var connection = new SqliteConnection("Data Source=:memory:");
+        connection.Open();
+        using var store = WikidataCacheStore.OpenFromConnection(connection);
+
+        var titles = new[] { new WikidataTitle("Rusa unicolor: Timmins, R. & Kawanishi, K. é", "en", "normal") };
+        store.UpsertAssessmentItems(new[] {
+            Row("Q1", 1, 10, "Q13442814") with { TitleStatements = titles },
+            Row("Q2", 2, 20, "Q13442814") with { TitleStatements = Array.Empty<WikidataTitle>() },
+            Row("Q3", 3, 30, "Q13442814"),
+        });
+
+        var rows = store.ReadAssessmentItems().ToDictionary(r => r.Qid);
+        Assert.Equal(titles, rows["Q1"].TitleStatements);
+        Assert.Empty(rows["Q2"].TitleStatements!);
+        Assert.Null(rows["Q3"].TitleStatements);
+    }
+
+    [Fact]
+    public void Store_TableWithoutTitleStatements_IsMigratedAndReadsNull() {
+        using var connection = new SqliteConnection("Data Source=:memory:");
+        connection.Open();
+        // The table as `wikidata iucn-assessment-items` made it before October 2026.
+        using (var create = connection.CreateCommand()) {
+            create.CommandText = WikidataAssessmentItemTable.Ddl
+                .Replace("    title_statements TEXT,\r\n", string.Empty)
+                .Replace("    title_statements TEXT,\n", string.Empty);
+            create.ExecuteNonQuery();
+            create.CommandText = "INSERT INTO wikidata_iucn_assessment_items(qid, qid_numeric, title, fetched_at, first_seen_at) "
+                + "VALUES ('Q7', 7, 'Old: Someone', '2026-09-13T00:00:00.0000000Z', '2026-09-13T00:00:00.0000000Z')";
+            create.ExecuteNonQuery();
+        }
+        Assert.False(WikidataAssessmentItemTable.HasTitleStatements(connection));
+
+        // A read-only reader of the old table still works.
+        var old = Assert.Single(WikidataAssessmentItemTable.ReadAll(connection));
+        Assert.Null(old.TitleStatements);
+        Assert.Equal("Old: Someone", old.Title);
+
+        using var store = WikidataCacheStore.OpenFromConnection(connection);
+        Assert.True(WikidataAssessmentItemTable.HasTitleStatements(connection));
+        Assert.Null(Assert.Single(store.ReadAssessmentItems()).TitleStatements);
     }
 
     [Fact]

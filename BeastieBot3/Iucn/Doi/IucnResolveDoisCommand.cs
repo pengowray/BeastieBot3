@@ -11,8 +11,10 @@ using Spectre.Console.Cli;
 //
 //   1. IucnDoiScopeReader lists the assessments in the scope with no DOI from those sources.
 //   2. Crossref's list of every DOI under IUCN's prefix (CrossrefIucnWorks, about 260 requests) is
-//      downloaded when the cache has none from the last 7 days. An assessment whose DOI is in it is
-//      settled with no further request.
+//      downloaded when the cache has none from the last 7 days, or always with --refresh-crossref
+//      (even when no assessment needs checking: `site build-db` reads the titles Crossref
+//      registered, for the name in the titles of new Wikidata items). An assessment whose DOI is
+//      in it is settled with no further request.
 //   3. For the rest, likely DOIs (IucnDoiCandidates) are checked one by one at doi.org's handle API
 //      until one exists (IucnDoiResolution). By default only assessments published in the year the
 //      list was downloaded or the year before, or new in this release, are checked there
@@ -74,7 +76,7 @@ internal sealed class IucnResolveDoisCommand : AsyncCommand<IucnResolveDoisComma
         public string? DoiOrg { get; init; }
 
         [CommandOption("--refresh-crossref")]
-        [Description("Download Crossref's list of IUCN DOIs again, even when the cache has a copy from the last 7 days.")]
+        [Description("Download Crossref's list of IUCN DOIs and their titles again, even when the cache has a copy from the last 7 days or no assessment needs checking.")]
         public bool RefreshCrossref { get; init; }
 
         [CommandOption("--status")]
@@ -190,7 +192,7 @@ internal sealed class IucnResolveDoisCommand : AsyncCommand<IucnResolveDoisComma
         }
 
         try {
-            if (!settings.NoCrossref && toCheck.Count > 0) {
+            if (!settings.NoCrossref && (toCheck.Count > 0 || settings.RefreshCrossref)) {
                 if (settings.RefreshCrossref || listing?.CompletedAtUtc is not { } completed || now - completed > CrossrefMaxAge) {
                     await DownloadCrossrefAsync(store, http, Warn, cancellationToken).ConfigureAwait(false);
                     listing = store.LastCompletedListing();

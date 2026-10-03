@@ -28,9 +28,14 @@ using Microsoft.Data.Sqlite;
 //     been read, so the few rows with such a name are parsed again and written at the end.
 //   - has_taxonomic_notes says whether the payload's taxonomic notes have text (SiteBuildRules.HasText);
 //     the notes are narrative text and are never stored. NULL for a row with no cached payload.
+//   - The citation's RegisteredName is the name part of the title Crossref registered for its DOI
+//     ("Canis mesomelas: Hoffmann, M." gives "Canis mesomelas"), which the Wikidata item commands
+//     use when the item has no title of its own. Only when the DOI names this
+//     assessment's own id, so an errata version sharing the DOI of the assessment it corrects gets none.
 //   - wikidata_item_qid is the Wikidata item for the assessment as a publication: its own, or for an
-//     errata version, the item of the assessment its DOI names (SiteWikidataItems.Find). A row with
-//     no cached payload can only get its own.
+//     errata version, the item of the assessment its DOI names (SiteWikidataItems.Find), and
+//     wikidata_item_assessment_id the assessment that item is for. A row with no cached payload can
+//     only get its own.
 //   - replaced_by_assessment_id is set on the assessment an errata or amended version replaced,
 //     pointing at the newer one. An errata version (its title says "errata version published in")
 //     replaced one of the assessments IucnTaxaHeaders.PredecessorIds gives that are also rows here;
@@ -52,6 +57,9 @@ internal sealed class SiteDoiSources {
     public Dictionary<long, (long? AssessmentId, string? Doi)> Gbif { get; } = new();
     public Dictionary<long, List<string>> Wikidata { get; } = new();
     public Dictionary<long, string> Resolved { get; } = new();
+    /// Titles Crossref registered for IUCN DOIs, by DOI (any case), with the assessment id the DOI
+    /// names; from `iucn resolve-dois`'s crossref_works.
+    public Dictionary<string, (long AssessmentId, string Title)> CrossrefTitles { get; } = new(StringComparer.OrdinalIgnoreCase);
 }
 
 internal sealed class SiteAssessmentPass {
@@ -315,6 +323,15 @@ internal sealed class SiteAssessmentPass {
             }
         }
         _stats.Count(_stats.DoisBySource, parts.Doi is null ? DoiSource.None : parts.DoiSource);
+        if (parts.Doi is { } doi && dois.CrossrefTitles.TryGetValue(doi.Trim(), out var registered)
+            && registered.AssessmentId == assessment.AssessmentId
+            && WikidataCitation.NameFromTitle(registered.Title) is { } registeredName) {
+            parts = parts with { RegisteredName = registeredName };
+            _stats.RegisteredNames++;
+            if (!WikidataCitation.SameName(registeredName, parts.ScientificName)) {
+                _stats.RegisteredNamesDiffer++;
+            }
+        }
         _stats.CitationsParsed++;
         assessment.CitationJson = parts.ToJson();
         SetWikidataItem(assessment, parts.Doi);
@@ -415,6 +432,9 @@ internal sealed class SiteAssessmentPass {
         }
         assessment.WikidataItemQid = found.Item.Qid;
         assessment.WikidataItemProperties = found.Item.Properties;
+        assessment.WikidataItemTitles = found.Item.TitlesJson;
+        assessment.WikidataItemLabelEn = found.Item.LabelEn;
+        assessment.WikidataItemAssessmentId = found.Item.AssessmentId;
         _stats.WikidataItems.Used.Add(found.Item.Qid);
         if (found.ThroughDoi) _stats.AssessmentsWithItemThroughDoi++; else _stats.AssessmentsWithOwnItem++;
     }

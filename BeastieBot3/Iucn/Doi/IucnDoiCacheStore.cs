@@ -15,9 +15,11 @@ using Microsoft.Data.Sqlite;
 //                      what was decided about it.
 //   crossref_works     Crossref's list of DOIs under IUCN's prefix 10.2305 that name a Red List
 //                      assessment ("...RLTS.T<taxon>A<assessment>..."), with the ids in the DOI and
-//                      the ids in the assessment page URL it points to. For an errata version
-//                      published 2015 to 2018 the two differ: the DOI keeps the assessment id of the
-//                      assessment it corrects and points to the errata version's page.
+//                      the ids in the assessment page URL it points to, and the title registered
+//                      for it ("Canis mesomelas: Hoffmann, M."; NULL in rows downloaded before the
+//                      title column was added). For an errata version published 2015 to 2018 the
+//                      ids differ: the DOI keeps the assessment id of the assessment it corrects and
+//                      points to the errata version's page.
 //   crossref_listings  one row per download of that list: when it started and finished, how many
 //                      works Crossref reported and how many were read.
 
@@ -32,7 +34,8 @@ internal static class DoiFoundBy {
 /// One doi_check row.
 internal sealed record DoiCheckRow(long AssessmentId, long TaxonId, string? Doi, DateTime CheckedAtUtc, int CandidatesTried);
 
-/// One work from Crossref's list, already parsed.
+/// One work from Crossref's list, already parsed. Title: the registered title as Crossref gives it,
+/// HTML entities included; null when Crossref gives none.
 internal sealed record CrossrefIucnWork(
     string Doi,
     long TaxonId,
@@ -41,7 +44,8 @@ internal sealed record CrossrefIucnWork(
     string? Language,
     string? Url,
     long? UrlTaxonId,
-    long? UrlAssessmentId);
+    long? UrlAssessmentId,
+    string? Title = null);
 
 /// A Crossref list download.
 internal sealed record CrossrefListing(long Id, DateTime StartedAtUtc, DateTime? CompletedAtUtc, long? TotalResults, long WorksSeen, int Requests);
@@ -112,12 +116,28 @@ internal sealed class IucnDoiCacheStore : SqliteStore {
                 url TEXT,
                 url_taxon_id INTEGER,
                 url_assessment_id INTEGER,
-                listing_id INTEGER NOT NULL
+                listing_id INTEGER NOT NULL,
+                title TEXT
             );
             CREATE INDEX IF NOT EXISTS idx_crossref_works_assessment ON crossref_works(assessment_id);
             CREATE INDEX IF NOT EXISTS idx_crossref_works_url_assessment ON crossref_works(url_assessment_id);
             """;
         command.ExecuteNonQuery();
+        // A cache made before titles were stored gets the column; its rows keep NULL until the
+        // next download of Crossref's list.
+        if (!HasCrossrefTitles(_connection)) {
+            using var alter = _connection.CreateCommand();
+            alter.CommandText = "ALTER TABLE crossref_works ADD COLUMN title TEXT";
+            alter.ExecuteNonQuery();
+        }
+    }
+
+    /// True when crossref_works has the title column. A cache made before it existed and opened
+    /// read-only (`site build-db`) has not been migrated.
+    public static bool HasCrossrefTitles(SqliteConnection connection) {
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT 1 FROM pragma_table_info('crossref_works') WHERE name = 'title'";
+        return command.ExecuteScalar() is not null;
     }
 
     // ------------------------------------------------------------ doi_check
@@ -283,8 +303,8 @@ internal sealed class IucnDoiCacheStore : SqliteStore {
         using (var command = _connection.CreateCommand()) {
             command.Transaction = transaction;
             command.CommandText = """
-                INSERT INTO crossref_works (doi, taxon_id, assessment_id, release, language, url, url_taxon_id, url_assessment_id, listing_id)
-                VALUES (@doi, @tid, @aid, @release, @lang, @url, @utid, @uaid, @listing)
+                INSERT INTO crossref_works (doi, taxon_id, assessment_id, release, language, url, url_taxon_id, url_assessment_id, listing_id, title)
+                VALUES (@doi, @tid, @aid, @release, @lang, @url, @utid, @uaid, @listing, @title)
                 ON CONFLICT(doi) DO UPDATE SET
                     taxon_id = excluded.taxon_id,
                     assessment_id = excluded.assessment_id,
@@ -293,7 +313,8 @@ internal sealed class IucnDoiCacheStore : SqliteStore {
                     url = excluded.url,
                     url_taxon_id = excluded.url_taxon_id,
                     url_assessment_id = excluded.url_assessment_id,
-                    listing_id = excluded.listing_id
+                    listing_id = excluded.listing_id,
+                    title = excluded.title
                 """;
             var doi = command.Parameters.Add("@doi", SqliteType.Text);
             var tid = command.Parameters.Add("@tid", SqliteType.Integer);
@@ -303,6 +324,7 @@ internal sealed class IucnDoiCacheStore : SqliteStore {
             var url = command.Parameters.Add("@url", SqliteType.Text);
             var urlTaxon = command.Parameters.Add("@utid", SqliteType.Integer);
             var urlAssessment = command.Parameters.Add("@uaid", SqliteType.Integer);
+            var title = command.Parameters.Add("@title", SqliteType.Text);
             command.Parameters.AddWithValue("@listing", listingId);
             foreach (var work in works) {
                 doi.Value = work.Doi;
@@ -313,6 +335,7 @@ internal sealed class IucnDoiCacheStore : SqliteStore {
                 url.Value = (object?)work.Url ?? DBNull.Value;
                 urlTaxon.Value = (object?)work.UrlTaxonId ?? DBNull.Value;
                 urlAssessment.Value = (object?)work.UrlAssessmentId ?? DBNull.Value;
+                title.Value = (object?)work.Title ?? DBNull.Value;
                 command.ExecuteNonQuery();
             }
         }
@@ -370,10 +393,10 @@ internal sealed class IucnDoiCacheStore : SqliteStore {
         var works = new List<CrossrefIucnWork>();
         using var command = _connection.CreateCommand();
         command.CommandText = """
-            SELECT doi, taxon_id, assessment_id, release, language, url, url_taxon_id, url_assessment_id
+            SELECT doi, taxon_id, assessment_id, release, language, url, url_taxon_id, url_assessment_id, title
             FROM crossref_works WHERE assessment_id = @id
             UNION
-            SELECT doi, taxon_id, assessment_id, release, language, url, url_taxon_id, url_assessment_id
+            SELECT doi, taxon_id, assessment_id, release, language, url, url_taxon_id, url_assessment_id, title
             FROM crossref_works WHERE url_assessment_id = @id
             ORDER BY doi
             """;
@@ -388,7 +411,8 @@ internal sealed class IucnDoiCacheStore : SqliteStore {
                 reader.IsDBNull(4) ? null : reader.GetString(4),
                 reader.IsDBNull(5) ? null : reader.GetString(5),
                 reader.IsDBNull(6) ? null : reader.GetInt64(6),
-                reader.IsDBNull(7) ? null : reader.GetInt64(7)));
+                reader.IsDBNull(7) ? null : reader.GetInt64(7),
+                reader.IsDBNull(8) ? null : reader.GetString(8)));
         }
         return works;
     }

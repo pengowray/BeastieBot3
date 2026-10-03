@@ -722,6 +722,58 @@ textarea {
     margin: 0 0 1.25rem;
 }
 
+/* The item's title and label that the commands replace, and the IUCN status beside Wikidata's.
+   A table cell breaks only a word too long for it, so words stay whole at phone width; a list
+   item may break a long URL anywhere. */
+
+.wikidata-changes td,
+.status-compare td {
+    overflow-wrap: break-word;
+}
+
+.wikidata-status li {
+    overflow-wrap: anywhere;
+}
+
+.wikidata-changes-intro {
+    margin-bottom: 0.3rem;
+}
+
+.wikidata-status {
+    margin-top: 2rem;
+}
+
+.wikidata-status h3 {
+    margin-top: 0;
+}
+
+.status-compare tbody th {
+    width: 40%;
+}
+
+.plain-list {
+    list-style: none;
+    margin: 0;
+    padding: 0;
+}
+
+.status-verdict {
+    font-weight: 600;
+}
+
+.status-commands-label {
+    margin: 0.75rem 0 0.2rem;
+}
+
+.wikidata-status ul:not(.plain-list) {
+    margin: 0;
+    padding-left: 1.25rem;
+}
+
+.status-keep {
+    margin-top: 0.75rem;
+}
+
 .help {
     font-size: 0.85rem;
     color: var(--muted);

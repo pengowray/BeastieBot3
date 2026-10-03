@@ -41,6 +41,51 @@ public sealed class WikidataSectionTests(SiteFactory factory) : IClassFixture<Si
         Assert.DoesNotContain("{{cite Q}} citation</label>", part);
     }
 
+    // Two items state the leopard's IUCN taxon ID, so the create commands leave out main subject
+    // (P921), and one line says why.
+    [Fact]
+    public async Task TaxonIdOnSeveralItems_CreateCommandsLeaveOutMainSubject() {
+        var html = await _client.GetStringAsync($"/species/{FixtureDb.Leopard}");
+        var box = Html.Textarea(html, WikidataCite.CommandsBoxId)!;
+        Assert.StartsWith("CREATE", box);
+        Assert.Contains("LAST\tP1433\tQ32059", box);
+        Assert.DoesNotContain("P921", box);
+        Assert.Contains(SiteText.MainSubjectSeveralItems(2, FixtureDb.Leopard), Html.Text(Part(html)));
+    }
+
+    // The cassowary's item states its IUCN taxon ID only at deprecated rank, so the add commands
+    // leave out main subject (P921), which the assessment item lacks.
+    [Fact]
+    public async Task TaxonIdAtDeprecatedRank_AddCommandsLeaveOutMainSubject() {
+        var html = await _client.GetStringAsync($"/species/{FixtureDb.Cassowary}");
+        var box = Html.Textarea(html, WikidataCite.CommandsBoxId)!;
+        Assert.Equal($"{FixtureDb.CassowaryLatestItem}\tP577\t+2016-00-00T00:00:00Z/9", box);
+        var text = Html.Text(Part(html));
+        Assert.Contains(SiteText.MainSubjectDeprecated(FixtureDb.CassowaryItem, FixtureDb.Cassowary), text);
+        Assert.Contains(SiteText.MissingStatements("publication date (P577)"), text);
+    }
+
+    // One item states the taxon's IUCN taxon ID: main subject (P921) is written, with no line.
+    [Fact]
+    public async Task OneItemWithTheTaxonId_CommandsHaveMainSubject() {
+        var html = await _client.GetStringAsync($"/species/{FixtureDb.PolarBear}");
+        Assert.Contains("LAST\tP921\tQ33609", Html.Textarea(html, WikidataCite.CommandsBoxId)!);
+        Assert.DoesNotContain("wikidata-main-subject", Part(html));
+    }
+
+    [Fact]
+    public void TaxonItemDoubt_FromTheTaxonsLinks() {
+        static TaxonRow Taxon(string? source = "p627", bool deprecated = false, string? others = null) =>
+            new(1, "Panthera pardus", TaxonKinds.Species, "ANIMALIA", null, null, null, null, null, null, null, null, null, null, "Q35694", null, null,
+                WikidataQidSource: source, WikidataP627Deprecated: deprecated, WikidataOtherItems: others);
+        Assert.Null(TaxonItemDoubt.Of(Taxon()));
+        Assert.Null(TaxonItemDoubt.Of(null));
+        Assert.Null(TaxonItemDoubt.Of(Taxon(source: "name-match", deprecated: true)));
+        Assert.Equal(new TaxonItemDoubt(TaxonItemDoubtKind.TaxonIdDeprecated, 1, "Q35694", 1), TaxonItemDoubt.Of(Taxon(deprecated: true)));
+        var others = WikidataOtherTaxonItem.ListToJson([new WikidataOtherTaxonItem("Q1"), new WikidataOtherTaxonItem("Q2", true)]);
+        Assert.Equal(new TaxonItemDoubt(TaxonItemDoubtKind.SeveralItems, 1, "Q35694", 3), TaxonItemDoubt.Of(Taxon(deprecated: true, others: others)));
+    }
+
     [Fact]
     public async Task ItemWithoutCitationParts() {
         // The West African lion's assessment has no citation, so there is no options form, but its
@@ -102,7 +147,9 @@ public sealed class UnreadableItemModelTests(UnreadableItemModelSiteFactory fact
         var html = await response.Content.ReadAsStringAsync();
         Assert.Contains("No Wikidata item found for this assessment.", html);
         Assert.DoesNotContain("id=\"wikidata-commands\"", html);
-        Assert.DoesNotContain("QuickStatements", html);
+        Assert.DoesNotContain("QuickStatements commands to create the item", html);
+        // The status commands follow no item model, so they are still offered.
+        Assert.Contains("id=\"wikidata-status-commands\"", html);
 
         var tiger = await client.GetStringAsync($"/species/{FixtureDb.Tiger}");
         Assert.Contains($"wikidata.org/wiki/{FixtureDb.TigerLatestItem}", tiger);
@@ -175,6 +222,25 @@ public sealed class WikidataCiteUnitTests {
         Assert.Equal(0, calls);
     }
 
+    // Taxon 30321's 1998 assessment: Crossref registered "Apollonias barbujana ssp. ceballosi", and
+    // IUCN's citation has "subsp.". The names are the same, so there is no name note; the create
+    // commands keep Crossref's form, which is the registered title.
+    [Fact]
+    public void RegisteredNameThatDiffersOnlyInTheRankMarker_NoNameNote() {
+        var parts = new IucnCitationParts {
+            TaxonId = 30321, AssessmentId = 9535286, Year = 1998, ScientificName = "Apollonias barbujana subsp. ceballosi",
+            RegisteredName = "Apollonias barbujana ssp. ceballosi", Doi = "10.2305/IUCN.UK.1998.RLTS.T30321A9535286.en",
+        };
+        var view = WikidataCite.Build(Row(null), parts, "Q30252628", new WikidataItemModel(), new CiteQOptions());
+        Assert.Equal(new TitleName("Apollonias barbujana ssp. ceballosi", TitleNameSource.Crossref), view.Name);
+        Assert.False(view.ShowNameNote);
+        Assert.Contains("LAST\tP1476\ten:\"Apollonias barbujana ssp. ceballosi\"", view.Commands!.Text);
+
+        // A different name still gets the note.
+        Assert.True(WikidataCite.Build(Row(null), parts with { RegisteredName = "Apollonias ceballosi" }, "Q30252628",
+            new WikidataItemModel(), new CiteQOptions()).ShowNameNote);
+    }
+
     [Fact]
     public void NoModelGivesNoCommands() {
         var calls = 0;
@@ -221,6 +287,18 @@ public sealed class WikidataCiteUnitTests {
             new WikitextBox("a", "b", "QuickStatements", "c", 2, CopyName: SiteText.CopyQuickStatements).CopyAccessibleName);
     }
 
+    // Q56226968's assessment with no item and no Crossref title: IUCN's citation name is internal,
+    // so there are no create commands, and the line says why.
+    [Fact]
+    public void OnlyAnInternalName_NoCreateCommands() {
+        var parts = new IucnCitationParts { TaxonId = 22694346, AssessmentId = 39183818, Year = 2012, ScientificName = "Larus glaucoides_old" };
+        var view = WikidataCite.Build(Row(null), parts, null, new WikidataItemModel(), new CiteQOptions());
+        Assert.True(view.NoUsableName);
+        Assert.Null(view.Commands);
+        Assert.Equal("No commands: the only name this site has for this assessment is IUCN's citation name, Larus glaucoides_old, "
+            + "which IUCN uses as an internal name for a taxon it has replaced.", SiteText.NoUsableName(view.CitationName!));
+    }
+
     [Fact]
     public void PropertyLabels() {
         Assert.Equal("DOI (P356)", SiteText.WikidataPropertyLabel("P356"));
@@ -237,6 +315,20 @@ public sealed class WikidataCiteUnitTests {
     public void SchemaHasTheColumnsTheSiteReads() {
         Assert.Contains("wikidata_item_qid", SiteDbSchema.Ddl);
         Assert.Contains("wikidata_item_properties", SiteDbSchema.Ddl);
+        Assert.Contains("wikidata_item_titles", SiteDbSchema.Ddl);
+        Assert.Contains("wikidata_item_label_en", SiteDbSchema.Ddl);
+        Assert.Contains("wikidata_p141", SiteDbSchema.Ddl);
+        Assert.Contains("wikidata_item_downloaded", SiteDbSchema.Ddl);
+    }
+
+    [Fact]
+    public void StatementsAdded_SkipsRemovals() {
+        string[] commands = [
+            "Q5\tP1476\ten:\"Ursus maritimus\"",
+            "-Q5\tP1476\ten:\"Ursus maritimus: Wiig, Ø.\"",
+            "-STATEMENT\tQ5$1A2B3C4D-0000-4000-8000-000000000001",
+        ];
+        Assert.Equal(["title (P1476)"], WikidataCite.StatementsAdded(commands));
     }
 
     [Fact]

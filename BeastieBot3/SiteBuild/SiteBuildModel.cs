@@ -59,6 +59,16 @@ internal sealed class SiteTaxon {
     public string? EnwikiTitle { get; set; }
     public string? WikidataQid { get; set; }
     public string? WikidataQidSource { get; set; }
+    /// For an item that states the taxon's IUCN taxon id: its P141 statements as JSON
+    /// (WikidataStatusStatement), and the day the Wikidata cache downloaded it. Null when the
+    /// cache has not downloaded the item.
+    public string? WikidataP141 { get; set; }
+    public string? WikidataItemDownloaded { get; set; }
+    /// The item states the taxon's IUCN taxon id only at deprecated rank.
+    public bool WikidataP627Deprecated { get; set; }
+    /// The other items that state the taxon's IUCN taxon id, as JSON (WikidataOtherTaxonItem);
+    /// null when no other item does.
+    public string? WikidataOtherItems { get; set; }
     public string? ColId { get; set; }
     public long? LatestGlobalAssessmentId { get; set; }
 
@@ -117,6 +127,12 @@ internal sealed class SiteAssessment {
     /// (SiteWikidataItems).
     public string? WikidataItemQid { get; set; }
     public string? WikidataItemProperties { get; set; }
+    /// That item's title statements as JSON (WikidataTitle; null when not recorded) and English label.
+    public string? WikidataItemTitles { get; set; }
+    public string? WikidataItemLabelEn { get; set; }
+    /// The assessment that item is for. An errata version that shares the item of the assessment
+    /// it corrects has that assessment's id here.
+    public long? WikidataItemAssessmentId { get; set; }
     /// True when the row came from the CSV, whose values win over the API's.
     public required bool FromCsv { get; init; }
 }
@@ -194,6 +210,25 @@ internal sealed class SiteBuildStats {
     public int QidsFromNameMatch;
     public int QidsNameMatchOtherKingdom;
     public int QidTieBreaks;
+    /// Taxa linked through P627 whose item the Wikidata cache has downloaded, so their P141
+    /// statements are known; and of those, items with no P141 statement.
+    public int QidsWithP141Known;
+    public int QidsWithNoP141;
+    /// Taxa linked through P627 whose chosen item states the id only at deprecated rank. Null: the
+    /// cache had no table of deprecated ids.
+    public int? QidsP627Deprecated;
+    /// Edition items of the Red List read from the cache; null when the cache has no such table.
+    public int? RedListEditions;
+    /// Items whose JSON was read for P141 references the index does not record, and the P141
+    /// statements found to cite IUCN that way: by a reference URL on iucnredlist.org, or by a
+    /// stated in after a reference's first.
+    public int P141ItemsReadAsJson;
+    public int P141CitesIucnByUrl;
+    public int P141CitesIucnByLaterStatedIn;
+    /// Citations whose DOI has a title registered with Crossref, and of those, the ones whose name
+    /// differs from IUCN's citation name (WikidataCitation.SameName).
+    public int RegisteredNames;
+    public int RegisteredNamesDiffer;
     public int ColIdsFromPlacement;
     public int ColIdsFromCrossReference;
     public int SpratMatched;
