@@ -245,33 +245,15 @@ internal sealed class SpeciesLineFormatter {
     /// Examples:
     /// - [[Common name]] (''Scientific name'')
     /// - [[Wikilink|Common name]] (''Scientific name'')
-    /// - [[Scientific name|Article title]] (''Scientific name'')  (fallback when no common name but article exists with different title)
-    /// - ''[[Scientific name]]'' (fallback when no common name and no distinct article)
+    /// - [[Article title|''Scientific name'']] (no common name; the article has another title)
+    /// - ''[[Scientific name]]'' (no common name; no article, or the article has the scientific name as its title)
+    /// With no common name the line is the same as in Style C: the scientific name, linked to the
+    /// article. The article title is only a link target, never shown, because it is often another
+    /// scientific name ("Crenimugil buchanani" for Moolgarda buchanani) or a genus.
     /// </summary>
     private string BuildCommonNameFocusFragment(string? commonName, string? articleTitle, string? rawScientific, string formattedScientific, IucnSpeciesRecord record) {
         if (string.IsNullOrWhiteSpace(commonName)) {
-            // For infraspecific taxa, use specialized formatting with proper rank markers
-            var hasInfrarank = !string.IsNullOrWhiteSpace(record.InfraType) && !string.IsNullOrWhiteSpace(record.InfraName);
-            if (hasInfrarank) {
-                var infraLink = BuildInfraspecificLink(record, articleTitle);
-                if (!string.IsNullOrWhiteSpace(infraLink)) {
-                    return infraLink;
-                }
-            }
-
-            // Fallback: no common name resolved
-            var linkTarget = ResolveLinkTarget(record, articleTitle, rawScientific);
-            if (!string.IsNullOrWhiteSpace(linkTarget)) {
-                if (string.Equals(linkTarget, rawScientific, StringComparison.OrdinalIgnoreCase)) {
-                    return $"''[[{linkTarget}]]''";
-                }
-
-                if (!string.IsNullOrWhiteSpace(rawScientific)) {
-                    return $"[[{rawScientific}|{linkTarget}]] ({formattedScientific})";
-                }
-                return $"[[{linkTarget}]] ({formattedScientific})";
-            }
-            return formattedScientific;
+            return BuildScientificNameOnlyFragment(articleTitle, rawScientific, formattedScientific, record);
         }
 
         // We have a common name
@@ -302,24 +284,7 @@ internal sealed class SpeciesLineFormatter {
     /// </summary>
     private string BuildCommonNameOnlyFragment(string? commonName, string? articleTitle, string? rawScientific, string formattedScientific, IucnSpeciesRecord record) {
         if (string.IsNullOrWhiteSpace(commonName)) {
-            // For infraspecific taxa, use specialized formatting with proper rank markers
-            var hasInfrarank = !string.IsNullOrWhiteSpace(record.InfraType) && !string.IsNullOrWhiteSpace(record.InfraName);
-            if (hasInfrarank) {
-                var infraLink = BuildInfraspecificLink(record, articleTitle);
-                if (!string.IsNullOrWhiteSpace(infraLink)) {
-                    return infraLink;
-                }
-            }
-
-            // Fallback to scientific name
-            var linkTarget = ResolveLinkTarget(record, articleTitle, rawScientific);
-            if (!string.IsNullOrWhiteSpace(linkTarget)) {
-                if (string.Equals(linkTarget, rawScientific, StringComparison.OrdinalIgnoreCase)) {
-                    return $"''[[{linkTarget}]]''";
-                }
-                return $"[[{linkTarget}|{formattedScientific}]]";
-            }
-            return formattedScientific;
+            return BuildScientificNameOnlyFragment(articleTitle, rawScientific, formattedScientific, record);
         }
 
         // We have a common name - show only common name
@@ -334,6 +299,35 @@ internal sealed class SpeciesLineFormatter {
         }
 
         return $"[[{commonLinkTarget}|{commonName}]]";
+    }
+
+    /// <summary>
+    /// The name fragment of Styles B and C for a taxon with no common name: the scientific name,
+    /// linked to the article when there is one. A subspecies or variety gets its rank marker
+    /// (<see cref="BuildInfraspecificLink"/>). Examples:
+    /// - ''[[Scientific name]]'' (the link target is the scientific name)
+    /// - [[Article title|''Scientific name'']]
+    /// - ''Scientific name'' (nothing to link, such as an undescribed "sp. nov." name)
+    /// </summary>
+    private string BuildScientificNameOnlyFragment(string? articleTitle, string? rawScientific, string formattedScientific, IucnSpeciesRecord record) {
+        var hasInfrarank = !string.IsNullOrWhiteSpace(record.InfraType) && !string.IsNullOrWhiteSpace(record.InfraName);
+        if (hasInfrarank) {
+            var infraLink = BuildInfraspecificLink(record, articleTitle);
+            if (!string.IsNullOrWhiteSpace(infraLink)) {
+                return infraLink;
+            }
+        }
+
+        var linkTarget = ResolveLinkTarget(record, articleTitle, rawScientific);
+        if (string.IsNullOrWhiteSpace(linkTarget)) {
+            return formattedScientific;
+        }
+        // Ordinal: a title that differs from the scientific name only in case is still a different
+        // text, and shown as the link text it would put the article title on the line.
+        if (string.Equals(linkTarget, rawScientific, StringComparison.Ordinal)) {
+            return $"''[[{linkTarget}]]''";
+        }
+        return $"[[{linkTarget}|{formattedScientific}]]";
     }
 
     /// <summary>
