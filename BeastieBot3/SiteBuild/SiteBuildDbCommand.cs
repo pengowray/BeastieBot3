@@ -244,7 +244,7 @@ internal sealed class SiteBuildDbCommand : Command<SiteBuildDbCommand.Settings> 
         }
 
         Section("File");
-        Text("Size", $"{s.FileBytes / 1024.0 / 1024.0:N1} MB");
+        Text("Size", $"{s.FileBytes / 1_000_000.0:N1} MB");
         var total = s.Phases.LastOrDefault(p => p.Phase == "Total").Elapsed;
         Text("Total time", $"{total.TotalSeconds:N0} s");
         AnsiConsole.Write(table);

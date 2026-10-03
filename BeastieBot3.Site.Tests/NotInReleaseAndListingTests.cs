@@ -154,7 +154,7 @@ public sealed class NotInReleaseAndListingTests(SiteFactory factory) : IClassFix
         Assert.Contains("<p class=\"note\">DOI found in Crossref&#x27;s list of IUCN DOIs, or by checking possible DOIs at doi.org.</p>", html);
 
         var about = Html.Text(await _client.GetStringAsync("/about"));
-        Assert.Contains("possible DOIs checked at doi.org (most recent check 30 September 2026)", about);
+        Assert.Contains("for recent assessments missing from it, possible DOIs checked at doi.org A note", about);
         Assert.Contains("A note under the citation says when the DOI came from GBIF, Wikidata, Crossref or doi.org, or when no DOI was found.", about);
     }
 }
