@@ -16,7 +16,7 @@ namespace BeastieBot3.SiteBuild;
 [CommandInfo("site build-db", CommandKind.Mutates,
     "Build the public species site's database (Datastore:site_sqlite) from the IUCN CSV export, the IUCN API cache, GBIF's copy of the IUCN checklist, the common names store, the Wikidata and Wikipedia caches, the Catalogue of Life placement file and release metadata, the SPRAT database, and the DOIs found by iucn resolve-dois. Taxa that are in the API cache but not in the CSV export get pages too, with their earlier assessments. The new database is written beside the old one and replaces it only when the build finishes. No assessment narrative text is stored.",
     Rerun = RerunEffect.Rebuilds,
-    RerunNote = "Builds the whole database again from the data stored locally and replaces the previous one. A running site keeps reading the old file until it is restarted.",
+    RerunNote = "Builds the whole database again from the data stored locally and replaces the previous one. A running site switches to the new file within about 30 seconds, without a restart.",
     Examples = new[] {
         "site build-db",
         "site build-db --limit 2000",
@@ -146,7 +146,7 @@ internal sealed class SiteBuildDbCommand : Command<SiteBuildDbCommand.Settings> 
             AnsiConsole.MarkupLineInterpolated($"[yellow]{warning}[/]");
         }
         AnsiConsole.MarkupLineInterpolated($"[green]Site database written:[/] {inputs.Output}");
-        AnsiConsole.MarkupLine("[grey]A running site keeps reading the old file until it is restarted.[/]");
+        AnsiConsole.MarkupLine("[grey]A running site switches to the new file within about 30 seconds, without a restart.[/]");
         return 0;
     }
 
