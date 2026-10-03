@@ -257,7 +257,7 @@ public static class SiteText {
     /// After NameFromItemTitle or NameRegistered, when the commands set the title or label.
     public const string NameCommandsUsePublished = "The commands use the published name.";
     public static string NameFromIucnCitation(string cited) =>
-        $"The commands use the name in IUCN's citation, {cited}. This site does not know the name the assessment was published under, which for an older assessment may be different.";
+        $"The commands use the name in IUCN's citation, {cited}. This site does not know the name the assessment was published under, which for an older assessment can be an earlier name of the taxon.";
     /// No item, and no usable name for a new one.
     public static string NoUsableName(string cited) =>
         $"No commands: IUCN's citation gives the name as {cited}, which is IUCN's internal name for a replaced taxon, and this site does not know the name the assessment was published under.";

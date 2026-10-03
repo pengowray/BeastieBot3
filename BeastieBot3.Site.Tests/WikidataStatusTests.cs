@@ -275,7 +275,7 @@ public sealed class WikidataStatusTests(SiteFactory factory) : IClassFixture<Sit
     [Fact]
     public async Task NewItem_WithIucnsCitationName_SaysThePublishedNameIsNotKnown() {
         var text = Html.Text(await CiteQPart($"/species/{FixtureDb.Bromus}"));
-        Assert.Contains("The commands use the name in IUCN's citation, Bromus interruptus. This site does not know the name the assessment was published under, which for an older assessment may be different.", text);
+        Assert.Contains("The commands use the name in IUCN's citation, Bromus interruptus. This site does not know the name the assessment was published under, which for an older assessment can be an earlier name of the taxon.", text);
     }
 
     [Fact]
