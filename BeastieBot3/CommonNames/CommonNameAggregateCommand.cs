@@ -569,38 +569,7 @@ internal sealed class CommonNameAggregateCommand : AsyncCommand<CommonNameAggreg
 
                         if (string.IsNullOrWhiteSpace(json)) continue;
 
-                        // Cheapest probe first: did an earlier run already resolve this entity?
-                        long? taxonId = store.FindTaxonByCrossReference("wikidata", entityId);
-                        var matchType = "exact";
-                        string? createName = null;
-
-                        // Then via the linked IUCN SIS id(s).
-                        if (!taxonId.HasValue && !string.IsNullOrWhiteSpace(iucnIds)) {
-                            foreach (var sisIdStr in iucnIds.Split(',')) {
-                                taxonId = store.FindTaxonBySourceId("iucn", sisIdStr.Trim());
-                                if (taxonId.HasValue) break;
-                            }
-                        }
-
-                        // Then via scientific name (canonical, then synonym).
-                        if (!taxonId.HasValue) {
-                            try {
-                                var record = WikidataEntityParser.Parse(json);
-                                foreach (var sciName in record.ScientificNames.Where(n => !string.IsNullOrWhiteSpace(n.Value))) {
-                                    var normalized = ScientificNameNormalizer.Normalize(sciName.Value);
-                                    if (normalized == null) continue;
-                                    createName ??= sciName.Value; // first usable name, for --create-missing
-
-                                    taxonId = store.FindTaxonByCanonicalName(normalized);
-                                    if (taxonId.HasValue) break;
-
-                                    taxonId = store.FindTaxonBySynonym(normalized);
-                                    if (taxonId.HasValue) { matchType = "synonym"; break; }
-                                }
-                            } catch {
-                                // Continue without matching
-                            }
-                        }
+                        var (taxonId, matchType, createName) = ResolveWikidataTaxon(store, entityId, iucnIds, json);
 
                         if (!taxonId.HasValue) {
                             // No existing taxon. Union mode mints one from the Wikidata scientific name;
@@ -676,6 +645,52 @@ internal sealed class CommonNameAggregateCommand : AsyncCommand<CommonNameAggreg
             AnsiConsole.MarkupLine($"[green]Wikidata:[/] {added:N0} common names from {matched:N0} matched entities, [blue]{created:N0}[/] taxa created ({errors} errors)");
             AnsiConsole.MarkupLine($"[grey]Skipped as scientific names: {scientificLabels:N0} English labels[/]");
         }, cancellationToken);
+    }
+
+    /// <summary>
+    /// The store taxon a Wikidata item's names belong to, and how it was found:
+    /// 1. the item's IUCN taxon ids (P627, comma-separated in <paramref name="iucnIds"/>) as they
+    ///    are in the cache now;
+    /// 2. the taxon an earlier run recorded for the item (a Wikidata cross-reference);
+    /// 3. the item's scientific names (P225), as the canonical name and then as a synonym
+    ///    (match type "synonym").
+    /// The current P627 comes first: a cross-reference is kept by a run without --replace, so after
+    /// the item's P627 changes it names the taxon the item used to have. CreateName is the item's
+    /// first usable scientific name, for --create-missing; it is only read when nothing matched.
+    /// </summary>
+    internal static (long? TaxonId, string MatchType, string? CreateName) ResolveWikidataTaxon(
+        CommonNameStore store, string entityId, string? iucnIds, string json) {
+        if (!string.IsNullOrWhiteSpace(iucnIds)) {
+            foreach (var sisId in iucnIds.Split(',')) {
+                if (store.FindTaxonBySourceId("iucn", sisId.Trim()) is { } byIucnId) {
+                    return (byIucnId, "exact", null);
+                }
+            }
+        }
+
+        if (store.FindTaxonByCrossReference("wikidata", entityId) is { } earlier) {
+            return (earlier, "exact", null);
+        }
+
+        string? createName = null;
+        try {
+            var record = WikidataEntityParser.Parse(json);
+            foreach (var sciName in record.ScientificNames.Where(n => !string.IsNullOrWhiteSpace(n.Value))) {
+                var normalized = ScientificNameNormalizer.Normalize(sciName.Value);
+                if (normalized == null) continue;
+                createName ??= sciName.Value;
+
+                if (store.FindTaxonByCanonicalName(normalized) is { } byName) {
+                    return (byName, "exact", createName);
+                }
+                if (store.FindTaxonBySynonym(normalized) is { } bySynonym) {
+                    return (bySynonym, "synonym", createName);
+                }
+            }
+        } catch {
+            // Continue without matching
+        }
+        return (null, "exact", createName);
     }
 
     private static Task AggregateWikipediaCommonNamesAsync(CommonNameStore store, string wikipediaPath, int? limit, bool createMissing,
@@ -799,8 +814,8 @@ internal sealed class CommonNameAggregateCommand : AsyncCommand<CommonNameAggreg
                             created++;
                         } else {
                             matched++;
-                            // A page about another taxon is recorded with its own match type, so it
-                            // can be told apart from the taxon's own article.
+                            // A page about another taxon is recorded, but not as this taxon's article
+                            // (CommonNameStore.GetWikipediaArticleTitle reads only "exact").
                             store.InsertCrossReference(taxonId.Value, "wikipedia", pageTitle,
                                 givesNames ? "exact" : CommonNameStore.OtherTaxonsPageMatch);
                         }

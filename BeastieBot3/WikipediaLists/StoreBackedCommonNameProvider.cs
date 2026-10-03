@@ -1,6 +1,5 @@
 using System;
 using System.Collections.Generic;
-using System.IO;
 using BeastieBot3;
 using BeastieBot3.CommonNames;
 using BeastieBot3.Taxonomy;
@@ -34,7 +33,8 @@ internal sealed class StoreBackedCommonNameProvider : IDisposable {
     private readonly Dictionary<string, string?> _articleByScientificCache = new(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
-    /// Creates a provider that owns and will dispose the store, which it opens read-only.
+    /// Creates a provider that owns and will dispose the store and the Wikipedia cache, which it
+    /// opens read-only.
     /// </summary>
     public StoreBackedCommonNameProvider(string commonNameDbPath, string? wikipediaCachePath = null, bool allowAmbiguous = false) {
         _store = CommonNameStore.OpenReadOnly(commonNameDbPath);
@@ -42,13 +42,8 @@ internal sealed class StoreBackedCommonNameProvider : IDisposable {
         _allowAmbiguous = allowAmbiguous;
         Chooser = CommonNameChooser.ForStore(_store, allowAmbiguous: allowAmbiguous);
 
-        if (!string.IsNullOrWhiteSpace(wikipediaCachePath) && File.Exists(wikipediaCachePath)) {
-            _wikiCache = WikipediaCacheStore.Open(wikipediaCachePath);
-            _ownsWikiCache = true;
-        } else {
-            _wikiCache = null;
-            _ownsWikiCache = false;
-        }
+        _wikiCache = string.IsNullOrWhiteSpace(wikipediaCachePath) ? null : WikipediaCacheStore.OpenReadOnly(wikipediaCachePath);
+        _ownsWikiCache = _wikiCache is not null;
     }
 
     /// <summary>

@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Data;
 using System.Globalization;
 using System.IO;
+using System.Linq;
 using System.Text;
 using Microsoft.Data.Sqlite;
 using BeastieBot3.Infrastructure;
@@ -25,6 +26,29 @@ internal sealed class WikipediaCacheStore : HttpCacheSqliteStore {
         store.EnsureImportSchema();
         store.EnsureSchema();
         return store;
+    }
+
+    /// <summary>
+    /// Opens an existing cache for reading only: no folder is created, no WAL pragma is set and no
+    /// schema work is done, so a reader such as `wikipedia generate-lists` cannot change a cache
+    /// that a download may be writing. Any write through it fails. Null when the file does not
+    /// exist or cannot be opened.
+    /// </summary>
+    internal static WikipediaCacheStore? OpenReadOnly(string databasePath) {
+        if (!File.Exists(databasePath)) {
+            return null;
+        }
+        var connection = new SqliteConnection(new SqliteConnectionStringBuilder {
+            DataSource = databasePath,
+            Mode = SqliteOpenMode.ReadOnly,
+        }.ConnectionString);
+        try {
+            connection.Open();
+        } catch (SqliteException) {
+            connection.Dispose();
+            return null;
+        }
+        return new WikipediaCacheStore(connection);
     }
 
     /// Test seam: build the schema on a connection the caller owns (see SqliteStore).
@@ -634,12 +658,15 @@ WHERE id=@id
         tx.Commit();
     }
 
-    public void UpsertTaxoboxData(WikiTaxoboxData data) {
+    public void UpsertTaxoboxData(WikiTaxoboxData data) => UpsertTaxoboxData(data, transaction: null);
+
+    private void UpsertTaxoboxData(WikiTaxoboxData data, SqliteTransaction? transaction) {
         if (data is null) {
             throw new ArgumentNullException(nameof(data));
         }
 
         using var command = _connection.CreateCommand();
+        command.Transaction = transaction;
         command.CommandText =
             """
 INSERT INTO wiki_taxobox_data(page_row_id, scientific_name, rank, kingdom, phylum, class_name, order_name, family, subfamily, tribe, genus, species, is_monotypic, data_json)
@@ -676,35 +703,102 @@ ON CONFLICT(page_row_id) DO UPDATE SET
         command.ExecuteNonQuery();
     }
 
-    public void DeleteTaxoboxData(long pageRowId) {
+    public void DeleteTaxoboxData(long pageRowId) => DeleteTaxoboxData(pageRowId, transaction: null);
+
+    private void DeleteTaxoboxData(long pageRowId, SqliteTransaction? transaction) {
         using var command = _connection.CreateCommand();
+        command.Transaction = transaction;
         command.CommandText = "DELETE FROM wiki_taxobox_data WHERE page_row_id=@id";
         command.Parameters.AddWithValue("@id", pageRowId);
         command.ExecuteNonQuery();
     }
 
+    /// <summary>
+    /// Saves the taxobox fields of several pages in one transaction: <paramref name="upserts"/>
+    /// replace or add a page's fields, and the pages in <paramref name="deletes"/> lose theirs.
+    /// </summary>
+    public void SaveTaxoboxChanges(IReadOnlyList<WikiTaxoboxData> upserts, IReadOnlyList<long> deletes) {
+        if (upserts.Count == 0 && deletes.Count == 0) {
+            return;
+        }
+        using var tx = _connection.BeginTransaction();
+        foreach (var data in upserts) {
+            UpsertTaxoboxData(data, tx);
+        }
+        foreach (var pageRowId in deletes) {
+            DeleteTaxoboxData(pageRowId, tx);
+        }
+        tx.Commit();
+    }
+
     public WikiTaxoboxData? GetTaxoboxData(long pageRowId) {
         using var command = _connection.CreateCommand();
         command.CommandText =
-            """
-SELECT page_row_id, scientific_name, rank, kingdom, phylum, class_name, order_name, family, subfamily, tribe, genus, species, is_monotypic, data_json
+            $"""
+SELECT {TaxoboxColumns}
 FROM wiki_taxobox_data
 WHERE page_row_id=@id
 LIMIT 1
 """;
         command.Parameters.AddWithValue("@id", pageRowId);
         using var reader = command.ExecuteReader(CommandBehavior.SingleRow);
-        if (!reader.Read()) {
-            return null;
-        }
+        return reader.Read() ? ReadTaxobox(reader, 0) : null;
+    }
 
-        bool? ParseBool(int ordinal) {
-            if (reader.IsDBNull(ordinal)) {
+    /// <summary>
+    /// Downloaded pages (download_status cached) in row id order, starting after
+    /// <paramref name="afterPageRowId"/>, with their wikitext and their stored taxobox fields.
+    /// Wikitext is null for a redirect stored without text. `wikipedia reparse-taxoboxes` reads
+    /// the cache a batch at a time with this.
+    /// </summary>
+    public IReadOnlyList<WikiStoredTaxoboxPage> ReadDownloadedPages(long afterPageRowId, int limit) {
+        using var command = _connection.CreateCommand();
+        command.CommandText =
+            $"""
+SELECT p.id, p.page_title, p.wikitext, {TaxoboxColumnsOf("t")}
+FROM wiki_pages p
+LEFT JOIN wiki_taxobox_data t ON t.page_row_id = p.id
+WHERE p.id > @after AND p.download_status = @cached
+ORDER BY p.id
+LIMIT @limit
+""";
+        command.Parameters.AddWithValue("@after", afterPageRowId);
+        command.Parameters.AddWithValue("@cached", WikiPageDownloadStatus.Cached);
+        command.Parameters.AddWithValue("@limit", limit);
+        var pages = new List<WikiStoredTaxoboxPage>();
+        using var reader = command.ExecuteReader();
+        while (reader.Read()) {
+            pages.Add(new WikiStoredTaxoboxPage(
+                reader.GetInt64(0),
+                reader.GetString(1),
+                reader.IsDBNull(2) ? null : reader.GetString(2),
+                reader.IsDBNull(3) ? null : ReadTaxobox(reader, 3)));
+        }
+        return pages;
+    }
+
+    /// <summary>How many pages are downloaded (download_status cached), redirects included.</summary>
+    public long CountDownloadedPages() {
+        using var command = _connection.CreateCommand();
+        command.CommandText = "SELECT COUNT(*) FROM wiki_pages WHERE download_status = @cached";
+        command.Parameters.AddWithValue("@cached", WikiPageDownloadStatus.Cached);
+        return Convert.ToInt64(command.ExecuteScalar() ?? 0L);
+    }
+
+    private const string TaxoboxColumns =
+        "page_row_id, scientific_name, rank, kingdom, phylum, class_name, order_name, family, subfamily, tribe, genus, species, is_monotypic, data_json";
+
+    private static string TaxoboxColumnsOf(string alias) =>
+        string.Join(", ", TaxoboxColumns.Split(", ").Select(column => $"{alias}.{column}"));
+
+    // The 14 wiki_taxobox_data columns in TaxoboxColumns order, starting at ordinal first.
+    private static WikiTaxoboxData ReadTaxobox(SqliteDataReader reader, int first) {
+        string? Text(int offset) => reader.IsDBNull(first + offset) ? null : reader.GetString(first + offset);
+        bool? Flag(int offset) {
+            if (reader.IsDBNull(first + offset)) {
                 return null;
             }
-
-            var value = reader.GetInt64(ordinal);
-            return value switch {
+            return reader.GetInt64(first + offset) switch {
                 0 => false,
                 1 => true,
                 _ => null
@@ -712,20 +806,11 @@ LIMIT 1
         }
 
         return new WikiTaxoboxData(
-            reader.GetInt64(0),
-            reader.IsDBNull(1) ? null : reader.GetString(1),
-            reader.IsDBNull(2) ? null : reader.GetString(2),
-            reader.IsDBNull(3) ? null : reader.GetString(3),
-            reader.IsDBNull(4) ? null : reader.GetString(4),
-            reader.IsDBNull(5) ? null : reader.GetString(5),
-            reader.IsDBNull(6) ? null : reader.GetString(6),
-            reader.IsDBNull(7) ? null : reader.GetString(7),
-            reader.IsDBNull(8) ? null : reader.GetString(8),
-            reader.IsDBNull(9) ? null : reader.GetString(9),
-            reader.IsDBNull(10) ? null : reader.GetString(10),
-            reader.IsDBNull(11) ? null : reader.GetString(11),
-            ParseBool(12),
-            reader.IsDBNull(13) ? null : reader.GetString(13));
+            reader.GetInt64(first),
+            Text(1), Text(2), Text(3), Text(4), Text(5), Text(6),
+            Text(7), Text(8), Text(9), Text(10), Text(11),
+            Flag(12),
+            Text(13));
     }
 
     public void RecordPageFailure(long pageRowId, string errorMessage, DateTime occurredAt) {
@@ -1120,6 +1205,9 @@ internal sealed record WikiTaxoboxData(
     bool? IsMonotypic,
     string? DataJson
 );
+
+/// <summary>A downloaded page's wikitext (null for a redirect stored without text) and its stored taxobox fields.</summary>
+internal sealed record WikiStoredTaxoboxPage(long PageRowId, string PageTitle, string? Wikitext, WikiTaxoboxData? Taxobox);
 
 internal sealed record WikiMissingTitle(string Title, string NormalizedTitle, string ReasonCode, string? Notes, DateTime AttemptedAt);
 
