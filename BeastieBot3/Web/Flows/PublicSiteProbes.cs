@@ -59,11 +59,11 @@ public static class PublicSiteProbes {
 
         return CompareReleases(gbif, iucn) switch {
             < 0 => new FlowProbeResult("todo",
-                $"The newest checklist is release {gbif}, but the IUCN Red List database holds release {iucn}, so assessments new in release {iucn} get no DOI from the checklist. Download it again. If the download is still release {gbif}, GBIF does not have release {iucn} yet."),
+                $"The newest checklist is from release {gbif}, but the IUCN Red List database holds release {iucn}, so assessments new in release {iucn} get no DOI from the checklist. Download it again. If the new download is still from release {gbif}, GBIF does not have release {iucn} yet."),
             > 0 => new FlowProbeResult("todo",
-                $"The newest checklist is release {gbif}, newer than the IUCN Red List database (release {iucn}). Import release {gbif} first: see the Import IUCN data workflow."),
+                $"The newest checklist is from release {gbif}, but the IUCN Red List database holds the older release {iucn}. Import release {gbif} first (Import IUCN data workflow)."),
             _ => new FlowProbeResult("todo",
-                $"The newest checklist is release {gbif}, but the IUCN Red List database holds release {iucn}."),
+                $"The newest checklist is from release {gbif}, but the IUCN Red List database holds release {iucn}."),
         };
     }
 

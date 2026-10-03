@@ -50,25 +50,21 @@ public class PublicSiteProbeTests {
     public void Gbif_older_than_the_csv_is_todo_and_says_what_it_costs() {
         var r = PublicSiteProbes.GbifStep(Site() with { GbifRelease = "2025-2" });
         Assert.Equal("todo", r.Status);
-        Assert.Contains("release 2025-2", r.Detail);
-        Assert.Contains("holds release 2026-1", r.Detail);
-        Assert.Contains("assessments new in release 2026-1 get no DOI from the checklist", r.Detail);
-        Assert.Contains("GBIF does not have release 2026-1 yet", r.Detail);
+        Assert.Equal("The newest checklist is from release 2025-2, but the IUCN Red List database holds release 2026-1, so assessments new in release 2026-1 get no DOI from the checklist. Download it again. If the new download is still from release 2025-2, GBIF does not have release 2026-1 yet.", r.Detail);
     }
 
     [Fact]
     public void Gbif_newer_than_the_csv_points_to_the_iucn_import() {
         var r = PublicSiteProbes.GbifStep(Site() with { GbifRelease = "2026-2" });
         Assert.Equal("todo", r.Status);
-        Assert.Contains("newer than the IUCN Red List database (release 2026-1)", r.Detail);
-        Assert.Contains("Import IUCN data", r.Detail);
+        Assert.Equal("The newest checklist is from release 2026-2, but the IUCN Red List database holds the older release 2026-1. Import release 2026-2 first (Import IUCN data workflow).", r.Detail);
     }
 
     [Fact]
     public void Gbif_release_that_cannot_be_ordered_still_reports_both_releases() {
         var r = PublicSiteProbes.GbifStep(Site() with { GbifRelease = "2026-01" });
         Assert.Equal("todo", r.Status);
-        Assert.Equal("The newest checklist is release 2026-01, but the IUCN Red List database holds release 2026-1.", r.Detail);
+        Assert.Equal("The newest checklist is from release 2026-01, but the IUCN Red List database holds release 2026-1.", r.Detail);
     }
 
     [Fact]

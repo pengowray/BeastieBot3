@@ -911,13 +911,13 @@ public static class FlowCatalogue {
         new FlowDefinition {
             Id = "public-site",
             Title = "Update the public species site",
-            Description = "Build the database of the public species site (Beastie Bot Species Status) and upload it to the server. `site build-db` reads the IUCN data, the caches and the other databases as they are when it runs, so update those first. After a new Red List release, that means the Import IUCN data workflow and groups 1 to 3 of the Wikipedia reports pipeline.",
+            Description = "Build the database of the public species site (Beastie Bot Species Status) and upload it to the server. `site build-db` reads the IUCN data, the caches and the other databases as they are when it runs. After a new Red List release, update them first: run the Import IUCN data workflow and groups 1 to 3 of the Wikipedia reports pipeline.",
             Steps = new[] {
                 // ===== 1 · Build the site database =====
                 new FlowStep {
                     Id = "site-gbif-download",
                     Title = "Download GBIF's copy of the IUCN checklist",
-                    Description = "`iucn gbif-download` downloads the IUCN Red List checklist that IUCN publishes on GBIF (CC BY 4.0) into Datasets:GBIF_IUCN_dir. Most of the site's DOIs come from it: for nearly every globally assessed species, it gives the citation of the latest global assessment with its DOI.",
+                    Description = "`iucn gbif-download` downloads the IUCN Red List checklist that IUCN publishes on GBIF (CC BY 4.0) into the folder set in Datasets:GBIF_IUCN_dir. Most of the site's DOIs come from it: for nearly every globally assessed species, the checklist includes the citation of the latest global assessment with its DOI.",
                     Commands = new[] { "iucn gbif-download" },
                     Probe = PublicSiteProbes.Gbif,
                     Group = "1 · Build the site database",
@@ -925,12 +925,12 @@ public static class FlowCatalogue {
                 },
                 new FlowStep {
                     Id = "site-resolve-dois",
-                    Title = "Look up missing DOIs on doi.org",
-                    Description = "`iucn resolve-dois` looks up DOIs on doi.org for assessments that IUCN's citation text, the GBIF checklist and Wikidata give no DOI for, and saves the DOIs it finds in the DOI cache (Datastore:IUCN_doi_cache_sqlite), which `site build-db` reads.",
+                    Title = "Find missing DOIs on doi.org",
+                    Description = "`iucn resolve-dois` finds DOIs for assessments that no other source gives a DOI for (IUCN's citation text, the GBIF checklist, Wikidata) by checking possible DOIs against doi.org. It saves the DOIs it finds in the DOI cache (Datastore:IUCN_doi_cache_sqlite), which `site build-db` reads.",
                     Commands = new[] { "iucn resolve-dois" },
                     Probe = PublicSiteProbes.Dois,
                     Group = "1 · Build the site database",
-                    Note = "--scope under Options sets which assessments to look up: latest-global (the default), latest-regional, all-latest or history. Each lookup is a request to doi.org. This step's status line shows only whether the DOI cache exists, not how many assessments are still to look up.",
+                    Note = "--scope under Options sets which assessments to find DOIs for: latest-global (the default), latest-regional, all-latest or history. The status line under this step's title shows only whether the DOI cache exists, not how many assessments are left to check.",
                 },
                 new FlowStep {
                     Id = "site-build-db",
@@ -940,7 +940,7 @@ public static class FlowCatalogue {
                     InputSourceIds = new[] { "iucn-main", "iucn-api-cache" },
                     Probe = PublicSiteProbes.Build,
                     Group = "1 · Build the site database",
-                    Note = "Only the IUCN Red List database and the IUCN API cache are required: the build leaves out any other input that is missing. For release 2026-1 the build takes about 65 seconds and writes about 410 MB. When the site database is older than its inputs, the status line under the step title names each input that changed after the build. --limit under Options builds from only the first N taxa, and writes them to the same file unless you also set --output, so do not deploy a database built with --limit.",
+                    Note = "Only the IUCN Red List database and the IUCN API cache are required: the build leaves out any other input that is missing. For release 2026-1 the build takes about 65 seconds and writes about 410 MB. When the site database is older than its inputs, the status line under the step title names each input that changed after the build. --limit under Options builds a database of only the first N taxa. Unless you also set --output, that database replaces Datastore:site_sqlite, so build again without --limit before you deploy.",
                 },
                 new FlowStep {
                     Id = "site-check-citations",
@@ -966,9 +966,9 @@ public static class FlowCatalogue {
                     GuideTitle = "How to deploy the database",
                     GuideSteps = new[] {
                         "Wait until `site build-db` has finished. Do not run the script while a build is running.",
-                        "In a terminal, in the BeastieBot3 repository folder, run `deploy/oracle/deploy-db.sh`. It uploads the file named by [Datastore] site_sqlite in BeastieBot3/paths.ini, or by SITE_DB in deploy/oracle/deploy.env. To upload another file, give its path: `deploy/oracle/deploy-db.sh /path/to/site.sqlite`. If site_sqlite in paths.ini is a relative path, give the path this way too.",
+                        "In a terminal, in the BeastieBot3 repository folder, run `deploy/oracle/deploy-db.sh`. It uploads the file named by SITE_DB in deploy/oracle/deploy.env or, when SITE_DB is not set, by [Datastore] site_sqlite in BeastieBot3/paths.ini. To upload another file, give its path: `deploy/oracle/deploy-db.sh /path/to/site.sqlite`. If site_sqlite in paths.ini is a relative path, give the path this way too.",
                         "If the upload stops partway, run the script again. It continues the upload.",
-                        "If the status line of \"Build the site database\" said the schema version had changed, deploy the new site first: run `deploy/oracle/deploy-app.sh`, then `deploy/oracle/deploy-db.sh` straight away. The site on the server refuses a database with a different schema version, so it shows errors until deploy-db.sh finishes.",
+                        "If the schema version changed (before the rebuild, the status line of \"Build the site database\" showed two schema versions), deploy the new site first: run `deploy/oracle/deploy-app.sh`, then `deploy/oracle/deploy-db.sh` straight away. The site on the server refuses a database with a different schema version, so it shows errors until deploy-db.sh finishes.",
                         "Check the site with `deploy/oracle/status.sh`. To go back to the previous database, run `deploy/oracle/rollback-db.sh`.",
                     },
                 },
