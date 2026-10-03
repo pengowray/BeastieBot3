@@ -30,7 +30,11 @@ public sealed class WikipediaCacheStatusCommand : Command<WikipediaCacheStatusCo
         var paths = settings.CreatePaths();
         var cachePath = paths.ResolveWikipediaCachePath(settings.CachePath);
 
-        using var store = WikipediaCacheStore.Open(cachePath);
+        using var store = WikipediaCacheStore.OpenReadOnly(cachePath);
+        if (store is null) {
+            AnsiConsole.MarkupLineInterpolated($"[red]Wikipedia cache not found:[/] {cachePath}");
+            return -1;
+        }
         var stats = store.GetCacheStats();
 
         AnsiConsole.MarkupLine($"[grey]Wikipedia cache:[/] {cachePath}");
