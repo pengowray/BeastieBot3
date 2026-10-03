@@ -359,11 +359,34 @@ reports/redlist-audit-2026/
   <report>.html              description + commentary + summary tables + short preview + links
   <report>-list.html         full sortable/filterable list, one page (only for a report with rows)
   csv/<report>.csv           every row, CC0 (only for a report with rows)
-  assets/audit.css, audit.js shared, embedded; no external dependencies
+  assets/audit.css, audit.js, theme.js   shared, embedded; no external dependencies
 reports/redlist-audit-2026-limited/   the same layout, from a --limit run (no release-counts.yml)
 ```
 
 Each report page embeds a short preview and links out to the full list and the CSV.
+
+**Theme.** Every page's header has a Theme setting (System, Light, Dark).
+
+- `assets/theme.js` loads in `<head>` before `audit.css`, without `defer`. It sets `data-theme` on
+  `<html>` from `localStorage` (key `theme`) before the page is drawn.
+- `audit.css` has the light tokens on `:root`, and the dark tokens twice: under
+  `@media screen and (prefers-color-scheme: dark)` for `:root:not([data-theme="light"])`, and under
+  `@media screen` for `:root[data-theme="dark"]`. Keep the two dark blocks identical. Both are
+  screen only, so a printed page is always light.
+- The light theme's `--control-border` (the filter box and the Theme setting) is `#767c84`, 4.2:1
+  against white, the same value as on the public species site.
+- Status badge colours are set inline (`IucnStatusVisuals`) and are the same in both themes.
+- The setting is hidden without JavaScript and in print.
+- A site opened from a folder, in a browser that gives each local file its own origin, keeps the
+  choice for one page only.
+- `AuditThemeTests` pins the markup, the token blocks, that colours appear only in the token
+  blocks, and 4.5:1 contrast for text and status badges in both themes.
+
+**Phone width.** Below 640 px, the index tables and the list of crosscheck pages show each row as
+a block instead of columns: the title on its own line, then the action, the count, the change
+since the previous release and the links. The column headings are hidden from view but kept for
+screen readers. A `.stack-label` span, hidden on wider screens, gives each count its unit and
+each change its "Since <release>:" heading.
 
 **Files from an earlier run.** After writing, `AuditSiteRenderer.Write` removes the files an
 earlier run wrote that this run did not: the list page and CSV of a report that now has no rows,

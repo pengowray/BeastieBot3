@@ -39,13 +39,18 @@ Three listing styles are available, configured via `display.listing_style` in YA
 * [[Western gorilla]] (''Gorilla gorilla'')
 * [[Wikilink|Common name]] (''Scientific name'')
 * [[Scientific name|Common name]] (''Scientific name'')  (when page is at scientific name)
-* ''[[Scientific name]]''  (fallback when no common name)
+* [[Article title|''Scientific name'']]  (no common name; the article has another title)
+* ''[[Scientific name]]''  (no common name; the article is at the scientific name, or there is no article)
 ```
 
 **Rules**:
 - Common name first with link, scientific name in parentheses after
 - Always include scientific name (even when common name is same as article title)
 - Link to Wikipedia article, or use scientific name as link target if no article
+- With no common name, the line is the italic scientific name linked to the article, the same as
+  Style C. The article title is only a link target and is never shown as text: titles are often
+  another scientific name or a genus ("Crenimugil buchanani" for *Moolgarda buchanani*)
+- A subspecies or variety with no article of its own links to its species' article
 - Sort by scientific name
 
 ### Style C: Common Name Only
@@ -55,12 +60,15 @@ Three listing styles are available, configured via `display.listing_style` in YA
 ```wikitext
 * [[Gorilla]]
 * [[Wikilink|Common name]]
-* ''[[Scientific name]]''  (fallback when no common name)
+* [[Article title|''Scientific name'']]  (no common name; the article has another title)
+* ''[[Scientific name]]''  (no common name; the article is at the scientific name, or there is no article)
 ```
 
 **Rules**:
 - Only common name shown (with link)
-- Fall back to italicized scientific name if no common name
+- Fall back to italicized scientific name if no common name, linked to the article; the article
+  title is never shown as text
+- A subspecies or variety with no article of its own links to its species' article
 - Sort by scientific name
 
 ## Formatting Infraspecific Taxa

@@ -35,7 +35,7 @@ Wikidata. The workflow page is "Update IUCN statuses on Wikidata" (`wikidata-iuc
 | File | Role |
 |---|---|
 | `WikidataIucnModel.cs` | Shared records: `IucnGlobalAssessment`, `WdTaxonItem`/`WdStatement`/`WdReference`, `TaxonItemLink`, `ExistingAssessmentItem` |
-| `IucnGlobalAssessmentReader.cs`, `IucnAssessmentCitationParser.cs` | Latest global assessment per taxon from the IUCN API cache, credits split into names |
+| `IucnGlobalAssessmentReader.cs`, `IucnAssessmentCitationParser.cs` | Latest global assessment per taxon from the IUCN API cache. The parser reads the credits and the citation; `Iucn/Citations/CreditNameSplitter.cs` splits each credit into names, and `Iucn/Citations/IucnCitationText` removes the "Accessed on" sentence from the citation and reads its DOI |
 | `WdTaxonItemReader.cs`, `WdTaxonItemParser.cs`, `TaxonItemLinkReader.cs` | Cached Wikidata items (statements with raw JSON and `lastrevid`), taxon-item links by source |
 | `ExistingAssessmentItemReader.cs` | Assessment items found by `wikidata iucn-assessment-items` |
 | `TaxonLinkClassifier.cs` | Pure: tier A-D + flags for a pair |

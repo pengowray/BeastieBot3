@@ -14,16 +14,16 @@ Common names for species are notoriously ambiguous. The same name can refer to d
 
 ## Performance Notes
 
-These commands process large amounts of data and can take significant time to run. All times measured on a Windows desktop with SSD storage:
+These commands process large amounts of data and can take significant time to run. Times were measured on a Windows desktop with SSD storage, except the Wikidata and Wikipedia rows, which were measured on a Linux desktop in October 2026:
 
 | Command | Fresh Run | Re-run | Notes |
 |---------|-----------|--------|-------|
 | `init` | ~5-6 min | ~5-6 min | Same time (upserts 183k taxa) |
 | `aggregate --source iucn` | ~7 min | ~7 min | Processes 178k assessments |
-| `aggregate --source wikidata` | ~20 min | ~20 min | Matches 180k entities |
-| `aggregate --source wikipedia` | ~22 min | ~22 min | Parses 30k page taxoboxes |
+| `aggregate --source wikidata` | ~6-7 min | ~6-7 min | October 2026 |
+| `aggregate --source wikipedia` | ~2 min | ~2 min | October 2026: 98,843 matched pages |
 | `aggregate --source col` | ~110 min | ~110 min | Includes COL synonym import |
-| `aggregate` (all sources) | ~160 min | ~160 min | Total of above |
+| `aggregate` (all sources) | ~160 min | ~160 min | Sum of the earlier Windows times for all four sources |
 | `init --aggregate` | ~170 min | - | Full fresh setup (~3 hours) |
 
 **Re-running commands:**
@@ -122,6 +122,26 @@ beastiebot3 common-names aggregate --source col --replace
 - Each source attempts to match its taxa against the common names database
 - Matching is done by scientific name (canonical name or synonym)
 - Names that can't be matched to a known taxon are skipped
+- A Wikidata item's names go to the store taxon found first by these, in order
+  (`ResolveWikidataTaxon`): the item's IUCN taxon ids (P627) as they are in the Wikidata cache
+  now; the taxon an earlier run recorded for the item (a Wikidata cross-reference); the item's
+  scientific names (P225), as the canonical name and then as a synonym. The current P627 comes
+  first because a run without `--replace` keeps old cross-references, which name the taxon the
+  item had before its P627 changed.
+- A Wikipedia page that `wikipedia match-taxa` matched to more than one taxon gives its names
+  only to some of them (`WikipediaPageMatch`): the taxa whose accepted name is the scientific
+  name in the page's taxobox; failing that, the taxa with that name as a synonym; failing that,
+  the taxa matched by their own name rather than through a synonym or a Catalogue of Life name;
+  failing that, all of them. A taxon that takes no names from the page gets a
+  `taxon_cross_references` row with `match_type` `other_taxon_page`.
+- The store's Wikipedia article for a taxon (`CommonNameStore.GetWikipediaArticleTitle`) is the
+  page its `wikipedia_title` or `wikipedia_taxobox` name came from. A taxon with neither (for
+  example one whose article title is a scientific name) gets the page of its `exact` Wikipedia
+  cross-reference, never an `other_taxon_page` one. The lists use this title only as a link
+  target, never as the text of a line.
+- Stored rows change only when a source is aggregated again: after a change to the filtering
+  rules below, run `aggregate --source wikipedia --replace` and `aggregate --source wikidata
+  --replace`.
 
 ### `common-names sources`
 
@@ -134,14 +154,19 @@ beastiebot3 common-names sources
 Displays a table showing:
 - **Available** - Whether the source database file exists
 - **Aggregated** - Whether an import run has been completed
-- **Records** - Number of records added in the last run
+- **Records** - Number of names from the source that the store holds now
 - **Last Run** - Timestamp of the last aggregation
+
+`common-names sources` and `common-names report` open the store read-only
+(`CommonNameStore.OpenReadOnly`).
 
 ### Ambiguous common names
 
 An ambiguous common name is an English common name that two or more taxa in the Common names
 store have. Only valid, non-fossil taxa are counted, from any kingdom, including taxa that share a
-scientific synonym, and names are compared ignoring case, spaces and punctuation.
+scientific synonym, and names are compared ignoring case, spaces and punctuation. A junk name (see
+[Common name quality](#common-name-quality)) does not count as a name the taxon has, and a
+repairable name counts under its repaired form.
 `wikipedia generate-lists`, `sprat generate-lists`, `site build-db` and
 `common-names report --report ambiguous` apply the same rule to these names
 (`CommonNameStore.QueryAmbiguousNames`, `AmbiguousNames`), and work out the names from the store
@@ -165,13 +190,19 @@ it only as one of its other IUCN names, so Panthera leo is listed as "Lion". Pan
 "Tiger" as its Wikipedia article title, so it is listed as "Tiger", although a grouper also has
 "Tiger" from the Catalogue of Life.
 
-For a species entry, `generate-lists` uses the first of these that the taxon has:
+`CommonNameChooser` is the one place a taxon's English name is chosen. `wikipedia generate-lists`,
+`sprat generate-lists`, `site build-db` and `common-names report --report trace` all use it. For a
+species entry it takes the first of these that the taxon has:
 
 1. A common name set for the taxon in `rules/rules-list.txt`. It is used even if it is
    ambiguous.
-2. The taxon's first common name in source order that is not skipped for it.
+2. The taxon's first common name in source order that is not junk and not skipped for it,
+   repaired where `CommonNameQuality` can repair it, with the capitalization rules applied.
 
-When the taxon has neither, the entry shows only its scientific name.
+When the name from step 1 or 2 is not usable as a common name (the scientific name again, a
+working name such as "sp. nov.", or a name with an authority and year), the taxon gets no common
+name. When the taxon has no common name, the entry shows only its scientific name. The trace report
+shows the chooser's pick from the store (without `rules-list.txt`).
 
 A section heading shows the scientific name. The sentence under it gives the taxon's common name,
 taken from the first of: `rules/taxon-rules.yml`, `rules/rules-list.txt`, the taxon's first
@@ -184,9 +215,9 @@ the `init`, `aggregate` and `report --report summary` summaries show the same co
 names, run `common-names report --report ambiguous`, which writes
 `common-name-ambiguous-<timestamp>.md` to the reports folder. The report has one table for each
 ambiguous name, and its "Uses This Name" column is Yes for the taxon the name is used for. On the
-October 2026 store it listed 10,165 names: 6,702 used for one taxon each and 3,463 used for no
-taxon (equal-priority ties). With `--kingdom`, the report counts only the taxa in that kingdom, so
-it leaves out names shared by taxa in different kingdoms. In the web UI the report is the optional
+store of 3 October 2026 it listed 10,303 names: 6,970 used for one taxon each and 3,333 used for
+no taxon (equal-priority ties). With `--kingdom`, the report counts only the taxa in that kingdom,
+so it leaves out names shared by taxa in different kingdoms. In the web UI the report is the optional
 "List ambiguous common names" step of the "Wikipedia reports pipeline" workflow.
 
 With `--use-legacy-names`, `generate-lists` reads names from the Wikidata and IUCN API caches
@@ -226,6 +257,8 @@ beastiebot3 common-names report --report all --limit 100
 - `caps` - Missing capitalization rules
 - `wiki-disambig` - Names that may need Wikipedia disambiguation
 - `iucn-preferred` - Conflicts between IUCN preferred names
+- `trace` - For sample taxa in each major group, every English name the store has, why each one
+  was rejected, and the name the chooser picks
 - `all` - Generate all reports
 
 ## Typical Workflow
@@ -285,6 +318,57 @@ When aggregating common names, certain entries are filtered out:
 - **Species codes**: Entries matching "Species code: XX" pattern (placeholder names)
 - **Scientific names**: Entries that match the taxon's actual scientific name parts (genus, species, infraspecific epithet)
 
-### All Sources
-- Names are normalized for comparison (lowercase, punctuation stripped)
-- Language is limited to English ('en') by default
+### Wikipedia titles, taxobox names and Wikidata labels
+
+`ScientificNameCheck.IsScientificName` decides whether a Wikipedia article title (without its
+disambiguation), a taxobox name or a Wikidata English label is a scientific name. `aggregate`
+stores only the ones that are not. The rules, in order:
+
+1. The name is one of the taxon's own names, one of them followed by an authority or a note
+   ("Myristica fatua Sw."), or the first word or words of one (the genus of a monotypic genus, the
+   species of a subspecies), ignoring case, rank markers and a subgenus: a scientific name. A genus
+   taken from a synonym does not count when it is an English word ("Orca" for Orcinus orca).
+2. Otherwise only a name shaped like a scientific name can be one: two to four words, the first a
+   capitalised word of plain letters and the rest lower case. A single word is a scientific name
+   when it is a genus in the store and not an English word ("Strumigenys", but not "Platypus").
+   A name with any other shape is a common name. Double quotes around a genus
+   ("\"Hyla\" nicefori") are ignored.
+3. The first word is one of the taxon's genera ("Gobio gobio" for Gobio latus): a scientific name.
+4. A word is an English word ("Pygmy hippopotamus", "Alligator gar"): a common name. A first word
+   that is a genus in the store does not count as English, and neither does a later word that is
+   one of the taxon's epithets.
+5. A word is a genus or epithet in the store, or one of the taxon's epithets (another combination
+   of the same species, such as "Rubroshorea ovata" for Shorea ovata): a scientific name. An
+   epithet that is also the taxon's genus (the "gorilla" of Gorilla gorilla) does not count.
+6. Otherwise a common name. When the taxon's names are not known, the shape alone decides, and a
+   name with the shape of a scientific name is taken to be one.
+
+A word is English when at least 3 different English common names from IUCN and the Catalogue of
+Life use it. A word that is also an epithet somewhere in the store needs at least 10 ("gazelle" in
+"Dorcas gazelle" counts as English, "montana" in "Aiouea montana" does not).
+
+### Wikipedia taxobox
+
+`TaxoboxCommonName` reads the taxobox's name field. The field is split into lines at `<br>`, and
+the first line that is a usable English name is taken. Lines in italics (a scientific name), in a
+non-Latin script, naming a family ("Salamandridae") or repeating the page title are skipped; a
+line that starts with a lower-case letter continues the line before. `CommonNameQuality` then
+repairs or rejects what is left, and `ScientificNameCheck` drops a name that is the taxon's
+scientific name. Junk stored by earlier runs stays until `aggregate --source wikipedia --replace`.
+
+### Common name quality
+
+`CommonNameQuality.Assess` gives each name one of three verdicts. The lists, `site build-db` and
+the ambiguity rule never use a junk name, and use a repairable name in its repaired form.
+
+- **Junk**: wiki markup that cannot be removed, author citations with a year ("Calvert, 1902"),
+  OCR errors from scanned books in the Catalogue of Life (a backslash inside a name, or, in a name
+  labelled English, a digit standing for a letter or capitals inside words), names cut off at a
+  bracket ("Pholidoscelis polops (Cope"), a gloss with no name ("meaning large bear cat"), and
+  IUCN's placeholder "Species code: X".
+- **Repairable**: a good name with extra text, such as a citation template after the name ("Sunda
+  slow loris{sfn|Groves|2005|p=122}"), the next infobox parameter, a footnote marker, an author and
+  year in brackets, or a translation in brackets ("Da Xiong Mao (meaning large bear cat)"). The
+  extra text is removed.
+- **Good**: everything else, including names that look odd but are real ("Cassin's 17-year
+  Cicada", "European pilchard (=sardine)").
