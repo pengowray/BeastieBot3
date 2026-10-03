@@ -322,7 +322,7 @@ internal sealed class SiteAssessmentPass {
             && WikidataCitation.NameFromTitle(registered.Title) is { } registeredName) {
             parts = parts with { RegisteredName = registeredName };
             _stats.RegisteredNames++;
-            if (!string.Equals(registeredName, WikidataCitation.NameFromTitle(parts.ScientificName), StringComparison.Ordinal)) {
+            if (!string.Equals(registeredName, WikidataCitation.NameText(parts.ScientificName), StringComparison.Ordinal)) {
                 _stats.RegisteredNamesDiffer++;
             }
         }

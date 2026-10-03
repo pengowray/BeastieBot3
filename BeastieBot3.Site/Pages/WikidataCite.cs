@@ -220,7 +220,7 @@ public static partial class WikidataCite {
         CiteQOptions citeQOptions, Action<string, Exception>? onError = null, Func<long, bool>? hasPage = null) {
         var itemQid = ItemId(assessment.WikidataItemQid);
         var taxonItem = ItemId(taxonQid);
-        var citationName = parts is null ? null : WikidataCitation.NameFromTitle(parts.ScientificName);
+        var citationName = parts is null ? null : WikidataCitation.NameText(parts.ScientificName) is { Length: > 0 } cleaned ? cleaned : null;
 
         T? Try<T>(string what, Func<T> make) where T : class {
             try {
