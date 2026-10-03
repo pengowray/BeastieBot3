@@ -230,8 +230,16 @@ each time they run, so there is nothing to rebuild after aggregating.
 
 Each ambiguous name is used for at most one taxon, and skipped for all the other taxa that have
 it (a name set for a taxon in `rules/rules-list.txt` is used even so; see below). `AmbiguousNames`
-decides which taxon may use it:
+decides which taxon may use it. Step 0 applies to a name that only a species and its own
+subspecies, varieties and subpopulations have. Steps 1 to 4 apply to every other ambiguous name.
 
+0. When the taxa that have the name are one species and its own subspecies, varieties and
+   subpopulations, each taxon's best source for the name is compared in the chooser's order
+   (`CommonNameStore.GetSourcePriority`; see the chooser below): Wikipedia article title,
+   Wikipedia taxobox, Wikidata label, IUCN main name, other IUCN names, other Wikidata names,
+   Catalogue of Life. The taxon whose best source comes first may use the name. If two or more
+   taxa have their best source at the same place in that order, the species may use the name, and
+   if the species is not one of them, no taxon may use it.
 1. The taxon that has the name from the highest-priority source may use it, unless step 2 applies.
    The sources, highest priority first (`AmbiguousNames.KeeperPriority`):
    1. Wikipedia article title
@@ -260,6 +268,13 @@ decides which taxon may use it:
 4. If two or more taxa still have the name at equal priority, the name is skipped for all of them,
    except that a species takes priority over its own subspecies, varieties and subpopulations.
 
+Steps 2 and 4 compare a species with its own subspecies only when an unrelated taxon also has the
+name. Step 0 was added in October 2026. Before it, when a species had a name from its taxobox and
+its nominate subspecies had the same name as its IUCN main name, step 1 gave the name to the
+subspecies, because step 1 ranks an IUCN main name above a taxobox name. About 30 species lost a
+name to their own subspecies this way, and 13 of them had no English name left (the
+*Chrysoritis* opals).
+
 A taxon that may use a name is not always listed under it: the chooser (below) tries the taxon's
 own names in its own order and takes the first one that is not skipped for the taxon.
 
@@ -287,16 +302,17 @@ Examples from the store of 3 October 2026:
   "Tangara aurulenta", so *T. aurulenta* is not matched to the article, step 2 does not apply, and
   *T. arthus* is listed as "Golden tanager".
 - "Water opal" is a taxobox name of *Chrysoritis palmus* and the IUCN main name of its subspecies
-  *Chrysoritis palmus* ssp. *palmus*. The IUCN main name has the higher priority, so the subspecies
-  is listed as "Water opal". Outside step 2, a species takes priority over its own subspecies only
-  when both have the name at equal priority (step 4). The species has no other English name, so
-  it is listed by its scientific name.
+  *Chrysoritis palmus* ssp. *palmus*, so step 0 applies. In the chooser's order a taxobox name
+  comes before an IUCN main name, so *Chrysoritis palmus* is listed as "Water opal", and the name
+  is skipped for the subspecies. The species has no other English name. Before step 0 was added,
+  the subspecies used the name and the species was listed by its scientific name.
 
 Until October 2026, the order of the sources in step 1 was the order in which the chooser tries a
 taxon's own names (below), with the Wikipedia taxobox and the Wikidata label before the IUCN main
-name, and there were no steps 2 and 3. On the store of 3 October 2026, the change affected the
+name, and there were no steps 0, 2 and 3. On the store of 3 October 2026, the change affected the
 English name of 313 taxa, counting the chooser's pick from the store without `rules-list.txt`: 84
-taxa gained an English name, 44 lost theirs, and 185 got a different one.
+taxa gained an English name, 44 lost theirs, and 185 got a different one. These counts were
+measured before step 0 was added.
 
 `CommonNameChooser` is the one place a taxon's English name is chosen. `wikipedia generate-lists`,
 `sprat generate-lists`, `site build-db` and `common-names report --report trace` all use it. For a
@@ -331,8 +347,8 @@ names, run `common-names report --report ambiguous`, which writes
 `common-name-ambiguous-<timestamp>.md` to the reports folder. The report has one table for each
 ambiguous name, and its "Uses This Name" column is Yes for the taxon the name is used for (on
 two rows when an old and a current IUCN id have the same scientific name). On the store of
-3 October 2026 it listed 10,371 names: 7,078 used for one taxon each and 3,293 used for no taxon
-(equal-priority ties). With `--kingdom`, the report counts only the taxa in that kingdom,
+3 October 2026, before step 0 was added, it listed 10,371 names: 7,078 used for one taxon each
+and 3,293 used for no taxon (equal-priority ties). With `--kingdom`, the report counts only the taxa in that kingdom,
 so it leaves out names shared by taxa in different kingdoms. In the web UI the report is the optional
 "List ambiguous common names" step of the "Wikipedia reports pipeline" workflow.
 

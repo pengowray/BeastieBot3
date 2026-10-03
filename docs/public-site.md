@@ -6,19 +6,21 @@ criteria, population trend, dates), the assessment history, regional assessments
 synonyms, links to Wikipedia, Wikidata, the Catalogue of Life and SPRAT, and wikitext to copy:
 `{{cite iucn}}` with the assessment's authors and DOI, `{{IUCN status}}`, the taxobox status
 parameters, and `{{cite Q}}` for the assessment's Wikidata item (or, when the assessment has no
-item, QuickStatements commands to create one). Instructions for deploying it to an Oracle Cloud Always Free VM are in
+item, QuickStatements commands to create one). For the latest global assessment of a species or
+subspecies, it also gives QuickStatements commands that bring the IUCN conservation status (P141)
+on the taxon's Wikidata item up to date. Instructions for deploying it to an Oracle Cloud Always Free VM are in
 `deploy/oracle/README.md`.
 
 ## Parts
 
 | Part | Where | What it does |
 | --- | --- | --- |
-| Shared library | `BeastieBot3.Shared/` | Code both the CLI and the site use. Keep it on the same target framework as both (net10.0) and with no NuGet packages, so both can reference it. `Wikitext/`: `IucnCitationParts` (one assessment's citation, parsed by `site build-db` and stored as JSON in `citation_json`; each author is a `CitationAuthor`, with `GivenNames` when they are known), the renderers `CiteIucnRenderer` (with `CiteIucnOptions.FullGivenNames`), `IucnStatusTemplate`, `SpeciesboxStatus`, `ScientificNameMarkup`, and `WikidataCitation` (`{{cite Q}}`, and QuickStatements commands and links for an assessment's Wikidata item, following `WikidataItemModel`; see [Wikidata items of assessments](#wikidata-items-of-assessments)). `SiteData/`: `SiteDbSchema` (the site database's DDL, `Version` and meta keys) and `SiteNameKey.Fold` (the folded form of a name used for exact lookups). |
+| Shared library | `BeastieBot3.Shared/` | Code both the CLI and the site use. Keep it on the same target framework as both (net10.0) and with no NuGet packages, so both can reference it. `Wikitext/`: `IucnCitationParts` (one assessment's citation, parsed by `site build-db` and stored as JSON in `citation_json`; each author is a `CitationAuthor`, with `GivenNames` when they are known), the renderers `CiteIucnRenderer` (with `CiteIucnOptions.FullGivenNames`), `IucnStatusTemplate`, `SpeciesboxStatus`, `ScientificNameMarkup`, `WikidataCitation` (`{{cite Q}}`, and QuickStatements commands and links for an assessment's Wikidata item, following `WikidataItemModel`; see [Wikidata items of assessments](#wikidata-items-of-assessments)), `WikidataStatusEdit` (QuickStatements commands for a taxon item's IUCN conservation status; see [IUCN conservation status on Wikidata](#iucn-conservation-status-on-wikidata)) and `WikidataStatusValues` (the P141 value for each IUCN category, also used by the Wikidata status dry run). `SiteData/`: `SiteDbSchema` (the site database's DDL, `Version` and meta keys) and `SiteNameKey.Fold` (the folded form of a name used for exact lookups). |
 | GBIF checklist | `BeastieBot3/Iucn/Gbif/` | `iucn gbif-download` downloads, and `GbifIucnChecklistReader` reads, GBIF's CC BY 4.0 copy of the IUCN checklist. |
 | IUCN citations | `BeastieBot3/Iucn/Citations/` | Code the site build and the Wikidata dry run share: `CreditNameSplitter` (splits a credit's `full` string into names), `IucnAuthorNameParser` (reads one name as a person, an organisation, or a name kept as IUCN wrote it), `AssessorNamePool` (repairs names with a letter lost to an encoding error), `AssessorGivenNames` (finds a person's full given names in the assessor credit's `value[]` list; see [Full given names](#full-given-names)) and `IucnCitationText` (removes IUCN's "Accessed on" sentence and reads the DOI in IUCN's citation text). |
 | DOI lookup | `BeastieBot3/Iucn/Doi/` | `iucn resolve-dois` looks for DOIs that IUCN's citation text, GBIF and Wikidata do not give, in Crossref's list of IUCN DOIs and at doi.org, and saves them in the DOI cache (`Datastore:IUCN_doi_cache_sqlite`). See [Missing DOIs](#missing-dois-iucn-resolve-dois). |
-| Site build | `BeastieBot3/SiteBuild/` | `site build-db` builds the site database; `site check-citations` writes a read-only report. Citation code: `IucnCitationPartsParser` (title annotations, and putting the parts together), `IucnDoiSelector` (choosing a DOI), `IucnTaxaHeaders` (each taxon's list of assessments). `SiteApiTaxaReader` reads the taxa that are only in the API cache. `SiteBuildRules.ClassifySpratName` matches SPRAT profiles to taxa, both whole-taxon profiles and population profiles. `SiteWikidataItems` chooses each assessment's Wikidata item. `SiteBuildRules.DescribesAnotherKingdom` decides whether a Wikidata item matched to a taxon by name is left out of `taxon.wikidata_qid`: it is left out when the item's English description names a group in another kingdom. |
-| Site | `BeastieBot3.Site/` (net10.0, Razor Pages) | Opens the site database read-only and reads no other data. `Pages/WikitextOptions.cs` reads and writes the citation options; `Pages/WikidataCite.cs` builds the `{{cite Q}}` part of the wikitext section; `wwwroot/site.js` updates the wikitext when an option changes (see [Citation options](#citation-options)). `wwwroot/theme.js` and the tokens at the top of `wwwroot/site.css` make the light and dark themes (see [Theme](#theme)). Tests in `BeastieBot3.Site.Tests/`, and a Playwright check of the wikitext updates in `BeastieBot3.Site.Tests/browser/live-update.cjs`. |
+| Site build | `BeastieBot3/SiteBuild/` | `site build-db` builds the site database; `site check-citations` writes a read-only report. Citation code: `IucnCitationPartsParser` (title annotations, and putting the parts together), `IucnDoiSelector` (choosing a DOI), `IucnTaxaHeaders` (each taxon's list of assessments). `SiteApiTaxaReader` reads the taxa that are only in the API cache. `SiteBuildRules.ClassifySpratName` matches SPRAT profiles to taxa, both whole-taxon profiles and population profiles. `SiteWikidataItems` chooses each assessment's Wikidata item. `SiteBuildRules.DescribesAnotherKingdom` decides whether a Wikidata item matched to a taxon by name is left out of `taxon.wikidata_qid`: it is left out when the item's English description names a group in another kingdom. `SiteLinkReaders` reads the taxon items' IUCN conservation status (P141) statements, and `P141JsonReferences` reads the references that the Wikidata cache's index does not record (see [IUCN conservation status on Wikidata](#iucn-conservation-status-on-wikidata)). |
+| Site | `BeastieBot3.Site/` (net10.0, Razor Pages) | Opens the site database read-only and reads no other data. `Pages/WikitextOptions.cs` reads and writes the citation options; `Pages/WikidataCite.cs` builds the `{{cite Q}}` part and the IUCN conservation status part of the wikitext section, which the partials `Pages/Shared/_WikidataName.cshtml`, `_WikidataItemChanges.cshtml`, `_WikidataMainSubject.cshtml`, `_WikidataStatus.cshtml` and `_WikidataStatusPlan.cshtml` show; `wwwroot/site.js` updates the wikitext when an option changes (see [Citation options](#citation-options)). `wwwroot/theme.js` and the tokens at the top of `wwwroot/site.css` make the light and dark themes (see [Theme](#theme)). Tests in `BeastieBot3.Site.Tests/`, and a Playwright check of the wikitext updates in `BeastieBot3.Site.Tests/browser/live-update.cjs`. |
 | Deployment | `deploy/oracle/` | Server setup, app and database deploys, rollback, status. |
 
 `BeastieBot3.Site` references only `BeastieBot3.Shared`, never the `BeastieBot3` project, because
@@ -38,14 +40,28 @@ must never be reachable from outside the machine.
    newer EPBC listings. Run `wikidata iucn-assessment-items` to find the Wikidata items of
    assessments, including the items readers created with the site's QuickStatements commands (see
    [Wikidata items of assessments](#wikidata-items-of-assessments)). It is a step of the "Update
-   IUCN statuses on Wikidata" workflow (`wikidata-iucn-status`); `wikipedia update` and the
-   `public-site` workflow do not run it. Without it, `site build-db` uses the items from the last
-   time it ran.
+   IUCN statuses on Wikidata" workflow (`wikidata-iucn-status`) and, as "Find the Wikidata items
+   of assessments", of the `public-site` workflow; `wikipedia update` does not run it. Without it,
+   `site build-db` uses the items from the last time it ran. The command also stores three things that `site build-db` reads:
+   - the title (P1476) statements of each assessment item, with their language and rank (column
+     `title_statements` of `wikidata_iucn_assessment_items`; NULL when not recorded yet, `[]` when
+     the item has no title). The commands that replace an item's title need them;
+   - the editions of the IUCN Red List on Wikidata (table `wikidata_iucn_red_list_editions`). A
+     status reference stated in one of these editions cites IUCN;
+   - the items that state an IUCN taxon ID (P627) only at deprecated rank (table
+     `wikidata_deprecated_iucn_taxon_ids`, 11 items on 3 October 2026).
+
+   The command replaces the rows of each of the two tables only when that table's query succeeds.
+   See [IUCN conservation status on Wikidata](#iucn-conservation-status-on-wikidata) for how the
+   build uses the tables.
 3. Run `iucn gbif-download`. It keeps the new checklist zip only when it differs from the newest
    zip (by the date in the file name) in `Datasets:GBIF_IUCN_dir`; `site build-db` reads the newest.
 4. Run `iucn resolve-dois --refresh-crossref`, then `iucn resolve-dois --scope latest-regional`.
    The first run downloads Crossref's list of IUCN DOIs again, so that it includes the new
-   release's DOIs, and checks the latest global assessments. See
+   release's DOIs, and checks the latest global assessments. With `--refresh-crossref`, the
+   command downloads the list even when no assessment needs checking. The list also gives the
+   title registered with Crossref for each DOI, which `site build-db` uses for the name in the
+   title and label of a new Wikidata item for an assessment. See
    [Missing DOIs](#missing-dois-iucn-resolve-dois).
 5. Run `site build-db`. For release 2026-1 on 3 October 2026 it took about 100 seconds and wrote a
    database of about 463 MB. It writes `<Datastore:site_sqlite>.building` and replaces `Datastore:site_sqlite` only
@@ -82,7 +98,9 @@ database as its input, and is blocked when that file is missing.
 `SiteDbSchema.Ddl` is the contract between `site build-db` and the site. Increase
 `SiteDbSchema.Version` whenever you add, remove or rename a table or column, or change what a column
 holds, then run `site build-db` again. The site answers 503 (on `/healthz` and every page) for a
-database with any other version, so deploy the new site and the rebuilt database together.
+database with any other version, so deploy the new site and the rebuilt database together. The
+current version is 8. Versions 6 and 7 numbered the changes of a branch before it was merged
+into main, and no database built on main has them.
 
 Rules the site depends on (pinned by `SiteDbBuildTests` and the site tests):
 
@@ -143,6 +161,10 @@ Rules the site depends on (pinned by `SiteDbBuildTests` and the site tests):
   is NULL was assessed under a pre-1994 system; the site shows no `{{IUCN status}}` or taxobox
   wikitext for it.
 - `citation_json` is `IucnCitationParts.ToJson()`. It never holds assessment narrative text.
+  `IucnCitationParts.RegisteredName` is the name part of the title registered with Crossref for
+  the citation's DOI ("Canis mesomelas" from "Canis mesomelas: Hoffmann, M."), read from the DOI
+  cache's `crossref_works.title`. The build sets it only when the DOI names the row's own
+  assessment id, so an errata version that has the DOI of the assessment it corrects gets none.
   `replaced_by_assessment_id` links an assessment to the errata or amended version that replaced it.
   For an errata version, the build looks for the replaced assessment among the ids that
   `IucnTaxaHeaders.PredecessorIds` returns. If none of those ids is an earlier assessment row of
@@ -189,15 +211,53 @@ Rules the site depends on (pinned by `SiteDbBuildTests` and the site tests):
   always writes `wikidata_item_properties` for a row that has `wikidata_item_qid`. The site relies
   on this: for a row with an item and NULL properties, it cannot tell which statements the item
   lacks, so it offers no commands to add them.
+- Three more columns describe the assessment's item (schema version 8):
+  - `assessment.wikidata_item_titles`: the item's title (P1476) statements of every rank, as
+    `WikidataTitle` JSON with each title's text, language and rank, copied from the Wikidata
+    cache's `title_statements` column. NULL when there is no item, or when
+    `wikidata iucn-assessment-items` has not recorded the titles. The site then offers no
+    commands that change the title.
+  - `assessment.wikidata_item_label_en`: the item's English label.
+  - `assessment.wikidata_item_assessment_id`: the assessment that the item is for. It is the row's
+    own `assessment_id`, except for an errata version that shares the item of the assessment it
+    corrects, where it is that assessment's id.
 - `taxon.wikidata_qid` is the item that states the taxon's IUCN taxon id (P627,
   `wikidata_qid_source = 'p627'`), otherwise an item that `wikidata backfill-iucn` matched by the
-  taxon's name (`'name-match'`). The build leaves out a name-matched item whose English
+  taxon's name (`'name-match'`). When two or more items state the id,
+  `SiteBuildRules.ChooseP627Item` chooses one of them. An item that states the id only at
+  deprecated rank (listed in `wikidata_deprecated_iucn_taxon_ids`) is chosen only when every item
+  that states the id does. From the items left, it chooses the one whose English label or taxon
+  name (P225) is the IUCN scientific name (with or without its rank marker), and then the lowest
+  item number. For IUCN taxon ID 96251644, the build chooses Q122932761, which states the id at
+  normal rank, over Q3008560, which has it at deprecated rank. When the Wikidata cache has no
+  `wikidata_deprecated_iucn_taxon_ids` table, the build warns and treats every item that states
+  an id as stating it at a rank that is not deprecated.
+
+  The build leaves out a name-matched item whose English
   description names a group in another kingdom, such as the insect item matched to the plant
   *Clusia flava* ("species of insect"). `SiteBuildRules.DescribesAnotherKingdom` takes the group
   from a description of the form "species of <group>" (or "genus of", "subspecies of" and other
   ranks) and looks it up in the word table of `WikiPageKingdom`, the table the Wikipedia matcher
   uses. The build of 3 October 2026 left out 13 items this way; the build summary row is
   "Wikidata items matched by name but left out: the item is a taxon in another kingdom".
+- Four columns describe the taxon's item when `wikidata_qid_source = 'p627'` (schema version 8).
+  The [IUCN conservation status](#iucn-conservation-status-on-wikidata) part of a taxon page reads
+  them:
+  - `taxon.wikidata_p141`: every IUCN conservation status (P141) statement on the item, at any
+    rank, as `WikidataStatusStatement` JSON. Each statement has its id, value and rank, and, from
+    its references, the stated in (P248) items (only the first one of each reference), the IUCN
+    taxon IDs (P627), the number of references, and `citesIucn`, which is true when a reference
+    cites IUCN. The column is `[]` when the item has no P141 statement, and NULL when the Wikidata
+    cache has not downloaded the item. A statement with no value or an unknown value is not in the
+    cache, so it is not in this column either.
+  - `taxon.wikidata_item_downloaded`: the day (`yyyy-MM-dd`) that the Wikidata cache downloaded
+    the item. NULL when `wikidata_p141` is NULL.
+  - `taxon.wikidata_p627_deprecated`: 1 when the item states the taxon's IUCN taxon ID only at
+    deprecated rank, else 0.
+  - `taxon.wikidata_other_items`: the other items that state the taxon's IUCN taxon ID, as
+    `WikidataOtherTaxonItem` JSON: each item's id, whether it states the id only at deprecated
+    rank, and its P141 statements (NULL when the cache has not downloaded it). The column is NULL
+    when no other item states the id.
 - `taxon.enwiki_title` is the article that `wikipedia match-taxa` matched the taxon to. The
   matcher rejects a page about a taxon in another kingdom, and tries the taxon's name followed by
   a bracketed word for its kingdom, such as "Ficus variegata (plant)" or "Orestias elegans (fish)"
@@ -323,10 +383,12 @@ does not include). It has two sources:
 
 1. Crossref's list of IUCN DOIs (`api.crossref.org/prefixes/10.2305/works`, saved in
    `crossref_works`). In October 2026 the download was 258 requests and about 3 minutes, for
-   255,060 assessment DOIs. A run downloads the list again when the saved copy is more than 7 days
-   old, or with `--refresh-crossref`. Each entry in the list (a Crossref "work") gives the ids in
-   the DOI and the ids in the URL of the page the DOI points to. For an errata version published from 2015 to 2018 they differ: the DOI has the id
-   of the assessment it replaced and points to the errata version's page.
+   255,060 assessment DOIs. A run that has assessments to check downloads the list again when the
+   saved copy is more than 7 days old. With `--refresh-crossref`, a run downloads the list every
+   time, even when no assessment needs checking. Each entry in the list (a Crossref "work") gives
+   the ids in the DOI, the ids in the URL of the page the DOI points to, and the title registered
+   for the DOI. For an errata version published from 2015 to 2018 the ids differ: the DOI has the
+   id of the assessment it replaced and points to the errata version's page.
 2. doi.org (`https://doi.org/api/handles/<doi>?type=URL`). For an assessment missing from
    Crossref's list, `IucnDoiCandidates` builds candidate DOIs from the releases of the year it was
    published (ordered by how many known DOIs of that year use each release) and, for an amended
@@ -355,6 +417,12 @@ The DOI cache's tables:
 - `doi_check_detail`: `found_by` (`crossref` or `doi.org`), `scope`, `year_published`, `note`.
 - `doi_lookup_log`: every doi.org request.
 - `crossref_works` and `crossref_listings`: the saved copy of Crossref's list.
+  `crossref_works.title` is the title registered for the DOI, in the form "Name: author list"
+  ("Canis mesomelas: Hoffmann, M."). A cache made before October 2026 gets the `title` column
+  when `iucn resolve-dois` next opens it, and the column stays NULL until the list is downloaded
+  again (`--refresh-crossref`). `site build-db` reads the titles for `RegisteredName` (see
+  [The site database](#the-site-database)). When the cache has no titles, the build warns and new
+  Wikidata items use IUCN's citation name.
 
 Results for release 2026-1 (October 2026). Crossref's list had every DOI that IUCN's citation
 text, GBIF and Wikidata give. doi.org found no DOI for any assessment missing from Crossref's
@@ -371,8 +439,9 @@ each scope that have no DOI from IUCN's citation text, GBIF or Wikidata:
 
 Wikidata has items for about 6,600 IUCN assessments as publications. The site gives `{{cite Q}}`
 for an assessment that has an item, and QuickStatements commands that add the statements the item
-lacks, or that create an item for an assessment that has none. The site never edits Wikidata: a
-reader runs the commands in QuickStatements with their own Wikidata account.
+lacks and replace a title or English label that differs from the item model, or that create an
+item for an assessment that has none. The site never edits Wikidata: a reader runs the commands in
+QuickStatements with their own Wikidata account.
 
 ### Which item an assessment gets (`SiteWikidataItems`)
 
@@ -430,14 +499,16 @@ an access date without a URL as an error.
 `CreateItemCommands` writes QuickStatements v1 commands that create an item. The first command is
 `CREATE`; each command after it starts with `LAST` (the item just created) and adds, in this order:
 
-- the English label and description, from the model's templates (each is left out when it is over
-  250 characters);
+- the English label and description, from the model's templates with the name from `TitleNameFor`
+  (see [The name in titles and labels](#the-name-in-titles-and-labels)); each is left out when it
+  is over 250 characters;
 - instance of (P31), from the model;
-- title (P1476): the scientific name, as monolingual text;
+- title (P1476): the name from `TitleNameFor`, as monolingual text;
 - published in (P1433): the IUCN Red List;
 - publisher (P123): IUCN;
-- main subject (P921): the taxon's item, when the site has one (`taxon.wikidata_qid`, from P627 or
-  a name match);
+- main subject (P921): the taxon's item, when the caller passes one. The site passes
+  `taxon.wikidata_qid` (from P627 or a name match), except when that item is in doubt (see
+  [On the site](#on-the-site-pageswikidatacitecs));
 - language (P407): from the DOI's last part (`.en` English, `.es` Spanish, `.fr` French, `.pt`
   Portuguese), or the model's language when there is no such DOI;
 - full work available at URL (P953): the assessment's page on iucnredlist.org;
@@ -449,14 +520,36 @@ an access date without a URL as an error.
   printed name is written with `!P2093`, so that its ordinal goes on a new statement and not on
   the first author's.
 
-No statement has a reference.
+No statement has a reference. When `TitleNameFor` finds no usable name, `CreateItemCommands`
+returns no commands, because an item with no title or label could not be found again.
 
 `AddMissingCommands` writes commands that add to an existing item what it lacks, judged from
 `wikidata_item_properties`: the English label when `Len` is missing, and each statement above
-whose property is missing. An item with an author item (P50) gets no author name strings (P2093).
-The commands never add publisher (P123), language (P407) or a description, because the cache does
-not record whether the item has them, and they never remove or change a statement. When the item
-lacks nothing, there are no commands.
+whose property is missing. The label and the title use the name from `TitleNameFor`, given the
+item's own titles (`wikidata_item_titles`). An item with an author item (P50) gets no author name
+strings (P2093). `AddMissingCommands` never adds publisher (P123), language (P407) or a
+description, because the cache does not record whether the item has them, and it never removes or
+changes a statement. When the item lacks nothing, it returns no commands.
+
+`FixCommands` writes commands that replace an existing item's title (P1476) and English label.
+Most items that SourceMD made in 2017 and 2018 have "Name: author list" as both, and `{{cite Q}}`
+shows the title as the title of the work.
+
+- Title: when the item has exactly one title that is not deprecated, and that title has the form
+  "Name: author list", the commands add "Name" as a new title in the old title's language, then
+  remove the old title by its exact text and language
+  (`-Q1<TAB>P1476<TAB>en:"Canis mesomelas: Hoffmann, M"`), which is how QuickStatements finds a
+  statement to remove. The name stays as the title has it, never IUCN's newer citation name. The
+  title is not changed when `wikidata_item_titles` is NULL, when any title of any rank already has
+  the new text in that language, when a deprecated title has the old title's text and language
+  (QuickStatements could remove that one), when QuickStatements cannot match the old text exactly
+  (a control character, `||`, or a space at either end), or when the name is an internal IUCN
+  name with `_`.
+- English label: when the label differs from the model's label template filled with the name from
+  `TitleNameFor`, the commands set it with `Len`, which replaces the old label. A missing label is
+  added by `AddMissingCommands`.
+
+The site shows the commands from `AddMissingCommands` and `FixCommands` in one box.
 
 `QuickStatementsUrl` writes a link to `https://quickstatements.toolforge.org/#/v1=` with the
 commands joined by `||` and each tab written as `|`, percent-encoded. A command whose values
@@ -465,23 +558,199 @@ contain `|` keeps its tabs (`%09`). `QuickStatementsUrlFits` checks that a link 
 longest create batch in release 2026-1 is for an assessment with 59 authors, and its link was
 measured at 4,430 characters.
 
+### The name in titles and labels
+
+`WikidataCitation.TitleNameFor` gives the name for an assessment item's title, English label and
+English description, and says which title it read the name from (`TitleNameSource`). It takes the
+first of these:
+
+1. the name part of the item's own title (`ItemTitle`), when the item has exactly one title that is
+   not deprecated;
+2. the name part of the title registered with Crossref for the assessment's DOI (`Crossref`, from
+   `IucnCitationParts.RegisteredName`);
+3. IUCN's citation name (`IucnCitation`).
+
+A new item has no title, so its commands start at the second. IUCN's citation gives the taxon's
+current name even for an older assessment: the title registered for the 2014 assessment of the
+black-backed jackal is "Canis mesomelas: Hoffmann, M.", and IUCN's citation now gives *Lupulella
+mesomelas*. Neither title proves the name an assessment first appeared under. Crossref's records
+for some 2008 and 2010 DOIs were made in 2015 and deposited again with the names current then
+(Q29037714, Q29393952), and SourceMD copied most item titles from Crossref. The page says only
+which title a name was read from.
+
+A name with `_` is IUCN's internal name for a taxon it has replaced ("Larus glaucoides_old"), and
+`TitleNameFor` never uses one (`IsIucnInternalName`). When it finds no usable name, there are no
+create commands, and the add commands leave out the title and the label.
+
+`NameFromTitle` reads the name part of a title: the text before the last colon outside round
+brackets, or the whole title when it has no such colon. A subpopulation's name can have a colon
+inside brackets, as in "Oncorhynchus nerka (COLUMBIA RIVER: Redfish Lk): Rand, P.S." (66 of
+Crossref's 255,060 titles in October 2026). HTML tags are removed, entities decoded and runs of
+spaces collapsed.
+
+`SameName` decides whether two names differ, for the name note on the page and for the build
+summary. It counts "ssp." and "subsp." as the same, ignores round and square brackets, and counts a
+run of spaces as one space, so "Apollonias barbujana ssp. ceballosi" (Crossref) and "Apollonias
+barbujana subsp. ceballosi" (IUCN) are the same name. The commands keep each name as it is
+written.
+
 ### On the site (`Pages/WikidataCite.cs`)
 
-The subsection "{{cite Q}} citation from Wikidata" is the last part of the wikitext section, after
-the citation options.
+The subsection "{{cite Q}} citation from Wikidata" follows the citation options in the wikitext
+section. On the page of a taxon in the release, when the assessment shown is its latest global
+assessment, the subsection "IUCN conservation status on Wikidata" follows it (see
+[IUCN conservation status on Wikidata](#iucn-conservation-status-on-wikidata)).
 
 - When the assessment has an item, the subsection shows a link to the item, the `{{cite Q}}` box,
   and a one-line summary of English Wikipedia's guidance on `{{cite Q}}`, linked to WP:Citing
-  sources#Wikidata. When `AddMissingCommands` returns commands, it also lists what they add (such
-  as "main subject (P921)"), shows the commands in a box, and links to QuickStatements with the
-  commands filled in.
+  sources#Wikidata. When `AddMissingCommands` or `FixCommands` returns commands, it also lists the
+  statements the item is missing (such as "main subject (P921)"), shows a table of each title and
+  English label that the commands replace beside its new value (`_WikidataItemChanges.cshtml`),
+  shows all the commands in one box, and links to QuickStatements with the commands filled in.
+- When the item is for another assessment (`wikidata_item_assessment_id` is not the row's own id),
+  the row is an errata version that shares the item of the assessment it corrects. The subsection
+  then shows only the link to the item, the `{{cite Q}}` box and a line that links to the page of
+  that assessment, where the commands for the item are. When the site has no page for that
+  assessment, the line says so. Commands built from the errata row would give the item the errata
+  version's article number, URL and authors.
 - When the assessment has no item, the subsection says "No Wikidata item found for this
   assessment." It links to a Wikidata search, so that a reader can find an item made after the
   site's data was downloaded: by the DOI (`haswbstatement:P356=`), or, when there is no DOI, by the
   article number (`e.T<taxon id>A<assessment id>`) that assessment items have in their labels. It
-  then shows the create commands and a link that opens QuickStatements with them.
+  then shows the create commands and a link that opens QuickStatements with them. When the only
+  name the site has is an internal IUCN name with `_`, there are no create commands, and a line
+  says why.
+- A line about the name (`_WikidataName.cshtml`) appears when the name from `TitleNameFor` comes
+  from a title and is not the same as IUCN's citation name by `SameName`. It says "The name in the
+  item's title (P1476) is X" or "The name in the title registered with Crossref for this
+  assessment's DOI is X", then that IUCN's citation gives a different name (and, when that name has
+  `_`, that it is an internal name), then "The commands use X" when the commands set the item's
+  title or label. When the commands use IUCN's citation name because neither title is known, the
+  line says that IUCN's citation gives the taxon's current name, even for an older assessment.
+- When two or more Wikidata items state the taxon's IUCN taxon ID (P627), or the taxon's item
+  states it only at deprecated rank, the taxon's item is in doubt (`TaxonItemDoubt.Of`, from
+  `wikidata_other_items` and `wikidata_p627_deprecated`). The create and add commands then leave
+  out main subject (P921), and a line beside the commands box says why
+  (`_WikidataMainSubject.cshtml`). The line is on the page of every assessment of the taxon, and
+  only when the commands would otherwise have added P921. The IUCN conservation status part gives
+  no commands in these cases either. Both cases are in the Wikidata status dry run's tiers C and
+  D.
 - When a `WikidataCitation` call throws, the page leaves out only the box that call makes, and logs
   a warning.
+
+## IUCN conservation status on Wikidata
+
+The subsection "IUCN conservation status on Wikidata" compares the IUCN conservation status (P141)
+statements on the taxon's Wikidata item with the latest global assessment, and gives
+QuickStatements commands that bring the item up to date with a reference to the assessment.
+`WikidataStatusEdit.Plan` (in `BeastieBot3.Shared`) makes the commands, `WikidataCite.BuildStatus`
+decides when to offer them, and `_WikidataStatus.cshtml` and `_WikidataStatusPlan.cshtml` show
+them. The commands follow the Wikidata status dry run as far as QuickStatements can express it.
+"The public site's status commands" in `docs/wikidata-iucn-status.md` lists the differences. The
+site never edits Wikidata.
+
+### When the commands are offered
+
+The page shows the subsection only on the page of a taxon in the release (`in_release = 1`), and
+only when the assessment shown is the taxon's latest global assessment. The subsection says why it
+gives no commands when:
+
+- the taxon is a variety or a subpopulation;
+- the taxon has no Wikidata item;
+- the taxon's item was matched by name (`wikidata_qid_source = 'name-match'`), so it does not
+  state the taxon's IUCN taxon ID (P627);
+- two or more items state the taxon's IUCN taxon ID (`wikidata_other_items`), or the taxon's item
+  states it only at deprecated rank (`wikidata_p627_deprecated = 1`). The dry run holds such links
+  for review (tiers C and D). The subsection still shows the table, with the P141 statements of
+  every item that states the id;
+- the Wikidata cache has not downloaded the item (`wikidata_p141` is NULL).
+
+### Which statements are compared
+
+Only P141 statements with a reference that cites IUCN (`citesIucn`) are compared with the
+assessment. A reference cites IUCN when it has one of these:
+
+- an IUCN taxon ID (P627);
+- stated in (P248) the IUCN Red List (Q32059), IUCN (Q48268), an edition of the Red List (from
+  `wikidata_iucn_red_list_editions`), or the item of an IUCN assessment (from
+  `wikidata_iucn_assessment_items`);
+- a reference URL (P854) on iucnredlist.org or a subdomain of it, such as a pre-publication PDF on
+  nc.iucnredlist.org (`WikidataStatusStatement.IsIucnRedListUrl`).
+
+Statements with no reference to IUCN, such as one referenced only to a national red book, are
+never removed. The table marks each of them "no reference" or "no reference to IUCN", and a note
+under the table says that they are not compared.
+
+`site build-db` reads the statements and references from the Wikidata cache's index tables
+`wikidata_p141_statements` and `wikidata_p141_references`, which take about a second to read.
+Reading every item's JSON instead took 94 seconds in October 2026. The index records the first
+stated in of each reference and its IUCN taxon IDs, but no later stated in and no reference URL.
+So for each statement that has references but none that the index shows citing IUCN, the build
+reads the item's cached JSON and checks every stated in and every reference URL
+(`P141JsonReferences`). In the build of
+3 October 2026 it read 87 items, and 34 of their statements cite IUCN by a reference URL. When the
+cache has no `wikidata_iucn_red_list_editions` table, the build warns, and a reference stated in an
+edition cites IUCN only when it also has an IUCN taxon ID.
+
+### The comparison (`WikidataStatusEdit.Plan`)
+
+- The IUCN value is `WikidataStatusValues.QidForCode` of the category as published, compared
+  case-sensitively: "nt" (Not Threatened, before 1994) is not NT. LR/nt and LR/lc give near threatened and
+  least concern. LR/cd has no P141 value, so the page gives no commands (`NoValue`). Possibly
+  extinct is a flag on CR, so CR(PE) and CR(PEW) give critically endangered, and a line under the
+  table says that Wikidata has no value for possibly extinct.
+- The item's best rank is taken over every statement that is not deprecated, whatever its
+  references cite: preferred when any statement is preferred, else normal. The IUCN statements at
+  that rank are compared with the IUCN value. When every IUCN statement is at normal rank under a
+  preferred statement from another source, all the IUCN statements are compared.
+- The outcome is `Agrees` when the compared statements all have the IUCN value, `Differs` when
+  any has another value, and `Missing` when no statement that is not deprecated cites IUCN (other
+  statements can still have a value).
+- The outcome is `Blocked`, with no commands, when a deprecated statement has the IUCN value or two
+  or more statements have it. QuickStatements finds the statement that a reference goes on by its
+  value, taking the last statement of any rank with that value, so the reference could go on the
+  wrong statement.
+
+### The commands
+
+- One command adds the IUCN value with the reference. When a statement already has the IUCN
+  value, the command adds the reference to that statement instead. The reference has stated in (P248) the assessment's Wikidata item
+  when the site has one, IUCN taxon ID (P627), reference URL (P854) of the assessment's page on
+  iucnredlist.org, and retrieved (P813), the day the IUCN API cache downloaded the assessment. The
+  page lists what the reference leaves out: stated in the Red List release, because the site has no
+  Wikidata item for the release, and stated in the assessment's own item when the site has none.
+- The statement with the IUCN value gets no reference when it already has a reference with this
+  taxon's IUCN taxon ID, of any date, or one stated in the assessment's item. The cache does not
+  record a reference's URL or retrieved date, and a reference that differs only in its retrieved
+  date would otherwise be added again after every download.
+- For a changed status (`Differs`), there are two choices (`StatusEditChoice`):
+  - Replace also removes the IUCN statements at the item's best rank that have another value, by
+    statement id (`-STATEMENT<TAB>Q140$...`). A normal-rank statement under a preferred one is
+    never removed, whatever source the preferred one cites.
+  - Keep removes nothing.
+
+  QuickStatements v1 cannot set a statement's rank. When statements with another value are left
+  on the item, the page lists the ranks to set by hand on the item's page: the statement with the
+  IUCN value to preferred rank, unless it is preferred already, and each preferred statement with
+  another value to normal rank.
+- The choice shown first is Keep when the item has a statement at preferred rank, else Replace
+  (`WikidataStatusEdit.RecommendedChoice`), and a line gives that reason. The other choice is in a
+  details element. The page leaves it out when its commands are the same as the first choice's.
+  That happens when every IUCN statement is at normal rank under a preferred statement from
+  another source, so Replace can remove no statement.
+- The add command comes before the removals, so a batch that stops part way never leaves the item
+  without a status.
+
+The `site build-db` summary has these rows for the status part: "Of those, items that state the id
+only at deprecated rank (no status commands)", "Of those, items downloaded to the Wikidata cache
+(IUCN status statements known)", "Of those, items with no IUCN status (P141)", "Editions of the
+IUCN Red List on Wikidata (a P141 reference stated in one cites IUCN)", "Items whose JSON was read
+for P141 references that the cache's index does not record", and two rows that count the
+statements found to cite IUCN in that JSON, by a reference URL and by a second or later stated in.
+For the names in titles and labels it has "Citations with a title registered with Crossref for
+their DOI", "Of those, titles with a name other than IUCN's citation name (ssp./subsp., brackets
+and spaces ignored)", and, when the cache has not recorded some items' titles, "Items kept whose
+title statements are not recorded (run wikidata iucn-assessment-items)".
 
 ## The site
 
@@ -584,8 +853,8 @@ links to other assessments of the taxon keep the options.
   assessment shown has no authors with given names, a `fullnames=1` already chosen is kept in a
   hidden field, so it still applies on the next assessment.
 - The `{{cite Q}}` box uses the same ref options as `{{cite iucn}}` (`ToCiteQOptions`). The access
-  date option has no effect on it, because the site never sets `CiteQOptions.ItemHasUrl` (see
-  [Known gaps](#known-gaps)).
+  date option applies to it only when the item has a URL: `WikidataCite.Build` sets
+  `CiteQOptions.ItemHasUrl` when the item's `wikidata_item_properties` include P953.
 
 `wwwroot/site.js` updates the wikitext when an option changes:
 
@@ -666,16 +935,17 @@ of `dotnet test`. To run it:
   (`iucn resolve-dois --scope latest-regional`) gives one.
 - For 6,569 of the 6,578 cached assessment items, the title (P1476) has the form SourceMD gave
   them, "Name: author list" ("Rusa unicolor: Timmins, R., ..."), and 6,566 have an English label of
-  that form too. `{{cite Q}}` shows that whole text as the title of the work. The site's commands cannot correct it, because they
-  never remove or replace a statement.
+  that form too. `{{cite Q}}` shows that whole text as the title of the work until a reader runs the
+  site's commands that replace the title and label (`FixCommands`). The site offers no title change
+  for an item whose title statements `wikidata iucn-assessment-items` has not recorded.
 - The commands that add missing statements never add publisher (P123), language (P407) or the
   English description, because the Wikidata cache does not record whether an item has them. To
   offer them, `wikidata iucn-assessment-items` would have to record them.
 - The site keeps offering the commands to create an item for an assessment until
   `wikidata iucn-assessment-items` finds the new item and `site build-db` runs again. The search
   link beside the commands is there so a reader can check first.
-- The site never sets `CiteQOptions.ItemHasUrl`, so its `{{cite Q}}` never has `|access-date=`,
-  even for the 6 items that have a URL.
-- The site does not check a QuickStatements link with `QuickStatementsUrlFits` before showing it.
-  The longest link in release 2026-1 is about 4,430 characters, under `MaxQuickStatementsUrlLength`
-  (8,000 characters).
+- The reference that the status commands add has no stated in (P248) for the Red List release,
+  because the site has no Wikidata item for the release. The dry run's release reference has one.
+- A QuickStatements link longer than `MaxQuickStatementsUrlLength` (8,000 characters) is left out
+  (`QuickStatementsUrlFits`). The reader can still copy the commands from the box. The longest
+  link in release 2026-1 is about 4,430 characters.
