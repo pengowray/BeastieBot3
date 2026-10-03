@@ -212,7 +212,7 @@ public static partial class CiteIucnRenderer {
     // Cite rejects a name made only of the digits 0-9 ("Cite error: The <ref> tag name cannot be a
     // simple integer"), so such a name gets a prefix rather than being dropped, which would break any
     // reuse the editor meant: "1" becomes "iucn-1".
-    private static string SanitizeRefName(string? name) {
+    internal static string SanitizeRefName(string? name) {
         if (string.IsNullOrWhiteSpace(name)) {
             return string.Empty;
         }

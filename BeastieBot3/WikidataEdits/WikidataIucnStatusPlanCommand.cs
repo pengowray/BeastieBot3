@@ -217,22 +217,8 @@ internal sealed class WikidataIucnStatusPlanCommand : AsyncCommand<WikidataIucnS
         return 0;
     }
 
-    private static WikidataIucnEditConfig LoadConfig(PathsService paths, out string? loadedFrom) {
-        loadedFrom = null;
-        try {
-            var rules = RulesPaths.Resolve(paths);
-            foreach (var dir in new[] { rules.SourceRulesDir, rules.BuildOutputRulesDir }) {
-                var path = WikidataIucnEditConfig.PathFor(dir);
-                if (File.Exists(path)) {
-                    loadedFrom = path;
-                    return WikidataIucnEditConfig.Load(dir);
-                }
-            }
-        } catch {
-            // fall through to defaults
-        }
-        return new WikidataIucnEditConfig();
-    }
+    private static WikidataIucnEditConfig LoadConfig(PathsService paths, out string? loadedFrom) =>
+        WikidataIucnEditConfig.LoadFromRules(paths, out loadedFrom);
 
     private static void WriteCsv(WikidataIucnPlanStore store, string path) {
         using var writer = new StreamWriter(path);
