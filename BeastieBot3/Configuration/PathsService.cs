@@ -71,6 +71,16 @@ namespace BeastieBot3.Configuration;
             return string.IsNullOrWhiteSpace(datasets) ? null : Path.Combine(datasets, "gbif-iucn");
         }
 
+        // DOIs found by checking candidate DOIs against doi.org (`iucn resolve-dois`), for
+        // assessments whose DOI no other source gives. Defaults to iucn_doi_cache.sqlite in the
+        // datastore folder.
+        public string? GetIucnDoiCachePath() {
+            var configured = _reader.Get("Datastore:IUCN_doi_cache_sqlite");
+            if (!string.IsNullOrWhiteSpace(configured)) return configured;
+            var datastore = GetDatastoreDir();
+            return string.IsNullOrWhiteSpace(datastore) ? null : Path.Combine(datastore, "iucn_doi_cache.sqlite");
+        }
+
         // The public site's database (built by `site build-db`). Defaults to site.sqlite in the
         // datastore folder.
         public string? GetSiteDatabasePath() {
