@@ -68,6 +68,23 @@ public sealed class WikidataStatusTests(SiteFactory factory) : IClassFixture<Sit
     }
 
     [Fact]
+    public async Task ValueAlreadyCited_TheCommandsOnlyRemove() {
+        var html = await _client.GetStringAsync($"/species/{FixtureDb.Koala}");
+        var text = Html.Text(Part(html));
+
+        Assert.Contains("endangered (Q96377276), preferred rank vulnerable (Q278113), normal rank", text);
+        Assert.Contains("Wikidata gives a different status.", text);
+        Assert.Contains("The commands: remove endangered (Q96377276), preferred rank", text);
+        // The vulnerable statement already cites the assessment's item, so no reference is described.
+        Assert.DoesNotContain("The reference:", text);
+        Assert.DoesNotContain("Left out of the reference", text);
+        Assert.Equal($"-STATEMENT\t{FixtureDb.KoalaP141Endangered}", Html.Textarea(html, WikidataCite.StatusCommandsBoxId));
+        // Keeping the old status needs no commands, only ranks.
+        Assert.Null(Html.Textarea(html, WikidataCite.StatusKeepCommandsBoxId));
+        Assert.Contains("on the item's page set vulnerable (Q278113) to preferred rank and set endangered (Q96377276) to normal rank.", text);
+    }
+
+    [Fact]
     public async Task NoStatus_AddsIt_PossiblyExtinctIsExplained() {
         var text = await PartText(FixtureDb.Baiji);
 

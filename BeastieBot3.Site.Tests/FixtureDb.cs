@@ -112,6 +112,9 @@ public static class FixtureDb {
     public const string TigerP141Statement = "q132186$1A2B3C4D-0000-4000-8000-000000000001";
     public const string PolarBearP141Statement = "Q33609$1A2B3C4D-0000-4000-8000-000000000002";
     public const string PlantSubspeciesItem = "Q900000010";
+    public const string KoalaLatestItem = "Q900000003";
+    public const string KoalaP141Endangered = "Q36101$1A2B3C4D-0000-4000-8000-000000000005";
+    public const string KoalaP141Vulnerable = "Q36101$1A2B3C4D-0000-4000-8000-000000000006";
     /// The tiger's assessment item's title and label, as SourceMD wrote them.
     public const string TigerItemOldTitle = "Panthera tigris: Goodrich, J. & Wibisono, H.";
 
@@ -340,12 +343,16 @@ public static class FixtureDb {
 
         // Koala: a SPRAT profile with no listing, and the listing of some of its populations.
         w.Taxon(Koala, "Phascolarctos cinereus", "species", "ANIMALIA", "CHORDATA", "MAMMALIA", "DIPROTODONTIA", "PHASCOLARCTIDAE", "Phascolarctos",
-            authority: "(Goldfuss, 1817)", commonEn: "Koala", enwiki: "Koala", qid: "Q36101", latest: KoalaLatest);
+            authority: "(Goldfuss, 1817)", commonEn: "Koala", enwiki: "Koala", qid: "Q36101", latest: KoalaLatest,
+            // Its item gives endangered at preferred rank, and the assessment's vulnerable at normal rank
+            // with a reference to the assessment's item: the commands only remove endangered.
+            itemDownloaded: "2026-09-13",
+            p141: P141((KoalaP141Endangered, "Q96377276", "preferred", null), (KoalaP141Vulnerable, "Q278113", "normal", KoalaLatestItem)));
         w.EpbcListing(Koala, KoalaSprat, "Phascolarctos cinereus", null, "taxon", null);
         w.EpbcListing(Koala, KoalaPopulationSprat, "Phascolarctos cinereus (combined populations of Qld, NSW and the ACT)", "EN", "population",
             "combined populations of Qld, NSW and the ACT");
         w.Assessment(KoalaLatest, Koala, "Global", true, "VU", criteria: "A2bc", criteriaVersion: "3.1", year: 2016, date: "2014-07-08",
-            trend: "Decreasing");
+            trend: "Decreasing", wikidataItem: KoalaLatestItem, wikidataItemProperties: "P31 P1476 P1433 P921 P953 P577 P356 P2093 Len");
         w.Name(Koala, "Phascolarctos cinereus", "scientific", null, "iucn");
         w.Name(Koala, "Koala", "common", "en", "iucn", preferred: true);
 

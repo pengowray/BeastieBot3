@@ -105,24 +105,27 @@
             @if (plan.Removes.Count > 0) {
                 <p class="help">@SiteText.StatusReplaceReason</p>
             }
-            <p class="status-commands-label">@SiteText.ReferenceLabel</p>
-            <ul>
-                @if (reference.StatedIn is { } statedIn) {
-                    <li>@SiteText.RefStatedInBefore<a href="@SiteFormat.WikidataUrl(statedIn)">@statedIn</a>@SiteText.RefStatedInAfter</li>
-                }
-                <li>@SiteText.RefTaxonId(reference.TaxonId)</li>
-                <li>@SiteText.RefUrlBefore<a href="@reference.Url">@reference.Url</a></li>
-                @if (reference.Retrieved is { } retrieved) {
-                    <li>@SiteText.RefRetrieved(SiteFormat.Date(retrieved))</li>
-                }
-            </ul>
-            <p class="status-commands-label">@SiteText.LeftOutLabel</p>
-            <ul>
-                <li>@SiteText.LeftOutRelease(Model.Release)</li>
-                @if (reference.StatedIn is null) {
-                    <li>@SiteText.LeftOutAssessmentItem</li>
-                }
-            </ul>
+            @* Only when the commands add the reference: a batch of removals alone adds none. *@
+            @if (plan.AddsReference) {
+                <p class="status-commands-label">@SiteText.ReferenceLabel</p>
+                <ul>
+                    @if (reference.StatedIn is { } statedIn) {
+                        <li>@SiteText.RefStatedInBefore<a href="@SiteFormat.WikidataUrl(statedIn)">@statedIn</a>@SiteText.RefStatedInAfter</li>
+                    }
+                    <li>@SiteText.RefTaxonId(reference.TaxonId)</li>
+                    <li>@SiteText.RefUrlBefore<a href="@reference.Url">@reference.Url</a></li>
+                    @if (reference.Retrieved is { } retrieved) {
+                        <li>@SiteText.RefRetrieved(SiteFormat.Date(retrieved))</li>
+                    }
+                </ul>
+                <p class="status-commands-label">@SiteText.LeftOutLabel</p>
+                <ul>
+                    <li>@SiteText.LeftOutRelease(Model.Release)</li>
+                    @if (reference.StatedIn is null) {
+                        <li>@SiteText.LeftOutAssessmentItem</li>
+                    }
+                </ul>
+            }
             <p>@SiteText.RunCommandsLine</p>
             <div class="wikitext-box">
                 <partial name="_WikitextBoxContent" model="box" />
