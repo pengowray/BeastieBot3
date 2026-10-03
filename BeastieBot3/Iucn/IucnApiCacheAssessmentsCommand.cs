@@ -158,23 +158,30 @@ public sealed class IucnApiCacheAssessmentsCommand : AsyncCommand<IucnApiCacheAs
         // The --csv-missing and --stale-latest queues hold only assessments to download. A stale
         // payload is cached and usually newer than any cutoff, so the usual skip test would drop it.
         var downloadEvery = settings.Force || settings.StaleLatest;
+
+        // Skip already-cached/fresh. (Backed-off / tombstoned failures were already excluded from
+        // the queue, so there's no per-item failed_requests lookup here.) Decided before the
+        // progress bar starts, so its total and time estimate count downloads only (see
+        // IucnDownloadQueueSummary); the queue holds the whole backlog, mostly cached.
+        var due = downloadEvery ? queue : queue.Where(item => ShouldDownload(item.DownloadedAt, refreshThreshold)).ToList();
+        var skipped = queue.Count - due.Count;
+        if (skipped > 0) {
+            var summary = IucnDownloadQueueSummary.Describe("Assessments", queue.Count, due.Count, upToDate: skipped, notFoundEarlier: 0, refreshThreshold);
+            if (due.Count == 0) {
+                AnsiConsole.MarkupLineInterpolated($"[green]Nothing to download.[/] {summary}");
+                return 0;
+            }
+            AnsiConsole.MarkupLineInterpolated($"[grey]{summary}[/]");
+        }
+
         var sleep = Math.Clamp(settings.SleepBetweenRequests, 0, 5_000);
         var downloaded = 0;
-        var skipped = 0;
         var notFound = 0;
         var failures = 0;
 
-        await ProgressConsole.RunAsync("Downloading assessments", queue.Count, async progress => {
-            foreach (var item in queue) {
+        await ProgressConsole.RunAsync("Downloading assessments", due.Count, async progress => {
+            foreach (var item in due) {
                 cancellationToken.ThrowIfCancellationRequested();
-
-                // Skip already-cached/fresh. (Backed-off / tombstoned failures were already excluded
-                // from the queue, so there's no per-item failed_requests lookup here.)
-                if (!downloadEvery && !ShouldDownload(item.DownloadedAt, refreshThreshold)) {
-                    skipped++;
-                    progress.Increment(1);
-                    continue;
-                }
 
                 switch (await DownloadSingleAsync(apiClient, cacheStore, item.AssessmentId, cancellationToken).ConfigureAwait(false)) {
                     case DownloadOutcome.Success: downloaded++; break;
