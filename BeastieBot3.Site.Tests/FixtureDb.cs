@@ -103,6 +103,37 @@ public static class FixtureDb {
     public const long WoylieOld = 2785;
     public const long WoylieOld2008 = 6143;
 
+    // Acropora palmerae, in the release, and Acropora minuta, an old id whose name IUCN lists as a
+    // synonym of it. Only the newest assessment of Acropora palmerae has taxonomic notes.
+    public const long Palmerae = 133531;
+    public const long PalmeraeLatest = 133531001;
+    public const long Palmerae2008 = 133531000;
+    public const long Minuta = 133018;
+    public const long Minuta2008 = 133018001;
+
+    // An old id with two links, as after a split: Platanista gangetica (41758) has the name of
+    // 41756 and is a synonym of Platanista minor (41757).
+    public const long Gangetica = 41756;
+    public const long GangeticaLatest = 41756001;
+    public const long Minor = 41757;
+    public const long MinorLatest = 41757001;
+    public const long GangeticaOld = 41758;
+    public const long GangeticaOld2012 = 41758001;
+    public const long GangeticaOld1996 = 41758002;
+    public const long GangeticaOldAsia = 41758003;
+
+    // Ids with no global assessments: Clessiniola variabilis (in the release, a Europe assessment
+    // only) and Turricaspia trivialis, an old id whose name it lists as a synonym; and Pupilla
+    // bigranata, an old id with a Europe assessment only, whose name Pupilla muscorum lists.
+    public const long Clessiniola = 212620635;
+    public const long ClessiniolaEurope = 212620635001;
+    public const long Turricaspia = 189519;
+    public const long Turricaspia2011 = 189519001;
+    public const long PupillaMuscorum = 215033857;
+    public const long PupillaMuscorumLatest = 215033857001;
+    public const long PupillaBigranata = 156831;
+    public const long PupillaBigranataEurope = 156831001;
+
     public const int FillerCount = 55;
     public const long FillerFirstId = 900000;
 
@@ -370,7 +401,7 @@ public static class FixtureDb {
             authority: "Gray, 1837", commonEn: "Woylie", latest: WoylieLatest);
         w.Assessment(WoylieLatest, Woylie, "Global", true, "CR", criteria: "A3e", criteriaVersion: "3.1", year: 2015, date: "2014-01-01",
             citation: Citation(Woylie, WoylieLatest, 2015, "Bettongia penicillata", [Person("Woinarski", "J.")],
-                doi: WoylieDoi, doiSource: DoiSource.Resolved, text: null));
+                doi: WoylieDoi, doiSource: DoiSource.Resolved, text: null), taxonomicNotes: true);
         w.Name(Woylie, "Bettongia penicillata", "scientific", null, "iucn");
         w.Name(Woylie, "Woylie", "common", "en", "iucn", preferred: true);
 
@@ -378,9 +409,74 @@ public static class FixtureDb {
             authority: "Gray, 1837", commonEn: "Woylie", inRelease: false, currentTaxon: Woylie);
         w.Assessment(WoylieOld2008, WoylieOld, "Global", false, "CR", criteria: "A2ce", criteriaVersion: "3.1", year: 2008, date: "2008-06-30",
             citation: Citation(WoylieOld, WoylieOld2008, 2008, "Bettongia penicillata", [Person("Woinarski", "J.")],
-                doi: null, doiSource: DoiSource.None, text: null));
+                doi: null, doiSource: DoiSource.None, text: null), taxonomicNotes: true);
         w.Name(WoylieOld, "Bettongia penicillata", "scientific", null, "iucn");
         w.Name(WoylieOld, "Woylie", "common", "en", "iucn", preferred: true);
+        w.TaxonLink(WoylieOld, Woylie, "same-name");
+
+        // Acropora palmerae and Acropora minuta, an old id whose name is a synonym of it.
+        w.Taxon(Palmerae, "Acropora palmerae", "species", "ANIMALIA", "CNIDARIA", "ANTHOZOA", "SCLERACTINIA", "ACROPORIDAE", "Acropora",
+            authority: "Wells, 1954", latest: PalmeraeLatest);
+        w.Assessment(PalmeraeLatest, Palmerae, "Global", true, "EN", criteria: "A4c", criteriaVersion: "3.1", year: 2024, date: "2022-01-01",
+            citation: Citation(Palmerae, PalmeraeLatest, 2024, "Acropora palmerae", [Person("Aeby", "G.")], doi: null, doiSource: DoiSource.None, text: null),
+            taxonomicNotes: true);
+        w.Assessment(Palmerae2008, Palmerae, "Global", false, "VU", criteria: "A4c", criteriaVersion: "3.1", year: 2008, date: "2008-01-01",
+            taxonomicNotes: false);
+        w.Name(Palmerae, "Acropora palmerae", "scientific", null, "iucn");
+        w.Name(Palmerae, "Acropora minuta", "synonym", null, "iucn");
+
+        w.Taxon(Minuta, "Acropora minuta", "species", "ANIMALIA", "CNIDARIA", "ANTHOZOA", "SCLERACTINIA", "ACROPORIDAE", "Acropora",
+            authority: "Veron, 2000", inRelease: false);
+        w.Assessment(Minuta2008, Minuta, "Global", false, "VU", criteria: "A4c", criteriaVersion: "3.1", year: 2008, date: "2008-01-01",
+            citation: Citation(Minuta, Minuta2008, 2008, "Acropora minuta", [Person("Aeby", "G.")], doi: null, doiSource: DoiSource.None, text: null),
+            taxonomicNotes: false);
+        w.Name(Minuta, "Acropora minuta", "scientific", null, "iucn");
+        w.TaxonLink(Minuta, Palmerae, "iucn-synonym");
+
+        // Platanista: an old id linked to two taxa in the release.
+        w.Taxon(Gangetica, "Platanista gangetica", "species", "ANIMALIA", "CHORDATA", "MAMMALIA", "CETARTIODACTYLA", "PLATANISTIDAE", "Platanista",
+            authority: "(Roxburgh, 1801)", latest: GangeticaLatest);
+        w.Assessment(GangeticaLatest, Gangetica, "Global", true, "EN", criteria: "A2abc", criteriaVersion: "3.1", year: 2022, date: "2021-03-01",
+            taxonomicNotes: true);
+        w.Name(Gangetica, "Platanista gangetica", "scientific", null, "iucn");
+        w.Taxon(Minor, "Platanista minor", "species", "ANIMALIA", "CHORDATA", "MAMMALIA", "CETARTIODACTYLA", "PLATANISTIDAE", "Platanista",
+            authority: "Owen, 1853", latest: MinorLatest);
+        w.Assessment(MinorLatest, Minor, "Global", true, "EN", criteria: "A2abc", criteriaVersion: "3.1", year: 2022, date: "2021-03-02",
+            taxonomicNotes: true);
+        w.Name(Minor, "Platanista minor", "scientific", null, "iucn");
+        w.Name(Minor, "Platanista gangetica", "synonym", null, "iucn");
+        w.Taxon(GangeticaOld, "Platanista gangetica", "species", "ANIMALIA", "CHORDATA", "MAMMALIA", "CETARTIODACTYLA", "PLATANISTIDAE", "Platanista",
+            authority: "(Roxburgh, 1801)", inRelease: false, currentTaxon: Gangetica);
+        w.Assessment(GangeticaOld2012, GangeticaOld, "Global", false, "EN", criteria: "A2abcd", criteriaVersion: "3.1", year: 2012, date: "2012-01-01",
+            taxonomicNotes: true);
+        w.Assessment(GangeticaOld1996, GangeticaOld, "Global", false, "EN", criteria: "A1acd", criteriaVersion: "2.3", year: 1996, date: "1996-01-01");
+        w.Assessment(GangeticaOldAsia, GangeticaOld, "Asia", false, "EN", criteriaVersion: "3.1", year: 2010, date: "2010-01-01");
+        w.Name(GangeticaOld, "Platanista gangetica", "scientific", null, "iucn");
+        w.TaxonLink(GangeticaOld, Gangetica, "same-name");
+        w.TaxonLink(GangeticaOld, Minor, "iucn-synonym");
+
+        // Ids with no global assessments.
+        w.Taxon(Clessiniola, "Clessiniola variabilis", "species", "ANIMALIA", "MOLLUSCA", "GASTROPODA", "LITTORINIMORPHA", "HYDROBIIDAE", "Clessiniola",
+            authority: "(Eichwald, 1838)");
+        w.Assessment(ClessiniolaEurope, Clessiniola, "Europe", true, "LC", criteriaVersion: "3.1", year: 2011, date: "2010-06-01");
+        w.Name(Clessiniola, "Clessiniola variabilis", "scientific", null, "iucn");
+        w.Name(Clessiniola, "Turricaspia trivialis", "synonym", null, "iucn");
+        w.Taxon(Turricaspia, "Turricaspia trivialis", "species", "ANIMALIA", "MOLLUSCA", "GASTROPODA", "LITTORINIMORPHA", "HYDROBIIDAE", "Turricaspia",
+            inRelease: false);
+        w.Assessment(Turricaspia2011, Turricaspia, "Global", false, "DD", criteriaVersion: "3.1", year: 2011, date: "2010-06-01");
+        w.Name(Turricaspia, "Turricaspia trivialis", "scientific", null, "iucn");
+        w.TaxonLink(Turricaspia, Clessiniola, "iucn-synonym");
+
+        w.Taxon(PupillaMuscorum, "Pupilla muscorum", "species", "ANIMALIA", "MOLLUSCA", "GASTROPODA", "STYLOMMATOPHORA", "PUPILLIDAE", "Pupilla",
+            authority: "(Linnaeus, 1758)", latest: PupillaMuscorumLatest);
+        w.Assessment(PupillaMuscorumLatest, PupillaMuscorum, "Global", true, "LC", criteriaVersion: "3.1", year: 2017, date: "2016-08-01");
+        w.Name(PupillaMuscorum, "Pupilla muscorum", "scientific", null, "iucn");
+        w.Name(PupillaMuscorum, "Pupilla bigranata", "synonym", null, "iucn");
+        w.Taxon(PupillaBigranata, "Pupilla bigranata", "species", "ANIMALIA", "MOLLUSCA", "GASTROPODA", "STYLOMMATOPHORA", "PUPILLIDAE", "Pupilla",
+            inRelease: false);
+        w.Assessment(PupillaBigranataEurope, PupillaBigranata, "Europe", false, "LC", criteriaVersion: "3.1", year: 2011, date: "2010-06-01");
+        w.Name(PupillaBigranata, "Pupilla bigranata", "scientific", null, "iucn");
+        w.TaxonLink(PupillaBigranata, PupillaMuscorum, "iucn-synonym");
 
         // A variety, for the kind label.
         w.Taxon(Variety, "Cupressus arizonica var. glabra", "variety", "PLANTAE", "TRACHEOPHYTA", "PINOPSIDA", "PINALES", "CUPRESSACEAE", "Cupressus",
@@ -419,7 +515,7 @@ public static class FixtureDb {
         w.Meta(SiteDbSchema.MetaKeys.AssessmentCount, w.AssessmentCount.ToString(CultureInfo.InvariantCulture));
     }
 
-    public static int GlobalTaxonCount => 15 + FillerCount;
+    public static int GlobalTaxonCount => 19 + FillerCount;
 
     public const string GbifCitation =
         "IUCN (2026). The IUCN Red List of Threatened Species. Version 2026-1. https://www.iucnredlist.org. Downloaded on 2026-07-28. https://doi.org/10.15468/0qnb58";
@@ -499,7 +595,8 @@ public static class FixtureDb {
 
         public void Assessment(long id, long taxonId, string scope, bool latest, string category, bool possiblyExtinct = false,
             string? criteria = null, string? criteriaVersion = null, int? year = null, string? date = null, string? trend = null,
-            string? citation = null, long? replacedBy = null, string? wikidataItem = null, string? wikidataItemProperties = null) {
+            string? citation = null, long? replacedBy = null, string? wikidataItem = null, string? wikidataItemProperties = null,
+            bool? taxonomicNotes = null) {
             AssessmentCount++;
             Run("""
                 INSERT INTO assessment(assessment_id, taxon_id, scope, is_latest, category, possibly_extinct,
@@ -509,7 +606,13 @@ public static class FixtureDb {
                 """,
                 id, taxonId, scope, latest ? 1 : 0, category, possiblyExtinct ? 1 : 0, criteria, criteriaVersion, year, date, trend, citation,
                 replacedBy, wikidataItem, wikidataItemProperties);
+            if (taxonomicNotes is { } notes) {
+                Run("UPDATE assessment SET has_taxonomic_notes = @a WHERE assessment_id = @b", notes ? 1 : 0, id);
+            }
         }
+
+        public void TaxonLink(long taxonId, long currentTaxonId, string kind) =>
+            Run("INSERT INTO taxon_link(taxon_id, current_taxon_id, link_kind) VALUES (@a, @b, @c)", taxonId, currentTaxonId, kind);
 
         public void Name(long taxonId, string name, string type, string? language, string source, bool preferred = false) {
             var nameId = _nextNameId++;

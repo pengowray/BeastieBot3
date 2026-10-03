@@ -1,0 +1,110 @@
+@model SpeciesModel
+@* The combined assessment history: the global assessments of this taxon and of the taxa linked to
+   it (CombinedHistory), in place of the taxon's own history table. A legend line for each id, with
+   the swatch of its row colour, then the table, newest first. *@
+@{
+    var combined = Model.Combined!;
+    var selected = Model.Selected;
+    var thisPage = combined.ThisPage;
+    string NameHtml(TaxonRow t) => ScientificNameMarkup.ToHtml(t.ScientificName, t.SubpopulationName);
+}
+<section class="history combined-history" aria-labelledby="history-heading">
+    <h2 id="history-heading">@SiteText.HeadingCombinedHistory</h2>
+    <p>@SiteText.CombinedIntro(combined.Ids.Select(i => i.TaxonId).ToList())</p>
+    <ul class="id-legend">
+        @foreach (var id in combined.Ids) {
+            <li>
+                @if (id.TintClass is { } tint) {
+                    <span class="id-swatch @tint" aria-hidden="true"></span>
+                }
+                <span>
+                    @if (id.IsThisPage) {
+                        <strong>@SiteText.IucnIdLink(id.TaxonId)</strong> <span class="tag">@SiteText.ThisPageTag</span>
+                    } else {
+                        <a href="/species/@id.TaxonId">@SiteText.IucnIdLink(id.TaxonId)</a>
+                    }@SiteText.LegendBeforeName<span class="sci-name">@Html.Raw(NameHtml(id.Taxon))</span>@SiteText.LegendAfterName(id.Taxon.InRelease, Model.Version, id.Global.Count, id.FirstYear, id.LastYear)
+                    @switch (id.Link) {
+                        case HistoryLink.SameName:
+                            @SiteText.LegendSameName(thisPage.TaxonId)
+                            break;
+                        case HistoryLink.NameIsSynonymOfThisTaxon:
+                            @SiteText.SynonymOfBefore<span class="sci-name">@Html.Raw(NameHtml(id.Taxon))</span>@SiteText.SynonymOfMiddle<span class="sci-name">@Html.Raw(NameHtml(thisPage.Taxon))</span><text>.</text>
+                            break;
+                        case HistoryLink.ThisNameIsSynonymOfIt:
+                            @SiteText.SynonymOfBefore<span class="sci-name">@Html.Raw(NameHtml(thisPage.Taxon))</span>@SiteText.SynonymOfMiddle<span class="sci-name">@Html.Raw(NameHtml(id.Taxon))</span><text>.</text>
+                            break;
+                    }
+                </span>
+            </li>
+        }
+    </ul>
+    @if (combined.Rows.Count > 0) {
+        <div class="table-scroll">
+            <table class="combined-table">
+                <thead>
+                    <tr>
+                        <th scope="col">@SiteText.ColPublished</th>
+                        <th scope="col">@SiteText.ColIucnId</th>
+                        @if (combined.ShowNames) {
+                            <th scope="col">@SiteText.ColName</th>
+                        }
+                        <th scope="col">@SiteText.ColCategory</th>
+                        <th scope="col">@SiteText.ColCriteria</th>
+                        <th scope="col" class="narrow-hide">@SiteText.ColAssessed</th>
+                        <th scope="col">@SiteText.ColWikitext</th>
+                        <th scope="col">@SiteText.ColAssessment</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var row in combined.Rows) {
+                        var a = row.Assessment;
+                        var own = row.Id.IsThisPage;
+                        var isShown = own && selected?.AssessmentId == a.AssessmentId;
+                        var isLatest = a.AssessmentId == Model.LatestGlobal?.AssessmentId
+                            || (!own && row.Id.Taxon.InRelease && a.AssessmentId == row.Id.Taxon.LatestGlobalAssessmentId);
+                        var versionNote = Model.VersionNote(a);
+                        var rowClass = string.Join(' ', new[] { row.Id.TintClass, isShown ? "shown" : null }.Where(c => c is not null));
+                        <tr class="@(rowClass.Length == 0 ? null : rowClass)">
+                            <th scope="row">@a.YearPublished @if (isLatest) {<span class="tag">@SiteText.Latest</span>}@if (versionNote is not null) {<text> </text><span class="version-note">@versionNote</span>}</th>
+                            <td class="iucn-id">
+                                @if (own) {
+                                    @a.TaxonId<span class="tag">@SiteText.ThisPageTag</span>
+                                } else {
+                                    <a href="/species/@a.TaxonId" aria-label="@SiteText.IucnIdLink(a.TaxonId)">@a.TaxonId</a>
+                                }
+                            </td>
+                            @if (combined.ShowNames) {
+                                <td><span class="sci-name">@Html.Raw(ScientificNameMarkup.ToHtml(row.Id.Taxon.ScientificName, row.Id.Taxon.SubpopulationName))</span></td>
+                            }
+                            <td><partial name="_Badge" model="@BadgeModel.For(a)" /></td>
+                            <td>@a.Criteria</td>
+                            <td class="narrow-hide">@SiteFormat.Date(a.AssessmentDate)</td>
+                            <td>
+                                @if (isShown) {
+                                    <span class="shown-label">@SiteText.Shown</span>
+                                } else if (own) {
+                                    var ownIsLatest = a.AssessmentId == Model.LatestGlobal?.AssessmentId;
+                                    <a data-options-link="@SpeciesModel.OptionsLinkKey(ownIsLatest ? null : a.AssessmentId)" href="@(Model.OptionsUrl(ownIsLatest ? null : a.AssessmentId))#wikitext" aria-label="@SiteText.ShowWikitextAccessible(null, a.YearPublished, versionNote)">@SiteText.ShowWikitext</a>
+                                } else {
+                                    <a data-options-link="@SpeciesModel.OtherIdOptionsLinkKey(row)" href="@(Model.OtherIdOptionsUrl(row))#wikitext" aria-label="@SiteText.ShowWikitextOtherIdAccessible(a.TaxonId, a.YearPublished, versionNote)">@SiteText.ShowWikitextOtherId(a.TaxonId)</a>
+                                }
+                            </td>
+                            <td><a href="@SiteFormat.IucnAssessmentUrl(a.TaxonId, a.AssessmentId)">@SiteText.IucnSiteLink</a></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+    @if (combined.WithNotes.Count > 0) {
+        @* <text> keeps the whitespace of the code lines out of the sentence ("2790 , the"). *@
+        <p class="note taxonomic-notes">@SiteText.TaxonomicNotesBefore@for (var i = 0; i < combined.WithNotes.Count; i++) {
+                var id = combined.WithNotes[i];
+                var newest = id.NewestGlobal!;
+                <text>@SiteText.ListSeparator(i, combined.WithNotes.Count)<a href="@SiteFormat.IucnAssessmentUrl(newest.TaxonId, newest.AssessmentId)">@SiteText.TaxonomicNotesLink(newest.YearPublished, id.TaxonId)</a></text>
+            }@SiteText.TaxonomicNotesAfter</p>
+    }
+    @foreach (var id in combined.Others.Where(i => i.RegionalCount > 0)) {
+        <p class="note">@SiteText.OtherRegionalBefore<a href="/species/@id.TaxonId#regional">@SiteText.IucnIdLink(id.TaxonId)</a>@SiteText.OtherRegionalAfter</p>
+    }
+</section>

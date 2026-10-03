@@ -202,6 +202,12 @@ internal static class SiteBuildRules {
 
     public static string? NullIfBlank(string? text) => string.IsNullOrWhiteSpace(text) ? null : text.Trim();
 
+    /// True when HTML text such as an assessment's taxonomic notes has a letter or digit once its
+    /// tags are removed and its entities decoded. IUCN stores empty notes as "", as null, and as
+    /// markup with nothing in it ("<em><br/></em>", "<span ...></span>").
+    public static bool HasText(string? html) =>
+        !string.IsNullOrEmpty(html) && WebUtility.HtmlDecode(HtmlTag.Replace(html, " ")).Any(char.IsLetterOrDigit);
+
     // ------------------------------------------------------------ links
 
     /// The EPBC Act category code for SPRAT's epbc_status text; null when the taxon is not listed

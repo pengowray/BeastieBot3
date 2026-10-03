@@ -9,15 +9,15 @@ using Spectre.Console;
 //
 //   1. IUCN CSV export: every taxon (the backbone) and its latest assessments.
 //   2. IUCN API taxon records: assessment history, IUCN common names and synonyms, and the taxa
-//      that are only in the API cache (not in the release), each with the taxon in the release
-//      that has its name.
+//      that are only in the API cache (not in the release), each linked to the taxa in the release
+//      that have its name or list it as a synonym (SiteTaxonLinks).
 //   3. Plan the assessment rows.
 //   4. DOI sources: GBIF's checklist, Wikidata, and the DOIs `iucn resolve-dois` found in Crossref's
 //      list of IUCN DOIs or at doi.org. Also the Wikidata items for assessments.
 //   5. IUCN API assessment payloads: citation parts; the assessment rows are written here.
 //   6. Common names store: English names, the best English name, CoL synonyms.
 //   7. Links: English Wikipedia, Wikidata, Catalogue of Life (and the release's citation), SPRAT.
-//   8. Parents, then the taxon and name rows, then meta.
+//   8. Parents, then the taxon, name and taxon link rows, then meta.
 //   9. Name keys, indexes, full-text index, ANALYZE, VACUUM.
 //
 // The database is written to "<output>.building" and moved over the output only when every phase
@@ -92,7 +92,7 @@ internal sealed class SiteDbBuild {
         });
         taxonList.AddRange(apiTaxa.NotInRelease);
         taxonList.Sort((a, b) => a.TaxonId.CompareTo(b.TaxonId));
-        SetCurrentTaxa(taxonList);
+        var taxonLinks = SiteTaxonLinks.Find(taxonList, _stats);
 
         // 3. Plan.
         var assessments = new SiteAssessmentPass(taxa, apiTaxa.Records, _stats);
@@ -181,7 +181,10 @@ internal sealed class SiteDbBuild {
                 }
                 WriteNames(writer, taxon);
             }
-            return $"{taxonList.Count:N0} taxa, {writer.NameCount:N0} names";
+            foreach (var link in taxonLinks) {
+                writer.AddTaxonLink(link);
+            }
+            return $"{taxonList.Count:N0} taxa, {writer.NameCount:N0} names, {taxonLinks.Count:N0} links from old ids";
         });
         WriteMeta(writer, taxonList.Count);
 
@@ -191,27 +194,6 @@ internal sealed class SiteDbBuild {
             body();
             return null;
         }));
-    }
-
-    // ------------------------------------------------------------ taxa not in the release
-
-    // For each taxon not in the release, the taxon in the release with the same scientific name:
-    // same kingdom first, then the same kind, then the lowest id.
-    private void SetCurrentTaxa(List<SiteTaxon> taxonList) {
-        var inRelease = taxonList.Where(t => t.InRelease)
-            .GroupBy(t => t.ScientificName, StringComparer.Ordinal)
-            .ToDictionary(g => g.Key, g => g.ToList(), StringComparer.Ordinal);
-        foreach (var taxon in taxonList) {
-            if (taxon.InRelease || !inRelease.TryGetValue(taxon.ScientificName, out var candidates)) {
-                continue;
-            }
-            taxon.CurrentTaxonId = candidates
-                .OrderBy(c => string.Equals(c.Kingdom, taxon.Kingdom, StringComparison.OrdinalIgnoreCase) ? 0 : 1)
-                .ThenBy(c => c.Kind == taxon.Kind ? 0 : 1)
-                .ThenBy(c => c.TaxonId)
-                .First().TaxonId;
-            _stats.NotInReleaseWithCurrentTaxon++;
-        }
     }
 
     // ------------------------------------------------------------ parents

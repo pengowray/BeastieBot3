@@ -26,6 +26,8 @@ using Microsoft.Data.Sqlite;
 //   - An author name with a letter lost to an encoding error ("Kry?tufek, B.") is repaired from the
 //     other assessor credits (AssessorNamePool). The pool is complete only after every payload has
 //     been read, so the few rows with such a name are parsed again and written at the end.
+//   - has_taxonomic_notes says whether the payload's taxonomic notes have text (SiteBuildRules.HasText);
+//     the notes are narrative text and are never stored. NULL for a row with no cached payload.
 //   - wikidata_item_qid is the Wikidata item for the assessment as a publication: its own, or for an
 //     errata version, the item of the assessment its DOI names (SiteWikidataItems.Find). A row with
 //     no cached payload can only get its own.
@@ -257,6 +259,10 @@ internal sealed class SiteAssessmentPass {
                 assessment.PopulationTrend = PopulationTrend(root);
                 assessment.CriteriaVersion = CriteriaVersion(root);
             }
+            assessment.HasTaxonomicNotes = HasTaxonomicNotes(root);
+            if (assessment.HasTaxonomicNotes == true) {
+                _stats.PayloadsWithTaxonomicNotes++;
+            }
             if (!AddCitation(assessment, root, downloaded, dois, repairAuthorName: null)) {
                 _waitingForNames.Add((assessment, json, downloaded, dois));
                 return false;
@@ -412,6 +418,13 @@ internal sealed class SiteAssessmentPass {
         _stats.WikidataItems.Used.Add(found.Item.Qid);
         if (found.ThroughDoi) _stats.AssessmentsWithItemThroughDoi++; else _stats.AssessmentsWithOwnItem++;
     }
+
+    // documentation.taxonomic_notes: HTML text, or null. Only whether it has text is kept; the notes
+    // are narrative text, which the site database must not hold.
+    private static bool HasTaxonomicNotes(JsonElement root) =>
+        root.ValueKind == JsonValueKind.Object
+        && root.TryGetProperty("documentation", out var documentation) && documentation.ValueKind == JsonValueKind.Object
+        && SiteBuildRules.HasText(SiteApiTaxaReader.ReadString(documentation, "taxonomic_notes"));
 
     // population_trend: {"description": {"en": "Unknown"}, "code": "3"}
     private static string? PopulationTrend(JsonElement root) {
