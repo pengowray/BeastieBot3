@@ -115,6 +115,7 @@ public sealed class OtherEndpointTests(SiteFactory factory) : IClassFixture<Site
         Assert.Equal(3, Regex.Matches(html, "<td><a href=\"https://creativecommons.org/licenses/by/4.0/\">CC BY 4.0</a></td>").Count);
         Assert.Contains("<td><a href=\"https://creativecommons.org/licenses/by-sa/4.0/\">CC BY-SA 4.0</a></td>", html);
         Assert.Contains("<td><a href=\"https://creativecommons.org/publicdomain/zero/1.0/\">CC0</a></td>", html);
+        Assert.Contains("<td><a href=\"https://www.crossref.org/documentation/retrieve-metadata/\">CC0</a></td>", html);
         Assert.Contains("<td><a href=\"https://www.iucnredlist.org/terms/terms-of-use\">IUCN Red List Terms of Use</a></td>", html);
 
         // Every source the taxon pages name beside an English common name says it supplies names.
@@ -123,6 +124,14 @@ public sealed class OtherEndpointTests(SiteFactory factory) : IClassFixture<Site
         }
         Assert.Contains("English common names, synonyms, and links to Catalogue of Life pages", text);
         Assert.Contains("DOIs of the latest global assessments", text);
+
+        // Crossref, the last DOI source, with the date of the newest DOI check.
+        Assert.Contains("<th scope=\"row\"><a href=\"https://www.crossref.org/documentation/retrieve-metadata/rest-api/\">Crossref</a></th>", html);
+        Assert.Contains("DOIs not found in IUCN's citation text, GBIF or Wikidata, taken from Crossref's list of the DOIs IUCN has registered. "
+            + "For recent assessments not in that list, this site checks possible DOIs at doi.org.", text);
+        Assert.Contains("DOIs checked on various dates up to 30 September 2026", text);
+        Assert.Contains("which includes a DOI for about 12% of latest assessments", text);
+        Assert.DoesNotContain("subpopulation assessments have no citation", text);
 
         // Citations with links to the material.
         Assert.Contains("<th scope=\"row\"><a href=\"https://doi.org/10.15468/0qnb58\">GBIF: IUCN checklist, published by IUCN</a></th>", html);
@@ -143,6 +152,9 @@ public sealed class OtherEndpointTests(SiteFactory factory) : IClassFixture<Site
         Assert.Contains("GBIF: IUCN checklist on GBIF, published by IUCN. https://doi.org/10.15468/0qnb58", text);
         Assert.Contains("<th scope=\"row\"><a href=\"https://www.catalogueoflife.org\">Catalogue of Life</a></th>", html);
         Assert.Contains("Catalogue of Life: Catalogue of Life, release COL26.7 XR. https://www.catalogueoflife.org", text);
+        // No DOI check date: the Crossref row's version cell is empty.
+        Assert.Matches(">Crossref</a></th>\\s*<td>[^<]*</td>\\s*<td><a [^>]*>CC0</a></td>\\s*<td></td>", html);
+        Assert.DoesNotContain("DOIs checked on various dates", text);
     }
 
     private sealed class NoCitationsSiteFactory : SiteFactory {

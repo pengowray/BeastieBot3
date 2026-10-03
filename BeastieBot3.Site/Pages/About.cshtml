@@ -64,6 +64,12 @@
                     <td>@(Model.BuiltDate is null ? null : SiteText.CachedUpTo(Model.BuiltDate))</td>
                 </tr>
                 <tr>
+                    <th scope="row"><a href="@SiteText.CrossrefUrl">Crossref</a></th>
+                    <td>DOIs not found in IUCN's citation text, GBIF or Wikidata, taken from Crossref's list of the DOIs IUCN has registered. For recent assessments not in that list, this site checks possible DOIs at doi.org.</td>
+                    <td><a href="@SiteText.CrossrefLicenceUrl">CC0</a></td>
+                    <td>@(Model.DoiCheckedDate is null ? null : SiteText.DoisCheckedUpTo(Model.DoiCheckedDate))</td>
+                </tr>
+                <tr>
                     <th scope="row"><a href="@SiteText.EnglishWikipediaUrl">English Wikipedia</a></th>
                     <td>Article titles and English common names</td>
                     <td><a href="@SiteText.LicenceCcBySa">CC BY-SA 4.0</a></td>
@@ -97,7 +103,7 @@
     <p><strong>Authors.</strong> IUCN gives the authors of an assessment as a single list, such as "Wiig, Ø., Amstrup, S. &amp; Thiemann, G.". This site splits the list into one parameter for each author. About 1% of author names cannot be split with confidence. Those names are given exactly as IUCN wrote them, and a note under the citation asks you to check them.</p>
     <p><strong>DOI.</strong> The DOI comes from the first of these sources that has one:</p>
     <ol>
-        <li>IUCN's own citation text, which includes a DOI for about 12% of assessments</li>
+        <li>IUCN's own citation text, which includes a DOI for about 12% of latest assessments</li>
         <li>GBIF's copy of the IUCN checklist</li>
         <li>Wikidata</li>
         <li>Crossref's list of the DOIs IUCN has registered, and for recent assessments missing from it, possible DOIs checked at doi.org@(Model.DoiCheckedDate is null ? "" : " (most recent check " + Model.DoiCheckedDate + ")")</li>
@@ -113,7 +119,6 @@
     </ul>
     <p>Select <strong>@SiteText.UpdateWikitext</strong> to reload the page with the new wikitext.</p>
     <p><strong>Earlier assessments.</strong> To cite an earlier assessment, select <strong>@SiteText.ShowWikitext</strong> in its row of the Assessment history table. The page then shows the wikitext for that assessment and says which assessment it is.</p>
-    <p><strong>Subpopulations.</strong> About 300 subpopulation assessments have no citation yet, because their details have not been downloaded from IUCN. The {{IUCN status}} wikitext is available for them.</p>
 
     <h2 id="iucn-terms">IUCN Red List Terms of Use</h2>
     <p>The IUCN Red List data on this site is used under the <a href="@SiteText.TermsUrl">IUCN Red List Terms of Use</a> and remains subject to those terms.</p>

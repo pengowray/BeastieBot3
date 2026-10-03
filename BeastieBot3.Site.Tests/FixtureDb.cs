@@ -110,7 +110,7 @@ public static class FixtureDb {
     /// Creates a fixture database in a new temporary folder and returns its path. The folder is
     /// deleted when the test run ends. schemaVersion and dropTable make the broken variants;
     /// release sets meta iucn_release; withSourceCitations=false leaves out the GBIF and Catalogue
-    /// of Life citation and DOI meta keys.
+    /// of Life citation and DOI meta keys, and the date DOIs were last checked.
     public static string Create(string name, string? schemaVersion = null, string? dropTable = null, string release = "2026-1",
         bool withSourceCitations = true) {
         var dir = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "beastiebot-site-tests", Guid.NewGuid().ToString("N"));
@@ -387,10 +387,10 @@ public static class FixtureDb {
             w.Meta(SiteDbSchema.MetaKeys.GbifChecklistDoi, "10.15468/0qnb58");
             w.Meta(SiteDbSchema.MetaKeys.ColCitation, ColCitation);
             w.Meta(SiteDbSchema.MetaKeys.ColDoi, "10.48580/dgykv");
+            w.Meta(SiteDbSchema.MetaKeys.IucnDoiCheckedTo, "2026-09-30");
         }
         w.Meta(SiteDbSchema.MetaKeys.ColRelease, "COL26.7 XR");
         w.Meta(SiteDbSchema.MetaKeys.SpratReport, "01102026-023504-report.csv");
-        w.Meta(SiteDbSchema.MetaKeys.IucnDoiCheckedTo, "2026-09-30");
         w.Meta(SiteDbSchema.MetaKeys.TaxonCount, w.TaxonCount.ToString(CultureInfo.InvariantCulture));
         w.Meta(SiteDbSchema.MetaKeys.AssessmentCount, w.AssessmentCount.ToString(CultureInfo.InvariantCulture));
     }

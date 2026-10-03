@@ -324,6 +324,9 @@ public static class SiteText {
     public const string EnglishWikipediaUrl = "https://en.wikipedia.org";
     public const string CatalogueOfLifeUrl = "https://www.catalogueoflife.org";
     public const string SpratUrl = "https://www.environment.gov.au/cgi-bin/sprat/public/sprat.pl";
+    public const string CrossrefUrl = "https://www.crossref.org/documentation/retrieve-metadata/rest-api/";
+    /// Crossref's licensing statement: bibliographic metadata is facts, in the public domain (CC0).
+    public const string CrossrefLicenceUrl = "https://www.crossref.org/documentation/retrieve-metadata/";
 
     /// DOI of GBIF's copy of the IUCN checklist, used when the database has none in its meta table.
     public const string GbifChecklistDoi = "10.15468/0qnb58";
@@ -334,4 +337,8 @@ public static class SiteText {
     /// About page, Version cell of Wikidata and English Wikipedia: their data comes from caches
     /// downloaded over time, so the date is the latest it can be, the day the database was built.
     public static string CachedUpTo(string date) => $"Downloaded on various dates up to {date}";
+
+    /// About page, Version cell of Crossref: `iucn resolve-dois` checks each assessment's DOI on its
+    /// own date, so the date is the newest check.
+    public static string DoisCheckedUpTo(string date) => $"DOIs checked on various dates up to {date}";
 }

@@ -24,7 +24,8 @@ public sealed class AboutModel : PageModel {
     public string? SpratDate { get; private set; }
     public string? BuiltDate { get; private set; }
 
-    /// The newest date a DOI was checked at doi.org, when the database has it.
+    /// The newest date on which `iucn resolve-dois` checked an assessment's DOI, in Crossref's list
+    /// or at doi.org, when the database has it.
     public string? DoiCheckedDate { get; private set; }
 
     /// GBIF's recommended citation of its copy of the IUCN checklist, when the database has it.
