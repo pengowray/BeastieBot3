@@ -9,8 +9,9 @@ namespace BeastieBot3.SiteBuild;
 // (P854) on iucnredlist.org or a subdomain of it, or a stated in (P248) after the first one. The
 // index has only the first stated in of each reference and its IUCN taxon IDs (P627), so
 // `site build-db` reads the cached JSON of the few items with a statement whose references the index
-// shows citing something else or nothing (89 statements on 89 items in October 2026; 35 of them have
-// an IUCN reference URL, such as a pre-publication PDF on nc.iucnredlist.org).
+// shows citing something else or nothing (87 items in the 2026-1 build of 3 October 2026; 34 of
+// their statements have an IUCN reference URL, such as a pre-publication PDF on nc.iucnredlist.org,
+// and none has an IUCN stated in after the first).
 
 internal enum P141JsonCitation {
     /// A reference URL (P854) on iucnredlist.org or a subdomain.

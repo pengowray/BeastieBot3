@@ -241,7 +241,7 @@ internal static class SiteLinkReaders {
     // item (wikidata_iucn_assessment_items); or it has a reference URL (P854) on iucnredlist.org or
     // a subdomain. For the URL and for a stated in after the first, the JSON of the items is read,
     // but only for the statements whose references the index shows citing something else or nothing
-    // (P141JsonReferences; 89 statements in October 2026).
+    // (P141JsonReferences; 87 items in the build of 3 October 2026).
     private static void ReadP141(SqliteConnection connection, IReadOnlyDictionary<long, SiteTaxon> taxa,
         IReadOnlyDictionary<long, List<(long NumericId, bool Deprecated)>> otherItems, bool hasAssessmentItems, SiteBuildStats stats,
         CancellationToken cancellationToken) {
