@@ -24,12 +24,12 @@ namespace BeastieBot3.Shared.Wikitext;
 //   help page does not document that use.
 // - Which statements count: only those with a reference that cites IUCN (CitesIucn: an IUCN taxon
 //   ID (P627) in the reference, stated in (P248) the IUCN Red List, one of its editions, IUCN or
-//   an assessment's own item, or a reference URL (P854) on iucnredlist.org or a subdomain of it,
+//   the item of an IUCN assessment, or a reference URL (P854) on iucnredlist.org or a subdomain of it,
 //   such as a pre-publication PDF on nc.iucnredlist.org). Agrees, Differs and Missing are decided
 //   from them alone. The item's best rank is taken over every current statement (preferred when
 //   any is, else normal), and the IUCN statements at that rank are compared, as the dry run
 //   compares the best-ranked ones. When every IUCN statement is under a preferred statement that
-//   cites another source, the IUCN statements at their own best rank are compared instead. A
+//   cites another source, all the IUCN statements (each at normal rank) are compared instead. A
 //   statement with no reference, or with only references to another source (a national red book),
 //   is never removed and is listed to the reader as Others.
 // - Rank: QuickStatements v1 cannot set a statement's rank (Help:QuickStatements, Limitations).
@@ -252,9 +252,8 @@ public static partial class WikidataStatusEdit {
         // history, even when the preferred one cites another source.
         var removable = current.Any(s => s.IsPreferred) ? iucn.Where(s => s.IsPreferred).ToList() : iucn;
         // The verdict compares those; when every IUCN statement is under a preferred statement from
-        // another source, it compares the IUCN statements at their own best rank.
-        var compared = removable.Count > 0 ? removable
-            : iucn.Where(s => s.IsPreferred).ToList() is { Count: > 0 } preferred ? preferred : iucn;
+        // another source, so all of them are at normal rank, it compares all of them.
+        var compared = removable.Count > 0 ? removable : iucn;
 
         StatusEditOutcome outcome;
         var removes = new List<WikidataStatusStatement>();
