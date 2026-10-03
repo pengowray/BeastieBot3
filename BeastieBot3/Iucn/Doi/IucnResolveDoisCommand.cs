@@ -151,24 +151,37 @@ internal sealed class IucnResolveDoisCommand : AsyncCommand<IucnResolveDoisComma
             AnsiConsole.MarkupLine("[yellow]No CSV export of the previous release was found, so no assessment is known to be new in this release.[/]");
         }
 
-        using var store = IucnDoiCacheStore.Open(cachePath);
-        var checks = store.ReadChecks();
         var now = DateTime.UtcNow;
-        var plan = DoiRunPlan.Make(found.Targets, checks, settings.Recheck,
-            settings.RecheckMissingAfterDays is { } days ? TimeSpan.FromDays(days) : null, now);
-
-        var listing = store.LastCompletedListing();
+        var recheckMissingAfter = settings.RecheckMissingAfterDays is { } days ? TimeSpan.FromDays(days) : (TimeSpan?)null;
         if (settings.Status) {
-            WriteStatus(scopeName, found, plan, listing, store.CountCrossrefWorks());
+            // --status saves nothing, so a cache that does not exist yet is not created.
+            if (!File.Exists(cachePath)) {
+                WriteStatus(scopeName, found, DoiRunPlan.Make(found.Targets, new Dictionary<long, DoiCheckRow>(), settings.Recheck, recheckMissingAfter, now), null, 0);
+                return 0;
+            }
+            using var existing = IucnDoiCacheStore.Open(cachePath);
+            WriteStatus(scopeName, found, DoiRunPlan.Make(found.Targets, existing.ReadChecks(), settings.Recheck, recheckMissingAfter, now),
+                existing.LastCompletedListing(), existing.CountCrossrefWorks());
             return 0;
         }
 
+        using var store = IucnDoiCacheStore.Open(cachePath);
+        var plan = DoiRunPlan.Make(found.Targets, store.ReadChecks(), settings.Recheck, recheckMissingAfter, now);
+        var listing = store.LastCompletedListing();
         var toCheck = settings.Limit is { } limit ? plan.ToCheck.Take(limit).ToList() : plan.ToCheck;
         var summary = new DoiRunSummary();
         using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(60) };
         http.DefaultRequestHeaders.UserAgent.ParseAdd(UserAgent);
         http.DefaultRequestHeaders.Accept.ParseAdd("application/json");
         void Warn(string message) => AnsiConsole.MarkupLineInterpolated($"[yellow]{message}[/]");
+        var doiOrg = new PoliteHttpGetter(http, TimeSpan.FromMilliseconds(settings.DelayMs)) { OnRetry = Warn };
+        var lookup = new DoiHandleClient(doiOrg);
+        DoiRunPlan CacheState() => DoiRunPlan.Make(found.Targets, store.ReadChecks(), false, null, DateTime.UtcNow);
+        void Finish() {
+            summary.DoiOrgRequests = doiOrg.Requests;
+            summary.RateLimited = doiOrg.RateLimited;
+            WriteSummary(scopeName, summary, CacheState());
+        }
 
         try {
             if (!settings.NoCrossref && toCheck.Count > 0) {
@@ -180,22 +193,18 @@ internal sealed class IucnResolveDoisCommand : AsyncCommand<IucnResolveDoisComma
                 }
             }
 
-            var doiOrg = new PoliteHttpGetter(http, TimeSpan.FromMilliseconds(settings.DelayMs)) { OnRetry = Warn };
-            var lookup = new DoiHandleClient(doiOrg);
             await CheckAsync(store, toCheck, settings, lookup, summary, cancellationToken).ConfigureAwait(false);
-            summary.DoiOrgRequests = doiOrg.Requests;
-            summary.RateLimited = doiOrg.RateLimited;
         } catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested) {
             AnsiConsole.MarkupLine("[yellow]Stopped. Every result found so far is saved; run the command again to continue.[/]");
-            WriteSummary(scopeName, summary, DoiRunPlan.Make(found.Targets, store.ReadChecks(), false, null, DateTime.UtcNow));
+            Finish();
             return 1;
         } catch (PoliteHttpException ex) {
             AnsiConsole.MarkupLineInterpolated($"[red]Stopped: {ex.Message}[/] ({ex.Url})");
             AnsiConsole.MarkupLine("Every result found so far is saved; run the command again to continue.");
-            WriteSummary(scopeName, summary, DoiRunPlan.Make(found.Targets, store.ReadChecks(), false, null, DateTime.UtcNow));
+            Finish();
             return 2;
         }
-        WriteSummary(scopeName, summary, DoiRunPlan.Make(found.Targets, store.ReadChecks(), false, null, DateTime.UtcNow));
+        Finish();
         return summary.StoppedByErrors ? 2 : 0;
     }
 
@@ -232,6 +241,7 @@ internal sealed class IucnResolveDoisCommand : AsyncCommand<IucnResolveDoisComma
                 year.Checked++;
                 summary.Checked++;
 
+                string? crossrefNote = null;
                 if (!settings.NoCrossref) {
                     var choice = IucnDoiResolution.ChooseFromCrossref(target, store.CrossrefWorksFor(target.AssessmentId));
                     if (choice.Doi is { } crossrefDoi) {
@@ -248,13 +258,10 @@ internal sealed class IucnResolveDoisCommand : AsyncCommand<IucnResolveDoisComma
                         Progress(progress, summary);
                         continue;
                     }
-                    summary.CrossrefNotes += choice.Note is null ? 0 : 1;
-                    var probe = await ProbeAndSaveAsync(store, target, lookup, choice.Note, year, summary, cancellationToken).ConfigureAwait(false);
-                    unexpectedInARow = probe ? 0 : unexpectedInARow + 1;
-                } else {
-                    var probe = await ProbeAndSaveAsync(store, target, lookup, null, year, summary, cancellationToken).ConfigureAwait(false);
-                    unexpectedInARow = probe ? 0 : unexpectedInARow + 1;
+                    crossrefNote = choice.Note;
                 }
+                var answered = await ProbeAndSaveAsync(store, target, lookup, crossrefNote, year, summary, cancellationToken).ConfigureAwait(false);
+                unexpectedInARow = answered ? 0 : unexpectedInARow + 1;
                 Progress(progress, summary);
                 if (unexpectedInARow >= MaxUnexpectedInARow) {
                     summary.StoppedByErrors = true;
@@ -409,7 +416,6 @@ internal sealed class DoiRunSummary {
     public int NotFound { get; set; }
     public int NotInCrossref { get; set; }
     public int Errors { get; set; }
-    public int CrossrefNotes { get; set; }
     /// Assessments with at least one doi.org lookup.
     public int Probed { get; set; }
     public int DoiOrgRequests { get; set; }
