@@ -1,13 +1,17 @@
 using System;
+using System.Collections.Generic;
 using System.ComponentModel;
 using System.Threading;
 using System.Threading.Tasks;
 using Spectre.Console;
 using Spectre.Console.Cli;
 
-// Convenience command that runs both API cache steps sequentially:
+// Convenience command that runs the API cache steps in order:
 // 1. IucnApiCacheTaxaCommand - fetches /taxa/sis/{sisId} for all IUCN species
 // 2. IucnApiCacheAssessmentsCommand - fetches /assessment/{id} from taxa JSON
+// 3. IucnApiCacheAssessmentsCommand --csv-missing - CSV assessments no taxon record lists
+//    (subpopulations); skipped when there is no CSV database
+// 4. IucnApiCacheAssessmentsCommand --stale-latest - with --stale-latest or --full
 // Creates/updates Datastore:IUCN_api_cache_sqlite. Resume-safe; skips existing.
 // Run via: iucn api-cache full
 
@@ -73,7 +77,7 @@ public sealed class IucnApiCacheFullSettings : CommonSettings {
     // --- Optional extra phases (off by default; --full turns them all on) ---
 
     [CommandOption("--full")]
-    [Description("Build the whole API dataset end to end: cache-taxa -> cache-infraranks (--from-csv) -> cache-assessments -> project-view. Shorthand for --infraranks --infraranks-from-csv --project.")]
+    [Description("Build the whole API dataset end to end: cache-taxa -> cache-infraranks (--from-csv) -> cache-assessments -> cache-assessments --csv-missing -> cache-assessments --stale-latest -> project-view. Shorthand for --infraranks --infraranks-from-csv --stale-latest --project.")]
     public bool Full { get; init; }
 
     [CommandOption("--infraranks")]
@@ -83,6 +87,10 @@ public sealed class IucnApiCacheFullSettings : CommonSettings {
     [CommandOption("--infraranks-from-csv")]
     [Description("Implies --infraranks; also seed infraspecific taxa from the CSV (catches assessed subspecies of unassessed species). Needs the CSV import.")]
     public bool InfraranksFromCsv { get; init; }
+
+    [CommandOption("--stale-latest")]
+    [Description("After downloading assessments, also download again each cached assessment whose latest flag disagrees with its taxon record and that was downloaded before the taxon record (cache-assessments --stale-latest). Reads every cached assessment, which can take a minute.")]
+    public bool StaleLatest { get; init; }
 
     [CommandOption("--project")]
     [Description("After caching, build the CSV-shaped projection (iucn api project-view) so the data is usable via --dataset api.")]
@@ -102,10 +110,11 @@ public sealed class IucnApiCacheFullSettings : CommonSettings {
 }
 
 [CommandInfo("iucn api cache-all", CommandKind.Mutates,
-    "Build or update the IUCN API cache, and with --full also the IUCN API projection that --dataset api reads. Runs cache-taxa, then cache-assessments; --full also runs cache-infraranks --from-csv before cache-assessments, and project-view at the end. During a refresh (`iucn api refresh-start`) it also runs discover-by-family and re-checks taxa and assessments the API previously said were gone, unless the refresh was started with --no-discovery or --no-tombstones.",
+    "Build or update the IUCN API cache, and with --full also the IUCN API projection that --dataset api reads. Runs cache-taxa, then cache-assessments, then cache-assessments --csv-missing for the assessments in the IUCN CSV export that no taxon record lists; --full also runs cache-infraranks --from-csv before cache-assessments, then cache-assessments --stale-latest, and project-view at the end. During a refresh (`iucn api refresh-start`) it also runs discover-by-family and re-checks taxa and assessments the API previously said were gone, unless the refresh was started with --no-discovery or --no-tombstones.",
     Reason = "Caches IUCN /api/v4 taxa + assessment payloads into the local API cache (idempotent additive; --force-taxa/--force-assessments re-download already-cached entries). --project also rebuilds the derived projection DB.",
     Rerun = RerunEffect.IdempotentAdd,
-    RerunNote = RerunNotes.DuringIucnRefreshPrefix + "every cached taxon record and assessment downloaded before the refresh's cutoff date.",
+    RerunNote = "Each run also downloads the assessments in the IUCN CSV export that are not in the cache yet, such as subpopulation assessments, which no taxon record lists. "
+        + RerunNotes.DuringIucnRefreshPrefix + "every cached taxon record and assessment downloaded before the refresh's cutoff date.",
     ReportOnlyWith = new[] { "--status" },
     Examples = new[] {
         "iucn api cache-all",
@@ -122,8 +131,9 @@ public sealed class IucnApiCacheFullCommand : AsyncCommand<IucnApiCacheFullSetti
         var runInfraranks = settings.Infraranks || settings.InfraranksFromCsv || settings.Full;
         var infraranksFromCsv = settings.InfraranksFromCsv || settings.Full;
         var runProject = settings.Project || settings.Full;
+        var runStaleLatest = settings.StaleLatest || settings.Full;
 
-        if (settings.SkipTaxa && settings.SkipAssessments && !runInfraranks && !runProject) {
+        if (settings.SkipTaxa && settings.SkipAssessments && !runInfraranks && !runStaleLatest && !runProject) {
             AnsiConsole.MarkupLine("[yellow]Nothing to do — every phase is skipped.[/]");
             return 0;
         }
@@ -147,10 +157,17 @@ public sealed class IucnApiCacheFullCommand : AsyncCommand<IucnApiCacheFullSetti
         var runDiscovery = session is { IncludeDiscovery: true, DiscoveryDoneAt: null };
         var runTombstones = !settings.SkipTombstones && session is { IncludeTombstones: true, TombstonesDoneAt: null };
 
+        // The CSV assessments no taxon record lists come after the assessment phase. The API route
+        // can be built without a CSV database; then the plan says why this phase is skipped.
+        var csvPath = IucnApiCacheAssessmentsCommand.TryResolveCsvDatabase(paths, settings.SourceDatabase, out var csvProblem);
+        var runCsvMissing = csvPath is not null && !settings.SkipAssessments && !settings.AssessmentFailedOnly;
+        var csvMissing = csvPath is null ? null : CountCsvMissing(csvPath, cachePath, cancellationToken);
+
         // The plan up front (and nothing but the plan with --status): each phase with what it has
         // left, so "which phase am I up to" is answered before anything downloads.
         var state = IucnApiCacheStateReader.Read(paths);
-        PrintPlan(state, settings, runDiscovery, runInfraranks, runTombstones, runProject, settings.StatusOnly);
+        PrintPlan(state, settings, runDiscovery, runInfraranks, runTombstones, runProject, settings.StatusOnly,
+            new CsvMissingPlan(runCsvMissing, csvMissing, csvProblem), runStaleLatest);
         if (settings.StatusOnly) {
             return 0;
         }
@@ -229,6 +246,40 @@ public sealed class IucnApiCacheFullCommand : AsyncCommand<IucnApiCacheFullSetti
             }, cancellationToken).ConfigureAwait(false);
         }
 
+        // Assessments in the CSV export that no cached taxon record lists, so the queue above never
+        // has them: subpopulations, and taxa whose own record answers 404. Without this phase a
+        // release refresh would leave every subpopulation assessment out of the cache.
+        var csvMissingResult = 0;
+        if (runCsvMissing) {
+            AnsiConsole.MarkupLine("[grey]== Phase: cache-assessments --csv-missing ==[/]");
+            csvMissingResult = await IucnApiCacheAssessmentsCommand.RunAsync(new IucnApiCacheAssessmentsSettings {
+                IniFile = settings.IniFile,
+                SettingsDir = settings.SettingsDir,
+                CacheDatabase = settings.CacheDatabase,
+                SourceDatabase = settings.SourceDatabase,
+                CsvMissing = true,
+                Limit = settings.AssessmentLimit,
+                Force = settings.ForceAssessments,
+                SleepBetweenRequests = settings.AssessmentSleepMs
+            }, cancellationToken).ConfigureAwait(false);
+        }
+
+        // Cached assessments that still say they are current after their taxon record, downloaded
+        // later, says they are not. Reads every payload, so only with --stale-latest or --full.
+        var staleResult = 0;
+        if (runStaleLatest) {
+            AnsiConsole.MarkupLine("[grey]== Phase: cache-assessments --stale-latest ==[/]");
+            staleResult = await IucnApiCacheAssessmentsCommand.RunAsync(new IucnApiCacheAssessmentsSettings {
+                IniFile = settings.IniFile,
+                SettingsDir = settings.SettingsDir,
+                CacheDatabase = settings.CacheDatabase,
+                StaleLatest = true,
+                Limit = settings.AssessmentLimit,
+                Force = settings.ForceAssessments,
+                SleepBetweenRequests = settings.AssessmentSleepMs
+            }, cancellationToken).ConfigureAwait(false);
+        }
+
         // Last, and only once the rest is downloaded: re-check what the API said was gone. A taxon
         // absent from the previous release can exist in the new one, and nothing else ever looks at
         // those ids again. An interrupted taxa re-check carries on (it skips 404s recorded since the
@@ -292,12 +343,49 @@ public sealed class IucnApiCacheFullCommand : AsyncCommand<IucnApiCacheFullSetti
             : discoveryResult != 0 ? discoveryResult
             : infraResult != 0 ? infraResult
             : assessmentResult != 0 ? assessmentResult
+            : csvMissingResult != 0 ? csvMissingResult
+            : staleResult != 0 ? staleResult
             : projectResult;
+    }
+
+    // CSV assessment ids with no cached payload, and how many of those the API answered 404 for.
+    internal sealed record CsvMissingCount(long NotCached, long NotFound);
+
+    private sealed record CsvMissingPlan(bool Runs, CsvMissingCount? Count, string? Problem);
+
+    // Reads the CSV's assessment ids and the cache's assessment id index (about a second), with the
+    // cache opened read-only. A cache that does not exist yet has none of them. Null when either
+    // file cannot be read; the plan then describes the phase without a count.
+    private static CsvMissingCount? CountCsvMissing(string csvPath, string cachePath, CancellationToken cancellationToken) {
+        try {
+            var csvIds = new IucnSisIdProvider(csvPath).ReadAssessmentIds(cancellationToken);
+            using var store = IucnApiCacheStore.OpenReadOnly(cachePath);
+            if (store is null) {
+                long all = 0;
+                foreach (var _ in csvIds) all++;
+                return new CsvMissingCount(all, 0);
+            }
+            return CountCsvMissing(store, csvIds);
+        } catch (Exception ex) when (ex is not OperationCanceledException) {
+            return null;
+        }
+    }
+
+    internal static CsvMissingCount CountCsvMissing(IucnApiCacheStore store, IEnumerable<long> csvAssessmentIds) {
+        var cached = store.GetCachedAssessmentIds();
+        var tombstoned = new HashSet<long>(store.GetTombstonedEntityIds("assessment"));
+        long notCached = 0, notFound = 0;
+        foreach (var id in csvAssessmentIds) {
+            if (cached.Contains(id)) continue;
+            notCached++;
+            if (tombstoned.Contains(id)) notFound++;
+        }
+        return new CsvMissingCount(notCached, notFound);
     }
 
     private static void PrintPlan(IucnApiCacheState s, IucnApiCacheFullSettings settings,
                                   bool runDiscovery, bool runInfraranks, bool runTombstones, bool runProject,
-                                  bool statusOnly) {
+                                  bool statusOnly, CsvMissingPlan csvMissing, bool runStaleLatest) {
         var refresh = s.RefreshProgress;
 
         var table = new Table().Border(TableBorder.Simple);
@@ -330,6 +418,15 @@ public sealed class IucnApiCacheFullCommand : AsyncCommand<IucnApiCacheFullSetti
             settings.SkipAssessments ? "--skip-assessments"
                 : BuildAssessmentPlanText(s, refresh, runTombstones));
 
+        Row("Download assessments in the CSV export that are missing from the cache (cache-assessments --csv-missing)",
+            runs: csvMissing.Runs,
+            CsvMissingPlanText(settings, csvMissing));
+
+        Row("Download again assessments whose latest flag disagrees with their taxon record (cache-assessments --stale-latest)",
+            runs: runStaleLatest,
+            runStaleLatest ? "compares every cached assessment with its taxon record, which can take a minute"
+                : "add --stale-latest or --full to include it");
+
         Row("Re-check taxa the API previously said were gone",
             runs: runTombstones,
             runTombstones ? $"{s.TombstonedTaxa:N0} ids to re-check against the new release"
@@ -357,7 +454,25 @@ public sealed class IucnApiCacheFullCommand : AsyncCommand<IucnApiCacheFullSetti
         return parts.Count == 0 ? "adds only assessments not cached yet" : string.Join(" · ", parts);
     }
 
+    private static string CsvMissingPlanText(IucnApiCacheFullSettings settings, CsvMissingPlan plan) {
+        if (settings.SkipAssessments) return "--skip-assessments";
+        if (settings.AssessmentFailedOnly) return "--assessment-failed-only";
+        if (plan.Problem is not null) return plan.Problem;
+        if (plan.Count is not { } count) return "downloads the assessments in the CSV export that are not cached yet";
+        var toDownload = count.NotCached - count.NotFound;
+        var text = toDownload > 0
+            ? $"{toDownload:N0} assessments to download"
+            : "every assessment in the CSV export is cached";
+        if (count.NotFound > 0) {
+            text += $" · {count.NotFound:N0} not found on the API (404) are left alone";
+        }
+        return text;
+    }
+
     private static string ProjectionPlanText(IucnProjectionState? p) {
+        if (p is { Exists: false, UnfinishedBuildStartedAt: { } started }) {
+            return $"empty: the last build, started {IucnRefreshMath.Stamp(started)}, did not finish; rebuilt at the end of this run";
+        }
         if (p is null || !p.Exists) return "not built yet";
         if (p.IsPartial) return $"currently incomplete ({p.LatestNotDownloaded:N0} taxa missing their latest assessment); rebuilt at the end of this run";
         return $"rebuilt from whatever this run finishes with (currently {p.ProjectedTaxa:N0} taxa)";
@@ -376,7 +491,9 @@ public sealed class IucnApiCacheFullCommand : AsyncCommand<IucnApiCacheFullSetti
             $"[grey]API cache:[/] {s.TaxaCached:N0} taxa · {s.AssessmentsCached:N0} assessments{age} · {s.TombstonedTaxa:N0} ids recorded as gone");
 
         var p = s.Projection;
-        var projection = p is null || !p.Exists ? "not built yet"
+        var projection = p is { Exists: false, UnfinishedBuildStartedAt: { } started }
+                ? $"empty: the last build, started {IucnRefreshMath.Stamp(started)}, did not finish"
+            : p is null || !p.Exists ? "not built yet"
             : p.IsPartial ? $"incomplete ({p.LatestNotDownloaded:N0} taxa missing their latest assessment)"
             : $"complete · {p.ProjectedTaxa:N0} taxa · built {IucnRefreshMath.Stamp(p.BuiltAt ?? DateTime.MinValue)}";
         AnsiConsole.MarkupLineInterpolated($"[grey]Projection:[/] {projection}");
