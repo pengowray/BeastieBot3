@@ -19,7 +19,7 @@ For the local web UI (`serve`), read-only Playwright smoke tests live in `e2e/` 
 
 ## Project Overview
 
-.NET 9 CLI tool that aggregates biological taxonomy data from IUCN Red List, Catalogue of Life (CoL), Wikidata, and Wikipedia into local SQLite databases. Used for normalizing vernacular (common) names, resolving taxonomic synonyms, and detecting naming conflicts across sources.
+.NET 10 CLI tool that aggregates biological taxonomy data from IUCN Red List, Catalogue of Life (CoL), Wikidata, and Wikipedia into local SQLite databases. Used for normalizing vernacular (common) names, resolving taxonomic synonyms, and detecting naming conflicts across sources.
 
 ## Architecture
 
