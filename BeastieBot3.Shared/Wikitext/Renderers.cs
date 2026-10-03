@@ -29,4 +29,8 @@ public sealed record CiteIucnOptions {
     /// |name-list-style=amp, which puts "&" before the last author as IUCN does. Only written when
     /// there are two or more authors.
     public bool NameListStyleAmp { get; init; }
+
+    /// Use a person's full given names (CitationAuthor.GivenNames) where IUCN lists them, instead of
+    /// the initials IUCN's citation prints. Authors without GivenNames keep their initials.
+    public bool FullGivenNames { get; init; }
 }

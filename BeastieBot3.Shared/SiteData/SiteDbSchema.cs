@@ -8,7 +8,7 @@ namespace BeastieBot3.Shared.SiteData;
 // narrative text (rationale, range, threats ...), no coded threats/habitats/countries, no downloads.
 // Keep such fields out of this database rather than hiding them in the site.
 public static class SiteDbSchema {
-    public const int Version = 3;
+    public const int Version = 4;
 
     public const string Ddl = """
         CREATE TABLE meta (
@@ -75,7 +75,9 @@ public static class SiteDbSchema {
             assessment_date              TEXT,                -- 'yyyy-MM-dd'
             population_trend             TEXT,                -- 'Increasing' | 'Decreasing' | 'Stable' | 'Unknown'; NULL when not given
             citation_json                TEXT,                -- IucnCitationParts as JSON; NULL when the API payload is not cached
-            replaced_by_assessment_id    INTEGER              -- the errata or amended version that replaced this assessment; NULL otherwise
+            replaced_by_assessment_id    INTEGER,             -- the errata or amended version that replaced this assessment; NULL otherwise
+            wikidata_item_qid            TEXT,                -- Wikidata item for this assessment as a publication ('Q123'); NULL when none is known
+            wikidata_item_properties     TEXT                 -- space-separated properties that item already has ('P31 P356 P2093'); NULL when no item
         );
         CREATE INDEX assessment_taxon ON assessment(taxon_id, year_published);
 
@@ -136,6 +138,9 @@ public static class SiteDbSchema {
         /// table, whether the DOI was found in Crossref's list, found at doi.org or not found, when the
         /// build read that cache.
         public const string IucnDoiCheckedTo = "iucn_doi_checked_to";
+        /// JSON of the Wikidata assessment item model (rules/wikidata/iucn-status.yml assessment_item)
+        /// that QuickStatements batches on the site follow: WikidataItemModel.ToJson().
+        public const string WikidataItemModel = "wikidata_item_model";
         public const string TaxonCount = "taxon_count";
         public const string AssessmentCount = "assessment_count";
     }

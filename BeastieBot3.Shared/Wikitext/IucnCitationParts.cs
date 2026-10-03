@@ -22,11 +22,14 @@ public enum CitationAuthorKind {
 
 /// One author, in the order the IUCN citation lists them.
 /// Display is the name exactly as IUCN's citation writes it ("Wiig, Ø.", "BirdLife International").
+/// GivenNames is the person's full given names from the assessment's credits value[] list
+/// ("Catherine" for "Sayer, C."), set only when the match is certain; null otherwise.
 public sealed record CitationAuthor(
     CitationAuthorKind Kind,
     string Display,
     string? Last = null,
-    string? Initials = null);
+    string? Initials = null,
+    string? GivenNames = null);
 
 /// Where a DOI came from. A DOI is only stored when its taxon id matches, and its assessment id
 /// matches or belongs to the assessment this one is an errata version of.
