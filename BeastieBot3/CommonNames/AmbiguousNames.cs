@@ -14,8 +14,12 @@ namespace BeastieBot3.CommonNames;
 /// the store keeps a taxon for an old IUCN id beside the one for its current id (Arthroleptella
 /// bicolor is IUCN 58057 and 121376651), and both are given the same Wikipedia title. A taxon's
 /// priority for a name is the best <see cref="KeeperPriority"/> of the sources it has the name
-/// from. One taxon keeps a shared name when every other taxon has the name at a lower priority, or
-/// at the same priority and is one of its own subspecies, varieties or subpopulations. When two
+/// from. When the only taxa with a shared name are a species and its own subspecies, varieties or
+/// subpopulations, the order a taxon uses for its own names decides instead
+/// (<see cref="CommonNameStore.GetSourcePriority"/>: title, taxobox, Wikidata label, IUCN's main
+/// name ...), and the species keeps the name when it ties for the best. Otherwise one taxon keeps a
+/// shared name when every other taxon has the name at a lower priority, or at the same priority and
+/// is one of its own subspecies, varieties or subpopulations. When two
 /// or more taxa have the name as IUCN's main English name and none has it from a Wikipedia title,
 /// a taxon that also has it from a Wikipedia taxobox beats the others, and failing that, a taxon
 /// that also has it as a Wikidata label (<see cref="IucnMainTieBreak"/>). A shared name is
@@ -31,7 +35,8 @@ namespace BeastieBot3.CommonNames;
 /// tie-break as above); failing that, the title decides as before.
 ///
 /// Examples from 2026: Panthera leo keeps "Lion" (its Wikipedia title) over Panthera leo ssp. leo
-/// (an IUCN name that is not IUCN's main one); Panthera tigris keeps "Tiger" over Plectropomus
+/// (an IUCN name that is not IUCN's main one); Chrysoritis pyramus keeps "Pyramus opal" (its
+/// taxobox name) over its nominate subspecies (IUCN's main name); Panthera tigris keeps "Tiger" over Plectropomus
 /// oligacanthus (a Catalogue of Life name); Lithobates sylvaticus keeps "Wood frog" (its Wikipedia
 /// title) over Papurana daemeli (IUCN's main name); Quercus alba keeps "White oak" (IUCN's main
 /// name and its taxobox name) over Grevillea baileyana (IUCN's main name only); Anisognathus

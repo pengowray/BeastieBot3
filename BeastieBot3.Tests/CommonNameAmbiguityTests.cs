@@ -10,7 +10,9 @@ namespace BeastieBot3.Tests;
 // (AmbiguousNames.KeeperPriority: Wikipedia title, IUCN main name, taxobox, Wikidata label, other
 // IUCN names, other Wikidata names, Catalogue of Life), a taxobox name and then a Wikidata label
 // decide between two IUCN main names, a species beats its own subspecies, varieties and
-// subpopulations at the same priority, and every other taxon skips the name. `wikipedia generate-lists`, `site build-db` and
+// subpopulations at the same priority, and every other taxon skips the name. A name that only a
+// species and its own subspecies, varieties or subpopulations have is decided by the order a taxon
+// uses for its own names (CommonNameStore.GetSourcePriority), with the species winning ties. `wikipedia generate-lists`, `site build-db` and
 // `common-names report --report ambiguous` all read these verdicts; the report test below fails
 // if the report and the lists ever disagree on its fixture.
 public class CommonNameAmbiguityTests {
