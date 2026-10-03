@@ -35,24 +35,74 @@ public sealed class SiteQueries {
         command.CommandText = $"SELECT {TaxonColumns} FROM taxon t WHERE t.taxon_id = @id";
         command.Parameters.AddWithValue("@id", taxonId);
         using var reader = command.ExecuteReader();
-        if (!reader.Read()) {
-            return null;
+        return reader.Read() ? TaxonAt(reader) : null;
+    }
+
+    // The number of columns in TaxonColumns, where the columns after them start.
+    private const int TaxonColumnCount = 19;
+
+    private static TaxonRow TaxonAt(SqliteDataReader reader) => new(
+        reader.GetInt64(0),
+        reader.GetString(1),
+        reader.GetString(2),
+        Text(reader, 3), Text(reader, 4), Text(reader, 5), Text(reader, 6), Text(reader, 7), Text(reader, 8),
+        Text(reader, 9),
+        Text(reader, 10),
+        Long(reader, 11),
+        Text(reader, 12),
+        Text(reader, 13),
+        Text(reader, 14),
+        Text(reader, 15),
+        Long(reader, 16),
+        reader.GetInt64(17) != 0,
+        Long(reader, 18));
+
+    /// The taxa linked to this one in taxon_link: for a taxon in the release, the taxa not in the
+    /// release (old ids) linked to it; for a taxon not in the release, the taxa in the release it is
+    /// linked to. Taxa in the release first, then by id.
+    public IReadOnlyList<TaxonLinkRow> GetLinkedTaxa(long taxonId) {
+        using var connection = _db.OpenConnection();
+        using var command = connection.CreateCommand();
+        command.CommandText = $"""
+            SELECT {TaxonColumns}, l.link_kind
+            FROM taxon_link l JOIN taxon t ON t.taxon_id = l.current_taxon_id
+            WHERE l.taxon_id = @id
+            UNION ALL
+            SELECT {TaxonColumns}, l.link_kind
+            FROM taxon_link l JOIN taxon t ON t.taxon_id = l.taxon_id
+            WHERE l.current_taxon_id = @id
+            ORDER BY 18 DESC, 1
+            """;
+        command.Parameters.AddWithValue("@id", taxonId);
+        using var reader = command.ExecuteReader();
+        var rows = new List<TaxonLinkRow>();
+        while (reader.Read()) {
+            rows.Add(new TaxonLinkRow(TaxonAt(reader), reader.GetString(TaxonColumnCount)));
         }
-        return new TaxonRow(
-            reader.GetInt64(0),
-            reader.GetString(1),
-            reader.GetString(2),
-            Text(reader, 3), Text(reader, 4), Text(reader, 5), Text(reader, 6), Text(reader, 7), Text(reader, 8),
-            Text(reader, 9),
-            Text(reader, 10),
-            Long(reader, 11),
-            Text(reader, 12),
-            Text(reader, 13),
-            Text(reader, 14),
-            Text(reader, 15),
-            Long(reader, 16),
-            reader.GetInt64(17) != 0,
-            Long(reader, 18));
+        return rows;
+    }
+
+    /// has_taxonomic_notes of each of these assessments: true or false, or null when the build had
+    /// no cached payload for it. Assessments not in the database are left out.
+    public IReadOnlyDictionary<long, bool?> GetTaxonomicNotesFlags(IReadOnlyCollection<long> assessmentIds) {
+        var flags = new Dictionary<long, bool?>();
+        if (assessmentIds.Count == 0) {
+            return flags;
+        }
+        using var connection = _db.OpenConnection();
+        using var command = connection.CreateCommand();
+        var names = new List<string>();
+        foreach (var id in assessmentIds.Distinct()) {
+            var name = "@a" + names.Count.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            names.Add(name);
+            command.Parameters.AddWithValue(name, id);
+        }
+        command.CommandText = $"SELECT assessment_id, has_taxonomic_notes FROM assessment WHERE assessment_id IN ({string.Join(", ", names)})";
+        using var reader = command.ExecuteReader();
+        while (reader.Read()) {
+            flags[reader.GetInt64(0)] = reader.IsDBNull(1) ? null : reader.GetInt64(1) != 0;
+        }
+        return flags;
     }
 
     /// The taxon's SPRAT profiles and EPBC Act listings: the profile of the whole taxon first, then
@@ -71,25 +121,6 @@ public sealed class SiteQueries {
         var rows = new List<EpbcListingRow>();
         while (reader.Read()) {
             rows.Add(new EpbcListingRow(reader.GetInt64(0), reader.GetString(1), Text(reader, 2), reader.GetString(3), Text(reader, 4)));
-        }
-        return rows;
-    }
-
-    /// Taxa not in the release whose name is this taxon's (their current_taxon_id is this one), by id.
-    public IReadOnlyList<TaxonSummary> GetEarlierIds(long taxonId) {
-        using var connection = _db.OpenConnection();
-        using var command = connection.CreateCommand();
-        command.CommandText = $"""
-            SELECT {SummaryColumns}
-            FROM taxon t {SummaryJoin}
-            WHERE t.current_taxon_id = @id
-            ORDER BY t.taxon_id
-            """;
-        command.Parameters.AddWithValue("@id", taxonId);
-        using var reader = command.ExecuteReader();
-        var rows = new List<TaxonSummary>();
-        while (reader.Read()) {
-            rows.Add(SummaryAt(reader, 0));
         }
         return rows;
     }

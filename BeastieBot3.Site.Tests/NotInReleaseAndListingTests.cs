@@ -75,8 +75,12 @@ public sealed class NotInReleaseAndListingTests(SiteFactory factory) : IClassFix
         Assert.Contains("No current assessment in IUCN Red List version 2026-1.", Html.Text(old));
         Assert.Contains($"<p class=\"current-taxon\">IUCN Red List version 2026-1 lists <span class=\"sci-name\"><i>Bettongia penicillata</i></span> under <a href=\"/species/{FixtureDb.Woylie}\">IUCN id {FixtureDb.Woylie}</a>.</p>", old);
 
+        // The old id has a global assessment, so the taxon's page combines the two histories and its
+        // legend links the old id (CombinedHistoryPageTests).
         var current = await _client.GetStringAsync($"/species/{FixtureDb.Woylie}");
-        Assert.Contains($"Earlier assessments of a taxon with this name are under <a href=\"/species/{FixtureDb.WoylieOld}\">IUCN id {FixtureDb.WoylieOld}</a>.", current);
+        Assert.Contains($"<a href=\"/species/{FixtureDb.WoylieOld}\">IUCN id {FixtureDb.WoylieOld}</a>", current);
+        Assert.Contains($"IUCN id {FixtureDb.WoylieOld} (Bettongia penicillata): not in Red List version 2026-1; 1 global assessment, published 2008. "
+            + $"Same scientific name as IUCN id {FixtureDb.Woylie}.", Html.Text(current));
         Assert.Contains("Latest global assessment", Html.Text(current));
     }
 

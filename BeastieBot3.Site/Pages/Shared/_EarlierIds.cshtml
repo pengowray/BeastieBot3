@@ -1,0 +1,16 @@
+@model SpeciesModel
+@* Under the assessment history of a taxon in the release with no combined history: a line for
+   each old id linked to it (none of them has a global assessment). An old id's own page names the
+   taxa it is linked to in its status section instead. *@
+@if (Model.InRelease) {
+    foreach (var link in Model.LinkedTaxa) {
+        var earlier = link.Taxon;
+        if (link.IsSynonym) {
+            var oldName = ScientificNameMarkup.ToHtml(earlier.ScientificName, earlier.SubpopulationName);
+            var thisName = ScientificNameMarkup.ToHtml(Model.Taxon!.ScientificName, Model.Taxon.SubpopulationName);
+            <p class="note earlier-id">@SiteText.EarlierSynonymIdBefore<span class="sci-name">@Html.Raw(oldName)</span>@SiteText.EarlierSynonymIdMiddle<a href="/species/@earlier.TaxonId">@SiteText.IucnIdLink(earlier.TaxonId)</a>. @SiteText.SynonymOfBefore<span class="sci-name">@Html.Raw(oldName)</span>@SiteText.SynonymOfMiddle<span class="sci-name">@Html.Raw(thisName)</span>.</p>
+        } else {
+            <p class="note earlier-id">@SiteText.EarlierIdBefore<a href="/species/@earlier.TaxonId">@SiteText.IucnIdLink(earlier.TaxonId)</a>@SiteText.EarlierIdAfter</p>
+        }
+    }
+}

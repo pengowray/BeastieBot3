@@ -64,11 +64,14 @@ public sealed class SpeciesModel : PageModel {
     /// assesses. Its page has no status summary and no latest assessment.
     public bool InRelease => Taxon?.InRelease ?? true;
 
-    /// For a taxon not in the release: the taxon in the release with the same scientific name.
-    public TaxonSummary? CurrentTaxon { get; private set; }
+    /// The taxa linked to this one in taxon_link. For a taxon not in the release: the taxa in the
+    /// release with its name, or that IUCN lists its name as a synonym of. For a taxon in the
+    /// release: the taxa not in the release (old ids) linked to it in those ways.
+    public IReadOnlyList<TaxonLinkRow> LinkedTaxa { get; private set; } = [];
 
-    /// For a taxon in the release: the taxa not in the release that have its scientific name.
-    public IReadOnlyList<TaxonSummary> EarlierIds { get; private set; } = [];
+    /// The global assessments of this taxon and of the linked taxa in one table, shown in place of
+    /// the assessment history; null when no linked taxon has a global assessment.
+    public CombinedHistory? Combined { get; private set; }
 
     /// SPRAT profiles and EPBC Act listings: the whole taxon's first, then populations'.
     public IReadOnlyList<EpbcListingRow> EpbcListings { get; private set; } = [];
@@ -142,14 +145,11 @@ public sealed class SpeciesModel : PageModel {
         if (Taxon.ParentTaxonId is { } parentId) {
             Parent = _queries.GetSummary(parentId);
         }
-        if (!Taxon.InRelease && Taxon.CurrentTaxonId is { } currentId) {
-            CurrentTaxon = _queries.GetSummary(currentId);
-        }
-        if (Taxon.InRelease) {
-            EarlierIds = _queries.GetEarlierIds(Taxon.TaxonId);
-        }
+        LinkedTaxa = _queries.GetLinkedTaxa(Taxon.TaxonId);
         EpbcListings = _queries.GetEpbcListings(Taxon.TaxonId);
         LoadAssessments(assessment);
+        Combined = CombinedHistory.Build(Taxon, LinkedTaxa,
+            id => id == Taxon.TaxonId ? _assessments : _queries.GetAssessments(id), _queries.GetTaxonomicNotesFlags);
         Options = WikitextOptions.FromQuery(authors, access, opts, wrapRef, refname, amp,
             Selected is null ? DefaultRefNames.LatestGlobal : DefaultRefNameFor(Selected), fullnames);
         Taxobox = TaxoboxTemplate.For(Taxon.Kind, Taxon.Kingdom);
@@ -173,6 +173,20 @@ public sealed class SpeciesModel : PageModel {
 
     public string DefaultRefNameFor(AssessmentRow assessment) =>
         DefaultRefNames.For(assessment, LatestGlobal?.AssessmentId, GlobalHistory);
+
+    /// The "Show wikitext" link of a combined history row under another IUCN id: that id's page with
+    /// the assessment and the current options. The ref name goes along only when the visitor chose
+    /// it, as on this page; otherwise the default that page gives the assessment applies.
+    public string OtherIdOptionsUrl(CombinedRow row) {
+        var other = row.Id.Taxon;
+        var targetDefault = DefaultRefNames.For(row.Assessment, other.InRelease ? other.LatestGlobalAssessmentId : null, row.Id.Global);
+        return $"/species/{other.TaxonId}{Options.ToQuery(row.Assessment.AssessmentId, targetDefault)}";
+    }
+
+    /// The data-options-link key of a combined history row under another IUCN id, which cannot be
+    /// one of this page's own keys (an assessment id, or "default").
+    public static string OtherIdOptionsLinkKey(CombinedRow row) =>
+        string.Create(System.Globalization.CultureInfo.InvariantCulture, $"{row.Id.TaxonId}-{row.Assessment.AssessmentId}");
 
     private IReadOnlyList<AssessmentRow> _assessments = [];
 
@@ -296,7 +310,8 @@ public sealed class SpeciesModel : PageModel {
     /// keeps the year of the assessment it replaces, so without the note the two rows look the same.
     public string? VersionNote(AssessmentRow assessment) {
         if (assessment.ReplacedByAssessmentId is { } replacedBy) {
-            var replacing = _assessments.FirstOrDefault(a => a.AssessmentId == replacedBy);
+            var replacing = _assessments.FirstOrDefault(a => a.AssessmentId == replacedBy)
+                ?? Combined?.Rows.FirstOrDefault(r => r.Assessment.AssessmentId == replacedBy)?.Assessment;
             var replacingParts = replacing is null ? null : PartsOf(replacing);
             return replacingParts?.ErrataYear is not null ? SiteText.ReplacedByErrata
                 : replacingParts?.AmendsYear is not null ? SiteText.ReplacedByAmended

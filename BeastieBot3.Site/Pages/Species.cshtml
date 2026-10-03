@@ -65,8 +65,14 @@
     <h2 id="status-heading">@(Model.LatestGlobal is null ? SiteText.HeadingStatusNoGlobal : SiteText.HeadingStatus)</h2>
     @if (!Model.InRelease) {
         <p class="no-global-line">@SiteText.NoCurrentLine(Model.Version)</p>
-        @if (Model.CurrentTaxon is { } current) {
-            <p class="current-taxon">@SiteText.CurrentTaxonBefore(Model.Version)<span class="sci-name">@Html.Raw(ScientificNameMarkup.ToHtml(current.ScientificName, current.SubpopulationName))</span>@SiteText.CurrentTaxonMiddle<a href="/species/@current.TaxonId">@SiteText.IucnIdLink(current.TaxonId)</a>@SiteText.CurrentTaxonAfter</p>
+        @foreach (var link in Model.LinkedTaxa) {
+            var current = link.Taxon;
+            var currentName = ScientificNameMarkup.ToHtml(current.ScientificName, current.SubpopulationName);
+            if (link.IsSynonym) {
+                <p class="current-taxon">@SiteText.SynonymOfBefore<span class="sci-name">@Html.Raw(ScientificNameMarkup.ToHtml(taxon.ScientificName, taxon.SubpopulationName))</span>@SiteText.SynonymOfMiddle<span class="sci-name">@Html.Raw(currentName)</span>@SiteText.SynonymOfBeforeLink<a href="/species/@current.TaxonId">@SiteText.IucnIdLink(current.TaxonId)</a>@SiteText.SynonymOfAfter</p>
+            } else {
+                <p class="current-taxon">@SiteText.CurrentTaxonBefore(Model.Version)<span class="sci-name">@Html.Raw(currentName)</span>@SiteText.CurrentTaxonMiddle<a href="/species/@current.TaxonId">@SiteText.IucnIdLink(current.TaxonId)</a>@SiteText.CurrentTaxonAfter</p>
+            }
         }
     } else if (Model.LatestGlobal is null && Model.RegionalRows.Count > 0) {
         <p class="no-global-line">@SiteText.NoGlobalBefore<a href="#regional">@SiteText.NoGlobalLinkText(Model.RegionalRows.Count)</a>@SiteText.NoGlobalAfter</p>
@@ -258,7 +264,9 @@
     </section>
 }
 
-@if (Model.GlobalHistory.Count > 0) {
+@if (Model.Combined is not null) {
+    <partial name="_CombinedHistory" model="Model" />
+} else if (Model.GlobalHistory.Count > 0) {
     <section class="history" aria-labelledby="history-heading">
         <h2 id="history-heading">@SiteText.HeadingHistory</h2>
         <div class="table-scroll">
@@ -296,16 +304,12 @@
                 </tbody>
             </table>
         </div>
-        @foreach (var earlier in Model.EarlierIds) {
-            <p class="note earlier-id">@SiteText.EarlierIdBefore<a href="/species/@earlier.TaxonId">@SiteText.IucnIdLink(earlier.TaxonId)</a>@SiteText.EarlierIdAfter</p>
-        }
+        <partial name="_EarlierIds" model="Model" />
     </section>
-} else if (Model.EarlierIds.Count > 0) {
+} else if (Model.InRelease && Model.LinkedTaxa.Count > 0) {
     <section class="history" aria-labelledby="history-heading">
         <h2 id="history-heading">@SiteText.HeadingHistory</h2>
-        @foreach (var earlier in Model.EarlierIds) {
-            <p class="note earlier-id">@SiteText.EarlierIdBefore<a href="/species/@earlier.TaxonId">@SiteText.IucnIdLink(earlier.TaxonId)</a>@SiteText.EarlierIdAfter</p>
-        }
+        <partial name="_EarlierIds" model="Model" />
     </section>
 }
 

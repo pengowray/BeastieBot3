@@ -316,6 +316,86 @@ public static class SiteText {
     public const string Latest = "Latest";
     public const string IucnSiteLink = "IUCN Red List website";
 
+    // Taxon page: old IUCN ids. A taxon not in the release (an old id) is linked to the taxon in the
+    // release with the same scientific name, and to the one taxon whose IUCN synonyms list its name.
+    // When a linked id has a global assessment, the history section is a combined assessment history
+    // (Pages/Shared/_CombinedHistory.cshtml): a legend line for each id, then one table.
+    public const string HeadingCombinedHistory = "Combined assessment history";
+
+    /// "Global assessments of IUCN ids 2790 and 2785, newest first."; with more than 3 ids, their number.
+    public static string CombinedIntro(IReadOnlyList<long> ids) {
+        if (ids.Count > 3) {
+            return $"Global assessments of {ids.Count} IUCN ids, newest first.";
+        }
+        var list = ids.Count == 1 ? $"{ids[0]}"
+            : string.Join(", ", ids.Take(ids.Count - 1)) + $" and {ids[^1]}";
+        return $"Global assessments of IUCN ids {list}, newest first.";
+    }
+
+    public const string ColIucnId = "IUCN id";
+    /// The tag beside the page's own id, in the legend and in the IUCN id column.
+    public const string ThisPageTag = "This page";
+
+    /// A legend line: strong("IUCN id 2790") + " " + tag(ThisPageTag), or link("IUCN id 2785"); then
+    /// LegendBeforeName + italic name + LegendAfterName(...); then, for a linked id, LegendSameName,
+    /// or SynonymOfBefore + italic name + SynonymOfMiddle + italic name + ".".
+    public const string LegendBeforeName = " (";
+
+    /// After the name in a legend line: whether the id is in the release, and its global assessments:
+    /// "): in Red List version 2026-1; 1 global assessment, published 2026."
+    public static string LegendAfterName(bool inRelease, string? version, int globalCount, int? firstYear, int? lastYear) {
+        var release = version is null
+            ? (inRelease ? "in the current Red List version" : "not in the current Red List version")
+            : (inRelease ? $"in Red List version {version}" : $"not in Red List version {version}");
+        var assessments = globalCount == 0 ? "no global assessments"
+            : globalCount == 1 ? $"1 global assessment, published {lastYear}"
+            : firstYear == lastYear ? $"{globalCount} global assessments, published {lastYear}"
+            : $"{globalCount} global assessments, published {firstYear} to {lastYear}";
+        return $"): {release}; {assessments}.";
+    }
+
+    /// After the legend line of an id with the same scientific name as the page's taxon.
+    public static string LegendSameName(long pageTaxonId) => $"Same scientific name as IUCN id {pageTaxonId}.";
+
+    /// In the Wikitext column, for a row of another IUCN id: a link to that id's page, which shows
+    /// the assessment's wikitext. The accessible name starts with the visible text.
+    public static string ShowWikitextOtherId(long taxonId) => $"See IUCN id {taxonId}";
+    public static string ShowWikitextOtherIdAccessible(long taxonId, int? year, string? versionNote = null) {
+        var text = year is null
+            ? $"See IUCN id {taxonId} for the wikitext of the assessment"
+            : $"See IUCN id {taxonId} for the wikitext of its {year} assessment";
+        return versionNote is null ? text : $"{text} ({char.ToLowerInvariant(versionNote[0])}{versionNote[1..]})";
+    }
+
+    /// Under the combined table, when the newest global assessment of one or more ids has taxonomic
+    /// notes: TaxonomicNotesBefore + link(TaxonomicNotesLink) [+ ListSeparator + link ...] +
+    /// TaxonomicNotesAfter. The links go to the assessments on the IUCN Red List website.
+    public const string TaxonomicNotesBefore = "IUCN's taxonomic notes may explain why these assessments are under more than one IUCN id: see the ";
+    public static string TaxonomicNotesLink(int? year, long taxonId) =>
+        year is null ? $"newest assessment of IUCN id {taxonId}" : $"{year} assessment of IUCN id {taxonId}";
+    /// Before link number index (from 0) of count: "", ", the " or " and the ".
+    public static string ListSeparator(int index, int count) => index == 0 ? string.Empty : index == count - 1 ? " and the " : ", the ";
+    public const string TaxonomicNotesAfter = " on the IUCN Red List website.";
+
+    /// Under the combined table, for another id with regional assessments: before + link("IUCN id
+    /// {id}", to the Regional assessments section of its page) + after.
+    public const string OtherRegionalBefore = "Regional assessments of ";
+    public const string OtherRegionalAfter = " are on its page.";
+
+    /// IUCN lists one name as a synonym of another: SynonymOfBefore + italic name + SynonymOfMiddle +
+    /// italic name, then "." in a legend line and under the history, or, in the status section of an
+    /// old id's page, SynonymOfBeforeLink + link("IUCN id {id}") + SynonymOfAfter.
+    public const string SynonymOfBefore = "IUCN lists ";
+    public const string SynonymOfMiddle = " as a synonym of ";
+    public const string SynonymOfBeforeLink = " (";
+    public const string SynonymOfAfter = ").";
+
+    /// Under the assessment history of a taxon in the release, for an old id whose name IUCN lists as
+    /// a synonym of it and that has no global assessment: EarlierSynonymIdBefore + italic name +
+    /// EarlierSynonymIdMiddle + link("IUCN id {id}") + ". " + the synonym sentence.
+    public const string EarlierSynonymIdBefore = "Earlier assessments of ";
+    public const string EarlierSynonymIdMiddle = " are under ";
+
     // Taxon page: names
     public const string NamesEnglish = "English common names";
     public const string NamesOtherLanguages = "Common names in other languages";

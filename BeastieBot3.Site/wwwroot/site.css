@@ -17,6 +17,21 @@
     --badge-ring: transparent;
     /* Borders of form controls: at least 3:1 against --bg and --code-bg. */
     --control-border: #767c84;
+    /* Row colours of the combined assessment history, one per IUCN id: a background (text, links,
+       muted text and grey badges at least 4.5:1 on it) and a mark for the row's left edge and the
+       legend swatch (at least 3:1 against the background and against --bg). */
+    --id-tint-1: #e7effc;
+    --id-mark-1: #2563c9;
+    --id-tint-2: #fbf0d9;
+    --id-mark-2: #a86b00;
+    --id-tint-3: #e2f3e7;
+    --id-mark-3: #2a7f45;
+    --id-tint-4: #efe7fa;
+    --id-mark-4: #7448c2;
+    --id-tint-5: #fbe6ec;
+    --id-mark-5: #bb3a62;
+    --id-tint-6: #dff2f2;
+    --id-mark-6: #1a7f80;
     color-scheme: light;
 }
 
@@ -37,6 +52,18 @@
         --shown-bg: #1c2a3d;
         --badge-ring: rgba(255, 255, 255, 0.35);
         --control-border: #6f7882;
+        --id-tint-1: #1a2840;
+        --id-mark-1: #6fa3f2;
+        --id-tint-2: #33281a;
+        --id-mark-2: #d9a441;
+        --id-tint-3: #1a2f22;
+        --id-mark-3: #5cbf7c;
+        --id-tint-4: #2a2242;
+        --id-mark-4: #ae8ff0;
+        --id-tint-5: #3a1e2a;
+        --id-mark-5: #ee86a6;
+        --id-tint-6: #152f30;
+        --id-mark-6: #4dbfbf;
         color-scheme: dark;
     }
 }
@@ -57,6 +84,18 @@
     --shown-bg: #1c2a3d;
     --badge-ring: rgba(255, 255, 255, 0.35);
     --control-border: #6f7882;
+    --id-tint-1: #1a2840;
+    --id-mark-1: #6fa3f2;
+    --id-tint-2: #33281a;
+    --id-mark-2: #d9a441;
+    --id-tint-3: #1a2f22;
+    --id-mark-3: #5cbf7c;
+    --id-tint-4: #2a2242;
+    --id-mark-4: #ae8ff0;
+    --id-tint-5: #3a1e2a;
+    --id-mark-5: #ee86a6;
+    --id-tint-6: #152f30;
+    --id-mark-6: #4dbfbf;
     color-scheme: dark;
 }
 
@@ -804,7 +843,73 @@ abbr[title] {
     margin: 0.5rem 0 0;
 }
 
-/* Under the assessment history: an old IUCN id with the same name. */
+/* Under the assessment history: an old IUCN id with the same name, or whose name is a synonym. */
 .earlier-id {
     color: var(--muted);
 }
+
+/* Combined assessment history: the assessments of several IUCN ids in one table. Each id's rows
+   have its background and a mark on their left edge, and the legend shows the same mark. The IUCN
+   id column names each row's id, so the colours only help. */
+.id-legend {
+    list-style: none;
+    padding: 0;
+    margin: 0 0 0.75rem;
+}
+
+.id-legend li {
+    display: flex;
+    gap: 0.5rem;
+    align-items: baseline;
+    margin: 0.3rem 0;
+}
+
+.id-swatch {
+    flex: none;
+    display: inline-block;
+    width: 0.9rem;
+    height: 0.9rem;
+    border-radius: 2px;
+    border: 4px solid var(--border);
+    transform: translateY(0.1rem);
+}
+
+.combined-table th,
+.combined-table td {
+    padding-left: 0.5rem;
+}
+
+.combined-table tbody th:first-child {
+    border-left: 5px solid transparent;
+}
+
+.combined-table .iucn-id {
+    white-space: nowrap;
+}
+
+/* The row whose wikitext is shown has an outline, since its background is its id's colour. */
+.combined-table tr.shown {
+    outline: 2px solid var(--fg);
+    outline-offset: -2px;
+}
+
+/* These rules outrank tr.shown, so a shown row keeps its id's colour under the outline. */
+.combined-table tr.id-tint-1, .id-swatch.id-tint-1 { background: var(--id-tint-1); }
+.combined-table tr.id-tint-2, .id-swatch.id-tint-2 { background: var(--id-tint-2); }
+.combined-table tr.id-tint-3, .id-swatch.id-tint-3 { background: var(--id-tint-3); }
+.combined-table tr.id-tint-4, .id-swatch.id-tint-4 { background: var(--id-tint-4); }
+.combined-table tr.id-tint-5, .id-swatch.id-tint-5 { background: var(--id-tint-5); }
+.combined-table tr.id-tint-6, .id-swatch.id-tint-6 { background: var(--id-tint-6); }
+
+.combined-table tr.id-tint-1 > th:first-child { border-left-color: var(--id-mark-1); }
+.id-swatch.id-tint-1 { border-color: var(--id-mark-1); }
+.combined-table tr.id-tint-2 > th:first-child { border-left-color: var(--id-mark-2); }
+.id-swatch.id-tint-2 { border-color: var(--id-mark-2); }
+.combined-table tr.id-tint-3 > th:first-child { border-left-color: var(--id-mark-3); }
+.id-swatch.id-tint-3 { border-color: var(--id-mark-3); }
+.combined-table tr.id-tint-4 > th:first-child { border-left-color: var(--id-mark-4); }
+.id-swatch.id-tint-4 { border-color: var(--id-mark-4); }
+.combined-table tr.id-tint-5 > th:first-child { border-left-color: var(--id-mark-5); }
+.id-swatch.id-tint-5 { border-color: var(--id-mark-5); }
+.combined-table tr.id-tint-6 > th:first-child { border-left-color: var(--id-mark-6); }
+.id-swatch.id-tint-6 { border-color: var(--id-mark-6); }
