@@ -741,6 +741,38 @@ internal sealed class CommonNameStore : SqliteStore {
     }
 
     /// <summary>
+    /// How many species the store has in <paramref name="genus"/>: the distinct first two words of
+    /// the valid, non-fossil taxa whose canonical name is the genus followed by more words. A
+    /// subspecies counts as its species, and a working name ("pristoceuthophilus sp. nov.") as one
+    /// species. `common-names aggregate` uses it to tell a genus with one species from a larger one.
+    /// </summary>
+    public int CountSpeciesInGenus(string genus) {
+        var lower = genus.Trim().ToLowerInvariant();
+        if (lower.Length == 0) {
+            return 0;
+        }
+        using var command = _connection.CreateCommand();
+        // A range on the canonical name index: '!' is the character after the space.
+        command.CommandText =
+            """
+            SELECT canonical_name FROM taxa
+            WHERE canonical_name >= @from AND canonical_name < @to
+              AND validity_status = 'valid' AND is_fossil = 0;
+            """;
+        command.Parameters.AddWithValue("@from", lower + " ");
+        command.Parameters.AddWithValue("@to", lower + "!");
+        var species = new HashSet<string>(StringComparer.Ordinal);
+        using var reader = command.ExecuteReader();
+        while (reader.Read()) {
+            var words = reader.GetString(0).Split(' ', StringSplitOptions.RemoveEmptyEntries);
+            if (words.Length >= 2) {
+                species.Add(words[1]);
+            }
+        }
+        return species.Count;
+    }
+
+    /// <summary>
     /// A taxon's scientific names as stored, normalised: taxa.canonical_name and every
     /// scientific_name_synonyms.normalized_name. <see cref="ScientificNameCheck"/> compares a
     /// candidate common name with them.

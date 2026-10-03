@@ -708,6 +708,8 @@ internal sealed class CommonNameAggregateCommand : AsyncCommand<CommonNameAggreg
             var scientificTitles = 0;
             var scientificTaxoboxNames = 0;
             var otherTaxonsPage = 0;
+            var genusPages = 0;
+            var speciesInGenus = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
 
             using var wikiConnection = new SqliteConnection($"Data Source={wikipediaPath};Mode=ReadOnly");
             wikiConnection.Open();
@@ -729,13 +731,13 @@ internal sealed class CommonNameAggregateCommand : AsyncCommand<CommonNameAggreg
             if (useTaxonMatches) {
                 // Use pre-computed matches
                 command.CommandText = limit.HasValue
-                    ? @"SELECT m.taxon_identifier, p.page_title, p.normalized_title, t.data_json, m.page_row_id
+                    ? @"SELECT m.taxon_identifier, p.page_title, p.normalized_title, t.data_json, m.page_row_id, t.is_monotypic
                         FROM taxon_wiki_matches m
                         JOIN wiki_pages p ON p.id = m.page_row_id
                         LEFT JOIN wiki_taxobox_data t ON t.page_row_id = p.id
                         WHERE m.taxon_source = @source AND m.match_status = 'matched'
                         LIMIT @limit"
-                    : @"SELECT m.taxon_identifier, p.page_title, p.normalized_title, t.data_json, m.page_row_id
+                    : @"SELECT m.taxon_identifier, p.page_title, p.normalized_title, t.data_json, m.page_row_id, t.is_monotypic
                         FROM taxon_wiki_matches m
                         JOIN wiki_pages p ON p.id = m.page_row_id
                         LEFT JOIN wiki_taxobox_data t ON t.page_row_id = p.id
@@ -748,12 +750,12 @@ internal sealed class CommonNameAggregateCommand : AsyncCommand<CommonNameAggreg
                 // Fall back to matching via taxobox scientific names
                 AnsiConsole.MarkupLine("[grey]No pre-computed matches found, using taxobox scientific names...[/]");
                 command.CommandText = limit.HasValue
-                    ? @"SELECT t.scientific_name, p.page_title, t.data_json
+                    ? @"SELECT t.scientific_name, p.page_title, t.data_json, t.is_monotypic
                         FROM wiki_taxobox_data t
                         JOIN wiki_pages p ON p.id = t.page_row_id
                         WHERE t.scientific_name IS NOT NULL AND t.scientific_name != ''
                         LIMIT @limit"
-                    : @"SELECT t.scientific_name, p.page_title, t.data_json
+                    : @"SELECT t.scientific_name, p.page_title, t.data_json, t.is_monotypic
                         FROM wiki_taxobox_data t
                         JOIN wiki_pages p ON p.id = t.page_row_id
                         WHERE t.scientific_name IS NOT NULL AND t.scientific_name != ''";
@@ -773,6 +775,7 @@ internal sealed class CommonNameAggregateCommand : AsyncCommand<CommonNameAggreg
                         string? taxonIdentifier;
                         string pageTitle;
                         string? taxoboxJson;
+                        bool markedMonotypic;
                         var givesNames = true;
 
                         if (useTaxonMatches) {
@@ -780,11 +783,13 @@ internal sealed class CommonNameAggregateCommand : AsyncCommand<CommonNameAggreg
                             pageTitle = reader.GetString(1);
                             taxoboxJson = reader.IsDBNull(3) ? null : reader.GetString(3);
                             givesNames = !sharedPageExclusions.Contains((reader.GetInt64(4), taxonIdentifier));
+                            markedMonotypic = !reader.IsDBNull(5) && reader.GetInt64(5) == 1;
                         } else {
                             // Using taxobox scientific name - need to match to our taxa
                             var scientificName = reader.GetString(0);
                             pageTitle = reader.GetString(1);
                             taxoboxJson = reader.IsDBNull(2) ? null : reader.GetString(2);
+                            markedMonotypic = !reader.IsDBNull(3) && reader.GetInt64(3) == 1;
 
                             // Clean up scientific name (may contain wiki markup)
                             scientificName = CleanWikiScientificName(scientificName);
@@ -825,12 +830,31 @@ internal sealed class CommonNameAggregateCommand : AsyncCommand<CommonNameAggreg
                             continue;
                         }
 
-                        // Add the page title (without its disambiguation) as a common name, unless it
-                        // is a scientific name: the taxon's, or another combination (ScientificNameCheck).
-                        var cleanTitle = CommonNameNormalizer.RemoveDisambiguationSuffix(pageTitle);
                         var taxonNames = store.GetTaxonScientificNames(taxonId.Value);
+                        var taxobox = TaxoboxFields(taxoboxJson);
 
-                        if (ScientificNameCheck.IsScientificName(cleanTitle, taxonNames, nameWords.Value)) {
+                        // A page about a genus or a higher taxon gives no names to a species or
+                        // subspecies matched to it ("Casque-headed tree frogs" on the page
+                        // "Trachycephalus" for Trachycephalus vermiculatus, "Maple" for Acer
+                        // kwangnanense), unless the genus has one species. The cross-reference
+                        // stays, so the lists can still link the page.
+                        if (taxobox is not null && WikipediaPageMatch.IsGenusPageOfSpecies(taxobox, taxonNames.Canonical,
+                                markedMonotypic, genus => CountSpeciesInGenus(store, speciesInGenus, genus))) {
+                            genusPages++;
+                            continue;
+                        }
+
+                        // Add the page title (without its disambiguation) as a common name, unless it
+                        // is a scientific name: the one the page's taxobox gives for the page's own
+                        // taxon ("Tliltocatl epicureanus"), the taxon's, or another combination
+                        // (ScientificNameCheck).
+                        var cleanTitle = CommonNameNormalizer.RemoveDisambiguationSuffix(pageTitle);
+                        var subjectKeys = taxobox is null
+                            ? (IReadOnlySet<string>)new HashSet<string>()
+                            : WikipediaPageMatch.SubjectKeys(taxobox);
+
+                        if (WikipediaPageMatch.IsTaxoboxSubject(cleanTitle, subjectKeys)
+                            || ScientificNameCheck.IsScientificName(cleanTitle, taxonNames, nameWords.Value)) {
                             scientificTitles++;
                         } else {
                             var normalized = CommonNameNormalizer.NormalizeForMatching(cleanTitle);
@@ -850,11 +874,12 @@ internal sealed class CommonNameAggregateCommand : AsyncCommand<CommonNameAggreg
                         }
 
                         // Extract common name from taxobox "name" field
-                        if (!string.IsNullOrWhiteSpace(taxoboxJson)) {
-                            var taxoboxName = ExtractTaxoboxName(taxoboxJson, pageTitle);
+                        if (taxobox is not null) {
+                            var taxoboxName = TaxoboxCommonName.FromNameField(taxobox.GetValueOrDefault("name"), pageTitle);
                             if (string.IsNullOrWhiteSpace(taxoboxName)) {
                                 // The name field has no English name.
-                            } else if (ScientificNameCheck.IsScientificName(taxoboxName, taxonNames, nameWords.Value)) {
+                            } else if (WikipediaPageMatch.IsTaxoboxSubject(taxoboxName, subjectKeys)
+                                       || ScientificNameCheck.IsScientificName(taxoboxName, taxonNames, nameWords.Value)) {
                                 scientificTaxoboxNames++;
                             } else {
                                 var taxoboxNormalized = CommonNameNormalizer.NormalizeForMatching(taxoboxName);
@@ -880,10 +905,12 @@ internal sealed class CommonNameAggregateCommand : AsyncCommand<CommonNameAggreg
             store.CompleteImportRun(runId, processed, totalAdded, 0, 0,
                 $"Matched {matched} pages to taxa, {titleAdded} titles, {taxoboxAdded} taxobox names, created {created}, " +
                 $"skipped as scientific names: {scientificTitles} titles, {scientificTaxoboxNames} taxobox names, " +
-                $"{otherTaxonsPage} taxa whose matched page is about another taxon");
+                $"{otherTaxonsPage} taxa whose matched page is about another taxon, " +
+                $"{genusPages} species and subspecies whose matched page is about a genus or a higher taxon");
             AnsiConsole.MarkupLine($"[green]Wikipedia:[/] {titleAdded:N0} titles + {taxoboxAdded:N0} taxobox names from {matched:N0} matched pages, [blue]{created:N0}[/] taxa created");
             AnsiConsole.MarkupLine($"[grey]Skipped as scientific names: {scientificTitles:N0} titles, {scientificTaxoboxNames:N0} taxobox names[/]");
             AnsiConsole.MarkupLine($"[grey]Skipped {otherTaxonsPage:N0} taxa whose matched page is about another taxon[/]");
+            AnsiConsole.MarkupLine($"[grey]Skipped {genusPages:N0} species and subspecies whose matched page is about a genus or a higher taxon[/]");
         }, cancellationToken);
     }
 
@@ -944,21 +971,28 @@ internal sealed class CommonNameAggregateCommand : AsyncCommand<CommonNameAggreg
         }
     }
 
-    private static string? ExtractTaxoboxName(string json, string pageTitle) {
-        try {
-            using var document = JsonDocument.Parse(json);
-            var root = document.RootElement;
-
-            // The taxobox "name" field typically contains the common name, as wikitext that can
-            // hold several names, templates, references and the next parameter (TaxoboxCommonName).
-            if (root.TryGetProperty("name", out var nameProp) && nameProp.ValueKind == JsonValueKind.String) {
-                return TaxoboxCommonName.FromNameField(nameProp.GetString(), pageTitle);
-            }
-        } catch (JsonException) {
-            // Ignore malformed JSON
+    // A page's taxobox parameters as the Wikipedia cache stores them (wiki_taxobox_data.data_json);
+    // null when the page has none or the JSON cannot be read. The "name" parameter typically holds
+    // the common name, as wikitext that can hold several names, templates, references and the next
+    // parameter (TaxoboxCommonName).
+    private static Dictionary<string, string>? TaxoboxFields(string? json) {
+        if (string.IsNullOrWhiteSpace(json)) {
+            return null;
         }
+        try {
+            return JsonSerializer.Deserialize<Dictionary<string, string>>(json);
+        } catch (JsonException) {
+            return null;
+        }
+    }
 
-        return null;
+    // How many species the store has in a genus (CommonNameStore.CountSpeciesInGenus), cached for
+    // the run.
+    private static int CountSpeciesInGenus(CommonNameStore store, Dictionary<string, int> cache, string genus) {
+        if (!cache.TryGetValue(genus, out var count)) {
+            cache[genus] = count = store.CountSpeciesInGenus(genus);
+        }
+        return count;
     }
 
     // Creates a union taxon for a source row that matched no existing taxon (cross-reference,

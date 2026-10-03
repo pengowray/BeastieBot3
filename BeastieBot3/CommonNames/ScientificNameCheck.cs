@@ -159,7 +159,8 @@ internal static class ScientificNameCheck {
     /// first a capitalised word of plain letters, the rest lower case. A single word is a scientific
     /// name when it is a genus in the store and not an English word ("Strumigenys" for Kyidris
     /// media; not "Platypus"). Anything else is a common name. Double quotes around a genus
-    /// ("\"Hyla\" nicefori") are ignored throughout.</item>
+    /// ("\"Hyla\" nicefori"), a hybrid marker ("Yucca × schottii", <see cref="WithoutHybridMarker"/>)
+    /// and a period inside an epithet ("Cyanea st.-johnii") are ignored throughout.</item>
     /// <item>The first word is one of the taxon's genera ("Gobio gobio" for Gobio latus): a scientific
     /// name.</item>
     /// <item>A word is an English word ("Pygmy hippopotamus", "Alligator gar"): a common name. A
@@ -182,7 +183,8 @@ internal static class ScientificNameCheck {
         // Wikipedia puts a genus in double quotes when the species no longer belongs in it
         // ("\"Hyla\" nicefori").
         // Some Wikidata labels have a no-break space between the words ("Lycodon cathaya").
-        name = name.Replace("\"", "").Replace(' ', ' ');
+        name = WithoutHybridMarker(name.Replace("\"", "").Replace(' ', ' '));
+        name = PeriodInEpithet.Replace(name, "");
         var normalized = ScientificNameNormalizer.Normalize(name);
         if (normalized is null) {
             return false;
@@ -251,6 +253,22 @@ internal static class ScientificNameCheck {
         // 6. No evidence either way.
         return taxon.IsEmpty;
     }
+
+    /// <summary>
+    /// The name without a hybrid marker: the hybrid sign × anywhere ("Yucca × schottii",
+    /// "×Chitalpa tashkentensis"), and an "x" written for it between a genus and an epithet
+    /// ("Yucca x schottii"). An "x" anywhere else is kept, so a common name for a hybrid such as
+    /// "Eurasian Teal x Green-winged Teal" is unchanged.
+    /// </summary>
+    internal static string WithoutHybridMarker(string name) =>
+        AsciiHybridMarker.Replace(HybridSign.Replace(name, " ").Trim(), "$1 ");
+
+    private static readonly Regex HybridSign = new(@"\s*×\s*", RegexOptions.Compiled);
+    private static readonly Regex AsciiHybridMarker = new(@"^([A-Z][a-z]+) x (?=[a-z])", RegexOptions.Compiled);
+
+    // A period inside an epithet, before a hyphen: Wikipedia titles the page for Cyanea st-johnii
+    // "Cyanea st.-johnii".
+    private static readonly Regex PeriodInEpithet = new(@"(?<=\b[a-z]+)\.(?=-[a-z])", RegexOptions.Compiled);
 
     internal static List<string> WithoutRankMarkers(IEnumerable<string> words) =>
         words.Where(w => !RankMarkers.Contains(w)).ToList();

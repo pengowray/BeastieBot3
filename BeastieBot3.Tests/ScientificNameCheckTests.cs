@@ -260,4 +260,42 @@ public class ScientificNameCheckTests {
         Assert.False(words.IsEpithet("salar"));
         Assert.False(words.IsGenus("haplochromis"));
     }
+
+    // Hybrids and punctuation (October 2026: these titles and Wikidata labels were stored as common
+    // names and shown in place of IUCN names such as "Schott's yucca").
+
+    [Theory]
+    [InlineData("Yucca × schottii", "yucca schottii")]
+    [InlineData("Malus × zumi", "malus zumi")]
+    [InlineData("Phragmipedium × richteri", "phragmipedium richteri")]
+    [InlineData("Yucca ×schottii", "yucca schottii")]
+    [InlineData("Yucca x schottii", "yucca schottii")]
+    public void TheTaxonsNameAsAHybrid_IsScientific(string name, string canonical) {
+        Assert.True(IsScientific(name, Taxon(canonical)));
+    }
+
+    [Fact]
+    public void AnotherHybridInTheTaxonsGenus_IsScientific() {
+        Assert.True(IsScientific("Pyrus × michauxii", Taxon("pyrus anatolica")));
+    }
+
+    [Fact]
+    public void ACommonNameWithAnXBetweenTwoNames_IsNotScientific() {
+        Assert.False(IsScientific("Eurasian Teal x Green-winged Teal", Taxon("anas crecca"), Words(english: ["teal"])));
+    }
+
+    [Fact]
+    public void TheTaxonsNameWithAPeriodInTheEpithet_IsScientific() {
+        Assert.True(IsScientific("Cyanea st.-johnii", Taxon("cyanea st-johnii")));
+    }
+
+    [Theory]
+    [InlineData("Yucca × schottii", "Yucca schottii")]
+    [InlineData("×Chitalpa tashkentensis", "Chitalpa tashkentensis")]
+    [InlineData("Yucca x schottii", "Yucca schottii")]
+    [InlineData("Eurasian Teal x Green-winged Teal", "Eurasian Teal x Green-winged Teal")]
+    [InlineData("Box turtle", "Box turtle")]
+    public void WithoutHybridMarker(string name, string expected) {
+        Assert.Equal(expected, ScientificNameCheck.WithoutHybridMarker(name));
+    }
 }
