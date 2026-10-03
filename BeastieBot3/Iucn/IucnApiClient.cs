@@ -29,16 +29,20 @@ internal sealed class IucnApiClient : IDisposable {
     private readonly TimeSpan _rateLimitWait;
     private readonly int _maxRateLimitRetries;
     private readonly Func<TimeSpan, CancellationToken, Task> _delay;
-    private readonly Func<DateTimeOffset> _now;
+    private readonly TimeProvider _time;
+    private readonly long _origin;
 
     // Shared gate, guarded by _rateLock. Every request start, retries included, takes the next
     // free time slot: no earlier than _pausedUntil (set by a 429, so concurrent workers back off
     // together instead of each using up its own retries), and at least _pace.Interval after the
     // previous start (measured start to start, so a slow answer does not add to the wait).
+    // Both are times since _origin on the monotonic clock (TimeProvider.GetTimestamp), which
+    // setting the system clock does not change. If they were system clock times, setting the
+    // clock back would make the next request wait for as long as the clock moved back.
     private readonly object _rateLock = new();
     private readonly IucnApiPace _pace;
-    private DateTimeOffset _pausedUntil = DateTimeOffset.MinValue;
-    private DateTimeOffset _nextSlot = DateTimeOffset.MinValue;
+    private TimeSpan _pausedUntil = TimeSpan.Zero;
+    private TimeSpan _nextSlot = TimeSpan.Zero;
 
     public IucnApiClient(IucnApiConfiguration configuration)
         : this(configuration, new SocketsHttpHandler {
@@ -48,12 +52,13 @@ internal sealed class IucnApiClient : IDisposable {
     }
 
     // Test/advanced seam: inject the message handler (e.g. a fake that returns 429s) so the
-    // retry/backoff logic can be exercised without real HTTP, and the delay and clock so the
-    // waits can be recorded instead of slept.
+    // retry/backoff logic can be exercised without real HTTP, the delay so the waits can be
+    // recorded instead of slept, and the TimeProvider so a test sets both clocks by hand.
     internal IucnApiClient(IucnApiConfiguration configuration, HttpMessageHandler handler,
-        Func<TimeSpan, CancellationToken, Task>? delay = null, Func<DateTimeOffset>? now = null, IucnApiPace? pace = null) {
+        Func<TimeSpan, CancellationToken, Task>? delay = null, TimeProvider? time = null, IucnApiPace? pace = null) {
         _delay = delay ?? Task.Delay;
-        _now = now ?? (() => DateTimeOffset.UtcNow);
+        _time = time ?? TimeProvider.System;
+        _origin = _time.GetTimestamp();
         _pace = pace ?? new IucnApiPace();
         _httpClient = new HttpClient(handler) {
             BaseAddress = configuration.BaseUri,
@@ -172,11 +177,12 @@ internal sealed class IucnApiClient : IDisposable {
             or HttpStatusCode.InternalServerError;
 
     // Reads the Retry-After header (absolute date or delta seconds) if the server sent one.
-    private static TimeSpan? RetryAfter(HttpResponseMessage response) {
+    // A date is compared with the system clock, the clock the server's date is on.
+    private TimeSpan? RetryAfter(HttpResponseMessage response) {
         if (response.Headers.RetryAfter is not { } retryAfter) return null;
         if (retryAfter.Delta is { } delta && delta > TimeSpan.Zero) return delta;
         if (retryAfter.Date is { } date) {
-            var wait = date - DateTimeOffset.UtcNow;
+            var wait = date - _time.GetUtcNow();
             if (wait > TimeSpan.Zero) return wait;
         }
         return null;
@@ -186,7 +192,7 @@ internal sealed class IucnApiClient : IDisposable {
     private async Task WaitForTurnAsync(CancellationToken cancellationToken) {
         TimeSpan wait;
         lock (_rateLock) {
-            var now = _now();
+            var now = Elapsed();
             var slot = now;
             if (_nextSlot > slot) slot = _nextSlot;
             if (_pausedUntil > slot) slot = _pausedUntil;
@@ -201,12 +207,15 @@ internal sealed class IucnApiClient : IDisposable {
     // Pauses every worker for `wait` and slows the pace. Returns the new interval between requests.
     private TimeSpan OnRateLimited(TimeSpan wait) {
         lock (_rateLock) {
-            var until = _now() + wait;
+            var until = Elapsed() + wait;
             if (until > _pausedUntil) _pausedUntil = until;
             _pace.OnRateLimited();
             return _pace.Interval;
         }
     }
+
+    // Time since the client was created, on the monotonic clock.
+    private TimeSpan Elapsed() => _time.GetElapsedTime(_origin);
 
     private void OnAnswered() {
         lock (_rateLock) {
