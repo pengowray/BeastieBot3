@@ -132,10 +132,10 @@ public sealed class NotInReleaseAndListingTests(SiteFactory factory) : IClassFix
     public async Task DoiFoundAtDoiOrgHasItsNote() {
         var html = await _client.GetStringAsync($"/species/{FixtureDb.Woylie}");
         Assert.Contains($"|doi={FixtureDb.WoylieDoi}", Html.Textarea(html, "wikitext-cite"));
-        Assert.Contains("<p class=\"note\">DOI found by checking possible DOIs at doi.org.</p>", html);
+        Assert.Contains("<p class=\"note\">DOI found in Crossref&#x27;s list of IUCN DOIs, or by checking possible DOIs at doi.org.</p>", html);
 
         var about = Html.Text(await _client.GetStringAsync("/about"));
-        Assert.Contains("possible DOIs for the assessment, checked at doi.org, most recently on 30 September 2026", about);
-        Assert.Contains("A note under the citation says when the DOI came from GBIF, Wikidata or doi.org, or when no DOI was found.", about);
+        Assert.Contains("possible DOIs checked at doi.org (most recent check 30 September 2026)", about);
+        Assert.Contains("A note under the citation says when the DOI came from GBIF, Wikidata, Crossref or doi.org, or when no DOI was found.", about);
     }
 }

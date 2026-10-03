@@ -40,7 +40,7 @@ public enum DoiSource {
     Gbif,
     /// From a Wikidata item for the assessment (P356).
     Wikidata,
-    /// Found by checking possible DOIs for the assessment at doi.org (`iucn resolve-dois`).
+    /// Found by `iucn resolve-dois`: in Crossref's list of IUCN DOIs, or by checking possible DOIs at doi.org.
     Resolved,
 }
 

@@ -176,7 +176,7 @@ public static class SiteText {
     // Taxon page: notes about the wikitext
     public const string DoiGbif = "DOI from GBIF's copy of the IUCN checklist.";
     public const string DoiWikidata = "DOI from Wikidata.";
-    public const string DoiResolved = "DOI found by checking possible DOIs at doi.org.";
+    public const string DoiResolved = "DOI found in Crossref's list of IUCN DOIs, or by checking possible DOIs at doi.org.";
     public const string NoDoi = "No DOI found in IUCN's citation text, GBIF or Wikidata. {{cite iucn}} works without a DOI.";
     public const string AuthorsUnsplit = "Check these author names, given exactly as IUCN wrote them:";
     /// versionNote: VersionNote's text ("Replaced by the errata version"), added as a sentence.

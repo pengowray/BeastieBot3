@@ -100,9 +100,9 @@
         <li>IUCN's own citation text, which includes a DOI for about 12% of assessments</li>
         <li>GBIF's copy of the IUCN checklist</li>
         <li>Wikidata</li>
-        <li>possible DOIs for the assessment, checked at doi.org@(Model.DoiCheckedDate is null ? "" : ", most recently on " + Model.DoiCheckedDate)</li>
+        <li>Crossref's list of the DOIs IUCN has registered, and for recent assessments missing from it, possible DOIs checked at doi.org@(Model.DoiCheckedDate is null ? "" : " (most recent check " + Model.DoiCheckedDate + ")")</li>
     </ol>
-    <p>A note under the citation says when the DOI came from GBIF, Wikidata or doi.org, or when no DOI was found. {{cite iucn}} works without a DOI.</p>
+    <p>A note under the citation says when the DOI came from GBIF, Wikidata, Crossref or doi.org, or when no DOI was found. {{cite iucn}} works without a DOI.</p>
     <p><strong>Access date.</strong> By default, <code>|access-date=</code> is the date this site downloaded the details of the assessment from the IUCN Red List API@(Model.ApiDateRange is null ? "" : ", " + Model.ApiDateRange). If you check the assessment on the IUCN Red List website yourself, choose today's date. This site gives today's date in UTC. You can also leave the access date out.</p>
     <p><strong>Citation options.</strong> On each taxon page you can choose:</p>
     <ul>
