@@ -73,7 +73,13 @@ internal sealed class CommonNameReportCommand : AsyncCommand<CommonNameReportCom
 
         AnsiConsole.MarkupLine($"[blue]Common name store:[/] {commonNameDbPath}");
 
-        using var store = CommonNameStore.Open(commonNameDbPath);
+        if (!File.Exists(commonNameDbPath)) {
+            AnsiConsole.MarkupLine("[yellow]Database does not exist. Run 'common-names init' first.[/]");
+            return 1;
+        }
+
+        // Reports only read the store, so it is opened without the schema work Open does.
+        using var store = CommonNameStore.OpenReadOnly(commonNameDbPath);
 
         var reportType = settings.ReportType.ToLowerInvariant();
 

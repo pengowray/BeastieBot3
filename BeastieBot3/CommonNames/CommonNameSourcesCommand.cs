@@ -69,7 +69,8 @@ internal sealed class CommonNameSourcesCommand : AsyncCommand<CommonNameSourcesC
             return Task.FromResult(1);
         }
 
-        using var store = CommonNameStore.Open(commonNameDbPath);
+        // This command only reads the store, so it is opened without the schema work Open does.
+        using var store = CommonNameStore.OpenReadOnly(commonNameDbPath);
         var importRuns = store.GetImportRunSummaries();
         var importRunsByType = new Dictionary<string, ImportRunSummary>(StringComparer.OrdinalIgnoreCase);
         foreach (var run in importRuns) {

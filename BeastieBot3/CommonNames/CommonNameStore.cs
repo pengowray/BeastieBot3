@@ -934,6 +934,14 @@ internal sealed class CommonNameStore : SqliteStore {
     /// </summary>
     public IReadOnlyDictionary<string, SourceReplacement> GetSourceReplacements() {
         var results = new Dictionary<string, SourceReplacement>(StringComparer.OrdinalIgnoreCase);
+        // A store written before the table was added, opened read-only (OpenReadOnly does no
+        // schema work), has no source_replacements table: no source has been replaced in it.
+        using (var exists = _connection.CreateCommand()) {
+            exists.CommandText = "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'source_replacements'";
+            if (exists.ExecuteScalar() is null) {
+                return results;
+            }
+        }
         using var command = _connection.CreateCommand();
         command.CommandText =
             """
