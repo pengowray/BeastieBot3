@@ -23,6 +23,8 @@
         <meta name="robots" content="noindex">
     }
     <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    @* Not deferred: theme.js sets the theme chosen in this browser before the page is drawn. *@
+    <script src="~/theme.js" asp-append-version="true"></script>
     <link rel="stylesheet" href="~/site.css" asp-append-version="true">
     <script src="~/site.js" asp-append-version="true" defer></script>
 </head>
@@ -37,6 +39,17 @@
             <nav class="site-nav" aria-label="Site">
                 <a href="/about">@SiteText.NavAbout</a>
             </nav>
+            @* Hidden until theme.js runs (site.css), so a browser without JavaScript has no control
+               that does nothing. The server always selects System: the choice is made in the browser,
+               so every visitor gets the same page from the output cache. *@
+            <div class="theme-control">
+                <label for="theme-select">@SiteText.ThemeLabel</label>
+                <select id="theme-select" autocomplete="off">
+                    <option value="system" selected>@SiteText.ThemeSystem</option>
+                    <option value="light">@SiteText.ThemeLight</option>
+                    <option value="dark">@SiteText.ThemeDark</option>
+                </select>
+            </div>
         </div>
     </header>
     <main id="main" class="wrap" tabindex="-1">

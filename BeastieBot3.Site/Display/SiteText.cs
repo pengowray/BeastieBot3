@@ -15,6 +15,13 @@ public static class SiteText {
     public const string FooterLine1 = "This site is unofficial and is not affiliated with or endorsed by IUCN.";
     public const string SourceCode = "Source code";
 
+    // Layout: theme control in the header. theme.js shows it and keeps the choice in the browser;
+    // without JavaScript it stays hidden and the site follows the system setting.
+    public const string ThemeLabel = "Theme";
+    public const string ThemeSystem = "System";
+    public const string ThemeLight = "Light";
+    public const string ThemeDark = "Dark";
+
     // Home page
     public const string SearchLabel = "Search for a taxon";
     public const string SearchPlaceholder = "Scientific name, common name or synonym";
