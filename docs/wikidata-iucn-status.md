@@ -90,8 +90,8 @@ Editing `iucn-status.yml` changes the site's commands after the next `site build
 The public site also gives QuickStatements commands for a taxon item's IUCN conservation status
 (`WikidataStatusEdit` in `BeastieBot3.Shared`; see "IUCN conservation status on Wikidata" in
 `docs/public-site.md`). A reader runs them in QuickStatements with their own Wikidata account. The
-site's commands follow this plan where QuickStatements can express it, and differ from it in these
-ways:
+site's commands are based on this plan. They differ from it where QuickStatements cannot do what
+the plan does, and where the site follows its own rules:
 
 - **Which statements count.** The dry run compares the item's best-ranked P141 statements,
   whatever their references cite (`IucnStatusEditPlanner.BestRanked`). The site compares and
@@ -101,20 +101,21 @@ ways:
   takes the item's best rank over every statement that is not deprecated, whatever it cites, and
   never removes a normal-rank statement when the item has a preferred one.
 - **Rank.** QuickStatements v1 cannot set a statement's rank or change its value. The site's
-  Replace adds a new statement and removes, by statement id, the IUCN statements at the item's
-  best rank that have another value. The dry run's `replace` variant overwrites the value of the
-  first best-ranked statement. The site's Keep adds a new statement and lists the ranks that the
-  reader sets by hand. The dry run's `preferred` variant sets the ranks in its own edit. The site
+  Replace adds the IUCN value (or a reference to the statement that already has it) and removes,
+  by statement id, the IUCN statements at the item's best rank that have another value. The dry run's `replace` variant overwrites the value of the
+  first best-ranked statement. The site's Keep adds the IUCN value in the same way, removes
+  nothing, and lists the ranks that the reader sets by hand. The dry run's `preferred` variant sets the ranks in its own edit. The site
   shows Keep first when the item has a statement at preferred rank, and Replace first otherwise.
   In the dry run, `rank_variants` chooses which variants are planned.
 - **References.** The site adds one reference: stated in (P248) the assessment's item when one
   exists, IUCN taxon ID (P627), reference URL (P854) of the assessment page, and retrieved (P813).
-  It has no stated in for the release, because the site has no item for the release. It adds no
+  It never cites a release item: when `WikidataStatusEdit` was written, Wikidata had no item
+  for release 2026-1. It adds no
   reference to a statement that already has one with the taxon's IUCN taxon ID or stated in the
   assessment's item. The site's status commands never create an assessment item. The site offers
   the commands that create one in its `{{cite Q}}` part.
 - **Which taxa.** The site gives commands only when the taxon's item states the taxon's IUCN taxon
-  ID at a rank that is not deprecated, and no other item states that id. So the site gives no
+  ID at a rank that is not deprecated, and no other item states that id at any rank. So the site gives no
   commands for three kinds of link that the dry run puts in tiers C and D: an item matched by
   name, an id stated on several items, and an id stated only at deprecated rank. The site never
   adds or deprecates an IUCN taxon ID.
@@ -122,8 +123,7 @@ ways:
   two or more statements, have the IUCN value, because QuickStatements finds the statement that a
   reference goes on by its value.
 
-Both use the same P141 values (`WikidataStatusValues`). `IucnStatusEditPlanner` does not apply the
-site's rule about statements that cite IUCN.
+Both use the same P141 values (`WikidataStatusValues`).
 
 ## Tiers
 

@@ -238,8 +238,8 @@ subspecies, varieties and subpopulations have. Steps 1 to 4 apply to every other
    (`CommonNameStore.GetSourcePriority`; see the chooser below): Wikipedia article title,
    Wikipedia taxobox, Wikidata label, IUCN main name, other IUCN names, other Wikidata names,
    Catalogue of Life. The taxon whose best source comes first may use the name. If two or more
-   taxa have their best source at the same place in that order, the species may use the name, and
-   if the species is not one of them, no taxon may use it.
+   taxa tie for first place, the species may use the name when it is one of them, and otherwise no
+   taxon may use it.
 1. The taxon that has the name from the highest-priority source may use it, unless step 2 applies.
    The sources, highest priority first (`AmbiguousNames.KeeperPriority`):
    1. Wikipedia article title
@@ -268,8 +268,8 @@ subspecies, varieties and subpopulations have. Steps 1 to 4 apply to every other
 4. If two or more taxa still have the name at equal priority, the name is skipped for all of them,
    except that a species takes priority over its own subspecies, varieties and subpopulations.
 
-Steps 2 and 4 compare a species with its own subspecies only when an unrelated taxon also has the
-name. Step 0 was added in October 2026. Before it, when a species had a name from its taxobox and
+Steps 2 and 4 compare a species with its own subspecies, varieties and subpopulations only when
+some other taxon, one that is neither the species nor one of them, also has the name. Step 0 was added in October 2026. Before it, when a species had a name from its taxobox and
 its nominate subspecies had the same name as its IUCN main name, step 1 gave the name to the
 subspecies, because step 1 ranks an IUCN main name above a taxobox name. About 30 species lost a
 name to their own subspecies this way, and 13 of them had no English name left (the
@@ -309,7 +309,7 @@ Examples from the store of 3 October 2026:
 
 Until October 2026, the order of the sources in step 1 was the order in which the chooser tries a
 taxon's own names (below), with the Wikipedia taxobox and the Wikidata label before the IUCN main
-name, and there were no steps 0, 2 and 3. On the store of 3 October 2026, the change affected the
+name, and there were no steps 2 and 3. On the store of 3 October 2026, that change affected the
 English name of 313 taxa, counting the chooser's pick from the store without `rules-list.txt`: 84
 taxa gained an English name, 44 lost theirs, and 185 got a different one. These counts were
 measured before step 0 was added.
