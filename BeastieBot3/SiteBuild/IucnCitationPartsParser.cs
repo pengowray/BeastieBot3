@@ -4,7 +4,6 @@ using System.Text.Json;
 using System.Text.RegularExpressions;
 using BeastieBot3.Iucn.Citations;
 using BeastieBot3.Shared.Wikitext;
-using BeastieBot3.WikidataEdits;
 
 // Reads one cached /api/v4/assessment/{id} payload into the IucnCitationParts the public site
 // renders {{cite iucn}} from. Pure: the caller passes the payload, when it was downloaded and,
@@ -177,6 +176,7 @@ internal static class IucnCitationPartsParser {
         }
 
         var authors = ReadAuthors(assessment, authorPrefix, repairAuthorName);
+        var citationText = CleanText(IucnCitationText.StripAccessedOn(citation));
         var parts = new IucnCitationParts {
             TaxonId = taxonId.Value,
             AssessmentId = assessmentId.Value,
@@ -188,7 +188,7 @@ internal static class IucnCitationPartsParser {
             AmendsYear = ParseYear(annotations.Groups["amends"].Value),
             Authors = authors.Names.Select(n => n.Author).ToList(),
             AuthorsEtAl = authors.EtAl,
-            IucnCitationText = CleanText(IucnAssessmentCitationParser.StripAccessedOn(citation)),
+            IucnCitationText = citationText,
             DownloadedAtUtc = downloadedAtUtc,
         };
 

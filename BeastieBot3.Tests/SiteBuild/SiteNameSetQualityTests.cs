@@ -39,6 +39,36 @@ public class SiteNameSetQualityTests {
         Assert.False(names.Add("Sunda slow loris{sfn|Groves|2005|p=122}", "common", "en", "wikipedia"));
     }
 
+    // The build summary's counts. The store repeats IUCN's names, so the same junk name can be
+    // offered twice from one source; it is one name left out.
+    [Fact]
+    public void JunkCommonNames_AreCountedOncePerNameLanguageAndSource() {
+        var names = new SiteNameSet();
+
+        names.Add("Calvert, 1902", "common", "en", "iucn");
+        names.Add("Calvert, 1902", "common", "en", "iucn");
+        names.Add("Calvert, 1902", "common", "en", "col");
+        names.Add("Weil 3 bauch-Graslandmaus", "common", "en", "col");
+
+        Assert.Equal(3, names.JunkCommonNames);
+        Assert.Equal(0, names.RepairedCommonNames);
+    }
+
+    [Fact]
+    public void RepairedCommonNames_AreCountedOnlyWhenAdded() {
+        var names = new SiteNameSet();
+
+        names.Add("Sunda slow loris", "common", "en", "iucn");
+        // The same name as the clean copy from this source: not added.
+        names.Add("Sunda slow loris{sfn|Groves|2005|p=122}", "common", "en", "iucn");
+        names.Add("Sunda slow loris{sfn|Groves|2005|p=122}", "common", "en", "wikipedia");
+        names.Add("Sunda slow loris{sfn|Groves|2005|p=122}", "common", "en", "wikipedia");
+        names.Add("Da Xiong Mao (meaning large bear cat)", "common", "en", "col");
+
+        Assert.Equal(2, names.RepairedCommonNames);
+        Assert.Equal(0, names.JunkCommonNames);
+    }
+
     [Fact]
     public void DigitRule_OnlyAppliesToEnglishNames() {
         var names = new SiteNameSet();
@@ -52,5 +82,6 @@ public class SiteNameSetQualityTests {
         var names = new SiteNameSet();
 
         Assert.True(names.Add("Pholidoscelis polops (Cope", "synonym", null, "col"));
+        Assert.Equal(0, names.JunkCommonNames);
     }
 }

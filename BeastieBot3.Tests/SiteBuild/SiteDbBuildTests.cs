@@ -1,12 +1,11 @@
 using System.IO.Compression;
 using System.Text;
-using System.Text.Json;
 using BeastieBot3.CommonNames;
 using BeastieBot3.Shared.SiteData;
 using BeastieBot3.Shared.Wikitext;
 using BeastieBot3.SiteBuild;
 using Microsoft.Data.Sqlite;
-using Spectre.Console;
+using static BeastieBot3.Tests.SiteBuild.SiteBuildSourceFixture;
 
 namespace BeastieBot3.Tests.SiteBuild;
 
@@ -36,19 +35,9 @@ public sealed class SiteDbBuildTests : IDisposable {
     // The replacement character, written this way so it stays visible in the source.
     private const char Lost = (char)0xFFFD;
 
-    private readonly string _dir = Path.Combine(Path.GetTempPath(), "beastiebot-sitebuild-tests", Guid.NewGuid().ToString("N"));
+    private readonly SiteBuildSourceFixture _sources = new();
 
-    public SiteDbBuildTests() {
-        Directory.CreateDirectory(_dir);
-    }
-
-    public void Dispose() {
-        SqliteConnection.ClearAllPools();
-        try {
-            Directory.Delete(_dir, recursive: true);
-        } catch (IOException) {
-        }
-    }
+    public void Dispose() => _sources.Dispose();
 
     [Fact]
     public void Build_WritesTheSchemaTheSiteReads() {
@@ -60,9 +49,8 @@ public sealed class SiteDbBuildTests : IDisposable {
         Assert.Equal("delete", Scalar(db, "PRAGMA journal_mode"));
 
         // The schema is SiteDbSchema.Ddl exactly.
-        var expected = Path.Combine(_dir, "expected.sqlite");
-        using (var reference = new SqliteConnection($"Data Source={expected};Pooling=False")) {
-            reference.Open();
+        var expected = _sources.PathOf("expected.sqlite");
+        using (var reference = OpenWritable(expected)) {
             Execute(reference, SiteDbSchema.Ddl);
         }
         using (var reference = OpenReadOnly(expected)) {
@@ -246,7 +234,7 @@ public sealed class SiteDbBuildTests : IDisposable {
 
     [Fact]
     public void Build_RemovesJournalFilesLeftBesideTheOldDatabase() {
-        var output = Path.Combine(_dir, "site.sqlite");
+        var output = _sources.PathOf("site.sqlite");
         File.WriteAllText(output, "old database");
         File.WriteAllText(output + "-journal", "stale journal");
         File.WriteAllText(output + "-wal", "stale wal");
@@ -261,11 +249,10 @@ public sealed class SiteDbBuildTests : IDisposable {
 
     [Fact]
     public void Build_ThatFails_LeavesTheOldDatabaseAndNoTemporaryFile() {
-        var output = Path.Combine(_dir, "site.sqlite");
+        var output = _sources.PathOf("site.sqlite");
         File.WriteAllText(output, "old database");
-        var brokenCache = Path.Combine(_dir, "broken-cache.sqlite");
-        using (var connection = new SqliteConnection($"Data Source={brokenCache};Pooling=False")) {
-            connection.Open();
+        var brokenCache = _sources.PathOf("broken-cache.sqlite");
+        using (var connection = OpenWritable(brokenCache)) {
             Execute(connection, "CREATE TABLE unrelated (x INTEGER);");
         }
         var inputs = Inputs(output) with { ApiCache = brokenCache };
@@ -278,7 +265,7 @@ public sealed class SiteDbBuildTests : IDisposable {
 
     [Fact]
     public void Build_ThatIsCancelled_LeavesTheOldDatabase() {
-        var output = Path.Combine(_dir, "site.sqlite");
+        var output = _sources.PathOf("site.sqlite");
         File.WriteAllText(output, "old database");
         using var cancelled = new CancellationTokenSource();
         cancelled.Cancel();
@@ -292,18 +279,18 @@ public sealed class SiteDbBuildTests : IDisposable {
     // ------------------------------------------------------------ the build
 
     private string Build() {
-        var output = Path.Combine(_dir, "site.sqlite");
+        var output = _sources.PathOf("site.sqlite");
         new SiteDbBuild(Inputs(output), QuietConsole()).Run(CancellationToken.None);
         return output;
     }
 
     private SiteBuildInputs Inputs(string output) {
-        var iucn = Path.Combine(_dir, "iucn.sqlite");
-        var cache = Path.Combine(_dir, "cache.sqlite");
-        var names = Path.Combine(_dir, "common_names.sqlite");
-        var rules = Path.Combine(_dir, "rules-list.txt");
-        var gbif = Path.Combine(_dir, "iucn-checklist-2026-07-28.zip");
-        var colDir = Path.Combine(_dir, "col");
+        var iucn = _sources.PathOf("iucn.sqlite");
+        var cache = _sources.PathOf("cache.sqlite");
+        var names = _sources.PathOf("common_names.sqlite");
+        var rules = _sources.PathOf("rules-list.txt");
+        var gbif = _sources.PathOf("iucn-checklist-2026-07-28.zip");
+        var colDir = _sources.PathOf("col");
         if (!File.Exists(iucn)) {
             WriteIucn(iucn);
             WriteCache(cache);
@@ -319,10 +306,10 @@ public sealed class SiteDbBuildTests : IDisposable {
             ApiCache = cache,
             CommonNames = names,
             RulesList = rules,
-            WikidataCache = Path.Combine(_dir, "missing-wikidata.sqlite"),
+            WikidataCache = _sources.PathOf("missing-wikidata.sqlite"),
             GbifChecklist = gbif,
             // Only the file name is read, for the release.
-            ColDatabase = Path.Combine(_dir, "col_coldp_COL26.7_XR.sqlite"),
+            ColDatabase = _sources.PathOf("col_coldp_COL26.7_XR.sqlite"),
             ColDir = colDir,
             Output = output,
         };
@@ -374,72 +361,24 @@ public sealed class SiteDbBuildTests : IDisposable {
         }
     }
 
-    private static IAnsiConsole QuietConsole() => AnsiConsole.Create(new AnsiConsoleSettings {
-        Out = new AnsiConsoleOutput(TextWriter.Null),
-        Interactive = InteractionSupport.No,
-    });
-
     // ------------------------------------------------------------ source fixtures
 
-    private static void WriteIucn(string path) {
-        using var c = new SqliteConnection($"Data Source={path};Pooling=False");
-        c.Open();
-        Execute(c, """
-            CREATE TABLE import_metadata (id INTEGER PRIMARY KEY, filename TEXT NOT NULL, redlist_version TEXT NOT NULL, started_at TEXT NOT NULL, ended_at TEXT);
-            INSERT INTO import_metadata VALUES (1, '2026-1/a.zip', '2026-1', '2026-08-14', NULL);
-            CREATE TABLE taxonomy_html (import_id INTEGER, taxonId INTEGER, scientificName TEXT, kingdomName TEXT, phylumName TEXT,
-                className TEXT, orderName TEXT, familyName TEXT, genusName TEXT, speciesName TEXT, infraType TEXT, infraName TEXT,
-                infraAuthority TEXT, subpopulationName TEXT, authority TEXT, taxonomicNotes TEXT);
-            INSERT INTO taxonomy_html VALUES
+    private static void WriteIucn(string path) =>
+        WriteIucnCsv(path, "2026-1", """
                 (1, 22823, 'Ursus maritimus', 'ANIMALIA', 'CHORDATA', 'MAMMALIA', 'CARNIVORA', 'URSIDAE', 'Ursus', 'maritimus', NULL, NULL, NULL, NULL, 'Phipps, 1774', '<p>NARRATIVE notes</p>'),
                 (1, 900001, 'Ursus maritimus ssp. testus', 'ANIMALIA', 'CHORDATA', 'MAMMALIA', 'CARNIVORA', 'URSIDAE', 'Ursus', 'maritimus', 'subspecies', 'testus', NULL, NULL, 'Tester &amp; Other, 1999', NULL),
                 (1, 900002, 'Ursus maritimus Test subpopulation', 'ANIMALIA', 'CHORDATA', 'MAMMALIA', 'CARNIVORA', 'URSIDAE', 'Ursus', 'maritimus', NULL, NULL, NULL, 'Test subpopulation', 'Phipps, 1774', NULL),
-                (1, 900003, 'Ursus nemo', 'ANIMALIA', 'CHORDATA', 'MAMMALIA', 'CARNIVORA', 'URSIDAE', 'Ursus', 'nemo', NULL, NULL, NULL, NULL, NULL, NULL);
-            CREATE TABLE assessments_html (import_id INTEGER, assessmentId INTEGER, taxonId INTEGER, scientificName TEXT, redlistCategory TEXT,
-                redlistCriteria TEXT, yearPublished TEXT, assessmentDate TEXT, criteriaVersion TEXT, language TEXT, rationale TEXT,
-                populationTrend TEXT, possiblyExtinct TEXT, possiblyExtinctInTheWild TEXT, scopes TEXT);
-            INSERT INTO assessments_html VALUES
+                (1, 900003, 'Ursus nemo', 'ANIMALIA', 'CHORDATA', 'MAMMALIA', 'CARNIVORA', 'URSIDAE', 'Ursus', 'nemo', NULL, NULL, NULL, NULL, NULL, NULL)
+            """, """
                 (1, 14871490, 22823, 'Ursus maritimus', 'Vulnerable', 'A3c', '2015', '2015-08-27 00:00:00 UTC', '3.1', 'English', 'NARRATIVE rationale', 'Unknown', 'false', 'false', 'Global'),
                 (1, 217912462, 22823, 'Ursus maritimus', 'Vulnerable', 'A3c', '2025', '2022-12-09 00:00:00 UTC', '3.1', 'English', 'NARRATIVE', 'Stable', 'false', 'false', 'Europe'),
                 (1, 900101, 900001, 'Ursus maritimus ssp. testus', 'Critically Endangered', 'D', '2020', '2020-01-01 00:00:00 UTC', '3.1', 'English', NULL, NULL, 'true', 'false', 'Global'),
                 (1, 900102, 900002, 'Ursus maritimus Test subpopulation', 'Endangered', NULL, '2019', '2019-05-05 00:00:00 UTC', '3.1', 'English', NULL, 'Decreasing', 'false', 'false', 'Global & Europe'),
-                (1, 900103, 900003, 'Ursus nemo', 'Least Concern', NULL, '2023', '2023-01-01 00:00:00 UTC', '3.1', 'English', NULL, NULL, 'false', 'false', NULL);
+                (1, 900103, 900003, 'Ursus nemo', 'Least Concern', NULL, '2023', '2023-01-01 00:00:00 UTC', '3.1', 'English', NULL, NULL, 'false', 'false', NULL)
             """);
-    }
-
-    private static string Scope(string code, string description) =>
-        $$"""[{"description":{"en":"{{description}}"},"code":"{{code}}"}]""";
-
-    private static string Header(long id, long taxonId, bool latest, string? year, string date, string code, string scopes) =>
-        $$"""{"assessment_id":{{id}},"sis_taxon_id":{{taxonId}},"latest":{{(latest ? "true" : "false")}},"year_published":{{(year is null ? "null" : $"\"{year}\"")}},"assessment_date":"{{date}}","red_list_category_code":"{{code}}","criteria":null,"possibly_extinct":false,"possibly_extinct_in_the_wild":false,"scopes":{{scopes}}}""";
-
-    private static string Payload(long id, long taxonId, string year, string citation, string assessor, int people, string version, string? trend, string scopes) =>
-        JsonSerializer.Serialize(new Dictionary<string, object?> {
-            ["assessment_id"] = id,
-            ["sis_taxon_id"] = taxonId,
-            ["year_published"] = year,
-            ["latest"] = false,
-            ["citation"] = citation,
-            ["taxon"] = new Dictionary<string, object?> { ["sis_id"] = taxonId, ["scientific_name"] = "Ursus maritimus", ["subpopulation_name"] = null },
-            ["credits"] = new[] { new Dictionary<string, object?> {
-                ["credit_type_name"] = "assessor", ["full"] = assessor, ["value"] = Enumerable.Range(1, people).Select(i => $"v{i}").ToArray(),
-            } },
-            ["errata"] = Array.Empty<object>(),
-            ["scopes"] = JsonSerializer.Deserialize<JsonElement>(scopes),
-            ["red_list_category"] = new Dictionary<string, object?> { ["version"] = version },
-            ["population_trend"] = trend is null ? null : new Dictionary<string, object?> { ["description"] = new Dictionary<string, string> { ["en"] = trend } },
-            ["documentation"] = new Dictionary<string, string> { ["rationale"] = "NARRATIVE rationale" },
-        });
 
     private static void WriteCache(string path) {
-        using var c = new SqliteConnection($"Data Source={path};Pooling=False");
-        c.Open();
-        Execute(c, """
-            CREATE TABLE taxa (id INTEGER PRIMARY KEY, root_sis_id INTEGER NOT NULL UNIQUE, downloaded_at TEXT NOT NULL, json TEXT NOT NULL);
-            CREATE TABLE assessments (id INTEGER PRIMARY KEY, assessment_id INTEGER NOT NULL UNIQUE, sis_id INTEGER NOT NULL, downloaded_at TEXT NOT NULL, json TEXT NOT NULL);
-            CREATE TABLE taxa_lookup (sis_id INTEGER NOT NULL, taxa_id INTEGER NOT NULL, root_sis_id INTEGER NOT NULL, scope TEXT NOT NULL, PRIMARY KEY (sis_id, taxa_id));
-            """);
-        var global = Scope("1", "Global");
+        var global = GlobalScope;
         var europe = Scope("2", "Europe");
         var polarBear = $$"""
             {"sis_id":22823,"taxon":{"sis_id":22823,"scientific_name":"Ursus maritimus","species_taxa":[],
@@ -448,65 +387,61 @@ public sealed class SiteDbBuildTests : IDisposable {
               "synonyms":[{"name":"Thalarctos maritimus (Phipps, 1774)","genus_name":"Thalarctos","species_name":"maritimus","species_author":"(Phipps, 1774)","infra_type":null,"infra_name":null,"subpopulation_name":null}],
               "subpopulation_taxa":[{"sis_id":900002,"scientific_name":"Ursus maritimus Test subpopulation","common_names":[{"main":true,"name":"Test Bear","language":"eng"}],"synonyms":[]}]},
              "assessments":[
-               {{Header(PolarBearEurope, PolarBear, true, "2025", "2022-12-09T00:00:00.000+00:00", "VU", europe)}},
-               {{Header(PolarBearGlobal, PolarBear, true, "2015", "2015-08-27T01:00:00.000+01:00", "VU", global)}},
-               {{Header(PolarBear1996, PolarBear, false, "1996", "1996-08-01T01:00:00.000+01:00", "LR/cd", global)}},
-               {{Header(PolarBear2005, PolarBear, false, "2005", "2005-01-01T00:00:00.000+00:00", "VU", global)}},
-               {{Header(PolarBear2006Amended, PolarBear, false, "2006", "2005-01-01T00:00:00.000+00:00", "VU", global)}},
-               {{Header(PolarBear2008, PolarBear, false, "2008", "2008-06-30T00:00:00.000+00:00", "VU", global)}},
-               {{Header(PolarBear2008Errata, PolarBear, false, "2008", "2008-06-30T00:00:00.000+00:00", "VU", global)}},
-               {{Header(PolarBear2008Errata2, PolarBear, false, "2008", "2008-06-30T00:00:00.000+00:00", "VU", global)}},
-               {{Header(PolarBearDraft, PolarBear, false, null, "2027-01-01T00:00:00.000+00:00", "EN", global)}},
-               {{Header(PolarBearNoScope, PolarBear, false, "2001", "2001-01-01T00:00:00.000+00:00", "EN", "[]")}}]}
+               {{Header(PolarBearEurope, PolarBear, true, "2025", "VU", "2022-12-09T00:00:00.000+00:00", europe)}},
+               {{Header(PolarBearGlobal, PolarBear, true, "2015", "VU", "2015-08-27T01:00:00.000+01:00", global)}},
+               {{Header(PolarBear1996, PolarBear, false, "1996", "LR/cd", "1996-08-01T01:00:00.000+01:00", global)}},
+               {{Header(PolarBear2005, PolarBear, false, "2005", "VU", "2005-01-01T00:00:00.000+00:00", global)}},
+               {{Header(PolarBear2006Amended, PolarBear, false, "2006", "VU", "2005-01-01T00:00:00.000+00:00", global)}},
+               {{Header(PolarBear2008, PolarBear, false, "2008", "VU", "2008-06-30T00:00:00.000+00:00", global)}},
+               {{Header(PolarBear2008Errata, PolarBear, false, "2008", "VU", "2008-06-30T00:00:00.000+00:00", global)}},
+               {{Header(PolarBear2008Errata2, PolarBear, false, "2008", "VU", "2008-06-30T00:00:00.000+00:00", global)}},
+               {{Header(PolarBearDraft, PolarBear, false, null, "EN", "2027-01-01T00:00:00.000+00:00", global)}},
+               {{Header(PolarBearNoScope, PolarBear, false, "2001", "EN", "2001-01-01T00:00:00.000+00:00", "[]")}}]}
             """;
         var subspecies = $$"""
             {"sis_id":900001,"taxon":{"sis_id":900001,"scientific_name":"Ursus maritimus ssp. testus","species_taxa":[{"sis_id":22823}],"common_names":[],"synonyms":[]},
-             "assessments":[{{Header(SubspeciesLatest, Subspecies, true, "2020", "2020-01-01T00:00:00.000+00:00", "CR", global)}}]}
+             "assessments":[{{Header(SubspeciesLatest, Subspecies, true, "2020", "CR", "2020-01-01T00:00:00.000+00:00", global)}}]}
             """;
-        Execute(c, "INSERT INTO taxa (id, root_sis_id, downloaded_at, json) VALUES (1, 22823, '2026-08-18T00:00:00Z', @json)", ("@json", polarBear));
-        Execute(c, "INSERT INTO taxa (id, root_sis_id, downloaded_at, json) VALUES (2, 900001, '2026-08-18T00:00:00Z', @json)", ("@json", subspecies));
-        Execute(c, "INSERT INTO taxa_lookup VALUES (900002, 1, 22823, 'subpopulation')");
 
-        var payloads = new (long Id, long Taxon, string Downloaded, string Json)[] {
-            (PolarBearGlobal, PolarBear, "2026-08-21T03:23:18.6842353Z", Payload(PolarBearGlobal, PolarBear, "2015",
-                "Wiig, Ø. & Amstrup, S. 2015. Ursus maritimus. The IUCN Red List of Threatened Species 2015: e.T22823A14871490. https://dx.doi.org/10.2305/IUCN.UK.2015-4.RLTS.T22823A14871490.en. Accessed on 21 August 2026.",
-                "Wiig, Ø. & Amstrup, S.", 2, "3.1", "Unknown", global)),
-            (PolarBearEurope, PolarBear, "2026-08-22T00:00:00Z", Payload(PolarBearEurope, PolarBear, "2025",
-                "Wiig, Ø. 2025. Ursus maritimus (Europe assessment). The IUCN Red List of Threatened Species 2025: e.T22823A217912462. Accessed on 22 August 2026.",
-                "Wiig, Ø.", 1, "3.1", "Stable", europe)),
-            (PolarBear1996, PolarBear, "2026-08-24T03:15:26.3246382Z", Payload(PolarBear1996, PolarBear, "1996",
-                "Polar Bear Specialist Group 1996. Ursus maritimus. The IUCN Red List of Threatened Species 1996: e.T22823A9390941. Accessed on 24 August 2026.",
-                "Polar Bear Specialist Group", 1, "2.3", null, global)),
-            // Read before the 2006 assessment that has the name right, so it waits for the name pool.
-            (PolarBear2005, PolarBear, "2026-08-23T00:00:00Z", Payload(PolarBear2005, PolarBear, "2005",
-                "Kry?tufek, B. 2005. Ursus maritimus. The IUCN Red List of Threatened Species 2005: e.T22823A9390905. Accessed on 23 August 2026.",
-                "Kry?tufek, B.", 1, "3.1", null, global)),
-            (PolarBear2006Amended, PolarBear, "2026-08-23T00:00:00Z", Payload(PolarBear2006Amended, PolarBear, "2006",
-                "Kryštufek, B. 2006. Ursus maritimus (amended version of 2005 assessment). The IUCN Red List of Threatened Species 2006: e.T22823A9390906. Accessed on 23 August 2026.",
-                "Kryštufek, B.", 1, "3.1", null, global)),
-            (PolarBear2008, PolarBear, "2026-08-23T00:00:00Z", Payload(PolarBear2008, PolarBear, "2008",
-                "Wiig, Ø. 2008. Ursus maritimus. The IUCN Red List of Threatened Species 2008: e.T22823A9390950. Accessed on 23 August 2026.",
-                "Wiig, Ø.", 1, "3.1", null, global)),
-            (PolarBear2008Errata, PolarBear, "2026-08-23T00:00:00Z", Payload(PolarBear2008Errata, PolarBear, "2008",
-                $"Wiig, Ø. & Mo{Lost}brucker, H. 2008. Ursus maritimus (errata version published in 2009). The IUCN Red List of Threatened Species 2008: e.T22823A9390951. Accessed on 23 August 2026.",
-                $"Wiig, Ø. & Mo{Lost}brucker, H.", 2, "3.1", null, global)),
-            // Both 2008 assessments are candidates; they are settled after every payload is read.
-            (PolarBear2008Errata2, PolarBear, "2026-08-23T00:00:00Z", Payload(PolarBear2008Errata2, PolarBear, "2008",
-                "Wiig, Ø. 2008. Ursus maritimus (errata version published in 2010). The IUCN Red List of Threatened Species 2008: e.T22823A9390952. Accessed on 23 August 2026.",
-                "Wiig, Ø.", 1, "3.1", null, global)),
-        };
-        foreach (var (id, taxon, downloaded, json) in payloads) {
-            Execute(c, "INSERT INTO assessments (assessment_id, sis_id, downloaded_at, json) VALUES (@id, @taxon, @downloaded, @json)",
-                ("@id", id), ("@taxon", taxon), ("@downloaded", downloaded), ("@json", json));
-        }
+        const string name = "Ursus maritimus";
+        WriteApiCache(path,
+            new[] { new CachedTaxonRecord(1, PolarBear, polarBear), new CachedTaxonRecord(2, Subspecies, subspecies) },
+            new[] {
+                new CachedAssessment(PolarBearGlobal, PolarBear, "2026-08-21T03:23:18.6842353Z", Payload(PolarBearGlobal, PolarBear, name, "2015",
+                    "Wiig, Ø. & Amstrup, S. 2015. Ursus maritimus. The IUCN Red List of Threatened Species 2015: e.T22823A14871490. https://dx.doi.org/10.2305/IUCN.UK.2015-4.RLTS.T22823A14871490.en. Accessed on 21 August 2026.",
+                    "Wiig, Ø. & Amstrup, S.", 2, "3.1", "Unknown", global)),
+                new CachedAssessment(PolarBearEurope, PolarBear, "2026-08-22T00:00:00Z", Payload(PolarBearEurope, PolarBear, name, "2025",
+                    "Wiig, Ø. 2025. Ursus maritimus (Europe assessment). The IUCN Red List of Threatened Species 2025: e.T22823A217912462. Accessed on 22 August 2026.",
+                    "Wiig, Ø.", 1, "3.1", "Stable", europe)),
+                new CachedAssessment(PolarBear1996, PolarBear, "2026-08-24T03:15:26.3246382Z", Payload(PolarBear1996, PolarBear, name, "1996",
+                    "Polar Bear Specialist Group 1996. Ursus maritimus. The IUCN Red List of Threatened Species 1996: e.T22823A9390941. Accessed on 24 August 2026.",
+                    "Polar Bear Specialist Group", 1, "2.3", null, global)),
+                // Read before the 2006 assessment that has the name right, so it waits for the name pool.
+                new CachedAssessment(PolarBear2005, PolarBear, "2026-08-23T00:00:00Z", Payload(PolarBear2005, PolarBear, name, "2005",
+                    "Kry?tufek, B. 2005. Ursus maritimus. The IUCN Red List of Threatened Species 2005: e.T22823A9390905. Accessed on 23 August 2026.",
+                    "Kry?tufek, B.", 1, "3.1", null, global)),
+                new CachedAssessment(PolarBear2006Amended, PolarBear, "2026-08-23T00:00:00Z", Payload(PolarBear2006Amended, PolarBear, name, "2006",
+                    "Kryštufek, B. 2006. Ursus maritimus (amended version of 2005 assessment). The IUCN Red List of Threatened Species 2006: e.T22823A9390906. Accessed on 23 August 2026.",
+                    "Kryštufek, B.", 1, "3.1", null, global)),
+                new CachedAssessment(PolarBear2008, PolarBear, "2026-08-23T00:00:00Z", Payload(PolarBear2008, PolarBear, name, "2008",
+                    "Wiig, Ø. 2008. Ursus maritimus. The IUCN Red List of Threatened Species 2008: e.T22823A9390950. Accessed on 23 August 2026.",
+                    "Wiig, Ø.", 1, "3.1", null, global)),
+                new CachedAssessment(PolarBear2008Errata, PolarBear, "2026-08-23T00:00:00Z", Payload(PolarBear2008Errata, PolarBear, name, "2008",
+                    $"Wiig, Ø. & Mo{Lost}brucker, H. 2008. Ursus maritimus (errata version published in 2009). The IUCN Red List of Threatened Species 2008: e.T22823A9390951. Accessed on 23 August 2026.",
+                    $"Wiig, Ø. & Mo{Lost}brucker, H.", 2, "3.1", null, global)),
+                // Both 2008 assessments are candidates; they are settled after every payload is read.
+                new CachedAssessment(PolarBear2008Errata2, PolarBear, "2026-08-23T00:00:00Z", Payload(PolarBear2008Errata2, PolarBear, name, "2008",
+                    "Wiig, Ø. 2008. Ursus maritimus (errata version published in 2010). The IUCN Red List of Threatened Species 2008: e.T22823A9390952. Accessed on 23 August 2026.",
+                    "Wiig, Ø.", 1, "3.1", null, global)),
+            },
+            new[] { new CachedTaxonLookup(Subpopulation, 1, PolarBear, "subpopulation") });
     }
 
     private static void WriteCommonNames(string path) {
         using (CommonNameStore.Open(path)) {
             // Creates the schema.
         }
-        using var c = new SqliteConnection($"Data Source={path};Pooling=False");
-        c.Open();
+        using var c = OpenWritable(path);
         Execute(c, """
             INSERT INTO taxa (id, canonical_name, original_name, rank, kingdom, validity_status, primary_source, primary_source_id, created_at, updated_at) VALUES
                 (1, 'ursus maritimus', 'Ursus maritimus', 'species', 'ANIMALIA', 'valid', 'iucn', '22823', 'x', 'x'),
@@ -530,50 +465,7 @@ public sealed class SiteDbBuildTests : IDisposable {
             """);
     }
 
-    // ------------------------------------------------------------ SQL helpers
-
-    private static SqliteConnection OpenReadOnly(string path) {
-        var connection = new SqliteConnection(new SqliteConnectionStringBuilder {
-            DataSource = path, Mode = SqliteOpenMode.ReadOnly, Pooling = false,
-        }.ConnectionString);
-        connection.Open();
-        return connection;
-    }
-
     private static List<string> SchemaOf(SqliteConnection c) =>
         Rows(c, "SELECT type || ' ' || name || ': ' || COALESCE(sql, '') FROM sqlite_master WHERE name NOT LIKE 'sqlite_%' ORDER BY name")
             .Select(r => (string)r[0]!).ToList();
-
-    private static void Execute(SqliteConnection c, string sql, params (string Name, object? Value)[] parameters) {
-        using var command = c.CreateCommand();
-        command.CommandText = sql;
-        foreach (var (name, value) in parameters) {
-            command.Parameters.AddWithValue(name, value ?? DBNull.Value);
-        }
-        command.ExecuteNonQuery();
-    }
-
-    private static string? Scalar(SqliteConnection c, string sql) {
-        using var command = c.CreateCommand();
-        command.CommandText = sql;
-        return command.ExecuteScalar() is { } value and not DBNull ? Convert.ToString(value, System.Globalization.CultureInfo.InvariantCulture) : null;
-    }
-
-    private static List<object?[]> Rows(SqliteConnection c, string sql, params (string Name, object? Value)[] parameters) {
-        using var command = c.CreateCommand();
-        command.CommandText = sql;
-        foreach (var (name, value) in parameters) {
-            command.Parameters.AddWithValue(name, value ?? DBNull.Value);
-        }
-        using var reader = command.ExecuteReader();
-        var rows = new List<object?[]>();
-        while (reader.Read()) {
-            var row = new object?[reader.FieldCount];
-            for (var i = 0; i < reader.FieldCount; i++) {
-                row[i] = reader.IsDBNull(i) ? null : reader.GetValue(i);
-            }
-            rows.Add(row);
-        }
-        return rows;
-    }
 }

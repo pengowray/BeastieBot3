@@ -156,6 +156,10 @@ internal sealed class SiteBuildStats {
 
     public readonly Dictionary<string, int> NamesByType = new(StringComparer.Ordinal);
     public int CommonNamesEnglish;
+    /// Common names in any language that CommonNameQuality found to be junk (left out of the name
+    /// table), and that it repaired (stored repaired). Counted per taxon by SiteNameSet.
+    public int CommonNamesJunk;
+    public int CommonNamesRepaired;
     public int CommonNameEn;
     public int CommonNameEnUnusable;
     public int CommonNameEnFromRules;

@@ -298,6 +298,8 @@ internal sealed class SiteDbBuild {
                 _stats.CommonNamesEnglish++;
             }
         }
+        _stats.CommonNamesJunk += names.JunkCommonNames;
+        _stats.CommonNamesRepaired += names.RepairedCommonNames;
         // The lists are not needed again.
         taxon.IucnCommonNames = new List<IucnCommonName>();
         taxon.IucnSynonyms = new List<string>();

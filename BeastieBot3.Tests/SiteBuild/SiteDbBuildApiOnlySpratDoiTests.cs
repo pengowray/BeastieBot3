@@ -1,9 +1,7 @@
-using System.Text.Json;
 using BeastieBot3.Shared.SiteData;
 using BeastieBot3.Shared.Wikitext;
 using BeastieBot3.SiteBuild;
-using Microsoft.Data.Sqlite;
-using Spectre.Console;
+using static BeastieBot3.Tests.SiteBuild.SiteBuildSourceFixture;
 
 namespace BeastieBot3.Tests.SiteBuild;
 
@@ -31,19 +29,9 @@ public sealed class SiteDbBuildApiOnlySpratDoiTests : IDisposable {
     private const long WoylieOld2008 = 6143;
     private const string KoalaDoi = "10.2305/IUCN.UK.2016-1.RLTS.T16892A166496779.en";
 
-    private readonly string _dir = Path.Combine(Path.GetTempPath(), "beastiebot-sitebuild-tests", Guid.NewGuid().ToString("N"));
+    private readonly SiteBuildSourceFixture _sources = new();
 
-    public SiteDbBuildApiOnlySpratDoiTests() {
-        Directory.CreateDirectory(_dir);
-    }
-
-    public void Dispose() {
-        SqliteConnection.ClearAllPools();
-        try {
-            Directory.Delete(_dir, recursive: true);
-        } catch (IOException) {
-        }
-    }
+    public void Dispose() => _sources.Dispose();
 
     // ------------------------------------------------------------ taxa not in the release
 
@@ -178,12 +166,11 @@ public sealed class SiteDbBuildApiOnlySpratDoiTests : IDisposable {
 
     [Fact]
     public void Build_WithADoiCacheThatHasNoTable_WarnsAndCarriesOn() {
-        var empty = Path.Combine(_dir, "empty-doi-cache.sqlite");
-        using (var c = new SqliteConnection($"Data Source={empty};Pooling=False")) {
-            c.Open();
+        var empty = _sources.PathOf("empty-doi-cache.sqlite");
+        using (var c = OpenWritable(empty)) {
             Execute(c, "CREATE TABLE something_else (x INTEGER);");
         }
-        var output = Path.Combine(_dir, "site-no-doi.sqlite");
+        var output = _sources.PathOf("site-no-doi.sqlite");
         var stats = new SiteDbBuild(Inputs(output) with { DoiCache = empty }, QuietConsole()).Run(CancellationToken.None);
 
         Assert.Contains(stats.Warnings, w => w.Contains("no doi_check table", StringComparison.Ordinal));
@@ -202,12 +189,27 @@ public sealed class SiteDbBuildApiOnlySpratDoiTests : IDisposable {
             IucnDoiSelector.Select(parts, null, null, null, null, "10.2305/IUCN.UK.2016-1.RLTS.T16893A166496779.en"));
     }
 
+    // ------------------------------------------------------------ common names left out or repaired
+
+    // The koala's record lists an author citation as a name (junk, left out) and a name with a
+    // citation template after it (stored as "Native bear"); the summary counts one of each.
+    [Fact]
+    public void Build_CountsCommonNamesLeftOutAsJunkAndRepaired() {
+        var output = _sources.PathOf("site-names.sqlite");
+        var stats = new SiteDbBuild(Inputs(output), QuietConsole()).Run(CancellationToken.None);
+
+        Assert.Equal((1, 1), (stats.CommonNamesJunk, stats.CommonNamesRepaired));
+        using var db = OpenReadOnly(output);
+        Assert.Equal(new[] { "Koala", "Native bear" },
+            Rows(db, $"SELECT name FROM name WHERE taxon_id = {Koala} AND name_type = 'common' ORDER BY name_id").Select(r => (string)r[0]!));
+    }
+
     // ------------------------------------------------------------ the build
 
     private const long TaxonCount = 5;
 
     private string Build() {
-        var output = Path.Combine(_dir, "site.sqlite");
+        var output = _sources.PathOf("site.sqlite");
         if (!File.Exists(output)) {
             new SiteDbBuild(Inputs(output), QuietConsole()).Run(CancellationToken.None);
         }
@@ -215,10 +217,10 @@ public sealed class SiteDbBuildApiOnlySpratDoiTests : IDisposable {
     }
 
     private SiteBuildInputs Inputs(string output) {
-        var iucn = Path.Combine(_dir, "iucn.sqlite");
-        var cache = Path.Combine(_dir, "cache.sqlite");
-        var sprat = Path.Combine(_dir, "sprat.sqlite");
-        var doiCache = Path.Combine(_dir, "iucn_doi_cache.sqlite");
+        var iucn = _sources.PathOf("iucn.sqlite");
+        var cache = _sources.PathOf("cache.sqlite");
+        var sprat = _sources.PathOf("sprat.sqlite");
+        var doiCache = _sources.PathOf("iucn_doi_cache.sqlite");
         if (!File.Exists(iucn)) {
             WriteIucn(iucn);
             WriteCache(cache);
@@ -234,67 +236,20 @@ public sealed class SiteDbBuildApiOnlySpratDoiTests : IDisposable {
         };
     }
 
-    private static IAnsiConsole QuietConsole() => AnsiConsole.Create(new AnsiConsoleSettings {
-        Out = new AnsiConsoleOutput(TextWriter.Null),
-        Interactive = InteractionSupport.No,
-    });
-
     // ------------------------------------------------------------ source fixtures
 
-    private static void WriteIucn(string path) {
-        using var c = new SqliteConnection($"Data Source={path};Pooling=False");
-        c.Open();
-        Execute(c, """
-            CREATE TABLE import_metadata (id INTEGER PRIMARY KEY, filename TEXT NOT NULL, redlist_version TEXT NOT NULL, started_at TEXT NOT NULL, ended_at TEXT);
-            INSERT INTO import_metadata VALUES (1, '2026-1/a.zip', '2026-1', '2026-08-14', NULL);
-            CREATE TABLE taxonomy_html (import_id INTEGER, taxonId INTEGER, scientificName TEXT, kingdomName TEXT, phylumName TEXT,
-                className TEXT, orderName TEXT, familyName TEXT, genusName TEXT, speciesName TEXT, infraType TEXT, infraName TEXT,
-                infraAuthority TEXT, subpopulationName TEXT, authority TEXT);
-            INSERT INTO taxonomy_html VALUES
-                (1, 15954, 'Panthera pardus', 'ANIMALIA', 'CHORDATA', 'MAMMALIA', 'CARNIVORA', 'FELIDAE', 'Panthera', 'pardus', NULL, NULL, NULL, NULL, '(Linnaeus, 1758)'),
-                (1, 16892, 'Phascolarctos cinereus', 'ANIMALIA', 'CHORDATA', 'MAMMALIA', 'DIPROTODONTIA', 'PHASCOLARCTIDAE', 'Phascolarctos', 'cinereus', NULL, NULL, NULL, NULL, '(Goldfuss, 1817)'),
-                (1, 2790, 'Bettongia penicillata', 'ANIMALIA', 'CHORDATA', 'MAMMALIA', 'DIPROTODONTIA', 'POTOROIDAE', 'Bettongia', 'penicillata', NULL, NULL, NULL, NULL, 'Gray, 1837');
-            CREATE TABLE assessments_html (import_id INTEGER, assessmentId INTEGER, taxonId INTEGER, scientificName TEXT, redlistCategory TEXT,
-                redlistCriteria TEXT, yearPublished TEXT, assessmentDate TEXT, criteriaVersion TEXT, populationTrend TEXT,
-                possiblyExtinct TEXT, possiblyExtinctInTheWild TEXT, scopes TEXT);
-            INSERT INTO assessments_html VALUES
-                (1, 50659089, 15954, 'Panthera pardus', 'Vulnerable', 'A2cd', '2024', '2023-01-01 00:00:00 UTC', '3.1', 'Decreasing', 'false', 'false', 'Global'),
-                (1, 166496779, 16892, 'Phascolarctos cinereus', 'Vulnerable', 'A2bc', '2016', '2014-07-08 00:00:00 UTC', '3.1', 'Decreasing', 'false', 'false', 'Global'),
-                (1, 2790001, 2790, 'Bettongia penicillata', 'Critically Endangered', 'A3e', '2015', '2014-01-01 00:00:00 UTC', '3.1', 'Decreasing', 'false', 'false', 'Global');
+    private static void WriteIucn(string path) =>
+        WriteIucnCsv(path, "2026-1", """
+                (1, 15954, 'Panthera pardus', 'ANIMALIA', 'CHORDATA', 'MAMMALIA', 'CARNIVORA', 'FELIDAE', 'Panthera', 'pardus', NULL, NULL, NULL, NULL, '(Linnaeus, 1758)', NULL),
+                (1, 16892, 'Phascolarctos cinereus', 'ANIMALIA', 'CHORDATA', 'MAMMALIA', 'DIPROTODONTIA', 'PHASCOLARCTIDAE', 'Phascolarctos', 'cinereus', NULL, NULL, NULL, NULL, '(Goldfuss, 1817)', NULL),
+                (1, 2790, 'Bettongia penicillata', 'ANIMALIA', 'CHORDATA', 'MAMMALIA', 'DIPROTODONTIA', 'POTOROIDAE', 'Bettongia', 'penicillata', NULL, NULL, NULL, NULL, 'Gray, 1837', NULL)
+            """, """
+                (1, 50659089, 15954, 'Panthera pardus', 'Vulnerable', 'A2cd', '2024', '2023-01-01 00:00:00 UTC', '3.1', NULL, NULL, 'Decreasing', 'false', 'false', 'Global'),
+                (1, 166496779, 16892, 'Phascolarctos cinereus', 'Vulnerable', 'A2bc', '2016', '2014-07-08 00:00:00 UTC', '3.1', NULL, NULL, 'Decreasing', 'false', 'false', 'Global'),
+                (1, 2790001, 2790, 'Bettongia penicillata', 'Critically Endangered', 'A3e', '2015', '2014-01-01 00:00:00 UTC', '3.1', NULL, NULL, 'Decreasing', 'false', 'false', 'Global')
             """);
-    }
-
-    private static string Scope(string code, string description) =>
-        $$"""[{"description":{"en":"{{description}}"},"code":"{{code}}"}]""";
-
-    private static string Header(long id, long taxonId, bool latest, string year, string code) =>
-        $$"""{"assessment_id":{{id}},"sis_taxon_id":{{taxonId}},"latest":{{(latest ? "true" : "false")}},"year_published":"{{year}}","assessment_date":"{{year}}-01-01T00:00:00.000+00:00","red_list_category_code":"{{code}}","criteria":null,"possibly_extinct":false,"possibly_extinct_in_the_wild":false,"scopes":{{Scope("1", "Global")}}}""";
-
-    private static string Payload(long id, long taxonId, string name, string year, string citation, string assessor) =>
-        JsonSerializer.Serialize(new Dictionary<string, object?> {
-            ["assessment_id"] = id,
-            ["sis_taxon_id"] = taxonId,
-            ["year_published"] = year,
-            ["latest"] = false,
-            ["citation"] = citation,
-            ["taxon"] = new Dictionary<string, object?> { ["sis_id"] = taxonId, ["scientific_name"] = name, ["subpopulation_name"] = null },
-            ["credits"] = new[] { new Dictionary<string, object?> {
-                ["credit_type_name"] = "assessor", ["full"] = assessor, ["value"] = new[] { "v1" },
-            } },
-            ["errata"] = Array.Empty<object>(),
-            ["scopes"] = JsonSerializer.Deserialize<JsonElement>(Scope("1", "Global")),
-            ["red_list_category"] = new Dictionary<string, object?> { ["version"] = "3.1" },
-            ["documentation"] = new Dictionary<string, string> { ["rationale"] = "NARRATIVE rationale" },
-        });
 
     private static void WriteCache(string path) {
-        using var c = new SqliteConnection($"Data Source={path};Pooling=False");
-        c.Open();
-        Execute(c, """
-            CREATE TABLE taxa (id INTEGER PRIMARY KEY, root_sis_id INTEGER NOT NULL UNIQUE, downloaded_at TEXT NOT NULL, json TEXT NOT NULL);
-            CREATE TABLE assessments (id INTEGER PRIMARY KEY, assessment_id INTEGER NOT NULL UNIQUE, sis_id INTEGER NOT NULL, downloaded_at TEXT NOT NULL, json TEXT NOT NULL);
-            CREATE TABLE taxa_lookup (sis_id INTEGER NOT NULL, taxa_id INTEGER NOT NULL, root_sis_id INTEGER NOT NULL, scope TEXT NOT NULL, PRIMARY KEY (sis_id, taxa_id));
-            """);
         var amurLeopard = $$"""
             {"sis_id":15957,"taxon":{"sis_id":15957,"scientific_name":"Panthera pardus ssp. orientalis",
               "species_taxa":[{"sis_id":15954,"scientific_name":"Panthera pardus"}],"subpopulation_taxa":[],"infrarank_taxa":[],
@@ -319,31 +274,25 @@ public sealed class SiteDbBuildApiOnlySpratDoiTests : IDisposable {
         var koala = $$"""
             {"sis_id":16892,"taxon":{"sis_id":16892,"scientific_name":"Phascolarctos cinereus","species_taxa":[],"subpopulation_taxa":[],
               "species":true,"subpopulation":false,"infrarank":false,
-              "common_names":[{"main":true,"name":"Koala","language":"eng"}],"synonyms":[]},
+              "common_names":[{"main":true,"name":"Koala","language":"eng"},{"main":false,"name":"Calvert, 1902","language":"eng"},
+                              {"main":false,"name":"Native bear{sfn|Troughton|1941}","language":"eng"}],"synonyms":[]},
              "assessments":[{{Header(KoalaLatest, Koala, true, "2016", "VU")}}]}
             """;
-        var rows = new[] { (1, AmurLeopard, amurLeopard), (2, WoylieOld, woylieOld), (3, Koala, koala) };
-        foreach (var (id, root, json) in rows) {
-            Execute(c, "INSERT INTO taxa (id, root_sis_id, downloaded_at, json) VALUES (@id, @root, '2026-08-18T00:00:00Z', @json)",
-                ("@id", id), ("@root", root), ("@json", json));
-        }
 
-        var payloads = new (long Id, long Taxon, string Name, string Year, string Citation, string Assessor)[] {
-            (AmurLeopard2016Ne, AmurLeopard, "Panthera pardus ssp. orientalis", "2016", "Stein, A.B. 2016. Panthera pardus ssp. orientalis. The IUCN Red List of Threatened Species 2016: e.T15957A96947390. Accessed on 18 August 2026.", "Stein, A.B."),
-            (AmurLeopard2008, AmurLeopard, "Panthera pardus ssp. orientalis", "2008", "Jackson, P. 2008. Panthera pardus ssp. orientalis. The IUCN Red List of Threatened Species 2008: e.T15957A5333757. Accessed on 18 August 2026.", "Jackson, P."),
-            (KoalaLatest, Koala, "Phascolarctos cinereus", "2016", "Woinarski, J. 2016. Phascolarctos cinereus. The IUCN Red List of Threatened Species 2016: e.T16892A166496779. Accessed on 18 August 2026.", "Woinarski, J."),
-            (LeopardLatest, Leopard, "Panthera pardus", "2024", "Stein, A.B. 2024. Panthera pardus. The IUCN Red List of Threatened Species 2024: e.T15954A50659089. https://dx.doi.org/10.2305/IUCN.UK.2024-1.RLTS.T15954A50659089.en. Accessed on 18 August 2026.", "Stein, A.B."),
-        };
-        foreach (var (id, taxon, name, year, citation, assessor) in payloads) {
-            Execute(c, "INSERT INTO assessments (assessment_id, sis_id, downloaded_at, json) VALUES (@id, @taxon, '2026-08-21T00:00:00Z', @json)",
-                ("@id", id), ("@taxon", taxon), ("@json", Payload(id, taxon, name, year, citation, assessor)));
-        }
+        const string downloaded = "2026-08-21T00:00:00Z";
+        WriteApiCache(path,
+            new[] { new CachedTaxonRecord(1, AmurLeopard, amurLeopard), new CachedTaxonRecord(2, WoylieOld, woylieOld), new CachedTaxonRecord(3, Koala, koala) },
+            new[] {
+                new CachedAssessment(AmurLeopard2016Ne, AmurLeopard, downloaded, Payload(AmurLeopard2016Ne, AmurLeopard, "Panthera pardus ssp. orientalis", "2016", "Stein, A.B. 2016. Panthera pardus ssp. orientalis. The IUCN Red List of Threatened Species 2016: e.T15957A96947390. Accessed on 18 August 2026.", "Stein, A.B.")),
+                new CachedAssessment(AmurLeopard2008, AmurLeopard, downloaded, Payload(AmurLeopard2008, AmurLeopard, "Panthera pardus ssp. orientalis", "2008", "Jackson, P. 2008. Panthera pardus ssp. orientalis. The IUCN Red List of Threatened Species 2008: e.T15957A5333757. Accessed on 18 August 2026.", "Jackson, P.")),
+                new CachedAssessment(KoalaLatest, Koala, downloaded, Payload(KoalaLatest, Koala, "Phascolarctos cinereus", "2016", "Woinarski, J. 2016. Phascolarctos cinereus. The IUCN Red List of Threatened Species 2016: e.T16892A166496779. Accessed on 18 August 2026.", "Woinarski, J.")),
+                new CachedAssessment(LeopardLatest, Leopard, downloaded, Payload(LeopardLatest, Leopard, "Panthera pardus", "2024", "Stein, A.B. 2024. Panthera pardus. The IUCN Red List of Threatened Species 2024: e.T15954A50659089. https://dx.doi.org/10.2305/IUCN.UK.2024-1.RLTS.T15954A50659089.en. Accessed on 18 August 2026.", "Stein, A.B.")),
+            });
     }
 
     // Only the columns `site build-db` reads.
     private static void WriteSprat(string path) {
-        using var c = new SqliteConnection($"Data Source={path};Pooling=False");
-        c.Open();
+        using var c = OpenWritable(path);
         Execute(c, """
             CREATE TABLE import_metadata (id INTEGER PRIMARY KEY AUTOINCREMENT, filename TEXT NOT NULL, redlist_version TEXT NOT NULL, started_at TEXT NOT NULL, ended_at TEXT);
             INSERT INTO import_metadata (filename, redlist_version, started_at) VALUES ('25062026-070407-report.csv', 'x', 'x');
@@ -360,8 +309,7 @@ public sealed class SiteDbBuildApiOnlySpratDoiTests : IDisposable {
     }
 
     private static void WriteDoiCache(string path) {
-        using var c = new SqliteConnection($"Data Source={path};Pooling=False");
-        c.Open();
+        using var c = OpenWritable(path);
         Execute(c, """
             CREATE TABLE doi_check (assessment_id INTEGER PRIMARY KEY, taxon_id INTEGER NOT NULL, doi TEXT, checked_at TEXT NOT NULL,
                 candidates_tried INTEGER NOT NULL);
@@ -370,45 +318,5 @@ public sealed class SiteDbBuildApiOnlySpratDoiTests : IDisposable {
                 (5333757, 15957, '10.2305/IUCN.UK.2008.RLTS.T15958A5333757.en', '2026-09-29T10:00:00.0000000Z', 2),
                 (2790001, 2790, NULL, '2026-09-28T10:00:00.0000000Z', 4);
             """);
-    }
-
-    // ------------------------------------------------------------ SQL helpers
-
-    private static SqliteConnection OpenReadOnly(string path) {
-        var connection = new SqliteConnection(new SqliteConnectionStringBuilder {
-            DataSource = path, Mode = SqliteOpenMode.ReadOnly, Pooling = false,
-        }.ConnectionString);
-        connection.Open();
-        return connection;
-    }
-
-    private static void Execute(SqliteConnection c, string sql, params (string Name, object? Value)[] parameters) {
-        using var command = c.CreateCommand();
-        command.CommandText = sql;
-        foreach (var (name, value) in parameters) {
-            command.Parameters.AddWithValue(name, value ?? DBNull.Value);
-        }
-        command.ExecuteNonQuery();
-    }
-
-    private static string? Scalar(SqliteConnection c, string sql) {
-        using var command = c.CreateCommand();
-        command.CommandText = sql;
-        return command.ExecuteScalar() is { } value and not DBNull ? Convert.ToString(value, System.Globalization.CultureInfo.InvariantCulture) : null;
-    }
-
-    private static List<object?[]> Rows(SqliteConnection c, string sql) {
-        using var command = c.CreateCommand();
-        command.CommandText = sql;
-        using var reader = command.ExecuteReader();
-        var rows = new List<object?[]>();
-        while (reader.Read()) {
-            var row = new object?[reader.FieldCount];
-            for (var i = 0; i < reader.FieldCount; i++) {
-                row[i] = reader.IsDBNull(i) ? null : reader.GetValue(i);
-            }
-            rows.Add(row);
-        }
-        return rows;
     }
 }
