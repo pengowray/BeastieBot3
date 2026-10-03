@@ -87,6 +87,7 @@
         var button = form.querySelector("button[type=\"submit\"]");
         var status = form.querySelector("[data-live-status]");
         var updatedText = section.getAttribute("data-live-updated") || "";
+        var tooManyText = section.getAttribute("data-live-too-many") || "";
         if (button) {
             button.hidden = true;
         }
@@ -120,6 +121,13 @@
 
             fetch(target, { credentials: "same-origin", signal: controller ? controller.signal : undefined })
                 .then(function (response) {
+                    if (response.status === 429 && tooManyText && status) {
+                        // Rate limited: say so in place and bring the button back, rather than
+                        // leaving the page for the error page.
+                        var limited = new Error("HTTP 429");
+                        limited.rateLimited = true;
+                        throw limited;
+                    }
                     if (!response.ok) {
                         throw new Error("HTTP " + response.status);
                     }
@@ -148,6 +156,14 @@
                         return;
                     }
                     section.removeAttribute("aria-busy");
+                    if (error && error.rateLimited) {
+                        window.clearTimeout(statusTimer);
+                        status.textContent = tooManyText;
+                        if (button) {
+                            button.hidden = false;
+                        }
+                        return;
+                    }
                     window.location.assign(target + "#wikitext");
                 });
         }

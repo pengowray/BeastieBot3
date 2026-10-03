@@ -384,6 +384,8 @@ public static class SiteText {
         "This site has no assessments with this id. Check the id, or search for the taxon by name.";
     public const string TooManyHeading = "Too many requests";
     public const string TooManyLine = "Try again in a minute.";
+    /// Status line under the citation options when a live update was refused by the rate limit.
+    public const string WikitextTooManyRequests = "Too many requests: the wikitext was not updated. Wait a minute, then select Update wikitext.";
     public const string ServerErrorHeading = "Server error";
     public static string ServerErrorLine(string contact) => $"Try again in a few minutes. If the error happens again, report it to {contact}.";
     public const string UnavailableHeading = "Site unavailable";

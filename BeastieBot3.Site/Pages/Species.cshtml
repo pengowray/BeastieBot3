@@ -105,7 +105,7 @@
 @if (selected is not null) {
     <section class="wikitext" id="wikitext" aria-labelledby="wikitext-heading"
              data-copied="@SiteText.Copied" data-copy-label="@SiteText.Copy" data-copy-failed="@SiteText.CopyFailed" data-copy-failed-button="@SiteText.CopyFailedButton"
-             data-live-updated="@SiteText.WikitextUpdated" data-options-url="@Model.CurrentOptionsUrl">
+             data-live-updated="@SiteText.WikitextUpdated" data-live-too-many="@SiteText.WikitextTooManyRequests" data-options-url="@Model.CurrentOptionsUrl">
         <h2 id="wikitext-heading">@SiteText.HeadingWikitext</h2>
         @{
             var selectedCategory = IucnCategories.Describe(selected).Label;
