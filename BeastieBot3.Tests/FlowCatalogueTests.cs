@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Linq;
 using BeastieBot3.Web.Commands;
 using BeastieBot3.Web.Flows;
+using BeastieBot3.Web.Status;
 using Xunit;
 
 namespace BeastieBot3.Tests;
@@ -113,5 +114,52 @@ public class FlowCatalogueTests {
         Assert.Null(deploy.Probe);
         Assert.Contains(deploy.GuideSteps, g => g.Contains("deploy/oracle/deploy-db.sh"));
         Assert.True(pipeline.Single(s => s.Commands.Contains("site check-citations")).Optional);
+    }
+
+    // A step's input and output chips are looked up in the Data sources catalogue. An id that is not
+    // there renders as the bare id with no state, and as a missing input it blocks the step.
+    [Fact]
+    public void Every_step_source_id_is_a_data_source() {
+        var known = DataSourceCatalogue.All.Select(d => d.Id).ToHashSet(StringComparer.Ordinal);
+        var unknown = FlowCatalogue.All
+            .SelectMany(f => f.Steps.SelectMany(s => s.InputSourceIds.Concat(s.OutputSourceIds)
+                .Where(id => !known.Contains(id))
+                .Select(id => $"{f.Id}/{s.Id}: {id}")))
+            .ToList();
+        Assert.True(unknown.Count == 0, "No data source: " + string.Join("; ", unknown));
+    }
+
+    // Each public site step shows the file it writes, and the deploy step the file it uploads. The
+    // GBIF checklist and the DOI cache are read when they are there, so they are outputs of the
+    // steps that make them and never inputs: a missing input blocks the step.
+    [Fact]
+    public void Public_site_steps_show_the_files_they_write_and_upload() {
+        var steps = FlowCatalogue.Find("public-site")!.Steps.ToDictionary(s => s.Id);
+        Assert.Equal(new[] { "gbif-checklist" }, steps["site-gbif-download"].OutputSourceIds);
+        Assert.Equal(new[] { "iucn-doi-cache" }, steps["site-resolve-dois"].OutputSourceIds);
+        Assert.Equal(new[] { "site-sqlite" }, steps["site-build-db"].OutputSourceIds);
+        Assert.Equal(new[] { "site-sqlite" }, steps["site-deploy-db"].InputSourceIds);
+
+        var optional = new[] { "gbif-checklist", "iucn-doi-cache" };
+        var asInput = FlowCatalogue.All.SelectMany(f => f.Steps)
+            .Where(s => s.InputSourceIds.Any(optional.Contains))
+            .Select(s => s.Id)
+            .ToList();
+        Assert.Empty(asInput);
+    }
+
+    // The site build's status line names its inputs ("the DOI cache changed after the site database
+    // was built"); where an input has a chip, the chip uses the same name.
+    [Theory]
+    [InlineData(PublicSiteStateReader.IucnInput, "iucn-main")]
+    [InlineData(PublicSiteStateReader.ApiCacheInput, "iucn-api-cache")]
+    [InlineData(PublicSiteStateReader.GbifInput, "gbif-checklist")]
+    [InlineData(PublicSiteStateReader.DoiCacheInput, "iucn-doi-cache")]
+    [InlineData(PublicSiteStateReader.CommonNamesInput, "common-names")]
+    [InlineData(PublicSiteStateReader.WikidataInput, "wikidata-cache")]
+    [InlineData(PublicSiteStateReader.WikipediaInput, "wikipedia-cache")]
+    [InlineData(PublicSiteStateReader.SpratInput, "sprat-sqlite")]
+    public void Public_site_input_names_match_their_data_source_names(string inputName, string sourceId) {
+        Assert.Equal(inputName, DataSourceCatalogue.All.Single(d => d.Id == sourceId).Name);
     }
 }

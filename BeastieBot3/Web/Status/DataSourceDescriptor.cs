@@ -1,4 +1,5 @@
 using BeastieBot3.Configuration;
+using BeastieBot3.Shared.SiteData;
 
 namespace BeastieBot3.Web.Status;
 
@@ -54,6 +55,13 @@ public static class DataSourceCatalogue {
                 : null,
         },
         new DataSourceDescriptor {
+            Id = "gbif-checklist",
+            Name = "GBIF checklist",
+            Kind = "directory",
+            Description = "Folder containing the IUCN Red List checklist zips that IUCN publishes on GBIF, downloaded by `iucn gbif-download`. `iucn resolve-dois` and `site build-db` read the newest zip.",
+            ResolvePath = p => p.GetGbifIucnDir(),
+        },
+        new DataSourceDescriptor {
             Id = "iucn-main",
             Name = "IUCN Red List database",
             Kind = "sqlite",
@@ -99,6 +107,20 @@ public static class DataSourceCatalogue {
             Metrics = new[] {
                 new MetricSpec { Label = "assessments (latest)", Sql = "SELECT COUNT(*) FROM assessments_html" },
                 new MetricSpec { Label = "taxonomy rows",        Sql = "SELECT COUNT(*) FROM taxonomy_html" },
+            },
+        },
+        new DataSourceDescriptor {
+            Id = "iucn-doi-cache",
+            Name = "DOI cache",
+            Kind = "sqlite",
+            Description = "DOIs found by `iucn resolve-dois` for assessments that have no DOI from IUCN's citation, the GBIF checklist or Wikidata. `site build-db` reads its DOIs from this cache.",
+            ResolvePath = p => p.GetIucnDoiCachePath(),
+            // One row per assessment checked, with a NULL doi when none was found. About 0.1s cold
+            // on 148k rows; doi is not indexed, so the two splits read the table too.
+            Metrics = new[] {
+                new MetricSpec { Label = "assessments checked", Sql = "SELECT COUNT(*) FROM doi_check" },
+                new MetricSpec { Label = "DOI found",           Sql = "SELECT COUNT(*) FROM doi_check WHERE doi IS NOT NULL" },
+                new MetricSpec { Label = "no DOI found",        Sql = "SELECT COUNT(*) FROM doi_check WHERE doi IS NULL" },
             },
         },
         new DataSourceDescriptor {
@@ -163,6 +185,23 @@ public static class DataSourceCatalogue {
                 new MetricSpec {
                     Label = "EPBC threatened",
                     Sql = "SELECT COUNT(*) FROM sprat_species WHERE epbc_status IN ('Critically Endangered','Endangered','Vulnerable')",
+                },
+            },
+        },
+        new DataSourceDescriptor {
+            Id = "site-sqlite",
+            Name = "Site database",
+            Kind = "sqlite",
+            Description = "Database of the public species site, built by `site build-db`. `deploy/oracle/deploy-db.sh` uploads it to the server.",
+            ResolvePath = p => p.GetSiteDatabasePath(),
+            // `site build-db` replaces this file with a rename, which is why StatusService opens
+            // every database without pooling.
+            Metrics = new[] {
+                new MetricSpec { Label = "taxa",           Sql = "SELECT COUNT(*) FROM taxon" },
+                new MetricSpec { Label = "assessments",    Sql = "SELECT COUNT(*) FROM assessment" },
+                new MetricSpec {
+                    Label = "schema version",
+                    Sql = $"SELECT CAST(value AS INTEGER) FROM meta WHERE key = '{SiteDbSchema.MetaKeys.SchemaVersion}'",
                 },
             },
         },

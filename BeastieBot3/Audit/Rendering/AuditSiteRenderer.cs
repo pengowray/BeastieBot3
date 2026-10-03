@@ -337,10 +337,9 @@ internal static class AuditSiteRenderer {
             sb.Append($"<td><div class=\"report-title\"><a href=\"{r.Id}.html\">{HtmlText.Escape(r.Title)}</a></div>");
             sb.Append($"<div class=\"report-desc\">{HtmlText.Escape(IndexBlurb(r))}</div></td>\n");
             sb.Append($"<td class=\"kind\">{AuditPageLayout.ActionBadge(r.Action)}</td>\n");
-            sb.Append($"<td class=\"count\">{r.Count:N0}</td>\n");
+            sb.Append($"<td class=\"count\">{r.Count:N0}{StackLabel(r.Count == 1 ? " row" : " rows")}</td>\n");
             if (doc.SinceRelease is not null) {
-                var change = SinceText(doc, r);
-                sb.Append($"<td class=\"since {change.Css}\">{HtmlText.Escape(change.Text)}</td>\n");
+                sb.Append(SinceCell(doc, r)).Append('\n');
             }
             sb.Append("<td class=\"links\">");
             sb.Append($"<a href=\"{r.Id}.html\">details</a>");
@@ -354,6 +353,18 @@ internal static class AuditSiteRenderer {
             sb.Append(footerHtml);
         }
         sb.Append("</section>\n");
+    }
+
+    // Text shown only when a narrow screen stacks a table row's cells (audit.css): the unit of a
+    // count, and the heading of the change since the previous release. Wider screens hide it, because
+    // the column headings say the same.
+    private static string StackLabel(string text) => $"<span class=\"stack-label\">{HtmlText.Escape(text)}</span>";
+
+    // A report with no count for the previous release gets an empty cell, which a narrow screen hides.
+    private static string SinceCell(AuditDocument doc, AuditReport report) {
+        var change = SinceText(doc, report);
+        var label = change.Text.Length == 0 ? "" : StackLabel($"Since {doc.SinceRelease}: ");
+        return $"<td class=\"since {change.Css}\">{label}{HtmlText.Escape(change.Text)}</td>";
     }
 
     // The change since the previous release, as a short phrase. Blank when that release recorded no
@@ -456,10 +467,9 @@ internal static class AuditSiteRenderer {
                 ? $"<td>{HtmlText.Escape(r.Title)} <span class=\"here-tag\">this page</span></td>"
                 : $"<td><a href=\"{r.Id}.html\">{HtmlText.Escape(r.Title)}</a></td>");
             sb.Append($"<td class=\"kind\">{AuditPageLayout.ActionBadge(r.Action)}</td>");
-            sb.Append($"<td class=\"num\">{r.Count:N0}</td>");
+            sb.Append($"<td class=\"num\">{r.Count:N0}{StackLabel(r.Count == 1 ? " name" : " names")}</td>");
             if (doc.SinceRelease is not null) {
-                var change = SinceText(doc, r);
-                sb.Append($"<td class=\"since {change.Css}\">{HtmlText.Escape(change.Text)}</td>");
+                sb.Append(SinceCell(doc, r));
             }
             sb.Append($"<td>{HtmlText.Escape(r.FamilyScope ?? string.Empty)}</td>");
             sb.Append("</tr>\n");
