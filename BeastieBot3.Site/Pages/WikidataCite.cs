@@ -100,12 +100,14 @@ public static partial class WikidataCite {
         return ItemIdPattern().IsMatch(id) ? id : null;
     }
 
-    /// The properties listed in wikidata_item_properties ("P31 P356 P2093").
+    /// The properties listed in wikidata_item_properties ("P31 P356 P2093 Len"). Property ids are
+    /// upper-cased; other tokens keep their case, and the set ignores case. Upper-casing everything
+    /// turned the label token "Len" into "LEN", so every item's label was offered again as missing.
     public static IReadOnlySet<string> Properties(string? list) =>
         (list ?? string.Empty)
             .Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
-            .Select(p => p.ToUpperInvariant())
-            .ToHashSet(StringComparer.Ordinal);
+            .Select(p => p.Length > 1 && (p[0] == 'p' || p[0] == 'P') && p.Skip(1).All(char.IsAsciiDigit) ? p.ToUpperInvariant() : p)
+            .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
     /// What a QuickStatements v1 batch adds, from the second field of each tab-separated command,
     /// in the order of first appearance: "publisher (P123)", "label (en)". A CREATE line adds nothing.

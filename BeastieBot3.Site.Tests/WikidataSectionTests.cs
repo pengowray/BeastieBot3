@@ -238,4 +238,13 @@ public sealed class WikidataCiteUnitTests {
         Assert.Contains("wikidata_item_qid", SiteDbSchema.Ddl);
         Assert.Contains("wikidata_item_properties", SiteDbSchema.Ddl);
     }
+
+    [Fact]
+    public void ItemPropertiesKeepTheLabelToken() {
+        // "Len" (the item has an English label) must survive parsing; upper-casing it made every
+        // item's label look missing, so the add batch set the label again.
+        var present = BeastieBot3.Site.Pages.WikidataCite.Properties("P31 P1476 P1433 P577 P356 Len");
+        Assert.Contains(BeastieBot3.Shared.Wikitext.WikidataCitation.EnglishLabelToken, present);
+        Assert.Contains("p356", present);
+    }
 }
