@@ -2,6 +2,7 @@ using System.Globalization;
 using BeastieBot3.Infrastructure;
 using BeastieBot3.Iucn.Gbif;
 using BeastieBot3.Sprat;
+using BeastieBot3.Wikidata;
 using Microsoft.Data.Sqlite;
 
 // The links and outside identifiers of each taxon, and the outside DOIs, for `site build-db`. Every
@@ -27,6 +28,8 @@ using Microsoft.Data.Sqlite;
 //                  of IUCN DOIs or at doi.org.
 //   DOIs           GBIF's copy of the IUCN checklist (the current global assessment of each taxon)
 //                  and Wikidata items for assessments (wikidata_iucn_assessment_items).
+//   Wikidata items for assessments: the same table, items that are publications (SiteWikidataItems).
+//                  A cache written before the table existed gives none.
 //   GBIF citation  The checklist's recommended citation from its eml.xml, and the dataset DOI: the
 //                  citation's identifier, else the DOI in the citation text, else 10.15468/0qnb58.
 
@@ -68,6 +71,7 @@ internal static class SiteLinkReaders {
     public static void ReadWikidata(string path, IReadOnlyDictionary<long, SiteTaxon> taxa, SiteBuildStats stats,
         SiteDoiSources dois, CancellationToken cancellationToken) {
         using var connection = OpenReadOnly(path);
+        var hasAssessmentItems = WikidataAssessmentItemTable.Exists(connection);
 
         var claims = new Dictionary<long, List<(long NumericId, string? Label)>>();
         using (var command = connection.CreateCommand()) {
@@ -139,6 +143,15 @@ internal static class SiteLinkReaders {
                 taxon.WikidataQidSource = "name-match";
                 stats.QidsFromNameMatch++;
             }
+        }
+
+        if (!hasAssessmentItems) {
+            stats.Warnings.Add("The Wikidata cache has no table of Wikidata items for IUCN assessments, so the build takes no DOIs and no assessment items from Wikidata. To fill the table, run wikidata iucn-assessment-items.");
+            return;
+        }
+        foreach (var row in WikidataAssessmentItemTable.ReadAll(connection)) {
+            cancellationToken.ThrowIfCancellationRequested();
+            stats.WikidataItems.Add(row);
         }
 
         // DOIs of Wikidata items for assessments: doi first, then any others in all_dois.

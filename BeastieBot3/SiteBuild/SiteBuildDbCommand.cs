@@ -3,6 +3,7 @@ using System.Globalization;
 using BeastieBot3.Col;
 using BeastieBot3.Iucn.Gbif;
 using BeastieBot3.Shared.Wikitext;
+using BeastieBot3.WikidataEdits;
 using Microsoft.Data.Sqlite;
 using Spectre.Console;
 using Spectre.Console.Cli;
@@ -89,6 +90,9 @@ internal sealed class SiteBuildDbCommand : Command<SiteBuildDbCommand.Settings> 
             var colDatabase = paths.GetColSqlitePath();
             var output = settings.OutputPath ?? paths.GetSiteDatabasePath()
                 ?? throw new InvalidOperationException(paths.NotConfiguredMessage("Site database", "Datastore:site_sqlite", "--output"));
+            // The Wikidata status dry run's settings file: its assessment item model is what the
+            // site's QuickStatements batches follow.
+            var wikidataConfig = WikidataIucnEditConfig.LoadFromRules(paths, out var wikidataConfigPath);
             inputs = new SiteBuildInputs {
                 IucnDatabase = paths.ResolveIucnDatabasePath(settings.IucnDatabase, "--iucn-db"),
                 ApiCache = paths.ResolveIucnApiCachePath(settings.CacheDatabase),
@@ -103,6 +107,8 @@ internal sealed class SiteBuildDbCommand : Command<SiteBuildDbCommand.Settings> 
                 GbifChecklist = Full(settings.GbifChecklist ?? GbifIucnChecklistReader.FindNewest(paths.GetGbifIucnDir())),
                 DoiCache = Full(settings.DoiCache ?? paths.GetIucnDoiCachePath()),
                 RulesList = Full(settings.RulesList ?? Path.Combine(paths.BaseDirectory, "rules", "rules-list.txt")),
+                WikidataItemModel = wikidataConfig.ToItemModel(),
+                WikidataItemModelSource = wikidataConfigPath,
                 Output = Path.GetFullPath(output),
                 Limit = settings.Limit,
             };
@@ -151,6 +157,11 @@ internal sealed class SiteBuildDbCommand : Command<SiteBuildDbCommand.Settings> 
     }
 
     private static string? Full(string? path) => string.IsNullOrWhiteSpace(path) ? null : Path.GetFullPath(path);
+
+    private static bool HasAuthors(SiteWikidataItem item) {
+        var properties = item.Properties.Split(' ');
+        return properties.Contains("P2093") || properties.Contains("P50");
+    }
 
     private static void WriteSummary(SiteBuildStats s) {
         var table = new Table().AddColumn("Measure").AddColumn(new TableColumn("Value").RightAligned());
@@ -222,6 +233,21 @@ internal sealed class SiteBuildDbCommand : Command<SiteBuildDbCommand.Settings> 
         Row("Taxa with a Wikidata item that states their IUCN taxon id (P627)", s.QidsFromP627);
         Row("Of those, items chosen from several", s.QidTieBreaks);
         Row("Taxa with a Wikidata item matched by name", s.QidsFromNameMatch);
+        var items = s.WikidataItems;
+        Row("Wikidata items for IUCN assessments in the Wikidata cache", items.Read);
+        foreach (var (label, count) in items.KeptByClass.OrderByDescending(p => p.Value)) {
+            Row($"Of those, kept as publications: {label}", count);
+        }
+        foreach (var (classes, count) in items.DroppedByClasses.OrderByDescending(p => p.Value)) {
+            Row($"Of those, left out as not a publication: instance of {classes}", count);
+        }
+        if (items.WithoutIds > 0) Row("Items kept with no taxon or assessment id (not used)", items.WithoutIds);
+        if (items.SecondItemForAnAssessment > 0) Row("Items for an assessment that already has an item (not used)", items.SecondItemForAnAssessment);
+        Row("Assessments with their own Wikidata item", s.AssessmentsWithOwnItem);
+        Row("Errata versions given the item of the assessment their DOI names", s.AssessmentsWithItemThroughDoi);
+        Row("Items for an assessment not in the site database (not used)", items.ByAssessment.Count - items.Used.Count);
+        Row("Items used with no author (P50 or P2093)", items.ByAssessment.Values.Count(i => items.Used.Contains(i.Qid) && !HasAuthors(i)));
+        Row("Items used with no main subject (P921)", items.ByAssessment.Values.Count(i => items.Used.Contains(i.Qid) && !i.Properties.Split(' ').Contains("P921")));
         Row("Catalogue of Life ids from the placement file", s.ColIdsFromPlacement);
         Row("Catalogue of Life ids from the common names store", s.ColIdsFromCrossReference);
         Row("Taxa matched to SPRAT by name", s.SpratMatched);
@@ -237,6 +263,7 @@ internal sealed class SiteBuildDbCommand : Command<SiteBuildDbCommand.Settings> 
         Text("Catalogue of Life release", s.ColRelease);
         Text("Catalogue of Life release DOI", s.ColDoi);
         Text("SPRAT report", s.SpratReport);
+        Text("Wikidata assessment item model", s.WikidataItemModelSource ?? "built-in defaults (no iucn-status.yml found)");
         Text("DOI checks (iucn resolve-dois)", s.DoiChecksRead == 0 ? null
             : $"{s.DoiChecksRead:N0} assessments, {s.DoiChecksWithDoi:N0} with a DOI, newest check {s.DoiCheckedTo:yyyy-MM-dd}");
         if (s.MissingSources.Count > 0) {

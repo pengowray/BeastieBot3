@@ -1,5 +1,7 @@
+using BeastieBot3.Shared.SiteData;
 using BeastieBot3.Shared.Wikitext;
 using BeastieBot3.SiteBuild;
+using BeastieBot3.Wikidata;
 using static BeastieBot3.Tests.SiteBuild.SiteBuildSourceFixture;
 
 namespace BeastieBot3.Tests.SiteBuild;
@@ -82,9 +84,67 @@ public sealed class SiteDbBuildErrataDoiTests : IDisposable {
             IucnDoiSelector.Select(errata, null, null, null, Array.Empty<long>(), Doi2013));
     }
 
+    // ------------------------------------------------------------ Wikidata items for assessments
+
+    // The Europe assessment has its own item; the errata version, whose DOI names the Europe
+    // assessment, shares it rather than being offered a second item with the same DOI. A taxon item
+    // that carries an assessment DOI is left out, and an item for an assessment the site does not
+    // have is not used.
+    [Fact]
+    public void Build_SetsTheWikidataItemOfEachAssessment() {
+        var (output, stats) = Build(withEuropeHeader: true, withWikidata: true);
+        using var db = OpenReadOnly(output);
+        var rows = Rows(db, "SELECT assessment_id, wikidata_item_qid, wikidata_item_properties FROM assessment ORDER BY assessment_id");
+
+        Assert.Equal(new object?[] { Europe2013, "Q56000001", "P31 P1476 P1433 P921 P577 P356 Len" }, rows.Single(r => (long)r[0]! == Europe2013));
+        Assert.Equal(new object?[] { Errata2018, "Q56000001", "P31 P1476 P1433 P921 P577 P356 Len" }, rows.Single(r => (long)r[0]! == Errata2018));
+        Assert.Equal(new object?[] { Global1998, null, null }, rows.Single(r => (long)r[0]! == Global1998));
+
+        Assert.Equal((1, 1), (stats.AssessmentsWithOwnItem, stats.AssessmentsWithItemThroughDoi));
+        Assert.Equal(3, stats.WikidataItems.Read);
+        Assert.Equal(new Dictionary<string, int> { ["Q13442814 scholarly article"] = 2 }, stats.WikidataItems.KeptByClass);
+        Assert.Equal(new Dictionary<string, int> { ["Q16521 Q55808"] = 1 }, stats.WikidataItems.DroppedByClasses);
+        Assert.Equal(1, stats.WikidataItems.ByAssessment.Count - stats.WikidataItems.Used.Count);
+        Assert.Equal(new WikidataItemModel().ToJson(), Scalar(db, $"SELECT value FROM meta WHERE key = '{SiteDbSchema.MetaKeys.WikidataItemModel}'"));
+    }
+
+    [Fact]
+    public void Build_WithoutAWikidataCache_HasNoItemsAndStoresTheModelItWasGiven() {
+        var model = new WikidataItemModel { InstanceOf = "Q1172284" };
+        var (output, stats) = Build(withEuropeHeader: true, model: model);
+        using var db = OpenReadOnly(output);
+        Assert.Equal("0", Scalar(db, "SELECT COUNT(*) FROM assessment WHERE wikidata_item_qid IS NOT NULL"));
+        Assert.Equal(model, WikidataItemModel.FromJson(Scalar(db, $"SELECT value FROM meta WHERE key = '{SiteDbSchema.MetaKeys.WikidataItemModel}'")));
+        Assert.Equal(0, stats.AssessmentsWithOwnItem);
+    }
+
+    private static void WriteWikidataCache(string path) {
+        var fetched = new DateTime(2026, 10, 1, 0, 0, 0, DateTimeKind.Utc);
+        using var store = WikidataCacheStore.Open(path);
+        store.UpsertAssessmentItems(new[] {
+            new WikidataAssessmentItemRow {
+                Qid = "Q56000001", Doi = Doi2013.ToUpperInvariant(), AllDois = [Doi2013.ToUpperInvariant()],
+                TaxonId = PinusPinea, AssessmentId = Europe2013, IdSource = "doi",
+                Title = "Pinus pinea: Farjon, A.", LabelEn = "Pinus pinea: Farjon, A.",
+                InstanceOf = ["Q13442814"], MainSubjects = ["Q146992"], PublishedIn = ["Q32059"],
+                PublicationDate = "2011-11-08T00:00:00Z", PublicationYear = 2011, FetchedAtUtc = fetched,
+            },
+            // Made up: a taxon item that carries an assessment DOI, like Zino's petrel's (Q1272830).
+            new WikidataAssessmentItemRow {
+                Qid = "Q56000002", Doi = "10.2305/IUCN.UK.1998.RLTS.T42391A10690403.EN", TaxonId = PinusPinea, AssessmentId = Global1998,
+                IdSource = "doi", LabelEn = "stone pine", InstanceOf = ["Q16521", "Q55808"], FetchedAtUtc = fetched,
+            },
+            // An assessment the site database does not have.
+            new WikidataAssessmentItemRow {
+                Qid = "Q56000003", Doi = "10.2305/IUCN.UK.2008.RLTS.T42391A1234.EN", TaxonId = PinusPinea, AssessmentId = 1234,
+                IdSource = "doi", InstanceOf = ["Q13442814"], AuthorStringCount = 1, FetchedAtUtc = fetched,
+            },
+        });
+    }
+
     // ------------------------------------------------------------ the build
 
-    private (string Output, SiteBuildStats Stats) Build(bool withEuropeHeader) {
+    private (string Output, SiteBuildStats Stats) Build(bool withEuropeHeader, bool withWikidata = false, WikidataItemModel? model = null) {
         var iucn = _sources.PathOf("iucn.sqlite");
         var cache = _sources.PathOf("cache.sqlite");
         var doiCache = _sources.PathOf("iucn_doi_cache.sqlite");
@@ -92,10 +152,17 @@ public sealed class SiteDbBuildErrataDoiTests : IDisposable {
         WriteIucn(iucn);
         WriteCache(cache, withEuropeHeader);
         WriteDoiCache(doiCache);
+        string? wikidata = null;
+        if (withWikidata) {
+            wikidata = _sources.PathOf("wikidata.sqlite");
+            WriteWikidataCache(wikidata);
+        }
         var stats = new SiteDbBuild(new SiteBuildInputs {
             IucnDatabase = iucn,
             ApiCache = cache,
             DoiCache = doiCache,
+            WikidataCache = wikidata,
+            WikidataItemModel = model ?? new WikidataItemModel(),
             Output = output,
         }, QuietConsole()).Run(CancellationToken.None);
         return (output, stats);

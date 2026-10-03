@@ -26,6 +26,9 @@ using Microsoft.Data.Sqlite;
 //   - An author name with a letter lost to an encoding error ("Kry?tufek, B.") is repaired from the
 //     other assessor credits (AssessorNamePool). The pool is complete only after every payload has
 //     been read, so the few rows with such a name are parsed again and written at the end.
+//   - wikidata_item_qid is the Wikidata item for the assessment as a publication: its own, or for an
+//     errata version, the item of the assessment its DOI names (SiteWikidataItems.Find). A row with
+//     no cached payload can only get its own.
 //   - replaced_by_assessment_id is set on the assessment an errata or amended version replaced,
 //     pointing at the newer one. An errata version (its title says "errata version published in")
 //     replaced one of the assessments IucnTaxaHeaders.PredecessorIds gives that are also rows here;
@@ -308,6 +311,7 @@ internal sealed class SiteAssessmentPass {
         _stats.Count(_stats.DoisBySource, parts.Doi is null ? DoiSource.None : parts.DoiSource);
         _stats.CitationsParsed++;
         assessment.CitationJson = parts.ToJson();
+        SetWikidataItem(assessment, parts.Doi);
         LinkReplaced(assessment, parse, predecessors, doiNamedPredecessor);
         return true;
     }
@@ -385,6 +389,9 @@ internal sealed class SiteAssessmentPass {
     }
 
     private void Write(SiteDbWriter writer, SiteAssessment assessment) {
+        if (assessment.WikidataItemQid is null) {
+            SetWikidataItem(assessment, doi: null);
+        }
         writer.AddAssessment(assessment);
         if (!assessment.IsLatest) {
             _stats.AssessmentsHistory++;
@@ -394,6 +401,16 @@ internal sealed class SiteAssessmentPass {
             _stats.AssessmentsRegionalLatest++;
         }
         assessment.CitationJson = null;
+    }
+
+    private void SetWikidataItem(SiteAssessment assessment, string? doi) {
+        if (_stats.WikidataItems.Find(assessment.TaxonId, assessment.AssessmentId, doi) is not { } found) {
+            return;
+        }
+        assessment.WikidataItemQid = found.Item.Qid;
+        assessment.WikidataItemProperties = found.Item.Properties;
+        _stats.WikidataItems.Used.Add(found.Item.Qid);
+        if (found.ThroughDoi) _stats.AssessmentsWithItemThroughDoi++; else _stats.AssessmentsWithOwnItem++;
     }
 
     // population_trend: {"description": {"en": "Unknown"}, "code": "3"}
