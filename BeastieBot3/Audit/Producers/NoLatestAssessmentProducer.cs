@@ -45,8 +45,8 @@ internal sealed class NoLatestAssessmentProducer : IAuditReportProducer {
                 "Geographic scope of the most recent assessment. Regional-only taxa were never assessed globally."),
         };
         if (matches is not null) {
-            columns.Add(MatchColumn(SameNameKey, SameNameHeader, SameNameHelp, matches, m => m.SameName));
-            columns.Add(MatchColumn(ViaSynonymKey, ViaSynonymHeader, ViaSynonymHelp, matches, m => m.ViaSynonym));
+            columns.Add(MatchColumn(SameNameKey, SameNameHeader, SameNameHelp(ctx.Release), matches, m => m.SameName));
+            columns.Add(MatchColumn(ViaSynonymKey, ViaSynonymHeader, ViaSynonymHelp(ctx.Release), matches, m => m.ViaSynonym));
         }
         columns.AddRange(new[] {
             AuditColumns.Custom("assessmentCount", "Assessments", AuditColumnType.Number,
@@ -61,7 +61,7 @@ internal sealed class NoLatestAssessmentProducer : IAuditReportProducer {
             ByScope(findings),
         };
         if (matches is not null) {
-            summaryTables.Add(ByMatch(findings, matches));
+            summaryTables.Add(ByMatch(findings, matches, ctx.Release));
         }
 
         return new AuditReport {
@@ -86,7 +86,8 @@ internal sealed class NoLatestAssessmentProducer : IAuditReportProducer {
                 "### Suggestion\n\n" +
                 "- For any taxon which was removed, merged, or reclassified: create a new Not Evaluated (NE) assessment for the taxon. The NE \"assessment\" becomes the current assessment. This will show it's no longer assessed by the IUCN, and do so in a way consistent with the rest of the Red List data and site.\n" +
                 "- If the taxon is still valid, flag its most recent assessment as current.\n" +
-                "- Update how old assessments display on the website so they cannot be mistaken for the current one. Have old assessment pages include a link to the current assessment or make it clear when there is none.",
+                "- Update how old assessments display on the website so they cannot be mistaken for the current one. Have old assessment pages include a link to the current assessment or make it clear when there is none." +
+                SuggestionMatches(findings, matches),
             Columns = columns,
             Findings = findings,
             SummaryTables = summaryTables,
@@ -169,8 +170,8 @@ ORDER BY t.root_sis_id";
 
     // ---- Current taxa with the same name, or listing the name as an IUCN synonym ----
 
-    private const string SameNameKey = "sameNameCurrent";
-    private const string ViaSynonymKey = "viaSynonymCurrent";
+    private const string SameNameKey = "sameNameAsCurrentTaxon";
+    private const string ViaSynonymKey = "iucnSynonymOfCurrentTaxon";
 
     private sealed record RowMatches(IucnOldTaxon Old, IReadOnlyList<IucnSameNameMatch> SameName, IReadOnlyList<IucnSameNameMatch> ViaSynonym);
 
@@ -311,20 +312,26 @@ ORDER BY t.root_sis_id";
         return found;
     }
 
-    private const string SameNameHeader = "Current taxon with same name";
-    private const string SameNameHelp = "Taxa in the current release with the same scientific name, in the same kingdom, and with a current assessment in the same scope as this taxon's last assessment. Shows the SIS id, the name and authority if they differ from this taxon's, and the current category and year.";
-    private const string ViaSynonymHeader = "Current taxon via IUCN synonym";
-    private const string ViaSynonymHelp = "Taxa in the current release that list this name as an IUCN synonym, in the same kingdom and scope. Taxa already in the same-name column are left out. When the synonym entry has a different author or a note such as [in part], the entry is quoted.";
+    private const string SameNameHeader = "Same name as current taxon";
+    private static string SameNameHelp(string release) =>
+        $"SIS id, category and year of each taxon in the {release} CSV export that is in the same kingdom as the listed taxon, has the same scientific name, and has a current assessment in the same scope as the listed taxon's last assessment. " +
+        $"The {release} taxon's name and authority are also shown when either is written differently from the listed taxon's.";
+    private const string ViaSynonymHeader = "IUCN synonym of current taxon";
+    private static string ViaSynonymHelp(string release) =>
+        $"SIS id, name, authority, category and year of each taxon in the {release} CSV export that is in the same kingdom as the listed taxon, has the listed taxon's scientific name in its IUCN synonym list, and has a current assessment in the same scope as the listed taxon's last assessment. " +
+        "Taxa already in the \"" + SameNameHeader + "\" column are left out. " +
+        "When the matching IUCN synonym entry has a different authority or a note such as \"[in part]\", the entry is shown after \"IUCN synonym:\".";
 
     private static string MatchSentence(IReadOnlyList<AuditFinding> findings, IReadOnlyDictionary<string, RowMatches>? matches, string release) {
         if (matches is null) {
-            return "Matches to current taxa with the same name or an IUCN synonym were not checked, because the CSV export database was not available.";
+            return "The listed taxa were not checked for taxa in the current release with the same name or an IUCN synonym, because the CSV export was not available when this page was built.";
         }
         var (sameName, viaSynonym, neither) = MatchCounts(findings, matches);
-        return $"{sameName:N0} of these taxa have a taxon in the {release} CSV export with the same scientific name, in the same kingdom and with a current assessment in the same scope (Global, or the same region). " +
-            $"Another {viaSynonym:N0} have no same-name match, but their name is listed as an IUCN synonym of a current taxon. " +
-            $"The remaining {neither:N0} have no match in either column. " +
-            $"The columns {SameNameHeader} and {ViaSynonymHeader} link to the current assessments.";
+        return $"For {sameName:N0} of the {findings.Count:N0} taxa, the \"{SameNameHeader}\" column shows one or more taxa in the {release} CSV export with the same scientific name. " +
+            $"For {viaSynonym:N0} more taxa, the \"{ViaSynonymHeader}\" column shows one or more taxa in {release} that have the listed taxon's name in their IUCN synonym list. " +
+            $"The other {neither:N0} taxa have no match in either column. " +
+            "Both columns show only taxa in the same kingdom with a current assessment in the same scope as the listed taxon's last assessment. " +
+            "Names are compared ignoring case, spacing, and \"ssp.\" versus \"subsp.\".";
     }
 
     private static (int SameName, int ViaSynonymOnly, int Neither) MatchCounts(IReadOnlyList<AuditFinding> findings, IReadOnlyDictionary<string, RowMatches> matches) {
@@ -345,16 +352,24 @@ ORDER BY t.root_sis_id";
         return (sameName, viaSynonym, neither);
     }
 
-    private static AuditSummaryTable ByMatch(IReadOnlyList<AuditFinding> findings, IReadOnlyDictionary<string, RowMatches> matches) {
+    private static string SuggestionMatches(IReadOnlyList<AuditFinding> findings, IReadOnlyDictionary<string, RowMatches>? matches) {
+        if (matches is null) {
+            return "";
+        }
+        var (sameName, viaSynonym, _) = MatchCounts(findings, matches);
+        return $" For {sameName + viaSynonym:N0} of these taxa, the \"{SameNameHeader}\" or \"{ViaSynonymHeader}\" column gives a possible current assessment to link to.";
+    }
+
+    private static AuditSummaryTable ByMatch(IReadOnlyList<AuditFinding> findings, IReadOnlyDictionary<string, RowMatches> matches, string release) {
         var (sameName, viaSynonym, neither) = MatchCounts(findings, matches);
         var rows = new[] {
-            new[] { "Same scientific name", sameName.ToString("N0") } as IReadOnlyList<string>,
-            new[] { "IUCN synonym only", viaSynonym.ToString("N0") },
-            new[] { "No match", neither.ToString("N0") },
+            new[] { SameNameHeader, sameName.ToString("N0") } as IReadOnlyList<string>,
+            new[] { $"{ViaSynonymHeader}, no same-name match", viaSynonym.ToString("N0") },
+            new[] { $"No taxon in {release} found by name or IUCN synonym", neither.ToString("N0") },
         };
         return new AuditSummaryTable {
-            Title = "Current taxon with the same name or an IUCN synonym",
-            Note = "Each taxon is counted once. A taxon with matches in both columns is counted under the same scientific name.",
+            Title = $"Matches with taxa in {release}",
+            Note = $"Each listed taxon is counted in one row. A taxon with both kinds of match is counted under \"{SameNameHeader}\".",
             Headers = new[] { "Match", "Taxa" }, Rows = rows, NumericColumns = new[] { 1 },
         };
     }

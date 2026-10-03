@@ -260,7 +260,7 @@ internal sealed class IucnSameNameTaxa {
         }
         sb.Append(" (").Append(StatusAndYear(match.Assessment)).Append(')');
         if (match.ListedAs is { } listedAs) {
-            sb.Append(", synonym entry: \"").Append(Clean(listedAs)).Append('"');
+            sb.Append(", IUCN synonym: ").Append(Clean(listedAs));
         }
         return sb.ToString();
     }

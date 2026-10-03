@@ -263,6 +263,7 @@ ORDER BY t.root_sis_id";
             var (sameName, viaSynonymOnly) = MatchCounts(taxa);
             sb.AppendLine($"- **{MdSameNameCountLabel}:** {sameName:N0}");
             sb.AppendLine($"- **{MdViaSynonymCountLabel}:** {viaSynonymOnly:N0}");
+            sb.AppendLine($"- **{MdNeitherCountLabel}:** {taxa.Count - sameName - viaSynonymOnly:N0}");
         }
         sb.AppendLine();
         sb.AppendLine("These are species in the IUCN API cache where no assessment has `\"latest\": true`. ");
@@ -434,19 +435,20 @@ ORDER BY t.root_sis_id";
 
     // ---- Current taxa with the same name, or listing the name as an IUCN synonym ----
 
-    private const string MdSameNameCountLabel = "Current taxon with the same name";
-    private const string MdViaSynonymCountLabel = "Current taxon through an IUCN synonym only";
+    private const string MdSameNameCountLabel = "Taxa with the same name as a current taxon";
+    private const string MdViaSynonymCountLabel = "Taxa whose name is an IUCN synonym of a current taxon (not counted above)";
+    private const string MdNeitherCountLabel = "Taxa with no current taxon found by name or IUCN synonym";
     private const string MdMatchesIntro =
-        "After a taxon, \"same name:\" links the current taxa in the CSV export with the same scientific name, in the same kingdom and with a current assessment in the same scope as the taxon's last assessment. " +
-        "\"IUCN synonym of:\" links the current taxa that list the name as an IUCN synonym. " +
-        "Each link shows the SIS id, the name and authority if they differ from the taxon's, and the current category and year.";
-    private const string MdMatchesNotChecked = "Matches to current taxa with the same name or an IUCN synonym were not checked, because the IUCN CSV database was not found.";
-    private const string MdSameNameLead = "; same name: ";
-    private const string MdViaSynonymLead = "; IUCN synonym of: ";
-    private const string CsvSameNameColumn = "same_name_current";
-    private const string CsvViaSynonymColumn = "via_synonym_current";
-    private const string ConsoleSameNameLabel = "Current taxon with the same name";
-    private const string ConsoleViaSynonymLabel = "Current taxon through an IUCN synonym only";
+        "A current taxon here is one in the CSV export, in the same kingdom as the listed taxon, with a current assessment in the same scope as the listed taxon's most recent assessment. " +
+        "After a taxon's own assessment, \"same name as\" is followed by each current taxon with the same scientific name, and \"IUCN synonym of\" by each current taxon that has the listed taxon's name in its IUCN synonym list. " +
+        "Each one links to its current assessment and shows its SIS id, its name and authority when either is written differently, and its category and year.";
+    private const string MdMatchesNotChecked = "The listed taxa were not checked for current taxa with the same name or an IUCN synonym, because the IUCN CSV database was not found.";
+    private const string MdSameNameLead = "; same name as ";
+    private const string MdViaSynonymLead = "; IUCN synonym of ";
+    private const string CsvSameNameColumn = "same_name_as_current_taxon";
+    private const string CsvViaSynonymColumn = "iucn_synonym_of_current_taxon";
+    private const string ConsoleSameNameLabel = MdSameNameCountLabel;
+    private const string ConsoleViaSynonymLabel = MdViaSynonymCountLabel;
 
     // Old ids with a same-name match, and old ids with no same-name match but a synonym match.
     private static (int SameName, int ViaSynonymOnly) MatchCounts(IEnumerable<TaxonReportRow> taxa) {
@@ -531,7 +533,7 @@ ORDER BY t.root_sis_id";
         }
         using var csv = OpenReadOnly(csvPath);
         if (!TableExists(csv, "taxonomy_html") || !TableExists(csv, "assessments_html")) {
-            AnsiConsole.MarkupLineInterpolated($"[yellow]IUCN CSV database has no imported taxa: {csvPath}. {ColumnsLeftOut}[/]");
+            AnsiConsole.MarkupLineInterpolated($"[yellow]CSV export database has no imported taxa: {csvPath}. {ColumnsLeftOut}[/]");
             return null;
         }
         AnsiConsole.MarkupLineInterpolated($"[grey]IUCN CSV database:[/] {csvPath}");
@@ -540,9 +542,9 @@ ORDER BY t.root_sis_id";
     }
 
     private static string CsvMissingLine(string path) =>
-        $"IUCN CSV database not found: {path}. {ColumnsLeftOut}";
+        $"CSV export database not found: {path}. {ColumnsLeftOut}";
 
-    private const string ColumnsLeftOut = "The report leaves out the same-name and IUCN synonym columns.";
+    private const string ColumnsLeftOut = "Report written without same-name and IUCN synonym matches.";
 
     private static bool TableExists(SqliteConnection connection, string tableName) {
         using var command = connection.CreateCommand();
