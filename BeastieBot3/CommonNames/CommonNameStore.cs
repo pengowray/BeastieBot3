@@ -672,12 +672,28 @@ internal sealed class CommonNameStore : SqliteStore {
     /// Junk names (<see cref="CommonNameQuality"/>) are left out, and a repairable name counts
     /// under its repaired name's key (<see cref="CommonNameChooser.UsableName"/>), the key the
     /// chooser compares it by.
+    /// The rule also reads which taxa are matched to each Wikipedia page (the `wikipedia`
+    /// cross-references), so that a title does not decide between the taxa one article covers.
     /// </summary>
     private AmbiguousNames QueryAmbiguousNames(string language, string? kingdom = null) {
+        var taxaByPage = new Dictionary<string, HashSet<long>>(StringComparer.Ordinal);
+        using (var pages = _connection.CreateCommand()) {
+            pages.CommandText = "SELECT source_identifier, taxon_id FROM taxon_cross_references WHERE source = 'wikipedia';";
+            using var pageReader = pages.ExecuteReader();
+            while (pageReader.Read()) {
+                var page = pageReader.GetString(0);
+                if (!taxaByPage.TryGetValue(page, out var taxa)) {
+                    taxaByPage[page] = taxa = new HashSet<long>();
+                }
+                taxa.Add(pageReader.GetInt64(1));
+            }
+        }
+
         using var command = _connection.CreateCommand();
         var kingdomFilter = kingdom != null ? "AND t.kingdom = @kingdom" : "";
         command.CommandText = $@"
-            SELECT c.normalized_name, c.taxon_id, t.canonical_name, c.source, c.is_preferred, c.raw_name, t.kingdom
+            SELECT c.normalized_name, c.taxon_id, t.canonical_name, c.source, c.is_preferred, c.raw_name, t.kingdom,
+                   c.source_identifier
             FROM common_names c
             JOIN taxa t ON c.taxon_id = t.id
             WHERE c.language = @lang
@@ -705,9 +721,10 @@ internal sealed class CommonNameStore : SqliteStore {
                 CanonicalName: reader.GetString(2),
                 Source: source,
                 IsPreferred: preferred,
-                Kingdom: reader.IsDBNull(6) ? null : reader.GetString(6)));
+                Kingdom: reader.IsDBNull(6) ? null : reader.GetString(6),
+                TitlePage: source == "wikipedia_title" && !reader.IsDBNull(7) ? reader.GetString(7) : null));
         }
-        return AmbiguousNames.Build(holdings);
+        return AmbiguousNames.Build(holdings, taxaByPage);
     }
 
     /// <summary>

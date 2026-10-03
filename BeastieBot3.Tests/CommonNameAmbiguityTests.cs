@@ -393,6 +393,160 @@ public class CommonNameAmbiguityTests {
         Assert.Null(Best(store, species));
     }
 
+    // A Wikipedia title does not decide between the taxa that one article covers. In the store,
+    // only the taxon named in the page's taxobox takes the page's title as a name; the other taxa
+    // matched to the page get an other_taxon_page cross-reference (WikipediaPageMatch).
+
+    private static void AddTitle(CommonNameStore store, long taxon, string title, string page) {
+        store.InsertCommonName(taxon, title, CommonNameNormalizer.NormalizeForMatching(title)!, "en", "wikipedia_title", page, true);
+        store.InsertCrossReference(taxon, "wikipedia", page);
+    }
+
+    private static void LinkToOtherTaxonsPage(CommonNameStore store, long taxon, string page) =>
+        store.InsertCrossReference(taxon, "wikipedia", page, CommonNameStore.OtherTaxonsPageMatch);
+
+    [Fact]
+    public void ScarletBelliedMountainTanager_IsKeptByIucnsMainName_WhenTheArticleCoversBothSpecies() {
+        // 2026 data: IUCN splits Anisognathus lunulatus ("Scarlet-bellied Mountain-tanager") from
+        // A. igniventris ("Fire-bellied Mountain-tanager"); Wikipedia keeps one article, "Scarlet-
+        // bellied mountain tanager", with A. igniventris in its taxobox, and A. lunulatus redirects
+        // to it. Until October 2026 the title gave the name to A. igniventris and A. lunulatus had
+        // no English name.
+        using var store = OpenInMemory();
+        var igniventris = AddTaxon(store, "anisognathus igniventris", "103845767");
+        var lunulatus = AddTaxon(store, "anisognathus lunulatus", "103845827");
+        AddTitle(store, igniventris, "Scarlet-bellied mountain tanager", "Scarlet-bellied mountain tanager");
+        AddName(store, igniventris, "Scarlet-bellied Mountain Tanager", "wikidata_label");
+        AddName(store, igniventris, "Scarlet-bellied Mountain-Tanager", "wikidata");
+        AddName(store, igniventris, "Scarlet-bellied Mountain-Tanager", "col");
+        AddName(store, igniventris, "Fire-bellied Mountain-tanager", "iucn", preferred: true);
+        AddName(store, lunulatus, "Scarlet-bellied Mountain-tanager", "iucn", preferred: true);
+        LinkToOtherTaxonsPage(store, lunulatus, "Scarlet-bellied mountain tanager");
+
+        var verdicts = store.GetAmbiguousNames("en");
+
+        Assert.Equal(lunulatus, verdicts.KeptBy("scarletbelliedmountaintanager"));
+        Assert.Equal("Scarlet-bellied Mountain-tanager", Best(store, lunulatus));
+        Assert.Equal("Fire-bellied Mountain-tanager", Best(store, igniventris));
+    }
+
+    [Fact]
+    public void Edelweiss_IsKeptByIucnsMainName_WhenTheArticleCoversBothSpecies() {
+        // 2026 data: the article "Edelweiss" has Leontopodium nivale in its taxobox; IUCN's main
+        // name "Edelweiss" is for Leontopodium alpinum, which is matched to the same article.
+        using var store = OpenInMemory();
+        var nivale = AddTaxon(store, "leontopodium nivale", "1", "PLANTAE");
+        var alpinum = AddTaxon(store, "leontopodium alpinum", "202984", "PLANTAE");
+        AddTitle(store, nivale, "Edelweiss", "Edelweiss");
+        AddName(store, nivale, "edelweiss", "wikidata_label");
+        AddName(store, alpinum, "Edelweiss", "iucn", preferred: true);
+        AddName(store, alpinum, "Edelweiss", "wikidata");
+        LinkToOtherTaxonsPage(store, alpinum, "Edelweiss");
+
+        Assert.Equal(alpinum, store.GetAmbiguousNames("en").KeptBy("edelweiss"));
+    }
+
+    [Fact]
+    public void GoldenTanager_StaysWithTheTitle_BecauseTheOtherSpeciesIsNotMatchedToTheArticle() {
+        // 2026 data: IUCN's main name "Golden Tanager" is for Tangara aurulenta, split from Tangara
+        // arthus ("Chestnut-breasted Tanager"), whose article is "Golden tanager". Wikipedia has no
+        // page or redirect "Tangara aurulenta", so nothing in the store says the article covers it,
+        // and the title still decides.
+        using var store = OpenInMemory();
+        var arthus = AddTaxon(store, "tangara arthus", "103849276");
+        var aurulenta = AddTaxon(store, "tangara aurulenta", "103849300");
+        AddTitle(store, arthus, "Golden tanager", "Golden tanager");
+        AddName(store, arthus, "Golden Tanager", "wikidata_label");
+        AddName(store, arthus, "Chestnut-breasted Tanager", "iucn", preferred: true);
+        AddName(store, aurulenta, "Golden Tanager", "iucn", preferred: true);
+
+        Assert.Equal(arthus, store.GetAmbiguousNames("en").KeptBy("goldentanager"));
+        Assert.Null(Best(store, aurulenta));
+    }
+
+    [Fact]
+    public void BrydesWhale_StaysWithTheTitle_WhenBothTaxaOfTheArticleHaveItAsIucnsMainName() {
+        // 2026 data: IUCN has "Bryde's Whale" as the main name of Balaenoptera edeni and of a second
+        // taxon matched to the article "Bryde's whale". IUCN's main name does not decide between
+        // them, so the title does.
+        using var store = OpenInMemory();
+        var edeni = AddTaxon(store, "balaenoptera edeni", "2476");
+        var edeniNew = AddTaxon(store, "balaenoptera edeni_new", "217123456");
+        var omurai = AddTaxon(store, "balaenoptera omurai", "1");
+        AddTitle(store, edeni, "Bryde's whale", "Bryde's whale");
+        AddName(store, edeni, "Bryde's Whale", "iucn", preferred: true);
+        AddName(store, edeniNew, "Bryde's Whale", "iucn", preferred: true);
+        LinkToOtherTaxonsPage(store, edeniNew, "Bryde's whale");
+        AddName(store, omurai, "Bryde's whale", "col");
+
+        Assert.Equal(edeni, store.GetAmbiguousNames("en").KeptBy("brydeswhale"));
+    }
+
+    [Fact]
+    public void BlackBrowedBushtit_StaysWithTheTitle_WhenNoTaxonOfTheArticleHasItAsIucnsMainName() {
+        // 2026 data: Aegithalos iouschistos is matched to the article "Black-browed bushtit" and has
+        // the name as its Wikidata label; Aegithalos bonvaloti, in the taxobox, has it from IUCN but
+        // not as IUCN's main name. Only IUCN's main name can take the name from the title.
+        using var store = OpenInMemory();
+        var bonvaloti = AddTaxon(store, "aegithalos bonvaloti", "22736055");
+        var iouschistos = AddTaxon(store, "aegithalos iouschistos", "1");
+        AddTitle(store, bonvaloti, "Black-browed bushtit", "Black-browed bushtit");
+        AddName(store, bonvaloti, "Black-browed Bushtit", "iucn");
+        AddName(store, bonvaloti, "Black-browed Tit", "iucn", preferred: true);
+        AddName(store, iouschistos, "Black-browed Bushtit", "wikidata_label");
+        AddName(store, iouschistos, "Rufous-fronted Tit", "iucn", preferred: true);
+        LinkToOtherTaxonsPage(store, iouschistos, "Black-browed bushtit");
+
+        Assert.Equal(bonvaloti, store.GetAmbiguousNames("en").KeptBy("blackbrowedbushtit"));
+    }
+
+    [Fact]
+    public void NileTilapia_StaysWithTheSpecies_WhenItsSubspeciesIsMatchedToTheArticle() {
+        // 2026 data: IUCN's main name "Nile Tilapia" is for Oreochromis niloticus ssp. niloticus,
+        // which is matched to the species' article "Nile tilapia". A species beats its own
+        // subspecies before IUCN's main name is looked at.
+        using var store = OpenInMemory();
+        var species = AddTaxon(store, "oreochromis niloticus", "167000");
+        var nominate = AddTaxon(store, "oreochromis niloticus ssp. niloticus", "167013", rank: "subspecies");
+        AddTitle(store, species, "Nile tilapia", "Nile tilapia");
+        AddName(store, species, "Nile tilapia", "col");
+        AddName(store, nominate, "Nile Tilapia", "iucn", preferred: true);
+        LinkToOtherTaxonsPage(store, nominate, "Nile tilapia");
+
+        Assert.Equal(species, store.GetAmbiguousNames("en").KeptBy("niletilapia"));
+    }
+
+    [Fact]
+    public void TwoTaxaWithTheTitleOfOnePage_IucnsMainNameDecides() {
+        // 2026 data: the article "African goshawk" gave its title to both Accipiter tachiro and
+        // Accipiter toussenelii (WikipediaPageMatch gives a page's names to every matched taxon
+        // when its taxobox names none of them). IUCN's main name "African Goshawk" is Accipiter
+        // tachiro's. Before October 2026 neither taxon kept the name.
+        using var store = OpenInMemory();
+        var tachiro = AddTaxon(store, "accipiter tachiro", "22727697");
+        var toussenelii = AddTaxon(store, "accipiter toussenelii", "22727705");
+        AddTitle(store, tachiro, "African goshawk", "African goshawk");
+        AddTitle(store, toussenelii, "African goshawk", "African goshawk");
+        AddName(store, tachiro, "African Goshawk", "iucn", preferred: true);
+        AddName(store, toussenelii, "Red-chested Goshawk", "iucn", preferred: true);
+
+        Assert.Equal(tachiro, store.GetAmbiguousNames("en").KeptBy("africangoshawk"));
+    }
+
+    [Fact]
+    public void TitlesOfTwoDifferentPages_StillTie() {
+        // "Jack Dempsey (fish)" and a page "Jack Dempsey (plant)" are different articles, so IUCN's
+        // main name does not decide between their taxa.
+        using var store = OpenInMemory();
+        var cichlid = AddTaxon(store, "rocio octofasciata", "1");
+        var plant = AddTaxon(store, "plantus dempseyi", "2", "PLANTAE");
+        AddTitle(store, cichlid, "Jack Dempsey", "Jack Dempsey (fish)");
+        AddTitle(store, plant, "Jack Dempsey", "Jack Dempsey (plant)");
+        AddName(store, plant, "Jack Dempsey", "iucn", preferred: true);
+
+        Assert.Null(store.GetAmbiguousNames("en").KeptBy("jackdempsey"));
+    }
+
     [Fact]
     public void ASpeciesTiedWithItsSubspecies_AndAnUnrelatedTaxon_DoesNotKeepTheName() {
         using var store = OpenInMemory();

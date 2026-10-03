@@ -22,15 +22,26 @@ namespace BeastieBot3.CommonNames;
 /// ambiguous for every other taxon that has it, and for all of them when two unrelated taxa tie
 /// for the best priority.
 ///
+/// A Wikipedia title does not decide between the taxa that one article covers. When the taxa
+/// with the best priority have the name as the title of the same page, the other taxa that have
+/// the name and are matched to that page (a Wikipedia cross-reference, usually `other_taxon_page`:
+/// a species IUCN has split while Wikipedia keeps one article) are compared with them. Of those
+/// taxa, a species keeps the name over its own subspecies, varieties and subpopulations; failing
+/// that, the one taxon with the name as IUCN's main English name keeps it (with the same
+/// tie-break as above); failing that, the title decides as before.
+///
 /// Examples from 2026: Panthera leo keeps "Lion" (its Wikipedia title) over Panthera leo ssp. leo
 /// (an IUCN name that is not IUCN's main one); Panthera tigris keeps "Tiger" over Plectropomus
 /// oligacanthus (a Catalogue of Life name); Lithobates sylvaticus keeps "Wood frog" (its Wikipedia
 /// title) over Papurana daemeli (IUCN's main name); Quercus alba keeps "White oak" (IUCN's main
-/// name and its taxobox name) over Grevillea baileyana (IUCN's main name only).
+/// name and its taxobox name) over Grevillea baileyana (IUCN's main name only); Anisognathus
+/// lunulatus keeps "Scarlet-bellied mountain tanager" (IUCN's main name) over Anisognathus
+/// igniventris, whose article has that title and covers both species.
 /// </summary>
 internal sealed class AmbiguousNames {
     public static AmbiguousNames None { get; } = new(Array.Empty<string>(), new Dictionary<string, long[]>());
 
+    private const int WikipediaTitlePriority = 1;
     private const int IucnMainPriority = 2;
 
     /// <summary>
@@ -44,7 +55,7 @@ internal sealed class AmbiguousNames {
     /// ranked below the taxobox name before and still does.
     /// </summary>
     internal static int KeeperPriority(string source, bool isPreferred) => source.ToLowerInvariant() switch {
-        "wikipedia_title" => 1,
+        "wikipedia_title" => WikipediaTitlePriority,
         "iucn" => isPreferred ? IucnMainPriority : 5,
         "wikipedia_taxobox" => 3,
         "wikidata_label" => 4,
@@ -99,8 +110,14 @@ internal sealed class AmbiguousNames {
     public bool IsAmbiguousFor(long taxonId, string normalizedName) =>
         _keepersByName.TryGetValue(normalizedName, out var keepers) && Array.IndexOf(keepers, taxonId) < 0;
 
-    /// <summary>Applies the rule to every (name, taxon, source) row of the taxa that count.</summary>
-    internal static AmbiguousNames Build(IEnumerable<NameHolding> holdings) {
+    /// <summary>
+    /// Applies the rule to every (name, taxon, source) row of the taxa that count.
+    /// <paramref name="taxaByPage"/> gives, for a Wikipedia page title, the store taxa matched to
+    /// that page (their Wikipedia cross-references); without it a title always decides.
+    /// </summary>
+    internal static AmbiguousNames Build(IEnumerable<NameHolding> holdings,
+        IReadOnlyDictionary<string, HashSet<long>>? taxaByPage = null) {
+        taxaByPage ??= new Dictionary<string, HashSet<long>>();
         // For each name, one holder per scientific name and kingdom.
         var byName = new Dictionary<string, Dictionary<(string CanonicalName, string? Kingdom), Holder>>(StringComparer.OrdinalIgnoreCase);
         foreach (var holding in holdings) {
@@ -121,43 +138,94 @@ internal sealed class AmbiguousNames {
             .ToList();
         var keepersByName = new Dictionary<string, long[]>(shared.Count, StringComparer.OrdinalIgnoreCase);
         foreach (var (name, holders) in shared) {
-            keepersByName[name] = FindKeeper(holders.Values.ToList())?.TaxonIds.Order().ToArray() ?? Array.Empty<long>();
+            keepersByName[name] = FindKeeper(holders.Values.ToList(), taxaByPage)?.TaxonIds.Order().ToArray() ?? Array.Empty<long>();
         }
         return new AmbiguousNames(shared.Select(kv => kv.Key).ToList(), keepersByName);
     }
 
     // The store taxa with one scientific name (and kingdom) that have a name, their best priority
-    // for it, and their best tie-break among IUCN main names.
+    // for it, their best tie-break among IUCN main names, whether they have it as IUCN's main name,
+    // and the pages they have it from as a Wikipedia title.
     private sealed class Holder(string canonicalName) {
         public string CanonicalName { get; } = canonicalName;
         public int Priority { get; private set; } = int.MaxValue;
         public int TieBreak { get; private set; } = int.MaxValue;
+        public bool HasIucnMain { get; private set; }
+        public bool HasTitleWithoutPage { get; private set; }
+        public HashSet<string> TitlePages { get; } = new(StringComparer.Ordinal);
         public List<long> TaxonIds { get; } = new();
 
         public void Add(NameHolding holding) {
             if (!TaxonIds.Contains(holding.TaxonId)) {
                 TaxonIds.Add(holding.TaxonId);
             }
-            Priority = Math.Min(Priority, KeeperPriority(holding.Source, holding.IsPreferred));
+            var priority = KeeperPriority(holding.Source, holding.IsPreferred);
+            Priority = Math.Min(Priority, priority);
             TieBreak = Math.Min(TieBreak, IucnMainTieBreak(holding.Source));
+            HasIucnMain |= priority == IucnMainPriority;
+            if (priority == WikipediaTitlePriority) {
+                if (string.IsNullOrEmpty(holding.TitlePage)) {
+                    HasTitleWithoutPage = true;
+                } else {
+                    TitlePages.Add(holding.TitlePage);
+                }
+            }
         }
     }
 
     // At most one holder can keep a name: of two holders at the best priority (and tie-break), at
     // most one is the species of the other.
-    private static Holder? FindKeeper(IReadOnlyList<Holder> holders) {
+    private static Holder? FindKeeper(IReadOnlyList<Holder> holders, IReadOnlyDictionary<string, HashSet<long>> taxaByPage) {
         var best = holders.Min(h => h.Priority);
         var atBest = holders.Where(h => h.Priority == best).ToList();
+        if (best == WikipediaTitlePriority && TaxaOfOneArticle(atBest, holders, taxaByPage) is { } article) {
+            if ((SpeciesOfAll(article) ?? ByIucnMainName(article)) is { } keeper) {
+                return keeper;
+            }
+        }
         if (best == IucnMainPriority && atBest.Count > 1) {
             var tieBreak = atBest.Min(h => h.TieBreak);
             atBest = atBest.Where(h => h.TieBreak == tieBreak).ToList();
         }
-        if (atBest.Count == 1) {
-            return atBest[0];
+        return atBest.Count == 1 ? atBest[0] : SpeciesOfAll(atBest);
+    }
+
+    // The holders that one Wikipedia article covers: the title holders, when all of them have the
+    // name as the title of the same page, and every other holder matched to that page. Null when
+    // the title holders' pages differ or are not known, or the article covers only one holder.
+    private static List<Holder>? TaxaOfOneArticle(List<Holder> titleHolders, IReadOnlyList<Holder> holders,
+        IReadOnlyDictionary<string, HashSet<long>> taxaByPage) {
+        if (titleHolders.Any(h => h.HasTitleWithoutPage)) {
+            return null;
         }
-        foreach (var candidate in atBest) {
-            if (atBest.All(other => ReferenceEquals(other, candidate)
-                                    || IsSpeciesOf(candidate.CanonicalName, other.CanonicalName))) {
+        var pages = titleHolders.SelectMany(h => h.TitlePages).Distinct(StringComparer.Ordinal).ToList();
+        if (pages.Count != 1) {
+            return null;
+        }
+        var linked = taxaByPage.GetValueOrDefault(pages[0]);
+        var article = titleHolders
+            .Concat(holders.Where(h => !titleHolders.Contains(h) && linked is not null && h.TaxonIds.Any(linked.Contains)))
+            .ToList();
+        return article.Count > 1 ? article : null;
+    }
+
+    // The one holder with the name as IUCN's main name, after the tie-break; null when none or
+    // several.
+    private static Holder? ByIucnMainName(List<Holder> holders) {
+        var main = holders.Where(h => h.HasIucnMain).ToList();
+        if (main.Count == 0) {
+            return null;
+        }
+        var tieBreak = main.Min(h => h.TieBreak);
+        var best = main.Where(h => h.TieBreak == tieBreak).ToList();
+        return best.Count == 1 ? best[0] : null;
+    }
+
+    // The holder that is the species of every other holder; null when there is none.
+    private static Holder? SpeciesOfAll(List<Holder> holders) {
+        foreach (var candidate in holders) {
+            if (holders.All(other => ReferenceEquals(other, candidate)
+                                     || IsSpeciesOf(candidate.CanonicalName, other.CanonicalName))) {
                 return candidate;
             }
         }
@@ -180,7 +248,8 @@ internal sealed class AmbiguousNames {
 /// <summary>
 /// One common name of one taxon from one source, as <see cref="AmbiguousNames.Build"/> reads it.
 /// <paramref name="Source"/> and <paramref name="IsPreferred"/> are the store's; <paramref name="Kingdom"/>
-/// is the taxon's kingdom as the store has it, or null.
+/// is the taxon's kingdom as the store has it, or null. <paramref name="TitlePage"/> is the page a
+/// <c>wikipedia_title</c> name came from (its source_identifier), or null.
 /// </summary>
 internal readonly record struct NameHolding(string NormalizedName, long TaxonId, string CanonicalName, string Source,
-    bool IsPreferred, string? Kingdom = null);
+    bool IsPreferred, string? Kingdom = null, string? TitlePage = null);
