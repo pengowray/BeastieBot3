@@ -355,6 +355,15 @@ public sealed class WikidataStatusUnitTests {
     }
 
     [Fact]
+    public void NameNote_SaysWhenIucnsNameIsAnInternalOne() {
+        // Q56226968: IUCN's citation gives taxon 22694346 as "Larus glaucoides_old".
+        Assert.Equal("This assessment was published under the name Larus glaucoides, which is the name in the item's title. "
+            + "IUCN's citation now gives the name Larus glaucoides_old, which is IUCN's internal name for a replaced taxon.",
+            Display.SiteText.NameFromItemTitle("Larus glaucoides", "Larus glaucoides_old"));
+        Assert.EndsWith("IUCN's citation now gives the name Lupulella mesomelas.", Display.SiteText.NameRegistered("Canis mesomelas", "Lupulella mesomelas"));
+    }
+
+    [Fact]
     public void ReviewScopes_HaveNoPlan() {
         var others = WikidataOtherTaxonItem.ListToJson([new WikidataOtherTaxonItem("Q1588648", false, [])]);
         var several = WikidataCite.BuildStatus(Taxon(p141: Statement("Q278113")) with { WikidataOtherItems = others }, Latest(), null);

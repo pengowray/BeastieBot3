@@ -251,9 +251,12 @@ public static class SiteText {
     // differs from IUCN's citation name, or when the commands use IUCN's citation name because the
     // name the assessment was published under is not known.
     public static string NameFromItemTitle(string published, string cited) =>
-        $"This assessment was published under the name {published}, which is the name in the item's title. IUCN's citation now gives the name {cited}.";
+        $"This assessment was published under the name {published}, which is the name in the item's title. {CitedName(cited)}";
     public static string NameRegistered(string published, string cited) =>
-        $"This assessment was published under the name {published}, which is the name in the title registered with Crossref for its DOI. IUCN's citation now gives the name {cited}.";
+        $"This assessment was published under the name {published}, which is the name in the title registered with Crossref for its DOI. {CitedName(cited)}";
+    private static string CitedName(string cited) => WikidataCitation.IsIucnInternalName(cited)
+        ? $"IUCN's citation now gives the name {cited}, which is IUCN's internal name for a replaced taxon."
+        : $"IUCN's citation now gives the name {cited}.";
     /// After NameFromItemTitle or NameRegistered, when the commands set the title or label.
     public const string NameCommandsUsePublished = "The commands use the published name.";
     public static string NameFromIucnCitation(string cited) =>
