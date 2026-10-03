@@ -136,6 +136,30 @@ public class AuditRenderingTests {
     }
 
     [Fact]
+    public void PartsColumn_LinksEachPartInHtmlAndWritesPlainTextToCsv() {
+        var column = new AuditColumn {
+            Key = "matches", Header = "Matches", Value = f => "2 taxa: 20 (LC, 2020); 30 <x>",
+            Parts = f => new[] {
+                new AuditCellPart("2 taxa: "),
+                new AuditCellPart("20 (LC, 2020)", "https://www.iucnredlist.org/species/20/200"),
+                new AuditCellPart("; "),
+                new AuditCellPart("30 <x>", "javascript:alert(1)"),
+            },
+        };
+        var report = new AuditReport {
+            Id = "demo", Title = "Demo", Summary = "x", DataSourceLabel = "src",
+            Columns = new List<AuditColumn> { column }, Findings = new[] { new AuditFinding { ReportId = "demo", Key = "1" } },
+        };
+
+        var html = HtmlListRenderer.Table(report, report.Findings);
+        Assert.Contains("2 taxa: <a href=\"https://www.iucnredlist.org/species/20/200\" rel=\"noopener\" target=\"_blank\">20 (LC, 2020)</a>; 30 &lt;x&gt;", html);
+        Assert.DoesNotContain("javascript:", html);
+
+        var csv = AuditCsvWriter.Write(report.Columns, report.Findings).Replace("\r", "").Split('\n');
+        Assert.Equal("demo:1,\"2 taxa: 20 (LC, 2020); 30 <x>\"", csv[1]);
+    }
+
+    [Fact]
     public void Csv_WritesHeaderKeysAndEscapes() {
         var columns = new List<AuditColumn> {
             new() { Key = "name", Header = "Name", Value = f => f.ScientificName },

@@ -53,5 +53,14 @@ internal sealed class AuditColumn {
     // data-view-html); values are HTML-escaped by the renderer. Null values are omitted.
     public IReadOnlyDictionary<string, Func<AuditFinding, string?>>? Data { get; init; }
 
+    // For a cell that holds several linked items (one link per matched taxon): the HTML table shows
+    // these parts, each part's text linked to its Href when it has one, while Value() stays the
+    // plain text the CSV writer and the sort use. Null, or an empty list, falls back to Value().
+    public Func<AuditFinding, IReadOnlyList<AuditCellPart>?>? Parts { get; init; }
+
     public bool IsNumeric => Type == AuditColumnType.Number;
 }
+
+// One piece of a multi-part cell. The parts are written in order with nothing added between them,
+// so separators and a leading count are parts with no Href: "2 taxa: ", a link, "; ", a link.
+internal sealed record AuditCellPart(string Text, string? Href = null);

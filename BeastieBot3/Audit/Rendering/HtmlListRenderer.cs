@@ -63,6 +63,10 @@ internal static class HtmlListRenderer {
         var sortAttr = $" data-sort=\"{HtmlText.Escape(sortKey)}\"";
         var numClass = col.IsNumeric ? " class=\"num\"" : "";
 
+        if (col.Parts?.Invoke(f) is { Count: > 0 } parts) {
+            return $"<td{numClass}{sortAttr}>{PartsHtml(parts)}</td>";
+        }
+
         switch (col.Type) {
             case AuditColumnType.Status: {
                 if (string.IsNullOrWhiteSpace(raw)) {
@@ -120,6 +124,18 @@ internal static class HtmlListRenderer {
             default:
                 return $"<td{sortAttr}>{HtmlText.Escape(raw)}</td>";
         }
+    }
+
+    // Each part's text, escaped, and linked when the part has a safe Href.
+    private static string PartsHtml(IReadOnlyList<AuditCellPart> parts) {
+        var sb = new StringBuilder();
+        foreach (var part in parts) {
+            var text = HtmlText.Escape(part.Text);
+            sb.Append(HtmlText.IsSafeHref(part.Href)
+                ? $"<a href=\"{HtmlText.Escape(part.Href!)}\" rel=\"noopener\" target=\"_blank\">{text}</a>"
+                : text);
+        }
+        return sb.ToString();
     }
 
     private static string SortValue(AuditColumn col, string raw) {
