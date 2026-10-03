@@ -120,9 +120,10 @@ public static class FixtureDb {
     /// Creates a fixture database in a new temporary folder and returns its path. The folder is
     /// deleted when the test run ends. schemaVersion and dropTable make the broken variants;
     /// release sets meta iucn_release; withSourceCitations=false leaves out the GBIF and Catalogue
-    /// of Life citation and DOI meta keys, and the date DOIs were last checked.
+    /// of Life citation and DOI meta keys, and the date DOIs were last checked; wikidataItemModelJson
+    /// replaces the stored Wikidata assessment item model (the defaults).
     public static string Create(string name, string? schemaVersion = null, string? dropTable = null, string release = "2026-1",
-        bool withSourceCitations = true) {
+        bool withSourceCitations = true, string? wikidataItemModelJson = null) {
         var dir = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "beastiebot-site-tests", Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(dir);
         AppDomain.CurrentDomain.ProcessExit += (_, _) => {
@@ -142,7 +143,8 @@ public static class FixtureDb {
             Exec(connection, SiteDbSchema.Ddl);
             using var tx = connection.BeginTransaction();
             var writer = new Writer(connection, tx);
-            Populate(writer, schemaVersion ?? SiteDbSchema.Version.ToString(CultureInfo.InvariantCulture), release, withSourceCitations);
+            Populate(writer, schemaVersion ?? SiteDbSchema.Version.ToString(CultureInfo.InvariantCulture), release, withSourceCitations,
+                wikidataItemModelJson ?? new WikidataItemModel().ToJson());
             tx.Commit();
             Exec(connection, "INSERT INTO name_fts(name_fts) VALUES('rebuild')");
             if (dropTable is not null) {
@@ -152,7 +154,7 @@ public static class FixtureDb {
         return path;
     }
 
-    private static void Populate(Writer w, string schemaVersion, string release, bool withSourceCitations) {
+    private static void Populate(Writer w, string schemaVersion, string release, bool withSourceCitations, string wikidataItemModelJson) {
         // Polar bear: a species with a global history, a citation with a DOI from GBIF, an
         // unsplit author, common names in three languages and synonyms.
         w.Taxon(PolarBear, "Ursus maritimus", "species", "ANIMALIA", "CHORDATA", "MAMMALIA", "CARNIVORA", "URSIDAE", "Ursus",
@@ -412,7 +414,7 @@ public static class FixtureDb {
         }
         w.Meta(SiteDbSchema.MetaKeys.ColRelease, "COL26.7 XR");
         w.Meta(SiteDbSchema.MetaKeys.SpratReport, "01102026-023504-report.csv");
-        w.Meta(SiteDbSchema.MetaKeys.WikidataItemModel, new WikidataItemModel().ToJson());
+        w.Meta(SiteDbSchema.MetaKeys.WikidataItemModel, wikidataItemModelJson);
         w.Meta(SiteDbSchema.MetaKeys.TaxonCount, w.TaxonCount.ToString(CultureInfo.InvariantCulture));
         w.Meta(SiteDbSchema.MetaKeys.AssessmentCount, w.AssessmentCount.ToString(CultureInfo.InvariantCulture));
     }

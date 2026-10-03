@@ -657,6 +657,32 @@ textarea {
     color: var(--fg);
 }
 
+/* "Wikitext updated", where the update button is when site.js hides it. The line keeps its
+   height while empty, so the form does not move when the text appears. */
+.live-status {
+    margin: 0.5rem 0 0;
+    min-height: 1.5em;
+    font-size: 0.9rem;
+}
+
+/* {{cite Q}} and QuickStatements, after the citation options */
+
+.wikidata-cite {
+    margin-top: 2rem;
+}
+
+.wikidata-cite h3 {
+    margin-top: 0;
+}
+
+.wikidata-cite .wikitext-box {
+    margin-bottom: 0.5rem;
+}
+
+.quickstatements-link {
+    margin: 0 0 1.25rem;
+}
+
 .help {
     font-size: 0.85rem;
     color: var(--muted);

@@ -191,7 +191,68 @@ public static class SiteText {
     public const string RefNameHelp = "Use a ref name that no other citation in the article uses, unless this citation replaces the citation with that name.";
     public const string AmpHtml = "Add <code>|name-list-style=amp</code>";
     public const string AmpHelp = "Puts “&” before the last author, as IUCN does.";
+    /// The form's submit button, for browsers without JavaScript. site.js hides it and updates the
+    /// wikitext as soon as an option changes, then shows WikitextUpdated in a status line.
     public const string UpdateWikitext = "Update wikitext";
+    public const string WikitextUpdated = "Wikitext updated";
+
+    // Taxon page: {{cite Q}} and QuickStatements, the last part of the wikitext section. The site
+    // never edits Wikidata; the reader runs the QuickStatements commands with their own account.
+    public const string HeadingWikidataCite = "{{cite Q}} citation from Wikidata";
+    /// Before a link to the item ("Q123").
+    public const string WikidataItemBefore = "Wikidata item for this assessment: ";
+    public const string LabelCiteQ = "{{cite Q}} citation";
+    /// Link("English Wikipedia guidance") + after: the 2017 deletion discussion of Template:Cite Q
+    /// and WP:Citing sources#Wikidata.
+    public const string CiteQGuidanceLink = "English Wikipedia guidance";
+    public const string CiteQGuidanceUrl = "https://en.wikipedia.org/wiki/Wikipedia:Citing_sources#Wikidata";
+    public const string CiteQGuidanceAfter =
+        ": check every detail that {{cite Q}} takes from Wikidata, and don't use {{cite Q}} in an article whose citations mostly give authors as “Last, First” or in Vancouver style.";
+    /// statements: "publisher (P123), DOI (P356)".
+    public static string MissingStatements(string statements) => $"The item is missing these statements: {statements}.";
+    /// After MissingStatements, in the same paragraph.
+    public const string AddStatementsLine = "To add them, run these commands in QuickStatements with your Wikidata account.";
+    public const string LabelAddStatements = "QuickStatements commands to add the missing statements";
+    public const string NoWikidataItem = "No Wikidata item found for this assessment.";
+    /// Before + link("search Wikidata") + after.
+    public const string SearchWikidataBefore = "Before creating an item, ";
+    public const string SearchWikidataLink = "search Wikidata";
+    public const string SearchWikidataAfter = " in case one was added after this site's data was downloaded.";
+    public const string CreateItemLine =
+        "To create the item, run these commands in QuickStatements with your Wikidata account. Then cite the new item with {{cite Q|<new item id>}}.";
+    public const string LabelCreateItem = "QuickStatements commands to create the item";
+    public const string OpenInQuickStatements = "Open in QuickStatements";
+    public const string CopyQuickStatements = "Copy QuickStatements commands";
+
+    /// The English labels of the properties the assessment item model uses, as Wikidata gives them.
+    public static string WikidataPropertyLabel(string property) {
+        var label = property switch {
+            "P31" => "instance of",
+            "P50" => "author",
+            "P123" => "publisher",
+            "P356" => "DOI",
+            "P407" => "language of work or name",
+            "P478" => "volume",
+            "P577" => "publication date",
+            "P921" => "main subject",
+            "P953" => "full work available at URL",
+            "P1433" => "published in",
+            "P1476" => "title",
+            "P2093" => "author name string",
+            "P2322" => "article ID",
+            _ => null,
+        };
+        return label is null ? property : $"{label} ({property})";
+    }
+
+    /// QuickStatements terms: 'L' label, 'D' description, 'A' alias, 'S' sitelink, with the language
+    /// code or site: "label (en)".
+    public static string WikidataTermLabel(char kind, string language) => kind switch {
+        'L' => $"label ({language})",
+        'D' => $"description ({language})",
+        'A' => $"alias ({language})",
+        _ => $"sitelink ({language})",
+    };
 
     // Taxon page: notes about the wikitext
     public const string DoiGbif = "DOI from GBIF's copy of the IUCN checklist.";

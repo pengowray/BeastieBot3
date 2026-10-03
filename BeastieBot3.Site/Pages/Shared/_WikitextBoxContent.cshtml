@@ -1,0 +1,8 @@
+@model WikitextBox
+@* The label, copy button, copy status and text of one box. The copy button is shown by site.js. *@
+<div class="wikitext-box-head">
+    <label for="@Model.Id">@Model.Label</label>
+    <button type="button" class="copy-button" data-copy="@Model.Id" aria-label="@Model.CopyAccessibleName" hidden>@SiteText.Copy</button>
+    <p class="copy-status" role="status" aria-live="polite"></p>
+</div>
+<textarea id="@Model.Id" readonly rows="@Model.Rows" spellcheck="false" autocapitalize="off" autocomplete="off">@Model.Text</textarea>
