@@ -196,11 +196,11 @@ internal sealed class CommonNameReportCommand : AsyncCommand<CommonNameReportCom
                 var byTaxon = records
                     .GroupBy(r => r.TaxonId)
                     .OrderByDescending(g => verdicts.Keeps(g.Key, normalizedName))
-                    .ThenBy(g => g.Min(r => CommonNameStore.GetSourcePriority(r.Source, r.IsPreferred)));
+                    .ThenBy(g => g.Min(r => AmbiguousNames.KeeperPriority(r.Source, r.IsPreferred)));
                 foreach (var taxonGroup in byTaxon) {
                     var first = taxonGroup.First();
                     var sources = string.Join(", ", taxonGroup
-                        .OrderBy(r => CommonNameStore.GetSourcePriority(r.Source, r.IsPreferred))
+                        .OrderBy(r => AmbiguousNames.KeeperPriority(r.Source, r.IsPreferred))
                         .Select(r => r.Source).Distinct());
                     var isPreferred = taxonGroup.Any(r => r.IsPreferred) ? "Yes" : "No";
                     var scientificName = CapitalizeFirst(first.TaxonCanonicalName);

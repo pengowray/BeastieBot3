@@ -559,9 +559,12 @@ internal sealed class CommonNameStore : SqliteStore {
     }
 
     /// <summary>
-    /// Source priority for common name selection.
-    /// Lower numbers = higher priority. Wikipedia sources are preferred as they match existing article titles.
+    /// The order in which the chooser tries one taxon's own common names
+    /// (<see cref="CommonNameChooser.ChooseBest"/>); lower numbers first. Wikipedia sources come
+    /// first as they match existing article titles.
     /// Order: wikipedia_title, wikipedia_taxobox, wikidata_label, iucn (preferred), iucn (other), wikidata (aliases), col.
+    /// Which taxon keeps a name that several taxa have is decided in another order
+    /// (<see cref="AmbiguousNames.KeeperPriority"/>).
     /// </summary>
     internal static int GetSourcePriority(string source, bool isPreferred) {
         return source.ToLowerInvariant() switch {
@@ -659,8 +662,9 @@ internal sealed class CommonNameStore : SqliteStore {
     /// generation and `site build-db` skip a name that is ambiguous for the taxon
     /// (<see cref="CommonNameChooser.ChooseBest"/>), and `common-names report --report ambiguous` lists the shared
     /// names with the taxon that keeps each one (<see cref="GetAmbiguousCommonNames"/>), so all
-    /// three read this method and cannot drift apart. Source priority comes from
-    /// <see cref="GetSourcePriority"/>, so the names are grouped here rather than in SQL.
+    /// three read this method and cannot drift apart. <see cref="AmbiguousNames"/> ranks the
+    /// sources (<see cref="AmbiguousNames.KeeperPriority"/>), so the names are grouped there rather
+    /// than in SQL.
     /// With <paramref name="kingdom"/>, only that kingdom's taxa are counted, so a name shared by
     /// a plant and an animal is not shared within either kingdom. The kingdom is upper-cased
     /// before binding, because taxa store it as IUCN writes it ("PLANTAE") and the report's
@@ -699,7 +703,8 @@ internal sealed class CommonNameStore : SqliteStore {
                 NormalizedName: usable.NormalizedName,
                 TaxonId: reader.GetInt64(1),
                 CanonicalName: reader.GetString(2),
-                Priority: GetSourcePriority(source, preferred),
+                Source: source,
+                IsPreferred: preferred,
                 Kingdom: reader.IsDBNull(6) ? null : reader.GetString(6)));
         }
         return AmbiguousNames.Build(holdings);
