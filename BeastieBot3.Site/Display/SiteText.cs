@@ -247,6 +247,29 @@ public static class SiteText {
     public const string RunCommandsLine = "Run these commands in QuickStatements with your Wikidata account.";
     public const string LabelUpdateItem = "QuickStatements commands to update the item";
 
+    // The name in the item's title and label (WikidataCitation.PublishedNameFor), shown when it
+    // differs from IUCN's citation name, or when the commands use IUCN's citation name because the
+    // name the assessment was published under is not known.
+    public static string NameFromItemTitle(string published, string cited) =>
+        $"This assessment was published under the name {published}, which is the name in the item's title. IUCN's citation now gives the name {cited}.";
+    public static string NameRegistered(string published, string cited) =>
+        $"This assessment was published under the name {published}, which is the name in the title registered with Crossref for its DOI. IUCN's citation now gives the name {cited}.";
+    /// After NameFromItemTitle or NameRegistered, when the commands set the title or label.
+    public const string NameCommandsUsePublished = "The commands use the published name.";
+    public static string NameFromIucnCitation(string cited) =>
+        $"The commands use the name in IUCN's citation, {cited}. This site does not know the name the assessment was published under, which for an older assessment may be different.";
+    /// No item, and no usable name for a new one.
+    public static string NoUsableName(string cited) =>
+        $"No commands: IUCN's citation gives the name as {cited}, which is IUCN's internal name for a replaced taxon, and this site does not know the name the assessment was published under.";
+
+    // An errata version that shares the Wikidata item of the assessment it corrects (same DOI).
+    /// Before + link(BorrowedItemLink) + ".".
+    public const string BorrowedItemBefore =
+        "This errata version has the same DOI as the assessment it corrects, so it shares that assessment's Wikidata item. Commands to update the item are on ";
+    public const string BorrowedItemLink = "that assessment's page";
+    public static string BorrowedItemNoPage(long assessmentId) =>
+        $"This errata version has the same DOI as the assessment it corrects (assessment {assessmentId}), so it shares that assessment's Wikidata item. This site has no page for that assessment, so it offers no commands to update the item.";
+
     // Taxon page: the taxon item's IUCN conservation status (P141) beside the latest global
     // assessment, after the {{cite Q}} part. Wikidata's own English labels name the status values
     // ("critically endangered (Q219127)").
@@ -266,7 +289,19 @@ public static class SiteText {
         return WikidataStatusValues.Describe(qid) is { } value ? $"{value.LabelEn} ({value.Qid})" : qid;
     }
     public static string StatusValueWithRank(string? qid, string rank) => $"{StatusValue(qid)}, {rank} rank";
+    /// A statement in the comparison table: its value, its rank when the item has several, and a
+    /// note when no reference cites IUCN.
+    public static string StatusStatement(WikidataStatusStatement statement, bool showRank) {
+        var text = showRank ? StatusValueWithRank(statement.Value, statement.Rank) : StatusValue(statement.Value);
+        return statement.CitesIucn ? text : $"{text}, {(statement.References == 0 ? "no reference" : "no reference to IUCN")}";
+    }
     public const string StatusNone = "none";
+    public const string StatusNotDownloaded = "not downloaded";
+    /// After a link to an item in the comparison table.
+    public const string StatusRowTaxonIdDeprecated = ", IUCN taxon ID at deprecated rank";
+    /// Under the table, when some statements have no reference to IUCN.
+    public const string StatusOthersNote =
+        "Only statements with a reference to IUCN are compared with the assessment, and the commands never remove the other statements.";
     /// The IUCN row when the category has no P141 value: "no value for LR/cd".
     public static string StatusNoValueFor(string code) => $"no value for {code}";
 
@@ -280,8 +315,11 @@ public static class SiteText {
 
     public const string StatusAgrees = "Wikidata gives the same status.";
     public const string StatusAgreesCited = "Wikidata gives the same status, with a reference to this assessment's Wikidata item. No commands needed.";
+    public static string StatusAgreesCitedTaxonId(long taxonId) =>
+        $"Wikidata gives the same status, with a reference that has IUCN taxon ID (P627) {taxonId}. No commands needed.";
     public const string StatusDiffers = "Wikidata gives a different status.";
     public const string StatusMissing = "Wikidata gives no IUCN conservation status for this taxon.";
+    public const string StatusMissingNoIucnReference = "None of the item's IUCN conservation status statements has a reference to IUCN.";
     public static string StatusNoValue(string iucnLabel, string code) =>
         $"No commands: Wikidata has no IUCN conservation status value for {iucnLabel} ({code}).";
     public static string StatusBlockedSeveral(int count, string value) =>
@@ -296,13 +334,27 @@ public static class SiteText {
         $" was matched to this taxon by name and does not state IUCN taxon ID (P627) {taxonId}.";
     /// Before + link(item) + ".".
     public const string StatusNotDownloadedBefore = "No commands: this site has not downloaded the Wikidata item ";
+    public static string StatusSeveralItems(int count, long taxonId) =>
+        $"No commands: {count} Wikidata items state IUCN taxon ID (P627) {taxonId}, so first check which one is the item for this taxon.";
+    /// Before + link(item) + StatusTaxonIdDeprecatedAfter.
+    public const string StatusTaxonIdDeprecatedBefore = "No commands: the Wikidata item ";
+    public static string StatusTaxonIdDeprecatedAfter(long taxonId) =>
+        $" states IUCN taxon ID (P627) {taxonId} only at deprecated rank, so it may not be the item for this taxon.";
 
     public const string StatusCommandsDo = "The commands:";
-    public static string StatusAddValue(string value) => $"add {value} with the reference below";
-    public static string StatusAddReference(string value) => $"add the reference below to the {value} statement";
+    /// same: the other choice, shown after the reference.
+    public static string StatusAddValue(string value, bool same = false) =>
+        same ? $"add {value} with the same reference" : $"add {value} with the reference below";
+    public static string StatusAddReference(string value, bool same = false) =>
+        same ? $"add the same reference to the {value} statement" : $"add the reference below to the {value} statement";
     public static string StatusRemove(string value) => $"remove {value}";
-    public const string StatusReplaceReason =
-        "Most taxon items on Wikidata have one IUCN conservation status statement, so these commands replace the old status.";
+    /// Why the commands shown first remove or keep the old status (WikidataStatusEdit.RecommendedChoice).
+    public const string StatusReplaceReason = "None of the item's statements has preferred rank, so these commands remove the old status.";
+    public const string StatusKeepReason =
+        "The item has a statement at preferred rank. Items like this keep earlier statuses at normal rank, so these commands keep the old status.";
+    /// The same, when keeping the old status needs no commands, only ranks.
+    public const string StatusKeepReasonNoCommands =
+        "The item has a statement at preferred rank. Items like this keep earlier statuses at normal rank.";
 
     public const string ReferenceLabel = "The reference:";
     /// Before + link(item) + RefStatedInAfter.
@@ -318,14 +370,19 @@ public static class SiteText {
     public const string LeftOutAssessmentItem = "stated in (P248) for this assessment's own Wikidata item: this site's data has none";
     public const string LabelStatusCommands = "QuickStatements commands to update the IUCN conservation status";
 
-    public const string KeepSummary = "Keep the old status on the item instead";
-    public static string KeepIntro(string value) =>
-        $"These commands add {value} with the same reference and remove nothing.";
-    /// steps: "set endangered (Q96377276) to preferred rank and near threatened (Q719675) to normal rank".
-    public static string KeepRankSteps(string steps) =>
+    /// The summary of the details element with the other choice.
+    public static string StatusAltSummary(StatusEditChoice choice) => choice == StatusEditChoice.Keep
+        ? "Keep the old status on the item instead"
+        : "Remove the old status from the item instead";
+    public static string LabelStatusChoiceCommands(StatusEditChoice choice) => choice == StatusEditChoice.Keep
+        ? "QuickStatements commands that keep the old status"
+        : "QuickStatements commands that remove the old status";
+    /// steps: "set endangered (Q96377276) to preferred rank and set near threatened (Q719675) to normal rank".
+    public static string RankStepsAfterCommands(string steps) =>
         $"QuickStatements cannot set ranks. After the commands run, on the item's page {steps}.";
+    /// The same, when the choice needs no commands, only ranks.
+    public static string RankStepsOnly(string steps) => $"No QuickStatements commands are needed. On the item's page, {steps}.";
     public static string RankStep(string value, string rank) => $"set {value} to {rank} rank";
-    public const string LabelStatusKeepCommands = "QuickStatements commands that keep the old status";
 
     /// The English labels of the properties the assessment item model uses, as Wikidata gives them.
     public static string WikidataPropertyLabel(string property) {

@@ -1,0 +1,63 @@
+@model WikidataStatusPlanPartial
+@* One way of bringing the IUCN status up to date (WikidataStatusEdit.Plan): what its commands do,
+   the reference they add, the commands, and the ranks left to set by hand. The plan shown first
+   also gives the reason for its choice and the reference; the other choice, in a details element,
+   refers to that reference. *@
+@{
+    var plan = Model.Plan;
+    var target = SiteText.StatusValue(plan.TargetQid);
+    var showRanks = plan.Current.Count > 1;
+    var steps = plan.RankSteps
+        .Select(s => SiteText.RankStep(s.StatementId is null ? target : SiteText.StatusValue(s.Value), s.Rank))
+        .ToList();
+}
+@if (plan.Commands.Count > 0) {
+    <p class="status-commands-label">@SiteText.StatusCommandsDo</p>
+    <ul>
+        @if (plan.AddsValue) {
+            <li>@SiteText.StatusAddValue(target, Model.IsAlternative)</li>
+        } else if (plan.AddsReference) {
+            <li>@SiteText.StatusAddReference(target, Model.IsAlternative)</li>
+        }
+        @foreach (var removed in plan.Removes) {
+            <li>@SiteText.StatusRemove(showRanks ? SiteText.StatusValueWithRank(removed.Value, removed.Rank) : SiteText.StatusValue(removed.Value))</li>
+        }
+    </ul>
+}
+@if (!Model.IsAlternative && plan.Outcome == StatusEditOutcome.Differs) {
+    <p class="help">@(plan.Choice == StatusEditChoice.Replace ? SiteText.StatusReplaceReason
+        : plan.Commands.Count > 0 ? SiteText.StatusKeepReason : SiteText.StatusKeepReasonNoCommands)</p>
+}
+@* Only when the commands add the reference: a batch of removals alone adds none. *@
+@if (!Model.IsAlternative && plan.Commands.Count > 0 && plan.AddsReference && plan.Reference is { } reference) {
+    <p class="status-commands-label">@SiteText.ReferenceLabel</p>
+    <ul>
+        @if (reference.StatedIn is { } statedIn) {
+            <li>@SiteText.RefStatedInBefore<a href="@SiteFormat.WikidataUrl(statedIn)">@statedIn</a>@SiteText.RefStatedInAfter</li>
+        }
+        <li>@SiteText.RefTaxonId(reference.TaxonId)</li>
+        <li>@SiteText.RefUrlBefore<a href="@reference.Url">@reference.Url</a></li>
+        @if (reference.Retrieved is { } retrieved) {
+            <li>@SiteText.RefRetrieved(SiteFormat.Date(retrieved))</li>
+        }
+    </ul>
+    <p class="status-commands-label">@SiteText.LeftOutLabel</p>
+    <ul>
+        <li>@SiteText.LeftOutRelease(Model.Release)</li>
+        @if (reference.StatedIn is null) {
+            <li>@SiteText.LeftOutAssessmentItem</li>
+        }
+    </ul>
+}
+@if (Model.Box is { } box) {
+    <p>@SiteText.RunCommandsLine</p>
+    <div class="wikitext-box">
+        <partial name="_WikitextBoxContent" model="box" />
+    </div>
+    @if (Model.QuickStatementsUrl is { } url) {
+        <p class="quickstatements-link"><a href="@url">@SiteText.OpenInQuickStatements</a></p>
+    }
+}
+@if (steps.Count > 0) {
+    <p>@(plan.Commands.Count > 0 ? SiteText.RankStepsAfterCommands(string.Join(" and ", steps)) : SiteText.RankStepsOnly(string.Join(" and ", steps)))</p>
+}

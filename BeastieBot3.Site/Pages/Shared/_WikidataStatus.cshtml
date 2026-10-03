@@ -6,6 +6,8 @@
     var plan = view.Plan;
     var latest = Model.Latest;
     var iucnLabel = IucnCategories.Describe(latest).Label;
+    var targetQid = plan?.TargetQid ?? WikidataStatusEdit.TargetQid(latest.Category);
+    var showTable = view.IsReview || (view.Scope == WikidataStatusScope.Offered && plan is not null);
 }
 <section class="wikidata-status" id="wikidata-status" aria-labelledby="wikidata-status-heading">
     <h3 id="wikidata-status-heading">@SiteText.HeadingWikidataStatus</h3>
@@ -23,8 +25,10 @@
             <p>@SiteText.StatusNotDownloadedBefore<a href="@view.TaxonItemUrl">@view.TaxonItemQid</a>.</p>
             break;
     }
-    @if (view.Scope == WikidataStatusScope.Offered && plan is not null) {
-        var showRanks = plan.Current.Count > 1;
+    @if (showTable) {
+        var current = view.Statements.Where(s => !s.IsDeprecated).OrderBy(s => s.IsPreferred ? 0 : 1).ToList();
+        var showRanks = current.Count > 1;
+        var hasOthers = current.Any(s => !s.CitesIucn);
         <div class="table-scroll">
             <table class="status-compare">
                 <thead>
@@ -36,26 +40,47 @@
                 <tbody>
                     <tr>
                         <th scope="row">@SiteText.StatusRowIucn(Model.Release)</th>
-                        <td>@(plan.TargetQid is null ? SiteText.StatusNoValueFor(latest.Category) : SiteText.StatusValue(plan.TargetQid))</td>
+                        <td>@(targetQid is null ? SiteText.StatusNoValueFor(latest.Category) : SiteText.StatusValue(targetQid))</td>
                     </tr>
                     <tr>
-                        <th scope="row">@SiteText.StatusRowWikidataBefore<a href="@view.TaxonItemUrl">@view.TaxonItemQid</a>@SiteText.StatusRowWikidataAfter(view.DownloadedText)</th>
+                        <th scope="row">@SiteText.StatusRowWikidataBefore<a href="@view.TaxonItemUrl">@view.TaxonItemQid</a>@SiteText.StatusRowWikidataAfter(view.DownloadedText)@(view.Scope == WikidataStatusScope.TaxonIdDeprecated ? SiteText.StatusRowTaxonIdDeprecated : null)</th>
                         <td>
-                            @if (plan.Current.Count == 0) {
+                            @if (view.IsReview && view.Statements.Count == 0 && view.DownloadedText is null) {
+                                @SiteText.StatusNotDownloaded
+                            } else if (current.Count == 0) {
                                 @SiteText.StatusNone
                             } else {
                                 <ul class="plain-list">
-                                    @foreach (var statement in plan.Current) {
-                                        <li>@(showRanks ? SiteText.StatusValueWithRank(statement.Value, statement.Rank) : SiteText.StatusValue(statement.Value))</li>
+                                    @foreach (var statement in current) {
+                                        <li>@SiteText.StatusStatement(statement, showRanks)</li>
                                     }
                                 </ul>
                             }
                         </td>
                     </tr>
+                    @foreach (var other in view.OtherItems) {
+                        var otherCurrent = other.Statements?.Where(s => !s.IsDeprecated).OrderBy(s => s.IsPreferred ? 0 : 1).ToList();
+                        <tr>
+                            <th scope="row">@SiteText.StatusRowWikidataBefore<a href="@SiteFormat.WikidataUrl(other.Qid)">@other.Qid</a>@(other.TaxonIdDeprecated ? SiteText.StatusRowTaxonIdDeprecated : null)</th>
+                            <td>
+                                @if (otherCurrent is null) {
+                                    @SiteText.StatusNotDownloaded
+                                } else if (otherCurrent.Count == 0) {
+                                    @SiteText.StatusNone
+                                } else {
+                                    <ul class="plain-list">
+                                        @foreach (var statement in otherCurrent) {
+                                            <li>@SiteText.StatusStatement(statement, otherCurrent.Count > 1)</li>
+                                        }
+                                    </ul>
+                                }
+                            </td>
+                        </tr>
+                    }
                 </tbody>
             </table>
         </div>
-        @if (plan.TargetQid is { } mappedTarget) {
+        @if (targetQid is { } mappedTarget) {
             var value = SiteText.StatusValue(mappedTarget);
             @if (latest.Category == "CR" && latest.PossiblyExtinct) {
                 <p class="help">@SiteText.StatusMappedPossiblyExtinct(iucnLabel, value)</p>
@@ -65,16 +90,35 @@
                 <p class="help">@SiteText.StatusMappedLowerRisk(iucnLabel, value)</p>
             }
         }
+        @if (hasOthers && !view.IsReview) {
+            <p class="help">@SiteText.StatusOthersNote</p>
+        }
 
+        @switch (view.Scope) {
+            case WikidataStatusScope.TaxonIdOnSeveralItems:
+                <p class="status-verdict">@SiteText.StatusSeveralItems(view.OtherItems.Count + 1, view.TaxonId)</p>
+                break;
+            case WikidataStatusScope.TaxonIdDeprecated:
+                <p class="status-verdict">@SiteText.StatusTaxonIdDeprecatedBefore<a href="@view.TaxonItemUrl">@view.TaxonItemQid</a>@SiteText.StatusTaxonIdDeprecatedAfter(view.TaxonId)</p>
+                break;
+        }
+    }
+    @if (view.Scope == WikidataStatusScope.Offered && plan is not null) {
         @switch (plan.Outcome) {
             case StatusEditOutcome.Agrees:
-                <p class="status-verdict">@(plan.AlreadyCited ? SiteText.StatusAgreesCited : SiteText.StatusAgrees)</p>
+                @if (!plan.AlreadyCited) {
+                    <p class="status-verdict">@SiteText.StatusAgrees</p>
+                } else if (view.AssessmentItemQid is { } citedItem && plan.Current.Any(s => s.Value == plan.TargetQid && (s.StatedIn ?? []).Contains(citedItem))) {
+                    <p class="status-verdict">@SiteText.StatusAgreesCited</p>
+                } else {
+                    <p class="status-verdict">@SiteText.StatusAgreesCitedTaxonId(view.TaxonId)</p>
+                }
                 break;
             case StatusEditOutcome.Differs:
                 <p class="status-verdict">@SiteText.StatusDiffers</p>
                 break;
             case StatusEditOutcome.Missing:
-                <p class="status-verdict">@SiteText.StatusMissing</p>
+                <p class="status-verdict">@(plan.Current.Count == 0 ? SiteText.StatusMissing : SiteText.StatusMissingNoIucnReference)</p>
                 break;
             case StatusEditOutcome.NoValue:
                 <p class="status-verdict">@SiteText.StatusNoValue(iucnLabel, latest.Category)</p>
@@ -84,78 +128,17 @@
                 <p class="status-verdict">
                     @(plan.Block == StatusEditBlock.DeprecatedStatementHasTheValue
                         ? SiteText.StatusBlockedDeprecated(blockedValue)
-                        : SiteText.StatusBlockedSeveral(plan.Current.Count(s => s.Value == plan.TargetQid), blockedValue))
+                        : SiteText.StatusBlockedSeveral(view.Statements.Count(s => s.Value == plan.TargetQid), blockedValue))
                 </p>
                 break;
         }
 
-        @if (view.Commands is { } box && plan.Reference is { } reference) {
-            var target = SiteText.StatusValue(plan.TargetQid);
-            <p class="status-commands-label">@SiteText.StatusCommandsDo</p>
-            <ul>
-                @if (plan.AddsValue) {
-                    <li>@SiteText.StatusAddValue(target)</li>
-                } else if (plan.AddsReference) {
-                    <li>@SiteText.StatusAddReference(target)</li>
-                }
-                @foreach (var removed in plan.Removes) {
-                    <li>@SiteText.StatusRemove(showRanks ? SiteText.StatusValueWithRank(removed.Value, removed.Rank) : SiteText.StatusValue(removed.Value))</li>
-                }
-            </ul>
-            @if (plan.Removes.Count > 0) {
-                <p class="help">@SiteText.StatusReplaceReason</p>
-            }
-            @* Only when the commands add the reference: a batch of removals alone adds none. *@
-            @if (plan.AddsReference) {
-                <p class="status-commands-label">@SiteText.ReferenceLabel</p>
-                <ul>
-                    @if (reference.StatedIn is { } statedIn) {
-                        <li>@SiteText.RefStatedInBefore<a href="@SiteFormat.WikidataUrl(statedIn)">@statedIn</a>@SiteText.RefStatedInAfter</li>
-                    }
-                    <li>@SiteText.RefTaxonId(reference.TaxonId)</li>
-                    <li>@SiteText.RefUrlBefore<a href="@reference.Url">@reference.Url</a></li>
-                    @if (reference.Retrieved is { } retrieved) {
-                        <li>@SiteText.RefRetrieved(SiteFormat.Date(retrieved))</li>
-                    }
-                </ul>
-                <p class="status-commands-label">@SiteText.LeftOutLabel</p>
-                <ul>
-                    <li>@SiteText.LeftOutRelease(Model.Release)</li>
-                    @if (reference.StatedIn is null) {
-                        <li>@SiteText.LeftOutAssessmentItem</li>
-                    }
-                </ul>
-            }
-            <p>@SiteText.RunCommandsLine</p>
-            <div class="wikitext-box">
-                <partial name="_WikitextBoxContent" model="box" />
-            </div>
-            @if (view.QuickStatementsUrl is { } url) {
-                <p class="quickstatements-link"><a href="@url">@SiteText.OpenInQuickStatements</a></p>
-            }
-        }
+        <partial name="_WikidataStatusPlan" model="@(new WikidataStatusPlanPartial(plan, view.Commands, view.QuickStatementsUrl, IsAlternative: false, Model.Release))" />
 
-        @if (view.KeepPlan is { } keep) {
-            var keepTarget = SiteText.StatusValue(keep.TargetQid);
-            var steps = keep.RankSteps
-                .Select(s => SiteText.RankStep(s.StatementId is null ? keepTarget : SiteText.StatusValue(s.Value), s.Rank))
-                .ToList();
-            <details class="status-keep" id="wikidata-status-keep">
-                <summary>@SiteText.KeepSummary</summary>
-                @if (view.KeepCommands is { } keepBox) {
-                    <p>@SiteText.KeepIntro(keepTarget)</p>
-                }
-                @if (steps.Count > 0) {
-                    <p>@SiteText.KeepRankSteps(string.Join(" and ", steps))</p>
-                }
-                @if (view.KeepCommands is { } keepCommands) {
-                    <div class="wikitext-box">
-                        <partial name="_WikitextBoxContent" model="keepCommands" />
-                    </div>
-                    @if (view.KeepQuickStatementsUrl is { } keepUrl) {
-                        <p class="quickstatements-link"><a href="@keepUrl">@SiteText.OpenInQuickStatements</a></p>
-                    }
-                }
+        @if (view.AltPlan is { } alt) {
+            <details class="status-keep" id="wikidata-status-alt">
+                <summary>@SiteText.StatusAltSummary(alt.Choice)</summary>
+                <partial name="_WikidataStatusPlan" model="@(new WikidataStatusPlanPartial(alt, view.AltCommands, view.AltQuickStatementsUrl, IsAlternative: true, Model.Release))" />
             </details>
         }
     }

@@ -117,6 +117,21 @@ public static class FixtureDb {
     public const string KoalaP141Vulnerable = "Q36101$1A2B3C4D-0000-4000-8000-000000000006";
     /// The tiger's assessment item's title and label, as SourceMD wrote them.
     public const string TigerItemOldTitle = "Panthera tigris: Goodrich, J. & Wibisono, H.";
+    /// Made up: the item of Micropyropsis tuberosa's 2010 assessment, which its errata version shares.
+    public const string MicropyropsisItem = "Q900000020";
+    public const string MicropyropsisItemOldTitle = "Micropyropsis tuberosa: Rhazi, L., Grillas, P., Rhazi, M. & Flanagan, D.";
+    /// Made up: the name Crossref registered for the polar bear's 2008 assessment, an older name.
+    public const string PolarBear2008RegisteredName = "Thalarctos maritimus";
+    /// The leopard's item, and a made-up second item that states its IUCN taxon ID too.
+    public const string LeopardItem = "Q35694";
+    public const string LeopardOtherItem = "Q900000030";
+    /// The cassowary's item, which states its IUCN taxon ID at deprecated rank (made up).
+    public const string CassowaryItem = "Q190722";
+    /// The woylie's item (made up): critically endangered with a reference that has its IUCN taxon
+    /// ID, and endangered with a reference to another source.
+    public const string WoylieItem = "Q900000040";
+    public const string WoylieP141Critically = "Q900000040$1A2B3C4D-0000-4000-8000-000000000007";
+    public const string WoylieP141Endangered = "Q900000040$1A2B3C4D-0000-4000-8000-000000000008";
 
     public const int FillerCount = 55;
     public const long FillerFirstId = 900000;
@@ -185,7 +200,7 @@ public static class FixtureDb {
         w.Assessment(PolarBear2008, PolarBear, "Global", false, "VU", criteria: "A3c", criteriaVersion: "3.1", year: 2008,
             date: "2008-06-30", trend: "Decreasing",
             citation: Citation(PolarBear, PolarBear2008, 2008, "Ursus maritimus", [Person("Schliebe", "S.")], etAl: true,
-                doi: null, doiSource: DoiSource.None, text: null));
+                doi: null, doiSource: DoiSource.None, text: null, registeredName: PolarBear2008RegisteredName));
         w.Assessment(PolarBear1996, PolarBear, "Global", false, "LR/cd", criteriaVersion: "2.3", year: 1996, date: "1996-06-30");
         // site build-db stores IUCN's "Earlier Version" as a NULL criteria version.
         w.Assessment(PolarBear1988Nt, PolarBear, "Global", false, "nt", year: 1988);
@@ -298,11 +313,18 @@ public static class FixtureDb {
         w.Assessment(MicropyropsisLatest, Micropyropsis, "Global", true, "EN", criteria: "B1ab(i,ii,iii,v)+2ab(i,ii,iii,v)", criteriaVersion: "3.1",
             year: 2010, date: "2009-02-12",
             citation: Citation(Micropyropsis, MicropyropsisLatest, 2010, "Micropyropsis tuberosa", rhazi,
-                doi: "10.2305/IUCN.UK.2010-2.RLTS.T162107A5539282.en", doiSource: DoiSource.Gbif, text: null, errataYear: 2016));
+                doi: "10.2305/IUCN.UK.2010-2.RLTS.T162107A5539282.en", doiSource: DoiSource.Gbif, text: null, errataYear: 2016),
+            // The errata version has the DOI of the assessment it corrects, so it shares that assessment's item.
+            wikidataItem: MicropyropsisItem, wikidataItemProperties: "P31 P1476 P1433 P577 P356 Len",
+            wikidataItemTitles: WikidataTitle.ListToJson([new WikidataTitle(MicropyropsisItemOldTitle, "en")]),
+            wikidataItemLabelEn: MicropyropsisItemOldTitle, wikidataItemAssessment: MicropyropsisReplaced);
         w.Assessment(MicropyropsisReplaced, Micropyropsis, "Global", false, "EN", criteria: "B1ab(i,ii,iii,v)+2ab(i,ii,iii,v)", criteriaVersion: "3.1",
             year: 2010, date: "2009-02-12", replacedBy: MicropyropsisLatest,
             citation: Citation(Micropyropsis, MicropyropsisReplaced, 2010, "Micropyropsis tuberosa", rhazi,
-                doi: null, doiSource: DoiSource.None, text: null));
+                doi: "10.2305/IUCN.UK.2010-2.RLTS.T162107A5539282.en", doiSource: DoiSource.Wikidata, text: null),
+            wikidataItem: MicropyropsisItem, wikidataItemProperties: "P31 P1476 P1433 P577 P356 Len",
+            wikidataItemTitles: WikidataTitle.ListToJson([new WikidataTitle(MicropyropsisItemOldTitle, "en")]),
+            wikidataItemLabelEn: MicropyropsisItemOldTitle);
         Author[] deVega = [Person("de Vega Durán", "C."), Person("Berjano Pérez", "R.")];
         w.Assessment(MicropyropsisEurope, Micropyropsis, "Europe", true, "EN", criteria: "B1ab(iii)+2ab(iii)", criteriaVersion: "3.1",
             year: 2011, date: "2011-03-23",
@@ -358,14 +380,19 @@ public static class FixtureDb {
 
         // Southern cassowary: the EPBC Act lists the whole species under another name.
         w.Taxon(Cassowary, "Casuarius casuarius", "species", "ANIMALIA", "CHORDATA", "AVES", "CASUARIIFORMES", "CASUARIIDAE", "Casuarius",
-            authority: "(Linnaeus, 1758)", commonEn: "Southern cassowary", latest: CassowaryLatest);
+            authority: "(Linnaeus, 1758)", commonEn: "Southern cassowary", latest: CassowaryLatest,
+            qid: CassowaryItem, itemDownloaded: "2026-09-13", p627Deprecated: true,
+            p141: P141(("Q190722$1A2B3C4D-0000-4000-8000-000000000009", "Q211005", "normal", "Q136547248")));
         w.Assessment(CassowaryLatest, Cassowary, "Global", true, "LC", criteriaVersion: "3.1", year: 2016, date: "2016-10-01");
         w.EpbcListing(Cassowary, CassowarySprat, "Casuarius casuarius johnsonii", "EN", "taxon", null);
         w.Name(Cassowary, "Casuarius casuarius", "scientific", null, "iucn");
 
         // Leopard and the Amur leopard, which is not in the release.
         w.Taxon(Leopard, "Panthera pardus", "species", "ANIMALIA", "CHORDATA", "MAMMALIA", "CARNIVORA", "FELIDAE", "Panthera",
-            authority: "(Linnaeus, 1758)", commonEn: "Leopard", latest: LeopardLatest);
+            authority: "(Linnaeus, 1758)", commonEn: "Leopard", latest: LeopardLatest,
+            qid: LeopardItem, itemDownloaded: "2026-09-13", p141: "[]",
+            otherItems: WikidataOtherTaxonItem.ListToJson([new WikidataOtherTaxonItem(LeopardOtherItem, false,
+                [new WikidataStatusStatement(LeopardOtherItem + "$1A2B3C4D-0000-4000-8000-00000000000A", "Q278113", "normal", ["Q136547248"], [], 1, true)])]));
         w.Assessment(LeopardLatest, Leopard, "Global", true, "VU", criteria: "A2cd", criteriaVersion: "3.1", year: 2024, date: "2023-01-01");
         w.Name(Leopard, "Panthera pardus", "scientific", null, "iucn");
         w.Name(Leopard, "Leopard", "common", "en", "iucn", preferred: true);
@@ -394,7 +421,10 @@ public static class FixtureDb {
 
         // The woylie, and an old id with its name.
         w.Taxon(Woylie, "Bettongia penicillata", "species", "ANIMALIA", "CHORDATA", "MAMMALIA", "DIPROTODONTIA", "POTOROIDAE", "Bettongia",
-            authority: "Gray, 1837", commonEn: "Woylie", latest: WoylieLatest);
+            authority: "Gray, 1837", commonEn: "Woylie", latest: WoylieLatest, qid: WoylieItem, itemDownloaded: "2026-09-13",
+            p141: P141(
+                new WikidataStatusStatement(WoylieP141Critically, "Q219127", "normal", ["Q136547248"], [Woylie.ToString()], 1, true),
+                new WikidataStatusStatement(WoylieP141Endangered, "Q96377276", "normal", [], [], 1, false)));
         w.Assessment(WoylieLatest, Woylie, "Global", true, "CR", criteria: "A3e", criteriaVersion: "3.1", year: 2015, date: "2014-01-01",
             citation: Citation(Woylie, WoylieLatest, 2015, "Bettongia penicillata", [Person("Woinarski", "J.")],
                 doi: WoylieDoi, doiSource: DoiSource.Resolved, text: null));
@@ -469,6 +499,8 @@ public static class FixtureDb {
                 TaxonIds: [], References: 1, CitesIucn: true))
             .ToList());
 
+    private static string P141(params WikidataStatusStatement[] statements) => WikidataStatusStatement.ListToJson(statements);
+
     private static Author Person(string last, string initials, string? givenNames = null) =>
         new(CitationAuthorKind.Person, $"{last}, {initials}", last, initials, givenNames);
 
@@ -478,7 +510,7 @@ public static class FixtureDb {
 
     private static string Citation(long taxonId, long assessmentId, int year, string name, IReadOnlyList<Author> authors,
         string? doi, DoiSource doiSource, string? text, bool etAl = false, string? region = null, bool narrative = false,
-        int? errataYear = null, int? amendsYear = null) {
+        int? errataYear = null, int? amendsYear = null, string? registeredName = null) {
         var parts = new IucnCitationParts {
             TaxonId = taxonId,
             AssessmentId = assessmentId,
@@ -491,6 +523,7 @@ public static class FixtureDb {
             AuthorsEtAl = etAl,
             Doi = doi,
             DoiSource = doiSource,
+            RegisteredName = registeredName,
             IucnCitationText = text,
             DownloadedAtUtc = new DateTime(2026, 8, 18, 10, 30, 0, DateTimeKind.Utc),
         };
@@ -520,18 +553,19 @@ public static class FixtureDb {
         public void Taxon(long id, string name, string kind, string kingdom, string phylum, string className, string order, string family,
             string genus, string? authority = null, string? commonEn = null, string? enwiki = null, string? qid = null, string? colId = null,
             long? parent = null, long? latest = null, string? subpopulation = null, string? infraRank = null, string? infraName = null,
-            bool inRelease = true, long? currentTaxon = null, string? qidSource = null, string? p141 = null, string? itemDownloaded = null) {
+            bool inRelease = true, long? currentTaxon = null, string? qidSource = null, string? p141 = null, string? itemDownloaded = null,
+            bool p627Deprecated = false, string? otherItems = null) {
             TaxonCount++;
             Run("""
                 INSERT INTO taxon(taxon_id, scientific_name, kind, kingdom, phylum, class_name, order_name, family, genus,
                     infra_rank, infra_name, subpopulation_name, authority, parent_taxon_id, common_name_en, enwiki_title,
                     wikidata_qid, col_id, latest_global_assessment_id, in_release, current_taxon_id,
-                    wikidata_qid_source, wikidata_p141, wikidata_item_downloaded)
-                VALUES (@a, @b, @c, @d, @e, @f, @g, @h, @i, @j, @k, @l, @m, @n, @o, @p, @q, @r, @s, @t, @u, @v, @w, @x)
+                    wikidata_qid_source, wikidata_p141, wikidata_item_downloaded, wikidata_p627_deprecated, wikidata_other_items)
+                VALUES (@a, @b, @c, @d, @e, @f, @g, @h, @i, @j, @k, @l, @m, @n, @o, @p, @q, @r, @s, @t, @u, @v, @w, @x, @y, @z)
                 """,
                 id, name, kind, kingdom, phylum, className, order, family, genus, infraRank, infraName, subpopulation, authority,
                 parent, commonEn, enwiki, qid, colId, latest, inRelease ? 1 : 0, currentTaxon,
-                qidSource ?? (qid is null ? null : "p627"), p141, itemDownloaded);
+                qidSource ?? (qid is null ? null : "p627"), p141, itemDownloaded, p627Deprecated ? 1 : 0, otherItems);
         }
 
         public void EpbcListing(long taxonId, long spratId, string listedName, string? status, string appliesTo, string? population) =>
@@ -544,16 +578,18 @@ public static class FixtureDb {
         public void Assessment(long id, long taxonId, string scope, bool latest, string category, bool possiblyExtinct = false,
             string? criteria = null, string? criteriaVersion = null, int? year = null, string? date = null, string? trend = null,
             string? citation = null, long? replacedBy = null, string? wikidataItem = null, string? wikidataItemProperties = null,
-            string? wikidataItemTitles = null, string? wikidataItemLabelEn = null) {
+            string? wikidataItemTitles = null, string? wikidataItemLabelEn = null, long? wikidataItemAssessment = null) {
             AssessmentCount++;
             Run("""
                 INSERT INTO assessment(assessment_id, taxon_id, scope, is_latest, category, possibly_extinct,
                     possibly_extinct_in_the_wild, criteria, criteria_version, year_published, assessment_date, population_trend, citation_json,
-                    replaced_by_assessment_id, wikidata_item_qid, wikidata_item_properties, wikidata_item_titles, wikidata_item_label_en)
-                VALUES (@a, @b, @c, @d, @e, @f, 0, @g, @h, @i, @j, @k, @l, @m, @n, @o, @p, @q)
+                    replaced_by_assessment_id, wikidata_item_qid, wikidata_item_properties, wikidata_item_titles, wikidata_item_label_en,
+                    wikidata_item_assessment_id)
+                VALUES (@a, @b, @c, @d, @e, @f, 0, @g, @h, @i, @j, @k, @l, @m, @n, @o, @p, @q, @r)
                 """,
                 id, taxonId, scope, latest ? 1 : 0, category, possiblyExtinct ? 1 : 0, criteria, criteriaVersion, year, date, trend, citation,
-                replacedBy, wikidataItem, wikidataItemProperties, wikidataItemTitles, wikidataItemLabelEn);
+                replacedBy, wikidataItem, wikidataItemProperties, wikidataItemTitles, wikidataItemLabelEn,
+                wikidataItem is null ? null : wikidataItemAssessment ?? id);
         }
 
         public void Name(long taxonId, string name, string type, string? language, string source, bool preferred = false) {

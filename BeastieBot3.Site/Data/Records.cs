@@ -24,7 +24,9 @@ public sealed record TaxonRow(
     long? CurrentTaxonId = null,
     string? WikidataQidSource = null,
     string? WikidataP141 = null,
-    string? WikidataItemDownloaded = null) {
+    string? WikidataItemDownloaded = null,
+    bool WikidataP627Deprecated = false,
+    string? WikidataOtherItems = null) {
     /// The taxon's item states this taxon's IUCN taxon id (P627), rather than being matched by name.
     public bool WikidataItemStatesTaxonId => WikidataQidSource == "p627";
 }
@@ -47,7 +49,8 @@ public sealed record AssessmentRow(
     string? WikidataItemQid = null,
     string? WikidataItemProperties = null,
     string? WikidataItemTitles = null,
-    string? WikidataItemLabelEn = null) {
+    string? WikidataItemLabelEn = null,
+    long? WikidataItemAssessmentId = null) {
     public bool IsGlobal => string.Equals(Scope.Trim(), "Global", StringComparison.OrdinalIgnoreCase);
 }
 

@@ -30,7 +30,7 @@ public sealed class WikidataStatusTests(SiteFactory factory) : IClassFixture<Sit
         Assert.Contains("Wikidata item Q132186, downloaded 13 September 2026 vulnerable (Q278113)", text);
         Assert.Contains("Wikidata gives a different status.", text);
         Assert.Contains("The commands: add endangered (Q96377276) with the reference below remove vulnerable (Q278113)", text);
-        Assert.Contains("so these commands replace the old status.", text);
+        Assert.Contains("None of the item's statements has preferred rank, so these commands remove the old status.", text);
         // The tiger's assessment has an item, so the reference states it, and only the release is left out.
         Assert.Contains($"stated in (P248): {FixtureDb.TigerLatestItem}, this assessment's Wikidata item", text);
         Assert.Contains("IUCN taxon ID (P627): 15955", text);
@@ -44,12 +44,14 @@ public sealed class WikidataStatusTests(SiteFactory factory) : IClassFixture<Sit
         Assert.Equal($"-STATEMENT\t{FixtureDb.TigerP141Statement}", commands[1]);
         Assert.Contains("https://quickstatements.toolforge.org/#/v1=", Part(html));
 
-        Assert.Contains("<details class=\"status-keep\" id=\"wikidata-status-keep\">", html);
-        Assert.Contains("Keep the old status on the item instead", text);
-        Assert.Contains("These commands add endangered (Q96377276) with the same reference and remove nothing.", text);
-        Assert.Contains("QuickStatements cannot set ranks. After the commands run, on the item's page set endangered (Q96377276) to preferred rank.", text);
-        var keep = Html.Textarea(html, WikidataCite.StatusKeepCommandsBoxId)!;
-        Assert.Equal(commands[0], keep);
+        Assert.Contains("<details class=\"status-keep\" id=\"wikidata-status-alt\">", html);
+        var alt = Html.Text(Part(html)[Part(html).IndexOf("wikidata-status-alt", StringComparison.Ordinal)..]);
+        Assert.Contains("Keep the old status on the item instead", alt);
+        Assert.Contains("The commands: add endangered (Q96377276) with the same reference", alt);
+        Assert.DoesNotContain("remove", alt);
+        Assert.Contains("QuickStatements commands that keep the old status", alt);
+        Assert.Contains("QuickStatements cannot set ranks. After the commands run, on the item's page set endangered (Q96377276) to preferred rank.", alt);
+        Assert.Equal(commands[0], Html.Textarea(html, WikidataCite.StatusAltCommandsBoxId));
     }
 
     [Fact]
@@ -68,20 +70,67 @@ public sealed class WikidataStatusTests(SiteFactory factory) : IClassFixture<Sit
     }
 
     [Fact]
-    public async Task ValueAlreadyCited_TheCommandsOnlyRemove() {
+    public async Task PreferredStatement_KeepFirst_AndNoCommandsOnlyRanks() {
+        // The koala's item gives endangered at preferred rank, and the assessment's vulnerable at
+        // normal rank with a reference to the assessment's item.
         var html = await _client.GetStringAsync($"/species/{FixtureDb.Koala}");
-        var text = Html.Text(Part(html));
+        var part = Part(html);
+        var text = Html.Text(part);
 
         Assert.Contains("endangered (Q96377276), preferred rank vulnerable (Q278113), normal rank", text);
         Assert.Contains("Wikidata gives a different status.", text);
-        Assert.Contains("The commands: remove endangered (Q96377276), preferred rank", text);
+        Assert.Contains("The item has a statement at preferred rank. Items like this keep earlier statuses at normal rank.", text);
+        Assert.DoesNotContain("so these commands keep the old status", text);
+        // Keeping the old status needs no commands, only ranks, and the text says so.
+        Assert.Null(Html.Textarea(html, WikidataCite.StatusCommandsBoxId));
+        var main = Html.Text(part[..part.IndexOf("wikidata-status-alt", StringComparison.Ordinal)]);
+        Assert.DoesNotContain("After the commands run", main);
+        Assert.Contains("No QuickStatements commands are needed. On the item's page, set vulnerable (Q278113) to preferred rank and set endangered (Q96377276) to normal rank.", main);
         // The vulnerable statement already cites the assessment's item, so no reference is described.
         Assert.DoesNotContain("The reference:", text);
         Assert.DoesNotContain("Left out of the reference", text);
-        Assert.Equal($"-STATEMENT\t{FixtureDb.KoalaP141Endangered}", Html.Textarea(html, WikidataCite.StatusCommandsBoxId));
-        // Keeping the old status needs no commands, only ranks.
-        Assert.Null(Html.Textarea(html, WikidataCite.StatusKeepCommandsBoxId));
-        Assert.Contains("on the item's page set vulnerable (Q278113) to preferred rank and set endangered (Q96377276) to normal rank.", text);
+
+        var alt = Html.Text(part[part.IndexOf("wikidata-status-alt", StringComparison.Ordinal)..]);
+        Assert.Contains("Remove the old status from the item instead", alt);
+        Assert.Contains("The commands: remove endangered (Q96377276), preferred rank", alt);
+        Assert.Contains("QuickStatements commands that remove the old status", alt);
+        Assert.Equal($"-STATEMENT\t{FixtureDb.KoalaP141Endangered}", Html.Textarea(html, WikidataCite.StatusAltCommandsBoxId));
+    }
+
+    [Fact]
+    public async Task OtherSourceStatement_IsShownButNotCompared_AndATaxonIdReferenceCounts() {
+        var html = await _client.GetStringAsync($"/species/{FixtureDb.Woylie}");
+        var text = Html.Text(Part(html));
+
+        Assert.Contains("critically endangered (Q219127), normal rank endangered (Q96377276), normal rank, no reference to IUCN", text);
+        Assert.Contains("Only statements with a reference to IUCN are compared with the assessment, and the commands never remove the other statements.", text);
+        Assert.Contains("Wikidata gives the same status, with a reference that has IUCN taxon ID (P627) 2790. No commands needed.", text);
+        Assert.Null(Html.Textarea(html, WikidataCite.StatusCommandsBoxId));
+    }
+
+    [Fact]
+    public async Task TaxonIdOnSeveralItems_EveryItemIsCompared_NoCommands() {
+        var html = await _client.GetStringAsync($"/species/{FixtureDb.Leopard}");
+        var text = Html.Text(Part(html));
+
+        Assert.Contains("IUCN Red List 2026-1 vulnerable (Q278113)", text);
+        Assert.Contains($"Wikidata item {FixtureDb.LeopardItem}, downloaded 13 September 2026 none", text);
+        Assert.Contains($"Wikidata item {FixtureDb.LeopardOtherItem} vulnerable (Q278113)", text);
+        Assert.Contains("No commands: 2 Wikidata items state IUCN taxon ID (P627) 15954, so first check which one is the item for this taxon.", text);
+        // Another item has a status, so the page never says Wikidata has none.
+        Assert.DoesNotContain("Wikidata gives no IUCN conservation status", text);
+        Assert.Null(Html.Textarea(html, WikidataCite.StatusCommandsBoxId));
+    }
+
+    [Fact]
+    public async Task TaxonIdAtDeprecatedRank_NoCommands() {
+        var html = await _client.GetStringAsync($"/species/{FixtureDb.Cassowary}");
+        var text = Html.Text(Part(html));
+
+        Assert.Contains($"Wikidata item {FixtureDb.CassowaryItem}, downloaded 13 September 2026, IUCN taxon ID at deprecated rank least concern (Q211005)", text);
+        Assert.Contains($"No commands: the Wikidata item {FixtureDb.CassowaryItem} states IUCN taxon ID (P627) 22678108 only at deprecated rank, so it may not be the item for this taxon.", text);
+        Assert.DoesNotContain("Wikidata gives", text);
+        Assert.Null(Html.Textarea(html, WikidataCite.StatusCommandsBoxId));
     }
 
     [Fact]
@@ -180,6 +229,55 @@ public sealed class WikidataStatusTests(SiteFactory factory) : IClassFixture<Sit
         Assert.Contains($"{FixtureDb.TigerLatestItem}\tLen\t\"Panthera tigris. The IUCN Red List of Threatened Species 2022: e.T15955A214862019\"", commands);
     }
 
+    private async Task<string> CiteQPart(string url) {
+        var html = await _client.GetStringAsync(url);
+        var start = Html.IndexOf(html, "id=\"wikidata-cite\"");
+        return html[start..html.IndexOf("</section>", start, StringComparison.Ordinal)];
+    }
+
+    [Fact]
+    public async Task ErrataVersionSharingAnItem_OnlyCiteQ_AndALinkToTheAssessmentItIsFor() {
+        var html = await _client.GetStringAsync($"/species/{FixtureDb.Micropyropsis}");
+        var part = await CiteQPart($"/species/{FixtureDb.Micropyropsis}");
+        var text = Html.Text(part);
+
+        Assert.Contains($"{{{{cite Q|{FixtureDb.MicropyropsisItem}", Html.Textarea(html, WikidataCite.CiteQBoxId));
+        Assert.Contains("This errata version has the same DOI as the assessment it corrects, so it shares that assessment's Wikidata item. Commands to update the item are on that assessment's page.", text);
+        Assert.Contains($"assessment={FixtureDb.MicropyropsisReplaced}", part);
+        Assert.Null(Html.Textarea(html, WikidataCite.CommandsBoxId));
+        Assert.DoesNotContain("QuickStatements", text);
+    }
+
+    [Fact]
+    public async Task TheAssessmentAnItemIsFor_HasTheCommands_BuiltFromItsOwnIds() {
+        var url = $"/species/{FixtureDb.Micropyropsis}?assessment={FixtureDb.MicropyropsisReplaced}";
+        var html = await _client.GetStringAsync(url);
+        var commands = Html.Textarea(html, WikidataCite.CommandsBoxId)!.Split('\n');
+
+        Assert.Contains($"{FixtureDb.MicropyropsisItem}\tP1476\ten:\"Micropyropsis tuberosa\"", commands);
+        Assert.Contains($"{FixtureDb.MicropyropsisItem}\tLen\t\"Micropyropsis tuberosa. The IUCN Red List of Threatened Species 2010: e.T162107A5539282\"", commands);
+        Assert.Contains($"{FixtureDb.MicropyropsisItem}\tP953\t\"https://www.iucnredlist.org/species/162107/5539282\"", commands);
+        Assert.DoesNotContain("errata version has the same DOI", Html.Text(await CiteQPart(url)));
+    }
+
+    [Fact]
+    public async Task NewItem_UsesTheRegisteredName_AndSaysSo() {
+        var url = $"/species/{FixtureDb.PolarBear}?assessment={FixtureDb.PolarBear2008}";
+        var html = await _client.GetStringAsync(url);
+        var text = Html.Text(await CiteQPart(url));
+
+        Assert.Contains($"This assessment was published under the name {FixtureDb.PolarBear2008RegisteredName}, which is the name in the title registered with Crossref for its DOI. IUCN's citation now gives the name Ursus maritimus. The commands use the published name.", text);
+        var commands = Html.Textarea(html, WikidataCite.CommandsBoxId)!.Split('\n');
+        Assert.Contains($"LAST\tP1476\ten:\"{FixtureDb.PolarBear2008RegisteredName}\"", commands);
+        Assert.Contains(commands, c => c.StartsWith($"LAST\tLen\t\"{FixtureDb.PolarBear2008RegisteredName}. The IUCN Red List", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task NewItem_WithIucnsCitationName_SaysThePublishedNameIsNotKnown() {
+        var text = Html.Text(await CiteQPart($"/species/{FixtureDb.Bromus}"));
+        Assert.Contains("The commands use the name in IUCN's citation, Bromus interruptus. This site does not know the name the assessment was published under, which for an older assessment may be different.", text);
+    }
+
     [Fact]
     public async Task AboutPageSaysWhatTheCommandsDo() {
         var text = Html.Text(await _client.GetStringAsync("/about"));
@@ -187,6 +285,9 @@ public sealed class WikidataStatusTests(SiteFactory factory) : IClassFixture<Sit
         Assert.Contains("Titles and labels of assessment items.", text);
         Assert.Contains("IUCN conservation status on Wikidata.", text);
         Assert.Contains("QuickStatements cannot set ranks, so you then set the ranks on the item's page.", text);
+        Assert.Contains("Only statements with a reference to IUCN are compared, and the commands never remove the others.", text);
+        Assert.Contains("The name in the title and label is the name the assessment was published under", text);
+        Assert.Contains("An errata version that has the same DOI as the assessment it corrects shares that assessment's item", text);
     }
 }
 
@@ -229,20 +330,42 @@ public sealed class WikidataStatusUnitTests {
     public void ChangedStatus_HasBothPlans() {
         var view = WikidataCite.BuildStatus(Taxon(p141: Statement("Q278113")), Latest(), null);
         Assert.Equal(StatusEditOutcome.Differs, view.Plan!.Outcome);
+        Assert.Equal(StatusEditChoice.Replace, view.Plan.Choice);
         Assert.Single(view.Plan.Removes);
-        Assert.NotNull(view.KeepPlan);
-        Assert.Empty(view.KeepPlan!.Removes);
+        Assert.Equal(StatusEditChoice.Keep, view.AltPlan!.Choice);
+        Assert.Empty(view.AltPlan.Removes);
         Assert.NotNull(view.Commands);
-        Assert.NotNull(view.KeepCommands);
+        Assert.NotNull(view.AltCommands);
         Assert.Equal("13 September 2026", view.DownloadedText);
     }
 
     [Fact]
-    public void SameStatus_HasNoKeepPlan() {
+    public void PreferredStatement_KeepIsShownFirst() {
+        var view = WikidataCite.BuildStatus(Taxon(p141: Statement("Q278113", "preferred")), Latest(), null);
+        Assert.Equal(StatusEditChoice.Keep, view.Plan!.Choice);
+        Assert.Equal(StatusEditChoice.Replace, view.AltPlan!.Choice);
+    }
+
+    [Fact]
+    public void SameStatus_HasNoOtherChoice() {
         var view = WikidataCite.BuildStatus(Taxon(p141: Statement("Q96377276")), Latest(), null);
         Assert.Equal(StatusEditOutcome.Agrees, view.Plan!.Outcome);
-        Assert.Null(view.KeepPlan);
-        Assert.Null(view.KeepCommands);
+        Assert.Null(view.AltPlan);
+        Assert.Null(view.AltCommands);
+    }
+
+    [Fact]
+    public void ReviewScopes_HaveNoPlan() {
+        var others = WikidataOtherTaxonItem.ListToJson([new WikidataOtherTaxonItem("Q1588648", false, [])]);
+        var several = WikidataCite.BuildStatus(Taxon(p141: Statement("Q278113")) with { WikidataOtherItems = others }, Latest(), null);
+        Assert.Equal(WikidataStatusScope.TaxonIdOnSeveralItems, several.Scope);
+        Assert.Null(several.Plan);
+        Assert.Equal("Q1588648", Assert.Single(several.OtherItems).Qid);
+        Assert.True(several.HasContent);
+
+        var deprecated = WikidataCite.BuildStatus(Taxon(p141: Statement("Q278113")) with { WikidataP627Deprecated = true }, Latest(), null);
+        Assert.Equal(WikidataStatusScope.TaxonIdDeprecated, deprecated.Scope);
+        Assert.Null(deprecated.Commands);
     }
 
     [Fact]

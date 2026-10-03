@@ -227,6 +227,14 @@
                         </div>
                         <p class="note"><a href="@SiteText.CiteQGuidanceUrl">@SiteText.CiteQGuidanceLink</a>@SiteText.CiteQGuidanceAfter</p>
                     }
+                    @if (wikidata.ItemIsForAssessmentId is { } owner) {
+                        @if (wikidata.ItemAssessmentHasPage) {
+                            <p class="wikidata-borrowed">@SiteText.BorrowedItemBefore<a href="@(Model.OptionsUrl(owner))#wikidata-cite">@SiteText.BorrowedItemLink</a>.</p>
+                        } else {
+                            <p class="wikidata-borrowed">@SiteText.BorrowedItemNoPage(owner)</p>
+                        }
+                    }
+                    <partial name="_WikidataName" model="wikidata" />
                     @if (wikidata.Commands is { } add) {
                         var changes = wikidata.Changes;
                         @if (changes.Count == 0) {
@@ -247,6 +255,9 @@
                     }
                 } else {
                     <p class="wikidata-item">@SiteText.NoWikidataItem</p>
+                    @if (wikidata.NoUsableName && wikidata.CitationName is { } internalName) {
+                        <p>@SiteText.NoUsableName(internalName)</p>
+                    }
                     @if (wikidata.Commands is { } create) {
                         <p>
                             @if (wikidata.SearchUrl is { } searchUrl) {
@@ -254,6 +265,7 @@
                             }
                             @SiteText.CreateItemLine
                         </p>
+                        <partial name="_WikidataName" model="wikidata" />
                         <div class="wikitext-box">
                             <partial name="_WikitextBoxContent" model="create" />
                         </div>
