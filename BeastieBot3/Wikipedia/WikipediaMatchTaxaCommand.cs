@@ -18,7 +18,8 @@ using BeastieBot3.Wikidata;
 // 2. Wikidata sitelinks: enwiki title from wikidata_sitelinks
 // 3. Synonyms: IucnSynonymService provides alternate names
 // 4. Taxobox parsing: scientific name extracted from cached wikitext
-// Writes matches to taxon_matches table. Run via: wikipedia match-taxa
+// Reads the IUCN rows and the name sources; TaxonPageMatcher matches each taxon and writes
+// taxon_wiki_matches. Run via: wikipedia match-taxa
 
 namespace BeastieBot3.Wikipedia;
 
@@ -26,7 +27,7 @@ namespace BeastieBot3.Wikipedia;
     "Attempt to match IUCN taxa to cached Wikipedia pages using Wikidata sitelinks and synonyms.",
     Reason = "Writes IUCN taxon -> Wikipedia page matches into the cache.",
     Rerun = RerunEffect.IdempotentAdd,
-    RerunNote = "Taxa already matched to an article are skipped, and every other taxon is checked again. --pending-only also skips taxa already found to have no article.",
+    RerunNote = "Taxa already matched to an article are skipped, unless the article is about a taxon in another kingdom. All other taxa are checked, including taxa where no article was found before. With --pending-only, taxa where no article was found before are skipped too.",
     Examples = new[] {
         "wikipedia match-taxa",
         "wikipedia match-taxa --limit 500",
@@ -170,8 +171,14 @@ public sealed class WikipediaMatchTaxaCommand : AsyncCommand<WikipediaMatchTaxaC
             stats.Evaluated++;
 
             var existing = wikipediaStore.GetTaxonMatch(TaxonSources.Iucn, rowTaxonId);
-            var result = ProcessTaxon(row, existing, wikipediaStore, wikidataLookup, synonymService, settings, cancellationToken);
-            stats.Record(result, existing?.MatchStatus);
+            var outcome = TaxonPageMatcher.ProcessTaxon(rowTaxonId, row.KingdomName, existing, wikipediaStore,
+                () => TaxonPageMatcher.BuildCandidates(wikidataLookup.GetCandidate(rowTaxonId), synonymService.GetCandidates(row, cancellationToken),
+                    name => TaxonPageMatcher.KingdomQualifiedTitles(wikipediaStore, name, row.KingdomName)),
+                settings.ReprocessMatched, settings.PendingOnly, cancellationToken);
+            stats.Record(outcome.Result, existing?.MatchStatus);
+            if (outcome.WrongKingdom is not null) {
+                stats.WrongKingdomRechecked++;
+            }
 
             if (processed >= limit) {
                 break;
@@ -185,263 +192,6 @@ public sealed class WikipediaMatchTaxaCommand : AsyncCommand<WikipediaMatchTaxaC
 
         RenderSummary(stats);
         return 0;
-    }
-
-    private static TaxonProcessResult ProcessTaxon(
-        IucnTaxonomyRow row,
-        TaxonWikiMatch? existing,
-        WikipediaCacheStore cacheStore,
-        WikidataIucnMatchLookup wikidataLookup,
-        IucnSynonymService synonymService,
-        Settings settings,
-        CancellationToken cancellationToken) {
-        var taxonId = row.TaxonId.ToString(CultureInfo.InvariantCulture);
-        if (!settings.ReprocessMatched && existing is not null && string.Equals(existing.MatchStatus, TaxonWikiMatchStatus.Matched, StringComparison.OrdinalIgnoreCase)) {
-            return TaxonProcessResult.AlreadyMatched;
-        }
-
-        // `wikipedia update` settles taxa after a page download this way: only a taxon that was
-        // waiting on a page (or was never checked) can change because a page arrived.
-        if (settings.PendingOnly && existing is not null && !string.Equals(existing.MatchStatus, TaxonWikiMatchStatus.Pending, StringComparison.OrdinalIgnoreCase)) {
-            return TaxonProcessResult.NotRechecked;
-        }
-
-        // Re-evaluating this taxon: drop its prior attempt rows so the attempt log holds
-        // only the latest run instead of appending unbounded history on every re-run.
-        cacheStore.ClearTaxonAttempts(TaxonSources.Iucn, taxonId);
-
-        // One line per taxon whose result changed. Printing every re-checked taxon put 89,000
-        // "Missing" lines in each run's log, burying the few that moved.
-        bool Unchanged(string status) => string.Equals(existing?.MatchStatus, status, StringComparison.OrdinalIgnoreCase);
-
-        var candidates = BuildCandidates(row, wikidataLookup, synonymService, cancellationToken);
-        if (candidates.Count == 0) {
-            cacheStore.UpsertTaxonMatch(new TaxonWikiMatch(
-                TaxonSources.Iucn,
-                taxonId,
-                TaxonWikiMatchStatus.Missing,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                "No candidate names available",
-                DateTime.UtcNow));
-            if (!Unchanged(TaxonWikiMatchStatus.Missing)) {
-                AnsiConsole.MarkupLineInterpolated($"[yellow]No candidates[/] for SIS {Markup.Escape(taxonId)}");
-            }
-            return TaxonProcessResult.NoCandidates;
-        }
-
-        var attemptOrder = cacheStore.GetNextAttemptOrder(TaxonSources.Iucn, taxonId);
-        PendingCandidate? pending = null;
-        var sawRejection = false;
-
-        foreach (var candidate in candidates) {
-            cancellationToken.ThrowIfCancellationRequested();
-            var evaluation = EvaluateCandidate(candidate, cacheStore);
-            cacheStore.RecordTaxonAttempt(new TaxonWikiMatchAttempt(
-                TaxonSources.Iucn,
-                taxonId,
-                attemptOrder++,
-                candidate.DisplayTitle,
-                candidate.NormalizedTitle,
-                candidate.SourceHint,
-                evaluation.AttemptOutcome,
-                evaluation.PageSummary.PageRowId,
-                evaluation.FinalTitle,
-                evaluation.Notes,
-                DateTime.UtcNow));
-
-            if (evaluation.Status == CandidateEvaluationStatus.Matched) {
-                cacheStore.UpsertTaxonMatch(new TaxonWikiMatch(
-                    TaxonSources.Iucn,
-                    taxonId,
-                    TaxonWikiMatchStatus.Matched,
-                    evaluation.PageSummary.PageRowId,
-                    candidate.DisplayTitle,
-                    candidate.NormalizedTitle,
-                    candidate.IsSynonym ? candidate.SynonymValue : null,
-                    evaluation.FinalTitle,
-                    candidate.MatchMethod,
-                    evaluation.Notes,
-                    DateTime.UtcNow));
-                AnsiConsole.MarkupLineInterpolated($"[green]Matched[/] SIS {Markup.Escape(taxonId)} -> {Markup.Escape(evaluation.FinalTitle ?? candidate.DisplayTitle)} ({Markup.Escape(candidate.MatchMethod)})");
-                return TaxonProcessResult.Matched;
-            }
-
-            if (evaluation.Status == CandidateEvaluationStatus.Pending && pending is null) {
-                pending = new PendingCandidate(candidate, evaluation);
-            }
-
-            if (evaluation.Status == CandidateEvaluationStatus.Rejected) {
-                sawRejection = true;
-            }
-        }
-
-        if (pending is not null) {
-            var pendingCandidate = pending.Candidate;
-            var state = pending.Evaluation;
-            cacheStore.UpsertTaxonMatch(new TaxonWikiMatch(
-                TaxonSources.Iucn,
-                taxonId,
-                TaxonWikiMatchStatus.Pending,
-                state.PageSummary.PageRowId,
-                pendingCandidate.DisplayTitle,
-                pendingCandidate.NormalizedTitle,
-                pendingCandidate.IsSynonym ? pendingCandidate.SynonymValue : null,
-                state.FinalTitle,
-                pendingCandidate.MatchMethod,
-                state.Notes ?? "Awaiting download",
-                DateTime.UtcNow));
-            if (!Unchanged(TaxonWikiMatchStatus.Pending)) {
-                AnsiConsole.MarkupLineInterpolated($"[yellow]Pending[/] SIS {Markup.Escape(taxonId)} waiting on {Markup.Escape(pendingCandidate.DisplayTitle)}");
-            }
-            return TaxonProcessResult.Pending;
-        }
-
-        if (sawRejection) {
-            // Every candidate that resolved to a real page was a disambiguation/set-index
-            // page — distinct from "no article exists at all".
-            cacheStore.UpsertTaxonMatch(new TaxonWikiMatch(
-                TaxonSources.Iucn,
-                taxonId,
-                TaxonWikiMatchStatus.Rejected,
-                null,
-                null,
-                null,
-                null,
-                null,
-                null,
-                "All candidate pages were disambiguation or set-index pages",
-                DateTime.UtcNow));
-            if (!Unchanged(TaxonWikiMatchStatus.Rejected)) {
-                AnsiConsole.MarkupLineInterpolated($"[yellow]Rejected[/] SIS {Markup.Escape(taxonId)} (disambiguation/set-index only)");
-            }
-            return TaxonProcessResult.Rejected;
-        }
-
-        cacheStore.UpsertTaxonMatch(new TaxonWikiMatch(
-            TaxonSources.Iucn,
-            taxonId,
-            TaxonWikiMatchStatus.Missing,
-            null,
-            null,
-            null,
-            null,
-            null,
-            null,
-            "All candidates missing or invalid",
-            DateTime.UtcNow));
-        if (!Unchanged(TaxonWikiMatchStatus.Missing)) {
-            AnsiConsole.MarkupLineInterpolated($"[red]Missing[/] SIS {Markup.Escape(taxonId)} (no valid articles)");
-        }
-        return TaxonProcessResult.Missing;
-    }
-
-    private static CandidateEvaluation EvaluateCandidate(WikipediaMatchCandidate candidate, WikipediaCacheStore cacheStore) {
-        var now = DateTime.UtcNow;
-        var summary = cacheStore.GetPageByNormalizedTitle(candidate.NormalizedTitle);
-        WikiPageSummary effectiveSummary;
-        if (summary is null) {
-            var upsert = cacheStore.UpsertPageCandidate(new WikiPageCandidate(candidate.DisplayTitle, candidate.NormalizedTitle, null, now, now));
-            effectiveSummary = new WikiPageSummary(upsert.PageRowId, candidate.DisplayTitle, candidate.NormalizedTitle, WikiPageDownloadStatus.Pending, false, null, false, false, false, now);
-        }
-        else {
-            effectiveSummary = summary;
-        }
-
-        return effectiveSummary.DownloadStatus switch {
-            WikiPageDownloadStatus.Pending => CandidateEvaluation.Pending(effectiveSummary, "Page not downloaded yet"),
-            WikiPageDownloadStatus.Failed => CandidateEvaluation.Failed(effectiveSummary, "Last fetch attempt failed"),
-            WikiPageDownloadStatus.Missing => CandidateEvaluation.Missing(effectiveSummary, "Wikipedia reports the page as missing"),
-            WikiPageDownloadStatus.Cached => EvaluateCached(effectiveSummary, cacheStore),
-            _ => CandidateEvaluation.Failed(effectiveSummary, $"Unknown status {effectiveSummary.DownloadStatus}")
-        };
-    }
-
-    private static CandidateEvaluation EvaluateCached(WikiPageSummary summary, WikipediaCacheStore cacheStore) {
-        // A real cached page that is unusable as a taxon article is "rejected", distinct
-        // from a page that genuinely doesn't exist ("missing") — so the taxon's match row
-        // can record which it was.
-        if (summary.IsDisambiguation) {
-            return CandidateEvaluation.Rejected(summary, "Disambiguation page");
-        }
-
-        if (summary.IsSetIndex) {
-            return CandidateEvaluation.Rejected(summary, "Set index page");
-        }
-
-        if (summary.IsRedirect && !string.IsNullOrWhiteSpace(summary.RedirectTarget)) {
-            // Re-validate the redirect DESTINATION: a scientific name that redirects to a
-            // disambiguation / set-index page is not a real match, and the recorded match must
-            // reference the target page, not the redirect stub (whose own flags say nothing about
-            // where it points).
-            var target = cacheStore.GetPageByNormalizedTitle(WikipediaTitleHelper.Normalize(summary.RedirectTarget));
-            if (target is null || target.DownloadStatus == WikiPageDownloadStatus.Pending) {
-                return CandidateEvaluation.Pending(summary, "Redirect target not downloaded yet");
-            }
-            if (target.DownloadStatus == WikiPageDownloadStatus.Missing) {
-                return CandidateEvaluation.Missing(summary, "Redirect target is missing");
-            }
-            if (target.IsDisambiguation) {
-                return CandidateEvaluation.Rejected(summary, "Redirects to a disambiguation page");
-            }
-            if (target.IsSetIndex) {
-                return CandidateEvaluation.Rejected(summary, "Redirects to a set-index page");
-            }
-            // Valid redirect: match the TARGET page (carry its PageRowId), flagged as redirect-resolved.
-            return CandidateEvaluation.Redirected(target, target.PageTitle);
-        }
-
-        return CandidateEvaluation.Matched(summary, summary.PageTitle);
-    }
-
-    private static IReadOnlyList<WikipediaMatchCandidate> BuildCandidates(
-        IucnTaxonomyRow row,
-        WikidataIucnMatchLookup wikidataLookup,
-        IucnSynonymService synonymService,
-        CancellationToken cancellationToken) {
-        var list = new List<WikipediaMatchCandidate>();
-        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-
-        void AddCandidate(string? title, string sourceHint, string matchMethod, bool isSynonym, string? synonymValue) {
-            if (string.IsNullOrWhiteSpace(title)) {
-                return;
-            }
-
-            var normalized = WikipediaTitleHelper.Normalize(title);
-            if (normalized.Length == 0 || !seen.Add(normalized)) {
-                return;
-            }
-
-            list.Add(new WikipediaMatchCandidate(title.Trim(), normalized, sourceHint, matchMethod, isSynonym, synonymValue));
-        }
-
-        var wikidata = wikidataLookup.GetCandidate(row.TaxonId.ToString(CultureInfo.InvariantCulture));
-        if (wikidata is not null) {
-            AddCandidate(wikidata.Title, "wikidata", wikidata.MatchMethod, wikidata.IsSynonym, wikidata.MatchedName);
-        }
-
-        foreach (var candidate in synonymService.GetCandidates(row, cancellationToken)) {
-            var method = candidate.Source switch {
-                TaxonNameSource.IucnTaxonomy => "iucn-taxonomy",
-                TaxonNameSource.IucnAssessments => "iucn-assessment",
-                TaxonNameSource.IucnConstructed => "iucn-constructed",
-                TaxonNameSource.IucnInfraRanked => "iucn-infra-rank",
-                TaxonNameSource.IucnSynonym => "iucn-synonym",
-                TaxonNameSource.ColSynonym => "col-synonym",
-                TaxonNameSource.ColAccepted => "col-accepted",
-                TaxonNameSource.ColCorrected => "col-corrected",
-                TaxonNameSource.ColVariant => "col-variant",
-                TaxonNameSource.ColAcceptedViaSynonym => "col-accepted-via-synonym",
-                _ => "scientific-name"
-            };
-            AddCandidate(candidate.Name, method, method, candidate.IsSynonym, candidate.Name);
-        }
-
-        return list;
     }
 
     private static bool ShouldSkip(IucnTaxonomyRow row) {
@@ -546,9 +296,10 @@ public sealed class WikipediaMatchTaxaCommand : AsyncCommand<WikipediaMatchTaxaC
         Row("Matched to an article", stats.Matched);
         Row("Waiting on a page download", stats.Pending);
         Row("No article found", stats.Missing);
-        Row("Only disambiguation pages", stats.Rejected);
+        Row("No article: only disambiguation pages, set-index pages or pages about a taxon in another kingdom", stats.Rejected);
         Row("No names to look up", stats.NoCandidates);
         table.AddRow("[grey]Already matched, not re-checked[/]", $"[grey]{stats.AlreadyMatched:n0}[/]", "");
+        table.AddRow("Re-checked: earlier match was a page about a taxon in another kingdom", stats.WrongKingdomRechecked.ToString("n0"), "");
         if (stats.NotRechecked > 0) {
             table.AddRow("[grey]Checked before, skipped (--pending-only)[/]", $"[grey]{stats.NotRechecked:n0}[/]", "");
         }
@@ -567,6 +318,9 @@ public sealed class WikipediaMatchTaxaCommand : AsyncCommand<WikipediaMatchTaxaC
 
     private sealed class WikipediaMatchStats {
         public long Evaluated { get; set; }
+        // Taxa whose earlier match was to a page about a taxon in another kingdom; also counted
+        // under the result of the new check.
+        public long WrongKingdomRechecked { get; set; }
         public TransitionCount Matched { get; } = new();
         public TransitionCount Pending { get; } = new();
         public TransitionCount Missing { get; } = new();
@@ -608,52 +362,4 @@ public sealed class WikipediaMatchTaxaCommand : AsyncCommand<WikipediaMatchTaxaC
             }
         }
     }
-
-    private enum TaxonProcessResult {
-        Matched,
-        Pending,
-        Missing,
-        Rejected,
-        NoCandidates,
-        Skipped,
-        AlreadyMatched,
-        NotRechecked
-    }
-
-    private enum CandidateEvaluationStatus {
-        Matched,
-        Pending,
-        Failed,
-        Missing,
-        Rejected
-    }
-
-    private sealed record CandidateEvaluation(
-        CandidateEvaluationStatus Status,
-        WikiPageSummary PageSummary,
-        string AttemptOutcome,
-        string? Notes,
-        string? FinalTitle
-    ) {
-        public static CandidateEvaluation Matched(WikiPageSummary summary, string? finalTitle) => new(CandidateEvaluationStatus.Matched, summary, TaxonWikiAttemptOutcome.Matched, null, finalTitle ?? summary.PageTitle);
-        // A match reached via a redirect: status is still Matched, but the per-attempt outcome records the redirect.
-        public static CandidateEvaluation Redirected(WikiPageSummary summary, string? finalTitle) => new(CandidateEvaluationStatus.Matched, summary, TaxonWikiAttemptOutcome.Redirected, null, finalTitle ?? summary.PageTitle);
-        public static CandidateEvaluation Pending(WikiPageSummary summary, string notes) => new(CandidateEvaluationStatus.Pending, summary, TaxonWikiAttemptOutcome.PendingFetch, notes, summary.PageTitle);
-        public static CandidateEvaluation Failed(WikiPageSummary summary, string notes) => new(CandidateEvaluationStatus.Failed, summary, TaxonWikiAttemptOutcome.Failed, notes, summary.PageTitle);
-        public static CandidateEvaluation Missing(WikiPageSummary summary, string notes) => new(CandidateEvaluationStatus.Missing, summary, TaxonWikiAttemptOutcome.Missing, notes, summary.PageTitle);
-        // A real cached page deliberately rejected (disambiguation/set-index). Falls through like Failed in the
-        // candidate loop, but lets the taxon record 'rejected' rather than 'missing'.
-        public static CandidateEvaluation Rejected(WikiPageSummary summary, string notes) => new(CandidateEvaluationStatus.Rejected, summary, TaxonWikiAttemptOutcome.Failed, notes, summary.PageTitle);
-    }
-
-    private sealed record WikipediaMatchCandidate(
-        string DisplayTitle,
-        string NormalizedTitle,
-        string SourceHint,
-        string MatchMethod,
-        bool IsSynonym,
-        string? SynonymValue
-    );
-
-    private sealed record PendingCandidate(WikipediaMatchCandidate Candidate, CandidateEvaluation Evaluation);
 }

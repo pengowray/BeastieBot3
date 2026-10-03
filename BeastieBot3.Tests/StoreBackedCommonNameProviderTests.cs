@@ -25,17 +25,17 @@ public sealed class StoreBackedCommonNameProviderTests : IDisposable {
         return CommonNameStore.OpenFromConnection(connection);
     }
 
-    private static long AddTaxon(CommonNameStore store, string canonical, long iucnId) =>
-        store.InsertOrUpdateTaxon(canonical, canonical, "species", "ANIMALIA",
+    private static long AddTaxon(CommonNameStore store, string canonical, long iucnId, string kingdom = "ANIMALIA") =>
+        store.InsertOrUpdateTaxon(canonical, canonical, "species", kingdom,
             isExtinct: false, isFossil: false, validityStatus: "valid", primarySource: "iucn", primarySourceId: iucnId.ToString());
 
     private static IucnSpeciesRecord Record(long iucnId, string genus, string species, string? infraType = null,
-        string? infraName = null) {
+        string? infraName = null, string kingdom = "ANIMALIA") {
         var scientific = infraName is null ? $"{genus} {species}" : $"{genus} {species} {infraType} {infraName}";
         return new IucnSpeciesRecord(
             TaxonId: iucnId, AssessmentId: 1, RedlistCategory: "Vulnerable", StatusCode: "VU",
             ScientificNameAssessments: scientific, ScientificNameTaxonomy: scientific,
-            KingdomName: "ANIMALIA", PhylumName: "CHORDATA", ClassName: "CHONDRICHTHYES",
+            KingdomName: kingdom, PhylumName: "CHORDATA", ClassName: "CHONDRICHTHYES",
             OrderName: "RAJIFORMES", FamilyName: "RAJIDAE", GenusName: genus, SpeciesName: species,
             InfraType: infraType, InfraName: infraName, SubpopulationName: null, Scopes: "Global",
             Authority: null, InfraAuthority: null, PossiblyExtinct: null, PossiblyExtinctInTheWild: null,
@@ -142,7 +142,8 @@ public sealed class StoreBackedCommonNameProviderTests : IDisposable {
         var madeSince = Page("Hylambates maculatus");
         cache.MarkPageMissing(madeSince, "missing", now);
         Page("Queued only");
-        using var check = new EnwikiTitleCheck(connection, ownsConnection: false);
+        using var check = new EnwikiTitleCheck(cache, ownsCache: false);
+        using var downloadedOnly = new EnwikiTitleCheck(cache, ownsCache: false, useTitleList: false);
 
         Assert.True(check.Exists("Leucoraja wallacei"));
         Assert.True(check.Exists("leucoraja wallacei"));
@@ -151,7 +152,141 @@ public sealed class StoreBackedCommonNameProviderTests : IDisposable {
         Assert.False(check.Exists("Moolgarda buchanani"));
         Assert.False(check.Exists("Queued only"));
         Assert.False(check.Exists("Never heard of"));
-        Assert.True(EnwikiTitleCheck.IsDownloaded(cache, "Iphisa elegans"));
-        Assert.False(EnwikiTitleCheck.IsDownloaded(cache, "Leucoraja wallacei"));
+        Assert.True(downloadedOnly.Exists("Iphisa elegans"));
+        Assert.False(downloadedOnly.Exists("Leucoraja wallacei"));
+    }
+
+    // Disambiguation pages and pages about another kingdom, with the pages and titles of the
+    // October 2026 Wikipedia cache (WikiKingdomFixture). The lists linked [[Ficus variegata]], a
+    // disambiguation page, for the fig, which the matcher had matched to "Ficus variegata
+    // (gastropod)".
+
+    [Fact]
+    public void TitleCheck_ADownloadedDisambiguationPage_DoesNotCount_EvenInTheTitleList() {
+        using var fixture = new WikiKingdomFixture();
+        fixture.AddRedirect("Ficus variegatus", "Ficus variegata");
+        using var check = new EnwikiTitleCheck(fixture.Cache, ownsCache: false);
+
+        Assert.False(check.Exists("Ficus variegata"));
+        Assert.True(check.IsDisambiguation("Ficus variegata"));
+        Assert.False(check.Exists("Ficus variegatus"));
+        Assert.True(check.IsDisambiguation("Ficus variegatus"));
+        Assert.True(check.Exists("Ficus variegata (gastropod)"));
+        // Not downloaded: counts by the title list, and may be a disambiguation page.
+        Assert.True(check.Exists("Gaussia princeps"));
+        Assert.False(check.IsDisambiguation("Gaussia princeps"));
+    }
+
+    [Fact]
+    public void TitleCheck_FindsPagesAboutAnotherKingdom() {
+        using var fixture = new WikiKingdomFixture();
+        fixture.AddRedirect("Gaussia scotti", "Gaussia princeps (crustacean)");
+        using var check = new EnwikiTitleCheck(fixture.Cache, ownsCache: false);
+
+        Assert.True(check.IsAboutAnotherKingdom("Ficus variegata (gastropod)", "PLANTAE"));
+        Assert.False(check.IsAboutAnotherKingdom("Ficus variegata (gastropod)", "ANIMALIA"));
+        Assert.True(check.IsAboutAnotherKingdom("Gaussia scotti", "PLANTAE"));
+        Assert.True(check.IsAboutAnotherKingdom("Long-billed bernieria", "PLANTAE"));
+        Assert.False(check.IsAboutAnotherKingdom("Gaussia princeps (plant)", "PLANTAE"));
+        Assert.False(check.IsAboutAnotherKingdom("Ficus variegata (gastropod)", null));
+        Assert.Equal("Ficus variegata (plant)", check.QualifiedTitle("Ficus variegata", "PLANTAE"));
+        Assert.Equal("Orestias elegans (fish)", check.QualifiedTitle("Orestias elegans", "ANIMALIA"));
+        Assert.Null(check.QualifiedTitle("Leucoraja wallacei", "ANIMALIA"));
+    }
+
+    private static IucnSpeciesRecord Plant(long iucnId, string genus, string species) =>
+        Record(iucnId, genus, species, kingdom: "PLANTAE");
+
+    [Fact]
+    public void FicusVariegata_LinksThePlantArticle_NotTheDisambiguationPageOrTheGastropod() {
+        using var store = OpenInMemory();
+        using var fixture = new WikiKingdomFixture();
+        var fig = AddTaxon(store, "ficus variegata", 147494668, "PLANTAE");
+        store.InsertCrossReference(fig, "wikipedia", "Ficus variegata (gastropod)");
+        using var check = new EnwikiTitleCheck(fixture.Cache, ownsCache: false);
+        using var provider = new StoreBackedCommonNameProvider(store, titleCheck: check);
+
+        Assert.Equal("Ficus variegata (plant)", provider.GetWikipediaArticleTitle(Plant(147494668, "Ficus", "variegata")));
+        Assert.Equal("Ficus variegata (plant)", provider.GetWikipediaArticleTitleByScientificName("Ficus variegata", "PLANTAE"));
+    }
+
+    [Fact]
+    public void WhenTheOwnNameIsADisambiguationPage_TheMatchedPageIsLinked() {
+        // After `wikipedia match-taxa` and `common-names aggregate`, the fig is matched to its article.
+        using var store = OpenInMemory();
+        using var fixture = new WikiKingdomFixture();
+        var fig = AddTaxon(store, "ficus variegata", 147494668, "PLANTAE");
+        store.InsertCrossReference(fig, "wikipedia", "Ficus variegata (tree)");
+        using var check = new EnwikiTitleCheck(fixture.Cache, ownsCache: false);
+        using var provider = new StoreBackedCommonNameProvider(store, titleCheck: check);
+
+        Assert.Equal("Ficus variegata (tree)", provider.GetWikipediaArticleTitle(Plant(147494668, "Ficus", "variegata")));
+    }
+
+    [Fact]
+    public void GaussiaPrinceps_LinksItsOwnName_WhileTheCacheHasNotDownloadedIt() {
+        // "Gaussia princeps" may be a disambiguation page; until it is downloaded the list links it.
+        using var store = OpenInMemory();
+        using var fixture = new WikiKingdomFixture();
+        var palm = AddTaxon(store, "gaussia princeps", 201634, "PLANTAE");
+        store.InsertCrossReference(palm, "wikipedia", "Gaussia princeps (crustacean)");
+        using var check = new EnwikiTitleCheck(fixture.Cache, ownsCache: false);
+        using var provider = new StoreBackedCommonNameProvider(store, titleCheck: check);
+
+        Assert.Equal("Gaussia princeps", provider.GetWikipediaArticleTitle(Plant(201634, "Gaussia", "princeps")));
+    }
+
+    [Fact]
+    public void GaussiaPrinceps_LinksThePlantTitle_OnceItsOwnNameIsADownloadedDisambiguationPage() {
+        using var store = OpenInMemory();
+        using var fixture = new WikiKingdomFixture();
+        fixture.AddPage("Gaussia princeps", disambiguation: true,
+            "'''''Gaussia princeps''''' may refer to:\n* [[Gaussia princeps (plant)]]\n* [[Gaussia princeps (crustacean)]]");
+        var palm = AddTaxon(store, "gaussia princeps", 201634, "PLANTAE");
+        store.InsertCrossReference(palm, "wikipedia", "Gaussia princeps (crustacean)");
+        using var check = new EnwikiTitleCheck(fixture.Cache, ownsCache: false);
+        using var provider = new StoreBackedCommonNameProvider(store, titleCheck: check);
+
+        Assert.Equal("Gaussia princeps (plant)", provider.GetWikipediaArticleTitle(Plant(201634, "Gaussia", "princeps")));
+    }
+
+    [Fact]
+    public void APageAboutAnotherKingdom_IsNeverLinked() {
+        // Moolgarda buchanani-style: the own name has no page, so the matched page would be linked.
+        using var store = OpenInMemory();
+        using var fixture = new WikiKingdomFixture();
+        var plant = AddTaxon(store, "beilschmiedia madagascariensis", 69222293, "PLANTAE");
+        store.InsertCrossReference(plant, "wikipedia", "Long-billed bernieria");
+        using var check = new EnwikiTitleCheck(fixture.Cache, ownsCache: false);
+        using var provider = new StoreBackedCommonNameProvider(store, titleCheck: check);
+
+        Assert.Null(provider.GetWikipediaArticleTitle(Plant(69222293, "Beilschmiedia", "madagascariensis")));
+    }
+
+    [Fact]
+    public void ATaxonMatchedToNoPage_WhoseOwnNameIsADisambiguationPage_LinksTheTitleForItsKingdom() {
+        // The fish Orestias elegans: the matcher rejected the disambiguation page "Orestias elegans".
+        using var store = OpenInMemory();
+        using var fixture = new WikiKingdomFixture();
+        AddTaxon(store, "orestias elegans", 176675428);
+        using var check = new EnwikiTitleCheck(fixture.Cache, ownsCache: false);
+        using var provider = new StoreBackedCommonNameProvider(store, titleCheck: check);
+
+        Assert.Equal("Orestias elegans (fish)", provider.GetWikipediaArticleTitle(Record(176675428, "Orestias", "elegans")));
+    }
+
+    [Fact]
+    public void TheLine_LinksThePlantArticle_ShowingTheScientificName() {
+        using var store = OpenInMemory();
+        using var fixture = new WikiKingdomFixture();
+        var fig = AddTaxon(store, "ficus variegata", 147494668, "PLANTAE");
+        store.InsertCrossReference(fig, "wikipedia", "Ficus variegata (gastropod)");
+        using var check = new EnwikiTitleCheck(fixture.Cache, ownsCache: false);
+        using var provider = new StoreBackedCommonNameProvider(store, titleCheck: check);
+        var formatter = new SpeciesLineFormatter(new LegacyTaxaRuleList(_rulesPath), provider, commonNameProvider: null);
+        var style = new DisplayPreferences { ListingStyle = ListingStyle.ScientificNameFocus, IncludeStatusTemplate = false };
+
+        Assert.Equal("* [[Ficus variegata (plant)|''Ficus variegata'']]",
+            formatter.FormatSpeciesLine(Plant(147494668, "Ficus", "variegata"), style, null));
     }
 }

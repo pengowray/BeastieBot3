@@ -14,12 +14,12 @@ Common names for species are notoriously ambiguous. The same name can refer to d
 
 ## Performance Notes
 
-These commands process large amounts of data and can take significant time to run. Times were measured on a Windows desktop with SSD storage, except the Wikidata and Wikipedia rows, which were measured on a Linux desktop in October 2026:
+These commands process large amounts of data and can take significant time to run. Times were measured on a Windows desktop with SSD storage, except the IUCN, Wikidata and Wikipedia rows, which were measured on a Linux desktop in October 2026:
 
 | Command | Fresh Run | Re-run | Notes |
 |---------|-----------|--------|-------|
 | `init` | ~5-6 min | ~5-6 min | Same time (upserts 183k taxa) |
-| `aggregate --source iucn` | ~7 min | ~7 min | Processes 178k assessments |
+| `aggregate --source iucn` | ~48 s | ~48 s | Processes 178k assessments. Measured on 3 October 2026 |
 | `aggregate --source wikidata` | ~6-7 min | ~6-7 min | October 2026 |
 | `aggregate --source wikipedia` | ~2 min | ~2 min | October 2026: 98,843 matched pages |
 | `aggregate --source col` | ~110 min | ~110 min | Includes COL synonym import |
@@ -39,7 +39,7 @@ These commands process large amounts of data and can take significant time to ru
 | IUCN Red List | `iucn` | Common names from IUCN API assessments (~175k names) |
 | Catalogue of Life | `col` | English vernacular names from COL database (~119k names) |
 | Wikidata | `wikidata` | P1843 taxon common name claims (~70k names) |
-| Wikidata Labels | `wikidata_label` | Item labels filtered for common name patterns (~17k names) |
+| Wikidata Labels | `wikidata_label` | Item labels filtered for common name patterns (20,064 names in October 2026) |
 | Wikipedia | `wikipedia_title` / `wikipedia_taxobox` | Article titles and taxobox names (~33k names) |
 
 ## Commands
@@ -154,20 +154,41 @@ beastiebot3 common-names aggregate --source col --replace
 - The lists (`StoreBackedCommonNameProvider`) choose the link for a taxon in this order:
   1. The page its `wikipedia_title` or `wikipedia_taxobox` name came from.
   2. When the taxon has an `exact` cross-reference, the taxon's own scientific name, if English
-     Wikipedia has a page or a redirect with that title. `EnwikiTitleCheck` looks for the title in
-     `enwiki_dump_titles` and for a `wiki_pages` row with status `cached`. For a subspecies or
-     variety it tries the name without a rank marker first, then the scientific name that the
-     line shows.
+     Wikipedia has a page or a redirect with that title and the title is not a disambiguation
+     page. `EnwikiTitleCheck` looks for the title in `enwiki_dump_titles` and for a `wiki_pages`
+     row with status `cached`. A cached page with `is_disambiguation = 1`, or a cached redirect
+     to one, does not count, even when `enwiki_dump_titles` lists it. A title the cache has not
+     downloaded counts when `enwiki_dump_titles` lists it, so it can still be a disambiguation
+     page. For a subspecies or variety it tries the name without a rank marker first, then the
+     scientific name that the line shows.
   3. The page of the `exact` cross-reference.
+  4. When the own name is a cached disambiguation page (or a cached redirect to one), the own name
+     followed by the bracketed word for the taxon's kingdom, if English Wikipedia has that title:
+     "Ficus variegata (plant)", "Orestias elegans (fish)". This step does not need an `exact`
+     cross-reference. When there are several such titles, a plant takes "(plant)" before "(tree)"
+     and "(palm)" (`WikiPageKingdom.QualifiedTitlesFor`).
+
+  No step links a page about a taxon in another kingdom (`WikiPageKingdom`, the same check that
+  `wikipedia match-taxa` makes). A page counts as about another kingdom when at least one of the
+  following gives a kingdom and none of them gives the taxon's IUCN kingdom: the taxobox
+  `kingdom` parameter, the bracketed word after the taxobox `genus` or `taxon` parameter ("Ficus
+  (gastropod)"), the bracketed word at the end of the title, and the `<group> described in
+  <year>` categories ("Gastropods described in 1798"). A bracketed word or category group that is
+  not in the tables in `WikiPageKingdom`, such as "(disambiguation)" or "Taxa described in", is
+  ignored. When no step gives a page, the line links the scientific name itself.
 
   So the line for *Leucoraja wallacei* links `[[Leucoraja wallacei]]`, a redirect to the genus
   article, not `[[Leucoraja]]`. *Moolgarda buchanani* has no page or redirect with its own name,
-  so its line links the page of its cross-reference, "Crenimugil buchanani". Section headings
-  and links to a parent species use the same order
+  so its line links the page of its cross-reference, "Crenimugil buchanani". The fig *Ficus
+  variegata* was matched to "Ficus variegata (gastropod)", and "Ficus variegata" is a
+  disambiguation page, so its line links `[[Ficus variegata (plant)|''Ficus variegata'']]`. In
+  October 2026 the palm *Gaussia princeps* still linked `[[Gaussia princeps]]`: the cache had not
+  downloaded that title, so the lists could not tell whether it is a disambiguation page.
+  Section headings and links to a parent species use the same order
   (`StoreBackedCommonNameProvider.GetWikipediaArticleTitleByScientificName`). Without a
-  Wikipedia cache the lists skip step 2. `sprat generate-lists` creates the provider from a
-  Wikipedia cache it has already opened, and that provider checks only `wiki_pages` in step 2,
-  not `enwiki_dump_titles`.
+  Wikipedia cache the lists skip steps 2 and 4 and the kingdom check. `sprat generate-lists`
+  creates the provider from a Wikipedia cache it has already opened, and that provider checks only
+  `wiki_pages` in steps 2 and 4, not `enwiki_dump_titles`.
 - Stored rows change only when a source is aggregated again: after a change to the filtering
   rules below, run `aggregate --source wikipedia --replace` and `aggregate --source wikidata
   --replace`, then `site build-db`.

@@ -352,7 +352,7 @@ public sealed class WikipediaUpdateCommand : AsyncCommand<WikipediaUpdateCommand
             $"{s.TaxaWithoutArticle:n0} checked, no article found",
         };
         if (s.TaxaAwaitingPage > 0) taxa.Add($"{s.TaxaAwaitingPage:n0} waiting on a page");
-        if (s.TaxaRejected > 0) taxa.Add($"{s.TaxaRejected:n0} with only disambiguation pages");
+        if (s.TaxaRejected > 0) taxa.Add($"{s.TaxaRejected:n0} with no article: only disambiguation pages, set-index pages or pages about a taxon in another kingdom");
         taxa.Add($"{s.TaxaNeverMatched:n0} never checked");
         AnsiConsole.MarkupLine($"[grey]Taxa:[/] {s.IucnTaxa:n0} in IUCN{notCounted} · {Markup.Escape(string.Join(" · ", taxa))}");
         AnsiConsole.MarkupLineInterpolated(

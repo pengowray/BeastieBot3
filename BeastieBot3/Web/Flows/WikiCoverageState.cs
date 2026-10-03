@@ -71,7 +71,8 @@ public sealed record WikiCoverageState {
     public long TaxaWithArticle { get; init; }
     /// Taxa the matcher looked at and found no article for.
     public long TaxaWithoutArticle { get; init; }
-    /// Taxa whose only candidate pages were disambiguation or set-index pages.
+    /// Taxa whose only candidate pages were disambiguation or set-index pages, or pages about a
+    /// taxon in another kingdom.
     public long TaxaRejected { get; init; }
     /// Varieties: in IUCN, but neither matcher nor backfill tries to place them, so they are left
     /// out of IucnTaxa and every gap. Counted so the totals can say where they went.

@@ -1,11 +1,9 @@
 using System;
 using System.Collections.Generic;
-using System.IO;
 using BeastieBot3;
 using BeastieBot3.CommonNames;
 using BeastieBot3.Taxonomy;
 using BeastieBot3.Wikipedia;
-using Microsoft.Data.Sqlite;
 
 // CommonNameStore-backed provider for Wikipedia list generation: finds a taxon's names in the
 // store and has CommonNameChooser pick and capitalise the best one (source priority, ambiguous
@@ -24,9 +22,12 @@ internal sealed class StoreBackedCommonNameProvider : IDisposable {
     private readonly WikipediaCacheStore? _wikiCache;
     private readonly bool _ownsWikiCache;
     private readonly bool _allowAmbiguous;
-    // Whether English Wikipedia has a page or a redirect with a title; null without a Wikipedia cache.
+    // Whether English Wikipedia has a page or a redirect with a title, not counting a disambiguation
+    // page; null without a Wikipedia cache.
     private readonly Func<string, bool>? _titleExists;
-    private readonly EnwikiTitleCheck? _ownedTitleCheck;
+    // Disambiguation pages, pages about another kingdom and titles with a kingdom word; null without
+    // a Wikipedia cache, and for a provider given only titleExists.
+    private readonly EnwikiTitleCheck? _titleCheck;
 
     // Per-run memoization. Generation resolves the same taxon's id/name/article several times per
     // record (Style B/C sort + line formatting + parent-species link) and again for the same taxon
@@ -49,25 +50,29 @@ internal sealed class StoreBackedCommonNameProvider : IDisposable {
 
         _wikiCache = string.IsNullOrWhiteSpace(wikipediaCachePath) ? null : WikipediaCacheStore.OpenReadOnly(wikipediaCachePath);
         _ownsWikiCache = _wikiCache is not null;
-        _ownedTitleCheck = _wikiCache is null ? null : EnwikiTitleCheck.OpenReadOnly(wikipediaCachePath!);
-        _titleExists = _ownedTitleCheck is null ? null : _ownedTitleCheck.Exists;
+        _titleCheck = _wikiCache is null ? null : new EnwikiTitleCheck(_wikiCache, ownsCache: false);
+        _titleExists = _titleCheck is null ? null : _titleCheck.Exists;
     }
 
     /// <summary>
     /// Creates a provider using an existing store (caller retains ownership).
-    /// <paramref name="titleExists"/> says whether English Wikipedia has a page or a redirect with a
-    /// title; without it, the provider asks <paramref name="wikiCache"/> for pages it has
-    /// downloaded, and without either it cannot tell (see <see cref="GetWikipediaArticleTitle"/>).
+    /// <paramref name="titleCheck"/> answers what the lists need to know about English Wikipedia
+    /// titles. <paramref name="titleExists"/> says only whether English Wikipedia has a page or a
+    /// redirect with a title. Without either, the provider asks <paramref name="wikiCache"/> about the
+    /// pages it has downloaded, and without any of them it cannot tell (see
+    /// <see cref="GetWikipediaArticleTitle"/>).
     /// </summary>
     public StoreBackedCommonNameProvider(CommonNameStore store, WikipediaCacheStore? wikiCache = null, bool allowAmbiguous = false,
-        Func<string, bool>? titleExists = null) {
+        Func<string, bool>? titleExists = null, EnwikiTitleCheck? titleCheck = null) {
         _store = store ?? throw new ArgumentNullException(nameof(store));
         _ownsStore = false;
         _allowAmbiguous = allowAmbiguous;
         Chooser = CommonNameChooser.ForStore(_store, allowAmbiguous: allowAmbiguous);
         _wikiCache = wikiCache;
         _ownsWikiCache = false;
-        _titleExists = titleExists ?? (wikiCache is null ? null : title => EnwikiTitleCheck.IsDownloaded(wikiCache, title));
+        _titleCheck = titleCheck
+            ?? (titleExists is null && wikiCache is not null ? new EnwikiTitleCheck(wikiCache, ownsCache: false, useTitleList: false) : null);
+        _titleExists = titleExists ?? (_titleCheck is null ? null : _titleCheck.Exists);
     }
 
     /// <summary>
@@ -136,10 +141,15 @@ internal sealed class StoreBackedCommonNameProvider : IDisposable {
     /// redirect is linked as it is: [[Leucoraja wallacei]], a redirect to the species list of the
     /// genus article, and not [[Leucoraja]];</item>
     /// <item>else the matched page: "Crenimugil buchanani" for Moolgarda buchanani, whose own name
-    /// has no page. Without a Wikipedia cache the provider cannot tell, and links the matched page.</item>
+    /// has no page. Without a Wikipedia cache the provider cannot tell, and links the matched page;</item>
+    /// <item>else, when the own name is a disambiguation page, the own name with the bracketed word
+    /// for the taxon's kingdom, if English Wikipedia has that title: "Ficus variegata (plant)".</item>
     /// </list>
-    /// A subspecies or variety is checked by its name without a rank marker, then by its name as
-    /// IUCN writes it.
+    /// An own name that is a disambiguation page or a redirect to one is never linked, and no page is
+    /// linked that is about a taxon in another kingdom (<see cref="WikiPageKingdom"/>): the plant Ficus
+    /// variegata is matched to "Ficus variegata (gastropod)", and "Ficus variegata" is a
+    /// disambiguation page. A subspecies or variety is checked by its name without a rank marker,
+    /// then by its name as IUCN writes it.
     /// </summary>
     public string? GetWikipediaArticleTitle(IucnSpeciesRecord record) {
         if (record is null) {
@@ -150,7 +160,7 @@ internal sealed class StoreBackedCommonNameProvider : IDisposable {
         }
 
         var taxonId = FindTaxonId(record);
-        var resolved = taxonId.HasValue ? ArticleTitle(taxonId.Value, OwnNames(record)) : null;
+        var resolved = taxonId.HasValue ? ArticleTitle(taxonId.Value, OwnNames(record), record.KingdomName) : null;
         _wikiArticleCache[record.TaxonId] = resolved;
         return resolved;
     }
@@ -170,37 +180,59 @@ internal sealed class StoreBackedCommonNameProvider : IDisposable {
         }
 
         var taxonId = FindTaxonIdByScientificName(scientificName, kingdom);
-        var resolved = taxonId.HasValue ? ArticleTitle(taxonId.Value, [scientificName]) : null;
+        var resolved = taxonId.HasValue ? ArticleTitle(taxonId.Value, [scientificName], kingdom) : null;
         _articleByScientificCache[cacheKey] = resolved;
         return resolved;
     }
 
-    // Steps 1 to 3 of GetWikipediaArticleTitle for a store taxon whose own names, as the lists
-    // would link them, are ownNames.
-    private string? ArticleTitle(long storeTaxonId, IEnumerable<string?> ownNames) {
-        if (_store.GetWikipediaNamePage(storeTaxonId, "en") is { } namePage) {
+    // Steps 1 to 4 of GetWikipediaArticleTitle for a store taxon in kingdom (null when not known)
+    // whose own names, as the lists would link them, are ownNames.
+    private string? ArticleTitle(long storeTaxonId, IReadOnlyList<string?> ownNames, string? kingdom) {
+        if (_store.GetWikipediaNamePage(storeTaxonId, "en") is { } namePage && !AboutAnotherKingdom(namePage, kingdom)) {
             return namePage;
         }
         var matched = _store.GetMatchedWikipediaPage(storeTaxonId);
-        if (matched is null || _titleExists is null) {
+        if (_titleExists is null) {
             return matched;
         }
+        var ownNameIsDisambiguation = false;
         foreach (var own in ownNames) {
-            if (!string.IsNullOrWhiteSpace(own) && _titleExists(own)) {
+            if (string.IsNullOrWhiteSpace(own)) {
+                continue;
+            }
+            if (_titleCheck?.IsDisambiguation(own) == true) {
+                ownNameIsDisambiguation = true;
+            }
+            else if (matched is not null && _titleExists(own) && !AboutAnotherKingdom(own, kingdom)) {
                 return own;
             }
         }
-        return matched;
+        if (matched is not null && !AboutAnotherKingdom(matched, kingdom)) {
+            return matched;
+        }
+        if (ownNameIsDisambiguation && _titleCheck is not null) {
+            foreach (var own in ownNames) {
+                if (!string.IsNullOrWhiteSpace(own) && _titleCheck.QualifiedTitle(own, kingdom) is { } qualified) {
+                    return qualified;
+                }
+            }
+        }
+        return null;
     }
+
+    private bool AboutAnotherKingdom(string title, string? kingdom) =>
+        _titleCheck?.IsAboutAnotherKingdom(title, kingdom) == true;
 
     // The names a record's line links when it has no article title: the scientific name the
     // lists show (SpeciesLineFormatter.ResolveScientificName), and for a subspecies or variety
     // first the name without a rank marker ("Panthera leo persica").
-    private static IEnumerable<string?> OwnNames(IucnSpeciesRecord record) {
+    private static IReadOnlyList<string?> OwnNames(IucnSpeciesRecord record) {
+        var names = new List<string?>(2);
         if (!string.IsNullOrWhiteSpace(record.InfraName)) {
-            yield return ScientificNameHelper.BuildFromParts(record.GenusName, record.SpeciesName, record.InfraName);
+            names.Add(ScientificNameHelper.BuildFromParts(record.GenusName, record.SpeciesName, record.InfraName));
         }
-        yield return SpeciesLineFormatter.ResolveScientificName(record);
+        names.Add(SpeciesLineFormatter.ResolveScientificName(record));
+        return names;
     }
 
     /// <summary>
@@ -269,102 +301,11 @@ internal sealed class StoreBackedCommonNameProvider : IDisposable {
     }
 
     public void Dispose() {
-        _ownedTitleCheck?.Dispose();
         if (_ownsWikiCache) {
             _wikiCache?.Dispose();
         }
         if (_ownsStore) {
             _store.Dispose();
-        }
-    }
-}
-
-/// <summary>
-/// Whether English Wikipedia has a page or a redirect with a title, as far as the Wikipedia cache
-/// knows: the title is in the imported list of every article title (enwiki_dump_titles, from
-/// `wikipedia titles-dump`), or the cache has downloaded it as a page or a redirect. Any other title
-/// counts as having no page, including one the cache knows nothing about. Answers are kept for
-/// the run.
-/// </summary>
-internal sealed class EnwikiTitleCheck : IDisposable {
-    private readonly SqliteConnection _connection;
-    private readonly bool _ownsConnection;
-    private readonly bool _hasTitleList;
-    private readonly Dictionary<string, bool> _answers = new(StringComparer.Ordinal);
-
-    /// <summary>A check over <paramref name="connection"/>, an open connection to a Wikipedia cache.</summary>
-    internal EnwikiTitleCheck(SqliteConnection connection, bool ownsConnection) {
-        _connection = connection;
-        _ownsConnection = ownsConnection;
-        using var command = _connection.CreateCommand();
-        command.CommandText = "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'enwiki_dump_titles'";
-        _hasTitleList = command.ExecuteScalar() is not null;
-    }
-
-    /// <summary>
-    /// A check that opens the Wikipedia cache at <paramref name="databasePath"/> read-only; null when
-    /// the file does not exist or cannot be opened.
-    /// </summary>
-    public static EnwikiTitleCheck? OpenReadOnly(string databasePath) {
-        if (!File.Exists(databasePath)) {
-            return null;
-        }
-        var connection = new SqliteConnection(new SqliteConnectionStringBuilder {
-            DataSource = databasePath,
-            Mode = SqliteOpenMode.ReadOnly,
-        }.ConnectionString);
-        try {
-            connection.Open();
-            return new EnwikiTitleCheck(connection, ownsConnection: true);
-        } catch (SqliteException) {
-            connection.Dispose();
-            return null;
-        }
-    }
-
-    /// <summary>Whether English Wikipedia has a page or a redirect titled <paramref name="title"/>.</summary>
-    public bool Exists(string title) {
-        var normalized = WikipediaTitleHelper.Normalize(title);
-        if (normalized.Length == 0) {
-            return false;
-        }
-        if (!_answers.TryGetValue(normalized, out var exists)) {
-            _answers[normalized] = exists = IsDownloaded(normalized) || IsInTitleList(normalized);
-        }
-        return exists;
-    }
-
-    /// <summary>
-    /// Whether <paramref name="cache"/> has downloaded <paramref name="title"/> as a page or a
-    /// redirect. The test for a provider given only the cache, which cannot read the title list.
-    /// </summary>
-    public static bool IsDownloaded(WikipediaCacheStore cache, string title) {
-        var normalized = WikipediaTitleHelper.Normalize(title);
-        return normalized.Length > 0
-            && cache.GetPageByNormalizedTitle(normalized)?.DownloadStatus == WikiPageDownloadStatus.Cached;
-    }
-
-    private bool IsDownloaded(string normalizedTitle) {
-        using var command = _connection.CreateCommand();
-        command.CommandText = "SELECT 1 FROM wiki_pages WHERE normalized_title = @title AND download_status = @cached";
-        command.Parameters.AddWithValue("@title", normalizedTitle);
-        command.Parameters.AddWithValue("@cached", WikiPageDownloadStatus.Cached);
-        return command.ExecuteScalar() is not null;
-    }
-
-    private bool IsInTitleList(string normalizedTitle) {
-        if (!_hasTitleList) {
-            return false;
-        }
-        using var command = _connection.CreateCommand();
-        command.CommandText = "SELECT 1 FROM enwiki_dump_titles WHERE title = @title";
-        command.Parameters.AddWithValue("@title", normalizedTitle);
-        return command.ExecuteScalar() is not null;
-    }
-
-    public void Dispose() {
-        if (_ownsConnection) {
-            _connection.Dispose();
         }
     }
 }
