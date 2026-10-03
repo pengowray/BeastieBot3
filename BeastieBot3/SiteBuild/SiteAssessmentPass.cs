@@ -13,11 +13,14 @@ using Microsoft.Data.Sqlite;
 //   - Every other header in the taxon's own API record is an earlier assessment, or a newer one
 //     than the release. A header flagged latest is only latest here when the CSV has no row for the
 //     taxon and that scope, so a region never has two latest rows.
+//   - A taxon that is not in the release (only in the API cache) has no latest assessment: every
+//     header of its record is stored as an earlier one, including any flagged latest.
 //   - Headers for another taxon id, with no scope, with no year published (unpublished drafts) or
 //     with no category are left out and counted.
 //   - The citation parts are parsed from every cached payload. The DOI is IUCN's own when its
 //     citation has one that fits; otherwise GBIF's, only for the assessment GBIF's checklist names
-//     as the taxon's current global one; otherwise Wikidata's (IucnDoiSelector checks each).
+//     as the taxon's current global one; otherwise Wikidata's; otherwise the one `iucn resolve-dois`
+//     found by checking doi.org (IucnDoiSelector checks each).
 //     Assessments with no cached payload (the CSV's subpopulations) keep citation_json NULL.
 //   - An author name with a letter lost to an encoding error ("Kry?tufek, B.") is repaired from the
 //     other assessor credits (AssessorNamePool). The pool is complete only after every payload has
@@ -36,10 +39,11 @@ using Microsoft.Data.Sqlite;
 namespace BeastieBot3.SiteBuild;
 
 /// The DOIs other sources offer, by taxon (GBIF: the assessment it names and its DOI) and by
-/// assessment (Wikidata).
+/// assessment (Wikidata, and the DOIs `iucn resolve-dois` found by checking doi.org).
 internal sealed class SiteDoiSources {
     public Dictionary<long, (long? AssessmentId, string? Doi)> Gbif { get; } = new();
     public Dictionary<long, List<string>> Wikidata { get; } = new();
+    public Dictionary<long, string> Resolved { get; } = new();
 }
 
 internal sealed class SiteAssessmentPass {
@@ -84,6 +88,7 @@ internal sealed class SiteAssessmentPass {
 
         foreach (var (taxonId, record) in _records) {
             csvScopes.TryGetValue(taxonId, out var scopesInCsv);
+            var inRelease = _taxa[taxonId].InRelease;
             foreach (var header in record.Assessments) {
                 if (header.TaxonId is { } headerTaxon && headerTaxon != taxonId) {
                     _stats.ApiHeadersOtherTaxon++;
@@ -109,7 +114,10 @@ internal sealed class SiteAssessmentPass {
                     continue;
                 }
                 var latest = header.Latest;
-                if (latest) {
+                if (latest && !inRelease) {
+                    latest = false;
+                    _stats.NotInReleaseLatestHeaders++;
+                } else if (latest) {
                     if (scopesInCsv?.Contains(header.Scope) == true) {
                         latest = false;
                         _stats.ApiLatestCoveredByCsv++;
@@ -279,7 +287,8 @@ internal sealed class SiteAssessmentPass {
                 gbifDoi = gbif.Doi;
             }
             dois.Wikidata.TryGetValue(assessment.AssessmentId, out var wikidataDois);
-            var choice = IucnDoiSelector.Select(parts, citationDoi: null, gbifDoi, wikidataDois, predecessors);
+            dois.Resolved.TryGetValue(assessment.AssessmentId, out var resolvedDoi);
+            var choice = IucnDoiSelector.Select(parts, citationDoi: null, gbifDoi, wikidataDois, predecessors, resolvedDoi);
             parts = parts with { Doi = choice.Doi, DoiSource = choice.Source };
         }
         _stats.Count(_stats.DoisBySource, parts.Doi is null ? DoiSource.None : parts.DoiSource);

@@ -40,6 +40,8 @@ public enum DoiSource {
     Gbif,
     /// From a Wikidata item for the assessment (P356).
     Wikidata,
+    /// Found by checking possible DOIs for the assessment at doi.org (`iucn resolve-dois`).
+    Resolved,
 }
 
 public sealed record IucnCitationParts {

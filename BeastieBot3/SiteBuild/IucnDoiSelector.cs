@@ -21,8 +21,9 @@ using BeastieBot3.Shared.Wikitext;
 // The release part is not checked: an amended version can carry the release of the assessment it
 // amends (Dugong 2019, "amended version of 2015 assessment", own id, release 2015-4).
 //
-// Sources in priority order: IUCN's own citation text, GBIF's copy of the IUCN checklist, then
-// Wikidata (P356 on the assessment's item). The first DOI that passes wins.
+// Sources in priority order: IUCN's own citation text, GBIF's copy of the IUCN checklist, Wikidata
+// (P356 on the assessment's item), then the DOI `iucn resolve-dois` found by checking candidate DOIs
+// at doi.org. The first DOI that passes wins.
 
 namespace BeastieBot3.SiteBuild;
 
@@ -102,19 +103,21 @@ internal static class IucnDoiSelector {
     public static bool IsAccepted(DoiVerdict verdict) =>
         verdict is DoiVerdict.Accepted or DoiVerdict.AcceptedPredecessor;
 
-    /// The first acceptable DOI in priority order (citation, GBIF, Wikidata), in canonical spelling,
-    /// with its source; (null, None) when none passes. parts.Doi is ignored.
+    /// The first acceptable DOI in priority order (citation, GBIF, Wikidata, found at doi.org), in
+    /// canonical spelling, with its source; (null, None) when none passes. parts.Doi is ignored.
     public static DoiChoice Select(
         IucnCitationParts parts,
         string? citationDoi,
         string? gbifDoi,
         IEnumerable<string>? wikidataDois,
-        IReadOnlyCollection<long>? predecessorAssessmentIds) {
+        IReadOnlyCollection<long>? predecessorAssessmentIds,
+        string? resolvedDoi = null) {
         if (TryAccept(citationDoi) is { } fromCitation) return new DoiChoice(fromCitation, DoiSource.Citation);
         if (TryAccept(gbifDoi) is { } fromGbif) return new DoiChoice(fromGbif, DoiSource.Gbif);
         foreach (var doi in wikidataDois ?? Array.Empty<string>()) {
             if (TryAccept(doi) is { } fromWikidata) return new DoiChoice(fromWikidata, DoiSource.Wikidata);
         }
+        if (TryAccept(resolvedDoi) is { } fromDoiOrg) return new DoiChoice(fromDoiOrg, DoiSource.Resolved);
         return new DoiChoice(null, DoiSource.None);
 
         string? TryAccept(string? doi) =>

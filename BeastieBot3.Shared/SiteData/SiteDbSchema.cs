@@ -8,7 +8,7 @@ namespace BeastieBot3.Shared.SiteData;
 // narrative text (rationale, range, threats ...), no coded threats/habitats/countries, no downloads.
 // Keep such fields out of this database rather than hiding them in the site.
 public static class SiteDbSchema {
-    public const int Version = 2;
+    public const int Version = 3;
 
     public const string Ddl = """
         CREATE TABLE meta (
@@ -37,11 +37,28 @@ public static class SiteDbSchema {
             wikidata_qid                TEXT,                 -- 'Q19939'
             wikidata_qid_source         TEXT,                 -- 'p627': the item states this IUCN taxon id; 'name-match': matched by name
             col_id                      TEXT,                 -- Catalogue of Life accepted name usage id
-            sprat_taxon_id              INTEGER,              -- Australian SPRAT taxon id
-            epbc_status                 TEXT,                 -- EPBC Act category: 'EX' 'EW' 'CR' 'EN' 'VU' 'CD'; NULL when not listed
-            latest_global_assessment_id INTEGER               -- NULL when the taxon has regional assessments only
+            latest_global_assessment_id INTEGER,              -- NULL when the taxon has regional assessments only, or is not in the release
+            in_release                  INTEGER NOT NULL,     -- 1: in the Red List version's CSV export. 0: only in the IUCN API cache
+                                                              -- (an old or merged id, or a taxon IUCN no longer assesses); every one
+                                                              -- of its assessments has is_latest = 0
+            current_taxon_id            INTEGER               -- in_release = 0 only: the taxon in the release with the same scientific
+                                                              -- name (same kingdom first); NULL when there is none
         );
         CREATE INDEX taxon_parent ON taxon(parent_taxon_id);
+
+        -- SPRAT profiles of the taxon (Australia's Species Profile and Threats Database) and their
+        -- EPBC Act listings. One row per SPRAT profile: the profile whose name is the taxon's name (or
+        -- lists it among its IUCN names), and every profile named after the taxon with a population in
+        -- brackets: "Phascolarctos cinereus (combined populations of Qld, NSW and the ACT)".
+        CREATE TABLE epbc_listing (
+            taxon_id       INTEGER NOT NULL,
+            sprat_taxon_id INTEGER NOT NULL,
+            listed_name    TEXT NOT NULL,                     -- the name the EPBC Act lists it under, else SPRAT's scientific name
+            status         TEXT,                              -- EPBC Act category: 'EX' 'EW' 'CR' 'EN' 'VU' 'CD'; NULL when not listed
+            applies_to     TEXT NOT NULL,                     -- 'taxon' | 'population'
+            population     TEXT,                              -- applies_to = 'population': the text in brackets after the taxon's name
+            PRIMARY KEY (taxon_id, sprat_taxon_id)
+        ) WITHOUT ROWID;
 
         CREATE TABLE assessment (
             assessment_id                INTEGER PRIMARY KEY,
@@ -114,6 +131,9 @@ public static class SiteDbSchema {
         public const string ColDoi = "col_doi";
         /// SPRAT report file name the EPBC statuses came from.
         public const string SpratReport = "sprat_report";
+        /// The newest date ('yyyy-MM-dd') on which `iucn resolve-dois` checked a DOI at doi.org, when
+        /// the build read its cache.
+        public const string IucnDoiCheckedTo = "iucn_doi_checked_to";
         public const string TaxonCount = "taxon_count";
         public const string AssessmentCount = "assessment_count";
     }

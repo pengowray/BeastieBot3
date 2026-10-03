@@ -8,9 +8,11 @@ using Spectre.Console;
 // Builds the public site's database from the local caches (`site build-db`). The phases, in order:
 //
 //   1. IUCN CSV export: every taxon (the backbone) and its latest assessments.
-//   2. IUCN API taxon records: assessment history, IUCN common names and synonyms.
+//   2. IUCN API taxon records: assessment history, IUCN common names and synonyms, and the taxa
+//      that are only in the API cache (not in the release), each with the taxon in the release
+//      that has its name.
 //   3. Plan the assessment rows.
-//   4. DOI sources: GBIF's checklist and Wikidata.
+//   4. DOI sources: GBIF's checklist, Wikidata, and the DOIs `iucn resolve-dois` found at doi.org.
 //   5. IUCN API assessment payloads: citation parts; the assessment rows are written here.
 //   6. Common names store: English names, the best English name, CoL synonyms.
 //   7. Links: English Wikipedia, Wikidata, Catalogue of Life (and the release's citation), SPRAT.
@@ -81,12 +83,15 @@ internal sealed class SiteDbBuild {
 
         using var cache = SiteIucnCsvReader.OpenReadOnly(_inputs.ApiCache);
 
-        // 2. API taxon records.
+        // 2. API taxon records, and the taxa only in the API cache.
         var apiTaxa = new SiteApiTaxaReader(taxa, _stats);
         Phase("Reading IUCN API taxon records", () => {
             apiTaxa.Read(cache, readAll: _inputs.Limit is null, ct);
-            return $"{apiTaxa.Records.Count:N0} taxa have their own record";
+            return $"{apiTaxa.Records.Count:N0} taxa have their own record, {apiTaxa.NotInRelease.Count:N0} of them not in the release";
         });
+        taxonList.AddRange(apiTaxa.NotInRelease);
+        taxonList.Sort((a, b) => a.TaxonId.CompareTo(b.TaxonId));
+        SetCurrentTaxa(taxonList);
 
         // 3. Plan.
         var assessments = new SiteAssessmentPass(taxa, apiTaxa.Records, _stats);
@@ -109,6 +114,11 @@ internal sealed class SiteDbBuild {
         Optional("Wikidata cache", _inputs.WikidataCache, path => {
             SiteLinkReaders.ReadWikidata(path, taxa, _stats, dois, ct);
             return $"{_stats.QidsFromP627 + _stats.QidsFromNameMatch:N0} taxa with an item, {dois.Wikidata.Count:N0} assessments with a DOI";
+        });
+        Optional("DOI cache (iucn resolve-dois)", _inputs.DoiCache, path => {
+            SiteLinkReaders.ReadDoiCache(path, dois, _stats, ct);
+            var newest = _stats.DoiCheckedTo is { } at ? at.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) : "none";
+            return $"{_stats.DoiChecksRead:N0} assessments checked, {_stats.DoiChecksWithDoi:N0} with a DOI, newest check {newest}";
         });
 
         // 5. Payloads; the assessment rows are written here.
@@ -154,7 +164,8 @@ internal sealed class SiteDbBuild {
         });
         Optional("SPRAT database", _inputs.SpratDatabase, path => {
             _stats.SpratReport = SiteLinkReaders.ReadSprat(path, taxa, _stats, ct);
-            return $"{_stats.SpratMatched:N0} taxa matched by name, {_stats.EpbcStatuses:N0} with an EPBC status";
+            return $"{_stats.SpratMatched:N0} taxa matched by name, {_stats.EpbcStatuses:N0} with an EPBC status, "
+                + $"{_stats.SpratPopulationProfiles:N0} population profiles ({_stats.EpbcPopulationListings:N0} listed)";
         });
 
         // 8. Parents, taxa, names, meta.
@@ -163,6 +174,9 @@ internal sealed class SiteDbBuild {
             foreach (var taxon in taxonList) {
                 ct.ThrowIfCancellationRequested();
                 writer.AddTaxon(taxon);
+                foreach (var listing in taxon.EpbcListings) {
+                    writer.AddEpbcListing(taxon.TaxonId, listing);
+                }
                 WriteNames(writer, taxon);
             }
             return $"{taxonList.Count:N0} taxa, {writer.NameCount:N0} names";
@@ -177,16 +191,39 @@ internal sealed class SiteDbBuild {
         }));
     }
 
+    // ------------------------------------------------------------ taxa not in the release
+
+    // For each taxon not in the release, the taxon in the release with the same scientific name:
+    // same kingdom first, then the same kind, then the lowest id.
+    private void SetCurrentTaxa(List<SiteTaxon> taxonList) {
+        var inRelease = taxonList.Where(t => t.InRelease)
+            .GroupBy(t => t.ScientificName, StringComparer.Ordinal)
+            .ToDictionary(g => g.Key, g => g.ToList(), StringComparer.Ordinal);
+        foreach (var taxon in taxonList) {
+            if (taxon.InRelease || !inRelease.TryGetValue(taxon.ScientificName, out var candidates)) {
+                continue;
+            }
+            taxon.CurrentTaxonId = candidates
+                .OrderBy(c => string.Equals(c.Kingdom, taxon.Kingdom, StringComparison.OrdinalIgnoreCase) ? 0 : 1)
+                .ThenBy(c => c.Kind == taxon.Kind ? 0 : 1)
+                .ThenBy(c => c.TaxonId)
+                .First().TaxonId;
+            _stats.NotInReleaseWithCurrentTaxon++;
+        }
+    }
+
     // ------------------------------------------------------------ parents
 
-    // The species of an infraspecific taxon, by "Genus species" among the CSV's species (same kingdom
-    // first); the taxon a subpopulation belongs to, by its name without the subpopulation part. When
-    // the name finds nothing, the API record's species (species_taxa) or the record that lists the
-    // subpopulation. Only a taxon that is in the site database is stored as the parent.
+    // The species of an infraspecific taxon, by "Genus species" among the database's species (same
+    // kingdom first, taxa in the release first); the taxon a subpopulation belongs to, by its name
+    // without the subpopulation part. When the name finds nothing, the API record's species
+    // (species_taxa) or the record that lists the subpopulation. For a taxon not in the release, the
+    // API record's species comes first when that species is in the release. Only a taxon that is in
+    // the site database is stored as the parent.
     private void SetParents(List<SiteTaxon> taxonList, IReadOnlyDictionary<long, SiteTaxon> taxa,
         IReadOnlyDictionary<long, long> subpopulationParents) {
         var byName = new Dictionary<string, List<SiteTaxon>>(StringComparer.Ordinal);
-        foreach (var taxon in taxonList) {
+        foreach (var taxon in taxonList.OrderBy(t => t.InRelease ? 0 : 1).ThenBy(t => t.TaxonId)) {
             if (taxon.Kind == SiteTaxonKind.Subpopulation) {
                 continue;
             }
@@ -205,6 +242,12 @@ internal sealed class SiteDbBuild {
                 _ => null,
             };
             if (taxon.Kind == SiteTaxonKind.Species) {
+                continue;
+            }
+            if (!taxon.InRelease && taxon.ApiSpeciesId is { } apiSpecies && apiSpecies != taxon.TaxonId
+                && taxa.TryGetValue(apiSpecies, out var species) && species.InRelease) {
+                taxon.ParentTaxonId = apiSpecies;
+                _stats.ParentsFromApi++;
                 continue;
             }
             if (parentName is not null && byName.TryGetValue(parentName, out var candidates)) {
@@ -287,6 +330,7 @@ internal sealed class SiteDbBuild {
         writer.SetMeta(SiteDbSchema.MetaKeys.ColCitation, _stats.ColCitation);
         writer.SetMeta(SiteDbSchema.MetaKeys.ColDoi, _stats.ColDoi);
         writer.SetMeta(SiteDbSchema.MetaKeys.SpratReport, _stats.SpratReport);
+        writer.SetMeta(SiteDbSchema.MetaKeys.IucnDoiCheckedTo, _stats.DoiCheckedTo?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
         writer.SetMeta(SiteDbSchema.MetaKeys.TaxonCount, taxonCount.ToString(CultureInfo.InvariantCulture));
         writer.SetMeta(SiteDbSchema.MetaKeys.AssessmentCount, assessmentCount);
     }

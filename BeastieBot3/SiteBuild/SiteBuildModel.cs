@@ -18,6 +18,8 @@ internal sealed record SiteBuildInputs {
     /// The CoL database itself; only its file name is read, for the release when there is no placement file.
     public string? ColDatabase { get; init; }
     public string? SpratDatabase { get; init; }
+    /// `iucn resolve-dois`'s cache (Datastore:IUCN_doi_cache_sqlite): DOIs found by checking doi.org.
+    public string? DoiCache { get; init; }
     /// rules-list.txt, whose "Scientific name = common name" lines override the best English name,
     /// as they do in the Wikipedia lists.
     public string? RulesList { get; init; }
@@ -52,9 +54,17 @@ internal sealed class SiteTaxon {
     public string? WikidataQid { get; set; }
     public string? WikidataQidSource { get; set; }
     public string? ColId { get; set; }
-    public long? SpratTaxonId { get; set; }
-    public string? EpbcStatus { get; set; }
     public long? LatestGlobalAssessmentId { get; set; }
+
+    /// False for a taxon that is only in the IUCN API cache, not in the release's CSV export (an old
+    /// or merged id, or a taxon IUCN no longer assesses). None of its assessments is latest.
+    public bool InRelease { get; init; } = true;
+
+    /// For a taxon not in the release: the taxon in the release with the same scientific name.
+    public long? CurrentTaxonId { get; set; }
+
+    /// SPRAT profiles and EPBC Act listings (epbc_listing rows).
+    public List<EpbcListing> EpbcListings { get; } = new();
 
     /// The API's taxon record lists the species of an infraspecific taxon (species_taxa); used for
     /// the parent when the CSV has no species of that name.
@@ -67,6 +77,16 @@ internal sealed class SiteTaxon {
 }
 
 internal sealed record IucnCommonName(string Name, string? Language, bool IsMain);
+
+internal static class EpbcAppliesTo {
+    public const string Taxon = "taxon";
+    public const string Population = "population";
+}
+
+/// One SPRAT profile of a taxon. Status: the EPBC Act category code, null when the profile is not
+/// listed. Population: for a profile named after the taxon with a population in brackets, the text
+/// in the brackets ("combined populations of Qld, NSW and the ACT").
+internal sealed record EpbcListing(long SpratTaxonId, string ListedName, string? Status, string AppliesTo, string? Population);
 
 /// One assessment row to write. The CSV gives the latest assessments; the API headers add the
 /// earlier ones, whose trend and criteria version come from the payload.
@@ -149,6 +169,23 @@ internal sealed class SiteBuildStats {
     public int ColIdsFromCrossReference;
     public int SpratMatched;
     public int EpbcStatuses;
+    public int SpratPopulationProfiles;
+    public int EpbcPopulationListings;
+    /// SPRAT rows named after a taxon with something in brackets that is not a population: a
+    /// voucher or a sense ("sensu lato").
+    public int SpratBracketsNotPopulation;
+
+    /// Taxa only in the API cache (not in the CSV export), by kind; and their API headers flagged
+    /// latest, which are stored as earlier assessments.
+    public readonly Dictionary<string, int> NotInReleaseByKind = new(StringComparer.Ordinal);
+    public int NotInReleaseRecordsUnusable;
+    public int NotInReleaseWithCurrentTaxon;
+    public int NotInReleaseLatestHeaders;
+
+    /// `iucn resolve-dois`'s cache: assessments it checked, of those with a DOI, and its newest check.
+    public int DoiChecksRead;
+    public int DoiChecksWithDoi;
+    public DateTime? DoiCheckedTo;
 
     public string? GbifVersion;
     public string? GbifPublished;

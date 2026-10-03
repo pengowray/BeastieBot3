@@ -24,6 +24,7 @@ internal sealed class SiteDbWriter : IDisposable {
     private readonly SqliteCommand _assessment;
     private readonly SqliteCommand _name;
     private readonly SqliteCommand _replacedBy;
+    private readonly SqliteCommand _epbcListing;
     private long _nextNameId = 1;
     private bool _finished;
 
@@ -42,14 +43,14 @@ internal sealed class SiteDbWriter : IDisposable {
         _taxon = Prepare("""
             INSERT INTO taxon (taxon_id, scientific_name, kind, kingdom, phylum, class_name, order_name, family, genus,
                 species_epithet, infra_rank, infra_name, subpopulation_name, authority, parent_taxon_id, common_name_en,
-                enwiki_title, wikidata_qid, wikidata_qid_source, col_id, sprat_taxon_id, epbc_status, latest_global_assessment_id)
+                enwiki_title, wikidata_qid, wikidata_qid_source, col_id, latest_global_assessment_id, in_release, current_taxon_id)
             VALUES (@taxon_id, @scientific_name, @kind, @kingdom, @phylum, @class_name, @order_name, @family, @genus,
                 @species_epithet, @infra_rank, @infra_name, @subpopulation_name, @authority, @parent_taxon_id, @common_name_en,
-                @enwiki_title, @wikidata_qid, @wikidata_qid_source, @col_id, @sprat_taxon_id, @epbc_status, @latest_global_assessment_id)
+                @enwiki_title, @wikidata_qid, @wikidata_qid_source, @col_id, @latest_global_assessment_id, @in_release, @current_taxon_id)
             """,
             "@taxon_id", "@scientific_name", "@kind", "@kingdom", "@phylum", "@class_name", "@order_name", "@family", "@genus",
             "@species_epithet", "@infra_rank", "@infra_name", "@subpopulation_name", "@authority", "@parent_taxon_id", "@common_name_en",
-            "@enwiki_title", "@wikidata_qid", "@wikidata_qid_source", "@col_id", "@sprat_taxon_id", "@epbc_status", "@latest_global_assessment_id");
+            "@enwiki_title", "@wikidata_qid", "@wikidata_qid_source", "@col_id", "@latest_global_assessment_id", "@in_release", "@current_taxon_id");
         _assessment = Prepare("""
             INSERT INTO assessment (assessment_id, taxon_id, scope, is_latest, category, possibly_extinct,
                 possibly_extinct_in_the_wild, criteria, criteria_version, year_published, assessment_date, population_trend, citation_json)
@@ -65,6 +66,11 @@ internal sealed class SiteDbWriter : IDisposable {
             "@name_id", "@taxon_id", "@name", "@name_type", "@language", "@source", "@is_preferred");
         _replacedBy = Prepare("UPDATE assessment SET replaced_by_assessment_id = @replaced_by WHERE assessment_id = @assessment_id",
             "@replaced_by", "@assessment_id");
+        _epbcListing = Prepare("""
+            INSERT INTO epbc_listing (taxon_id, sprat_taxon_id, listed_name, status, applies_to, population)
+            VALUES (@taxon_id, @sprat_taxon_id, @listed_name, @status, @applies_to, @population)
+            """,
+            "@taxon_id", "@sprat_taxon_id", "@listed_name", "@status", "@applies_to", "@population");
     }
 
     /// Creates the file, replacing any file already at the path.
@@ -95,8 +101,13 @@ internal sealed class SiteDbWriter : IDisposable {
     public void AddTaxon(SiteTaxon t) {
         Bind(_taxon, t.TaxonId, t.ScientificName, t.Kind, t.Kingdom, t.Phylum, t.ClassName, t.OrderName, t.Family, t.Genus,
             t.SpeciesEpithet, t.InfraRank, t.InfraName, t.SubpopulationName, t.Authority, t.ParentTaxonId, t.CommonNameEn,
-            t.EnwikiTitle, t.WikidataQid, t.WikidataQidSource, t.ColId, t.SpratTaxonId, t.EpbcStatus, t.LatestGlobalAssessmentId);
+            t.EnwikiTitle, t.WikidataQid, t.WikidataQidSource, t.ColId, t.LatestGlobalAssessmentId, t.InRelease ? 1 : 0, t.CurrentTaxonId);
         _taxon.ExecuteNonQuery();
+    }
+
+    public void AddEpbcListing(long taxonId, EpbcListing listing) {
+        Bind(_epbcListing, taxonId, listing.SpratTaxonId, listing.ListedName, listing.Status, listing.AppliesTo, listing.Population);
+        _epbcListing.ExecuteNonQuery();
     }
 
     public void AddAssessment(SiteAssessment a) {
@@ -210,6 +221,7 @@ internal sealed class SiteDbWriter : IDisposable {
         _assessment.Dispose();
         _name.Dispose();
         _replacedBy.Dispose();
+        _epbcListing.Dispose();
         if (!_finished && _transaction is not null) {
             try {
                 _transaction.Rollback();

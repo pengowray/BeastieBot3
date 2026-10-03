@@ -58,6 +58,19 @@ internal static class SiteBuildRules {
         };
     }
 
+    /// The kind of a taxon from the flags of its IUCN API record (taxon.infrarank,
+    /// taxon.subpopulation): a subpopulation; an infraspecific taxon is a variety when its name has
+    /// "var.", otherwise a subspecies; anything else is a species.
+    public static string KindFromApiFlags(bool infrarank, bool subpopulation, string scientificName) {
+        if (subpopulation) {
+            return SiteTaxonKind.Subpopulation;
+        }
+        if (infrarank) {
+            return InfraRankMarker(scientificName) == "var." ? SiteTaxonKind.Variety : SiteTaxonKind.Subspecies;
+        }
+        return SiteTaxonKind.Species;
+    }
+
     /// The rank marker as the scientific name writes it ("ssp.", "subsp.", "var."), or null.
     public static string? InfraRankMarker(string scientificName) {
         foreach (var word in scientificName.Split(' ', StringSplitOptions.RemoveEmptyEntries)) {
@@ -203,6 +216,54 @@ internal static class SiteBuildRules {
         _ => null,
     };
 
+    /// What a SPRAT scientific name says about the taxon whose name it starts with: the whole
+    /// taxon ("Phascolarctos cinereus"), one population of it ("Phascolarctos cinereus (combined
+    /// populations of Qld, NSW and the ACT)", "Rhinonicteris aurantia (Pilbara form)"), or neither.
+    /// Brackets count as a population only when they are one group at the end of the name and hold
+    /// no digit (digits mean a voucher, part of a phrase name: "Acacia sp. Castletower (N.Gibson
+    /// TOI345)"). A sense in brackets ("sensu lato", "s.l.", "sensu stricto") is the whole taxon.
+    public static SpratNameMatch ClassifySpratName(string spratName, string taxonName) {
+        var name = spratName.Trim();
+        var taxon = taxonName.Trim();
+        if (string.Equals(name, taxon, StringComparison.Ordinal)) {
+            return new SpratNameMatch(SpratNameKind.Taxon, null);
+        }
+        if (!name.StartsWith(taxon + " (", StringComparison.Ordinal)) {
+            return new SpratNameMatch(SpratNameKind.None, null);
+        }
+        var bracketed = name[(taxon.Length + 1)..];
+        if (BracketGroup(bracketed) is not { } inner) {
+            return new SpratNameMatch(SpratNameKind.NotPopulation, null);
+        }
+        if (SenseQualifiers.Contains(inner.TrimEnd('.').Trim(), StringComparer.OrdinalIgnoreCase)) {
+            return new SpratNameMatch(SpratNameKind.Taxon, null);
+        }
+        if (inner.Any(char.IsDigit)) {
+            return new SpratNameMatch(SpratNameKind.NotPopulation, null);
+        }
+        return new SpratNameMatch(SpratNameKind.Population, inner);
+    }
+
+    private static readonly string[] SenseQualifiers = {
+        "sensu lato", "s.l", "s. l", "s. lat", "sens. lat", "sensu stricto", "s.s", "s. str", "s.str", "sens. str",
+    };
+
+    // "(text)" as the whole string, with balanced brackets inside: the text, trimmed; else null.
+    private static string? BracketGroup(string text) {
+        if (text.Length < 3 || text[0] != '(' || text[^1] != ')') {
+            return null;
+        }
+        var depth = 0;
+        for (var i = 0; i < text.Length; i++) {
+            depth += text[i] switch { '(' => 1, ')' => -1, _ => 0 };
+            if (depth == 0 && i < text.Length - 1) {
+                return null;
+            }
+        }
+        var inner = text[1..^1].Trim();
+        return depth == 0 && inner.Length > 0 ? inner : null;
+    }
+
     /// When several Wikidata items state the same IUCN taxon id (P627), the one whose English label
     /// or taxon name (P225) is the IUCN scientific name, written with or without its rank marker;
     /// failing that, or when several qualify, the lowest item number.
@@ -305,6 +366,20 @@ internal static class SiteBuildRules {
 
     private static string CollapseWhitespace(string text) => Whitespace.Replace(text, " ").Trim();
 }
+
+internal enum SpratNameKind {
+    /// The SPRAT name is not the taxon's name, with or without brackets.
+    None,
+    /// The SPRAT name is the taxon's name, or the name with a sense in brackets.
+    Taxon,
+    /// The taxon's name with a population in brackets.
+    Population,
+    /// The taxon's name with brackets that do not name a population: a voucher, or more than one group.
+    NotPopulation,
+}
+
+/// ClassifySpratName's answer. Population: the text in the brackets, for SpratNameKind.Population.
+internal readonly record struct SpratNameMatch(SpratNameKind Kind, string? Population);
 
 /// A Wikidata item that states an IUCN taxon id, with what the tie-break compares.
 internal sealed record WikidataCandidate(long NumericId, string? Label, IReadOnlyList<string> TaxonNames);

@@ -1,4 +1,5 @@
 using System.Globalization;
+using System.Net;
 using System.Text.Json;
 using BeastieBot3.Infrastructure;
 using Microsoft.Data.Sqlite;
@@ -12,8 +13,10 @@ using Microsoft.Data.Sqlite;
 // its names but not its assessments (taxa_lookup maps the subpopulation id to that record). Four
 // Zea mays subpopulations do have their own record, which is preferred.
 //
-// Records whose id is not in the CSV (old or merged ids, and taxa with no current assessment such
-// as the Amur leopard, 15957) are skipped.
+// A record whose id is not in the CSV (an old or merged id, or a taxon IUCN no longer assesses, such
+// as the Amur leopard, 15957) becomes a taxon too (NotInRelease): its name, ranks, authority and
+// kind come from the record's taxon object (kind from its species / infrarank / subpopulation flags),
+// and its species from species_taxa. None of its assessments is latest (SiteAssessmentPass).
 
 namespace BeastieBot3.SiteBuild;
 
@@ -37,7 +40,7 @@ internal sealed class ApiTaxonRecord {
 }
 
 internal sealed class SiteApiTaxaReader {
-    private readonly IReadOnlyDictionary<long, SiteTaxon> _taxa;
+    private readonly Dictionary<long, SiteTaxon> _taxa;
     private readonly SiteBuildStats _stats;
     // Names of a subpopulation from the record it belongs to, used when it has no record of its own.
     private readonly Dictionary<long, (List<IucnCommonName> Names, List<string> Synonyms, long ParentRoot)> _subpopulationNames = new();
@@ -47,7 +50,11 @@ internal sealed class SiteApiTaxaReader {
     /// For a subpopulation listed in another taxon's record: that record's taxon id.
     public Dictionary<long, long> SubpopulationParents { get; } = new();
 
-    public SiteApiTaxaReader(IReadOnlyDictionary<long, SiteTaxon> taxa, SiteBuildStats stats) {
+    /// Taxa made from records whose id is not in the CSV export; they are also added to the taxa
+    /// dictionary the reader was given.
+    public List<SiteTaxon> NotInRelease { get; } = new();
+
+    public SiteApiTaxaReader(Dictionary<long, SiteTaxon> taxa, SiteBuildStats stats) {
         _taxa = taxa;
         _stats = stats;
     }
@@ -86,6 +93,16 @@ internal sealed class SiteApiTaxaReader {
                             rowIds.Add(reader.GetInt64(0));
                         }
                     }
+                }
+            }
+            // The records not in the CSV whose ids are in the same range as the taxa read.
+            if (_taxa.Count > 0) {
+                using var range = cache.CreateCommand();
+                range.CommandText = "SELECT id FROM taxa WHERE root_sis_id <= @max";
+                range.Parameters.AddWithValue("@max", _taxa.Keys.Max());
+                using var reader = range.ExecuteReader();
+                while (reader.Read()) {
+                    rowIds.Add(reader.GetInt64(0));
                 }
             }
             using var command = cache.CreateCommand();
@@ -131,7 +148,17 @@ internal sealed class SiteApiTaxaReader {
             }
             var taxonElement = root.TryGetProperty("taxon", out var t) && t.ValueKind == JsonValueKind.Object ? t : (JsonElement?)null;
 
-            if (_taxa.TryGetValue(rootSisId, out var taxon)) {
+            if (!_taxa.TryGetValue(rootSisId, out var taxon)) {
+                taxon = taxonElement is { } own ? NotInReleaseTaxon(rootSisId, own) : null;
+                if (taxon is null) {
+                    _stats.NotInReleaseRecordsUnusable++;
+                } else {
+                    _taxa[rootSisId] = taxon;
+                    NotInRelease.Add(taxon);
+                    _stats.Count(_stats.NotInReleaseByKind, taxon.Kind);
+                }
+            }
+            if (taxon is not null) {
                 Records[rootSisId] = new ApiTaxonRecord {
                     Headers = IucnTaxaHeaders.Read(root),
                     Assessments = ReadHeaders(root),
@@ -147,13 +174,43 @@ internal sealed class SiteApiTaxaReader {
                 && subpopulations.ValueKind == JsonValueKind.Array) {
                 foreach (var subpopulation in subpopulations.EnumerateArray()) {
                     if (subpopulation.ValueKind != JsonValueKind.Object || ReadLong(subpopulation, "sis_id") is not { } id
-                        || !_taxa.ContainsKey(id) || _subpopulationNames.ContainsKey(id)) {
+                        || !_taxa.TryGetValue(id, out var listed) || listed.Kind != SiteTaxonKind.Subpopulation
+                        || _subpopulationNames.ContainsKey(id)) {
                         continue;
                     }
                     _subpopulationNames[id] = (ReadCommonNames(subpopulation), ReadSynonyms(subpopulation, _stats), rootSisId);
                 }
             }
         }
+    }
+
+    // A taxon row from the record's taxon object, for a record whose id is not in the CSV; null when
+    // the record names no taxon.
+    private static SiteTaxon? NotInReleaseTaxon(long rootSisId, JsonElement taxon) {
+        var scientificName = SiteBuildRules.CleanName(ReadString(taxon, "scientific_name"));
+        if (scientificName.Length == 0) {
+            return null;
+        }
+        var subpopulation = SiteBuildRules.NullIfBlank(ReadString(taxon, "subpopulation_name"));
+        var authority = SiteBuildRules.NullIfBlank(ReadString(taxon, "authority"));
+        return new SiteTaxon {
+            TaxonId = rootSisId,
+            ScientificName = scientificName,
+            Kind = SiteBuildRules.KindFromApiFlags(IsTrue(taxon, "infrarank"), IsTrue(taxon, "subpopulation") || subpopulation is not null,
+                scientificName),
+            Kingdom = SiteBuildRules.NullIfBlank(ReadString(taxon, "kingdom_name")),
+            Phylum = SiteBuildRules.NullIfBlank(ReadString(taxon, "phylum_name")),
+            ClassName = SiteBuildRules.NullIfBlank(ReadString(taxon, "class_name")),
+            OrderName = SiteBuildRules.NullIfBlank(ReadString(taxon, "order_name")),
+            Family = SiteBuildRules.NullIfBlank(ReadString(taxon, "family_name")),
+            Genus = SiteBuildRules.NullIfBlank(ReadString(taxon, "genus_name")),
+            SpeciesEpithet = SiteBuildRules.NullIfBlank(ReadString(taxon, "species_name")),
+            InfraRank = SiteBuildRules.InfraRankMarker(scientificName),
+            InfraName = SiteBuildRules.NullIfBlank(ReadString(taxon, "infra_name")),
+            SubpopulationName = subpopulation,
+            Authority = authority is null ? null : SiteBuildRules.NullIfBlank(WebUtility.HtmlDecode(authority)),
+            InRelease = false,
+        };
     }
 
     // ------------------------------------------------------------ headers

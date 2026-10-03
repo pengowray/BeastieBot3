@@ -14,7 +14,7 @@ using Spectre.Console.Cli;
 namespace BeastieBot3.SiteBuild;
 
 [CommandInfo("site build-db", CommandKind.Mutates,
-    "Build the public species site's database (Datastore:site_sqlite) from the IUCN CSV export, the IUCN API cache, GBIF's copy of the IUCN checklist, the common names store, the Wikidata and Wikipedia caches, the Catalogue of Life placement file and release metadata, and the SPRAT database. The new database is written beside the old one and replaces it only when the build finishes. No assessment narrative text is stored.",
+    "Build the public species site's database (Datastore:site_sqlite) from the IUCN CSV export, the IUCN API cache, GBIF's copy of the IUCN checklist, the common names store, the Wikidata and Wikipedia caches, the Catalogue of Life placement file and release metadata, the SPRAT database, and the DOIs found by iucn resolve-dois. Taxa that are in the API cache but not in the CSV export get pages too, with their earlier assessments. The new database is written beside the old one and replaces it only when the build finishes. No assessment narrative text is stored.",
     Rerun = RerunEffect.Rebuilds,
     RerunNote = "Builds the whole database again from the data stored locally and replaces the previous one. A running site keeps reading the old file until it is restarted.",
     Examples = new[] {
@@ -71,6 +71,10 @@ internal sealed class SiteBuildDbCommand : Command<SiteBuildDbCommand.Settings> 
         [CommandOption("--gbif-zip <PATH>")]
         [Description("GBIF's copy of the IUCN checklist. Default: the newest zip in Datasets:GBIF_IUCN_dir.")]
         public string? GbifChecklist { get; init; }
+
+        [CommandOption("--doi-cache <PATH>")]
+        [Description("DOIs found by checking doi.org (iucn resolve-dois). Default: Datastore:IUCN_doi_cache_sqlite in paths.ini.")]
+        public string? DoiCache { get; init; }
     }
 
     public override int Execute(CommandContext context, Settings settings, CancellationToken cancellationToken) {
@@ -97,6 +101,7 @@ internal sealed class SiteBuildDbCommand : Command<SiteBuildDbCommand.Settings> 
                 ColDir = Full(settings.ColDir ?? paths.GetColDir()),
                 SpratDatabase = Full(settings.SpratDatabase ?? paths.GetSpratDatabasePath()),
                 GbifChecklist = Full(settings.GbifChecklist ?? GbifIucnChecklistReader.FindNewest(paths.GetGbifIucnDir())),
+                DoiCache = Full(settings.DoiCache ?? paths.GetIucnDoiCachePath()),
                 RulesList = Full(settings.RulesList ?? Path.Combine(paths.BaseDirectory, "rules", "rules-list.txt")),
                 Output = Path.GetFullPath(output),
                 Limit = settings.Limit,
@@ -161,6 +166,12 @@ internal sealed class SiteBuildDbCommand : Command<SiteBuildDbCommand.Settings> 
         Row("Parent taxon found by name", s.ParentsByName);
         Row("Parent taxon found from the IUCN API record", s.ParentsFromApi);
         Row("Parent taxon not in the database", s.ParentsMissing);
+        Row("Not in the release (only in the API cache): species", s.NotInReleaseByKind.GetValueOrDefault(SiteTaxonKind.Species));
+        Row("Not in the release: subspecies", s.NotInReleaseByKind.GetValueOrDefault(SiteTaxonKind.Subspecies));
+        Row("Not in the release: varieties", s.NotInReleaseByKind.GetValueOrDefault(SiteTaxonKind.Variety));
+        Row("Not in the release: subpopulations", s.NotInReleaseByKind.GetValueOrDefault(SiteTaxonKind.Subpopulation));
+        Row("Not in the release, with a taxon of the same name in the release", s.NotInReleaseWithCurrentTaxon);
+        Row("API taxon records not in the release with no scientific name (left out)", s.NotInReleaseRecordsUnusable);
 
         Section("Assessments");
         Row("Latest global", s.AssessmentsGlobalLatest);
@@ -172,6 +183,7 @@ internal sealed class SiteBuildDbCommand : Command<SiteBuildDbCommand.Settings> 
         Row("Left out: assessments in API taxon records for another taxon id", s.ApiHeadersOtherTaxon);
         Row("Flagged latest by the API, but the CSV has that scope (stored as earlier)", s.ApiLatestCoveredByCsv);
         Row("Flagged latest by the API and missing from the CSV (stored as latest)", s.ApiLatestNotInCsv);
+        Row("Flagged latest by the API, for a taxon not in the release (stored as earlier)", s.NotInReleaseLatestHeaders);
         Row("Category in the CSV differs from the API taxon record", s.CsvCategoryDiffersFromApi);
         Row("Replaced by an errata version (replaced_by_assessment_id set)", s.ReplacedByErrata);
         Row("Replaced by an amended version (replaced_by_assessment_id set)", s.ReplacedByAmended);
@@ -186,6 +198,7 @@ internal sealed class SiteBuildDbCommand : Command<SiteBuildDbCommand.Settings> 
         Row("DOIs from IUCN's citation text", s.DoisBySource.GetValueOrDefault(DoiSource.Citation));
         Row("DOIs from GBIF", s.DoisBySource.GetValueOrDefault(DoiSource.Gbif));
         Row("DOIs from Wikidata", s.DoisBySource.GetValueOrDefault(DoiSource.Wikidata));
+        Row("DOIs found by checking doi.org (iucn resolve-dois)", s.DoisBySource.GetValueOrDefault(DoiSource.Resolved));
         Row("Citations with no DOI", s.DoisBySource.GetValueOrDefault(DoiSource.None));
         Row("Author names repaired: a letter lost to an encoding error, restored from other assessor credits", s.AuthorNameRepairs.Values.Sum());
         Row("Author names with a lost letter that could not be repaired", s.AuthorNamesNotRepaired.Values.Sum());
@@ -210,6 +223,9 @@ internal sealed class SiteBuildDbCommand : Command<SiteBuildDbCommand.Settings> 
         Row("Catalogue of Life ids from the common names store", s.ColIdsFromCrossReference);
         Row("Taxa matched to SPRAT by name", s.SpratMatched);
         Row("Taxa with an EPBC status", s.EpbcStatuses);
+        Row("SPRAT profiles of a population of a taxon", s.SpratPopulationProfiles);
+        Row("Of those, listed under the EPBC Act", s.EpbcPopulationListings);
+        Row("SPRAT names with a voucher or other text in brackets after a taxon's name (not linked)", s.SpratBracketsNotPopulation);
 
         Section("Sources");
         Text("IUCN release", s.IucnRelease);
@@ -218,6 +234,8 @@ internal sealed class SiteBuildDbCommand : Command<SiteBuildDbCommand.Settings> 
         Text("Catalogue of Life release", s.ColRelease);
         Text("Catalogue of Life release DOI", s.ColDoi);
         Text("SPRAT report", s.SpratReport);
+        Text("DOI checks at doi.org", s.DoiChecksRead == 0 ? null
+            : $"{s.DoiChecksRead:N0} assessments, {s.DoiChecksWithDoi:N0} with a DOI, newest check {s.DoiCheckedTo:yyyy-MM-dd}");
         if (s.MissingSources.Count > 0) {
             Text("Sources not found (skipped)", string.Join(", ", s.MissingSources));
         }

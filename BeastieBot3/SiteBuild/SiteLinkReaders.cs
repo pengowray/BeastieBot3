@@ -1,4 +1,5 @@
 using System.Globalization;
+using BeastieBot3.Infrastructure;
 using BeastieBot3.Iucn.Gbif;
 using Microsoft.Data.Sqlite;
 
@@ -15,8 +16,11 @@ using Microsoft.Data.Sqlite;
 //                  ProvisionallyAccepted give the accepted usage id), keyed by IUCN's own kingdom,
 //                  genus and species spelling; otherwise the common names store's CoL cross-reference.
 //                  Subpopulations get none: CoL has no subpopulations.
-//   SPRAT          sprat.sqlite sprat_species, by exact scientific name, then by each name in
-//                  IUCN_Red_List_Listed_Names. Only an EPBC-listed row gives a status.
+//   SPRAT          sprat.sqlite sprat_species. The profile of the whole taxon: by exact scientific
+//                  name, then by each name in IUCN_Red_List_Listed_Names. Profiles of populations:
+//                  every row named after the taxon with a population in brackets
+//                  (SiteBuildRules.ClassifySpratName). Only an EPBC-listed row gives a status.
+//   DOI cache      iucn_doi_cache.sqlite doi_check: DOIs `iucn resolve-dois` found at doi.org.
 //   DOIs           GBIF's copy of the IUCN checklist (the current global assessment of each taxon)
 //                  and Wikidata items for assessments (wikidata_iucn_assessment_items).
 //   GBIF citation  The checklist's recommended citation from its eml.xml, and the dataset DOI: the
@@ -213,20 +217,26 @@ internal static class SiteLinkReaders {
 
     // ------------------------------------------------------------ SPRAT
 
-    /// Sets sprat_taxon_id and epbc_status; returns the report file the SPRAT database was imported from.
+    /// Fills each taxon's EpbcListings; returns the report file the SPRAT database was imported from.
+    /// A name shared by several taxa goes to the taxon in the release with the lowest id, else the
+    /// lowest id of the others.
     public static string? ReadSprat(string path, IReadOnlyDictionary<long, SiteTaxon> taxa, SiteBuildStats stats,
         CancellationToken cancellationToken) {
-        var byName = new Dictionary<string, long>(StringComparer.Ordinal);
-        foreach (var taxon in taxa.Values) {
-            byName.TryAdd(taxon.ScientificName, taxon.TaxonId);
+        var byName = new Dictionary<string, SiteTaxon>(StringComparer.Ordinal);
+        foreach (var taxon in taxa.Values.OrderBy(t => t.InRelease ? 0 : 1).ThenBy(t => t.TaxonId)) {
+            byName.TryAdd(taxon.ScientificName, taxon);
         }
 
-        // Best SPRAT row per IUCN taxon: an exact scientific name match beats a listed-name match,
-        // then a row with an EPBC listing, then the lowest SPRAT id.
-        var best = new Dictionary<long, (int Rank, long SpratId, string? Epbc)>();
+        // The profile for the whole taxon: an exact scientific name match beats a sense in brackets,
+        // which beats a listed-name match; then a profile with an EPBC listing; then the lowest SPRAT id.
+        var best = new Dictionary<long, (int Rank, EpbcListing Listing)>();
+        var populations = new Dictionary<long, List<EpbcListing>>();
         using var connection = OpenReadOnly(path);
         using (var command = connection.CreateCommand()) {
-            command.CommandText = "SELECT sprat_taxon_id, scientific_name, epbc_status, IUCN_Red_List_Listed_Names FROM sprat_species";
+            command.CommandText = """
+                SELECT sprat_taxon_id, scientific_name, epbc_status, IUCN_Red_List_Listed_Names, EPBC_Threatened_Species_Listed_Name
+                FROM sprat_species
+                """;
             using var reader = command.ExecuteReader();
             while (reader.Read()) {
                 cancellationToken.ThrowIfCancellationRequested();
@@ -234,40 +244,127 @@ internal static class SiteLinkReaders {
                     continue;
                 }
                 var epbc = SiteBuildRules.EpbcCode(reader.IsDBNull(2) ? null : reader.GetString(2));
+                var scientificName = SiteBuildRules.NullIfBlank(reader.IsDBNull(1) ? null : reader.GetString(1));
+                var listedName = SiteBuildRules.NullIfBlank(reader.IsDBNull(4) ? null : reader.GetString(4)) ?? scientificName;
+
+                // A population of a taxon: the taxon's name with the population in brackets.
+                SiteTaxon? populationOf = null;
+                if (scientificName is not null) {
+                    for (var at = scientificName.IndexOf(" (", StringComparison.Ordinal); at > 0;
+                         at = scientificName.IndexOf(" (", at + 1, StringComparison.Ordinal)) {
+                        if (!byName.TryGetValue(scientificName[..at], out var taxon)) {
+                            continue;
+                        }
+                        var match = SiteBuildRules.ClassifySpratName(scientificName, taxon.ScientificName);
+                        if (match.Kind == SpratNameKind.Population) {
+                            // The population as the listed name gives it, when that has the same form.
+                            var listed = listedName is null ? match : SiteBuildRules.ClassifySpratName(listedName, taxon.ScientificName);
+                            var population = listed.Kind == SpratNameKind.Population ? listed.Population! : match.Population!;
+                            if (!populations.TryGetValue(taxon.TaxonId, out var list)) {
+                                populations[taxon.TaxonId] = list = new List<EpbcListing>();
+                            }
+                            list.Add(new EpbcListing(spratId, listedName ?? scientificName, epbc, EpbcAppliesTo.Population, population));
+                            populationOf = taxon;
+                        } else if (match.Kind == SpratNameKind.Taxon) {
+                            Consider(taxon, 2);
+                        } else if (match.Kind == SpratNameKind.NotPopulation) {
+                            stats.SpratBracketsNotPopulation++;
+                        }
+                        break;
+                    }
+                }
+
+                // The profile of the whole taxon: by its scientific name, then by each IUCN name it lists.
                 var names = new List<(string Name, bool Exact)>();
-                if (!reader.IsDBNull(1)) {
-                    names.Add((reader.GetString(1).Trim(), true));
+                if (scientificName is not null) {
+                    names.Add((scientificName, true));
                 }
                 if (!reader.IsDBNull(3)) {
                     names.AddRange(reader.GetString(3).Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
                         .Select(n => (n, false)));
                 }
                 foreach (var (name, exact) in names) {
-                    if (!byName.TryGetValue(name, out var taxonId)) {
+                    if (!byName.TryGetValue(name, out var taxon) || taxon == populationOf) {
                         continue;
                     }
-                    var rank = (exact ? 0 : 2) + (epbc is null ? 1 : 0);
-                    if (!best.TryGetValue(taxonId, out var current) || rank < current.Rank
-                        || (rank == current.Rank && spratId < current.SpratId)) {
-                        best[taxonId] = (rank, spratId, epbc);
-                    }
+                    Consider(taxon, exact ? 0 : 4);
                     break;
+                }
+
+                void Consider(SiteTaxon taxon, int baseRank) {
+                    var rank = baseRank + (epbc is null ? 1 : 0);
+                    if (!best.TryGetValue(taxon.TaxonId, out var current) || rank < current.Rank
+                        || (rank == current.Rank && spratId < current.Listing.SpratTaxonId)) {
+                        best[taxon.TaxonId] = (rank, new EpbcListing(spratId, listedName ?? scientificName ?? string.Empty, epbc,
+                            EpbcAppliesTo.Taxon, null));
+                    }
                 }
             }
         }
-        foreach (var (taxonId, match) in best) {
-            var taxon = taxa[taxonId];
-            taxon.SpratTaxonId = match.SpratId;
-            taxon.EpbcStatus = match.Epbc;
+        foreach (var (taxonId, (_, listing)) in best) {
+            taxa[taxonId].EpbcListings.Add(listing);
             stats.SpratMatched++;
-            if (match.Epbc is not null) {
+            if (listing.Status is not null) {
                 stats.EpbcStatuses++;
+            }
+        }
+        foreach (var (taxonId, list) in populations) {
+            var taxon = taxa[taxonId];
+            foreach (var listing in list.OrderBy(l => l.Population, StringComparer.OrdinalIgnoreCase).ThenBy(l => l.SpratTaxonId)) {
+                if (taxon.EpbcListings.Any(l => l.SpratTaxonId == listing.SpratTaxonId)) {
+                    continue;
+                }
+                taxon.EpbcListings.Add(listing);
+                stats.SpratPopulationProfiles++;
+                if (listing.Status is not null) {
+                    stats.EpbcPopulationListings++;
+                }
             }
         }
 
         using var file = connection.CreateCommand();
         file.CommandText = "SELECT filename FROM import_metadata ORDER BY id DESC LIMIT 1";
         return file.ExecuteScalar() is string fileName ? Path.GetFileName(fileName.Trim()) : null;
+    }
+
+    // ------------------------------------------------------------ DOIs found by checking doi.org
+
+    /// Reads `iucn resolve-dois`'s cache (table doi_check: assessment_id, taxon_id, doi, checked_at,
+    /// candidates_tried; doi NULL when no candidate resolved) into dois.Resolved. A file without the
+    /// table, or with a table the build cannot read, gives no DOIs and a warning.
+    public static void ReadDoiCache(string path, SiteDoiSources dois, SiteBuildStats stats, CancellationToken cancellationToken) {
+        using var connection = OpenReadOnly(path);
+        using (var exists = connection.CreateCommand()) {
+            exists.CommandText = "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'doi_check'";
+            if (Convert.ToInt64(exists.ExecuteScalar(), CultureInfo.InvariantCulture) == 0) {
+                stats.Warnings.Add($"The DOI cache {path} has no doi_check table, so no DOIs found by checking doi.org were used.");
+                return;
+            }
+        }
+        try {
+            using var command = connection.CreateCommand();
+            command.CommandText = "SELECT assessment_id, doi, checked_at FROM doi_check";
+            using var reader = command.ExecuteReader();
+            while (reader.Read()) {
+                cancellationToken.ThrowIfCancellationRequested();
+                stats.DoiChecksRead++;
+                if (!reader.IsDBNull(2) && StoredUtc.Parse(reader.GetString(2)) is { } checkedAt
+                    && (stats.DoiCheckedTo is null || checkedAt > stats.DoiCheckedTo)) {
+                    stats.DoiCheckedTo = checkedAt;
+                }
+                if (reader.IsDBNull(0) || reader.IsDBNull(1) || SiteBuildRules.NullIfBlank(reader.GetString(1)) is not { } doi) {
+                    continue;
+                }
+                stats.DoiChecksWithDoi++;
+                dois.Resolved[reader.GetInt64(0)] = doi;
+            }
+        } catch (SqliteException ex) {
+            dois.Resolved.Clear();
+            stats.DoiChecksRead = 0;
+            stats.DoiChecksWithDoi = 0;
+            stats.DoiCheckedTo = null;
+            stats.Warnings.Add($"The DOI cache {path} could not be read, so no DOIs found by checking doi.org were used: {ex.Message}");
+        }
     }
 
     // ------------------------------------------------------------ GBIF
