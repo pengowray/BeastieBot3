@@ -84,6 +84,21 @@ public class FlowCatalogueTests {
         }
     }
 
+    // cache-assessments has three queues, one per run; the API flow's "Step by step" panel has a
+    // step for each of the two that `iucn api cache-all` runs as phases of their own.
+    [Fact]
+    public void Api_step_by_step_has_the_csv_missing_and_stale_latest_queues() {
+        var flow = FlowCatalogue.Find("iucn-import")!;
+        var commands = flow.Steps.Where(s => s.Section == FlowSection.StepByStep).SelectMany(s => s.Commands).ToList();
+        Assert.Contains("iucn api cache-assessments --csv-missing", commands);
+        Assert.Contains("iucn api cache-assessments --stale-latest", commands);
+
+        // Both come before the projection, which the panel says to run last.
+        var ids = flow.Steps.Select(s => s.Id).ToList();
+        Assert.True(ids.IndexOf("api-csv-missing") < ids.IndexOf("api-project-view"));
+        Assert.True(ids.IndexOf("api-stale-latest") < ids.IndexOf("api-project-view"));
+    }
+
     // The public site flow, in the order the work has to happen: the DOI sources before the build,
     // the build before the check and the deploy.
     [Fact]
