@@ -162,10 +162,15 @@ public class AuditThemeTests {
         }
     }
 
-    [Fact]
-    public void Css_DarkFilterBoxBorderIsAtLeast3To1() {
-        var dark = Colours(DarkMediaBlock);
-        Assert.True(Contrast(dark["control-border"], dark["bg"]) >= 3.0);
+    // WCAG 1.4.11: the border of a control (the filter box, the Theme setting) needs 3:1 against
+    // the page. The light border was #d9dee3, 1.35:1 against white.
+    [Theory]
+    [InlineData("light")]
+    [InlineData("dark")]
+    public void Css_ControlBorderIsAtLeast3To1(string theme) {
+        var colours = Colours(theme == "light" ? LightBlock : DarkMediaBlock);
+        var ratio = Contrast(colours["control-border"], colours["bg"]);
+        Assert.True(ratio >= 3.0, $"{theme}: --control-border on --bg is {ratio:0.00}:1");
     }
 
     [Theory]

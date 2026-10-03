@@ -31,7 +31,7 @@ internal static class AuditAssets {
   --mark-bg: #fde7c2;
   --mark-ink: #5b4a25;
   --ws: #b9c1c9;
-  --control-border: #d9dee3;
+  --control-border: #767c84;
   --fade-start: rgba(255, 255, 255, 0);
   --fade-end: rgba(255, 255, 255, 0.88);
   --backdrop: rgba(20, 25, 30, 0.55);
