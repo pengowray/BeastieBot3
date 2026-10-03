@@ -41,7 +41,7 @@ must never be reachable from outside the machine.
    The first run downloads Crossref's list of IUCN DOIs again, so that it includes the new
    release's DOIs, and checks the latest global assessments. See
    [Missing DOIs](#missing-dois-iucn-resolve-dois).
-5. Run `site build-db`. For release 2026-1 it takes about 65 seconds and writes a database of about
+5. Run `site build-db`. For release 2026-1 it takes about 80 seconds and writes a database of about
    450 MB. It writes `<Datastore:site_sqlite>.building` and replaces `Datastore:site_sqlite` only
    when the build finishes; a failed or cancelled build leaves the previous database in place. It
    reads the DOI cache from `Datastore:IUCN_doi_cache_sqlite` (`--doi-cache` gives another path),
@@ -116,6 +116,14 @@ Rules the site depends on (pinned by `SiteDbBuildTests` and the site tests):
   wikitext for it.
 - `citation_json` is `IucnCitationParts.ToJson()`. It never holds assessment narrative text.
   `replaced_by_assessment_id` links an assessment to the errata or amended version that replaced it.
+  For an errata version, the build looks for the replaced assessment among the ids that
+  `IucnTaxaHeaders.PredecessorIds` returns. If none of those ids is an earlier assessment row of
+  the taxon, and the errata version's DOI came from the DOI cache, the build uses the assessment
+  id inside that DOI (see [Citations](#citations)). This finds replaced assessments that IUCN now
+  lists with another scope or year. For example, *Pinus pinea* assessment 2977175 is now scoped
+  Europe, and its row is marked as replaced by the global errata version 129160976. The build
+  summary row "Errata versions whose replaced assessment was found from their DOI (another scope
+  or year)" counts these cases: 6 in release 2026-1.
 - Every taxon's scientific name is in the `name` and `name_key` tables, and the `name_fts` index is
   rebuilt after the bulk insert. The finished file is in rollback-journal mode, not WAL, so a
   read-only process can open it.
@@ -125,8 +133,9 @@ Rules the site depends on (pinned by `SiteDbBuildTests` and the site tests):
   choose it, by `CommonNameChooser`: a `rules-list.txt` override, otherwise the best of the store's
   names for the taxon (by source priority, skipping junk names and names another taxon keeps under
   the ambiguity rule `AmbiguousNames`, repaired where `CommonNameQuality` can repair them, with the
-  capitalisation rules), and none when that name is not usable as a common name. So a wrong English
-  name appears both on the site and in the lists.
+  capitals of the taxon's Wikipedia article title or else the capitalisation rules), and none when
+  that name is not usable as a common name. So a wrong English name appears both on the site and
+  in the lists.
 - The `name` table leaves out common names that `CommonNameQuality` finds to be junk (wiki markup,
   author citations, OCR errors, names cut off at a bracket), in every language, and stores
   repairable ones repaired (`SiteNameSet`). The `site build-db` summary counts both: "Common names
@@ -170,8 +179,16 @@ sentence from the citation text and reads the DOI it links to.
   published from 2015 to 2018 kept their predecessor's DOI. Priority: IUCN's citation text, then
   GBIF (latest global assessments only), then Wikidata, then the DOI cache that
   `iucn resolve-dois` writes (`DoiSource.Resolved`: found in Crossref's list of IUCN DOIs or at
-  doi.org). A DOI from the DOI cache is checked by `IucnDoiSelector` like the others. IUCN's
-  citation text has a DOI for only about 12% of latest assessments, so most DOIs come from GBIF.
+  doi.org). `IucnDoiSelector` checks a DOI from the DOI cache like the others, with one
+  addition for an errata version. If the DOI contains the errata version's taxon id and the id of
+  another assessment, that assessment is accepted as one the errata version replaced, even when
+  `IucnTaxaHeaders.PredecessorIds` does not return it (`IucnDoiSelector.ErrataPredecessorNamedBy`).
+  This is safe because `iucn resolve-dois` saves such a DOI only when the DOI resolves to the
+  errata version's page. In release 2026-1 this rule gives 8 more assessments a DOI. For example,
+  the global errata version 129160976 of *Pinus pinea* gets the DOI
+  `10.2305/IUCN.UK.2013-1.RLTS.T42391A2977175.en`, which contains the id of assessment 2977175.
+  IUCN's citation text has a DOI for only about 12% of latest assessments, so most DOIs come from
+  GBIF.
 - `site build-db` never builds a DOI from a year: the release part of a DOI cannot be predicted.
   `iucn resolve-dois` builds candidate DOIs from the year, but saves one only when doi.org confirms
   that it exists.
@@ -217,10 +234,12 @@ does not include). It has two sources:
    at least 300 ms apart (`--delay`); after a 429 answer the command waits for Retry-After and
    slows the pace.
 
-Every DOI saved passes `IucnDoiSelector.Check`. A run skips the assessments already in the cache;
-`--recheck-missing-after <DAYS>` checks again the assessments whose last check found no DOI and
-is at least DAYS days old. `--status`
-prints the counts for a scope, sends no requests and creates no cache file.
+Every DOI saved passes `IucnDoiSelector.Check`. For an errata version, the check also accepts the
+DOI of another assessment of the same taxon when Crossref's list links that DOI to the errata
+version's page (`IucnDoiResolution.ChooseFromCrossref`). A run skips the assessments already in
+the cache; `--recheck-missing-after <DAYS>` checks again the assessments whose last check found no
+DOI and is at least DAYS days old. `--status` prints the counts for a scope, sends no requests and
+creates no cache file.
 
 The DOI cache's tables:
 
@@ -263,18 +282,27 @@ each scope that have no DOI from IUCN's citation text, GBIF or Wikidata:
 - The page of a taxon that is not in the release (`in_release = 0`) says "No current assessment in
   IUCN Red List version X", names the taxon in the release with the same name (`current_taxon_id`)
   when there is one, and lists the taxon's earlier assessments with the wikitext (such as
-  `{{cite iucn}}`) for each. On the page of a taxon in the release, the history section links to
-  each old id that has the same scientific name.
+  `{{cite iucn}}`) for each. Its Regional assessments table lists every regional assessment, by
+  region and then newest first. On the page of a taxon in the release, that table lists the latest
+  assessment in each region, and the history section links to each old id that has the same
+  scientific name. The page of a taxon in the release with no global assessment says "No global
+  assessment. This taxon has been assessed in N regions."
 - Search, `/name/{name}` and `/api/suggest` rank taxa in the release before taxa that are not,
   within each group of matches (exact name, name that starts with the text, any other match).
   Search and `/name/{name}` go straight to a taxon page when the text names one taxon exactly: the
   only exact match among the taxa in the release or, when no taxon in the release matches exactly,
-  the only exact match among all taxa (`SearchModel.SingleExactMatch`).
+  the only exact match among all taxa (`SearchModel.SingleExactMatch`). The search box lists each
+  suggested name once, ignoring letter case, because two suggestions with the same name open the
+  same search result. When an old id and a taxon in the release have the same scientific name,
+  `/api/suggest` returns both, and `site.js` keeps only the first, which is the taxon in the
+  release.
 - The IUCN Red List Terms of Use limit what the site may hold and offer: no assessment narrative
   text, no coded threats, habitats or countries, no downloads, and no API that returns assessment
   fields (`/api/suggest` returns names, ids and the category only). Every page with IUCN data shows
   the Red List version and links to the About page, which credits every source with its licence and
-  citation.
+  citation. Crossref is one of those sources, for the DOIs that `iucn resolve-dois` finds; its
+  licence is CC0, and its Version cell gives the date of the newest DOI check
+  (`iucn_doi_checked_to`).
 - Run locally with `dotnet run --project BeastieBot3.Site`. `appsettings.Development.json` points to
   `~/datasets/beastiebot/site.sqlite`; set `Site__DatabasePath` to use another file.
 
@@ -298,17 +326,24 @@ each scope that have no DOI from IUCN's citation text, GBIF or Wikidata:
 ## Known gaps
 
 - Most taxa that are not in the release have no Wikipedia article and no English name on the site:
-  in the build of 3 October 2026, 195 of the 4,223 have an `enwiki_title` and 101 have a
+  in the build of 3 October 2026, 195 of the 4,223 have an `enwiki_title` and 104 have a
   `common_name_en`. `wikipedia match-taxa` matches the taxa in the IUCN Red List database, so such
   a taxon has an article only when the Wikipedia cache still has a match made for it earlier, and
   it has an English name only when the common names store has one for it. The Amur leopard
   (*Panthera pardus* ssp. *orientalis*, 15957) has neither.
 - The ambiguity rule gives a Wikipedia article title or taxobox name priority over an IUCN main
-  name. So for about 478 taxa, the name that IUCN gives as the taxon's main name is used for
-  another taxon instead, one that has the name as its Wikipedia article title or taxobox name. A
-  decision on changing the source priority is pending.
+  name. So for about 445 taxa in the release, the name that IUCN gives as the taxon's main name is
+  used for another taxon instead, one that has the name as its Wikipedia article title or taxobox
+  name. The count leaves out a taxon whose IUCN main name is used for its own species or for one
+  of its own subspecies. A decision on changing the source priority is pending.
 - The Wikipedia matcher (`wikipedia match-taxa`) can match a taxon to the article about a taxon of
-  the same name in another kingdom. The plant *Ficus variegata* links to "Ficus variegata
-  (gastropod)", and the palm *Gaussia princeps* to "Gaussia princeps (crustacean)".
+  the same name in another kingdom. It matches the plant *Ficus variegata* to "Ficus variegata
+  (gastropod)", and the palm *Gaussia princeps* to "Gaussia princeps (crustacean)". The site's
+  article link (`taxon.enwiki_title`, read from the matcher's `taxon_wiki_matches`) still goes to
+  those pages. The Wikipedia lists link the taxon's own scientific name when English Wikipedia has
+  that title, so they link "Ficus variegata" and "Gaussia princeps". "Ficus variegata" is a
+  disambiguation page, and the plant's article is "Ficus variegata (plant)". The Wikipedia cache
+  has not downloaded "Gaussia princeps", so it may also be a disambiguation page; English
+  Wikipedia has the title "Gaussia princeps (plant)".
 - Regional assessments have DOIs only when IUCN's citation text, Wikidata or the DOI cache
   (`iucn resolve-dois --scope latest-regional`) gives one.

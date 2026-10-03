@@ -134,14 +134,43 @@ beastiebot3 common-names aggregate --source col --replace
   the taxa matched by their own name rather than through a synonym or a Catalogue of Life name;
   failing that, all of them. A taxon that takes no names from the page gets a
   `taxon_cross_references` row with `match_type` `other_taxon_page`.
+- A species or subspecies matched to a page about its genus or a higher taxon takes neither the
+  page's title nor its taxobox name: "Casque-headed tree frogs" on the page "Trachycephalus" is not
+  a name of *Trachycephalus vermiculatus* (`WikipediaPageMatch.IsGenusPageOfSpecies`). A page is
+  about a genus or a higher taxon when its taxobox has none of the parameters that name a species
+  (`binomial`, `trinomial`, `species`, `subspecies`, `binomial_text`, `species_text`,
+  `trinomial_text`), and its `taxon` parameter (or, without one, its `genus` parameter) is a
+  single word. The check ignores the rank stored in the Wikipedia cache, which is "genus" for some
+  species pages, such as the Raiatea starling's. The species does take the page's names when the
+  taxobox marks the genus monotypic or the store has exactly one species in the page's genus
+  (`CommonNameStore.CountSpeciesInGenus`). Either way the species keeps its `exact`
+  cross-reference to the page, so the lists can still link it. `aggregate --source wikipedia`
+  prints the number of species and subspecies it skipped this way (511 in October 2026).
 - The store's Wikipedia article for a taxon (`CommonNameStore.GetWikipediaArticleTitle`) is the
-  page its `wikipedia_title` or `wikipedia_taxobox` name came from. A taxon with neither (for
-  example one whose article title is a scientific name) gets the page of its `exact` Wikipedia
-  cross-reference, never an `other_taxon_page` one. The lists use this title only as a link
-  target, never as the text of a line.
+  page its `wikipedia_title` or `wikipedia_taxobox` name came from (`GetWikipediaNamePage`). A
+  taxon with neither (for example one whose article title is a scientific name) gets the page of
+  its `exact` Wikipedia cross-reference (`GetMatchedWikipediaPage`), never an `other_taxon_page`
+  one. The lists use a title only as a link target, never as the text of a line.
+- The lists (`StoreBackedCommonNameProvider`) choose the link for a taxon in this order:
+  1. The page its `wikipedia_title` or `wikipedia_taxobox` name came from.
+  2. When the taxon has an `exact` cross-reference, the taxon's own scientific name, if English
+     Wikipedia has a page or a redirect with that title. `EnwikiTitleCheck` looks for the title in
+     `enwiki_dump_titles` and for a `wiki_pages` row with status `cached`. For a subspecies or
+     variety it tries the name without a rank marker first, then the scientific name that the
+     line shows.
+  3. The page of the `exact` cross-reference.
+
+  So the line for *Leucoraja wallacei* links `[[Leucoraja wallacei]]`, a redirect to the genus
+  article, not `[[Leucoraja]]`. *Moolgarda buchanani* has no page or redirect with its own name,
+  so its line links the page of its cross-reference, "Crenimugil buchanani". Section headings
+  and links to a parent species use the same order
+  (`StoreBackedCommonNameProvider.GetWikipediaArticleTitleByScientificName`). Without a
+  Wikipedia cache the lists skip step 2. `sprat generate-lists` creates the provider from a
+  Wikipedia cache it has already opened, and that provider checks only `wiki_pages` in step 2,
+  not `enwiki_dump_titles`.
 - Stored rows change only when a source is aggregated again: after a change to the filtering
   rules below, run `aggregate --source wikipedia --replace` and `aggregate --source wikidata
-  --replace`.
+  --replace`, then `site build-db`.
 
 ### `common-names sources`
 
@@ -164,9 +193,12 @@ Displays a table showing:
 
 An ambiguous common name is an English common name that two or more taxa in the Common names
 store have. Only valid, non-fossil taxa are counted, from any kingdom, including taxa that share a
-scientific synonym, and names are compared ignoring case, spaces and punctuation. A junk name (see
-[Common name quality](#common-name-quality)) does not count as a name the taxon has, and a
-repairable name counts under its repaired form.
+scientific synonym, and names are compared ignoring case, spaces and punctuation. Store taxa with
+the same scientific name and kingdom count as one taxon. The store can hold a species under both
+an old IUCN id and its current id (*Arthroleptella bicolor* is 58057 and 121376651), and both are
+given the same Wikipedia title. A name used for one of the two taxa is used for the other too. A
+junk name (see [Common name quality](#common-name-quality)) does not count as a name the taxon
+has, and a repairable name counts under its repaired form.
 `wikipedia generate-lists`, `sprat generate-lists`, `site build-db` and
 `common-names report --report ambiguous` apply the same rule to these names
 (`CommonNameStore.QueryAmbiguousNames`, `AmbiguousNames`), and work out the names from the store
@@ -197,7 +229,11 @@ species entry it takes the first of these that the taxon has:
 1. A common name set for the taxon in `rules/rules-list.txt`. It is used even if it is
    ambiguous.
 2. The taxon's first common name in source order that is not junk and not skipped for it,
-   repaired where `CommonNameQuality` can repair it, with the capitalization rules applied.
+   repaired where `CommonNameQuality` can repair it. A name from a Wikipedia article title keeps
+   the title's capitals, with the first letter upper case ("Large Palau flying fox", "Banded
+   martin"). A name from another source that is one of the taxon's article titles apart from its
+   capitals is shown with the title's capitals. Any other name, including a taxobox name, gets the
+   capitalization rules ("White Ash" becomes "White ash").
 
 When the name from step 1 or 2 is not usable as a common name (the scientific name again, a
 working name such as "sp. nov.", or a name with an authority and year), the taxon gets no common
@@ -214,9 +250,10 @@ name is ambiguous.
 the `init`, `aggregate` and `report --report summary` summaries show the same count. To see the
 names, run `common-names report --report ambiguous`, which writes
 `common-name-ambiguous-<timestamp>.md` to the reports folder. The report has one table for each
-ambiguous name, and its "Uses This Name" column is Yes for the taxon the name is used for. On the
-store of 3 October 2026 it listed 10,303 names: 6,970 used for one taxon each and 3,333 used for
-no taxon (equal-priority ties). With `--kingdom`, the report counts only the taxa in that kingdom,
+ambiguous name, and its "Uses This Name" column is Yes for the taxon the name is used for (on
+two rows when an old and a current IUCN id have the same scientific name). On the store of
+3 October 2026 it listed 10,371 names: 7,038 used for one taxon each and 3,333 used for no taxon
+(equal-priority ties). With `--kingdom`, the report counts only the taxa in that kingdom,
 so it leaves out names shared by taxa in different kingdoms. In the web UI the report is the optional
 "List ambiguous common names" step of the "Wikipedia reports pipeline" workflow.
 
@@ -322,7 +359,16 @@ When aggregating common names, certain entries are filtered out:
 
 `ScientificNameCheck.IsScientificName` decides whether a Wikipedia article title (without its
 disambiguation), a taxobox name or a Wikidata English label is a scientific name. `aggregate`
-stores only the ones that are not. The rules, in order:
+stores only the ones that are not.
+
+For a Wikipedia title or taxobox name, `aggregate` first compares the name with the scientific
+name in the page's own taxobox: the `taxon`, `binomial` or `trinomial` parameter, or `genus` with
+`species` and `subspecies` (`WikipediaPageMatch.IsTaxoboxSubject`). If they are equal, ignoring
+case, rank markers, a subgenus and the hybrid sign, the name is a scientific name and the rules
+below are not applied. For example, the page titled "Tliltocatl epicureanus" is matched to
+*Brachypelma epicureanum*, and its taxobox has `taxon = Tliltocatl epicureanus`, so the title is a
+scientific name, although the store has no genus *Tliltocatl* and no epithet *epicureanus*. The
+rules, in order:
 
 1. The name is one of the taxon's own names, one of them followed by an authority or a note
    ("Myristica fatua Sw."), or the first word or words of one (the genus of a monotypic genus, the
@@ -331,8 +377,11 @@ stores only the ones that are not. The rules, in order:
 2. Otherwise only a name shaped like a scientific name can be one: two to four words, the first a
    capitalised word of plain letters and the rest lower case. A single word is a scientific name
    when it is a genus in the store and not an English word ("Strumigenys", but not "Platypus").
-   A name with any other shape is a common name. Double quotes around a genus
-   ("\"Hyla\" nicefori") are ignored.
+   A name with any other shape is a common name. Before any rule is applied, these are removed
+   from the name: double quotes around a genus ("\"Hyla\" nicefori"), the hybrid sign ×
+   ("Yucca × schottii"), an "x" between the genus and the epithet ("Yucca x schottii"), and a
+   period before a hyphen inside an epithet ("Cyanea st.-johnii"). An "x" in any other position
+   stays in the name, so "Eurasian Teal x Green-winged Teal" is a common name.
 3. The first word is one of the taxon's genera ("Gobio gobio" for Gobio latus): a scientific name.
 4. A word is an English word ("Pygmy hippopotamus", "Alligator gar"): a common name. A first word
    that is a genus in the store does not count as English, and neither does a later word that is
