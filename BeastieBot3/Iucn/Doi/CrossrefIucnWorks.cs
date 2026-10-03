@@ -12,7 +12,7 @@ using GbifDoi = BeastieBot3.Iucn.Gbif.IucnDoi;
 // In October 2026 the prefix had 256,151 works: 255,060 Red List assessments (type "dataset") and
 // about 1,100 books, reports and journal articles. Each item gives the DOI (in lower case) and
 // resource.primary.URL, the page it points to: https://www.iucnredlist.org/species/<taxon>/<assessment>.
-// The list takes about 260 requests (2.5 s each). Crossref's public pool allows 5 requests a second
+// The list took 258 requests and about 3 minutes on 2026-10-03. Crossref's public pool allows 5 requests a second
 // and one at a time (x-rate-limit-limit, x-concurrency-limit); this sends one request at a time.
 //
 // The User-Agent names the project, never a person's email address, so the requests go to the

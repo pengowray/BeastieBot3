@@ -351,7 +351,7 @@ internal sealed class IucnResolveDoisCommand : AsyncCommand<IucnResolveDoisComma
         if (listing?.CompletedAtUtc is { } completed) {
             AnsiConsole.MarkupLineInterpolated($"Crossref's list of IUCN DOIs: downloaded {completed:yyyy-MM-dd HH:mm} UTC, {crossrefWorks:N0} assessment DOIs.");
         } else {
-            AnsiConsole.MarkupLine("Crossref's list of IUCN DOIs: not downloaded yet. The next run downloads it (about 260 requests).");
+            AnsiConsole.MarkupLine("Crossref's list of IUCN DOIs: not downloaded yet. The next run downloads it (about 260 requests, 3 minutes).");
         }
     }
 
