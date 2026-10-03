@@ -740,6 +740,53 @@ internal sealed class CommonNameStore : SqliteStore {
     }
 
     /// <summary>
+    /// A taxon's scientific names as stored, normalised: taxa.canonical_name and every
+    /// scientific_name_synonyms.normalized_name. <see cref="ScientificNameCheck"/> compares a
+    /// candidate common name with them.
+    /// </summary>
+    public TaxonScientificNames GetTaxonScientificNames(long taxonId) {
+        string? canonical;
+        using (var command = _connection.CreateCommand()) {
+            command.CommandText = "SELECT canonical_name FROM taxa WHERE id = @id";
+            command.Parameters.AddWithValue("@id", taxonId);
+            canonical = command.ExecuteScalar() as string;
+        }
+
+        var synonyms = new List<string>();
+        using (var command = _connection.CreateCommand()) {
+            command.CommandText = "SELECT DISTINCT normalized_name FROM scientific_name_synonyms WHERE taxon_id = @id";
+            command.Parameters.AddWithValue("@id", taxonId);
+            using var reader = command.ExecuteReader();
+            while (reader.Read()) {
+                synonyms.Add(reader.GetString(0));
+            }
+        }
+        return new TaxonScientificNames(canonical, synonyms);
+    }
+
+    /// <summary>
+    /// The word sets <see cref="ScientificNameCheck"/> uses: genus names and epithets from every
+    /// canonical name and synonym in the store, and the words of the English common names from IUCN
+    /// and the Catalogue of Life. Names from Wikipedia and Wikidata labels are left out, because the
+    /// check decides which of those are stored, so using them would make one run depend on the last.
+    /// </summary>
+    public NameWordSets LoadNameWordSets() =>
+        NameWordSets.Build(
+            ReadStrings("SELECT canonical_name FROM taxa UNION ALL SELECT normalized_name FROM scientific_name_synonyms"),
+            ReadStrings("SELECT raw_name FROM common_names WHERE language = 'en' AND source IN ('iucn', 'col')"));
+
+    private IEnumerable<string> ReadStrings(string sql) {
+        using var command = _connection.CreateCommand();
+        command.CommandText = sql;
+        using var reader = command.ExecuteReader();
+        while (reader.Read()) {
+            if (!reader.IsDBNull(0)) {
+                yield return reader.GetString(0);
+            }
+        }
+    }
+
+    /// <summary>
     /// Get all common names for a specific taxon across all languages.
     /// </summary>
     public IReadOnlyList<CommonNameRecord> GetCommonNamesForTaxonAllLanguages(long taxonId) {

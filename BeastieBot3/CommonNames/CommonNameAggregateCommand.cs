@@ -101,6 +101,10 @@ internal sealed class CommonNameAggregateCommand : AsyncCommand<CommonNameAggreg
 
         var source = settings.Source.ToLowerInvariant();
 
+        // Read when the Wikidata or Wikipedia step first needs them, so a run with --source all
+        // uses the IUCN names it has just imported.
+        var nameWords = new Lazy<NameWordSets>(store.LoadNameWordSets);
+
         // A purge followed by a truncated import would leave the hub holding only the first N rows
         // of the source, which looks like a successful run and quietly loses the rest.
         if (settings.Replace && settings.Limit.HasValue) {
@@ -133,7 +137,7 @@ internal sealed class CommonNameAggregateCommand : AsyncCommand<CommonNameAggreg
                 if (settings.Replace) {
                     ReplaceSource(store, "wikidata");
                 }
-                await AggregateWikidataCommonNamesAsync(store, wikidataPath, settings.Limit, settings.CreateMissing, cancellationToken);
+                await AggregateWikidataCommonNamesAsync(store, wikidataPath, settings.Limit, settings.CreateMissing, nameWords, cancellationToken);
             } else {
                 AnsiConsole.MarkupLine("[yellow]Skipping Wikidata:[/] cache not found");
             }
@@ -145,7 +149,7 @@ internal sealed class CommonNameAggregateCommand : AsyncCommand<CommonNameAggreg
                 if (settings.Replace) {
                     ReplaceSource(store, "wikipedia");
                 }
-                await AggregateWikipediaCommonNamesAsync(store, wikipediaPath, settings.Limit, settings.CreateMissing, cancellationToken);
+                await AggregateWikipediaCommonNamesAsync(store, wikipediaPath, settings.Limit, settings.CreateMissing, nameWords, cancellationToken);
             } else {
                 AnsiConsole.MarkupLine("[yellow]Skipping Wikipedia:[/] cache not found");
             }
@@ -516,7 +520,8 @@ internal sealed class CommonNameAggregateCommand : AsyncCommand<CommonNameAggreg
         };
     }
 
-    private static Task AggregateWikidataCommonNamesAsync(CommonNameStore store, string wikidataPath, int? limit, bool createMissing, CancellationToken cancellationToken) {
+    private static Task AggregateWikidataCommonNamesAsync(CommonNameStore store, string wikidataPath, int? limit, bool createMissing,
+        Lazy<NameWordSets> nameWords, CancellationToken cancellationToken) {
         return Task.Run(() => {
             AnsiConsole.MarkupLine("[yellow]Aggregating Wikidata common names...[/]");
             AnsiConsole.MarkupLine($"[blue]Wikidata cache:[/] {wikidataPath}");
@@ -527,6 +532,7 @@ internal sealed class CommonNameAggregateCommand : AsyncCommand<CommonNameAggreg
             var errors = 0;
             var matched = 0;
             var created = 0;
+            var scientificLabels = 0;
 
             using var wikidataConnection = new SqliteConnection($"Data Source={wikidataPath};Mode=ReadOnly");
             wikidataConnection.Open();
@@ -631,22 +637,16 @@ internal sealed class CommonNameAggregateCommand : AsyncCommand<CommonNameAggreg
                                 added++;
                             }
 
-                            // Also add the English label as a common name candidate
-                            // BUT skip if it looks like a scientific name (matches P225 or is Genus species format)
+                            // Also add the English label as a common name candidate, unless it is a
+                            // scientific name: the taxon's, the item's own (P225), or another
+                            // combination of them (ScientificNameCheck).
                             if (!string.IsNullOrWhiteSpace(record.LabelEn)) {
                                 var labelTrimmed = record.LabelEn.Trim();
-                                
-                                // Check if label matches any scientific name from P225
-                                var isScientificName = record.ScientificNames
-                                    .Any(sn => sn.Value.Equals(labelTrimmed, StringComparison.OrdinalIgnoreCase));
-                                
-                                // Also check if it looks like a scientific name (Genus species format)
-                                // Scientific names: start with capital, second word lowercase, typically 2 words
-                                if (!isScientificName) {
-                                    isScientificName = LooksLikeScientificName(labelTrimmed);
-                                }
-                                
-                                if (!isScientificName) {
+                                var taxonNames = store.GetTaxonScientificNames(taxonId.Value).WithSynonyms(
+                                    record.ScientificNames.Select(n => ScientificNameNormalizer.Normalize(n.Value)).OfType<string>());
+                                if (ScientificNameCheck.IsScientificName(labelTrimmed, taxonNames, nameWords.Value)) {
+                                    scientificLabels++;
+                                } else {
                                     var normalized = CommonNameNormalizer.NormalizeForMatching(labelTrimmed);
                                     if (normalized != null) {
                                         store.InsertCommonName(
@@ -672,12 +672,14 @@ internal sealed class CommonNameAggregateCommand : AsyncCommand<CommonNameAggreg
                 });
 
             store.CompleteImportRun(runId, processed, added, 0, errors,
-                $"Matched {matched} entities to taxa, created {created}");
+                $"Matched {matched} entities to taxa, created {created}, {scientificLabels} English labels skipped as scientific names");
             AnsiConsole.MarkupLine($"[green]Wikidata:[/] {added:N0} common names from {matched:N0} matched entities, [blue]{created:N0}[/] taxa created ({errors} errors)");
+            AnsiConsole.MarkupLine($"[grey]Wikidata labels not stored because they are scientific names: {scientificLabels:N0}[/]");
         }, cancellationToken);
     }
 
-    private static Task AggregateWikipediaCommonNamesAsync(CommonNameStore store, string wikipediaPath, int? limit, bool createMissing, CancellationToken cancellationToken) {
+    private static Task AggregateWikipediaCommonNamesAsync(CommonNameStore store, string wikipediaPath, int? limit, bool createMissing,
+        Lazy<NameWordSets> nameWords, CancellationToken cancellationToken) {
         return Task.Run(() => {
             AnsiConsole.MarkupLine("[yellow]Aggregating Wikipedia common names...[/]");
             AnsiConsole.MarkupLine($"[blue]Wikipedia cache:[/] {wikipediaPath}");
@@ -688,6 +690,8 @@ internal sealed class CommonNameAggregateCommand : AsyncCommand<CommonNameAggreg
             var taxoboxAdded = 0;
             var matched = 0;
             var created = 0;
+            var scientificTitles = 0;
+            var scientificTaxoboxNames = 0;
 
             using var wikiConnection = new SqliteConnection($"Data Source={wikipediaPath};Mode=ReadOnly");
             wikiConnection.Open();
@@ -785,11 +789,14 @@ internal sealed class CommonNameAggregateCommand : AsyncCommand<CommonNameAggreg
                             store.InsertCrossReference(taxonId.Value, "wikipedia", pageTitle, "exact");
                         }
 
-                        // Add page title as common name (cleaned)
-                        // BUT skip if the title looks like a scientific name
+                        // Add the page title (without its disambiguation) as a common name, unless it
+                        // is a scientific name: the taxon's, or another combination (ScientificNameCheck).
                         var cleanTitle = CommonNameNormalizer.RemoveDisambiguationSuffix(pageTitle);
-                        
-                        if (!LooksLikeScientificName(cleanTitle)) {
+                        var taxonNames = store.GetTaxonScientificNames(taxonId.Value);
+
+                        if (ScientificNameCheck.IsScientificName(cleanTitle, taxonNames, nameWords.Value)) {
+                            scientificTitles++;
+                        } else {
                             var normalized = CommonNameNormalizer.NormalizeForMatching(cleanTitle);
 
                             if (normalized != null) {
@@ -809,7 +816,11 @@ internal sealed class CommonNameAggregateCommand : AsyncCommand<CommonNameAggreg
                         // Extract common name from taxobox "name" field
                         if (!string.IsNullOrWhiteSpace(taxoboxJson)) {
                             var taxoboxName = ExtractTaxoboxName(taxoboxJson, pageTitle);
-                            if (!string.IsNullOrWhiteSpace(taxoboxName) && !LooksLikeScientificName(taxoboxName)) {
+                            if (string.IsNullOrWhiteSpace(taxoboxName)) {
+                                // The name field has no English name.
+                            } else if (ScientificNameCheck.IsScientificName(taxoboxName, taxonNames, nameWords.Value)) {
+                                scientificTaxoboxNames++;
+                            } else {
                                 var taxoboxNormalized = CommonNameNormalizer.NormalizeForMatching(taxoboxName);
                                 var cleanTitleNormalized = CommonNameNormalizer.NormalizeForMatching(cleanTitle);
                                 if (taxoboxNormalized != null && taxoboxNormalized != cleanTitleNormalized) {
@@ -831,8 +842,10 @@ internal sealed class CommonNameAggregateCommand : AsyncCommand<CommonNameAggreg
 
             var totalAdded = titleAdded + taxoboxAdded;
             store.CompleteImportRun(runId, processed, totalAdded, 0, 0,
-                $"Matched {matched} pages to taxa, {titleAdded} titles, {taxoboxAdded} taxobox names, created {created}");
+                $"Matched {matched} pages to taxa, {titleAdded} titles, {taxoboxAdded} taxobox names, created {created}, " +
+                $"skipped as scientific names: {scientificTitles} titles, {scientificTaxoboxNames} taxobox names");
             AnsiConsole.MarkupLine($"[green]Wikipedia:[/] {titleAdded:N0} titles + {taxoboxAdded:N0} taxobox names from {matched:N0} matched pages, [blue]{created:N0}[/] taxa created");
+            AnsiConsole.MarkupLine($"[grey]Not stored because they are scientific names: {scientificTitles:N0} titles, {scientificTaxoboxNames:N0} taxobox names[/]");
         }, cancellationToken);
     }
 
@@ -1149,47 +1162,4 @@ internal sealed class CommonNameAggregateCommand : AsyncCommand<CommonNameAggreg
             AnsiConsole.MarkupLine($"[green]COL synonyms:[/] {added:N0} synonyms from {matched:N0} matched taxa ({skippedNoTaxon:N0} skipped)");
         }, cancellationToken);
     }
-
-    /// <summary>
-    /// Heuristic to detect if a string looks like a scientific name (binomial nomenclature).
-    /// Scientific names: "Genus species" or "Genus species subspecies" with first word capitalized,
-    /// subsequent words lowercase, typically Latin/Greek roots.
-    /// </summary>
-    private static bool LooksLikeScientificName(string name) {
-        if (string.IsNullOrWhiteSpace(name)) return false;
-        
-        var words = name.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-        
-        // Scientific names are typically 2-4 words
-        if (words.Length < 2 || words.Length > 4) return false;
-        
-        // First word (genus) should be capitalized
-        if (!char.IsUpper(words[0][0])) return false;
-        
-        // Second word (species epithet) should be all lowercase
-        if (words.Length >= 2 && words[1].Any(char.IsUpper)) return false;
-        
-        // If 3+ words, check if they follow scientific name patterns
-        // (subspecies, variety markers like "var.", "subsp.")
-        if (words.Length >= 3) {
-            var third = words[2];
-            // If third word is all lowercase or a taxonomic marker, likely scientific
-            if (third.All(c => char.IsLower(c) || c == '.')) return true;
-            // If third word has capitals, probably not scientific (e.g., "American Black Bear")
-            if (third.Any(char.IsUpper)) return false;
-        }
-        
-        // Check for common Latin/Greek species epithet endings
-        var epithet = words[1].ToLowerInvariant();
-        var latinEndings = new[] { "ii", "ae", "is", "us", "um", "a", "ensis", "oides", "ica", "icum", "icus" };
-        if (latinEndings.Any(ending => epithet.EndsWith(ending))) return true;
-        
-        // If first word ends in common genus patterns and second is lowercase, likely scientific
-        var genus = words[0].ToLowerInvariant();
-        var genusEndings = new[] { "us", "a", "um", "is", "on", "ia", "ops", "yx", "ax" };
-        if (genusEndings.Any(ending => genus.EndsWith(ending)) && words[1].All(char.IsLower)) return true;
-        
-        return false;
-    }
-
 }
