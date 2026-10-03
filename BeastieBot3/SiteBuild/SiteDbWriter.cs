@@ -43,28 +43,28 @@ internal sealed class SiteDbWriter : IDisposable {
         _taxon = Prepare("""
             INSERT INTO taxon (taxon_id, scientific_name, kind, kingdom, phylum, class_name, order_name, family, genus,
                 species_epithet, infra_rank, infra_name, subpopulation_name, authority, parent_taxon_id, common_name_en,
-                enwiki_title, wikidata_qid, wikidata_qid_source, wikidata_p141, wikidata_item_downloaded, col_id,
-                latest_global_assessment_id, in_release, current_taxon_id)
+                enwiki_title, wikidata_qid, wikidata_qid_source, wikidata_p141, wikidata_item_downloaded, wikidata_p627_deprecated,
+                wikidata_other_items, col_id, latest_global_assessment_id, in_release, current_taxon_id)
             VALUES (@taxon_id, @scientific_name, @kind, @kingdom, @phylum, @class_name, @order_name, @family, @genus,
                 @species_epithet, @infra_rank, @infra_name, @subpopulation_name, @authority, @parent_taxon_id, @common_name_en,
-                @enwiki_title, @wikidata_qid, @wikidata_qid_source, @wikidata_p141, @wikidata_item_downloaded, @col_id,
-                @latest_global_assessment_id, @in_release, @current_taxon_id)
+                @enwiki_title, @wikidata_qid, @wikidata_qid_source, @wikidata_p141, @wikidata_item_downloaded, @wikidata_p627_deprecated,
+                @wikidata_other_items, @col_id, @latest_global_assessment_id, @in_release, @current_taxon_id)
             """,
             "@taxon_id", "@scientific_name", "@kind", "@kingdom", "@phylum", "@class_name", "@order_name", "@family", "@genus",
             "@species_epithet", "@infra_rank", "@infra_name", "@subpopulation_name", "@authority", "@parent_taxon_id", "@common_name_en",
-            "@enwiki_title", "@wikidata_qid", "@wikidata_qid_source", "@wikidata_p141", "@wikidata_item_downloaded", "@col_id",
-            "@latest_global_assessment_id", "@in_release", "@current_taxon_id");
+            "@enwiki_title", "@wikidata_qid", "@wikidata_qid_source", "@wikidata_p141", "@wikidata_item_downloaded", "@wikidata_p627_deprecated",
+            "@wikidata_other_items", "@col_id", "@latest_global_assessment_id", "@in_release", "@current_taxon_id");
         _assessment = Prepare("""
             INSERT INTO assessment (assessment_id, taxon_id, scope, is_latest, category, possibly_extinct,
                 possibly_extinct_in_the_wild, criteria, criteria_version, year_published, assessment_date, population_trend, citation_json,
-                wikidata_item_qid, wikidata_item_properties, wikidata_item_titles, wikidata_item_label_en)
+                wikidata_item_qid, wikidata_item_properties, wikidata_item_titles, wikidata_item_label_en, wikidata_item_assessment_id)
             VALUES (@assessment_id, @taxon_id, @scope, @is_latest, @category, @possibly_extinct,
                 @possibly_extinct_in_the_wild, @criteria, @criteria_version, @year_published, @assessment_date, @population_trend, @citation_json,
-                @wikidata_item_qid, @wikidata_item_properties, @wikidata_item_titles, @wikidata_item_label_en)
+                @wikidata_item_qid, @wikidata_item_properties, @wikidata_item_titles, @wikidata_item_label_en, @wikidata_item_assessment_id)
             """,
             "@assessment_id", "@taxon_id", "@scope", "@is_latest", "@category", "@possibly_extinct",
             "@possibly_extinct_in_the_wild", "@criteria", "@criteria_version", "@year_published", "@assessment_date", "@population_trend", "@citation_json",
-            "@wikidata_item_qid", "@wikidata_item_properties", "@wikidata_item_titles", "@wikidata_item_label_en");
+            "@wikidata_item_qid", "@wikidata_item_properties", "@wikidata_item_titles", "@wikidata_item_label_en", "@wikidata_item_assessment_id");
         _name = Prepare("""
             INSERT INTO name (name_id, taxon_id, name, name_type, language, source, is_preferred)
             VALUES (@name_id, @taxon_id, @name, @name_type, @language, @source, @is_preferred)
@@ -107,8 +107,8 @@ internal sealed class SiteDbWriter : IDisposable {
     public void AddTaxon(SiteTaxon t) {
         Bind(_taxon, t.TaxonId, t.ScientificName, t.Kind, t.Kingdom, t.Phylum, t.ClassName, t.OrderName, t.Family, t.Genus,
             t.SpeciesEpithet, t.InfraRank, t.InfraName, t.SubpopulationName, t.Authority, t.ParentTaxonId, t.CommonNameEn,
-            t.EnwikiTitle, t.WikidataQid, t.WikidataQidSource, t.WikidataP141, t.WikidataItemDownloaded, t.ColId,
-            t.LatestGlobalAssessmentId, t.InRelease ? 1 : 0, t.CurrentTaxonId);
+            t.EnwikiTitle, t.WikidataQid, t.WikidataQidSource, t.WikidataP141, t.WikidataItemDownloaded, t.WikidataP627Deprecated ? 1 : 0,
+            t.WikidataOtherItems, t.ColId, t.LatestGlobalAssessmentId, t.InRelease ? 1 : 0, t.CurrentTaxonId);
         _taxon.ExecuteNonQuery();
     }
 
@@ -120,7 +120,8 @@ internal sealed class SiteDbWriter : IDisposable {
     public void AddAssessment(SiteAssessment a) {
         Bind(_assessment, a.AssessmentId, a.TaxonId, a.Scope, a.IsLatest ? 1 : 0, a.Category, a.PossiblyExtinct ? 1 : 0,
             a.PossiblyExtinctInTheWild ? 1 : 0, a.Criteria, a.CriteriaVersion, a.YearPublished, a.AssessmentDate,
-            a.PopulationTrend, a.CitationJson, a.WikidataItemQid, a.WikidataItemProperties, a.WikidataItemTitles, a.WikidataItemLabelEn);
+            a.PopulationTrend, a.CitationJson, a.WikidataItemQid, a.WikidataItemProperties, a.WikidataItemTitles, a.WikidataItemLabelEn,
+            a.WikidataItemAssessmentId);
         _assessment.ExecuteNonQuery();
     }
 

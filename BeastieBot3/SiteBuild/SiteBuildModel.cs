@@ -64,6 +64,11 @@ internal sealed class SiteTaxon {
     /// cache has not downloaded the item.
     public string? WikidataP141 { get; set; }
     public string? WikidataItemDownloaded { get; set; }
+    /// The item states the taxon's IUCN taxon id only at deprecated rank.
+    public bool WikidataP627Deprecated { get; set; }
+    /// The other items that state the taxon's IUCN taxon id, as JSON (WikidataOtherTaxonItem);
+    /// null when no other item does.
+    public string? WikidataOtherItems { get; set; }
     public string? ColId { get; set; }
     public long? LatestGlobalAssessmentId { get; set; }
 
@@ -122,6 +127,9 @@ internal sealed class SiteAssessment {
     /// That item's title statements as JSON (WikidataTitle; null when not recorded) and English label.
     public string? WikidataItemTitles { get; set; }
     public string? WikidataItemLabelEn { get; set; }
+    /// The assessment that item is for. An errata version that shares the item of the assessment
+    /// it corrects has that assessment's id here.
+    public long? WikidataItemAssessmentId { get; set; }
     /// True when the row came from the CSV, whose values win over the API's.
     public required bool FromCsv { get; init; }
 }
@@ -201,6 +209,15 @@ internal sealed class SiteBuildStats {
     /// statements are known; and of those, items with no P141 statement.
     public int QidsWithP141Known;
     public int QidsWithNoP141;
+    /// Taxa linked through P627 whose chosen item states the id only at deprecated rank. Null: the
+    /// cache had no table of deprecated ids.
+    public int? QidsP627Deprecated;
+    /// Edition items of the Red List read from the cache; null when the cache has no such table.
+    public int? RedListEditions;
+    /// Citations whose DOI has a title registered with Crossref (the name the assessment was
+    /// published under), and of those, the ones whose name differs from IUCN's citation name.
+    public int RegisteredNames;
+    public int RegisteredNamesDiffer;
     public int ColIdsFromPlacement;
     public int ColIdsFromCrossReference;
     public int SpratMatched;

@@ -266,10 +266,16 @@ internal static class SiteBuildRules {
 
     /// When several Wikidata items state the same IUCN taxon id (P627), the one whose English label
     /// or taxon name (P225) is the IUCN scientific name, written with or without its rank marker;
-    /// failing that, or when several qualify, the lowest item number.
+    /// failing that, or when several qualify, the lowest item number. An item that states the id
+    /// only at deprecated rank is chosen only when every item does: deprecated rank marks the id as
+    /// wrong for that item (Q3008560 keeps 96251644 at deprecated rank, reason "obsolete", while
+    /// Q122932761 states it normally).
     public static long ChooseP627Item(IReadOnlyCollection<WikidataCandidate> candidates, string scientificName) {
         if (candidates.Count == 0) {
             throw new ArgumentException("No candidates.", nameof(candidates));
+        }
+        if (candidates.Any(c => !c.TaxonIdDeprecated) && candidates.Any(c => c.TaxonIdDeprecated)) {
+            candidates = candidates.Where(c => !c.TaxonIdDeprecated).ToList();
         }
         var names = new HashSet<string>(StringComparer.OrdinalIgnoreCase) {
             CollapseWhitespace(scientificName),
@@ -413,4 +419,5 @@ internal enum SpratNameKind {
 internal readonly record struct SpratNameMatch(SpratNameKind Kind, string? Population);
 
 /// A Wikidata item that states an IUCN taxon id, with what the tie-break compares.
-internal sealed record WikidataCandidate(long NumericId, string? Label, IReadOnlyList<string> TaxonNames);
+/// TaxonIdDeprecated: the item states the IUCN taxon id only at deprecated rank.
+internal sealed record WikidataCandidate(long NumericId, string? Label, IReadOnlyList<string> TaxonNames, bool TaxonIdDeprecated = false);

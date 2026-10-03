@@ -38,11 +38,18 @@ public static class SiteDbSchema {
             wikidata_qid_source         TEXT,                 -- 'p627': the item states this IUCN taxon id; 'name-match': matched by name
             wikidata_p141               TEXT,                 -- wikidata_qid_source = 'p627' only: the item's IUCN conservation status (P141)
                                                               -- statements, any rank, as WikidataStatusStatement JSON
-                                                              -- ([{"id":"Q140$...","value":"Q278113","rank":"normal","statedIn":["Q115962546"]}];
-                                                              -- statedIn: the stated in (P248) items of its references). [] when the item has
-                                                              -- none; NULL when the Wikidata cache has not downloaded the item. Statements
-                                                              -- with no value or an unknown value are not in the cache, so not here either
+                                                              -- ([{"id":"Q140$...","value":"Q278113","rank":"normal","statedIn":["Q115962546"],
+                                                              --    "taxonIds":["15951"],"references":1,"citesIucn":true}]; from its references:
+                                                              -- statedIn the stated in (P248) items, taxonIds the IUCN taxon IDs (P627), references
+                                                              -- how many, citesIucn whether one cites IUCN). [] when the item has none; NULL
+                                                              -- when the Wikidata cache has not downloaded the item. Statements with no value
+                                                              -- or an unknown value are not in the cache, so not here either
             wikidata_item_downloaded    TEXT,                 -- 'yyyy-MM-dd': when the Wikidata cache downloaded that item; NULL with wikidata_p141
+            wikidata_p627_deprecated    INTEGER NOT NULL DEFAULT 0, -- 1: that item states the taxon's IUCN taxon ID (P627) only at deprecated rank
+            wikidata_other_items        TEXT,                 -- wikidata_qid_source = 'p627' only: the other items that state the taxon's IUCN
+                                                              -- taxon ID, as WikidataOtherTaxonItem JSON
+                                                              -- ([{"qid":"Q1588648","taxonIdDeprecated":false,"p141":[...]}]; p141 NULL when
+                                                              -- not downloaded); NULL when no other item states it
             col_id                      TEXT,                 -- Catalogue of Life accepted name usage id
             latest_global_assessment_id INTEGER,              -- NULL when the taxon has regional assessments only, or is not in the release
             in_release                  INTEGER NOT NULL,     -- 1: in the Red List version's CSV export. 0: only in the IUCN API cache
@@ -87,7 +94,9 @@ public static class SiteDbSchema {
             wikidata_item_properties     TEXT,                -- space-separated properties that item already has, in WikidataCitation.JudgedProperties order ('P31 P356 P2093 Len'; Len = it has an English label); NULL when no item
             wikidata_item_titles         TEXT,                -- that item's title (P1476) statements, any rank, as WikidataTitle JSON ([{"text":...,"lang":"en","rank":"normal"}]);
                                                               -- NULL when no item, or when `wikidata iucn-assessment-items` has not recorded them
-            wikidata_item_label_en       TEXT                 -- that item's English label; NULL when no item or no label
+            wikidata_item_label_en       TEXT,                -- that item's English label; NULL when no item or no label
+            wikidata_item_assessment_id  INTEGER              -- the assessment that item is for: assessment_id, or for an errata version that
+                                                              -- shares the item of the assessment it corrects, that assessment's id
         );
         CREATE INDEX assessment_taxon ON assessment(taxon_id, year_published);
 

@@ -100,6 +100,9 @@ public sealed class SiteDbBuildErrataDoiTests : IDisposable {
         Assert.Equal(new object?[] { Errata2018, "Q56000001", "P31 P1476 P1433 P921 P577 P356 Len" }, rows.Single(r => (long)r[0]! == Errata2018));
         Assert.Equal(new object?[] { Global1998, null, null }, rows.Single(r => (long)r[0]! == Global1998));
 
+        // Both rows say which assessment the item is for, so the errata version's page can tell it borrows it.
+        Assert.Equal(Europe2013.ToString(), Scalar(db, $"SELECT wikidata_item_assessment_id FROM assessment WHERE assessment_id = {Errata2018}"));
+        Assert.Equal(Europe2013.ToString(), Scalar(db, $"SELECT wikidata_item_assessment_id FROM assessment WHERE assessment_id = {Europe2013}"));
         Assert.Equal((1, 1), (stats.AssessmentsWithOwnItem, stats.AssessmentsWithItemThroughDoi));
         Assert.Equal(3, stats.WikidataItems.Read);
         Assert.Equal(new Dictionary<string, int> { ["Q13442814 scholarly article"] = 2 }, stats.WikidataItems.KeptByClass);
@@ -120,13 +123,51 @@ public sealed class SiteDbBuildErrataDoiTests : IDisposable {
         Assert.Equal("Pinus pinea: Farjon, A.", Scalar(db, $"SELECT wikidata_item_label_en FROM assessment WHERE assessment_id = {Europe2013}"));
         Assert.Null(Scalar(db, $"SELECT wikidata_item_titles FROM assessment WHERE assessment_id = {Global1998}"));
 
-        var taxon = Rows(db, $"SELECT wikidata_qid, wikidata_qid_source, wikidata_p141, wikidata_item_downloaded FROM taxon WHERE taxon_id = {PinusPinea}").Single();
-        Assert.Equal(("Q146992", "p627", "2026-08-20"), ((string)taxon[0]!, (string)taxon[1]!, (string)taxon[3]!));
-        var statement = Assert.Single(WikidataStatusStatement.ListFromJson((string)taxon[2]!)!);
-        Assert.Equal((P141Statement, "Q211005", "normal"), (statement.Id, statement.Value, statement.Rank));
-        Assert.Equal(new[] { "Q115962546", "Q136547248" }, statement.StatedIn);
+        var taxon = Rows(db, $"SELECT wikidata_qid, wikidata_qid_source, wikidata_p141, wikidata_item_downloaded, wikidata_p627_deprecated FROM taxon WHERE taxon_id = {PinusPinea}").Single();
+        Assert.Equal(("Q146992", "p627", "2026-08-20", 0L), ((string)taxon[0]!, (string)taxon[1]!, (string)taxon[3]!, (long)taxon[4]!));
+        var statements = WikidataStatusStatement.ListFromJson((string)taxon[2]!)!;
+        Assert.Equal(3, statements.Count);
+        var iucn = statements.Single(s => s.Id == P141Statement);
+        Assert.Equal(("Q211005", "normal"), (iucn.Value, iucn.Rank));
+        Assert.Equal(new[] { "Q115962546", "Q136547248" }, iucn.StatedIn);
+        Assert.Equal(new[] { PinusPinea.ToString() }, iucn.TaxonIds);
+        Assert.Equal((2, true), (iucn.References, iucn.CitesIucn));
+        // Stated in an edition of the Red List, with no IUCN taxon ID: cites IUCN.
+        var edition = statements.Single(s => s.Id == P141EditionOnly);
+        Assert.Equal((1, true), (edition.References, edition.CitesIucn));
+        Assert.Empty(edition.TaxonIds!);
+        // A national red book: does not cite IUCN.
+        var book = statements.Single(s => s.Id == P141Book);
+        Assert.Equal((1, false), (book.References, book.CitesIucn));
         Assert.Equal((1, 0), (stats.QidsWithP141Known, stats.QidsWithNoP141));
         Assert.Equal(0, stats.WikidataItems.TitlesNotRecorded);
+    }
+
+    // Q100 also states the stone pine's IUCN taxon id, at deprecated rank only. It has the lower
+    // number, so without the deprecated list it would be chosen; it is named as another item instead.
+    [Fact]
+    public void Build_AnItemWithTheIdAtDeprecatedRank_IsNotChosen_AndIsListedAsAnotherItem() {
+        var (output, stats) = Build(withEuropeHeader: true, withWikidata: true);
+        using var db = OpenReadOnly(output);
+
+        Assert.Equal("Q146992", Scalar(db, $"SELECT wikidata_qid FROM taxon WHERE taxon_id = {PinusPinea}"));
+        var other = Assert.Single(WikidataOtherTaxonItem.ListFromJson(Scalar(db, $"SELECT wikidata_other_items FROM taxon WHERE taxon_id = {PinusPinea}"))!);
+        Assert.Equal(("Q100", true), (other.Qid, other.TaxonIdDeprecated));
+        Assert.Equal("Q278113", Assert.Single(other.Statements!).Value);
+        Assert.Equal((0, 2, 1), (stats.QidsP627Deprecated, stats.RedListEditions, stats.QidTieBreaks));
+    }
+
+    // The DOI names the Europe assessment, so only that row gets the name Crossref registered for it.
+    [Fact]
+    public void Build_TheRegisteredName_OnlyForTheAssessmentTheDoiNames() {
+        var (output, stats) = Build(withEuropeHeader: true);
+        using var db = OpenReadOnly(output);
+        var errata = IucnCitationParts.FromJson(Scalar(db, $"SELECT citation_json FROM assessment WHERE assessment_id = {Errata2018}"))!;
+        var europe = IucnCitationParts.FromJson(Scalar(db, $"SELECT citation_json FROM assessment WHERE assessment_id = {Europe2013}"))!;
+
+        Assert.Equal("Pinus pinea", europe.RegisteredName);
+        Assert.Null(errata.RegisteredName);
+        Assert.Equal((1, 0), (stats.RegisteredNames, stats.RegisteredNamesDiffer));
     }
 
     [Fact]
@@ -140,22 +181,36 @@ public sealed class SiteDbBuildErrataDoiTests : IDisposable {
     }
 
     private const string P141Statement = "Q146992$0E7A3F55-2E7B-4C60-9F0B-2D8B54F1A001";
+    private const string P141EditionOnly = "Q146992$0E7A3F55-2E7B-4C60-9F0B-2D8B54F1A002";
+    private const string P141Book = "Q146992$0E7A3F55-2E7B-4C60-9F0B-2D8B54F1A003";
 
     private static void WriteWikidataCache(string path) {
         var fetched = new DateTime(2026, 10, 1, 0, 0, 0, DateTimeKind.Utc);
         using (var store = WikidataCacheStore.Open(path)) {
             WriteAssessmentItems(store, fetched);
+            store.ReplaceRedListEditions(["Q115962546", "Q136547248"], fetched);
+            store.ReplaceDeprecatedIucnTaxonIds([(100, PinusPinea.ToString())], fetched);
         }
         // Q146992, the stone pine's item: it states the IUCN taxon id, and its P141 (least concern)
-        // has two references, stated in the 2022.2 and the 2025.2 release items.
+        // has two references, stated in the 2022.2 and the 2025.2 release items. Made up: a second
+        // statement whose one reference is stated in the 2025.2 edition with no IUCN taxon ID, a
+        // third whose reference is a book, and Q100, which states the id at deprecated rank.
         using var c = OpenWritable(path);
         Execute(c, $"""
             INSERT INTO wikidata_entities (entity_numeric_id, entity_id, discovered_at, last_seen_at, has_p141, has_p627, json_downloaded, downloaded_at, json)
                 VALUES (146992, 'Q146992', '2026-08-01T00:00:00.0000000Z', '2026-08-20T00:00:00.0000000Z', 1, 1, 1, '2026-08-20T03:04:05.0000000Z', '{"{}"}');
+            INSERT INTO wikidata_entities (entity_numeric_id, entity_id, discovered_at, last_seen_at, has_p141, has_p627, json_downloaded, downloaded_at, json)
+                VALUES (100, 'Q100', '2026-08-01T00:00:00.0000000Z', '2026-08-20T00:00:00.0000000Z', 1, 1, 1, '2026-08-19T03:04:05.0000000Z', '{"{}"}');
             INSERT INTO wikidata_p627_values VALUES (146992, 'claim', '{PinusPinea}');
+            INSERT INTO wikidata_p627_values VALUES (100, 'claim', '{PinusPinea}');
             INSERT INTO wikidata_p141_statements VALUES (146992, '{P141Statement}', 211005, 'Q211005', 'normal');
             INSERT INTO wikidata_p141_references VALUES (146992, '{P141Statement}', 'h1', 136547248, '{PinusPinea}');
             INSERT INTO wikidata_p141_references VALUES (146992, '{P141Statement}', 'h2', 115962546, '{PinusPinea}');
+            INSERT INTO wikidata_p141_statements VALUES (146992, '{P141EditionOnly}', 211005, 'Q211005', 'deprecated');
+            INSERT INTO wikidata_p141_references VALUES (146992, '{P141EditionOnly}', 'h3', 136547248, '');
+            INSERT INTO wikidata_p141_statements VALUES (146992, '{P141Book}', 219127, 'Q219127', 'deprecated');
+            INSERT INTO wikidata_p141_references VALUES (146992, '{P141Book}', 'h4', NULL, '');
+            INSERT INTO wikidata_p141_statements VALUES (100, 'Q100$0E7A3F55-2E7B-4C60-9F0B-2D8B54F1A004', 278113, 'Q278113', 'normal');
             """);
     }
 
@@ -255,6 +310,10 @@ public sealed class SiteDbBuildErrataDoiTests : IDisposable {
             INSERT INTO doi_check VALUES
                 ({Errata2018}, {PinusPinea}, '{Doi2013}', '2026-10-03T00:48:05.2695906Z', 0),
                 ({Europe2013}, {PinusPinea}, '{Doi2013}', '2026-10-03T00:48:05.2000000Z', 0);
+            CREATE TABLE crossref_works (doi TEXT PRIMARY KEY, taxon_id INTEGER NOT NULL, assessment_id INTEGER NOT NULL,
+                release TEXT, language TEXT, url TEXT, url_taxon_id INTEGER, url_assessment_id INTEGER, listing_id INTEGER NOT NULL, title TEXT);
+            INSERT INTO crossref_works VALUES ('{Doi2013}', {PinusPinea}, {Europe2013}, '2013-1', 'en',
+                'https://www.iucnredlist.org/species/42391/129160976', {PinusPinea}, {Errata2018}, 1, 'Pinus pinea: Farjon, A.');
             """);
     }
 }
