@@ -45,6 +45,8 @@ internal static class WikidataAssessmentItemQueries {
         """
 PREFIX wd: <http://www.wikidata.org/entity/>
 PREFIX wdt: <http://www.wikidata.org/prop/direct/>
+PREFIX p: <http://www.wikidata.org/prop/>
+PREFIX ps: <http://www.wikidata.org/prop/statement/>
 PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
 PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
 PREFIX schema: <http://schema.org/>
@@ -127,17 +129,32 @@ SELECT DISTINCT ?item WHERE {
         "P31", "P356", "P1433", "P921", "P577", "P1476", "P50", "P2093", "P953", "P854", "P856",
     };
 
+    /// The property key ParseDetails gives a title (P1476) statement read with its rank, as opposed
+    /// to "P1476", the best-ranked values only (wdt:).
+    public const string TitleStatementProperty = "statement:P1476";
+
     /// One row per (item, property, value) for the given items: no OPTIONAL cross products, so a
     /// batch of 250 items is a few thousand rows. Items not in the queried graph return nothing.
+    /// The second branch reads every title statement with its rank and statement node, because
+    /// wdt:P1476 leaves out the lower-ranked ones and a batch that removes a title needs them all.
     public static string Details(IReadOnlyCollection<string> qids) {
         var items = string.Join(' ', qids.Select(q => "wd:" + q));
         var properties = string.Join(' ', DetailProperties.Select(p => "wdt:" + p)) + " rdfs:label schema:dateModified";
         return Prefixes + $$"""
-SELECT ?item ?p ?v WHERE {
+SELECT ?item ?p ?v ?rank ?statement WHERE {
   VALUES ?item { {{items}} }
-  VALUES ?p { {{properties}} }
-  ?item ?p ?v .
-  FILTER(?p != rdfs:label || LANG(?v) = "en")
+  {
+    VALUES ?p { {{properties}} }
+    ?item ?p ?v .
+    FILTER(?p != rdfs:label || LANG(?v) = "en")
+  }
+  UNION
+  {
+    ?item p:P1476 ?statement .
+    ?statement ps:P1476 ?v ;
+               wikibase:rank ?rank .
+    BIND(ps:P1476 AS ?p)
+  }
 }
 """;
     }
@@ -184,12 +201,14 @@ SELECT ?item ?p ?v WHERE {
                 ? rawValue[EntityPrefix.Length..]
                 : rawValue;
             string? language = valueCell.TryGetProperty("xml:lang", out var lang) ? lang.GetString() : null;
+            var rank = binding.TryGetProperty("rank", out var rankCell) ? ShortRank(rankCell.GetProperty("value").GetString()) : null;
+            var statement = binding.TryGetProperty("statement", out var statementCell) ? statementCell.GetProperty("value").GetString() : null;
 
             if (!result.TryGetValue(qid, out var list)) {
                 result[qid] = list = new List<WikidataTriple>();
             }
 
-            list.Add(new WikidataTriple(property, value, language));
+            list.Add(new WikidataTriple(property, value, language, rank, statement));
         }
 
         return result;
@@ -201,6 +220,15 @@ SELECT ?item ?p ?v WHERE {
         "http://schema.org/dateModified" => "modified",
         _ when iri.StartsWith("http://www.wikidata.org/prop/direct/", StringComparison.Ordinal) =>
             iri["http://www.wikidata.org/prop/direct/".Length..],
+        "http://www.wikidata.org/prop/statement/P1476" => TitleStatementProperty,
+        _ => null,
+    };
+
+    /// "preferred", "normal" or "deprecated" from wikibase:PreferredRank and the others.
+    internal static string? ShortRank(string? iri) => iri switch {
+        "http://wikiba.se/ontology#PreferredRank" => "preferred",
+        "http://wikiba.se/ontology#NormalRank" => "normal",
+        "http://wikiba.se/ontology#DeprecatedRank" => "deprecated",
         _ => null,
     };
 

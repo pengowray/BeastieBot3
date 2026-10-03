@@ -2,6 +2,8 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using Microsoft.Data.Sqlite;
 using BeastieBot3.WikidataEdits;
 
@@ -13,6 +15,12 @@ using BeastieBot3.WikidataEdits;
 //
 // List columns (all_dois, instance_of, main_subjects, published_in, urls, found_by) hold values
 // separated by single spaces: none of the values can contain one.
+//
+// title_statements holds every title (P1476) statement of the item, of any rank, as JSON
+// [{"text":..., "lang":..., "rank":...}], so a QuickStatements batch can remove an old title by its
+// exact text and language. NULL means the row was written before the column existed (or by a run
+// that did not read the statements); [] means the item has no title statement. The title column
+// keeps the best-ranked English title (wdt:P1476), which the status dry run reads.
 
 namespace BeastieBot3.Wikidata;
 
@@ -31,6 +39,9 @@ internal sealed record WikidataAssessmentItemRow {
     public string? IdSource { get; init; }
     /// P1476 title, English when there is one.
     public string? Title { get; init; }
+    /// Every P1476 statement, any rank, duplicates kept. Null when not recorded (a row written
+    /// before title_statements existed).
+    public IReadOnlyList<WikidataTitleStatement>? TitleStatements { get; init; }
     public string? LabelEn { get; init; }
     public IReadOnlyList<string> InstanceOf { get; init; } = Array.Empty<string>();
     /// P921 main subject.
@@ -87,6 +98,7 @@ CREATE TABLE IF NOT EXISTS wikidata_iucn_assessment_items (
     doi_language TEXT,
     id_source TEXT,
     title TEXT,
+    title_statements TEXT,
     label_en TEXT,
     instance_of TEXT,
     main_subjects TEXT,
@@ -111,6 +123,16 @@ CREATE INDEX IF NOT EXISTS idx_wikidata_iucn_assessment_items_assessment ON wiki
         "instance_of, main_subjects, published_in, publication_date, publication_year, author_item_count, " +
         "author_string_count, urls, found_by, source_endpoint, modified_at, fetched_at, first_seen_at";
 
+    public const string TitleStatementsColumn = "title_statements";
+
+    /// True when the table has the title_statements column. A cache written before it existed and
+    /// opened read-only (site build-db, the dry run) has not been migrated.
+    public static bool HasTitleStatements(SqliteConnection connection) {
+        using var command = connection.CreateCommand();
+        command.CommandText = $"SELECT 1 FROM pragma_table_info('{TableName}') WHERE name = '{TitleStatementsColumn}'";
+        return command.ExecuteScalar() is not null;
+    }
+
     public static bool Exists(SqliteConnection connection) {
         using var command = connection.CreateCommand();
         command.CommandText = "SELECT 1 FROM sqlite_master WHERE type='table' AND name=@name";
@@ -120,8 +142,9 @@ CREATE INDEX IF NOT EXISTS idx_wikidata_iucn_assessment_items_assessment ON wiki
 
     public static IReadOnlyList<WikidataAssessmentItemRow> ReadAll(SqliteConnection connection) {
         var list = new List<WikidataAssessmentItemRow>();
+        var titles = HasTitleStatements(connection) ? TitleStatementsColumn : "NULL";
         using var command = connection.CreateCommand();
-        command.CommandText = $"SELECT {SelectColumns} FROM {TableName} ORDER BY qid_numeric";
+        command.CommandText = $"SELECT {SelectColumns}, {titles} FROM {TableName} ORDER BY qid_numeric";
         using var reader = command.ExecuteReader();
         while (reader.Read()) {
             list.Add(new WikidataAssessmentItemRow {
@@ -148,6 +171,7 @@ CREATE INDEX IF NOT EXISTS idx_wikidata_iucn_assessment_items_assessment ON wiki
                 ModifiedAt = NullableString(reader, 20),
                 FetchedAtUtc = ParseUtc(reader.GetString(21)) ?? DateTime.MinValue,
                 FirstSeenAtUtc = ParseUtc(NullableString(reader, 22)),
+                TitleStatements = WikidataTitleStatement.ListFromJson(NullableString(reader, 23)),
             });
         }
 
@@ -171,9 +195,34 @@ CREATE INDEX IF NOT EXISTS idx_wikidata_iucn_assessment_items_assessment ON wiki
         reader.IsDBNull(ordinal) ? null : reader.GetString(ordinal);
 }
 
-/// One statement value read from the query service: Property is "P31", "label" or "modified";
-/// Value is an item id ("Q13442814") or the literal; Language is set for monolingual text.
-internal readonly record struct WikidataTriple(string Property, string Value, string? Language);
+/// One title (P1476) statement: its monolingual text, language code and rank ("preferred",
+/// "normal" or "deprecated").
+internal sealed record WikidataTitleStatement(
+    [property: JsonPropertyName("text")] string Text,
+    [property: JsonPropertyName("lang")] string? Language,
+    [property: JsonPropertyName("rank")] string Rank) {
+    public static string ListToJson(IReadOnlyList<WikidataTitleStatement> titles) => JsonSerializer.Serialize(titles);
+
+    /// Null for a NULL or blank column; an unreadable value reads as null too (not recorded).
+    public static IReadOnlyList<WikidataTitleStatement>? ListFromJson(string? json) {
+        if (string.IsNullOrWhiteSpace(json)) {
+            return null;
+        }
+
+        try {
+            return JsonSerializer.Deserialize<List<WikidataTitleStatement>>(json);
+        }
+        catch (JsonException) {
+            return null;
+        }
+    }
+}
+
+/// One statement value read from the query service: Property is "P31", "label" or "modified", or
+/// TitleStatementProperty for a title statement of any rank; Value is an item id ("Q13442814") or
+/// the literal; Language is set for monolingual text. Rank and Statement (the statement node) are
+/// set for title statements only.
+internal readonly record struct WikidataTriple(string Property, string Value, string? Language, string? Rank = null, string? Statement = null);
 
 internal static class WikidataAssessmentItemBuilder {
     public static WikidataAssessmentItemRow Build(
@@ -213,6 +262,7 @@ internal static class WikidataAssessmentItemBuilder {
             DoiLanguage = parsed?.Language,
             IdSource = parsed is null ? null : parsed.Source == IucnAssessmentRefSource.Doi ? "doi" : "url",
             Title = PickText(byProperty, "P1476"),
+            TitleStatements = TitleStatements(byProperty),
             LabelEn = PickText(byProperty, "label", englishOnly: true),
             InstanceOf = ItemIds(Values("P31")),
             MainSubjects = ItemIds(Values("P921")),
@@ -240,6 +290,22 @@ internal static class WikidataAssessmentItemBuilder {
         return dash > 0 && int.TryParse(text[..dash], NumberStyles.AllowLeadingSign, CultureInfo.InvariantCulture, out var year)
             ? year
             : null;
+    }
+
+    // One entry per statement node, sorted so a re-run writes the same JSON for the same item.
+    private static IReadOnlyList<WikidataTitleStatement> TitleStatements(Dictionary<string, List<WikidataTriple>> byProperty) {
+        if (!byProperty.TryGetValue(WikidataAssessmentItemQueries.TitleStatementProperty, out var list)) {
+            return Array.Empty<WikidataTitleStatement>();
+        }
+
+        return list
+            .GroupBy(t => t.Statement ?? $"{t.Value}\u0000{t.Language}\u0000{t.Rank}", StringComparer.Ordinal)
+            .Select(g => g.First())
+            .Select(t => new WikidataTitleStatement(t.Value, t.Language, t.Rank ?? "normal"))
+            .OrderBy(t => t.Text, StringComparer.Ordinal)
+            .ThenBy(t => t.Language, StringComparer.Ordinal)
+            .ThenBy(t => t.Rank, StringComparer.Ordinal)
+            .ToList();
     }
 
     private static IReadOnlyList<string> ItemIds(IReadOnlyList<string> values) =>
