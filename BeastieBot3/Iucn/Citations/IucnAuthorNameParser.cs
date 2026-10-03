@@ -252,7 +252,7 @@ internal static class IucnAuthorNameParser {
         || Capitals.IsMatch(display)
         || Acronym.IsMatch(display);
 
-    private static bool HasOrganisationWord(string text) =>
+    internal static bool HasOrganisationWord(string text) =>
         Words.Matches(text).Any(m => OrganisationWords.Contains(m.Value));
 
     private static ParsedAuthorName Make(CitationAuthorKind kind, string display, AuthorNameShape shape,

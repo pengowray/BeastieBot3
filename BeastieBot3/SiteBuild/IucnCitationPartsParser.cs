@@ -31,6 +31,10 @@ using BeastieBot3.Shared.Wikitext;
 // encoding error ("Kry?tufek, B.") is repaired by the caller's function when one is given
 // (AssessorNamePool.Repair); the parse lists the names repaired and the names still damaged.
 //
+// Each person written with initials gets CitationAuthor.GivenNames when the assessor credits'
+// value[] lists them with certainty (AssessorGivenNames has the rules); GivenNameMatches says, for
+// every author, whether and why not.
+//
 // The DOI in the citation goes into the parts only when IucnDoiSelector accepts it for this
 // assessment. A payload with no year_published is an unpublished draft and gives no parts.
 
@@ -83,6 +87,9 @@ internal sealed record IucnCitationParse {
     public CreditSplitRule? SplitRule { get; init; }
     /// One per author, in order.
     public IReadOnlyList<AuthorNameShape> AuthorShapes { get; init; } = [];
+    /// One per author, in order: whether value[] gave the author's full given names
+    /// (AssessorGivenNames), and why not.
+    public IReadOnlyList<GivenNameMatch> GivenNameMatches { get; init; } = [];
     /// The assessor credit and the citation's author prefix differ after HTML and whitespace cleanup.
     public bool CreditDiffersFromCitation { get; init; }
     /// Further assessor credits that added names to the first (a repeated credits block that adds a person).
@@ -186,7 +193,9 @@ internal static class IucnCitationPartsParser {
             RegionalScope = region,
             ErrataYear = ParseYear(annotations.Groups["errata"].Value),
             AmendsYear = ParseYear(annotations.Groups["amends"].Value),
-            Authors = authors.Names.Select(n => n.Author).ToList(),
+            Authors = authors.Names.Select((n, i) => authors.GivenNames[i].IsMatch
+                ? n.Author with { GivenNames = authors.GivenNames[i].GivenNames }
+                : n.Author).ToList(),
             AuthorsEtAl = authors.EtAl,
             IucnCitationText = citationText,
             DownloadedAtUtc = downloadedAtUtc,
@@ -203,6 +212,7 @@ internal static class IucnCitationPartsParser {
             AuthorSource = authors.Source,
             SplitRule = authors.Rule,
             AuthorShapes = authors.Names.Select(n => n.Shape).ToList(),
+            GivenNameMatches = authors.GivenNames,
             CreditDiffersFromCitation = authors.Source == CitationAuthorSource.AssessorCredit
                 && !string.Equals(authors.CreditText, CleanText(authorPrefix), StringComparison.Ordinal),
             ExtraAssessorBlocksAddingNames = authors.ExtraBlocksAddingNames,
@@ -249,6 +259,7 @@ internal static class IucnCitationPartsParser {
 
     private sealed record AuthorRead(
         IReadOnlyList<ParsedAuthorName> Names,
+        IReadOnlyList<GivenNameMatch> GivenNames,
         bool EtAl,
         CitationAuthorSource Source,
         CreditSplitRule? Rule,
@@ -271,7 +282,7 @@ internal static class IucnCitationPartsParser {
             count = null;
             source = CitationAuthorSource.CitationPrefix;
         } else {
-            return new AuthorRead(Array.Empty<ParsedAuthorName>(), false, CitationAuthorSource.None, null, null, 0, [], []);
+            return new AuthorRead(Array.Empty<ParsedAuthorName>(), [], false, CitationAuthorSource.None, null, null, 0, [], []);
         }
 
         var cleaned = CleanText(text);
@@ -316,7 +327,11 @@ internal static class IucnCitationPartsParser {
             }
             parsed.Add(KeepGivenNamesOnlyIfConfirmed(IucnAuthorNameParser.Parse(read), givenNamesConfirmed.Contains(name)));
         }
-        return new AuthorRead(parsed, etAl, source, rule,
+
+        // Full given names from value[]: only for names read from an assessor credit.
+        var values = source == CitationAuthorSource.AssessorCredit ? AssessorGivenNames.ReadValues(blocks) : [];
+        var givenNames = parsed.Select(p => AssessorGivenNames.Match(p.Author, p.Shape, values)).ToList();
+        return new AuthorRead(parsed, givenNames, etAl, source, rule,
             source == CitationAuthorSource.AssessorCredit ? cleaned : null, extraBlocks, repaired, damaged);
     }
 

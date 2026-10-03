@@ -61,6 +61,19 @@ internal sealed class CitationCheckTally {
     /// Earlier assessments read only for their assessor names, to repair damaged names.
     public int NamePoolPayloads { get; set; }
 
+    /// Full given names from value[] (AssessorGivenNames): one count per author, by outcome.
+    public Dictionary<GivenNameOutcome, int> GivenNameOutcomes { get; } = new();
+    public Dictionary<GivenNameOutcome, List<string>> GivenNameExamples { get; } = new();
+    /// Assessments with a person written with initials: every such person got given names, some, none.
+    public int GivenNameAssessmentsAllMatched { get; private set; }
+    public int GivenNameAssessmentsSomeMatched { get; private set; }
+    public int GivenNameAssessmentsNoneMatched { get; private set; }
+    /// A fixed-seed random sample of matches, for checking by eye.
+    public List<string> GivenNameSample { get; } = new();
+    public const int GivenNameSampleSize = 100;
+    private int _givenNameMatchesSeen;
+    private readonly Random _sampleRandom = new(20261003);
+
     public int Regional { get; private set; }
     public int AmendedWithYear { get; private set; }
     public int AmendedNoYear { get; private set; }
@@ -126,6 +139,7 @@ internal sealed class CitationCheckTally {
                 names[author.Display] = names.GetValueOrDefault(author.Display) + 1;
             }
         }
+        AddGivenNames(parse, parts);
         if (parts.Authors.Count == 0) NoAuthors++;
         else if (structured) AllAuthorsStructured++;
         else SomeAuthorsVerbatim++;
@@ -160,6 +174,35 @@ internal sealed class CitationCheckTally {
             AddExample(CitationDoiExamples, parse.CitationDoiVerdict,
                 $"{parts.AssessmentId} {parts.ScientificName}{Annotation(parts)}: {parse.CitationDoi}");
         }
+    }
+
+    private void AddGivenNames(IucnCitationParse parse, IucnCitationParts parts) {
+        var candidates = 0;
+        var matched = 0;
+        for (var i = 0; i < parts.Authors.Count && i < parse.GivenNameMatches.Count; i++) {
+            var author = parts.Authors[i];
+            var match = parse.GivenNameMatches[i];
+            Increment(GivenNameOutcomes, match.Outcome);
+            if (match.Outcome != GivenNameOutcome.NotInitials) candidates++;
+            var example = match.IsMatch
+                ? $"{author.Display} → {author.GivenNames} (from \"{match.Entry}\"; {parts.AssessmentId})"
+                : match.Entry is null ? $"{author.Display} ({parts.AssessmentId})" : $"{author.Display} ≠ \"{match.Entry}\" ({parts.AssessmentId})";
+            if (match.Outcome != GivenNameOutcome.NotInitials) AddExample(GivenNameExamples, match.Outcome, example);
+            if (!match.IsMatch) continue;
+            matched++;
+            // Reservoir sample: every match has the same chance of being in the sample.
+            _givenNameMatchesSeen++;
+            if (GivenNameSample.Count < GivenNameSampleSize) {
+                GivenNameSample.Add(example);
+            } else {
+                var slot = _sampleRandom.Next(_givenNameMatchesSeen);
+                if (slot < GivenNameSampleSize) GivenNameSample[slot] = example;
+            }
+        }
+        if (candidates == 0) return;
+        if (matched == candidates) GivenNameAssessmentsAllMatched++;
+        else if (matched > 0) GivenNameAssessmentsSomeMatched++;
+        else GivenNameAssessmentsNoneMatched++;
     }
 
     public void AddComparison(IucnCitationParts parts, string articleTitle, WikiCitationComparison comparison) {
@@ -277,6 +320,8 @@ internal static class CitationCheckReport {
         Row(sb, "At least one author name left as published", t.SomeAuthorsVerbatim, t.Parsed);
         Row(sb, "Author names with a lost letter, repaired", t.AuthorNameRepairs.Values.Sum(), null);
         Row(sb, "Author names with a lost letter, not repaired", t.AuthorNamesNotRepaired.Values.Sum(), null);
+        var givenCandidates = t.GivenNameOutcomes.Where(p => p.Key != GivenNameOutcome.NotInitials).Sum(p => p.Value);
+        Row(sb, "Persons written with initials: full given names found in value[]", GivenNamesMatched(t), givenCandidates);
         Row(sb, "DOI from IUCN's citation accepted", Count(t.CitationDoiVerdicts, DoiVerdict.Accepted) + Count(t.CitationDoiVerdicts, DoiVerdict.AcceptedPredecessor), t.Parsed);
         if (t.WikiCompared) {
             var sameAuthors = Count(t.AuthorAgreements, AuthorAgreement.Same);
@@ -395,6 +440,8 @@ internal static class CitationCheckReport {
         }
         sb.AppendLine();
 
+        GivenNames(sb, t);
+
         sb.AppendLine("### Per citation");
         sb.AppendLine();
         sb.AppendLine("| | Assessments |");
@@ -411,6 +458,54 @@ internal static class CitationCheckReport {
         Examples(sb, "The same name twice", t.RepeatedNameExamples);
         LostLetters(sb, t);
     }
+
+    private static int GivenNamesMatched(CitationCheckTally t) =>
+        Count(t.GivenNameOutcomes, GivenNameOutcome.Matched) + Count(t.GivenNameOutcomes, GivenNameOutcome.MatchedFewerGivenNames)
+        + Count(t.GivenNameOutcomes, GivenNameOutcome.MatchedMoreGivenNames);
+
+    private static void GivenNames(StringBuilder sb, CitationCheckTally t) {
+        var candidates = t.GivenNameOutcomes.Where(p => p.Key != GivenNameOutcome.NotInitials).Sum(p => p.Value);
+        var all = t.GivenNameOutcomes.Values.Sum();
+        sb.AppendLine("### Full given names from value[]");
+        sb.AppendLine();
+        sb.AppendLine("The site's \"full given names\" option writes \"Sayer, Catherine\" for \"Sayer, C.\" when the assessor credit's value[]");
+        sb.AppendLine("list names the person with certainty (`AssessorGivenNames`). Only persons IUCN wrote with initials are looked up.");
+        sb.AppendLine();
+        sb.AppendLine("| Outcome | Authors | Share of persons with initials | Examples |");
+        sb.AppendLine("| --- | ---: | ---: | --- |");
+        foreach (var outcome in Enum.GetValues<GivenNameOutcome>()) {
+            var count = Count(t.GivenNameOutcomes, outcome);
+            if (count == 0) continue;
+            var share = outcome == GivenNameOutcome.NotInitials ? "" : Share(count, candidates);
+            sb.AppendLine($"| {GivenNameLabel(outcome)} | {N(count)} | {share} | {Cell(t.GivenNameExamples.GetValueOrDefault(outcome)?.Take(5))} |");
+        }
+        sb.AppendLine($"| All authors | {N(all)} | | |");
+        sb.AppendLine();
+        sb.AppendLine("| Citations with a person written with initials | Assessments |");
+        sb.AppendLine("| --- | ---: |");
+        sb.AppendLine($"| Every such person has given names | {N(t.GivenNameAssessmentsAllMatched)} |");
+        sb.AppendLine($"| Some do | {N(t.GivenNameAssessmentsSomeMatched)} |");
+        sb.AppendLine($"| None does | {N(t.GivenNameAssessmentsNoneMatched)} |");
+        sb.AppendLine();
+        foreach (var (outcome, examples) in t.GivenNameExamples.OrderBy(p => p.Key)) {
+            Examples(sb, GivenNameLabel(outcome), examples);
+        }
+        Examples(sb, $"Random sample of {N(t.GivenNameSample.Count)} matches (fixed seed), to check by eye", t.GivenNameSample);
+    }
+
+    private static string GivenNameLabel(GivenNameOutcome outcome) => outcome switch {
+        GivenNameOutcome.Matched => "Given names found: one for each initial",
+        GivenNameOutcome.MatchedFewerGivenNames => "Given names found, fewer than the initials (the other initials kept)",
+        GivenNameOutcome.MatchedMoreGivenNames => "Given names found, more than the initials (only the ones the initials stand for kept)",
+        GivenNameOutcome.NotInitials => "Not looked up: an organisation, a name kept as published, or given names already printed",
+        GivenNameOutcome.NoValueList => "No value[] entries (or only email addresses)",
+        GivenNameOutcome.NoSurnameMatch => "No value[] entry ends with the surname",
+        GivenNameOutcome.InitialsDisagree => "The entry with the surname has given names that don't fit the initials",
+        GivenNameOutcome.Ambiguous => "Two entries fit",
+        GivenNameOutcome.EntryInitialsOnly => "The entry with the surname gives only initials",
+        GivenNameOutcome.EntryNotAName => "The entry's given part has digits, @, brackets, a comma, a lost letter, an organisation word or a name in small letters",
+        _ => outcome.ToString(),
+    };
 
     private static void LostLetters(StringBuilder sb, CitationCheckTally t) {
         const char replacement = (char)0xFFFD;

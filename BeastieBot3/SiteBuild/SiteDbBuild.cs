@@ -13,7 +13,7 @@ using Spectre.Console;
 //      that has its name.
 //   3. Plan the assessment rows.
 //   4. DOI sources: GBIF's checklist, Wikidata, and the DOIs `iucn resolve-dois` found in Crossref's
-//      list of IUCN DOIs or at doi.org.
+//      list of IUCN DOIs or at doi.org. Also the Wikidata items for assessments.
 //   5. IUCN API assessment payloads: citation parts; the assessment rows are written here.
 //   6. Common names store: English names, the best English name, CoL synonyms.
 //   7. Links: English Wikipedia, Wikidata, Catalogue of Life (and the release's citation), SPRAT.
@@ -114,7 +114,8 @@ internal sealed class SiteDbBuild {
         });
         Optional("Wikidata cache", _inputs.WikidataCache, path => {
             SiteLinkReaders.ReadWikidata(path, taxa, _stats, dois, ct);
-            return $"{_stats.QidsFromP627 + _stats.QidsFromNameMatch:N0} taxa with an item, {dois.Wikidata.Count:N0} assessments with a DOI";
+            return $"{_stats.QidsFromP627 + _stats.QidsFromNameMatch:N0} taxa with an item, {dois.Wikidata.Count:N0} assessments with a DOI, "
+                + $"{_stats.WikidataItems.ByAssessment.Count:N0} items for assessments";
         });
         Optional("DOI cache (iucn resolve-dois)", _inputs.DoiCache, path => {
             SiteLinkReaders.ReadDoiCache(path, dois, _stats, ct);
@@ -334,6 +335,8 @@ internal sealed class SiteDbBuild {
         writer.SetMeta(SiteDbSchema.MetaKeys.ColDoi, _stats.ColDoi);
         writer.SetMeta(SiteDbSchema.MetaKeys.SpratReport, _stats.SpratReport);
         writer.SetMeta(SiteDbSchema.MetaKeys.IucnDoiCheckedTo, _stats.DoiCheckedTo?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
+        writer.SetMeta(SiteDbSchema.MetaKeys.WikidataItemModel, _inputs.WikidataItemModel.ToJson());
+        _stats.WikidataItemModelSource = _inputs.WikidataItemModelSource;
         writer.SetMeta(SiteDbSchema.MetaKeys.TaxonCount, taxonCount.ToString(CultureInfo.InvariantCulture));
         writer.SetMeta(SiteDbSchema.MetaKeys.AssessmentCount, assessmentCount);
     }

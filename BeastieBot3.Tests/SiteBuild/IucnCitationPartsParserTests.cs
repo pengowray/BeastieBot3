@@ -333,6 +333,39 @@ public class IucnCitationPartsParserTests {
     }
 
     [Fact]
+    public void FullGivenNames_FromTheAssessorCreditsValueList() {
+        // aid 196580951, Salmo salar Kola subpopulation, as cached on 3 October 2026.
+        const string json = """
+            {"assessment_id": 196580951, "sis_taxon_id": 196579964, "year_published": "2023", "latest": true,
+             "citation": "Sayer, C. & Lajus, D. 2023. Salmo salar Kola subpopulation. The IUCN Red List of Threatened Species 2023: e.T196579964A196580951. Accessed on 03 October 2026.",
+             "taxon": {"sis_id": 196579964, "scientific_name": "Salmo salar Kola subpopulation", "subpopulation_name": "Kola subpopulation"},
+             "credits": [{"credit_type_name": "assessor", "full": "Sayer, C. & Lajus, D.", "value": ["Catherine Sayer (IUCN Red List Unit)", "Dmitry Lajus"]},
+                         {"credit_type_name": "evaluator", "full": "Smith, K.", "value": ["Kevin Smith"]}],
+             "errata": [], "scopes": [{"description": {"en": "Global"}, "code": "1"}]}
+            """;
+        var parse = Parse(json);
+        Assert.Equal(new[] {
+            new CitationAuthor(CitationAuthorKind.Person, "Sayer, C.", "Sayer", "C.", "Catherine"),
+            new CitationAuthor(CitationAuthorKind.Person, "Lajus, D.", "Lajus", "D.", "Dmitry"),
+        }, parse.Parts!.Authors);
+        Assert.Equal(new[] { GivenNameOutcome.Matched, GivenNameOutcome.Matched }, parse.GivenNameMatches.Select(m => m.Outcome));
+        Assert.Equal("Catherine Sayer (IUCN Red List Unit)", parse.GivenNameMatches[0].Entry);
+    }
+
+    [Fact]
+    public void FullGivenNames_NotFromTheCitationText_NorWhenTheEntryDoesNotFit() {
+        // No assessor credit: the names come from the citation and value[] can't be read for them.
+        var fromCitation = Parse(Payload(1, 2, "2020", "Liddle, T.A. 2020. Abies alba. The IUCN Red List of Threatened Species 2020: e.T1A2.", "Abies alba"));
+        Assert.Null(fromCitation.Parts!.Authors.Single().GivenNames);
+        // value[] has "Adam Liddle", the person's middle name.
+        var credits = """[{"credit_type_name":"assessor","full":"Liddle, T.A.","value":["Adam Liddle"]}]""";
+        var middleName = Parse(Payload(1, 2, "2020", "Liddle, T.A. 2020. Abies alba. The IUCN Red List of Threatened Species 2020: e.T1A2.", "Abies alba")
+            .Replace("\"credits\":[]", "\"credits\":" + credits, StringComparison.Ordinal));
+        Assert.Null(middleName.Parts!.Authors.Single().GivenNames);
+        Assert.Equal(GivenNameOutcome.InitialsDisagree, middleName.GivenNameMatches.Single().Outcome);
+    }
+
+    [Fact]
     public void PersonShapes() {
         var dotless = Parts(Payload(176113246, 245432249, "2024",
             "Villa-Navarro, F., DoNascimiento, CD, Mojica, J.I., Rodríguez-Olarte, D., Usma, S., Herrera-Collazos, E.E. & Fernando, E. 2024. Hypophthalmus oremaculatus. The IUCN Red List of Threatened Species 2024: e.T176113246A245432249. Accessed on 18 August 2026.",

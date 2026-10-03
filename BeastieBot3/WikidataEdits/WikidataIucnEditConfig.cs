@@ -1,6 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using BeastieBot3.Configuration;
+using BeastieBot3.Shared.Wikitext;
+using BeastieBot3.Web.Endpoints;
 using YamlDotNet.Serialization;
 using YamlDotNet.Serialization.NamingConventions;
 
@@ -11,6 +14,11 @@ using YamlDotNet.Serialization.NamingConventions;
 //
 // An id that does not exist yet (the 2026.1 release item before anyone creates it) is left empty;
 // the plan then uses a "CREATE:" placeholder in its place and the flow page shows the step as to do.
+//
+// The assessment item's defaults (used when the file or a key is missing) come from the shared
+// WikidataItemModel, so the dry run and the public site's QuickStatements batches agree.
+// `site build-db` reads the same file through LoadFromRules and stores ToItemModel() in the site
+// database.
 
 namespace BeastieBot3.WikidataEdits;
 
@@ -22,7 +30,7 @@ internal sealed class WikidataIucnEditConfig {
     public string? EditionItem { get; set; }
 
     /// Q32059, the IUCN Red List as a work.
-    public string RedListItem { get; set; } = "Q32059";
+    public string RedListItem { get; set; } = AssessmentItemConfig.Defaults.PublishedIn;
 
     public AssessmentItemConfig AssessmentItem { get; set; } = new();
 
@@ -52,6 +60,36 @@ internal sealed class WikidataIucnEditConfig {
 
     public static string PathFor(string rulesDir) => Path.Combine(rulesDir, "wikidata", "iucn-status.yml");
 
+    /// The assessment item model the public site's QuickStatements batches follow.
+    public WikidataItemModel ToItemModel() => new() {
+        InstanceOf = AssessmentItem.InstanceOf,
+        PublishedIn = RedListItem,
+        Publisher = AssessmentItem.Publisher,
+        Language = AssessmentItem.Language,
+        TitleLanguage = AssessmentItem.TitleLanguage,
+        LabelTemplate = AssessmentItem.Label,
+        DescriptionTemplate = AssessmentItem.Description,
+    };
+
+    /// Reads iucn-status.yml from the source rules folder, else the copy beside the program; the
+    /// defaults when neither has one or it can't be read. loadedFrom is the file read, or null.
+    public static WikidataIucnEditConfig LoadFromRules(PathsService paths, out string? loadedFrom) {
+        loadedFrom = null;
+        try {
+            var rules = RulesPaths.Resolve(paths);
+            foreach (var dir in new[] { rules.SourceRulesDir, rules.BuildOutputRulesDir }) {
+                var path = PathFor(dir);
+                if (File.Exists(path)) {
+                    loadedFrom = path;
+                    return Load(dir);
+                }
+            }
+        } catch {
+            // fall through to defaults
+        }
+        return new WikidataIucnEditConfig();
+    }
+
     public static WikidataIucnEditConfig Load(string rulesDir) {
         var path = PathFor(rulesDir);
         if (!File.Exists(path)) {
@@ -66,18 +104,21 @@ internal sealed class WikidataIucnEditConfig {
 }
 
 internal sealed class AssessmentItemConfig {
+    /// The shared model's defaults, which are the values in iucn-status.yml.
+    internal static readonly WikidataItemModel Defaults = new();
+
     /// P31 for a new assessment item. Existing ones are mostly scholarly articles (Q13442814);
     /// the class is part of the modelling proposal and may change.
-    public string InstanceOf { get; set; } = "Q13442814";
+    public string InstanceOf { get; set; } = Defaults.InstanceOf;
     /// Placeholders: {name} {year} {taxon_id} {assessment_id}.
-    public string Label { get; set; } = "{name}. The IUCN Red List of Threatened Species {year}: e.T{taxon_id}A{assessment_id}";
-    public string Description { get; set; } = "IUCN Red List assessment of {name}";
+    public string Label { get; set; } = Defaults.LabelTemplate;
+    public string Description { get; set; } = Defaults.DescriptionTemplate;
     /// Language of the P1476 title (the scientific name).
-    public string TitleLanguage { get; set; } = "en";
+    public string TitleLanguage { get; set; } = Defaults.TitleLanguage;
     /// P123 publisher: IUCN.
-    public string Publisher { get; set; } = "Q48268";
+    public string Publisher { get; set; } = Defaults.Publisher;
     /// P407 language of work: English.
-    public string Language { get; set; } = "Q1860";
+    public string Language { get; set; } = Defaults.Language;
     /// Credit types written as P2093 author name strings, in citation order.
     public List<string> AuthorCreditTypes { get; set; } = new() { "assessor" };
 }

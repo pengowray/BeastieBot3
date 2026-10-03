@@ -53,12 +53,15 @@ internal sealed class SiteDbWriter : IDisposable {
             "@enwiki_title", "@wikidata_qid", "@wikidata_qid_source", "@col_id", "@latest_global_assessment_id", "@in_release", "@current_taxon_id");
         _assessment = Prepare("""
             INSERT INTO assessment (assessment_id, taxon_id, scope, is_latest, category, possibly_extinct,
-                possibly_extinct_in_the_wild, criteria, criteria_version, year_published, assessment_date, population_trend, citation_json)
+                possibly_extinct_in_the_wild, criteria, criteria_version, year_published, assessment_date, population_trend, citation_json,
+                wikidata_item_qid, wikidata_item_properties)
             VALUES (@assessment_id, @taxon_id, @scope, @is_latest, @category, @possibly_extinct,
-                @possibly_extinct_in_the_wild, @criteria, @criteria_version, @year_published, @assessment_date, @population_trend, @citation_json)
+                @possibly_extinct_in_the_wild, @criteria, @criteria_version, @year_published, @assessment_date, @population_trend, @citation_json,
+                @wikidata_item_qid, @wikidata_item_properties)
             """,
             "@assessment_id", "@taxon_id", "@scope", "@is_latest", "@category", "@possibly_extinct",
-            "@possibly_extinct_in_the_wild", "@criteria", "@criteria_version", "@year_published", "@assessment_date", "@population_trend", "@citation_json");
+            "@possibly_extinct_in_the_wild", "@criteria", "@criteria_version", "@year_published", "@assessment_date", "@population_trend", "@citation_json",
+            "@wikidata_item_qid", "@wikidata_item_properties");
         _name = Prepare("""
             INSERT INTO name (name_id, taxon_id, name, name_type, language, source, is_preferred)
             VALUES (@name_id, @taxon_id, @name, @name_type, @language, @source, @is_preferred)
@@ -113,7 +116,7 @@ internal sealed class SiteDbWriter : IDisposable {
     public void AddAssessment(SiteAssessment a) {
         Bind(_assessment, a.AssessmentId, a.TaxonId, a.Scope, a.IsLatest ? 1 : 0, a.Category, a.PossiblyExtinct ? 1 : 0,
             a.PossiblyExtinctInTheWild ? 1 : 0, a.Criteria, a.CriteriaVersion, a.YearPublished, a.AssessmentDate,
-            a.PopulationTrend, a.CitationJson);
+            a.PopulationTrend, a.CitationJson, a.WikidataItemQid, a.WikidataItemProperties);
         _assessment.ExecuteNonQuery();
     }
 

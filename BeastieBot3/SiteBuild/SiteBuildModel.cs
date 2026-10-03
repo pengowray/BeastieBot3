@@ -26,6 +26,11 @@ internal sealed record SiteBuildInputs {
     public string? RulesList { get; init; }
     /// GBIF's copy of the IUCN checklist (a Darwin Core Archive zip).
     public string? GbifChecklist { get; init; }
+    /// The Wikidata assessment item model (rules/wikidata/iucn-status.yml, assessment_item) stored
+    /// in meta for the site's QuickStatements batches, and the file it was read from (null: the
+    /// defaults, when no file was found).
+    public Shared.Wikitext.WikidataItemModel WikidataItemModel { get; init; } = new();
+    public string? WikidataItemModelSource { get; init; }
     /// The site database to replace.
     public required string Output { get; init; }
     /// Only the first N taxa by taxon id.
@@ -105,6 +110,10 @@ internal sealed class SiteAssessment {
     public string? AssessmentDate { get; init; }
     public string? PopulationTrend { get; set; }
     public string? CitationJson { get; set; }
+    /// The Wikidata item for the assessment as a publication, and the properties it has
+    /// (SiteWikidataItems).
+    public string? WikidataItemQid { get; set; }
+    public string? WikidataItemProperties { get; set; }
     /// True when the row came from the CSV, whose values win over the API's.
     public required bool FromCsv { get; init; }
 }
@@ -170,6 +179,12 @@ internal sealed class SiteBuildStats {
     public int SynonymsBuiltFromFullName;
 
     public int EnwikiTitles;
+    /// Wikidata items for assessments (wikidata_iucn_assessment_items): which were kept, and the
+    /// assessments that got one, their own or (an errata version) the one its DOI names.
+    public SiteWikidataItems WikidataItems = new();
+    public int AssessmentsWithOwnItem;
+    public int AssessmentsWithItemThroughDoi;
+    public string? WikidataItemModelSource;
     public int QidsFromP627;
     public int QidsFromNameMatch;
     public int QidTieBreaks;
