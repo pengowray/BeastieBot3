@@ -211,6 +211,15 @@ public sealed class DisplayTests {
         Assert.Equal("Show 1,200 more synonyms", SiteText.ShowMoreSynonyms(1200));
     }
 
+    [Theory]
+    [InlineData("iucn", "IUCN Red List")]
+    [InlineData("col", "Catalogue of Life")]
+    [InlineData("wikidata", "Wikidata")]
+    [InlineData("wikipedia", "Wikipedia")]
+    [InlineData("wikipedia-taxobox", "Wikipedia taxobox")]
+    [InlineData("something-new", "something-new")]
+    public void NameSourceLabels(string source, string label) => Assert.Equal(label, SiteText.SourceLabel(source));
+
     [Fact]
     public void NoEmDashes() {
         foreach (var field in typeof(SiteText).GetFields()) {

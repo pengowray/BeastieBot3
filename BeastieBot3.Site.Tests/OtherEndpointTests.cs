@@ -125,6 +125,7 @@ public sealed class OtherEndpointTests(SiteFactory factory) : IClassFixture<Site
             Assert.Matches($">{Regex.Escape(source)}</a></th>\\s*<td>[^<]*common names", html);
         }
         Assert.Contains("English common names, synonyms, and links to Catalogue of Life pages", text);
+        Assert.Contains("English common names (from article titles and taxoboxes) and links to Wikipedia articles", text);
         Assert.Contains("DOIs of the latest global assessments", text);
 
         // Crossref, the last DOI source, with the date of the newest DOI check.

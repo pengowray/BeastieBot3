@@ -253,4 +253,27 @@ public class SiteBuildRulesTests {
         Assert.Equal("scientific", names.Names[1].NameType);
         Assert.False(names.Add("Felis leo", "synonym", null, "iucn"));
     }
+
+    // ------------------------------------------------------------ name sources
+
+    [Theory]
+    [InlineData("wikipedia_title", "wikipedia")]
+    [InlineData("wikipedia_taxobox", "wikipedia-taxobox")]
+    [InlineData("wikidata_label", "wikidata")]
+    [InlineData("wikidata", "wikidata")]
+    [InlineData("col", "col")]
+    [InlineData("iucn", "iucn")]
+    [InlineData(" IUCN ", "iucn")]
+    [InlineData("gbif", null)]
+    public void SiteSource_MapsTheStoresSources(string storeSource, string? expected) =>
+        Assert.Equal(expected, SiteCommonNamesReader.SiteSource(storeSource));
+
+    [Fact]
+    public void SiteNameSet_KeepsATaxoboxNameBesideTheSameTitleName() {
+        // The species page lists every source of a name, so one row per source is kept.
+        var names = new SiteNameSet();
+        Assert.True(names.Add("Sea bear", "common", "en", SiteNameSource.Wikipedia));
+        Assert.True(names.Add("Sea bear", "common", "en", SiteNameSource.WikipediaTaxobox));
+        Assert.Equal(new[] { "wikipedia", "wikipedia-taxobox" }, names.Names.Select(n => n.Source));
+    }
 }

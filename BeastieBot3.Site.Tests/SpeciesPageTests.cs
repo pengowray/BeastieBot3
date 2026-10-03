@@ -319,6 +319,7 @@ public sealed class SpeciesPageTests(SiteFactory factory) : IClassFixture<SiteFa
         Assert.Contains("English common names", text);
         Assert.Contains("Polar bear IUCN's main English name IUCN Red List, Wikidata", text);
         Assert.Contains("White bear Catalogue of Life", text);
+        Assert.Contains("Thalassic bear Wikipedia taxobox", text);
         Assert.Contains("Common names in other languages", text);
         Assert.Contains("French Ours blanc, Ours polaire", text);
         Assert.Contains("Spanish Oso polar", text);

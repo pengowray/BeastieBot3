@@ -333,6 +333,7 @@ public static class SiteText {
         "col" => "Catalogue of Life",
         "wikidata" => "Wikidata",
         "wikipedia" => "Wikipedia",
+        "wikipedia-taxobox" => "Wikipedia taxobox",
         _ => source,
     };
 
