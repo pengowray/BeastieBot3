@@ -290,14 +290,79 @@ public class WikidataCitationTests {
     }
 
     [Fact]
-    public void FixCommands_OnlyALanguageDiffers_TheTitleIsReplaced() {
-        // Q56227924 has la:"Myrmecophaga tridactyla"; the model's title language is en.
+    public void FixCommands_TitleWithNoAuthorList_IsLeftAsItIs() {
+        // Q56227924 has la:"Myrmecophaga tridactyla": a name and no author list, so nothing is
+        // removed from it, and its language stays, though the model's title language is en.
         var fix = WikidataCitation.FixCommands(Karlschmidti with { ScientificName = "Myrmecophaga tridactyla" }, "Q56227924",
             [new WikidataTitle("Myrmecophaga tridactyla", "la")], labelEn: null, Model);
+        Assert.Empty(fix.Commands);
+        // Q56804492: "<i>Myotis nattereri</i>" has no author list either.
+        var tagged = WikidataCitation.FixCommands(Karlschmidti with { ScientificName = "Myotis nattereri" }, "Q56804492",
+            [new WikidataTitle("<i>Myotis nattereri</i>", "en")], labelEn: null, Model);
+        Assert.Empty(tagged.Commands);
+    }
+
+    // Q56481550, the item for the 2014 assessment of taxon 3755, published as Canis mesomelas
+    // (Crossref's title for 10.2305/IUCN.UK.2014-1.RLTS.T3755A46122476.en is "Canis mesomelas:
+    // Hoffmann, M."). IUCN's citation now gives the current name, Lupulella mesomelas.
+    private static readonly IucnCitationParts Lupulella = new() {
+        TaxonId = 3755,
+        AssessmentId = 46122476,
+        Year = 2014,
+        ScientificName = "Lupulella mesomelas",
+        Authors = [Person("Hoffmann", "M.")],
+    };
+
+    [Fact]
+    public void FixCommands_KeepsTheNameTheAssessmentWasPublishedUnder() {
+        const string old = "Canis mesomelas: Hoffmann, M";
+        var fix = WikidataCitation.FixCommands(Lupulella, "Q56481550", [new WikidataTitle(old, "en")], old, Model);
         Assert.Equal(new[] {
-            L("Q56227924", "P1476", "en:\"Myrmecophaga tridactyla\""),
-            L("-Q56227924", "P1476", "la:\"Myrmecophaga tridactyla\""),
+            L("Q56481550", "P1476", "en:\"Canis mesomelas\""),
+            L("-Q56481550", "P1476", "en:\"" + old + "\""),
+            L("Q56481550", "Len", "\"Canis mesomelas. The IUCN Red List of Threatened Species 2014: e.T3755A46122476\""),
         }, fix.Commands);
+        Assert.DoesNotContain(fix.Commands, c => c.Contains("Lupulella", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void FixCommands_IucnInternalName_IsNeverWritten() {
+        // Q56226968: IUCN's citation calls taxon 22694346 "Larus glaucoides_old"; the item's title has
+        // the name it was published under.
+        var parts = new IucnCitationParts {
+            TaxonId = 22694346, AssessmentId = 39183818, Year = 2012, ScientificName = "Larus glaucoides_old",
+            Authors = [new CitationAuthor(CitationAuthorKind.Organisation, "BirdLife International")],
+        };
+        const string old = "Larus glaucoides: BirdLife International";
+        var fix = WikidataCitation.FixCommands(parts, "Q56226968", [new WikidataTitle(old, "en")], old, Model);
+        Assert.Equal(new[] {
+            L("Q56226968", "P1476", "en:\"Larus glaucoides\""),
+            L("-Q56226968", "P1476", "en:\"" + old + "\""),
+            L("Q56226968", "Len", "\"Larus glaucoides. The IUCN Red List of Threatened Species 2012: e.T22694346A39183818\""),
+        }, fix.Commands);
+
+        // A title whose own name has the marker is left alone, and so is the label when no other
+        // name is known.
+        const string marked = "Larus glaucoides_old: BirdLife International";
+        var none = WikidataCitation.FixCommands(parts, "Q1", [new WikidataTitle(marked, "en")], marked, Model);
+        Assert.Empty(none.Commands);
+    }
+
+    [Fact]
+    public void FixCommands_DeprecatedTitleWithTheSameText_LeavesTheTitleAlone() {
+        // QuickStatements removes the last statement whose value matches, of any rank, so it could
+        // remove the deprecated copy and keep the title the page says is replaced.
+        var fix = WikidataCitation.FixCommands(Karlschmidti, "Q1", [
+            new WikidataTitle(KarlschmidtiOld, "en"),
+            new WikidataTitle(KarlschmidtiOld, "en", "deprecated"),
+        ], KarlschmidtiLabel, Model);
+        Assert.DoesNotContain(fix.Commands, c => c.Contains("P1476", StringComparison.Ordinal));
+        // The same text in another language is not a match.
+        var other = WikidataCitation.FixCommands(Karlschmidti, "Q1", [
+            new WikidataTitle(KarlschmidtiOld, "en"),
+            new WikidataTitle(KarlschmidtiOld, "de", "deprecated"),
+        ], KarlschmidtiLabel, Model);
+        Assert.Contains(L("-Q1", "P1476", "en:\"" + KarlschmidtiOld + "\""), other.Commands);
     }
 
     [Fact]
@@ -336,7 +401,7 @@ public class WikidataCitationTests {
     [InlineData("Name: A", "")]
     public void FixCommands_OldTitleQuickStatementsCannotMatch_IsLeftAlone(string text, string language) {
         var fix = WikidataCitation.FixCommands(Karlschmidti, "Q1", [new WikidataTitle(text, language)], KarlschmidtiLabel, Model);
-        Assert.Empty(fix.Commands);
+        Assert.DoesNotContain(fix.Commands, c => c.Contains("P1476", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -369,6 +434,70 @@ public class WikidataCitationTests {
         var url = WikidataCitation.QuickStatementsUrl(fix.Commands);
         var data = Uri.UnescapeDataString(url[WikidataCitation.QuickStatementsBase.Length..]);
         Assert.Contains("-Q1\tP1476\ten:\"Name: A | B\"", data);
+    }
+
+    // ------------------------------------------------------------ the published name
+
+    [Theory]
+    [InlineData("Canis mesomelas: Hoffmann, M.", "Canis mesomelas")]
+    [InlineData("Opsanus tau : Collette, B.B", "Opsanus tau")]
+    [InlineData("Sepia orbignyana: Barratt, I. &amp; Allcock, L.", "Sepia orbignyana")]
+    [InlineData("<i>Myotis nattereri</i>", "Myotis nattereri")]
+    [InlineData("Myrmecophaga  tridactyla", "Myrmecophaga tridactyla")]
+    [InlineData(": Hoffmann, M.", null)]
+    [InlineData("  ", null)]
+    [InlineData(null, null)]
+    public void NameFromTitle_TheTextBeforeTheAuthorList(string? title, string? name) {
+        Assert.Equal(name, WikidataCitation.NameFromTitle(title));
+    }
+
+    [Fact]
+    public void PublishedNameFor_ItemTitleThenCrossrefThenIucn() {
+        var registered = Lupulella with { RegisteredName = "Canis mesomelas" };
+        Assert.Equal(new PublishedName("Canis mesomelas", PublishedNameSource.ItemTitle),
+            WikidataCitation.PublishedNameFor(Lupulella, [new WikidataTitle("Canis mesomelas: Hoffmann, M", "en")]));
+        Assert.Equal(new PublishedName("Canis mesomelas", PublishedNameSource.Crossref), WikidataCitation.PublishedNameFor(registered));
+        // Several titles that are not deprecated: none is the item's title.
+        Assert.Equal(PublishedNameSource.Crossref, WikidataCitation.PublishedNameFor(registered,
+            [new WikidataTitle("A b: C", "en"), new WikidataTitle("D e: F", "en")])!.Source);
+        Assert.Equal(new PublishedName("Lupulella mesomelas", PublishedNameSource.IucnCitation), WikidataCitation.PublishedNameFor(Lupulella));
+        // "_old" names are skipped, wherever they come from.
+        Assert.Equal(PublishedNameSource.IucnCitation,
+            WikidataCitation.PublishedNameFor(Lupulella with { RegisteredName = "Canis mesomelas_old" })!.Source);
+        Assert.Null(WikidataCitation.PublishedNameFor(Lupulella with { ScientificName = "Larus glaucoides_old" }));
+    }
+
+    [Fact]
+    public void CreateItemCommands_UseTheRegisteredName() {
+        var commands = WikidataCitation.CreateItemCommands(Lupulella with { RegisteredName = "Canis mesomelas" }, null, Model);
+        Assert.Contains(L("LAST", "P1476", "en:\"Canis mesomelas\""), commands);
+        Assert.Contains(L("LAST", "Len", "\"Canis mesomelas. The IUCN Red List of Threatened Species 2014: e.T3755A46122476\""), commands);
+        Assert.Contains(L("LAST", "Den", "\"IUCN Red List assessment of Canis mesomelas\""), commands);
+        Assert.DoesNotContain(commands, c => c.Contains("Lupulella", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void CreateItemCommands_NoUsableName_NoCommands() {
+        Assert.Empty(WikidataCitation.CreateItemCommands(Lupulella with { ScientificName = "Larus glaucoides_old" }, null, Model));
+        var registered = WikidataCitation.CreateItemCommands(
+            Lupulella with { ScientificName = "Larus glaucoides_old", RegisteredName = "Larus glaucoides" }, null, Model);
+        Assert.Contains(L("LAST", "P1476", "en:\"Larus glaucoides\""), registered);
+    }
+
+    [Fact]
+    public void AddMissingCommands_TitleAndLabelUseThePublishedName() {
+        // No title: the registered name. A title but no label: the name in the title.
+        var noTitle = WikidataCitation.AddMissingCommands(Lupulella with { RegisteredName = "Canis mesomelas" }, "Q1",
+            new HashSet<string> { "P31" }, null, Model);
+        Assert.Contains(L("Q1", "P1476", "en:\"Canis mesomelas\""), noTitle);
+        var noLabel = WikidataCitation.AddMissingCommands(Lupulella, "Q1", new HashSet<string> { "P31", "P1476" }, null, Model,
+            [new WikidataTitle("Canis mesomelas: Hoffmann, M", "en")]);
+        Assert.Contains(L("Q1", "Len", "\"Canis mesomelas. The IUCN Red List of Threatened Species 2014: e.T3755A46122476\""), noLabel);
+        // No usable name: the title and label are left out, the rest is added.
+        var none = WikidataCitation.AddMissingCommands(Lupulella with { ScientificName = "Larus glaucoides_old" }, "Q1",
+            new HashSet<string>(), null, Model);
+        Assert.DoesNotContain(none, c => c.Contains("\tP1476\t", StringComparison.Ordinal) || c.Contains("\tLen\t", StringComparison.Ordinal));
+        Assert.Contains(none, c => c.Contains("\tP953\t", StringComparison.Ordinal));
     }
 
     [Fact]

@@ -81,6 +81,12 @@ public sealed record IucnCitationParts {
     public string? Doi { get; init; }
     public DoiSource DoiSource { get; init; }
 
+    /// The name part of the title registered with Crossref for Doi ("Canis mesomelas" from "Canis
+    /// mesomelas: Hoffmann, M."), which is the name the assessment was published under; ScientificName
+    /// is the taxon's current name. Set by `site build-db` only when Doi names this assessment's own
+    /// ids and `iucn resolve-dois` stored Crossref's title for it; null otherwise.
+    public string? RegisteredName { get; init; }
+
     /// IUCN's citation text from the payload with its "Accessed on ..." sentence removed.
     public string? IucnCitationText { get; init; }
 
