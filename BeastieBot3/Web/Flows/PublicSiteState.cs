@@ -1,0 +1,322 @@
+using System;
+using System.Collections.Generic;
+using System.Globalization;
+using System.IO;
+using System.Linq;
+using BeastieBot3.Col;
+using BeastieBot3.Configuration;
+using BeastieBot3.Infrastructure;
+using BeastieBot3.Iucn.Gbif;
+using BeastieBot3.Shared.SiteData;
+using Microsoft.Data.Sqlite;
+
+// What the public species site workflow needs to light its steps: which Red List release GBIF's
+// newest checklist zip is from, the site database's meta table, and when each input of
+// `site build-db` last changed.
+//
+// Every read here is small (a meta table, two MAX() over indexed columns, a few file times), so it
+// runs on the poll directly. The one exception is the checklist's eml.xml: reading it means opening
+// the zip, so its result is kept until the file's size or modification time changes.
+//
+// File times of a SQLite database: the newest of the main file and its -wal file, but the -wal
+// file only when it has content. A database in WAL mode can hold its latest writes in the -wal
+// file for days (the SPRAT database has a 4 KB main file beside a 2.8 MB -wal), and opening a
+// database read-write touches an empty -wal file without changing anything. The -shm file is
+// touched by every reader, so it is never looked at.
+
+namespace BeastieBot3.Web.Flows;
+
+/// <summary>One input of `site build-db` and when it last changed (UTC).</summary>
+public sealed record SiteInputChange(string Name, DateTime ChangedAtUtc);
+
+public sealed record PublicSiteState {
+    // --- The IUCN Red List database (the CSV release, Datastore:IUCN_sqlite_from_cvs) ---
+    public bool IucnExists { get; init; }
+    /// The Red List release the database holds ("2026-1"). Null when it holds none or several.
+    public string? IucnRelease { get; init; }
+
+    // --- GBIF's IUCN checklist: the newest zip in Datasets:GBIF_IUCN_dir, the one site build-db reads ---
+    public string? GbifDir { get; init; }
+    public string? GbifZipName { get; init; }
+    /// The Red List release named in the checklist's metadata ("2026-1"). Null when it names none.
+    public string? GbifRelease { get; init; }
+    /// The checklist's publication date as its metadata writes it ("2026-07-28").
+    public string? GbifPublished { get; init; }
+    /// Why the zip's metadata could not be read, when it could not.
+    public string? GbifReadError { get; init; }
+
+    // --- The DOI cache (`iucn resolve-dois`, Datastore:IUCN_doi_cache_sqlite) ---
+    public string? DoiCachePath { get; init; }
+    public bool DoiCacheExists { get; init; }
+
+    // --- The site database (`site build-db`, Datastore:site_sqlite) ---
+    public string? SitePath { get; init; }
+    public bool SiteExists { get; init; }
+    /// Why the meta table could not be read, when the file is there but could not be read.
+    public string? SiteReadError { get; init; }
+    public int? SiteSchemaVersion { get; init; }
+    public DateTime? SiteBuiltAtUtc { get; init; }
+    public string? SiteIucnRelease { get; init; }
+    public long? SiteTaxonCount { get; init; }
+
+    /// When each input of `site build-db` last changed, in the order the build reads them.
+    /// Inputs that do not exist are left out, as the build leaves them out.
+    public IReadOnlyList<SiteInputChange> Inputs { get; init; } = Array.Empty<SiteInputChange>();
+}
+
+/// <summary>The files the public site workflow reads, resolved from paths.ini.</summary>
+public sealed record PublicSitePaths {
+    public string? IucnDatabase { get; init; }
+    public string? ApiCache { get; init; }
+    public string? GbifDir { get; init; }
+    public string? DoiCache { get; init; }
+    public string? CommonNames { get; init; }
+    public string? WikidataCache { get; init; }
+    public string? WikipediaCache { get; init; }
+    public string? ColPlacement { get; init; }
+    public string? SpratDatabase { get; init; }
+    public string? SiteDatabase { get; init; }
+
+    // The same defaults `site build-db` uses when it is given no options.
+    public static PublicSitePaths From(PathsService paths) {
+        var col = Full(Try(paths.GetColSqlitePath));
+        return new PublicSitePaths {
+            IucnDatabase = Full(Try(paths.GetIucnDatabasePath)),
+            ApiCache = Full(Try(paths.GetIucnApiCachePath)),
+            GbifDir = Full(Try(paths.GetGbifIucnDir)),
+            DoiCache = Full(Try(paths.GetIucnDoiCachePath)),
+            CommonNames = Full(Try(paths.GetCommonNameStorePath)),
+            WikidataCache = Full(Try(paths.GetWikidataCachePath)),
+            WikipediaCache = Full(Try(paths.GetWikipediaCachePath)),
+            ColPlacement = col is null ? null : TaxonPlacementStore.SidecarPath(col),
+            SpratDatabase = Full(Try(paths.GetSpratDatabasePath)),
+            SiteDatabase = Full(Try(paths.GetSiteDatabasePath)),
+        };
+    }
+
+    private static string? Try(Func<string?> get) {
+        try { return get(); } catch { return null; }
+    }
+
+    private static string? Full(string? path) {
+        if (string.IsNullOrWhiteSpace(path)) return null;
+        try { return Path.GetFullPath(path); } catch { return null; }
+    }
+}
+
+public static class PublicSiteStateReader {
+    // Names of the inputs as the web UI's data source chips name them, where there is a chip.
+    public const string IucnInput = "IUCN Red List database";
+    public const string ApiCacheInput = "IUCN API cache";
+    public const string GbifInput = "GBIF checklist";
+    public const string DoiCacheInput = "DOI cache";
+    public const string CommonNamesInput = "Common names store";
+    public const string WikidataInput = "Wikidata cache";
+    public const string WikipediaInput = "Wikipedia cache";
+    public const string ColPlacementInput = "Catalogue of Life placement";
+    public const string SpratInput = "SPRAT (EPBC) database";
+
+    public static PublicSiteState Read(PathsService paths) => Read(PublicSitePaths.From(paths));
+
+    /// Never throws: whatever cannot be read is left empty, with the reason where there is one.
+    public static PublicSiteState Read(PublicSitePaths p) {
+        var inputs = new List<SiteInputChange>();
+        void Add(string name, DateTime? changedAt) {
+            if (changedAt is { } at) inputs.Add(new SiteInputChange(name, at));
+        }
+
+        var iucn = ReadIucn(p.IucnDatabase);
+        Add(IucnInput, iucn.ImportedAt);
+        Add(ApiCacheInput, ReadNewestDownload(p.ApiCache));
+
+        var gbifZip = Try(() => GbifIucnChecklistFiles.FindNewest(p.GbifDir));
+        var gbif = gbifZip is null ? null : ReadGbif(gbifZip);
+        Add(GbifInput, gbifZip is null ? null : FileTime(gbifZip));
+
+        Add(DoiCacheInput, SqliteChangedAt(p.DoiCache));
+        Add(CommonNamesInput, SqliteChangedAt(p.CommonNames));
+        Add(WikidataInput, SqliteChangedAt(p.WikidataCache));
+        Add(WikipediaInput, SqliteChangedAt(p.WikipediaCache));
+        Add(ColPlacementInput, SqliteChangedAt(p.ColPlacement));
+        Add(SpratInput, SqliteChangedAt(p.SpratDatabase));
+
+        var state = new PublicSiteState {
+            IucnExists = iucn.Exists,
+            IucnRelease = iucn.Release,
+            GbifDir = p.GbifDir,
+            GbifZipName = gbifZip is null ? null : Path.GetFileName(gbifZip),
+            GbifRelease = gbif?.Release,
+            GbifPublished = gbif?.Published,
+            GbifReadError = gbif?.Error,
+            DoiCachePath = p.DoiCache,
+            DoiCacheExists = Exists(p.DoiCache),
+            SitePath = p.SiteDatabase,
+            SiteExists = Exists(p.SiteDatabase),
+            Inputs = inputs,
+        };
+        return state.SiteExists ? ReadSite(state, p.SiteDatabase!) : state;
+    }
+
+    // ---- the IUCN Red List database ----
+
+    private sealed record IucnInfo(bool Exists, string? Release, DateTime? ImportedAt);
+
+    // Completed imports only, as IucnReleaseStateReader reads them. The import time is when the
+    // last zip finished importing, which says more than the file's time: `iucn import` also
+    // recreates its views on every run.
+    private static IucnInfo ReadIucn(string? path) {
+        if (!Exists(path)) return new IucnInfo(false, null, null);
+        try {
+            using var conn = OpenReadOnly(path!);
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = "SELECT redlist_version, ended_at FROM import_metadata WHERE ended_at IS NOT NULL";
+            cmd.CommandTimeout = 5;
+            var releases = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            DateTime? newest = null;
+            using var reader = cmd.ExecuteReader();
+            while (reader.Read()) {
+                if (!reader.IsDBNull(0) && reader.GetString(0).Trim() is { Length: > 0 } version
+                    && !string.Equals(version, "unknown", StringComparison.OrdinalIgnoreCase)) {
+                    releases.Add(version);
+                }
+                if (!reader.IsDBNull(1) && StoredUtc.Parse(reader.GetString(1)) is { } ended
+                    && (newest is null || ended > newest)) {
+                    newest = ended;
+                }
+            }
+            return new IucnInfo(true, releases.Count == 1 ? releases.First() : null, newest);
+        } catch (Exception) {
+            // No import_metadata table, or a file that is not a database: nothing to compare against.
+            return new IucnInfo(true, null, null);
+        }
+    }
+
+    // ---- the IUCN API cache ----
+
+    // The newest download, not the file's time: the cache is also written by refresh sessions and
+    // failed-request records, which change nothing the site reads. Both columns are indexed.
+    private static DateTime? ReadNewestDownload(string? path) {
+        if (!Exists(path)) return null;
+        try {
+            using var conn = OpenReadOnly(path!);
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = "SELECT (SELECT MAX(downloaded_at) FROM taxa), (SELECT MAX(downloaded_at) FROM assessments)";
+            cmd.CommandTimeout = 5;
+            using var reader = cmd.ExecuteReader();
+            if (!reader.Read()) return null;
+            DateTime? newest = null;
+            for (var i = 0; i < 2; i++) {
+                if (!reader.IsDBNull(i) && StoredUtc.Parse(reader.GetString(i)) is { } at && (newest is null || at > newest)) {
+                    newest = at;
+                }
+            }
+            return newest;
+        } catch (Exception) {
+            return null;
+        }
+    }
+
+    // ---- GBIF's checklist ----
+
+    private sealed record GbifInfo(string Path, long Length, DateTime ModifiedUtc, string? Release, string? Published, string? Error);
+
+    private static GbifInfo? _gbifCache;
+
+    // eml.xml is a few kilobytes inside a ~21 MB zip; opening the zip reads its central directory.
+    // Kept until the file changes, because this runs on every poll of the workflow page.
+    private static GbifInfo? ReadGbif(string zipPath) {
+        FileInfo file;
+        try {
+            file = new FileInfo(zipPath);
+            if (!file.Exists) return null;
+        } catch {
+            return null;
+        }
+        var cached = _gbifCache;
+        if (cached is not null && cached.Path == zipPath && cached.Length == file.Length && cached.ModifiedUtc == file.LastWriteTimeUtc) {
+            return cached;
+        }
+        GbifInfo info;
+        try {
+            var dataset = GbifIucnChecklistReader.ReadSummary(zipPath).Dataset;
+            info = new GbifInfo(zipPath, file.Length, file.LastWriteTimeUtc, dataset.RedListVersion, dataset.PubDate, null);
+        } catch (Exception ex) {
+            // Not a zip, not a checklist, unreadable XML or no permission: all say the same thing here.
+            info = new GbifInfo(zipPath, file.Length, file.LastWriteTimeUtc, null, null, ex.Message);
+        }
+        _gbifCache = info;
+        return info;
+    }
+
+    // ---- the site database ----
+
+    private static PublicSiteState ReadSite(PublicSiteState state, string path) {
+        try {
+            using var conn = OpenReadOnly(path);
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = "SELECT key, value FROM meta";
+            cmd.CommandTimeout = 5;
+            var meta = new Dictionary<string, string>(StringComparer.Ordinal);
+            using (var reader = cmd.ExecuteReader()) {
+                while (reader.Read()) {
+                    if (!reader.IsDBNull(0) && !reader.IsDBNull(1)) meta[reader.GetString(0)] = reader.GetString(1);
+                }
+            }
+            string? Get(string key) => meta.TryGetValue(key, out var v) && !string.IsNullOrWhiteSpace(v) ? v.Trim() : null;
+            return state with {
+                SiteSchemaVersion = int.TryParse(Get(SiteDbSchema.MetaKeys.SchemaVersion), NumberStyles.Integer, CultureInfo.InvariantCulture, out var version) ? version : null,
+                SiteBuiltAtUtc = StoredUtc.Parse(Get(SiteDbSchema.MetaKeys.BuiltAtUtc)),
+                SiteIucnRelease = Get(SiteDbSchema.MetaKeys.IucnRelease),
+                SiteTaxonCount = long.TryParse(Get(SiteDbSchema.MetaKeys.TaxonCount), NumberStyles.Integer, CultureInfo.InvariantCulture, out var taxa) ? taxa : null,
+            };
+        } catch (Exception ex) {
+            return state with { SiteReadError = ex.Message };
+        }
+    }
+
+    // ---- files ----
+
+    /// <summary>
+    /// When a SQLite database last changed: the newer of the main file's time and its -wal file's
+    /// time, counting the -wal file only when it is not empty. Null when the database does not exist.
+    /// </summary>
+    internal static DateTime? SqliteChangedAt(string? path) {
+        var main = FileTime(path);
+        if (main is null) return null;
+        try {
+            var wal = new FileInfo(path + "-wal");
+            if (wal.Exists && wal.Length > 0 && wal.LastWriteTimeUtc > main.Value) return wal.LastWriteTimeUtc;
+        } catch {
+            // an unreadable -wal file leaves the main file's time
+        }
+        return main;
+    }
+
+    private static DateTime? FileTime(string? path) {
+        if (string.IsNullOrWhiteSpace(path)) return null;
+        try {
+            return File.Exists(path) ? File.GetLastWriteTimeUtc(path) : null;
+        } catch {
+            return null;
+        }
+    }
+
+    private static bool Exists(string? path) {
+        if (string.IsNullOrWhiteSpace(path)) return false;
+        try { return File.Exists(path); } catch { return false; }
+    }
+
+    private static T? Try<T>(Func<T?> get) where T : class {
+        try { return get(); } catch { return null; }
+    }
+
+    // Read-only, no pooling, no schema work: this runs on a poll against databases other commands
+    // are writing.
+    private static SqliteConnection OpenReadOnly(string path) {
+        var conn = new SqliteConnection(new SqliteConnectionStringBuilder {
+            DataSource = path, Mode = SqliteOpenMode.ReadOnly, Pooling = false,
+        }.ConnectionString);
+        conn.Open();
+        return conn;
+    }
+}
