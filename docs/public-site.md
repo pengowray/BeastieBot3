@@ -903,7 +903,11 @@ title statements are not recorded (run wikidata iucn-assessment-items)".
   - `Site:SourceUrl`: when set, the footer links to the source code.
   - `Site:RateLimits`: per client IP, `PagesPerMinute` (default 60), `SearchPerMinute` (30),
     `SuggestPerMinute` (30) and `UpdatesPerMinute` (10, texts sent to `/update`); for the whole site,
-    `ConcurrentSearches` (4) and `SearchQueueLength` (8), which count status updates too.
+    `ConcurrentSearches` (4) and `SearchQueueLength` (8), which count status updates too. Taxon, group and name pages
+    (`/species`, `/taxa`, `/name`) also have `TaxonPagesPerHour` (600) and `TaxonPagesPerDay` (3,000)
+    per client, so a scraper under the per-minute limit cannot copy the site in a few days (one
+    walked the group pages on 5 October 2026); the 429 page then gives the wait from Retry-After.
+    Caddy from Ubuntu's apt repository has no rate limiting module, so the limits are in the app.
 - All SQL of the status update page is in `Data/SiteStatusLookup.cs`, over one connection per request.
 - The site checks the database file when a request arrives, no more than once every 30 seconds. A
   replaced file is used from the next check, without a restart (connection pools are cleared and the

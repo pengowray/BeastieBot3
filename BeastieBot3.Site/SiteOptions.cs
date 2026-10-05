@@ -37,4 +37,10 @@ public sealed class RateLimitOptions {
     /// More wait in a queue of SearchQueueLength; when the queue is full they get status 429.
     public int ConcurrentSearches { get; set; } = 4;
     public int SearchQueueLength { get; set; } = 8;
+
+    /// Taxon, group and name pages (/species, /taxa, /name) per client per hour and per day, on top
+    /// of PagesPerMinute: a person checking a list's taxa opens far fewer, and a scraper that stays
+    /// under the per-minute limit could otherwise copy the whole site in a few days. 0: no limit.
+    public int TaxonPagesPerHour { get; set; } = 600;
+    public int TaxonPagesPerDay { get; set; } = 3000;
 }

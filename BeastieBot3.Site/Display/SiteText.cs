@@ -148,6 +148,13 @@ public static partial class SiteText {
         "This site has no assessments with this id. Check the id, or search for the taxon by name.";
     public const string TooManyHeading = "Too many requests";
     public const string TooManyLine = "Try again in a minute.";
+    /// The wait before the limit lets this address in again, from the Retry-After header.
+    public static string TooManyWait(int seconds) => seconds switch {
+        <= 60 => TooManyLine,
+        < 2 * 3600 => $"Try again in {(seconds + 59) / 60} minutes.",
+        _ => $"Try again in {(seconds + 3599) / 3600} hours.",
+    };
+    public const string TooManyTaxonPages = "This address has opened more taxon and group pages than the site allows in an hour or a day.";
     /// Status line under the citation options when a live update was refused by the rate limit.
     public const string WikitextTooManyRequests = "Too many requests: the wikitext was not updated. Wait a minute, then select Update wikitext.";
     public const string ServerErrorHeading = "Server error";

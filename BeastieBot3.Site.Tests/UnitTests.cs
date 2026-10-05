@@ -459,6 +459,24 @@ public sealed class RateLimitKeyTests {
         Assert.True(second.TryGetMetadata(MetadataName.RetryAfter, out _));
     }
 
+    [Theory]
+    [InlineData(30, "Try again in a minute.")]
+    [InlineData(61, "Try again in 2 minutes.")]
+    [InlineData(3000, "Try again in 50 minutes.")]
+    [InlineData(50000, "Try again in 14 hours.")]
+    public void TheWaitIsSaidInMinutesOrHours(int seconds, string expected) => Assert.Equal(expected, SiteText.TooManyWait(seconds));
+
+    [Fact]
+    public void TaxonPagesHaveADailyLimitPerClient() {
+        var limits = new RateLimitOptions { PagesPerMinute = 1000, TaxonPagesPerHour = 1000, TaxonPagesPerDay = 2 };
+        using var limiter = SiteRateLimits.BuildGlobalLimiter(limits);
+        Assert.True(limiter.AttemptAcquire(Request("/species/1", "203.0.113.5")).IsAcquired);
+        Assert.True(limiter.AttemptAcquire(Request("/taxa/genus/ursus", "203.0.113.5")).IsAcquired);
+        Assert.False(limiter.AttemptAcquire(Request("/name/Ursus", "203.0.113.5")).IsAcquired);
+        Assert.True(limiter.AttemptAcquire(Request("/about", "203.0.113.5")).IsAcquired);
+        Assert.True(limiter.AttemptAcquire(Request("/species/1", "203.0.113.6")).IsAcquired);
+    }
+
     [Fact]
     public void Ipv4ClientsAreCountedOneByOne() {
         Assert.Equal("203.0.113.7", SiteRateLimits.ClientKey(IPAddress.Parse("203.0.113.7")));

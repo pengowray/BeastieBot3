@@ -8,7 +8,9 @@ using Microsoft.Extensions.Options;
 namespace BeastieBot3.Site.Web;
 
 /// Requests per client per minute, in four buckets: search pages, the name-suggest API, texts sent
-/// to the status update page (POST /update), and every other page. Static files are served before the limiter and are not counted; /healthz and the
+/// to the status update page (POST /update), and every other page. Taxon, group and name pages also
+/// count against an hourly and a daily limit per client (RateLimitOptions.TaxonPagesPerHour and
+/// TaxonPagesPerDay). Static files are served before the limiter and are not counted; /healthz and the
 /// error pages (including the 429 page itself) are never limited. Searches and suggestions also
 /// and status updates share one limit on how many run at the same time (RateLimitOptions.ConcurrentSearches). A
 /// rejected request gets status 429 and the status code page renders the "Too many requests" page.
@@ -67,8 +69,27 @@ public static class SiteRateLimits {
             }
             return RateLimitPartition.GetNoLimiter("unlimited");
         });
-        return PartitionedRateLimiter.CreateChained(perClient, searchesAtOnce);
+        var taxonPagesPerHour = TaxonPageLimiter(limits.TaxonPagesPerHour, "hour", TimeSpan.FromHours(1));
+        var taxonPagesPerDay = TaxonPageLimiter(limits.TaxonPagesPerDay, "day", TimeSpan.FromDays(1));
+        return PartitionedRateLimiter.CreateChained(perClient, taxonPagesPerHour, taxonPagesPerDay, searchesAtOnce);
     }
+
+    /// The pages whose number per client is also limited per hour and per day.
+    internal static bool IsTaxonPage(PathString path) =>
+        path.StartsWithSegments("/species") || path.StartsWithSegments("/taxa") || path.StartsWithSegments("/name");
+
+    private static PartitionedRateLimiter<HttpContext> TaxonPageLimiter(int permits, string name, TimeSpan window) =>
+        PartitionedRateLimiter.Create<HttpContext, string>(context => {
+            if (permits <= 0 || !IsTaxonPage(context.Request.Path)) {
+                return RateLimitPartition.GetNoLimiter("unlimited");
+            }
+            var key = $"taxon-{name}|{ClientKey(context.Connection.RemoteIpAddress)}";
+            return RateLimitPartition.GetFixedWindowLimiter(key, _ => new FixedWindowRateLimiterOptions {
+                PermitLimit = permits,
+                Window = window,
+                QueueLimit = 0,
+            });
+        });
 
     private static bool IsUpdatePost(HttpContext context) =>
         HttpMethods.IsPost(context.Request.Method) && SiteMiddleware.IsUpdatePath(context.Request.Path);

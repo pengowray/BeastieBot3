@@ -82,6 +82,24 @@ public sealed class RateLimitTests(RateLimitedSiteFactory factory) : IClassFixtu
     }
 }
 
+public sealed class TaxonPageLimitTests(TaxonPageLimitedSiteFactory factory) : IClassFixture<TaxonPageLimitedSiteFactory> {
+    [Fact]
+    public async Task TooManyTaxonPagesInAnHourGetThe429PageWithTheWait() {
+        var client = factory.Client();
+        for (var i = 0; i < 2; i++) {
+            Assert.Equal(HttpStatusCode.OK, (await client.GetAsync($"/species/{FixtureDb.PolarBear}")).StatusCode);
+        }
+        var limited = await client.GetAsync($"/species/{FixtureDb.Tiger}");
+        Assert.Equal(HttpStatusCode.TooManyRequests, limited.StatusCode);
+        var text = Html.Text(await limited.Content.ReadAsStringAsync());
+        Assert.Contains("This address has opened more taxon and group pages than the site allows in an hour or a day.", text);
+        Assert.Matches(@"Try again in \d+ minutes\.", text);
+
+        // Other pages count only against the per-minute limit.
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/about")).StatusCode);
+    }
+}
+
 /// A clock the test moves by hand.
 public sealed class ManualTime : TimeProvider {
     private DateTimeOffset _now = new(2026, 10, 3, 9, 0, 0, TimeSpan.Zero);

@@ -1,3 +1,5 @@
+using BeastieBot3.Site.Web;
+using Microsoft.AspNetCore.Diagnostics;
 using BeastieBot3.Site.Display;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.AspNetCore.Mvc.RazorPages;
@@ -38,7 +40,10 @@ public sealed class ErrorModel : PageModel {
                 break;
             case StatusCodes.Status429TooManyRequests:
                 Heading = SiteText.TooManyHeading;
-                Line = SiteText.TooManyLine;
+                var wait = int.TryParse(Response.Headers.RetryAfter.ToString(), out var seconds) ? seconds : 0;
+                Line = wait > 60 && SiteRateLimits.IsTaxonPage(HttpContext.Features.Get<IStatusCodeReExecuteFeature>()?.OriginalPath ?? "")
+                    ? SiteText.TooManyTaxonPages + " " + SiteText.TooManyWait(wait)
+                    : SiteText.TooManyWait(wait);
                 break;
             case StatusCodes.Status503ServiceUnavailable:
                 Heading = SiteText.UnavailableHeading;

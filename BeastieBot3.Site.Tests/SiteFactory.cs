@@ -21,6 +21,8 @@ public class SiteFactory : WebApplicationFactory<Program> {
         builder.UseSetting("Site:RateLimits:SearchPerMinute", SearchPerMinute.ToString());
         builder.UseSetting("Site:RateLimits:SuggestPerMinute", SearchPerMinute.ToString());
         builder.UseSetting("Site:RateLimits:UpdatesPerMinute", SearchPerMinute.ToString());
+        builder.UseSetting("Site:RateLimits:TaxonPagesPerHour", "100000");
+        builder.UseSetting("Site:RateLimits:TaxonPagesPerDay", "100000");
     }
 
     public HttpClient Client() => CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });
@@ -52,6 +54,14 @@ public sealed class RateLimitedSiteFactory : SiteFactory {
     public const int Limit = 3;
     protected override int PagesPerMinute => Limit;
     protected override int SearchPerMinute => Limit;
+}
+
+/// A site that allows two taxon pages per client per hour.
+public sealed class TaxonPageLimitedSiteFactory : SiteFactory {
+    protected override void ConfigureWebHost(IWebHostBuilder builder) {
+        base.ConfigureWebHost(builder);
+        builder.UseSetting("Site:RateLimits:TaxonPagesPerHour", "2");
+    }
 }
 
 public static class Html {
