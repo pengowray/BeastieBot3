@@ -45,6 +45,16 @@ public class ScientificNameMarkupTests {
         Assert.Equal(expected, ScientificNameMarkup.ToHtml(name, subpopulation));
     }
 
+    [Theory]
+    [InlineData("Ursus maritimus marinus", "<i>Ursus maritimus marinus</i>")]
+    [InlineData("Rana (Hylarana) albolineata", "<i>Rana (Hylarana) albolineata</i>")]
+    [InlineData("Terminalia catappa var. pubescens", "<i>Terminalia catappa</i> var. <i>pubescens</i>")]
+    [InlineData("Abies alba subsp. alba var. pyramidalis", "<i>Abies alba</i> subsp. <i>alba</i> var. <i>pyramidalis</i>")]
+    [InlineData("Felis tigris", "<i>Felis tigris</i>")]
+    public void ToSynonymHtml(string name, string expected) {
+        Assert.Equal(expected, ScientificNameMarkup.ToSynonymHtml(name));
+    }
+
     [Fact]
     public void ToWikitext_EscapesApostrophesThatWouldBecomeMarkup() {
         // Two apostrophes in a row in upright text would start italics; they are written as entities.

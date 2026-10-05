@@ -1153,12 +1153,11 @@ colspan and rowspan; `StatusUpdater` decides the edits), and reads the database 
 
 ## Known gaps
 
-- Wikidata gives few synonyms: the taxa's items name 8,570 synonym items (P1420), and the Wikidata
-  cache has downloaded 277 of them. Downloading those items would add the rest. English Wikipedia
+- Wikidata gives few synonyms until the synonym items are downloaded: the taxa's items name 8,686
+  synonym items (P1420). `wikidata queue-synonyms` queues the ones not in the cache, and
+  `wikidata cache-entities` downloads them. English Wikipedia
   taxoboxes have a `synonyms` parameter (about 62,000 pages in the cache) that the site does not
   read; its wikitext (`{{Species list}}`, `<br />`, `<small>` authorities) needs a parser first.
-- A trinomial synonym with no rank marker ("Ursus maritimus marinus") is shown with only the
-  first two words in italics, as `ScientificNameMarkup` writes every name.
 
 - Few groups have an English name of their own (1,182 of 33,559 in the build of 5 October 2026).
   The rules files name the groups the Wikipedia lists needed; the common names store has names for

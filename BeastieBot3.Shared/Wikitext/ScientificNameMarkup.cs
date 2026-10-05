@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text;
+using System.Linq;
 
 namespace BeastieBot3.Shared.Wikitext;
 
@@ -17,6 +18,11 @@ namespace BeastieBot3.Shared.Wikitext;
 // CSV this gives the expected result, including "Eschrichtius robustus western subpopulation" (the
 // species epithet uses the only room, so "western" starts the tail) and "Ferrissia sp. indet.". When
 // the subpopulation name is known it is marked upright directly, whatever words it contains.
+//
+// A synonym from another catalogue (ToSynonymHtml) has no subpopulation tail, but often has a
+// trinomial with no rank marker ("Ursus maritimus marinus") and a subgenus in brackets
+// ("Rana (Hylarana) albolineata"): there the name has room for two epithets, and a capitalised
+// word in brackets after the genus is italic.
 
 public static class ScientificNameMarkup {
     // Rank markers: upright, and each makes room for one more italic epithet.
@@ -39,7 +45,7 @@ public static class ScientificNameMarkup {
     /// Rank markers (ssp., subsp., var., f.) and the subpopulation words stay upright.
     public static string ToWikitext(string scientificName, string? subpopulationName = null) {
         var sb = new StringBuilder();
-        foreach (var segment in Split(scientificName, subpopulationName)) {
+        foreach (var segment in Split(scientificName, subpopulationName, synonym: false)) {
             if (segment.Italic) {
                 sb.Append("''").Append(EscapeItalicApostrophes(segment.Text)).Append("''");
             } else {
@@ -50,9 +56,16 @@ public static class ScientificNameMarkup {
     }
 
     /// The same split as ToWikitext, as HTML-encoded text with <i> elements.
-    public static string ToHtml(string scientificName, string? subpopulationName = null) {
+    public static string ToHtml(string scientificName, string? subpopulationName = null) =>
+        Html(Split(scientificName, subpopulationName, synonym: false));
+
+    /// ToHtml for a synonym from another catalogue: a third lowercase word is an epithet, and a
+    /// subgenus in brackets is italic ("<i>Rana (Hylarana) albolineata</i>").
+    public static string ToSynonymHtml(string name) => Html(Split(name, null, synonym: true));
+
+    private static string Html(List<Segment> segments) {
         var sb = new StringBuilder();
-        foreach (var segment in Split(scientificName, subpopulationName)) {
+        foreach (var segment in segments) {
             if (segment.Italic) {
                 sb.Append("<i>").Append(HtmlEncode(segment.Text)).Append("</i>");
             } else {
@@ -64,13 +77,13 @@ public static class ScientificNameMarkup {
 
     // Splits the name into alternating italic and upright runs. Spaces between two words of the same
     // kind stay inside the run (''Panthera pardus''); a space between runs is upright text.
-    private static List<Segment> Split(string scientificName, string? subpopulationName) {
+    private static List<Segment> Split(string scientificName, string? subpopulationName, bool synonym) {
         var name = CollapseSpaces(scientificName);
         var tail = FindSubpopulationTail(name, subpopulationName);
         var core = tail is null ? name : name[..^tail.Length].TrimEnd();
 
         var words = new List<Word>();
-        var slots = 1;
+        var slots = synonym ? 2 : 1;
         var inTail = false;
         var genusSeen = false;
         foreach (var word in core.Split(' ', StringSplitOptions.RemoveEmptyEntries)) {
@@ -87,8 +100,15 @@ public static class ScientificNameMarkup {
                 AddWithLeadingHybridSign(words, word);
                 continue;
             }
+            if (synonym && words.Count == 1 && IsSubgenus(word)) {
+                words.Add(new Word(word, true));
+                continue;
+            }
             if (RankMarkers.Contains(word)) {
-                slots++;
+                // A marker names the rank of the next epithet, which the synonym's room already allows for.
+                if (!synonym || slots == 0) {
+                    slots++;
+                }
                 words.Add(new Word(word, false));
                 continue;
             }
@@ -138,6 +158,10 @@ public static class ScientificNameMarkup {
             words.Add(new Word(word, true));
         }
     }
+
+    // "(Hylarana)": a capitalised word in brackets.
+    private static bool IsSubgenus(string word) =>
+        word.Length > 3 && word[0] == '(' && word[^1] == ')' && char.IsUpper(word[1]) && word[2..^1].All(char.IsLetter);
 
     // A lowercase word of letters, hyphens and underscores ("pardus", "st-hilairei", "ottonis_new").
     private static bool IsEpithet(string word) {

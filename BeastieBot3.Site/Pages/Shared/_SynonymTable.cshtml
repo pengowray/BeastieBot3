@@ -10,7 +10,7 @@
         <tbody>
             @foreach (var s in Model) {
                 <tr>
-                    <th scope="row">@Html.Raw(ScientificNameMarkup.ToHtml(s.Name))@if (s.Authority is not null) {<text> </text><span class="authority">@s.Authority</span>}</th>
+                    <th scope="row">@Html.Raw(ScientificNameMarkup.ToSynonymHtml(s.Name))@if (s.Authority is not null) {<text> </text><span class="authority">@s.Authority</span>}</th>
                     <td>@for (var i = 0; i < s.Sources.Count; i++) {
                             var source = s.Sources[i];
                             if (i > 0) {<text>, </text>}
