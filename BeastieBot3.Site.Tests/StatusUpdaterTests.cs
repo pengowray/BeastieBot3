@@ -411,6 +411,30 @@ public sealed class StatusUpdaterTests {
     [Fact]
     public void DefaultCapIsTheListCap() => Assert.Equal(3600, StatusUpdater.DefaultMaxItems);
 
+    // 2 MB texts made to be slow to read: many taxoboxes and templates, one template with many
+    // named parameters, braces that never close, and a long wikitable.
+    [Theory]
+    [InlineData("{{Taxobox|status=}}{{IUCN status}}")]
+    [InlineData("|a=")]
+    [InlineData("{{")]
+    [InlineData("{|\n! Name !! Status\n|-\n| ''Ursus imaginarius'' || EN\n")]
+    public void LargeTextsAreReadQuickly(string unit) {
+        var text = new System.Text.StringBuilder("{{x");
+        while (text.Length < 2 * 1024 * 1024) {
+            text.Append(unit);
+        }
+        var watch = System.Diagnostics.Stopwatch.StartNew();
+        var result = Run(text.ToString());
+        Assert.True(watch.Elapsed < TimeSpan.FromSeconds(10), $"{watch.Elapsed} for {unit}");
+        Assert.True(result.Findings.Count <= StatusUpdater.DefaultMaxItems);
+    }
+
+    [Fact]
+    public void StatusSystemLineKeepsCrlf() {
+        var result = Run("{{Taxobox\r\n|status=VU\r\n|binomial=Amblysomus hottentotus\r\n}}", TaxoboxLookup());
+        Assert.Equal("{{Taxobox\r\n|status=EN\r\n|status_system=IUCN3.1\r\n|binomial=Amblysomus hottentotus\r\n}}", result.Text);
+    }
+
     // ---------------------------------------------------------------- helpers
 
     [Theory]

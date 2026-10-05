@@ -142,6 +142,10 @@ public sealed partial class WikitextScanner {
     /// trimming and lower case are applied.
     public static string NormalizeParameterName(string name) => name.Trim().ToLowerInvariant();
 
+    // Templates nested deeper than this are read as text. MediaWiki stops expanding at 100 levels,
+    // and the cap keeps a text of nothing but "{{" from holding a million open frames.
+    private const int MaxDepth = 100;
+
     private static (List<WikiTemplate> All, List<TextSpan> Outer) FindTemplates(string masked) {
         var all = new List<WikiTemplate>();
         var outer = new List<TextSpan>();
@@ -149,7 +153,7 @@ public sealed partial class WikitextScanner {
         var i = 0;
         while (i < masked.Length) {
             var c = masked[i];
-            if (c == '{' && At(masked, i + 1, '{')) {
+            if (c == '{' && At(masked, i + 1, '{') && stack.Count < MaxDepth) {
                 stack.Push(new Frame(i));
                 i += 2;
                 continue;
@@ -196,11 +200,17 @@ public sealed partial class WikitextScanner {
         var nameEnd = frame.Pipes.Count > 0 ? frame.Pipes[0] : contentEnd;
         var name = NormalizeName(masked[(frame.Start + 2)..nameEnd]);
         var parameters = new List<TemplateParameter>(frame.Pipes.Count);
+        // Pipes and "=" signs are both in text order, so one pass over the "=" signs finds the first
+        // one of each parameter.
+        var e = 0;
         for (var k = 0; k < frame.Pipes.Count; k++) {
             var pipe = frame.Pipes[k];
             var end = k + 1 < frame.Pipes.Count ? frame.Pipes[k + 1] : contentEnd;
             var whole = new TextSpan(pipe + 1, end);
-            var equals = frame.EqualSigns.FirstOrDefault(e => e > pipe && e < end, -1);
+            while (e < frame.EqualSigns.Count && frame.EqualSigns[e] < pipe) {
+                e++;
+            }
+            var equals = e < frame.EqualSigns.Count && frame.EqualSigns[e] < end ? frame.EqualSigns[e] : -1;
             parameters.Add(equals < 0
                 ? new TemplateParameter(pipe, whole, null, whole)
                 : new TemplateParameter(pipe, whole, masked[whole.Start..equals].Trim(), new TextSpan(equals + 1, end)));

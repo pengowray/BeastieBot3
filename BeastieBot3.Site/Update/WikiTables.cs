@@ -19,6 +19,10 @@ public sealed record WikiTable(TextSpan Span, IReadOnlyList<TableRow> Rows);
 /// line inside a template that started on an earlier line continues the cell too. Tables can be
 /// nested in cells; the outer cell's content then includes the nested table.
 public static class WikiTables {
+    // Tables nested deeper than this are read as cell text, so a text of thousands of unclosed
+    // "{|" lines stays quick to read.
+    private const int MaxDepth = 20;
+
     public static IReadOnlyList<WikiTable> Find(WikitextScanner scanner) {
         var masked = scanner.Masked;
         var tables = new List<WikiTable>();
@@ -33,7 +37,7 @@ public static class WikiTables {
             }
             if (!scanner.InsideTemplate(p)) {
                 var top = stack.Count > 0 ? stack.Peek() : null;
-                if (StartsWith(masked, p, lineEnd, "{|")) {
+                if (StartsWith(masked, p, lineEnd, "{|") && stack.Count < MaxDepth) {
                     stack.Push(new Builder(lineStart));
                 } else if (top is not null && StartsWith(masked, p, lineEnd, "|}")) {
                     top.CloseCell(lineStart - 1);

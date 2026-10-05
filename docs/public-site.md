@@ -936,7 +936,8 @@ colspan and rowspan; `StatusUpdater` decides the edits), and reads the database 
 - Only the values that change are replaced; everything else comes back byte for byte. At most 3,600
   items (`GroupList.MaxLines`) are checked; the rest are counted and left as they are.
 - The page is the only one that answers POST (`SiteMiddleware.UseGetAndHeadOnly` allows it on
-  `/update` and raises the request body limit to 2 MB plus 64 KB for it). The form is
+  `/update` and raises the request body limit to 2 MB plus 64 KB for it; Caddy's
+  `deploy/oracle/Caddyfile.template` allows the same size there and 1 MB elsewhere). The form is
   multipart/form-data, so wikitext is not percent-encoded; text over 2 MB (UTF-8) gets 413 with a
   message on the page. The page sets no cookies and has no antiforgery token, is never cached, and
   the error page also answers POST, so a 429 or 500 after a POST shows the usual error page.

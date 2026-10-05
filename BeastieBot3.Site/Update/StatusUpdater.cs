@@ -21,6 +21,13 @@ public sealed partial class StatusUpdater {
     /// The most items checked in one text: as many as one Wikipedia page can hold.
     public const int DefaultMaxItems = GroupList.MaxLines;
 
+    // Longer cells are not read as a status code, a status heading or a status template, or for
+    // names: real ones are far shorter, and the limits keep a cell that runs to the end of a
+    // 2 MB text (an unclosed table) from being copied and searched once per table.
+    private const int MaxCodeLength = 20;
+    private const int MaxStatusCellLength = 1_000;
+    private const int MaxNameCellLength = 20_000;
+
     private static readonly HashSet<string> TaxoboxNames = ["speciesbox", "taxobox", "automatic taxobox", "subspeciesbox", "infraspeciesbox"];
 
     private readonly IStatusLookup _lookup;
@@ -43,7 +50,8 @@ public sealed partial class StatusUpdater {
     public StatusUpdateResult Update(string text) {
         var scanner = new WikitextScanner(text);
         var candidates = new List<Candidate>();
-        var claimed = new List<TextSpan>();
+        // {{IUCN status}} templates inside a taxobox's status parameters belong to the taxobox.
+        var claimed = new HashSet<WikiTemplate>();
 
         foreach (var box in scanner.Templates.Where(t => TaxoboxNames.Contains(t.Name))) {
             if (box.Named("status") is null) {
@@ -52,7 +60,7 @@ public sealed partial class StatusUpdater {
             candidates.Add(new TaxoboxCandidate(box));
             foreach (var name in new[] { "status", "status_system", "status_ref" }) {
                 if (box.Named(name) is { } p) {
-                    claimed.Add(p.Whole);
+                    claimed.UnionWith(scanner.TemplatesWithin(p.Whole));
                 }
             }
         }
@@ -68,7 +76,7 @@ public sealed partial class StatusUpdater {
         }
 
         foreach (var template in scanner.Templates.Where(t => t.Name == "iucn status")) {
-            if (cellTemplates.Contains(template) || claimed.Any(c => c.Start <= template.Span.Start && template.Span.End <= c.End)) {
+            if (cellTemplates.Contains(template) || claimed.Contains(template)) {
                 continue;
             }
             candidates.Add(new TemplateCandidate(template));
@@ -166,7 +174,7 @@ public sealed partial class StatusUpdater {
         var statusColumns = new HashSet<int>();
         foreach (var row in table.Rows.Where(r => r.IsHeaderRow)) {
             foreach (var cell in row.Cells) {
-                if (IsStatusHeader(s.Masked[cell.Content.Start..cell.Content.End])) {
+                if (cell.Content.Length <= MaxStatusCellLength && IsStatusHeader(s.Masked[cell.Content.Start..cell.Content.End])) {
                     for (var c = cell.Column; c < cell.Column + cell.Colspan; c++) {
                         statusColumns.Add(c);
                     }
@@ -179,12 +187,11 @@ public sealed partial class StatusUpdater {
         foreach (var row in table.Rows.Where(r => !r.IsHeaderRow)) {
             foreach (var cell in row.Cells.Where(c => statusColumns.Contains(c.Column))) {
                 var core = s.Core(cell.Content);
-                var text = s.Masked[core.Start..core.End];
-                if (BareCode(text) is not null) {
+                if (core.Length <= MaxCodeLength && BareCode(s.Masked[core.Start..core.End]) is not null) {
                     yield return (row, cell, null);
                     continue;
                 }
-                var template = s.TemplatesWithin(core).FirstOrDefault(t => t.Span == core);
+                var template = core.Length > MaxStatusCellLength ? null : s.TemplatesWithin(core).FirstOrDefault(t => t.Span == core);
                 if (template is not null && template.Name == "iucn status"
                     && (template.Positional(2) is not { } ids || s.CoreText(ids.Value).Length == 0)) {
                     yield return (row, cell, template);
@@ -302,7 +309,7 @@ public sealed partial class StatusUpdater {
             var core = s.Core(status.Value);
             var gap = s.Text[core.End..status.Whole.End];
             // On its own line when the status parameter ends its line, else on the same line.
-            var newline = gap.Contains('\n') ? "\n" : string.Empty;
+            var newline = gap.Contains("\r\n", StringComparison.Ordinal) ? "\r\n" : gap.Contains('\n') ? "\n" : string.Empty;
             var insert = layout.Success
                 ? $"{newline}|{layout.Groups["pre"].Value}status_system{layout.Groups["mid"].Value}{newSystem}"
                 : $"{newline}| status_system = {newSystem}";
@@ -427,6 +434,9 @@ public sealed partial class StatusUpdater {
 
     // The scientific names a cell writes in italics, links or a {{sp}} or {{taxlink}} template.
     private static IEnumerable<string> NamesIn(WikitextScanner s, TextSpan content) {
+        if (content.Length > MaxNameCellLength) {
+            return [];
+        }
         var text = s.Masked[content.Start..content.End];
         var found = new List<string>();
         foreach (Match m in Link().Matches(text)) {
