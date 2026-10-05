@@ -106,6 +106,7 @@ public sealed class OtherEndpointTests(SiteFactory factory) : IClassFixture<Site
         var html = await _client.GetStringAsync("/about");
         Assert.Contains("<img class=\"site-logo\" src=\"/logo-80.png\" width=\"40\" height=\"40\" alt=\"\">", html);
         Assert.Contains("<link rel=\"apple-touch-icon\" href=\"/apple-touch-icon.png\">", html);
+        Assert.Contains("The bat logo is by spiky.fish.", Html.Text(html));
     }
 
     [Fact]
