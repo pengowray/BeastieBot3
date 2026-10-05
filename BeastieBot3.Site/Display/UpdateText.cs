@@ -5,7 +5,7 @@ namespace BeastieBot3.Site.Display;
 
 /// Strings of the status update page (/update). The three results are named the same way in the
 /// summary, the report table and the notes: "changed", "already up to date", "left as is".
-public static class UpdateText {
+public static partial class UpdateText {
     public const string Heading = "Update IUCN statuses in wikitext";
     public const string NavLink = "Update wikitext";
 
@@ -75,47 +75,6 @@ public static class UpdateText {
     public const string EditSummaryHelp = "A starting point for the edit summary on Wikipedia. Check it before you save.";
     public const string EditSummaryCredit = "assisted by Beastie Bot Species Status";
 
-    /// "IUCN Red List 2026-1: Panthera tigris VU→EN, Ursus maritimus EN→VU; 3 other IUCN statuses updated
-    /// (ids, years, references or trends); 2 IUCN citations updated (assisted by Beastie Bot Species Status)".
-    /// With more changes than fit in EditSummary.MaxListLength: "42 IUCN statuses changed (12 to EN,
-    /// 20 to VU, 10 to LC)". Null when nothing changed.
-    // Most threatened first; codes not listed come last.
-    private static int SeverityOrder(string code) {
-        var i = Array.FindIndex(SeverityCodes, c => string.Equals(c, code.Replace(" ", ""), StringComparison.OrdinalIgnoreCase));
-        return i < 0 ? SeverityCodes.Length : i;
-    }
-
-    private static readonly string[] SeverityCodes =
-        ["EX", "EW", "CR(PE)", "CR(PEW)", "CR", "EN", "VU", "LR/cd", "NT", "LR/nt", "LC", "LR/lc", "DD", "NE"];
-
-    public static string? EditSummary(string? version, IReadOnlyList<Update.EditSummary.CategoryChange> changes, int otherItems, int citations) {
-        if (changes.Count == 0 && otherItems == 0 && citations == 0) {
-            return null;
-        }
-        var parts = new List<string>();
-        if (changes.Count > 0) {
-            var list = string.Join(", ", changes.Select(c => $"{c.Name} {c.From}→{c.To}"));
-            if (list.Length > Update.EditSummary.MaxListLength) {
-                var byCategory = changes.GroupBy(c => c.To, StringComparer.OrdinalIgnoreCase)
-                    .OrderBy(g => SeverityOrder(g.Key))
-                    .Select(g => $"{Count(g.Count())} to {g.Key}");
-                list = $"{Count(changes.Count)} IUCN statuses changed ({string.Join(", ", byCategory)})";
-            }
-            parts.Add(list);
-        }
-        if (otherItems > 0) {
-            var other = changes.Count > 0 ? " other" : "";
-            var unchanged = changes.Count > 0 ? "" : "; categories unchanged";
-            parts.Add(otherItems == 1
-                ? $"1{other} IUCN status updated (ids, year, reference or trend{unchanged})"
-                : $"{Count(otherItems)}{other} IUCN statuses updated (ids, years, references or trends{unchanged})");
-        }
-        if (citations > 0) {
-            parts.Add(citations == 1 ? "1 IUCN citation updated" : $"{Count(citations)} IUCN citations updated");
-        }
-        var prefix = version is null ? "IUCN Red List" : $"IUCN Red List {version}";
-        return $"{prefix}: {string.Join("; ", parts)} ({EditSummaryCredit})";
-    }
     public const string OutputLabel = "Updated wikitext (read only)";
     public const string CopyOutputAccessible = "Copy updated wikitext";
     public const string NoChanges = "No items were changed. The updated wikitext is the same as the text you pasted.";
@@ -160,80 +119,6 @@ public static class UpdateText {
     public const string ColumnPopulationSuggested = "Suggested population";
 
     public static string PopulationIucnValue(string value, int? year) => year is { } y ? $"{value} ({y})" : value;
-
-    public static string Outcome(StatusOutcome outcome) => outcome switch {
-        StatusOutcome.Updated => "Changed",
-        StatusOutcome.Current => "Already up to date",
-        _ => "Left as is",
-    };
-
-    public static string OutcomeClass(StatusOutcome outcome) => outcome switch {
-        StatusOutcome.Updated => "outcome-updated",
-        StatusOutcome.Current => "outcome-current",
-        _ => "outcome-not-updated",
-    };
-
-    public static string Kind(StatusItemKind kind) => kind switch {
-        StatusItemKind.StatusTemplate => "{{IUCN status}} template",
-        StatusItemKind.TableCell => "Table cell",
-        StatusItemKind.ListLine => "List line",
-        StatusItemKind.SpeciesTableRow => "Species table row",
-        StatusItemKind.Citation => "{{cite iucn}}",
-        _ => "Taxobox",
-    };
-
-    public static string Note(StatusNote note, StatusItemKind kind) {
-        var several = note.Detail?.Contains(", ", StringComparison.Ordinal) == true;
-        return note.Kind switch {
-            StatusNoteKind.UsedCurrentTaxon => $"Old taxon id {note.Id} replaced with the current taxon id.",
-            StatusNoteKind.TaxonNotFound => $"No taxon on this site has taxon id {note.Id}.",
-            StatusNoteKind.NotInRelease => $"Taxon id {note.Id} is not in this Red List version, and no taxon in this version has the same scientific name.",
-            StatusNoteKind.NoGlobalAssessment => "No global assessment. This taxon has regional assessments only.",
-            StatusNoteKind.NoCode => $"The latest category, {note.Detail}, has no code in {{{{IUCN status}}}} or in taxoboxes.",
-            StatusNoteKind.NoTaxonId => "Taxon not found: the template has no taxon id and is not in a status column of a table. Add the taxon id and assessment id, such as 4828/21289898.",
-            StatusNoteKind.BadTaxonId => $"Could not read the ids \"{note.Detail}\". Expected taxon id/assessment id, such as 4828/21289898.",
-            StatusNoteKind.NoName when kind == StatusItemKind.Taxobox => "No scientific name found in the taxobox (taxon=, genus= and species=, binomial= or trinomial=).",
-            StatusNoteKind.NoName when kind == StatusItemKind.ListLine => "No scientific name found on this line before the template.",
-            StatusNoteKind.NoName when kind == StatusItemKind.SpeciesTableRow => "No scientific name found in the row's binomial or name.",
-            StatusNoteKind.NoName => "No scientific name found in this table row.",
-            StatusNoteKind.NameNotFound when several => $"No taxon in this Red List version has any of the names {note.Detail}.",
-            StatusNoteKind.NameNotFound => $"No taxon in this Red List version has the name {note.Detail}.",
-            StatusNoteKind.NameAmbiguous when several => $"Ambiguous names: {note.Detail} match {note.Id} taxa.",
-            StatusNoteKind.NameAmbiguous => $"Ambiguous name: {note.Detail} matches {note.Id} taxa.",
-            StatusNoteKind.OtherStatusSystem => $"status_system is {note.Detail}, which is not an IUCN system. Taxobox left as is.",
-            StatusNoteKind.UnknownStatusCode => $"status is {note.Detail}, which is not an IUCN category code.",
-            StatusNoteKind.StatusSystemAdded => "Added status_system, which was missing.",
-            StatusNoteKind.CitationReplaced => "Replaced the {{cite iucn}} in status_ref with a citation of the latest assessment.",
-            StatusNoteKind.RefNotChecked => "Check status_ref: it has no {{cite iucn}}, so it was not checked.",
-            StatusNoteKind.RefDefinedElsewhere => $"Check the reference \"{note.Detail}\": status_ref uses this named reference, which is defined elsewhere in the article. It was not checked.",
-            StatusNoteKind.NoStatusRef => "No status_ref: the status changed, and the taxobox has no reference for it. The taxon's page on this site has a {{cite iucn}} to copy.",
-            StatusNoteKind.NoCitation => "Check status_ref: it cites an older assessment, and this site has no citation for the latest assessment. status_ref was not changed.",
-            StatusNoteKind.PossiblyExtinctKept => $"Kept as \"CR\". The latest assessment is {note.Detail}.",
-            StatusNoteKind.IdsNotAdded => $"No ids. Add ids would add {note.Detail}.",
-            StatusNoteKind.YearNotAdded => $"No year. Add years would add year={note.Detail}.",
-            StatusNoteKind.IdsAdded => $"Added the ids {note.Detail}.",
-            StatusNoteKind.AssessmentIdNotAdded => $"No assessment id. Add ids would write {note.Detail}.",
-            StatusNoteKind.IdNotFoundMatchedByName => $"No taxon on this site has taxon id {note.Id}. Found by the scientific name {note.Detail} instead.",
-            StatusNoteKind.IdNotInReleaseMatchedByName => $"Taxon id {note.Id} is not in this Red List version. Found by the scientific name {note.Detail} instead.",
-            StatusNoteKind.YearAdded => $"Added year={note.Detail}.",
-            StatusNoteKind.CitationWithoutIds => "No assessment id (such as e.T22823A14871490) in article-number, id, url or doi, so the citation was not checked.",
-            StatusNoteKind.CitationOlder => "Cites an older assessment. Not replaced: select Replace citations above the result.",
-            StatusNoteKind.CitationUpdated => "Replaced with a citation of the latest assessment.",
-            StatusNoteKind.NoGenus => $"The binomial {note.Detail} is abbreviated, and no {{{{Species table}}}} above it gives the genus.",
-            StatusNoteKind.NoPopulationTrend => "direction not checked: the latest assessment has no population trend.",
-            StatusNoteKind.DirectionNotRecognised => $"direction not changed: it has no population trend template, such as {{{{decrease}}}}. To show the latest assessment's population trend, use {note.Detail}.",
-            StatusNoteKind.MatchedBySynonym => $"Matched by the synonym {note.Detail}. The Taxon column shows IUCN's name.",
-            StatusNoteKind.MatchedByCitation when note.Detail is not null =>
-                $"No name in this item matches exactly one IUCN taxon, so the taxon was found by the taxon id in the IUCN citation in the reference named \"{note.Detail}\".",
-            StatusNoteKind.MatchedByCitation =>
-                "No name in this item matches exactly one IUCN taxon, so the taxon was found by the taxon id in the IUCN citation on the same row or line.",
-            StatusNoteKind.MatchedByCommonName =>
-                $"Matched by the English common name “{note.Detail}”. The Taxon column shows IUCN's scientific name.",
-            StatusNoteKind.CommonNameNotUsed =>
-                $"The English common name “{note.Detail}” matches one taxon, but common names were not used. To use them, click Match common names above the result.",
-            _ => note.Kind.ToString(),
-        };
-    }
 
     private static string Count(int n) => n.ToString("N0", CultureInfo.InvariantCulture);
 
