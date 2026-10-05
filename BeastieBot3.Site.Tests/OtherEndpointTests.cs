@@ -90,6 +90,24 @@ public sealed class OtherEndpointTests(SiteFactory factory) : IClassFixture<Site
         Assert.Contains("Disallow: /api/", body);
     }
 
+    [Theory]
+    [InlineData("/favicon.ico")]
+    [InlineData("/favicon-32x32.png")]
+    [InlineData("/apple-touch-icon.png")]
+    [InlineData("/logo-80.png")]
+    [InlineData("/site.webmanifest")]
+    public async Task IconsAreServed(string path) {
+        var response = await _client.GetAsync(path);
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task HeaderHasTheLogo() {
+        var html = await _client.GetStringAsync("/about");
+        Assert.Contains("<img class=\"site-logo\" src=\"/logo-80.png\" width=\"40\" height=\"40\" alt=\"\">", html);
+        Assert.Contains("<link rel=\"apple-touch-icon\" href=\"/apple-touch-icon.png\">", html);
+    }
+
     [Fact]
     public async Task AboutPage() {
         var html = await _client.GetStringAsync("/about");

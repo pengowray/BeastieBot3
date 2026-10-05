@@ -22,7 +22,12 @@
     @if (ViewData["NoIndex"] is true) {
         <meta name="robots" content="noindex">
     }
-    <link rel="icon" href="/favicon.svg" type="image/svg+xml">
+    @* The bat is Oversample's logo, art commissioned by the site's author. *@
+    <link rel="icon" href="/favicon.ico">
+    <link rel="icon" href="/favicon-32x32.png" sizes="32x32" type="image/png">
+    <link rel="icon" href="/favicon-16x16.png" sizes="16x16" type="image/png">
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png">
+    <link rel="manifest" href="/site.webmanifest">
     @* Not deferred: theme.js sets the theme chosen in this browser before the page is drawn. *@
     <script src="~/theme.js" asp-append-version="true"></script>
     <link rel="stylesheet" href="~/site.css" asp-append-version="true">
@@ -32,7 +37,7 @@
     <a class="skip-link" href="#main">@SiteText.SkipToContent</a>
     <header class="site-header">
         <div class="wrap header-row">
-            <a class="site-name" href="/">@SiteText.SiteName</a>
+            <a class="site-name" href="/"><img class="site-logo" src="/logo-80.png" width="40" height="40" alt="">@SiteText.SiteName</a>
             @if (!hideHeaderSearch) {
                 <partial name="_SearchForm" model="@(new SearchFormModel(ViewData["Query"] as string, "header"))" />
             }

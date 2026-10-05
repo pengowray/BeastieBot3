@@ -226,9 +226,18 @@ h3 {
 }
 
 .site-name {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.5rem;
     font-weight: 700;
     color: var(--fg);
     text-decoration: none;
+}
+
+.site-logo {
+    flex: none;
+    width: 40px;
+    height: 40px;
 }
 
 .site-name:visited {
