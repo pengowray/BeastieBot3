@@ -1157,8 +1157,8 @@ colspan and rowspan; `StatusUpdater` decides the edits), and reads the database 
 - The updated wikitext is in a read-only box of fixed height (24rem, at most 70% of the window)
   that scrolls, with its own colours (`--output-bg`, `--output-border`) and "(read only)" in its
   label, so it is not taken for the box text is pasted into; `site.js` grows every other wikitext
-  box to fit. The report shows the changed items first, with radio buttons for the items left as is
-  and for all items; when nothing changed, it starts with the items left as is. The filter is CSS
+  box to fit. The report shows the changed items first, with radio buttons for the items already up to
+  date, the items left as is and all items; when nothing changed, it starts with the items left as is. The filter is CSS
   (`:has`), with no script and no state.
 - Only the values that change are replaced; everything else comes back byte for byte. At most 3,600
   items (`GroupList.MaxLines`) are checked; the rest are counted and left as they are.

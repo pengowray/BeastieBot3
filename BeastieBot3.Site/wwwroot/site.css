@@ -1238,6 +1238,7 @@ th.num {
 }
 
 .update-findings:has(#show-changed:checked) .update-report tbody tr:not(.outcome-updated),
+.update-findings:has(#show-current:checked) .update-report tbody tr:not(.outcome-current),
 .update-findings:has(#show-left:checked) .update-report tbody tr:not(.outcome-not-updated) {
     display: none;
 }

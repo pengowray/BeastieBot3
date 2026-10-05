@@ -87,6 +87,7 @@
         @if (result.Findings.Count > 0) {
             var changedCount = result.Findings.Count(f => f.Outcome == StatusOutcome.Updated);
             var leftCount = result.Findings.Count(f => f.Outcome == StatusOutcome.NotUpdated);
+            var currentCount = result.Findings.Count(f => f.Outcome == StatusOutcome.Current);
             var show = changedCount > 0 ? "changed" : leftCount > 0 ? "left" : "all";
             <div class="update-findings">
             <h3 id="report-heading">@UpdateText.ReportHeading</h3>
@@ -95,6 +96,7 @@
             <fieldset class="update-filter">
                 <legend>@UpdateText.FilterLegend</legend>
                 <label><input type="radio" name="show" id="show-changed" checked="@(show == "changed")"> @UpdateText.FilterChanged(changedCount)</label>
+                <label><input type="radio" name="show" id="show-current"> @UpdateText.FilterCurrent(currentCount)</label>
                 <label><input type="radio" name="show" id="show-left" checked="@(show == "left")"> @UpdateText.FilterLeft(leftCount)</label>
                 <label><input type="radio" name="show" id="show-all" checked="@(show == "all")"> @UpdateText.FilterAll(result.Findings.Count)</label>
             </fieldset>

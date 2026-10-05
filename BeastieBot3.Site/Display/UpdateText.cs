@@ -46,7 +46,7 @@ public static class UpdateText {
     public const string OptionIds = "Add the taxon id and assessment id to {{IUCN status}} templates that lack them";
     public const string OptionYear = "Add year= to {{IUCN status}} templates that have no year";
     public const string OptionCitations = "Replace {{cite iucn}} citations of older assessments with citations of the latest ones";
-    public const string OptionCommonNames = "Find a taxon by its English common name when no scientific name in the row or line is one IUCN uses";
+    public const string OptionCommonNames = "Match common names: when no scientific name in an item matches IUCN's, find the taxon by its English common name, if only one taxon has that name";
 
     // Offers above the result, shown when an option that is off would change items.
     public static string OfferPossiblyExtinct(int n) =>
@@ -64,8 +64,8 @@ public static class UpdateText {
         n == 1 ? "1 {{cite iucn}} cites an older assessment." : $"{Count(n)} {{{{cite iucn}}}} citations cite older assessments.";
     public const string OfferCitationsButton = "Replace citations";
     public static string OfferCommonNames(int n) =>
-        n == 1 ? "1 item has no scientific name that IUCN uses, but has an English common name of one taxon."
-            : $"{Count(n)} items have no scientific name that IUCN uses, but have an English common name of one taxon.";
+        n == 1 ? "1 item was not found by scientific name. Its English common name matches one taxon."
+            : $"{Count(n)} items were not found by scientific name. Their English common names each match one taxon.";
     public const string OfferCommonNamesButton = "Match common names";
 
     public const string ResultHeading = "Result";
@@ -75,8 +75,8 @@ public static class UpdateText {
     public const string EditSummaryHelp = "A starting point for the edit summary on Wikipedia. Check it before you save.";
     public const string EditSummaryCredit = "assisted by Beastie Bot Species Status";
 
-    /// "IUCN Red List 2026-1: Panthera tigris VU→EN, Ursus maritimus EN→VU; 3 more status entries updated
-    /// (ids, years or references); 2 IUCN citations updated (assisted by Beastie Bot Species Status)".
+    /// "IUCN Red List 2026-1: Panthera tigris VU→EN, Ursus maritimus EN→VU; 3 other IUCN statuses updated
+    /// (ids, years, references or trends); 2 IUCN citations updated (assisted by Beastie Bot Species Status)".
     /// With more changes than fit in EditSummary.MaxListLength: "42 IUCN statuses changed (12 to EN,
     /// 20 to VU, 10 to LC)". Null when nothing changed.
     // Most threatened first; codes not listed come last.
@@ -104,10 +104,11 @@ public static class UpdateText {
             parts.Add(list);
         }
         if (otherItems > 0) {
-            var more = changes.Count > 0 ? " more" : "";
+            var other = changes.Count > 0 ? " other" : "";
+            var unchanged = changes.Count > 0 ? "" : "; categories unchanged";
             parts.Add(otherItems == 1
-                ? $"1{more} status entry updated (ids, year or reference)"
-                : $"{Count(otherItems)}{more} status entries updated (ids, years or references)");
+                ? $"1{other} IUCN status updated (ids, year, reference or trend{unchanged})"
+                : $"{Count(otherItems)}{other} IUCN statuses updated (ids, years, references or trends{unchanged})");
         }
         if (citations > 0) {
             parts.Add(citations == 1 ? "1 IUCN citation updated" : $"{Count(citations)} IUCN citations updated");
@@ -140,6 +141,7 @@ public static class UpdateText {
     public const string ReportHeading = "Items found";
     public const string FilterLegend = "Show:";
     public static string FilterChanged(int n) => $"Changed ({Count(n)})";
+    public static string FilterCurrent(int n) => $"Already up to date ({Count(n)})";
     public static string FilterLeft(int n) => $"Left as is ({Count(n)})";
     public static string FilterAll(int n) => $"All items ({Count(n)})";
     public const string ColumnLine = "Line";
@@ -220,12 +222,15 @@ public static class UpdateText {
             StatusNoteKind.NoGenus => $"The binomial {note.Detail} is abbreviated, and no {{{{Species table}}}} above it gives the genus.",
             StatusNoteKind.NoPopulationTrend => "direction not checked: the latest assessment has no population trend.",
             StatusNoteKind.DirectionNotRecognised => $"direction not changed: it has no population trend template, such as {{{{decrease}}}}. To show the latest assessment's population trend, use {note.Detail}.",
-            StatusNoteKind.MatchedBySynonym => $"Found by the synonym {note.Detail}. The Taxon column has IUCN's name.",
+            StatusNoteKind.MatchedBySynonym => $"Matched by the synonym {note.Detail}. The Taxon column shows IUCN's name.",
             StatusNoteKind.MatchedByCitation when note.Detail is not null =>
-                $"Found by the taxon id in the IUCN citation of reference \"{note.Detail}\", not by name.",
-            StatusNoteKind.MatchedByCitation => "Found by the taxon id in the IUCN citation in the row or line, not by name.",
-            StatusNoteKind.MatchedByCommonName => $"Found by the English common name {note.Detail}. The Taxon column has IUCN's name.",
-            StatusNoteKind.CommonNameNotUsed => $"The English common name {note.Detail} names one taxon. Not used: select Match common names above the result.",
+                $"No name in this item matches exactly one IUCN taxon, so the taxon was found by the taxon id in the IUCN citation in the reference named \"{note.Detail}\".",
+            StatusNoteKind.MatchedByCitation =>
+                "No name in this item matches exactly one IUCN taxon, so the taxon was found by the taxon id in the IUCN citation on the same row or line.",
+            StatusNoteKind.MatchedByCommonName =>
+                $"Matched by the English common name “{note.Detail}”. The Taxon column shows IUCN's scientific name.",
+            StatusNoteKind.CommonNameNotUsed =>
+                $"The English common name “{note.Detail}” matches one taxon, but common names were not used. To use them, click Match common names above the result.",
             _ => note.Kind.ToString(),
         };
     }
