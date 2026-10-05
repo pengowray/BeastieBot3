@@ -309,4 +309,13 @@ public sealed class HomeAndSearchTests(SiteFactory factory) : IClassFixture<Site
         var json = await _client.GetStringAsync($"/api/suggest?q=T{FixtureDb.PolarBear}");
         Assert.Contains($"\"taxonId\":{FixtureDb.PolarBear}", json);
     }
+
+    [Fact]
+    public async Task ATaxonIdWithAnotherTaxonsAssessmentIdListsBoth() {
+        var response = await _client.GetAsync($"/search?q=T{FixtureDb.Tiger}A{FixtureDb.PolarBear2008}");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var text = Html.Text(await response.Content.ReadAsStringAsync());
+        Assert.Contains($"Matched IUCN taxon ID: {FixtureDb.Tiger}", text);
+        Assert.Contains($"Matched IUCN assessment ID: {FixtureDb.PolarBear2008}", text);
+    }
 }

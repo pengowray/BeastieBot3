@@ -294,7 +294,8 @@ public sealed class SiteQueries {
             }
         }
         var taxonId = query.TaxonId ?? query.Number;
-        var skipTaxon = query.TaxonId is not null && query.AssessmentId is not null && assessmentHit is not null;
+        // The taxon is listed too when the assessment belongs to another taxon.
+        var skipTaxon = query.TaxonId is not null && query.AssessmentId is not null && assessmentHit?.Taxon.TaxonId == query.TaxonId;
         if (taxonId is { } tid && !skipTaxon) {
             using var command = connection.CreateCommand();
             command.CommandText = $"SELECT {SummaryColumns} FROM taxon t {SummaryJoin} WHERE t.taxon_id = @id";
