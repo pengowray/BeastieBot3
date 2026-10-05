@@ -41,6 +41,8 @@ public sealed partial class StatusUpdater {
     // The table row each {{IUCN status}} in a table cell is in, for finding its taxon by name when its
     // taxon id is unknown. Filled by Update.
     private readonly Dictionary<WikiTemplate, TableRow> _rowOf = [];
+    // Species table rows whose population differs from IUCN's. Filled by Update.
+    private readonly List<PopulationSuggestion> _populations = [];
 
     public StatusUpdater(IStatusLookup lookup, DateOnly today, int maxItems = DefaultMaxItems, StatusUpdateOptions? options = null) {
         _lookup = lookup;
@@ -61,6 +63,7 @@ public sealed partial class StatusUpdater {
     public StatusUpdateResult Update(string text) {
         var scanner = new WikitextScanner(text);
         _rowOf.Clear();
+        _populations.Clear();
         _genusLines = null;
         var candidates = new List<Candidate>();
         // {{IUCN status}} templates inside a taxobox's status parameters belong to the taxobox.
@@ -138,7 +141,7 @@ public sealed partial class StatusUpdater {
             findings.Add(finding);
             edits.AddRange(itemEdits);
         }
-        return new StatusUpdateResult(Apply(text, edits), findings, Math.Max(0, candidates.Count - _maxItems));
+        return new StatusUpdateResult(Apply(text, edits), findings, Math.Max(0, candidates.Count - _maxItems), [.. _populations]);
     }
 
     // ---------------------------------------------------------------- {{IUCN status}} with ids

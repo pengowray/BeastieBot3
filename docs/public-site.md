@@ -1030,9 +1030,16 @@ colspan and rowspan; `StatusUpdater` decides the edits), and reads the database 
   1,245 `direction` values in 10 family lists in October 2026). Only the trend template is replaced,
   so the `<ref>` after it stays; a template with the same trend (any label, capitals or redirect,
   such as `{{Down}}`) is kept as written; an empty `direction` is filled; a `direction` with no trend
-  template, or a taxon with no trend, is left with a note. `population` is not changed: the site
-  database has no population size (IUCN's `supplementary_info.population_size` is set for about 10%
-  of latest assessments, in forms such as `U` and `50-400,90-250`).
+  template, or a taxon with no trend, is left with a note. `population` is not changed. A row whose
+  `population` differs from IUCN's number of mature individuals (`assessment.population_size`, from
+  the payload's `supplementary_info.population_size`: a range, a number, a range and a best estimate
+  `500000-999999,800000`, two ranges, or `U`) is listed under "Population differences" with a
+  suggested value (`PopulationValues`): the first part of IUCN's value written as the tables write
+  numbers ("500,000–999,999"), or "Unknown" for `U`. A row agrees when its number or range matches
+  any part of IUCN's value end by end, allowing the row's own rounding within 5% (2,200 for 2177) and
+  a band's upper end one lower (2,500–10,000 for `2500-9999`); references and `{{efn}}` notes are
+  ignored. A taxon with no population size gives no row. In October 2026 this listed 0 to 8 rows in
+  each of 6 family lists. `range`, `size`, `habitat` and `diet` are not checked; the page says so.
 - `{{cite iucn}}` anywhere outside a taxobox's `status_ref`: found by the T…A… id in
   `|article-number=`, `|id=`, `|url=` or `|doi=`. A citation of a regional assessment is skipped. A
   citation of an older global assessment is reported, and replaced only when the reader asks.

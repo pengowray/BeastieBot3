@@ -150,6 +150,13 @@ public sealed partial class StatusUpdater {
         if (latest is null) {
             return Fail(StatusNoteKind.NoGlobalAssessment, taxon: taxon);
         }
+        if (row.Named("population") is { } population) {
+            var value = s.Original(s.Core(population.Value));
+            if (PopulationValues.Suggest(value, latest.PopulationSize) is { } suggested) {
+                _populations.Add(new PopulationSuggestion(s.LineOf(population.PipePosition), taxon, PopulationValues.Clean(value),
+                    latest.PopulationSize!, latest.YearPublished, suggested));
+            }
+        }
         if (!IucnCategories.HasStatusTemplateCode(latest)) {
             return Fail(StatusNoteKind.NoCode, latest.Category, taxon);
         }

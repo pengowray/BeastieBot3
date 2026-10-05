@@ -135,6 +135,8 @@ internal sealed class SiteAssessment {
     public int? YearPublished { get; init; }
     public string? AssessmentDate { get; init; }
     public string? PopulationTrend { get; set; }
+    /// The number of mature individuals as IUCN publishes it ('1000-1200', '500000-999999,800000', 'U'); null when not given.
+    public string? PopulationSize { get; set; }
     public string? CitationJson { get; set; }
     /// Whether the cached payload's taxonomic notes have text; null when there is no payload.
     public bool? HasTaxonomicNotes { get; set; }

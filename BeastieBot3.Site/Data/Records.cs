@@ -51,7 +51,8 @@ public sealed record AssessmentRow(
     string? WikidataItemProperties = null,
     string? WikidataItemTitles = null,
     string? WikidataItemLabelEn = null,
-    long? WikidataItemAssessmentId = null) {
+    long? WikidataItemAssessmentId = null,
+    string? PopulationSize = null) {
     public bool IsGlobal => string.Equals(Scope.Trim(), "Global", StringComparison.OrdinalIgnoreCase);
 }
 

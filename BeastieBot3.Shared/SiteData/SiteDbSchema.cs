@@ -8,7 +8,7 @@ namespace BeastieBot3.Shared.SiteData;
 // narrative text (rationale, range, threats ...), no coded threats/habitats/countries, no downloads.
 // Keep such fields out of this database rather than hiding them in the site.
 public static class SiteDbSchema {
-    public const int Version = 9;
+    public const int Version = 10;
 
     public const string Ddl = """
         CREATE TABLE meta (
@@ -165,6 +165,9 @@ public static class SiteDbSchema {
             year_published               INTEGER,
             assessment_date              TEXT,                -- 'yyyy-MM-dd'
             population_trend             TEXT,                -- 'Increasing' | 'Decreasing' | 'Stable' | 'Unknown'; NULL when not given
+            population_size              TEXT,                -- number of mature individuals as IUCN publishes it (supplementary_info.population_size):
+                                                              -- '1000-1200', '2177', '500000-999999,800000' (range, best estimate), 'U' (unknown);
+                                                              -- NULL when not given or the payload is not cached
             citation_json                TEXT,                -- IucnCitationParts as JSON; NULL when the API payload is not cached
             replaced_by_assessment_id    INTEGER,             -- the errata or amended version that replaced this assessment; NULL otherwise
             has_taxonomic_notes          INTEGER,             -- 1: the cached payload's documentation.taxonomic_notes has text; 0: empty or missing;

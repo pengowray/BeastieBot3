@@ -32,7 +32,7 @@ public static class UpdateText {
     public const string IntroLists = ", such as * [[Aye-aye]], ''Daubentonia madagascariensis'' {{IUCN status|EN}}: the code. The taxon is found by the scientific name earlier on the line.";
 
     public const string IntroSpeciesTablesTitle = "Species tables";
-    public const string IntroSpeciesTables = ": the iucn-status and direction parameters of {{Species table/row}}. direction is set to the latest assessment's population trend, such as {{decrease|Population declining}}, and the reference after it is kept. The taxon is found by the row's binomial, with the genus from the {{Species table}} above it.";
+    public const string IntroSpeciesTables = ": the iucn-status and direction parameters of {{Species table/row}}. direction is set to the latest assessment's population trend, such as {{decrease|Population declining}}, and the reference after it is kept. population is not changed: when it differs from the number of mature individuals in the latest assessment, the row is listed under \"Population differences\" after the Items found table. range, size, habitat and diet are not checked. The taxon is found by the row's binomial, with the genus from the {{Species table}} above it.";
 
     public static string IntroLimits(int maxItems) =>
         $"Limits: 2 MB of text and {Count(maxItems)} items. Items after the first {Count(maxItems)} are left as they are.";
@@ -95,6 +95,15 @@ public static class UpdateText {
     public const string ColumnTaxon = "Taxon";
     public const string ColumnNotes = "Notes";
 
+    public const string PopulationHeading = "Population differences";
+    public const string PopulationIntro = "In these rows, population differs from the number of mature individuals in the latest global assessment and was not changed, because IUCN often gives a band such as 2,500\u20139,999 or a best estimate with a range.";
+    public const string PopulationKey = "IUCN mature individuals is the value as IUCN publishes it, with the year of the assessment. U means unknown. A number after a comma is a best estimate or a second range.";
+    public const string ColumnPopulationNow = "Population now";
+    public const string ColumnPopulationIucn = "IUCN mature individuals";
+    public const string ColumnPopulationSuggested = "Suggested population";
+
+    public static string PopulationIucnValue(string value, int? year) => year is { } y ? $"{value} ({y})" : value;
+
     public static string Outcome(StatusOutcome outcome) => outcome switch {
         StatusOutcome.Updated => "Changed",
         StatusOutcome.Current => "Already up to date",
@@ -155,7 +164,7 @@ public static class UpdateText {
             StatusNoteKind.CitationUpdated => "Replaced with a citation of the latest assessment.",
             StatusNoteKind.NoGenus => $"The binomial {note.Detail} is abbreviated, and no {{{{Species table}}}} above it gives the genus.",
             StatusNoteKind.NoPopulationTrend => "direction not checked: the latest assessment has no population trend.",
-            StatusNoteKind.DirectionNotRecognised => $"direction not changed: it has no population trend template, such as {{{{decrease}}}}. The latest assessment's trend is {note.Detail}.",
+            StatusNoteKind.DirectionNotRecognised => $"direction not changed: it has no population trend template, such as {{{{decrease}}}}. To show the latest assessment's population trend, use {note.Detail}.",
             _ => note.Kind.ToString(),
         };
     }

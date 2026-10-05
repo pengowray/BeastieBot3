@@ -105,6 +105,36 @@
                 </table>
             </div>
         }
+
+        @if (result.Populations.Count > 0) {
+            <h3 id="population-heading">@UpdateText.PopulationHeading</h3>
+            <p>@UpdateText.PopulationIntro</p>
+            <p class="help">@UpdateText.PopulationKey</p>
+            <div class="table-scroll">
+                <table class="update-report" aria-labelledby="population-heading">
+                    <thead>
+                        <tr>
+                            <th scope="col">@UpdateText.ColumnLine</th>
+                            <th scope="col">@UpdateText.ColumnTaxon</th>
+                            <th scope="col">@UpdateText.ColumnPopulationNow</th>
+                            <th scope="col">@UpdateText.ColumnPopulationIucn</th>
+                            <th scope="col">@UpdateText.ColumnPopulationSuggested</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var p in result.Populations) {
+                            <tr>
+                                <td>@p.Line.ToString("N0", System.Globalization.CultureInfo.InvariantCulture)</td>
+                                <td><a href="/species/@p.Taxon.TaxonId">@Html.Raw(ScientificNameMarkup.ToHtml(p.Taxon.ScientificName))</a></td>
+                                <td><code class="update-code">@p.Current</code></td>
+                                <td>@UpdateText.PopulationIucnValue(p.IucnValue, p.Year)</td>
+                                <td><code class="update-code">@p.Suggested</code></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
     </section>
 }
 

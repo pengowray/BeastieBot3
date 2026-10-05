@@ -131,8 +131,10 @@ public sealed record StatusFinding(
     IReadOnlyList<StatusNote> Notes);
 
 /// Text: the input with the updates applied. Findings: in the order of the text. NotChecked: items
-/// found after the first MaxItems, which were left as they are.
-public sealed record StatusUpdateResult(string Text, IReadOnlyList<StatusFinding> Findings, int NotChecked) {
+/// found after the first MaxItems, which were left as they are. Populations: species table rows whose
+/// population differs from IUCN's number of mature individuals, which are listed and not changed.
+public sealed record StatusUpdateResult(string Text, IReadOnlyList<StatusFinding> Findings, int NotChecked,
+    IReadOnlyList<PopulationSuggestion> Populations) {
     /// How many items have a note of this kind: used to offer an option that would change them.
     public int CountNotes(StatusNoteKind kind) => Findings.Count(f => f.Notes.Any(n => n.Kind == kind));
 

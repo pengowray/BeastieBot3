@@ -270,6 +270,7 @@ internal sealed class SiteAssessmentPass {
                 assessment.PopulationTrend = PopulationTrend(root);
                 assessment.CriteriaVersion = CriteriaVersion(root);
             }
+            assessment.PopulationSize = PopulationSize(root);
             assessment.HasTaxonomicNotes = HasTaxonomicNotes(root);
             if (assessment.HasTaxonomicNotes == true) {
                 _stats.PayloadsWithTaxonomicNotes++;
@@ -457,6 +458,14 @@ internal sealed class SiteAssessmentPass {
         }
         return SiteBuildRules.NullIfBlank(SiteApiTaxaReader.ReadString(description, "en"));
     }
+
+    // supplementary_info.population_size: '1000-1200', '500000-999999,800000', 'U', or null. The CSV
+    // export does not have it, so it is read for CSV rows too.
+    private static string? PopulationSize(JsonElement root) =>
+        root.ValueKind == JsonValueKind.Object
+        && root.TryGetProperty("supplementary_info", out var info) && info.ValueKind == JsonValueKind.Object
+            ? SiteBuildRules.NullIfBlank(SiteApiTaxaReader.ReadString(info, "population_size")?.Trim())
+            : null;
 
     // red_list_category: {"version": "3.1", "description": {...}, "code": "VU"}
     private static string? CriteriaVersion(JsonElement root) {

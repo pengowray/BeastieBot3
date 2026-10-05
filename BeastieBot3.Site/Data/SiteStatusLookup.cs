@@ -25,7 +25,7 @@ public sealed class SiteStatusLookup : IStatusLookup, IDisposable {
             SELECT t.taxon_id, t.scientific_name, t.in_release, t.current_taxon_id,
                    a.assessment_id, a.taxon_id, a.scope, a.is_latest, a.category, a.possibly_extinct,
                    a.possibly_extinct_in_the_wild, a.criteria, a.criteria_version, a.year_published,
-                   a.assessment_date, a.population_trend, a.citation_json
+                   a.assessment_date, a.population_trend, a.citation_json, a.population_size
             FROM taxon t
             LEFT JOIN assessment a ON a.assessment_id = t.latest_global_assessment_id
             WHERE t.taxon_id = @id
@@ -48,7 +48,8 @@ public sealed class SiteStatusLookup : IStatusLookup, IDisposable {
                 reader.IsDBNull(13) ? null : reader.GetInt32(13),
                 Text(reader, 14),
                 Text(reader, 15),
-                Text(reader, 16));
+                Text(reader, 16),
+                PopulationSize: Text(reader, 17));
             taxon = new StatusTaxon(reader.GetInt64(0), reader.GetString(1), inRelease,
                 reader.IsDBNull(3) ? null : reader.GetInt64(3), latest);
         }

@@ -11,9 +11,10 @@ internal sealed class FakeStatusLookup : IStatusLookup {
     private readonly List<(string Key, long TaxonId, bool Synonym)> _names = [];
 
     public FakeStatusLookup Taxon(long id, string name, string? category, int? year = null, long? assessmentId = null,
-        bool inRelease = true, long? current = null, bool pe = false, string? criteriaVersion = "3.1", string? citationJson = null, string? trend = null) {
+        bool inRelease = true, long? current = null, bool pe = false, string? criteriaVersion = "3.1", string? citationJson = null, string? trend = null,
+        string? populationSize = null) {
         AssessmentRow? latest = category is null ? null : new AssessmentRow(assessmentId ?? id * 10, id, "Global", true, category, pe, false,
-            null, criteriaVersion, year, null, trend, citationJson);
+            null, criteriaVersion, year, null, trend, citationJson, PopulationSize: populationSize);
         _taxa[id] = new StatusTaxon(id, name, inRelease, current, inRelease ? latest : null);
         if (inRelease) {
             _names.Add((SiteNameKey.Fold(name), id, false));
@@ -639,6 +640,39 @@ public sealed class StatusUpdaterTests {
         var note = Assert.Single(Assert.Single(noTemplate.Findings).Notes);
         Assert.Equal(StatusNoteKind.DirectionNotRecognised, note.Kind);
         Assert.Equal("{{decrease|Population declining}}", note.Detail);
+    }
+
+    [Theory]
+    [InlineData("Unknown", "1000-1200", "1,000\u20131,200")]
+    [InlineData("Unknown<ref name=\"x\"/>", "500000-999999,800000", "500,000\u2013999,999")]
+    [InlineData("2,500", "U", "Unknown")]
+    [InlineData("3,000", "2177", "2,177")]
+    [InlineData("Unknown", "U", null)]
+    [InlineData("Unknown", null, null)]
+    [InlineData("8,000\u201310,000", "8000-10000", null)]
+    [InlineData("8,000&ndash;10,000", "8000-10000", null)]
+    [InlineData("2,500\u201310,000", "2500-9999", null)]
+    [InlineData("2,500 to 5,000", "2500-9999,2500-5000", null)]
+    [InlineData("800,000", "500000-999999,800000", null)]
+    [InlineData("about 50", "0-1,.5", null)]
+    [InlineData("2,200", "2177", null)]
+    [InlineData("9,000\u201310,000", "8932-10208", null)]
+    [InlineData("1,700\u20132,500", "1750-2450", null)]
+    [InlineData("2,300\u20134,600", "2360-4560", "2,360\u20134,560")]
+    [InlineData("10,000", "14000", "14,000")]
+    [InlineData("11,200{{efn|Not counting farms.}}", "11158", null)]
+    public void PopulationSuggestion(string current, string? iucn, string? suggested) =>
+        Assert.Equal(suggested, PopulationValues.Suggest(current, iucn));
+
+    [Fact]
+    public void SpeciesTableRowPopulationIsListedAndNotChanged() {
+        var lookup = new FakeStatusLookup().Taxon(15955, "Panthera tigris", "EN", 2022, 214862019, trend: "Increasing",
+            populationSize: "2608-3905");
+        var text = TigerRow("{{increase|Population increasing}}");
+        var result = Run(text, lookup);
+        Assert.Equal(text, result.Text);
+        var p = Assert.Single(result.Populations);
+        Assert.Equal(("Unknown", "2608-3905", 2022, "2,608\u20133,905", 4), (p.Current, p.IucnValue, p.Year, p.Suggested, p.Line));
     }
 
     // ---------------------------------------------------------------- {{cite iucn}}

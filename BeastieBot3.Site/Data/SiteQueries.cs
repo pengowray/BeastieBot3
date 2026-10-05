@@ -153,7 +153,8 @@ public sealed class SiteQueries {
             SELECT assessment_id, taxon_id, scope, is_latest, category, possibly_extinct,
                    possibly_extinct_in_the_wild, criteria, criteria_version, year_published,
                    assessment_date, population_trend, citation_json, replaced_by_assessment_id,
-                   wikidata_item_qid, wikidata_item_properties, wikidata_item_titles, wikidata_item_label_en, wikidata_item_assessment_id
+                   wikidata_item_qid, wikidata_item_properties, wikidata_item_titles, wikidata_item_label_en, wikidata_item_assessment_id,
+                   population_size
             FROM assessment
             WHERE taxon_id = @id
             ORDER BY year_published DESC, assessment_date DESC, assessment_id DESC
@@ -181,7 +182,8 @@ public sealed class SiteQueries {
                 Text(reader, 15),
                 Text(reader, 16),
                 Text(reader, 17),
-                Long(reader, 18)));
+                Long(reader, 18),
+                Text(reader, 19)));
         }
         return rows;
     }

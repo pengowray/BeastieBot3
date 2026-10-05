@@ -60,14 +60,14 @@ internal sealed class SiteDbWriter : IDisposable {
             "@node_id", "@tree_pos", "@list_article_title", "@list_parent_article_title");
         _assessment = Prepare("""
             INSERT INTO assessment (assessment_id, taxon_id, scope, is_latest, category, possibly_extinct,
-                possibly_extinct_in_the_wild, criteria, criteria_version, year_published, assessment_date, population_trend, citation_json,
+                possibly_extinct_in_the_wild, criteria, criteria_version, year_published, assessment_date, population_trend, population_size, citation_json,
                 has_taxonomic_notes, wikidata_item_qid, wikidata_item_properties, wikidata_item_titles, wikidata_item_label_en, wikidata_item_assessment_id)
             VALUES (@assessment_id, @taxon_id, @scope, @is_latest, @category, @possibly_extinct,
-                @possibly_extinct_in_the_wild, @criteria, @criteria_version, @year_published, @assessment_date, @population_trend, @citation_json,
+                @possibly_extinct_in_the_wild, @criteria, @criteria_version, @year_published, @assessment_date, @population_trend, @population_size, @citation_json,
                 @has_taxonomic_notes, @wikidata_item_qid, @wikidata_item_properties, @wikidata_item_titles, @wikidata_item_label_en, @wikidata_item_assessment_id)
             """,
             "@assessment_id", "@taxon_id", "@scope", "@is_latest", "@category", "@possibly_extinct",
-            "@possibly_extinct_in_the_wild", "@criteria", "@criteria_version", "@year_published", "@assessment_date", "@population_trend", "@citation_json",
+            "@possibly_extinct_in_the_wild", "@criteria", "@criteria_version", "@year_published", "@assessment_date", "@population_trend", "@population_size", "@citation_json",
             "@has_taxonomic_notes", "@wikidata_item_qid", "@wikidata_item_properties", "@wikidata_item_titles", "@wikidata_item_label_en", "@wikidata_item_assessment_id");
         _name = Prepare("""
             INSERT INTO name (name_id, taxon_id, name, name_type, language, source, is_preferred)
@@ -127,7 +127,7 @@ internal sealed class SiteDbWriter : IDisposable {
     public void AddAssessment(SiteAssessment a) {
         Bind(_assessment, a.AssessmentId, a.TaxonId, a.Scope, a.IsLatest ? 1 : 0, a.Category, a.PossiblyExtinct ? 1 : 0,
             a.PossiblyExtinctInTheWild ? 1 : 0, a.Criteria, a.CriteriaVersion, a.YearPublished, a.AssessmentDate,
-            a.PopulationTrend, a.CitationJson, a.HasTaxonomicNotes is { } notes ? (notes ? 1 : 0) : null, a.WikidataItemQid, a.WikidataItemProperties,
+            a.PopulationTrend, a.PopulationSize, a.CitationJson, a.HasTaxonomicNotes is { } notes ? (notes ? 1 : 0) : null, a.WikidataItemQid, a.WikidataItemProperties,
             a.WikidataItemTitles, a.WikidataItemLabelEn, a.WikidataItemAssessmentId);
         _assessment.ExecuteNonQuery();
     }
