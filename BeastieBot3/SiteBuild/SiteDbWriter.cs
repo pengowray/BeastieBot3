@@ -45,16 +45,19 @@ internal sealed class SiteDbWriter : IDisposable {
             INSERT INTO taxon (taxon_id, scientific_name, kind, kingdom, phylum, class_name, order_name, family, genus,
                 species_epithet, infra_rank, infra_name, subpopulation_name, authority, parent_taxon_id, common_name_en,
                 enwiki_title, wikidata_qid, wikidata_qid_source, wikidata_p141, wikidata_item_downloaded, wikidata_p627_deprecated,
-                wikidata_other_items, col_id, latest_global_assessment_id, in_release, current_taxon_id)
+                wikidata_other_items, col_id, latest_global_assessment_id, in_release, current_taxon_id,
+                node_id, tree_pos, list_article_title, list_parent_article_title)
             VALUES (@taxon_id, @scientific_name, @kind, @kingdom, @phylum, @class_name, @order_name, @family, @genus,
                 @species_epithet, @infra_rank, @infra_name, @subpopulation_name, @authority, @parent_taxon_id, @common_name_en,
                 @enwiki_title, @wikidata_qid, @wikidata_qid_source, @wikidata_p141, @wikidata_item_downloaded, @wikidata_p627_deprecated,
-                @wikidata_other_items, @col_id, @latest_global_assessment_id, @in_release, @current_taxon_id)
+                @wikidata_other_items, @col_id, @latest_global_assessment_id, @in_release, @current_taxon_id,
+                @node_id, @tree_pos, @list_article_title, @list_parent_article_title)
             """,
             "@taxon_id", "@scientific_name", "@kind", "@kingdom", "@phylum", "@class_name", "@order_name", "@family", "@genus",
             "@species_epithet", "@infra_rank", "@infra_name", "@subpopulation_name", "@authority", "@parent_taxon_id", "@common_name_en",
             "@enwiki_title", "@wikidata_qid", "@wikidata_qid_source", "@wikidata_p141", "@wikidata_item_downloaded", "@wikidata_p627_deprecated",
-            "@wikidata_other_items", "@col_id", "@latest_global_assessment_id", "@in_release", "@current_taxon_id");
+            "@wikidata_other_items", "@col_id", "@latest_global_assessment_id", "@in_release", "@current_taxon_id",
+            "@node_id", "@tree_pos", "@list_article_title", "@list_parent_article_title");
         _assessment = Prepare("""
             INSERT INTO assessment (assessment_id, taxon_id, scope, is_latest, category, possibly_extinct,
                 possibly_extinct_in_the_wild, criteria, criteria_version, year_published, assessment_date, population_trend, citation_json,
@@ -111,7 +114,8 @@ internal sealed class SiteDbWriter : IDisposable {
         Bind(_taxon, t.TaxonId, t.ScientificName, t.Kind, t.Kingdom, t.Phylum, t.ClassName, t.OrderName, t.Family, t.Genus,
             t.SpeciesEpithet, t.InfraRank, t.InfraName, t.SubpopulationName, t.Authority, t.ParentTaxonId, t.CommonNameEn,
             t.EnwikiTitle, t.WikidataQid, t.WikidataQidSource, t.WikidataP141, t.WikidataItemDownloaded, t.WikidataP627Deprecated ? 1 : 0,
-            t.WikidataOtherItems, t.ColId, t.LatestGlobalAssessmentId, t.InRelease ? 1 : 0, t.CurrentTaxonId);
+            t.WikidataOtherItems, t.ColId, t.LatestGlobalAssessmentId, t.InRelease ? 1 : 0, t.CurrentTaxonId,
+            t.NodeId, t.TreePos, t.ListArticleTitle, t.ListParentArticleTitle);
         _taxon.ExecuteNonQuery();
     }
 
@@ -131,6 +135,38 @@ internal sealed class SiteDbWriter : IDisposable {
     public void AddTaxonLink(SiteTaxonLink link) {
         Bind(_taxonLink, link.TaxonId, link.CurrentTaxonId, link.Kind);
         _taxonLink.ExecuteNonQuery();
+    }
+
+    /// Writes the tree of groups: higher_taxon, its counts by category and CoL's English names.
+    public void AddHigherTaxa(IReadOnlyList<SiteTreeNode> nodes) {
+        using var node = Prepare("""
+            INSERT INTO higher_taxon (node_id, parent_node_id, depth, rank, name, name_key, link_query, source, show_rank, kingdom, col_id,
+                common_name_en, common_name_source, enwiki_title, first_pos, last_pos, species_count, infra_count, subpopulation_count)
+            VALUES (@node_id, @parent_node_id, @depth, @rank, @name, @name_key, @link_query, @source, @show_rank, @kingdom, @col_id,
+                @common_name_en, @common_name_source, @enwiki_title, @first_pos, @last_pos, @species_count, @infra_count, @subpopulation_count)
+            """,
+            "@node_id", "@parent_node_id", "@depth", "@rank", "@name", "@name_key", "@link_query", "@source", "@show_rank", "@kingdom", "@col_id",
+            "@common_name_en", "@common_name_source", "@enwiki_title", "@first_pos", "@last_pos", "@species_count", "@infra_count", "@subpopulation_count");
+        using var count = Prepare("""
+            INSERT INTO higher_taxon_count (node_id, category, species_count, infra_count, subpopulation_count)
+            VALUES (@node_id, @category, @species_count, @infra_count, @subpopulation_count)
+            """, "@node_id", "@category", "@species_count", "@infra_count", "@subpopulation_count");
+        using var name = Prepare("INSERT OR IGNORE INTO higher_taxon_name (node_id, name, source) VALUES (@node_id, @name, @source)",
+            "@node_id", "@name", "@source");
+        foreach (var n in nodes) {
+            Bind(node, n.NodeId, n.Parent?.NodeId, n.Depth, n.Rank, n.Name, SiteNameKey.Fold(n.Name), n.LinkQuery, n.Source, n.ShowRank ? 1 : 0,
+                n.Kingdom, n.ColId, n.CommonNameEn, n.CommonNameSource, n.EnwikiTitle, n.FirstPos, n.LastPos, n.SpeciesCount,
+                n.InfraCount, n.SubpopulationCount);
+            node.ExecuteNonQuery();
+            foreach (var (category, counts) in n.CategoryCounts) {
+                Bind(count, n.NodeId, category, counts[0], counts[1], counts[2]);
+                count.ExecuteNonQuery();
+            }
+            foreach (var colName in n.ColNames) {
+                Bind(name, n.NodeId, colName, SiteTreeSource.Col);
+                name.ExecuteNonQuery();
+            }
+        }
     }
 
     /// Sets replaced_by_assessment_id on an assessment already written.

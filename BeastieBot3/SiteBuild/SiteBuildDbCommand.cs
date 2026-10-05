@@ -92,6 +92,7 @@ internal sealed class SiteBuildDbCommand : Command<SiteBuildDbCommand.Settings> 
                 ?? throw new InvalidOperationException(paths.NotConfiguredMessage("Site database", "Datastore:site_sqlite", "--output"));
             // The Wikidata status dry run's settings file: its assessment item model is what the
             // site's QuickStatements batches follow.
+            var rulesList = Full(settings.RulesList ?? Path.Combine(paths.BaseDirectory, "rules", "rules-list.txt"))!;
             var wikidataConfig = WikidataIucnEditConfig.LoadFromRules(paths, out var wikidataConfigPath);
             inputs = new SiteBuildInputs {
                 IucnDatabase = paths.ResolveIucnDatabasePath(settings.IucnDatabase, "--iucn-db"),
@@ -106,7 +107,9 @@ internal sealed class SiteBuildDbCommand : Command<SiteBuildDbCommand.Settings> 
                 SpratDatabase = Full(settings.SpratDatabase ?? paths.GetSpratDatabasePath()),
                 GbifChecklist = Full(settings.GbifChecklist ?? GbifIucnChecklistReader.FindNewest(paths.GetGbifIucnDir())),
                 DoiCache = Full(settings.DoiCache ?? paths.GetIucnDoiCachePath()),
-                RulesList = Full(settings.RulesList ?? Path.Combine(paths.BaseDirectory, "rules", "rules-list.txt")),
+                RulesList = rulesList,
+                TaxonRules = Full(Path.Combine(Path.GetDirectoryName(rulesList)!, "taxon-rules.yml")),
+                NotAssignedRules = Iucn.IucnNotAssignedRules.LoadForPaths(paths),
                 WikidataItemModel = wikidataConfig.ToItemModel(),
                 WikidataItemModelSource = wikidataConfigPath,
                 Output = Path.GetFullPath(output),
@@ -273,6 +276,21 @@ internal sealed class SiteBuildDbCommand : Command<SiteBuildDbCommand.Settings> 
         Row("SPRAT profiles of a population of a taxon", s.SpratPopulationProfiles);
         Row("Of those, listed under the EPBC Act", s.EpbcPopulationListings);
         Row("SPRAT names with a voucher or other text in brackets after a taxon's name (not linked)", s.SpratBracketsNotPopulation);
+
+        Section("Groups (higher taxa)");
+        Row("Groups", s.TreeNodes);
+        Row("Of those, Catalogue of Life groups between IUCN ranks", s.TreeColGroups);
+        Row("Of those, orders and families from rules/iucn-not-assigned.yml (IUCN: NOT ASSIGNED)", s.TreeRuleGroups);
+        Row("Taxa with an order from rules/iucn-not-assigned.yml", s.TreeTaxaUnderRuleOrder);
+        Row("Taxa with a family from rules/iucn-not-assigned.yml", s.TreeTaxaUnderRuleFamily);
+        Row("Taxa with a rank still NOT ASSIGNED (placed in the group above)", s.TreeTaxaWithUnassignedRank);
+        Row("Taxa with no kingdom (left out of the groups)", s.TreeTaxaWithoutKingdom);
+        Text("Catalogue of Life placement", s.ColPlacementState ?? "not used");
+        Row("Groups with an English name (rules or Wikipedia)", s.GroupCommonNames);
+        Row("Groups with an English Wikipedia page", s.GroupArticles);
+        Row("Groups with a Catalogue of Life id", s.GroupColIds);
+        Row("Groups with Catalogue of Life English names", s.GroupsWithColNames);
+        Row("Taxa with an article for Wikipedia list lines", s.ListArticleTitles);
 
         Section("Sources");
         Text("IUCN release", s.IucnRelease);

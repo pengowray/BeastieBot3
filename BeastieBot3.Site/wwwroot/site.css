@@ -965,3 +965,179 @@ abbr[title] {
 .id-swatch.id-tint-5 { border-color: var(--id-mark-5); }
 .combined-table tr.id-tint-6 > th:first-child { border-left-color: var(--id-mark-6); }
 .id-swatch.id-tint-6 { border-color: var(--id-mark-6); }
+
+/* ---------------------------------------------------------------- groups (higher taxa) */
+
+/* Classification on a taxon page: Catalogue of Life groups are hidden until the box is ticked. */
+.classification.has-col-toggle .col-group {
+    display: none;
+}
+
+.classification.has-col-toggle:has(.show-col:checked) .col-group {
+    display: list-item;
+}
+
+.classification .group-common {
+    color: var(--muted);
+}
+
+.classification .group-common::before {
+    content: "(";
+}
+
+.classification .group-common::after {
+    content: ")";
+}
+
+.col-toggle {
+    display: inline-block;
+    margin-top: 0.3rem;
+    font-size: 0.85rem;
+    color: var(--muted);
+}
+
+.col-marker,
+.rule-marker {
+    font-size: 0.75rem;
+    color: var(--muted);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    padding: 0 0.25em;
+    margin-left: 0.25em;
+    text-decoration: none;
+    cursor: help;
+}
+
+.group-header .rank-word {
+    color: var(--muted);
+    font-weight: 400;
+    margin-right: 0.3em;
+}
+
+.group-col-names .label {
+    color: var(--muted);
+}
+
+.group-links {
+    list-style: none;
+    padding: 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem 1.25rem;
+}
+
+.group-choices .group-path {
+    color: var(--muted);
+    font-size: 0.9rem;
+    margin-left: 0.5em;
+}
+
+td.num,
+th.num {
+    text-align: right;
+    font-variant-numeric: tabular-nums;
+}
+
+.group-children td .rank {
+    margin-right: 0.3em;
+}
+
+/* The list: options beside the output on wide screens, above it on narrow ones. */
+.list-editor {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 1rem;
+}
+
+@media (min-width: 52rem) {
+    .list-editor {
+        grid-template-columns: minmax(0, 1fr) 17rem;
+        grid-template-areas: "output options";
+        align-items: start;
+    }
+
+    .list-editor .list-options {
+        grid-area: options;
+        position: sticky;
+        top: 0.5rem;
+        max-height: calc(100vh - 1rem);
+        overflow-y: auto;
+    }
+
+    .list-editor .list-output {
+        grid-area: output;
+    }
+}
+
+.list-options .example {
+    display: block;
+    margin-left: 1.6em;
+    font-size: 0.85rem;
+    color: var(--muted);
+}
+
+.list-options .rank-choices {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0 0.5rem;
+}
+
+.list-options .category-choices label {
+    display: flex;
+    align-items: center;
+    gap: 0.4em;
+}
+
+.list-options .option-sublabel {
+    margin: 0.4rem 0 0.1rem;
+}
+
+.list-options .inline-select select {
+    margin-left: 0.4em;
+}
+
+.list-size {
+    font-weight: 600;
+    margin: 0 0 0.5rem;
+}
+
+.list-output .wikitext-box textarea {
+    min-height: 12rem;
+}
+
+.list-preview {
+    margin-top: 1rem;
+}
+
+.list-preview summary {
+    cursor: pointer;
+    font-weight: 600;
+}
+
+.preview-body .preview-heading {
+    margin: 1rem 0 0.25rem;
+    font-size: 1.05rem;
+}
+
+.preview-body h3.preview-heading {
+    font-size: 1.25rem;
+}
+
+.preview-lines {
+    margin: 0.25rem 0;
+    padding-left: 1.25rem;
+}
+
+.preview-lines li.nested {
+    margin-left: 1.5rem;
+    list-style-type: circle;
+}
+
+.preview-group-name,
+.preview-label {
+    margin: 0.25rem 0;
+}
+
+.preview-group-name {
+    color: var(--muted);
+}

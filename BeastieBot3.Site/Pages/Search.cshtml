@@ -17,7 +17,25 @@
 } else {
     <partial name="_SearchForm" model="@(new SearchFormModel(Model.Query, "main"))" />
     <h1>@SiteText.SearchHeading(Model.Query)</h1>
-    @if (Model.Items.Count == 0) {
+    @if (Model.Groups.Count > 0) {
+        <h2>@GroupText.SearchGroupsHeading</h2>
+        <ul class="group-results">
+            @foreach (var group in Model.Groups) {
+                <li>
+                    <a href="@BeastieBot3.Site.Web.SiteUrls.Group(group)">@BeastieBot3.Site.Lists.GroupList.HeadingText(group)</a>
+                    @if (group.CommonNameEn is not null) {
+                        <span class="common-name">@group.CommonNameEn</span>
+                    }
+                    <span class="kind">@GroupText.SearchGroupSpecies(group.SpeciesCount, group.Kingdom)</span>
+                </li>
+            }
+        </ul>
+        @if (Model.Items.Count > 0) {
+            <h2>@GroupText.SearchTaxaHeading</h2>
+        }
+    }
+    @if (Model.Items.Count == 0 && Model.Groups.Count > 0) {
+    } else if (Model.Items.Count == 0) {
         <p class="message">@SiteText.NoResults(Model.Query)</p>
     } else {
         <p class="result-count">@(Model.TotalTaxa > Model.Items.Count

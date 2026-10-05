@@ -170,9 +170,29 @@ internal sealed class SiteDbBuild {
                 + $"{_stats.SpratPopulationProfiles:N0} population profiles ({_stats.EpbcPopulationListings:N0} listed)";
         });
 
-        // 8. Parents, taxa, names, meta.
+        // 8. Parents, the tree of groups and list links, then taxa, names, meta.
+        SetParents(taxonList, taxa, apiTaxa.SubpopulationParents);
+        SiteTaxonTree tree = null!;
+        Phase("Building the tree of groups", () => {
+            var placement = ReadPlacement(ct);
+            tree = SiteTaxonTree.Build(taxonList, placement, _inputs.NotAssignedRules);
+            _stats.TreeNodes = tree.Nodes.Count;
+            _stats.TreeColGroups = tree.Nodes.Count(n => n.Source == SiteTreeSource.Col);
+            _stats.TreeRuleGroups = tree.Nodes.Count(n => n.Source == SiteTreeSource.IucnRule);
+            _stats.TreeTaxaUnderRuleOrder = tree.TaxaUnderRuleOrder;
+            _stats.TreeTaxaUnderRuleFamily = tree.TaxaUnderRuleFamily;
+            _stats.TreeTaxaWithUnassignedRank = tree.TaxaWithUnassignedRank;
+            _stats.TreeTaxaWithoutKingdom = tree.TaxaWithoutKingdom;
+            return $"{tree.Nodes.Count:N0} groups, {_stats.TreeColGroups:N0} of them from the Catalogue of Life";
+        });
+        Phase("Naming the groups and finding the articles list lines link", () => {
+            NameGroupsAndLinks(taxonList, tree, ct);
+            return $"{_stats.GroupCommonNames:N0} groups with an English name, {_stats.GroupArticles:N0} with an article, "
+                + $"{_stats.GroupsWithColNames:N0} with Catalogue of Life English names; {_stats.ListArticleTitles:N0} taxa with an article for list lines";
+        });
+
         Phase("Writing taxa and names", () => {
-            SetParents(taxonList, taxa, apiTaxa.SubpopulationParents);
+            writer.AddHigherTaxa(tree.Nodes);
             foreach (var taxon in taxonList) {
                 ct.ThrowIfCancellationRequested();
                 writer.AddTaxon(taxon);
@@ -194,6 +214,50 @@ internal sealed class SiteDbBuild {
             body();
             return null;
         }));
+    }
+
+    // ------------------------------------------------------------ tree of groups
+
+    // The CoL groups of the placement built from this IUCN database and the current rules. When
+    // the placement file only has one built from an older copy of the file, an older CoL file or
+    // older rules, that one is used and the build warns.
+    private SitePlacement ReadPlacement(CancellationToken ct) {
+        if (_inputs.ColPlacement is not { } path || !File.Exists(path) || _inputs.ColDatabase is not { } colDatabase) {
+            return SitePlacement.Empty;
+        }
+        var status = Col.TaxonPlacementStore.Status(_inputs.IucnDatabase, colDatabase, _inputs.NotAssignedRules);
+        string sourceKey;
+        if (status.IsCurrent) {
+            sourceKey = status.SourceKey;
+            _stats.ColPlacementState = "current";
+        } else if (status.Source is { } earlier) {
+            sourceKey = earlier.SourceKey;
+            _stats.ColPlacementState = "out-of-date";
+            _stats.Warnings.Add($"The Catalogue of Life placement is out of date ({status.State}), so the Catalogue of Life groups may not match this IUCN release. To update it, run col build-placement.");
+        } else {
+            _stats.Warnings.Add($"The Catalogue of Life placement file has no placement for this IUCN database ({status.State}), so the tree has IUCN's ranks only. To add the Catalogue of Life groups, run col build-placement.");
+            return SitePlacement.Empty;
+        }
+        return SiteLinkReaders.ReadPlacementPaths(path, sourceKey, ct);
+    }
+
+    // English names and articles of the groups, as the Wikipedia list headings choose them, and the
+    // articles list lines link for each taxon. Uses whichever of the common names store, the
+    // Wikipedia cache and the CoL database are there.
+    private void NameGroupsAndLinks(List<SiteTaxon> taxonList, SiteTaxonTree tree, CancellationToken ct) {
+        var legacy = _inputs.RulesList is { } rulesPath && File.Exists(rulesPath)
+            ? new LegacyTaxaRuleList(rulesPath)
+            : LegacyTaxaRuleList.Empty();
+        var taxonRules = _inputs.TaxonRules is { } yaml ? WikipediaLists.TaxonRulesService.Load(yaml) : null;
+        var wikiCache = _inputs.WikipediaCache is { } wiki && File.Exists(wiki) ? wiki : null;
+        using var provider = _inputs.CommonNames is { } names && File.Exists(names)
+            ? new WikipediaLists.StoreBackedCommonNameProvider(names, wikiCache)
+            : null;
+        using var titles = wikiCache is null ? null : WikipediaLists.EnwikiTitleCheck.OpenReadOnly(wikiCache);
+        var headings = new WikipediaLists.HeadingFormatter(legacy, taxonRules, provider);
+        SiteGroupNames.Resolve(tree.Nodes, headings, titles, _inputs.ColDatabase, _stats, ct);
+        var lines = new WikipediaLists.SpeciesLineFormatter(legacy, provider, commonNameProvider: null);
+        SiteListLinks.Resolve(taxonList, lines, _stats, ct);
     }
 
     // ------------------------------------------------------------ parents
@@ -320,6 +384,8 @@ internal sealed class SiteDbBuild {
         writer.SetMeta(SiteDbSchema.MetaKeys.IucnDoiCheckedTo, _stats.DoiCheckedTo?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
         writer.SetMeta(SiteDbSchema.MetaKeys.WikidataItemModel, _inputs.WikidataItemModel.ToJson());
         _stats.WikidataItemModelSource = _inputs.WikidataItemModelSource;
+        writer.SetMeta(SiteDbSchema.MetaKeys.NotAssignedRules, _inputs.NotAssignedRules.IsEmpty ? null : _inputs.NotAssignedRules.Fingerprint);
+        writer.SetMeta(SiteDbSchema.MetaKeys.ColPlacementState, _stats.ColPlacementState);
         writer.SetMeta(SiteDbSchema.MetaKeys.TaxonCount, taxonCount.ToString(CultureInfo.InvariantCulture));
         writer.SetMeta(SiteDbSchema.MetaKeys.AssessmentCount, assessmentCount);
     }

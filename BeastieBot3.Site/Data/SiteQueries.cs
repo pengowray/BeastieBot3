@@ -16,7 +16,8 @@ public sealed class SiteQueries {
         t.taxon_id, t.scientific_name, t.kind, t.kingdom, t.phylum, t.class_name, t.order_name, t.family,
         t.genus, t.subpopulation_name, t.authority, t.parent_taxon_id, t.common_name_en, t.enwiki_title,
         t.wikidata_qid, t.col_id, t.latest_global_assessment_id, t.in_release, t.current_taxon_id,
-        t.wikidata_qid_source, t.wikidata_p141, t.wikidata_item_downloaded, t.wikidata_p627_deprecated, t.wikidata_other_items
+        t.wikidata_qid_source, t.wikidata_p141, t.wikidata_item_downloaded, t.wikidata_p627_deprecated, t.wikidata_other_items,
+        t.node_id
         """;
 
     // A taxon with the category of its latest global assessment; the column order SummaryAt reads.
@@ -58,7 +59,8 @@ public sealed class SiteQueries {
         Text(reader, 20),
         Text(reader, 21),
         !reader.IsDBNull(22) && reader.GetInt64(22) != 0,
-        Text(reader, 23));
+        Text(reader, 23),
+        reader.IsDBNull(24) ? null : reader.GetInt32(24));
 
     /// The taxa linked to this one in taxon_link: for a taxon in the release, the taxa not in the
     /// release (old ids) linked to it; for a taxon not in the release, the taxa in the release it is
@@ -378,6 +380,214 @@ public sealed class SiteQueries {
             sb.Append(c);
         }
         return sb.Append('%').ToString();
+    }
+
+    // ------------------------------------------------------------ groups (higher_taxon)
+
+    private const string GroupColumns = """
+        h.node_id, h.parent_node_id, h.depth, h.rank, h.name, h.source, h.show_rank, h.kingdom, h.col_id,
+        h.common_name_en, h.common_name_source, h.enwiki_title, h.first_pos, h.last_pos,
+        h.species_count, h.infra_count, h.subpopulation_count, h.link_query
+        """;
+
+    private static GroupRow GroupAt(SqliteDataReader reader) => new(
+        reader.GetInt32(0), reader.IsDBNull(1) ? null : reader.GetInt32(1), reader.GetInt32(2),
+        reader.GetString(3), reader.GetString(4), reader.GetString(5), reader.GetInt64(6) != 0, reader.GetString(7),
+        Text(reader, 8), Text(reader, 9), Text(reader, 10), Text(reader, 11),
+        reader.GetInt32(12), reader.GetInt32(13), reader.GetInt32(14), reader.GetInt32(15), reader.GetInt32(16), Text(reader, 17));
+
+    private IReadOnlyList<GroupRow> ReadGroups(string sql, params (string Name, object Value)[] parameters) {
+        using var connection = _db.OpenConnection();
+        using var command = connection.CreateCommand();
+        command.CommandText = sql;
+        foreach (var (name, value) in parameters) {
+            command.Parameters.AddWithValue(name, value);
+        }
+        using var reader = command.ExecuteReader();
+        var rows = new List<GroupRow>();
+        while (reader.Read()) {
+            rows.Add(GroupAt(reader));
+        }
+        return rows;
+    }
+
+    /// The groups with this rank and name (folded with SiteNameKey.Fold), in tree order. More than
+    /// one when two kingdoms, or two IUCN classes, use the name.
+    public IReadOnlyList<GroupRow> FindGroups(string rank, string name) =>
+        ReadGroups($"SELECT {GroupColumns} FROM higher_taxon h WHERE h.name_key = @key AND h.rank = @rank ORDER BY h.node_id",
+            ("@key", SiteNameKey.Fold(name)), ("@rank", rank.Trim().ToLowerInvariant()));
+
+    /// Groups whose name (folded) is the text, any rank, for search. Biggest first.
+    public IReadOnlyList<GroupRow> FindGroupsByName(string text, int limit) =>
+        ReadGroups($"SELECT {GroupColumns} FROM higher_taxon h WHERE h.name_key = @key ORDER BY h.species_count DESC, h.node_id LIMIT @limit",
+            ("@key", SiteNameKey.Fold(text)), ("@limit", limit));
+
+    public GroupRow? GetGroup(int nodeId) =>
+        ReadGroups($"SELECT {GroupColumns} FROM higher_taxon h WHERE h.node_id = @id", ("@id", nodeId)).FirstOrDefault();
+
+    /// The group and every group above it, kingdom first.
+    public IReadOnlyList<GroupRow> GetGroupPath(int nodeId) =>
+        ReadGroups($"""
+            WITH RECURSIVE up(id) AS (
+                SELECT @id
+                UNION ALL
+                SELECT p.parent_node_id FROM higher_taxon p JOIN up ON p.node_id = up.id WHERE p.parent_node_id IS NOT NULL)
+            SELECT {GroupColumns} FROM higher_taxon h WHERE h.node_id IN (SELECT id FROM up) ORDER BY h.depth
+            """, ("@id", nodeId));
+
+    /// The groups directly under a group, in tree order.
+    public IReadOnlyList<GroupRow> GetChildGroups(int nodeId) =>
+        ReadGroups($"SELECT {GroupColumns} FROM higher_taxon h WHERE h.parent_node_id = @id ORDER BY h.node_id", ("@id", nodeId));
+
+    /// Every group inside a group (not the group itself), in tree order.
+    public IReadOnlyList<GroupRow> GetGroupsWithin(GroupRow group) =>
+        ReadGroups($"""
+            SELECT {GroupColumns} FROM higher_taxon h
+            WHERE h.first_pos >= @first AND h.last_pos <= @last AND h.node_id > @id
+            ORDER BY h.node_id
+            """, ("@first", group.FirstPos), ("@last", group.LastPos), ("@id", group.NodeId));
+
+    /// The ranks of the groups inside a group.
+    public IReadOnlyList<GroupRank> GetRanksWithin(GroupRow group) {
+        using var connection = _db.OpenConnection();
+        using var command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT h.rank, MIN(h.depth), MIN(h.source = 'col') FROM higher_taxon h
+            WHERE h.first_pos >= @first AND h.last_pos <= @last AND h.node_id > @id
+            GROUP BY h.rank
+            """;
+        command.Parameters.AddWithValue("@first", group.FirstPos);
+        command.Parameters.AddWithValue("@last", group.LastPos);
+        command.Parameters.AddWithValue("@id", group.NodeId);
+        using var reader = command.ExecuteReader();
+        var ranks = new List<GroupRank>();
+        while (reader.Read()) {
+            ranks.Add(new GroupRank(reader.GetString(0), reader.GetInt32(1), reader.GetInt64(2) != 0));
+        }
+        return ranks;
+    }
+
+    public IReadOnlyList<GroupCategoryCount> GetGroupCounts(int nodeId) {
+        using var connection = _db.OpenConnection();
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT category, species_count, infra_count, subpopulation_count FROM higher_taxon_count WHERE node_id = @id";
+        command.Parameters.AddWithValue("@id", nodeId);
+        using var reader = command.ExecuteReader();
+        var rows = new List<GroupCategoryCount>();
+        while (reader.Read()) {
+            rows.Add(new GroupCategoryCount(reader.GetString(0), reader.GetInt32(1), reader.GetInt32(2), reader.GetInt32(3)));
+        }
+        return rows;
+    }
+
+    /// The counts of several groups at once, by node id.
+    public IReadOnlyDictionary<int, IReadOnlyList<GroupCategoryCount>> GetGroupCounts(IReadOnlyCollection<int> nodeIds) {
+        var result = new Dictionary<int, IReadOnlyList<GroupCategoryCount>>();
+        if (nodeIds.Count == 0) {
+            return result;
+        }
+        using var connection = _db.OpenConnection();
+        using var command = connection.CreateCommand();
+        var names = new List<string>();
+        var i = 0;
+        foreach (var id in nodeIds) {
+            var name = "@n" + i++;
+            names.Add(name);
+            command.Parameters.AddWithValue(name, id);
+        }
+        command.CommandText = $"""
+            SELECT node_id, category, species_count, infra_count, subpopulation_count FROM higher_taxon_count
+            WHERE node_id IN ({string.Join(", ", names)})
+            """;
+        using var reader = command.ExecuteReader();
+        while (reader.Read()) {
+            var id = reader.GetInt32(0);
+            if (!result.TryGetValue(id, out var list)) {
+                result[id] = list = new List<GroupCategoryCount>();
+            }
+            ((List<GroupCategoryCount>)list).Add(new GroupCategoryCount(reader.GetString(1), reader.GetInt32(2), reader.GetInt32(3), reader.GetInt32(4)));
+        }
+        return result;
+    }
+
+    /// The Catalogue of Life's English names of several groups, by node id.
+    public IReadOnlyDictionary<int, IReadOnlyList<string>> GetGroupColNames(IReadOnlyCollection<int> nodeIds) {
+        var result = new Dictionary<int, IReadOnlyList<string>>();
+        if (nodeIds.Count == 0) {
+            return result;
+        }
+        using var connection = _db.OpenConnection();
+        using var command = connection.CreateCommand();
+        var names = new List<string>();
+        var i = 0;
+        foreach (var id in nodeIds) {
+            var name = "@n" + i++;
+            names.Add(name);
+            command.Parameters.AddWithValue(name, id);
+        }
+        command.CommandText = $"""
+            SELECT node_id, name FROM higher_taxon_name WHERE node_id IN ({string.Join(", ", names)})
+            ORDER BY node_id, name COLLATE NOCASE
+            """;
+        using var reader = command.ExecuteReader();
+        while (reader.Read()) {
+            var id = reader.GetInt32(0);
+            if (!result.TryGetValue(id, out var list)) {
+                result[id] = list = new List<string>();
+            }
+            ((List<string>)list).Add(reader.GetString(1));
+        }
+        return result;
+    }
+
+    /// The Catalogue of Life's English names of a group, as CoL writes them.
+    public IReadOnlyList<string> GetGroupColNames(int nodeId) {
+        using var connection = _db.OpenConnection();
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT name FROM higher_taxon_name WHERE node_id = @id ORDER BY name COLLATE NOCASE";
+        command.Parameters.AddWithValue("@id", nodeId);
+        using var reader = command.ExecuteReader();
+        var names = new List<string>();
+        while (reader.Read()) {
+            names.Add(reader.GetString(0));
+        }
+        return names;
+    }
+
+    /// The taxa of a group that have a latest global assessment, in tree order, of the given kinds.
+    public IReadOnlyList<ListTaxonRow> GetListTaxa(GroupRow group, IReadOnlyCollection<string> kinds) {
+        using var connection = _db.OpenConnection();
+        using var command = connection.CreateCommand();
+        var kindNames = new List<string>();
+        var i = 0;
+        foreach (var kind in kinds) {
+            var name = "@k" + i++;
+            kindNames.Add(name);
+            command.Parameters.AddWithValue(name, kind);
+        }
+        if (kindNames.Count == 0) {
+            return [];
+        }
+        command.CommandText = $"""
+            SELECT t.taxon_id, t.scientific_name, t.kind, t.kingdom, t.genus, t.species_epithet, t.infra_rank, t.infra_name,
+                   t.subpopulation_name, t.common_name_en, t.list_article_title, t.list_parent_article_title, t.parent_taxon_id,
+                   t.node_id, t.tree_pos, a.assessment_id, a.category, a.possibly_extinct, a.possibly_extinct_in_the_wild, a.year_published
+            FROM taxon t JOIN assessment a ON a.assessment_id = t.latest_global_assessment_id
+            WHERE t.tree_pos BETWEEN @first AND @last AND t.kind IN ({string.Join(", ", kindNames)})
+            ORDER BY t.tree_pos
+            """;
+        command.Parameters.AddWithValue("@first", group.FirstPos);
+        command.Parameters.AddWithValue("@last", group.LastPos);
+        using var reader = command.ExecuteReader();
+        var rows = new List<ListTaxonRow>();
+        while (reader.Read()) {
+            rows.Add(new ListTaxonRow(
+                reader.GetInt64(0), reader.GetString(1), reader.GetString(2), Text(reader, 3), Text(reader, 4), Text(reader, 5),
+                Text(reader, 6), Text(reader, 7), Text(reader, 8), Text(reader, 9), Text(reader, 10), Text(reader, 11),
+                Long(reader, 12), reader.GetInt32(13), reader.GetInt32(14), reader.GetInt64(15), reader.GetString(16),
+                reader.GetInt64(17) != 0, reader.GetInt64(18) != 0, reader.IsDBNull(19) ? null : reader.GetInt32(19)));
+        }
+        return rows;
     }
 
     private static TaxonSummary SummaryAt(SqliteDataReader reader, int start) => new(

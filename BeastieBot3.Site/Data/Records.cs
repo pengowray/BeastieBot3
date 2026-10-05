@@ -26,7 +26,8 @@ public sealed record TaxonRow(
     string? WikidataP141 = null,
     string? WikidataItemDownloaded = null,
     bool WikidataP627Deprecated = false,
-    string? WikidataOtherItems = null) {
+    string? WikidataOtherItems = null,
+    int? NodeId = null) {
     /// The taxon's item states this taxon's IUCN taxon id (P627), rather than being matched by name.
     public bool WikidataItemStatesTaxonId => WikidataQidSource == "p627";
 }

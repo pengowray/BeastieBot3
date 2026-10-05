@@ -8,7 +8,7 @@ namespace BeastieBot3.Shared.SiteData;
 // narrative text (rationale, range, threats ...), no coded threats/habitats/countries, no downloads.
 // Keep such fields out of this database rather than hiding them in the site.
 public static class SiteDbSchema {
-    public const int Version = 8;
+    public const int Version = 9;
 
     public const string Ddl = """
         CREATE TABLE meta (
@@ -55,11 +55,75 @@ public static class SiteDbSchema {
             in_release                  INTEGER NOT NULL,     -- 1: in the Red List version's CSV export. 0: only in the IUCN API cache
                                                               -- (an old or merged id, or a taxon IUCN no longer assesses); every one
                                                               -- of its assessments has is_latest = 0
-            current_taxon_id            INTEGER               -- in_release = 0 only: the taxon in the release with the same scientific
+            current_taxon_id            INTEGER,              -- in_release = 0 only: the taxon in the release with the same scientific
                                                               -- name (same kingdom first); NULL when there is none
+            node_id                     INTEGER,              -- in_release = 1 only: the lowest higher_taxon the taxon is in (usually its genus)
+            tree_pos                    INTEGER,              -- in_release = 1 only: the taxon's place in the tree, numbered depth-first; the
+                                                              -- taxa under a higher_taxon have tree_pos from its first_pos to its last_pos.
+                                                              -- A species comes before its subspecies, varieties and subpopulations
+            list_article_title          TEXT,                 -- the article a Wikipedia list line links for the taxon (SpeciesLineFormatter), which
+                                                              -- can differ from enwiki_title: a redirect with the taxon's own name is linked as it is
+            list_parent_article_title   TEXT                  -- subspecies and varieties only: the article of the species, which a list line links
+                                                              -- when the taxon has no article of its own
         );
         CREATE INDEX taxon_parent ON taxon(parent_taxon_id);
         CREATE INDEX taxon_current ON taxon(current_taxon_id);
+        CREATE INDEX taxon_tree ON taxon(tree_pos);
+
+        -- The groups the taxa in the release are in: IUCN's kingdom, phylum, class, order, family and
+        -- genus, and the Catalogue of Life groups between them that the placement file (`col build-placement`)
+        -- keeps: a CoL group is used only when nearly all the IUCN taxon's species are in it, so a CoL
+        -- group never moves a taxon out of its IUCN order or family. Node ids change with every build;
+        -- the site finds a group by its rank and name.
+        CREATE TABLE higher_taxon (
+            node_id            INTEGER PRIMARY KEY,           -- numbered depth-first, names in alphabetical order
+            parent_node_id     INTEGER,                       -- NULL for a kingdom
+            depth              INTEGER NOT NULL,              -- 0 for a kingdom
+            rank               TEXT NOT NULL,                 -- lower case: 'kingdom' 'phylum' 'class' 'order' 'family' 'genus', or a CoL
+                                                              -- rank ('suborder', 'infraclass', 'subfamily', 'tribe', 'unranked' ...)
+            name               TEXT NOT NULL,                 -- IUCN's upper-case names in title case ('Carnivora'); CoL's spelling for a CoL group
+            name_key           TEXT NOT NULL,                 -- SiteNameKey.Fold(name)
+            link_query         TEXT,                          -- when another group has the same rank and name: what tells them apart in the
+                                                              -- group's address, 'kingdom=plantae' or 'parent=Moraceae'; NULL otherwise
+            source             TEXT NOT NULL,                 -- 'iucn'; 'iucn-rule': IUCN gives "NOT ASSIGNED" and rules/iucn-not-assigned.yml
+                                                              -- gives the order or family; 'col': a Catalogue of Life group
+            show_rank          INTEGER NOT NULL,              -- 0: a CoL group of the same rank as the IUCN taxon above it (order Cetacea in
+                                                              -- order Artiodactyla), or of no usable rank: show the name without the rank
+            kingdom            TEXT NOT NULL,                 -- IUCN's kingdom, upper case
+            col_id             TEXT,                          -- Catalogue of Life id of the group; NULL when not known
+            common_name_en     TEXT,                          -- English name for the group ('cats'); NULL when none
+            common_name_source TEXT,                          -- 'rules': rules-list.txt or taxon-rules.yml; 'wikipedia': the article the group's
+                                                              -- scientific name redirects to
+            enwiki_title       TEXT,                          -- English Wikipedia page or redirect with the group's name, or the name with a
+                                                              -- bracketed word for its kingdom ('Ficus (plant)'); NULL when none is known
+            first_pos          INTEGER NOT NULL,              -- the taxa in the group: taxon.tree_pos from first_pos to last_pos
+            last_pos           INTEGER NOT NULL,
+            species_count      INTEGER NOT NULL,              -- species in the release in the group
+            infra_count        INTEGER NOT NULL,              -- subspecies and varieties
+            subpopulation_count INTEGER NOT NULL
+        );
+        CREATE INDEX higher_taxon_parent ON higher_taxon(parent_node_id);
+        CREATE INDEX higher_taxon_key ON higher_taxon(name_key, rank);
+        CREATE INDEX higher_taxon_first ON higher_taxon(first_pos);
+
+        -- How many taxa in a group have each category in their latest global assessment.
+        CREATE TABLE higher_taxon_count (
+            node_id           INTEGER NOT NULL,
+            category          TEXT NOT NULL,                  -- the {{IUCN status}} code: 'CR(PE)', 'CR(PEW)', 'CR', 'LR/nt' ...
+            species_count     INTEGER NOT NULL,
+            infra_count       INTEGER NOT NULL,
+            subpopulation_count INTEGER NOT NULL,
+            PRIMARY KEY (node_id, category)
+        ) WITHOUT ROWID;
+
+        -- Other English names of a group: the Catalogue of Life's vernacular names. They are not
+        -- checked, so a page lists them as CoL gives them, and never uses one as the group's name.
+        CREATE TABLE higher_taxon_name (
+            node_id  INTEGER NOT NULL,
+            name     TEXT NOT NULL,
+            source   TEXT NOT NULL,                           -- 'col'
+            PRIMARY KEY (node_id, name)
+        ) WITHOUT ROWID;
 
         -- Links from a taxon not in the release (in_release = 0) to a taxon in the release. An old id
         -- can have two links: the taxon with its name, and the one taxon whose IUCN synonyms list its
@@ -175,6 +239,12 @@ public static class SiteDbSchema {
         /// JSON of the Wikidata assessment item model (rules/wikidata/iucn-status.yml assessment_item)
         /// that QuickStatements batches on the site follow: WikidataItemModel.ToJson().
         public const string WikidataItemModel = "wikidata_item_model";
+        /// Fingerprint of rules/iucn-not-assigned.yml (IucnNotAssignedRules.Fingerprint) used for the
+        /// orders and families of the higher_taxon tree; absent when there were no rules.
+        public const string NotAssignedRules = "not_assigned_rules";
+        /// Whether higher_taxon has Catalogue of Life groups: 'current', 'out-of-date' (the placement
+        /// file was built from another IUCN database, an older CoL file or older rules) or absent.
+        public const string ColPlacementState = "col_placement_state";
         public const string TaxonCount = "taxon_count";
         public const string AssessmentCount = "assessment_count";
     }

@@ -10,6 +10,13 @@ namespace BeastieBot3.WikipediaLists;
 /// {{main}} link, the "Members of X are called Y" common-name sentence, and an optional descriptive
 /// blurb. Produced by <see cref="HeadingFormatter"/> and consumed by the tree renderer.
 /// </summary>
+/// <summary>Where <see cref="HeadingFormatter.ResolveCommonName"/> found a name.</summary>
+internal static class HigherTaxonNameSource {
+    public const string Rules = "rules";
+    public const string CommonNames = "common-names";
+    public const string WikipediaRedirect = "wikipedia";
+}
+
 internal readonly record struct HeadingInfo(string Text, string? MainLink, string? CommonNameSentence = null, string? Description = null);
 
 // Builds taxonomy-section headings from a raw taxon name (or a virtual group), resolving the common
@@ -56,58 +63,73 @@ internal sealed class HeadingFormatter {
         // --- Heading text is always the scientific name with rank label ---
         var headingText = FormatHeadingText(displayName, rank, showRankLabel: true, isScientificName: true);
 
-        // --- Resolve common name from all sources (for sentence, not heading) ---
-        string? commonName = null;
-        var yamlRule = _taxonRules?.GetRule(raw);
-        var legacyRules = _legacyRules.Get(raw);
-
-        // Priority: YAML CommonPlural > YAML CommonName > Legacy CommonPlural > Legacy CommonName
-        if (!string.IsNullOrWhiteSpace(yamlRule?.CommonPlural))
-            commonName = yamlRule.CommonPlural;
-        else if (!string.IsNullOrWhiteSpace(yamlRule?.CommonName))
-            commonName = yamlRule.CommonName;
-        else if (!string.IsNullOrWhiteSpace(legacyRules?.CommonPlural))
-            commonName = legacyRules.CommonPlural;
-        else if (!string.IsNullOrWhiteSpace(legacyRules?.CommonName))
-            commonName = legacyRules.CommonName;
-        else if (_storeBackedProvider is not null) {
-            // Store-backed common names for higher taxa
-            var storeName = _storeBackedProvider.GetBestCommonNameByScientificName(raw, kingdom);
-            if (!string.IsNullOrWhiteSpace(storeName)) {
-                commonName = storeName;
-            } else {
-                // Fallback: Wikipedia redirect target (e.g., Araneae -> Spider)
-                var redirectTitle = _storeBackedProvider.GetWikipediaRedirectTitleByScientificName(raw);
-                if (!string.IsNullOrWhiteSpace(redirectTitle) && !redirectTitle.Equals(raw, StringComparison.OrdinalIgnoreCase)) {
-                    var cleaned = CommonNameNormalizer.RemoveDisambiguationSuffix(redirectTitle);
-                    if (!CommonNameNormalizer.LooksLikeScientificName(cleaned, null, null)) {
-                        commonName = cleaned;
-                    }
-                }
-            }
-        }
-
-        // --- Resolve wikilink target for the sentence ---
-        string? wikilinkTarget = null;
-        if (!string.IsNullOrWhiteSpace(yamlRule?.Wikilink))
-            wikilinkTarget = yamlRule.Wikilink;
-        else if (!string.IsNullOrWhiteSpace(legacyRules?.Wikilink))
-            wikilinkTarget = legacyRules.Wikilink;
-        else {
-            var yamlMainArticle = _taxonRules?.GetMainArticle(raw);
-            if (!string.IsNullOrWhiteSpace(yamlMainArticle))
-                wikilinkTarget = yamlMainArticle;
-            else if (_storeBackedProvider is not null)
-                wikilinkTarget = _storeBackedProvider.GetWikipediaArticleTitleByScientificName(raw, kingdom);
-        }
+        var commonName = ResolveCommonName(raw, kingdom).Name;
+        var wikilinkTarget = ResolveWikilink(raw, kingdom);
 
         // --- Build common name sentence ---
         var sentence = BuildCommonNameSentence(displayName, rank, commonName, wikilinkTarget);
 
         // --- Revived comprises/blurb grey-text line (legacy TaxonHeaderBlurb.GrayText) ---
-        var description = FormatTaxonDescription(yamlRule);
+        var description = FormatTaxonDescription(_taxonRules?.GetRule(raw));
 
         return new HeadingInfo(headingText, null, sentence, description);
+    }
+
+    /// <summary>
+    /// The common name (usually plural) for a heading's taxon, and where it came from:
+    /// <see cref="HigherTaxonNameSource.Rules"/> (taxon-rules.yml, then rules-list.txt),
+    /// <see cref="HigherTaxonNameSource.CommonNames"/> (the common names store) or
+    /// <see cref="HigherTaxonNameSource.WikipediaRedirect"/> (the article the scientific name
+    /// redirects to, when its title is not a scientific name: Araneae -> Spider).
+    /// </summary>
+    public (string? Name, string? Source) ResolveCommonName(string raw, string? kingdom) {
+        var yamlRule = _taxonRules?.GetRule(raw);
+        var legacyRules = _legacyRules.Get(raw);
+
+        // Priority: YAML CommonPlural > YAML CommonName > Legacy CommonPlural > Legacy CommonName
+        if (!string.IsNullOrWhiteSpace(yamlRule?.CommonPlural))
+            return (yamlRule.CommonPlural, HigherTaxonNameSource.Rules);
+        if (!string.IsNullOrWhiteSpace(yamlRule?.CommonName))
+            return (yamlRule.CommonName, HigherTaxonNameSource.Rules);
+        if (!string.IsNullOrWhiteSpace(legacyRules?.CommonPlural))
+            return (legacyRules.CommonPlural, HigherTaxonNameSource.Rules);
+        if (!string.IsNullOrWhiteSpace(legacyRules?.CommonName))
+            return (legacyRules.CommonName, HigherTaxonNameSource.Rules);
+        if (_storeBackedProvider is null) {
+            return (null, null);
+        }
+        // Store-backed common names for higher taxa
+        var storeName = _storeBackedProvider.GetBestCommonNameByScientificName(raw, kingdom);
+        if (!string.IsNullOrWhiteSpace(storeName)) {
+            return (storeName, HigherTaxonNameSource.CommonNames);
+        }
+        // Fallback: Wikipedia redirect target (e.g., Araneae -> Spider)
+        var redirectTitle = _storeBackedProvider.GetWikipediaRedirectTitleByScientificName(raw);
+        if (!string.IsNullOrWhiteSpace(redirectTitle) && !redirectTitle.Equals(raw, StringComparison.OrdinalIgnoreCase)) {
+            var cleaned = CommonNameNormalizer.RemoveDisambiguationSuffix(redirectTitle);
+            if (!CommonNameNormalizer.LooksLikeScientificName(cleaned, null, null)) {
+                return (cleaned, HigherTaxonNameSource.WikipediaRedirect);
+            }
+        }
+        return (null, null);
+    }
+
+    /// <summary>
+    /// The article a heading's "Members of ..." sentence links: a wikilink from taxon-rules.yml or
+    /// rules-list.txt, else the main article in taxon-rules.yml, else the store's article for the
+    /// scientific name. Null when none is known.
+    /// </summary>
+    public string? ResolveWikilink(string raw, string? kingdom) {
+        var yamlRule = _taxonRules?.GetRule(raw);
+        var legacyRules = _legacyRules.Get(raw);
+        if (!string.IsNullOrWhiteSpace(yamlRule?.Wikilink))
+            return yamlRule.Wikilink;
+        if (!string.IsNullOrWhiteSpace(legacyRules?.Wikilink))
+            return legacyRules.Wikilink;
+        var yamlMainArticle = _taxonRules?.GetMainArticle(raw);
+        if (!string.IsNullOrWhiteSpace(yamlMainArticle))
+            return yamlMainArticle;
+        return _storeBackedProvider?.GetWikipediaArticleTitleByScientificName(raw, kingdom);
     }
 
     public HeadingInfo FormatVirtualGroupHeading(VirtualGroup group) {

@@ -171,7 +171,10 @@ internal sealed class SiteAssessmentPass {
                      .ThenBy(a => a.YearPublished ?? 0)
                      .ThenBy(a => a.AssessmentId)) {
             // Later rows win: CSV rows come last, then the newest.
-            _taxa[assessment.TaxonId].LatestGlobalAssessmentId = assessment.AssessmentId;
+            var taxon = _taxa[assessment.TaxonId];
+            taxon.LatestGlobalAssessmentId = assessment.AssessmentId;
+            taxon.LatestGlobalStatusCode = IucnStatusTemplate.ToTemplateCode(assessment.Category, assessment.PossiblyExtinct,
+                assessment.PossiblyExtinctInTheWild);
         }
     }
 

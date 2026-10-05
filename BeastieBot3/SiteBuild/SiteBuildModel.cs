@@ -21,6 +21,11 @@ internal sealed record SiteBuildInputs {
     /// `iucn resolve-dois`'s cache (Datastore:IUCN_doi_cache_sqlite): DOIs found in Crossref's list
     /// of IUCN DOIs or at doi.org.
     public string? DoiCache { get; init; }
+    /// rules/iucn-not-assigned.yml: orders and families for taxa that IUCN gives as "NOT ASSIGNED",
+    /// for the tree of groups, as in the Wikipedia lists.
+    public Iucn.IucnNotAssignedRules NotAssignedRules { get; init; } = Iucn.IucnNotAssignedRules.None;
+    /// taxon-rules.yml, whose common names for groups the list headings use.
+    public string? TaxonRules { get; init; }
     /// rules-list.txt, whose "Scientific name = common name" lines override the best English name,
     /// as they do in the Wikipedia lists.
     public string? RulesList { get; init; }
@@ -71,6 +76,16 @@ internal sealed class SiteTaxon {
     public string? WikidataOtherItems { get; set; }
     public string? ColId { get; set; }
     public long? LatestGlobalAssessmentId { get; set; }
+    /// The {{IUCN status}} code of the latest global assessment ("CR(PE)", "LR/nt"); null when none.
+    public string? LatestGlobalStatusCode { get; set; }
+
+    /// The tree of groups (SiteTaxonTree): the lowest group the taxon is in, and its place in the tree.
+    public int? NodeId { get; set; }
+    public int? TreePos { get; set; }
+    /// What a Wikipedia list line links (SpeciesLineFormatter): the taxon's article, and for a
+    /// subspecies or variety its species' article.
+    public string? ListArticleTitle { get; set; }
+    public string? ListParentArticleTitle { get; set; }
 
     /// False for a taxon that is only in the IUCN API cache, not in the release's CSV export (an old
     /// or merged id, or a taxon IUCN no longer assesses). None of its assessments is latest.
@@ -144,6 +159,19 @@ internal sealed class SiteBuildStats {
     public int ParentsByName;
     public int ParentsFromApi;
     public int ParentsMissing;
+    public int TreeNodes;
+    public int TreeColGroups;
+    public int TreeRuleGroups;
+    public int TreeTaxaUnderRuleOrder;
+    public int TreeTaxaUnderRuleFamily;
+    public int TreeTaxaWithUnassignedRank;
+    public int TreeTaxaWithoutKingdom;
+    public string? ColPlacementState;
+    public int GroupCommonNames;
+    public int GroupArticles;
+    public int GroupColIds;
+    public int GroupsWithColNames;
+    public int ListArticleTitles;
 
     public int CsvAssessments;
     public int CsvAssessmentsNoScope;

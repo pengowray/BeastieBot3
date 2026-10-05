@@ -21,6 +21,10 @@ public sealed class SearchModel : PageModel {
     public IReadOnlyList<TaxonListItem> Items { get; private set; } = [];
     public long TotalTaxa { get; private set; }
 
+    /// Groups (genera, families and other ranks) whose name is the search text.
+    public IReadOnlyList<GroupRow> Groups { get; private set; } = [];
+    public const int MaxGroups = 10;
+
     /// q: the search text. all=1 lists the results even when the text names exactly one taxon (the
     /// "See all search results" link on a taxon page uses it, so it does not redirect straight back).
     public IActionResult OnGet() {
@@ -36,6 +40,10 @@ public sealed class SearchModel : PageModel {
         }
 
         var result = _queries.Search(Query, MaxResults, cancellationToken: HttpContext.RequestAborted);
+        Groups = _queries.FindGroupsByName(Query, MaxGroups);
+        if (all != "1" && Groups.Count == 1 && !result.Hits.Any(h => h.IsExactMatch)) {
+            return Redirect(Web.SiteUrls.Group(Groups[0]));
+        }
         if (all != "1" && SingleExactMatch(result.Hits) is { } hit) {
             var url = $"/species/{hit.Taxon.TaxonId}";
             if (hit.MatchedNameType != NameTypes.Scientific) {

@@ -60,6 +60,14 @@ public sealed class SpeciesModel : PageModel {
     public TaxonRow? Taxon { get; private set; }
     public TaxonSummary? Parent { get; private set; }
 
+    /// The groups the taxon is in, kingdom first, with the Catalogue of Life groups between IUCN's
+    /// ranks. Empty for a taxon not in the release, whose page lists its ranks as IUCN gave them.
+    public IReadOnlyList<GroupRow> Classification { get; private set; } = [];
+
+    /// The Catalogue of Life's English names of the classification's groups that have no English name of their own.
+    public IReadOnlyDictionary<int, IReadOnlyList<string>> ClassificationColNames { get; private set; } =
+        new Dictionary<int, IReadOnlyList<string>>();
+
     /// False for a taxon that is not in the release: an old IUCN id, or a taxon IUCN no longer
     /// assesses. Its page has no status summary and no latest assessment.
     public bool InRelease => Taxon?.InRelease ?? true;
@@ -148,6 +156,10 @@ public sealed class SpeciesModel : PageModel {
 
         if (Taxon.ParentTaxonId is { } parentId) {
             Parent = _queries.GetSummary(parentId);
+        }
+        if (Taxon.NodeId is { } nodeId) {
+            Classification = _queries.GetGroupPath(nodeId);
+            ClassificationColNames = _queries.GetGroupColNames(Classification.Where(g => g.CommonNameEn is null).Select(g => g.NodeId).ToList());
         }
         LinkedTaxa = _queries.GetLinkedTaxa(Taxon.TaxonId);
         EpbcListings = _queries.GetEpbcListings(Taxon.TaxonId);

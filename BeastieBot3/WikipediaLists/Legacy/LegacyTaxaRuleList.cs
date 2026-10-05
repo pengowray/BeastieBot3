@@ -20,6 +20,12 @@ internal sealed class LegacyTaxaRuleList {
         Compile(File.ReadAllLines(fullPath));
     }
 
+    private LegacyTaxaRuleList() {
+    }
+
+    /// <summary>A list with no rules, for when rules-list.txt is not there.</summary>
+    public static LegacyTaxaRuleList Empty() => new();
+
     public LegacyTaxonRules? Get(string taxon) {
         if (string.IsNullOrWhiteSpace(taxon)) {
             return null;

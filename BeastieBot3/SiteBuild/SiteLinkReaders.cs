@@ -431,6 +431,34 @@ internal static class SiteLinkReaders {
         return SiteBuildRules.ColReleaseFromPath(source.ExecuteScalar() as string);
     }
 
+    /// The CoL groups between IUCN ranks from the placement file's placement for one IUCN database
+    /// (source_key), with their CoL ids.
+    public static SitePlacement ReadPlacementPaths(string path, string sourceKey, CancellationToken cancellationToken) {
+        using var connection = OpenReadOnly(path);
+        using var command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT span, anchor_key, name, col_rank, show_rank, col_id
+            FROM placement WHERE source_key = @key
+            ORDER BY span, anchor_key, seq
+            """;
+        command.Parameters.AddWithValue("@key", sourceKey);
+        var paths = new Dictionary<(Taxonomy.PlacementSpan, string), IReadOnlyList<SitePlacementNode>>();
+        using var reader = command.ExecuteReader();
+        while (reader.Read()) {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (!Enum.TryParse<Taxonomy.PlacementSpan>(reader.GetString(0), out var span)) {
+                continue;
+            }
+            var key = (span, reader.GetString(1));
+            if (!paths.TryGetValue(key, out var list)) {
+                paths[key] = list = new List<SitePlacementNode>();
+            }
+            ((List<SitePlacementNode>)list).Add(new SitePlacementNode(reader.GetString(2), reader.GetString(3), reader.GetInt32(4) != 0,
+                reader.IsDBNull(5) ? null : SiteBuildRules.NullIfBlank(reader.GetString(5))));
+        }
+        return new SitePlacement(paths);
+    }
+
     public static void ApplyColCrossReferences(IReadOnlyDictionary<long, SiteTaxon> taxa, IReadOnlyDictionary<long, string> crossReferences,
         SiteBuildStats stats) {
         foreach (var (taxonId, colId) in crossReferences) {

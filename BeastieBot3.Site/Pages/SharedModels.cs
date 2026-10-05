@@ -24,6 +24,13 @@ public sealed record BadgeModel(CategoryDisplay Category, bool Large = false, bo
 
     public static BadgeModel For(AssessmentRow assessment, bool large = false, bool showLabel = true) =>
         new(IucnCategories.Describe(assessment), large, showLabel);
+
+    /// The badge of an {{IUCN status}} code as the group counts store it ("CR(PE)", "LR/nt").
+    public static BadgeModel ForStatusCode(string code, bool showLabel = false) => code switch {
+        "CR(PE)" => new(IucnCategories.Describe("CR", true, false), false, showLabel),
+        "CR(PEW)" => new(IucnCategories.Describe("CR", false, true), false, showLabel),
+        _ => new(IucnCategories.Describe(code, false, false), false, showLabel),
+    };
 }
 
 /// One taxon in a list of results (search, name lookup) or of child taxa, with a note saying which

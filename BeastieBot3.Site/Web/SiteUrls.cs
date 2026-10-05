@@ -1,6 +1,18 @@
 namespace BeastieBot3.Site.Web;
 
 public static class SiteUrls {
+    /// A group page: "/taxa/family/felidae", with "?kingdom=plantae" or "?parent=Moraceae" when
+    /// another group has the same rank and name. listQuery is the list options ("?style=sci&h=family"
+    /// or empty), joined to that.
+    public static string Group(Data.GroupRow group, string listQuery = "") {
+        var url = $"/taxa/{Uri.EscapeDataString(group.Rank)}/{Uri.EscapeDataString(group.Name.ToLowerInvariant())}";
+        var query = listQuery.TrimStart('?');
+        if (group.LinkQuery is { } pick) {
+            query = query.Length == 0 ? pick : pick + "&" + query;
+        }
+        return query.Length == 0 ? url : url + "?" + query;
+    }
+
     /// The absolute URL of a path on this site ("/species/22823"), for canonical links. Built from
     /// Site:BaseUrl when it is an absolute http or https URL. Otherwise from the request: its scheme,
     /// its host in lower case, and its port only when it is not the scheme's default. Output-cached

@@ -44,7 +44,38 @@
     @if (parentPrefix is not null && Model.Parent is { } parent) {
         <p class="parent-line">@parentPrefix <a href="/species/@parent.TaxonId">@Html.Raw(ScientificNameMarkup.ToHtml(parent.ScientificName, parent.SubpopulationName))</a></p>
     }
-    @if (ranks.Any(r => !string.IsNullOrWhiteSpace(r))) {
+    @if (Model.Classification.Count > 0) {
+        var colCount = Model.Classification.Count(g => g.IsCol);
+        @* The groups link to their pages. Catalogue of Life groups are hidden until the box is ticked
+           (site.css, :has), so the page needs no script for it. *@
+        <div class="classification has-col-toggle">
+            <h2 id="classification-heading" class="visually-hidden">@SiteText.HeadingClassification</h2>
+            <ol>
+                @foreach (var step in Model.Classification) {
+                    var colNames = step.CommonNameEn is null ? Model.ClassificationColNames.GetValueOrDefault(step.NodeId) : null;
+                    <li class="@(step.IsCol ? "col-group" : null)">
+                        @if (step.ShowRank && step.Rank != "unranked") {
+                            <span class="rank">@BeastieBot3.Site.Lists.GroupList.Capitalize(step.Rank)</span>
+                        }
+                        <a href="@BeastieBot3.Site.Web.SiteUrls.Group(step)">@if (step.IsGenus) {<i>@step.Name</i>} else {@step.Name}</a>
+                        @if (step.CommonNameEn is not null) {
+                            <span class="group-common">@step.CommonNameEn</span>
+                        } else if (colNames is { Count: > 0 }) {
+                            <span class="group-common col-names" title="@GroupText.ColNamesTitle">@string.Join(", ", colNames.Take(3))</span>
+                        }
+                        @if (step.IsCol) {
+                            <abbr class="col-marker" title="@GroupText.ColMarkerTitle">@GroupText.ColMarker</abbr>
+                        } else if (step.IsFromRule) {
+                            <span class="rule-marker" title="@GroupText.RuleMarkerTitle">@GroupText.RuleMarker</span>
+                        }
+                    </li>
+                }
+            </ol>
+            @if (colCount > 0) {
+                <label class="col-toggle"><input type="checkbox" class="show-col" autocomplete="off"> @GroupText.ShowColGroups (@colCount)</label>
+            }
+        </div>
+    } else if (ranks.Any(r => !string.IsNullOrWhiteSpace(r))) {
         @* The ranks are plain text, so they sit in a div with a hidden heading (a nav landmark is for links). *@
         <div class="classification">
             <h2 id="classification-heading" class="visually-hidden">@SiteText.HeadingClassification</h2>
