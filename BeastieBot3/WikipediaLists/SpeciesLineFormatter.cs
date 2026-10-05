@@ -1,8 +1,8 @@
 using System;
 using System.Text;
-using System.Text.RegularExpressions;
 using BeastieBot3.CommonNames;
 using BeastieBot3.Iucn;
+using BeastieBot3.Shared.Wikitext;
 using BeastieBot3.Taxonomy;
 using BeastieBot3.WikipediaLists.Legacy;
 using static BeastieBot3.WikipediaLists.ProseFormat;
@@ -12,10 +12,11 @@ namespace BeastieBot3.WikipediaLists;
 
 // Renders a single species/infraspecific record to one wikitext bullet line, in whichever listing
 // style the display preferences select (Style A scientific-focus, Style B common-focus, Style C
-// common-only). Owns the name resolution it needs — common name, Wikipedia article title, scientific
-// name formatting, link-target selection, and the {{IUCN status}} template. Extracted from
-// WikipediaListGenerator (R2 carve-up); the generator builds the taxonomy tree and calls in here per
-// leaf record. Holds the same common-name providers the generator was constructed with.
+// common-only). Owns the name resolution the line needs: common name, Wikipedia article title,
+// the parent species' article and the scientific name. The line itself is rendered by
+// SpeciesListLine in BeastieBot3.Shared, which the public site uses too; ToEntry builds its input.
+// Extracted from WikipediaListGenerator (R2 carve-up); the generator builds the taxonomy tree and
+// calls in here per leaf record. Holds the same common-name providers the generator was constructed with.
 internal sealed class SpeciesLineFormatter {
     private readonly LegacyTaxaRuleList _legacyRules;
     private readonly CommonNameProvider? _commonNameProvider;
@@ -31,66 +32,8 @@ internal sealed class SpeciesLineFormatter {
     }
 
     public string FormatSpeciesLine(IucnSpeciesRecord record, DisplayPreferences display, string? listStatusContext, OtherBucketContext? otherContext = null) {
-        var descriptor = IucnRedlistStatus.Describe(record.StatusCode);
-        var builder = new StringBuilder();
-        builder.Append("* ");
-
-        builder.Append(BuildNameFragment(record, display));
-
-        // Add special indicator for PE/PEW if not redundant with list context
-        var specialLabel = GetSpecialStatusLabel(record.StatusCode, listStatusContext);
-        if (!string.IsNullOrWhiteSpace(specialLabel)) {
-            builder.Append(" (");
-            builder.Append(specialLabel);
-            builder.Append(')');
-        }
-
-        // Append subpopulation name if present
-        var scopeLabel = GetRegionalScopeLabel(record);
-        if (!string.IsNullOrWhiteSpace(record.SubpopulationName) || !string.IsNullOrWhiteSpace(scopeLabel)) {
-            builder.Append(" (");
-            if (!string.IsNullOrWhiteSpace(record.SubpopulationName)) {
-                builder.Append(record.SubpopulationName);
-            }
-
-            if (!string.IsNullOrWhiteSpace(scopeLabel)) {
-                if (!string.IsNullOrWhiteSpace(record.SubpopulationName)) {
-                    builder.Append("; ");
-                }
-                builder.Append("scope: ");
-                builder.Append(scopeLabel);
-            }
-
-            builder.Append(')');
-        }
-
-        // Add IUCN status template at end: {{IUCN status|XX|taxonId/assessmentId|1|year=YYYY}}
-        if (display.IncludeStatusTemplate) {
-            builder.Append(' ');
-            builder.Append(BuildIucnStatusTemplate(record, descriptor));
-        }
-
-        // Add rank annotation for "Other" bucket items (e.g., Family, Subfamily, Tribe)
-        if (otherContext is { IsInOtherBucket: true }) {
-            var rankValue = otherContext.GetRankValue(record);
-            if (!string.IsNullOrWhiteSpace(rankValue)) {
-                var displayValue = ToTitleCase(rankValue);
-                var shouldLink = otherContext.ShouldLinkValue(displayValue);
-                if (shouldLink) {
-                    builder.Append($" ({otherContext.RankLabel}: [[{displayValue}]])");
-                } else {
-                    builder.Append($" ({otherContext.RankLabel}: {displayValue})");
-                }
-            }
-        }
-
-        // A source-supplied trailing annotation (e.g. the SPRAT multi-system status string). Appended
-        // verbatim with an em-dash separator; null for IUCN-sourced records, so the line is unchanged.
-        if (!string.IsNullOrWhiteSpace(record.StatusAnnotation)) {
-            builder.Append(" — ");
-            builder.Append(record.StatusAnnotation);
-        }
-
+        var builder = new StringBuilder(SpeciesListLine.Format(ToEntry(record), ToLineOptions(display, listStatusContext)));
+        AppendAnnotations(builder, record, otherContext);
         return builder.ToString();
     }
 
@@ -105,53 +48,60 @@ internal sealed class SpeciesLineFormatter {
     }
 
     public string FormatInfraspecificLine(IucnSpeciesRecord record, DisplayPreferences display, string? listStatusContext, OtherBucketContext? otherContext = null) {
-        var descriptor = IucnRedlistStatus.Describe(record.StatusCode);
-        var builder = new StringBuilder();
-        builder.Append("* ");
+        var builder = new StringBuilder(SpeciesListLine.FormatInfraspecificUnderSpecies(ToEntry(record), ToLineOptions(display, listStatusContext)));
+        AppendAnnotations(builder, record, otherContext);
+        return builder.ToString();
+    }
 
-        var commonName = ResolveCommonName(record);
-        var articleTitle = ResolveWikipediaArticle(record);
-        var infraLink = BuildInfraspecificLink(record, articleTitle, abbreviateGenus: true);
-        if (!string.IsNullOrWhiteSpace(infraLink)) {
-            builder.Append(infraLink);
-            if (!string.IsNullOrWhiteSpace(commonName)) {
-                builder.Append(", ");
-                builder.Append(commonName);
-            }
-        } else {
-            builder.Append(BuildNameFragment(record, display));
-        }
+    /// <summary>
+    /// The values SpeciesListLine renders a line from: the record's names, with the common name,
+    /// the article title and (for a subspecies or variety with no article) the parent species'
+    /// article resolved as the lists resolve them.
+    /// </summary>
+    internal SpeciesListEntry ToEntry(IucnSpeciesRecord record) {
+        var articleTitle = ResolveArticleTitle(record);
+        var parentArticle = !string.IsNullOrWhiteSpace(record.InfraName) && string.IsNullOrWhiteSpace(articleTitle)
+            ? ResolveParentSpeciesArticle(record)
+            : null;
+        return new SpeciesListEntry {
+            ScientificName = ResolveScientificName(record),
+            Genus = record.GenusName,
+            SpeciesEpithet = record.SpeciesName,
+            InfraType = record.InfraType,
+            InfraName = record.InfraName,
+            Kingdom = record.KingdomName,
+            SubpopulationName = record.SubpopulationName,
+            RegionalScopeLabel = GetRegionalScopeLabel(record),
+            CommonName = ResolveCommonName(record),
+            ArticleTitle = articleTitle,
+            ParentSpeciesArticleTitle = parentArticle,
+            StatusCode = IucnRedlistStatus.Describe(record.StatusCode).Code,
+            PossiblyExtinct = IsFlagTrue(record.PossiblyExtinct),
+            PossiblyExtinctInTheWild = IsFlagTrue(record.PossiblyExtinctInTheWild),
+            TaxonId = record.TaxonId,
+            AssessmentId = record.AssessmentId,
+            YearPublished = record.YearPublished,
+        };
+    }
 
-        var specialLabel = GetSpecialStatusLabel(record.StatusCode, listStatusContext);
-        if (!string.IsNullOrWhiteSpace(specialLabel)) {
-            builder.Append(" (");
-            builder.Append(specialLabel);
-            builder.Append(')');
-        }
+    internal static SpeciesListLineOptions ToLineOptions(DisplayPreferences display, string? statusContext) => new() {
+        Style = display.ListingStyle switch {
+            ListingStyle.ScientificNameFocus => SpeciesListStyle.ScientificNameFirst,
+            ListingStyle.CommonNameOnly => SpeciesListStyle.CommonNameOnly,
+            _ => SpeciesListStyle.CommonNameFirst,
+        },
+        IncludeStatusTemplate = display.IncludeStatusTemplate,
+        ItalicizeScientific = display.ItalicizeScientific,
+        StatusContext = statusContext,
+    };
 
-        var scopeLabel = GetRegionalScopeLabel(record);
-        if (!string.IsNullOrWhiteSpace(record.SubpopulationName) || !string.IsNullOrWhiteSpace(scopeLabel)) {
-            builder.Append(" (");
-            if (!string.IsNullOrWhiteSpace(record.SubpopulationName)) {
-                builder.Append(record.SubpopulationName);
-            }
+    // The CSV's "true"/"false" text: exactly "true" in any case, untrimmed, as IucnRedlistStatus reads it.
+    private static bool IsFlagTrue(string? flag) => string.Equals(flag, "true", StringComparison.OrdinalIgnoreCase);
 
-            if (!string.IsNullOrWhiteSpace(scopeLabel)) {
-                if (!string.IsNullOrWhiteSpace(record.SubpopulationName)) {
-                    builder.Append("; ");
-                }
-                builder.Append("scope: ");
-                builder.Append(scopeLabel);
-            }
-
-            builder.Append(')');
-        }
-
-        if (display.IncludeStatusTemplate) {
-            builder.Append(' ');
-            builder.Append(BuildIucnStatusTemplate(record, descriptor));
-        }
-
+    // After the shared line: the rank of an "Other" bucket item (e.g. Family, Subfamily, Tribe), then
+    // a source-supplied annotation (the SPRAT multi-system status string), appended verbatim with an
+    // em-dash separator; null for IUCN-sourced records, so the line is unchanged.
+    private static void AppendAnnotations(StringBuilder builder, IucnSpeciesRecord record, OtherBucketContext? otherContext) {
         if (otherContext is { IsInOtherBucket: true }) {
             var rankValue = otherContext.GetRankValue(record);
             if (!string.IsNullOrWhiteSpace(rankValue)) {
@@ -165,200 +115,10 @@ internal sealed class SpeciesLineFormatter {
             }
         }
 
-        // A source-supplied trailing annotation (e.g. the SPRAT multi-system status string). Appended
-        // verbatim with an em-dash separator; null for IUCN-sourced records, so the line is unchanged.
         if (!string.IsNullOrWhiteSpace(record.StatusAnnotation)) {
             builder.Append(" — ");
             builder.Append(record.StatusAnnotation);
         }
-
-        return builder.ToString();
-    }
-
-    private string BuildNameFragment(IucnSpeciesRecord record, DisplayPreferences display) {
-        var commonName = ResolveCommonName(record);
-        var articleTitle = ResolveWikipediaArticle(record);
-        var rawScientific = ResolveScientificName(record);
-        var formattedScientific = FormatScientificNameForDisplay(record, display.ItalicizeScientific);
-
-        // For infraspecific taxa, use properly formatted name for link targets.
-        // This ensures animal subspecies omit "ssp." and plants include "subsp."/"var.".
-        var linkScientific = !string.IsNullOrWhiteSpace(record.InfraName)
-            ? BuildScientificNameForLink(record)
-            : rawScientific;
-
-        return display.ListingStyle switch {
-            ListingStyle.ScientificNameFocus => BuildScientificNameFocusFragment(commonName, articleTitle, linkScientific, formattedScientific, record),
-            ListingStyle.CommonNameOnly => BuildCommonNameOnlyFragment(commonName, articleTitle, linkScientific, formattedScientific, record),
-            _ => BuildCommonNameFocusFragment(commonName, articleTitle, linkScientific, formattedScientific, record),  // Default: CommonNameFocus
-        };
-    }
-
-    /// <summary>
-    /// Style A: Scientific name focus. Shows scientific name first, common name after comma.
-    /// Examples:
-    /// - ''[[Pinus radiata]]'', Monterey pine
-    /// - ''[[Scientific name]]''
-    /// - ''[[Wikilink|Scientific name]]'', Common name
-    /// </summary>
-    private string BuildScientificNameFocusFragment(string? commonName, string? articleTitle, string? rawScientific, string formattedScientific, IucnSpeciesRecord record) {
-        // For infraspecific taxa with var./subsp., use special formatting
-        var hasInfrarank = !string.IsNullOrWhiteSpace(record.InfraType) && !string.IsNullOrWhiteSpace(record.InfraName);
-        var infraLink = hasInfrarank ? BuildInfraspecificLink(record, articleTitle) : null;
-
-        if (!string.IsNullOrWhiteSpace(infraLink)) {
-            if (!string.IsNullOrWhiteSpace(commonName)) {
-                return $"{infraLink}, {commonName}";
-            }
-            return infraLink;
-        }
-
-        // Standard species formatting
-        var linkTarget = ResolveLinkTarget(record, articleTitle, rawScientific);
-
-        if (string.IsNullOrWhiteSpace(linkTarget)) {
-            // No linkable target (e.g. an undescribed "sp. nov." placeholder) — show plain italic,
-            // keeping the common name if there is one.
-            return !string.IsNullOrWhiteSpace(commonName) ? $"{formattedScientific}, {commonName}" : formattedScientific;
-        }
-
-        // Use ''[[X]]'' format when link target matches scientific name
-        if (string.Equals(linkTarget, rawScientific, StringComparison.OrdinalIgnoreCase)) {
-            var linkedScientific = $"''[[{rawScientific}]]''";
-            if (!string.IsNullOrWhiteSpace(commonName)) {
-                return $"{linkedScientific}, {commonName}";
-            }
-            return linkedScientific;
-        }
-
-        // Article uses common name as title, so use [[Wikilink|Scientific name]]
-        var linkedWithPipe = $"[[{linkTarget}|{formattedScientific}]]";
-        if (!string.IsNullOrWhiteSpace(commonName)) {
-            return $"{linkedWithPipe}, {commonName}";
-        }
-        return linkedWithPipe;
-    }
-
-    /// <summary>
-    /// Style B: Common name focus (default). Shows common name first, scientific name in parentheses.
-    /// Scientific name must always be explicitly visible — never hidden inside a link.
-    /// Examples:
-    /// - [[Common name]] (''Scientific name'')
-    /// - [[Wikilink|Common name]] (''Scientific name'')
-    /// - [[Article title|''Scientific name'']] (no common name; the article has another title)
-    /// - ''[[Scientific name]]'' (no common name; no article, or the article has the scientific name as its title)
-    /// With no common name the line is the same as in Style C: the scientific name, linked to the
-    /// article. The article title is only a link target, never shown, because it is often another
-    /// scientific name ("Crenimugil buchanani" for Moolgarda buchanani) or a genus.
-    /// </summary>
-    private string BuildCommonNameFocusFragment(string? commonName, string? articleTitle, string? rawScientific, string formattedScientific, IucnSpeciesRecord record) {
-        if (string.IsNullOrWhiteSpace(commonName)) {
-            return BuildScientificNameOnlyFragment(articleTitle, rawScientific, formattedScientific, record);
-        }
-
-        // We have a common name
-        var commonLinkTarget = ResolveLinkTargetForCommonName(articleTitle, rawScientific, commonName);
-
-        if (string.IsNullOrWhiteSpace(commonLinkTarget)) {
-            // No link target available, just use common name
-            return $"[[{commonName}]] ({formattedScientific})";
-        }
-
-        // Build the link
-        string linkedCommonName;
-        if (string.Equals(commonLinkTarget, commonName, StringComparison.Ordinal)) {
-            linkedCommonName = $"[[{commonName}]]";
-        } else {
-            linkedCommonName = $"[[{commonLinkTarget}|{commonName}]]";
-        }
-
-        return $"{linkedCommonName} ({formattedScientific})";
-    }
-
-    /// <summary>
-    /// Style C: Common name only. Shows only common name (falls back to scientific if unavailable).
-    /// Examples:
-    /// - [[Common name]]
-    /// - [[Wikilink|Common name]]
-    /// - ''[[Scientific name]]'' (fallback when no common name)
-    /// </summary>
-    private string BuildCommonNameOnlyFragment(string? commonName, string? articleTitle, string? rawScientific, string formattedScientific, IucnSpeciesRecord record) {
-        if (string.IsNullOrWhiteSpace(commonName)) {
-            return BuildScientificNameOnlyFragment(articleTitle, rawScientific, formattedScientific, record);
-        }
-
-        // We have a common name - show only common name
-        var commonLinkTarget = ResolveLinkTargetForCommonName(articleTitle, rawScientific, commonName);
-
-        if (string.IsNullOrWhiteSpace(commonLinkTarget)) {
-            return $"[[{commonName}]]";
-        }
-
-        if (string.Equals(commonLinkTarget, commonName, StringComparison.Ordinal)) {
-            return $"[[{commonName}]]";
-        }
-
-        return $"[[{commonLinkTarget}|{commonName}]]";
-    }
-
-    /// <summary>
-    /// The name fragment of Styles B and C for a taxon with no common name: the scientific name,
-    /// linked to the article when there is one. A subspecies or variety gets its rank marker
-    /// (<see cref="BuildInfraspecificLink"/>). Examples:
-    /// - ''[[Scientific name]]'' (the link target is the scientific name)
-    /// - [[Article title|''Scientific name'']]
-    /// - ''Scientific name'' (nothing to link, such as an undescribed "sp. nov." name)
-    /// </summary>
-    private string BuildScientificNameOnlyFragment(string? articleTitle, string? rawScientific, string formattedScientific, IucnSpeciesRecord record) {
-        var hasInfrarank = !string.IsNullOrWhiteSpace(record.InfraType) && !string.IsNullOrWhiteSpace(record.InfraName);
-        if (hasInfrarank) {
-            var infraLink = BuildInfraspecificLink(record, articleTitle);
-            if (!string.IsNullOrWhiteSpace(infraLink)) {
-                return infraLink;
-            }
-        }
-
-        var linkTarget = ResolveLinkTarget(record, articleTitle, rawScientific);
-        if (string.IsNullOrWhiteSpace(linkTarget)) {
-            return formattedScientific;
-        }
-        // Ordinal: a title that differs from the scientific name only in case is still a different
-        // text, and shown as the link text it would put the article title on the line.
-        if (string.Equals(linkTarget, rawScientific, StringComparison.Ordinal)) {
-            return $"''[[{linkTarget}]]''";
-        }
-        return $"[[{linkTarget}|{formattedScientific}]]";
-    }
-
-    /// <summary>
-    /// Builds a properly formatted link for subspecies/varieties with correct italicization.
-    /// For infraspecific taxa, we need [[link|''Genus species'' subsp. ''subspecies'']] format.
-    /// For animals, the rank marker is hidden.
-    /// </summary>
-    private string? BuildInfraspecificLink(IucnSpeciesRecord record, string? articleTitle, bool abbreviateGenus = false) {
-        if (string.IsNullOrWhiteSpace(record.InfraName)) {
-            return null;
-        }
-
-        var displayText = BuildInfraspecificDisplayText(record, abbreviateGenus);
-        var fullScientific = BuildScientificNameForLink(record);
-        if (string.IsNullOrWhiteSpace(displayText) || string.IsNullOrWhiteSpace(fullScientific)) {
-            return null;
-        }
-
-        if (!string.IsNullOrWhiteSpace(articleTitle)) {
-            return $"[[{articleTitle}|{displayText}]]";
-        }
-
-        // Subspecies/variety articles rarely exist. Rather than redlink a bare trinomial, link the
-        // formatted name to the PARENT SPECIES article when one is known (e.g. an Antarctic blue
-        // whale subspecies → the blue whale article); otherwise fall back to plain (italic) text.
-        var parentArticle = ResolveParentSpeciesArticle(record);
-        if (!string.IsNullOrWhiteSpace(parentArticle)) {
-            return $"[[{parentArticle}|{displayText}]]";
-        }
-
-        return displayText;
     }
 
     /// <summary>
@@ -366,7 +126,7 @@ internal sealed class SpeciesLineFormatter {
     /// or null when no article is known — used so a subspecies/variety with no article of its own can
     /// still bluelink to its species page instead of redlinking a trinomial.
     /// </summary>
-    private string? ResolveParentSpeciesArticle(IucnSpeciesRecord record) {
+    internal string? ResolveParentSpeciesArticle(IucnSpeciesRecord record) {
         if (_storeBackedProvider is null) {
             return null;
         }
@@ -380,117 +140,9 @@ internal sealed class SpeciesLineFormatter {
     }
 
     /// <summary>
-    /// Format a scientific name for display (with italics if requested).
+    /// The Wikipedia article title the lists link for a record, or null when none is known.
     /// </summary>
-    private static string FormatScientificNameForDisplay(IucnSpeciesRecord record, bool italicize) {
-        if (!string.IsNullOrWhiteSpace(record.InfraName)) {
-            var formatted = BuildInfraspecificDisplayText(record, abbreviateGenus: false, stripItalics: !italicize);
-            if (!string.IsNullOrWhiteSpace(formatted)) {
-                return formatted;
-            }
-        }
-
-        var scientific = BuildScientificNameForDisplay(record);
-        if (string.IsNullOrWhiteSpace(scientific)) {
-            return record.GenusName ?? "";
-        }
-
-        return italicize ? ItalicizeSafe(scientific) : scientific;
-    }
-
-    // Italicize a display string, guarding the MediaWiki quirk where ''X'' with X ending in an
-    // apostrophe (e.g. an undescribed epithet "sp. nov. 'loguerciae'") yields a stray ''' that renders
-    // as bold. Falls back to explicit <i></i> only in that case.
-    private static string ItalicizeSafe(string text) =>
-        text.EndsWith("'", StringComparison.Ordinal) ? $"<i>{text}</i>" : $"''{text}''";
-
-    private static string? BuildScientificNameForDisplay(IucnSpeciesRecord record) {
-        if (!string.IsNullOrWhiteSpace(record.InfraName)) {
-            return BuildInfraspecificDisplayText(record, abbreviateGenus: false, stripItalics: true);
-        }
-
-        return ResolveScientificName(record);
-    }
-
-    private static string BuildScientificNameForLink(IucnSpeciesRecord record) {
-        var genus = record.GenusName?.Trim();
-        var species = record.SpeciesName?.Trim();
-        if (string.IsNullOrWhiteSpace(genus) || string.IsNullOrWhiteSpace(species)) {
-            return ResolveScientificName(record) ?? string.Empty;
-        }
-
-        if (string.IsNullOrWhiteSpace(record.InfraName)) {
-            return $"{genus} {species}";
-        }
-
-        var rankMarker = ResolveInfraspecificRankMarker(record);
-        if (!string.IsNullOrWhiteSpace(rankMarker)) {
-            return $"{genus} {species} {rankMarker} {record.InfraName?.Trim()}".Replace("  ", " ");
-        }
-
-        return $"{genus} {species} {record.InfraName?.Trim()}".Replace("  ", " ");
-    }
-
-    private static string? BuildInfraspecificDisplayText(
-        IucnSpeciesRecord record,
-        bool abbreviateGenus,
-        bool stripItalics = false) {
-        var genus = record.GenusName?.Trim();
-        var species = record.SpeciesName?.Trim();
-        var infraName = record.InfraName?.Trim();
-        if (string.IsNullOrWhiteSpace(genus) || string.IsNullOrWhiteSpace(species) || string.IsNullOrWhiteSpace(infraName)) {
-            return null;
-        }
-
-        if (abbreviateGenus) {
-            genus = genus.Length > 0 ? $"{genus[0]}." : genus;
-        }
-
-        var rankMarker = ResolveInfraspecificRankMarker(record);
-        if (!string.IsNullOrWhiteSpace(rankMarker)) {
-            var head = stripItalics ? $"{genus} {species}" : $"''{genus} {species}''";
-            var tail = stripItalics ? infraName : $"''{infraName}''";
-            return $"{head} {rankMarker} {tail}";
-        }
-
-        return stripItalics
-            ? $"{genus} {species} {infraName}"
-            : $"''{genus} {species} {infraName}''";
-    }
-
-    private static string? ResolveInfraspecificRankMarker(IucnSpeciesRecord record) {
-        var infraType = record.InfraType?.Trim().ToLowerInvariant() ?? string.Empty;
-        var kingdom = record.KingdomName?.ToUpperInvariant() ?? string.Empty;
-
-        if (infraType.Contains("var")) {
-            return "var.";
-        }
-
-        if (infraType.Contains("subsp") || infraType.Contains("ssp")) {
-            return kingdom == "ANIMALIA" ? null : "subsp.";
-        }
-
-        // Botanical "form" rank (IUCN/CoL spell it "forma"/"form"/"f."). Map to the
-        // canonical marker rather than fabricating "forma." in the fall-through below.
-        if (infraType.StartsWith("form") || infraType == "f." || infraType == "f") {
-            return "f.";
-        }
-
-        if (!string.IsNullOrWhiteSpace(infraType)) {
-            return infraType.EndsWith(".") ? infraType : infraType + ".";
-        }
-
-        return null;
-    }
-
-    private static bool RequiresRankMarker(IucnSpeciesRecord record) {
-        return !string.IsNullOrWhiteSpace(ResolveInfraspecificRankMarker(record));
-    }
-
-    /// <summary>
-    /// Resolve the Wikipedia article title for a record.
-    /// </summary>
-    private string? ResolveWikipediaArticle(IucnSpeciesRecord record) {
+    internal string? ResolveArticleTitle(IucnSpeciesRecord record) {
         // A curated per-taxon wikilink override (rules-list.txt "<sci> wikilink <Article>") wins over
         // every data-derived title — it's the manual correction for cases the sources resolve wrongly
         // (e.g. the Canis familiaris/Dingo taxobox split, where the hub has no usable article title).
@@ -510,45 +162,6 @@ internal sealed class SpeciesLineFormatter {
         }
 
         return null;
-    }
-
-    // Undescribed-species placeholders ("Genus sp. nov. 'x'") never have a Wikipedia article.
-    private static bool IsUndescribedName(string? name) =>
-        !string.IsNullOrWhiteSpace(name) && name.Contains("sp. nov", StringComparison.OrdinalIgnoreCase);
-
-    private string ResolveLinkTarget(IucnSpeciesRecord record, string? articleTitle, string? rawScientific) {
-        if (!string.IsNullOrWhiteSpace(articleTitle)) {
-            return articleTitle;
-        }
-
-        // Don't emit a guaranteed redlink for an undescribed placeholder — callers fall back to plain
-        // italic text instead of ''[[Genus sp. nov. 'x']]''.
-        if (IsUndescribedName(rawScientific) || IsUndescribedName(ResolveScientificName(record))) {
-            return string.Empty;
-        }
-
-        if (!string.IsNullOrWhiteSpace(rawScientific)) {
-            return rawScientific;
-        }
-
-        var built = BuildScientificNameForLink(record);
-        if (!string.IsNullOrWhiteSpace(built)) {
-            return built;
-        }
-
-        return record.GenusName ?? record.SpeciesName ?? string.Empty;
-    }
-
-    private static string ResolveLinkTargetForCommonName(string? articleTitle, string? rawScientific, string commonName) {
-        if (!string.IsNullOrWhiteSpace(articleTitle)) {
-            return articleTitle;
-        }
-
-        if (!string.IsNullOrWhiteSpace(rawScientific)) {
-            return rawScientific;
-        }
-
-        return commonName;
     }
 
     /// <summary>
@@ -611,35 +224,5 @@ internal sealed class SpeciesLineFormatter {
         }
 
         return ScientificNameHelper.BuildFromParts(record.GenusName, record.SpeciesName, record.InfraName);
-    }
-
-    private static string BuildIucnStatusTemplate(IucnSpeciesRecord record, RedlistStatusDescriptor descriptor) =>
-        IucnRedlistStatus.BuildStatusTemplate(descriptor.Code, record.PossiblyExtinct, record.PossiblyExtinctInTheWild,
-            record.TaxonId, record.AssessmentId, record.YearPublished);
-
-    private static string? GetSpecialStatusLabel(string statusCode, string? listStatusContext) {
-        // Don't add redundant labels when the list is specifically for that status
-        var code = statusCode.ToUpperInvariant();
-        var context = listStatusContext?.ToUpperInvariant() ?? string.Empty;
-
-        // PE/PEW always need indicator except on dedicated PE lists
-        if (code is "CR(PE)" or "PE") {
-            // If context contains CR(PE) or PE, suppress the label
-            if (context.Contains("CR(PE)") || (context.Contains("PE") && !context.Contains("PEW"))) return null;
-            return "possibly extinct"; // non-breaking space
-        }
-
-        if (code is "CR(PEW)" or "PEW") {
-            if (context.Contains("CR(PEW)") || context.Contains("PEW")) return null;
-            return "possibly extinct in the wild";
-        }
-
-        // EW indicator only needed if not on an EW-specific list
-        if (code == "EW") {
-            if (context.Contains("EW")) return null;
-            return "extinct in the wild";
-        }
-
-        return null;
     }
 }
