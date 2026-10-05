@@ -120,7 +120,8 @@ Rules the site depends on (pinned by `SiteDbBuildTests` and the site tests):
   the taxon's record lists it (`failed_requests` in the API cache, endpoint `assessment`): 3 rows,
   the audit site's "Historical assessments missing from the API". The rows keep the citation from
   the payload the cache downloaded before the 404.
-- Synonyms are stored once per source that gives them (`iucn`, `col`, `wikidata`), with
+- Synonyms are stored once per source that gives them (`iucn`, `col`, `wikidata`,
+  `wikipedia-taxobox`), with
   `name.authority` when the source has one. IUCN's authority is the synonym's `infrarank_author`
   for an infraspecific name, else `species_author`, else the text after the name in its full name
   (`SiteBuildRules.IucnSynonymAuthority`; 150,611 of 151,808). CoL's is the `authorship` of the CoL
@@ -128,7 +129,13 @@ Rules the site depends on (pinned by `SiteDbBuildTests` and the site tests):
   (`SiteLinkReaders.ReadColSynonymAuthorities`; 406,281 of 449,171). Wikidata's are the scientific
   names of the items the taxon's item names as taxon synonym (P1420), when the Wikidata cache has
   downloaded that item (285 names from 8,570 synonym items, read in about 50 seconds), with no
-  authority. The authority is never part of `name_key` or `name_fts`, and `SiteTaxonLinks` still
+  authority. `wikipedia-taxobox` synonyms come from the taxobox of the taxon's Wikipedia article
+  (`SiteLinkReaders.ReadWikipediaTaxoboxSynonyms`): the taxobox's own scientific name with its
+  authority, when Wikipedia uses another name than IUCN ("Nycticeinops crassulus" for
+  *Pipistrellus crassulus*), and the names in its `synonyms` parameter (`TaxoboxSynonymsParser`,
+  which finds names in 96% of the 43,461 cached taxoboxes with a value). A page about a genus or a
+  higher taxon gives none; a page matched to several taxa gives them only to the taxon whose name is
+  the taxobox's. The authority is never part of `name_key` or `name_fts`, and `SiteTaxonLinks` still
   compares IUCN synonym names without it.
 
 - Every taxon in the IUCN CSV export is a row of the `taxon` table with `in_release = 1`, including
@@ -1104,8 +1111,11 @@ colspan and rowspan; `StatusUpdater` decides the edits), and reads the database 
   naming another list (EPBC, CITES, ...): a bare code or `{{IUCN status|X}}` with no ids. The taxon is
   the one taxon in the release named in the same row (italics, links, `{{sp}}`, `{{taxlink}}`; a
   rowspan cell above counts), by an exact `name_key` match on scientific names, trying a trinomial
-  with `ssp.`, `subsp.` and `var.`; IUCN synonyms only when no scientific name matches and they name
-  one taxon. Only the code is changed (and ids and a year added when asked), and a bare `CR` is kept
+  with `ssp.`, `subsp.` and `var.`; synonyms (from any source in the `name` table: IUCN, the Catalogue
+  of Life, Wikidata and Wikipedia taxoboxes) only when no scientific name matches and they name one
+  taxon, with a note naming the synonym; English common names only when neither matches, they name
+  one taxon, and the reader asks (option below). Without the option the item says which common name
+  would have found it. Only the code is changed (and ids and a year added when asked), and a bare `CR` is kept
   for a possibly extinct taxon unless the reader asks for CR(PE) and CR(PEW).
 - Taxoboxes ({{Speciesbox}}, {{Taxobox}}, {{Automatic taxobox}}, {{Subspeciesbox}},
   {{Infraspeciesbox}}) with a `status` parameter: `status` and `status_system`
@@ -1113,10 +1123,11 @@ colspan and rowspan; `StatusUpdater` decides the edits), and reads the database 
   `{{cite iucn}}` inside `status_ref` when it cites another assessment (by the assessment id in
   `|article-number=`, `|id=`, `|url=` or `|doi=`, else by `|year=` / `|volume=`). The new citation
   uses the taxon page's default options, without the ref wrapper, which is kept.
-- Options (`StatusUpdateOptions`, form fields `pe`, `ids`, `year`, `cites`, all off by default):
-  CR(PE) or CR(PEW) instead of a kept CR in table cells and species table rows; ids added to
-  templates with none or with a taxon id only; `|year=` added to templates with no year or label
-  (not EX or EW); older `{{cite iucn}}` citations replaced. When an option that is off would change
+- Options (`StatusUpdateOptions`, form fields `pe`, `ids`, `year`, `cites`, `common`, all off by
+  default): CR(PE) or CR(PEW) instead of a kept CR in table cells and species table rows; ids added
+  to templates with none or with a taxon id only; `|year=` added to templates with no year or label
+  (not EX or EW); older `{{cite iucn}}` citations replaced; a taxon found by an English common name
+  in the row or line. When an option that is off would change
   items, the result lists it with the count and a button that sends the same text again with it on
   (`StatusUpdateResult.CountNotes`).
 - Checked against a sample of 9 English Wikipedia lists on 5 October 2026: what is left as is is
@@ -1125,6 +1136,18 @@ colspan and rowspan; `StatusUpdater` decides the edits), and reads the database 
   the 93,530 cached articles: linked codes (`[[Endangered species|EN]]`) and `data-sort-value` on
   status cells. Not handled: `[[File:Status iucn3.1 EN.svg]]` images (4 in the
   cached articles).
+- The result starts with an edit summary line (`Update/EditSummary.cs`) for the reader to copy into
+  Wikipedia's edit summary: each taxon whose category changed with the old and new codes
+  ("Ursus maritimus EN→VU"), read from the item's text before and after; when that list would pass
+  350 characters, the changes counted by new category in IUCN's order ("40 IUCN statuses changed
+  (20 to EN, 20 to LC)"); then counts of the other status entries and the citations that changed,
+  and "(assisted by Beastie Bot Species Status)". It is left out when nothing changed.
+- The updated wikitext is in a read-only box of fixed height (24rem, at most 70% of the window)
+  that scrolls, with its own colours (`--output-bg`, `--output-border`) and "(read only)" in its
+  label, so it is not taken for the box text is pasted into; `site.js` grows every other wikitext
+  box to fit. The report shows the changed items first, with radio buttons for the items left as is
+  and for all items; when nothing changed, it starts with the items left as is. The filter is CSS
+  (`:has`), with no script and no state.
 - Only the values that change are replaced; everything else comes back byte for byte. At most 3,600
   items (`GroupList.MaxLines`) are checked; the rest are counted and left as they are.
 - The page is the only one that answers POST (`SiteMiddleware.UseGetAndHeadOnly` allows it on
@@ -1155,9 +1178,10 @@ colspan and rowspan; `StatusUpdater` decides the edits), and reads the database 
 
 - Wikidata gives few synonyms until the synonym items are downloaded: the taxa's items name 8,686
   synonym items (P1420). `wikidata queue-synonyms` queues the ones not in the cache, and
-  `wikidata cache-entities` downloads them. English Wikipedia
-  taxoboxes have a `synonyms` parameter (about 62,000 pages in the cache) that the site does not
-  read; its wikitext (`{{Species list}}`, `<br />`, `<small>` authorities) needs a parser first.
+  `wikidata cache-entities` downloads them.
+- `TaxoboxSynonymsParser` gives nothing for an epithet written with a capital (`''Coluber Aurora''`),
+  an abbreviated genus (`''U. clandestina''`) or a genus in square brackets, and keeps publication
+  details and `sensu`/`auct. non` comments in some authorities.
 
 - Few groups have an English name of their own (1,182 of 33,559 in the build of 5 October 2026).
   The rules files name the groups the Wikipedia lists needed; the common names store has names for
