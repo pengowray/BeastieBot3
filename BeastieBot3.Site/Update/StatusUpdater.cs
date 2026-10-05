@@ -340,7 +340,8 @@ public sealed partial class StatusUpdater {
         var before = s.Original(core);
         var names = candidate.Row.Cells.Concat(candidate.Row.Spanning).Where(c => c != candidate.Cell)
             .SelectMany(c => NamesIn(s, c.Content)).Distinct().ToList();
-        var (taxon, failure) = ResolveNames(names, s, [.. candidate.Row.Cells.Concat(candidate.Row.Spanning).Select(c => c.Content)]);
+        // Only the status cell's own references: another cell can cite another taxon's assessment.
+        var (taxon, failure) = ResolveNames(names, s, [candidate.Cell.Content]);
         if (taxon is null) {
             return new StatusFinding(StatusItemKind.TableCell, line, StatusOutcome.NotUpdated, before, null, null, [failure!]);
         }
@@ -576,8 +577,8 @@ public sealed partial class StatusUpdater {
 
     internal static bool IsScientificNameShape(string name) => NameShape().IsMatch(name);
 
-    // context: where to look for an IUCN citation of the taxon when no name matches (the row or line
-    // of the item); null for none.
+    // context: where to look for an IUCN citation of the taxon when no name matches (the status and
+    // its references); null for none.
     private (StatusTaxon? Taxon, StatusNote? Failure) ResolveNames(IReadOnlyList<string> names, WikitextScanner? s = null,
         IReadOnlyList<TextSpan>? context = null) {
         if (names.Count == 0) {

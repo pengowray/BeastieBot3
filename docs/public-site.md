@@ -1116,9 +1116,15 @@ colspan and rowspan; `StatusUpdater` decides the edits), and reads the database 
   taxon, with a note naming the synonym; then the taxon id in an IUCN citation in the row or line
   (a `{{cite iucn}}` written there, or a `<ref name="X"/>` whose definition anywhere in the text has
   a T…A… id), when the citations name one taxon in the release, which also settles a name that
-  matches several taxa (List of vespertilionines, October 2026: 64 of the 323 items found this way,
-  where the list uses newer genus names such as *Afropipistrellus*); English common names only when
-  none of these matches, they name
+  matches several taxa. Only the references on the status count: the status cell, the text from an
+  `{{IUCN status}}` to the end of its line, a species table row's `iucn-status`, `direction` and
+  `population`, and a taxobox's `status_ref`. Other cells cite other assessments: List of
+  vespertilionines cites the broad-headed serotine's assessment for the habitat of Happolds'
+  pipistrelle, which was split from it and is not evaluated, and reading the whole row gave the split
+  species the old species' status. With the status references only, 22 of that list's 323 items
+  are found this way (it uses newer genus names such as *Afropipistrellus*), all with the status
+  the list already gives, and its 45 NE rows are left as is. English common names only when none of
+  these matches, they name
   one taxon, and the reader asks (option below). Without the option the item says which common name
   would have found it. Only the code is changed (and ids and a year added when asked), and a bare `CR` is kept
   for a possibly extinct taxon unless the reader asks for CR(PE) and CR(PEW).

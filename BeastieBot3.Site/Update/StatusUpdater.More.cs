@@ -26,7 +26,7 @@ public sealed partial class StatusUpdater {
     private StatusFinding ListLine(WikitextScanner s, WikiTemplate template, List<Edit> edits) {
         var line = s.LineOf(template.Span.Start);
         var before = s.Original(template.Span);
-        var (taxon, failure) = ResolveNames(LineNames(s, template), s, [LineSpan(s, template.Span.Start)]);
+        var (taxon, failure) = ResolveNames(LineNames(s, template), s, [AfterOnLine(s, template)]);
         if (taxon is null) {
             return new StatusFinding(StatusItemKind.ListLine, line, StatusOutcome.NotUpdated, before, null, null,
                 [failure!.Kind == StatusNoteKind.NoName ? new StatusNote(StatusNoteKind.NoName) : failure]);
@@ -97,10 +97,10 @@ public sealed partial class StatusUpdater {
         TextSpan[] context;
         if (_rowOf.TryGetValue(template, out var row)) {
             names = row.Cells.Concat(row.Spanning).SelectMany(c => NamesIn(s, c.Content)).Distinct().ToList();
-            context = [.. row.Cells.Concat(row.Spanning).Select(c => c.Content)];
+            context = [.. row.Cells.Where(c => s.TemplatesWithin(c.Content).Contains(template)).Select(c => c.Content)];
         } else if (IsListLine(s, template.Span.Start)) {
             names = LineNames(s, template);
-            context = [LineSpan(s, template.Span.Start)];
+            context = [AfterOnLine(s, template)];
         } else {
             return null;
         }
@@ -108,11 +108,11 @@ public sealed partial class StatusUpdater {
         return taxon;
     }
 
-    // The whole line the position is on, without its newline.
-    private static TextSpan LineSpan(WikitextScanner s, int position) {
-        var start = s.Text.LastIndexOf('\n', Math.Max(0, position - 1)) + 1;
-        var end = s.Text.IndexOf('\n', position);
-        return new TextSpan(start, end < 0 ? s.Text.Length : end);
+    // The template and the rest of its line, where its references are: an IUCN citation earlier on
+    // the line can be for another claim.
+    private static TextSpan AfterOnLine(WikitextScanner s, WikiTemplate template) {
+        var end = s.Text.IndexOf('\n', template.Span.Start);
+        return new TextSpan(template.Span.Start, end < 0 ? s.Text.Length : end);
     }
 
     // ---------------------------------------------------------------- IUCN citations near an item
@@ -218,7 +218,12 @@ public sealed partial class StatusUpdater {
         if (row.Named("name") is { } nameParam) {
             names.AddRange(NamesIn(s, nameParam.Value));
         }
-        var (taxon, failure) = ResolveNames(names.Distinct().ToList(), s, [row.Span]);
+        // Only the references on the status, trend and population: a row can cite another species'
+        // assessment for its range or habitat (List of vespertilionines cites the broad-headed
+        // serotine's for the habitat of Happolds' pipistrelle, which was split from it).
+        TextSpan[] statusSpans = [.. new[] { "iucn-status", "direction", "population" }
+            .Select(row.Named).OfType<TemplateParameter>().Select(p => p.Whole)];
+        var (taxon, failure) = ResolveNames(names.Distinct().ToList(), s, statusSpans);
         if (taxon is null) {
             return noGenus is not null && failure!.Kind == StatusNoteKind.NoName
                 ? Fail(StatusNoteKind.NoGenus, noGenus)

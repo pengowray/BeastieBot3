@@ -763,6 +763,22 @@ public sealed class StatusUpdaterTests {
     }
 
     [Fact]
+    public void ACitationForAnotherClaimInTheRowIsNotUsed() {
+        const string text = """
+            {{Species table/row
+            |name=[[Some mole]] |binomial=C. aliena
+            |habitat=Forest<ref name="IUCNmole"/>
+            |iucn-status=NE |population=Unknown
+            |direction={{population change unknown}}
+            }}
+            <ref name="IUCNmole">{{cite iucn |article-number=e.T4828A21289898}}</ref>
+            """;
+        var finding = Assert.Single(Run(text).Findings, f => f.Kind == StatusItemKind.SpeciesTableRow);
+        Assert.Equal(StatusOutcome.NotUpdated, finding.Outcome);
+        Assert.Null(finding.Taxon);
+    }
+
+    [Fact]
     public void AnAmbiguousNameIsSettledByTheRowsCitation() {
         // Ficus variegata is the name of taxa 500 and 501.
         var finding = Assert.Single(Run("* ''Ficus variegata'' {{IUCN status|LC}}<ref>{{cite iucn |article-number=e.T501A5011}}</ref>\n").Findings,
