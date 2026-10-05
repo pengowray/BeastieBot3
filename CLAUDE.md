@@ -258,7 +258,7 @@ IUCN classifies only by kingdom, phylum, class, order, family and genus, so a li
 - Schema 10 adds `assessment.population_size` (IUCN's number of mature individuals as published, read from every cached payload, CSV rows included), for the `/update` page's "Population differences" table of `{{Species table/row}}` populations.
 - `/update` (`Pages/Update.cshtml`, logic in `BeastieBot3.Site/Update/`, strings in `Display/UpdateText.cs`) takes pasted wikitext and returns it with `{{IUCN status}}` templates, status cells of wikitables and taxobox status lines brought up to the latest global assessment, byte for byte elsewhere, with a report. It is the only page that answers POST (`UseGetAndHeadOnly` allows it there and raises the body limit to 2 MB plus 64 KB); details in `docs/public-site.md`.
 - New `site build-db` tests start from `BeastieBot3.Tests/SiteBuild/SiteBuildSourceFixture` (import it with `using static`).
-- Site UI strings are in `BeastieBot3.Site/Display/SiteText.cs`, the About page text in `Pages/About.cshtml`, and category labels in `Display/IucnCategories.cs`. Load the `ui-text` and `no-riddlespeak` skills before changing them, and ask the user to sign off new or changed strings.
+- Site UI strings are in `BeastieBot3.Site/Display/SiteText.cs` (a partial class: the taxon page in `SiteText.Taxon.cs`, its Wikidata part in `SiteText.Wikidata.cs`; the status update page in `UpdateText.cs`), the About page text in `Pages/About.cshtml`, and category labels in `Display/IucnCategories.cs`. Load the `ui-text` and `no-riddlespeak` skills before changing them, and ask the user to sign off new or changed strings.
 
 ## Wikipedia Chart Generation
 

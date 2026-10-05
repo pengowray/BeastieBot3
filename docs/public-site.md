@@ -884,7 +884,7 @@ title statements are not recorded (run wikidata iucn-assessment-items)".
 
 ## The site
 
-- UI strings are in `BeastieBot3.Site/Display/SiteText.cs`, the About page text in
+- UI strings are in `BeastieBot3.Site/Display/SiteText.cs` (with `SiteText.Taxon.cs` and `SiteText.Wikidata.cs`), the About page text in
   `Pages/About.cshtml`, and category labels and badge colours (from en-wiki Module:IUCN status) in
   `Display/IucnCategories.cs`. All SQL is in `Data/SiteQueries.cs`; user input reaches FTS5 only
   through `Data/FtsQuery.cs`.
