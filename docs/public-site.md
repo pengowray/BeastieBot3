@@ -778,8 +778,10 @@ title statements are not recorded (run wikidata iucn-assessment-items)".
   - `Site:ContactText` and `Site:ContactUrl`: who to contact about problems. Until they are set,
     pages say "the person who runs this site".
   - `Site:SourceUrl`: when set, the footer links to the source code.
-  - `Site:RateLimits`: per client IP, `PagesPerMinute` (default 60), `SearchPerMinute` (30) and
-    `SuggestPerMinute` (30); for the whole site, `ConcurrentSearches` (4) and `SearchQueueLength` (8).
+  - `Site:RateLimits`: per client IP, `PagesPerMinute` (default 60), `SearchPerMinute` (30),
+    `SuggestPerMinute` (30) and `UpdatesPerMinute` (10, texts sent to `/update`); for the whole site,
+    `ConcurrentSearches` (4) and `SearchQueueLength` (8), which count status updates too.
+- All SQL of the status update page is in `Data/SiteStatusLookup.cs`, over one connection per request.
 - The site checks the database file when a request arrives, no more than once every 30 seconds. A
   replaced file is used from the next check, without a restart (connection pools are cleared and the
   output cache is emptied). A missing file or a wrong schema version makes `/healthz` answer 503 with
@@ -904,6 +906,40 @@ of `dotnet test`. To run it:
 3. `node BeastieBot3.Site.Tests/browser/live-update.cjs` runs the checks. Playwright installed
    globally is enough. `SITE_URL` sets another address, and `SHOTS` names a folder for
    screenshots.
+
+### Status update page (`/update`)
+
+An editor pastes the wikitext of an article or list and gets the same text back with the IUCN
+statuses changed to match the latest global assessments, and a report with one row per item (line,
+result, item, text before and after, taxon, notes). Strings are in `Display/UpdateText.cs`; the
+logic is pure, in `Update/` (`WikitextScanner` masks comments, nowiki, pre, syntaxhighlight, source
+and math, and finds templates by counting braces; `WikiTables` reads wikitables line by line with
+colspan and rowspan; `StatusUpdater` decides the edits), and reads the database through
+`IStatusLookup` (`Data/SiteStatusLookup.cs`), so `StatusUpdaterTests` run over a fake.
+
+- `{{IUCN status}}` with a taxon id: the code (`IucnStatusTemplate.ToTemplateCode`), the ids, and
+  `|year=` or a `|label=` that is a year are replaced; for EX and EW those parameters are removed. A
+  template with neither keeps having neither. An id with `in_release = 0` and a `current_taxon_id`
+  uses the current taxon.
+- Wikitable cells in a column whose header mentions IUCN or the Red List, or says "status" without
+  naming another list (EPBC, CITES, ...): a bare code or `{{IUCN status|X}}` with no ids. The taxon is
+  the one taxon in the release named in the same row (italics, links, `{{sp}}`, `{{taxlink}}`; a
+  rowspan cell above counts), by an exact `name_key` match on scientific names, trying a trinomial
+  with `ssp.`, `subsp.` and `var.`; IUCN synonyms only when no scientific name matches and they name
+  one taxon. Only the code is changed, and a bare `CR` is kept for a possibly extinct taxon.
+- Taxoboxes ({{Speciesbox}}, {{Taxobox}}, {{Automatic taxobox}}, {{Subspeciesbox}},
+  {{Infraspeciesbox}}) with a `status` parameter: `status` and `status_system`
+  (`SpeciesboxStatus.ToStatusCode` / `ToStatusSystem`; `status_system` is added when missing), and the
+  `{{cite iucn}}` inside `status_ref` when it cites another assessment (by the assessment id in
+  `|article-number=`, `|id=`, `|url=` or `|doi=`, else by `|year=` / `|volume=`). The new citation
+  uses the taxon page's default options, without the ref wrapper, which is kept.
+- Only the values that change are replaced; everything else comes back byte for byte. At most 3,600
+  items (`GroupList.MaxLines`) are checked; the rest are counted and left as they are.
+- The page is the only one that answers POST (`SiteMiddleware.UseGetAndHeadOnly` allows it on
+  `/update` and raises the request body limit to 2 MB plus 64 KB for it). The form is
+  multipart/form-data, so wikitext is not percent-encoded; text over 2 MB (UTF-8) gets 413 with a
+  message on the page. The page sets no cookies and has no antiforgery token, is never cached, and
+  the error page also answers POST, so a 429 or 500 after a POST shows the usual error page.
 
 ### Theme
 
