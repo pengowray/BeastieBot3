@@ -14,7 +14,7 @@ public sealed class SpeciesPageTests(SiteFactory factory) : IClassFixture<SiteFa
             "<h1>",
             "<span class=\"sci-name\"><i>Ursus maritimus</i></span>",
             "class=\"taxon-common-name\">Polar bear",
-            "class=\"classification\"",
+            "class=\"classification",
             ">Latest global assessment</h2>",
             ">Wikitext for Wikipedia</h2>",
             ">Assessment history</h2>",
@@ -37,7 +37,7 @@ public sealed class SpeciesPageTests(SiteFactory factory) : IClassFixture<SiteFa
         Assert.Contains("<span class=\"authority\">Phipps, 1774</span>", html);
         Assert.Contains("Kingdom Animalia", text);
         Assert.Contains("Family Ursidae", text);
-        Assert.Contains("<span class=\"rank\">Genus</span> <i>Ursus</i>", html);
+        Assert.Contains("<a href=\"/taxa/genus/ursus\"><i>Ursus</i></a>", html);
         Assert.Contains("<span class=\"badge cat-vu\">VU</span> <span class=\"category-label\">Vulnerable</span>", html);
         Assert.Contains("Criteria A3c", text);
         Assert.Contains("Population trend Unknown", text);
@@ -123,7 +123,7 @@ public sealed class SpeciesPageTests(SiteFactory factory) : IClassFixture<SiteFa
     public async Task ClassificationIsNotANavigationLandmark() {
         var html = await Page();
         Assert.DoesNotContain("<nav class=\"classification\"", html);
-        Assert.Contains("<div class=\"classification\">", html);
+        Assert.Contains("<div class=\"classification has-col-toggle\">", html);
         Assert.Contains("<h2 id=\"classification-heading\" class=\"visually-hidden\">Classification</h2>", html);
     }
 

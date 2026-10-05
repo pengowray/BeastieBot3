@@ -24,9 +24,12 @@ public sealed class GroupModel : PageModel {
     private readonly SiteDatabase _db;
     private readonly SiteQueries _queries;
 
-    public GroupModel(SiteDatabase db, SiteQueries queries) {
+    private readonly SiteOptions _options;
+
+    public GroupModel(SiteDatabase db, SiteQueries queries, Microsoft.Extensions.Options.IOptions<SiteOptions> options) {
         _db = db;
         _queries = queries;
+        _options = options.Value;
     }
 
     public string RequestedRank { get; private set; } = string.Empty;
@@ -69,6 +72,8 @@ public sealed class GroupModel : PageModel {
             return Page();
         }
         Group = group;
+        // Every set of list options has its own address; search engines get the page without them.
+        ViewData["Canonical"] = SiteUrls.Absolute(_options.BaseUrl, Request, SiteUrls.Group(group));
         Path = _queries.GetGroupPath(group.NodeId);
         Counts = _queries.GetGroupCounts(group.NodeId);
         ColNames = _queries.GetGroupColNames(group.NodeId);

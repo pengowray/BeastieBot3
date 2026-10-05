@@ -567,6 +567,24 @@ public static class FixtureDb {
             w.Name(id, $"Fillerus {epithet}", "scientific", null, "iucn");
         }
 
+        // The groups of the polar bear, with Catalogue of Life suborder Caniformia, and two genera
+        // named Abronia in two kingdoms (no taxa in this fixture).
+        w.Group(1, null, 0, "kingdom", "Animalia", "iucn", "ANIMALIA", 1, 1, species: 1);
+        w.Group(2, 1, 1, "phylum", "Chordata", "iucn", "ANIMALIA", 1, 1, species: 1, common: "chordates");
+        w.Group(3, 2, 2, "class", "Mammalia", "iucn", "ANIMALIA", 1, 1, species: 1, common: "mammals");
+        w.Group(4, 3, 3, "order", "Carnivora", "iucn", "ANIMALIA", 1, 1, species: 1);
+        w.Group(5, 4, 4, "suborder", "Caniformia", "col", "ANIMALIA", 1, 1, species: 1, colId: "6224H");
+        w.Group(6, 5, 5, "family", "Ursidae", "iucn", "ANIMALIA", 1, 1, species: 1, common: "bears", enwiki: "Bear");
+        w.Group(7, 6, 6, "genus", "Ursus", "iucn", "ANIMALIA", 1, 1, species: 1);
+        foreach (var id in Enumerable.Range(1, 7)) {
+            w.GroupCount(id, "VU", 1);
+        }
+        w.GroupName(6, "Bears");
+        w.Place(PolarBear, 7, 1, "Polar bear");
+        w.Group(8, null, 0, "kingdom", "Plantae", "iucn", "PLANTAE", 2, 1);
+        w.Group(9, 4, 4, "genus", "Abronia", "iucn", "ANIMALIA", 2, 1, linkQuery: "kingdom=animalia");
+        w.Group(10, 8, 1, "genus", "Abronia", "iucn", "PLANTAE", 2, 1, linkQuery: "kingdom=plantae");
+
         w.Meta(SiteDbSchema.MetaKeys.SchemaVersion, schemaVersion);
         w.Meta(SiteDbSchema.MetaKeys.BuiltAtUtc, "2026-10-02T09:00:00Z");
         w.Meta(SiteDbSchema.MetaKeys.IucnRelease, release);
@@ -700,6 +718,26 @@ public static class FixtureDb {
                 Run("UPDATE assessment SET has_taxonomic_notes = @a WHERE assessment_id = @b", notes ? 1 : 0, id);
             }
         }
+
+        public void Group(int id, int? parent, int depth, string rank, string name, string source, string kingdom, int first, int last,
+            int species = 0, string? common = null, string? enwiki = null, string? colId = null, string? linkQuery = null) =>
+            Run("""
+                INSERT INTO higher_taxon(node_id, parent_node_id, depth, rank, name, name_key, link_query, source, show_rank, kingdom, col_id,
+                    common_name_en, common_name_source, enwiki_title, first_pos, last_pos, species_count, infra_count, subpopulation_count)
+                VALUES (@a, @b, @c, @d, @e, @f, @g, @h, 1, @i, @j, @k, @l, @m, @n, @o, @p, 0, 0)
+                """,
+                id, parent, depth, rank, name, SiteNameKey.Fold(name), linkQuery, source, kingdom, colId, common,
+                common is null ? null : "rules", enwiki, first, last, species);
+
+        public void GroupCount(int id, string category, int species) =>
+            Run("INSERT INTO higher_taxon_count(node_id, category, species_count, infra_count, subpopulation_count) VALUES (@a, @b, @c, 0, 0)",
+                id, category, species);
+
+        public void GroupName(int id, string name) =>
+            Run("INSERT INTO higher_taxon_name(node_id, name, source) VALUES (@a, @b, 'col')", id, name);
+
+        public void Place(long taxonId, int nodeId, int treePos, string? listArticle) =>
+            Run("UPDATE taxon SET node_id = @a, tree_pos = @b, list_article_title = @c WHERE taxon_id = @d", nodeId, treePos, listArticle, taxonId);
 
         public void TaxonLink(long taxonId, long currentTaxonId, string kind) =>
             Run("INSERT INTO taxon_link(taxon_id, current_taxon_id, link_kind) VALUES (@a, @b, @c)", taxonId, currentTaxonId, kind);
