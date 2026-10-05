@@ -158,13 +158,71 @@ public sealed partial class StatusUpdater {
         if (BareCodeFor(current, code, notes) is { } written) {
             edits.Add(new Edit(core.Start, core.End, written));
         }
-        var shown = new TextSpan(status.PipePosition, core.End);
-        if (edits.Count == 0) {
-            return new StatusFinding(StatusItemKind.SpeciesTableRow, line, StatusOutcome.Current, before, null, taxon, notes);
+        var shown = new List<TemplateParameter> { status };
+        if (row.Named("direction") is { } direction) {
+            Direction(s, direction, latest.PopulationTrend, edits, notes);
+            shown.Add(direction);
+            shown.Sort((a, b) => a.PipePosition.CompareTo(b.PipePosition));
         }
-        return new StatusFinding(StatusItemKind.SpeciesTableRow, line, StatusOutcome.Updated, before, Apply(s.Text, edits, shown).TrimEnd(),
+        var shownBefore = ParamLines(s.Text, shown, []);
+        if (edits.Count == 0) {
+            return new StatusFinding(StatusItemKind.SpeciesTableRow, line, StatusOutcome.Current, shownBefore, null, taxon, notes);
+        }
+        return new StatusFinding(StatusItemKind.SpeciesTableRow, line, StatusOutcome.Updated, shownBefore, ParamLines(s.Text, shown, edits),
             taxon, notes);
     }
+
+    // The direction parameter of a species table row: the population trend template, replaced when
+    // the latest assessment's trend differs. The text around the template (its <ref>) is kept, and a
+    // template with the same trend is kept as written, whatever its label or capitals.
+    private static void Direction(WikitextScanner s, TemplateParameter direction, string? trend, List<Edit> edits,
+        List<StatusNote> notes) {
+        var wanted = trend?.Trim().ToLowerInvariant() switch {
+            "decreasing" => Trend.Decreasing,
+            "stable" => Trend.Stable,
+            "increasing" => Trend.Increasing,
+            "unknown" => Trend.Unknown,
+            _ => (Trend?)null,
+        };
+        if (wanted is not { } w) {
+            notes.Add(new StatusNote(StatusNoteKind.NoPopulationTrend));
+            return;
+        }
+        var core = s.Core(direction.Value);
+        if (core.Length == 0) {
+            var at = direction.Value.Start;
+            edits.Add(new Edit(at, at, TrendTemplate(w)));
+            return;
+        }
+        foreach (var template in s.TemplatesWithin(direction.Value)) {
+            if (TrendOf(template.Name) is { } found) {
+                if (found != w) {
+                    edits.Add(new Edit(template.Span.Start, template.Span.End, TrendTemplate(w)));
+                }
+                return;
+            }
+        }
+        notes.Add(new StatusNote(StatusNoteKind.DirectionNotRecognised, TrendTemplate(w)));
+    }
+
+    private enum Trend { Decreasing, Stable, Increasing, Unknown }
+
+    // What the species tables on English Wikipedia write, such as List of felids.
+    private static string TrendTemplate(Trend trend) => trend switch {
+        Trend.Decreasing => "{{decrease|Population declining}}",
+        Trend.Stable => "{{steady|Population steady}}",
+        Trend.Increasing => "{{increase|Population increasing}}",
+        _ => "{{population change unknown}}",
+    };
+
+    // The trend templates and their redirects, by normalized name.
+    private static Trend? TrendOf(string name) => name switch {
+        "decrease" or "loss" or "down" or "diminution" or "decreasenegative" or "negative decrease" => Trend.Decreasing,
+        "increase" or "gain" or "profit" or "growth" or "up" or "augmentation" or "increasepositive" or "positive increase" => Trend.Increasing,
+        "steady" or "nochange" or "unchanged" or "no change" or "same" or "stable" => Trend.Stable,
+        "population change unknown" => Trend.Unknown,
+        _ => null,
+    };
 
     // ---------------------------------------------------------------- {{cite iucn}}
 

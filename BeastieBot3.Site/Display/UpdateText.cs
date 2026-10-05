@@ -32,7 +32,7 @@ public static class UpdateText {
     public const string IntroLists = ", such as * [[Aye-aye]], ''Daubentonia madagascariensis'' {{IUCN status|EN}}: the code. The taxon is found by the scientific name earlier on the line.";
 
     public const string IntroSpeciesTablesTitle = "Species tables";
-    public const string IntroSpeciesTables = ": the iucn-status parameter of {{Species table/row}}. The taxon is found by the row's binomial, with the genus from the {{Species table}} above it.";
+    public const string IntroSpeciesTables = ": the iucn-status and direction parameters of {{Species table/row}}. direction is set to the latest assessment's population trend, such as {{decrease|Population declining}}, and the reference after it is kept. The taxon is found by the row's binomial, with the genus from the {{Species table}} above it.";
 
     public static string IntroLimits(int maxItems) =>
         $"Limits: 2 MB of text and {Count(maxItems)} items. Items after the first {Count(maxItems)} are left as they are.";
@@ -154,6 +154,8 @@ public static class UpdateText {
             StatusNoteKind.CitationOlder => "Cites an older assessment. Not replaced: select Replace citations above the result.",
             StatusNoteKind.CitationUpdated => "Replaced with a citation of the latest assessment.",
             StatusNoteKind.NoGenus => $"The binomial {note.Detail} is abbreviated, and no {{{{Species table}}}} above it gives the genus.",
+            StatusNoteKind.NoPopulationTrend => "direction not checked: the latest assessment has no population trend.",
+            StatusNoteKind.DirectionNotRecognised => $"direction not changed: it has no population trend template, such as {{{{decrease}}}}. The latest assessment's trend is {note.Detail}.",
             _ => note.Kind.ToString(),
         };
     }

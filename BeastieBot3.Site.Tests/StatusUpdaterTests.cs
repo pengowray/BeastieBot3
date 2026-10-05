@@ -11,9 +11,9 @@ internal sealed class FakeStatusLookup : IStatusLookup {
     private readonly List<(string Key, long TaxonId, bool Synonym)> _names = [];
 
     public FakeStatusLookup Taxon(long id, string name, string? category, int? year = null, long? assessmentId = null,
-        bool inRelease = true, long? current = null, bool pe = false, string? criteriaVersion = "3.1", string? citationJson = null) {
+        bool inRelease = true, long? current = null, bool pe = false, string? criteriaVersion = "3.1", string? citationJson = null, string? trend = null) {
         AssessmentRow? latest = category is null ? null : new AssessmentRow(assessmentId ?? id * 10, id, "Global", true, category, pe, false,
-            null, criteriaVersion, year, null, null, citationJson);
+            null, criteriaVersion, year, null, trend, citationJson);
         _taxa[id] = new StatusTaxon(id, name, inRelease, current, inRelease ? latest : null);
         if (inRelease) {
             _names.Add((SiteNameKey.Fold(name), id, false));
@@ -584,6 +584,61 @@ public sealed class StatusUpdaterTests {
         const string text = "{{Species table |genus=Lipotes}}\n{{Species table/row |binomial=L. vexillifer |iucn-status=CR}}";
         Assert.Equal(text, Run(text).Text);
         Assert.Contains("|iucn-status=CR(PE)}}", Run(text, options: new StatusUpdateOptions { PossiblyExtinctCodes = true }).Text);
+    }
+
+    private static FakeStatusLookup TrendLookup(string? trend) =>
+        new FakeStatusLookup().Taxon(15955, "Panthera tigris", "EN", 2022, 214862019, trend: trend);
+
+    private static string TigerRow(string direction) =>
+        "{{Species table |genus=[[Panthera]]}}\n{{Species table/row\n|binomial=P. tigris\n|iucn-status=EN |population=Unknown\n"
+        + $"|direction={direction}\n}}}}";
+
+    [Fact]
+    public void SpeciesTableRowDirectionIsChangedAndItsReferenceKept() {
+        var result = Run(TigerRow("{{steady|Population steady}}<ref name=\"IUCNTiger\"/>"), TrendLookup("Decreasing"));
+        Assert.Equal(TigerRow("{{decrease|Population declining}}<ref name=\"IUCNTiger\"/>"), result.Text);
+        var row = Assert.Single(result.Findings);
+        Assert.Equal(StatusOutcome.Updated, row.Outcome);
+        Assert.Equal("|iucn-status=EN\n|direction={{steady|Population steady}}<ref name=\"IUCNTiger\"/>", row.Before);
+        Assert.Equal("|iucn-status=EN\n|direction={{decrease|Population declining}}<ref name=\"IUCNTiger\"/>", row.After);
+    }
+
+    [Theory]
+    [InlineData("Unknown", "{{Population change unknown}}")]
+    [InlineData("Decreasing", "{{Down|Falling}}<ref name=\"x\"/>")]
+    [InlineData("Increasing", "{{increase|Population increasing}}")]
+    [InlineData("Stable", "{{steady}}")]
+    public void SpeciesTableRowDirectionWithTheSameTrendIsKeptAsWritten(string trend, string direction) {
+        var text = TigerRow(direction);
+        var result = Run(text, TrendLookup(trend));
+        Assert.Equal(text, result.Text);
+        Assert.Equal(StatusOutcome.Current, Assert.Single(result.Findings).Outcome);
+    }
+
+    [Fact]
+    public void SpeciesTableRowDirectionUnknownTrend() {
+        var result = Run(TigerRow("{{decrease|Population declining}}"), TrendLookup("Unknown"));
+        Assert.Contains("|direction={{population change unknown}}\n", result.Text);
+    }
+
+    [Fact]
+    public void EmptySpeciesTableRowDirectionIsFilled() {
+        var result = Run(TigerRow(""), TrendLookup("Stable"));
+        Assert.Contains("|direction={{steady|Population steady}}\n", result.Text);
+    }
+
+    [Fact]
+    public void SpeciesTableRowDirectionIsLeftWithNoTrendOrNoTemplate() {
+        var noTrend = Run(TigerRow("{{decrease|Population declining}}"), TrendLookup(null));
+        Assert.Equal(TigerRow("{{decrease|Population declining}}"), noTrend.Text);
+        Assert.Equal(1, noTrend.CountNotes(StatusNoteKind.NoPopulationTrend));
+
+        var text = TigerRow("Declining");
+        var noTemplate = Run(text, TrendLookup("Decreasing"));
+        Assert.Equal(text, noTemplate.Text);
+        var note = Assert.Single(Assert.Single(noTemplate.Findings).Notes);
+        Assert.Equal(StatusNoteKind.DirectionNotRecognised, note.Kind);
+        Assert.Equal("{{decrease|Population declining}}", note.Detail);
     }
 
     // ---------------------------------------------------------------- {{cite iucn}}

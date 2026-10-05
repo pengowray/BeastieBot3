@@ -1024,6 +1024,15 @@ colspan and rowspan; `StatusUpdater` decides the edits), and reads the database 
 - `{{Species table/row}}`'s `iucn-status` (the family lists: List of felids, canids, mustelids,
   hominoids, pinnipeds, 28 to 64 rows each): the taxon is the row's `binomial`, whose abbreviated
   genus is the link text of the `genus` of the `{{Species table}}` above it, or the row's `name`.
+  The row's `direction` gets the latest global assessment's population trend in the form the
+  family lists use (`{{decrease|Population declining}}`, `{{steady|Population steady}}`,
+  `{{increase|Population increasing}}`, `{{population change unknown}}`, which were 1,241 of the
+  1,244 `direction` values in 8 family lists in October 2026). Only the trend template is replaced,
+  so the `<ref>` after it stays; a template with the same trend (any label, capitals or redirect,
+  such as `{{Down}}`) is kept as written; an empty `direction` is filled; a `direction` with no trend
+  template, or a taxon with no trend, is left with a note. `population` is not changed: the site
+  database has no population size (IUCN's `supplementary_info.population_size` is set for about 10%
+  of latest assessments, in forms such as `U` and `50-400,90-250`).
 - `{{cite iucn}}` anywhere outside a taxobox's `status_ref`: found by the T…A… id in
   `|article-number=`, `|id=`, `|url=` or `|doi=`. A citation of a regional assessment is skipped. A
   citation of an older global assessment is reported, and replaced only when the reader asks.
@@ -1050,8 +1059,8 @@ colspan and rowspan; `StatusUpdater` decides the edits), and reads the database 
   taxa IUCN does not assess (subfossil lemurs, the domestic cat), names IUCN spells differently,
   and legend tables. Two forms the first version left out did not occur at all, in the sample or in
   the 93,530 cached articles: linked codes (`[[Endangered species|EN]]`) and `data-sort-value` on
-  status cells. Not handled: the population trend in `{{Species table/row}}`'s `direction`
-  (`{{decrease}}` and so on), and `[[File:Status iucn3.1 EN.svg]]` images (4 in the cached articles).
+  status cells. Not handled: `[[File:Status iucn3.1 EN.svg]]` images (4 in the
+  cached articles).
 - Only the values that change are replaced; everything else comes back byte for byte. At most 3,600
   items (`GroupList.MaxLines`) are checked; the rest are counted and left as they are.
 - The page is the only one that answers POST (`SiteMiddleware.UseGetAndHeadOnly` allows it on

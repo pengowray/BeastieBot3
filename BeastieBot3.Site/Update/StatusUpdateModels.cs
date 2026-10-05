@@ -110,6 +110,11 @@ public enum StatusNoteKind {
     CitationUpdated,
     /// The row's binomial is abbreviated and no {{Species table}} above it gives the genus.
     NoGenus,
+    /// The latest assessment has no population trend, so a species table row's direction was not checked.
+    NoPopulationTrend,
+    /// A species table row's direction has no trend template ({{decrease}} and so on), so it was left;
+    /// Detail: the template for the latest trend.
+    DirectionNotRecognised,
 }
 
 public sealed record StatusNote(StatusNoteKind Kind, string? Detail = null, long? Id = null);
