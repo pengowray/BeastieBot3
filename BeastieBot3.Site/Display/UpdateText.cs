@@ -221,6 +221,9 @@ public static class UpdateText {
             StatusNoteKind.NoPopulationTrend => "direction not checked: the latest assessment has no population trend.",
             StatusNoteKind.DirectionNotRecognised => $"direction not changed: it has no population trend template, such as {{{{decrease}}}}. To show the latest assessment's population trend, use {note.Detail}.",
             StatusNoteKind.MatchedBySynonym => $"Found by the synonym {note.Detail}. The Taxon column has IUCN's name.",
+            StatusNoteKind.MatchedByCitation when note.Detail is not null =>
+                $"Found by the taxon id in the IUCN citation of reference \"{note.Detail}\", not by name.",
+            StatusNoteKind.MatchedByCitation => "Found by the taxon id in the IUCN citation in the row or line, not by name.",
             StatusNoteKind.MatchedByCommonName => $"Found by the English common name {note.Detail}. The Taxon column has IUCN's name.",
             StatusNoteKind.CommonNameNotUsed => $"The English common name {note.Detail} names one taxon. Not used: select Match common names above the result.",
             _ => note.Kind.ToString(),

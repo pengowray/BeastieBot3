@@ -1113,7 +1113,12 @@ colspan and rowspan; `StatusUpdater` decides the edits), and reads the database 
   rowspan cell above counts), by an exact `name_key` match on scientific names, trying a trinomial
   with `ssp.`, `subsp.` and `var.`; synonyms (from any source in the `name` table: IUCN, the Catalogue
   of Life, Wikidata and Wikipedia taxoboxes) only when no scientific name matches and they name one
-  taxon, with a note naming the synonym; English common names only when neither matches, they name
+  taxon, with a note naming the synonym; then the taxon id in an IUCN citation in the row or line
+  (a `{{cite iucn}}` written there, or a `<ref name="X"/>` whose definition anywhere in the text has
+  a T…A… id), when the citations name one taxon in the release, which also settles a name that
+  matches several taxa (List of vespertilionines, October 2026: 64 of the 323 items found this way,
+  where the list uses newer genus names such as *Afropipistrellus*); English common names only when
+  none of these matches, they name
   one taxon, and the reader asks (option below). Without the option the item says which common name
   would have found it. Only the code is changed (and ids and a year added when asked), and a bare `CR` is kept
   for a possibly extinct taxon unless the reader asks for CR(PE) and CR(PEW).

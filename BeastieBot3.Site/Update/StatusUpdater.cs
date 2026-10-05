@@ -69,6 +69,7 @@ public sealed partial class StatusUpdater {
         _rowOf.Clear();
         _populations.Clear();
         _genusLines = null;
+        ReadNamedReferences(scanner);
         var candidates = new List<Candidate>();
         // {{IUCN status}} templates inside a taxobox's status parameters belong to the taxobox.
         var claimed = new HashSet<WikiTemplate>();
@@ -339,7 +340,7 @@ public sealed partial class StatusUpdater {
         var before = s.Original(core);
         var names = candidate.Row.Cells.Concat(candidate.Row.Spanning).Where(c => c != candidate.Cell)
             .SelectMany(c => NamesIn(s, c.Content)).Distinct().ToList();
-        var (taxon, failure) = ResolveNames(names);
+        var (taxon, failure) = ResolveNames(names, s, [.. candidate.Row.Cells.Concat(candidate.Row.Spanning).Select(c => c.Content)]);
         if (taxon is null) {
             return new StatusFinding(StatusItemKind.TableCell, line, StatusOutcome.NotUpdated, before, null, null, [failure!]);
         }
@@ -393,7 +394,7 @@ public sealed partial class StatusUpdater {
         if (names.Count == 0) {
             return Fail(StatusNoteKind.NoName);
         }
-        var (taxon, failure) = ResolveNames(names);
+        var (taxon, failure) = ResolveNames(names, s, statusRef is null ? null : [statusRef.Whole]);
         if (taxon is null) {
             return new StatusFinding(StatusItemKind.Taxobox, line, StatusOutcome.NotUpdated, before, null, null, [failure!]);
         }
@@ -575,9 +576,12 @@ public sealed partial class StatusUpdater {
 
     internal static bool IsScientificNameShape(string name) => NameShape().IsMatch(name);
 
-    private (StatusTaxon? Taxon, StatusNote? Failure) ResolveNames(IReadOnlyList<string> names) {
+    // context: where to look for an IUCN citation of the taxon when no name matches (the row or line
+    // of the item); null for none.
+    private (StatusTaxon? Taxon, StatusNote? Failure) ResolveNames(IReadOnlyList<string> names, WikitextScanner? s = null,
+        IReadOnlyList<TextSpan>? context = null) {
         if (names.Count == 0) {
-            return (null, new StatusNote(StatusNoteKind.NoName));
+            return ByCitation(s, context, names) ?? (null, new StatusNote(StatusNoteKind.NoName));
         }
         foreach (var kind in new[] { StatusNameKind.Scientific, StatusNameKind.Synonym }) {
             var ids = new HashSet<long>();
@@ -595,8 +599,16 @@ public sealed partial class StatusUpdater {
                 return (_lookup.GetTaxon(ids.First()), null);
             }
             if (ids.Count > 1) {
+                // The row's own IUCN citation can say which of them it is.
+                if (ByCitation(s, context, names) is { Taxon: { } settled } && ids.Contains(settled.TaxonId)) {
+                    return (settled, null);
+                }
+                _nameNote = null;
                 return (null, new StatusNote(StatusNoteKind.NameAmbiguous, string.Join(", ", names), ids.Count));
             }
+        }
+        if (ByCitation(s, context, names) is { } cited) {
+            return cited;
         }
         // An English common name is used only when it names one taxon, and only when asked for;
         // otherwise the note says it would have found one.
@@ -613,6 +625,20 @@ public sealed partial class StatusUpdater {
             break;
         }
         return (null, new StatusNote(StatusNoteKind.NameNotFound, string.Join(", ", names)));
+    }
+
+    // The one taxon the IUCN citations in the item's row or line name, when no name matched. Null
+    // when there is no context, or the citations name no taxon or more than one.
+    private (StatusTaxon? Taxon, StatusNote? Failure)? ByCitation(WikitextScanner? s, IReadOnlyList<TextSpan>? context, IReadOnlyList<string> names) {
+        if (s is null || context is null) {
+            return null;
+        }
+        var (ids, refName) = CitedTaxa(s, context);
+        if (ids.Count != 1) {
+            return null;
+        }
+        _nameNote = new StatusNote(StatusNoteKind.MatchedByCitation, refName);
+        return (_lookup.GetTaxon(ids.First()), null);
     }
 
     // IUCN writes a subspecies "Panthera tigris ssp. sumatrae" (animals) or "subsp." (plants) and a

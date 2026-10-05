@@ -122,6 +122,9 @@ public enum StatusNoteKind {
     DirectionNotRecognised,
     /// The taxon was found by a synonym (Detail), not by its scientific name.
     MatchedBySynonym,
+    /// No name matched, or a name matched several taxa; the taxon was found by the taxon id in an IUCN
+    /// citation in the item's row or line (Detail: the name of the reference it uses, or null for a citation written there).
+    MatchedByCitation,
     /// The taxon was found by an English common name (Detail); StatusUpdateOptions.MatchCommonNames is on.
     MatchedByCommonName,
     /// No name matched, but an English common name (Detail) names exactly one taxon;

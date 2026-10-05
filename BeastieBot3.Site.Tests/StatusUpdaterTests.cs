@@ -746,6 +746,37 @@ public sealed class StatusUpdaterTests {
         Assert.DoesNotContain(finding.Notes, n => n.Kind is StatusNoteKind.CommonNameNotUsed or StatusNoteKind.MatchedByCommonName);
     }
 
+    [Fact]
+    public void ARowWithNoKnownNameIsFoundByTheIucnCitationItUses() {
+        const string text = """
+            {{Species table/row
+            |name=[[Giant golden mole]] |binomial=C. giganteus
+            |iucn-status=VU |population=Unknown
+            |direction={{population change unknown}}<ref name="IUCNmole"/>
+            }}
+            == References ==
+            <ref name="IUCNmole">{{cite iucn |title=''Amblysomus hottentotus'' |article-number=e.T4828A21289898}}</ref>
+            """;
+        var finding = Assert.Single(Run(text).Findings, f => f.Kind == StatusItemKind.SpeciesTableRow);
+        Assert.Equal(4828, finding.Taxon!.TaxonId);
+        Assert.Equal(new StatusNote(StatusNoteKind.MatchedByCitation, "IUCNmole"), finding.Notes[0]);
+    }
+
+    [Fact]
+    public void AnAmbiguousNameIsSettledByTheRowsCitation() {
+        // Ficus variegata is the name of taxa 500 and 501.
+        var finding = Assert.Single(Run("* ''Ficus variegata'' {{IUCN status|LC}}<ref>{{cite iucn |article-number=e.T501A5011}}</ref>\n").Findings,
+            f => f.Kind == StatusItemKind.ListLine);
+        Assert.Equal(501, finding.Taxon!.TaxonId);
+    }
+
+    [Fact]
+    public void ARowCitingTwoTaxaIsNotMatchedByCitation() {
+        const string text = "* [[Unknown mole]] {{IUCN status|VU}}{{cite iucn |article-number=e.T4828A1}}{{cite iucn |article-number=e.T1087A1}}\n";
+        var finding = Assert.Single(Run(text).Findings, f => f.Kind == StatusItemKind.ListLine);
+        Assert.Equal(StatusOutcome.NotUpdated, finding.Outcome);
+    }
+
     // ---------------------------------------------------------------- edit summary
 
     [Fact]
