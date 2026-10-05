@@ -68,6 +68,27 @@ public sealed class SiteDbBuildTests : IDisposable {
     }
 
     [Fact]
+    public void Build_WritesTheTreeOfGroups() {
+        using var db = OpenReadOnly(Build());
+
+        var groups = Rows(db, "SELECT rank, name, species_count FROM higher_taxon ORDER BY node_id")
+            .Select(r => ((string)r[0]!, (string)r[1]!, (long)r[2]!)).ToList();
+        Assert.Equal(["kingdom", "phylum", "class", "order", "family", "genus"], groups.Select(g => g.Item1));
+        Assert.Equal("Animalia", groups[0].Item2);
+        Assert.Equal("Ursus", groups[^1].Item2);
+
+        // Every taxon in the release has a place in the tree, inside its genus; the species comes
+        // before its subspecies and subpopulation.
+        var genus = Rows(db, "SELECT node_id, first_pos, last_pos FROM higher_taxon WHERE rank = 'genus'").Single();
+        var placed = Rows(db, "SELECT taxon_id, node_id, tree_pos FROM taxon WHERE in_release = 1 ORDER BY tree_pos").ToList();
+        Assert.All(placed, r => Assert.Equal(genus[0], r[1]));
+        Assert.Equal(genus[1], placed[0][2]);
+        Assert.Equal(genus[2], placed[^1][2]);
+        Assert.Equal(PolarBear, placed[0][0]);
+        Assert.Equal("0", Scalar(db, "SELECT COUNT(*) FROM taxon WHERE in_release = 1 AND tree_pos IS NULL"));
+    }
+
+    [Fact]
     public void Build_StoresTheGbifAndCatalogueOfLifeCitations() {
         using var db = OpenReadOnly(Build());
         var meta = Rows(db, "SELECT key, value FROM meta").ToDictionary(r => (string)r[0]!, r => (string)r[1]!);

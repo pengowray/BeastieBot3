@@ -272,7 +272,8 @@ public static class GroupList {
                     if (heading.Section is { } section) {
                         context = section.StatusContext;
                     }
-                    if (sb.Length > 0) {
+                    // A blank line between a list and the next heading, as in the generated lists.
+                    if (previousWasLine) {
                         sb.Append('\n');
                     }
                     var marks = new string('=', heading.Level);
