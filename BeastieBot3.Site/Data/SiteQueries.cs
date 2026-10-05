@@ -17,7 +17,7 @@ public sealed class SiteQueries {
         t.genus, t.subpopulation_name, t.authority, t.parent_taxon_id, t.common_name_en, t.enwiki_title,
         t.wikidata_qid, t.col_id, t.latest_global_assessment_id, t.in_release, t.current_taxon_id,
         t.wikidata_qid_source, t.wikidata_p141, t.wikidata_item_downloaded, t.wikidata_p627_deprecated, t.wikidata_other_items,
-        t.node_id
+        t.node_id, t.species_epithet
         """;
 
     // A taxon with the category of its latest global assessment; the column order SummaryAt reads.
@@ -63,7 +63,8 @@ public sealed class SiteQueries {
         Text(reader, 21),
         !reader.IsDBNull(22) && reader.GetInt64(22) != 0,
         Text(reader, 23),
-        reader.IsDBNull(24) ? null : reader.GetInt32(24));
+        reader.IsDBNull(24) ? null : reader.GetInt32(24),
+        Text(reader, 25));
 
     /// The taxa linked to this one in taxon_link: for a taxon in the release, the taxa not in the
     /// release (old ids) linked to it; for a taxon not in the release, the taxa in the release it is
@@ -212,25 +213,57 @@ public sealed class SiteQueries {
         return rows;
     }
 
-    /// Taxa whose parent is this one: subspecies, then varieties, then subpopulations; within each,
-    /// taxa in the release first, then by name.
-    public IReadOnlyList<TaxonSummary> GetChildren(long taxonId) {
+    // A related taxon: SummaryColumns, then the latest global assessment's criteria, year and id.
+    private const string RelatedColumns = SummaryColumns + ", a.criteria, a.year_published, a.assessment_id";
+
+    private static RelatedTaxonRow RelatedAt(SqliteDataReader reader) {
+        const int next = SummaryColumnCount;
+        return new RelatedTaxonRow(SummaryAt(reader, 0), Text(reader, next),
+            reader.IsDBNull(next + 1) ? null : reader.GetInt32(next + 1), Long(reader, next + 2));
+    }
+
+    private IReadOnlyList<RelatedTaxonRow> ReadRelated(string where, params (string Name, object Value)[] parameters) {
         using var connection = _db.OpenConnection();
         using var command = connection.CreateCommand();
         command.CommandText = $"""
-            SELECT {SummaryColumns}
+            SELECT {RelatedColumns}
             FROM taxon t {SummaryJoin}
-            WHERE t.parent_taxon_id = @id
-            ORDER BY CASE t.kind WHEN 'subspecies' THEN 0 WHEN 'variety' THEN 1 WHEN 'subpopulation' THEN 2 ELSE 3 END,
+            WHERE {where}
+            ORDER BY CASE t.kind WHEN 'species' THEN 0 WHEN 'subspecies' THEN 1 WHEN 'variety' THEN 2 WHEN 'subpopulation' THEN 3 ELSE 4 END,
                      t.in_release DESC, t.scientific_name
             """;
-        command.Parameters.AddWithValue("@id", taxonId);
+        foreach (var (name, value) in parameters) {
+            command.Parameters.AddWithValue(name, value);
+        }
         using var reader = command.ExecuteReader();
-        var rows = new List<TaxonSummary>();
+        var rows = new List<RelatedTaxonRow>();
         while (reader.Read()) {
-            rows.Add(SummaryAt(reader, 0));
+            rows.Add(RelatedAt(reader));
         }
         return rows;
+    }
+
+    /// The taxon with its latest global assessment's criteria and year; null when there is no such taxon.
+    public RelatedTaxonRow? GetRelated(long taxonId) =>
+        ReadRelated("t.taxon_id = @id", ("@id", taxonId)).FirstOrDefault();
+
+    /// Taxa whose parent is this one: subspecies, then varieties, then subpopulations; within each,
+    /// taxa in the release first, then by name.
+    public IReadOnlyList<RelatedTaxonRow> GetChildren(long taxonId) =>
+        ReadRelated("t.parent_taxon_id = @id", ("@id", taxonId));
+
+    /// The other subspecies, varieties and subpopulations in the release with the same genus and
+    /// species epithet as this one, for a taxon whose species IUCN has not assessed (so no taxon is
+    /// their parent). Read from the taxon's group (its genus) in tree order, through taxon_tree.
+    public IReadOnlyList<RelatedTaxonRow> GetUnassessedSpeciesSiblings(TaxonRow taxon) {
+        if (taxon.NodeId is not { } nodeId || taxon.Genus is null || taxon.SpeciesEpithet is null) {
+            return [];
+        }
+        return ReadRelated("""
+            t.tree_pos BETWEEN (SELECT first_pos FROM higher_taxon WHERE node_id = @node)
+                           AND (SELECT last_pos FROM higher_taxon WHERE node_id = @node)
+            AND t.genus = @genus AND t.species_epithet = @epithet AND t.kind <> 'species' AND t.taxon_id <> @id
+            """, ("@node", nodeId), ("@genus", taxon.Genus), ("@epithet", taxon.SpeciesEpithet), ("@id", taxon.TaxonId));
     }
 
     /// The taxa an IdQuery names, taxon id first, then assessment id. A taxon id and an assessment id

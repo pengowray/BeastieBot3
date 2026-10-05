@@ -130,7 +130,19 @@ public sealed class SpeciesModel : PageModel {
     public IReadOnlyList<EnglishCommonName> EnglishNames { get; private set; } = [];
     public IReadOnlyList<LanguageGroup> OtherLanguages { get; private set; } = [];
     public IReadOnlyList<string> Synonyms { get; private set; } = [];
-    public IReadOnlyList<TaxonListItem> Children { get; private set; } = [];
+
+    /// For a subspecies, variety or subpopulation: its species, with that species' latest global assessment.
+    public RelatedTaxonRow? SpeciesRow { get; private set; }
+
+    /// For a subspecies or variety in the release with no parent taxon: IUCN has not assessed its
+    /// species. The species' name ("Asellus aquaticus").
+    public string? UnassessedSpeciesName { get; private set; }
+
+    /// For a species: its subspecies, varieties and subpopulations. For any other taxon: the other
+    /// subspecies, varieties and subpopulations of its species.
+    public IReadOnlyList<RelatedTaxonRow> RelatedTaxa { get; private set; } = [];
+
+    public bool IsSpecies => Taxon?.Kind == TaxonKinds.Species;
 
     /// Set when the visitor arrived from a search for a synonym or common name of this taxon.
     public string? ArrivedQuery { get; private set; }
@@ -171,11 +183,24 @@ public sealed class SpeciesModel : PageModel {
         Taxobox = TaxoboxTemplate.For(Taxon.Kind, Taxon.Kingdom);
         BuildWikitext();
         LoadNames();
-        Children = _queries.GetChildren(Taxon.TaxonId).Select(c => new TaxonListItem(c)).ToList();
+        LoadRelatedTaxa();
         LoadArrival(q);
         DataDateRange = ReadDataDateRange(snapshot);
         ViewData["Canonical"] = SiteUrls.Absolute(_options.BaseUrl, Request, $"/species/{Taxon.TaxonId}");
         return Page();
+    }
+
+    private void LoadRelatedTaxa() {
+        var taxon = Taxon!;
+        if (taxon.Kind == TaxonKinds.Species) {
+            RelatedTaxa = _queries.GetChildren(taxon.TaxonId);
+        } else if (taxon.ParentTaxonId is { } parentId) {
+            SpeciesRow = _queries.GetRelated(parentId);
+            RelatedTaxa = _queries.GetChildren(parentId).Where(r => r.Taxon.TaxonId != taxon.TaxonId).ToList();
+        } else if (taxon.InRelease && taxon.Genus is not null && taxon.SpeciesEpithet is not null) {
+            UnassessedSpeciesName = $"{taxon.Genus} {taxon.SpeciesEpithet}";
+            RelatedTaxa = _queries.GetUnassessedSpeciesSiblings(taxon);
+        }
     }
 
     /// The URL of this page with the current options and the given assessment (null: the default

@@ -27,7 +27,8 @@ public sealed record TaxonRow(
     string? WikidataItemDownloaded = null,
     bool WikidataP627Deprecated = false,
     string? WikidataOtherItems = null,
-    int? NodeId = null) {
+    int? NodeId = null,
+    string? SpeciesEpithet = null) {
     /// The taxon's item states this taxon's IUCN taxon id (P627), rather than being matched by name.
     public bool WikidataItemStatesTaxonId => WikidataQidSource == "p627";
 }
@@ -76,6 +77,10 @@ public sealed record TaxonSummary(
     bool PossiblyExtinct,
     bool PossiblyExtinctInTheWild,
     bool InRelease = true);
+
+/// A taxon in the species / subspecies table of a taxon page, with the criteria, year and id of its
+/// latest global assessment (all null when it has none).
+public sealed record RelatedTaxonRow(TaxonSummary Taxon, string? Criteria, int? YearPublished, long? LatestGlobalAssessmentId);
 
 /// A taxon linked to the page's taxon in taxon_link. Kind: TaxonLinkKinds.SameName or IucnSynonym.
 public sealed record TaxonLinkRow(TaxonRow Taxon, string Kind) {

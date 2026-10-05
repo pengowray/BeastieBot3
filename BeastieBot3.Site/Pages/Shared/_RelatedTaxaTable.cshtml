@@ -1,0 +1,42 @@
+@model IReadOnlyList<RelatedTaxonRow>
+<div class="table-scroll">
+    <table class="related-taxa">
+        <thead>
+            <tr>
+                <th scope="col">@SiteText.ColTaxon</th>
+                <th scope="col">@SiteText.ColCategory</th>
+                <th scope="col">@SiteText.ColCriteria</th>
+                <th scope="col">@SiteText.ColPublished</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var row in Model) {
+                var taxon = row.Taxon;
+                var badge = BadgeModel.For(taxon);
+                var kind = SiteText.KindLabel(taxon.Kind);
+                <tr>
+                    <th scope="row">
+                        <a href="/species/@taxon.TaxonId">@Html.Raw(ScientificNameMarkup.ToHtml(taxon.ScientificName, taxon.SubpopulationName))</a>
+                        @if (taxon.CommonNameEn is not null) {
+                            <span class="common-name">@taxon.CommonNameEn</span>
+                        }
+                        @if (kind is not null) {
+                            <span class="kind">@kind</span>
+                        }
+                    </th>
+                    <td>
+                        @if (!taxon.InRelease) {
+                            <span class="no-global">@SiteText.NoCurrentShort</span>
+                        } else if (badge is not null) {
+                            <partial name="_Badge" model="badge" />
+                        } else {
+                            <span class="no-global">@SiteText.NoGlobalShort</span>
+                        }
+                    </td>
+                    <td>@row.Criteria</td>
+                    <td>@row.YearPublished</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>

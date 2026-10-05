@@ -57,6 +57,7 @@ public static class FixtureDb {
     // A plant subspecies (its species is not in the database), with an "NT" from 1998 that has no
     // criteria version.
     public const long PlantSubspecies = 32277;
+    public const long PlantSubspeciesSibling = 32278;
     public const long PlantSubspeciesLatest = 2812588;
     public const long PlantSubspecies1998Nt = 9692717;
     public const long PlantSubspecies1998Vu = 9692643;
@@ -384,6 +385,9 @@ public static class FixtureDb {
         w.Assessment(PlantSubspecies1998Vu, PlantSubspecies, "Global", false, "VU", criteria: "B1+2b", criteriaVersion: "2.3", year: 1998, date: "1998-01-01");
         w.Name(PlantSubspecies, "Hirtella zanzibarica subsp. megacarpa", "scientific", null, "iucn");
         w.Name(PlantSubspecies, "Hirtella megacarpa", "synonym", null, "iucn");
+        // IUCN has not assessed Hirtella zanzibarica itself, only these two subspecies.
+        w.Taxon(PlantSubspeciesSibling, "Hirtella zanzibarica subsp. cryptadenia", "subspecies", "PLANTAE", "TRACHEOPHYTA", "MAGNOLIOPSIDA",
+            "MALPIGHIALES", "CHRYSOBALANACEAE", "Hirtella", infraRank: "subsp.", infraName: "cryptadenia");
 
         // Bromus interruptus: Extinct in the Wild, with an "EX" from 1998 that has no criteria version.
         w.Taxon(Bromus, "Bromus interruptus", "species", "PLANTAE", "TRACHEOPHYTA", "LILIOPSIDA", "POALES", "POACEAE", "Bromus",
@@ -584,6 +588,9 @@ public static class FixtureDb {
         w.Group(8, null, 0, "kingdom", "Plantae", "iucn", "PLANTAE", 2, 1);
         w.Group(9, 4, 4, "genus", "Abronia", "iucn", "ANIMALIA", 2, 1, linkQuery: "kingdom=animalia");
         w.Group(10, 8, 1, "genus", "Abronia", "iucn", "PLANTAE", 2, 1, linkQuery: "kingdom=plantae");
+        w.Group(11, null, 0, "genus", "Hirtella", "iucn", "PLANTAE", 20, 21);
+        w.Place(PlantSubspecies, 11, 20, null);
+        w.Place(PlantSubspeciesSibling, 11, 21, null);
 
         w.Meta(SiteDbSchema.MetaKeys.SchemaVersion, schemaVersion);
         w.Meta(SiteDbSchema.MetaKeys.BuiltAtUtc, "2026-10-02T09:00:00Z");
@@ -689,6 +696,10 @@ public static class FixtureDb {
                 id, name, kind, kingdom, phylum, className, order, family, genus, infraRank, infraName, subpopulation, authority,
                 parent, commonEn, enwiki, qid, colId, latest, inRelease ? 1 : 0, currentTaxon,
                 qidSource ?? (qid is null ? null : "p627"), p141, itemDownloaded, p627Deprecated ? 1 : 0, otherItems);
+            var words = name.Split(' ');
+            if (words.Length > 1) {
+                Run("UPDATE taxon SET species_epithet = @a WHERE taxon_id = @b", words[1], id);
+            }
         }
 
         public void EpbcListing(long taxonId, long spratId, string listedName, string? status, string appliesTo, string? population) =>

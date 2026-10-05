@@ -107,6 +107,27 @@ public static class SiteText {
         return char.ToUpperInvariant(text[0]) + text[1..];
     }
 
+    /// The heading of a species page's table of its subspecies, varieties and subpopulations: the
+    /// kinds it has, or when it has none, the kinds its kingdom can have (animals have no varieties).
+    public static string HeadingInfraTaxa(string? kingdom, bool subspecies, bool varieties, bool subpopulations) =>
+        subspecies || varieties || subpopulations
+            ? HeadingChildren(subspecies, varieties, subpopulations)
+            : HeadingChildren(true, !IsAnimal(kingdom), true);
+
+    public static string NoInfraTaxa(string? kingdom) => IsAnimal(kingdom)
+        ? "IUCN has not assessed any subspecies or subpopulations of this species."
+        : "IUCN has not assessed any subspecies, varieties or subpopulations of this species.";
+
+    private static bool IsAnimal(string? kingdom) => string.Equals(kingdom, "ANIMALIA", StringComparison.OrdinalIgnoreCase);
+
+    public const string HeadingSpecies = "Species";
+    public const string SpeciesNotAssessedBefore = "IUCN has not assessed the species ";
+    public const string SpeciesNotAssessedAfter = " as a whole.";
+
+    /// "Other subspecies", "Other subspecies and subpopulations" of the same species.
+    public static string HeadingOtherInfraTaxa(bool subspecies, bool varieties, bool subpopulations) =>
+        "Other " + HeadingChildren(subspecies, varieties, subpopulations).ToLowerInvariant() + " of this species";
+
     public static readonly IReadOnlyList<string> RankLabels = ["Kingdom", "Phylum", "Class", "Order", "Family", "Genus"];
 
     /// "Subspecies of", "Variety of", "Subpopulation of"; the parent's linked name follows.
@@ -473,6 +494,7 @@ public static class SiteText {
     public const string ColPublished = "Year published";
     public const string ColAssessed = "Date assessed";
     public const string ColCategory = "Category";
+    public const string ColTaxon = "Taxon";
     public const string ColCriteria = "Criteria";
     public const string ColWikitext = "Wikitext";
     public const string ColRegion = "Region";

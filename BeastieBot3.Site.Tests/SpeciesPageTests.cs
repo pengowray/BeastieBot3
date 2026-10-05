@@ -373,12 +373,40 @@ public sealed class SpeciesPageTests(SiteFactory factory) : IClassFixture<SiteFa
         Assert.Contains($"<p class=\"parent-line\">Subspecies of <a href=\"/species/{FixtureDb.Tiger}\"><i>Panthera tigris</i></a></p>", html);
         Assert.Contains("<i>Panthera tigris</i> ssp. <i>sumatrae</i>", html);
 
+        Assert.Contains("<h2 id=\"related-heading\">Species</h2>", html);
+        Assert.Contains($"<a href=\"/species/{FixtureDb.Tiger}\"><i>Panthera tigris</i></a>", Section(html, "related"));
+
         var tiger = await _client.GetStringAsync($"/species/{FixtureDb.Tiger}");
-        Assert.Contains("<h2 id=\"children-heading\">Subspecies</h2>", tiger);
-        Assert.Contains($"<a href=\"/species/{FixtureDb.SumatranTiger}\">", tiger);
+        Assert.Contains("<h2 id=\"related-heading\">Subspecies</h2>", tiger);
+        Assert.Contains($"<a href=\"/species/{FixtureDb.SumatranTiger}\">", Section(tiger, "related"));
 
         var lion = await _client.GetStringAsync($"/species/{FixtureDb.Lion}");
-        Assert.Contains("<h2 id=\"children-heading\">Subpopulations</h2>", lion);
+        Assert.Contains("<h2 id=\"related-heading\">Subpopulations</h2>", lion);
+    }
+
+    [Fact]
+    public async Task SpeciesWithNoSubspeciesSaysSo() {
+        var bear = Html.Text(await _client.GetStringAsync($"/species/{FixtureDb.PolarBear}"));
+        Assert.Contains("Subspecies and subpopulations IUCN has not assessed any subspecies or subpopulations of this species.", bear);
+
+        var brome = Html.Text(await _client.GetStringAsync($"/species/{FixtureDb.Bromus}"));
+        Assert.Contains("Subspecies, varieties and subpopulations IUCN has not assessed any subspecies, varieties or subpopulations of this species.", brome);
+    }
+
+    [Fact]
+    public async Task SubspeciesOfAnUnassessedSpeciesListsTheOtherSubspecies() {
+        var html = await _client.GetStringAsync($"/species/{FixtureDb.PlantSubspecies}");
+        var related = Section(html, "related");
+        Assert.Contains("IUCN has not assessed the species <span class=\"sci-name\"><i>Hirtella zanzibarica</i></span> as a whole.", related);
+        Assert.Contains("<h3>Other subspecies of this species</h3>", related);
+        Assert.Contains($"<a href=\"/species/{FixtureDb.PlantSubspeciesSibling}\">", related);
+        Assert.DoesNotContain($"<a href=\"/species/{FixtureDb.PlantSubspecies}\">", related);
+    }
+
+    private static string Section(string html, string id) {
+        var start = html.IndexOf($"<section class=\"{id}\"", StringComparison.Ordinal);
+        Assert.True(start >= 0, $"no section {id}");
+        return html[start..html.IndexOf("</section>", start, StringComparison.Ordinal)];
     }
 
     [Fact]

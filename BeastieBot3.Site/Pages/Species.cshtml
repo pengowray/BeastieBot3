@@ -411,6 +411,30 @@
     </section>
 }
 
+<section class="related" id="related" aria-labelledby="related-heading">
+@if (Model.IsSpecies) {
+    var kinds = Model.RelatedTaxa.Select(r => r.Taxon.Kind).ToHashSet();
+    <h2 id="related-heading">@SiteText.HeadingInfraTaxa(taxon.Kingdom, kinds.Contains(TaxonKinds.Subspecies), kinds.Contains(TaxonKinds.Variety), kinds.Contains(TaxonKinds.Subpopulation))</h2>
+    if (Model.RelatedTaxa.Count == 0) {
+        <p>@SiteText.NoInfraTaxa(taxon.Kingdom)</p>
+    } else {
+        <partial name="_RelatedTaxaTable" model="Model.RelatedTaxa" />
+    }
+} else if (Model.SpeciesRow is not null || Model.UnassessedSpeciesName is not null) {
+    <h2 id="related-heading">@SiteText.HeadingSpecies</h2>
+    if (Model.SpeciesRow is { } speciesRow) {
+        <partial name="_RelatedTaxaTable" model="@(new[] { speciesRow })" />
+    } else {
+        <p>@SiteText.SpeciesNotAssessedBefore<span class="sci-name"><i>@Model.UnassessedSpeciesName</i></span>@SiteText.SpeciesNotAssessedAfter</p>
+    }
+    if (Model.RelatedTaxa.Count > 0) {
+        var kinds = Model.RelatedTaxa.Select(r => r.Taxon.Kind).ToHashSet();
+        <h3>@SiteText.HeadingOtherInfraTaxa(kinds.Contains(TaxonKinds.Subspecies), kinds.Contains(TaxonKinds.Variety), kinds.Contains(TaxonKinds.Subpopulation))</h3>
+        <partial name="_RelatedTaxaTable" model="Model.RelatedTaxa" />
+    }
+}
+</section>
+
 <section class="names" aria-labelledby="names-heading">
     <h2 id="names-heading">@SiteText.HeadingNames</h2>
     <h3>@SiteText.NamesEnglish</h3>
@@ -526,16 +550,6 @@
         }
     </dl>
 </section>
-
-@if (Model.Children.Count > 0) {
-    <section class="children" aria-labelledby="children-heading">
-        <h2 id="children-heading">@SiteText.HeadingChildren(
-            Model.Children.Any(c => c.Taxon.Kind == TaxonKinds.Subspecies),
-            Model.Children.Any(c => c.Taxon.Kind == TaxonKinds.Variety),
-            Model.Children.Any(c => c.Taxon.Kind == TaxonKinds.Subpopulation))</h2>
-        <partial name="_TaxonList" model="Model.Children" />
-    </section>
-}
 
 @if (Model.Version is not null) {
     <p class="data-note">
