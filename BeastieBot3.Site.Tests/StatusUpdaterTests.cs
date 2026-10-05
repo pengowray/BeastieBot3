@@ -26,6 +26,19 @@ internal sealed class FakeStatusLookup : IStatusLookup {
         return this;
     }
 
+    private readonly Dictionary<long, string> _scopes = [];
+
+    /// An assessment that is not the latest global one (an older global or a regional one).
+    public FakeStatusLookup Assessment(long id, string scope) {
+        _scopes[id] = scope;
+        return this;
+    }
+
+    public string? AssessmentScope(long assessmentId) =>
+        _scopes.TryGetValue(assessmentId, out var scope) ? scope
+        : _taxa.Values.Any(t => t.LatestGlobal?.AssessmentId == assessmentId) ? "Global"
+        : null;
+
     public int Lookups { get; private set; }
 
     public StatusTaxon? GetTaxon(long taxonId) {
@@ -59,8 +72,9 @@ public sealed class StatusUpdaterTests {
         .Taxon(601, "Podocnemis expansa", "LR/cd", 1996, 6011, criteriaVersion: "2.3")
         .Synonym(15955, "Felis tigris");
 
-    private static StatusUpdateResult Run(string text, FakeStatusLookup? lookup = null, int max = StatusUpdater.DefaultMaxItems) =>
-        new StatusUpdater(lookup ?? Lookup(), Today, max).Update(text);
+    private static StatusUpdateResult Run(string text, FakeStatusLookup? lookup = null, int max = StatusUpdater.DefaultMaxItems,
+        StatusUpdateOptions? options = null) =>
+        new StatusUpdater(lookup ?? Lookup(), Today, max, options).Update(text);
 
     // ---------------------------------------------------------------- {{IUCN status}} with ids
 
@@ -140,8 +154,31 @@ public sealed class StatusUpdaterTests {
     }
 
     [Fact]
-    public void TaxonIdWithoutAssessmentIdIsAccepted() {
-        Assert.Equal("{{IUCN status|EN|4828/21289898|1|year=2015}}", Run("{{IUCN status|EN|4828|1|year=2015}}").Text);
+    public void TaxonIdWithoutAssessmentIdKeepsItsFormUnlessIdsAreAsked() {
+        var plain = Run("{{IUCN status|VU|4828|1|year=2008}}");
+        Assert.Equal("{{IUCN status|EN|4828|1|year=2015}}", plain.Text);
+        Assert.Equal(1, plain.CountNotes(StatusNoteKind.AssessmentIdNotAdded));
+        Assert.Equal("{{IUCN status|EN|4828/21289898|1|year=2015}}",
+            Run("{{IUCN status|EN|4828|1|year=2015}}", options: new StatusUpdateOptions { AddIds = true }).Text);
+    }
+
+    [Fact]
+    public void UnknownTaxonIdFallsBackToTheNameOnTheLine() {
+        var result = Run("*[[Tiger]], ''Panthera tigris'' {{IUCN status|VU|22679798}}\n");
+        Assert.Equal("*[[Tiger]], ''Panthera tigris'' {{IUCN status|EN|15955}}\n", result.Text);
+        Assert.Contains(Assert.Single(result.Findings).Notes, n => n.Kind == StatusNoteKind.IdNotFoundMatchedByName);
+    }
+
+    [Fact]
+    public void AbbreviatedNameOnAListLineTakesTheGenusLineAbove() {
+        var result = Run("*** Genus: ''[[Panthera]]''\n**** [[Tiger]], ''P. tigris'' {{IUCN status|VU}}\n");
+        Assert.Contains("{{IUCN status|EN}}", result.Text);
+    }
+
+    [Fact]
+    public void SpeciesTableGenusIsTheLinkText() {
+        var result = Run("{{Species table |genus=[[Panthera (genus)|Panthera]]}}\n{{Species table/row |binomial=P. tigris |iucn-status=VU}}");
+        Assert.Contains("|iucn-status=EN}}", result.Text);
     }
 
     [Fact]
@@ -454,4 +491,129 @@ public sealed class StatusUpdaterTests {
     [InlineData("Endangered", null)]
     [InlineData("", null)]
     public void BareCodes(string text, string? expected) => Assert.Equal(expected, StatusUpdater.BareCode(text));
+
+    // ---------------------------------------------------------------- options
+
+    private const string PeTable = "{| class=\"wikitable\"\n! Species !! IUCN status\n|-\n| ''Lipotes vexillifer'' || CR\n|}\n";
+
+    [Fact]
+    public void BareCrStaysForAPossiblyExtinctTaxonUnlessAsked() {
+        var kept = Run(PeTable);
+        Assert.Equal(PeTable, kept.Text);
+        Assert.Equal(1, kept.CountNotes(StatusNoteKind.PossiblyExtinctKept));
+
+        var changed = Run(PeTable, options: new StatusUpdateOptions { PossiblyExtinctCodes = true });
+        Assert.Contains("| ''Lipotes vexillifer'' || CR(PE)\n", changed.Text);
+        Assert.Equal(0, changed.CountNotes(StatusNoteKind.PossiblyExtinctKept));
+    }
+
+    [Fact]
+    public void TemplateWithNoIdsGetsIdsAndYearOnlyWhenAsked() {
+        const string table = "{| class=\"wikitable\"\n! Species !! IUCN status\n|-\n| ''Panthera tigris'' || {{IUCN status|VU}}\n|}\n";
+        var plain = Run(table);
+        Assert.Contains("{{IUCN status|EN}}", plain.Text);
+        var notes = Assert.Single(plain.Findings).Notes;
+        Assert.Contains(notes, n => n.Kind == StatusNoteKind.IdsNotAdded && n.Detail == "15955/214862019");
+        Assert.Contains(notes, n => n.Kind == StatusNoteKind.YearNotAdded && n.Detail == "2022");
+
+        var both = Run(table, options: new StatusUpdateOptions { AddIds = true, AddYear = true });
+        Assert.Contains("{{IUCN status|EN|15955/214862019|1|year=2022}}", both.Text);
+        var ids = Run(table, options: new StatusUpdateOptions { AddIds = true });
+        Assert.Contains("{{IUCN status|EN|15955/214862019|1}}", ids.Text);
+    }
+
+    [Fact]
+    public void TemplateWithIdsAndNoYearGetsAYearWhenAsked() {
+        Assert.Equal("{{IUCN status|EN|4828/21289898|1}}", Run("{{IUCN status|VU|4828/111|1}}").Text);
+        Assert.Equal("{{IUCN status|EN|4828/21289898|1|year=2015}}",
+            Run("{{IUCN status|VU|4828/111|1}}", options: new StatusUpdateOptions { AddYear = true }).Text);
+        // EX and EW have no year.
+        Assert.Equal("{{IUCN status|EW|165247/5995954|1}}",
+            Run("{{IUCN status|CR|165247/1|1}}", options: new StatusUpdateOptions { AddYear = true }).Text);
+    }
+
+    // ---------------------------------------------------------------- list lines
+
+    [Fact]
+    public void ListLineIsMatchedByTheScientificNameBeforeTheTemplate() {
+        const string text = "***** [[Tiger]], ''Panthera tigris'' {{IUCN status|VU}} <ref>{{cite web |title=Felis tigris}}</ref>\n";
+        var result = Run(text);
+        Assert.Equal(text.Replace("{{IUCN status|VU}}", "{{IUCN status|EN}}"), result.Text);
+        var finding = Assert.Single(result.Findings, f => f.Kind == StatusItemKind.ListLine);
+        Assert.Equal(15955, finding.Taxon!.TaxonId);
+    }
+
+    [Fact]
+    public void TemplateWithNoIdsOutsideAListOrTableIsLeft() {
+        var result = Run("The tiger is {{IUCN status|VU}}.\n");
+        Assert.Equal(StatusNoteKind.NoTaxonId, Assert.Single(Assert.Single(result.Findings).Notes).Kind);
+    }
+
+    // ---------------------------------------------------------------- {{Species table/row}}
+
+    [Fact]
+    public void SpeciesTableRowTakesTheGenusFromTheTableAbove() {
+        const string text = """
+            {{Species table |genus=[[Panthera]] |species-count=two}}
+            {{Species table/row
+            |name=[[Tiger]] |binomial=P. tigris
+            |iucn-status=VU |population=3,000
+            }}
+            {{Species table/row
+            |name=[[Unknown cat]] |binomial=P. nemo
+            |iucn-status=LC
+            }}
+            {{Species table/end}}
+            """;
+        var result = Run(text);
+        Assert.Contains("|iucn-status=EN |population=3,000", result.Text);
+        Assert.Contains("|iucn-status=LC\n", result.Text);
+        var rows = result.Findings.Where(f => f.Kind == StatusItemKind.SpeciesTableRow).ToList();
+        Assert.Equal([StatusOutcome.Updated, StatusOutcome.NotUpdated], rows.Select(r => r.Outcome));
+        Assert.Equal("|iucn-status=EN", rows[0].After);
+    }
+
+    [Fact]
+    public void SpeciesTableRowWithNoGenusAboveIsLeft() {
+        var result = Run("{{Species table/row |binomial=P. tigris |iucn-status=VU}}");
+        Assert.Equal(StatusNoteKind.NoGenus, Assert.Single(Assert.Single(result.Findings).Notes).Kind);
+    }
+
+    [Fact]
+    public void SpeciesTableRowKeepsCrForAPossiblyExtinctTaxonUnlessAsked() {
+        const string text = "{{Species table |genus=Lipotes}}\n{{Species table/row |binomial=L. vexillifer |iucn-status=CR}}";
+        Assert.Equal(text, Run(text).Text);
+        Assert.Contains("|iucn-status=CR(PE)}}", Run(text, options: new StatusUpdateOptions { PossiblyExtinctCodes = true }).Text);
+    }
+
+    // ---------------------------------------------------------------- {{cite iucn}}
+
+    [Fact]
+    public void CitationOfAnOlderAssessmentIsReplacedOnlyWhenAsked() {
+        var parts = new IucnCitationParts {
+            TaxonId = 4828, AssessmentId = 21289898, Year = 2015, ScientificName = "Amblysomus hottentotus",
+            Authors = [new CitationAuthor(CitationAuthorKind.Person, "Bronner, G.", "Bronner", "G.")],
+        };
+        var lookup = new FakeStatusLookup().Taxon(4828, "Amblysomus hottentotus", "EN", 2015, 21289898, citationJson: parts.ToJson())
+            .Assessment(111, "Global").Assessment(222, "Europe");
+        const string text = "<ref>{{cite iucn |author=Old, A. |year=2008 |title=''Amblysomus hottentotus'' |article-number=e.T4828A111}}</ref>"
+            + " <ref>{{cite iucn |year=2008 |article-number=e.T4828A222}}</ref>";
+
+        var plain = Run(text, lookup);
+        Assert.Equal(text, plain.Text);
+        Assert.Equal(1, plain.CountNotes(StatusNoteKind.CitationOlder));
+        // A citation of a regional assessment is not an item.
+        Assert.Single(plain.Findings);
+
+        var replaced = Run(text, lookup, options: new StatusUpdateOptions { UpdateCitations = true });
+        Assert.Contains("|author=Bronner, G. |year=2015", replaced.Text);
+        Assert.Contains("e.T4828A222}}</ref>", replaced.Text);
+        Assert.Equal(StatusOutcome.Updated, Assert.Single(replaced.Findings).Outcome);
+    }
+
+    [Fact]
+    public void CitationOfTheLatestAssessmentIsCurrent() {
+        var result = Run("{{cite iucn |year=2015 |article-number=e.T4828A21289898}}");
+        Assert.Equal(StatusOutcome.Current, Assert.Single(result.Findings).Outcome);
+    }
 }

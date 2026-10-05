@@ -15,6 +15,8 @@
         <li><strong>@UpdateText.IntroTemplatesTitle</strong>@UpdateText.IntroTemplates</li>
         <li><strong>@UpdateText.IntroTablesTitle</strong>@UpdateText.IntroTables</li>
         <li><strong>@UpdateText.IntroTaxoboxesTitle</strong>@UpdateText.IntroTaxoboxes</li>
+        <li><strong>@UpdateText.IntroListsTitle</strong>@UpdateText.IntroLists</li>
+        <li><strong>@UpdateText.IntroSpeciesTablesTitle</strong>@UpdateText.IntroSpeciesTables</li>
     </ul>
     <p class="help">@UpdateText.IntroLimits(StatusUpdater.DefaultMaxItems)</p>
 </div>
@@ -32,6 +34,32 @@
             : UpdateText.Summary(result.Updated, result.Current, result.NotUpdated))</p>
         @if (result.Updated == 0 && result.Findings.Count > 0) {
             <p class="note">@UpdateText.NoChanges</p>
+        }
+        @{
+            var offers = new List<(int Count, string Text, string Field, string Button)>();
+            if (!Model.Options.PossiblyExtinctCodes && result.CountNotes(StatusNoteKind.PossiblyExtinctKept) is > 0 and var pe) {
+                offers.Add((pe, UpdateText.OfferPossiblyExtinct(pe), UpdateModel.PossiblyExtinctField, UpdateText.OfferPossiblyExtinctButton));
+            }
+            if (!Model.Options.AddIds && result.CountNotes(StatusNoteKind.IdsNotAdded) is > 0 and var ids) {
+                offers.Add((ids, UpdateText.OfferIds(ids), UpdateModel.IdsField, UpdateText.OfferIdsButton));
+            }
+            if (!Model.Options.AddIds && result.CountNotes(StatusNoteKind.AssessmentIdNotAdded) is > 0 and var assessmentIds) {
+                offers.Add((assessmentIds, UpdateText.OfferAssessmentIds(assessmentIds), UpdateModel.IdsField, UpdateText.OfferIdsButton));
+            }
+            if (!Model.Options.AddYear && result.CountNotes(StatusNoteKind.YearNotAdded) is > 0 and var years) {
+                offers.Add((years, UpdateText.OfferYear(years), UpdateModel.YearField, UpdateText.OfferYearButton));
+            }
+            if (!Model.Options.UpdateCitations && result.CountNotes(StatusNoteKind.CitationOlder) is > 0 and var cites) {
+                offers.Add((cites, UpdateText.OfferCitations(cites), UpdateModel.CitationsField, UpdateText.OfferCitationsButton));
+            }
+        }
+        @if (offers.Count > 0) {
+            @* Each button sends the form below again with its option ticked. *@
+            <ul class="update-offers">
+                @foreach (var offer in offers) {
+                    <li><span>@offer.Text</span> <button type="submit" form="update-form" name="@offer.Field" value="1">@offer.Button</button></li>
+                }
+            </ul>
         }
         <div class="wikitext-box">
             <div class="wikitext-box-head">
@@ -80,9 +108,16 @@
     </section>
 }
 
-<form class="update-form" method="post" action="/update#result" enctype="multipart/form-data">
+<form class="update-form" id="update-form" method="post" action="/update#result" enctype="multipart/form-data">
     <label for="update-input">@UpdateText.InputLabel</label>
     <textarea id="update-input" name="@UpdateModel.TextField" rows="16" spellcheck="false" autocapitalize="off" autocomplete="off" required>@("\n" + Model.Input)</textarea>
+    <fieldset class="update-options">
+        <legend>@UpdateText.OptionsLegend</legend>
+        <label><input type="checkbox" name="@UpdateModel.PossiblyExtinctField" value="1" checked="@Model.Options.PossiblyExtinctCodes"> @UpdateText.OptionPossiblyExtinct</label>
+        <label><input type="checkbox" name="@UpdateModel.IdsField" value="1" checked="@Model.Options.AddIds"> @UpdateText.OptionIds</label>
+        <label><input type="checkbox" name="@UpdateModel.YearField" value="1" checked="@Model.Options.AddYear"> @UpdateText.OptionYear</label>
+        <label><input type="checkbox" name="@UpdateModel.CitationsField" value="1" checked="@Model.Options.UpdateCitations"> @UpdateText.OptionCitations</label>
+    </fieldset>
     <div class="update-actions">
         <button type="submit">@UpdateText.Submit</button>
         <p class="help">@UpdateText.NotSaved</p>

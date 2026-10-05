@@ -10,6 +10,7 @@ public sealed class SiteStatusLookup : IStatusLookup, IDisposable {
     private readonly SqliteConnection _connection;
     private readonly Dictionary<long, StatusTaxon?> _taxa = [];
     private readonly Dictionary<(string, bool), IReadOnlyCollection<long>> _names = [];
+    private readonly Dictionary<long, string?> _scopes = [];
 
     internal SiteStatusLookup(SqliteConnection connection) {
         _connection = connection;
@@ -80,6 +81,18 @@ public sealed class SiteStatusLookup : IStatusLookup, IDisposable {
         }
         _names[(key, synonyms)] = ids;
         return ids;
+    }
+
+    public string? AssessmentScope(long assessmentId) {
+        if (_scopes.TryGetValue(assessmentId, out var known)) {
+            return known;
+        }
+        using var command = _connection.CreateCommand();
+        command.CommandText = "SELECT scope FROM assessment WHERE assessment_id = @id";
+        command.Parameters.AddWithValue("@id", assessmentId);
+        var scope = command.ExecuteScalar() as string;
+        _scopes[assessmentId] = scope;
+        return scope;
     }
 
     public void Dispose() => _connection.Dispose();

@@ -15,8 +15,12 @@ namespace BeastieBot3.Site.Update;
 /// 1. {{IUCN status|CODE|taxonId/assessmentId|1|year=YYYY}}, found by the taxon id it names;
 /// 2. a cell in a wikitable column whose header names the status, holding a code ("EN") or
 ///    {{IUCN status|EN}} with no ids, found by the scientific name in the same row;
-/// 3. the status, status_system and status_ref lines of a taxobox, found by the taxobox's name.
-/// Only the values that change are replaced, so the text outside them comes back byte for byte.
+/// 3. the status, status_system and status_ref lines of a taxobox, found by the taxobox's name;
+/// 4. {{IUCN status}} with no ids on a list line, found by the scientific name on the line;
+/// 5. the iucn-status parameter of {{Species table/row}}, found by its binomial;
+/// 6. {{cite iucn}} citations of an older global assessment (StatusUpdateOptions.UpdateCitations).
+/// StatusUpdateOptions turns on the changes that are off by default. Only the values that change
+/// are replaced, so the text outside them comes back byte for byte.
 public sealed partial class StatusUpdater {
     /// The most items checked in one text: as many as one Wikipedia page can hold.
     public const int DefaultMaxItems = GroupList.MaxLines;
@@ -33,11 +37,16 @@ public sealed partial class StatusUpdater {
     private readonly IStatusLookup _lookup;
     private readonly int _maxItems;
     private readonly DateOnly _today;
+    private readonly StatusUpdateOptions _options;
+    // The table row each {{IUCN status}} in a table cell is in, for finding its taxon by name when its
+    // taxon id is unknown. Filled by Update.
+    private readonly Dictionary<WikiTemplate, TableRow> _rowOf = [];
 
-    public StatusUpdater(IStatusLookup lookup, DateOnly today, int maxItems = DefaultMaxItems) {
+    public StatusUpdater(IStatusLookup lookup, DateOnly today, int maxItems = DefaultMaxItems, StatusUpdateOptions? options = null) {
         _lookup = lookup;
         _today = today;
         _maxItems = maxItems;
+        _options = options ?? new StatusUpdateOptions();
     }
 
     private sealed record Edit(int Start, int End, string Replacement);
@@ -46,9 +55,13 @@ public sealed partial class StatusUpdater {
     private sealed record TemplateCandidate(WikiTemplate Template) : Candidate(Template.Span.Start);
     private sealed record CellCandidate(TableRow Row, TableCell Cell, WikiTemplate? Template) : Candidate(Cell.Content.Start);
     private sealed record TaxoboxCandidate(WikiTemplate Template) : Candidate(Template.Span.Start);
+    private sealed record SpeciesRowCandidate(WikiTemplate Template, string? Genus) : Candidate(Template.Span.Start);
+    private sealed record CitationCandidate(WikiTemplate Template) : Candidate(Template.Span.Start);
 
     public StatusUpdateResult Update(string text) {
         var scanner = new WikitextScanner(text);
+        _rowOf.Clear();
+        _genusLines = null;
         var candidates = new List<Candidate>();
         // {{IUCN status}} templates inside a taxobox's status parameters belong to the taxobox.
         var claimed = new HashSet<WikiTemplate>();
@@ -67,6 +80,15 @@ public sealed partial class StatusUpdater {
 
         var cellTemplates = new HashSet<WikiTemplate>();
         foreach (var table in WikiTables.Find(scanner)) {
+            foreach (var row in table.Rows.Where(r => !r.IsHeaderRow)) {
+                foreach (var cell in row.Cells) {
+                    if (cell.Content.Length <= MaxStatusCellLength) {
+                        foreach (var t in scanner.TemplatesWithin(cell.Content).Where(t => t.Name == "iucn status")) {
+                            _rowOf[t] = row;
+                        }
+                    }
+                }
+            }
             foreach (var (row, cell, template) in StatusCells(scanner, table)) {
                 candidates.Add(new CellCandidate(row, cell, template));
                 if (template is not null) {
@@ -82,17 +104,37 @@ public sealed partial class StatusUpdater {
             candidates.Add(new TemplateCandidate(template));
         }
 
+        // {{Species table |genus=[[Catopuma]] ...}} heads the rows under it, which abbreviate the genus.
+        string? genus = null;
+        foreach (var template in scanner.Templates.OrderBy(t => t.Span.Start)) {
+            if (template.Name == "species table") {
+                genus = template.Named("genus") is { } g ? LinkText(scanner.CoreText(g.Value)) : null;
+            } else if (template.Name == "species table/row" && template.Named("iucn-status") is not null) {
+                candidates.Add(new SpeciesRowCandidate(template, genus));
+            }
+        }
+
+        foreach (var cite in scanner.Templates.Where(t => t.Name == "cite iucn" && !claimed.Contains(t))) {
+            candidates.Add(new CitationCandidate(cite));
+        }
+
         candidates.Sort((a, b) => a.Position.CompareTo(b.Position));
         var findings = new List<StatusFinding>();
         var edits = new List<Edit>();
         foreach (var candidate in candidates.Take(_maxItems)) {
             var itemEdits = new List<Edit>();
-            var finding = candidate switch {
+            StatusFinding? finding = candidate switch {
                 TemplateCandidate t => StatusTemplate(scanner, t.Template, itemEdits),
                 CellCandidate c => TableCell(scanner, c, itemEdits),
                 TaxoboxCandidate b => Taxobox(scanner, b.Template, itemEdits),
+                SpeciesRowCandidate r => SpeciesRow(scanner, r, itemEdits),
+                CitationCandidate c => CitationFinding(scanner, c.Template, itemEdits),
                 _ => throw new InvalidOperationException(),
             };
+            // A citation of a regional assessment is not an item.
+            if (finding is null) {
+                continue;
+            }
             findings.Add(finding);
             edits.AddRange(itemEdits);
         }
@@ -110,7 +152,7 @@ public sealed partial class StatusUpdater {
         var idsParam = template.Positional(2);
         var idsText = idsParam is null ? string.Empty : s.CoreText(idsParam.Value);
         if (idsText.Length == 0) {
-            return Fail(StatusNoteKind.NoTaxonId);
+            return IsListLine(s, template.Span.Start) ? ListLine(s, template, edits) : Fail(StatusNoteKind.NoTaxonId);
         }
         var ids = IdsPattern().Match(idsText);
         if (!ids.Success || !long.TryParse(ids.Groups[1].Value, NumberStyles.None, CultureInfo.InvariantCulture, out var taxonId)) {
@@ -119,16 +161,23 @@ public sealed partial class StatusUpdater {
 
         var notes = new List<StatusNote>();
         var taxon = _lookup.GetTaxon(taxonId);
-        if (taxon is null) {
-            return Fail(StatusNoteKind.TaxonNotFound, id: taxonId);
-        }
-        if (!taxon.InRelease) {
+        if (taxon is { InRelease: false }) {
             var current = taxon.CurrentTaxonId is { } currentId ? _lookup.GetTaxon(currentId) : null;
-            if (current is null || !current.InRelease) {
-                return Fail(StatusNoteKind.NotInRelease, id: taxonId, taxon: taxon);
+            if (current is { InRelease: true }) {
+                notes.Add(new StatusNote(StatusNoteKind.UsedCurrentTaxon, Id: taxonId));
+                taxon = current;
             }
-            notes.Add(new StatusNote(StatusNoteKind.UsedCurrentTaxon, Id: taxonId));
-            taxon = current;
+        }
+        if (taxon is not { InRelease: true }) {
+            // An id the release does not have (often an old BirdLife id): the scientific name in the
+            // table row or on the list line can still find the taxon.
+            var byName = NameNear(s, template);
+            if (byName is null) {
+                return taxon is null ? Fail(StatusNoteKind.TaxonNotFound, id: taxonId) : Fail(StatusNoteKind.NotInRelease, id: taxonId, taxon: taxon);
+            }
+            notes.Add(new StatusNote(taxon is null ? StatusNoteKind.IdNotFoundMatchedByName : StatusNoteKind.IdNotInReleaseMatchedByName,
+                byName.ScientificName, taxonId));
+            taxon = byName;
         }
         var latest = taxon.LatestGlobal;
         if (latest is null) {
@@ -142,8 +191,19 @@ public sealed partial class StatusUpdater {
         if (template.Positional(1) is { } codeParam) {
             ReplaceCore(s, codeParam.Value, code, edits, ignoreCase: true);
         }
-        ReplaceCore(s, idsParam!.Value, $"{taxon.TaxonId}/{latest.AssessmentId}", edits);
+        // A template that names only the taxon ("2467") keeps that form unless the reader asks for ids.
+        var fullIds = $"{taxon.TaxonId}/{latest.AssessmentId}";
+        if (ids.Groups[2].Success || _options.AddIds) {
+            ReplaceCore(s, idsParam!.Value, fullIds, edits);
+            if (!ids.Groups[2].Success) {
+                notes.Add(new StatusNote(StatusNoteKind.IdsAdded, fullIds));
+            }
+        } else {
+            ReplaceCore(s, idsParam!.Value, taxon.TaxonId.ToString(CultureInfo.InvariantCulture), edits);
+            notes.Add(new StatusNote(StatusNoteKind.AssessmentIdNotAdded, fullIds));
+        }
         UpdateYear(s, template, code, latest.YearPublished, edits);
+        AddIdsAndYear(s, template, taxon, latest, code, hasIds: true, edits, notes);
         return Finish(s, StatusItemKind.StatusTemplate, line, template.Span, edits, taxon, notes);
     }
 
@@ -165,6 +225,45 @@ public sealed partial class StatusUpdater {
             } else if (year is { } y) {
                 ReplaceCore(s, p.Value, y.ToString(CultureInfo.InvariantCulture), edits);
             }
+        }
+    }
+
+    // The code to write where a cell or a species table row holds a bare code (current), or null
+    // when it stays. A plain CR stays CR for a possibly extinct taxon unless the reader asks for
+    // CR(PE) and CR(PEW): tables usually write the category alone.
+    private string? BareCodeFor(string? current, string code, List<StatusNote> notes) {
+        if (current == "CR" && code is "CR(PE)" or "CR(PEW)" && !_options.PossiblyExtinctCodes) {
+            notes.Add(new StatusNote(StatusNoteKind.PossiblyExtinctKept, code));
+            return null;
+        }
+        return string.Equals(current, code, StringComparison.OrdinalIgnoreCase) ? null : code;
+    }
+
+    // Ids for a template that has none, and a year for one with neither year= nor label=, when the
+    // options ask for them; otherwise a note says what they would add. EX and EW get no year.
+    private void AddIdsAndYear(WikitextScanner s, WikiTemplate template, StatusTaxon taxon, AssessmentRow latest, string code,
+        bool hasIds, List<Edit> edits, List<StatusNote> notes) {
+        var end = s.Core(new TextSpan(template.Span.Start, template.Span.End - 2)).End;
+        if (!hasIds && template.Positional(1) is { } codeParam) {
+            var ids = $"{taxon.TaxonId}/{latest.AssessmentId}";
+            if (_options.AddIds) {
+                var at = s.Core(codeParam.Value).End;
+                edits.Add(new Edit(at, at, $"|{ids}|1"));
+                notes.Add(new StatusNote(StatusNoteKind.IdsAdded, ids));
+            } else {
+                notes.Add(new StatusNote(StatusNoteKind.IdsNotAdded, ids));
+            }
+        }
+        if (code is "EX" or "EW" || latest.YearPublished is not { } year || template.Named("year") is not null
+            || template.Named("label") is not null) {
+            return;
+        }
+        var yearText = year.ToString(CultureInfo.InvariantCulture);
+        if (_options.AddYear) {
+            edits.Add(new Edit(end, end, $"|year={yearText}"));
+            notes.Add(new StatusNote(StatusNoteKind.YearAdded, yearText));
+        } else {
+            notes.Add(new StatusNote(StatusNoteKind.YearNotAdded, yearText));
         }
     }
 
@@ -248,14 +347,11 @@ public sealed partial class StatusUpdater {
             if (template.Positional(1) is { } codeParam) {
                 ReplaceCore(s, codeParam.Value, code, edits, ignoreCase: true);
             }
+            AddIdsAndYear(s, template, taxon, latest, code, hasIds: false, edits, notes);
         } else {
             var current = BareCode(s.Masked[core.Start..core.End]);
-            // A plain CR stays CR for a possibly extinct taxon: tables write the category, and
-            // "CR(PE)" as text is not a category.
-            if (current == "CR" && code is "CR(PE)" or "CR(PEW)") {
-                notes.Add(new StatusNote(StatusNoteKind.PossiblyExtinctKept, code));
-            } else if (!string.Equals(current, code, StringComparison.OrdinalIgnoreCase)) {
-                edits.Add(new Edit(core.Start, core.End, code));
+            if (BareCodeFor(current, code, notes) is { } written) {
+                edits.Add(new Edit(core.Start, core.End, written));
             }
         }
         return Finish(s, StatusItemKind.TableCell, line, core, edits, taxon, notes);

@@ -1011,20 +1011,47 @@ colspan and rowspan; `StatusUpdater` decides the edits), and reads the database 
 
 - `{{IUCN status}}` with a taxon id: the code (`IucnStatusTemplate.ToTemplateCode`), the ids, and
   `|year=` or a `|label=` that is a year are replaced; for EX and EW those parameters are removed. A
-  template with neither keeps having neither. An id with `in_release = 0` and a `current_taxon_id`
-  uses the current taxon.
+  template with neither keeps having neither, and a template with a taxon id only ("2467", as List
+  of cetaceans writes it) keeps that form, unless the reader asks for them (options below). An id
+  with `in_release = 0` and a `current_taxon_id` uses the current taxon. An id the site does not
+  have, or one not in the release with no current taxon (List of birds of Hawaii has old BirdLife
+  ids), falls back to the scientific name in the template's table row or on its list line.
+- `{{IUCN status}}` with no ids on a list line (`*`, `#`, `:` or `;` first), as the lists by country
+  write it ("**** [[Aye-aye]], ''Daubentonia madagascariensis'' {{IUCN status|EN}}"): the taxon is
+  the one the scientific names on the line before the template name. An abbreviated name
+  ("''G. aurita''") takes its genus from the nearest line above that says "Genus ''[[Geogale]]''",
+  and a plain binomial in brackets counts.
+- `{{Species table/row}}`'s `iucn-status` (the family lists: List of felids, canids, mustelids,
+  hominoids, pinnipeds, 28 to 64 rows each): the taxon is the row's `binomial`, whose abbreviated
+  genus is the link text of the `genus` of the `{{Species table}}` above it, or the row's `name`.
+- `{{cite iucn}}` anywhere outside a taxobox's `status_ref`: found by the T…A… id in
+  `|article-number=`, `|id=`, `|url=` or `|doi=`. A citation of a regional assessment is skipped. A
+  citation of an older global assessment is reported, and replaced only when the reader asks.
 - Wikitable cells in a column whose header mentions IUCN or the Red List, or says "status" without
   naming another list (EPBC, CITES, ...): a bare code or `{{IUCN status|X}}` with no ids. The taxon is
   the one taxon in the release named in the same row (italics, links, `{{sp}}`, `{{taxlink}}`; a
   rowspan cell above counts), by an exact `name_key` match on scientific names, trying a trinomial
   with `ssp.`, `subsp.` and `var.`; IUCN synonyms only when no scientific name matches and they name
-  one taxon. Only the code is changed, and a bare `CR` is kept for a possibly extinct taxon.
+  one taxon. Only the code is changed (and ids and a year added when asked), and a bare `CR` is kept
+  for a possibly extinct taxon unless the reader asks for CR(PE) and CR(PEW).
 - Taxoboxes ({{Speciesbox}}, {{Taxobox}}, {{Automatic taxobox}}, {{Subspeciesbox}},
   {{Infraspeciesbox}}) with a `status` parameter: `status` and `status_system`
   (`SpeciesboxStatus.ToStatusCode` / `ToStatusSystem`; `status_system` is added when missing), and the
   `{{cite iucn}}` inside `status_ref` when it cites another assessment (by the assessment id in
   `|article-number=`, `|id=`, `|url=` or `|doi=`, else by `|year=` / `|volume=`). The new citation
   uses the taxon page's default options, without the ref wrapper, which is kept.
+- Options (`StatusUpdateOptions`, form fields `pe`, `ids`, `year`, `cites`, all off by default):
+  CR(PE) or CR(PEW) instead of a kept CR in table cells and species table rows; ids added to
+  templates with none or with a taxon id only; `|year=` added to templates with no year or label
+  (not EX or EW); older `{{cite iucn}}` citations replaced. When an option that is off would change
+  items, the result lists it with the count and a button that sends the same text again with it on
+  (`StatusUpdateResult.CountNotes`).
+- Checked against a sample of 9 English Wikipedia lists on 5 October 2026: what is left as is is
+  taxa IUCN does not assess (subfossil lemurs, the domestic cat), names IUCN spells differently,
+  and legend tables. Two forms the first version left out did not occur at all, in the sample or in
+  the 93,530 cached articles: linked codes (`[[Endangered species|EN]]`) and `data-sort-value` on
+  status cells. Not handled: the population trend in `{{Species table/row}}`'s `direction`
+  (`{{decrease}}` and so on), and `[[File:Status iucn3.1 EN.svg]]` images (4 in the cached articles).
 - Only the values that change are replaced; everything else comes back byte for byte. At most 3,600
   items (`GroupList.MaxLines`) are checked; the rest are counted and left as they are.
 - The page is the only one that answers POST (`SiteMiddleware.UseGetAndHeadOnly` allows it on

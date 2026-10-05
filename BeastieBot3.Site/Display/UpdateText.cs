@@ -28,12 +28,40 @@ public static class UpdateText {
     public const string IntroTaxoboxesTitle = "Taxoboxes with a status parameter";
     public const string IntroTaxoboxes = ": status, status_system, and the {{cite iucn}} in status_ref when it cites an older assessment. The taxon is found by the taxobox's scientific name.";
 
+    public const string IntroListsTitle = "{{IUCN status}} on list lines";
+    public const string IntroLists = ", such as * [[Aye-aye]], ''Daubentonia madagascariensis'' {{IUCN status|EN}}: the code. The taxon is found by the scientific name earlier on the line.";
+
+    public const string IntroSpeciesTablesTitle = "Species tables";
+    public const string IntroSpeciesTables = ": the iucn-status parameter of {{Species table/row}}. The taxon is found by the row's binomial, with the genus from the {{Species table}} above it.";
+
     public static string IntroLimits(int maxItems) =>
         $"Limits: 2 MB of text and {Count(maxItems)} items. Items after the first {Count(maxItems)} are left as they are.";
 
     public const string InputLabel = "Wikitext of an article or list";
     public const string Submit = "Update statuses";
     public const string NotSaved = "This site does not save your text or edit Wikipedia. Copy the updated wikitext back into the article yourself.";
+
+    public const string OptionsLegend = "Also change";
+    public const string OptionPossiblyExtinct = "CR to CR(PE) or CR(PEW) in table cells and species tables, for possibly extinct taxa";
+    public const string OptionIds = "Add the taxon id and assessment id to {{IUCN status}} templates that lack them";
+    public const string OptionYear = "Add year= to {{IUCN status}} templates that have no year";
+    public const string OptionCitations = "Replace {{cite iucn}} citations of older assessments with citations of the latest ones";
+
+    // Offers above the result, shown when an option that is off would change items.
+    public static string OfferPossiblyExtinct(int n) =>
+        n == 1 ? "1 item kept CR for a possibly extinct taxon." : $"{Count(n)} items kept CR for possibly extinct taxa.";
+    public const string OfferPossiblyExtinctButton = "Use CR(PE) and CR(PEW)";
+    public static string OfferIds(int n) =>
+        n == 1 ? "1 {{IUCN status}} template has no ids." : $"{Count(n)} {{{{IUCN status}}}} templates have no ids.";
+    public const string OfferIdsButton = "Add ids";
+    public static string OfferAssessmentIds(int n) =>
+        n == 1 ? "1 {{IUCN status}} template has a taxon id but no assessment id." : $"{Count(n)} {{{{IUCN status}}}} templates have a taxon id but no assessment id.";
+    public static string OfferYear(int n) =>
+        n == 1 ? "1 {{IUCN status}} template has no year." : $"{Count(n)} {{{{IUCN status}}}} templates have no year.";
+    public const string OfferYearButton = "Add years";
+    public static string OfferCitations(int n) =>
+        n == 1 ? "1 {{cite iucn}} cites an older assessment." : $"{Count(n)} {{{{cite iucn}}}} citations cite older assessments.";
+    public const string OfferCitationsButton = "Replace citations";
 
     public const string ResultHeading = "Result";
     public const string OutputLabel = "Updated wikitext";
@@ -82,6 +110,9 @@ public static class UpdateText {
     public static string Kind(StatusItemKind kind) => kind switch {
         StatusItemKind.StatusTemplate => "{{IUCN status}} template",
         StatusItemKind.TableCell => "Table cell",
+        StatusItemKind.ListLine => "List line",
+        StatusItemKind.SpeciesTableRow => "Species table row",
+        StatusItemKind.Citation => "{{cite iucn}}",
         _ => "Taxobox",
     };
 
@@ -96,6 +127,8 @@ public static class UpdateText {
             StatusNoteKind.NoTaxonId => "Taxon not found: the template has no taxon id and is not in a status column of a table. Add the taxon id and assessment id, such as 4828/21289898.",
             StatusNoteKind.BadTaxonId => $"Could not read the ids \"{note.Detail}\". Expected taxon id/assessment id, such as 4828/21289898.",
             StatusNoteKind.NoName when kind == StatusItemKind.Taxobox => "No scientific name found in the taxobox (taxon=, genus= and species=, binomial= or trinomial=).",
+            StatusNoteKind.NoName when kind == StatusItemKind.ListLine => "No scientific name found on this line before the template.",
+            StatusNoteKind.NoName when kind == StatusItemKind.SpeciesTableRow => "No scientific name found in the row's binomial or name.",
             StatusNoteKind.NoName => "No scientific name found in this table row.",
             StatusNoteKind.NameNotFound when several => $"No taxon in this Red List version has any of the names {note.Detail}.",
             StatusNoteKind.NameNotFound => $"No taxon in this Red List version has the name {note.Detail}.",
@@ -110,6 +143,17 @@ public static class UpdateText {
             StatusNoteKind.NoStatusRef => "No status_ref: the status changed, and the taxobox has no reference for it. The taxon's page on this site has a {{cite iucn}} to copy.",
             StatusNoteKind.NoCitation => "Check status_ref: it cites an older assessment, and this site has no citation for the latest assessment. status_ref was not changed.",
             StatusNoteKind.PossiblyExtinctKept => $"Kept as \"CR\". The latest assessment is {note.Detail}.",
+            StatusNoteKind.IdsNotAdded => $"No ids. With \"Add ids\": {note.Detail}.",
+            StatusNoteKind.YearNotAdded => $"No year. With \"Add years\": year={note.Detail}.",
+            StatusNoteKind.IdsAdded => $"Added the ids {note.Detail}.",
+            StatusNoteKind.AssessmentIdNotAdded => $"No assessment id. With \"Add ids\": {note.Detail}.",
+            StatusNoteKind.IdNotFoundMatchedByName => $"No taxon on this site has taxon id {note.Id}. Found by the scientific name {note.Detail} instead.",
+            StatusNoteKind.IdNotInReleaseMatchedByName => $"Taxon id {note.Id} is not in this Red List version. Found by the scientific name {note.Detail} instead.",
+            StatusNoteKind.YearAdded => $"Added year={note.Detail}.",
+            StatusNoteKind.CitationWithoutIds => "No assessment id (such as e.T22823A14871490) in article-number, id, url or doi, so the citation was not checked.",
+            StatusNoteKind.CitationOlder => "Cites an older assessment. Not replaced: tick \"Replace {{cite iucn}} citations\" to replace it.",
+            StatusNoteKind.CitationUpdated => "Replaced with a citation of the latest assessment.",
+            StatusNoteKind.NoGenus => $"The binomial {note.Detail} is abbreviated, and no {{{{Species table}}}} above it gives the genus.",
             _ => note.Kind.ToString(),
         };
     }

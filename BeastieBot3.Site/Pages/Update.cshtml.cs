@@ -42,6 +42,14 @@ public sealed class UpdateModel : PageModel {
 
     public StatusUpdateResult? Result { get; private set; }
 
+    /// The options the form sent ("1" in the fields below); all off on a first visit.
+    public StatusUpdateOptions Options { get; private set; } = new();
+
+    public const string PossiblyExtinctField = "pe";
+    public const string IdsField = "ids";
+    public const string YearField = "year";
+    public const string CitationsField = "cites";
+
     public string? Error { get; private set; }
 
     public void OnGet() {
@@ -68,12 +76,20 @@ public sealed class UpdateModel : PageModel {
             return Failed(StatusCodes.Status413PayloadTooLarge, UpdateText.ErrorTooLarge);
         }
         Input = text;
+        // The last value counts: an offer's button sends "1" after the form's own checkbox.
+        bool On(string field) => form[field].LastOrDefault() == "1";
+        Options = new StatusUpdateOptions {
+            PossiblyExtinctCodes = On(PossiblyExtinctField),
+            AddIds = On(IdsField),
+            AddYear = On(YearField),
+            UpdateCitations = On(CitationsField),
+        };
         if (string.IsNullOrWhiteSpace(text)) {
             Error = UpdateText.ErrorEmpty;
             return Page();
         }
         using var lookup = _queries.OpenStatusLookup();
-        Result = new StatusUpdater(lookup, DateOnly.FromDateTime(DateTime.UtcNow)).Update(text);
+        Result = new StatusUpdater(lookup, DateOnly.FromDateTime(DateTime.UtcNow), options: Options).Update(text);
         return Page();
     }
 
