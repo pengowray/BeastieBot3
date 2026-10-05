@@ -160,7 +160,7 @@ public static class GroupList {
         }
         foreach (var (group, members) in byGroup) {
             blocks.Add(new HeadingBlock(level, HeadingText(group), group, null));
-            if (options.HeadingNames && group.CommonNameEn is not null) {
+            if (options.HeadingNames && HasSentenceName(group)) {
                 blocks.Add(new GroupNameBlock(group));
             }
             AddGroups(blocks, members, groups, rest, level + 1, options);
@@ -224,7 +224,7 @@ public static class GroupList {
     };
 
     public static SpeciesListEntry Entry(ListTaxonRow taxon) => new() {
-        ScientificName = taxon.ScientificName,
+        ScientificName = SpeciesName(taxon),
         Genus = taxon.Genus,
         SpeciesEpithet = taxon.SpeciesEpithet,
         InfraType = taxon.InfraRank,
@@ -241,6 +241,14 @@ public static class GroupList {
         AssessmentId = taxon.AssessmentId,
         YearPublished = taxon.YearPublished?.ToString(System.Globalization.CultureInfo.InvariantCulture),
     };
+
+    // A subpopulation's line shows the species' name and then the subpopulation in brackets; IUCN
+    // writes the subpopulation into the scientific name ("Lycaon pictus North Africa subpopulation").
+    private static string SpeciesName(ListTaxonRow taxon) =>
+        taxon.SubpopulationName is { Length: > 0 } subpopulation
+        && taxon.ScientificName.EndsWith(" " + subpopulation, StringComparison.Ordinal)
+            ? taxon.ScientificName[..^(subpopulation.Length + 1)]
+            : taxon.ScientificName;
 
     /// "Family Felidae"; the name alone for a Catalogue of Life group shown without its rank.
     public static string HeadingText(GroupRow group) =>
@@ -302,6 +310,12 @@ public static class GroupList {
         }
         return sb.ToString().TrimEnd('\n');
     }
+
+    /// Whether the group's English name can go in a "Members of ..." line: only a name from the rules
+    /// files, which give plurals ("cats"). A name from a Wikipedia redirect is an article title
+    /// ("Eared seal"), and "are called Eared seal" reads wrong.
+    public static bool HasSentenceName(GroupRow group) =>
+        group.CommonNameEn is not null && group.CommonNameSource == "rules";
 
     /// "Members of the [[Felidae]] family are called cats.", as the Wikipedia list headings write it
     /// (HeadingFormatter in the CLI): the rank is left out for a group shown without its rank.

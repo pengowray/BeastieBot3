@@ -24,14 +24,22 @@ internal static class SiteListLinks {
         }
     }
 
-    // The fields of a list record that the article resolution reads.
-    private static IucnSpeciesRecord ToRecord(SiteTaxon taxon) => new(
+    // The fields of a list record that the article resolution reads. A subpopulation is looked up by
+    // its species' name: IUCN writes "Lycaon pictus North Africa subpopulation".
+    private static IucnSpeciesRecord ToRecord(SiteTaxon taxon) {
+        var name = taxon.SubpopulationName is { } subpopulation
+            ? SiteBuildRules.SubpopulationParentName(taxon.ScientificName, subpopulation) ?? taxon.ScientificName
+            : taxon.ScientificName;
+        return ToRecord(taxon, name);
+    }
+
+    private static IucnSpeciesRecord ToRecord(SiteTaxon taxon, string name) => new(
         TaxonId: taxon.TaxonId,
         AssessmentId: taxon.LatestGlobalAssessmentId ?? 0,
         RedlistCategory: string.Empty,
         StatusCode: taxon.LatestGlobalStatusCode ?? string.Empty,
-        ScientificNameAssessments: taxon.ScientificName,
-        ScientificNameTaxonomy: taxon.ScientificName,
+        ScientificNameAssessments: name,
+        ScientificNameTaxonomy: name,
         KingdomName: taxon.Kingdom!,
         PhylumName: taxon.Phylum,
         ClassName: taxon.ClassName,
@@ -41,7 +49,7 @@ internal static class SiteListLinks {
         SpeciesName: taxon.SpeciesEpithet!,
         InfraType: taxon.InfraRank,
         InfraName: taxon.InfraName,
-        SubpopulationName: taxon.SubpopulationName,
+        SubpopulationName: null,
         Scopes: null,
         Authority: taxon.Authority,
         InfraAuthority: null,

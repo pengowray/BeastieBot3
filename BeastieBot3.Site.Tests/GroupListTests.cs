@@ -18,7 +18,7 @@ public sealed class GroupListTests {
         new[] { Mammalia, Carnivora, Felidae, Panthera, Canidae, Canis }.ToDictionary(g => g.NodeId);
 
     private static GroupRow Group(int id, int? parent, string rank, string name, int first, int last, string? common = null) =>
-        new(id, parent, parent is null ? 0 : 1, rank, name, "iucn", true, "ANIMALIA", null, common, null, null, first, last, 0, 0, 0);
+        new(id, parent, parent is null ? 0 : 1, rank, name, "iucn", true, "ANIMALIA", null, common, common is null ? null : "rules", null, first, last, 0, 0, 0);
 
     private static ListTaxonRow Taxon(long id, string name, int node, int pos, string category, string? common = null,
         string kind = "species", long? parent = null, bool pe = false) {
@@ -93,6 +93,22 @@ public sealed class GroupListTests {
         Assert.IsType<LabelBlock>(panthera[2]);
         Assert.Equal("Subspecies", ((LabelBlock)panthera[2]).Text);
         Assert.Equal(2L, ((LineBlock)panthera[3]).Taxon.TaxonId);
+    }
+
+    [Fact]
+    public void A_subpopulation_line_has_the_species_name_and_the_subpopulation_in_brackets() {
+        var row = new ListTaxonRow(7, "Lycaon pictus North Africa subpopulation", "subpopulation", "ANIMALIA", "Lycaon", "pictus", null, null,
+            "North Africa subpopulation", "African wild dog", "African wild dog", null, 8, 6, 10, 70, "CR", false, false, 2020);
+        var line = SpeciesListLine.Format(GroupList.Entry(row), new SpeciesListLineOptions());
+
+        Assert.Equal("* [[African wild dog]] (''Lycaon pictus'') (North Africa subpopulation) {{IUCN status|CR|7/70|1|year=2020}}", line);
+    }
+
+    [Fact]
+    public void Writes_the_members_line_only_for_a_name_from_the_rules() {
+        var fromRedirect = Felidae with { CommonNameEn = "Cat", CommonNameSource = "wikipedia" };
+        Assert.False(GroupList.HasSentenceName(fromRedirect));
+        Assert.True(GroupList.HasSentenceName(Felidae));
     }
 
     [Fact]

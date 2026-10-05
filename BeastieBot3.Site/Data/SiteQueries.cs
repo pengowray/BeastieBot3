@@ -554,7 +554,8 @@ public sealed class SiteQueries {
         return names;
     }
 
-    /// The taxa of a group that have a latest global assessment, in tree order, of the given kinds.
+    /// The taxa of a group that have a latest global assessment, in tree order, of the given kinds. A
+    /// subpopulation with no English name of its own has its species' name.
     public IReadOnlyList<ListTaxonRow> GetListTaxa(GroupRow group, IReadOnlyCollection<string> kinds) {
         using var connection = _db.OpenConnection();
         using var command = connection.CreateCommand();
@@ -570,9 +571,11 @@ public sealed class SiteQueries {
         }
         command.CommandText = $"""
             SELECT t.taxon_id, t.scientific_name, t.kind, t.kingdom, t.genus, t.species_epithet, t.infra_rank, t.infra_name,
-                   t.subpopulation_name, t.common_name_en, t.list_article_title, t.list_parent_article_title, t.parent_taxon_id,
-                   t.node_id, t.tree_pos, a.assessment_id, a.category, a.possibly_extinct, a.possibly_extinct_in_the_wild, a.year_published
+                   t.subpopulation_name, COALESCE(t.common_name_en, p.common_name_en), t.list_article_title, t.list_parent_article_title,
+                   t.parent_taxon_id, t.node_id, t.tree_pos, a.assessment_id, a.category, a.possibly_extinct, a.possibly_extinct_in_the_wild,
+                   a.year_published
             FROM taxon t JOIN assessment a ON a.assessment_id = t.latest_global_assessment_id
+            LEFT JOIN taxon p ON p.taxon_id = t.parent_taxon_id AND t.kind = 'subpopulation'
             WHERE t.tree_pos BETWEEN @first AND @last AND t.kind IN ({string.Join(", ", kindNames)})
             ORDER BY t.tree_pos
             """;
