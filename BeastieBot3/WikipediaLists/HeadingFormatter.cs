@@ -64,6 +64,9 @@ internal sealed class HeadingFormatter {
         var headingText = FormatHeadingText(displayName, rank, showRankLabel: true, isScientificName: true);
 
         var commonName = ResolveCommonName(raw, kingdom).Name;
+        if (IsScientificName(raw, commonName)) {
+            commonName = null;
+        }
         var wikilinkTarget = ResolveWikilink(raw, kingdom);
 
         // --- Build common name sentence ---
@@ -218,6 +221,27 @@ internal sealed class HeadingFormatter {
         }
 
         return $"Members of {wikilink} are called {commonNameOrPlural}.";
+    }
+
+    /// <summary>
+    /// True when a rule's "common name" is a scientific name, so no "Members of ..." sentence is
+    /// written: the taxon's own name (rules-list.txt has "Daubentoniidae = Daubentoniidae" so the
+    /// family is not called "aye-ayes") or one word with a family or order ending
+    /// ("Anthocerotales = Dendrocerotales").
+    /// </summary>
+    internal static bool IsScientificName(string raw, string? name) {
+        if (string.IsNullOrWhiteSpace(name)) {
+            return false;
+        }
+        // Only a capitalised single word counts, so order Primates keeps its lowercase name "primates".
+        var trimmed = name.Trim();
+        if (trimmed.Contains(' ') || !char.IsUpper(trimmed[0])) {
+            return false;
+        }
+        return trimmed.Equals(raw.Trim(), StringComparison.OrdinalIgnoreCase)
+            || trimmed.EndsWith("idae", StringComparison.Ordinal) || trimmed.EndsWith("inae", StringComparison.Ordinal)
+            || trimmed.EndsWith("aceae", StringComparison.Ordinal) || trimmed.EndsWith("oidea", StringComparison.Ordinal)
+            || trimmed.EndsWith("ales", StringComparison.Ordinal) || trimmed.EndsWith("formes", StringComparison.Ordinal);
     }
 
     public static bool IsOtherOrUnknownHeading(string raw) => BeastieBot3.Taxonomy.TaxonomyTreeBuilder.IsResidualLabel(raw);

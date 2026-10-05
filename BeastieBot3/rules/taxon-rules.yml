@@ -225,7 +225,7 @@ taxa:
   Artiodactyla:
     use_virtual_groups: true
     common_name: artiodactyl
-    common_plural: Artiodactyls
+    common_plural: artiodactyls
     main_article: Even-toed ungulate
     comprises: "even-toed ungulates and cetaceans"
 
@@ -233,7 +233,7 @@ taxa:
   Cetartiodactyla:
     use_virtual_groups: true
     common_name: cetartiodactyl
-    common_plural: Cetartiodactyls
+    common_plural: cetartiodactyls
     main_article: Even-toed ungulate
     comprises: "even-toed ungulates and cetaceans"
 

@@ -17,7 +17,7 @@
 Mammalia blurb According to the IUCN, all known living mammal species have been assessed for the red list of threatened species.<ref>http://www.iucnredlist.org/initiatives/mammals/process/methods</ref>
 
 // top
-Mammalia = mammal
+Mammalia = mammal ! mammals
 Mammalia adj mammalian
 Mollusca = mollusc ! molluscs // (or mollusk ! mollusks). Go with spelling which matches other wikipedia pages, e.g. Lists of molluscs by location
 Arthropoda = arthropod ! arthropods
@@ -168,13 +168,13 @@ Rita sacerdotum = Salween rita
 Ungulata = ungulate ! ungulates
 Primates = primate ! primates
 Perissodactyla = odd-toed ungulate ! odd-toed ungulates
-Cheirogaleidae = cheirogaleid
+Cheirogaleidae = cheirogaleid ! cheirogaleids
 Hominidae = great ape ! great apes // note: Hominid refers to humans and relatives of humans closer than chimpanzees
 Hylobatidae = gibbon ! gibbons
 // Caviidae = cavy family // just 'cavy' is ambiguous
 // Habromys schmidlyi = Schmidly's deer mouse // but shares a name with Peromyscus schmidlyi ??
 //Echimyidae = echimyid
-Echimyidae = Neotropical spiny rat // and their fossil relatives
+Echimyidae = Neotropical spiny rat ! Neotropical spiny rats // and their fossil relatives
 Muridae = murid ! murids
 Bovidae = bovid ! bovids
 Giraffidae = giraffid ! giraffids
@@ -289,13 +289,13 @@ Melogale cucphuongensis = Vietnam ferret-badger
 ////
 // Squamata: Snakes and lizards names
 ////
-Acrochordidae = wart snake
-Agamidae = dragon lizard
-Amphisbaenidae = worm lizard 
+Acrochordidae = wart snake ! wart snakes
+Agamidae = dragon lizard ! dragon lizards
+Amphisbaenidae = worm lizard ! worm lizards
 Anguidae includes slowworms, glass lizards, and alligator lizards  // anguid
-Anniellidae = American legless lizard
-Anomalepididae = dawn blind snake  // anomalepidid
-Anomochilidae = dwarf pipe snake  // anomochilid
+Anniellidae = American legless lizard ! American legless lizards
+Anomalepididae = dawn blind snake ! dawn blind snakes  // anomalepidid
+Anomochilidae = dwarf pipe snake ! dwarf pipe snakes  // anomochilid
 Atractaspididae = burrowing asp ! burrowing asps   // => Atractaspidinae
 //Bipedidae // = ajolote (ambiguous) if excluding extinct
 //Boidae // boid, aka boas
@@ -304,10 +304,10 @@ Bolyeridae = Round Island boa ! Round Island boas // bolyerid
 // Carphodactylidae // carphodactylid  [geckos]
 // Chamaeleonidae // chameleon (automatically found)
 Colubridae = colubrid ! colubrids
-Cordylidae = girdled lizard // cordylid
+Cordylidae = girdled lizard ! girdled lizards // cordylid
 //Corytophanidae = corytophanid lizard
-Crotaphytidae = collared lizard // crotaphytid
-Cylindrophiidae = Asian pipe snake // cylindrophiid
+Crotaphytidae = collared lizard ! collared lizards // crotaphytid
+Cylindrophiidae = Asian pipe snake ! Asian pipe snakes // cylindrophiid
 Dactyloidae = anole ! anoles // dactyloid
 // Dibamidae = dibamid lizard // dibamid
 // Diplodactylidae = diplodactylid gecko
@@ -316,16 +316,16 @@ Dactyloidae = anole ! anoles // dactyloid
 /// Eublepharidae = eublepharid gecko
 // Gekkonidae // gekkonid
 // Gerrhopilidae = gerrhopilid snake
-Gerrhosauridae = plated lizard // gerrhosaurid
-Gymnophthalmidae = spectacled lizard // gymnophthalmid
-Helodermatidae = beaded lizard //
-Homalopsidae = Indo-Australian water snake // homalopsid // => Homalopsinae
-Hoplocercidae = hoplocercin // hoplocercid
+Gerrhosauridae = plated lizard ! plated lizards // gerrhosaurid
+Gymnophthalmidae = spectacled lizard ! spectacled lizards // gymnophthalmid
+Helodermatidae = beaded lizard ! beaded lizards //
+Homalopsidae = Indo-Australian water snake ! Indo-Australian water snakes // homalopsid // => Homalopsinae
+Hoplocercidae = hoplocercid ! hoplocercids // hoplocercid
 Iguanidae includes iguanas and related species // iguanid
-Lacertidae = wall lizard // lacertid
+Lacertidae = wall lizard ! wall lizards // lacertid
 // Lamprophiidae = lamprophiid snake
 // Leiosauridae = leiosaurid lizard
-Leptotyphlopidae = thread snake // leptotyphlopid
+Leptotyphlopidae = thread snake ! thread snakes // leptotyphlopid
 // Liolaemidae = liolaemid lizard
 Loxocemidae = Mexican python ! Mexican pythons // loxocemid
 Natricidae = keelback ! keelbacks // natricid
@@ -338,25 +338,25 @@ Opluridae = Madagascan iguana ! Madagascan iguanas // oplurid
 // Psammophiidae // psammophiid // => Colubridae  // ?
 // Pseudoxenodontidae // pseudoxenodontid // => Colubridae // ?
 // Pseudoxyrhophiidae = pseudoxyrhophiid snake // => Pseudoxyrhophiinae
-Pygopodidae = flap-footed lizard // pygopodid
+Pygopodidae = flap-footed lizard ! flap-footed lizards // pygopodid
 Pythonidae = python ! pythons // pythonid
-Rhineuridae = rhineurid worm lizard
+Rhineuridae = rhineurid worm lizard ! rhineurid worm lizards
 // Scincidae = skink ! skinks // (auto)
-Shinisauridae = crocodile lizard // shinisaurid // only extant genera / species?
+Shinisauridae = crocodile lizard ! crocodile lizards // shinisaurid // only extant genera / species?
 // Sphaerodactylidae = sphaerodactylid gecko
 Teiidae includes whiptails and tegus // teiid
-Trogonophidae = Palearctic worm lizard // trogonophid
+Trogonophidae = Palearctic worm lizard ! Palearctic worm lizards // trogonophid
 Tropidophiidae = dwarf boa ! dwarf boas // tropidophiid
-Tropiduridae = Neotropical ground lizard // tropidurid
-Typhlopidae = typhlopid blind snake // typhlopid
-Uropeltidae = shield-tailed snake // uropeltid
+Tropiduridae = Neotropical ground lizard ! Neotropical ground lizards // tropidurid
+Typhlopidae = typhlopid blind snake ! typhlopid blind snakes // typhlopid
+Uropeltidae = shield-tailed snake ! shield-tailed snakes // uropeltid
 // Varanidae includes monitors and earless monitor lizards // varanid
 Viperidae = viper ! vipers // viperid
 // Xantusiidae = night lizard // auto
 // Xenodermatidae = xenodermatid snake
-Xenopeltidae = sunbeam snake // xenopeltid
+Xenopeltidae = sunbeam snake ! sunbeam snakes // xenopeltid
 // Xenophiidae = xenophiid snake
-Xenosauridae = knob-scaled lizard // xenosaurid
+Xenosauridae = knob-scaled lizard ! knob-scaled lizards // xenosaurid
 
 /////
 // Squamata: sorted into: snakes and lizards
@@ -769,43 +769,43 @@ Paraschistura chrysicristinae = Diyarbakir loach // Diyarbakır Loach (dotless i
 Sarotherodon linnellii = unga // or blackbelly tilapia
 
 // Frog groups
-Aromobatidae = cryptic forest frog
-Arthroleptidae = screeching frog // also called squeakers
-Craugastoridae = fleshbelly frog
+Aromobatidae = cryptic forest frog ! cryptic forest frogs
+Arthroleptidae = screeching frog ! screeching frogs // also called squeakers
+Craugastoridae = fleshbelly frog ! fleshbelly frogs
 Cycloramphidae == Cycloramphinae // spelled slightly differently on wikipedia (but isn't a redirect to common name)
-Dicroglossidae = fork-tongued frog
-Eleutherodactylidae = robber frog // also, rain frog (which is ambiguous)
+Dicroglossidae = fork-tongued frog ! fork-tongued frogs
+Eleutherodactylidae = robber frog ! robber frogs // also, rain frog (which is ambiguous)
 // Eleutherodactylidae means free-toed
-Brevicipitidae = rain frog // rain frog is ambiguous
-Hyperoliidae = African reed frog // has several other common names http://research.amnh.org/vz/herpetology/amphibia/Amphibia/Anura/Hyperoliidae
-Leiopelmatidae = New Zealand primitive frog // or New Zealand frog // http://research.amnh.org/vz/herpetology/amphibia/Amphibia/Anura/Leiopelmatidae
-Leptodactylidae = southern frog
-Limnodynastidae = Australian ground frog // wikipedia common name confirmed http://research.amnh.org/vz/herpetology/amphibia/Amphibia/Anura/Limnodynastidae
+Brevicipitidae = rain frog ! rain frogs // rain frog is ambiguous
+Hyperoliidae = African reed frog ! African reed frogs // has several other common names http://research.amnh.org/vz/herpetology/amphibia/Amphibia/Anura/Hyperoliidae
+Leiopelmatidae = New Zealand primitive frog ! New Zealand primitive frogs // or New Zealand frog // http://research.amnh.org/vz/herpetology/amphibia/Amphibia/Anura/Leiopelmatidae
+Leptodactylidae = southern frog ! southern frogs
+Limnodynastidae = Australian ground frog ! Australian ground frogs // wikipedia common name confirmed http://research.amnh.org/vz/herpetology/amphibia/Amphibia/Anura/Limnodynastidae
 // Limnodynastidae redirects to Myobatrachidae, where it is called Limnodynastinae, and is a subfamily // not sure about this redirect TODO:
 // Mantellidae = ... English Names: None noted
-Megophryidae = litter frog // also megophryid
-Micrixalidae = dancing frog // also  tropical frogs, and torrent frogs (Micrixalus is monotypic within Micrixalidae)
+Megophryidae = litter frog ! litter frogs // also megophryid
+Micrixalidae = dancing frog ! dancing frogs // also  tropical frogs, and torrent frogs (Micrixalus is monotypic within Micrixalidae)
 //Micrixalidae == Micrixalus
-Microhylidae = narrow-mouthed frog
+Microhylidae = narrow-mouthed frog ! narrow-mouthed frogs
 Myobatrachidae = Australian water frog ! Australian water frogs // note: called Australian ground frogs on wiki
-Nyctibatrachidae = robust frog
+Nyctibatrachidae = robust frog ! robust frogs
 Myobatrachidae = Myobatrachidae// Myobatrachinae
 // Odontophrynidae = English Names: None noted
-Petropedetidae = African torrent frog
+Petropedetidae = African torrent frog ! African torrent frogs
 // Phrynobatrachidae == Phrynobatrachus (monophyletic)
-Phrynobatrachidae = puddle frog
-Pipidae = tongueless frog
+Phrynobatrachidae = puddle frog ! puddle frogs
+Pipidae = tongueless frog ! tongueless frogs
 // Pyxicephalidae = English Names: None noted
-Ranixalidae = leaping frog 
+Ranixalidae = leaping frog ! leaping frogs
 // Ranixalidae == Indirana (genus) (monophyletic )
-Rhacophoridae = shrub frog
-Sooglossidae = Seychelles frog
-Telmatobiidae = water frog // == Telmatobius (genus) ?
+Rhacophoridae = shrub frog ! shrub frogs
+Sooglossidae = Seychelles frog ! Seychelles frogs
+Telmatobiidae = water frog ! water frogs // == Telmatobius (genus) ?
 
 // misc/other (todo more) .. random ones
 Haematopinus oliveri = pygmy hog-sucking louse
 Peripatopsis leonina = Lion's Hill velvet worm
-Telemidae = six-eyed spider
+Telemidae = six-eyed spider ! six-eyed spiders
 Microgale jenkinsae = Jenkins' shrew tenrec // missing taxobox
 
 // Artiodactyla: now handled by virtual_groups in taxon-rules.yml
@@ -849,18 +849,18 @@ Janjucetidae below Cetacea : unranked
 
 //Chiroptera
 Chiroptera = bat ! bats
-Nycteridae = slit-faced bat
-Hipposideridae = Old World leaf-nosed bat
+Nycteridae = slit-faced bat ! slit-faced bats
+Hipposideridae = Old World leaf-nosed bat ! Old World leaf-nosed bats
 Hipposideridae plural Old World leaf-nosed bats
-Natalidae = funnel-eared bat
+Natalidae = funnel-eared bat ! funnel-eared bats
 Mormoopidae includes ghost-faced bats, moustached bats, and naked-backed bats // includes? or complete list? or are they synonyms?
-Mystacinidae = New Zealand short-tailed bat // only one genus, two species
-Natalida = funnel-eared bat
+Mystacinidae = New Zealand short-tailed bat ! New Zealand short-tailed bats // only one genus, two species
+Natalida = funnel-eared bat ! funnel-eared bats
 // Pteralopex flanneryi = greater monkey-faced bat // temporary (redirect was missing)
 Rhinolophus hilli = Hill's horseshoe bat
-Rhinopomatidae = mouse-tailed bat
-Thyropteridae = disc-winged bat
-Megadermatidae = false vampire bat
+Rhinopomatidae = mouse-tailed bat ! mouse-tailed bats
+Thyropteridae = disc-winged bat ! disc-winged bats
+Megadermatidae = false vampire bat ! false vampire bats
 
 //microbats
 Craseonycteridae below Microchiroptera : suborder
@@ -885,10 +885,10 @@ Vespertilionidae below Microchiroptera : suborder
 // Miniopteridae below Vespertilionoidea : superfamily  // outdated taxonomy from wikipedia
 // iucn lists both Vespertilionidae and Miniopteridae as families (under Chiroptera)
 Miniopteridae below Microchiroptera : suborder
-Miniopteridae = long-fingered bat
+Miniopteridae = long-fingered bat ! long-fingered bats
 // Cistugidae below Vespertilionoidea : superfamily   // outdated: historically been included in family Vespertilionidae
 Cistugidae below Microchiroptera : suborder
-Cistugidae = wing-gland bat
+Cistugidae = wing-gland bat ! wing-gland bats
 Neoromicia malagasyensis = Isalo serotine // Isalo = a town name. alt: Peterson's pipistrelle
 Microchiroptera = microbat ! microbats // not found uncapitalized on page enough times to register
 
