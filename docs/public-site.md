@@ -101,8 +101,9 @@ database as its input, and is blocked when that file is missing.
 `SiteDbSchema.Version` whenever you add, remove or rename a table or column, or change what a column
 holds, then run `site build-db` again. The site answers 503 (on `/healthz` and every page) for a
 database with any other version, so deploy the new site and the rebuilt database together. The
-current version is 8. Schema versions 6 and 7 were used only on a branch before it was merged
-into main, and no database built from main has them.
+current version is 9. Schema versions 6 and 7 were used only on a branch before it was merged
+into main, and no database built from main has them. Version 9 added the tree of groups (see
+[Groups and lists](#groups-and-lists)).
 
 Rules the site depends on (pinned by `SiteDbBuildTests` and the site tests):
 
@@ -273,6 +274,97 @@ Start new build tests from `BeastieBot3.Tests/SiteBuild/SiteBuildSourceFixture`,
 `using static`. The fixture has the temporary folder, writers for the IUCN CSV database and the API
 cache, the `Header` and `Payload` JSON builders (an assessment in a taxon record, and an
 assessment's own payload), and SQL helpers.
+
+## Groups and lists
+
+Schema 9 adds the groups the taxa are in (`higher_taxon`), so the site can link every rank on a
+taxon page and has a page for each group, with a Wikipedia list of its taxa.
+
+### The tree of groups (`SiteTaxonTree`)
+
+- Each taxon in the release (`in_release = 1`) goes under IUCN's kingdom, phylum, class, order,
+  family and genus. IUCN's upper-case names are stored in title case ("Carnivora").
+- Between class and order, order and family, and family and genus, the build adds the Catalogue of
+  Life groups that the placement file keeps for the IUCN database it reads (`col build-placement`;
+  see "Catalogue of Life groups in headings" in CLAUDE.md). These are the groups the Wikipedia list
+  headings can use, so a CoL group never takes a taxon out of its IUCN order or family. A CoL group
+  of the same rank as the IUCN taxon above it, such as order Cetacea in order Artiodactyla, has
+  `show_rank = 0` and is shown by name only. The placement has nothing above class, so there is no
+  subphylum Vertebrata. The build uses the placement built from this IUCN database and the current
+  `rules/iucn-not-assigned.yml`; when the file has only an older one, it uses that and warns
+  (`meta.col_placement_state` = `out-of-date`).
+- An order or family that IUCN gives as "NOT ASSIGNED" takes its value from
+  `rules/iucn-not-assigned.yml`, as in the lists (`source = 'iucn-rule'`); with no rule, the taxa
+  go directly under the group above. The `taxon` row keeps IUCN's own values.
+- Groups and taxa are numbered depth-first, children in alphabetical order. The taxa in a group
+  have consecutive `taxon.tree_pos` values, from the group's `first_pos` to its `last_pos`, so one
+  indexed range query finds them. In a genus each species comes before its own subspecies,
+  varieties and subpopulations.
+- `higher_taxon_count` has the counts by `{{IUCN status}}` code of each group's latest global
+  assessments: species, subspecies and varieties, and subpopulations.
+- Node ids change with every build, so pages address a group by rank and name:
+  `/taxa/family/felidae`. When two groups have the same rank and name (204 groups in the build of
+  5 October 2026, nearly all genera in two kingdoms), `link_query` holds what tells them apart:
+  `kingdom=plantae`, or `parent=Moraceae` when both are in one kingdom. A bare address that matches
+  two groups shows both to choose from.
+
+The build of 5 October 2026 has 33,559 groups, 4,526 of them from the Catalogue of Life. 677 taxa
+take their order from `iucn-not-assigned.yml`, and 43 have a rank still "NOT ASSIGNED".
+
+### Names and links of groups (`SiteGroupNames`)
+
+- `common_name_en` is the name the Wikipedia list headings use (`HeadingFormatter.ResolveCommonName`):
+  `taxon-rules.yml`, then `rules-list.txt`, then the common names store (which has no groups
+  above species today), then the title of the article the scientific name redirects to
+  (Araneae to Spider). Only 1,182 groups have one, nearly all of them families and orders, and
+  the forms differ: "cetaceans", "mammal", "Orchid". A heading's "Members of ..." line uses it.
+- The Catalogue of Life's English vernacular names are stored apart, in `higher_taxon_name`, as
+  CoL writes them (names that differ only in case are listed once). They are not checked, and some
+  name only part of the group ("cattle", "goats" for Bovidae), so the site lists them under their
+  source and never uses one as the group's name. 10,651 groups have some.
+- `enwiki_title`: a wikilink from the rules, else the group's name when English Wikipedia has a
+  page or redirect with that title that is not about another kingdom (`EnwikiTitleCheck`), else
+  the name with a bracketed word for its kingdom when the name is a disambiguation page.
+- `col_id`: the placement's id for a CoL group; for an IUCN group, the accepted CoL name usage with
+  the same name, rank and kingdom (for a genus with two, the one in the same family). The lookup
+  forces the `scientificName` index (`+rank`): without statistics SQLite chose the rank index, and
+  the phase took over 20 minutes instead of about a minute.
+
+### List lines (`SpeciesListLine`)
+
+The site's lists use `SpeciesListLine` in `BeastieBot3.Shared`, the renderer `wikipedia
+generate-lists` uses, so a line on the site is the line in the generated lists. The build stores
+what the line needs that only the CLI can work out: `taxon.list_article_title` (the article a line
+links, from `SpeciesLineFormatter.ResolveArticleTitle`, which can differ from `enwiki_title`: a
+redirect with the taxon's own name is linked as it is) and, for a subspecies or variety with no
+article, `list_parent_article_title` (its species' article). The English name is `common_name_en`,
+chosen by the same `CommonNameChooser`.
+
+### The group page (`Pages/Group.cshtml`)
+
+- The page shows the classification above the group (CoL groups marked), counts (species,
+  threatened, extinct, subspecies and varieties, subpopulations), the counts by category, CoL's
+  English names, links, and a table of the groups directly in it.
+- "Wikipedia list": the list as wikitext, with a preview that links to the site's taxon pages, and
+  the options beside it (`Lists/GroupListQuery.cs` reads and writes them as query parameters, so a
+  list can be linked): line format (the lists' styles A, B and C; the default is the style the
+  generated lists use for such a group), `{{IUCN status}}` on or off, a section for each category,
+  a heading for each of the ranks the reader ticks (any rank found inside the group, CoL ranks
+  included; default: two of class, order and family below the group's rank), the "Members of ..."
+  line under headings, the top heading level (2 to 4; ranks that would go below level 6 are left
+  out and the page says so), categories, subspecies and varieties (none, after the species, or
+  under their species as `**` lines), subpopulations, and the order of names. `site.js` updates the
+  list as options change, as it does the citation options (`#wikitext`, `data-live-region`).
+- A list is made only up to `GroupList.MaxLines` (3,600) lines, about as many `{{IUCN status}}`
+  templates as one Wikipedia page holds. The page counts the lines from `higher_taxon_count` first
+  and reads no taxa for a longer list. The cap also keeps the site from handing out the categories
+  of a whole kingdom at once.
+- Search lists the groups whose name is the search text, and goes straight to the group when it is
+  the only match and no taxon has the name exactly.
+- On a taxon page, each rank links to its group page, with the group's English name, or else up to
+  three of CoL's names (muted, with a tooltip naming the source). CoL groups are hidden until the
+  reader ticks "Show Catalogue of Life groups"; the toggle is CSS only (`:has`). A taxon not in the
+  release has no place in the tree and shows IUCN's ranks as text, as before.
 
 ## Citations
 
@@ -923,6 +1015,11 @@ of `dotnet test`. To run it:
   pass 4.5:1 in both themes. `ThemeControlTests` pins the theme.
 
 ## Known gaps
+
+- Few groups have an English name of their own (1,182 of 33,559 in the build of 5 October 2026).
+  The rules files name the groups the Wikipedia lists needed; the common names store has names for
+  species only. Adding plurals to `rules-list.txt` or `taxon-rules.yml` names a group on the site
+  and in the lists at once.
 
 - Most taxa that are not in the release have no Wikipedia article and no English name on the site:
   in the build of 3 October 2026, 195 of the 4,223 have an `enwiki_title` and 104 have a
