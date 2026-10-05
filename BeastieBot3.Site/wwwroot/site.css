@@ -1201,6 +1201,11 @@ th.num {
 .update-result .wikitext-box textarea.update-output {
     height: 24rem;
     max-height: 70vh;
+}
+
+/* Read-only boxes of the result: their own colours and border, unlike the box text is pasted into. */
+.update-result .wikitext-box textarea.update-output,
+.update-result .wikitext-box textarea.update-readonly {
     background: var(--output-bg);
     border: 1px dashed var(--output-border);
     border-left: 4px solid var(--output-border);

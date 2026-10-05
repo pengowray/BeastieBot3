@@ -745,4 +745,38 @@ public sealed class StatusUpdaterTests {
         Assert.Equal(StatusOutcome.NotUpdated, finding.Outcome);
         Assert.DoesNotContain(finding.Notes, n => n.Kind is StatusNoteKind.CommonNameNotUsed or StatusNoteKind.MatchedByCommonName);
     }
+
+    // ---------------------------------------------------------------- edit summary
+
+    [Fact]
+    public void EditSummaryNamesEachCategoryChange() {
+        var result = Run("* {{IUCN status|VU|4828/111|1|year=2008}}\n* ''Panthera tigris'' {{IUCN status|EN}}\n* {{IUCN status|VU|1087/1|1}}\n");
+        Assert.Equal("IUCN Red List 2026-1: Amblysomus hottentotus VU\u2192EN; 1 more status entry updated (ids, year or reference) (assisted by Beastie Bot Species Status)",
+            EditSummary.For(result, "2026-1"));
+    }
+
+    [Fact]
+    public void EditSummaryCountsManyChangesByCategory() {
+        var lookup = new FakeStatusLookup();
+        var text = new System.Text.StringBuilder();
+        for (var i = 1; i <= 40; i++) {
+            lookup.Taxon(1000 + i, $"Genus speciesnumber{i}", i % 2 == 0 ? "EN" : "LC", 2020, 9000 + i);
+            text.Append($"* {{{{IUCN status|VU|{1000 + i}/1|1|year=2008}}}}\n");
+        }
+        Assert.Equal("IUCN Red List: 40 IUCN statuses changed (20 to EN, 20 to LC) (assisted by Beastie Bot Species Status)",
+            EditSummary.For(Run(text.ToString(), lookup), null));
+    }
+
+    [Fact]
+    public void EditSummaryIsNullWhenNothingChanged() {
+        Assert.Null(EditSummary.For(Run("* {{IUCN status|EN|4828/21289898|1|year=2015}}\n"), "2026-1"));
+    }
+
+    [Theory]
+    [InlineData("{{IUCN status|EN|4828/1|1}}", "EN")]
+    [InlineData("| status = CR\n| status_system = IUCN3.1", "CR")]
+    [InlineData("| iucn-status = lr/nt", "lr/nt")]
+    [InlineData(" VU ", "VU")]
+    [InlineData("Panthera", null)]
+    public void EditSummaryReadsTheCode(string text, string? code) => Assert.Equal(code, EditSummary.CodeIn(text));
 }

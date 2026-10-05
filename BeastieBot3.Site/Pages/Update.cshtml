@@ -64,6 +64,17 @@
                 }
             </ul>
         }
+        @if (EditSummary.For(result, Model.Version) is { } editSummary) {
+            <div class="wikitext-box">
+                <div class="wikitext-box-head">
+                    <label for="update-edit-summary">@UpdateText.EditSummaryLabel</label>
+                    <button type="button" class="copy-button" data-copy="update-edit-summary" aria-label="@UpdateText.CopyEditSummaryAccessible" hidden>@SiteText.Copy</button>
+                    <p class="copy-status" role="status" aria-live="polite"></p>
+                </div>
+                <textarea id="update-edit-summary" class="update-readonly" readonly rows="2" spellcheck="false" autocapitalize="off" autocomplete="off" aria-describedby="update-edit-summary-help">@editSummary</textarea>
+                <p class="help" id="update-edit-summary-help">@UpdateText.EditSummaryHelp</p>
+            </div>
+        }
         <div class="wikitext-box">
             <div class="wikitext-box-head">
                 <label for="update-output">@UpdateText.OutputLabel</label>
