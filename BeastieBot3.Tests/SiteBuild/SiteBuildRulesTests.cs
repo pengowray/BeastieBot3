@@ -295,8 +295,8 @@ public class SiteBuildRulesTests {
               {"rank":"deprecated","mainsnak":{"datavalue":{"value":{"numeric-id":11}}}},
               {"rank":"preferred","mainsnak":{"snaktype":"novalue"}}]}}}}
             """;
-        Assert.Equal(new long[] { 10 }, SiteBuildRules.TaxonSynonymItems(json));
-        Assert.Empty(SiteBuildRules.TaxonSynonymItems("not json"));
+        Assert.Equal(new long[] { 10 }, BeastieBot3.Wikidata.WikidataTaxonSynonyms.ItemsIn(json));
+        Assert.Empty(BeastieBot3.Wikidata.WikidataTaxonSynonyms.ItemsIn("not json"));
     }
 
     // ------------------------------------------------------------ name sources

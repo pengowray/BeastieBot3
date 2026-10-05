@@ -1,4 +1,3 @@
-using System.Text.Json;
 using System.Globalization;
 using System.Net;
 using System.Text.RegularExpressions;
@@ -380,35 +379,6 @@ internal static class SiteBuildRules {
         return whole.Length > name.Length && whole.StartsWith(name + " ", StringComparison.Ordinal)
             ? NullIfBlank(whole[name.Length..])
             : null;
-    }
-
-    /// The items a Wikidata entity JSON (wbgetentities form) names as taxon synonym (P1420), leaving
-    /// out statements at deprecated rank.
-    public static IReadOnlyList<long> TaxonSynonymItems(string json) {
-        var items = new List<long>();
-        try {
-            using var doc = JsonDocument.Parse(json);
-            var root = doc.RootElement;
-            var entity = root.TryGetProperty("entities", out var entities) && entities.ValueKind == JsonValueKind.Object
-                ? entities.EnumerateObject().Select(p => p.Value).FirstOrDefault()
-                : root;
-            if (entity.ValueKind != JsonValueKind.Object || !entity.TryGetProperty("claims", out var claims)
-                || !claims.TryGetProperty("P1420", out var statements) || statements.ValueKind != JsonValueKind.Array) {
-                return items;
-            }
-            foreach (var statement in statements.EnumerateArray()) {
-                if (statement.TryGetProperty("rank", out var rank) && rank.GetString() == "deprecated") {
-                    continue;
-                }
-                if (statement.TryGetProperty("mainsnak", out var snak) && snak.TryGetProperty("datavalue", out var value)
-                    && value.TryGetProperty("value", out var inner) && inner.ValueKind == JsonValueKind.Object
-                    && inner.TryGetProperty("numeric-id", out var id) && id.TryGetInt64(out var numeric)) {
-                    items.Add(numeric);
-                }
-            }
-        } catch (JsonException) {
-        }
-        return items;
     }
 
     private static readonly string[] SynonymMarkers = { "ssp.", "subsp.", "var.", "subvar.", "f.", "forma", "fo." };

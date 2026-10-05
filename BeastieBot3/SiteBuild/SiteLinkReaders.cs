@@ -425,7 +425,7 @@ internal static class SiteLinkReaders {
                 if (!byItem.TryGetValue(reader.GetInt64(0), out var itemTaxa) || reader.IsDBNull(1)) {
                     continue;
                 }
-                foreach (var synonymItem in SiteBuildRules.TaxonSynonymItems(reader.GetString(1))) {
+                foreach (var synonymItem in WikidataTaxonSynonyms.ItemsIn(reader.GetString(1))) {
                     wanted.Add((itemTaxa, synonymItem));
                 }
             }
