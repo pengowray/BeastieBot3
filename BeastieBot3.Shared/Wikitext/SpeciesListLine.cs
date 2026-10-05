@@ -37,7 +37,9 @@ public sealed record SpeciesListEntry {
     public string? ArticleTitle { get; init; }
     /// The article of the parent species, linked from a subspecies or variety with no article of its own.
     public string? ParentSpeciesArticleTitle { get; init; }
-    /// The {{IUCN status}} code: "CR", "CR(PE)", "CR(PEW)", "EW", "LR/nt" and so on.
+    /// The {{IUCN status}} code: "CR", "CR(PE)", "CR(PEW)", "EW", "LR/nt" and so on. The possibly
+    /// extinct labels are read from this code only, not from the flags below, so a possibly extinct
+    /// CR taxon needs "CR(PE)" here: from IUCN's category and flags, use IucnStatusTemplate.ToTemplateCode.
     public string StatusCode { get; init; } = "";
     /// With StatusCode "CR", makes the template code CR(PE).
     public bool PossiblyExtinct { get; init; }
