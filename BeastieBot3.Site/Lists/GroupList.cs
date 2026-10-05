@@ -63,7 +63,7 @@ public sealed record LabelBlock(string Text) : ListBlock;
 /// One taxon. Nested: shown under its species ("**" in wikitext).
 public sealed record LineBlock(ListTaxonRow Taxon, SpeciesListEntry Entry, bool Nested) : ListBlock;
 
-public sealed record GroupListResult(IReadOnlyList<ListBlock> Blocks, int LineCount, int TemplateCount, int SkippedHeadingRanks);
+public sealed record GroupListResult(IReadOnlyList<ListBlock> Blocks, int LineCount, int TemplateCount, IReadOnlyList<string> SkippedRanks);
 
 public static class GroupList {
     /// The most lines a list may have: about the number of {{IUCN status}} templates one Wikipedia
@@ -82,7 +82,7 @@ public static class GroupList {
         var level = Math.Clamp(options.TopLevel, 2, MaxLevel);
         var rankLevels = MaxLevel - level + 1 - (options.ByStatus ? 1 : 0);
         var ranks = options.HeadingRanks.Take(Math.Max(0, rankLevels)).ToList();
-        var skipped = options.HeadingRanks.Count - ranks.Count;
+        var skipped = options.HeadingRanks.Skip(ranks.Count).ToList();
 
         if (options.ByStatus) {
             foreach (var section in StatusSection.All.Where(s => options.Sections.Contains(s.Key))) {

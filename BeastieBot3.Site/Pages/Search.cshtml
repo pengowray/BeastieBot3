@@ -34,10 +34,9 @@
             <h2>@GroupText.SearchTaxaHeading</h2>
         }
     }
-    @if (Model.Items.Count == 0 && Model.Groups.Count > 0) {
-    } else if (Model.Items.Count == 0) {
+    @if (Model.Items.Count == 0 && Model.Groups.Count == 0) {
         <p class="message">@SiteText.NoResults(Model.Query)</p>
-    } else {
+    } else if (Model.Items.Count > 0) {
         <p class="result-count">@(Model.TotalTaxa > Model.Items.Count
             ? SiteText.SearchTruncated(Model.Items.Count, Model.TotalTaxa)
             : SiteText.SearchCount(Model.Items.Count))</p>

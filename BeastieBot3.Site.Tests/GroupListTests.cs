@@ -116,7 +116,7 @@ public sealed class GroupListTests {
         var options = new GroupListOptions { TopLevel = 4, HeadingRanks = ["order", "family", "genus"] };
         var list = GroupList.Build(Taxa, Groups, options);
 
-        Assert.Equal(1, list.SkippedHeadingRanks);
+        Assert.Equal(["genus"], list.SkippedRanks);
         Assert.Equal(6, list.Blocks.OfType<HeadingBlock>().Max(h => h.Level));
     }
 

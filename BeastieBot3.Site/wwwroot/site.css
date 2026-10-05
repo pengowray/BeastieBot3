@@ -979,14 +979,7 @@ abbr[title] {
 
 .classification .group-common {
     color: var(--muted);
-}
-
-.classification .group-common::before {
-    content: "(";
-}
-
-.classification .group-common::after {
-    content: ")";
+    font-size: 0.85rem;
 }
 
 .col-toggle {

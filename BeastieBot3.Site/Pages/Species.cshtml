@@ -66,13 +66,13 @@
                         @if (step.IsCol) {
                             <abbr class="col-marker" title="@GroupText.ColMarkerTitle">@GroupText.ColMarker</abbr>
                         } else if (step.IsFromRule) {
-                            <span class="rule-marker" title="@GroupText.RuleMarkerTitle">@GroupText.RuleMarker</span>
+                            <span class="rule-marker" title="@GroupText.RuleMarkerTitle(step.Rank)">@GroupText.RuleMarker</span>
                         }
                     </li>
                 }
             </ol>
             @if (colCount > 0) {
-                <label class="col-toggle"><input type="checkbox" class="show-col" autocomplete="off"> @GroupText.ShowColGroups (@colCount)</label>
+                <label class="col-toggle"><input type="checkbox" class="show-col" autocomplete="off"> @GroupText.ShowColRanks(colCount)</label>
             }
         </div>
     } else if (ranks.Any(r => !string.IsNullOrWhiteSpace(r))) {
