@@ -35,6 +35,7 @@ before a deploy. See [What was not tested](#what-was-not-tested) before the firs
   | `deploy-db.sh` | Uploads a new `site.sqlite`, switches to it and checks `/healthz`. Puts the old database back when the check fails. |
   | `rollback-db.sh` | Swaps the live database with the previous one. |
   | `status.sh` | Shows the release, service state, health check, databases and free disk space. |
+  | `usage.sh` | Prints a usage report from Caddy's access logs: page views, visitors, searches, status update runs, crawler requests, rate limits and errors per day, and the most viewed taxa, the most frequent searches and the referring sites. `--days N` (default 7, at most the 14 days of logs) and `--top N`. Counts only: no IP addresses are shown. |
 
   `lib.sh` and `server-tasks.sh` hold code the other scripts share. `server-tasks.sh` runs on the
   server; a copy is installed there as `/usr/local/sbin/beastie-site`.
