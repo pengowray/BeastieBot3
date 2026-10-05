@@ -31,6 +31,9 @@ public sealed class SiteQueries {
 
     private const string SummaryJoin = "LEFT JOIN assessment a ON a.assessment_id = t.latest_global_assessment_id";
 
+    /// The status updater's reads over one connection, for one request. Dispose it.
+    public SiteStatusLookup OpenStatusLookup() => new(_db.OpenConnection());
+
     public TaxonRow? GetTaxon(long taxonId) {
         using var connection = _db.OpenConnection();
         using var command = connection.CreateCommand();

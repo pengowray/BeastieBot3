@@ -23,18 +23,32 @@ public static class SiteMiddleware {
         await next(context);
     });
 
-    /// The site only answers GET and HEAD. Anything else gets 405 with a plain-text body, so the
-    /// status code page is not run for a method no page handles.
+    /// The site answers GET and HEAD, and POST only on the status update page (UpdateModel.Path),
+    /// whose request body may be larger than the server's limit for every other request. Anything
+    /// else gets 405 with a plain-text body, so the status code page is not run for a method no
+    /// page handles.
     public static IApplicationBuilder UseGetAndHeadOnly(this IApplicationBuilder app) => app.Use(async (context, next) => {
-        if (HttpMethods.IsGet(context.Request.Method) || HttpMethods.IsHead(context.Request.Method)) {
+        var method = context.Request.Method;
+        if (HttpMethods.IsGet(method) || HttpMethods.IsHead(method)) {
+            await next(context);
+            return;
+        }
+        if (HttpMethods.IsPost(method) && IsUpdatePath(context.Request.Path)) {
+            if (context.Features.Get<Microsoft.AspNetCore.Http.Features.IHttpMaxRequestBodySizeFeature>() is { IsReadOnly: false } limit) {
+                limit.MaxRequestBodySize = Pages.UpdateModel.MaxBodyBytes;
+            }
             await next(context);
             return;
         }
         context.Response.StatusCode = StatusCodes.Status405MethodNotAllowed;
-        context.Response.Headers.Allow = "GET, HEAD";
+        context.Response.Headers.Allow = IsUpdatePath(context.Request.Path) ? "GET, HEAD, POST" : "GET, HEAD";
         context.Response.ContentType = "text/plain; charset=utf-8";
         await context.Response.WriteAsync("Method not allowed");
     });
+
+    /// The status update page's path, in any letter case, with or without a final "/".
+    public static bool IsUpdatePath(PathString path) =>
+        string.Equals(path.Value?.TrimEnd('/'), Pages.UpdateModel.Path, StringComparison.OrdinalIgnoreCase);
 
     /// While the database is not ready, every page answers 503 (the status code page explains).
     /// /healthz and the error pages still run.

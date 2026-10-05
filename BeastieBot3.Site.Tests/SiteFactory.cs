@@ -20,6 +20,7 @@ public class SiteFactory : WebApplicationFactory<Program> {
         builder.UseSetting("Site:RateLimits:PagesPerMinute", PagesPerMinute.ToString());
         builder.UseSetting("Site:RateLimits:SearchPerMinute", SearchPerMinute.ToString());
         builder.UseSetting("Site:RateLimits:SuggestPerMinute", SearchPerMinute.ToString());
+        builder.UseSetting("Site:RateLimits:UpdatesPerMinute", SearchPerMinute.ToString());
     }
 
     public HttpClient Client() => CreateClient(new WebApplicationFactoryClientOptions { AllowAutoRedirect = false });

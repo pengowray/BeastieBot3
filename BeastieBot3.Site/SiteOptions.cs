@@ -30,7 +30,10 @@ public sealed class RateLimitOptions {
     public int SearchPerMinute { get; set; } = 30;
     public int SuggestPerMinute { get; set; } = 30;
 
-    /// Search pages and suggestion requests handled at the same time, counting every client.
+    /// Texts sent to the status update page (POST /update).
+    public int UpdatesPerMinute { get; set; } = 10;
+
+    /// Search pages, suggestion requests and status updates handled at the same time, counting every client.
     /// More wait in a queue of SearchQueueLength; when the queue is full they get status 429.
     public int ConcurrentSearches { get; set; } = 4;
     public int SearchQueueLength { get; set; } = 8;
