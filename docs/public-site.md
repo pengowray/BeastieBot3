@@ -1027,7 +1027,7 @@ colspan and rowspan; `StatusUpdater` decides the edits), and reads the database 
   The row's `direction` gets the latest global assessment's population trend in the form the
   family lists use (`{{decrease|Population declining}}`, `{{steady|Population steady}}`,
   `{{increase|Population increasing}}`, `{{population change unknown}}`, which were 1,241 of the
-  1,244 `direction` values in 8 family lists in October 2026). Only the trend template is replaced,
+  1,245 `direction` values in 10 family lists in October 2026). Only the trend template is replaced,
   so the `<ref>` after it stays; a template with the same trend (any label, capitals or redirect,
   such as `{{Down}}`) is kept as written; an empty `direction` is filled; a `direction` with no trend
   template, or a taxon with no trend, is left with a note. `population` is not changed: the site
