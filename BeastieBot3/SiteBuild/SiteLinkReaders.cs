@@ -1,3 +1,4 @@
+using BeastieBot3.Shared.SiteData;
 using System.Globalization;
 using BeastieBot3.Infrastructure;
 using BeastieBot3.Iucn.Gbif;
@@ -397,7 +398,88 @@ internal static class SiteLinkReaders {
         public bool CitesIucn { get; set; }
     }
 
+    /// The scientific names of the items that each taxon's Wikidata item names as a taxon synonym
+    /// (P1420), at normal or preferred rank. Only items the Wikidata cache has downloaded have a
+    /// name, and most synonym items are not downloaded. Wikidata states the author of a name as an
+    /// item (P405 on P225), so these synonyms have no authority. Reads every cached item whose JSON
+    /// mentions P1420 (about 45 seconds over the whole cache).
+    public static void ReadWikidataSynonyms(string path, IReadOnlyDictionary<long, SiteTaxon> taxa, SiteBuildStats stats,
+        CancellationToken cancellationToken) {
+        var byItem = new Dictionary<long, List<SiteTaxon>>();
+        foreach (var taxon in taxa.Values) {
+            if (taxon.WikidataQid is { Length: > 1 } qid && long.TryParse(qid.AsSpan(1), NumberStyles.None, CultureInfo.InvariantCulture, out var id)) {
+                if (!byItem.TryGetValue(id, out var list)) {
+                    byItem[id] = list = new List<SiteTaxon>();
+                }
+                list.Add(taxon);
+            }
+        }
+        using var connection = OpenReadOnly(path);
+        var wanted = new List<(List<SiteTaxon> Taxa, long SynonymItem)>();
+        using (var command = connection.CreateCommand()) {
+            command.CommandText = "SELECT entity_numeric_id, json FROM wikidata_entities WHERE json LIKE '%\"P1420\"%'";
+            command.CommandTimeout = 0;
+            using var reader = command.ExecuteReader();
+            while (reader.Read()) {
+                cancellationToken.ThrowIfCancellationRequested();
+                if (!byItem.TryGetValue(reader.GetInt64(0), out var itemTaxa) || reader.IsDBNull(1)) {
+                    continue;
+                }
+                foreach (var synonymItem in SiteBuildRules.TaxonSynonymItems(reader.GetString(1))) {
+                    wanted.Add((itemTaxa, synonymItem));
+                }
+            }
+        }
+        using var names = connection.CreateCommand();
+        names.CommandText = "SELECT name FROM wikidata_scientific_names WHERE entity_numeric_id = @id ORDER BY language";
+        var idParameter = names.Parameters.Add("@id", SqliteType.Integer);
+        foreach (var (itemTaxa, synonymItem) in wanted) {
+            stats.WikidataSynonymItems++;
+            idParameter.Value = synonymItem;
+            if (names.ExecuteScalar() is not string name) {
+                continue;
+            }
+            stats.WikidataSynonymsNamed++;
+            foreach (var taxon in itemTaxa) {
+                taxon.WikidataSynonyms.Add(new SiteSynonym(name));
+            }
+        }
+    }
+
     // ------------------------------------------------------------ Catalogue of Life
+
+    /// Adds the Catalogue of Life's authorship to the CoL synonyms of each taxon with a col_id: the
+    /// synonym rows whose parentID is the taxon's CoL id, matched by name.
+    public static void ReadColSynonymAuthorities(string path, IReadOnlyDictionary<long, SiteTaxon> taxa, SiteBuildStats stats,
+        CancellationToken cancellationToken) {
+        using var connection = OpenReadOnly(path);
+        using var command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT scientificName, authorship FROM nameusage
+            WHERE parentID = @id AND status IN ('synonym', 'ambiguous synonym') AND authorship IS NOT NULL AND authorship <> ''
+            """;
+        var idParameter = command.Parameters.Add("@id", SqliteType.Text);
+        foreach (var taxon in taxa.Values) {
+            cancellationToken.ThrowIfCancellationRequested();
+            if (taxon.ColId is not { } colId || taxon.ColSynonyms.Count == 0) {
+                continue;
+            }
+            idParameter.Value = colId;
+            var authorities = new Dictionary<string, string>(StringComparer.Ordinal);
+            using (var reader = command.ExecuteReader()) {
+                while (reader.Read()) {
+                    authorities.TryAdd(SiteNameKey.Fold(reader.GetString(0)), reader.GetString(1));
+                }
+            }
+            for (var i = 0; i < taxon.ColSynonyms.Count; i++) {
+                var synonym = taxon.ColSynonyms[i];
+                if (synonym.Authority is null && authorities.TryGetValue(SiteNameKey.Fold(synonym.Name), out var authority)) {
+                    taxon.ColSynonyms[i] = synonym with { Authority = authority };
+                    stats.ColSynonymAuthorities++;
+                }
+            }
+        }
+    }
 
     /// Sets col_id from the placement file and returns the CoL release it was built from ("COL26.7 XR").
     public static string? ReadColPlacement(string path, IReadOnlyDictionary<long, SiteTaxon> taxa, SiteBuildStats stats,

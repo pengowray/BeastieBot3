@@ -193,8 +193,9 @@ internal sealed class SiteBuildDbCommand : Command<SiteBuildDbCommand.Settings> 
         Row("Latest global", s.AssessmentsGlobalLatest);
         Row("Latest regional", s.AssessmentsRegionalLatest);
         Row("Earlier (history)", s.AssessmentsHistory);
-        Row("Left out: CSV rows with no scope", s.CsvAssessmentsNoScope);
-        Row("Left out: assessments in API taxon records with no scope", s.ApiHeadersNoScope);
+        Row("Stored with no scope: CSV rows with no scope", s.CsvAssessmentsNoScope);
+        Row("Stored with no scope: assessments in API taxon records with no scope (not in the CSV)", s.ApiHeadersNoScope);
+        Row("Assessments the IUCN API answered 404 (not found) for, stored with that flag", s.AssessmentsApiNotFound);
         Row("Left out: assessments in API taxon records with no year published", s.ApiHeadersUnpublished);
         Row("Left out: assessments in API taxon records for another taxon id", s.ApiHeadersOtherTaxon);
         Row("Flagged latest by the API, but the CSV has that scope (stored as earlier)", s.ApiLatestCoveredByCsv);
@@ -229,7 +230,10 @@ internal sealed class SiteBuildDbCommand : Command<SiteBuildDbCommand.Settings> 
         Row("Common names in English", s.CommonNamesEnglish);
         Row("Common names left out as junk (wiki markup, author citations, OCR errors)", s.CommonNamesJunk);
         Row("Common names repaired before storing (wiki markup or extra text removed, OCR errors fixed)", s.CommonNamesRepaired);
-        Row("Synonyms", s.NamesByType.GetValueOrDefault(SiteNameType.Synonym));
+        Row("Synonyms (one row per source that gives the name)", s.NamesByType.GetValueOrDefault(SiteNameType.Synonym));
+        Row("Catalogue of Life synonyms with an authority from the CoL database", s.ColSynonymAuthorities);
+        Row("Wikidata taxon synonym (P1420) items of the taxa's items", s.WikidataSynonymItems);
+        Row("Of those, items the Wikidata cache has a scientific name for", s.WikidataSynonymsNamed);
         Row("Taxa with an English name for display", s.CommonNameEn);
         Row("Of those, names set in rules-list.txt", s.CommonNameEnFromRules);
         Row("English names not used: the scientific name again, or a working name", s.CommonNameEnUnusable);

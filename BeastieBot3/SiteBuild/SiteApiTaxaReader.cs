@@ -43,7 +43,7 @@ internal sealed class SiteApiTaxaReader {
     private readonly Dictionary<long, SiteTaxon> _taxa;
     private readonly SiteBuildStats _stats;
     // Names of a subpopulation from the record it belongs to, used when it has no record of its own.
-    private readonly Dictionary<long, (List<IucnCommonName> Names, List<string> Synonyms, long ParentRoot)> _subpopulationNames = new();
+    private readonly Dictionary<long, (List<IucnCommonName> Names, List<SiteSynonym> Synonyms, long ParentRoot)> _subpopulationNames = new();
 
     public Dictionary<long, ApiTaxonRecord> Records { get; } = new();
 
@@ -279,8 +279,8 @@ internal sealed class SiteApiTaxaReader {
         return names.OrderByDescending(n => n.IsMain).ToList();
     }
 
-    private static List<string> ReadSynonyms(JsonElement taxon, SiteBuildStats stats) {
-        var names = new List<string>();
+    private static List<SiteSynonym> ReadSynonyms(JsonElement taxon, SiteBuildStats stats) {
+        var names = new List<SiteSynonym>();
         if (!taxon.TryGetProperty("synonyms", out var array) || array.ValueKind != JsonValueKind.Array) {
             return names;
         }
@@ -290,15 +290,19 @@ internal sealed class SiteApiTaxaReader {
             }
             var genus = ReadString(entry, "genus_name");
             var species = ReadString(entry, "species_name");
+            var infraName = ReadString(entry, "infra_name");
+            var fullName = ReadString(entry, "name");
             var name = SiteBuildRules.IucnSynonymName(genus, species, ReadString(entry, "infra_type"),
-                ReadString(entry, "infra_name"), ReadString(entry, "subpopulation_name"), ReadString(entry, "name"));
+                infraName, ReadString(entry, "subpopulation_name"), fullName);
             if (name is null) {
                 continue;
             }
             if (string.IsNullOrWhiteSpace(genus) || string.IsNullOrWhiteSpace(species)) {
                 stats.SynonymsBuiltFromFullName++;
             }
-            names.Add(name);
+            var authority = SiteBuildRules.IucnSynonymAuthority(name, fullName, ReadString(entry, "species_author"),
+                ReadString(entry, "infrarank_author"), !string.IsNullOrWhiteSpace(infraName));
+            names.Add(new SiteSynonym(name, authority));
         }
         return names;
     }

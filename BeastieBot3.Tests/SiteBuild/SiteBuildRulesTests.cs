@@ -227,7 +227,7 @@ public class SiteBuildRulesTests {
     }
 
     [Fact]
-    public void NameSet_KeepsOneRowPerSourceForCommonNames_AndOnePerNameForSynonyms() {
+    public void NameSet_KeepsOneRowPerSourceForCommonNamesAndSynonyms() {
         var names = new SiteNameSet();
         Assert.True(names.Add("Ursus maritimus", "scientific", null, "iucn", isPreferred: true));
         Assert.True(names.Add("Polar Bear", "common", "en", "iucn", isPreferred: true));
@@ -236,11 +236,13 @@ public class SiteBuildRulesTests {
         Assert.True(names.Add("Ours polaire", "common", "fr", "iucn"));
         Assert.True(names.Add("Ours polaire", "common", null, "iucn"));      // another language
         Assert.True(names.Add("Thalarctos maritimus", "synonym", null, "iucn"));
-        Assert.False(names.Add("Thalarctos  maritimus", "synonym", null, "col")); // synonyms: one per name
+        Assert.False(names.Add("Thalarctos  maritimus", "synonym", null, "iucn")); // same synonym, same source
+        Assert.True(names.Add("Thalarctos  maritimus", "synonym", null, "col", authority: "(Phipps, 1774)")); // another source
         Assert.False(names.Add("Ursus Maritimus", "synonym", null, "col"));  // the taxon's own name
         Assert.False(names.Add("  ", "common", "en", "col"));
 
-        Assert.Equal(new[] { "Ursus maritimus", "Polar Bear", "polar bear", "Ours polaire", "Ours polaire", "Thalarctos maritimus" },
+        Assert.Equal(new[] { "Ursus maritimus", "Polar Bear", "polar bear", "Ours polaire", "Ours polaire", "Thalarctos maritimus",
+            "Thalarctos maritimus" },
             names.Names.Select(n => n.Name));
     }
 
@@ -263,7 +265,38 @@ public class SiteBuildRulesTests {
         names.Add("Panthera leo", "scientific", null, "iucn", isPreferred: true);
         Assert.Equal(new[] { "Felis leo", "Panthera leo" }, names.Names.Select(n => n.Name));
         Assert.Equal("scientific", names.Names[1].NameType);
-        Assert.False(names.Add("Felis leo", "synonym", null, "iucn"));
+        Assert.False(names.Add("Felis leo", "synonym", null, "col"));
+    }
+
+    [Fact]
+    public void NameSet_KeepsASynonymsAuthorityFromTheFirstCopyThatHasOne() {
+        var names = new SiteNameSet();
+        names.Add("Felis leo", "synonym", null, "iucn");
+        names.Add("Felis leo", "synonym", null, "iucn", authority: " Linnaeus,&nbsp;1758 ");
+        names.Add("Felis leo", "synonym", null, "iucn", authority: "L.");
+        Assert.Equal("Linnaeus, 1758", Assert.Single(names.Names).Authority);
+    }
+
+    [Theory]
+    [InlineData("Thalarctos maritimus", "Thalarctos maritimus (Phipps, 1774)", "(Phipps, 1774)", null, false, "(Phipps, 1774)")]
+    [InlineData("Ursus maritimus ssp. marinus", "Ursus maritimus ssp. marinus Pallas, 1776", "(Phipps, 1774)", "Pallas, 1776", true, "Pallas, 1776")]
+    [InlineData("Edodonta constricta", "Edodonta constricta Semper, 1874 [orth. error]", null, null, false, "Semper, 1874")]
+    [InlineData("Edodonta constricta", "Edodonta constricta", null, null, false, null)]
+    [InlineData("Edodonta constricta", "Other name Semper, 1874", "", null, false, null)]
+    public void IucnSynonymAuthority_TakesTheAuthorOfTheRankElseTheRestOfTheFullName(string name, string full, string? speciesAuthor,
+        string? infraAuthor, bool isInfra, string? expected) =>
+        Assert.Equal(expected, SiteBuildRules.IucnSynonymAuthority(name, full, speciesAuthor, infraAuthor, isInfra));
+
+    [Fact]
+    public void TaxonSynonymItems_ReadsP1420LeavingOutDeprecated() {
+        const string json = """
+            {"entities":{"Q1":{"claims":{"P1420":[
+              {"rank":"normal","mainsnak":{"datavalue":{"value":{"numeric-id":10}}}},
+              {"rank":"deprecated","mainsnak":{"datavalue":{"value":{"numeric-id":11}}}},
+              {"rank":"preferred","mainsnak":{"snaktype":"novalue"}}]}}}}
+            """;
+        Assert.Equal(new long[] { 10 }, SiteBuildRules.TaxonSynonymItems(json));
+        Assert.Empty(SiteBuildRules.TaxonSynonymItems("not json"));
     }
 
     // ------------------------------------------------------------ name sources

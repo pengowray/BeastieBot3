@@ -101,11 +101,35 @@ database as its input, and is blocked when that file is missing.
 `SiteDbSchema.Version` whenever you add, remove or rename a table or column, or change what a column
 holds, then run `site build-db` again. The site answers 503 (on `/healthz` and every page) for a
 database with any other version, so deploy the new site and the rebuilt database together. The
-current version is 9. Schema versions 6 and 7 were used only on a branch before it was merged
+current version is 11. Schema versions 6 and 7 were used only on a branch before it was merged
 into main, and no database built from main has them. Version 9 added the tree of groups (see
-[Groups and lists](#groups-and-lists)).
+[Groups and lists](#groups-and-lists)), version 10 `assessment.population_size`, and version 11
+`name.authority`, `assessment.api_not_found` and assessments with no scope (`scope = ''`).
 
 Rules the site depends on (pinned by `SiteDbBuildTests` and the site tests):
+
+- An assessment that IUCN published with no geographic scope (an empty scopes column in the CSV
+  export, an empty `scopes[]` in the API) is stored with `scope = ''` (`SiteBuildRules.NoScope`).
+  It is never global, so it never becomes `latest_global_assessment_id`. Until schema 11 these rows
+  were left out, and the 7 taxa whose only current assessment has no scope had no assessment on
+  the site. The build of 6 October 2026 has 33 such rows: 28 current ones from the CSV export and
+  24 rows from API taxon records that are not in the CSV export (the build summary rows "Stored
+  with no scope", which overlap). These are the assessments of the audit site's "Assessments with
+  no geographic scope" page.
+- `assessment.api_not_found` is 1 for an assessment that the IUCN API answered 404 for, although
+  the taxon's record lists it (`failed_requests` in the API cache, endpoint `assessment`): 3 rows,
+  the audit site's "Historical assessments missing from the API". The rows keep the citation from
+  the payload the cache downloaded before the 404.
+- Synonyms are stored once per source that gives them (`iucn`, `col`, `wikidata`), with
+  `name.authority` when the source has one. IUCN's authority is the synonym's `infrarank_author`
+  for an infraspecific name, else `species_author`, else the text after the name in its full name
+  (`SiteBuildRules.IucnSynonymAuthority`; 150,611 of 151,808). CoL's is the `authorship` of the CoL
+  synonym row whose `parentID` is the taxon's `col_id`, matched by folded name
+  (`SiteLinkReaders.ReadColSynonymAuthorities`; 406,281 of 449,171). Wikidata's are the scientific
+  names of the items the taxon's item names as taxon synonym (P1420), when the Wikidata cache has
+  downloaded that item (285 names from 8,570 synonym items, read in about 50 seconds), with no
+  authority. The authority is never part of `name_key` or `name_fts`, and `SiteTaxonLinks` still
+  compares IUCN synonym names without it.
 
 - Every taxon in the IUCN CSV export is a row of the `taxon` table with `in_release = 1`, including
   subspecies, varieties and subpopulations.
@@ -925,6 +949,39 @@ title statements are not recorded (run wikidata iucn-assessment-items)".
     history table and has a line for each old id: "Earlier assessments of a taxon with this name are
     under IUCN id N." or "Earlier assessments of X are under IUCN id N. IUCN lists X as a synonym
     of Y." (`_EarlierIds.cshtml`).
+- Search and `/api/suggest` also find IUCN ids (`Data/IdQuery.cs`, read before the name search
+  and before the minimum length check): `T22823A14871490` with or without `e.` and `.en`, `T22823`
+  (taxon id), `A14871490` (assessment id), a plain number (looked up as both), an IUCN DOI
+  (`10.2305/IUCN.UK.2015-4.RLTS.T22823A14871490.en`, also with `doi:` or a doi.org address) and a
+  Red List address (`iucnredlist.org/species/22823/14871490`). One match redirects to the taxon
+  page; an assessment that is not the taxon's latest global one opens with that assessment's
+  wikitext shown (`?assessment=N#wikitext`). Several matches are listed with "Matched IUCN taxon
+  ID" or "Matched IUCN assessment ID". A DOI is read for the ids in it, so the DOI of an errata
+  version that names the assessment it corrects finds that assessment. When the text names a
+  taxon and an assessment and the site has only the taxon, the taxon is listed under a line
+  saying the assessment was not found. No id matches: the text is searched as a name.
+- The table under the regional assessments (`_RelatedTaxaTable.cshtml`) lists, on a species page,
+  its subspecies, varieties and subpopulations with the category, criteria and year of each one's
+  latest global assessment, or a line saying IUCN has assessed none (animals: "subspecies or
+  subpopulations"; other kingdoms add varieties). On a subspecies, variety or subpopulation page it
+  lists the species, then the species' other subspecies, varieties and subpopulations. A subspecies
+  or variety in the release with no parent (347 in 2026-1, the audit site's "Subspecies and
+  varieties with no assessed parent species") says that IUCN has not assessed its species as a
+  whole, and lists the other assessed taxa with the same genus and species epithet, found through
+  the genus's `first_pos`..`last_pos` range (`SiteQueries.GetUnassessedSpeciesSiblings`).
+- Synonyms are a table of synonym and source. The authority beside the name is the first source's
+  that has one (IUCN, Wikidata, then CoL); a source whose authority differs, ignoring case and
+  spacing, has it after its name ("Catalogue of Life: Phipps, 1774").
+- A taxon assessed under a working name (`sp. nov.`, `ssp. nov.`, `subsp. nov.`, `var. nov.`;
+  `SiteFormat.IsProvisionalName`, 168 taxa in 2026-1) has a line under its heading saying the name
+  is provisional. The site does not look for the published name; the audit site's "Provisional
+  (sp. nov.) names with a described name in another source" does.
+- An assessment with no scope is listed in the Regional assessments table as "No scope given"
+  (headed "Assessments with no geographic scope" when every row has no scope). The status summary
+  of a taxon with no global assessment counts regions without it and says how many of its
+  assessments have no scope.
+- An assessment with `api_not_found = 1` has "Not found in the IUCN API" beside its IUCN Red List
+  link.
 - Search, `/name/{name}` and `/api/suggest` rank taxa in the release before taxa that are not,
   within each group of matches (exact name, name that starts with the text, any other match).
   Search and `/name/{name}` go straight to a taxon page when the text names one taxon exactly: the
@@ -1095,6 +1152,13 @@ colspan and rowspan; `StatusUpdater` decides the edits), and reads the database 
   pass 4.5:1 in both themes. `ThemeControlTests` pins the theme.
 
 ## Known gaps
+
+- Wikidata gives few synonyms: the taxa's items name 8,570 synonym items (P1420), and the Wikidata
+  cache has downloaded 277 of them. Downloading those items would add the rest. English Wikipedia
+  taxoboxes have a `synonyms` parameter (about 62,000 pages in the cache) that the site does not
+  read; its wikitext (`{{Species list}}`, `<br />`, `<small>` authorities) needs a parser first.
+- A trinomial synonym with no rank marker ("Ursus maritimus marinus") is shown with only the
+  first two words in italics, as `ScientificNameMarkup` writes every name.
 
 - Few groups have an English name of their own (1,182 of 33,559 in the build of 5 October 2026).
   The rules files name the groups the Wikipedia lists needed; the common names store has names for

@@ -117,6 +117,10 @@ internal sealed class SiteDbBuild {
             return $"{_stats.QidsFromP627 + _stats.QidsFromNameMatch:N0} taxa with an item, {dois.Wikidata.Count:N0} assessments with a DOI, "
                 + $"{_stats.WikidataItems.ByAssessment.Count:N0} items for assessments";
         });
+        Optional("Wikidata cache: taxon synonyms (P1420)", _inputs.WikidataCache, path => {
+            SiteLinkReaders.ReadWikidataSynonyms(path, taxa, _stats, ct);
+            return $"{_stats.WikidataSynonymItems:N0} synonym items, {_stats.WikidataSynonymsNamed:N0} with a name in the cache";
+        });
         Optional("DOI cache (iucn resolve-dois)", _inputs.DoiCache, path => {
             SiteLinkReaders.ReadDoiCache(path, dois, _stats, ct);
             var newest = _stats.DoiCheckedTo is { } at ? at.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) : "none";
@@ -125,6 +129,7 @@ internal sealed class SiteDbBuild {
 
         // 5. Payloads; the assessment rows are written here.
         Phase("Reading IUCN API assessment payloads", () => {
+            assessments.ReadApiNotFound(cache);
             assessments.WriteAll(cache, writer, dois, ct);
             return $"{_stats.CitationsParsed:N0} citations parsed, {_stats.AssessmentsGlobalLatest + _stats.AssessmentsRegionalLatest + _stats.AssessmentsHistory:N0} assessments written";
         });
@@ -152,6 +157,10 @@ internal sealed class SiteDbBuild {
             return $"{_stats.ColIdsFromPlacement:N0} species with a Catalogue of Life id";
         });
         SiteLinkReaders.ApplyColCrossReferences(taxa, colCrossReferences, _stats);
+        Optional("Catalogue of Life database: synonym authorities", _inputs.ColDatabase, path => {
+            SiteLinkReaders.ReadColSynonymAuthorities(path, taxa, _stats, ct);
+            return $"{_stats.ColSynonymAuthorities:N0} CoL synonyms with an authority";
+        });
         _stats.ColRelease ??= SiteBuildRules.ColReleaseFromPath(_inputs.ColDatabase);
         Optional("Catalogue of Life ColDP folder", _inputs.ColDir, path => {
             var col = ColReleaseCitation.Find(path, _stats.ColRelease, out var warning);
@@ -334,10 +343,13 @@ internal sealed class SiteDbBuild {
             names.Add(name, SiteNameType.Common, "en", source, preferred);
         }
         foreach (var synonym in taxon.IucnSynonyms) {
-            names.Add(synonym, SiteNameType.Synonym, null, SiteNameSource.Iucn);
+            names.Add(synonym.Name, SiteNameType.Synonym, null, SiteNameSource.Iucn, authority: synonym.Authority);
         }
         foreach (var synonym in taxon.ColSynonyms) {
-            names.Add(synonym, SiteNameType.Synonym, null, SiteNameSource.Col);
+            names.Add(synonym.Name, SiteNameType.Synonym, null, SiteNameSource.Col, authority: synonym.Authority);
+        }
+        foreach (var synonym in taxon.WikidataSynonyms) {
+            names.Add(synonym.Name, SiteNameType.Synonym, null, SiteNameSource.Wikidata, authority: synonym.Authority);
         }
         foreach (var name in names.Names) {
             writer.AddName(taxon.TaxonId, name);
@@ -350,9 +362,10 @@ internal sealed class SiteDbBuild {
         _stats.CommonNamesRepaired += names.RepairedCommonNames;
         // The lists are not needed again.
         taxon.IucnCommonNames = new List<IucnCommonName>();
-        taxon.IucnSynonyms = new List<string>();
+        taxon.IucnSynonyms = new List<SiteSynonym>();
         taxon.EnglishNames.Clear();
         taxon.ColSynonyms.Clear();
+        taxon.WikidataSynonyms.Clear();
     }
 
     private static int SourceOrder(string source) => source switch {

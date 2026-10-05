@@ -8,7 +8,7 @@ namespace BeastieBot3.Shared.SiteData;
 // narrative text (rationale, range, threats ...), no coded threats/habitats/countries, no downloads.
 // Keep such fields out of this database rather than hiding them in the site.
 public static class SiteDbSchema {
-    public const int Version = 10;
+    public const int Version = 11;
 
     public const string Ddl = """
         CREATE TABLE meta (
@@ -155,7 +155,8 @@ public static class SiteDbSchema {
         CREATE TABLE assessment (
             assessment_id                INTEGER PRIMARY KEY,
             taxon_id                     INTEGER NOT NULL,
-            scope                        TEXT NOT NULL,       -- 'Global', or the region as IUCN names it ('Europe')
+            scope                        TEXT NOT NULL,       -- 'Global', or the region as IUCN names it ('Europe'); '' when IUCN published the
+                                                              -- assessment with no geographic scope (never counted as global)
             is_latest                    INTEGER NOT NULL,    -- 1 = latest assessment for its scope
             category                     TEXT NOT NULL,       -- IUCN code as published: 'LC', 'LR/nt', and pre-1994 codes such as 'V', 'Ex'
             possibly_extinct             INTEGER NOT NULL DEFAULT 0,
@@ -177,8 +178,10 @@ public static class SiteDbSchema {
             wikidata_item_titles         TEXT,                -- that item's title (P1476) statements, any rank, as WikidataTitle JSON ([{"text":...,"lang":"en","rank":"normal"}]);
                                                               -- NULL when no item, or when `wikidata iucn-assessment-items` has not recorded them
             wikidata_item_label_en       TEXT,                -- that item's English label; NULL when no item or no label
-            wikidata_item_assessment_id  INTEGER              -- the assessment that item is for: assessment_id, or for an errata version that
+            wikidata_item_assessment_id  INTEGER,             -- the assessment that item is for: assessment_id, or for an errata version that
                                                               -- shares the item of the assessment it corrects, that assessment's id
+            api_not_found                INTEGER NOT NULL DEFAULT 0 -- 1: the IUCN API answered 404 (not found) when this assessment was requested,
+                                                              -- although the taxon's record lists it
         );
         CREATE INDEX assessment_taxon ON assessment(taxon_id, year_published);
 
@@ -189,7 +192,9 @@ public static class SiteDbSchema {
             name_type    TEXT NOT NULL,                       -- 'scientific' | 'common' | 'synonym'
             language     TEXT,                                -- ISO 639-1 code where one exists ('en', 'fr'), else IUCN's ISO 639-2 code; NULL when not given
             source       TEXT NOT NULL,                       -- 'iucn' | 'col' | 'wikidata' | 'wikipedia' (an article title) | 'wikipedia-taxobox' (the English name in an article's taxobox)
-            is_preferred INTEGER NOT NULL DEFAULT 0
+            is_preferred INTEGER NOT NULL DEFAULT 0,
+            authority    TEXT                                 -- synonyms only: the author and year as the source gives them ('(Phipps, 1774)');
+                                                              -- NULL when the source gives none. Not part of name_key or name_fts
         );
         CREATE INDEX name_taxon ON name(taxon_id);
 

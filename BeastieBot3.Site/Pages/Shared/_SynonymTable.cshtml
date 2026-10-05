@@ -1,0 +1,24 @@
+@model IEnumerable<SynonymRow>
+<div class="table-scroll">
+    <table class="names-table synonyms-table">
+        <thead>
+            <tr>
+                <th scope="col">@SiteText.ColSynonym</th>
+                <th scope="col">@SiteText.ColSource</th>
+            </tr>
+        </thead>
+        <tbody>
+            @foreach (var s in Model) {
+                <tr>
+                    <th scope="row">@Html.Raw(ScientificNameMarkup.ToHtml(s.Name))@if (s.Authority is not null) {<text> </text><span class="authority">@s.Authority</span>}</th>
+                    <td>@for (var i = 0; i < s.Sources.Count; i++) {
+                            var source = s.Sources[i];
+                            if (i > 0) {<text>, </text>}
+                            @source.Label
+                            if (source.OtherAuthority is not null) {@SiteText.SourceAuthoritySeparator<span class="authority">@source.OtherAuthority</span>}
+                        }</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>

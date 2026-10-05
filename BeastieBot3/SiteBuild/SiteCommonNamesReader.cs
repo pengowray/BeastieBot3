@@ -95,7 +95,7 @@ internal static class SiteCommonNamesReader {
             while (reader.Read()) {
                 cancellationToken.ThrowIfCancellationRequested();
                 if (long.TryParse(reader.GetString(0), out var taxonId) && taxa.TryGetValue(taxonId, out var taxon)) {
-                    taxon.ColSynonyms.Add(reader.GetString(1));
+                    taxon.ColSynonyms.Add(new SiteSynonym(reader.GetString(1)));
                 }
             }
         }

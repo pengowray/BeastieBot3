@@ -82,4 +82,11 @@ public static class SiteFormat {
         }
         return sb.ToString();
     }
+
+    private static readonly System.Text.RegularExpressions.Regex ProvisionalMarker = new(
+        @"\b(?:sp|ssp|subsp|var)\.\s*nov\.", System.Text.RegularExpressions.RegexOptions.CultureInvariant);
+
+    /// True for a working name of a taxon not yet formally described: "Notogomphus sp. nov. 'gorilla'",
+    /// "Hauffenia sp. nov." (168 taxa in 2026-1).
+    public static bool IsProvisionalName(string scientificName) => ProvisionalMarker.IsMatch(scientificName);
 }

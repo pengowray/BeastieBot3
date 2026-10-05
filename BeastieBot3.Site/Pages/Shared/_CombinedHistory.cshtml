@@ -89,7 +89,7 @@
                                     <a data-options-link="@SpeciesModel.OtherIdOptionsLinkKey(row)" href="@(Model.OtherIdOptionsUrl(row))#wikitext" aria-label="@SiteText.ShowWikitextOtherIdAccessible(a.TaxonId, a.YearPublished, versionNote)">@SiteText.ShowWikitextOtherId(a.TaxonId)</a>
                                 }
                             </td>
-                            <td><a href="@SiteFormat.IucnAssessmentUrl(a.TaxonId, a.AssessmentId)">@SiteText.IucnSiteLink</a></td>
+                            <td><partial name="_IucnAssessmentLink" model="a" /></td>
                         </tr>
                     }
                 </tbody>

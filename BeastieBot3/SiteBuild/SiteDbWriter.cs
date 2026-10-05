@@ -61,19 +61,22 @@ internal sealed class SiteDbWriter : IDisposable {
         _assessment = Prepare("""
             INSERT INTO assessment (assessment_id, taxon_id, scope, is_latest, category, possibly_extinct,
                 possibly_extinct_in_the_wild, criteria, criteria_version, year_published, assessment_date, population_trend, population_size, citation_json,
-                has_taxonomic_notes, wikidata_item_qid, wikidata_item_properties, wikidata_item_titles, wikidata_item_label_en, wikidata_item_assessment_id)
+                has_taxonomic_notes, wikidata_item_qid, wikidata_item_properties, wikidata_item_titles, wikidata_item_label_en, wikidata_item_assessment_id,
+                api_not_found)
             VALUES (@assessment_id, @taxon_id, @scope, @is_latest, @category, @possibly_extinct,
                 @possibly_extinct_in_the_wild, @criteria, @criteria_version, @year_published, @assessment_date, @population_trend, @population_size, @citation_json,
-                @has_taxonomic_notes, @wikidata_item_qid, @wikidata_item_properties, @wikidata_item_titles, @wikidata_item_label_en, @wikidata_item_assessment_id)
+                @has_taxonomic_notes, @wikidata_item_qid, @wikidata_item_properties, @wikidata_item_titles, @wikidata_item_label_en, @wikidata_item_assessment_id,
+                @api_not_found)
             """,
             "@assessment_id", "@taxon_id", "@scope", "@is_latest", "@category", "@possibly_extinct",
             "@possibly_extinct_in_the_wild", "@criteria", "@criteria_version", "@year_published", "@assessment_date", "@population_trend", "@population_size", "@citation_json",
-            "@has_taxonomic_notes", "@wikidata_item_qid", "@wikidata_item_properties", "@wikidata_item_titles", "@wikidata_item_label_en", "@wikidata_item_assessment_id");
+            "@has_taxonomic_notes", "@wikidata_item_qid", "@wikidata_item_properties", "@wikidata_item_titles", "@wikidata_item_label_en", "@wikidata_item_assessment_id",
+            "@api_not_found");
         _name = Prepare("""
-            INSERT INTO name (name_id, taxon_id, name, name_type, language, source, is_preferred)
-            VALUES (@name_id, @taxon_id, @name, @name_type, @language, @source, @is_preferred)
+            INSERT INTO name (name_id, taxon_id, name, name_type, language, source, is_preferred, authority)
+            VALUES (@name_id, @taxon_id, @name, @name_type, @language, @source, @is_preferred, @authority)
             """,
-            "@name_id", "@taxon_id", "@name", "@name_type", "@language", "@source", "@is_preferred");
+            "@name_id", "@taxon_id", "@name", "@name_type", "@language", "@source", "@is_preferred", "@authority");
         _replacedBy = Prepare("UPDATE assessment SET replaced_by_assessment_id = @replaced_by WHERE assessment_id = @assessment_id",
             "@replaced_by", "@assessment_id");
         _epbcListing = Prepare("""
@@ -128,7 +131,7 @@ internal sealed class SiteDbWriter : IDisposable {
         Bind(_assessment, a.AssessmentId, a.TaxonId, a.Scope, a.IsLatest ? 1 : 0, a.Category, a.PossiblyExtinct ? 1 : 0,
             a.PossiblyExtinctInTheWild ? 1 : 0, a.Criteria, a.CriteriaVersion, a.YearPublished, a.AssessmentDate,
             a.PopulationTrend, a.PopulationSize, a.CitationJson, a.HasTaxonomicNotes is { } notes ? (notes ? 1 : 0) : null, a.WikidataItemQid, a.WikidataItemProperties,
-            a.WikidataItemTitles, a.WikidataItemLabelEn, a.WikidataItemAssessmentId);
+            a.WikidataItemTitles, a.WikidataItemLabelEn, a.WikidataItemAssessmentId, a.ApiNotFound ? 1 : 0);
         _assessment.ExecuteNonQuery();
     }
 
@@ -178,7 +181,7 @@ internal sealed class SiteDbWriter : IDisposable {
     /// Writes one name and remembers its folded key for name_key.
     public void AddName(long taxonId, SiteName name) {
         var nameId = _nextNameId++;
-        Bind(_name, nameId, taxonId, name.Name, name.NameType, name.Language, name.Source, name.IsPreferred ? 1 : 0);
+        Bind(_name, nameId, taxonId, name.Name, name.NameType, name.Language, name.Source, name.IsPreferred ? 1 : 0, name.Authority);
         _name.ExecuteNonQuery();
         var key = SiteNameKey.Fold(name.Name);
         if (key.Length > 0) {

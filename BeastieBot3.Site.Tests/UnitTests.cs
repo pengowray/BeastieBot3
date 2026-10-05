@@ -569,3 +569,14 @@ public sealed class IdQueryTests {
     [InlineData("10.1234/some.other.doi")]
     public void IsNullForOtherText(string text) => Assert.Null(IdQuery.Parse(text));
 }
+
+public sealed class ProvisionalNameTests {
+    [Theory]
+    [InlineData("Notogomphus sp. nov. 'gorilla'", true)]
+    [InlineData("Hauffenia sp. nov.", true)]
+    [InlineData("Pupisoma sp. nov. 1", true)]
+    [InlineData("Ferrissia sp. indet.", false)]
+    [InlineData("Ursus maritimus", false)]
+    [InlineData("Novaculina novella", false)]
+    public void Detects(string name, bool expected) => Assert.Equal(expected, SiteFormat.IsProvisionalName(name));
+}

@@ -89,6 +89,28 @@ internal sealed class SiteAssessmentPass {
 
     public int PlannedCount => _plan.Count;
 
+    // Assessment ids the IUCN API answered 404 for (failed_requests), flagged as their rows are written.
+    private readonly HashSet<long> _apiNotFound = new();
+
+    /// Reads the assessment ids the IUCN API answered 404 for, from the API cache's failed_requests.
+    public void ReadApiNotFound(SqliteConnection cache) {
+        using var command = cache.CreateCommand();
+        command.CommandText = """
+            SELECT entity_id FROM failed_requests
+            WHERE endpoint = 'assessment' AND last_status = 404
+            """;
+        try {
+            using var reader = command.ExecuteReader();
+            while (reader.Read()) {
+                if (long.TryParse(reader.GetValue(0)?.ToString(), out var id)) {
+                    _apiNotFound.Add(id);
+                }
+            }
+        } catch (SqliteException) {
+            // An API cache with no failed_requests table has recorded no 404s.
+        }
+    }
+
     /// Decides the rows and each taxon's latest global assessment.
     public void Plan(IEnumerable<SiteAssessment> csvRows) {
         var csvScopes = new Dictionary<long, HashSet<string>>();
@@ -117,9 +139,10 @@ internal sealed class SiteAssessmentPass {
                     }
                     continue;
                 }
-                if (header.Scope is null) {
+                var scope = header.Scope;
+                if (scope is null) {
                     _stats.ApiHeadersNoScope++;
-                    continue;
+                    scope = SiteBuildRules.NoScope;
                 }
                 if (header.YearPublished is null) {
                     _stats.ApiHeadersUnpublished++;
@@ -134,7 +157,7 @@ internal sealed class SiteAssessmentPass {
                     latest = false;
                     _stats.NotInReleaseLatestHeaders++;
                 } else if (latest) {
-                    if (scopesInCsv?.Contains(header.Scope) == true) {
+                    if (scopesInCsv?.Contains(scope) == true) {
                         latest = false;
                         _stats.ApiLatestCoveredByCsv++;
                     } else {
@@ -144,7 +167,7 @@ internal sealed class SiteAssessmentPass {
                 _plan[header.AssessmentId] = new SiteAssessment {
                     AssessmentId = header.AssessmentId,
                     TaxonId = taxonId,
-                    Scope = header.Scope,
+                    Scope = scope,
                     IsLatest = latest,
                     Category = header.Category,
                     PossiblyExtinct = header.PossiblyExtinct,
@@ -418,6 +441,10 @@ internal sealed class SiteAssessmentPass {
     private void Write(SiteDbWriter writer, SiteAssessment assessment) {
         if (assessment.WikidataItemQid is null) {
             SetWikidataItem(assessment, doi: null);
+        }
+        if (_apiNotFound.Contains(assessment.AssessmentId)) {
+            assessment.ApiNotFound = true;
+            _stats.AssessmentsApiNotFound++;
         }
         writer.AddAssessment(assessment);
         if (!assessment.IsLatest) {

@@ -53,8 +53,13 @@ public sealed record AssessmentRow(
     string? WikidataItemTitles = null,
     string? WikidataItemLabelEn = null,
     long? WikidataItemAssessmentId = null,
-    string? PopulationSize = null) {
+    string? PopulationSize = null,
+    bool ApiNotFound = false) {
     public bool IsGlobal => string.Equals(Scope.Trim(), "Global", StringComparison.OrdinalIgnoreCase);
+
+    /// IUCN published the assessment with no geographic scope. It is not global, and is listed
+    /// with the regional assessments.
+    public bool HasNoScope => Scope.Trim().Length == 0;
 }
 
 public sealed record NameRow(
@@ -63,7 +68,8 @@ public sealed record NameRow(
     string NameType,
     string? Language,
     string Source,
-    bool IsPreferred);
+    bool IsPreferred,
+    string? Authority = null);
 
 /// A taxon with its category, as listed in search results, name lookups and the children of a taxon.
 /// InRelease: false for a taxon that is not in the release (no current assessment).

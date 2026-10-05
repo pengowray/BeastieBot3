@@ -41,6 +41,9 @@
     @if (taxon.CommonNameEn is not null) {
         <p class="taxon-common-name">@taxon.CommonNameEn</p>
     }
+    @if (SiteFormat.IsProvisionalName(taxon.ScientificName)) {
+        <p class="provisional-note">@SiteText.ProvisionalName</p>
+    }
     @if (parentPrefix is not null && Model.Parent is { } parent) {
         <p class="parent-line">@parentPrefix <a href="/species/@parent.TaxonId">@Html.Raw(ScientificNameMarkup.ToHtml(parent.ScientificName, parent.SubpopulationName))</a></p>
     }
@@ -106,13 +109,20 @@
             }
         }
     } else if (Model.LatestGlobal is null && Model.RegionalRows.Count > 0) {
-        <p class="no-global-line">@SiteText.NoGlobalBefore<a href="#regional">@SiteText.NoGlobalLinkText(Model.RegionalRows.Count)</a>@SiteText.NoGlobalAfter</p>
+        var regions = Model.RegionalRows.Count(r => !r.HasNoScope);
+        var noScope = Model.RegionalRows.Count(r => r.HasNoScope);
+        if (regions > 0) {
+            <p class="no-global-line">@SiteText.NoGlobalBefore<a href="#regional">@SiteText.NoGlobalLinkText(regions)</a>@SiteText.NoGlobalAfter</p>
+        }
+        if (noScope > 0) {
+            <p class="no-global-line">@SiteText.NoScopeLine(noScope)</p>
+        }
     }
     @if (status is not null) {
         <dl class="facts">
             @if (!status.IsGlobal) {
                 <dt>@SiteText.LabelRegion</dt>
-                <dd>@status.Scope</dd>
+                <dd>@SiteText.RegionLabel(status.Scope)</dd>
             }
             <dt>@SiteText.LabelCategory</dt>
             <dd><partial name="_Badge" model="@BadgeModel.For(status, large: true)" /></dd>
@@ -355,7 +365,7 @@
                                     <a data-options-link="@SpeciesModel.OptionsLinkKey(isLatest ? null : a.AssessmentId)" href="@(Model.OptionsUrl(isLatest ? null : a.AssessmentId))#wikitext" aria-label="@SiteText.ShowWikitextAccessible(null, a.YearPublished, versionNote)">@SiteText.ShowWikitext</a>
                                 }
                             </td>
-                            <td><a href="@SiteFormat.IucnAssessmentUrl(a.TaxonId, a.AssessmentId)">@SiteText.IucnSiteLink</a></td>
+                            <td><partial name="_IucnAssessmentLink" model="a" /></td>
                         </tr>
                     }
                 </tbody>
@@ -372,7 +382,7 @@
 
 @if (Model.RegionalRows.Count > 0) {
     <section class="regional" id="regional" aria-labelledby="regional-heading">
-        <h2 id="regional-heading">@SiteText.HeadingRegional</h2>
+        <h2 id="regional-heading">@(Model.RegionalRows.All(r => r.HasNoScope) ? SiteText.HeadingNoScope : SiteText.HeadingRegional)</h2>
         <div class="table-scroll">
             <table>
                 <thead>
@@ -391,7 +401,7 @@
                         var isDefault = a.AssessmentId == Model.StatusAssessment?.AssessmentId;
                         var versionNote = Model.VersionNote(a);
                         <tr class="@(isShown ? "shown" : null)">
-                            <th scope="row">@a.Scope</th>
+                            <th scope="row">@SiteText.RegionLabel(a.Scope)</th>
                             <td><partial name="_Badge" model="@BadgeModel.For(a)" /></td>
                             <td>@a.Criteria</td>
                             <td>@a.YearPublished@if (versionNote is not null) {<text> </text><span class="version-note">@versionNote</span>}</td>
@@ -402,7 +412,7 @@
                                     <a data-options-link="@SpeciesModel.OptionsLinkKey(isDefault ? null : a.AssessmentId)" href="@(Model.OptionsUrl(isDefault ? null : a.AssessmentId))#wikitext" aria-label="@SiteText.ShowWikitextAccessible(a.Scope, a.YearPublished, versionNote)">@SiteText.ShowWikitext</a>
                                 }
                             </td>
-                            <td><a href="@SiteFormat.IucnAssessmentUrl(a.TaxonId, a.AssessmentId)">@SiteText.IucnSiteLink</a></td>
+                            <td><partial name="_IucnAssessmentLink" model="a" /></td>
                         </tr>
                     }
                 </tbody>
@@ -486,19 +496,11 @@
 
     @if (Model.Synonyms.Count > 0) {
         <h3>@SiteText.NamesSynonyms</h3>
-        <ul class="synonyms">
-            @foreach (var s in Model.Synonyms.Take(SpeciesModel.ShortListLength)) {
-                <li>@Html.Raw(ScientificNameMarkup.ToHtml(s))</li>
-            }
-        </ul>
+        <partial name="_SynonymTable" model="Model.Synonyms.Take(SpeciesModel.ShortListLength)" />
         @if (Model.Synonyms.Count > SpeciesModel.ShortListLength) {
             <details>
                 <summary>@SiteText.ShowMoreSynonyms(Model.Synonyms.Count - SpeciesModel.ShortListLength)</summary>
-                <ul class="synonyms">
-                    @foreach (var s in Model.Synonyms.Skip(SpeciesModel.ShortListLength)) {
-                        <li>@Html.Raw(ScientificNameMarkup.ToHtml(s))</li>
-                    }
-                </ul>
+                <partial name="_SynonymTable" model="Model.Synonyms.Skip(SpeciesModel.ShortListLength)" />
             </details>
         }
     }

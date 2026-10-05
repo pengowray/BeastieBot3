@@ -89,7 +89,7 @@ internal static class SiteIucnCsvReader {
 
     /// The assessments of the given taxa, all of them latest for their scope (the export holds
     /// current assessments only); scopes are assigned per taxon by SiteBuildRules.AssignCsvScopes.
-    /// Rows with no scope are left out and counted; the API has no scope for them either.
+    /// Rows with no scope get SiteBuildRules.NoScope and are counted; the API has no scope for them either.
     public static List<SiteAssessment> ReadAssessments(SqliteConnection csv, IReadOnlyDictionary<long, SiteTaxon> taxa,
         SiteBuildStats stats, CancellationToken cancellationToken) {
         var byTaxon = new Dictionary<long, List<CsvRow>>();
@@ -124,7 +124,7 @@ internal static class SiteIucnCsvReader {
                 var row = list[i];
                 if (scopes[i] is not { } scope) {
                     stats.CsvAssessmentsNoScope++;
-                    continue;
+                    scope = SiteBuildRules.NoScope;
                 }
                 var category = SiteBuildRules.CategoryCodeFromCsv(row.Category);
                 if (category is null) {

@@ -169,7 +169,9 @@ public sealed class SiteDbBuildTests : IDisposable {
             """, ("@id", PolarBear)).ToDictionary(r => (long)r[0]!);
 
         Assert.Equal(new[] { PolarBear2005, PolarBear2006Amended, PolarBear1996, PolarBear2008, PolarBear2008Errata, PolarBear2008Errata2,
-            PolarBearGlobal, PolarBearEurope }, rows.Keys.Order());
+            PolarBearNoScope, PolarBearGlobal, PolarBearEurope }, rows.Keys.Order());
+        // An assessment with no scope is kept with an empty scope, and is not global.
+        Assert.Equal("", rows[PolarBearNoScope][1]);
 
         var global = rows[PolarBearGlobal];
         Assert.Equal(("Global", 1L, "VU", "3.1", 2015L, "2015-08-27", "Unknown"),
@@ -216,9 +218,9 @@ public sealed class SiteDbBuildTests : IDisposable {
         Assert.Contains(Rows(db, $"SELECT name, language FROM name WHERE taxon_id = {Subpopulation} AND name_type = 'common'"),
             r => (string)r[0]! == "Test Bear" && (string)r[1]! == "en");
 
-        // A taxon whose only assessment has no scope keeps no assessment.
+        // A taxon whose only assessment has no scope keeps it, with an empty scope, and has no latest global assessment.
         Assert.Null(taxa[NoScopeTaxon][4]);
-        Assert.Equal("0", Scalar(db, $"SELECT COUNT(*) FROM assessment WHERE taxon_id = {NoScopeTaxon}"));
+        Assert.Equal("1", Scalar(db, $"SELECT COUNT(*) FROM assessment WHERE taxon_id = {NoScopeTaxon} AND scope = '' AND is_latest = 1"));
     }
 
     [Fact]
@@ -236,6 +238,8 @@ public sealed class SiteDbBuildTests : IDisposable {
         Assert.Contains(("Sea bear", "common", "en", "wikipedia-taxobox", 0L), names);
         Assert.True(names.FindIndex(n => n.Item4 == "wikipedia") < names.FindIndex(n => n.Item4 == "wikipedia-taxobox"));
         Assert.Contains(("Thalarctos maritimus", "synonym", null, "iucn", 0L), names);
+        Assert.Equal("(Phipps, 1774)", Scalar(db,
+            $"SELECT authority FROM name WHERE taxon_id = {PolarBear} AND name = 'Thalarctos maritimus' AND source = 'iucn'"));
         Assert.Contains(("Ursus marinus", "synonym", null, "col", 0L), names);
         // The store's IUCN copy of "Polar Bear" is the same row as the API's.
         Assert.Single(names, n => n.Item1 == "Polar Bear" && n.Item4 == "iucn");

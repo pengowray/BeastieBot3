@@ -328,8 +328,11 @@ public sealed class SpeciesPageTests(SiteFactory factory) : IClassFixture<SiteFa
         Assert.Contains("Ice bear IUCN Red List", text);
         Assert.DoesNotContain("Invariant", text);
         Assert.Matches("<dt>Language not given</dt>\\s*<dd>Nanuq</dd>\\s*</dl>", html);
-        Assert.Contains("<li><i>Thalarctos maritimus</i></li>", html);
-        Assert.Contains("<li><i>Ursus marinus</i> Pallas, 1776</li>", html);
+        Assert.Contains("<th scope=\"row\"><i>Thalarctos maritimus</i> <span class=\"authority\">(Phipps, 1774)</span></th>", html);
+        Assert.Contains("<td>IUCN Red List, Catalogue of Life: <span class=\"authority\">Phipps, 1774</span></td>", html);
+        Assert.Contains("<th scope=\"row\"><i>Ursus marinus</i> <span class=\"authority\">Pallas, 1776</span></th>", html);
+        Assert.Contains("<th scope=\"row\"><i>Ursus polaris</i></th>", html);
+        Assert.Contains("<td>Wikidata</td>", html);
         Assert.Contains("<a href=\"https://en.wikipedia.org/wiki/Polar_bear\">Polar bear</a>", html);
         Assert.Contains("<a href=\"https://www.wikidata.org/wiki/Q33609\">Q33609</a>", html);
         Assert.Contains("<a href=\"https://www.catalogueoflife.org/data/taxon/4QHKG\"><i>Ursus maritimus</i></a>", html);
@@ -401,6 +404,32 @@ public sealed class SpeciesPageTests(SiteFactory factory) : IClassFixture<SiteFa
         Assert.Contains("<h3>Other subspecies of this species</h3>", related);
         Assert.Contains($"<a href=\"/species/{FixtureDb.PlantSubspeciesSibling}\">", related);
         Assert.DoesNotContain($"<a href=\"/species/{FixtureDb.PlantSubspecies}\">", related);
+    }
+
+    [Fact]
+    public async Task AnAssessmentWithNoScopeIsListedAndNeverCountedAsGlobal() {
+        var html = await _client.GetStringAsync($"/species/{FixtureDb.NoScopeOnly}");
+        var text = Html.Text(html);
+        Assert.Contains("IUCN published this taxon's assessment with no geographic scope, so it is neither global nor regional.", text);
+        Assert.DoesNotContain("This taxon has been assessed in", text);
+        Assert.Contains("<h2 id=\"regional-heading\">Assessments with no geographic scope</h2>", html);
+        Assert.Contains("<th scope=\"row\">No scope given</th>", html);
+        Assert.Contains("Region No scope given", text);
+        Assert.Contains("Wikitext for the assessment with no geographic scope: Data Deficient, published 2011.", text);
+    }
+
+    [Fact]
+    public async Task AProvisionalNameSaysSo() {
+        var text = Html.Text(await _client.GetStringAsync($"/species/{FixtureDb.NoScopeOnly}"));
+        Assert.Contains("Provisional name: the species had not been formally described when IUCN assessed it.", text);
+        Assert.DoesNotContain("Provisional name", Html.Text(await _client.GetStringAsync($"/species/{FixtureDb.PolarBear}")));
+    }
+
+    [Fact]
+    public async Task AnAssessmentTheApiDoesNotFindIsMarked() {
+        var html = await _client.GetStringAsync($"/species/{FixtureDb.PolarBear}");
+        Assert.Contains($"{FixtureDb.PolarBear1988Nt}\">IUCN Red List website</a> <span class=\"version-note\">Not found in the IUCN API</span>", html);
+        Assert.Single(System.Text.RegularExpressions.Regex.Matches(html, "Not found in the IUCN API"));
     }
 
     private static string Section(string html, string id) {

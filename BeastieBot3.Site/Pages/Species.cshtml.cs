@@ -13,6 +13,12 @@ namespace BeastieBot3.Site.Pages;
 
 public sealed record EnglishCommonName(string Name, IReadOnlyList<string> Sources, bool IsIucnMain);
 
+/// A synonym with the authority shown beside it (the first source's that gives one) and its sources.
+/// A source whose authority differs from the one shown has it in OtherAuthority.
+public sealed record SynonymSource(string Label, string? OtherAuthority);
+
+public sealed record SynonymRow(string Name, string? Authority, IReadOnlyList<SynonymSource> Sources);
+
 /// Common names in one language. Lang: the code for the lang attribute, or null.
 public sealed record LanguageGroup(string Language, string? Lang, IReadOnlyList<string> Names, bool NotGiven = false);
 
@@ -129,7 +135,7 @@ public sealed class SpeciesModel : PageModel {
 
     public IReadOnlyList<EnglishCommonName> EnglishNames { get; private set; } = [];
     public IReadOnlyList<LanguageGroup> OtherLanguages { get; private set; } = [];
-    public IReadOnlyList<string> Synonyms { get; private set; } = [];
+    public IReadOnlyList<SynonymRow> Synonyms { get; private set; } = [];
 
     /// For a subspecies, variety or subpopulation: its species, with that species' latest global assessment.
     public RelatedTaxonRow? SpeciesRow { get; private set; }
@@ -404,13 +410,31 @@ public sealed class SpeciesModel : PageModel {
             .ThenBy(g => g.Language, StringComparer.CurrentCultureIgnoreCase)
             .ToList();
 
-        Synonyms = names
-            .Where(n => n.NameType == NameTypes.Synonym)
-            .GroupBy(n => SiteNameKey.Fold(n.Name))
-            .Select(g => g.First().Name)
-            .OrderBy(n => n, StringComparer.Ordinal)
-            .ToList();
+        Synonyms = SynonymRows(names);
     }
+
+    /// The synonyms, one row per name (folded), sources in SourceOrder, by name.
+    public static IReadOnlyList<SynonymRow> SynonymRows(IEnumerable<NameRow> names) => names
+        .Where(n => n.NameType == NameTypes.Synonym)
+        .GroupBy(n => SiteNameKey.Fold(n.Name))
+        .Select(g => {
+            var rows = g.OrderBy(r => SourceOrder(r.Source)).ThenBy(r => r.NameId).ToList();
+            var authority = rows.Select(r => r.Authority).FirstOrDefault(a => a is not null);
+            var sources = rows
+                .GroupBy(r => r.Source)
+                .Select(s => {
+                    var own = s.Select(r => r.Authority).FirstOrDefault(a => a is not null);
+                    var other = own is not null && authority is not null && !SameAuthority(own, authority) ? own : null;
+                    return new SynonymSource(SiteText.SourceLabel(s.Key), other);
+                })
+                .ToList();
+            return new SynonymRow(rows[0].Name, authority, sources);
+        })
+        .OrderBy(s => s.Name, StringComparer.Ordinal)
+        .ToList();
+
+    // Authorities that differ only in spacing or case are the same.
+    private static bool SameAuthority(string a, string b) => SiteNameKey.Fold(a) == SiteNameKey.Fold(b);
 
     private static int SourceOrder(string source) => source switch {
         "iucn" => 0,

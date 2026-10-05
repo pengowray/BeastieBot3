@@ -490,8 +490,11 @@ button:hover {
 
 .authority {
     font-weight: 400;
-    font-size: 1.1rem;
     color: var(--muted);
+}
+
+.taxon-header .authority {
+    font-size: 1.1rem;
 }
 
 .taxon-common-name {
@@ -501,6 +504,11 @@ button:hover {
 
 .parent-line {
     margin: 0.25rem 0 0;
+}
+
+.provisional-note {
+    margin: 0.25rem 0 0;
+    color: var(--muted);
 }
 
 .classification ol {
@@ -835,11 +843,6 @@ tr.shown {
 
 .language-names dd {
     margin: 0;
-}
-
-.synonyms {
-    margin: 0;
-    padding-left: 1.25rem;
 }
 
 details summary {

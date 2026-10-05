@@ -1,3 +1,4 @@
+using System.Text.Json;
 using System.Globalization;
 using System.Net;
 using System.Text.RegularExpressions;
@@ -34,6 +35,11 @@ internal static class SiteNameSource {
 internal static class SiteBuildRules {
     /// The scope of a global assessment, as the site compares it.
     public const string GlobalScope = "Global";
+
+    /// The scope of an assessment IUCN published with no geographic scope (an empty scopes column in
+    /// the CSV export, an empty scopes[] in the API): 28 current assessments in 2026-1. Kept, and never
+    /// counted as global, so a taxon whose only current assessment has no scope still has a page with it.
+    public const string NoScope = "";
 
     /// The scope code of a global assessment in the API's scopes[].
     public const string GlobalScopeCode = "1";
@@ -356,6 +362,53 @@ internal static class SiteBuildRules {
             name += " " + subpopulation;
         }
         return name;
+    }
+
+    /// The authority of a synonym in the API's taxon record: infrarank_author for an infraspecific
+    /// name, else species_author; when the record has neither, the text after the name in its full
+    /// name ("Semper, 1874" from "Edodonta constricta Semper, 1874"), without a note in square brackets.
+    public static string? IucnSynonymAuthority(string name, string? fullName, string? speciesAuthor, string? infraAuthor, bool isInfra) {
+        var stated = NullIfBlank(CleanName(isInfra ? infraAuthor : speciesAuthor));
+        if (stated is not null) {
+            return stated;
+        }
+        var whole = CleanName(fullName);
+        var bracket = whole.IndexOf('[', StringComparison.Ordinal);
+        if (bracket >= 0) {
+            whole = whole[..bracket].Trim();
+        }
+        return whole.Length > name.Length && whole.StartsWith(name + " ", StringComparison.Ordinal)
+            ? NullIfBlank(whole[name.Length..])
+            : null;
+    }
+
+    /// The items a Wikidata entity JSON (wbgetentities form) names as taxon synonym (P1420), leaving
+    /// out statements at deprecated rank.
+    public static IReadOnlyList<long> TaxonSynonymItems(string json) {
+        var items = new List<long>();
+        try {
+            using var doc = JsonDocument.Parse(json);
+            var root = doc.RootElement;
+            var entity = root.TryGetProperty("entities", out var entities) && entities.ValueKind == JsonValueKind.Object
+                ? entities.EnumerateObject().Select(p => p.Value).FirstOrDefault()
+                : root;
+            if (entity.ValueKind != JsonValueKind.Object || !entity.TryGetProperty("claims", out var claims)
+                || !claims.TryGetProperty("P1420", out var statements) || statements.ValueKind != JsonValueKind.Array) {
+                return items;
+            }
+            foreach (var statement in statements.EnumerateArray()) {
+                if (statement.TryGetProperty("rank", out var rank) && rank.GetString() == "deprecated") {
+                    continue;
+                }
+                if (statement.TryGetProperty("mainsnak", out var snak) && snak.TryGetProperty("datavalue", out var value)
+                    && value.TryGetProperty("value", out var inner) && inner.ValueKind == JsonValueKind.Object
+                    && inner.TryGetProperty("numeric-id", out var id) && id.TryGetInt64(out var numeric)) {
+                    items.Add(numeric);
+                }
+            }
+        } catch (JsonException) {
+        }
+        return items;
     }
 
     private static readonly string[] SynonymMarkers = { "ssp.", "subsp.", "var.", "subvar.", "f.", "forma", "fo." };

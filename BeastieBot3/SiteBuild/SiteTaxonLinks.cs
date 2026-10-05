@@ -35,7 +35,7 @@ internal static class SiteTaxonLinks {
             .ToDictionary(g => g.Key, g => g.ToList(), StringComparer.Ordinal);
         var bySynonym = new Dictionary<string, List<SiteTaxon>>(StringComparer.Ordinal);
         foreach (var taxon in taxa.Where(t => t.InRelease)) {
-            foreach (var synonym in taxon.IucnSynonyms.Distinct(StringComparer.Ordinal)) {
+            foreach (var synonym in taxon.IucnSynonyms.Select(s => s.Name).Distinct(StringComparer.Ordinal)) {
                 if (!bySynonym.TryGetValue(synonym, out var list)) {
                     bySynonym[synonym] = list = new List<SiteTaxon>();
                 }

@@ -58,6 +58,8 @@ public static class FixtureDb {
     // criteria version.
     public const long PlantSubspecies = 32277;
     public const long PlantSubspeciesSibling = 32278;
+    public const long NoScopeOnly = 155555;
+    public const long NoScopeOnlyLatest = 155555001;
     public const long PlantSubspeciesLatest = 2812588;
     public const long PlantSubspecies1998Nt = 9692717;
     public const long PlantSubspecies1998Vu = 9692643;
@@ -236,7 +238,7 @@ public static class FixtureDb {
                 doi: null, doiSource: DoiSource.None, text: null, registeredName: PolarBear2008RegisteredName));
         w.Assessment(PolarBear1996, PolarBear, "Global", false, "LR/cd", criteriaVersion: "2.3", year: 1996, date: "1996-06-30");
         // site build-db stores IUCN's "Earlier Version" as a NULL criteria version.
-        w.Assessment(PolarBear1988Nt, PolarBear, "Global", false, "nt", year: 1988);
+        w.Assessment(PolarBear1988Nt, PolarBear, "Global", false, "nt", year: 1988, apiNotFound: true);
         w.Name(PolarBear, "Ursus maritimus", "scientific", null, "iucn");
         w.Name(PolarBear, "Polar bear", "common", "en", "iucn", preferred: true);
         w.Name(PolarBear, "Polar Bear", "common", "en", "wikidata");
@@ -248,8 +250,11 @@ public static class FixtureDb {
         // An ISO 639-2 code for English, and the code for an undetermined language.
         w.Name(PolarBear, "Ice bear", "common", "eng", "iucn");
         w.Name(PolarBear, "Nanuq", "common", "und", "iucn");
-        w.Name(PolarBear, "Thalarctos maritimus", "synonym", null, "iucn");
-        w.Name(PolarBear, "Ursus marinus Pallas, 1776", "synonym", null, "col");
+        // A synonym from two sources whose authorities differ, one from one source, and one with no authority.
+        w.Name(PolarBear, "Thalarctos maritimus", "synonym", null, "iucn", authority: "(Phipps, 1774)");
+        w.Name(PolarBear, "Ursus marinus", "synonym", null, "col", authority: "Pallas, 1776");
+        w.Name(PolarBear, "Thalarctos maritimus", "synonym", null, "col", authority: "Phipps, 1774");
+        w.Name(PolarBear, "Ursus polaris", "synonym", null, "wikidata");
 
         // House sparrow: a BirdLife assessment with an organisation as author and a regional one.
         w.Taxon(HouseSparrow, "Passer domesticus", "species", "ANIMALIA", "CHORDATA", "AVES", "PASSERIFORMES", "PASSERIDAE", "Passer",
@@ -548,6 +553,11 @@ public static class FixtureDb {
         w.Name(PupillaBigranata, "Pupilla bigranata", "scientific", null, "iucn");
         w.TaxonLink(PupillaBigranata, PupillaMuscorum, "iucn-synonym");
 
+        // A provisional name whose only assessment IUCN published with no scope.
+        w.Taxon(NoScopeOnly, "Hauffenia sp. nov.", "species", "ANIMALIA", "MOLLUSCA", "GASTROPODA", "LITTORINIMORPHA", "HYDROBIIDAE", "Hauffenia");
+        w.Assessment(NoScopeOnlyLatest, NoScopeOnly, "", true, "DD", criteriaVersion: "3.1", year: 2011, date: "2010-06-01");
+        w.Name(NoScopeOnly, "Hauffenia sp. nov.", "scientific", null, "iucn");
+
         // A variety, for the kind label.
         w.Taxon(Variety, "Cupressus arizonica var. glabra", "variety", "PLANTAE", "TRACHEOPHYTA", "PINOPSIDA", "PINALES", "CUPRESSACEAE", "Cupressus",
             authority: "(Sudw.) Little", latest: 34010001, infraRank: "var.", infraName: "glabra");
@@ -713,7 +723,7 @@ public static class FixtureDb {
             string? criteria = null, string? criteriaVersion = null, int? year = null, string? date = null, string? trend = null,
             string? citation = null, long? replacedBy = null, string? wikidataItem = null, string? wikidataItemProperties = null,
             string? wikidataItemTitles = null, string? wikidataItemLabelEn = null, long? wikidataItemAssessment = null,
-            bool? taxonomicNotes = null) {
+            bool? taxonomicNotes = null, bool apiNotFound = false) {
             AssessmentCount++;
             Run("""
                 INSERT INTO assessment(assessment_id, taxon_id, scope, is_latest, category, possibly_extinct,
@@ -725,6 +735,9 @@ public static class FixtureDb {
                 id, taxonId, scope, latest ? 1 : 0, category, possiblyExtinct ? 1 : 0, criteria, criteriaVersion, year, date, trend, citation,
                 replacedBy, wikidataItem, wikidataItemProperties, wikidataItemTitles, wikidataItemLabelEn,
                 wikidataItem is null ? null : wikidataItemAssessment ?? id);
+            if (apiNotFound) {
+                Run("UPDATE assessment SET api_not_found = 1 WHERE assessment_id = @a", id);
+            }
             if (taxonomicNotes is { } notes) {
                 Run("UPDATE assessment SET has_taxonomic_notes = @a WHERE assessment_id = @b", notes ? 1 : 0, id);
             }
@@ -753,10 +766,11 @@ public static class FixtureDb {
         public void TaxonLink(long taxonId, long currentTaxonId, string kind) =>
             Run("INSERT INTO taxon_link(taxon_id, current_taxon_id, link_kind) VALUES (@a, @b, @c)", taxonId, currentTaxonId, kind);
 
-        public void Name(long taxonId, string name, string type, string? language, string source, bool preferred = false) {
+        public void Name(long taxonId, string name, string type, string? language, string source, bool preferred = false,
+            string? authority = null) {
             var nameId = _nextNameId++;
-            Run("INSERT INTO name(name_id, taxon_id, name, name_type, language, source, is_preferred) VALUES (@a, @b, @c, @d, @e, @f, @g)",
-                nameId, taxonId, name, type, language, source, preferred ? 1 : 0);
+            Run("INSERT INTO name(name_id, taxon_id, name, name_type, language, source, is_preferred, authority) VALUES (@a, @b, @c, @d, @e, @f, @g, @h)",
+                nameId, taxonId, name, type, language, source, preferred ? 1 : 0, authority);
             Run("INSERT OR IGNORE INTO name_key(key, taxon_id, name_id) VALUES (@a, @b, @c)", SiteNameKey.Fold(name), taxonId, nameId);
         }
 

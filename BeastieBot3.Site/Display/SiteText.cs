@@ -80,6 +80,8 @@ public static class SiteText {
     public const string HeadingWikitext = "Wikitext for Wikipedia";
     public const string HeadingHistory = "Assessment history";
     public const string HeadingRegional = "Regional assessments";
+    /// In place of HeadingRegional when every assessment in that table has no scope.
+    public const string HeadingNoScope = "Assessments with no geographic scope";
     public const string HeadingNames = "Names";
     public const string HeadingLinks = "Links to other sites";
     public const string HeadingClassification = "Classification";
@@ -469,8 +471,23 @@ public static class SiteText {
         (year is null ? $"Wikitext for an earlier assessment: {category}." : $"Wikitext for an earlier assessment: {category}, published {year}.")
         + WithNote(versionNote);
     public static string RegionalAssessment(string region, string category, int? year, string? versionNote = null) =>
-        (year is null ? $"Wikitext for the {region} assessment: {category}." : $"Wikitext for the {region} assessment: {category}, published {year}.")
+        (year is null ? $"Wikitext for {RegionalName(region)}: {category}." : $"Wikitext for {RegionalName(region)}: {category}, published {year}.")
         + WithNote(versionNote);
+    /// "the Europe assessment", or for an assessment with no scope (region ""), "the assessment with no geographic scope".
+    private static string RegionalName(string region) =>
+        string.IsNullOrWhiteSpace(region) ? "the assessment with no geographic scope" : $"the {region} assessment";
+    /// A region in the regional table and the status summary; "" is an assessment IUCN published with no scope.
+    public static string RegionLabel(string region) => string.IsNullOrWhiteSpace(region) ? NoScopeLabel : region;
+    public const string NoScopeLabel = "No scope given";
+    /// Under the heading of a taxon IUCN assessed under a working name ("sp. nov.").
+    public const string ProvisionalName =
+        "Provisional name: the species had not been formally described when IUCN assessed it. \"sp. nov.\" means new species. If it has since been described, the published name may be among the synonyms below.";
+    /// The status summary of a taxon whose only current assessments have no scope.
+    public static string NoScopeLine(int count) => count == 1
+        ? "IUCN published this taxon's assessment with no geographic scope, so it is neither global nor regional."
+        : $"IUCN published {count} of this taxon's assessments with no geographic scope, so they are neither global nor regional.";
+    /// Beside the IUCN link of an assessment that the IUCN API answers 404 for.
+    public const string ApiNotFoundNote = "Not found in the IUCN API";
     private static string WithNote(string? note) => note is null ? string.Empty : $" {note}.";
     /// taxoboxLabel: TaxoboxTemplate.Label.
     public static string TaxoboxGlobalOnly(string taxoboxLabel) => $"{taxoboxLabel} are given for global assessments only.";
@@ -504,7 +521,7 @@ public static class SiteText {
     /// versionNote: the row's VersionNote, so an errata version and the assessment it replaced
     /// have different names.
     public static string ShowWikitextAccessible(string? region, int? year, string? versionNote = null) {
-        var assessment = region is null ? "the assessment" : $"the {region} assessment";
+        var assessment = region is null ? "the assessment" : RegionalName(region);
         var text = year is null ? $"Show wikitext for {assessment}" : $"Show wikitext for {assessment} published in {year}";
         return versionNote is null ? text : $"{text} ({char.ToLowerInvariant(versionNote[0])}{versionNote[1..]})";
     }
@@ -607,6 +624,9 @@ public static class SiteText {
     public const string NamesSynonyms = "Synonyms";
     public const string ColName = "Name";
     public const string ColSource = "Source";
+    public const string ColSynonym = "Synonym";
+    /// Between a source and the authority it gives for a synonym, when that differs from the one shown.
+    public const string SourceAuthoritySeparator = ": ";
     public const string IucnMainName = "IUCN's main English name";
     public const string NoEnglishName = "No English common name found";
     public const string LanguageNotGiven = "Language not given";

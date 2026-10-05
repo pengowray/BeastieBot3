@@ -103,10 +103,14 @@ internal sealed class SiteTaxon {
     public long? ApiSpeciesId { get; set; }
 
     public List<IucnCommonName> IucnCommonNames { get; set; } = new();
-    public List<string> IucnSynonyms { get; set; } = new();
+    public List<SiteSynonym> IucnSynonyms { get; set; } = new();
     public List<(string Name, string Source, bool IsPreferred)> EnglishNames { get; } = new();
-    public List<string> ColSynonyms { get; } = new();
+    public List<SiteSynonym> ColSynonyms { get; } = new();
+    public List<SiteSynonym> WikidataSynonyms { get; } = new();
 }
+
+/// A synonym and its authority as its source gives it; Authority is null when the source gives none.
+internal sealed record SiteSynonym(string Name, string? Authority = null);
 
 internal sealed record IucnCommonName(string Name, string? Language, bool IsMain);
 
@@ -140,6 +144,9 @@ internal sealed class SiteAssessment {
     public string? CitationJson { get; set; }
     /// Whether the cached payload's taxonomic notes have text; null when there is no payload.
     public bool? HasTaxonomicNotes { get; set; }
+
+    /// The IUCN API answered 404 when this assessment was requested (failed_requests).
+    public bool ApiNotFound { get; set; }
     /// The Wikidata item for the assessment as a publication, and the properties it has
     /// (SiteWikidataItems).
     public string? WikidataItemQid { get; set; }
@@ -228,6 +235,13 @@ internal sealed class SiteBuildStats {
     public int CommonNameEnUnusable;
     public int CommonNameEnFromRules;
     public int SynonymsBuiltFromFullName;
+    /// Synonym items named by the taxa's Wikidata items (P1420), and how many of them the cache has a name for.
+    public int WikidataSynonymItems;
+    public int WikidataSynonymsNamed;
+    /// CoL synonyms given their authorship from the CoL database.
+    public int ColSynonymAuthorities;
+    /// Assessments the IUCN API answered 404 for.
+    public int AssessmentsApiNotFound;
 
     public int EnwikiTitles;
     /// Wikidata items for assessments (wikidata_iucn_assessment_items): which were kept, and the

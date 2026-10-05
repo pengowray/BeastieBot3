@@ -155,7 +155,7 @@ public sealed class SiteQueries {
                    possibly_extinct_in_the_wild, criteria, criteria_version, year_published,
                    assessment_date, population_trend, citation_json, replaced_by_assessment_id,
                    wikidata_item_qid, wikidata_item_properties, wikidata_item_titles, wikidata_item_label_en, wikidata_item_assessment_id,
-                   population_size
+                   population_size, api_not_found
             FROM assessment
             WHERE taxon_id = @id
             ORDER BY year_published DESC, assessment_date DESC, assessment_id DESC
@@ -184,7 +184,8 @@ public sealed class SiteQueries {
                 Text(reader, 16),
                 Text(reader, 17),
                 Long(reader, 18),
-                Text(reader, 19)));
+                Text(reader, 19),
+                reader.GetInt64(20) != 0));
         }
         return rows;
     }
@@ -193,7 +194,7 @@ public sealed class SiteQueries {
         using var connection = _db.OpenConnection();
         using var command = connection.CreateCommand();
         command.CommandText = """
-            SELECT name_id, name, name_type, language, source, is_preferred
+            SELECT name_id, name, name_type, language, source, is_preferred, authority
             FROM name
             WHERE taxon_id = @id
             ORDER BY is_preferred DESC, name_id
@@ -208,7 +209,8 @@ public sealed class SiteQueries {
                 reader.GetString(2),
                 Text(reader, 3),
                 reader.GetString(4),
-                reader.GetInt64(5) != 0));
+                reader.GetInt64(5) != 0,
+                Text(reader, 6)));
         }
         return rows;
     }

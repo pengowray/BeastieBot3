@@ -41,7 +41,7 @@ public sealed class SiteTaxonLinksTests : IDisposable {
         Kind = SiteTaxonKind.Species,
         Kingdom = kingdom,
         InRelease = inRelease,
-        IucnSynonyms = synonyms.ToList(),
+        IucnSynonyms = synonyms.Select(s => new SiteSynonym(s)).ToList(),
     };
 
     [Fact]

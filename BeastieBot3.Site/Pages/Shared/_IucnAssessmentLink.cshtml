@@ -1,0 +1,2 @@
+@model AssessmentRow
+<a href="@SiteFormat.IucnAssessmentUrl(Model.TaxonId, Model.AssessmentId)">@SiteText.IucnSiteLink</a>@if (Model.ApiNotFound) {<text> </text><span class="version-note">@SiteText.ApiNotFoundNote</span>}
