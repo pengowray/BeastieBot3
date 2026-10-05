@@ -103,6 +103,13 @@ public sealed record SearchHit(
     string? MatchedLanguage,
     bool IsExactMatch);
 
+/// A taxon found by an IUCN id in the search text. AssessmentId is set when the id was an
+/// assessment's; then Scope and YearPublished are that assessment's, and IsDefault says whether it
+/// is the one the taxon's page shows first (its latest global assessment).
+public sealed record IdHit(TaxonSummary Taxon, long? AssessmentId, string? Scope, int? YearPublished, bool IsDefault) {
+    public bool IsAssessment => AssessmentId is not null;
+}
+
 public sealed record SearchResult(IReadOnlyList<SearchHit> Hits, long TotalTaxa) {
     public static readonly SearchResult Empty = new([], 0);
 }

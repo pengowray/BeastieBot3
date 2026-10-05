@@ -35,7 +35,14 @@ public sealed record BadgeModel(CategoryDisplay Category, bool Large = false, bo
 
 /// One taxon in a list of results (search, name lookup) or of child taxa, with a note saying which
 /// of its names matched when that is not its scientific or displayed common name.
-public sealed record TaxonListItem(TaxonSummary Taxon, string? MatchNoteLabel = null, string? MatchedNameHtml = null) {
+/// Url: where the name links, when not the taxon page (an assessment found by its id links the page
+/// with that assessment shown).
+public sealed record TaxonListItem(TaxonSummary Taxon, string? MatchNoteLabel = null, string? MatchedNameHtml = null, string? Url = null) {
+    public static TaxonListItem FromIdHit(IdHit hit) => hit.AssessmentId is { } aid
+        ? new TaxonListItem(hit.Taxon, SiteText.MatchAssessmentIdLabel,
+            SiteHtml.Encode(SiteText.MatchAssessmentId(aid, hit.Scope, hit.YearPublished)), SearchModel.SpeciesUrl(hit))
+        : new TaxonListItem(hit.Taxon, SiteText.MatchTaxonIdLabel, SiteHtml.Encode(hit.Taxon.TaxonId.ToString(System.Globalization.CultureInfo.InvariantCulture)));
+
     public static TaxonListItem FromHit(SearchHit hit) {
         var taxon = hit.Taxon;
         switch (hit.MatchedNameType) {

@@ -268,4 +268,45 @@ public sealed class HomeAndSearchTests(SiteFactory factory) : IClassFixture<Site
         Assert.DoesNotContain("<script>alert(1)</script>", html);
         Assert.Contains("&lt;script&gt;", html);
     }
+
+    [Theory]
+    [InlineData("T22823")]
+    [InlineData("22823")]
+    [InlineData("e.T22823A14871490")]
+    [InlineData("A14871490")]
+    [InlineData("https://doi.org/10.2305/IUCN.UK.2015-4.RLTS.T22823A14871490.en")]
+    public async Task AnIdOfTheTaxonOrItsLatestAssessmentRedirectsToTheTaxonPage(string q) {
+        var response = await _client.GetAsync("/search?q=" + Uri.EscapeDataString(q));
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+        Assert.Equal($"/species/{FixtureDb.PolarBear}", response.Headers.Location?.OriginalString);
+    }
+
+    [Fact]
+    public async Task AnEarlierAssessmentIdRedirectsWithThatAssessmentShown() {
+        var response = await _client.GetAsync($"/search?q=e.T{FixtureDb.PolarBear}A{FixtureDb.PolarBear2008}");
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+        Assert.Equal($"/species/{FixtureDb.PolarBear}?assessment={FixtureDb.PolarBear2008}#wikitext", response.Headers.Location?.OriginalString);
+    }
+
+    [Fact]
+    public async Task AnAssessmentIdNotOnTheSiteListsTheTaxonWithANote() {
+        var response = await _client.GetAsync($"/search?q=T{FixtureDb.PolarBear}A999999999");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var text = Html.Text(await response.Content.ReadAsStringAsync());
+        Assert.Contains("No assessment with IUCN assessment ID 999999999", text);
+        Assert.Contains($"Matched IUCN taxon ID: {FixtureDb.PolarBear}", text);
+    }
+
+    [Fact]
+    public async Task AllResultsListsAnAssessmentIdMatch() {
+        var html = await _client.GetStringAsync($"/search?q=A{FixtureDb.PolarBear2008}&all=1");
+        Assert.Contains($"Matched IUCN assessment ID: {FixtureDb.PolarBear2008} (Global, 2008)", Html.Text(html));
+        Assert.Contains($"href=\"/species/{FixtureDb.PolarBear}?assessment={FixtureDb.PolarBear2008}#wikitext\"", html);
+    }
+
+    [Fact]
+    public async Task SuggestFindsATaxonById() {
+        var json = await _client.GetStringAsync($"/api/suggest?q=T{FixtureDb.PolarBear}");
+        Assert.Contains($"\"taxonId\":{FixtureDb.PolarBear}", json);
+    }
 }

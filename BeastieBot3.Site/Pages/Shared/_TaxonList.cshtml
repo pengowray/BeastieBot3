@@ -15,7 +15,7 @@
                 }
             </div>
             <div class="taxon-list-name">
-                <a href="/species/@taxon.TaxonId">@Html.Raw(ScientificNameMarkup.ToHtml(taxon.ScientificName, taxon.SubpopulationName))</a>
+                <a href="@(item.Url ?? $"/species/{taxon.TaxonId}")">@Html.Raw(ScientificNameMarkup.ToHtml(taxon.ScientificName, taxon.SubpopulationName))</a>
                 @if (taxon.CommonNameEn is not null) {
                     <span class="common-name">@taxon.CommonNameEn</span>
                 }

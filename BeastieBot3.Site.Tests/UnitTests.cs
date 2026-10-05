@@ -542,3 +542,30 @@ public sealed class SiteUrlsTests {
     public void Absolute(string? baseUrl, string scheme, string host, string expected) =>
         Assert.Equal(expected, SiteUrls.Absolute(baseUrl, Request(scheme, host), "/species/1"));
 }
+
+public sealed class IdQueryTests {
+    [Theory]
+    [InlineData("e.T22823A14871490", 22823L, 14871490L, null)]
+    [InlineData("T22823A14871490", 22823L, 14871490L, null)]
+    [InlineData("t22823a14871490", 22823L, 14871490L, null)]
+    [InlineData("e.T22823A14871490.en.", 22823L, 14871490L, null)]
+    [InlineData("T22823", 22823L, null, null)]
+    [InlineData("A14871490", null, 14871490L, null)]
+    [InlineData(" 22823 ", null, null, 22823L)]
+    [InlineData("10.2305/IUCN.UK.2015-4.RLTS.T22823A14871490.en", 22823L, 14871490L, null)]
+    [InlineData("https://doi.org/10.2305/IUCN.UK.2015-4.RLTS.T22823A14871490.en", 22823L, 14871490L, null)]
+    [InlineData("doi:10.2305/IUCN.UK.2008.RLTS.T22823A9390963.en", 22823L, 9390963L, null)]
+    [InlineData("https://www.iucnredlist.org/species/22823/14871490", 22823L, 14871490L, null)]
+    [InlineData("iucnredlist.org/species/22823", 22823L, null, null)]
+    public void ReadsTheIds(string text, long? taxonId, long? assessmentId, long? number) =>
+        Assert.Equal(new IdQuery(taxonId, assessmentId, number), IdQuery.Parse(text));
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("Ursus maritimus")]
+    [InlineData("T22823 maritimus")]
+    [InlineData("0")]
+    [InlineData("1234567890123456789012")]
+    [InlineData("10.1234/some.other.doi")]
+    public void IsNullForOtherText(string text) => Assert.Null(IdQuery.Parse(text));
+}

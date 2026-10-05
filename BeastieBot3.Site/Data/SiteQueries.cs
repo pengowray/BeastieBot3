@@ -233,6 +233,48 @@ public sealed class SiteQueries {
         return rows;
     }
 
+    /// The taxa an IdQuery names, taxon id first, then assessment id. A taxon id and an assessment id
+    /// given together (from a DOI or "T22823A14871490") give the assessment only, when it exists.
+    public IReadOnlyList<IdHit> FindByIds(IdQuery query) {
+        using var connection = _db.OpenConnection();
+        var hits = new List<IdHit>();
+        var assessmentId = query.AssessmentId ?? query.Number;
+        IdHit? assessmentHit = null;
+        if (assessmentId is { } aid) {
+            using var command = connection.CreateCommand();
+            command.CommandText = $"""
+                SELECT {SummaryColumns}, s.scope, s.year_published, t.latest_global_assessment_id
+                FROM assessment s
+                JOIN taxon t ON t.taxon_id = s.taxon_id
+                {SummaryJoin}
+                WHERE s.assessment_id = @id
+                """;
+            command.Parameters.AddWithValue("@id", aid);
+            using var reader = command.ExecuteReader();
+            if (reader.Read()) {
+                const int next = SummaryColumnCount;
+                var latest = Long(reader, next + 2);
+                assessmentHit = new IdHit(SummaryAt(reader, 0), aid, reader.GetString(next),
+                    reader.IsDBNull(next + 1) ? null : reader.GetInt32(next + 1), latest == aid);
+            }
+        }
+        var taxonId = query.TaxonId ?? query.Number;
+        var skipTaxon = query.TaxonId is not null && query.AssessmentId is not null && assessmentHit is not null;
+        if (taxonId is { } tid && !skipTaxon) {
+            using var command = connection.CreateCommand();
+            command.CommandText = $"SELECT {SummaryColumns} FROM taxon t {SummaryJoin} WHERE t.taxon_id = @id";
+            command.Parameters.AddWithValue("@id", tid);
+            using var reader = command.ExecuteReader();
+            if (reader.Read()) {
+                hits.Add(new IdHit(SummaryAt(reader, 0), null, null, null, true));
+            }
+        }
+        if (assessmentHit is not null) {
+            hits.Add(assessmentHit);
+        }
+        return hits;
+    }
+
     /// The name type ("scientific", "common", "synonym") by which the text names this taxon, best
     /// first; null when it does not name it at all.
     public string? NameTypeFor(long taxonId, string text) {

@@ -23,6 +23,10 @@ public static class SiteEndpoints {
             context.Response.Headers.CacheControl = "public, max-age=300";
             context.Response.Headers["X-Robots-Tag"] = "noindex";
             var text = QueryText(context.Request);
+            if (IdQuery.Parse(text) is { } ids && queries.FindByIds(ids) is { Count: > 0 } idHits) {
+                return Results.Json(idHits.Select(h => h.Taxon).DistinctBy(t => t.TaxonId)
+                    .Select(t => new Suggestion(t.TaxonId, t.ScientificName, t.CommonNameEn, SuggestCode(t))));
+            }
             if (FtsQuery.IsTooShort(text)) {
                 return Results.Json(Array.Empty<Suggestion>());
             }

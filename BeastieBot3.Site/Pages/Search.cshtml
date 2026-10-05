@@ -37,6 +37,9 @@
     @if (Model.Items.Count == 0 && Model.Groups.Count == 0) {
         <p class="message">@SiteText.NoResults(Model.Query)</p>
     } else if (Model.Items.Count > 0) {
+        @if (Model.MissingAssessmentId is { } missing) {
+            <p class="message">@SiteText.AssessmentIdNotFound(missing)</p>
+        }
         <p class="result-count">@(Model.TotalTaxa > Model.Items.Count
             ? SiteText.SearchTruncated(Model.Items.Count, Model.TotalTaxa)
             : SiteText.SearchCount(Model.Items.Count))</p>

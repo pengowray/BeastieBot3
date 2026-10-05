@@ -1,3 +1,4 @@
+using System.Globalization;
 using BeastieBot3.Shared.Wikitext;
 
 namespace BeastieBot3.Site.Display;
@@ -44,6 +45,16 @@ public static class SiteText {
         $"Showing the first {shown} of {SiteFormat.Number(n)} taxa. Type more of the name to narrow the search.";
     public const string MatchSynonymLabel = "Matched synonym:";
     public const string MatchCommonNameLabel = "Matched common name:";
+    public const string MatchTaxonIdLabel = "Matched IUCN taxon ID:";
+    public const string MatchAssessmentIdLabel = "Matched IUCN assessment ID:";
+    /// "14871490 (Global, 2016)".
+    public static string MatchAssessmentId(long assessmentId, string? scope, int? year) {
+        var details = string.Join(", ", new[] { scope, year?.ToString(CultureInfo.InvariantCulture) }.Where(p => !string.IsNullOrEmpty(p)));
+        var id = assessmentId.ToString(CultureInfo.InvariantCulture);
+        return details.Length == 0 ? id : $"{id} ({details})";
+    }
+    public static string AssessmentIdNotFound(long assessmentId) =>
+        $"No assessment with IUCN assessment ID {assessmentId.ToString(CultureInfo.InvariantCulture)} on this site. The taxon ID in your search matched:";
     public static string NoResults(string query) =>
         $"No taxa found for “{query}”. Check the spelling, or search for the scientific name. If the spelling is right, the taxon may not be on the IUCN Red List.";
     public const string TooShort = "Search term too short. Enter at least 2 letters or digits.";
