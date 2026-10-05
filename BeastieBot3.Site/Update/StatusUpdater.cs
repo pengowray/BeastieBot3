@@ -47,12 +47,14 @@ public sealed partial class StatusUpdater {
     // a common name), or a common name that would have found it. Set by ResolveNames; Update adds it
     // to the item's notes, so every finding of the item has it, whichever way it ends.
     private StatusNote? _nameNote;
+    private readonly StatusTaxonResolver _resolver;
 
     public StatusUpdater(IStatusLookup lookup, DateOnly today, int maxItems = DefaultMaxItems, StatusUpdateOptions? options = null) {
         _lookup = lookup;
         _today = today;
         _maxItems = maxItems;
         _options = options ?? new StatusUpdateOptions();
+        _resolver = new StatusTaxonResolver(lookup, _options.MatchCommonNames);
     }
 
     private sealed record Edit(int Start, int End, string Replacement);
@@ -69,7 +71,7 @@ public sealed partial class StatusUpdater {
         _rowOf.Clear();
         _populations.Clear();
         _genusLines = null;
-        ReadNamedReferences(scanner);
+        _resolver.ReadReferences(scanner);
         var candidates = new List<Candidate>();
         // {{IUCN status}} templates inside a taxobox's status parameters belong to the taxobox.
         var claimed = new HashSet<WikiTemplate>();
@@ -581,90 +583,13 @@ public sealed partial class StatusUpdater {
 
     internal static bool IsScientificNameShape(string name) => NameShape().IsMatch(name);
 
-    // context: where to look for an IUCN citation of the taxon when no name matches (the status and
-    // its references); null for none.
-    // notEvaluated: the article gives the item NE. Such a taxon is often one IUCN has not split out
-    // yet ("Kruger serotine", described in 2026, is IUCN's English name for Neoromicia melckorum),
-    // so it is never found by a common name, which would give it another taxon's status.
+    // Finds the item's taxon by name (StatusTaxonResolver) and keeps how it was found for Update to
+    // add to the item's notes.
     private (StatusTaxon? Taxon, StatusNote? Failure) ResolveNames(IReadOnlyList<string> names, WikitextScanner? s = null,
         IReadOnlyList<TextSpan>? context = null, bool notEvaluated = false) {
-        if (names.Count == 0) {
-            return ByCitation(s, context, names) ?? (null, new StatusNote(StatusNoteKind.NoName));
-        }
-        foreach (var kind in new[] { StatusNameKind.Scientific, StatusNameKind.Synonym }) {
-            var ids = new HashSet<long>();
-            string? matched = null;
-            foreach (var name in names) {
-                foreach (var id in NameVariants(name).SelectMany(v => _lookup.InReleaseTaxaWithName(v, kind))) {
-                    matched ??= name;
-                    ids.Add(id);
-                }
-            }
-            if (ids.Count == 1) {
-                if (kind == StatusNameKind.Synonym) {
-                    _nameNote = new StatusNote(StatusNoteKind.MatchedBySynonym, matched);
-                }
-                return (_lookup.GetTaxon(ids.First()), null);
-            }
-            if (ids.Count > 1) {
-                // The row's own IUCN citation can say which of them it is.
-                if (ByCitation(s, context, names) is { Taxon: { } settled } && ids.Contains(settled.TaxonId)) {
-                    return (settled, null);
-                }
-                _nameNote = null;
-                return (null, new StatusNote(StatusNoteKind.NameAmbiguous, string.Join(", ", names), ids.Count));
-            }
-        }
-        if (ByCitation(s, context, names) is { } cited) {
-            return cited;
-        }
-        // An English common name is used only when it names one taxon, and only when asked for;
-        // otherwise the note says it would have found one.
-        foreach (var name in notEvaluated ? [] : names) {
-            var ids = _lookup.InReleaseTaxaWithName(name, StatusNameKind.EnglishCommonName);
-            if (ids.Count != 1) {
-                continue;
-            }
-            if (_options.MatchCommonNames) {
-                _nameNote = new StatusNote(StatusNoteKind.MatchedByCommonName, name);
-                return (_lookup.GetTaxon(ids.First()), null);
-            }
-            _nameNote = new StatusNote(StatusNoteKind.CommonNameNotUsed, name);
-            break;
-        }
-        return (null, new StatusNote(StatusNoteKind.NameNotFound, string.Join(", ", names)));
-    }
-
-    // The one taxon the IUCN citations in the item's row or line name, when no name matched. Null
-    // when there is no context, or the citations name no taxon or more than one.
-    private (StatusTaxon? Taxon, StatusNote? Failure)? ByCitation(WikitextScanner? s, IReadOnlyList<TextSpan>? context, IReadOnlyList<string> names) {
-        if (s is null || context is null) {
-            return null;
-        }
-        var (ids, refName) = CitedTaxa(s, context);
-        if (ids.Count != 1) {
-            return null;
-        }
-        _nameNote = new StatusNote(StatusNoteKind.MatchedByCitation, refName);
-        return (_lookup.GetTaxon(ids.First()), null);
-    }
-
-    // IUCN writes a subspecies "Panthera tigris ssp. sumatrae" (animals) or "subsp." (plants) and a
-    // variety "var.": a trinomial is also tried with each marker, and a marker with the other ones.
-    internal static IEnumerable<string> NameVariants(string name) {
-        yield return name;
-        var words = name.Split(' ');
-        string[] markers = ["ssp.", "subsp.", "var."];
-        if (words.Length == 3) {
-            foreach (var marker in markers) {
-                yield return $"{words[0]} {words[1]} {marker} {words[2]}";
-            }
-        } else if (words.Length == 4 && markers.Contains(words[2])) {
-            yield return $"{words[0]} {words[1]} {words[3]}";
-            foreach (var marker in markers.Where(m => m != words[2])) {
-                yield return $"{words[0]} {words[1]} {marker} {words[3]}";
-            }
-        }
+        var match = _resolver.Resolve(names, s, context, notEvaluated);
+        _nameNote = match.HowFound;
+        return (match.Taxon, match.Failure);
     }
 
     // ---------------------------------------------------------------- edits
@@ -729,8 +654,7 @@ public sealed partial class StatusUpdater {
     [GeneratedRegex(@"^<ref\s+name\s*=\s*[""']?(?<name>[^""'/>]+)[""']?\s*/>$", RegexOptions.IgnoreCase)]
     private static partial Regex NamedRefReuse();
 
-    [GeneratedRegex(@"T(?<t>\d+)A(?<a>\d+)|/species/(?<t>\d+)/(?<a>\d+)", RegexOptions.IgnoreCase)]
-    private static partial Regex AssessmentInText();
+    private static Regex AssessmentInText() => StatusTaxonResolver.AssessmentInText();
 
     [GeneratedRegex(@"\s*\([^()]*\)$")]
     private static partial Regex BracketedSuffix();

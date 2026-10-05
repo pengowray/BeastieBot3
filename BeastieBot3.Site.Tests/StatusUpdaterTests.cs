@@ -836,3 +836,37 @@ public sealed class StatusUpdaterTests {
     [InlineData("Panthera", null)]
     public void EditSummaryReadsTheCode(string text, string? code) => Assert.Equal(code, EditSummary.CodeIn(text));
 }
+
+public sealed class StatusTaxonResolverTests {
+    private static readonly FakeStatusLookup Lookup = new FakeStatusLookup()
+        .Taxon(500, "Ficus variegata", "LC", 2019, 5001)
+        .Taxon(501, "Ficus variegata", "NT", 2020, 5011)
+        .Taxon(15955, "Panthera tigris", "EN", 2022, 214862019)
+        .Synonym(15955, "Felis tigris")
+        .CommonName(15955, "Tiger");
+
+    [Fact]
+    public void ScientificNameFirstThenSynonymWithANote() {
+        var resolver = new StatusTaxonResolver(Lookup, matchCommonNames: false);
+        var byName = resolver.Resolve(["Panthera tigris"], null, null, false);
+        Assert.Equal((15955L, (StatusNote?)null), (byName.Taxon!.TaxonId, byName.HowFound));
+        var bySynonym = resolver.Resolve(["Felis tigris"], null, null, false);
+        Assert.Equal(new StatusNote(StatusNoteKind.MatchedBySynonym, "Felis tigris"), bySynonym.HowFound);
+    }
+
+    [Fact]
+    public void AnAmbiguousNameWithNoCitationFails() {
+        var match = new StatusTaxonResolver(Lookup, matchCommonNames: true).Resolve(["Ficus variegata"], null, null, false);
+        Assert.Null(match.Taxon);
+        Assert.Equal(StatusNoteKind.NameAmbiguous, match.Failure!.Kind);
+        Assert.Null(match.HowFound);
+    }
+
+    [Fact]
+    public void ACommonNameIsOfferedWhenNotAskedFor() {
+        var match = new StatusTaxonResolver(Lookup, matchCommonNames: false).Resolve(["Tiger"], null, null, false);
+        Assert.Null(match.Taxon);
+        Assert.Equal(new StatusNote(StatusNoteKind.CommonNameNotUsed, "Tiger"), match.HowFound);
+        Assert.Null(new StatusTaxonResolver(Lookup, matchCommonNames: true).Resolve(["Tiger"], null, null, notEvaluated: true).Taxon);
+    }
+}

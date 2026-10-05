@@ -1070,7 +1070,7 @@ statuses changed to match the latest global assessments, and a report with one r
 result, item, text before and after, taxon, notes). Strings are in `Display/UpdateText.cs`; the
 logic is pure, in `Update/` (`WikitextScanner` masks comments, nowiki, pre, syntaxhighlight, source
 and math, and finds templates by counting braces; `WikiTables` reads wikitables line by line with
-colspan and rowspan; `StatusUpdater` decides the edits), and reads the database through
+colspan and rowspan; `StatusUpdater` decides the edits, and `StatusTaxonResolver` finds each item's taxon by name, synonym, IUCN citation or common name), and reads the database through
 `IStatusLookup` (`Data/SiteStatusLookup.cs`), so `StatusUpdaterTests` run over a fake.
 
 - `{{IUCN status}}` with a taxon id: the code (`IucnStatusTemplate.ToTemplateCode`), the ids, and

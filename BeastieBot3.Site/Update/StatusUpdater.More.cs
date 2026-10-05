@@ -119,68 +119,6 @@ public sealed partial class StatusUpdater {
         return new TextSpan(template.Span.Start, end < 0 ? s.Text.Length : end);
     }
 
-    // ---------------------------------------------------------------- IUCN citations near an item
-
-    // The taxon ids in the IUCN citations each named reference cites ("T44853A22072238" in
-    // <ref name="IUCNBroad-headedserotine">{{cite iucn |article-number=e.T44853A22072238 ...}}</ref>).
-    // Filled by Update.
-    private readonly Dictionary<string, HashSet<long>> _refTaxa = new(StringComparer.Ordinal);
-
-    private void ReadNamedReferences(WikitextScanner s) {
-        _refTaxa.Clear();
-        foreach (Match m in RefDefinition().Matches(s.Masked)) {
-            var name = m.Groups["name"].Value.Trim();
-            foreach (Match id in AssessmentInText().Matches(m.Groups["body"].Value)) {
-                if (long.TryParse(id.Groups["t"].Value, out var taxonId)) {
-                    if (!_refTaxa.TryGetValue(name, out var ids)) {
-                        _refTaxa[name] = ids = [];
-                    }
-                    ids.Add(taxonId);
-                }
-            }
-        }
-    }
-
-    // The taxa in the release that the IUCN citations in the spans name, directly ({{cite iucn}} in
-    // the span) or through a named reference used in the span (<ref name="X"/>). A taxon id not in
-    // the release counts as its current taxon. Detail: the reference name, or null for a citation
-    // written in the span.
-    private (HashSet<long> TaxonIds, string? RefName) CitedTaxa(WikitextScanner s, IEnumerable<TextSpan> spans) {
-        var ids = new HashSet<long>();
-        string? refName = null;
-        foreach (var span in spans) {
-            var text = s.Masked[span.Start..span.End];
-            foreach (Match id in AssessmentInText().Matches(text)) {
-                if (long.TryParse(id.Groups["t"].Value, out var taxonId)) {
-                    ids.Add(taxonId);
-                }
-            }
-            foreach (Match use in RefUse().Matches(text)) {
-                var name = use.Groups["name"].Value.Trim();
-                if (_refTaxa.TryGetValue(name, out var cited)) {
-                    ids.UnionWith(cited);
-                    refName ??= name;
-                }
-            }
-        }
-        var inRelease = new HashSet<long>();
-        foreach (var id in ids) {
-            var taxon = _lookup.GetTaxon(id);
-            if (taxon is { InRelease: true }) {
-                inRelease.Add(id);
-            } else if (taxon?.CurrentTaxonId is { } current) {
-                inRelease.Add(current);
-            }
-        }
-        return (inRelease, refName);
-    }
-
-    [GeneratedRegex(@"<ref\s+name\s*=\s*[""']?(?<name>[^""'/>]+?)[""']?\s*>(?<body>.*?)</ref\s*>", RegexOptions.IgnoreCase | RegexOptions.Singleline)]
-    private static partial Regex RefDefinition();
-
-    [GeneratedRegex(@"<ref\s+name\s*=\s*[""']?(?<name>[^""'/>]+?)[""']?\s*/?>", RegexOptions.IgnoreCase)]
-    private static partial Regex RefUse();
-
     /// The text a link shows: "[[Caracal (genus)|Caracal]]" -> "Caracal"; then CleanName.
     internal static string LinkText(string text) =>
         CleanName(Link().Replace(text, l => l.Groups["label"].Success ? l.Groups["label"].Value : l.Groups["target"].Value));
