@@ -33,6 +33,23 @@ public sealed class UpdatePageTests(SiteFactory factory) : IClassFixture<SiteFac
     }
 
     [Fact]
+    public async Task TheResultBoxHasAFixedHeightAndTheReportShowsChangedItemsFirst() {
+        var input = "* [[Polar bear]] {{IUCN status|EN|22823/13045100|1|year=2008}}\n* {{IUCN status|VU|22823/14871490|1|year=2015}}\n";
+        var (_, html) = await Post(input);
+        Assert.Contains("class=\"update-output\" readonly", html);
+        Assert.Contains("Updated wikitext (read only)", html);
+        Assert.Contains("<input type=\"radio\" name=\"show\" id=\"show-changed\" checked=\"checked\"> Changed (1)", html);
+        Assert.Contains("id=\"show-left\"> Left as is (0)", html);
+        Assert.Contains("id=\"show-all\"> All items (2)", html);
+    }
+
+    [Fact]
+    public async Task WithNothingChangedTheReportShowsTheItemsLeftAsIs() {
+        var (_, html) = await Post("* {{IUCN status|VU|999999/1|1}}\n");
+        Assert.Contains("id=\"show-left\" checked=\"checked\">", html);
+    }
+
+    [Fact]
     public async Task PageIsLinkedFromTheNavigationAndHome() {
         var home = await (await _client.GetAsync("/")).Content.ReadAsStringAsync();
         Assert.Contains("<a href=\"/update\">Update wikitext</a>", home);
@@ -175,4 +192,5 @@ public sealed class UpdateRateLimitTests(RateLimitedSiteFactory factory) : IClas
         // The form itself is a page and is counted with the pages.
         Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/update")).StatusCode);
     }
+
 }

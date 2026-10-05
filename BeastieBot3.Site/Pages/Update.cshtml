@@ -49,6 +49,9 @@
             if (!Model.Options.AddYear && result.CountNotes(StatusNoteKind.YearNotAdded) is > 0 and var years) {
                 offers.Add((years, UpdateText.OfferYear(years), UpdateModel.YearField, UpdateText.OfferYearButton));
             }
+            if (!Model.Options.MatchCommonNames && result.CountNotes(StatusNoteKind.CommonNameNotUsed) is > 0 and var commons) {
+                offers.Add((commons, UpdateText.OfferCommonNames(commons), UpdateModel.CommonNamesField, UpdateText.OfferCommonNamesButton));
+            }
             if (!Model.Options.UpdateCitations && result.CountNotes(StatusNoteKind.CitationOlder) is > 0 and var cites) {
                 offers.Add((cites, UpdateText.OfferCitations(cites), UpdateModel.CitationsField, UpdateText.OfferCitationsButton));
             }
@@ -67,11 +70,23 @@
                 <button type="button" class="copy-button" data-copy="update-output" aria-label="@UpdateText.CopyOutputAccessible" hidden>@SiteText.Copy</button>
                 <p class="copy-status" role="status" aria-live="polite"></p>
             </div>
-            <textarea id="update-output" readonly rows="16" spellcheck="false" autocapitalize="off" autocomplete="off">@("\n" + result.Text)</textarea>
+            <textarea id="update-output" class="update-output" readonly rows="16" spellcheck="false" autocapitalize="off" autocomplete="off">@("\n" + result.Text)</textarea>
         </div>
 
         @if (result.Findings.Count > 0) {
+            var changedCount = result.Findings.Count(f => f.Outcome == StatusOutcome.Updated);
+            var leftCount = result.Findings.Count(f => f.Outcome == StatusOutcome.NotUpdated);
+            var show = changedCount > 0 ? "changed" : leftCount > 0 ? "left" : "all";
+            <div class="update-findings">
             <h3 id="report-heading">@UpdateText.ReportHeading</h3>
+            @* The rows are filtered by CSS (:has), so the choice works without JavaScript and keeps
+               no state; a browser without :has shows every row. *@
+            <fieldset class="update-filter">
+                <legend>@UpdateText.FilterLegend</legend>
+                <label><input type="radio" name="show" id="show-changed" checked="@(show == "changed")"> @UpdateText.FilterChanged(changedCount)</label>
+                <label><input type="radio" name="show" id="show-left" checked="@(show == "left")"> @UpdateText.FilterLeft(leftCount)</label>
+                <label><input type="radio" name="show" id="show-all" checked="@(show == "all")"> @UpdateText.FilterAll(result.Findings.Count)</label>
+            </fieldset>
             <div class="table-scroll">
                 <table class="update-report" aria-labelledby="report-heading">
                     <thead>
@@ -103,6 +118,7 @@
                         }
                     </tbody>
                 </table>
+            </div>
             </div>
         }
 
@@ -147,6 +163,7 @@
         <label><input type="checkbox" name="@UpdateModel.IdsField" value="1" checked="@Model.Options.AddIds"> @UpdateText.OptionIds</label>
         <label><input type="checkbox" name="@UpdateModel.YearField" value="1" checked="@Model.Options.AddYear"> @UpdateText.OptionYear</label>
         <label><input type="checkbox" name="@UpdateModel.CitationsField" value="1" checked="@Model.Options.UpdateCitations"> @UpdateText.OptionCitations</label>
+        <label><input type="checkbox" name="@UpdateModel.CommonNamesField" value="1" checked="@Model.Options.MatchCommonNames"> @UpdateText.OptionCommonNames</label>
     </fieldset>
     <div class="update-actions">
         <button type="submit">@UpdateText.Submit</button>

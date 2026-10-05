@@ -46,6 +46,7 @@ public static class UpdateText {
     public const string OptionIds = "Add the taxon id and assessment id to {{IUCN status}} templates that lack them";
     public const string OptionYear = "Add year= to {{IUCN status}} templates that have no year";
     public const string OptionCitations = "Replace {{cite iucn}} citations of older assessments with citations of the latest ones";
+    public const string OptionCommonNames = "Find a taxon by its English common name when no scientific name in the row or line is one IUCN uses";
 
     // Offers above the result, shown when an option that is off would change items.
     public static string OfferPossiblyExtinct(int n) =>
@@ -62,9 +63,13 @@ public static class UpdateText {
     public static string OfferCitations(int n) =>
         n == 1 ? "1 {{cite iucn}} cites an older assessment." : $"{Count(n)} {{{{cite iucn}}}} citations cite older assessments.";
     public const string OfferCitationsButton = "Replace citations";
+    public static string OfferCommonNames(int n) =>
+        n == 1 ? "1 item has no scientific name that IUCN uses, but has an English common name of one taxon."
+            : $"{Count(n)} items have no scientific name that IUCN uses, but have an English common name of one taxon.";
+    public const string OfferCommonNamesButton = "Match common names";
 
     public const string ResultHeading = "Result";
-    public const string OutputLabel = "Updated wikitext";
+    public const string OutputLabel = "Updated wikitext (read only)";
     public const string CopyOutputAccessible = "Copy updated wikitext";
     public const string NoChanges = "No items were changed. The updated wikitext is the same as the text you pasted.";
 
@@ -87,6 +92,10 @@ public static class UpdateText {
     public const string ErrorUnreadable = "Could not read the form. Reload the page and paste the text again.";
 
     public const string ReportHeading = "Items found";
+    public const string FilterLegend = "Show:";
+    public static string FilterChanged(int n) => $"Changed ({Count(n)})";
+    public static string FilterLeft(int n) => $"Left as is ({Count(n)})";
+    public static string FilterAll(int n) => $"All items ({Count(n)})";
     public const string ColumnLine = "Line";
     public const string ColumnResult = "Result";
     public const string ColumnItem = "Item";
@@ -165,6 +174,9 @@ public static class UpdateText {
             StatusNoteKind.NoGenus => $"The binomial {note.Detail} is abbreviated, and no {{{{Species table}}}} above it gives the genus.",
             StatusNoteKind.NoPopulationTrend => "direction not checked: the latest assessment has no population trend.",
             StatusNoteKind.DirectionNotRecognised => $"direction not changed: it has no population trend template, such as {{{{decrease}}}}. To show the latest assessment's population trend, use {note.Detail}.",
+            StatusNoteKind.MatchedBySynonym => $"Found by the synonym {note.Detail}. The Taxon column has IUCN's name.",
+            StatusNoteKind.MatchedByCommonName => $"Found by the English common name {note.Detail}. The Taxon column has IUCN's name.",
+            StatusNoteKind.CommonNameNotUsed => $"The English common name {note.Detail} names one taxon. Not used: select Match common names above the result.",
             _ => note.Kind.ToString(),
         };
     }

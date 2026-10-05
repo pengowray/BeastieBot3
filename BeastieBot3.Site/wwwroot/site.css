@@ -14,6 +14,9 @@
     --focus: #1d5fd1;
     --grey-badge: #5c5c5c;
     --shown-bg: #eaf1fb;
+    /* The read-only result box of the status update page, unlike the box text is pasted into. */
+    --output-bg: #eef6ee;
+    --output-border: #5f8a64;
     --badge-ring: transparent;
     /* Borders of form controls: at least 3:1 against --bg and --code-bg. */
     --control-border: #767c84;
@@ -50,6 +53,8 @@
         --focus: #8db7f7;
         --grey-badge: #a6a6a6;
         --shown-bg: #1c2a3d;
+        --output-bg: #17241b;
+        --output-border: #6f9a74;
         --badge-ring: rgba(255, 255, 255, 0.35);
         --control-border: #6f7882;
         --id-tint-1: #1a2840;
@@ -82,6 +87,8 @@
     --focus: #8db7f7;
     --grey-badge: #a6a6a6;
     --shown-bg: #1c2a3d;
+    --output-bg: #17241b;
+    --output-border: #6f9a74;
     --badge-ring: rgba(255, 255, 255, 0.35);
     --control-border: #6f7882;
     --id-tint-1: #1a2840;
@@ -1190,8 +1197,35 @@ th.num {
     font-size: 1.05rem;
 }
 
-.update-result .wikitext-box textarea {
-    min-height: 14rem;
+/* The updated wikitext keeps a fixed height and scrolls, so the report below it is in reach. */
+.update-result .wikitext-box textarea.update-output {
+    height: 24rem;
+    max-height: 70vh;
+    background: var(--output-bg);
+    border: 1px dashed var(--output-border);
+    border-left: 4px solid var(--output-border);
+}
+
+.update-filter {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.3rem 1rem;
+    border: 0;
+    padding: 0;
+    margin: 0.5rem 0;
+}
+
+.update-filter legend {
+    float: left;
+    font-weight: 600;
+    padding: 0;
+    margin-right: 0.25rem;
+}
+
+.update-findings:has(#show-changed:checked) .update-report tbody tr:not(.outcome-updated),
+.update-findings:has(#show-left:checked) .update-report tbody tr:not(.outcome-not-updated) {
+    display: none;
 }
 
 .update-report {

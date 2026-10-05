@@ -9,7 +9,7 @@ namespace BeastieBot3.Site.Data;
 public sealed class SiteStatusLookup : IStatusLookup, IDisposable {
     private readonly SqliteConnection _connection;
     private readonly Dictionary<long, StatusTaxon?> _taxa = [];
-    private readonly Dictionary<(string, bool), IReadOnlyCollection<long>> _names = [];
+    private readonly Dictionary<(string, StatusNameKind), IReadOnlyCollection<long>> _names = [];
     private readonly Dictionary<long, string?> _scopes = [];
 
     internal SiteStatusLookup(SqliteConnection connection) {
@@ -57,12 +57,12 @@ public sealed class SiteStatusLookup : IStatusLookup, IDisposable {
         return taxon;
     }
 
-    public IReadOnlyCollection<long> InReleaseTaxaWithName(string name, bool synonyms) {
+    public IReadOnlyCollection<long> InReleaseTaxaWithName(string name, StatusNameKind kind) {
         var key = SiteNameKey.Fold(name);
         if (key.Length == 0) {
             return [];
         }
-        if (_names.TryGetValue((key, synonyms), out var known)) {
+        if (_names.TryGetValue((key, kind), out var known)) {
             return known;
         }
         using var command = _connection.CreateCommand();
@@ -72,15 +72,20 @@ public sealed class SiteStatusLookup : IStatusLookup, IDisposable {
             JOIN name n ON n.name_id = k.name_id
             JOIN taxon t ON t.taxon_id = k.taxon_id
             WHERE k.key = @key AND n.name_type = @type AND t.in_release = 1
+              AND (@type <> 'common' OR n.language = 'en')
             """;
         command.Parameters.AddWithValue("@key", key);
-        command.Parameters.AddWithValue("@type", synonyms ? NameTypes.Synonym : NameTypes.Scientific);
+        command.Parameters.AddWithValue("@type", kind switch {
+            StatusNameKind.Synonym => NameTypes.Synonym,
+            StatusNameKind.EnglishCommonName => NameTypes.Common,
+            _ => NameTypes.Scientific,
+        });
         using var reader = command.ExecuteReader();
         var ids = new List<long>();
         while (reader.Read()) {
             ids.Add(reader.GetInt64(0));
         }
-        _names[(key, synonyms)] = ids;
+        _names[(key, kind)] = ids;
         return ids;
     }
 

@@ -8,7 +8,7 @@ namespace BeastieBot3.Site.Tests;
 /// A site database in memory for the status updater.
 internal sealed class FakeStatusLookup : IStatusLookup {
     private readonly Dictionary<long, StatusTaxon> _taxa = [];
-    private readonly List<(string Key, long TaxonId, bool Synonym)> _names = [];
+    private readonly List<(string Key, long TaxonId, StatusNameKind Kind)> _names = [];
 
     public FakeStatusLookup Taxon(long id, string name, string? category, int? year = null, long? assessmentId = null,
         bool inRelease = true, long? current = null, bool pe = false, string? criteriaVersion = "3.1", string? citationJson = null, string? trend = null,
@@ -17,13 +17,18 @@ internal sealed class FakeStatusLookup : IStatusLookup {
             null, criteriaVersion, year, null, trend, citationJson, PopulationSize: populationSize);
         _taxa[id] = new StatusTaxon(id, name, inRelease, current, inRelease ? latest : null);
         if (inRelease) {
-            _names.Add((SiteNameKey.Fold(name), id, false));
+            _names.Add((SiteNameKey.Fold(name), id, StatusNameKind.Scientific));
         }
         return this;
     }
 
     public FakeStatusLookup Synonym(long id, string name) {
-        _names.Add((SiteNameKey.Fold(name), id, true));
+        _names.Add((SiteNameKey.Fold(name), id, StatusNameKind.Synonym));
+        return this;
+    }
+
+    public FakeStatusLookup CommonName(long id, string name) {
+        _names.Add((SiteNameKey.Fold(name), id, StatusNameKind.EnglishCommonName));
         return this;
     }
 
@@ -47,10 +52,10 @@ internal sealed class FakeStatusLookup : IStatusLookup {
         return _taxa.GetValueOrDefault(taxonId);
     }
 
-    public IReadOnlyCollection<long> InReleaseTaxaWithName(string name, bool synonyms) {
+    public IReadOnlyCollection<long> InReleaseTaxaWithName(string name, StatusNameKind kind) {
         Lookups++;
         var key = SiteNameKey.Fold(name);
-        return _names.Where(n => n.Key == key && n.Synonym == synonyms).Select(n => n.TaxonId).Distinct().ToList();
+        return _names.Where(n => n.Key == key && n.Kind == kind).Select(n => n.TaxonId).Distinct().ToList();
     }
 }
 
@@ -704,5 +709,40 @@ public sealed class StatusUpdaterTests {
     public void CitationOfTheLatestAssessmentIsCurrent() {
         var result = Run("{{cite iucn |year=2015 |article-number=e.T4828A21289898}}");
         Assert.Equal(StatusOutcome.Current, Assert.Single(result.Findings).Outcome);
+    }
+
+    // ---------------------------------------------------------------- matching by other names
+
+    [Fact]
+    public void ASynonymMatchSaysWhichSynonym() {
+        var result = Run("* ''Felis tigris'' {{IUCN status|VU}}\n");
+        var finding = Assert.Single(result.Findings);
+        Assert.Equal(15955, finding.Taxon!.TaxonId);
+        Assert.Equal(new StatusNote(StatusNoteKind.MatchedBySynonym, "Felis tigris"), finding.Notes[0]);
+    }
+
+    [Fact]
+    public void ACommonNameIsUsedOnlyWhenAsked() {
+        var lookup = Lookup().CommonName(4828, "Giant golden mole").CommonName(15955, "Tiger").CommonName(15966, "Tiger");
+        const string text = "{| class=\"wikitable\"\n! Name !! Status\n|-\n| ''Chrysospalax giganteus'', [[Giant golden mole]] || VU\n|}\n";
+
+        var off = Assert.Single(Run(text, lookup).Findings);
+        Assert.Equal(StatusOutcome.NotUpdated, off.Outcome);
+        Assert.Equal(new StatusNote(StatusNoteKind.CommonNameNotUsed, "Giant golden mole"), off.Notes[0]);
+        Assert.Equal(StatusNoteKind.NameNotFound, off.Notes[1].Kind);
+
+        var on = Assert.Single(Run(text, lookup, options: new StatusUpdateOptions { MatchCommonNames = true }).Findings);
+        Assert.Equal(StatusOutcome.Updated, on.Outcome);
+        Assert.Equal(4828, on.Taxon!.TaxonId);
+        Assert.Equal(new StatusNote(StatusNoteKind.MatchedByCommonName, "Giant golden mole"), on.Notes[0]);
+    }
+
+    [Fact]
+    public void ACommonNameOfTwoTaxaIsNotUsed() {
+        var lookup = Lookup().CommonName(15955, "Striped cat").CommonName(15966, "Striped cat");
+        var finding = Assert.Single(Run("* ''Tigris unknownus'', [[Striped cat]] {{IUCN status|VU}}\n", lookup,
+            options: new StatusUpdateOptions { MatchCommonNames = true }).Findings);
+        Assert.Equal(StatusOutcome.NotUpdated, finding.Outcome);
+        Assert.DoesNotContain(finding.Notes, n => n.Kind is StatusNoteKind.CommonNameNotUsed or StatusNoteKind.MatchedByCommonName);
     }
 }

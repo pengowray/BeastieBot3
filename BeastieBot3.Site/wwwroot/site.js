@@ -392,7 +392,8 @@
     // Wikitext boxes grow to fit their text, so nothing is hidden behind a scroll bar. root: the
     // element whose boxes to fit; the whole page when not given.
     function fitTextareas(root) {
-        (root || document).querySelectorAll(".wikitext-box textarea").forEach(function (box) {
+        // The status update page's result box keeps its fixed height (site.css).
+        (root || document).querySelectorAll(".wikitext-box textarea:not(.update-output)").forEach(function (box) {
             box.rows = 1;
             box.style.height = "auto";
             box.style.height = (box.scrollHeight + 2) + "px";

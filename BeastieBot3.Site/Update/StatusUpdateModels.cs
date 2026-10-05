@@ -10,13 +10,15 @@ public sealed record StatusTaxon(long TaxonId, string ScientificName, bool InRel
 public interface IStatusLookup {
     StatusTaxon? GetTaxon(long taxonId);
 
-    /// The taxa in the release that have this scientific name (synonyms: false) or this IUCN
-    /// synonym (synonyms: true), compared after SiteNameKey.Fold.
-    IReadOnlyCollection<long> InReleaseTaxaWithName(string name, bool synonyms);
+    /// The taxa in the release that have this name as a scientific name, a synonym (from any
+    /// source) or an English common name, compared after SiteNameKey.Fold.
+    IReadOnlyCollection<long> InReleaseTaxaWithName(string name, StatusNameKind kind);
 
     /// The scope of an assessment ("Global", "Europe"), or null when the site has no such assessment.
     string? AssessmentScope(long assessmentId);
 }
+
+public enum StatusNameKind { Scientific, Synonym, EnglishCommonName }
 
 /// Changes the reader asks for on top of the default ones. Each is off by default.
 public sealed record StatusUpdateOptions {
@@ -30,6 +32,9 @@ public sealed record StatusUpdateOptions {
     /// Replace {{cite iucn}} citations of an older global assessment, anywhere in the text, with a
     /// citation of the latest one. Those in a taxobox's status_ref are always replaced.
     public bool UpdateCitations { get; init; }
+    /// When no scientific name or synonym in a row or line names a taxon, use an English common name
+    /// in it that names exactly one taxon.
+    public bool MatchCommonNames { get; init; }
 }
 
 public enum StatusItemKind {
@@ -115,6 +120,13 @@ public enum StatusNoteKind {
     /// A species table row's direction has no trend template ({{decrease}} and so on), so it was left;
     /// Detail: the template for the latest trend.
     DirectionNotRecognised,
+    /// The taxon was found by a synonym (Detail), not by its scientific name.
+    MatchedBySynonym,
+    /// The taxon was found by an English common name (Detail); StatusUpdateOptions.MatchCommonNames is on.
+    MatchedByCommonName,
+    /// No name matched, but an English common name (Detail) names exactly one taxon;
+    /// StatusUpdateOptions.MatchCommonNames would use it.
+    CommonNameNotUsed,
 }
 
 public sealed record StatusNote(StatusNoteKind Kind, string? Detail = null, long? Id = null);

@@ -43,6 +43,10 @@ public sealed partial class StatusUpdater {
     private readonly Dictionary<WikiTemplate, TableRow> _rowOf = [];
     // Species table rows whose population differs from IUCN's. Filled by Update.
     private readonly List<PopulationSuggestion> _populations = [];
+    // How the current item's taxon was found by name, when not by its scientific name (a synonym or
+    // a common name), or a common name that would have found it. Set by ResolveNames; Update adds it
+    // to the item's notes, so every finding of the item has it, whichever way it ends.
+    private StatusNote? _nameNote;
 
     public StatusUpdater(IStatusLookup lookup, DateOnly today, int maxItems = DefaultMaxItems, StatusUpdateOptions? options = null) {
         _lookup = lookup;
@@ -126,6 +130,7 @@ public sealed partial class StatusUpdater {
         var edits = new List<Edit>();
         foreach (var candidate in candidates.Take(_maxItems)) {
             var itemEdits = new List<Edit>();
+            _nameNote = null;
             StatusFinding? finding = candidate switch {
                 TemplateCandidate t => StatusTemplate(scanner, t.Template, itemEdits),
                 CellCandidate c => TableCell(scanner, c, itemEdits),
@@ -137,6 +142,9 @@ public sealed partial class StatusUpdater {
             // A citation of a regional assessment is not an item.
             if (finding is null) {
                 continue;
+            }
+            if (_nameNote is { } nameNote) {
+                finding = finding with { Notes = [nameNote, .. finding.Notes] };
             }
             findings.Add(finding);
             edits.AddRange(itemEdits);
@@ -571,14 +579,38 @@ public sealed partial class StatusUpdater {
         if (names.Count == 0) {
             return (null, new StatusNote(StatusNoteKind.NoName));
         }
-        foreach (var synonyms in new[] { false, true }) {
-            var ids = names.SelectMany(n => NameVariants(n).SelectMany(v => _lookup.InReleaseTaxaWithName(v, synonyms))).ToHashSet();
+        foreach (var kind in new[] { StatusNameKind.Scientific, StatusNameKind.Synonym }) {
+            var ids = new HashSet<long>();
+            string? matched = null;
+            foreach (var name in names) {
+                foreach (var id in NameVariants(name).SelectMany(v => _lookup.InReleaseTaxaWithName(v, kind))) {
+                    matched ??= name;
+                    ids.Add(id);
+                }
+            }
             if (ids.Count == 1) {
+                if (kind == StatusNameKind.Synonym) {
+                    _nameNote = new StatusNote(StatusNoteKind.MatchedBySynonym, matched);
+                }
                 return (_lookup.GetTaxon(ids.First()), null);
             }
             if (ids.Count > 1) {
                 return (null, new StatusNote(StatusNoteKind.NameAmbiguous, string.Join(", ", names), ids.Count));
             }
+        }
+        // An English common name is used only when it names one taxon, and only when asked for;
+        // otherwise the note says it would have found one.
+        foreach (var name in names) {
+            var ids = _lookup.InReleaseTaxaWithName(name, StatusNameKind.EnglishCommonName);
+            if (ids.Count != 1) {
+                continue;
+            }
+            if (_options.MatchCommonNames) {
+                _nameNote = new StatusNote(StatusNoteKind.MatchedByCommonName, name);
+                return (_lookup.GetTaxon(ids.First()), null);
+            }
+            _nameNote = new StatusNote(StatusNoteKind.CommonNameNotUsed, name);
+            break;
         }
         return (null, new StatusNote(StatusNoteKind.NameNotFound, string.Join(", ", names)));
     }
