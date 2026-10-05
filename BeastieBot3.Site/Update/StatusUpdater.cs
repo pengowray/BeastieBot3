@@ -341,7 +341,10 @@ public sealed partial class StatusUpdater {
         var names = candidate.Row.Cells.Concat(candidate.Row.Spanning).Where(c => c != candidate.Cell)
             .SelectMany(c => NamesIn(s, c.Content)).Distinct().ToList();
         // Only the status cell's own references: another cell can cite another taxon's assessment.
-        var (taxon, failure) = ResolveNames(names, s, [candidate.Cell.Content]);
+        var notEvaluated = candidate.Template is { } cellTemplate
+            ? IsNotEvaluated(s, cellTemplate)
+            : BareCode(s.Masked[core.Start..core.End]) == "NE";
+        var (taxon, failure) = ResolveNames(names, s, [candidate.Cell.Content], notEvaluated);
         if (taxon is null) {
             return new StatusFinding(StatusItemKind.TableCell, line, StatusOutcome.NotUpdated, before, null, null, [failure!]);
         }
@@ -395,7 +398,8 @@ public sealed partial class StatusUpdater {
         if (names.Count == 0) {
             return Fail(StatusNoteKind.NoName);
         }
-        var (taxon, failure) = ResolveNames(names, s, statusRef is null ? null : [statusRef.Whole]);
+        var (taxon, failure) = ResolveNames(names, s, statusRef is null ? null : [statusRef.Whole],
+            statusText.Equals("NE", StringComparison.OrdinalIgnoreCase));
         if (taxon is null) {
             return new StatusFinding(StatusItemKind.Taxobox, line, StatusOutcome.NotUpdated, before, null, null, [failure!]);
         }
@@ -579,8 +583,11 @@ public sealed partial class StatusUpdater {
 
     // context: where to look for an IUCN citation of the taxon when no name matches (the status and
     // its references); null for none.
+    // notEvaluated: the article gives the item NE. Such a taxon is often one IUCN has not split out
+    // yet ("Kruger serotine", described in 2026, is IUCN's English name for Neoromicia melckorum),
+    // so it is never found by a common name, which would give it another taxon's status.
     private (StatusTaxon? Taxon, StatusNote? Failure) ResolveNames(IReadOnlyList<string> names, WikitextScanner? s = null,
-        IReadOnlyList<TextSpan>? context = null) {
+        IReadOnlyList<TextSpan>? context = null, bool notEvaluated = false) {
         if (names.Count == 0) {
             return ByCitation(s, context, names) ?? (null, new StatusNote(StatusNoteKind.NoName));
         }
@@ -613,7 +620,7 @@ public sealed partial class StatusUpdater {
         }
         // An English common name is used only when it names one taxon, and only when asked for;
         // otherwise the note says it would have found one.
-        foreach (var name in names) {
+        foreach (var name in notEvaluated ? [] : names) {
             var ids = _lookup.InReleaseTaxaWithName(name, StatusNameKind.EnglishCommonName);
             if (ids.Count != 1) {
                 continue;

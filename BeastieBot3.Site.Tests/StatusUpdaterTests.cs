@@ -738,6 +738,15 @@ public sealed class StatusUpdaterTests {
     }
 
     [Fact]
+    public void ACommonNameIsNotUsedForAnItemTheArticleGivesNE() {
+        var lookup = Lookup().CommonName(4828, "Giant golden mole");
+        var finding = Assert.Single(Run("* ''Chrysospalax novus'', [[Giant golden mole]] {{IUCN status|NE}}\n", lookup,
+            options: new StatusUpdateOptions { MatchCommonNames = true }).Findings);
+        Assert.Equal(StatusOutcome.NotUpdated, finding.Outcome);
+        Assert.DoesNotContain(finding.Notes, n => n.Kind is StatusNoteKind.CommonNameNotUsed or StatusNoteKind.MatchedByCommonName);
+    }
+
+    [Fact]
     public void ACommonNameOfTwoTaxaIsNotUsed() {
         var lookup = Lookup().CommonName(15955, "Striped cat").CommonName(15966, "Striped cat");
         var finding = Assert.Single(Run("* ''Tigris unknownus'', [[Striped cat]] {{IUCN status|VU}}\n", lookup,

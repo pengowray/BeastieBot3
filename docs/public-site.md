@@ -1124,7 +1124,8 @@ colspan and rowspan; `StatusUpdater` decides the edits), and reads the database 
   species the old species' status. With the status references only, 22 of that list's 323 items
   are found this way (it uses newer genus names such as *Afropipistrellus*), all with the status
   the list already gives, and its 45 NE rows are left as is. English common names only when none of
-  these matches, they name
+  these matches and the item is not NE (the "Kruger serotine" of the same list, described in 2026, is
+  IUCN's English name for *Neoromicia melckorum*), they name
   one taxon, and the reader asks (option below). Without the option the item says which common name
   would have found it. Only the code is changed (and ids and a year added when asked), and a bare `CR` is kept
   for a possibly extinct taxon unless the reader asks for CR(PE) and CR(PEW).

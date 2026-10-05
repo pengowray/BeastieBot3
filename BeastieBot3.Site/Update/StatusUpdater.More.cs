@@ -26,7 +26,7 @@ public sealed partial class StatusUpdater {
     private StatusFinding ListLine(WikitextScanner s, WikiTemplate template, List<Edit> edits) {
         var line = s.LineOf(template.Span.Start);
         var before = s.Original(template.Span);
-        var (taxon, failure) = ResolveNames(LineNames(s, template), s, [AfterOnLine(s, template)]);
+        var (taxon, failure) = ResolveNames(LineNames(s, template), s, [AfterOnLine(s, template)], IsNotEvaluated(s, template));
         if (taxon is null) {
             return new StatusFinding(StatusItemKind.ListLine, line, StatusOutcome.NotUpdated, before, null, null,
                 [failure!.Kind == StatusNoteKind.NoName ? new StatusNote(StatusNoteKind.NoName) : failure]);
@@ -104,9 +104,13 @@ public sealed partial class StatusUpdater {
         } else {
             return null;
         }
-        var (taxon, _) = ResolveNames(names, s, context);
+        var (taxon, _) = ResolveNames(names, s, context, IsNotEvaluated(s, template));
         return taxon;
     }
+
+    // {{IUCN status|NE}}: the article says IUCN has not evaluated the taxon.
+    private static bool IsNotEvaluated(WikitextScanner s, WikiTemplate template) =>
+        template.Positional(1) is { } code && BareCode(s.CoreText(code.Value)) == "NE";
 
     // The template and the rest of its line, where its references are: an IUCN citation earlier on
     // the line can be for another claim.
@@ -223,7 +227,7 @@ public sealed partial class StatusUpdater {
         // serotine's for the habitat of Happolds' pipistrelle, which was split from it).
         TextSpan[] statusSpans = [.. new[] { "iucn-status", "direction", "population" }
             .Select(row.Named).OfType<TemplateParameter>().Select(p => p.Whole)];
-        var (taxon, failure) = ResolveNames(names.Distinct().ToList(), s, statusSpans);
+        var (taxon, failure) = ResolveNames(names.Distinct().ToList(), s, statusSpans, current == "NE");
         if (taxon is null) {
             return noGenus is not null && failure!.Kind == StatusNoteKind.NoName
                 ? Fail(StatusNoteKind.NoGenus, noGenus)
