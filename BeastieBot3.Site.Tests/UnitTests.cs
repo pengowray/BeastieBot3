@@ -579,4 +579,11 @@ public sealed class ProvisionalNameTests {
     [InlineData("Ursus maritimus", false)]
     [InlineData("Novaculina novella", false)]
     public void Detects(string name, bool expected) => Assert.Equal(expected, SiteFormat.IsProvisionalName(name));
+
+    [Theory]
+    [InlineData("Hauffenia sp. nov.", "sp. nov.", "species")]
+    [InlineData("Lepidium sp. nov. subsp. nov.", "subsp. nov.", "subspecies")]
+    [InlineData("Acacia aneura var. nov.", "var. nov.", "variety")]
+    public void NamesTheRank(string name, string marker, string rank) =>
+        Assert.Equal((marker, rank), SiteFormat.ProvisionalMarker(name));
 }

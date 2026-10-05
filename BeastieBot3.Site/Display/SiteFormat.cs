@@ -83,10 +83,25 @@ public static class SiteFormat {
         return sb.ToString();
     }
 
-    private static readonly System.Text.RegularExpressions.Regex ProvisionalMarker = new(
-        @"\b(?:sp|ssp|subsp|var)\.\s*nov\.", System.Text.RegularExpressions.RegexOptions.CultureInvariant);
+    private static readonly System.Text.RegularExpressions.Regex ProvisionalPattern = new(
+        @"\b(sp|ssp|subsp|var)\.\s*nov\.", System.Text.RegularExpressions.RegexOptions.CultureInvariant);
 
-    /// True for a working name of a taxon not yet formally described: "Notogomphus sp. nov. 'gorilla'",
-    /// "Hauffenia sp. nov." (168 taxa in 2026-1).
-    public static bool IsProvisionalName(string scientificName) => ProvisionalMarker.IsMatch(scientificName);
+    /// The marker of a working name of a taxon not yet formally described, as written ("sp. nov."),
+    /// and the rank it names; null for any other name. "Notogomphus sp. nov. 'gorilla'", "Hauffenia
+    /// sp. nov." (168 taxa in 2026-1). The last marker counts: "Genus sp. nov. ssp. nov." is a subspecies.
+    public static (string Marker, string Rank)? ProvisionalMarker(string scientificName) {
+        var matches = ProvisionalPattern.Matches(scientificName);
+        if (matches.Count == 0) {
+            return null;
+        }
+        var match = matches[^1];
+        var rank = match.Groups[1].Value switch {
+            "sp" => "species",
+            "var" => "variety",
+            _ => "subspecies",
+        };
+        return (match.Value, rank);
+    }
+
+    public static bool IsProvisionalName(string scientificName) => ProvisionalMarker(scientificName) is not null;
 }

@@ -293,7 +293,7 @@ public sealed class HomeAndSearchTests(SiteFactory factory) : IClassFixture<Site
         var response = await _client.GetAsync($"/search?q=T{FixtureDb.PolarBear}A999999999");
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var text = Html.Text(await response.Content.ReadAsStringAsync());
-        Assert.Contains("No assessment with IUCN assessment ID 999999999", text);
+        Assert.Contains("This site has no assessment with IUCN assessment ID 999999999.", text);
         Assert.Contains($"Matched IUCN taxon ID: {FixtureDb.PolarBear}", text);
     }
 

@@ -329,7 +329,7 @@ public sealed class SpeciesPageTests(SiteFactory factory) : IClassFixture<SiteFa
         Assert.DoesNotContain("Invariant", text);
         Assert.Matches("<dt>Language not given</dt>\\s*<dd>Nanuq</dd>\\s*</dl>", html);
         Assert.Contains("<th scope=\"row\"><i>Thalarctos maritimus</i> <span class=\"authority\">(Phipps, 1774)</span></th>", html);
-        Assert.Contains("<td>IUCN Red List, Catalogue of Life: <span class=\"authority\">Phipps, 1774</span></td>", html);
+        Assert.Contains("<td>IUCN Red List, Catalogue of Life (authority: <span class=\"authority\">Phipps, 1774</span>)</td>", html);
         Assert.Contains("<th scope=\"row\"><i>Ursus marinus</i> <span class=\"authority\">Pallas, 1776</span></th>", html);
         Assert.Contains("<th scope=\"row\"><i>Ursus polaris</i></th>", html);
         Assert.Contains("<td>Wikidata</td>", html);
@@ -410,7 +410,7 @@ public sealed class SpeciesPageTests(SiteFactory factory) : IClassFixture<SiteFa
     public async Task AnAssessmentWithNoScopeIsListedAndNeverCountedAsGlobal() {
         var html = await _client.GetStringAsync($"/species/{FixtureDb.NoScopeOnly}");
         var text = Html.Text(html);
-        Assert.Contains("IUCN published this taxon's assessment with no geographic scope, so it is neither global nor regional.", text);
+        Assert.Contains("No global assessment. IUCN published the current assessment of this taxon with no geographic scope.", text);
         Assert.DoesNotContain("This taxon has been assessed in", text);
         Assert.Contains("<h2 id=\"regional-heading\">Assessments with no geographic scope</h2>", html);
         Assert.Contains("<th scope=\"row\">No scope given</th>", html);
@@ -421,7 +421,8 @@ public sealed class SpeciesPageTests(SiteFactory factory) : IClassFixture<SiteFa
     [Fact]
     public async Task AProvisionalNameSaysSo() {
         var text = Html.Text(await _client.GetStringAsync($"/species/{FixtureDb.NoScopeOnly}"));
-        Assert.Contains("Provisional name: the species had not been formally described when IUCN assessed it.", text);
+        Assert.Contains("Provisional name: \"sp. nov.\" means new species. The species had not been formally described when IUCN assessed it.", text);
+        Assert.DoesNotContain("Synonyms table", text);
         Assert.DoesNotContain("Provisional name", Html.Text(await _client.GetStringAsync($"/species/{FixtureDb.PolarBear}")));
     }
 

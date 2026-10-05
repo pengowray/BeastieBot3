@@ -971,7 +971,7 @@ title statements are not recorded (run wikidata iucn-assessment-items)".
   the genus's `first_pos`..`last_pos` range (`SiteQueries.GetUnassessedSpeciesSiblings`).
 - Synonyms are a table of synonym and source. The authority beside the name is the first source's
   that has one (IUCN, Wikidata, then CoL); a source whose authority differs, ignoring case and
-  spacing, has it after its name ("Catalogue of Life: Phipps, 1774").
+  spacing, has it in brackets after its name ("Catalogue of Life (authority: Phipps, 1774)").
 - A taxon assessed under a working name (`sp. nov.`, `ssp. nov.`, `subsp. nov.`, `var. nov.`;
   `SiteFormat.IsProvisionalName`, 168 taxa in 2026-1) has a line under its heading saying the name
   is provisional. The site does not look for the published name; the audit site's "Provisional

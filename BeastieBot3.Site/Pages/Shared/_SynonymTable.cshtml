@@ -15,7 +15,7 @@
                             var source = s.Sources[i];
                             if (i > 0) {<text>, </text>}
                             @source.Label
-                            if (source.OtherAuthority is not null) {@SiteText.SourceAuthoritySeparator<span class="authority">@source.OtherAuthority</span>}
+                            if (source.OtherAuthority is not null) {@SiteText.SourceAuthorityBefore<span class="authority">@source.OtherAuthority</span>@SiteText.SourceAuthorityAfter}
                         }</td>
                 </tr>
             }

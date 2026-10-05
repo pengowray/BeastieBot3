@@ -54,7 +54,7 @@ public static class SiteText {
         return details.Length == 0 ? id : $"{id} ({details})";
     }
     public static string AssessmentIdNotFound(long assessmentId) =>
-        $"No assessment with IUCN assessment ID {assessmentId.ToString(CultureInfo.InvariantCulture)} on this site. The taxon ID in your search matched:";
+        $"This site has no assessment with IUCN assessment ID {assessmentId.ToString(CultureInfo.InvariantCulture)}.";
     public static string NoResults(string query) =>
         $"No taxa found for “{query}”. Check the spelling, or search for the scientific name. If the spelling is right, the taxon may not be on the IUCN Red List.";
     public const string TooShort = "Search term too short. Enter at least 2 letters or digits.";
@@ -479,13 +479,18 @@ public static class SiteText {
     /// A region in the regional table and the status summary; "" is an assessment IUCN published with no scope.
     public static string RegionLabel(string region) => string.IsNullOrWhiteSpace(region) ? NoScopeLabel : region;
     public const string NoScopeLabel = "No scope given";
-    /// Under the heading of a taxon IUCN assessed under a working name ("sp. nov.").
-    public const string ProvisionalName =
-        "Provisional name: the species had not been formally described when IUCN assessed it. \"sp. nov.\" means new species. If it has since been described, the published name may be among the synonyms below.";
-    /// The status summary of a taxon whose only current assessments have no scope.
-    public static string NoScopeLine(int count) => count == 1
-        ? "IUCN published this taxon's assessment with no geographic scope, so it is neither global nor regional."
-        : $"IUCN published {count} of this taxon's assessments with no geographic scope, so they are neither global nor regional.";
+    /// Under the heading of a taxon IUCN assessed under a working name. marker: "sp. nov.";
+    /// rank: "species", "subspecies" or "variety". hasSynonyms: the page has a Synonyms table.
+    public static string ProvisionalName(string marker, string rank, bool hasSynonyms) =>
+        $"Provisional name: \"{marker}\" means new {rank}. The {rank} had not been formally described when IUCN assessed it."
+        + (hasSynonyms ? " If it has been described since, its published name may be in the Synonyms table." : "");
+    /// The status summary of a taxon with no global assessment, some of whose current assessments
+    /// have no scope. withNoGlobal: the line comes first, so it starts with "No global assessment.".
+    public static string NoScopeLine(int count, bool withNoGlobal) =>
+        (withNoGlobal ? "No global assessment. " : "")
+        + (count == 1
+            ? "IUCN published the current assessment of this taxon with no geographic scope."
+            : $"IUCN published {count} current assessments of this taxon with no geographic scope.");
     /// Beside the IUCN link of an assessment that the IUCN API answers 404 for.
     public const string ApiNotFoundNote = "Not found in the IUCN API";
     private static string WithNote(string? note) => note is null ? string.Empty : $" {note}.";
@@ -625,8 +630,10 @@ public static class SiteText {
     public const string ColName = "Name";
     public const string ColSource = "Source";
     public const string ColSynonym = "Synonym";
-    /// Between a source and the authority it gives for a synonym, when that differs from the one shown.
-    public const string SourceAuthoritySeparator = ": ";
+    /// Around the authority a source gives for a synonym, when that differs from the one shown:
+    /// "Catalogue of Life (authority: Phipps, 1774)".
+    public const string SourceAuthorityBefore = " (authority: ";
+    public const string SourceAuthorityAfter = ")";
     public const string IucnMainName = "IUCN's main English name";
     public const string NoEnglishName = "No English common name found";
     public const string LanguageNotGiven = "Language not given";

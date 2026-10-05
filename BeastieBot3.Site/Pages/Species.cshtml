@@ -41,8 +41,8 @@
     @if (taxon.CommonNameEn is not null) {
         <p class="taxon-common-name">@taxon.CommonNameEn</p>
     }
-    @if (SiteFormat.IsProvisionalName(taxon.ScientificName)) {
-        <p class="provisional-note">@SiteText.ProvisionalName</p>
+    @if (SiteFormat.ProvisionalMarker(taxon.ScientificName) is { } provisional) {
+        <p class="provisional-note">@SiteText.ProvisionalName(provisional.Marker, provisional.Rank, Model.Synonyms.Count > 0)</p>
     }
     @if (parentPrefix is not null && Model.Parent is { } parent) {
         <p class="parent-line">@parentPrefix <a href="/species/@parent.TaxonId">@Html.Raw(ScientificNameMarkup.ToHtml(parent.ScientificName, parent.SubpopulationName))</a></p>
@@ -115,7 +115,7 @@
             <p class="no-global-line">@SiteText.NoGlobalBefore<a href="#regional">@SiteText.NoGlobalLinkText(regions)</a>@SiteText.NoGlobalAfter</p>
         }
         if (noScope > 0) {
-            <p class="no-global-line">@SiteText.NoScopeLine(noScope)</p>
+            <p class="no-global-line">@SiteText.NoScopeLine(noScope, withNoGlobal: regions == 0)</p>
         }
     }
     @if (status is not null) {
