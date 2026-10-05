@@ -10,7 +10,7 @@ namespace BeastieBot3.Site.Update;
 /// Items that were not changed are left out. Null when nothing changed.
 public static partial class EditSummary {
     /// Room left for the reader's own words: MediaWiki keeps the first 500 characters of a summary.
-    public const int MaxListLength = 350;
+    public const int MaxListLength = 300;
 
     public sealed record CategoryChange(string Name, string From, string To);
 

@@ -1151,7 +1151,7 @@ colspan and rowspan; `StatusUpdater` decides the edits), and reads the database 
 - The result starts with an edit summary line (`Update/EditSummary.cs`) for the reader to copy into
   Wikipedia's edit summary: each taxon whose category changed with the old and new codes
   ("Ursus maritimus EN→VU"), read from the item's text before and after; when that list would pass
-  350 characters, the changes counted by new category in IUCN's order ("40 IUCN statuses changed
+  300 characters (MediaWiki keeps 500, and the rest of the line takes about 130), the changes counted by new category in IUCN's order ("40 IUCN statuses changed
   (20 to EN, 20 to LC)"); then counts of the other status entries and the citations that changed,
   and "(assisted by Beastie Bot Species Status)". It is left out when nothing changed.
 - The updated wikitext is in a read-only box of fixed height (24rem, at most 70% of the window)

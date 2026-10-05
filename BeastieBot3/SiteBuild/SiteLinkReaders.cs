@@ -444,8 +444,6 @@ internal static class SiteLinkReaders {
     private static string NameKeyWithoutRank(string name) =>
         SiteNameKey.Fold(string.Join(' ', ScientificNameCheck.WithoutRankMarkers(name.Split(' ', StringSplitOptions.RemoveEmptyEntries))));
 
-    private static readonly string[] TaxoboxAuthorityParameters = { "authority", "trinomial_authority", "binomial_authority" };
-
     internal static void AddTaxoboxSynonyms(List<SiteTaxon> pageTaxa, string? json, SiteBuildStats stats) {
         if (pageTaxa.Count == 0 || string.IsNullOrWhiteSpace(json)) {
             return;
@@ -472,7 +470,11 @@ internal static class SiteLinkReaders {
         }
         var synonyms = new List<SiteSynonym>();
         if (subject is not null) {
-            var authority = TaxoboxAuthorityParameters
+            // The author of the name that became the subject: a trinomial's, else a binomial's.
+            var parameters = subject.Split(' ').Length > 2
+                ? new[] { "trinomial_authority", "authority" }
+                : new[] { "binomial_authority", "authority" };
+            var authority = parameters
                 .Select(p => fields.TryGetValue(p, out var value) ? TaxoboxSynonymsParser.CleanAuthority(value) : null)
                 .FirstOrDefault(a => a is not null);
             synonyms.Add(new SiteSynonym(subject, authority));
