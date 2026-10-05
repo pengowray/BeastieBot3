@@ -1190,7 +1190,9 @@ colspan and rowspan; `StatusUpdater` decides the edits, and `StatusTaxonResolver
 
 - Wikidata gives few synonyms until the synonym items are downloaded: the taxa's items name 8,686
   synonym items (P1420). `wikidata queue-synonyms` queues the ones not in the cache, and
-  `wikidata cache-entities` downloads them.
+  `wikidata cache-entities` downloads them (the `public-site` workflow's step "Download the Wikidata
+  synonym items"). Once downloaded, a synonym item is in the cache's name index, so
+  `wikidata backfill-iucn` can link a taxon whose IUCN name is a synonym item's name to that item.
 - `TaxoboxSynonymsParser` gives nothing for an epithet written with a capital (`''Coluber Aurora''`),
   an abbreviated genus (`''U. clandestina''`) or a genus in square brackets, and keeps publication
   details and `sensu`/`auct. non` comments in some authorities.

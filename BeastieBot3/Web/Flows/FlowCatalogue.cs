@@ -983,6 +983,16 @@ public static class FlowCatalogue {
                     Note = "Run it after updating the caches. Until it runs again, the site offers a create batch for an assessment whose item someone has added since. It only reads from Wikidata.",
                 },
                 new FlowStep {
+                    Id = "site-wikidata-synonyms",
+                    Title = "Download the Wikidata synonym items",
+                    Description = "The site lists the scientific names of the items that taxon items name as taxon synonym (P1420). wikidata queue-synonyms queues the synonym items that are not in the Wikidata cache, and wikidata cache-entities downloads them.",
+                    Commands = new[] { "wikidata queue-synonyms", "wikidata cache-entities" },
+                    InputSourceIds = new[] { "wikidata-cache" },
+                    OutputSourceIds = new[] { "wikidata-cache" },
+                    Group = "1 · Inputs",
+                    Note = "Run it after updating the caches. Queueing reads every downloaded item (about a minute); downloading takes about a second per item, so the first run (about 8,300 items in October 2026) takes over two hours.",
+                },
+                new FlowStep {
                     Id = "site-common-names",
                     Title = "Aggregate common names",
                     Description = "The site's English names come from the Common names store.",
