@@ -47,9 +47,9 @@ public static class SpeciesboxStatus {
         return sb.ToString();
     }
 
-    // The taxobox code: the {{IUCN status}} code, except that the module spells the possibly extinct
-    // forms PE and PEW rather than CR(PE) and CR(PEW).
-    private static string ToStatusCode(string category, bool possiblyExtinct, bool possiblyExtinctInTheWild) {
+    /// The taxobox code: the {{IUCN status}} code, except that the module spells the possibly extinct
+    /// forms PE and PEW rather than CR(PE) and CR(PEW).
+    public static string ToStatusCode(string category, bool possiblyExtinct, bool possiblyExtinctInTheWild) {
         var code = IucnStatusTemplate.ToTemplateCode(category.Trim(), possiblyExtinct, possiblyExtinctInTheWild);
         return code switch {
             "CR(PE)" => "PE",
@@ -58,7 +58,8 @@ public static class SpeciesboxStatus {
         };
     }
 
-    private static string ToStatusSystem(string code, string? criteriaVersion) {
+    /// The status_system for a taxobox code (ToStatusCode) and the assessment's criteria version.
+    public static string ToStatusSystem(string code, string? criteriaVersion) {
         if (code.StartsWith("LR/", StringComparison.OrdinalIgnoreCase)) {
             return "IUCN2.3";
         }
