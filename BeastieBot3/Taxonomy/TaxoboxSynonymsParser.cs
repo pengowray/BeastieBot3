@@ -188,6 +188,8 @@ internal static partial class TaxoboxSynonymsParser {
         text = Whitespace().Replace(text, " ");
         text = AuthorityEdgeStart().Replace(text, "");
         text = AuthorityEdgeEnd().Replace(text, "");
+        // "Jenyns, 1842." ends a sentence; "L." is an abbreviation and keeps its full stop.
+        text = SentenceFullStop().Replace(text, "");
         return text.Length > 0 && Letter().IsMatch(text) ? text : null;
     }
 
@@ -412,6 +414,9 @@ internal static partial class TaxoboxSynonymsParser {
     // Left over from unbalanced markup: "Thouars]]", "(Girard, 1856)>", "Heimerl/small>".
     [GeneratedRegex(@"[<\/]small>?|\[\[|\]\]|[{}<>|]")]
     private static partial Regex BrokenMarkup();
+
+    [GeneratedRegex(@"(?<=[\d\])])\.$")]
+    private static partial Regex SentenceFullStop();
 
     [GeneratedRegex(@"\s+")]
     private static partial Regex Whitespace();

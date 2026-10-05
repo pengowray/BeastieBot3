@@ -234,6 +234,8 @@ internal sealed class SiteBuildDbCommand : Command<SiteBuildDbCommand.Settings> 
         Row("Catalogue of Life synonyms with an authority from the CoL database", s.ColSynonymAuthorities);
         Row("Wikidata taxon synonym (P1420) items of the taxa's items", s.WikidataSynonymItems);
         Row("Of those, items the Wikidata cache has a scientific name for", s.WikidataSynonymsNamed);
+        Row("Wikipedia taxobox names and synonyms read (before repeats are dropped)", s.WikipediaTaxoboxSynonyms);
+        Row("Wikipedia pages matched to several taxa, none with the taxobox's name (no synonyms taken)", s.WikipediaTaxoboxPagesShared);
         Row("Taxa with an English name for display", s.CommonNameEn);
         Row("Of those, names set in rules-list.txt", s.CommonNameEnFromRules);
         Row("English names not used: the scientific name again, or a working name", s.CommonNameEnUnusable);

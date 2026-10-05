@@ -107,6 +107,8 @@ internal sealed class SiteTaxon {
     public List<(string Name, string Source, bool IsPreferred)> EnglishNames { get; } = new();
     public List<SiteSynonym> ColSynonyms { get; } = new();
     public List<SiteSynonym> WikidataSynonyms { get; } = new();
+    /// The scientific name and the synonyms in the taxobox of the taxon's English Wikipedia article.
+    public List<SiteSynonym> WikipediaSynonyms { get; } = new();
 }
 
 /// A synonym and its authority as its source gives it; Authority is null when the source gives none.
@@ -238,6 +240,10 @@ internal sealed class SiteBuildStats {
     /// Synonym items named by the taxa's Wikidata items (P1420), and how many of them the cache has a name for.
     public int WikidataSynonymItems;
     public int WikidataSynonymsNamed;
+    /// Names from Wikipedia taxoboxes added as synonyms (before the ones equal to a scientific name or
+    /// another source's are dropped), and pages matched to several taxa none of which has the taxobox's name.
+    public int WikipediaTaxoboxSynonyms;
+    public int WikipediaTaxoboxPagesShared;
     /// CoL synonyms given their authorship from the CoL database.
     public int ColSynonymAuthorities;
     /// Assessments the IUCN API answered 404 for.

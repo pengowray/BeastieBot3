@@ -152,6 +152,10 @@ internal sealed class SiteDbBuild {
             SiteLinkReaders.ReadWikipedia(path, taxa, _stats, ct);
             return $"{_stats.EnwikiTitles:N0} taxa with an article";
         });
+        Optional("Wikipedia cache: taxobox names and synonyms", _inputs.WikipediaCache, path => {
+            SiteLinkReaders.ReadWikipediaTaxoboxSynonyms(path, taxa, _stats, ct);
+            return $"{_stats.WikipediaTaxoboxSynonyms:N0} names, {_stats.WikipediaTaxoboxPagesShared:N0} pages of several taxa skipped";
+        });
         Optional("Catalogue of Life placement file", _inputs.ColPlacement, path => {
             _stats.ColRelease = SiteLinkReaders.ReadColPlacement(path, taxa, _stats, ct);
             return $"{_stats.ColIdsFromPlacement:N0} species with a Catalogue of Life id";
@@ -351,6 +355,9 @@ internal sealed class SiteDbBuild {
         foreach (var synonym in taxon.WikidataSynonyms) {
             names.Add(synonym.Name, SiteNameType.Synonym, null, SiteNameSource.Wikidata, authority: synonym.Authority);
         }
+        foreach (var synonym in taxon.WikipediaSynonyms) {
+            names.Add(synonym.Name, SiteNameType.Synonym, null, SiteNameSource.WikipediaTaxobox, authority: synonym.Authority);
+        }
         foreach (var name in names.Names) {
             writer.AddName(taxon.TaxonId, name);
             _stats.Count(_stats.NamesByType, name.NameType);
@@ -366,6 +373,7 @@ internal sealed class SiteDbBuild {
         taxon.EnglishNames.Clear();
         taxon.ColSynonyms.Clear();
         taxon.WikidataSynonyms.Clear();
+        taxon.WikipediaSynonyms.Clear();
     }
 
     private static int SourceOrder(string source) => source switch {

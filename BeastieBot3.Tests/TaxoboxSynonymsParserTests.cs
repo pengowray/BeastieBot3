@@ -177,8 +177,8 @@ public class TaxoboxSynonymsParserTests {
     public void FullStopAfterTheName() {
         var result = Parse("* ''Callichthys paleatus''. Jenyns, 1842. * ''Corydoras maculatus''. [[Franz Steindachner|Steindachner]], 1879.");
         Assert.Equal(new List<(string, string?)> {
-            ("Callichthys paleatus", "Jenyns, 1842."),
-            ("Corydoras maculatus", "Steindachner, 1879."),
+            ("Callichthys paleatus", "Jenyns, 1842"),
+            ("Corydoras maculatus", "Steindachner, 1879"),
         }, result);
     }
 
@@ -238,5 +238,11 @@ public class TaxoboxSynonymsParserTests {
     [InlineData("<ref>only a reference</ref>", null)]
     public void CleanAuthority_RemovesMarkup(string? wikitext, string? expected) {
         Assert.Equal(expected, TaxoboxSynonymsParser.CleanAuthority(wikitext));
+    }
+
+    [Fact]
+    public void KeepsABracketedYearAfterAnAuthorOutsideBrackets() {
+        var result = TaxoboxSynonymsParser.Parse("''Papilio ibiris'' C. & R. Felder, [1867]");
+        Assert.Equal("C. & R. Felder, [1867]", Assert.Single(result).Authority);
     }
 }
