@@ -107,6 +107,7 @@ public sealed class OtherEndpointTests(SiteFactory factory) : IClassFixture<Site
         Assert.Contains("<img class=\"site-logo\" src=\"/logo-80.png\" width=\"40\" height=\"40\" alt=\"\">", html);
         Assert.Contains("<link rel=\"apple-touch-icon\" href=\"/apple-touch-icon.png\">", html);
         Assert.Contains("The bat logo is by spiky.fish.", Html.Text(html));
+        Assert.Contains("The server keeps a log of each request for 14 days", Html.Text(html));
         Assert.Contains("<a href=\"https://en.wikipedia.org/wiki/User:Pengo\">User:Pengo</a>", html);
     }
 
