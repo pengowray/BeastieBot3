@@ -362,8 +362,8 @@ chosen by the same `CommonNameChooser`.
 - Search lists the groups whose name is the search text, and goes straight to the group when it is
   the only match and no taxon has the name exactly.
 - On a taxon page, each rank links to its group page, with the group's English name, or else up to
-  three of CoL's names (muted, with a tooltip naming the source). CoL groups are hidden until the
-  reader ticks "Show Catalogue of Life groups"; the toggle is CSS only (`:has`). A taxon not in the
+  three of CoL's names (muted, with a tooltip naming the source and saying they are unchecked). CoL groups are hidden until the
+  reader ticks "Show N ranks from the Catalogue of Life"; the toggle is CSS only (`:has`). A taxon not in the
   release has no place in the tree and shows IUCN's ranks as text, as before.
 
 ## Citations
