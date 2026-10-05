@@ -1,0 +1,90 @@
+@page "/update"
+@model UpdateModel
+@using BeastieBot3.Site.Update
+@{
+    ViewData["Title"] = UpdateText.Heading;
+    var result = Model.Result;
+}
+@* A textarea drops one newline straight after its start tag, so one is written there to keep a
+   text that starts with a newline. *@
+<h1>@UpdateText.Heading</h1>
+<div class="update-intro prose">
+    <p>@UpdateText.Intro(Model.Version)</p>
+    <p>@UpdateText.IntroItemsLabel</p>
+    <ul>
+        <li><strong>@UpdateText.IntroTemplatesTitle</strong>@UpdateText.IntroTemplates</li>
+        <li><strong>@UpdateText.IntroTablesTitle</strong>@UpdateText.IntroTables</li>
+        <li><strong>@UpdateText.IntroTaxoboxesTitle</strong>@UpdateText.IntroTaxoboxes</li>
+    </ul>
+    <p class="help">@UpdateText.IntroLimits(StatusUpdater.DefaultMaxItems)</p>
+</div>
+
+@if (Model.Error is not null) {
+    <p class="update-error" role="alert">@Model.Error</p>
+}
+
+@if (result is not null) {
+    <section class="update-result wikitext" id="result" aria-labelledby="result-heading"
+             data-copied="@SiteText.Copied" data-copy-label="@SiteText.Copy" data-copy-failed="@SiteText.CopyFailed" data-copy-failed-button="@SiteText.CopyFailedButton">
+        <h2 id="result-heading">@UpdateText.ResultHeading</h2>
+        <p class="update-summary">@(result.NotChecked > 0
+            ? UpdateText.SummaryCapped(StatusUpdater.DefaultMaxItems, result.Updated, result.Current, result.NotUpdated, result.NotChecked)
+            : UpdateText.Summary(result.Updated, result.Current, result.NotUpdated))</p>
+        @if (result.Updated == 0 && result.Findings.Count > 0) {
+            <p class="note">@UpdateText.NoChanges</p>
+        }
+        <div class="wikitext-box">
+            <div class="wikitext-box-head">
+                <label for="update-output">@UpdateText.OutputLabel</label>
+                <button type="button" class="copy-button" data-copy="update-output" aria-label="@UpdateText.CopyOutputAccessible" hidden>@SiteText.Copy</button>
+                <p class="copy-status" role="status" aria-live="polite"></p>
+            </div>
+            <textarea id="update-output" readonly rows="16" spellcheck="false" autocapitalize="off" autocomplete="off">@("\n" + result.Text)</textarea>
+        </div>
+
+        @if (result.Findings.Count > 0) {
+            <h3 id="report-heading">@UpdateText.ReportHeading</h3>
+            <div class="table-scroll">
+                <table class="update-report" aria-labelledby="report-heading">
+                    <thead>
+                        <tr>
+                            <th scope="col">@UpdateText.ColumnLine</th>
+                            <th scope="col">@UpdateText.ColumnResult</th>
+                            <th scope="col">@UpdateText.ColumnItem</th>
+                            <th scope="col">@UpdateText.ColumnBefore</th>
+                            <th scope="col">@UpdateText.ColumnAfter</th>
+                            <th scope="col">@UpdateText.ColumnTaxon</th>
+                            <th scope="col">@UpdateText.ColumnNotes</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        @foreach (var finding in result.Findings) {
+                            <tr class="@UpdateText.OutcomeClass(finding.Outcome)">
+                                <td>@finding.Line.ToString("N0", System.Globalization.CultureInfo.InvariantCulture)</td>
+                                <td class="update-outcome">@UpdateText.Outcome(finding.Outcome)</td>
+                                <td>@UpdateText.Kind(finding.Kind)</td>
+                                <td><code class="update-code">@finding.Before</code></td>
+                                <td>@if (finding.After is not null) {<code class="update-code">@finding.After</code>}</td>
+                                <td>@if (finding.Taxon is { } taxon) {<a href="/species/@taxon.TaxonId">@Html.Raw(ScientificNameMarkup.ToHtml(taxon.ScientificName))</a>}</td>
+                                <td>
+                                    @foreach (var note in finding.Notes) {
+                                        <p class="update-note">@UpdateText.Note(note, finding.Kind)</p>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </section>
+}
+
+<form class="update-form" method="post" action="/update#result" enctype="multipart/form-data">
+    <label for="update-input">@UpdateText.InputLabel</label>
+    <textarea id="update-input" name="@UpdateModel.TextField" rows="16" spellcheck="false" autocapitalize="off" autocomplete="off" required>@("\n" + Model.Input)</textarea>
+    <div class="update-actions">
+        <button type="submit">@UpdateText.Submit</button>
+        <p class="help">@UpdateText.NotSaved</p>
+    </div>
+</form>

@@ -12,7 +12,8 @@ var builder = WebApplication.CreateBuilder(args);
 
 builder.WebHost.ConfigureKestrel(kestrel => {
     kestrel.AddServerHeader = false;
-    // The site answers GET and HEAD only, so requests never need a body or long headers.
+    // The site answers GET and HEAD, so requests need no body or long headers. The one exception is
+    // POST /update, whose larger body limit UseGetAndHeadOnly sets for that request.
     kestrel.Limits.MaxRequestBodySize = 16 * 1024;
     kestrel.Limits.MaxRequestHeadersTotalSize = 16 * 1024;
     kestrel.Limits.MaxRequestLineSize = 4 * 1024;

@@ -37,6 +37,7 @@
                 <partial name="_SearchForm" model="@(new SearchFormModel(ViewData["Query"] as string, "header"))" />
             }
             <nav class="site-nav" aria-label="Site">
+                <a href="/update">@UpdateText.NavLink</a>
                 <a href="/about">@SiteText.NavAbout</a>
             </nav>
             @* Hidden until theme.js runs (site.css), so a browser without JavaScript has no control

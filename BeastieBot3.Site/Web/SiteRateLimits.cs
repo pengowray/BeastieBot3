@@ -7,10 +7,10 @@ using Microsoft.Extensions.Options;
 
 namespace BeastieBot3.Site.Web;
 
-/// Requests per client per minute, in three buckets: search pages, the name-suggest API, and every
-/// other page. Static files are served before the limiter and are not counted; /healthz and the
+/// Requests per client per minute, in four buckets: search pages, the name-suggest API, texts sent
+/// to the status update page (POST /update), and every other page. Static files are served before the limiter and are not counted; /healthz and the
 /// error pages (including the 429 page itself) are never limited. Searches and suggestions also
-/// share one limit on how many run at the same time (RateLimitOptions.ConcurrentSearches). A
+/// and status updates share one limit on how many run at the same time (RateLimitOptions.ConcurrentSearches). A
 /// rejected request gets status 429 and the status code page renders the "Too many requests" page.
 public static class SiteRateLimits {
     public static IServiceCollection AddSiteRateLimits(this IServiceCollection services) {
@@ -51,11 +51,14 @@ public static class SiteRateLimits {
             if (path.StartsWithSegments("/search")) {
                 return PerMinute("search|" + client, limits.SearchPerMinute);
             }
+            if (IsUpdatePost(context)) {
+                return PerMinute("update|" + client, limits.UpdatesPerMinute);
+            }
             return PerMinute("page|" + client, limits.PagesPerMinute);
         });
         var searchesAtOnce = PartitionedRateLimiter.Create<HttpContext, string>(context => {
             var path = context.Request.Path;
-            if (path.StartsWithSegments("/api") || path.StartsWithSegments("/search")) {
+            if (path.StartsWithSegments("/api") || path.StartsWithSegments("/search") || IsUpdatePost(context)) {
                 return RateLimitPartition.GetConcurrencyLimiter("searches", _ => new ConcurrencyLimiterOptions {
                     PermitLimit = Math.Max(1, limits.ConcurrentSearches),
                     QueueLimit = Math.Max(0, limits.SearchQueueLength),
@@ -66,6 +69,9 @@ public static class SiteRateLimits {
         });
         return PartitionedRateLimiter.CreateChained(perClient, searchesAtOnce);
     }
+
+    private static bool IsUpdatePost(HttpContext context) =>
+        HttpMethods.IsPost(context.Request.Method) && SiteMiddleware.IsUpdatePath(context.Request.Path);
 
     private static bool IsUnlimited(PathString path) =>
         path.StartsWithSegments("/healthz") || path.StartsWithSegments("/error");

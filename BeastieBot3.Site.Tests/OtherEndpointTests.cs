@@ -178,6 +178,7 @@ public sealed class OtherEndpointTests(SiteFactory factory) : IClassFixture<Site
     public async Task PostIsNotAllowed() {
         var response = await _client.PostAsync("/search?q=ursus", new StringContent("x"));
         Assert.Equal(HttpStatusCode.MethodNotAllowed, response.StatusCode);
+        Assert.Equal("GET, HEAD", string.Join(", ", response.Content.Headers.Allow));
     }
 
     [Theory]
@@ -186,6 +187,7 @@ public sealed class OtherEndpointTests(SiteFactory factory) : IClassFixture<Site
     [InlineData("/no/such/page")]
     [InlineData("/api/suggest?q=urs")]
     [InlineData("/site.css")]
+    [InlineData("/update")]
     public async Task SecurityHeaders(string url) {
         var response = await _client.GetAsync(url);
         var headers = response.Headers;

@@ -6,7 +6,10 @@ using Microsoft.Extensions.Options;
 namespace BeastieBot3.Site.Pages;
 
 /// The status code pages (UseStatusCodePagesWithReExecute and UseExceptionHandler). They never
-/// query the database, which may be the thing that failed.
+/// query the database, which may be the thing that failed. A failed POST to the status update page
+/// is re-executed here as a POST, so the page answers POST the same way and needs no antiforgery
+/// token (it reads no form).
+[IgnoreAntiforgeryToken]
 [ResponseCache(Duration = 0, Location = ResponseCacheLocation.None, NoStore = true)]
 public sealed class ErrorModel : PageModel {
     private readonly SiteOptions _options;
@@ -51,6 +54,8 @@ public sealed class ErrorModel : PageModel {
                 break;
         }
     }
+
+    public void OnPost(int code) => OnGet(code);
 
     public bool IsServerError => Code >= 500 && Code != StatusCodes.Status503ServiceUnavailable;
 }
