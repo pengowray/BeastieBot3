@@ -23,7 +23,4 @@ public static partial class SiteText {
         CreditTypes.Institutions => "Partner(s) / Institution(s)",
         _ => type,
     };
-
-    /// Under a group IUCN gives only in citation form ("Tolley, K. & Menegon, M.").
-    public const string CreditsFullOnly = "IUCN does not give full names for this group.";
 }

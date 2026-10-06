@@ -776,8 +776,7 @@ What `site build-db` stores (`AssessmentCreditsReader`, pinned by `SiteDbBuildCr
   generational suffix) is found there exactly once as a whole word; otherwise `value[]`'s order is
   kept.
 - When `value[]` is empty, or holds only email addresses, the group is the `full` string (the
-  citation form, "Tolley, K. & Menegon, M."), shown as one line with "IUCN does not give full names
-  for this group." and no count. When any group is like this the summary has no total. In 2026-1
+  citation form, "Tolley, K. & Menegon, M."), shown as one line with no count and no note. When any group is like this the summary has no total. In 2026-1
   this applies to 69,554 of the 346,877 assessments with credits, mostly older ones.
 - `assessment.credits` holds the groups as ids into `credit_name` (`StoredCredits` in
   `BeastieBot3.Shared`): `[{"type":"assessor","names":[12,45]},{"type":"evaluator","full":77}]`.

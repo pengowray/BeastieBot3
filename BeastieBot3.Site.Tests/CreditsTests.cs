@@ -48,7 +48,7 @@ public sealed class CreditsTests(SiteFactory factory) : IClassFixture<SiteFactor
         Assert.Contains("Assessor(s) <span class=\"credit-count\">(1)</span>", credits);
         Assert.Contains("<p class=\"credit-type\">Reviewer(s)</p>", credits);
         Assert.Contains("<p class=\"credit-full\">Derocher, A. &amp; Lunn, N.</p>", credits);
-        Assert.Contains("IUCN does not give full names for this group.", credits);
+        Assert.DoesNotContain("credit-note", credits);
     }
 
     // The section is for the assessment the wikitext is for: none for an assessment with no credits.
