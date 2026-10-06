@@ -64,6 +64,9 @@ must never be reachable from outside the machine.
    the title and label of a Wikidata item for an assessment, when the item has no title of its
    own. See
    [Missing DOIs](#missing-dois-iucn-resolve-dois).
+   Then run `wikipedia fetch-group-titles`, which downloads the English Wikipedia pages of new
+   groups and the redirects to their articles (see
+   [Names and links of groups](#names-and-links-of-groups-sitegroupnames)).
 5. Run `site build-db`. For release 2026-1 on 3 October 2026 it took about 100 seconds and wrote a
    database of about 463 MB. It writes `<Datastore:site_sqlite>.building` and replaces `Datastore:site_sqlite` only
    when the build finishes; a failed or cancelled build leaves the previous database in place. It
@@ -353,6 +356,39 @@ take their order from `iucn-not-assigned.yml`, and 43 have a rank still "NOT ASS
   CoL writes them (names that differ only in case are listed once). They are not checked, and some
   name only part of the group ("cattle", "goats" for Bovidae), so the site lists them under their
   source and never uses one as the group's name. 10,651 groups have some.
+- Names from English Wikipedia (`SiteGroupWikipediaNames`, `higher_taxon_name` rows with source
+  `wikipedia`): the title of the group's article and the titles of the redirects to it, which
+  `wikipedia fetch-group-titles` downloads (below). Search finds a group by them; the group page
+  does not list them. The article (from `enwiki_title`, else the group's name, followed through
+  redirects) counts only when it is about the group: not a disambiguation page, nothing in it about
+  another kingdom (`WikiPageKingdom`), and its taxobox taxon is the group's name, or, with no
+  taxobox name, the group's title redirects to it and no taxon is matched to it. Genus
+  *Orycteropus* redirects to "Aardvark", whose taxobox is *Orycteropus afer*, so the genus takes
+  none of its names. Left out: the group's own name, the scientific name of any group or taxon in
+  the site, redirects to a section ("Dobsoniini" to "Megabat#List of genera"), titles with
+  brackets, digits, colons or slashes, possessives, all capitals, "-ology"/"-ologist", and close
+  misspellings of the article title or the group's name ("Chiroptra"). Scientific synonyms of the
+  group itself stay ("Megachiroptera"). `higher_taxon_name.name_key` (`SiteNameKey.Fold`) is
+  indexed for the search. The build summary counts the groups whose article is about the group,
+  those of them with no redirect list downloaded yet, and the groups with no English name that
+  get a name from Wikipedia that is not a scientific name (a candidate for `common_name_en`, which
+  is still chosen as above).
+- `wikipedia fetch-group-titles` builds the groups as `site build-db` does (`SiteGroupTree`, from
+  the IUCN CSV export and the CoL placement) and, for each group's name (and a rules wikilink),
+  downloads the English Wikipedia page into `wiki_pages` (50 titles per action API request, no REST
+  HTML, saved through `WikipediaPageFetcher.SaveQueried`, so redirects, categories and taxoboxes are
+  stored as for any page), then the kingdom-qualified titles of names that are disambiguation pages
+  ("Morus (plant)"), then the redirects to each article reached (`prop=redirects`, into
+  `wiki_incoming_redirects`, with `wiki_incoming_redirect_fetches` recording which titles were asked
+  about). Families and above go first, then subfamilies and tribes, then genera. Names that are not
+  in the all-titles list are not asked for. `--status` prints what is left; each run writes its
+  counts to `wiki_group_title_status`, which the workflow light reads. The first full run in October
+  2026 took about 40 minutes.
+- Once the genus pages are downloaded, the last fallback of `common_name_en` (the title the
+  scientific name redirects to) would give a monotypic genus its species' name (genus *Ashbyia*
+  redirects to "Gibberbird"). `StoreBackedCommonNameProvider.GetWikipediaRedirectTitleByScientificName`
+  therefore gives no name when the target's taxobox has a species name (two or more words) that is
+  not the group's.
 - `enwiki_title`: a wikilink from the rules, else the group's name when English Wikipedia has a
   page or redirect with that title that is not about another kingdom (`EnwikiTitleCheck`), else
   the name with a bracketed word for its kingdom when the name is a disambiguation page.
@@ -390,8 +426,16 @@ chosen by the same `CommonNameChooser`.
   templates as one Wikipedia page holds. The page counts the lines from `higher_taxon_count` first
   and reads no taxa for a longer list. The cap also keeps the site from handing out the categories
   of a whole kingdom at once.
-- Search lists the groups whose name is the search text, and goes straight to the group when it is
-  the only match and no taxon has the name exactly.
+- Search lists the groups whose name is the search text, and the groups that have it as one of
+  their names from English Wikipedia (below), with the matched title ("Matched English Wikipedia
+  title: Fruit bat"), groups found by their own name first. It goes straight to the group when
+  exactly one group is found and no taxon matches the text strongly (`SearchModel.GroupToGoTo`).
+  A strong match is an exact match on a taxon's scientific name, a synonym, its `common_name_en` or
+  its article title (`SearchHit.IsStrongExactMatch`). An exact match on any other common name is
+  weak: "fruit bat" goes to family Pteropodidae, although "Fruit Bat" is a CoL vernacular of
+  *Epomophorus pusillus*. When a group is found and a taxon matches strongly, or two or more groups
+  are found, the results are listed, groups first. With no group found, search goes to the taxon
+  as before (`SingleExactMatch`). `all=1` always lists.
 - On a taxon page, each rank links to its group page, with the group's English name, or else up to
   three of CoL's names (muted, with a tooltip naming the source and saying they are unchecked). CoL groups are hidden until the
   reader ticks "Show N ranks from the Catalogue of Life"; the toggle is CSS only (`:has`). A taxon not in the
