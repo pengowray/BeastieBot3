@@ -190,7 +190,8 @@
             }
             <fieldset>
                 <legend>@GroupText.OptionsHeading</legend>
-                <fieldset class="option-group">
+                <partial name="_ListType" model="Model" />
+                <fieldset class="option-group" data-list-type="bullets" hidden="@Model.Table.IsTable">
                     <legend>@GroupText.OptionFormat</legend>
                     @foreach (var (style, label, example) in new[] {
                                  (SpeciesListStyle.ScientificNameFirst, GroupText.StyleSci, GroupText.StyleSciExample),
@@ -209,7 +210,7 @@
                 </fieldset>
                 <fieldset class="option-group">
                     <legend>@GroupText.OptionHeadings</legend>
-                    <label><input type="hidden" name="status" value="0"><input type="checkbox" name="status" value="1" checked="@options.ByStatus"> @GroupText.OptionStatusSections</label>
+                    <label data-list-type="bullets" hidden="@Model.Table.IsTable"><input type="hidden" name="status" value="0"><input type="checkbox" name="status" value="1" checked="@options.ByStatus"> @GroupText.OptionStatusSections</label>
                     <input type="hidden" name="h" value="none">
                     @if (Model.HeadingChoices.Count == 0) {
                         <p class="help">@GroupText.NoRanks(group.Rank, group.Name)</p>
@@ -246,7 +247,7 @@
                     </div>
                     <p class="help">@GroupText.CategoriesHelp</p>
                 </fieldset>
-                <fieldset class="option-group">
+                <fieldset class="option-group" data-list-type="bullets" hidden="@Model.Table.IsTable">
                     <legend>@GroupText.OptionTaxa</legend>
                     @foreach (var (mode, label) in new[] { (InfraMode.None, GroupText.InfraNone), (InfraMode.Separate, GroupText.InfraSeparate), (InfraMode.UnderSpecies, GroupText.InfraUnder) }) {
                         <label><input type="radio" name="infra" value="@GroupListQuery.InfraKey(mode)" checked="@(options.Infra == mode)"> @label</label>
@@ -260,6 +261,7 @@
                     <label><input type="radio" name="sort" value="sci" checked="@(options.Sort == ListSort.ScientificName)"> @GroupText.SortSci</label>
                     <label><input type="radio" name="sort" value="common" checked="@(options.Sort == ListSort.CommonName)"> @GroupText.SortCommon</label>
                 </fieldset>
+                <partial name="_SpeciesTableOptions" model="Model" />
                 <button type="submit">@GroupText.UpdateList</button>
                 <p class="live-status" role="status" data-live-status hidden></p>
                 <p><a href="@SiteUrls.Group(group)#wikitext">@GroupText.ResetOptions</a></p>
@@ -267,11 +269,15 @@
         </form>
 
         <div class="list-output" id="list-output" data-live-region>
-            @if (Model.TooLong) {
+            @if (Model.TooLong && Model.Table.IsTable) {
+                <p class="note">@GroupText.TablesTooLong(Model.LineCount, Model.MaxLines, Model.Table.References != TableReferences.None)</p>
+            } else if (Model.TooLong) {
                 <p class="note">@GroupText.TooLong(Model.LineCount, GroupList.MaxLines)</p>
                 @if (options.Sources.HasOtherSources) {
                     <p class="note">@GroupSourceText.TooLongNote</p>
                 }
+            } else if (Model.Tables is { RowCount: > 0 }) {
+                <partial name="_SpeciesTableOutput" model="Model" />
             } else if (Model.List is not { LineCount: > 0 } list) {
                 <p class="note">@GroupText.EmptyList(group.Name)</p>
             } else {

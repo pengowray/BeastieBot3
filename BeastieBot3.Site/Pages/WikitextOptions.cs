@@ -6,7 +6,7 @@ using BeastieBot3.Site.Data;
 namespace BeastieBot3.Site.Pages;
 
 /// The citation options form on a taxon page, read from and written to the query string:
-///   authors=author|lastfirst   fullnames=1   access=download|today|none   ref=1   refname=...   amp=1   opts=1
+///   authors=author|lastfirst   fullnames=1   access=download|today|none   ref=1   refname=...   amp=1   opts=1   cite=iucn|q
 /// Unticked checkboxes are not sent by the browser, so the form also sends opts=1: with it, a
 /// missing ref or amp means "off" and a missing or empty refname means a plain <ref>; without it (a
 /// plain link) the defaults apply. fullnames is off by default, so it needs no opts=1: fullnames=1
@@ -27,6 +27,10 @@ public sealed record WikitextOptions(CiteAuthorStyle AuthorStyle, string Access,
 
     /// Full given names where IUCN lists them, instead of initials (CiteIucnOptions.FullGivenNames).
     public bool FullGivenNames { get; init; }
+
+    /// The template in the taxobox status_ref: {{cite iucn}}, or {{cite Q}} when the assessment has
+    /// a Wikidata item (cite=q; IucnReference). The {{cite iucn}} and {{cite Q}} boxes do not change.
+    public ReferenceTemplate Template { get; init; }
 
     public static WikitextOptions FromQuery(string? authors, string? access, string? opts, string? wrapRef, string? refName, string? amp,
         string defaultRefName = DefaultRefNames.LatestGlobal, string? fullNames = null) {
@@ -97,6 +101,9 @@ public sealed record WikitextOptions(CiteAuthorStyle AuthorStyle, string Access,
         }
         if (Access != AccessDownload) {
             parts.Add("access=" + Access);
+        }
+        if (Template != ReferenceTemplate.CiteIucn) {
+            parts.Add(IucnReference.QueryKey + "=" + IucnReference.QueryValue(Template));
         }
         var name = CustomRefName ?? targetDefaultRefName;
         if (WrapInRef != Default.WrapInRef || Amp != Default.Amp || name != targetDefaultRefName) {

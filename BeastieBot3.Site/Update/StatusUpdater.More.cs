@@ -241,10 +241,10 @@ public sealed partial class StatusUpdater {
 
     // What the species tables on English Wikipedia write, such as List of felids.
     private static string TrendTemplate(Trend trend) => trend switch {
-        Trend.Decreasing => "{{decrease|Population declining}}",
-        Trend.Stable => "{{steady|Population steady}}",
-        Trend.Increasing => "{{increase|Population increasing}}",
-        _ => "{{population change unknown}}",
+        Trend.Decreasing => PopulationTrendTemplate.Decreasing,
+        Trend.Stable => PopulationTrendTemplate.Stable,
+        Trend.Increasing => PopulationTrendTemplate.Increasing,
+        _ => PopulationTrendTemplate.Unknown,
     };
 
     // The trend templates and their redirects, by normalized name.
@@ -313,9 +313,7 @@ public sealed partial class StatusUpdater {
             notes.Add(new StatusNote(StatusNoteKind.CitationOlder));
             return new StatusFinding(StatusItemKind.Citation, line, StatusOutcome.NotUpdated, before, null, taxon, notes);
         }
-        DateOnly? downloaded = parts.DownloadedAtUtc is { } at ? DateOnly.FromDateTime(at) : null;
-        var options = WikitextOptions.Default.ToCiteIucnOptions(_today, downloaded) with { WrapInRef = false };
-        edits.Add(new Edit(cite.Span.Start, cite.Span.End, CiteIucnRenderer.Render(parts, options)));
+        edits.Add(new Edit(cite.Span.Start, cite.Span.End, ReplacementCitation(latest, parts)));
         notes.Add(new StatusNote(StatusNoteKind.CitationUpdated));
         return Finish(s, StatusItemKind.Citation, line, cite.Span, edits, taxon, notes);
     }

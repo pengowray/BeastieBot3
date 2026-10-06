@@ -12,9 +12,10 @@ internal sealed class FakeStatusLookup : IStatusLookup {
 
     public FakeStatusLookup Taxon(long id, string name, string? category, int? year = null, long? assessmentId = null,
         bool inRelease = true, long? current = null, bool pe = false, string? criteriaVersion = "3.1", string? citationJson = null, string? trend = null,
-        string? populationSize = null) {
+        string? populationSize = null, string? wikidataItem = null, string? itemProperties = null) {
         AssessmentRow? latest = category is null ? null : new AssessmentRow(assessmentId ?? id * 10, id, "Global", true, category, pe, false,
-            null, criteriaVersion, year, null, trend, citationJson, PopulationSize: populationSize);
+            null, criteriaVersion, year, null, trend, citationJson, WikidataItemQid: wikidataItem, WikidataItemProperties: itemProperties,
+            PopulationSize: populationSize);
         _taxa[id] = new StatusTaxon(id, name, inRelease, current, inRelease ? latest : null);
         if (inRelease) {
             _names.Add((SiteNameKey.Fold(name), id, StatusNameKind.Scientific));

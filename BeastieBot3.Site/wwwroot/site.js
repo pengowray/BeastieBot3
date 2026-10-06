@@ -197,6 +197,25 @@
         });
     }
 
+    // The group page's list editor: when the list type changes, show the options of that type
+    // (data-list-type="bullets" or "tables") and hide the others. Hidden options are still sent,
+    // so switching back keeps them as they were.
+    function setUpListType() {
+        var form = document.querySelector("form.list-options");
+        if (!form) {
+            return;
+        }
+        form.addEventListener("change", function (event) {
+            if (!event.target || event.target.name !== "type") {
+                return;
+            }
+            var tables = event.target.value === "table";
+            form.querySelectorAll("[data-list-type]").forEach(function (element) {
+                element.hidden = (element.getAttribute("data-list-type") === "tables") !== tables;
+            });
+        });
+    }
+
     // The query the form would send, as the browser would write it.
     function formQuery(form) {
         var params = new URLSearchParams();
@@ -420,6 +439,7 @@
     }
 
     setUpCopyButtons();
+    setUpListType();
     setUpLiveOptions();
     setUpSuggestions();
     setUpTextareas();

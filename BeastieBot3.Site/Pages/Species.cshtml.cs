@@ -151,7 +151,8 @@ public sealed class SpeciesModel : PageModel {
     public string? DataDateRange { get; private set; }
 
     public IActionResult OnGet(long taxonId, long? assessment, string? authors, string? access, string? opts,
-        [FromQuery(Name = "ref")] string? wrapRef, string? refname, string? amp, string? fullnames, string? q) {
+        [FromQuery(Name = "ref")] string? wrapRef, string? refname, string? amp, string? fullnames, string? q,
+        [FromQuery(Name = IucnReference.QueryKey)] string? cite = null) {
         RequestedTaxonId = taxonId;
         var snapshot = _db.Snapshot;
         Version = snapshot?.IucnRelease;
@@ -174,7 +175,9 @@ public sealed class SpeciesModel : PageModel {
         Combined = CombinedHistory.Build(Taxon, LinkedTaxa,
             id => id == Taxon.TaxonId ? _assessments : _queries.GetAssessments(id), _queries.GetTaxonomicNotesFlags);
         Options = WikitextOptions.FromQuery(authors, access, opts, wrapRef, refname, amp,
-            Selected is null ? DefaultRefNames.LatestGlobal : DefaultRefNameFor(Selected), fullnames);
+            Selected is null ? DefaultRefNames.LatestGlobal : DefaultRefNameFor(Selected), fullnames) with {
+            Template = IucnReference.FromQuery(cite),
+        };
         Taxobox = TaxoboxTemplate.For(Taxon.Kind, Taxon.Kingdom);
         BuildWikitext();
         LoadNames();
@@ -297,8 +300,10 @@ public sealed class SpeciesModel : PageModel {
         }
 
         if (Parts is not null && citeOptions is not null && IucnCategories.HasTaxoboxCode(Selected)) {
-            // status_ref is always a <ref>, whatever the citation box shows.
-            var statusRef = CiteIucnRenderer.Render(Parts, citeOptions with { WrapInRef = true });
+            // status_ref is always a <ref>, whatever the citation box shows. It holds {{cite Q}} when
+            // the reader chose it and the assessment has a Wikidata item.
+            var statusRef = IucnReference.Render(Options.Template, Parts, Selected.WikidataItemQid, Selected.WikidataItemProperties,
+                citeOptions with { WrapInRef = true }, Options.ToCiteQOptions(today, downloaded) with { WrapInRef = true })!;
             var lines = SpeciesboxStatus.Render(Selected.Category, Selected.PossiblyExtinct, Selected.PossiblyExtinctInTheWild,
                 Selected.CriteriaVersion, statusRef);
             boxes.Add(new WikitextBox("wikitext-speciesbox", Taxobox.Label, Taxobox.Name, lines, Rows: 5));

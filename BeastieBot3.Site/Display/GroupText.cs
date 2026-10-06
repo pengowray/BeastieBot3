@@ -4,7 +4,7 @@ namespace BeastieBot3.Site.Display;
 // classification on taxon pages. Kept apart from SiteText so each file stays short enough to review.
 // "Group" is the code's word for a higher taxon; pages say "taxon" or the rank.
 
-public static class GroupText {
+public static partial class GroupText {
     // Classification on a taxon page
     public static string ShowColRanks(int count) =>
         count == 1 ? "Show 1 rank from the Catalogue of Life" : $"Show {count} ranks from the Catalogue of Life";

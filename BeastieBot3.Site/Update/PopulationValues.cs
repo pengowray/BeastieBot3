@@ -39,6 +39,18 @@ public static partial class PopulationValues {
         return Format(parts[0]);
     }
 
+    /// IUCN's value written the way the species tables write a population: "Unknown" for "U" or no
+    /// value, "8,000–10,000" for "8000-10000", the range for a range with a best estimate
+    /// ("500000-999999,800000"), and IUCN's text as published when it is none of these.
+    public static string Display(string? iucn) {
+        if (string.IsNullOrWhiteSpace(iucn) || iucn.Trim() is "U" or "u") {
+            return "Unknown";
+        }
+        return ReadIucn(iucn) is { } parts
+            ? Format(parts[0])
+            : Clean(iucn).Replace("{", string.Empty).Replace("}", string.Empty).Replace("|", "{{!}}");
+    }
+
     private static bool Matches(long row, long iucn) {
         if (row == iucn || row == iucn + 1) {
             return true;

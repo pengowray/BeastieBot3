@@ -1,0 +1,22 @@
+@model GroupModel
+@using BeastieBot3.Site.Lists
+@* The species tables' wikitext and preview (the group page's list output for the table type). *@
+@{
+    var tables = Model.Tables!;
+    var tableCount = tables.Items.OfType<GenusTable>().Count();
+    var lines = Model.Wikitext.Count(c => c == '\n') + 1;
+}
+<p class="list-size">@GroupText.TableSize(tables.RowCount, tableCount)</p>
+@if (tables.SkippedRanks.Count > 0) {
+    <p class="note">@GroupText.RanksLeftOut(tables.SkippedRanks)</p>
+}
+<div class="wikitext-box">
+    <partial name="_WikitextBoxContent" model="@(new WikitextBox("list-wikitext", GroupText.WikitextLabel, "list", Model.Wikitext, Math.Min(30, Math.Max(6, lines)), GroupText.CopyTablesAccessible))" />
+</div>
+<details class="list-preview" id="list-preview">
+    <summary>@GroupText.Preview</summary>
+    <p class="help">@GroupText.TablePreviewNote</p>
+    <div class="preview-body">
+        @Html.Raw(SpeciesTablePreview.ToHtml(tables))
+    </div>
+</details>

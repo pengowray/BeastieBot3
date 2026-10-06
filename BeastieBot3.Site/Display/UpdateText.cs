@@ -46,6 +46,7 @@ public static partial class UpdateText {
     public const string OptionIds = "Add the taxon id and assessment id to {{IUCN status}} templates that lack them";
     public const string OptionYear = "Add year= to {{IUCN status}} templates that have no year";
     public const string OptionCitations = "Replace {{cite iucn}} citations of older assessments with citations of the latest ones";
+    public const string OptionCiteQ = "Use {{cite Q}} instead of {{cite iucn}} in replaced citations when the latest assessment has a Wikidata item";
     public const string OptionCommonNames = "Match common names: when no scientific name in an item matches IUCN's, find the taxon by its English common name, if only one taxon has that name";
 
     // Offers above the result, shown when an option that is off would change items.
