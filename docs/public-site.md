@@ -114,6 +114,9 @@ IUCN does not have (version 13, deployed on 6 October 2026 without the Wikipedia
 into main, and no database built from main has them. Version 9 added the tree of groups (see
 [Groups and lists](#groups-and-lists)), version 10 `assessment.population_size`, and version 11
 `name.authority`, `assessment.api_not_found` and assessments with no scope (`scope = ''`).
+Version 16 adds `assessment.credits` and the `credit_name` table (see
+[Credits of an assessment](#credits-of-an-assessment)); version 15 is used by a parallel branch
+for the group page lists, and the two are renumbered when merged.
 
 Rules the site depends on (pinned by `SiteDbBuildTests` and the site tests):
 
@@ -632,6 +635,53 @@ Cite IUCN modules, send it to `https://en.wikipedia.org/w/api.php` with `action=
 between anonymous POSTs. Use a User-Agent such as
 `BeastieBot3-site-dev/0.1 (https://en.wikipedia.org/wiki/User:Beastie_Bot)`, never one with an
 email address.
+
+### Credits of an assessment
+
+The taxon page has a closed section "Credits as given by IUCN" under the `{{cite iucn}}` box
+(`Pages/Shared/_AssessmentCredits.cshtml`, `Pages/CreditsView.cs`, strings in
+`Display/SiteText.Credits.cs`). It lists the people and organisations that the payload's
+`credits[]` array names for the assessment the wikitext is for, so an editor can see the full
+names and affiliations behind the citation's initials. The section has `id="iucn-credits"`, so it
+stays open when `site.js` replaces the wikitext after an option changes. It changes with the
+assessment picked from the history tables.
+
+Each credit type is listed under the heading IUCN's assessment pages use (checked on the tiger's
+page on iucnredlist.org in October 2026), in IUCN's order: `assessor` "Assessor(s)", `evaluator`
+"Reviewer(s)", `contributor` "Contributor(s)", `facilitators` "Facilitator(s) / Compiler(s)" and
+`institutions` "Partner(s) / Institution(s)". A type IUCN adds later is shown after these under
+its own name. Each list has its number of entries after the heading, and the summary gives the
+number of different names, counting a name once when it appears under two headings (compared
+without its bracketed affiliation, `CreditsView.NameKey`).
+
+What `site build-db` stores (`AssessmentCreditsReader`, pinned by `SiteDbBuildCreditsTests`):
+
+- One group per credit type with the `value[]` entries as IUCN wrote them, with whitespace
+  collapsed to single spaces ("Pranav  Chanchani"). Entries that are not strings are skipped,
+  an entry listed twice in a type is kept once, and a type that a payload repeats (4 payloads in
+  2026-1) is one group.
+- Email addresses are left out: an entry that is only an address is dropped, and an address inside
+  an entry is removed with its brackets. About 0.75% of entries in 2026-1 have one, nearly all of
+  them address-only. An "@" that is not part of an address is kept.
+- `value[]` has no fixed order: in two of every three blocks with two or more names it differs from
+  the order of the `full` string, which IUCN's pages and the citation use. The entries are put in
+  the order of `full` when each entry's surname (its last word, after notes in brackets and a
+  generational suffix) is found there exactly once as a whole word; otherwise `value[]`'s order is
+  kept.
+- When `value[]` is empty, or holds only email addresses, the group is the `full` string (the
+  citation form, "Tolley, K. & Menegon, M."), shown as one line with "IUCN does not give full names
+  for this group." and no count. When any group is like this the summary has no total. In 2026-1
+  this applies to 69,554 of the 346,877 assessments with credits, mostly older ones.
+- `assessment.credits` holds the groups as ids into `credit_name` (`StoredCredits` in
+  `BeastieBot3.Shared`): `[{"type":"assessor","names":[12,45]},{"type":"evaluator","full":77}]`.
+  The same people are credited on thousands of assessments: the build of 6 October 2026 has
+  2,215,723 entries and 34,119 distinct ones. Stored this way the credits add about 41 MB to the
+  database (39.4 MB of `credits` text and 1.9 MB of `credit_name`), where JSON with the names in
+  each row would have added about 136 MB. The site reads them only for the assessment shown: the
+  row by its primary key, then the names with one `json_each` parameter.
+
+Credits are names and affiliations, not narrative text, so the IUCN Terms of Use rule above does not
+keep them out of the database.
 
 ### Full given names
 
