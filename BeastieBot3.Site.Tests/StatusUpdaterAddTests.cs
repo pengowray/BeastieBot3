@@ -14,7 +14,10 @@ public sealed class StatusUpdaterAddTests {
         .Taxon(165247, "Bromus interruptus", "EW", 2011, 5995954)
         .Taxon(700, "Felis silvestris", "LC", 2022, 7001)
         .Taxon(800, "Regional only", null)
-        .Synonym(15955, "Felis tigris");
+        .Synonym(15955, "Felis tigris")
+        .Article(15955, "Tiger")
+        .Article(700, "Wildcat")
+        .CommonName(4828, "Giant golden mole");
 
     private static readonly StatusUpdateOptions Lines = new() { AddToListLines = true };
     private static readonly StatusUpdateOptions Columns = new() { AddStatusColumns = true };
@@ -103,6 +106,49 @@ public sealed class StatusUpdaterAddTests {
     public void LinesInsideAColumnsListTemplateCount() {
         var result = Run("{{columns-list|colwidth=30em|\n* ''Panthera tigris''\n* ''Felis silvestris''\n}}\n", Lines);
         Assert.Equal("{{columns-list|colwidth=30em|\n* ''Panthera tigris'' {{IUCN status|EN}}\n* ''Felis silvestris'' {{IUCN status|LC}}\n}}\n", result.Text);
+    }
+
+    [Fact]
+    public void ALineWithOnlyALinkIsFoundByTheArticle() {
+        var result = Run("* [[Tiger]] – Asia\n* [[wildcat|Wildcats]]\n* [[Giant golden mole]]\n* [[Wildcat]] and [[Tiger]]\n", Lines);
+        Assert.Equal("* [[Tiger]] {{IUCN status|EN}} – Asia\n* [[wildcat|Wildcats]] {{IUCN status|LC}}\n* [[Giant golden mole]]\n"
+            + "* [[Wildcat]] and [[Tiger]]\n", result.Text);
+        Assert.Equal(new StatusNote(StatusNoteKind.MatchedByArticle, "Tiger"), result.Findings[0].Notes.Single());
+    }
+
+    [Theory]
+    [InlineData("* Family [[Tiger|Pantherinae]] <small>Pocock, 1917</small>")]   // a rank line
+    [InlineData("** Genus ''[[Tiger|Pantheroides]]''")]                         // a rank line
+    [InlineData("* [[Tiger|Pantherinae]]")]                                     // a link labelled with a group name
+    [InlineData("** ''Panthera tigris'' complex")]                              // a species group
+    [InlineData("** ''Panthera tigris'' species group")]
+    public void GroupLinesGetNoStatus(string line) {
+        Assert.Equal(0, Run(line + "\n").ListLinesWithoutStatus);
+    }
+
+    [Fact]
+    public void AbbreviatedNameInBracketsAfterALink() {
+        var result = Run("* '''Genus ''Panthera'''''<ref name=msw3>x</ref> – big cats\n** [[Kashmir cat]] (''P. tigris'') – [[India]] and [[Pakistan]]\n", Lines);
+        Assert.Equal("* '''Genus ''Panthera'''''<ref name=msw3>x</ref> – big cats\n** [[Kashmir cat]] (''P. tigris'') {{IUCN status|EN}} – [[India]] and [[Pakistan]]\n", result.Text);
+    }
+
+    [Fact]
+    public void StatusGoesAfterItalicsAroundALink() {
+        var result = Run("* ''[[Tiger|the tiger]]'' of Asia\n", Lines);
+        Assert.Equal("* ''[[Tiger|the tiger]]'' {{IUCN status|EN}} of Asia\n", result.Text);
+    }
+
+    [Fact]
+    public void ATableRowWithOnlyALinkIsFoundByTheArticle() {
+        var result = Run("{|\n! Name !! Range\n|-\n| [[Tiger]] || Asia\n|-\n| [[Wildcat]] || Europe\n|-\n| ''Neamblysomus gunningi'' || Africa\n|}", Columns);
+        Assert.Contains("| [[Tiger]] || {{IUCN status|EN}} || Asia", result.Text);
+        Assert.Contains("| [[Wildcat]] || {{IUCN status|LC}} || Europe", result.Text);
+    }
+
+    [Fact]
+    public void AStatusTemplateOnALineWithOnlyALinkIsFoundByTheArticle() {
+        var result = Run("* [[Tiger]] {{IUCN status|VU}}\n");
+        Assert.Equal("* [[Tiger]] {{IUCN status|EN}}\n", result.Text);
     }
 
     [Fact]

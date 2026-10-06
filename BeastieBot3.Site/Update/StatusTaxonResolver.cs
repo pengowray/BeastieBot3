@@ -9,7 +9,9 @@ namespace BeastieBot3.Site.Update;
 ///   3. the taxon id in the IUCN citations on the item's status (a {{cite iucn}} written there, or a
 ///      named reference used there whose definition has a T…A… id), when they name one taxon, noted.
 ///      This also settles a name that matches several taxa, when the cited taxon is one of them;
-///   4. an English common name of exactly one taxon, only when asked for (MatchCommonNames) and never
+///   4. a link in the item's row or line to the English Wikipedia article of exactly one taxon (the
+///      article title the site has for it), noted; never for an item the article gives NE;
+///   5. an English common name of exactly one taxon, only when asked for (MatchCommonNames) and never
 ///      for an item the article gives NE; when not asked for, the note says which name would match.
 /// One resolver serves one Update: ReadReferences reads the text's named references first.
 public sealed partial class StatusTaxonResolver {
@@ -49,9 +51,12 @@ public sealed partial class StatusTaxonResolver {
     /// gives the item NE. Such a taxon is often one IUCN has not split out yet ("Kruger serotine",
     /// described in 2026, is IUCN's English name for Neoromicia melckorum), so it is never found by a
     /// common name, which would give it another taxon's status.
-    public NameMatch Resolve(IReadOnlyList<string> names, WikitextScanner? s, IReadOnlyList<TextSpan>? context, bool notEvaluated) {
+    /// articles: the targets of the links in the item's row or line (StatusUpdater.ArticleLinks).
+    public NameMatch Resolve(IReadOnlyList<string> names, WikitextScanner? s, IReadOnlyList<TextSpan>? context, bool notEvaluated,
+        IReadOnlyList<string>? articles = null) {
         if (names.Count == 0) {
-            return ByCitation(s, context) ?? new NameMatch(null, new StatusNote(StatusNoteKind.NoName), null);
+            return ByCitation(s, context) ?? (notEvaluated ? null : ByArticle(articles))
+                ?? new NameMatch(null, new StatusNote(StatusNoteKind.NoName), null);
         }
         foreach (var kind in new[] { StatusNameKind.Scientific, StatusNameKind.Synonym }) {
             var ids = new HashSet<long>();
@@ -77,6 +82,9 @@ public sealed partial class StatusTaxonResolver {
         if (ByCitation(s, context) is { } byCitation) {
             return byCitation;
         }
+        if (!notEvaluated && ByArticle(articles) is { } byArticle) {
+            return byArticle;
+        }
         var notFound = new StatusNote(StatusNoteKind.NameNotFound, string.Join(", ", names));
         foreach (var name in notEvaluated ? [] : names) {
             var ids = _lookup.InReleaseTaxaWithName(name, StatusNameKind.EnglishCommonName);
@@ -88,6 +96,24 @@ public sealed partial class StatusTaxonResolver {
                 : new NameMatch(null, notFound, new StatusNote(StatusNoteKind.CommonNameNotUsed, name));
         }
         return new NameMatch(null, notFound, null);
+    }
+
+    // The one taxon whose English Wikipedia article the links point to, or null.
+    private NameMatch? ByArticle(IReadOnlyList<string>? articles) {
+        if (articles is null || articles.Count == 0) {
+            return null;
+        }
+        var ids = new HashSet<long>();
+        string? matched = null;
+        foreach (var title in articles) {
+            foreach (var id in _lookup.InReleaseTaxaWithName(title, StatusNameKind.ArticleTitle)) {
+                matched ??= title;
+                ids.Add(id);
+            }
+        }
+        return ids.Count == 1
+            ? new NameMatch(_lookup.GetTaxon(ids.First()), null, new StatusNote(StatusNoteKind.MatchedByArticle, matched))
+            : null;
     }
 
     // The one taxon the IUCN citations in the context name. Null when there is no context, or the

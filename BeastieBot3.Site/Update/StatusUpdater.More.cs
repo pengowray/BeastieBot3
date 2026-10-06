@@ -26,7 +26,8 @@ public sealed partial class StatusUpdater {
     private StatusFinding ListLine(WikitextScanner s, WikiTemplate template, List<Edit> edits) {
         var line = s.LineOf(template.Span.Start);
         var before = s.Original(template.Span);
-        var (taxon, failure) = ResolveNames(LineNames(s, template), s, [AfterOnLine(s, template)], IsNotEvaluated(s, template));
+        var (taxon, failure) = ResolveNames(LineNames(s, template), s, [AfterOnLine(s, template)], IsNotEvaluated(s, template),
+            ArticleTitles(s, [BeforeOnLine(s, template)]));
         if (taxon is null) {
             return new StatusFinding(StatusItemKind.ListLine, line, StatusOutcome.NotUpdated, before, null, null,
                 [failure!.Kind == StatusNoteKind.NoName ? new StatusNote(StatusNoteKind.NoName) : failure]);
@@ -50,10 +51,11 @@ public sealed partial class StatusUpdater {
     }
 
     // The scientific names on a list line before the template.
-    private List<string> LineNames(WikitextScanner s, WikiTemplate template) {
-        var lineStart = s.Text.LastIndexOf('\n', Math.Max(0, template.Span.Start - 1)) + 1;
-        return LineNames(s, new TextSpan(lineStart, template.Span.Start));
-    }
+    private List<string> LineNames(WikitextScanner s, WikiTemplate template) => LineNames(s, BeforeOnLine(s, template));
+
+    // The list line from its start to the template.
+    private static TextSpan BeforeOnLine(WikitextScanner s, WikiTemplate template) =>
+        new(s.Text.LastIndexOf('\n', Math.Max(0, template.Span.Start - 1)) + 1, template.Span.Start);
 
     // The scientific names in a span of a list line that starts at the line's start.
     private List<string> LineNames(WikitextScanner s, TextSpan span) =>
@@ -107,16 +109,19 @@ public sealed partial class StatusUpdater {
     private StatusTaxon? NameNear(WikitextScanner s, WikiTemplate template) {
         List<string> names;
         TextSpan[] context;
+        List<string> articles;
         if (_rowOf.TryGetValue(template, out var row)) {
             names = row.Cells.Concat(row.Spanning).SelectMany(c => NamesIn(s, c.Content)).Distinct().ToList();
             context = [.. row.Cells.Where(c => s.TemplatesWithin(c.Content).Contains(template)).Select(c => c.Content)];
+            articles = ArticleTitles(s, row.Cells.Concat(row.Spanning).Where(c => !context.Contains(c.Content)).Select(c => c.Content));
         } else if (IsListLine(s, template.Span.Start)) {
             names = LineNames(s, template);
             context = [AfterOnLine(s, template)];
+            articles = ArticleTitles(s, [BeforeOnLine(s, template)]);
         } else {
             return null;
         }
-        var (taxon, _) = ResolveNames(names, s, context, IsNotEvaluated(s, template));
+        var (taxon, _) = ResolveNames(names, s, context, IsNotEvaluated(s, template), articles);
         return taxon;
     }
 
@@ -177,7 +182,8 @@ public sealed partial class StatusUpdater {
         // serotine's for the habitat of Happolds' pipistrelle, which was split from it).
         TextSpan[] statusSpans = [.. new[] { "iucn-status", "direction", "population" }
             .Select(row.Named).OfType<TemplateParameter>().Select(p => p.Whole)];
-        var (taxon, failure) = ResolveNames(names.Distinct().ToList(), s, statusSpans, current == "NE");
+        var nameArticles = row.Named("name") is { } nameValue ? ArticleTitles(s, [nameValue.Value]) : [];
+        var (taxon, failure) = ResolveNames(names.Distinct().ToList(), s, statusSpans, current == "NE", nameArticles);
         if (taxon is null) {
             return noGenus is not null && failure!.Kind == StatusNoteKind.NoName
                 ? Fail(StatusNoteKind.NoGenus, noGenus)

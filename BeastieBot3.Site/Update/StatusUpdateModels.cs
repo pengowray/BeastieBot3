@@ -13,14 +13,15 @@ public interface IStatusLookup {
     StatusTaxon? GetTaxon(long taxonId);
 
     /// The taxa in the release that have this name as a scientific name, a synonym (from any
-    /// source) or an English common name, compared after SiteNameKey.Fold.
+    /// source), an English common name, or the title of their English Wikipedia article, compared
+    /// after SiteNameKey.Fold.
     IReadOnlyCollection<long> InReleaseTaxaWithName(string name, StatusNameKind kind);
 
     /// The scope of an assessment ("Global", "Europe"), or null when the site has no such assessment.
     string? AssessmentScope(long assessmentId);
 }
 
-public enum StatusNameKind { Scientific, Synonym, EnglishCommonName }
+public enum StatusNameKind { Scientific, Synonym, EnglishCommonName, ArticleTitle }
 
 /// Changes the reader asks for on top of the default ones. Each is off by default.
 public sealed record StatusUpdateOptions {
@@ -148,6 +149,9 @@ public enum StatusNoteKind {
     /// No name matched, but an English common name (Detail) names exactly one taxon;
     /// StatusUpdateOptions.MatchCommonNames would use it.
     CommonNameNotUsed,
+    /// No scientific name matched; the taxon was found by a link to its English Wikipedia article
+    /// (Detail: the link's target as written).
+    MatchedByArticle,
     /// The list line already gives a status in its text or as a status image (Detail), so no template was added.
     StatusInText,
     /// A status column was added to the table after column Id (1-based); Detail: "rows with a status/data rows".

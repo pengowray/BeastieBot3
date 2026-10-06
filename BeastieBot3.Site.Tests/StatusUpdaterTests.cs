@@ -28,6 +28,12 @@ internal sealed class FakeStatusLookup : IStatusLookup {
         return this;
     }
 
+    /// The title of the taxon's English Wikipedia article.
+    public FakeStatusLookup Article(long id, string title) {
+        _names.Add((SiteNameKey.Fold(title), id, StatusNameKind.ArticleTitle));
+        return this;
+    }
+
     public FakeStatusLookup CommonName(long id, string name) {
         _names.Add((SiteNameKey.Fold(name), id, StatusNameKind.EnglishCommonName));
         return this;

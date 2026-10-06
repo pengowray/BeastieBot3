@@ -76,6 +76,8 @@ public static partial class UpdateText {
                 "No name in this item matches exactly one IUCN taxon, so the taxon was found by the taxon id in the IUCN citation on the same row or line.",
             StatusNoteKind.MatchedByCommonName =>
                 $"Matched by the English common name “{note.Detail}”. The Taxon column shows IUCN's scientific name.",
+            StatusNoteKind.MatchedByArticle =>
+                $"Matched by the link to the Wikipedia article “{note.Detail}”. The Taxon column shows IUCN's scientific name.",
             StatusNoteKind.CommonNameNotUsed =>
                 $"The English common name “{note.Detail}” matches one taxon, but common names were not used. To use them, click Match common names above the result.",
             StatusNoteKind.StatusInText when note.Detail?.StartsWith('(') == true =>

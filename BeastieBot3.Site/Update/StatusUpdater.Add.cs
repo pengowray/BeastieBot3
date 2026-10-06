@@ -66,7 +66,7 @@ public sealed partial class StatusUpdater {
     private readonly List<ListMember> _bareMembers = [];
 
     private static ListMember Member(StatusTaxon taxon, int line, StatusNote? howFound, string? code) =>
-        new(taxon, line, howFound is { Kind: StatusNoteKind.MatchedBySynonym or StatusNoteKind.MatchedByCommonName, Detail: { } name }
+        new(taxon, line, howFound is { Kind: StatusNoteKind.MatchedBySynonym or StatusNoteKind.MatchedByCommonName or StatusNoteKind.MatchedByArticle, Detail: { } name }
             ? name : taxon.ScientificName, code);
 
     private static readonly HashSet<StatusItemKind> MemberKinds = [
@@ -81,7 +81,8 @@ public sealed partial class StatusUpdater {
         var seen = new HashSet<(long, int)>();
         foreach (var finding in findings.Where(f => MemberKinds.Contains(f.Kind) && f.Taxon is not null)) {
             if (seen.Add((finding.Taxon!.TaxonId, finding.Line))) {
-                var howFound = finding.Notes.FirstOrDefault(n => n.Kind is StatusNoteKind.MatchedBySynonym or StatusNoteKind.MatchedByCommonName);
+                var howFound = finding.Notes.FirstOrDefault(n => n.Kind is StatusNoteKind.MatchedBySynonym or StatusNoteKind.MatchedByCommonName
+                    or StatusNoteKind.MatchedByArticle);
                 var code = finding.Kind is StatusItemKind.ListLineAdded or StatusItemKind.TableRowAdded ? null : EditSummary.CodeIn(finding.Before);
                 members.Add(Member(finding.Taxon, finding.Line, howFound, code));
             }
@@ -123,7 +124,8 @@ public sealed partial class StatusUpdater {
             if (tableSpans.Skip(nextTable).TakeWhile(t => t.Start <= lineStart).Any(t => t.Contains(lineStart))) {
                 continue;
             }
-            if (HasTemplateStartIn(statusTemplateStarts, lineStart, end) || skippedSections.Any(span => span.Contains(lineStart))) {
+            if (HasTemplateStartIn(statusTemplateStarts, lineStart, end) || skippedSections.Any(span => span.Contains(lineStart))
+                || RankLine().IsMatch(masked[lineStart..end])) {
                 continue;
             }
             var refAt = masked.IndexOf("<ref", lineStart, end - lineStart, StringComparison.OrdinalIgnoreCase);
@@ -135,20 +137,47 @@ public sealed partial class StatusUpdater {
             var occurrences = LineNameOccurrences(s, nameSpan)
                 .Where(o => !externalLinks.Any(l => l.Start <= o.Span.Start && o.Span.End <= l.End)).ToList();
             // One name only: a line naming two species ("''Felis catus'' and ''Felis silvestris''")
-            // would otherwise get the status of whichever of them IUCN has.
-            if (occurrences.Select(o => o.Name).Distinct().Count() != 1) {
+            // would otherwise get the status of whichever of them IUCN has. A line with no
+            // scientific name ("*[[Black crested gibbon]]") is found by the article it links.
+            // A common name in a link can look like a scientific name ("[[Kashmir pygmy shrew]]"), so a
+            // name counts when it is a scientific name or synonym of a taxon, or is written in italics.
+            var italics = Italic().Matches(masked[nameSpan.Start..nameSpan.End])
+                .Select(m => new TextSpan(nameSpan.Start + m.Index, nameSpan.Start + m.Index + m.Length)).ToList();
+            bool InItalics(TextSpan span) => italics.Any(i => i.Start <= span.Start && span.End <= i.End);
+            occurrences = [.. occurrences.Where(o => occurrences.Any(p => p.Name == o.Name && InItalics(p.Span)) || IsKnownName(o.Name))];
+            var nameCount = occurrences.Select(o => o.Name).Distinct().Count();
+            if (nameCount > 1) {
+                continue;
+            }
+            // A link labelled with a family or genus name ("[[Basking shark|Cetorhinidae]]") is about
+            // the group, even when its article is the group's only species.
+            var links = ArticleLinks(s, nameSpan).Where(l => !IsGroupLink(masked[l.Span.Start..l.Span.End], InItalics(l.Span))).ToList();
+            if (nameCount == 0 && links.Count == 0) {
                 continue;
             }
             looked++;
-            var match = _resolver.Resolve([occurrences[0].Name], s, null, notEvaluated: false);
+            var match = _resolver.Resolve(nameCount == 1 ? [occurrences[0].Name] : [], s, null, notEvaluated: false,
+                [.. links.Select(l => l.Title).Distinct(StringComparer.OrdinalIgnoreCase)]);
             if (match.Taxon is null) {
+                continue;
+            }
+            if (nameCount == 0) {
+                var title = match.HowFound?.Detail;
+                occurrences = [.. links.Where(l => string.Equals(l.Title, title, StringComparison.OrdinalIgnoreCase)).Take(1)];
+                if (occurrences.Count == 0) {
+                    continue;
+                }
+            }
+            var insert = InsertAfterName(s, occurrences, end);
+            // "** ''S. vagrans'' complex": the line heads a group of species.
+            if (GroupAfterName().IsMatch(masked[insert..end])) {
                 continue;
             }
             var lineText = masked[lineStart..end];
             var image = StatusImage().Match(lineText);
             var code = CodeInBrackets().Match(lineText);
             var statusText = image.Success ? image.Value : code.Success ? code.Value : null;
-            yield return new LineAddition(new TextSpan(lineStart, end), match, InsertAfterName(s, occurrences, end), statusText);
+            yield return new LineAddition(new TextSpan(lineStart, end), match, insert, statusText);
         }
     }
 
@@ -181,6 +210,9 @@ public sealed partial class StatusUpdater {
         "flatlist", "flat list", "unbulleted list", "multicol",
     ];
 
+    private bool IsKnownName(string name) => StatusTaxonResolver.NameVariants(name).Any(v =>
+        _lookup.InReleaseTaxaWithName(v, StatusNameKind.Scientific).Count > 0 || _lookup.InReleaseTaxaWithName(v, StatusNameKind.Synonym).Count > 0);
+
     private static bool HasTemplateStartIn(List<int> starts, int from, int to) {
         var i = starts.BinarySearch(from);
         if (i < 0) {
@@ -195,10 +227,14 @@ public sealed partial class StatusUpdater {
         var first = occurrences.MinBy(o => o.Span.Start).Span;
         var start = first.Start;
         var end = first.End;
+        // Italics or bold around a link: "''[[Basking shark|Cetorhinus]]''".
+        var lineStart = s.Text.LastIndexOf('\n', Math.Max(0, start - 1)) + 1;
+        var around = Italic().Matches(s.Masked[lineStart..lineEnd])
+            .Select(m => new TextSpan(lineStart + m.Index, lineStart + m.Index + m.Length)).ToList();
         bool grown;
         do {
             grown = false;
-            foreach (var (_, span) in occurrences) {
+            foreach (var span in occurrences.Select(o => o.Span).Concat(around)) {
                 if (span.Start < end && span.End > start && (span.Start < start || span.End > end)) {
                     start = Math.Min(start, span.Start);
                     end = Math.Max(end, span.End);
@@ -291,14 +327,19 @@ public sealed partial class StatusUpdater {
             var matched = 0;
             foreach (var row in data) {
                 looked++;
-                var names = row.Cells.Concat(row.Spanning).SelectMany(c => NamesIn(s, c.Content)).Distinct().ToList();
-                var match = _resolver.Resolve(names, s, null, notEvaluated: false);
+                var cells = row.Cells.Concat(row.Spanning).ToList();
+                var names = cells.SelectMany(c => NamesIn(s, c.Content)).Distinct().ToList();
+                var match = _resolver.Resolve(names, s, null, notEvaluated: false, ArticleTitles(s, cells.Select(c => c.Content)));
                 rows.Add((row, match));
                 if (match.Taxon is null) {
                     continue;
                 }
                 matched++;
-                if (row.Cells.FirstOrDefault(c => NamesIn(s, c.Content).Any()) is { } nameCell) {
+                // The cell with the scientific name, or with the link that found the taxon.
+                var linked = match.HowFound is { Kind: StatusNoteKind.MatchedByArticle, Detail: { } title } ? title : null;
+                if (row.Cells.FirstOrDefault(c => linked is null
+                        ? NamesIn(s, c.Content).Any()
+                        : ArticleLinks(s, c.Content).Any(l => string.Equals(l.Title, linked, StringComparison.OrdinalIgnoreCase))) is { } nameCell) {
                     var column = nameCell.Column + nameCell.Colspan - 1;
                     nameColumns[column] = nameColumns.GetValueOrDefault(column) + 1;
                 }
@@ -439,6 +480,29 @@ public sealed partial class StatusUpdater {
         var eol = newline > 0 && s.Text[newline - 1] == '\r' ? "\r\n" : "\n";
         return new Edit(at, at, $"{eol}{(header ? "!" : "|")} {content}".TrimEnd(' '));
     }
+
+    // A line that names a rank before the taxon: "* Family [[Basking shark|Cetorhinidae]]",
+    // "** Genus ''[[Lamna]]''", "*** '''Genus ''Sorex'''''".
+    [GeneratedRegex(@"^[*#:; ]*(?:'{2,5})?\s*(?:Superfamily|Family|Subfamily|Tribe|Subtribe|Genus|Subgenus|Order|Suborder|Infraorder|Class|Subclass|Section|Clade)\b")]
+    private static partial Regex RankLine();
+
+    // A species group named after one species: "''S. vagrans'' complex", "''S. cinereus'' group".
+    [GeneratedRegex(@"^\s*(?:species\s+)?(?:complex|group)\b", RegexOptions.IgnoreCase)]
+    private static partial Regex GroupAfterName();
+
+    // A link labelled with the name of a group: one capitalised word that is in italics (a genus,
+    // "''[[Basking shark|Cetorhinus]]''") or has the ending of a family, subfamily, tribe or order name.
+    // A one-word English name ("[[Wildcat|Wildcats]]") is neither.
+    private static bool IsGroupLink(string link, bool inItalics) {
+        var m = OneWordLabel().Match(link);
+        return m.Success && (inItalics || m.Groups["italic"].Success || GroupEnding().IsMatch(m.Groups["word"].Value));
+    }
+
+    [GeneratedRegex(@"^\[\[[^|\]]*\|\s*(?<italic>'{2,5})?(?<word>\p{Lu}\p{Ll}+)(?:'{2,5})?\s*\]\]$")]
+    private static partial Regex OneWordLabel();
+
+    [GeneratedRegex(@"(?:idae|inae|ini|oidea|iformes|aceae|oideae|eae|ales)$")]
+    private static partial Regex GroupEnding();
 
     // [[File:Status iucn3.1 EN.svg]] and the like.
     [GeneratedRegex(@"status[ _]iucn[^|\]]*", RegexOptions.IgnoreCase)]

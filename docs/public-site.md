@@ -1422,7 +1422,7 @@ statuses changed to match the latest global assessments, and a report with one r
 result, item, text before and after, taxon, notes). Strings are in `Display/UpdateText.cs`; the
 logic is pure, in `Update/` (`WikitextScanner` masks comments, nowiki, pre, syntaxhighlight, source
 and math, and finds templates by counting braces; `WikiTables` reads wikitables line by line with
-colspan and rowspan; `StatusUpdater` decides the edits, and `StatusTaxonResolver` finds each item's taxon by name, synonym, IUCN citation or common name), and reads the database through
+colspan and rowspan; `StatusUpdater` decides the edits, and `StatusTaxonResolver` finds each item's taxon by name, synonym, IUCN citation, a link to its English Wikipedia article (the title the site stores as a `name` with source `wikipedia`; not for an item given NE) or common name), and reads the database through
 `IStatusLookup` (`Data/SiteStatusLookup.cs`), so `StatusUpdaterTests` run over a fake.
 
 - `{{IUCN status}}` with a taxon id: the code (`IucnStatusTemplate.ToTemplateCode`), the ids, and
@@ -1499,9 +1499,16 @@ colspan and rowspan; `StatusUpdater` decides the edits, and `StatusTaxonResolver
   (`StatusUpdateResult.ListLinesWithoutStatus`, `TablesWithoutStatus`) for an offer above the
   result and are not items, so they do not count toward the item limit.
   - `addlines`: `{{IUCN status|EN}}` on a `*` or `#` line with no `{{IUCN status}}`, outside
-    templates, tables and sections such as References, External links, See also, Further
-    reading and Synonyms, whose text before its first `<ref>` writes exactly one scientific name outside external
-    link labels, naming one taxon (a synonym counts, with a note). It goes after the name, after a
+    templates (except list layout templates such as `{{columns-list}}` and `{{div col}}`), tables and
+    sections such as References, External links, See also, Further reading and Synonyms, whose text
+    before its first `<ref>` writes exactly one scientific name outside external link labels, naming
+    one taxon (a synonym counts, with a note). A name counts when it is in italics or is a scientific
+    name or synonym of a taxon, so a common name in a link ("[[Magnificent frigatebird]]", which has
+    the shape of a binomial) does not count as a second name. A line with no scientific name is
+    found by a link to the taxon's English Wikipedia article (`MatchedByArticle`, below). Lines that
+    name a rank first ("* Family [[Basking shark|Cetorhinidae]]", "** Genus ..."), lines that head a
+    species group ("''S. vagrans'' complex") and links labelled with a group name (one word in
+    italics, or ending -idae, -inae and so on) are left out. It goes after the name, after a
     closing bracket when the name is in brackets ("[[Tiger]] (''P. tigris'')"), and after an
     authority straight after it: in brackets with a year, `{{small}}` or `<small>`. A line that gives
     a status as "(EN)" or a status image is reported and left. The `ids` and `year` options apply to
@@ -1548,9 +1555,10 @@ colspan and rowspan; `StatusUpdater` decides the edits, and `StatusTaxonResolver
     endangered amphibians (no codes) gave 567 EN species missing and 38 listed taxa now in another
     category; List of canids, List of cetaceans and Genus Fulica (Coot) one missing species each;
     List of felids none; List of Acer species 2 missing and 5 lumps; the regional lists (mammals of
-    India and Madagascar, birds of Hawaii) are partial. A 320 KB list takes under 0.3 s. Known gaps: a list whose lines give only a
-    common name link ("*[[Black crested gibbon]]") is not matched by name, and a missing taxon whose
-    article is a redirect to the list is linked to the list itself.
+    India and Madagascar, birds of Hawaii) are partial. A 320 KB list takes under 0.3 s. Lines that
+    give only a common name link are found by the article (the live List of critically endangered
+    mammals: 187 of IUCN's 236 CR species). A missing taxon whose article is a list (its own name
+    redirects there) is written without a link.
 - `citeq` (off by default): every citation the page replaces, in `status_ref` or elsewhere, is
   `{{cite Q|<item>}}` when the latest assessment has a Wikidata item, else `{{cite iucn}}`
   (`StatusUpdater.ReplacementCitation`, through `IucnReference`). An existing `{{cite Q}}` is not

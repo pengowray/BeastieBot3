@@ -1,3 +1,4 @@
+using System.Text.RegularExpressions;
 using BeastieBot3.Shared.Wikitext;
 using BeastieBot3.Site.Data;
 using BeastieBot3.Site.Lists;
@@ -62,7 +63,7 @@ public sealed record ListScopeResult(
 /// Compares the taxa a text lists (StatusUpdateResult.Members) with the IUCN group they are in, and
 /// finds the group's taxa the text leaves out, the taxa it lists that are outside the group or now
 /// in another category, and taxa it lists under two names. Report only: the text is never changed.
-public static class ListScope {
+public static partial class ListScope {
     /// The share of the listed taxa a group must hold to be the list's group.
     public const double ScopeShare = 0.95;
     /// The share of a group's taxa (in the list's categories, when it has some) that a text must list
@@ -211,10 +212,16 @@ public static class ListScope {
     /// The value of the Scope option for a group: "family/Felidae".
     public static string Key(GroupRow group) => $"{group.Rank}/{group.Name}";
 
-    /// The bullet lines for the missing taxa, in the style the Wikipedia lists use for the group.
+    /// The bullet lines for the missing taxa, in the style the Wikipedia lists use for the group. A
+    /// taxon whose article is a list ("Carex collifera" redirects to List of Carex species) is not
+    /// linked: in that list the link would lead back to the page itself.
     public static string MissingLines(ListScopeResult result) =>
         string.Join("\n", (result.Missing ?? []).Select(t =>
-            SpeciesListLine.Format(GroupList.Entry(t), new SpeciesListLineOptions { Style = result.Style })));
+            ListLink().Replace(SpeciesListLine.Format(GroupList.Entry(t), new SpeciesListLineOptions { Style = result.Style }),
+                m => m.Groups["label"].Success ? m.Groups["label"].Value : m.Groups["target"].Value)));
+
+    [GeneratedRegex(@"\[\[(?<target>List of [^|\]]+)(?:\|(?<label>[^\]]+))?\]\]")]
+    private static partial Regex ListLink();
 
     private static string? CurrentCode(StatusTaxon taxon) => taxon.LatestGlobal is { } a
         ? IucnStatusTemplate.ToTemplateCode(a.Category, a.PossiblyExtinct, a.PossiblyExtinctInTheWild)

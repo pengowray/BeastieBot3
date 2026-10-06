@@ -360,7 +360,8 @@ public sealed partial class StatusUpdater {
         var notEvaluated = candidate.Template is { } cellTemplate
             ? IsNotEvaluated(s, cellTemplate)
             : BareCode(s.Masked[core.Start..core.End]) == "NE";
-        var (taxon, failure) = ResolveNames(names, s, [candidate.Cell.Content], notEvaluated);
+        var articles = ArticleTitles(s, candidate.Row.Cells.Concat(candidate.Row.Spanning).Where(c => c != candidate.Cell).Select(c => c.Content));
+        var (taxon, failure) = ResolveNames(names, s, [candidate.Cell.Content], notEvaluated, articles);
         if (taxon is null) {
             return new StatusFinding(StatusItemKind.TableCell, line, StatusOutcome.NotUpdated, before, null, null, [failure!]);
         }
@@ -589,6 +590,26 @@ public sealed partial class StatusUpdater {
         return found.Select(o => (CleanName(o.Item1), o.Item2)).Where(o => IsScientificNameShape(o.Item1)).ToList();
     }
 
+    // The articles linked in a span: each wikilink's target, with its span. Links to other
+    // namespaces ("File:", "Category:", "wikt:") and to sections only are left out.
+    private static List<(string Title, TextSpan Span)> ArticleLinks(WikitextScanner s, TextSpan content) {
+        if (content.Length > MaxNameCellLength) {
+            return [];
+        }
+        var found = new List<(string, TextSpan)>();
+        foreach (Match m in Link().Matches(s.Masked[content.Start..content.End])) {
+            var target = m.Groups["target"].Value.Split('#')[0].Trim().Replace('_', ' ');
+            if (target.Length == 0 || target.Contains(':')) {
+                continue;
+            }
+            found.Add((target, new TextSpan(content.Start + m.Index, content.Start + m.Index + m.Length)));
+        }
+        return found;
+    }
+
+    private static List<string> ArticleTitles(WikitextScanner s, IEnumerable<TextSpan> spans) =>
+        spans.SelectMany(span => ArticleLinks(s, span)).Select(l => l.Title).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+
     internal static string CleanName(string text) {
         var name = HtmlTag().Replace(text, " ");
         name = name.Replace("'''", string.Empty, StringComparison.Ordinal).Replace("''", string.Empty, StringComparison.Ordinal)
@@ -603,8 +624,8 @@ public sealed partial class StatusUpdater {
     // Finds the item's taxon by name (StatusTaxonResolver) and keeps how it was found for Update to
     // add to the item's notes.
     private (StatusTaxon? Taxon, StatusNote? Failure) ResolveNames(IReadOnlyList<string> names, WikitextScanner? s = null,
-        IReadOnlyList<TextSpan>? context = null, bool notEvaluated = false) {
-        var match = _resolver.Resolve(names, s, context, notEvaluated);
+        IReadOnlyList<TextSpan>? context = null, bool notEvaluated = false, IReadOnlyList<string>? articles = null) {
+        var match = _resolver.Resolve(names, s, context, notEvaluated, articles);
         _nameNote = match.HowFound;
         return (match.Taxon, match.Failure);
     }

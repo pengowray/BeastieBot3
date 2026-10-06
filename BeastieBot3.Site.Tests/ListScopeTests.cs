@@ -1,4 +1,6 @@
+using BeastieBot3.Shared.Wikitext;
 using BeastieBot3.Site.Data;
+using BeastieBot3.Site.Lists;
 using BeastieBot3.Site.Update;
 
 namespace BeastieBot3.Site.Tests;
@@ -186,6 +188,17 @@ public sealed class ListScopeTests {
         var most = ListScope.Check(Members(lookup, [100, 101, 102, 103, 500, 501, 502, 503, 504, 505]), lookup)!;
         Assert.True(most.InfraChecked);
         Assert.Equal(4, most.Missing!.Count);
+    }
+
+    [Fact]
+    public void AMissingTaxonWhoseArticleIsAListIsNotLinked() {
+        var lookup = Tree().Species(4, 100, 4);
+        var result = ListScope.Check(Members(lookup, [100, 101, 102]), lookup)!;
+        var missing = result with { Missing = [result.Missing![0] with { ListArticleTitle = "List of Panthera species", ScientificName = "Panthera sp103" }] };
+        var line = ListScope.MissingLines(missing);
+        Assert.DoesNotContain("List of", line);
+        Assert.StartsWith("* ''Panthera sp103'' {{IUCN status|LC", line);
+        Assert.Contains("[[List of Panthera species", SpeciesListLine.Format(GroupList.Entry(missing.Missing![0]), new SpeciesListLineOptions { Style = missing.Style }));
     }
 
     [Theory]

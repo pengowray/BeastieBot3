@@ -76,13 +76,16 @@ public sealed class SiteStatusLookup : IStatusLookup, IDisposable {
             JOIN taxon t ON t.taxon_id = k.taxon_id
             WHERE k.key = @key AND n.name_type = @type AND t.in_release = 1
               AND (@type <> 'common' OR n.language = 'en')
+              AND (@source IS NULL OR n.source = @source)
             """;
         command.Parameters.AddWithValue("@key", key);
         command.Parameters.AddWithValue("@type", kind switch {
             StatusNameKind.Synonym => NameTypes.Synonym,
-            StatusNameKind.EnglishCommonName => NameTypes.Common,
+            StatusNameKind.EnglishCommonName or StatusNameKind.ArticleTitle => NameTypes.Common,
             _ => NameTypes.Scientific,
         });
+        // An article title is stored as an English common name from the source 'wikipedia'.
+        command.Parameters.AddWithValue("@source", kind == StatusNameKind.ArticleTitle ? "wikipedia" : DBNull.Value);
         using var reader = command.ExecuteReader();
         var ids = new List<long>();
         while (reader.Read()) {
