@@ -28,7 +28,8 @@ internal sealed record WikidataSweptTaxon(
     IReadOnlyList<string> ColIds,
     IReadOnlyList<string> IucnTaxonIds,
     string? EnwikiTitle,
-    string? LabelEn);
+    string? LabelEn,
+    IReadOnlyList<long> InstanceOf);
 
 internal sealed record WikidataSweepPage(IReadOnlyList<WikidataSweptTaxon> Items, int RowCount);
 
@@ -46,7 +47,8 @@ internal static class WikidataTaxonSweep {
         PREFIX xsd: <http://www.w3.org/2001/XMLSchema#>
         PREFIX schema: <http://schema.org/>
         PREFIX rdfs: <http://www.w3.org/2000/01/rdf-schema#>
-        SELECT ?qid ?name ?rank ?parent ?col ?iucn ?enwiki ?label WHERE {
+        PREFIX wd: <http://www.wikidata.org/entity/>
+        SELECT ?qid ?name ?rank ?parent ?col ?iucn ?enwiki ?label ?inst WHERE {
           ?item wdt:P225 ?name .
           BIND(xsd:integer(STRAFTER(STR(?item), "{{EntityPrefix}}")) AS ?qid)
           FILTER(?qid > {{cursor}})
@@ -56,6 +58,7 @@ internal static class WikidataTaxonSweep {
           OPTIONAL { ?item wdt:P627 ?iucn . }
           OPTIONAL { ?enwiki schema:about ?item ; schema:isPartOf <https://en.wikipedia.org/> . }
           OPTIONAL { ?item rdfs:label ?label . FILTER(LANG(?label) = "en") }
+          OPTIONAL { ?item wdt:P31 ?inst . FILTER(?inst != wd:Q16521) }
         }
         ORDER BY ?qid
         LIMIT {{limit}}
@@ -123,6 +126,9 @@ internal static class WikidataTaxonSweep {
             if (Text(binding, "label") is { } label) {
                 current.Label ??= label;
             }
+            if (EntityNumber(Text(binding, "inst")) is { } instance) {
+                current.Instances.Add(instance);
+            }
         }
         if (current is not null) {
             items.Add(current.Build());
@@ -161,6 +167,7 @@ internal static class WikidataTaxonSweep {
         public SortedSet<long> Parents { get; } = new();
         public SortedSet<string> ColIds { get; } = new(StringComparer.Ordinal);
         public SortedSet<string> IucnIds { get; } = new(StringComparer.Ordinal);
+        public SortedSet<long> Instances { get; } = new();
         public string? EnwikiTitle { get; set; }
         public string? Label { get; set; }
 
@@ -171,7 +178,7 @@ internal static class WikidataTaxonSweep {
             var name = Names.Min!;
             var label = Label is not null && !Names.Contains(Label, StringComparer.OrdinalIgnoreCase) ? Label : null;
             return new WikidataSweptTaxon(Qid, name, Names.Skip(1).ToList(), Ranks.Count > 0 ? Ranks.Min : null,
-                Parents.ToList(), ColIds.ToList(), IucnIds.ToList(), EnwikiTitle, label);
+                Parents.ToList(), ColIds.ToList(), IucnIds.ToList(), EnwikiTitle, label, Instances.ToList());
         }
     }
 }
