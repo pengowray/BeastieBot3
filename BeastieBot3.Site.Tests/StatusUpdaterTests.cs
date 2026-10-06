@@ -377,7 +377,7 @@ public sealed class StatusUpdaterTests {
         var finding = Assert.Single(result.Findings);
         Assert.Equal(StatusOutcome.Updated, finding.Outcome);
         Assert.Equal(3, finding.Line);
-        Assert.Contains("| status = PE\n| status_system = IUCN3.1\n| status_ref = <ref name=\"iucn\">{{cite iucn |author=Smith, B.D. |year=2017 |title=''Lipotes vexillifer'' |volume=2017 |article-number=e.T12119A50358152 |doi=10.2305/IUCN.UK.2017-1.RLTS.T12119A50358152.en |access-date=1 September 2026}}</ref>\n| taxon",
+        Assert.Contains("| status = PE\n| status_system = IUCN3.1\n| status_ref = <ref name=\"iucn\">{{cite iucn |last1=Smith |first1=B.D. |year=2017 |title=''Lipotes vexillifer'' |volume=2017 |article-number=e.T12119A50358152 |doi=10.2305/IUCN.UK.2017-1.RLTS.T12119A50358152.en |access-date=1 September 2026}}</ref>\n| taxon",
             result.Text);
         Assert.EndsWith("}}\nBody text.", result.Text);
         Assert.Contains(finding.Notes, n => n.Kind == StatusNoteKind.CitationReplaced);
@@ -701,7 +701,7 @@ public sealed class StatusUpdaterTests {
         Assert.Single(plain.Findings);
 
         var replaced = Run(text, lookup, options: new StatusUpdateOptions { UpdateCitations = true });
-        Assert.Contains("|author=Bronner, G. |year=2015", replaced.Text);
+        Assert.Contains("|last1=Bronner |first1=G. |year=2015", replaced.Text);
         Assert.Contains("e.T4828A222}}</ref>", replaced.Text);
         Assert.Equal(StatusOutcome.Updated, Assert.Single(replaced.Findings).Outcome);
     }

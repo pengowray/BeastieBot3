@@ -69,14 +69,14 @@ public sealed class SpeciesPageTests(SiteFactory factory) : IClassFixture<SiteFa
         var html = await Page();
         var cite = Html.Textarea(html, "wikitext-cite");
         Assert.Equal(
-            "<ref name=\"iucn\">{{cite iucn |author=Wiig, Ø. |author2=Amstrup, S. |author3=Atwood, T. |author4=Laidre, K. " +
-            "|author5=Jon Aars |author6=Thiemann, G. |year=2015 |title=''Ursus maritimus'' |volume=2015 " +
+            "<ref name=\"iucn\">{{cite iucn |last1=Wiig |first1=Ø. |last2=Amstrup |first2=S. |last3=Atwood |first3=T. |last4=Laidre |first4=K. " +
+            "|author5=Jon Aars |last6=Thiemann |first6=G. |year=2015 |title=''Ursus maritimus'' |volume=2015 " +
             "|article-number=e.T22823A14871490 |doi=10.2305/IUCN.UK.2015-4.RLTS.T22823A14871490.en |access-date=18 August 2026}}</ref>",
             cite);
         Assert.Equal("{{IUCN status|VU|22823/14871490|1|year=2015}}", Html.Textarea(html, "wikitext-status"));
         var speciesbox = Html.Textarea(html, "wikitext-speciesbox");
         Assert.NotNull(speciesbox);
-        Assert.StartsWith("| status = VU\n| status_system = IUCN3.1\n| status_ref = <ref name=\"iucn\">{{cite iucn |author=Wiig, Ø.", speciesbox);
+        Assert.StartsWith("| status = VU\n| status_system = IUCN3.1\n| status_ref = <ref name=\"iucn\">{{cite iucn |last1=Wiig |first1=Ø.", speciesbox);
 
         var text = Html.Text(html);
         Assert.Contains("DOI from GBIF's copy of the IUCN checklist.", text);
@@ -88,8 +88,16 @@ public sealed class SpeciesPageTests(SiteFactory factory) : IClassFixture<SiteFa
 
     [Fact]
     public async Task LastFirstAuthorsAndNoAccessDate() {
-        var cite = Html.Textarea(await Page("?authors=lastfirst&access=none"), "wikitext-cite")!;
+        var cite = Html.Textarea(await Page("?access=none"), "wikitext-cite")!;
         Assert.Contains("|last1=Wiig |first1=Ø. |last2=Amstrup |first2=S.", cite);
+        Assert.Contains("|author5=Jon Aars", cite);
+        Assert.DoesNotContain("access-date", cite);
+    }
+
+    [Fact]
+    public async Task AuthorNAuthorsAndNoAccessDate() {
+        var cite = Html.Textarea(await Page("?authors=author&access=none"), "wikitext-cite")!;
+        Assert.Contains("|author=Wiig, Ø. |author2=Amstrup, S.", cite);
         Assert.Contains("|author5=Jon Aars", cite);
         Assert.DoesNotContain("access-date", cite);
     }
@@ -185,14 +193,18 @@ public sealed class SpeciesPageTests(SiteFactory factory) : IClassFixture<SiteFa
 
     [Fact]
     public async Task OptionsFormKeepsTheChoices() {
-        var html = await Page("?authors=lastfirst&access=today&opts=1&amp=1");
-        Assert.Contains("value=\"lastfirst\" checked=\"checked\"", html);
+        var html = await Page("?authors=author&access=today&opts=1&amp=1");
+        Assert.Contains("value=\"author\" checked=\"checked\"", html);
+        // Last/first is the default: its radio button is checked without an authors parameter, and an
+        // explicit authors=lastfirst (sent by the form's radio button) means the same.
+        Assert.Contains("value=\"lastfirst\" checked=\"checked\"", await Page("?opts=1"));
+        Assert.Contains("value=\"lastfirst\" checked=\"checked\"", await Page("?authors=lastfirst&opts=1"));
         Assert.Contains("value=\"today\" checked=\"checked\"", html);
         Assert.Contains("name=\"amp\" value=\"1\" checked=\"checked\"", html);
         Assert.DoesNotContain("name=\"ref\" value=\"1\" checked", html);
         Assert.Contains("<form class=\"options-form\" method=\"get\" action=\"/species/22823#wikitext\">", html);
         // History links keep the options.
-        Assert.Contains($"href=\"/species/22823?assessment={FixtureDb.PolarBear2008}&amp;authors=lastfirst&amp;access=today&amp;opts=1&amp;amp=1#wikitext\"", html);
+        Assert.Contains($"href=\"/species/22823?assessment={FixtureDb.PolarBear2008}&amp;authors=author&amp;access=today&amp;opts=1&amp;amp=1#wikitext\"", html);
     }
 
     [Fact]
@@ -202,7 +214,7 @@ public sealed class SpeciesPageTests(SiteFactory factory) : IClassFixture<SiteFa
         Assert.Contains("Wikitext for an earlier assessment: Vulnerable, published 2008.", text);
         Assert.Contains("<a href=\"/species/22823#wikitext\">Show wikitext for the latest assessment</a>", html);
         var cite = Html.Textarea(html, "wikitext-cite")!;
-        Assert.Contains("|author=Schliebe, S. |display-authors=etal |year=2008", cite);
+        Assert.Contains("|last1=Schliebe |first1=S. |display-authors=etal |year=2008", cite);
         Assert.Contains("|article-number=e.T22823A13045100", cite);
         Assert.Contains("No DOI found in IUCN's citation text, GBIF or Wikidata. {{cite iucn}} works without a DOI.", text);
         Assert.Equal("{{IUCN status|VU|22823/13045100|1|year=2008}}", Html.Textarea(html, "wikitext-status"));

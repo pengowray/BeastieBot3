@@ -23,7 +23,7 @@ public sealed record WikitextOptions(CiteAuthorStyle AuthorStyle, string Access,
     public const int MaxRefNameLength = 40;
 
     public static readonly WikitextOptions Default =
-        new(CiteAuthorStyle.AuthorN, AccessDownload, WrapInRef: true, DefaultRefNames.LatestGlobal, Amp: false, DefaultRefNames.LatestGlobal);
+        new(CiteAuthorStyle.LastFirst, AccessDownload, WrapInRef: true, DefaultRefNames.LatestGlobal, Amp: false, DefaultRefNames.LatestGlobal);
 
     /// Full given names where IUCN lists them, instead of initials (CiteIucnOptions.FullGivenNames).
     public bool FullGivenNames { get; init; }
@@ -35,7 +35,7 @@ public sealed record WikitextOptions(CiteAuthorStyle AuthorStyle, string Access,
     public static WikitextOptions FromQuery(string? authors, string? access, string? opts, string? wrapRef, string? refName, string? amp,
         string defaultRefName = DefaultRefNames.LatestGlobal, string? fullNames = null) {
         var formSent = opts == "1";
-        var style = string.Equals(authors, "lastfirst", StringComparison.OrdinalIgnoreCase) ? CiteAuthorStyle.LastFirst : CiteAuthorStyle.AuthorN;
+        var style = string.Equals(authors, "author", StringComparison.OrdinalIgnoreCase) ? CiteAuthorStyle.AuthorN : CiteAuthorStyle.LastFirst;
         var accessValue = access?.Trim().ToLowerInvariant() switch {
             AccessToday => AccessToday,
             AccessNone => AccessNone,
@@ -93,8 +93,8 @@ public sealed record WikitextOptions(CiteAuthorStyle AuthorStyle, string Access,
         if (assessmentId is { } id) {
             parts.Add("assessment=" + id.ToString(CultureInfo.InvariantCulture));
         }
-        if (AuthorStyle == CiteAuthorStyle.LastFirst) {
-            parts.Add("authors=lastfirst");
+        if (AuthorStyle == CiteAuthorStyle.AuthorN) {
+            parts.Add("authors=author");
         }
         if (FullGivenNames) {
             parts.Add("fullnames=1");

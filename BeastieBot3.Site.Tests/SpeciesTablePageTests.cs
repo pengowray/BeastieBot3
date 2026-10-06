@@ -24,7 +24,7 @@ public sealed class SpeciesTablePageTests(SiteFactory factory) : IClassFixture<S
             }}
             {{Species table/end}}
             """.ReplaceLineEndings("\n"), wikitext[..wikitext.IndexOf("\n\n{{reflist", StringComparison.Ordinal)]);
-        Assert.Contains("{{reflist|refs=\n<ref name=\"IUCNPolarbear\">{{cite iucn |author=Wiig, Ø.", wikitext);
+        Assert.Contains("{{reflist|refs=\n<ref name=\"IUCNPolarbear\">{{cite iucn |last1=Wiig |first1=Ø.", wikitext);
         Assert.Contains("|article-number=e.T22823A14871490 |doi=10.2305/IUCN.UK.2015-4.RLTS.T22823A14871490.en", wikitext);
         Assert.Contains("1 species in 1 table", html);
         Assert.Contains("<caption>Genus <i>Ursus</i> – one species</caption>", html);
@@ -39,7 +39,7 @@ public sealed class SpeciesTablePageTests(SiteFactory factory) : IClassFixture<S
         var wikitext = Html.Textarea(html, "list-wikitext")!;
 
         Assert.StartsWith("{{Species table |no-note=y |no-ecology=yes |genus=[[Ursus]]", wikitext);
-        Assert.Contains("{{population change unknown}}<ref name=\"iucn-22823\">{{cite iucn |author=Wiig, Ø.", wikitext);
+        Assert.Contains("{{population change unknown}}<ref name=\"iucn-22823\">{{cite iucn |last1=Wiig |first1=Ø.", wikitext);
         Assert.DoesNotContain("IUCN statuses", wikitext);
         Assert.DoesNotContain("reflist", wikitext);
     }

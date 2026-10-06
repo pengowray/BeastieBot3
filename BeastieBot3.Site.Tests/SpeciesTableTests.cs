@@ -118,9 +118,9 @@ public sealed class SpeciesTableTests {
             {{Species table/end}}
 
             {{reflist|refs=
-            <ref name="IUCNLion">{{cite iucn |author=Smith, A. |year=2020 |title=''Panthera leo'' |volume=2020 |article-number=e.T1A10 |access-date=20 August 2026}}</ref>
-            <ref name="IUCNTiger">{{cite iucn |author=Smith, A. |year=2020 |title=''Panthera tigris'' |volume=2020 |article-number=e.T3A30 |access-date=20 August 2026}}</ref>
-            <ref name="IUCNGreywolf">{{cite iucn |author=Smith, A. |year=2020 |title=''Canis lupus'' |volume=2020 |article-number=e.T4A40 |access-date=20 August 2026}}</ref>
+            <ref name="IUCNLion">{{cite iucn |last1=Smith |first1=A. |year=2020 |title=''Panthera leo'' |volume=2020 |article-number=e.T1A10 |access-date=20 August 2026}}</ref>
+            <ref name="IUCNTiger">{{cite iucn |last1=Smith |first1=A. |year=2020 |title=''Panthera tigris'' |volume=2020 |article-number=e.T3A30 |access-date=20 August 2026}}</ref>
+            <ref name="IUCNGreywolf">{{cite iucn |last1=Smith |first1=A. |year=2020 |title=''Canis lupus'' |volume=2020 |article-number=e.T4A40 |access-date=20 August 2026}}</ref>
             }}
             """.ReplaceLineEndings("\n"), wikitext);
     }

@@ -246,9 +246,15 @@ public sealed class WikitextOptionsTests {
 
     [Fact]
     public void RoundTrip() {
-        var options = new WikitextOptions(CiteAuthorStyle.LastFirst, WikitextOptions.AccessNone, false, "my ref", true, "iucn");
-        Assert.Equal("?assessment=5&authors=lastfirst&access=none&opts=1&amp=1&refname=my%20ref", options.ToQuery(5, "iucn2008"));
-        Assert.Equal(options with { DefaultRefName = "iucn2008" }, WikitextOptions.FromQuery("lastfirst", "none", "1", null, "my ref", "1", "iucn2008"));
+        var options = new WikitextOptions(CiteAuthorStyle.AuthorN, WikitextOptions.AccessNone, false, "my ref", true, "iucn");
+        Assert.Equal("?assessment=5&authors=author&access=none&opts=1&amp=1&refname=my%20ref", options.ToQuery(5, "iucn2008"));
+        Assert.Equal(options with { DefaultRefName = "iucn2008" }, WikitextOptions.FromQuery("author", "none", "1", null, "my ref", "1", "iucn2008"));
+
+        // Last/first is the default: it is not written, and the form's "lastfirst" still reads as it.
+        var lastFirst = options with { AuthorStyle = CiteAuthorStyle.LastFirst };
+        Assert.Equal("?assessment=5&access=none&opts=1&amp=1&refname=my%20ref", lastFirst.ToQuery(5, "iucn2008"));
+        Assert.Equal(lastFirst with { DefaultRefName = "iucn2008" }, WikitextOptions.FromQuery("lastfirst", "none", "1", null, "my ref", "1", "iucn2008"));
+        Assert.Equal(lastFirst with { DefaultRefName = "iucn2008" }, WikitextOptions.FromQuery(null, "none", "1", null, "my ref", "1", "iucn2008"));
     }
 
     [Fact]
@@ -268,9 +274,12 @@ public sealed class WikitextOptionsTests {
     public void TheDefaultRefNameIsThatOfTheAssessmentShown() {
         Assert.Equal("iucn2008", WikitextOptions.FromQuery(null, null, null, null, null, null, "iucn2008").RefName);
         // The form sends the pre-filled default back; it stays the default, not the visitor's choice.
-        var submitted = WikitextOptions.FromQuery("lastfirst", null, "1", "1", "iucn", null, "iucn");
+        var submitted = WikitextOptions.FromQuery("author", null, "1", "1", "iucn", null, "iucn");
         Assert.Null(submitted.CustomRefName);
-        Assert.Equal("?assessment=5&authors=lastfirst", submitted.ToQuery(5, "iucn2008"));
+        Assert.Equal("?assessment=5&authors=author", submitted.ToQuery(5, "iucn2008"));
+        var lastFirst = WikitextOptions.FromQuery("lastfirst", null, "1", "1", "iucn", null, "iucn");
+        Assert.Null(lastFirst.CustomRefName);
+        Assert.Equal("?assessment=5", lastFirst.ToQuery(5, "iucn2008"));
     }
 
     [Fact]
@@ -334,8 +343,8 @@ public sealed class WikitextOptionsTests {
     public void FullGivenNamesRoundTrip() {
         var options = WikitextOptions.Default with { FullGivenNames = true };
         Assert.Equal("?fullnames=1", options.ToQuery(null, "iucn"));
-        Assert.Equal("?assessment=5&authors=lastfirst&fullnames=1&access=none",
-            (options with { AuthorStyle = CiteAuthorStyle.LastFirst, Access = WikitextOptions.AccessNone }).ToQuery(5, "iucn2008"));
+        Assert.Equal("?assessment=5&authors=author&fullnames=1&access=none",
+            (options with { AuthorStyle = CiteAuthorStyle.AuthorN, Access = WikitextOptions.AccessNone }).ToQuery(5, "iucn2008"));
         Assert.Equal(options, WikitextOptions.FromQuery(null, null, null, null, null, null, fullNames: "1"));
     }
 

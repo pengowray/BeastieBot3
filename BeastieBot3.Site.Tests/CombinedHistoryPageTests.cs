@@ -82,8 +82,8 @@ public sealed class CombinedHistoryPageTests(SiteFactory factory) : IClassFixtur
     // ref name for the assessment ("iucn2008" there too, so no refname in the link).
     [Fact]
     public async Task OtherIdWikitextLinksKeepTheOptions() {
-        var html = await Page(FixtureDb.Woylie, "?authors=lastfirst&access=none");
-        Assert.Contains($"href=\"/species/{FixtureDb.WoylieOld}?assessment={FixtureDb.WoylieOld2008}&amp;authors=lastfirst&amp;access=none#wikitext\"", html);
+        var html = await Page(FixtureDb.Woylie, "?authors=author&access=none");
+        Assert.Contains($"href=\"/species/{FixtureDb.WoylieOld}?assessment={FixtureDb.WoylieOld2008}&amp;authors=author&amp;access=none#wikitext\"", html);
 
         var named = await Page(FixtureDb.Woylie, "?opts=1&ref=1&refname=woylie");
         Assert.Contains($"href=\"/species/{FixtureDb.WoylieOld}?assessment={FixtureDb.WoylieOld2008}&amp;opts=1&amp;ref=1&amp;refname=woylie#wikitext\"", named);

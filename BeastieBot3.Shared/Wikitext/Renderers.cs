@@ -10,7 +10,7 @@ public enum CiteAuthorStyle {
     AuthorN,
     /// |last1=Wiig |first1=Ø. |last2=Amstrup |first2=S. ... (the form Template:Cite IUCN/doc shows).
     /// Organisations and names the parser could not split stay whole as |authorN=, numbered in the
-    /// same sequence.
+    /// same sequence; a sole author that is not a person is |author= ("|author=BirdLife International").
     LastFirst,
 }
 

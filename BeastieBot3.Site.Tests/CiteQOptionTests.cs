@@ -76,7 +76,7 @@ public sealed class CiteQOptionTests(SiteFactory factory) : IClassFixture<SiteFa
 
     [Fact]
     public void UpdatePageWritesCiteIucnWhenTheAssessmentHasNoItemOrCiteQIsOff() {
-        Assert.Contains("| status_ref = <ref name=\"iucn\">{{cite iucn |author=Smith, B.D. |year=2017", Update(Taxobox, citeQ: true, item: null).Text);
+        Assert.Contains("| status_ref = <ref name=\"iucn\">{{cite iucn |last1=Smith |first1=B.D. |year=2017", Update(Taxobox, citeQ: true, item: null).Text);
         Assert.DoesNotContain("cite Q", Update(Taxobox, citeQ: false, item: "Q123").Text);
     }
 }

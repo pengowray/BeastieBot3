@@ -97,15 +97,22 @@ public class CiteIucnRendererTests {
     }
 
     [Fact]
-    public void LastFirst_LeadingOrganisationIsAuthor1() {
+    public void LastFirst_SoleOrganisationIsAuthor() {
         var output = CiteIucnRenderer.Render(HouseSparrow, new CiteIucnOptions { AuthorStyle = CiteAuthorStyle.LastFirst });
-        Assert.StartsWith("{{cite iucn |author1=BirdLife International |year=2019", output);
+        Assert.StartsWith("{{cite iucn |author=BirdLife International |year=2019", output);
+    }
+
+    [Fact]
+    public void LastFirst_LeadingOrganisationWithOthersIsAuthor1() {
+        var parts = HouseSparrow with { Authors = [Org("BirdLife International"), new CitationAuthor(CitationAuthorKind.Person, "Liddle, T.A.", "Liddle", "T.A.")] };
+        Assert.StartsWith("{{cite iucn |author1=BirdLife International |last2=Liddle |first2=T.A. |year=",
+            CiteIucnRenderer.Render(parts, new CiteIucnOptions { AuthorStyle = CiteAuthorStyle.LastFirst }));
     }
 
     [Fact]
     public void LastFirst_PersonWithoutLastFallsBackToDisplay() {
         var parts = PolarBear with { Authors = [new CitationAuthor(CitationAuthorKind.Person, "Kadarusman")] };
-        Assert.StartsWith("{{cite iucn |author1=Kadarusman |year=",
+        Assert.StartsWith("{{cite iucn |author=Kadarusman |year=",
             CiteIucnRenderer.Render(parts, new CiteIucnOptions { AuthorStyle = CiteAuthorStyle.LastFirst }));
     }
 

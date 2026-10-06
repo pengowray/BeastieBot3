@@ -114,7 +114,7 @@ public sealed class UpdatePageTests(SiteFactory factory) : IClassFixture<SiteFac
             """;
         var (_, html) = await Post(input);
         var output = Output(html)!;
-        Assert.Contains("| status = PE\n| status_system = IUCN3.1\n| status_ref = <ref name=\"iucn\">{{cite iucn |author=Smith, B.D. |author2=Wang, D.", output);
+        Assert.Contains("| status = PE\n| status_system = IUCN3.1\n| status_ref = <ref name=\"iucn\">{{cite iucn |last1=Smith |first1=B.D. |last2=Wang |first2=D.", output);
         Assert.Contains("|article-number=e.T12119A50358152 |doi=10.2305/IUCN.UK.2017-3.RLTS.T12119A50358152.en |access-date=18 August 2026}}</ref>\n| taxon = Lipotes vexillifer\n}}", output);
         Assert.Contains("Replaced the {{cite iucn}} in status_ref with a citation of the latest assessment.", Html.Text(html));
     }

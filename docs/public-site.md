@@ -1197,7 +1197,9 @@ title statements are not recorded (run wikidata iucn-assessment-items)".
 ### Citation options
 
 The options form in a taxon page's wikitext section is read from and written to the query string
-(`Pages/WikitextOptions.cs`): `authors=author|lastfirst`, `fullnames=1`,
+(`Pages/WikitextOptions.cs`): `authors=author|lastfirst` (default `lastfirst`, `|last1=Surname
+|first1=I.`, since 6 October 2026; a sole author that is not a person, such as BirdLife International,
+is `|author=`; the species tables and `/update` use the same default), `fullnames=1`,
 `access=download|today|none`, `ref=1`, `refname=...`, `amp=1` and `opts=1`. A browser does not
 send an unticked checkbox, so the form also sends `opts=1`: with it, a missing `ref` or `amp`
 means off; without it (a plain link), the defaults apply. The output cache stores a separate copy

@@ -134,7 +134,7 @@ public static partial class CiteIucnRenderer {
                 display = $"(({display}))";
             }
             n++;
-            var name = style == CiteAuthorStyle.AuthorN && n == 1 ? "author" : $"author{n}";
+            var name = n == 1 && (style == CiteAuthorStyle.AuthorN || parts.Authors.Count == 1) ? "author" : $"author{n}";
             p.Add((name, display));
         }
         return n;

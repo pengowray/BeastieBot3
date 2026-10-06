@@ -20,11 +20,18 @@ public sealed class LiveUpdateTests(SiteFactory factory) : IClassFixture<SiteFac
         Assert.Equal("/species/22823", Attribute(html, "data-options-url"));
 
         // The address the form's query stands for, without what is the default.
-        var chosen = await Page("?opts=1&authors=lastfirst&access=download&ref=1&refname=iucn&amp=1");
-        Assert.Equal("/species/22823?authors=lastfirst&opts=1&ref=1&amp=1&refname=iucn", Attribute(chosen, "data-options-url"));
+        var chosen = await Page("?opts=1&authors=author&access=download&ref=1&refname=iucn&amp=1");
+        Assert.Equal("/species/22823?authors=author&opts=1&ref=1&amp=1&refname=iucn", Attribute(chosen, "data-options-url"));
+
+        // Last/first is the default, so the address leaves it out even when the form sent it.
+        var lastFirst = await Page("?opts=1&authors=lastfirst&access=download&ref=1&refname=iucn&amp=1");
+        Assert.Equal("/species/22823?opts=1&ref=1&amp=1&refname=iucn", Attribute(lastFirst, "data-options-url"));
 
         var earlier = await Page($"?assessment={FixtureDb.PolarBear2008}&opts=1&authors=author&access=none&ref=1&refname=iucn2008");
-        Assert.Equal($"/species/22823?assessment={FixtureDb.PolarBear2008}&access=none", Attribute(earlier, "data-options-url"));
+        Assert.Equal($"/species/22823?assessment={FixtureDb.PolarBear2008}&authors=author&access=none", Attribute(earlier, "data-options-url"));
+
+        var earlierLastFirst = await Page($"?assessment={FixtureDb.PolarBear2008}&opts=1&authors=lastfirst&access=none&ref=1&refname=iucn2008");
+        Assert.Equal($"/species/22823?assessment={FixtureDb.PolarBear2008}&access=none", Attribute(earlierLastFirst, "data-options-url"));
     }
 
     [Fact]
@@ -78,12 +85,12 @@ public sealed class LiveUpdateTests(SiteFactory factory) : IClassFixture<SiteFac
 
     [Fact]
     public async Task ShowWikitextLinksHaveKeys() {
-        var latest = await Page("?authors=lastfirst");
-        Assert.Contains($"<a data-options-link=\"{FixtureDb.PolarBear2008}\" href=\"/species/22823?assessment={FixtureDb.PolarBear2008}&amp;authors=lastfirst#wikitext\"", latest);
+        var latest = await Page("?authors=author");
+        Assert.Contains($"<a data-options-link=\"{FixtureDb.PolarBear2008}\" href=\"/species/22823?assessment={FixtureDb.PolarBear2008}&amp;authors=author#wikitext\"", latest);
 
         // On an earlier assessment's page the latest one is the page's default.
-        var earlier = await Page($"?assessment={FixtureDb.PolarBear2008}&authors=lastfirst");
-        Assert.Contains("<a data-options-link=\"default\" href=\"/species/22823?authors=lastfirst#wikitext\"", earlier);
+        var earlier = await Page($"?assessment={FixtureDb.PolarBear2008}&authors=author");
+        Assert.Contains("<a data-options-link=\"default\" href=\"/species/22823?authors=author#wikitext\"", earlier);
 
         var sparrow = await _client.GetStringAsync($"/species/{FixtureDb.HouseSparrow}?access=none");
         Assert.Contains($"<a data-options-link=\"{FixtureDb.HouseSparrowEurope}\" href=\"/species/{FixtureDb.HouseSparrow}?assessment={FixtureDb.HouseSparrowEurope}&amp;access=none#wikitext\"", sparrow);

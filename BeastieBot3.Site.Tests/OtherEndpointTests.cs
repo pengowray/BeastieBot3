@@ -227,7 +227,7 @@ public sealed class OtherEndpointTests(SiteFactory factory) : IClassFixture<Site
     [Fact]
     public async Task SecurityHeadersOnACachedTaxonPage() {
         // The second request is answered by the output cache.
-        const string url = "/species/22823?authors=lastfirst&q=cache-test";
+        const string url = "/species/22823?authors=author&q=cache-test";
         var first = await _client.GetAsync(url);
         var second = await _client.GetAsync(url);
         Assert.Equal(HttpStatusCode.OK, second.StatusCode);
@@ -257,7 +257,7 @@ public sealed class OtherEndpointTests(SiteFactory factory) : IClassFixture<Site
                      FixtureDb.Lion, FixtureDb.WestAfricanLion, FixtureDb.RegionalOnly, FixtureDb.Variety, FixtureDb.Koala,
                      FixtureDb.AmurLeopard, FixtureDb.WoylieOld, FixtureDb.Woylie }) {
             urls.Add($"/species/{id}");
-            urls.Add($"/species/{id}?authors=lastfirst&access=none");
+            urls.Add($"/species/{id}?authors=author&access=none");
         }
         urls.Add($"/species/{FixtureDb.PolarBear}?assessment={FixtureDb.PolarBear2008}");
         foreach (var url in urls) {
