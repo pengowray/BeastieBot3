@@ -29,6 +29,10 @@ public sealed record GroupRow(
     public bool IsGenus => Rank == "genus";
 }
 
+/// A group found by search. MatchedName is set when the group was found by the title of its English
+/// Wikipedia article or of a redirect to it, not by its own name.
+public sealed record GroupHit(GroupRow Group, string? MatchedName);
+
 /// A rank found inside a group: how deep it first appears, and whether only Catalogue of Life groups have it.
 public sealed record GroupRank(string Rank, int MinDepth, bool OnlyFromCol);
 

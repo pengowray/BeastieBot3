@@ -605,3 +605,29 @@ public sealed class ProvisionalNameTests {
     public void NamesTheRank(string name, string marker, string rank) =>
         Assert.Equal((marker, rank), SiteFormat.ProvisionalMarker(name));
 }
+
+// Which group a search goes straight to (SearchModel.GroupToGoTo).
+public sealed class SearchGroupRuleTests {
+    private static GroupHit Group(string name, string? matched = null) =>
+        new(new GroupRow(1, null, 0, "family", name, "iucn", true, "ANIMALIA", null, null, null, null, 1, 1, 1, 0, 0), matched);
+
+    private static SearchHit Taxon(bool exact, bool strong) =>
+        new(new TaxonSummary(1, "Epomophorus pusillus", null, "species", "Peters's dwarf epauletted fruit bat", "LC", false, false),
+            "Fruit Bat", "common", "en", exact, strong);
+
+    [Fact]
+    public void GroupFoundByWikipediaTitleBeatsAWeakTaxonMatch() =>
+        Assert.NotNull(SearchModel.GroupToGoTo([Group("Pteropodidae", "Fruit bat")], [Taxon(exact: true, strong: false)]));
+
+    [Fact]
+    public void StrongTaxonMatchListsBoth() =>
+        Assert.Null(SearchModel.GroupToGoTo([Group("Lipotes", "Baiji")], [Taxon(exact: true, strong: true)]));
+
+    [Fact]
+    public void TwoGroupsAreListed() =>
+        Assert.Null(SearchModel.GroupToGoTo([Group("Abronia"), Group("Abronia")], []));
+
+    [Fact]
+    public void NoGroupGoesNowhere() =>
+        Assert.Null(SearchModel.GroupToGoTo([], [Taxon(exact: true, strong: false)]));
+}

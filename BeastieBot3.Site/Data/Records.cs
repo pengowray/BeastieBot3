@@ -117,11 +117,6 @@ public sealed record SearchHit(
     string? MatchedLanguage,
     bool IsExactMatch,
     bool IsStrongExactMatch = false);
-
-/// A group found by search. MatchedName is set when the group was found by the title of its English
-/// Wikipedia article or of a redirect to it, not by its own name.
-public sealed record GroupHit(GroupRow Group, string? MatchedName);
-
 /// A taxon found by an IUCN id in the search text. AssessmentId is set when the id was an
 /// assessment's; then Scope and YearPublished are that assessment's, and IsDefault says whether it
 /// is the one the taxon's page shows first (its latest global assessment).
