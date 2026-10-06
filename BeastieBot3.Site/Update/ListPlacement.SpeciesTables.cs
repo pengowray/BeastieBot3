@@ -116,7 +116,12 @@ public static partial class ListPlacement {
                 Template = _options.CiteQ ? Pages.ReferenceTemplate.CiteQ : Pages.ReferenceTemplate.CiteIucn,
             };
             var row = SpeciesTable.Row(taxon, extras.GetValueOrDefault(taxon.TaxonId), options, new SpeciesTable.RefNamer(TableRefNames.CommonName));
+            // A reference the text already defines for the taxon's assessment is used again by name.
+            var cited = CitedBy(taxon);
             var refName = row.RefName is { } name && _text.Contains(name, StringComparison.Ordinal) ? $"{name}-{taxon.TaxonId}" : row.RefName;
+            var refText = cited is not null ? $"<ref name=\"{cited}\"/>"
+                : row.Reference is { } reference ? $"<ref name=\"{refName}\">{reference}</ref>"
+                : string.Empty;
             var values = new Dictionary<string, string>(StringComparer.Ordinal) {
                 ["name"] = row.Name,
                 ["binomial"] = row.Binomial,
@@ -125,7 +130,7 @@ public static partial class ListPlacement {
                 ["authority-not-original"] = row.AuthorityNotOriginal ? "yes" : string.Empty,
                 ["iucn-status"] = row.StatusCode,
                 ["population"] = row.Population,
-                ["direction"] = row.Direction + (row.Reference is { } reference ? $"<ref name=\"{refName}\">{reference}</ref>" : string.Empty),
+                ["direction"] = row.Direction + refText,
             };
             var edits = new List<(int Start, int End, string Text)>();
             foreach (var p in neighbour.Parameters) {
@@ -158,6 +163,24 @@ public static partial class ListPlacement {
             }
             sb.Append(_text, at, neighbour.Span.End - at);
             return sb.ToString();
+        }
+
+        private Dictionary<long, string>? _citedBy;
+
+        // The name of a reference the text defines whose citation has the taxon's id
+        // ("<ref name="IUCNBobrinskisserotine">{{cite iucn ... |article-number=e.T7914A22114842}}</ref>").
+        private string? CitedBy(ListTaxonRow taxon) {
+            if (_citedBy is null) {
+                _citedBy = [];
+                foreach (System.Text.RegularExpressions.Match m in RefDefinition().Matches(_scanner.Masked)) {
+                    foreach (System.Text.RegularExpressions.Match id in StatusTaxonResolver.AssessmentInText().Matches(m.Groups["body"].Value)) {
+                        if (long.TryParse(id.Groups["t"].Value, out var taxonId)) {
+                            _citedBy.TryAdd(taxonId, m.Groups["name"].Value.Trim());
+                        }
+                    }
+                }
+            }
+            return _citedBy.GetValueOrDefault(taxon.TaxonId);
         }
 
         private Dictionary<long, IReadOnlyDictionary<long, TableTaxonExtra>>? _extras;
@@ -255,6 +278,10 @@ public static partial class ListPlacement {
             return sb.ToString();
         }
     }
+
+    [System.Text.RegularExpressions.GeneratedRegex(@"<ref\s+name\s*=\s*[""']?(?<name>[^""'/>]+?)[""']?\s*>(?<body>.*?)</ref\s*>",
+        System.Text.RegularExpressions.RegexOptions.IgnoreCase | System.Text.RegularExpressions.RegexOptions.Singleline)]
+    private static partial System.Text.RegularExpressions.Regex RefDefinition();
 
     [System.Text.RegularExpressions.GeneratedRegex(@"\{\{\s*dagger[^{}]*\}\}|†", System.Text.RegularExpressions.RegexOptions.IgnoreCase)]
     private static partial System.Text.RegularExpressions.Regex DaggerTemplate();

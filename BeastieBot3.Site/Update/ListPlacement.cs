@@ -212,13 +212,18 @@ public static partial class ListPlacement {
             var markers = Prefix().Match(speciesText[listStart..]).Value;
             var trimmed = markers.TrimEnd();
             var prefix = trimmed + trimmed[^1] + (markers.Length > trimmed.Length ? " " : string.Empty);
-            var line = SpeciesListLine.FormatInfraspecificUnderSpecies(GroupList.Entry(taxon),
-                new SpeciesListLineOptions { Style = _scope.Style, IncludeStatusTemplate = false });
+            var last = _lines.LastOfBlock(species.Line);
+            // In the style of the lines already under the species ("**[[Western lowland gorilla]]"),
+            // else with the genus and species abbreviated.
+            var style = last > species.Line ? StyleOf(_lines.Text(species.Line + 1).TrimStart('*', '#', ' ')) : null;
+            var entry = GroupList.Entry(taxon);
+            var line = style is { } s
+                ? SpeciesListLine.Format(entry, new SpeciesListLineOptions { Style = s, IncludeStatusTemplate = false })
+                : SpeciesListLine.FormatInfraspecificUnderSpecies(entry, new SpeciesListLineOptions { Style = _scope.Style, IncludeStatusTemplate = false });
             line = prefix + ListScope.UnlinkLists(line["* ".Length..]);
             if (species.HasStatusTemplate && taxon.Category is not null) {
                 line += " " + StatusTemplate(taxon, _options);
             }
-            var last = _lines.LastOfBlock(species.Line);
             return new PlacedTaxon(taxon, line, _lines.End(last), species.Written, species.Taxon, species.Line, false);
         }
     }

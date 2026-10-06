@@ -212,7 +212,7 @@ public sealed class ListPlacementTests {
         var scope = ListScope.Check(result.Members!, tree)!;
         Assert.True(scope.InfraChecked);
         var placement = ListPlacement.Place(text, result.Members!, scope, new ListPlacementOptions(), tree);
-        Assert.Equal("* ''Panthera spbaa'' {{IUCN status|LC}}\n** ''Panthera spbaa alpha'' {{IUCN status|LC}}\n** ''P. spbaa beta'' {{IUCN status|LC}}\n"
+        Assert.Equal("* ''Panthera spbaa'' {{IUCN status|LC}}\n** ''Panthera spbaa alpha'' {{IUCN status|LC}}\n** ''Panthera spbaa beta'' {{IUCN status|LC}}\n"
             + "* ''Panthera spbab''\n* ''Panthera spbac''\n* ''Panthera spbad''\n", updater.TextWith(ListPlacement.Insertions(text, placement)));
     }
 
