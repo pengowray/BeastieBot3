@@ -3,8 +3,10 @@ using BeastieBot3.Site.Data;
 namespace BeastieBot3.Site.Update;
 
 /// A taxon as the status updater needs it, with its latest global assessment (null when it has
-/// none, or is not in the release).
-public sealed record StatusTaxon(long TaxonId, string ScientificName, bool InRelease, long? CurrentTaxonId, AssessmentRow? LatestGlobal);
+/// none, or is not in the release). Kind: TaxonKinds. NodeId: the lowest group the taxon is in
+/// (higher_taxon), for a taxon in the release.
+public sealed record StatusTaxon(long TaxonId, string ScientificName, bool InRelease, long? CurrentTaxonId, AssessmentRow? LatestGlobal,
+    string Kind = TaxonKinds.Species, int? NodeId = null);
 
 /// The site database as the status updater reads it.
 public interface IStatusLookup {
@@ -175,8 +177,10 @@ public sealed record StatusFinding(
 /// population differs from IUCN's number of mature individuals, which are listed and not changed.
 /// ListLinesWithoutStatus and TablesWithoutStatus: the list lines and tables that the options
 /// AddToListLines and AddStatusColumns would give a status, counted when those options are off.
+/// Members: the taxa the text lists (ListMember), for ListScope.
 public sealed record StatusUpdateResult(string Text, IReadOnlyList<StatusFinding> Findings, int NotChecked,
-    IReadOnlyList<PopulationSuggestion> Populations, int ListLinesWithoutStatus = 0, int TablesWithoutStatus = 0) {
+    IReadOnlyList<PopulationSuggestion> Populations, int ListLinesWithoutStatus = 0, int TablesWithoutStatus = 0,
+    IReadOnlyList<ListMember>? Members = null) {
     /// How many items have a note of this kind: used to offer an option that would change them.
     public int CountNotes(StatusNoteKind kind) => Findings.Count(f => f.Notes.Any(n => n.Kind == kind));
 
@@ -184,3 +188,9 @@ public sealed record StatusUpdateResult(string Text, IReadOnlyList<StatusFinding
     public int Current => Findings.Count(f => f.Outcome == StatusOutcome.Current);
     public int NotUpdated => Findings.Count(f => f.Outcome == StatusOutcome.NotUpdated);
 }
+
+/// A taxon the text lists: found on a list line, in a table row or a species table row, or by the
+/// ids of an {{IUCN status}} template (not in a taxobox or a citation). Written: the name that found
+/// it (a synonym or common name, else the taxon's scientific name). WrittenCode: the status code the
+/// text gave it before any change, or null when it had none.
+public sealed record ListMember(StatusTaxon Taxon, int Line, string Written, string? WrittenCode);

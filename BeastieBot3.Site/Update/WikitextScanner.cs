@@ -105,6 +105,24 @@ public sealed partial class WikitextScanner {
         return false;
     }
 
+    /// The outermost template the position is inside (after its "{{" and before its "}}"), or null.
+    public WikiTemplate? OuterTemplateAt(int position) {
+        var lo = 0;
+        var hi = _outerTemplates.Count - 1;
+        while (lo <= hi) {
+            var mid = (lo + hi) / 2;
+            var span = _outerTemplates[mid];
+            if (position <= span.Start) {
+                hi = mid - 1;
+            } else if (position >= span.End - 1) {
+                lo = mid + 1;
+            } else {
+                return TemplatesWithin(span).FirstOrDefault(t => t.Span == span);
+            }
+        }
+        return null;
+    }
+
     /// The span with masked text and whitespace trimmed from both ends; an empty span at its start
     /// when nothing is left.
     public TextSpan Core(TextSpan span) {

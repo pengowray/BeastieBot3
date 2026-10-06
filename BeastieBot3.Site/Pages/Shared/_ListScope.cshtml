@@ -1,0 +1,76 @@
+@model BeastieBot3.Site.Update.ListScopeResult
+@using BeastieBot3.Site.Update
+@using BeastieBot3.Site.Lists
+@* The comparison of the taxa the text lists with their group (ListScope). Report only. The scope
+   choice and the button belong to the update form, so they send the text again. *@
+@{
+    var r = Model;
+}
+<section class="update-scope" aria-labelledby="scope-heading">
+    <h3 id="scope-heading">@UpdateText.ScopeHeading(r.Scope)</h3>
+    <p>@UpdateText.ScopeSummary(r)</p>
+    @if (r.Categories is { } categories) {
+        <p>@UpdateText.ScopeCategories(categories, r.CategoriesFromCodes)</p>
+    }
+    @if (r.Infra > 0 || r.InfraChecked) {
+        <p>@UpdateText.ScopeInfra(r)</p>
+    }
+    @if (r.Path.Count > 1) {
+        <p class="update-scope-choice">
+            <label for="scope-choice">@UpdateText.ScopeChooseLabel</label>
+            <select id="scope-choice" name="@UpdateModel.ScopeField" form="update-form">
+                @foreach (var group in r.Path.Reverse()) {
+                    <option value="@ListScope.Key(group)" selected="@(group.NodeId == r.Scope.NodeId)">@GroupList.HeadingText(group)</option>
+                }
+            </select>
+            <button type="submit" form="update-form">@UpdateText.ScopeChooseButton</button>
+        </p>
+    }
+    @if (r.Partial && r.Missing is null) {
+        <p>@UpdateText.ScopePartial <button type="submit" form="update-form" name="@UpdateModel.ListAnywayField" value="1">@UpdateText.ScopeListAnywayButton</button></p>
+    }
+    @if (r.Missing is { } missing) {
+        <h4>@UpdateText.MissingHeading(r.MissingTotal)</h4>
+        @if (missing.Count == 0) {
+            <p>@UpdateText.MissingNone</p>
+        } else {
+            @if (missing.Count < r.MissingTotal) {
+                <p>@UpdateText.MissingCapped(missing.Count, r.MissingTotal)</p>
+            }
+            <div class="wikitext-box">
+                <div class="wikitext-box-head">
+                    <label for="scope-missing">@UpdateText.MissingLinesLabel</label>
+                    <button type="button" class="copy-button" data-copy="scope-missing" aria-label="@UpdateText.CopyMissingAccessible" hidden>@SiteText.Copy</button>
+                    <p class="copy-status" role="status" aria-live="polite"></p>
+                </div>
+                <textarea id="scope-missing" class="update-readonly" readonly rows="8" spellcheck="false" autocapitalize="off" autocomplete="off" aria-describedby="scope-missing-help">@("\n" + ListScope.MissingLines(r))</textarea>
+                <p class="help" id="scope-missing-help">@UpdateText.MissingLinesHelp</p>
+            </div>
+        }
+    }
+    @if (r.OtherCategory.Count > 0) {
+        <h4>@UpdateText.OtherCategoryHeading(r.OtherCategory.Count)</h4>
+        @await Html.PartialAsync("_ListScopeMembers", r.OtherCategory)
+    }
+    @if (r.Outside.Count > 0) {
+        <h4>@UpdateText.OutsideHeading(r.Outside.Count)</h4>
+        @await Html.PartialAsync("_ListScopeMembers", r.Outside)
+    }
+    @if (r.Duplicates.Count > 0) {
+        <h4>@UpdateText.DuplicatesHeading(r.Duplicates.Count)</h4>
+        <div class="table-scroll">
+            <table class="update-report">
+                <thead><tr><th scope="col">@UpdateText.ColumnTaxon</th><th scope="col">@UpdateText.ColumnNames</th><th scope="col">@UpdateText.ColumnLines</th></tr></thead>
+                <tbody>
+                    @foreach (var d in r.Duplicates) {
+                        <tr>
+                            <td><a href="/species/@d.Taxon.TaxonId">@Html.Raw(ScientificNameMarkup.ToHtml(d.Taxon.ScientificName))</a></td>
+                            <td>@string.Join(", ", d.Names)</td>
+                            <td>@UpdateText.LineNumbers(d.Lines)</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+</section>

@@ -35,8 +35,10 @@ public sealed partial class StatusUpdater {
     // Finds the list lines and tables that have no status. With the options on they become
     // candidates; with them off, the ones that would get a status are counted.
     private (int Lines, int Tables) FindMissing(WikitextScanner s, IReadOnlyList<WikiTable> tables, List<Candidate> candidates) {
+        _bareMembers.Clear();
         var lines = 0;
         foreach (var line in BareListLines(s, tables)) {
+            _bareMembers.Add(Member(line.Match.Taxon!, s.LineOf(line.Span.Start), line.Match.HowFound, null));
             if (_options.AddToListLines) {
                 candidates.Add(new LineAddCandidate(line));
             } else if (line.StatusText is null && line.Match.Taxon?.LatestGlobal is { } latest && IucnCategories.HasStatusTemplateCode(latest)) {
@@ -45,6 +47,9 @@ public sealed partial class StatusUpdater {
         }
         var tableCount = 0;
         foreach (var table in TablesWithoutStatus(s, tables)) {
+            foreach (var (row, match) in table.Rows.Where(r => r.Match.Taxon is not null)) {
+                _bareMembers.Add(Member(match.Taxon!, s.LineOf(row.Cells[0].Whole.Start), match.HowFound, null));
+            }
             if (_options.AddStatusColumns) {
                 candidates.Add(new TableAddCandidate(table));
             } else {
@@ -54,9 +59,45 @@ public sealed partial class StatusUpdater {
         return (lines, tableCount);
     }
 
+    // ---------------------------------------------------------------- members
+
+    // The taxa named on list lines and in table rows that have no status, found whether or not the
+    // options add one. Filled by FindMissing.
+    private readonly List<ListMember> _bareMembers = [];
+
+    private static ListMember Member(StatusTaxon taxon, int line, StatusNote? howFound, string? code) =>
+        new(taxon, line, howFound is { Kind: StatusNoteKind.MatchedBySynonym or StatusNoteKind.MatchedByCommonName, Detail: { } name }
+            ? name : taxon.ScientificName, code);
+
+    private static readonly HashSet<StatusItemKind> MemberKinds = [
+        StatusItemKind.StatusTemplate, StatusItemKind.TableCell, StatusItemKind.ListLine, StatusItemKind.SpeciesTableRow,
+        StatusItemKind.ListLineAdded, StatusItemKind.TableRowAdded,
+    ];
+
+    // The taxa the text lists: the items' taxa and the lines and rows with no status, one per taxon
+    // and line.
+    private List<ListMember> Members(IReadOnlyList<StatusFinding> findings) {
+        var members = new List<ListMember>();
+        var seen = new HashSet<(long, int)>();
+        foreach (var finding in findings.Where(f => MemberKinds.Contains(f.Kind) && f.Taxon is not null)) {
+            if (seen.Add((finding.Taxon!.TaxonId, finding.Line))) {
+                var howFound = finding.Notes.FirstOrDefault(n => n.Kind is StatusNoteKind.MatchedBySynonym or StatusNoteKind.MatchedByCommonName);
+                var code = finding.Kind is StatusItemKind.ListLineAdded or StatusItemKind.TableRowAdded ? null : EditSummary.CodeIn(finding.Before);
+                members.Add(Member(finding.Taxon, finding.Line, howFound, code));
+            }
+        }
+        foreach (var member in _bareMembers) {
+            if (seen.Add((member.Taxon.TaxonId, member.Line))) {
+                members.Add(member);
+            }
+        }
+        members.Sort((a, b) => a.Line.CompareTo(b.Line));
+        return members;
+    }
+
     // ---------------------------------------------------------------- list lines
 
-    // Lines starting with "*" or "#", outside templates and tables and outside sections such as
+    // Lines starting with "*" or "#", outside templates (except ListWrappers) and tables and outside sections such as
     // References and External links, with no {{IUCN status}}, whose text before its first <ref>
     // writes exactly one scientific name outside external links, which names one taxon. At most
     // _maxItems lines are looked up.
@@ -72,7 +113,8 @@ public sealed partial class StatusUpdater {
             var end = newline < 0 ? masked.Length : newline;
             var lineStart = start;
             start = end + 1;
-            if (masked[lineStart] is not ('*' or '#') || s.InsideTemplate(lineStart)) {
+            if (masked[lineStart] is not ('*' or '#')
+                || (s.OuterTemplateAt(lineStart) is { } outer && !ListWrappers.Contains(outer.Name))) {
                 continue;
             }
             while (nextTable < tableSpans.Count && tableSpans[nextTable].End <= lineStart) {
@@ -131,6 +173,13 @@ public sealed partial class StatusUpdater {
         // A list of synonyms would get the status of the taxon after every old name.
         "Synonyms", "Synonymy",
     };
+
+    // Templates that only lay out the list inside them in columns or on one line: their list lines
+    // are lines of the article's list. Other templates' lines (navboxes, taxoboxes) are not.
+    private static readonly HashSet<string> ListWrappers = [
+        "columns-list", "col-list", "collist", "column-list", "div col", "div col list", "plainlist", "plain list",
+        "flatlist", "flat list", "unbulleted list", "multicol",
+    ];
 
     private static bool HasTemplateStartIn(List<int> starts, int from, int to) {
         var i = starts.BinarySearch(from);

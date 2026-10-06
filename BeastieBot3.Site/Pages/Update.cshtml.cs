@@ -42,6 +42,10 @@ public sealed class UpdateModel : PageModel {
 
     public StatusUpdateResult? Result { get; private set; }
 
+    /// The taxa the text lists compared with the group they are in; null when the text lists too
+    /// few taxa (ListScope).
+    public ListScopeResult? Scope { get; private set; }
+
     /// The options the form sent ("1" in the fields below); all off on a first visit.
     public StatusUpdateOptions Options { get; private set; } = new();
 
@@ -53,6 +57,8 @@ public sealed class UpdateModel : PageModel {
     public const string CiteQField = "citeq";
     public const string AddToListLinesField = "addlines";
     public const string AddStatusColumnsField = "addcols";
+    public const string ScopeField = "scope";
+    public const string ListAnywayField = "anyway";
 
     public string? Error { get; private set; }
 
@@ -98,6 +104,9 @@ public sealed class UpdateModel : PageModel {
         }
         using var lookup = _queries.OpenStatusLookup();
         Result = new StatusUpdater(lookup, DateOnly.FromDateTime(DateTime.UtcNow), options: Options).Update(text);
+        var scope = form[ScopeField].LastOrDefault();
+        Scope = ListScope.Check(Result.Members ?? [], new SiteListScopeLookup(_queries),
+            new ListScopeOptions(string.IsNullOrWhiteSpace(scope) ? null : scope, On(ListAnywayField)));
         return Page();
     }
 

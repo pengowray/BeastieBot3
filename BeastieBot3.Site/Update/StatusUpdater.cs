@@ -166,7 +166,7 @@ public sealed partial class StatusUpdater {
             edits.AddRange(itemEdits);
         }
         return new StatusUpdateResult(Apply(text, edits), findings, Math.Max(0, candidates.Count - _maxItems), [.. _populations],
-            missingLines, missingTables);
+            missingLines, missingTables, Members(findings));
     }
 
     // ---------------------------------------------------------------- {{IUCN status}} with ids

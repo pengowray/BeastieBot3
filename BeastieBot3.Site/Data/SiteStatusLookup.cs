@@ -26,7 +26,7 @@ public sealed class SiteStatusLookup : IStatusLookup, IDisposable {
                    a.assessment_id, a.taxon_id, a.scope, a.is_latest, a.category, a.possibly_extinct,
                    a.possibly_extinct_in_the_wild, a.criteria, a.criteria_version, a.year_published,
                    a.assessment_date, a.population_trend, a.citation_json, a.population_size,
-                   a.wikidata_item_qid, a.wikidata_item_properties
+                   a.wikidata_item_qid, a.wikidata_item_properties, t.kind, t.node_id
             FROM taxon t
             LEFT JOIN assessment a ON a.assessment_id = t.latest_global_assessment_id
             WHERE t.taxon_id = @id
@@ -54,7 +54,7 @@ public sealed class SiteStatusLookup : IStatusLookup, IDisposable {
                 WikidataItemProperties: Text(reader, 19),
                 PopulationSize: Text(reader, 17));
             taxon = new StatusTaxon(reader.GetInt64(0), reader.GetString(1), inRelease,
-                reader.IsDBNull(3) ? null : reader.GetInt64(3), latest);
+                reader.IsDBNull(3) ? null : reader.GetInt64(3), latest, reader.GetString(20), reader.IsDBNull(21) ? null : reader.GetInt32(21));
         }
         _taxa[taxonId] = taxon;
         return taxon;

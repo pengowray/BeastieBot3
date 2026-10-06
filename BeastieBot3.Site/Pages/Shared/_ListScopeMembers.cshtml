@@ -1,0 +1,16 @@
+@model IReadOnlyList<BeastieBot3.Site.Update.ListScopeMember>
+<div class="table-scroll">
+    <table class="update-report">
+        <thead><tr><th scope="col">@UpdateText.ColumnTaxon</th><th scope="col">@UpdateText.ColumnInText</th><th scope="col">@UpdateText.ColumnLatest</th><th scope="col">@UpdateText.ColumnLines</th></tr></thead>
+        <tbody>
+            @foreach (var m in Model) {
+                <tr>
+                    <td><a href="/species/@m.Taxon.TaxonId">@Html.Raw(ScientificNameMarkup.ToHtml(m.Taxon.ScientificName))</a></td>
+                    <td>@m.WrittenCode</td>
+                    <td>@m.CurrentCode</td>
+                    <td>@UpdateText.LineNumbers(m.Lines)</td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>

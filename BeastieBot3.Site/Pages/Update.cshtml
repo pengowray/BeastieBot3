@@ -170,6 +170,10 @@
                 </table>
             </div>
         }
+
+        @if (Model.Scope is { } scope) {
+            @await Html.PartialAsync("_ListScope", scope)
+        }
     </section>
 }
 
