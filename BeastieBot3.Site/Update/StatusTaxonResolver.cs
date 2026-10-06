@@ -18,9 +18,11 @@ public sealed partial class StatusTaxonResolver {
     private readonly IStatusLookup _lookup;
     private readonly bool _matchCommonNames;
 
-    // The taxon ids in the IUCN citations each named reference cites ("T44853A22072238" in
-    // <ref name="IUCNBroad-headedserotine">{{cite iucn |article-number=e.T44853A22072238 ...}}</ref>).
-    private readonly Dictionary<string, HashSet<long>> _refTaxa = new(StringComparer.Ordinal);
+    // The text's named references and the taxa their citations name. Set by ReadReferences.
+    private ReferenceIndex _references = ReferenceIndex.Empty;
+
+    /// The named references of the text of the current Update.
+    public ReferenceIndex References => _references;
 
     public StatusTaxonResolver(IStatusLookup lookup, bool matchCommonNames) {
         _lookup = lookup;
@@ -31,20 +33,7 @@ public sealed partial class StatusTaxonResolver {
     /// found when not by its scientific name, or (CommonNameNotUsed) how it could have been found.
     public sealed record NameMatch(StatusTaxon? Taxon, StatusNote? Failure, StatusNote? HowFound);
 
-    public void ReadReferences(WikitextScanner s) {
-        _refTaxa.Clear();
-        foreach (Match m in RefDefinition().Matches(s.Masked)) {
-            var name = m.Groups["name"].Value.Trim();
-            foreach (Match id in AssessmentInText().Matches(m.Groups["body"].Value)) {
-                if (long.TryParse(id.Groups["t"].Value, out var taxonId)) {
-                    if (!_refTaxa.TryGetValue(name, out var ids)) {
-                        _refTaxa[name] = ids = [];
-                    }
-                    ids.Add(taxonId);
-                }
-            }
-        }
-    }
+    public void ReadReferences(WikitextScanner s) => _references = ReferenceIndex.Read(s);
 
     /// names: the names in the item's row or line. context: the spans holding the item's status and
     /// its references, where an IUCN citation is looked for; null for none. notEvaluated: the article
@@ -144,7 +133,7 @@ public sealed partial class StatusTaxonResolver {
             }
             foreach (Match use in RefUse().Matches(text)) {
                 var name = use.Groups["name"].Value.Trim();
-                if (_refTaxa.TryGetValue(name, out var cited)) {
+                if (_references.TaxaOf(name) is { } cited) {
                     ids.UnionWith(cited);
                     refName ??= name;
                 }
@@ -184,9 +173,6 @@ public sealed partial class StatusTaxonResolver {
     /// address "/species/22823/14871490".
     [GeneratedRegex(@"T(?<t>\d+)A(?<a>\d+)|/species/(?<t>\d+)/(?<a>\d+)", RegexOptions.IgnoreCase)]
     internal static partial Regex AssessmentInText();
-
-    [GeneratedRegex(@"<ref\s+name\s*=\s*[""']?(?<name>[^""'/>]+?)[""']?\s*>(?<body>.*?)</ref\s*>", RegexOptions.IgnoreCase | RegexOptions.Singleline)]
-    private static partial Regex RefDefinition();
 
     [GeneratedRegex(@"<ref\s+name\s*=\s*[""']?(?<name>[^""'/>]+?)[""']?\s*/?>", RegexOptions.IgnoreCase)]
     private static partial Regex RefUse();

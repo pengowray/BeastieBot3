@@ -76,6 +76,9 @@ public sealed record ListScopeResult(
     /// The species of the Catalogue of Life and Wikidata in the scope that the text does not name, as
     /// list rows (TaxonId: minus the extra species id; no assessment); null when not asked for.
     public IReadOnlyList<ListTaxonRow>? MissingExtra { get; init; }
+
+    /// How many such species the scope has, named in the text or not.
+    public int ExtraTotal { get; init; }
 }
 
 /// Compares the taxa a text lists (StatusUpdateResult.Members) with the IUCN group they are in, and
@@ -221,18 +224,18 @@ public static partial class ListScope {
             .Select(d => new ListScopeDuplicate(d.Taxon, d.Names, d.Lines))
             .ToList();
 
+        // Species IUCN does not have: only for a list of every category.
+        var extras = options.Extra && categories is null && (!partial || options.ListAnyway) ? lookup.ExtraSpeciesIn(scope) : null;
         return new ListScopeResult(scope, path, species.Count(t => InCategories(t.First().Taxon)), species.Count, speciesInScope,
             infraListed, infraInScope, infraChecked, categories,
             codes.Count > 0, partial,
             missing, missingTotal, GroupListQuery.DefaultStyle(PathOf(scope.NodeId)), outside, otherCategory, duplicates) {
             ListedIn = path.ToDictionary(g => g.NodeId, g => listed.Count(t => t.First().Taxon.Kind == TaxonKinds.Species
                 && PathOf(t.First().Taxon.NodeId!.Value).Any(p => p.NodeId == g.NodeId))),
-            // Species IUCN has not assessed: only for a list of every category.
-            MissingExtra = options.Extra && categories is null && (!partial || options.ListAnyway)
-                ? [.. lookup.ExtraSpeciesIn(scope)
-                    .Where(e => options.WrittenNames is null || !options.WrittenNames.Contains(Shared.SiteData.SiteNameKey.Fold(e.ScientificName)))
-                    .Select(ExtraRow)]
-                : null,
+            MissingExtra = extras?
+                .Where(e => options.WrittenNames is null || !options.WrittenNames.Contains(Shared.SiteData.SiteNameKey.Fold(e.ScientificName)))
+                .Select(ExtraRow).ToList(),
+            ExtraTotal = extras?.Count ?? 0,
         };
     }
 

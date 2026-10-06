@@ -1,4 +1,3 @@
-using System.Globalization;
 using System.Text.RegularExpressions;
 using BeastieBot3.Shared.Wikitext;
 using BeastieBot3.Site.Data;
@@ -103,14 +102,9 @@ public static partial class ListPlacement {
         : (ListOrder.None, scientific.Count);
 
     // {{IUCN status|EN}}, with the ids and year when the reader asks for them, as the updater adds it.
-    private static string StatusTemplate(ListTaxonRow taxon, ListPlacementOptions options) {
-        var code = GroupList.StatusCode(taxon);
-        var ids = options.AddIds && taxon.AssessmentId is { } a ? $"|{taxon.TaxonId}/{a}|1" : string.Empty;
-        var year = options.AddYear && code is not ("EX" or "EW") && taxon.YearPublished is { } y
-            ? "|year=" + y.ToString(CultureInfo.InvariantCulture)
-            : string.Empty;
-        return $"{{{{IUCN status|{code}{ids}{year}}}}}";
-    }
+    private static string StatusTemplate(ListTaxonRow taxon, ListPlacementOptions options) =>
+        StatusUpdater.NewStatusTemplate(GroupList.StatusCode(taxon), taxon.TaxonId, taxon.AssessmentId, taxon.YearPublished,
+            options.AddIds, options.AddYear);
 
     private sealed partial class Placer {
         private readonly string _text;

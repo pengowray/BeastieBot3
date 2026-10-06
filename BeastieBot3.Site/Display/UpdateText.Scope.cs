@@ -58,20 +58,25 @@ public static partial class UpdateText {
     public static string UnplacedLinesLabel(int n) =>
         n == 1 ? "List line for the 1 missing taxon that was not added (read only)" : $"List lines for the {Count(n)} missing taxa that were not added (read only)";
 
-    // PROVISIONAL wording.
     public static string ScopeOption(GroupRow group, int listed) =>
-        $"{GroupList.HeadingText(group)} ({Count(listed)} of {Count(group.SpeciesCount)} species)";
-    public const string ExtraSpeciesOption = "Also compare with species of the Catalogue of Life that IUCN has not assessed";
-    public const string ExtraSpeciesButton = "Compare with the Catalogue of Life too";
+        $"{GroupList.HeadingText(group)} ({Count(listed)} of {Count(group.SpeciesCount)} species in the wikitext)";
+
+    // Species of the Catalogue of Life that are not in the IUCN Red List (ListScopeResult.MissingExtra).
+    public const string ExtraSpeciesOption = "Also compare with Catalogue of Life species not in the IUCN Red List";
+    public const string ExtraSpeciesHelp = "Most are species that IUCN has not assessed. Some are fossils, hybrids, or names that IUCN treats as synonyms. Species the wikitext already names are not listed.";
+    public const string ExtraSpeciesButton = "Add Catalogue of Life species to the comparison";
+    public static string ExtraHeading(int n) => n == 1
+        ? "1 Catalogue of Life species not in the IUCN Red List is missing from the wikitext"
+        : $"{Count(n)} Catalogue of Life species not in the IUCN Red List are missing from the wikitext";
+    public static string ExtraNone(GroupRow group) =>
+        $"The wikitext includes every Catalogue of Life species in {GroupList.HeadingText(group)} that is not in the IUCN Red List.";
+    public static string ExtraNoneExist(GroupRow group) =>
+        $"The Catalogue of Life has no species in {GroupList.HeadingText(group)} that are not in the IUCN Red List.";
+    public static string ExtraLinesLabel(int n) => $"List lines for the {Count(n)} missing Catalogue of Life species (read only)";
+    public const string CopyExtraAccessible = "Copy the list lines for the missing Catalogue of Life species";
+    public const string ExtraLinesHelp = "These lines have no {{IUCN status}}. Check each species before you add it: some may be fossils, hybrids, or names that IUCN treats as synonyms.";
     public static string AddExtraResult(int added, int missing) =>
-        $"Added {Count(added)} of the {Count(missing)} missing species not assessed by IUCN to the updated wikitext.";
-    public static string ExtraHeading(int n) =>
-        n == 1 ? "1 species not assessed by IUCN is missing from the wikitext" : $"{Count(n)} species not assessed by IUCN are missing from the wikitext";
-    public const string ExtraNone = "Every species of the Catalogue of Life in this group is in the wikitext.";
-    public static string ExtraLinesLabel(int n) =>
-        n == 1 ? "List line for the 1 species not assessed by IUCN (read only)" : $"List lines for the {Count(n)} species not assessed by IUCN (read only)";
-    public const string CopyExtraAccessible = "Copy the list lines for the species not assessed by IUCN";
-    public const string ExtraLinesHelp = "These species are in the Catalogue of Life. The lines have no {{IUCN status}}. Check each species before you add it: some may be names IUCN treats as synonyms.";
+        $"Added {Count(added)} of the {Count(missing)} missing Catalogue of Life species to the updated wikitext.";
 
     public static string OtherCategoryHeading(int n, IReadOnlySet<string> categories) =>
         $"{Taxa(n)} now in a category other than {CategoryList(categories, "or")}";

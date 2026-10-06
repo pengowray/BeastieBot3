@@ -196,9 +196,8 @@
     <fieldset class="update-options" aria-describedby="update-add-help">
         <legend>@UpdateText.AddOptionsLegend</legend>
         <label><input type="checkbox" name="@UpdateModel.AddToListLinesField" value="1" checked="@Model.Options.AddToListLines"> @UpdateText.OptionAddToListLines</label>
-        <label><input type="checkbox" name="@UpdateModel.AddStatusColumnsField" value="1" checked="@Model.Options.AddStatusColumns"> @UpdateText.OptionAddStatusColumns</label>
         <label><input type="checkbox" name="@UpdateModel.AtLineEndField" value="1" checked="@Model.Options.StatusAtLineEnd"> @UpdateText.OptionAtLineEnd</label>
-        <label><input type="checkbox" name="@UpdateModel.AddReferencesField" value="1" checked="@Model.Options.AddReferences"> @UpdateText.OptionAddReferences</label>
+        <label><input type="checkbox" name="@UpdateModel.AddStatusColumnsField" value="1" checked="@Model.Options.AddStatusColumns"> @UpdateText.OptionAddStatusColumns</label>
         <label>@UpdateText.OptionColumnHeader
             <select name="@UpdateModel.ColumnHeaderField">
                 @foreach (var heading in UpdateModel.ColumnHeaders) {
@@ -206,6 +205,8 @@
                 }
             </select>
         </label>
+        <label><input type="checkbox" name="@UpdateModel.AddReferencesField" value="1" checked="@Model.Options.AddReferences" aria-describedby="update-refs-help"> @UpdateText.OptionAddReferences</label>
+        <p class="help" id="update-refs-help">@UpdateText.OptionAddReferencesHelp</p>
         <p class="help" id="update-add-help">@UpdateText.AddOptionsHelp</p>
     </fieldset>
     @if (result?.Findings.Any(f => f.Kind == StatusItemKind.TableColumnAdded) == true) {

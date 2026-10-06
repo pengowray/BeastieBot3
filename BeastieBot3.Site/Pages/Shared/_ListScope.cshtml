@@ -48,15 +48,19 @@
     }
     @if (r.Categories is null && r.Missing is not null) {
         <p class="update-scope-add">
-            <label><input type="checkbox" name="@UpdateModel.ExtraSpeciesField" value="1" form="update-form" checked="@Model.ExtraSpecies"> @UpdateText.ExtraSpeciesOption</label>
-            @if (!Model.ExtraSpecies) {
-                <button type="submit" form="update-form" name="@UpdateModel.ExtraSpeciesField" value="1">@UpdateText.ExtraSpeciesButton</button>
+            @if (Model.ExtraSpecies) {
+                <label><input type="checkbox" name="@UpdateModel.ExtraSpeciesField" value="1" form="update-form" checked aria-describedby="scope-extra-option-help"> @UpdateText.ExtraSpeciesOption</label>
+            } else {
+                <button type="submit" form="update-form" name="@UpdateModel.ExtraSpeciesField" value="1" aria-describedby="scope-extra-option-help">@UpdateText.ExtraSpeciesButton</button>
             }
         </p>
+        <p class="help" id="scope-extra-option-help">@UpdateText.ExtraSpeciesHelp</p>
     }
     @if (r.MissingExtra is { } extra) {
-        @if (extra.Count == 0) {
-            <p>@UpdateText.ExtraNone</p>
+        @if (r.ExtraTotal == 0) {
+            <p>@UpdateText.ExtraNoneExist(r.Scope)</p>
+        } else if (extra.Count == 0) {
+            <p>@UpdateText.ExtraNone(r.Scope)</p>
         } else {
             <h4>@UpdateText.ExtraHeading(extra.Count)</h4>
         }
