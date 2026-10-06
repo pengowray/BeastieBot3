@@ -63,16 +63,12 @@ internal static class SiteGroupWikipediaNames {
             return false;
         }
         if (!string.IsNullOrWhiteSpace(article.TaxoboxName)) {
-            return string.Equals(CleanTaxoboxName(article.TaxoboxName), groupName.Trim(), StringComparison.OrdinalIgnoreCase);
+            return article.TaxoboxIs(groupName);
         }
         // With no taxobox to say what the page is about, a page that a taxon's name leads to (a
         // species whose name redirects to its genus page is matched to that page) stays the taxon's.
         return article.Redirected && !ownedByTaxon;
     }
-
-    // "†Pteropodidae", "''Pteropus''" -> the bare name.
-    private static string CleanTaxoboxName(string name) =>
-        string.Join(' ', name.Replace("''", string.Empty).Trim().TrimStart('†', '?').Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
 
     /// <summary>
     /// The names to store for a group: the article title (when it is not the group's name) and the

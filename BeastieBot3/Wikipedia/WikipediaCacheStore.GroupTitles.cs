@@ -183,4 +183,12 @@ internal sealed partial class WikipediaCacheStore {
 /// taxobox (null when it has none); Redirected is true when the title is a redirect to it.
 /// </summary>
 internal sealed record WikiGroupArticle(long PageRowId, string Title, string NormalizedTitle, bool IsDisambiguation,
-    string? TaxoboxName, bool Redirected);
+    string? TaxoboxName, bool Redirected) {
+    /// Whether the taxobox's scientific name is <paramref name="name"/> (case, italics and a dagger ignored).
+    public bool TaxoboxIs(string name) =>
+        TaxoboxName is { } taxobox && string.Equals(CleanTaxoboxName(taxobox), name.Trim(), StringComparison.OrdinalIgnoreCase);
+
+    // "†Pteropodidae", "''Pteropus''" -> the bare name.
+    private static string CleanTaxoboxName(string name) =>
+        string.Join(' ', name.Replace("''", string.Empty).Trim().TrimStart('†', '?').Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
+}
