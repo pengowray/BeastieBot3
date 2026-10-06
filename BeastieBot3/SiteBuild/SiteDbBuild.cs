@@ -269,13 +269,21 @@ internal sealed class SiteDbBuild {
                     scientificNames.Add(Shared.SiteData.SiteNameKey.Fold(node.Name));
                 }
                 var taxonArticles = new HashSet<string>(StringComparer.Ordinal);
+                var englishNamePositions = new Dictionary<string, List<int>>(StringComparer.Ordinal);
                 foreach (var taxon in taxonList) {
                     scientificNames.Add(Shared.SiteData.SiteNameKey.Fold(taxon.ScientificName));
                     if (taxon.EnwikiTitle is { } article) {
                         taxonArticles.Add(Wikipedia.WikipediaTitleHelper.Normalize(article));
                     }
+                    if (taxon.CommonNameEn is { } english && taxon.TreePos is { } pos) {
+                        var key = Shared.SiteData.SiteNameKey.Fold(english);
+                        if (!englishNamePositions.TryGetValue(key, out var list)) {
+                            englishNamePositions[key] = list = new List<int>();
+                        }
+                        list.Add(pos);
+                    }
                 }
-                SiteGroupWikipediaNames.Resolve(tree.Nodes, cache, scientificNames, taxonArticles, _stats, ct);
+                SiteGroupWikipediaNames.Resolve(tree.Nodes, cache, scientificNames, taxonArticles, englishNamePositions, _stats, ct);
             }
         }
         var lines = new WikipediaLists.SpeciesLineFormatter(legacy, provider, commonNameProvider: null);

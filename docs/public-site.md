@@ -365,7 +365,8 @@ take their order from `iucn-not-assigned.yml`, and 43 have a rank still "NOT ASS
   taxobox name, the group's title redirects to it and no taxon is matched to it. Genus
   *Orycteropus* redirects to "Aardvark", whose taxobox is *Orycteropus afer*, so the genus takes
   none of its names. Left out: the group's own name, the scientific name of any group or taxon in
-  the site, redirects to a section ("Dobsoniini" to "Megabat#List of genera"), titles with
+  the site, the `common_name_en` of a taxon in the group ("Pirarucu" redirects to "Arapaima" and is
+  the English name of *Arapaima gigas*, so the search still goes to the species), redirects to a section ("Dobsoniini" to "Megabat#List of genera"), titles with
   brackets, digits, colons or slashes, possessives, all capitals, "-ology"/"-ologist", and close
   misspellings of the article title or the group's name ("Chiroptra"). Scientific synonyms of the
   group itself stay ("Megachiroptera"). `higher_taxon_name.name_key` (`SiteNameKey.Fold`) is

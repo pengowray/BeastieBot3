@@ -14,7 +14,7 @@ using BeastieBot3.Wikipedia;
 //     names another taxon is never the group's: genus Orycteropus redirects to "Aardvark", whose
 //     taxobox taxon is Orycteropus afer.
 // A title is left out when it is the group's own name, the scientific name of another group or of
-// a taxon in the site, a redirect to a section, has brackets, digits or a colon, is possessive or
+// a taxon in the site, the English name (common_name_en) of a taxon in the group, a redirect to a section, has brackets, digits or a colon, is possessive or
 // all capitals, names the study of the group ("-ology", "-ologist"), or looks like a misspelling
 // of the article title or the group's name.
 
@@ -25,8 +25,12 @@ internal static class SiteGroupWikipediaNames {
     /// Sets <see cref="SiteTreeNode.WikipediaNames"/> on each node whose article (its enwiki_title,
     /// else its name) is downloaded and about the group.
     /// </summary>
+    /// <paramref name="englishNamePositions"/>: for each folded common_name_en of a taxon, the tree
+    /// positions of the taxa that have it. A group leaves out the English name of a taxon inside it:
+    /// "Pirarucu" redirects to the genus article "Arapaima", and is the English name of Arapaima gigas.
     public static void Resolve(IReadOnlyList<SiteTreeNode> nodes, WikipediaCacheStore cache, IReadOnlySet<string> scientificNameKeys,
-        IReadOnlySet<string> taxonArticleTitles, SiteBuildStats stats, CancellationToken cancellationToken) {
+        IReadOnlySet<string> taxonArticleTitles, IReadOnlyDictionary<string, List<int>> englishNamePositions, SiteBuildStats stats,
+        CancellationToken cancellationToken) {
         foreach (var node in nodes) {
             cancellationToken.ThrowIfCancellationRequested();
             var title = node.EnwikiTitle ?? node.Name;
@@ -44,7 +48,8 @@ internal static class SiteGroupWikipediaNames {
             if (redirects is null) {
                 stats.GroupWikipediaArticlesWithoutRedirects++;
             }
-            var names = Names(node.Name, article.Title, redirects ?? [], key => scientificNameKeys.Contains(key));
+            var names = Names(node.Name, article.Title, redirects ?? [], key => scientificNameKeys.Contains(key)
+                || englishNamePositions.TryGetValue(key, out var positions) && positions.Any(p => p >= node.FirstPos && p <= node.LastPos));
             if (names.Count == 0) {
                 continue;
             }
