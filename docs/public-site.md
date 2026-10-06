@@ -399,6 +399,36 @@ chosen by the same `CommonNameChooser`.
   templates as one Wikipedia page holds. The page counts the lines from `higher_taxon_count` first
   and reads no taxa for a longer list. The cap also keeps the site from handing out the categories
   of a whole kingdom at once.
+- List type "Species tables" (`type=table`; `Lists/SpeciesTable.cs`, options in
+  `Lists/SpeciesTableQuery.cs`, extra columns read by `Data/SpeciesTableQueries.cs`): one
+  `{{Species table}}` per genus with a `{{Species table/row}}` per species, the format of featured
+  lists such as "List of vespertilionines", below the rank headings the reader ticks (genus is never
+  a heading). Species only; NE is ticked by default and its rows have `iucn-status=NE` and no
+  reference. The site database has no range, size, habitat, diet or image (the IUCN terms), so those
+  parameters are written blank, or switched off with `no-diet=yes` / `no-ecology=yes` (on the table
+  and every row; range and image are always written, because the row template prints a missing one
+  as `{{{range}}}`). The genus authority is unknown, so the caption has none; `species-count` is the
+  genus's species in the release, in words below 100, not the number of rows. A row gets the
+  authority split into name and year (brackets: `authority-not-original=yes`), the population
+  (`PopulationValues.Display`: "Unknown", or IUCN's number of mature individuals as the tables write
+  it) and the trend template (`PopulationTrendTemplate`, shared with `/update`). The row's
+  `{{IUCN status|option=23|...}}` has no ids, so the reference after the trend is its only link to
+  the assessment. Options: references (none; list-defined in a `{{reflist|refs=}}` at the end, the
+  default; full citation in the row), ref names ("IUCN" + English name without spaces or
+  punctuation as the featured lists write them, the default; `iucn-<taxon id>`; the scientific
+  name; a second taxon with the same name gets `-<taxon id>`), citation template (`{{cite iucn}}`,
+  or `{{cite Q}}` when the assessment has a Wikidata item), columns, and the `{{IUCN statuses}}` box
+  (counts of the rows). The bullet-only options are hidden while tables are chosen (`site.js`
+  switches `data-list-type` elements). The preview (`Lists/SpeciesTablePreview.cs`) is built from the
+  rows, not from the wikitext.
+- Tables are capped at `SpeciesTable.MaxRowsWithReferences` (400) rows with references and
+  `MaxRowsWithoutReferences` (1,000) without. Measured with `action=parse` (October 2026) on
+  subfamily Vespertilioninae, 281 rows: post-expand include size 1,078,884 bytes with list-defined
+  `{{cite iucn}}` references (3.8 KB a row; inline `{{cite Q}}` the same), 360,827 bytes with no
+  references and no "Size and ecology" column (1.3 KB a row; about 1.9 KB with the column, from
+  family Felidae). Wikipedia's limit is 2 MB a page, so 546 and about 1,100 rows would fill it; the
+  caps leave about a quarter for the article's own text and references. Lua time was 0.9 s of the
+  10 s limit. The parse showed no error categories, also for NE rows, `no-ecology` and `{{cite Q}}`.
 - Search lists the groups whose name is the search text, and goes straight to the group when it is
   the only match and no taxon has the name exactly.
 - On a taxon page, each rank links to its group page, with the group's English name, or else up to
@@ -1040,6 +1070,10 @@ links to other assessments of the taxon keep the options.
 - The `{{cite Q}}` box uses the same ref options as `{{cite iucn}}` (`ToCiteQOptions`). The access
   date option applies to it only when the item has a URL: `WikidataCite.Build` sets
   `CiteQOptions.ItemHasUrl` when the item's `wikidata_item_properties` include P953.
+- "Citation in taxobox status_ref" (`cite=q`, off by default): the taxobox lines' `status_ref` holds
+  `{{cite Q}}` instead of `{{cite iucn}}` when the assessment has a Wikidata item. The `{{cite iucn}}`
+  and `{{cite Q}}` boxes do not change. `Pages/IucnReference.cs` makes the choice for every page
+  that writes a reference (`cite=q` on the group page's species tables, `citeq` on `/update`).
 
 `wwwroot/site.js` updates the wikitext when an option changes:
 
@@ -1155,6 +1189,10 @@ colspan and rowspan; `StatusUpdater` decides the edits, and `StatusTaxonResolver
   in the row or line. When an option that is off would change
   items, the result lists it with the count and a button that sends the same text again with it on
   (`StatusUpdateResult.CountNotes`).
+- `citeq` (off by default): every citation the page replaces, in `status_ref` or elsewhere, is
+  `{{cite Q|<item>}}` when the latest assessment has a Wikidata item, else `{{cite iucn}}`
+  (`StatusUpdater.ReplacementCitation`, through `IucnReference`). An existing `{{cite Q}}` is not
+  checked.
 - Checked against a sample of 9 English Wikipedia lists on 5 October 2026: what is left as is is
   taxa IUCN does not assess (subfossil lemurs, the domestic cat), names IUCN spells differently,
   and legend tables. Two forms the first version left out did not occur at all, in the sample or in
