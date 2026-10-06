@@ -32,6 +32,9 @@ public sealed record StatusUpdateOptions {
     /// Replace {{cite iucn}} citations of an older global assessment, anywhere in the text, with a
     /// citation of the latest one. Those in a taxobox's status_ref are always replaced.
     public bool UpdateCitations { get; init; }
+    /// A replaced citation is {{cite Q}} for the latest assessment's Wikidata item, when it has one,
+    /// instead of {{cite iucn}} (IucnReference).
+    public bool CiteQ { get; init; }
     /// When no scientific name or synonym in a row or line names a taxon, use an English common name
     /// in it that names exactly one taxon.
     public bool MatchCommonNames { get; init; }
