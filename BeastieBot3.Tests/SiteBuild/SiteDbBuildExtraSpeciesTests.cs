@@ -79,6 +79,40 @@ public sealed class SiteDbBuildExtraSpeciesTests : IDisposable {
     }
 
     [Fact]
+    public void Build_StoresColAuthorities() {
+        using var db = OpenReadOnly(Build(ExtraPlacement.Genus));
+        var byName = Rows(db, "SELECT scientific_name, authority FROM extra_species").ToDictionary(r => (string)r[0]!, r => r[1]);
+
+        Assert.Equal("Forster, 1780", byName["Felis lybica"]);
+        Assert.Equal("Test, 1900", byName["Panthera parda"]);
+        // Only on Wikidata: the sweep reads no authors.
+        Assert.Null(byName["Panthera zdanskyi"]);
+    }
+
+    [Fact]
+    public void Build_SplitsCountsByPlacementAndLikelyIucnOverlap() {
+        using var db = OpenReadOnly(Build(ExtraPlacement.Family));
+        var panthera = Rows(db, """
+            SELECT c.sources, c.under_family, c.iucn_likely, c.species_count
+            FROM higher_taxon_extra_count c JOIN higher_taxon h ON h.node_id = c.node_id
+            WHERE h.rank = 'genus' AND h.name = 'Panthera' ORDER BY 1, 2, 3
+            """);
+        // Panthera parda (CoL) is likely Panthera pardus; Panthera zdanskyi (Wikidata) is not paired with an IUCN taxon.
+        Assert.Equal([new object?[] { 1L, 0L, 1L, 1L }, new object?[] { 2L, 0L, 0L, 1L }], panthera);
+        var underFamily = Scalar(db, """
+            SELECT SUM(c.species_count) FROM higher_taxon_extra_count c JOIN higher_taxon h ON h.node_id = c.node_id
+            WHERE h.rank = 'family' AND c.under_family = 1
+            """);
+        Assert.Equal("1", underFamily);
+        // The split adds up to the totals.
+        Assert.Equal("0", Scalar(db, """
+            SELECT COUNT(*) FROM higher_taxon_extra x
+            WHERE x.col_count + x.wikidata_count + x.both_count
+                <> (SELECT SUM(species_count) FROM higher_taxon_extra_count c WHERE c.node_id = x.node_id)
+            """));
+    }
+
+    [Fact]
     public void Build_WithFamilyPlacement_AddsSpeciesOfIucnFamilies() {
         using var db = OpenReadOnly(Build(ExtraPlacement.Family));
         var row = Rows(db, """

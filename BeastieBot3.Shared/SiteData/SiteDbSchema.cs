@@ -8,7 +8,7 @@ namespace BeastieBot3.Shared.SiteData;
 // narrative text (rationale, range, threats ...), no coded threats/habitats/countries, no downloads.
 // Keep such fields out of this database rather than hiding them in the site.
 public static class SiteDbSchema {
-    public const int Version = 14;
+    public const int Version = 15;
 
     public const string Ddl = """
         CREATE TABLE meta (
@@ -175,6 +175,8 @@ public static class SiteDbSchema {
             common_name_en   TEXT,                        -- the Wikidata item's English label when it is not a taxon name and not junk,
                                                           -- first letter capitalised; CoL's vernacular names are not checked, so never used
             enwiki_title     TEXT,                        -- the Wikidata item's English Wikipedia sitelink
+            authority        TEXT,                        -- CoL's authorship of the accepted name ("(Cuvier, 1824)"), for scientific_name;
+                                                          -- NULL for a species only in Wikidata (the sweep reads no authors) or when CoL has none
             node_id          INTEGER NOT NULL,            -- the higher_taxon it is placed under: its genus, or its family
             sort_pos         INTEGER NOT NULL             -- in tree order it comes after the taxon with this tree_pos (ties by name)
         );
@@ -206,6 +208,19 @@ public static class SiteDbSchema {
             col_count        INTEGER NOT NULL,            -- extra species under the group only in CoL
             wikidata_count   INTEGER NOT NULL,            -- only in Wikidata
             both_count       INTEGER NOT NULL             -- in both
+        ) WITHOUT ROWID;
+
+        -- The same counts split by where the species is placed and by whether it is likely an IUCN taxon,
+        -- so the line count follows the list options. One row per group and combination that has species.
+        CREATE TABLE higher_taxon_extra_count (
+            node_id          INTEGER NOT NULL,
+            sources          INTEGER NOT NULL,            -- as extra_species.sources: 1 CoL only, 2 Wikidata only, 3 both
+            under_family     INTEGER NOT NULL,            -- 1: placed under a family because IUCN does not have its genus
+                                                          -- (the list option genera=0 leaves these out); 0: under its genus
+            iucn_likely      INTEGER NOT NULL,            -- 1: an extra_overlap row with likely = 1 pairs it with an IUCN taxon, so
+                                                          -- a list that includes IUCN and prefers it leaves the species out
+            species_count    INTEGER NOT NULL,
+            PRIMARY KEY (node_id, sources, under_family, iucn_likely)
         ) WITHOUT ROWID;
 
         -- The name the Catalogue of Life or Wikidata gives an IUCN species in the release, when it differs
