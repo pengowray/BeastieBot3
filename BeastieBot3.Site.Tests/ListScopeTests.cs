@@ -31,6 +31,24 @@ internal sealed class FakeScopeLookup : IListScopeLookup {
     /// "spbaa" for 100: an epithet of letters, so the name has the shape of a scientific name.
     public static string Epithet(long id) => "sp" + string.Concat(id.ToString(System.Globalization.CultureInfo.InvariantCulture).Select(d => (char)('a' + (d - '0'))));
 
+    /// Adds a subspecies "Genus spbaa ssp. infra" of a species already added.
+    public FakeScopeLookup Infra(long id, long parent, string infra) {
+        var species = _taxa.Single(t => t.Row.TaxonId == parent).Row;
+        var name = $"{species.ScientificName} ssp. {infra}";
+        var latest = new AssessmentRow(id * 10, id, "Global", true, "LC", false, false, null, "3.1", 2020, null, null, null);
+        _taxa.Add((species with { TaxonId = id, ScientificName = name, Kind = TaxonKinds.Subspecies, InfraRank = "ssp.", InfraName = infra,
+            ParentTaxonId = parent, TreePos = _taxa.Count, AssessmentId = id * 10, CommonNameEn = null },
+            new StatusTaxon(id, name, true, null, latest, TaxonKinds.Subspecies, species.NodeId)));
+        return this;
+    }
+
+    /// Gives a taxon an English name.
+    public FakeScopeLookup Common(long id, string name) {
+        var i = _taxa.FindIndex(t => t.Row.TaxonId == id);
+        _taxa[i] = (_taxa[i].Row with { CommonNameEn = name }, _taxa[i].Taxon);
+        return this;
+    }
+
     public StatusTaxon Taxon(long id) => _taxa.Single(t => t.Row.TaxonId == id).Taxon;
 
     private bool Under(int node, int group) {
@@ -60,6 +78,9 @@ internal sealed class FakeScopeLookup : IListScopeLookup {
     public IReadOnlyList<GroupCategoryCount> CountsOf(int nodeId) =>
         [.. Within(nodeId).GroupBy(t => t.Row.Category!).Select(g => new GroupCategoryCount(g.Key,
             g.Count(t => t.Row.Kind == TaxonKinds.Species), g.Count(t => t.Row.Kind != TaxonKinds.Species), 0))];
+
+    public IReadOnlyDictionary<long, TableTaxonExtra> ExtrasOf(GroupRow group) =>
+        Within(group.NodeId).ToDictionary(t => t.Row.TaxonId, t => new TableTaxonExtra(t.Row.TaxonId, "(Smith, 1900)", "Decreasing", "1000", null, null, null));
 
     public IReadOnlyList<ListTaxonRow> TaxaIn(GroupRow group, IReadOnlyCollection<string> kinds) =>
         [.. Within(group.NodeId).Select(t => t.Row).Where(r => kinds.Contains(r.Kind))];

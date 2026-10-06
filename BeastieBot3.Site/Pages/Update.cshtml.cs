@@ -113,11 +113,13 @@ public sealed class UpdateModel : PageModel {
         var updater = new StatusUpdater(lookup, DateOnly.FromDateTime(DateTime.UtcNow), options: Options);
         Result = updater.Update(text);
         var scope = form[ScopeField].LastOrDefault();
-        Scope = ListScope.Check(Result.Members ?? [], new SiteListScopeLookup(_queries),
+        var scopeLookup = new SiteListScopeLookup(_queries, new SpeciesTableQueries(_db));
+        Scope = ListScope.Check(Result.Members ?? [], scopeLookup,
             new ListScopeOptions(string.IsNullOrWhiteSpace(scope) ? null : scope, On(ListAnywayField)));
         AddMissing = On(AddMissingField);
         if (AddMissing && Scope is { Partial: false, Missing.Count: > 0 }) {
-            Placement = ListPlacement.Place(text, Result.Members ?? [], Scope, Options.AddIds, Options.AddYear);
+            Placement = ListPlacement.Place(text, Result.Members ?? [], Scope,
+                new ListPlacementOptions(Options.AddIds, Options.AddYear, Options.CiteQ), scopeLookup);
             if (Placement.Placed.Count > 0) {
                 Result = Result with {
                     Text = updater.TextWith(ListPlacement.Insertions(text, Placement)),

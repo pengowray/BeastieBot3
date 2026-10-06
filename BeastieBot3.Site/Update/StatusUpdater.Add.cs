@@ -38,7 +38,7 @@ public sealed partial class StatusUpdater {
         _bareMembers.Clear();
         var lines = 0;
         foreach (var line in BareListLines(s, tables)) {
-            _bareMembers.Add(Member(line.Match.Taxon!, s.LineOf(line.Span.Start), line.Match.HowFound, null) with { OnListLine = true });
+            _bareMembers.Add(Member(line.Match.Taxon!, s.LineOf(line.Span.Start), line.Match.HowFound, null) with { Source = ListMemberSource.ListLine });
             if (_options.AddToListLines) {
                 candidates.Add(new LineAddCandidate(line));
             } else if (line.StatusText is null && line.Match.Taxon?.LatestGlobal is { } latest && IucnCategories.HasStatusTemplateCode(latest)) {
@@ -48,7 +48,7 @@ public sealed partial class StatusUpdater {
         var tableCount = 0;
         foreach (var table in TablesWithoutStatus(s, tables)) {
             foreach (var (row, match) in table.Rows.Where(r => r.Match.Taxon is not null)) {
-                _bareMembers.Add(Member(match.Taxon!, s.LineOf(row.Cells[0].Whole.Start), match.HowFound, null));
+                _bareMembers.Add(Member(match.Taxon!, s.LineOf(row.Cells[0].Whole.Start), match.HowFound, null) with { Source = ListMemberSource.TableRow });
             }
             if (_options.AddStatusColumns) {
                 candidates.Add(new TableAddCandidate(table));
@@ -86,10 +86,18 @@ public sealed partial class StatusUpdater {
                 var code = finding.Kind is StatusItemKind.ListLineAdded or StatusItemKind.TableRowAdded ? null : EditSummary.CodeIn(finding.Before);
                 // An {{IUCN status}} with ids on a "*" line (the generated lists) is a list line too;
                 // a template in a table cell is on a line that starts with "|".
-                var onListLine = finding.Kind is StatusItemKind.ListLine or StatusItemKind.ListLineAdded
-                    || (finding.Kind == StatusItemKind.StatusTemplate && IsListLine(s, s.LineStart(finding.Line)));
-                var hasStatus = onListLine && (finding.Kind != StatusItemKind.ListLineAdded || finding.Outcome == StatusOutcome.Updated);
-                members.Add(Member(finding.Taxon, finding.Line, howFound, code) with { OnListLine = onListLine, HasStatusTemplate = hasStatus });
+                var lineStart = s.LineStart(finding.Line);
+                var source = finding.Kind switch {
+                    StatusItemKind.ListLine or StatusItemKind.ListLineAdded => ListMemberSource.ListLine,
+                    StatusItemKind.SpeciesTableRow => ListMemberSource.SpeciesTableRow,
+                    StatusItemKind.TableCell or StatusItemKind.TableRowAdded => ListMemberSource.TableRow,
+                    _ when IsListLine(s, lineStart) => ListMemberSource.ListLine,
+                    _ when s.Text[lineStart..].TrimStart() is ['|' or '!', ..] => ListMemberSource.TableRow,
+                    _ => ListMemberSource.Other,
+                };
+                var hasStatus = source == ListMemberSource.ListLine
+                    && (finding.Kind != StatusItemKind.ListLineAdded || finding.Outcome == StatusOutcome.Updated);
+                members.Add(Member(finding.Taxon, finding.Line, howFound, code) with { Source = source, HasStatusTemplate = hasStatus });
             }
         }
         foreach (var member in _bareMembers) {
@@ -391,7 +399,7 @@ public sealed partial class StatusUpdater {
     // The first row that keeps a column from being added, as a ColumnLayout note: the column is added
     // only to a table with one header row, first, and rows with the same number of cells, none
     // spanning several rows or columns. Null when the column can be added.
-    private static StatusNote? LayoutProblem(WikitextScanner s, WikiTable table) {
+    internal static StatusNote? LayoutProblem(WikitextScanner s, WikiTable table) {
         StatusNote Problem(TableRow row, string cause) =>
             new(StatusNoteKind.ColumnLayout, cause, s.LineOf(row.Cells.Count > 0 ? row.Cells[0].Whole.Start : table.Span.Start));
         if (table.Rows.Count == 0 || !table.Rows[0].IsHeaderRow) {

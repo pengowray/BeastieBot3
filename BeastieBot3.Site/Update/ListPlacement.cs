@@ -6,117 +6,232 @@ using BeastieBot3.Site.Lists;
 
 namespace BeastieBot3.Site.Update;
 
-/// A missing taxon put into the text: its line, where it goes (Position in the text as it was
-/// pasted), and the line it goes next to: NeighbourLine, which names NeighbourName (as written), the
-/// taxon NeighbourTaxon when it is one the comparison found (null for a taxon IUCN does not have).
-/// Before: it goes before that line, not after it.
+/// A missing taxon put into the text: the text put in (a list line, a table row, or a whole
+/// {{Species table}} for a genus), where it goes (Position in the text as it was pasted), and the
+/// line it goes next to: NeighbourLine, which names NeighbourName (as written), the taxon
+/// NeighbourTaxon when the comparison found one there. Before: it goes before that line, not after it.
+/// The taxa of one new genus table share its text: the first carries it, the others have an empty Line.
 public sealed record PlacedTaxon(ListTaxonRow Taxon, string Line, int Position, string NeighbourName, StatusTaxon? NeighbourTaxon,
     int NeighbourLine, bool Before);
 
-/// Placed: the missing species put next to a listed species of the same genus. Unplaced: the
-/// missing taxa that stay in the box to copy (a genus the list does not have, a subspecies or
-/// variety, or a genus listed only in a table).
+/// Placed: the missing taxa put into the text. Unplaced: the missing taxa that stay in the box to copy.
 public sealed record ListPlacementResult(IReadOnlyList<PlacedTaxon> Placed, IReadOnlyList<ListTaxonRow> Unplaced);
 
 /// What the comparison section of the update page shows: the comparison, the missing taxa put into
 /// the wikitext (null when not asked for), and whether the reader asked for them.
 public sealed record ListScopeView(ListScopeResult Scope, ListPlacementResult? Placement, bool AddMissing);
 
-/// Puts the missing species of a list comparison (ListScope) into the list: each one on a new list
-/// line next to a listed species of the same genus: before the first one whose name (as written)
-/// sorts after it, when the genus is written in alphabetical order, else after the genus's last species. The line copies the
-/// neighbour's bullet markers and name style. Only list lines are used, never tables.
+/// The updater's options that change the text put in: ids and year in {{IUCN status}}, and {{cite Q}}
+/// for the references of new {{Species table/row}} rows.
+public sealed record ListPlacementOptions(bool AddIds = false, bool AddYear = false, bool CiteQ = false);
+
+/// Puts the missing taxa of a list comparison (ListScope) into the list, where the list has a place
+/// for them:
+/// - a species with a species of its genus on a list line: a new list line among them;
+/// - a subspecies or variety whose species is on a list line: a new line under the species;
+/// - a species with a species of its genus in a {{Species table}}: a new {{Species table/row}};
+/// - a species whose genus has no table, in a list of {{Species table}}s with a table of a genus of
+///   its family: a new {{Species table}} for the genus;
+/// - a species with a species of its genus in a row of a simple wikitable: a new row.
+/// Among its neighbours a taxon goes in alphabetical order, by scientific name or by common name,
+/// whichever order the list keeps (one pair in ten may be out of order); in a list in neither order,
+/// after the last of them. New lines and rows copy their neighbour's form.
 public static partial class ListPlacement {
-    public static ListPlacementResult Place(string text, IReadOnlyList<ListMember> members, ListScopeResult scope, bool addIds, bool addYear) {
+    public static ListPlacementResult Place(string text, IReadOnlyList<ListMember> members, ListScopeResult scope,
+        ListPlacementOptions options, IListScopeLookup lookup) {
         var missing = scope.Missing ?? [];
         if (scope.Partial || missing.Count == 0) {
             return new ListPlacementResult([], missing);
         }
-        var lines = new Lines(text);
-        // The listed species on list lines, by genus (their lowest group), in text order.
-        var byGenus = members
-            .Where(m => m.OnListLine && m.Taxon is { InRelease: true, NodeId: not null, Kind: TaxonKinds.Species })
-            .GroupBy(m => m.Taxon.NodeId!.Value)
-            .ToDictionary(g => g.Key, g => g.OrderBy(m => m.Line).ToList());
-
+        var placer = new Placer(text, members, scope, options, lookup);
         var placed = new List<PlacedTaxon>();
-        var unplaced = new List<ListTaxonRow>();
+        var rest = new List<ListTaxonRow>();
         foreach (var taxon in missing.OrderBy(t => t.ScientificName, StringComparer.OrdinalIgnoreCase)) {
-            if (taxon.Kind != TaxonKinds.Species || !byGenus.TryGetValue(taxon.NodeId, out var mates) || mates.Count == 0) {
-                unplaced.Add(taxon);
-                continue;
+            if (placer.Place(taxon) is { } p) {
+                placed.Add(p);
+            } else {
+                rest.Add(taxon);
             }
-            // The genus's species lines: the lines with fewest markers. A deeper line naming a species
-            // ("** ''Panthera leo'' subsp. ...") is under it.
-            int DepthOf(ListMember m) {
-                var text = lines.Text(m.Line);
-                var start = ListStart(text);
-                return start < 0 ? int.MaxValue : Markers(text[start..]);
-            }
-            var top = mates.Min(DepthOf);
-            mates = [.. mates.Where(m => DepthOf(m) == top)];
-            // The names as the list writes them: a synonym sorts where the list put it.
-            var outOfOrder = mates.Zip(mates.Skip(1)).Count(p => Compare(p.First.Written, p.Second.Written) > 0);
-            var sorted = outOfOrder <= (mates.Count - 1) / 10;
-            // In a list in order (one in ten pairs may be out of order), after the last line before
-            // the first species that sorts after it, counting the lines of species IUCN does not have
-            // ("Carex gynandra" between "Carex grayi" and "Carex hallii"); else after the genus's last
-            // species.
-            var next = sorted ? mates.FirstOrDefault(m => Compare(m.Written, taxon.ScientificName) > 0) : null;
-            var previous = sorted
-                ? mates.LastOrDefault(m => m.Line < (next?.Line ?? int.MaxValue) && Compare(m.Written, taxon.ScientificName) < 0)
-                : mates[^1];
-            var anchor = previous ?? next!;
-            var before = previous is null;
-            // A list that starts on the line of its template ("{{columns-list|...|*[[Tiger]]") starts
-            // at its first marker.
-            var anchorText = lines.Text(anchor.Line);
-            var listStart = ListStart(anchorText);
-            if (listStart < 0) {
-                unplaced.Add(taxon);
-                continue;
-            }
-            var anchorLine = anchor.Line;
-            var anchorName = anchor.Written;
-            StatusTaxon? anchorTaxon = anchor.Taxon;
-            if (sorted && previous is not null) {
-                var depth = Markers(anchorText[listStart..]);
-                for (var l = lines.LastOfBlock(anchorLine) + 1; l < (next?.Line ?? lines.Count + 1); l = lines.LastOfBlock(l) + 1) {
-                    var lineText = lines.Text(l);
-                    if (Markers(lineText) != depth || LeadingName().Match(lineText) is not { Success: true } leading
-                        || Compare(leading.Groups["name"].Value, taxon.ScientificName) >= 0) {
-                        break;
-                    }
-                    anchorLine = l;
-                    anchorName = leading.Groups["name"].Value;
-                    anchorTaxon = null;
-                }
-            }
-            var line = NewLine(anchorText[listStart..], taxon, scope.Style, anchor.HasStatusTemplate, addIds, addYear);
-            var position = before ? lines.Start(anchorLine) + listStart : lines.End(lines.LastOfBlock(anchorLine));
-            placed.Add(new PlacedTaxon(taxon, line, position, anchorName, anchorTaxon, anchorLine, before));
         }
-        return new ListPlacementResult(placed, unplaced);
+        var tables = placer.NewGenusTables(rest);
+        placed.AddRange(tables);
+        var inTables = tables.Select(p => p.Taxon.TaxonId).ToHashSet();
+        return new ListPlacementResult(placed, [.. rest.Where(t => !inTables.Contains(t.TaxonId))]);
     }
 
-    /// The insertions for StatusUpdater.TextWith. Several lines at one place keep the order of Placed,
-    /// which is by scientific name.
+    /// The insertions for StatusUpdater.TextWith. Several texts at one place keep the order of
+    /// Placed. A text written with "\n" gets the pasted text's line ends.
     public static IEnumerable<(int Position, string Text)> Insertions(string text, ListPlacementResult result) {
-        var eol = text.Contains("\r\n", StringComparison.Ordinal) ? "\r\n" : "\n";
-        return result.Placed.Select(p => (p.Position, p.Before ? p.Line + eol : eol + p.Line));
+        var crlf = text.Contains("\r\n", StringComparison.Ordinal);
+        return result.Placed.Where(p => p.Line.Length > 0).Select(p => {
+            var inserted = p.Before ? p.Line + "\n" : "\n" + p.Line;
+            return (p.Position, crlf ? inserted.Replace("\n", "\r\n", StringComparison.Ordinal) : inserted);
+        });
     }
 
     private static int Compare(string a, string b) => string.Compare(a, b, StringComparison.OrdinalIgnoreCase);
 
+    /// Where a key goes among keys in text order: the index of the first key that sorts after it,
+    /// or Count to go after the last; null when the keys are not in order (more than one pair in ten
+    /// out of order) or one is missing.
+    internal static int? OrderedPlace(IReadOnlyList<string?> keys, string? key) {
+        if (key is null || keys.Count == 0 || keys.Any(k => k is null)) {
+            return null;
+        }
+        var outOfOrder = keys.Zip(keys.Skip(1)).Count(p => Compare(p.First!, p.Second!) > 0);
+        if (outOfOrder > (keys.Count - 1) / 10) {
+            return null;
+        }
+        for (var i = 0; i < keys.Count; i++) {
+            if (Compare(keys[i]!, key) > 0) {
+                return i;
+            }
+        }
+        return keys.Count;
+    }
+
+    /// The order a list keeps among the neighbours of a new taxon: by scientific name, else by common
+    /// name, else none. Index: the first neighbour that sorts after the new taxon (Count: after the
+    /// last); with no order, Count.
+    internal enum ListOrder { None, Scientific, Common }
+
+    internal static (ListOrder Order, int Index) Order(IReadOnlyList<string?> scientific, string scientificKey,
+        IReadOnlyList<string?> common, string? commonKey) =>
+        OrderedPlace(scientific, scientificKey) is { } s ? (ListOrder.Scientific, s)
+        : OrderedPlace(common, commonKey) is { } c ? (ListOrder.Common, c)
+        : (ListOrder.None, scientific.Count);
+
+    // {{IUCN status|EN}}, with the ids and year when the reader asks for them, as the updater adds it.
+    private static string StatusTemplate(ListTaxonRow taxon, ListPlacementOptions options) {
+        var code = GroupList.StatusCode(taxon);
+        var ids = options.AddIds && taxon.AssessmentId is { } a ? $"|{taxon.TaxonId}/{a}|1" : string.Empty;
+        var year = options.AddYear && code is not ("EX" or "EW") && taxon.YearPublished is { } y
+            ? "|year=" + y.ToString(CultureInfo.InvariantCulture)
+            : string.Empty;
+        return $"{{{{IUCN status|{code}{ids}{year}}}}}";
+    }
+
+    private sealed partial class Placer {
+        private readonly string _text;
+        private readonly WikitextScanner _scanner;
+        private readonly Lines _lines;
+        private readonly IReadOnlyList<ListMember> _members;
+        private readonly ListScopeResult _scope;
+        private readonly ListPlacementOptions _options;
+        private readonly IListScopeLookup _lookup;
+
+        public Placer(string text, IReadOnlyList<ListMember> members, ListScopeResult scope, ListPlacementOptions options, IListScopeLookup lookup) {
+            _text = text;
+            _scanner = new WikitextScanner(text);
+            _lines = new Lines(text);
+            _members = members;
+            _scope = scope;
+            _options = options;
+            _lookup = lookup;
+        }
+
+        private IEnumerable<ListMember> Listed(ListMemberSource source) =>
+            _members.Where(m => m.Source == source && m.Taxon is { InRelease: true, NodeId: not null });
+
+        public PlacedTaxon? Place(ListTaxonRow taxon) {
+            if (taxon.Kind != TaxonKinds.Species) {
+                return taxon.ParentTaxonId is { } parent ? UnderSpecies(taxon, parent) : null;
+            }
+            return OnListLine(taxon) ?? InSpeciesTable(taxon) ?? InTableRow(taxon);
+        }
+
+        // ------------------------------------------------------------ list lines
+
+        private PlacedTaxon? OnListLine(ListTaxonRow taxon) {
+            var mates = Listed(ListMemberSource.ListLine)
+                .Where(m => m.Taxon.Kind == TaxonKinds.Species && m.Taxon.NodeId == taxon.NodeId).OrderBy(m => m.Line).ToList();
+            if (mates.Count == 0) {
+                return null;
+            }
+            // The genus's species lines: the lines with fewest markers. A deeper line naming a species
+            // ("** ''Panthera leo'' subsp. ...") is under it.
+            var top = mates.Min(DepthOf);
+            mates = [.. mates.Where(m => DepthOf(m) == top).GroupBy(m => m.Line).Select(g => g.First())];
+            var (order, index) = Order(
+                [.. mates.Select(m => m.Written)], taxon.ScientificName,
+                [.. mates.Select(m => CommonOnLine(ListPart(_lines.Text(m.Line))))], taxon.CommonNameEn);
+            var before = index == 0 && order != ListOrder.None;
+            var anchor = before ? mates[0] : mates[Math.Max(0, index - 1)];
+            var anchorText = _lines.Text(anchor.Line);
+            var listStart = ListStart(anchorText);
+            if (listStart < 0) {
+                return null;
+            }
+            var anchorLine = anchor.Line;
+            var anchorName = anchor.Written;
+            StatusTaxon? anchorTaxon = anchor.Taxon;
+            // After its neighbour: also after the lines of species IUCN does not have that sort before
+            // the new one ("Carex gynandra" between "Carex grayi" and "Carex hallii").
+            if (!before && order != ListOrder.None) {
+                var key = order == ListOrder.Scientific ? taxon.ScientificName : taxon.CommonNameEn!;
+                var depth = Markers(anchorText[listStart..]);
+                var stop = index < mates.Count ? mates[index].Line : _lines.Count + 1;
+                for (var l = _lines.LastOfBlock(anchorLine) + 1; l < stop; l = _lines.LastOfBlock(l) + 1) {
+                    var lineText = _lines.Text(l);
+                    var name = order == ListOrder.Scientific
+                        ? LeadingName().Match(lineText) is { Success: true } m ? m.Groups["name"].Value : null
+                        : CommonOnLine(lineText);
+                    if (Markers(lineText) != depth || name is null || Compare(name, key) >= 0) {
+                        break;
+                    }
+                    anchorLine = l;
+                    anchorName = name;
+                    anchorTaxon = null;
+                }
+            }
+            var line = NewLine(anchorText[listStart..], taxon, _scope.Style, anchor.HasStatusTemplate, _options);
+            var position = before ? _lines.Start(anchorLine) + listStart : _lines.End(_lines.LastOfBlock(anchorLine));
+            return new PlacedTaxon(taxon, line, position, anchorName, anchorTaxon, anchorLine, before);
+        }
+
+        private int DepthOf(ListMember m) {
+            var text = _lines.Text(m.Line);
+            var start = ListStart(text);
+            return start < 0 ? int.MaxValue : Markers(text[start..]);
+        }
+
+        private static string ListPart(string line) => ListStart(line) is >= 0 and var i ? line[i..] : line;
+
+        // A subspecies or variety under its species' line: after the lines already under it, one
+        // marker deeper, with the genus and species abbreviated ("** ''P. l. persica''").
+        private PlacedTaxon? UnderSpecies(ListTaxonRow taxon, long parentId) {
+            var species = Listed(ListMemberSource.ListLine).Where(m => m.Taxon.TaxonId == parentId).OrderBy(m => m.Line).FirstOrDefault();
+            if (species is null) {
+                return null;
+            }
+            var speciesText = _lines.Text(species.Line);
+            var listStart = ListStart(speciesText);
+            if (listStart < 0) {
+                return null;
+            }
+            var markers = Prefix().Match(speciesText[listStart..]).Value;
+            var trimmed = markers.TrimEnd();
+            var prefix = trimmed + trimmed[^1] + (markers.Length > trimmed.Length ? " " : string.Empty);
+            var line = SpeciesListLine.FormatInfraspecificUnderSpecies(GroupList.Entry(taxon),
+                new SpeciesListLineOptions { Style = _scope.Style, IncludeStatusTemplate = false });
+            line = prefix + ListScope.UnlinkLists(line["* ".Length..]);
+            if (species.HasStatusTemplate && taxon.Category is not null) {
+                line += " " + StatusTemplate(taxon, _options);
+            }
+            var last = _lines.LastOfBlock(species.Line);
+            return new PlacedTaxon(taxon, line, _lines.End(last), species.Written, species.Taxon, species.Line, false);
+        }
+    }
+
     // The new line: the neighbour's bullet markers and the space after them, the names in the
     // neighbour's style, and {{IUCN status}} when the neighbour has one.
-    internal static string NewLine(string neighbour, ListTaxonRow taxon, SpeciesListStyle fallback, bool withStatus, bool addIds, bool addYear) {
+    internal static string NewLine(string neighbour, ListTaxonRow taxon, SpeciesListStyle fallback, bool withStatus, ListPlacementOptions options) {
         var prefix = Prefix().Match(neighbour);
         var style = StyleOf(neighbour[prefix.Length..]) ?? fallback;
         var line = SpeciesListLine.Format(GroupList.Entry(taxon), new SpeciesListLineOptions { Style = style, IncludeStatusTemplate = false });
         line = ListScope.UnlinkLists(line["* ".Length..]);
         if (withStatus && taxon.Category is not null) {
-            line += " " + StatusTemplate(taxon, addIds, addYear);
+            line += " " + StatusTemplate(taxon, options);
         }
         return prefix.Value + line;
     }
@@ -135,15 +250,10 @@ public static partial class ListPlacement {
         return null;
     }
 
-    // {{IUCN status|EN}}, with the ids and year when the reader asks for them, as the updater adds it.
-    private static string StatusTemplate(ListTaxonRow taxon, bool addIds, bool addYear) {
-        var code = GroupList.StatusCode(taxon);
-        var ids = addIds && taxon.AssessmentId is { } a ? $"|{taxon.TaxonId}/{a}|1" : string.Empty;
-        var year = addYear && code is not ("EX" or "EW") && taxon.YearPublished is { } y
-            ? "|year=" + y.ToString(CultureInfo.InvariantCulture)
-            : string.Empty;
-        return $"{{{{IUCN status|{code}{ids}{year}}}}}";
-    }
+    // The common name a list line starts with: the text of its first link, when the line starts with
+    // a link that is not in italics ("*[[Lepilemur ruficaudatus|Red-tailed sportive lemur]]").
+    private static string? CommonOnLine(string line) =>
+        LeadingCommon().Match(line) is { Success: true } m ? m.Groups["label"].Success ? m.Groups["label"].Value : m.Groups["target"].Value : null;
 
     [GeneratedRegex(@"^[*#]+ ?")]
     private static partial Regex Prefix();
@@ -155,6 +265,9 @@ public static partial class ListPlacement {
     // "*''[[Carex gynandra]]'' <small>Schwein.</small>", "* †''Acer alaskense''".
     [GeneratedRegex(@"^[*#]+\s*(?:†|\{\{dagger\}\})?\s*'{2,5}(?:\[\[(?:[^|\]\n]*\|)?)?(?<name>\p{Lu}[\p{Ll}-]+ (?:× ?)?[\p{Ll}-]+)")]
     private static partial Regex LeadingName();
+
+    [GeneratedRegex(@"^[*#]+\s*\[\[(?<target>[^|\]\n]+)(?:\|(?<label>[^\]\n]+))?\]\]")]
+    private static partial Regex LeadingCommon();
 
     // Where the list part of a line starts: at 0 for a line starting with "*" or "#", after the "|"
     // for "{{columns-list|...|*...", or -1.

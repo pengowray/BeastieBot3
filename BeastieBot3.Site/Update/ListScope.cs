@@ -15,6 +15,9 @@ public interface IListScopeLookup {
 
     /// The group's taxa of these kinds, in tree order.
     IReadOnlyList<ListTaxonRow> TaxaIn(GroupRow group, IReadOnlyCollection<string> kinds);
+
+    /// What a {{Species table/row}} needs for the group's species (authority, population, citation), by taxon id.
+    IReadOnlyDictionary<long, TableTaxonExtra> ExtrasOf(GroupRow group);
 }
 
 /// What the reader chose. Scope: "rank/name" of a group above the taxa ("family/Felidae"), or null for

@@ -199,7 +199,21 @@ public sealed record StatusUpdateResult(string Text, IReadOnlyList<StatusFinding
 /// A taxon the text lists: found on a list line, in a table row or a species table row, or by the
 /// ids of an {{IUCN status}} template (not in a taxobox or a citation). Written: the name that found
 /// it (a synonym or common name, else the taxon's scientific name). WrittenCode: the status code the
-/// text gave it before any change, or null when it had none. OnListLine: the taxon is on a list line
-/// ("*" or "#"), not in a table. HasStatusTemplate: that line has {{IUCN status}}, or gets one.
+/// text gave it before any change, or null when it had none. Source: where the text lists it.
+/// HasStatusTemplate: a list line that has {{IUCN status}}, or gets one.
 public sealed record ListMember(StatusTaxon Taxon, int Line, string Written, string? WrittenCode,
-    bool OnListLine = false, bool HasStatusTemplate = false);
+    ListMemberSource Source = ListMemberSource.Other, bool HasStatusTemplate = false) {
+    /// On a list line ("*" or "#").
+    public bool OnListLine => Source == ListMemberSource.ListLine;
+}
+
+public enum ListMemberSource {
+    /// An {{IUCN status}} with ids in prose.
+    Other,
+    /// A list line ("*" or "#").
+    ListLine,
+    /// A row of a wikitable.
+    TableRow,
+    /// A {{Species table/row}}.
+    SpeciesTableRow,
+}

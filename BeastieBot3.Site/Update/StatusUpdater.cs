@@ -577,7 +577,7 @@ public sealed partial class StatusUpdater {
         NameOccurrencesIn(s, content).Select(o => o.Name);
 
     // The scientific names in a span, each with the span of the link, italics or template it is in.
-    private static List<(string Name, TextSpan Span)> NameOccurrencesIn(WikitextScanner s, TextSpan content) {
+    internal static List<(string Name, TextSpan Span)> NameOccurrencesIn(WikitextScanner s, TextSpan content) {
         if (content.Length > MaxNameCellLength) {
             return [];
         }
@@ -604,7 +604,7 @@ public sealed partial class StatusUpdater {
 
     // The articles linked in a span: each wikilink's target, with its span. Links to other
     // namespaces ("File:", "Category:", "wikt:") and to sections only are left out.
-    private static List<(string Title, TextSpan Span)> ArticleLinks(WikitextScanner s, TextSpan content) {
+    internal static List<(string Title, TextSpan Span)> ArticleLinks(WikitextScanner s, TextSpan content) {
         if (content.Length > MaxNameCellLength) {
             return [];
         }

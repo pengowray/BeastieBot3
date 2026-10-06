@@ -190,7 +190,7 @@ public static class SpeciesTable {
         return new SpeciesTableResult(items, list.SkippedRanks);
     }
 
-    private static SpeciesTableRow Row(ListTaxonRow taxon, TableTaxonExtra? extra, SpeciesTableOptions options, RefNamer names) {
+    internal static SpeciesTableRow Row(ListTaxonRow taxon, TableTaxonExtra? extra, SpeciesTableOptions options, RefNamer names) {
         var entry = GroupList.Entry(taxon);
         var code = GroupList.StatusCode(taxon);
         var hasCommon = !string.IsNullOrWhiteSpace(taxon.CommonNameEn);

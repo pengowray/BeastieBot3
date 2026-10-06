@@ -1,3 +1,4 @@
+using BeastieBot3.Site.Data;
 using BeastieBot3.Site.Update;
 
 namespace BeastieBot3.Site.Tests;
@@ -31,7 +32,7 @@ public sealed class ListPlacementTests {
         var updater = new StatusUpdater(Statuses(), new DateOnly(2026, 10, 7), options: options);
         var result = updater.Update(text);
         var scope = ListScope.Check(result.Members!, Tree(), new ListScopeOptions(scopeKey))!;
-        var placement = ListPlacement.Place(text, result.Members!, scope, options.AddIds, options.AddYear);
+        var placement = ListPlacement.Place(text, result.Members!, scope, new ListPlacementOptions(options.AddIds, options.AddYear), Tree());
         return (updater.TextWith(ListPlacement.Insertions(text, placement)), placement);
     }
 
@@ -98,7 +99,7 @@ public sealed class ListPlacementTests {
         var text = "* ''Panthera aaa''\n* ''Panthera spbaa''\n* ''Panthera spbac''\n";
         var result = updater.Update(text);
         var scope = ListScope.Check(result.Members!, Tree())!;
-        var placement = ListPlacement.Place(text, result.Members!, scope, false, false);
+        var placement = ListPlacement.Place(text, result.Members!, scope, new ListPlacementOptions(), Tree());
         Assert.Equal("* ''Panthera aaa''\n* ''Panthera spbaa''\n* ''[[Panthera spbab]]''\n* ''Panthera spbac''\n",
             updater.TextWith(ListPlacement.Insertions(text, placement)));
     }
@@ -146,12 +147,90 @@ public sealed class ListPlacementTests {
         Assert.Empty(placement.Placed);
     }
 
+    private static (string Text, ListPlacementResult Placement) RunWith(FakeScopeLookup tree, string text, string? scopeKey = null) {
+        var updater = new StatusUpdater(Statuses(), new DateOnly(2026, 10, 7));
+        var result = updater.Update(text);
+        var scope = ListScope.Check(result.Members!, tree, new ListScopeOptions(scopeKey))!;
+        var placement = ListPlacement.Place(text, result.Members!, scope, new ListPlacementOptions(), tree);
+        return (updater.TextWith(ListPlacement.Insertions(text, placement)), placement);
+    }
+
+    private static string Row(string name, string binomial, string extra = "|image=File:x.jpg |image-size=180px\n|range=Asia\n") =>
+        $"{{{{Species table/row\n|name=[[{name}]] |binomial={binomial}\n{extra}|authority-name=X |authority-year=1900\n|iucn-status=LC |population=Unknown\n"
+        + "|direction={{decrease|Population declining}}<ref name=\"IUCN\"/>\n}}";
+
+    [Fact]
+    public void ASpeciesTableGetsARowInCommonNameOrder() {
+        // The rows are in order of common name, not of scientific name.
+        var tree = Tree().Common(100, "Ccc cat").Common(101, "Bbb cat").Common(102, "Aaa cat").Common(103, "Ddd cat");
+        var text = "{{Species table |no-note=y |genus=[[Panthera]] |species-count=four}}\n" + Row("Aaa cat", "P. spbac") + "\n"
+            + Row("Ccc cat", "P. spbaa") + "\n" + Row("Ddd cat", "P. spbad") + "\n{{Species table/end}}\n";
+        var (result, placement) = RunWith(tree, text);
+        var placed = Assert.Single(placement.Placed);
+        Assert.Equal("Aaa cat", placed.NeighbourName);
+        Assert.False(placed.Before);
+        var newRow = "{{Species table/row\n|name=[[Panthera spbab|Bbb cat]] |binomial=P. spbab\n|image= |image-size=\n|range=\n"
+            + "|authority-name=Smith |authority-year=1900 |authority-not-original=yes\n|iucn-status=LC |population=1,000\n"
+            + "|direction={{decrease|Population declining}}\n}}";
+        Assert.Contains(Row("Aaa cat", "P. spbac") + "\n" + newRow + "\n" + Row("Ccc cat", "P. spbaa"), result);
+    }
+
+    [Fact]
+    public void AGenusWithNoTableGetsATableNextToItsFamily() {
+        var tree = Tree().Common(200, "Fff cat").Common(201, "Ggg cat");
+        var text = "{{Species table |no-note=y |genus=[[Panthera]] |species-count=four}}\n" + Row("Aaa cat", "P. spbaa") + "\n"
+            + Row("Bbb cat", "P. spbab") + "\n" + Row("Ccc cat", "P. spbac") + "\n" + Row("Ddd cat", "P. spbad") + "\n{{Species table/end}}\n";
+        var (result, placement) = RunWith(tree, text, "family/Felidae");
+        Assert.Equal([200L, 201L], placement.Placed.Select(p => p.Taxon.TaxonId));
+        Assert.Empty(placement.Unplaced);
+        // Felis sorts before Panthera.
+        Assert.StartsWith("{{Species table |no-note=y |genus=[[Felis]] |species-count=two}}\n{{Species table/row\n|name=[[Felis spcaa|Fff cat]] |binomial=F. spcaa", result);
+        Assert.Contains("|binomial=F. spcab", result);
+        Assert.Contains("}}\n{{Species table/end}}\n{{Species table |no-note=y |genus=[[Panthera]]", result);
+    }
+
+    [Fact]
+    public void AWikitableGetsARow() {
+        var text = "{| class=\"wikitable\"\n! Name !! Scientific name !! Status\n|-\n| [[Aaa cat]] || ''[[Panthera spbaa]]'' || LC\n|-\n"
+            + "| [[Ccc cat]] || ''[[Panthera spbac]]'' || LC\n|-\n| [[Ddd cat]] || ''[[Panthera spbad]]'' || LC\n|}\n";
+        var tree = Tree().Common(101, "Bbb cat");
+        var (result, _) = RunWith(tree, text);
+        Assert.Contains("| [[Aaa cat]] || ''[[Panthera spbaa]]'' || LC\n|-\n| [[Panthera spbab|Bbb cat]] || ''[[Panthera spbab]]'' || LC\n|-\n| [[Ccc cat]]", result);
+    }
+
+    [Fact]
+    public void ASubspeciesGoesUnderItsSpecies() {
+        // Two subspecies of spbaa; the list has one of them.
+        var tree = Tree().Infra(500, 100, "alpha").Infra(501, 100, "beta");
+        var statuses = Statuses()
+            .Taxon(500, "Panthera spbaa ssp. alpha", "LC", 2020, 5000, node: 4, kind: TaxonKinds.Subspecies)
+            .Taxon(501, "Panthera spbaa ssp. beta", "LC", 2020, 5010, node: 4, kind: TaxonKinds.Subspecies);
+        var text = "* ''Panthera spbaa'' {{IUCN status|LC}}\n** ''Panthera spbaa alpha'' {{IUCN status|LC}}\n* ''Panthera spbab''\n"
+            + "* ''Panthera spbac''\n* ''Panthera spbad''\n";
+        var updater = new StatusUpdater(statuses, new DateOnly(2026, 10, 7));
+        var result = updater.Update(text);
+        var scope = ListScope.Check(result.Members!, tree)!;
+        Assert.True(scope.InfraChecked);
+        var placement = ListPlacement.Place(text, result.Members!, scope, new ListPlacementOptions(), tree);
+        Assert.Equal("* ''Panthera spbaa'' {{IUCN status|LC}}\n** ''Panthera spbaa alpha'' {{IUCN status|LC}}\n** ''P. spbaa beta'' {{IUCN status|LC}}\n"
+            + "* ''Panthera spbab''\n* ''Panthera spbac''\n* ''Panthera spbad''\n", updater.TextWith(ListPlacement.Insertions(text, placement)));
+    }
+
+    [Fact]
+    public void ABulletListInCommonNameOrder() {
+        var tree = Tree().Common(100, "Ccc cat").Common(101, "Bbb cat").Common(102, "Aaa cat").Common(103, "Ddd cat");
+        var text = "* [[Aaa cat]] (''Panthera spbac'')\n* [[Ccc cat]] (''Panthera spbaa'')\n* [[Ddd cat]] (''Panthera spbad'')\n";
+        var (result, _) = RunWith(tree, text);
+        Assert.Equal("* [[Aaa cat]] (''Panthera spbac'')\n* [[Panthera spbab|Bbb cat]] (''Panthera spbab'')\n* [[Ccc cat]] (''Panthera spbaa'')\n"
+            + "* [[Ddd cat]] (''Panthera spbad'')\n", result);
+    }
+
     [Fact]
     public void NothingIsPlacedInAPartialList() {
         var lookup = new FakeScopeLookup().Group(1, null, "kingdom", "Animalia").Group(4, 1, "genus", "Panthera").Species(4, 100, 30);
-        var members = Enumerable.Range(100, 10).Select(i => new ListMember(lookup.Taxon(i), i - 99, $"Panthera {FakeScopeLookup.Epithet(i)}", null, OnListLine: true)).ToList();
+        var members = Enumerable.Range(100, 10).Select(i => new ListMember(lookup.Taxon(i), i - 99, $"Panthera {FakeScopeLookup.Epithet(i)}", null, ListMemberSource.ListLine)).ToList();
         var scope = ListScope.Check(members, lookup, new ListScopeOptions(ListAnyway: true))!;
         Assert.True(scope.Partial);
-        Assert.Empty(ListPlacement.Place("", members, scope, false, false).Placed);
+        Assert.Empty(ListPlacement.Place("", members, scope, new ListPlacementOptions(), lookup).Placed);
     }
 }

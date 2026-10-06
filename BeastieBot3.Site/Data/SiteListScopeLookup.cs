@@ -1,10 +1,11 @@
+using BeastieBot3.Site.Lists;
 using BeastieBot3.Site.Update;
 
 namespace BeastieBot3.Site.Data;
 
 /// ListScope's reads over the site database. Group paths are kept, since the taxa of one list share
 /// most of their groups.
-public sealed class SiteListScopeLookup(SiteQueries queries) : IListScopeLookup {
+public sealed class SiteListScopeLookup(SiteQueries queries, SpeciesTableQueries tables) : IListScopeLookup {
     private readonly Dictionary<int, IReadOnlyList<GroupRow>> _paths = [];
 
     public IReadOnlyList<GroupRow> PathOf(int nodeId) =>
@@ -13,4 +14,6 @@ public sealed class SiteListScopeLookup(SiteQueries queries) : IListScopeLookup 
     public IReadOnlyList<GroupCategoryCount> CountsOf(int nodeId) => queries.GetGroupCounts(nodeId);
 
     public IReadOnlyList<ListTaxonRow> TaxaIn(GroupRow group, IReadOnlyCollection<string> kinds) => queries.GetListTaxa(group, kinds);
+
+    public IReadOnlyDictionary<long, TableTaxonExtra> ExtrasOf(GroupRow group) => tables.GetExtras(group);
 }
