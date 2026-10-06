@@ -179,6 +179,16 @@ public sealed class ListSourcesTests(SiteFactory factory) : IClassFixture<SiteFa
     }
 
     [Fact]
+    public async Task NotEvaluatedBoxIsTickedWithAnotherSourceAndMarkedForLiveUpdates() {
+        // site.js copies the box's state from the new page after a live update (data-live-sync).
+        var withCol = await _client.GetStringAsync("/taxa/genus/ursus?src=iucn&src=col");
+        Assert.Contains("value=\"NE\" checked=\"checked\" data-live-sync=\"\"", withCol);
+
+        var iucnOnly = await _client.GetStringAsync("/taxa/genus/ursus");
+        Assert.Contains("value=\"NE\" data-live-sync=\"\"", iucnOnly);
+    }
+
+    [Fact]
     public async Task DefaultListHasOnlyIucnTaxa() {
         var html = await _client.GetStringAsync("/taxa/genus/ursus?style=sci&cat=");
 

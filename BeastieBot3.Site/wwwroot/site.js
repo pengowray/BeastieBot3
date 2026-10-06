@@ -147,7 +147,9 @@
                     if (address) {
                         window.history.replaceState(window.history.state, "", address + window.location.hash);
                     }
-                    lastQuery = query;
+                    // Boxes the server ticks itself now match the new page; the next change
+                    // compares with the form as it is after that.
+                    lastQuery = syncOptions(form, next, query) ? formQuery(form) : query;
                     section.removeAttribute("aria-busy");
                     announce();
                 })
@@ -281,6 +283,25 @@
         if (moved !== 0) {
             window.scrollBy(0, moved);
         }
+        return true;
+    }
+
+    // Checkboxes marked data-live-sync are ones the server can tick itself (the group page ticks NE
+    // when CoL or Wikidata is ticked). Each takes the state its copy has in the new page's form, but
+    // only when the form still sends the query the new page was made for, so a change the visitor
+    // made meanwhile is never undone. Returns true when it ran.
+    function syncOptions(form, next, query) {
+        var fresh = next.querySelector("form.options-form");
+        if (!fresh || formQuery(form) !== query) {
+            return false;
+        }
+        var escape = window.CSS && window.CSS.escape ? window.CSS.escape : function (text) { return text; };
+        form.querySelectorAll("input[data-live-sync]").forEach(function (input) {
+            var copy = fresh.querySelector("input[name=\"" + escape(input.name) + "\"][value=\"" + escape(input.value) + "\"]");
+            if (copy) {
+                input.checked = copy.checked;
+            }
+        });
         return true;
     }
 

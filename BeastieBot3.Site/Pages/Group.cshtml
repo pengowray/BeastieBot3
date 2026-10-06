@@ -256,7 +256,9 @@
                     <input type="hidden" name="cat" value="">
                     <div class="category-choices">
                         @foreach (var statusSection in StatusSection.All) {
-                            <label><input type="checkbox" name="cat" value="@statusSection.Key" checked="@(options.Sections.Contains(statusSection.Key))"> <partial name="_Badge" model="@BadgeModel.ForStatusCode(statusSection.Key, showLabel: true)" /></label>
+                            @* data-live-sync: ticking CoL or Wikidata includes NE, so after a live update site.js
+                               ticks the box as the server does. *@
+                            <label><input type="checkbox" name="cat" value="@statusSection.Key" checked="@(options.Sections.Contains(statusSection.Key))" data-live-sync="@(statusSection.Key == StatusSection.NotEvaluated ? "" : null)"> <partial name="_Badge" model="@BadgeModel.ForStatusCode(statusSection.Key, showLabel: true)" /></label>
                         }
                     </div>
                     <p class="help">@GroupText.CategoriesHelp</p>
