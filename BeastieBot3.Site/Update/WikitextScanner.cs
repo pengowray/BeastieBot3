@@ -68,6 +68,9 @@ public sealed partial class WikitextScanner {
         return (i >= 0 ? i : ~i - 1) + 1;
     }
 
+    /// The position where a 1-based line starts.
+    public int LineStart(int line) => _lineStarts[Math.Clamp(line - 1, 0, _lineStarts.Length - 1)];
+
     /// The templates that lie wholly inside the span, outer and nested, in order of their start.
     public IEnumerable<WikiTemplate> TemplatesWithin(TextSpan span) {
         var lo = 0;

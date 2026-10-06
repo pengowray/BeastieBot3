@@ -38,7 +38,7 @@ public sealed partial class StatusUpdater {
         _bareMembers.Clear();
         var lines = 0;
         foreach (var line in BareListLines(s, tables)) {
-            _bareMembers.Add(Member(line.Match.Taxon!, s.LineOf(line.Span.Start), line.Match.HowFound, null));
+            _bareMembers.Add(Member(line.Match.Taxon!, s.LineOf(line.Span.Start), line.Match.HowFound, null) with { OnListLine = true });
             if (_options.AddToListLines) {
                 candidates.Add(new LineAddCandidate(line));
             } else if (line.StatusText is null && line.Match.Taxon?.LatestGlobal is { } latest && IucnCategories.HasStatusTemplateCode(latest)) {
@@ -76,7 +76,7 @@ public sealed partial class StatusUpdater {
 
     // The taxa the text lists: the items' taxa and the lines and rows with no status, one per taxon
     // and line.
-    private List<ListMember> Members(IReadOnlyList<StatusFinding> findings) {
+    private List<ListMember> Members(WikitextScanner s, IReadOnlyList<StatusFinding> findings) {
         var members = new List<ListMember>();
         var seen = new HashSet<(long, int)>();
         foreach (var finding in findings.Where(f => MemberKinds.Contains(f.Kind) && f.Taxon is not null)) {
@@ -84,7 +84,12 @@ public sealed partial class StatusUpdater {
                 var howFound = finding.Notes.FirstOrDefault(n => n.Kind is StatusNoteKind.MatchedBySynonym or StatusNoteKind.MatchedByCommonName
                     or StatusNoteKind.MatchedByArticle);
                 var code = finding.Kind is StatusItemKind.ListLineAdded or StatusItemKind.TableRowAdded ? null : EditSummary.CodeIn(finding.Before);
-                members.Add(Member(finding.Taxon, finding.Line, howFound, code));
+                // An {{IUCN status}} with ids on a "*" line (the generated lists) is a list line too;
+                // a template in a table cell is on a line that starts with "|".
+                var onListLine = finding.Kind is StatusItemKind.ListLine or StatusItemKind.ListLineAdded
+                    || (finding.Kind == StatusItemKind.StatusTemplate && IsListLine(s, s.LineStart(finding.Line)));
+                var hasStatus = onListLine && (finding.Kind != StatusItemKind.ListLineAdded || finding.Outcome == StatusOutcome.Updated);
+                members.Add(Member(finding.Taxon, finding.Line, howFound, code) with { OnListLine = onListLine, HasStatusTemplate = hasStatus });
             }
         }
         foreach (var member in _bareMembers) {

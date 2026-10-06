@@ -165,9 +165,21 @@ public sealed partial class StatusUpdater {
             findings.Add(finding);
             edits.AddRange(itemEdits);
         }
+        _lastText = text;
+        _lastEdits = edits;
         return new StatusUpdateResult(Apply(text, edits), findings, Math.Max(0, candidates.Count - _maxItems), [.. _populations],
-            missingLines, missingTables, Members(findings));
+            missingLines, missingTables, Members(scanner, findings));
     }
+
+    // The text and edits of the last Update, for TextWith.
+    private string _lastText = string.Empty;
+    private List<Edit> _lastEdits = [];
+
+    /// The last Update's text with its edits and these insertions (positions in the text as it was
+    /// pasted). Apply orders edits by position and is stable, so an insertion at the same position
+    /// as an edit (a status added at the end of a line) comes after it.
+    public string TextWith(IEnumerable<(int Position, string Text)> insertions) =>
+        Apply(_lastText, [.. _lastEdits, .. insertions.Select(i => new Edit(i.Position, i.Position, i.Text))]);
 
     // ---------------------------------------------------------------- {{IUCN status}} with ids
 

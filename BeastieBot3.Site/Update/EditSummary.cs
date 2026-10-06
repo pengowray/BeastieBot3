@@ -49,7 +49,7 @@ public static partial class EditSummary {
                 otherItems++;
             }
         }
-        return UpdateText.EditSummary(version, changes, otherItems, citations, added, columns, columnStatuses);
+        return UpdateText.EditSummary(version, changes, otherItems, citations, added, columns, columnStatuses, result.MissingAdded);
     }
 
     /// The status code in an item's text: {{IUCN status|EN|...}}, "| status = EN",

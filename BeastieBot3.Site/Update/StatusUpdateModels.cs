@@ -185,6 +185,9 @@ public sealed record StatusFinding(
 public sealed record StatusUpdateResult(string Text, IReadOnlyList<StatusFinding> Findings, int NotChecked,
     IReadOnlyList<PopulationSuggestion> Populations, int ListLinesWithoutStatus = 0, int TablesWithoutStatus = 0,
     IReadOnlyList<ListMember>? Members = null) {
+    /// How many missing taxa ListPlacement put into Text.
+    public int MissingAdded { get; init; }
+
     /// How many items have a note of this kind: used to offer an option that would change them.
     public int CountNotes(StatusNoteKind kind) => Findings.Count(f => f.Notes.Any(n => n.Kind == kind));
 
@@ -196,5 +199,7 @@ public sealed record StatusUpdateResult(string Text, IReadOnlyList<StatusFinding
 /// A taxon the text lists: found on a list line, in a table row or a species table row, or by the
 /// ids of an {{IUCN status}} template (not in a taxobox or a citation). Written: the name that found
 /// it (a synonym or common name, else the taxon's scientific name). WrittenCode: the status code the
-/// text gave it before any change, or null when it had none.
-public sealed record ListMember(StatusTaxon Taxon, int Line, string Written, string? WrittenCode);
+/// text gave it before any change, or null when it had none. OnListLine: the taxon is on a list line
+/// ("*" or "#"), not in a table. HasStatusTemplate: that line has {{IUCN status}}, or gets one.
+public sealed record ListMember(StatusTaxon Taxon, int Line, string Written, string? WrittenCode,
+    bool OnListLine = false, bool HasStatusTemplate = false);

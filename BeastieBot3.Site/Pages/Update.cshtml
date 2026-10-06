@@ -32,7 +32,7 @@
         <p class="update-summary">@(result.NotChecked > 0
             ? UpdateText.SummaryCapped(StatusUpdater.DefaultMaxItems, result.Updated, result.Current, result.NotUpdated, result.NotChecked)
             : UpdateText.Summary(result.Updated, result.Current, result.NotUpdated, result.ListLinesWithoutStatus + result.TablesWithoutStatus > 0))</p>
-        @if (result.Updated == 0 && result.Findings.Count > 0) {
+        @if (result.Updated == 0 && result.MissingAdded == 0 && result.Findings.Count > 0) {
             <p class="note">@UpdateText.NoChanges</p>
         }
         @{
@@ -172,7 +172,7 @@
         }
 
         @if (Model.Scope is { } scope) {
-            @await Html.PartialAsync("_ListScope", scope)
+            @await Html.PartialAsync("_ListScope", new ListScopeView(scope, Model.Placement, Model.AddMissing))
         }
     </section>
 }

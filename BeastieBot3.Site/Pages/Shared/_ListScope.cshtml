@@ -1,10 +1,13 @@
-@model BeastieBot3.Site.Update.ListScopeResult
+@model BeastieBot3.Site.Update.ListScopeView
 @using BeastieBot3.Site.Update
 @using BeastieBot3.Site.Lists
 @* The comparison of the taxa the text lists with their group (ListScope). Report only. The scope
    choice and the button belong to the update form, so they send the text again. *@
 @{
-    var r = Model;
+    var r = Model.Scope;
+    var placement = Model.Placement;
+    // The missing taxa to copy: all of them, or the ones not put into the wikitext.
+    var toCopy = placement?.Unplaced ?? r.Missing;
 }
 <section class="update-scope" aria-labelledby="scope-heading">
     <h3 id="scope-heading">@UpdateText.ScopeHeading(r.Scope)</h3>
@@ -29,6 +32,9 @@
     @if (r.Partial && r.Missing is null) {
         <p>@UpdateText.ScopePartial(r) <button type="submit" form="update-form" name="@UpdateModel.ListAnywayField" value="1">@UpdateText.ScopeListAnywayButton</button></p>
     }
+    @if (r.Partial && Model.AddMissing) {
+        <p>@UpdateText.AddMissingPartial</p>
+    }
     @if (r.Missing is { } missing) {
         @if (missing.Count == 0) {
             <p>@UpdateText.MissingNone</p>
@@ -37,16 +43,46 @@
             @if (missing.Count < r.MissingTotal) {
                 <p>@UpdateText.MissingCapped(missing.Count, r.MissingTotal)</p>
             }
+            @if (!r.Partial) {
+                <p class="update-scope-add">
+                    <label><input type="checkbox" name="@UpdateModel.AddMissingField" value="1" form="update-form" checked="@Model.AddMissing" aria-describedby="scope-add-help"> @UpdateText.AddMissingOption</label>
+                    @if (!Model.AddMissing) {
+                        <button type="submit" form="update-form" name="@UpdateModel.AddMissingField" value="1">@UpdateText.AddMissingButton</button>
+                    }
+                </p>
+                <p class="help" id="scope-add-help">@UpdateText.AddMissingHelp</p>
+            }
+            @if (placement is not null) {
+                <p>@UpdateText.AddMissingResult(placement.Placed.Count, missing.Count)</p>
+                @if (placement.Placed.Count > 0) {
+                    <div class="table-scroll">
+                        <table class="update-report">
+                            <thead><tr><th scope="col">@UpdateText.ColumnTaxon</th><th scope="col">@UpdateText.ColumnPlacedNextTo</th><th scope="col">@UpdateText.ColumnLine</th></tr></thead>
+                            <tbody>
+                                @foreach (var p in placement.Placed) {
+                                    <tr>
+                                        <td><a href="/species/@p.Taxon.TaxonId">@Html.Raw(ScientificNameMarkup.ToHtml(p.Taxon.ScientificName))</a></td>
+                                        <td>@UpdateText.PlacedNextTo(p.Before) <a href="/species/@p.Neighbour.TaxonId">@Html.Raw(ScientificNameMarkup.ToHtml(p.Neighbour.ScientificName))</a></td>
+                                        <td>@p.NeighbourLine.ToString("N0", System.Globalization.CultureInfo.InvariantCulture)</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            }
+        }
+    }
+    @if (toCopy is { Count: > 0 } copy) {
             <div class="wikitext-box">
                 <div class="wikitext-box-head">
-                    <label for="scope-missing">@UpdateText.MissingLinesLabel</label>
+                    <label for="scope-missing">@(placement is null ? UpdateText.MissingLinesLabel : UpdateText.UnplacedLinesLabel)</label>
                     <button type="button" class="copy-button" data-copy="scope-missing" aria-label="@UpdateText.CopyMissingAccessible" hidden>@SiteText.Copy</button>
                     <p class="copy-status" role="status" aria-live="polite"></p>
                 </div>
-                <textarea id="scope-missing" class="update-readonly" readonly rows="8" spellcheck="false" autocapitalize="off" autocomplete="off" aria-describedby="scope-missing-help">@("\n" + ListScope.MissingLines(r))</textarea>
+                <textarea id="scope-missing" class="update-readonly" readonly rows="8" spellcheck="false" autocapitalize="off" autocomplete="off" aria-describedby="scope-missing-help">@("\n" + ListScope.MissingLines(copy, r.Style))</textarea>
                 <p class="help" id="scope-missing-help">@UpdateText.MissingLinesHelp</p>
             </div>
-        }
     }
     @if (r.OtherCategory.Count > 0) {
         <h4>@UpdateText.OtherCategoryHeading(r.OtherCategory.Count, r.Categories!)</h4>

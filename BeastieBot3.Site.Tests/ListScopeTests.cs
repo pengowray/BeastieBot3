@@ -20,13 +20,16 @@ internal sealed class FakeScopeLookup : IListScopeLookup {
     public FakeScopeLookup Species(int node, long firstId, int count, string category = "LC", string kind = TaxonKinds.Species) {
         for (var i = 0; i < count; i++) {
             var id = firstId + i;
-            var name = $"{_groups[node].Name} sp{id}";
+            var name = $"{_groups[node].Name} {Epithet(id)}";
             var latest = new AssessmentRow(id * 10, id, "Global", true, category, false, false, null, "3.1", 2020, null, null, null);
-            _taxa.Add((new ListTaxonRow(id, name, kind, "ANIMALIA", _groups[node].Name, $"sp{id}", null, null, null, null, null, null, null,
+            _taxa.Add((new ListTaxonRow(id, name, kind, "ANIMALIA", _groups[node].Name, Epithet(id), null, null, null, null, null, null, null,
                 node, _taxa.Count, id * 10, category, false, false, 2020), new StatusTaxon(id, name, true, null, latest, kind, node)));
         }
         return this;
     }
+
+    /// "spbaa" for 100: an epithet of letters, so the name has the shape of a scientific name.
+    public static string Epithet(long id) => "sp" + string.Concat(id.ToString(System.Globalization.CultureInfo.InvariantCulture).Select(d => (char)('a' + (d - '0'))));
 
     public StatusTaxon Taxon(long id) => _taxa.Single(t => t.Row.TaxonId == id).Taxon;
 
@@ -175,7 +178,7 @@ public sealed class ListScopeTests {
         var result = ListScope.Check(members, lookup)!;
         var duplicate = Assert.Single(result.Duplicates);
         Assert.Equal(100, duplicate.Taxon.TaxonId);
-        Assert.Equal(["Panthera sp100", "Felis tigris"], duplicate.Names);
+        Assert.Equal(["Panthera spbaa", "Felis tigris"], duplicate.Names);
         Assert.Equal([1, 10], duplicate.Lines);
     }
 
@@ -194,10 +197,10 @@ public sealed class ListScopeTests {
     public void AMissingTaxonWhoseArticleIsAListIsNotLinked() {
         var lookup = Tree().Species(4, 100, 4);
         var result = ListScope.Check(Members(lookup, [100, 101, 102]), lookup)!;
-        var missing = result with { Missing = [result.Missing![0] with { ListArticleTitle = "List of Panthera species", ScientificName = "Panthera sp103" }] };
+        var missing = result with { Missing = [result.Missing![0] with { ListArticleTitle = "List of Panthera species", ScientificName = "Panthera spbad" }] };
         var line = ListScope.MissingLines(missing);
         Assert.DoesNotContain("List of", line);
-        Assert.StartsWith("* ''Panthera sp103'' {{IUCN status|LC", line);
+        Assert.StartsWith("* ''Panthera spbad'' {{IUCN status|LC", line);
         Assert.Contains("[[List of Panthera species", SpeciesListLine.Format(GroupList.Entry(missing.Missing![0]), new SpeciesListLineOptions { Style = missing.Style }));
     }
 

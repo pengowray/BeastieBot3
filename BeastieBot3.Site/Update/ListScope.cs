@@ -216,9 +216,15 @@ public static partial class ListScope {
     /// taxon whose article is a list ("Carex collifera" redirects to List of Carex species) is not
     /// linked: in that list the link would lead back to the page itself.
     public static string MissingLines(ListScopeResult result) =>
-        string.Join("\n", (result.Missing ?? []).Select(t =>
-            ListLink().Replace(SpeciesListLine.Format(GroupList.Entry(t), new SpeciesListLineOptions { Style = result.Style }),
-                m => m.Groups["label"].Success ? m.Groups["label"].Value : m.Groups["target"].Value)));
+        MissingLines(result.Missing ?? [], result.Style);
+
+    /// The bullet lines for these taxa.
+    public static string MissingLines(IEnumerable<ListTaxonRow> taxa, SpeciesListStyle style) =>
+        string.Join("\n", taxa.Select(t => UnlinkLists(SpeciesListLine.Format(GroupList.Entry(t), new SpeciesListLineOptions { Style = style }))));
+
+    /// The line with its links to "List of ..." pages replaced by their text.
+    internal static string UnlinkLists(string line) =>
+        ListLink().Replace(line, m => m.Groups["label"].Success ? m.Groups["label"].Value : m.Groups["target"].Value);
 
     [GeneratedRegex(@"\[\[(?<target>List of [^|\]]+)(?:\|(?<label>[^\]]+))?\]\]")]
     private static partial Regex ListLink();
