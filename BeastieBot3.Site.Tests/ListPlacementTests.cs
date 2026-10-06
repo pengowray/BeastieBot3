@@ -226,6 +226,69 @@ public sealed class ListPlacementTests {
     }
 
     [Fact]
+    public void ANewLineStaysOutOfAReferenceOnTheNextLines() {
+        var (text, _) = Run("* ''Panthera spbaa''<ref>{{cite web\n |title=x}}</ref>\n* ''Panthera spbac''\n* ''Panthera spbad''\n");
+        Assert.Equal("* ''Panthera spbaa''<ref>{{cite web\n |title=x}}</ref>\n* ''[[Panthera spbab]]''\n* ''Panthera spbac''\n* ''Panthera spbad''\n", text);
+    }
+
+    [Fact]
+    public void ANewLineGoesInsideTheColumnsList() {
+        var (text, _) = Run("{{columns-list|colwidth=20em|\n* ''Panthera spbaa''\n* ''Panthera spbab''\n* ''Panthera spbac''}}\n");
+        Assert.Equal("{{columns-list|colwidth=20em|\n* ''Panthera spbaa''\n* ''Panthera spbab''\n* ''Panthera spbac''\n* ''[[Panthera spbad]]''}}\n", text);
+    }
+
+    [Fact]
+    public void PlacedRowsKeepCrlf() {
+        var text = "{| class=\"wikitable\"\r\n! Name !! Scientific name !! Status\r\n|-\r\n| [[Aaa cat]] || ''[[Panthera spbaa]]'' || LC\r\n|-\r\n"
+            + "| [[Ccc cat]] || ''[[Panthera spbac]]'' || LC\r\n|-\r\n| [[Ddd cat]] || ''[[Panthera spbad]]'' || LC\r\n|}\r\n";
+        var (result, _) = RunWith(Tree().Common(101, "Bbb cat"), text);
+        Assert.DoesNotContain("\r\r", result);
+        Assert.DoesNotContain("\n", result.Replace("\r\n", ""));
+        Assert.Contains("|| LC\r\n|-\r\n| [[Panthera spbab|Bbb cat]]", result);
+    }
+
+    [Fact]
+    public void ATableGettingAColumnGetsARowWithAStatusCell() {
+        var text = "{|\n! Name !! Scientific name\n|-\n| [[Aaa cat]] || ''[[Panthera spbaa]]''\n|-\n| [[Ccc cat]] || ''[[Panthera spbac]]''\n"
+            + "|-\n| [[Ddd cat]] || ''[[Panthera spbad]]''\n|}\n";
+        var updater = new StatusUpdater(Statuses(), new DateOnly(2026, 10, 7), options: new StatusUpdateOptions { AddStatusColumns = true });
+        var result = updater.Update(text);
+        var scope = ListScope.Check(result.Members!, Tree())!;
+        var columns = result.Findings.Where(f => f.Kind == StatusItemKind.TableColumnAdded && f.Outcome == StatusOutcome.Updated)
+            .ToDictionary(f => f.Line, f => (int)f.Notes.Single().Id!.Value);
+        Assert.Equal(new Dictionary<int, int> { [2] = 2 }, columns);
+        var placement = ListPlacement.Place(text, result.Members!, scope, new ListPlacementOptions { TablesWithNewColumn = columns }, Tree());
+        // No English name on this fake site, so the name cell is empty.
+        Assert.Contains("|-\n|  || ''[[Panthera spbab]]'' || {{IUCN status|LC}}\n|-\n| [[Ccc cat]]",
+            updater.TextWith(ListPlacement.Insertions(text, placement)));
+    }
+
+    [Fact]
+    public void ManyMissingSpeciesArePlacedQuickly() {
+        // A table and a list of 1,500 species of a genus of 3,000.
+        var tree = new FakeScopeLookup().Group(1, null, "kingdom", "Animalia").Group(4, 1, "genus", "Panthera").Species(4, 1000, 3000);
+        var statuses = new FakeStatusLookup();
+        for (long id = 1000; id < 4000; id++) {
+            statuses.Taxon(id, $"Panthera {FakeScopeLookup.Epithet(id)}", "LC", 2020, id * 10, node: 4);
+        }
+        var listed = Enumerable.Range(1000, 3000).Where(i => i % 2 == 0).Select(i => $"Panthera {FakeScopeLookup.Epithet(i)}").ToList();
+        foreach (var text in new[] {
+            "{|\n! Name !! Status\n" + string.Concat(listed.Select(n => $"|-\n| ''{n}'' || LC\n")) + "|}\n",
+            string.Concat(listed.Select(n => $"* ''{n}''\n")),
+        }) {
+            var watch = System.Diagnostics.Stopwatch.StartNew();
+            var updater = new StatusUpdater(statuses, new DateOnly(2026, 10, 7));
+            var result = updater.Update(text);
+            var scope = ListScope.Check(result.Members!, tree)!;
+            var before = watch.Elapsed;
+            var placement = ListPlacement.Place(text, result.Members!, scope, new ListPlacementOptions(), tree);
+            Assert.Equal(1500, placement.Placed.Count);
+            // The placement itself; the fake lookups above are slow by design (linear searches).
+            Assert.True(watch.Elapsed - before < TimeSpan.FromSeconds(2), (watch.Elapsed - before).ToString());
+        }
+    }
+
+    [Fact]
     public void NothingIsPlacedInAPartialList() {
         var lookup = new FakeScopeLookup().Group(1, null, "kingdom", "Animalia").Group(4, 1, "genus", "Panthera").Species(4, 100, 30);
         var members = Enumerable.Range(100, 10).Select(i => new ListMember(lookup.Taxon(i), i - 99, $"Panthera {FakeScopeLookup.Epithet(i)}", null, ListMemberSource.ListLine)).ToList();

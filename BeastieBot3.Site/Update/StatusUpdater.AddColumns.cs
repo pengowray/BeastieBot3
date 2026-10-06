@@ -11,15 +11,13 @@ public sealed partial class StatusUpdater {
     // at least half of which name one taxon. At most _maxItems rows are looked up.
     private IEnumerable<TableAddition> TablesWithoutStatus(WikitextScanner s, IReadOnlyList<WikiTable> tables) {
         var looked = 0;
+        var nested = NestedTables(tables);
         foreach (var table in tables) {
             if (looked >= _maxItems) {
                 yield break;
             }
-            if (tables.Any(other => other != table && (Inside(other.Span, table.Span) || Inside(table.Span, other.Span)))) {
-                continue;
-            }
             var data = table.Rows.Where(r => !r.IsHeaderRow).ToList();
-            if (data.Count < MinTableRows || HasStatus(s, table)) {
+            if (data.Count < MinTableRows || nested.Contains(table) || HasStatus(s, table)) {
                 continue;
             }
             var rows = new List<(TableRow Row, StatusTaxonResolver.NameMatch Match)>();
@@ -37,8 +35,10 @@ public sealed partial class StatusUpdater {
                 matched++;
                 // The cell with the scientific name, or with the link that found the taxon.
                 var linked = match.HowFound is { Kind: StatusNoteKind.MatchedByArticle, Detail: { } title } ? title : null;
+                // A name in italics or {{sp}}, or one IUCN has: a common name in a link can look like a
+                // binomial ("[[Snow leopard]]").
                 if (row.Cells.FirstOrDefault(c => linked is null
-                        ? NamesIn(s, c.Content).Any()
+                        ? WritesScientificName(s, c.Content) || NamesIn(s, c.Content).Any(IsKnownName)
                         : ArticleLinks(s, c.Content).Any(l => string.Equals(l.Title, linked, StringComparison.OrdinalIgnoreCase))) is { } nameCell) {
                     var column = nameCell.Column + nameCell.Colspan - 1;
                     nameColumns[column] = nameColumns.GetValueOrDefault(column) + 1;
@@ -53,7 +53,22 @@ public sealed partial class StatusUpdater {
         }
     }
 
-    private static bool Inside(TextSpan inner, TextSpan outer) => inner.Start > outer.Start && inner.End <= outer.End;
+    // The tables nested in another table or holding one, in one pass over the tables in order of start.
+    private static HashSet<WikiTable> NestedTables(IReadOnlyList<WikiTable> tables) {
+        var nested = new HashSet<WikiTable>();
+        var open = new Stack<WikiTable>();
+        foreach (var table in tables) {
+            while (open.Count > 0 && open.Peek().Span.End <= table.Span.Start) {
+                open.Pop();
+            }
+            if (open.Count > 0) {
+                nested.Add(table);
+                nested.Add(open.Peek());
+            }
+            open.Push(table);
+        }
+        return nested;
+    }
 
     private static bool HasStatus(WikitextScanner s, WikiTable table) {
         foreach (var row in table.Rows) {
@@ -167,7 +182,11 @@ public sealed partial class StatusUpdater {
     private static Edit NewCell(WikitextScanner s, TableRow row, int column, string content) {
         var cell = row.Cells[column];
         var header = row.IsHeaderRow;
-        var at = s.Core(cell.Whole).End;
+        // At the end of the cell before its trailing spaces, after a comment in it.
+        var at = cell.Whole.End;
+        while (at > cell.Whole.Start && char.IsWhiteSpace(s.Text[at - 1])) {
+            at--;
+        }
         bool inline;
         if (column + 1 < row.Cells.Count) {
             var next = row.Cells[column + 1];

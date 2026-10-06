@@ -338,6 +338,51 @@ public sealed class StatusUpdaterAddTests {
         Assert.DoesNotContain("ColumnLayout", UpdateText.Note(finding.Notes[0], finding.Kind));
     }
 
+    // ---------------------------------------------------------------- found in review
+
+    [Fact]
+    public void ALinkDoesNotOverrideAScientificNameThatIsNotFound() {
+        var table = "{|\n! Species !! Notes !! IUCN status\n|-\n| ''Panthera spelaea'' || related to the [[Tiger]] || EX\n|}";
+        Assert.Equal(table, Run(table).Text);
+        var line = "* ''Panthera zdanskyi'', a relative of the [[Tiger]] {{IUCN status|EX}}\n";
+        Assert.Equal(line, Run(line).Text);
+        Assert.Equal(0, Run("* †''Panthera spelaea'' (cave lion), related to the [[Tiger]]\n").ListLinesWithoutStatus);
+    }
+
+    [Fact]
+    public void AStatusAtTheLineEndStaysOutOfAReferenceOnTheNextLines() {
+        var result = Run("* ''Panthera tigris''<ref>{{cite web\n |title=x}}</ref>\n", Lines with { StatusAtLineEnd = true });
+        Assert.Equal("* ''Panthera tigris'' {{IUCN status|EN}}<ref>{{cite web\n |title=x}}</ref>\n", result.Text);
+    }
+
+    [Fact]
+    public void AStatusAtTheLineEndGoesBeforeTheEndOfAColumnsList() {
+        var result = Run("{{columns-list|colwidth=20em|\n* ''Felis silvestris''\n* ''Panthera tigris''}}\n", Lines with { StatusAtLineEnd = true });
+        Assert.Equal("{{columns-list|colwidth=20em|\n* ''Felis silvestris'' {{IUCN status|LC}}\n* ''Panthera tigris'' {{IUCN status|EN}}}}\n", result.Text);
+    }
+
+    [Fact]
+    public void TheColumnGoesAfterTheScientificNamesNotAfterCommonNameLinks() {
+        var text = "{|\n! Name !! Scientific name\n|-\n| [[Snow leopard]] || ''Panthera tigris''\n|-\n| [[Wild cat]] || ''Felis silvestris''\n"
+            + "|-\n| [[Golden mole]] || ''Neamblysomus gunningi''\n|}";
+        Assert.Contains("! Name !! Scientific name !! IUCN status", Run(text, Columns).Text);
+    }
+
+    [Fact]
+    public void ACommentAtTheEndOfTheNameCellStaysInIt() {
+        var text = "{|\n! Name !! Range\n|-\n| ''Panthera tigris'' <!-- c --> || a\n|-\n| ''Felis silvestris'' || b\n|-\n| ''Neamblysomus gunningi'' || c\n|}";
+        Assert.Contains("| ''Panthera tigris'' <!-- c --> || {{IUCN status|EN}} || a", Run(text, Columns).Text);
+    }
+
+    [Fact]
+    public void ManyTablesAndSectionsStayQuick() {
+        var tables = string.Concat(Enumerable.Repeat("{|\n|a\n|}\n", 20_000));
+        var sections = string.Concat(Enumerable.Repeat("==Notes==\n*a\n", 20_000));
+        var watch = System.Diagnostics.Stopwatch.StartNew();
+        Run(tables + sections, Lines with { AddStatusColumns = true });
+        Assert.True(watch.Elapsed < TimeSpan.FromSeconds(5), watch.Elapsed.ToString());
+    }
+
     // ---------------------------------------------------------------- round trip
 
     [Theory]

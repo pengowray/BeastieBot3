@@ -52,16 +52,30 @@ public static partial class ListPlacement {
         private static string CleanGenus(string text) =>
             LinkLabel(DaggerTemplate().Replace(text, string.Empty)).Trim();
 
+        // Every line of a {{Species table/row}}, mapped to its table and row; read once.
+        private Dictionary<int, (GenusTableText Table, int Row)>? _speciesRowOfLine;
+        private readonly Dictionary<GenusTableText, List<(string? Scientific, string? Common)>> _speciesRowKeys = [];
+
         private (GenusTableText Table, int Row)? RowOf(ListMember member) {
-            var at = _lines.Start(member.Line);
-            foreach (var table in GenusTables()) {
-                for (var i = 0; i < table.Rows.Count; i++) {
-                    if (table.Rows[i].Span.Start <= at && at < table.Rows[i].Span.End) {
-                        return (table, i);
+            if (_speciesRowOfLine is null) {
+                _speciesRowOfLine = [];
+                foreach (var table in GenusTables()) {
+                    for (var i = 0; i < table.Rows.Count; i++) {
+                        var span = table.Rows[i].Span;
+                        for (var l = _scanner.LineOf(span.Start); l <= _scanner.LineOf(span.End - 1); l++) {
+                            _speciesRowOfLine.TryAdd(l, (table, i));
+                        }
                     }
                 }
             }
-            return null;
+            return _speciesRowOfLine.TryGetValue(member.Line, out var found) ? found : null;
+        }
+
+        private List<(string? Scientific, string? Common)> KeysOf(GenusTableText table) {
+            if (!_speciesRowKeys.TryGetValue(table, out var keys)) {
+                _speciesRowKeys[table] = keys = [.. table.Rows.Select(r => RowKeys(table, r))];
+            }
+            return keys;
         }
 
         // The keys of a row: the scientific name (the binomial with the table's genus for its
@@ -83,7 +97,7 @@ public static partial class ListPlacement {
             if (found is not { Table: var table } || table.Rows.Count == 0) {
                 return null;
             }
-            var keys = table.Rows.Select(r => RowKeys(table, r)).ToList();
+            var keys = KeysOf(table);
             var (order, index) = Order([.. keys.Select(k => k.Scientific)], taxon.ScientificName, [.. keys.Select(k => k.Common)], taxon.CommonNameEn);
             var before = order != ListOrder.None && index < table.Rows.Count;
             var neighbourIndex = before ? index : table.Rows.Count - 1;
@@ -99,8 +113,7 @@ public static partial class ListPlacement {
             }
             var position = before ? neighbour.Span.Start : neighbour.Span.End;
             var neighbourKeys = keys[neighbourIndex];
-            var member = _members.FirstOrDefault(m => m.Source == ListMemberSource.SpeciesTableRow && neighbour.Span.Start <= _lines.Start(m.Line)
-                && _lines.Start(m.Line) < neighbour.Span.End);
+            var member = Listed(ListMemberSource.SpeciesTableRow).FirstOrDefault(m => RowOf(m) is { } r && r.Table == table && r.Row == neighbourIndex);
             return new PlacedTaxon(taxon, text, position, neighbourKeys.Common ?? neighbourKeys.Scientific ?? string.Empty, member?.Taxon,
                 _scanner.LineOf(neighbour.Span.Start), before);
         }
@@ -164,7 +177,8 @@ public static partial class ListPlacement {
                 at = end;
             }
             sb.Append(_text, at, neighbour.Span.End - at);
-            return sb.ToString();
+            // Insertions gives the text's line ends to the lines put in.
+            return sb.ToString().Replace("\r", string.Empty, StringComparison.Ordinal);
         }
 
         private ReferenceIndex? _references;
@@ -230,11 +244,12 @@ public static partial class ListPlacement {
                 foreach (var row in rows) {
                     text.Append('\n').Append(row);
                 }
-                text.Append('\n').Append(_text, neighbour.End!.Span.Start, neighbour.End.Span.Length);
+                text.Append('\n').Append(_text.AsSpan(neighbour.End!.Span.Start, neighbour.End.Span.Length));
                 var position = before ? neighbour.Header.Span.Start : neighbour.End.Span.End;
                 var line = _scanner.LineOf(before ? neighbour.Header.Span.Start : neighbour.End.Span.Start);
                 for (var i = 0; i < species.Count; i++) {
-                    placed.Add(new PlacedTaxon(species[i], i == 0 ? text.ToString() : string.Empty, position, neighbour.Genus, null, line, before));
+                    placed.Add(new PlacedTaxon(species[i], i == 0 ? text.ToString().Replace("\r", string.Empty, StringComparison.Ordinal) : string.Empty,
+                        position, neighbour.Genus, null, line, before));
                 }
             }
             return placed;

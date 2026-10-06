@@ -28,8 +28,8 @@ public interface IListScopeLookup {
 /// the group ListScope finds. ListAnyway: list the missing taxa when the text covers too little of
 /// the group to be a list of it.
 /// Extra: also compare with the species the Catalogue of Life and Wikidata have that IUCN does not
-/// (extra_species), leaving out those whose name WrittenNames has (SiteNameKey.Fold of every
-/// scientific name the text writes).
+/// (extra_species), leaving out those whose name or English Wikipedia article WrittenNames has
+/// (SiteNameKey.Fold of every scientific name the text writes and every page it links).
 public sealed record ListScopeOptions(string? Scope = null, bool ListAnyway = false, bool Extra = false,
     IReadOnlySet<string>? WrittenNames = null);
 
@@ -165,10 +165,12 @@ public static partial class ListScope {
                 : null;
         } else if (codes.Count == 0 && species.Count >= MinCodes) {
             // A list that writes no codes ("List of endangered amphibians" names the species only):
-            // the category nearly all its species are in now.
+            // the category nearly all its species are in now, when that is a threatened or extinct
+            // category. Most species of most genera are LC, so a genus article whose species are
+            // nearly all LC is a list of the genus, not of LC species.
             var current = species.Select(t => Current(t.First().Taxon)).OfType<string>().ToList();
             var top = current.GroupBy(c => c).MaxBy(g => g.Count());
-            if (top is not null && top.Count() >= CurrentCategoryShare * species.Count) {
+            if (top is not null && top.Count() >= CurrentCategoryShare * species.Count && (Threatened.Contains(top.Key) || Extinct.Contains(top.Key))) {
                 categories = new HashSet<string> { top.Key };
             } else if (current.Count(Threatened.Contains) >= CurrentCategoryShare * species.Count) {
                 categories = Threatened;
@@ -233,7 +235,8 @@ public static partial class ListScope {
             ListedIn = path.ToDictionary(g => g.NodeId, g => listed.Count(t => t.First().Taxon.Kind == TaxonKinds.Species
                 && PathOf(t.First().Taxon.NodeId!.Value).Any(p => p.NodeId == g.NodeId))),
             MissingExtra = extras?
-                .Where(e => options.WrittenNames is null || !options.WrittenNames.Contains(Shared.SiteData.SiteNameKey.Fold(e.ScientificName)))
+                .Where(e => options.WrittenNames is null || !(options.WrittenNames.Contains(Shared.SiteData.SiteNameKey.Fold(e.ScientificName))
+                    || (e.EnwikiTitle is { } title && options.WrittenNames.Contains(Shared.SiteData.SiteNameKey.Fold(title)))))
                 .Select(ExtraRow).ToList(),
             ExtraTotal = extras?.Count ?? 0,
         };

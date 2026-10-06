@@ -638,8 +638,21 @@ public sealed partial class StatusUpdater {
         return found;
     }
 
-    private static List<string> ArticleTitles(WikitextScanner s, IEnumerable<TextSpan> spans) =>
-        spans.SelectMany(span => ArticleLinks(s, span)).Select(l => l.Title).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+    // The articles linked in the spans, for finding an item's taxon by its article; null when the
+    // spans write a scientific name in italics or {{sp}}: then the item names its taxon, and a link
+    // in it ("''Panthera spelaea'', related to the [[Tiger]]") is about another one.
+    private static List<string>? ArticleTitles(WikitextScanner s, IEnumerable<TextSpan> spans) {
+        var list = spans.ToList();
+        if (list.Any(span => WritesScientificName(s, span))) {
+            return null;
+        }
+        return list.SelectMany(span => ArticleLinks(s, span)).Select(l => l.Title).Distinct(StringComparer.OrdinalIgnoreCase).ToList();
+    }
+
+    /// Whether a span writes a scientific name in italics or {{sp}} (not only as a link, which can be a
+    /// common name with the shape of a binomial: "[[Snow leopard]]").
+    internal static bool WritesScientificName(WikitextScanner s, TextSpan span) =>
+        NameOccurrencesIn(s, span).Any(o => s.Masked[o.Span.Start] is '\'' or '{');
 
     internal static string CleanName(string text) {
         var name = HtmlTag().Replace(text, " ");

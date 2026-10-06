@@ -73,6 +73,7 @@ public sealed partial class StatusUpdater {
         var looked = 0;
         var statusTemplateStarts = s.Templates.Where(t => t.Name == "iucn status").Select(t => t.Span.Start).ToList();
         var skippedSections = SkippedSections(masked);
+        var nextSection = 0;
         for (var start = 0; start < masked.Length && looked < _maxItems;) {
             var newline = masked.IndexOf('\n', start);
             var end = newline < 0 ? masked.Length : newline;
@@ -94,7 +95,11 @@ public sealed partial class StatusUpdater {
             if (tableSpans.Skip(nextTable).TakeWhile(t => t.Start <= lineStart).Any(t => t.Contains(lineStart))) {
                 continue;
             }
-            if (HasTemplateStartIn(statusTemplateStarts, lineStart, end) || skippedSections.Any(span => span.Contains(lineStart))
+            while (nextSection < skippedSections.Count && skippedSections[nextSection].End <= lineStart) {
+                nextSection++;
+            }
+            if (HasTemplateStartIn(statusTemplateStarts, lineStart, end)
+                || skippedSections.Skip(nextSection).TakeWhile(span => span.Start <= lineStart).Any(span => span.Contains(lineStart))
                 || RankLine().IsMatch(masked[lineStart..end])) {
                 continue;
             }
@@ -126,8 +131,10 @@ public sealed partial class StatusUpdater {
                 continue;
             }
             looked++;
+            // The links only for a line with no scientific name: "''Panthera zdanskyi'', a relative of
+            // the [[Tiger]]" is not about the tiger.
             var match = _resolver.Resolve(nameCount == 1 ? [occurrences[0].Name] : [], s, null, notEvaluated: false,
-                [.. links.Select(l => l.Title).Distinct(StringComparer.OrdinalIgnoreCase)]);
+                nameCount == 0 ? [.. links.Select(l => l.Title).Distinct(StringComparer.OrdinalIgnoreCase)] : null);
             if (match.Taxon is null) {
                 continue;
             }
@@ -147,9 +154,7 @@ public sealed partial class StatusUpdater {
             var image = StatusImage().Match(lineText);
             var code = CodeInBrackets().Match(lineText);
             var statusText = image.Success ? image.Value : code.Success ? code.Value : null;
-            var trailing = TrailingReferences().Match(masked[lineStart..end]);
-            var endInsert = trailing.Success ? lineStart + trailing.Index : lineStart + masked[lineStart..end].TrimEnd().Length;
-            yield return new LineAddition(new TextSpan(lineStart, end), match, insert, statusText, Math.Max(insert, endInsert));
+            yield return new LineAddition(new TextSpan(lineStart, end), match, insert, statusText, Math.Max(insert, LineEndInsert(s, lineStart, end)));
         }
     }
 
@@ -177,10 +182,30 @@ public sealed partial class StatusUpdater {
 
     // Templates that only lay out the list inside them in columns or on one line: their list lines
     // are lines of the article's list. Other templates' lines (navboxes, taxoboxes) are not.
-    private static readonly HashSet<string> ListWrappers = [
+    internal static readonly HashSet<string> ListWrappers = [
         "columns-list", "col-list", "collist", "column-list", "div col", "div col list", "plainlist", "plain list",
         "flatlist", "flat list", "unbulleted list", "multicol",
     ];
+
+    // Where a status goes at the end of a list line: before the references and footnotes at its end,
+    // before a reference or template that runs on to the next lines, and before the "}}" of a list
+    // layout template that ends on the line ("* ''Panthera tigris''}}").
+    private static int LineEndInsert(WikitextScanner s, int lineStart, int end) {
+        var masked = s.Masked;
+        var trailing = TrailingReferences().Match(masked[lineStart..end]);
+        var at = trailing.Success ? lineStart + trailing.Index : lineStart + masked[lineStart..end].TrimEnd().Length;
+        if (s.OuterTemplateAt(lineStart) is { } wrapper && ListWrappers.Contains(wrapper.Name)
+            && wrapper.Span.End <= end && wrapper.Span.End - 2 >= lineStart) {
+            at = Math.Min(at, wrapper.Span.End - 2);
+        }
+        if (s.ContainerAt(at, ListWrappers) is { } open && open.Start >= lineStart) {
+            at = open.Start;
+        }
+        while (at > lineStart && masked[at - 1] is ' ' or '\t') {
+            at--;
+        }
+        return at;
+    }
 
     private bool IsKnownName(string name) => StatusTaxonResolver.NameVariants(name).Any(v =>
         _lookup.InReleaseTaxaWithName(v, StatusNameKind.Scientific).Count > 0 || _lookup.InReleaseTaxaWithName(v, StatusNameKind.Synonym).Count > 0);

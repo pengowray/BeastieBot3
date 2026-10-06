@@ -9,6 +9,15 @@ public sealed partial class StatusUpdater {
     // options add one. Filled by FindMissing.
     private readonly List<ListMember> _bareMembers = [];
 
+    private static char FirstNonSpace(string text, int from) {
+        for (var i = from; i < text.Length && text[i] != '\n'; i++) {
+            if (!char.IsWhiteSpace(text[i])) {
+                return text[i];
+            }
+        }
+        return '\0';
+    }
+
     private static ListMember Member(StatusTaxon taxon, int line, StatusNote? howFound, string? code) =>
         new(taxon, line, howFound is { Kind: StatusNoteKind.MatchedBySynonym or StatusNoteKind.MatchedByCommonName or StatusNoteKind.MatchedByArticle, Detail: { } name }
             ? name : taxon.ScientificName, code);
@@ -35,8 +44,9 @@ public sealed partial class StatusUpdater {
                     StatusItemKind.ListLine or StatusItemKind.ListLineAdded => ListMemberSource.ListLine,
                     StatusItemKind.SpeciesTableRow => ListMemberSource.SpeciesTableRow,
                     StatusItemKind.TableCell or StatusItemKind.TableRowAdded => ListMemberSource.TableRow,
-                    _ when IsListLine(s, lineStart) => ListMemberSource.ListLine,
-                    _ when s.Text[lineStart..].TrimStart() is ['|' or '!', ..] => ListMemberSource.TableRow,
+                    // "*" and "#" lines only: the lines new taxa can be put next to.
+                    _ when lineStart < s.Text.Length && s.Text[lineStart] is '*' or '#' => ListMemberSource.ListLine,
+                    _ when FirstNonSpace(s.Text, lineStart) is '|' or '!' => ListMemberSource.TableRow,
                     _ => ListMemberSource.Other,
                 };
                 var hasStatus = source == ListMemberSource.ListLine

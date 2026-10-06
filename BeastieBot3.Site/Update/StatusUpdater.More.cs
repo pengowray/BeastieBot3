@@ -109,7 +109,7 @@ public sealed partial class StatusUpdater {
     private StatusTaxon? NameNear(WikitextScanner s, WikiTemplate template) {
         List<string> names;
         TextSpan[] context;
-        List<string> articles;
+        List<string>? articles;
         if (_rowOf.TryGetValue(template, out var row)) {
             names = row.Cells.Concat(row.Spanning).SelectMany(c => NamesIn(s, c.Content)).Distinct().ToList();
             context = [.. row.Cells.Where(c => s.TemplatesWithin(c.Content).Contains(template)).Select(c => c.Content)];
@@ -182,7 +182,8 @@ public sealed partial class StatusUpdater {
         // serotine's for the habitat of Happolds' pipistrelle, which was split from it).
         TextSpan[] statusSpans = [.. new[] { "iucn-status", "direction", "population" }
             .Select(row.Named).OfType<TemplateParameter>().Select(p => p.Whole)];
-        var nameArticles = row.Named("name") is { } nameValue ? ArticleTitles(s, [nameValue.Value]) : [];
+        // The article of name= only for a row with no binomial.
+        var nameArticles = row.Named("binomial") is null && row.Named("name") is { } nameValue ? ArticleTitles(s, [nameValue.Value]) : null;
         var (taxon, failure) = ResolveNames(names.Distinct().ToList(), s, statusSpans, current == "NE", nameArticles);
         if (taxon is null) {
             return noGenus is not null && failure!.Kind == StatusNoteKind.NoName

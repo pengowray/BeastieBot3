@@ -67,6 +67,25 @@ public sealed class UpdateModel : PageModel {
             names.UnionWith(StatusUpdater.NameOccurrencesIn(scanner, new TextSpan(start, end)).Select(o => SiteNameKey.Fold(o.Name)));
             start = end + 1;
         }
+        // Every page the text links: a species may be listed under another genus by the list
+        // ("A. dhofarensis") than by the Catalogue of Life (Pipistrellus dhofarensis), with a link to
+        // its article ("[[Dhofar pipistrelle]]").
+        foreach (System.Text.RegularExpressions.Match m in System.Text.RegularExpressions.Regex.Matches(scanner.Masked, @"\[\[([^|\]\n#]+)")) {
+            names.Add(SiteNameKey.Fold(m.Groups[1].Value.Replace('_', ' ')));
+        }
+        // The binomials of species table rows, which abbreviate the genus of their table ("L. braccatus").
+        string? genus = null;
+        foreach (var template in scanner.Templates) {
+            if (template.Name == "species table") {
+                genus = template.Named("genus") is { } g
+                    ? StatusUpdater.LinkText(System.Text.RegularExpressions.Regex.Replace(scanner.CoreText(g.Value), @"\{\{[^{}]*\}\}", string.Empty))
+                    : null;
+            } else if (template.Name == "species table/row" && template.Named("binomial") is { } b) {
+                var binomial = StatusUpdater.LinkText(scanner.CoreText(b.Value));
+                var parts = binomial.Split(' ', 2);
+                names.Add(SiteNameKey.Fold(parts.Length == 2 && parts[0].EndsWith('.') && genus is { Length: > 0 } ? $"{genus.Split(' ')[0]} {parts[1]}" : binomial));
+            }
+        }
         return names;
     }
 
@@ -159,9 +178,13 @@ public sealed class UpdateModel : PageModel {
                 On(ExtraSpeciesField) ? WrittenNames(text) : null));
         ExtraSpecies = On(ExtraSpeciesField);
         AddMissing = On(AddMissingField);
-        if (AddMissing && Scope is { Partial: false, Missing.Count: > 0 }) {
+        if (AddMissing && Scope is { Partial: false } && (Scope.Missing?.Count ?? 0) + (Scope.MissingExtra?.Count ?? 0) > 0) {
             Placement = ListPlacement.Place(text, Result.Members ?? [], Scope,
-                new ListPlacementOptions(Options.AddIds, Options.AddYear, Options.CiteQ, Options.AddToListLines), scopeLookup);
+                new ListPlacementOptions(Options.AddIds, Options.AddYear, Options.CiteQ, Options.AddToListLines) {
+                    TablesWithNewColumn = Result.Findings
+                        .Where(f => f.Kind == StatusItemKind.TableColumnAdded && f.Outcome == StatusOutcome.Updated)
+                        .ToDictionary(f => f.Line, f => (int)(f.Notes.First(n => n.Kind == StatusNoteKind.ColumnAdded).Id ?? 0)),
+                }, scopeLookup);
             if (Placement.Placed.Count > 0) {
                 Result = Result with {
                     Text = updater.TextWith(ListPlacement.Insertions(text, Placement)),

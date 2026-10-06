@@ -24,7 +24,12 @@ public sealed record ListScopeView(ListScopeResult Scope, ListPlacementResult? P
 /// for the references of new {{Species table/row}} rows.
 /// StatusOnLines: every new list line gets {{IUCN status}}, as StatusUpdateOptions.AddToListLines gives
 /// the other lines one; otherwise a new line has one when its neighbour has.
-public sealed record ListPlacementOptions(bool AddIds = false, bool AddYear = false, bool CiteQ = false, bool StatusOnLines = false);
+/// TablesWithNewColumn: the tables (by the line of their header row) that get a status column in the
+/// same run (StatusUpdateOptions.AddStatusColumns), with the 1-based column it goes after: a new row
+/// gets a status cell there too.
+public sealed record ListPlacementOptions(bool AddIds = false, bool AddYear = false, bool CiteQ = false, bool StatusOnLines = false) {
+    public IReadOnlyDictionary<int, int> TablesWithNewColumn { get; init; } = new Dictionary<int, int>();
+}
 
 /// Puts the missing taxa of a list comparison (ListScope) into the list, where the list has a place
 /// for them:
@@ -139,19 +144,26 @@ public static partial class ListPlacement {
 
         // ------------------------------------------------------------ list lines
 
+        // The species lines of each genus and their keys, read once per genus.
+        private Dictionary<int, (List<ListMember> Mates, List<string?> Scientific, List<string?> Common)>? _genusLines;
+
         private PlacedTaxon? OnListLine(ListTaxonRow taxon) {
-            var mates = Listed(ListMemberSource.ListLine)
-                .Where(m => m.Taxon.Kind == TaxonKinds.Species && m.Taxon.NodeId == taxon.NodeId).OrderBy(m => m.Line).ToList();
-            if (mates.Count == 0) {
+            _genusLines ??= Listed(ListMemberSource.ListLine).Where(m => m.Taxon.Kind == TaxonKinds.Species)
+                .GroupBy(m => m.Taxon.NodeId!.Value)
+                .ToDictionary(g => g.Key, g => {
+                    // The genus's species lines: the lines with fewest markers. A deeper line naming a
+                    // species ("** ''Panthera leo'' subsp. ...") is under it.
+                    var lines = g.OrderBy(m => m.Line).ToList();
+                    var top = lines.Min(DepthOf);
+                    List<ListMember> mates = [.. lines.Where(m => DepthOf(m) == top).GroupBy(m => m.Line).Select(l => l.First())];
+                    return (mates, mates.Select(m => (string?)m.Written).ToList(),
+                        mates.Select(m => CommonOnLine(ListPart(_lines.Text(m.Line)))).ToList());
+                });
+            if (!_genusLines.TryGetValue(taxon.NodeId, out var genus)) {
                 return null;
             }
-            // The genus's species lines: the lines with fewest markers. A deeper line naming a species
-            // ("** ''Panthera leo'' subsp. ...") is under it.
-            var top = mates.Min(DepthOf);
-            mates = [.. mates.Where(m => DepthOf(m) == top).GroupBy(m => m.Line).Select(g => g.First())];
-            var (order, index) = Order(
-                [.. mates.Select(m => m.Written)], taxon.ScientificName,
-                [.. mates.Select(m => CommonOnLine(ListPart(_lines.Text(m.Line))))], taxon.CommonNameEn);
+            var mates = genus.Mates;
+            var (order, index) = Order(genus.Scientific, taxon.ScientificName, genus.Common, taxon.CommonNameEn);
             var before = index == 0 && order != ListOrder.None;
             var anchor = before ? mates[0] : mates[Math.Max(0, index - 1)];
             var anchorText = _lines.Text(anchor.Line);
@@ -182,8 +194,27 @@ public static partial class ListPlacement {
                 }
             }
             var line = NewLine(anchorText[listStart..], taxon, _scope.Style, anchor.HasStatusTemplate || _options.StatusOnLines, _options);
-            var position = before ? _lines.Start(anchorLine) + listStart : _lines.End(_lines.LastOfBlock(anchorLine));
+            var position = before ? _lines.Start(anchorLine) + listStart : After(_lines.LastOfBlock(anchorLine));
             return new PlacedTaxon(taxon, line, position, anchorName, anchorTaxon, anchorLine, before);
+        }
+
+        // Where a new line goes after a list line: at its end, past a reference or template that runs
+        // on to the next lines ("<ref>{{cite web\n |title=x}}</ref>"), and before the "}}" of a
+        // list layout template that ends on the line ("* ''Panthera tigris''}}").
+        private int After(int line) {
+            var at = _lines.End(line);
+            for (var guard = 0; guard < 100 && _scanner.ContainerAt(at, StatusUpdater.ListWrappers) is { } open; guard++) {
+                at = _lines.End(_scanner.LineOf(open.End - 1));
+            }
+            var lineStart = _lines.Start(_scanner.LineOf(at));
+            if (_scanner.OuterTemplateAt(lineStart) is { } wrapper && StatusUpdater.ListWrappers.Contains(wrapper.Name)
+                && wrapper.Span.End <= at && wrapper.Span.End - 2 > lineStart) {
+                at = wrapper.Span.End - 2;
+                while (at > lineStart && _text[at - 1] is ' ' or '\t') {
+                    at--;
+                }
+            }
+            return at;
         }
 
         private int DepthOf(ListMember m) {
@@ -220,7 +251,7 @@ public static partial class ListPlacement {
             if ((species.HasStatusTemplate || _options.StatusOnLines) && taxon.Category is not null) {
                 line += " " + StatusTemplate(taxon, _options);
             }
-            return new PlacedTaxon(taxon, line, _lines.End(last), species.Written, species.Taxon, species.Line, false);
+            return new PlacedTaxon(taxon, line, After(last), species.Written, species.Taxon, species.Line, false);
         }
     }
 

@@ -68,6 +68,39 @@ public sealed partial class WikitextScanner {
         return (i >= 0 ? i : ~i - 1) + 1;
     }
 
+    private List<TextSpan>? _refs;
+
+    /// The outermost template or <ref>...</ref> element that the position is inside (after its first
+    /// character and before its last), leaving out the templates named in transparent (list layout
+    /// templates, inside which list lines are written); null when there is none. Text put at the
+    /// position would land inside it.
+    public TextSpan? ContainerAt(int position, IReadOnlySet<string>? transparent = null) {
+        _refs ??= [.. RefElement().Matches(Masked).Select(m => new TextSpan(m.Index, m.Index + m.Length))];
+        TextSpan? found = null;
+        foreach (var r in _refs) {
+            if (r.Start >= position) {
+                break;
+            }
+            if (position < r.End) {
+                found = r;
+                break;
+            }
+        }
+        if (OuterTemplateAt(position) is { } outer) {
+            var template = transparent is not null && transparent.Contains(outer.Name)
+                ? TemplatesWithin(outer.Span).Where(t => t != outer && t.Span.Start < position && position < t.Span.End && !transparent.Contains(t.Name))
+                    .MinBy(t => t.Span.Start)
+                : outer;
+            if (template is not null && (found is null || template.Span.Start < found.Value.Start)) {
+                found = template.Span;
+            }
+        }
+        return found;
+    }
+
+    [GeneratedRegex(@"<ref\b[^>]*?(?<!/)>.*?</ref\s*>", RegexOptions.IgnoreCase | RegexOptions.Singleline)]
+    private static partial Regex RefElement();
+
     /// The position where a 1-based line starts.
     public int LineStart(int line) => _lineStarts[Math.Clamp(line - 1, 0, _lineStarts.Length - 1)];
 
