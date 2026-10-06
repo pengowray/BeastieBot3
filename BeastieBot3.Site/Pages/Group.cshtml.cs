@@ -51,7 +51,8 @@ public sealed class GroupModel : PageModel {
     /// Lines the list has with these options (from the counts, before reading the taxa).
     public int LineCount { get; private set; }
     /// The most lines (rows for species tables) a list may have.
-    public int MaxLines => Table.IsTable ? SpeciesTable.MaxRows(Table) : GroupList.MaxLines;
+    public int MaxLines => Table.IsTable ? SpeciesTable.MaxRows(Table)
+        : Options.Line.HasReferences ? ListReferences.MaxLines : GroupList.MaxLines;
     public bool TooLong => LineCount > MaxLines;
     public GroupListResult? List { get; private set; }
     public string Wikitext { get; private set; } = string.Empty;
@@ -130,7 +131,11 @@ public sealed class GroupModel : PageModel {
             }
             var groups = _queries.GetGroupsWithin(group).Append(group).ToDictionary(g => g.NodeId);
             List = GroupList.Build(taxa, groups, Options);
-            Wikitext = GroupList.ToWikitext(List, Options);
+            var references = Options.Line.HasReferences
+                ? ListReferences.Build(List, new ListReferenceQueries(_db).GetCitations(group), Sources, Options.Line.Template,
+                    DateOnly.FromDateTime(DateTime.UtcNow))
+                : null;
+            Wikitext = GroupList.ToWikitext(List, Options, references);
         }
         return Page();
     }

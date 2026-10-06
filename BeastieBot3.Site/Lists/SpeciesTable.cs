@@ -280,7 +280,7 @@ public static class SpeciesTable {
 
     // ------------------------------------------------------------ ref names
 
-    private sealed class RefNamer(TableRefNames style) {
+    internal sealed class RefNamer(TableRefNames style) {
         private readonly HashSet<string> _used = new(StringComparer.Ordinal);
 
         public string Next(ListTaxonRow taxon) {

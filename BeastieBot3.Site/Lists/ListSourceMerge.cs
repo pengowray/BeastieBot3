@@ -192,10 +192,12 @@ public static class ListSourceMerge {
 
     private static ListTaxonRow Renamed(ListTaxonRow row, string name) {
         var parts = name.Split(' ', 2);
+        // IUCN's authority belongs to IUCN's name: under another genus the brackets would differ.
         return row with {
             ScientificName = name,
             Genus = parts[0],
             SpeciesEpithet = parts.Length > 1 ? parts[1] : row.SpeciesEpithet,
+            Authority = null,
         };
     }
 
@@ -204,6 +206,7 @@ public static class ListSourceMerge {
         return new ListTaxonRow(
             extra.RowId, name, TaxonKinds.Species, extra.Kingdom, parts[0], parts.Length > 1 ? parts[1] : extra.Epithet,
             null, null, null, extra.CommonNameEn, extra.EnwikiTitle, null, null, extra.NodeId, extra.SortPos,
-            null, null, false, false, null);
+            null, null, false, false, null,
+            Authority: name == extra.ScientificName ? extra.Authority : null);
     }
 }

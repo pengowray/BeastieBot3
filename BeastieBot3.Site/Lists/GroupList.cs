@@ -60,6 +60,8 @@ public sealed record GroupListOptions {
     public bool HeadingNames { get; init; }
     /// Which sources the species come from, and which is preferred (ListSources.cs).
     public ListSourceOptions Sources { get; init; } = ListSourceOptions.Default;
+    /// The authority and the reference after each line (ListLineOptions.cs).
+    public ListLineOptions Line { get; init; } = ListLineOptions.Default;
     /// Wikitext level of the top headings: 2 is "== ... ==".
     public int TopLevel { get; init; } = 2;
 }
@@ -244,6 +246,7 @@ public static class GroupList {
         Style = options.Style,
         IncludeStatusTemplate = options.StatusTemplate && assessed,
         StatusContext = statusContext,
+        Authority = options.Line.Authority,
     };
 
     public static SpeciesListEntry Entry(ListTaxonRow taxon) => new() {
@@ -263,6 +266,7 @@ public static class GroupList {
         TaxonId = taxon.TaxonId,
         AssessmentId = taxon.AssessmentId ?? 0,
         YearPublished = taxon.YearPublished?.ToString(System.Globalization.CultureInfo.InvariantCulture),
+        Authority = taxon.Authority,
     };
 
     // A subpopulation's line shows the species' name and then the subpopulation in brackets; IUCN
@@ -293,8 +297,12 @@ public static class GroupList {
     // ------------------------------------------------------------ wikitext
 
     /// The list as wikitext. Lines are rendered here with the options' status context per section.
-    public static string ToWikitext(GroupListResult list, GroupListOptions options) {
+    /// references (ListReferences.Build) puts a <ref> after the lines it has, in the form
+    /// options.Line.References asks for.
+    public static string ToWikitext(GroupListResult list, GroupListOptions options,
+        IReadOnlyDictionary<long, LineReference>? references = null) {
         var sb = new StringBuilder();
+        var refs = new ListReferenceWriter(options.Line.References, references);
         string? context = null;
         var previousWasLine = false;
         foreach (var block in list.Blocks) {
@@ -326,11 +334,14 @@ public static class GroupList {
                     var lineOptions = LineOptions(options, options.ByStatus ? context : null, line.Taxon.Category is not null);
                     sb.Append(line.Nested
                         ? "*" + SpeciesListLine.FormatInfraspecificUnderSpecies(line.Entry, lineOptions)
-                        : SpeciesListLine.Format(line.Entry, lineOptions)).Append('\n');
+                        : SpeciesListLine.Format(line.Entry, lineOptions));
+                    refs.AppendRef(sb, line.Taxon.TaxonId);
+                    sb.Append('\n');
                     previousWasLine = true;
                     break;
             }
         }
+        refs.AppendRefList(sb);
         return sb.ToString().TrimEnd('\n');
     }
 

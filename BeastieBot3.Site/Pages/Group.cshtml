@@ -256,6 +256,7 @@
                 </fieldset>
                 <div data-list-type="bullets" hidden="@Model.Table.IsTable">
                     <partial name="_ListSourceOptions" model="@options.Sources" />
+                    <partial name="_ListLineOptions" model="@options.Line" />
                 </div>
                 <fieldset class="option-group">
                     <legend>@GroupText.OptionSort</legend>
@@ -274,7 +275,7 @@
             @if (Model.TooLong && Model.Table.IsTable) {
                 <p class="note">@GroupText.TablesTooLong(Model.LineCount, Model.MaxLines, Model.Table.References != TableReferences.None)</p>
             } else if (Model.TooLong) {
-                <p class="note">@GroupText.TooLong(Model.LineCount, GroupList.MaxLines)</p>
+                <p class="note">@(options.Line.HasReferences ? GroupLineText.TooLongWithReferences(Model.LineCount, Model.MaxLines) : GroupText.TooLong(Model.LineCount, GroupList.MaxLines))</p>
                 @if (options.Sources.HasOtherSources) {
                     <p class="note">@GroupSourceText.TooLongNote</p>
                 }
