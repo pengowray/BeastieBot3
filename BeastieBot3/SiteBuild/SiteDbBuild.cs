@@ -201,7 +201,8 @@ internal sealed class SiteDbBuild {
         Phase("Naming the groups and finding the articles list lines link", () => {
             NameGroupsAndLinks(taxonList, tree, ct);
             return $"{_stats.GroupCommonNames:N0} groups with an English name, {_stats.GroupArticles:N0} with an article, "
-                + $"{_stats.GroupsWithColNames:N0} with Catalogue of Life English names; {_stats.ListArticleTitles:N0} taxa with an article for list lines";
+                + $"{_stats.GroupsWithColNames:N0} with Catalogue of Life English names, {_stats.GroupsWithWikipediaNames:N0} with names from English Wikipedia; "
+                + $"{_stats.ListArticleTitles:N0} taxa with an article for list lines";
         });
 
         Phase("Writing taxa and names", () => {
@@ -261,6 +262,22 @@ internal sealed class SiteDbBuild {
         using var titles = wikiCache is null ? null : WikipediaLists.EnwikiTitleCheck.OpenReadOnly(wikiCache);
         var headings = new WikipediaLists.HeadingFormatter(legacy, taxonRules, provider);
         SiteGroupNames.Resolve(tree.Nodes, headings, titles, _inputs.ColDatabase, _stats, ct);
+        if (wikiCache is not null && Wikipedia.WikipediaCacheStore.OpenReadOnly(wikiCache) is { } cache) {
+            using (cache) {
+                var scientificNames = new HashSet<string>(StringComparer.Ordinal);
+                foreach (var node in tree.Nodes) {
+                    scientificNames.Add(Shared.SiteData.SiteNameKey.Fold(node.Name));
+                }
+                var taxonArticles = new HashSet<string>(StringComparer.Ordinal);
+                foreach (var taxon in taxonList) {
+                    scientificNames.Add(Shared.SiteData.SiteNameKey.Fold(taxon.ScientificName));
+                    if (taxon.EnwikiTitle is { } article) {
+                        taxonArticles.Add(Wikipedia.WikipediaTitleHelper.Normalize(article));
+                    }
+                }
+                SiteGroupWikipediaNames.Resolve(tree.Nodes, cache, scientificNames, taxonArticles, _stats, ct);
+            }
+        }
         var lines = new WikipediaLists.SpeciesLineFormatter(legacy, provider, commonNameProvider: null);
         SiteListLinks.Resolve(taxonList, lines, _stats, ct);
     }

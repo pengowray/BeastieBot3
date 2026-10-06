@@ -20,13 +20,17 @@
     @if (Model.Groups.Count > 0) {
         <h2>@GroupText.SearchGroupsHeading</h2>
         <ul class="group-results">
-            @foreach (var group in Model.Groups) {
+            @foreach (var hit in Model.Groups) {
+                var group = hit.Group;
                 <li>
                     <a href="@BeastieBot3.Site.Web.SiteUrls.Group(group)">@BeastieBot3.Site.Lists.GroupList.HeadingText(group)</a>
                     @if (group.CommonNameEn is not null) {
                         <span class="common-name">@group.CommonNameEn</span>
                     }
                     <span class="kind">@GroupText.SearchGroupSpecies(group.SpeciesCount, group.Kingdom)</span>
+                    @if (hit.MatchedName is not null) {
+                        <div class="match-note">@GroupText.MatchWikipediaTitleLabel @hit.MatchedName</div>
+                    }
                 </li>
             }
         </ul>

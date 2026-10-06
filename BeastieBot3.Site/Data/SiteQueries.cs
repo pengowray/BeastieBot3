@@ -390,11 +390,12 @@ public sealed class SiteQueries {
                                + CASE h.name_type WHEN 'scientific' THEN 0 WHEN 'common' THEN 1 ELSE 2 END * 10000
                                + CASE t.kind WHEN 'species' THEN 0 ELSE 1 END * 1000
                                + CASE WHEN LENGTH(h.name) > 999 THEN 999 ELSE LENGTH(h.name) END) AS score,
-                           h.name, h.name_type, h.language
+                           h.name, h.name_type, h.language,
+                           MAX(h.name_type <> 'common' AND h.name_id IN (SELECT name_id FROM name_key WHERE key = @key)) AS exact_not_common
                     FROM hits h JOIN taxon t ON t.taxon_id = h.taxon_id
                     GROUP BY h.taxon_id
                 )
-                SELECT {SummaryColumns}, b.name, b.name_type, b.language, b.score
+                SELECT {SummaryColumns}, b.name, b.name_type, b.language, b.score, b.exact_not_common, t.enwiki_title
                 FROM best b
                 JOIN taxon t ON t.taxon_id = b.taxon_id
                 {SummaryJoin}
@@ -406,12 +407,17 @@ public sealed class SiteQueries {
             using var reader = command.ExecuteReader();
             while (reader.Read()) {
                 const int next = SummaryColumnCount;
+                var summary = SummaryAt(reader, 0);
+                var exact = reader.GetInt64(next + 3) < 100000;
                 hits.Add(new SearchHit(
-                    SummaryAt(reader, 0),
+                    summary,
                     reader.GetString(next),
                     reader.GetString(next + 1),
                     Text(reader, next + 2),
-                    reader.GetInt64(next + 3) < 100000));
+                    exact,
+                    exact && (reader.GetInt64(next + 4) == 1
+                        || IsKey(summary.CommonNameEn, key)
+                        || IsKey(Text(reader, next + 5), key))));
             }
         }
 
@@ -424,6 +430,8 @@ public sealed class SiteQueries {
         }
         return new SearchResult(hits, total);
     }
+
+    private static bool IsKey(string? name, string key) => name is not null && SiteNameKey.Fold(name) == key;
 
     // The names that match: FTS hits (when there is a MATCH expression) plus exact folded-key hits.
     private static string BuildHitsSql(bool withFts) {
@@ -501,9 +509,37 @@ public sealed class SiteQueries {
             ("@key", SiteNameKey.Fold(name)), ("@rank", rank.Trim().ToLowerInvariant()));
 
     /// Groups whose name (folded) is the text, any rank, for search. Biggest first.
-    public IReadOnlyList<GroupRow> FindGroupsByName(string text, int limit) =>
-        ReadGroups($"SELECT {GroupColumns} FROM higher_taxon h WHERE h.name_key = @key ORDER BY h.species_count DESC, h.node_id LIMIT @limit",
-            ("@key", SiteNameKey.Fold(text)), ("@limit", limit));
+    /// Also the groups that have the text as the title of their English Wikipedia article or of a
+    /// redirect to it (higher_taxon_name, source 'wikipedia'), after those with the name itself.
+    public IReadOnlyList<GroupHit> FindGroupsByName(string text, int limit) {
+        using var connection = _db.OpenConnection();
+        using var command = connection.CreateCommand();
+        // MIN(m.how) makes SQLite take m.matched from the row with the lowest `how`: the group's own
+        // name before a Wikipedia title.
+        command.CommandText = $"""
+            SELECT {GroupColumns}, m.matched, MIN(m.how) AS how
+            FROM (
+                SELECT node_id, NULL AS matched, 0 AS how FROM higher_taxon WHERE name_key = @key
+                UNION ALL
+                SELECT node_id, name, 1 FROM higher_taxon_name WHERE name_key = @key AND source = 'wikipedia'
+            ) m
+            JOIN higher_taxon h ON h.node_id = m.node_id
+            GROUP BY h.node_id
+            ORDER BY how, h.species_count DESC, h.node_id
+            LIMIT @limit
+            """;
+        command.Parameters.AddWithValue("@key", SiteNameKey.Fold(text));
+        command.Parameters.AddWithValue("@limit", limit);
+        using var reader = command.ExecuteReader();
+        var hits = new List<GroupHit>();
+        while (reader.Read()) {
+            hits.Add(new GroupHit(GroupAt(reader), Text(reader, GroupColumnCount)));
+        }
+        return hits;
+    }
+
+    // The number of columns in GroupColumns, where the columns after them start.
+    private const int GroupColumnCount = 18;
 
     public GroupRow? GetGroup(int nodeId) =>
         ReadGroups($"SELECT {GroupColumns} FROM higher_taxon h WHERE h.node_id = @id", ("@id", nodeId)).FirstOrDefault();
@@ -609,7 +645,7 @@ public sealed class SiteQueries {
             command.Parameters.AddWithValue(name, id);
         }
         command.CommandText = $"""
-            SELECT node_id, name FROM higher_taxon_name WHERE node_id IN ({string.Join(", ", names)})
+            SELECT node_id, name FROM higher_taxon_name WHERE node_id IN ({string.Join(", ", names)}) AND source = 'col'
             ORDER BY node_id, name COLLATE NOCASE
             """;
         using var reader = command.ExecuteReader();
@@ -627,7 +663,7 @@ public sealed class SiteQueries {
     public IReadOnlyList<string> GetGroupColNames(int nodeId) {
         using var connection = _db.OpenConnection();
         using var command = connection.CreateCommand();
-        command.CommandText = "SELECT name FROM higher_taxon_name WHERE node_id = @id ORDER BY name COLLATE NOCASE";
+        command.CommandText = "SELECT name FROM higher_taxon_name WHERE node_id = @id AND source = 'col' ORDER BY name COLLATE NOCASE";
         command.Parameters.AddWithValue("@id", nodeId);
         using var reader = command.ExecuteReader();
         var names = new List<string>();

@@ -113,6 +113,8 @@ public static class GroupText {
     // Search results
     public const string SearchGroupsHeading = "Higher taxa";
     public const string SearchTaxaHeading = "Assessed taxa";
+    /// Before the title of the group's English Wikipedia article, or of a redirect to it, that the search text matched.
+    public const string MatchWikipediaTitleLabel = "Matched English Wikipedia title:";
     public static string SearchGroupSpecies(int species, string kingdom) =>
         $"{SiteFormat.Number(species)} assessed species, {SiteFormat.TitleCase(kingdom)}";
 

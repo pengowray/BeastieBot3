@@ -107,12 +107,20 @@ public sealed record EpbcListingRow(long SpratTaxonId, string ListedName, string
 }
 
 /// One search result: the taxon and the name that matched best.
+/// IsStrongExactMatch: an exact match on the taxon's scientific name, a synonym, its English name
+/// for display (common_name_en) or the title of its English Wikipedia article. An exact match on any
+/// other common name (a Catalogue of Life vernacular, say) is exact but not strong.
 public sealed record SearchHit(
     TaxonSummary Taxon,
     string MatchedName,
     string MatchedNameType,
     string? MatchedLanguage,
-    bool IsExactMatch);
+    bool IsExactMatch,
+    bool IsStrongExactMatch = false);
+
+/// A group found by search. MatchedName is set when the group was found by the title of its English
+/// Wikipedia article or of a redirect to it, not by its own name.
+public sealed record GroupHit(GroupRow Group, string? MatchedName);
 
 /// A taxon found by an IUCN id in the search text. AssessmentId is set when the id was an
 /// assessment's; then Scope and YearPublished are that assessment's, and IsDefault says whether it

@@ -21,8 +21,9 @@ public sealed class SearchModel : PageModel {
     public IReadOnlyList<TaxonListItem> Items { get; private set; } = [];
     public long TotalTaxa { get; private set; }
 
-    /// Groups (genera, families and other ranks) whose name is the search text.
-    public IReadOnlyList<GroupRow> Groups { get; private set; } = [];
+    /// Groups (genera, families and other ranks) whose name is the search text, or the title of
+    /// their English Wikipedia article or of a redirect to it.
+    public IReadOnlyList<GroupHit> Groups { get; private set; } = [];
     public const int MaxGroups = 10;
 
     /// Set when the text was a taxon id and an assessment id together (a DOI, "T22823A14871490")
@@ -52,10 +53,10 @@ public sealed class SearchModel : PageModel {
 
         var result = _queries.Search(Query, MaxResults, cancellationToken: HttpContext.RequestAborted);
         Groups = _queries.FindGroupsByName(Query, MaxGroups);
-        if (all != "1" && Groups.Count == 1 && !result.Hits.Any(h => h.IsExactMatch)) {
-            return Redirect(Web.SiteUrls.Group(Groups[0]));
+        if (all != "1" && GroupToGoTo(Groups, result.Hits) is { } group) {
+            return Redirect(Web.SiteUrls.Group(group.Group));
         }
-        if (all != "1" && SingleExactMatch(result.Hits) is { } hit) {
+        if (all != "1" && Groups.Count == 0 && SingleExactMatch(result.Hits) is { } hit) {
             var url = $"/species/{hit.Taxon.TaxonId}";
             if (hit.MatchedNameType != NameTypes.Scientific) {
                 // The taxon page says which name was matched, and links back to all the results.
@@ -93,6 +94,17 @@ public sealed class SearchModel : PageModel {
     public static string SpeciesUrl(IdHit hit) => hit is { AssessmentId: { } aid, IsDefault: false }
         ? $"/species/{hit.Taxon.TaxonId}?assessment={aid}#wikitext"
         : $"/species/{hit.Taxon.TaxonId}";
+
+    /// <summary>
+    /// The group a search goes straight to: the only group found, when no taxon matches the text
+    /// strongly (<see cref="SearchHit.IsStrongExactMatch"/>). A group found by its name or by the
+    /// title of its English Wikipedia article or of a redirect to it ("fruit bat": family
+    /// Pteropodidae) comes before a taxon that has the text only as a common name it is not shown
+    /// with (a Catalogue of Life vernacular). When a group is found and a taxon matches strongly,
+    /// or several groups are found, the results are listed, groups first.
+    /// </summary>
+    public static GroupHit? GroupToGoTo(IReadOnlyList<GroupHit> groups, IReadOnlyList<SearchHit> hits) =>
+        groups.Count == 1 && !hits.Any(h => h.IsStrongExactMatch) ? groups[0] : null;
 
     /// The one taxon the text names exactly: the only exact match in the release, or, when no taxon
     /// in the release matches exactly, the only exact match. Null when there is none or several. A
