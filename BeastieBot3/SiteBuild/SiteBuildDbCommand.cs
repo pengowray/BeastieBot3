@@ -230,6 +230,9 @@ internal sealed class SiteBuildDbCommand : Command<SiteBuildDbCommand.Settings> 
         Row("Citations parsed from cached API assessments", s.CitationsParsed);
         Row("Assessments not in the API cache (no citation)", s.CitationsNotCached);
         Row("Cached assessments with taxonomic notes (has_taxonomic_notes = 1)", s.PayloadsWithTaxonomicNotes);
+        Row("Assessments with credits (assessment.credits)", s.AssessmentsWithCredits);
+        Row("Credit entries in those assessments", s.CreditEntries);
+        Row("Distinct credit entries (credit_name rows)", s.CreditNames);
         Row("Citations that could not be parsed", s.CitationFailures.Values.Sum() + s.PayloadsUnreadable);
         Row("DOIs from IUCN's citation text", s.DoisBySource.GetValueOrDefault(DoiSource.Citation));
         Row("DOIs from GBIF", s.DoisBySource.GetValueOrDefault(DoiSource.Gbif));
