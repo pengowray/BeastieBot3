@@ -209,8 +209,16 @@
                                 <p>@Model.Parts.IucnCitationText</p>
                             </details>
                         }
+                        @if (Model.Credits is { } credits) {
+                            <partial name="_AssessmentCredits" model="credits" />
+                        }
                     </div>
                 }
+            </div>
+        }
+        @if (Model.Credits is { } creditsWithoutCitation && !Model.Boxes.Any(b => b.Id == "wikitext-cite")) {
+            <div class="citation-notes">
+                <partial name="_AssessmentCredits" model="creditsWithoutCitation" />
             </div>
         }
         </div>

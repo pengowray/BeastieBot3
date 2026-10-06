@@ -8,7 +8,7 @@ namespace BeastieBot3.Shared.SiteData;
 // narrative text (rationale, range, threats ...), no coded threats/habitats/countries, no downloads.
 // Keep such fields out of this database rather than hiding them in the site.
 public static class SiteDbSchema {
-    public const int Version = 15;
+    public const int Version = 16;
 
     public const string Ddl = """
         CREATE TABLE meta (
@@ -261,10 +261,22 @@ public static class SiteDbSchema {
             wikidata_item_label_en       TEXT,                -- that item's English label; NULL when no item or no label
             wikidata_item_assessment_id  INTEGER,             -- the assessment that item is for: assessment_id, or for an errata version that
                                                               -- shares the item of the assessment it corrects, that assessment's id
-            api_not_found                INTEGER NOT NULL DEFAULT 0 -- 1: the IUCN API answered 404 (not found) when this assessment was requested,
+            api_not_found                INTEGER NOT NULL DEFAULT 0, -- 1: the IUCN API answered 404 (not found) when this assessment was requested,
                                                               -- although the taxon's record lists it
+            credits                      TEXT                 -- the people and organisations IUCN credits (the payload's credits[]), as StoredCredits JSON
+                                                              -- of credit_name ids: [{"type":"assessor","names":[12,45]},{"type":"evaluator","full":77}].
+                                                              -- One group per credit type, in CreditTypes.Order; "names" the value[] entries (full names,
+                                                              -- usually with an affiliation; email addresses left out), "full" the citation-form string when
+                                                              -- value[] is empty. NULL when the payload is not cached or has no credits
         );
         CREATE INDEX assessment_taxon ON assessment(taxon_id, year_published);
+
+        -- The text of each distinct credit entry ("Catherine Sayer (IUCN Red List Unit)") or citation-form
+        -- credit string ("Tolley, K. & Menegon, M."), for assessment.credits. Names and affiliations only.
+        CREATE TABLE credit_name (
+            credit_name_id INTEGER PRIMARY KEY,
+            text           TEXT NOT NULL
+        );
 
         CREATE TABLE name (
             name_id      INTEGER PRIMARY KEY,

@@ -1,6 +1,7 @@
 using System.Text.Json;
 using BeastieBot3.Infrastructure;
 using BeastieBot3.Iucn.Citations;
+using BeastieBot3.Shared.SiteData;
 using BeastieBot3.Shared.Wikitext;
 using Microsoft.Data.Sqlite;
 
@@ -26,6 +27,9 @@ using Microsoft.Data.Sqlite;
 //   - An author name with a letter lost to an encoding error ("Kry?tufek, B.") is repaired from the
 //     other assessor credits (AssessorNamePool). The pool is complete only after every payload has
 //     been read, so the few rows with such a name are parsed again and written at the end.
+//   - credits holds the payload's credits[] groups (AssessmentCreditsReader) as ids into credit_name,
+//     which lists each distinct name or "full" string once and is written after the last row.
+//     NULL for a row with no cached payload or a payload with no credits.
 //   - has_taxonomic_notes says whether the payload's taxonomic notes have text (SiteBuildRules.HasText);
 //     the notes are narrative text and are never stored. NULL for a row with no cached payload.
 //   - The citation's RegisteredName is the name part of the title Crossref registered for its DOI
@@ -77,6 +81,8 @@ internal sealed class SiteAssessmentPass {
     private readonly List<(long Newer, List<long> Candidates, bool ByErrata)> _unsettled = new();
 
     private readonly AssessorNamePool _names = new();
+    // credit_name: each distinct credit entry or "full" string, with its id.
+    private readonly Dictionary<string, long> _creditNames = new(StringComparer.Ordinal);
     // Rows with a damaged author name, parsed again once _names is complete.
     private readonly List<(SiteAssessment Assessment, byte[] Json, DateTime? Downloaded, SiteDoiSources Dois)> _waitingForNames = new();
 
@@ -260,6 +266,9 @@ internal sealed class SiteAssessmentPass {
         }
         _plan.Clear();
 
+        writer.AddCreditNames(_creditNames);
+        _stats.CreditNames = _creditNames.Count;
+
         SettleChains();
         foreach (var (replaced, (by, byErrata)) in _replacedBy) {
             if (by is not { } newer) {
@@ -294,6 +303,7 @@ internal sealed class SiteAssessmentPass {
                 assessment.CriteriaVersion = CriteriaVersion(root);
             }
             assessment.PopulationSize = PopulationSize(root);
+            assessment.CreditsJson = Credits(root);
             assessment.HasTaxonomicNotes = HasTaxonomicNotes(root);
             if (assessment.HasTaxonomicNotes == true) {
                 _stats.PayloadsWithTaxonomicNotes++;
@@ -468,6 +478,30 @@ internal sealed class SiteAssessmentPass {
         assessment.WikidataItemAssessmentId = found.Item.AssessmentId;
         _stats.WikidataItems.Used.Add(found.Item.Qid);
         if (found.ThroughDoi) _stats.AssessmentsWithItemThroughDoi++; else _stats.AssessmentsWithOwnItem++;
+    }
+
+    // The credits as stored: each group's entries (or its "full" string) as credit_name ids.
+    private string? Credits(JsonElement root) {
+        var groups = AssessmentCreditsReader.Read(root);
+        if (groups.Count == 0) {
+            return null;
+        }
+        _stats.AssessmentsWithCredits++;
+        var stored = new List<StoredCreditGroup>(groups.Count);
+        foreach (var group in groups) {
+            var ids = group.Names.Select(CreditNameId).ToList();
+            stored.Add(group.IsFullOnly ? new StoredCreditGroup(group.Type, [], ids[0]) : new StoredCreditGroup(group.Type, ids, null));
+            _stats.CreditEntries += ids.Count;
+        }
+        return StoredCredits.ToJson(stored);
+    }
+
+    private long CreditNameId(string text) {
+        if (!_creditNames.TryGetValue(text, out var id)) {
+            id = _creditNames.Count + 1;
+            _creditNames[text] = id;
+        }
+        return id;
     }
 
     // documentation.taxonomic_notes: HTML text, or null. Only whether it has text is kept; the notes

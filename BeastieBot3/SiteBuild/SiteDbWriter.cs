@@ -62,16 +62,16 @@ internal sealed class SiteDbWriter : IDisposable {
             INSERT INTO assessment (assessment_id, taxon_id, scope, is_latest, category, possibly_extinct,
                 possibly_extinct_in_the_wild, criteria, criteria_version, year_published, assessment_date, population_trend, population_size, citation_json,
                 has_taxonomic_notes, wikidata_item_qid, wikidata_item_properties, wikidata_item_titles, wikidata_item_label_en, wikidata_item_assessment_id,
-                api_not_found)
+                api_not_found, credits)
             VALUES (@assessment_id, @taxon_id, @scope, @is_latest, @category, @possibly_extinct,
                 @possibly_extinct_in_the_wild, @criteria, @criteria_version, @year_published, @assessment_date, @population_trend, @population_size, @citation_json,
                 @has_taxonomic_notes, @wikidata_item_qid, @wikidata_item_properties, @wikidata_item_titles, @wikidata_item_label_en, @wikidata_item_assessment_id,
-                @api_not_found)
+                @api_not_found, @credits)
             """,
             "@assessment_id", "@taxon_id", "@scope", "@is_latest", "@category", "@possibly_extinct",
             "@possibly_extinct_in_the_wild", "@criteria", "@criteria_version", "@year_published", "@assessment_date", "@population_trend", "@population_size", "@citation_json",
             "@has_taxonomic_notes", "@wikidata_item_qid", "@wikidata_item_properties", "@wikidata_item_titles", "@wikidata_item_label_en", "@wikidata_item_assessment_id",
-            "@api_not_found");
+            "@api_not_found", "@credits");
         _name = Prepare("""
             INSERT INTO name (name_id, taxon_id, name, name_type, language, source, is_preferred, authority)
             VALUES (@name_id, @taxon_id, @name, @name_type, @language, @source, @is_preferred, @authority)
@@ -131,8 +131,17 @@ internal sealed class SiteDbWriter : IDisposable {
         Bind(_assessment, a.AssessmentId, a.TaxonId, a.Scope, a.IsLatest ? 1 : 0, a.Category, a.PossiblyExtinct ? 1 : 0,
             a.PossiblyExtinctInTheWild ? 1 : 0, a.Criteria, a.CriteriaVersion, a.YearPublished, a.AssessmentDate,
             a.PopulationTrend, a.PopulationSize, a.CitationJson, a.HasTaxonomicNotes is { } notes ? (notes ? 1 : 0) : null, a.WikidataItemQid, a.WikidataItemProperties,
-            a.WikidataItemTitles, a.WikidataItemLabelEn, a.WikidataItemAssessmentId, a.ApiNotFound ? 1 : 0);
+            a.WikidataItemTitles, a.WikidataItemLabelEn, a.WikidataItemAssessmentId, a.ApiNotFound ? 1 : 0, a.CreditsJson);
         _assessment.ExecuteNonQuery();
+    }
+
+    /// Writes credit_name: each credit entry or "full" string with its id.
+    public void AddCreditNames(IReadOnlyDictionary<string, long> names) {
+        using var command = Prepare("INSERT INTO credit_name (credit_name_id, text) VALUES (@id, @text)", "@id", "@text");
+        foreach (var (text, id) in names.OrderBy(n => n.Value)) {
+            Bind(command, id, text);
+            command.ExecuteNonQuery();
+        }
     }
 
     public void AddTaxonLink(SiteTaxonLink link) {

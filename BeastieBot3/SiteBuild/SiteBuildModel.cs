@@ -146,6 +146,8 @@ internal sealed class SiteAssessment {
     /// The number of mature individuals as IUCN publishes it ('1000-1200', '500000-999999,800000', 'U'); null when not given.
     public string? PopulationSize { get; set; }
     public string? CitationJson { get; set; }
+    /// The credits as StoredCredits JSON (ids into credit_name); null when there is no payload or it has no credits.
+    public string? CreditsJson { get; set; }
     /// Whether the cached payload's taxonomic notes have text; null when there is no payload.
     public bool? HasTaxonomicNotes { get; set; }
 
@@ -215,6 +217,9 @@ internal sealed class SiteBuildStats {
     public int CitationsNotCached;
     /// Payloads whose documentation.taxonomic_notes has text.
     public int PayloadsWithTaxonomicNotes;
+    public int AssessmentsWithCredits;
+    public long CreditEntries;
+    public int CreditNames;
     public readonly Dictionary<CitationParseFailure, int> CitationFailures = new();
     public readonly Dictionary<Shared.Wikitext.DoiSource, int> DoisBySource = new();
     public DateTime? DownloadedFrom;

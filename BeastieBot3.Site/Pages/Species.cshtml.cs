@@ -101,6 +101,9 @@ public sealed class SpeciesModel : PageModel {
     public string? DownloadDateText { get; private set; }
     public string TodayText { get; private set; } = string.Empty;
 
+    /// The people and organisations IUCN credits for the selected assessment; null when it has none.
+    public CreditsView? Credits { get; private set; }
+
     /// For the full given names option, which is shown only when this is not null.
     public GivenNamesCoverage? GivenNames { get; private set; }
 
@@ -268,6 +271,7 @@ public sealed class SpeciesModel : PageModel {
             return;
         }
         Parts = ReadParts(Selected.CitationJson);
+        Credits = CreditsView.Build(_queries.GetCredits(Selected.AssessmentId));
         var boxes = new List<WikitextBox>();
         CiteIucnOptions? citeOptions = null;
         DateOnly? downloaded = Parts?.DownloadedAtUtc is { } at ? DateOnly.FromDateTime(at) : null;

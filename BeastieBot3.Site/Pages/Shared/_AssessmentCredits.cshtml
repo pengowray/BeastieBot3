@@ -1,0 +1,20 @@
+@model BeastieBot3.Site.Pages.CreditsView
+@* The id keeps the open state when site.js replaces the wikitext output after an option changes. *@
+<details class="iucn-credits" id="iucn-credits">
+    <summary>@Model.Summary</summary>
+    @foreach (var group in Model.Groups) {
+        <div class="credit-group">
+            <p class="credit-type">@group.Label@if (!group.IsFullOnly) {<text> </text><span class="credit-count">(@group.Names.Count.ToString("N0", System.Globalization.CultureInfo.InvariantCulture))</span>}</p>
+            @if (group.IsFullOnly) {
+                <p class="credit-full">@group.Names[0]</p>
+                <p class="credit-note">@SiteText.CreditsFullOnly</p>
+            } else {
+                <ul class="credit-names">
+                    @foreach (var name in group.Names) {
+                        <li>@name</li>
+                    }
+                </ul>
+            }
+        </div>
+    }
+</details>
