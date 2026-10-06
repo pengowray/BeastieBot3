@@ -113,9 +113,9 @@ public static partial class UpdateText {
     public const string ColumnNotes = "Notes";
 
     public const string PopulationHeading = "Population differences";
-    public const string PopulationIntro = "In these rows, population differs from the number of mature individuals in the latest global assessment and was not changed, because IUCN often gives a band such as 2,500\u20139,999 or a best estimate with a range.";
+    public const string PopulationIntro = "The population parameter cannot be updated reliably by this page, because IUCN often gives a band such as 2,500\u20139,999 or a best estimate with a range. Check these rows by hand: their population differs from the number of mature individuals in the latest global assessment.";
     public const string PopulationKey = "IUCN mature individuals is the value as IUCN publishes it, with the year of the assessment. U means unknown. A number after a comma is a best estimate or a second range.";
-    public const string ColumnPopulationNow = "Population now";
+    public const string ColumnPopulationNow = "Population in your wikitext";
     public const string ColumnPopulationIucn = "IUCN mature individuals";
     public const string ColumnPopulationSuggested = "Suggested population";
 

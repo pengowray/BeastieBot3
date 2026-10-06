@@ -8,7 +8,7 @@ namespace BeastieBot3.Shared.SiteData;
 // narrative text (rationale, range, threats ...), no coded threats/habitats/countries, no downloads.
 // Keep such fields out of this database rather than hiding them in the site.
 public static class SiteDbSchema {
-    public const int Version = 16;
+    public const int Version = 17;
 
     public const string Ddl = """
         CREATE TABLE meta (
@@ -267,7 +267,7 @@ public static class SiteDbSchema {
                                                               -- of credit_name ids: [{"type":"assessor","names":[12,45]},{"type":"evaluator","full":77}].
                                                               -- One group per credit type, in CreditTypes.Order; "names" the value[] entries (full names,
                                                               -- usually with an affiliation; email addresses left out), "full" the citation-form string when
-                                                              -- value[] is empty. NULL when the payload is not cached or has no credits
+                                                              -- value[] is empty, "emails" (when not 0) the value[] entries that were only an email address. NULL when the payload is not cached or has no credits
         );
         CREATE INDEX assessment_taxon ON assessment(taxon_id, year_published);
 

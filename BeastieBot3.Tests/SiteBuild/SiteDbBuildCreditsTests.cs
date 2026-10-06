@@ -94,6 +94,9 @@ public sealed class SiteDbBuildCreditsTests : IDisposable {
             "Anthony Whitaker (Deceased was @ Whitaker Consultants)", "Maria Ogielska (Wroclaw University)"], groups[1].Names);
         // Only an address in value[]: the group is shown as its "full" string.
         Assert.Equal((true, "Roy, S."), (groups[0].IsFullOnly, groups[0].Names.Single()));
+        // Entries that were only an address are counted, so the page can say some were left out.
+        Assert.Equal(1, groups[1].EmailsLeftOut);
+        Assert.Equal(1, groups[0].EmailsLeftOut);
     }
 
     [Fact]
@@ -118,13 +121,14 @@ public sealed class SiteDbBuildCreditsTests : IDisposable {
 
     [Fact]
     public void StoredCredits_RoundTrips() {
-        var groups = new[] { new StoredCreditGroup(CreditTypes.Assessor, [3, 1], null), new StoredCreditGroup(CreditTypes.Evaluator, [], 2) };
+        var groups = new[] { new StoredCreditGroup(CreditTypes.Assessor, [3, 1], null), new StoredCreditGroup(CreditTypes.Evaluator, [], 2, EmailsLeftOut: 2) };
         var json = StoredCredits.ToJson(groups);
 
-        Assert.Equal("""[{"type":"assessor","names":[3,1]},{"type":"evaluator","full":2}]""", json);
+        Assert.Equal("""[{"type":"assessor","names":[3,1]},{"type":"evaluator","full":2,"emails":2}]""", json);
         var read = StoredCredits.FromJson(json);
         Assert.Equal([3L, 1L], read[0].Names);
         Assert.Equal((CreditTypes.Evaluator, 2L, true), (read[1].Type, read[1].Full, read[1].IsFullOnly));
+        Assert.Equal((0, 2), (read[0].EmailsLeftOut, read[1].EmailsLeftOut));
         Assert.Equal([3L, 1L, 2L], StoredCredits.NameIds(read));
         Assert.Empty(StoredCredits.FromJson("not json"));
         Assert.Empty(StoredCredits.FromJson(null));

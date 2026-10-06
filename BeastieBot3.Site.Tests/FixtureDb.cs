@@ -305,10 +305,11 @@ public static class FixtureDb {
             (CreditTypes.Evaluator, ["Sugoto Roy (IUCN)"], false),
             (CreditTypes.Facilitators, ["John Goodrich (IUCN SSC Cat Specialist Group)"], false),
             (CreditTypes.Institutions, ["Wildlife Conservation Society"], false));
-        // A reviewer group IUCN gives only in citation form.
+        // A reviewer group IUCN gives only in citation form, and an assessor group with two entries
+        // that were only an email address.
         w.Credits(PolarBear2008,
-            (CreditTypes.Assessor, ["Scott Schliebe"], false),
-            (CreditTypes.Evaluator, ["Derocher, A. & Lunn, N."], true));
+            (CreditTypes.Assessor, ["Scott Schliebe"], false, 2),
+            (CreditTypes.Evaluator, ["Derocher, A. & Lunn, N."], true, 0));
         w.Name(Tiger, "Panthera tigris", "scientific", null, "iucn");
         w.Name(Tiger, "Tiger", "common", "en", "iucn", preferred: true);
         w.Name(Tiger, "Big cat", "common", "en", "wikidata");
@@ -720,7 +721,10 @@ public static class FixtureDb {
 
         /// Sets an assessment's credits, adding each text to credit_name once. Full: the group's one
         /// text is IUCN's citation-form string.
-        public void Credits(long assessmentId, params (string Type, string[] Names, bool Full)[] groups) {
+        public void Credits(long assessmentId, params (string Type, string[] Names, bool Full)[] groups) =>
+            Credits(assessmentId, groups.Select(g => (g.Type, g.Names, g.Full, 0)).ToArray());
+
+        public void Credits(long assessmentId, params (string Type, string[] Names, bool Full, int Emails)[] groups) {
             long IdOf(string text) {
                 if (!_creditNames.TryGetValue(text, out var id)) {
                     id = _creditNames.Count + 1;
@@ -730,8 +734,8 @@ public static class FixtureDb {
                 return id;
             }
             var stored = groups.Select(g => g.Full
-                ? new StoredCreditGroup(g.Type, [], IdOf(g.Names[0]))
-                : new StoredCreditGroup(g.Type, g.Names.Select(IdOf).ToList(), null)).ToList();
+                ? new StoredCreditGroup(g.Type, [], IdOf(g.Names[0]), g.Emails)
+                : new StoredCreditGroup(g.Type, g.Names.Select(IdOf).ToList(), null, g.Emails)).ToList();
             Run("UPDATE assessment SET credits = @a WHERE assessment_id = @b", StoredCredits.ToJson(stored), assessmentId);
         }
         public int TaxonCount { get; private set; }

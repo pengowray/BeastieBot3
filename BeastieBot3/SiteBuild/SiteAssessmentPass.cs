@@ -490,7 +490,9 @@ internal sealed class SiteAssessmentPass {
         var stored = new List<StoredCreditGroup>(groups.Count);
         foreach (var group in groups) {
             var ids = group.Names.Select(CreditNameId).ToList();
-            stored.Add(group.IsFullOnly ? new StoredCreditGroup(group.Type, [], ids[0]) : new StoredCreditGroup(group.Type, ids, null));
+            stored.Add(group.IsFullOnly
+                ? new StoredCreditGroup(group.Type, [], ids[0], group.EmailsLeftOut)
+                : new StoredCreditGroup(group.Type, ids, null, group.EmailsLeftOut));
             _stats.CreditEntries += ids.Count;
         }
         return StoredCredits.ToJson(stored);

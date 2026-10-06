@@ -25,8 +25,9 @@ using BeastieBot3.Shared.SiteData;
 
 namespace BeastieBot3.SiteBuild;
 
-/// One credit group: the entries of value[], or (IsFullOnly) the one "full" string.
-internal sealed record CreditGroup(string Type, IReadOnlyList<string> Names, bool IsFullOnly);
+/// One credit group: the entries of value[], or (IsFullOnly) the one "full" string. EmailsLeftOut
+/// counts the value[] entries that were only an email address (different addresses, each once).
+internal sealed record CreditGroup(string Type, IReadOnlyList<string> Names, bool IsFullOnly, int EmailsLeftOut = 0);
 
 internal static partial class AssessmentCreditsReader {
     public static IReadOnlyList<CreditGroup> Read(JsonElement root) {
@@ -34,13 +35,14 @@ internal static partial class AssessmentCreditsReader {
             || !root.TryGetProperty("credits", out var credits) || credits.ValueKind != JsonValueKind.Array) {
             return [];
         }
-        var byType = new Dictionary<string, (int First, List<string> Names, HashSet<string> Seen, List<string> Fulls)>(StringComparer.Ordinal);
+        var byType = new Dictionary<string, (int First, List<string> Names, HashSet<string> Seen, List<string> Fulls, HashSet<string> Emails)>(StringComparer.Ordinal);
         foreach (var credit in credits.EnumerateArray()) {
             if (credit.ValueKind != JsonValueKind.Object) continue;
             var type = ReadString(credit, "credit_type_name")?.Trim();
             if (string.IsNullOrEmpty(type)) continue;
             if (!byType.TryGetValue(type, out var group)) {
-                group = (byType.Count, new List<string>(), new HashSet<string>(StringComparer.Ordinal), new List<string>());
+                group = (byType.Count, new List<string>(), new HashSet<string>(StringComparer.Ordinal), new List<string>(),
+                    new HashSet<string>(StringComparer.OrdinalIgnoreCase));
                 byType[type] = group;
             }
             var full = IucnCitationPartsParser.CleanText(ReadString(credit, "full"));
@@ -48,8 +50,11 @@ internal static partial class AssessmentCreditsReader {
             if (!credit.TryGetProperty("value", out var value) || value.ValueKind != JsonValueKind.Array) continue;
             foreach (var entry in value.EnumerateArray()) {
                 if (entry.ValueKind != JsonValueKind.String) continue;
-                if (CleanEntry(entry.GetString()) is { } cleaned && group.Seen.Add(cleaned)) {
-                    group.Names.Add(cleaned);
+                var raw = entry.GetString();
+                if (CleanEntry(raw) is { } cleaned) {
+                    if (group.Seen.Add(cleaned)) group.Names.Add(cleaned);
+                } else if (raw is not null && raw.Contains('@')) {
+                    group.Emails.Add(Whitespace().Replace(raw, " ").Trim());
                 }
             }
         }
@@ -59,9 +64,9 @@ internal static partial class AssessmentCreditsReader {
             CreditGroup? made = null;
             if (group.Names.Count > 0) {
                 var names = group.Fulls.Count == 1 ? OrderByFull(group.Names, group.Fulls[0]) : group.Names;
-                made = new CreditGroup(type, names, IsFullOnly: false);
+                made = new CreditGroup(type, names, IsFullOnly: false, group.Emails.Count);
             } else if (group.Fulls.Count > 0) {
-                made = new CreditGroup(type, [group.Fulls[0]], IsFullOnly: true);
+                made = new CreditGroup(type, [group.Fulls[0]], IsFullOnly: true, group.Emails.Count);
             }
             if (made is not null) result.Add((CreditTypes.Rank(type), group.First, made));
         }

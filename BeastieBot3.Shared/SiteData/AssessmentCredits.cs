@@ -7,7 +7,9 @@ namespace BeastieBot3.Shared.SiteData;
 // groups of the IUCN API payload's credits[] array, each a list of credit_name ids, or, when IUCN's
 // value[] list is empty, the id of its "full" string (the citation form, "Tolley, K. & Menegon, M.").
 //
-//   [{"type":"assessor","names":[12,45]},{"type":"evaluator","full":77}]
+//   [{"type":"assessor","names":[12,45]},{"type":"evaluator","full":77,"emails":2}]
+//
+// "emails" counts the value[] entries that were only an email address, which are not stored.
 //
 // The names are kept in a table of their own because the same people are credited on thousands of
 // assessments: 2.1 million entries in 2026-1, of which about 5% are distinct.
@@ -33,8 +35,8 @@ public static class CreditTypes {
 }
 
 /// One credit group. Exactly one of Names (credit_name ids, in display order) and Full (the id of
-/// the group's "full" string) is set.
-public sealed record StoredCreditGroup(string Type, IReadOnlyList<long> Names, long? Full) {
+/// the group's "full" string) is set. EmailsLeftOut: value[] entries that were only an email address.
+public sealed record StoredCreditGroup(string Type, IReadOnlyList<long> Names, long? Full, int EmailsLeftOut = 0) {
     public bool IsFullOnly => Full is not null;
 }
 
@@ -52,6 +54,9 @@ public static class StoredCredits {
                     writer.WriteStartArray("names");
                     foreach (var id in group.Names) writer.WriteNumberValue(id);
                     writer.WriteEndArray();
+                }
+                if (group.EmailsLeftOut > 0) {
+                    writer.WriteNumber("emails", group.EmailsLeftOut);
                 }
                 writer.WriteEndObject();
             }
@@ -74,8 +79,9 @@ public static class StoredCredits {
                     || type.GetString() is not { Length: > 0 } typeText) {
                     continue;
                 }
+                var emails = element.TryGetProperty("emails", out var emailCount) && emailCount.TryGetInt32(out var e) ? e : 0;
                 if (element.TryGetProperty("full", out var full) && full.TryGetInt64(out var fullId)) {
-                    groups.Add(new StoredCreditGroup(typeText, [], fullId));
+                    groups.Add(new StoredCreditGroup(typeText, [], fullId, emails));
                     continue;
                 }
                 if (!element.TryGetProperty("names", out var names) || names.ValueKind != JsonValueKind.Array) continue;
@@ -83,7 +89,7 @@ public static class StoredCredits {
                 foreach (var id in names.EnumerateArray()) {
                     if (id.ValueKind == JsonValueKind.Number && id.TryGetInt64(out var value)) ids.Add(value);
                 }
-                if (ids.Count > 0) groups.Add(new StoredCreditGroup(typeText, ids, null));
+                if (ids.Count > 0) groups.Add(new StoredCreditGroup(typeText, ids, null, emails));
             }
             return groups;
         } catch (JsonException) {

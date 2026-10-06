@@ -14,6 +14,11 @@ public static partial class SiteText {
         { } n => $"Credits as given by IUCN ({n:N0} names)",
     };
 
+    /// Under a group whose IUCN list has entries that are only an email address, which the site leaves out.
+    public static string CreditsEmailsLeftOut(int count) => count == 1
+        ? "IUCN’s list also has 1 email address, not shown here."
+        : $"IUCN’s list also has {count:N0} email addresses, not shown here.";
+
     /// IUCN's heading for a credit type; a type IUCN may add later is shown as IUCN names it.
     public static string CreditTypeLabel(string type) => type switch {
         CreditTypes.Assessor => "Assessor(s)",

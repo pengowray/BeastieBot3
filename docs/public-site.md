@@ -107,7 +107,7 @@ database as its input, and is blocked when that file is missing.
 `SiteDbSchema.Version` whenever you add, remove or rename a table or column, or change what a column
 holds, then run `site build-db` again. The site answers 503 (on `/healthz` and every page) for a
 database with any other version, so deploy the new site and the rebuilt database together. The
-current version is 16. Version 14 has the Wikipedia names of groups (`higher_taxon_name` source `wikipedia`, built
+current version is 17 (version 17 counts the email addresses left out of each credit group). Version 14 has the Wikipedia names of groups (`higher_taxon_name` source `wikipedia`, built
 on a branch as version 12) together with the species from the Catalogue of Life and Wikidata that
 IUCN does not have (version 13, deployed on 6 October 2026 without the Wikipedia names) (see
 [Species from the Catalogue of Life and Wikidata](#species-from-the-catalogue-of-life-and-wikidata)). Schema versions 6 and 7 were used only on a branch before it was merged
@@ -770,6 +770,9 @@ What `site build-db` stores (`AssessmentCreditsReader`, pinned by `SiteDbBuildCr
 - Email addresses are left out: an entry that is only an address is dropped, and an address inside
   an entry is removed with its brackets. About 0.75% of entries in 2026-1 have one, nearly all of
   them address-only. An "@" that is not part of an address is kept.
+  The group records how many different address-only entries it had (`"emails"` in the stored JSON,
+  schema 17), and the page says so under the group: "IUCN's list also has 2 email addresses, not
+  shown here."
 - `value[]` has no fixed order: in two of every three blocks with two or more names it differs from
   the order of the `full` string, which IUCN's pages and the citation use. The entries are put in
   the order of `full` when each entry's surname (its last word, after notes in brackets and a

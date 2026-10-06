@@ -6,7 +6,7 @@ namespace BeastieBot3.Site.Pages;
 
 /// One credit group on the taxon page: IUCN's heading, and the names, or (IsFullOnly) the one
 /// citation-form line IUCN gives instead.
-public sealed record CreditGroupView(string Label, IReadOnlyList<string> Names, bool IsFullOnly);
+public sealed record CreditGroupView(string Label, IReadOnlyList<string> Names, bool IsFullOnly, int EmailsLeftOut = 0);
 
 /// The credits section of the selected assessment. DistinctNames counts a name credited under two
 /// headings once, comparing the names without their bracketed affiliations; null when a group is
@@ -21,7 +21,7 @@ public sealed record CreditsView(IReadOnlyList<CreditGroupView> Groups, int? Dis
             var ids = group.Full is { } full ? [full] : group.Names;
             var names = ids.Select(id => credits.Names.GetValueOrDefault(id)).OfType<string>().ToList();
             if (names.Count > 0) {
-                groups.Add(new CreditGroupView(SiteText.CreditTypeLabel(group.Type), names, group.IsFullOnly));
+                groups.Add(new CreditGroupView(SiteText.CreditTypeLabel(group.Type), names, group.IsFullOnly, group.EmailsLeftOut));
             }
         }
         if (groups.Count == 0) {
