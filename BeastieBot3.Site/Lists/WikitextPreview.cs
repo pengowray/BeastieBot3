@@ -39,7 +39,23 @@ public static class WikitextPreview {
         var html = new StringBuilder();
         var depth = 0;
         var bullet = 0;
-        foreach (var line in wikitext.Replace("\r", string.Empty).Split('\n')) {
+        var refs = new PreviewRefs();
+        var inRefList = false;
+        foreach (var rawLine in wikitext.Replace("\r", string.Empty).Split('\n')) {
+            // The {{reflist|refs=...}} block of list-defined references: its citations are listed at the end.
+            if (rawLine.StartsWith("{{reflist|refs=", StringComparison.OrdinalIgnoreCase)) {
+                inRefList = true;
+                continue;
+            }
+            if (inRefList) {
+                if (rawLine.Trim() == "}}") {
+                    inRefList = false;
+                } else {
+                    refs.Define(rawLine);
+                }
+                continue;
+            }
+            var line = refs.Mark(rawLine);
             var stars = line.TakeWhile(c => c == '*').Count();
             for (; depth > stars; depth--) {
                 html.Append("</li></ul>");
@@ -72,7 +88,52 @@ public static class WikitextPreview {
         for (; depth > 0; depth--) {
             html.Append("</li></ul>");
         }
-        return html.ToString();
+        return refs.Finish(html.ToString());
+    }
+
+    // References in a list (ListReferences): each <ref> becomes a superscript number, one per ref name,
+    // and the citations are listed at the end as written, since the preview does not render templates.
+    private sealed class PreviewRefs {
+        private static readonly Regex Ref = new("<ref name=\"([^\"]*)\"(?:\\s*/>|>(.*?)</ref>)", RegexOptions.Compiled);
+        private readonly List<string> _order = new();
+        private readonly Dictionary<string, string?> _citations = new(StringComparer.Ordinal);
+
+        // A placeholder that Inline passes through unchanged.
+        private const char Open = '';
+        private const char Close = '';
+
+        public string Mark(string line) => Ref.Replace(line, m => {
+            var name = m.Groups[1].Value;
+            if (!_citations.ContainsKey(name)) {
+                _order.Add(name);
+                _citations[name] = null;
+            }
+            if (m.Groups[2].Success) {
+                _citations[name] = m.Groups[2].Value;
+            }
+            return $"{Open}{_order.IndexOf(name) + 1}{Close}";
+        });
+
+        public void Define(string line) {
+            foreach (Match m in Ref.Matches(line)) {
+                if (m.Groups[2].Success && _citations.ContainsKey(m.Groups[1].Value)) {
+                    _citations[m.Groups[1].Value] = m.Groups[2].Value;
+                }
+            }
+        }
+
+        public string Finish(string html) {
+            if (_order.Count == 0) {
+                return html;
+            }
+            var sb = new StringBuilder(Regex.Replace(html, $"{Open}(\\d+){Close}", "<sup class=\"preview-ref\">[$1]</sup>"));
+            sb.Append("<ol class=\"preview-refs\">");
+            foreach (var name in _order) {
+                sb.Append("<li>").Append(Encode(_citations[name] ?? string.Empty)).Append("</li>");
+            }
+            sb.Append("</ol>");
+            return sb.ToString();
+        }
     }
 
     /// One line's inline markup: wikilinks, italics and bold, {{IUCN status}}.
@@ -92,6 +153,14 @@ public static class WikitextPreview {
             } else if (At(text, i, "{{") && text.IndexOf("}}", i + 2, StringComparison.Ordinal) is var close and > 0) {
                 html.Append(Template(text[(i + 2)..close]));
                 i = close + 2;
+            } else if (At(text, i, "<small>") || At(text, i, "</small>")) {
+                // The authority in small text (SpeciesListLine).
+                var closing = text[i + 1] == '/';
+                html.Append(closing ? "</small>" : "<small>");
+                i += closing ? 8 : 7;
+            } else if (At(text, i, "<nowiki>") && text.IndexOf("</nowiki>", i + 8, StringComparison.Ordinal) is var nowikiEnd and > 0) {
+                html.Append(Encode(text[(i + 8)..nowikiEnd]));
+                i = nowikiEnd + 9;
             } else if (At(text, i, "'''")) {
                 html.Append(bold ? "</b>" : "<b>");
                 bold = !bold;

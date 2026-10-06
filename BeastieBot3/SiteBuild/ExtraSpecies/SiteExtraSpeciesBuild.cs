@@ -29,6 +29,9 @@ internal sealed class SiteExtraSpeciesBuild {
     /// For each group with extra entries under it: its last descendant node id, and the entries under
     /// it by source (CoL only, Wikidata only, both).
     public Dictionary<int, (int LastNodeId, int Col, int Wikidata, int Both)> NodeCounts { get; } = new();
+    /// The entries under each group by sources (1 CoL, 2 Wikidata, 3 both), placement under a family
+    /// rather than a genus, and a likely overlap with an IUCN taxon (higher_taxon_extra_count).
+    public Dictionary<(int NodeId, int Sources, bool UnderFamily, bool IucnLikely), int> SplitCounts { get; } = new();
     public ExtraSpeciesStats Stats { get; } = new();
     public List<string> Warnings { get; } = new();
 
@@ -535,8 +538,14 @@ internal sealed class SiteExtraSpeciesBuild {
 
     private void CountNodes(SiteTaxonTree tree) {
         var counts = new Dictionary<int, int[]>();
+        var iucnLikely = Overlaps.Where(o => o.Likely && o.TaxonId is not null).Select(o => o.Entry).ToHashSet();
         foreach (var entry in Entries) {
             var slot = entry.ColId is not null && entry.Qid is not null ? 2 : entry.ColId is not null ? 0 : 1;
+            var split = (Sources: slot + 1, UnderFamily: entry.Node.Rank != "genus", IucnLikely: iucnLikely.Contains(entry));
+            for (var at = entry.Node; at is not null; at = at.Parent) {
+                var key = (at.NodeId, split.Sources, split.UnderFamily, split.IucnLikely);
+                SplitCounts[key] = SplitCounts.GetValueOrDefault(key) + 1;
+            }
             switch (slot) {
                 case 0: Stats.ColEntries++; break;
                 case 1: Stats.WikidataEntries++; break;

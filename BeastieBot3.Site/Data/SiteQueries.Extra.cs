@@ -6,13 +6,31 @@ using Microsoft.Data.Sqlite;
 
 namespace BeastieBot3.Site.Data;
 
+/// One row of higher_taxon_extra_count: extra species under a group with these sources (1 CoL only,
+/// 2 Wikidata only, 3 both), placed under a family or a genus, with or without a likely IUCN duplicate.
+public sealed record ExtraSpeciesSplit(int Sources, bool UnderFamily, bool IucnLikely, int Count);
+
 /// The extra species under a group, by source, and the group's last descendant node id.
 public sealed record ExtraSpeciesCounts(int LastNodeId, int Col, int Wikidata, int Both) {
-    /// How many extra species a list with these sources has at most.
+    /// The same species split by placement and likely IUCN duplicates; empty when not read.
+    public IReadOnlyList<ExtraSpeciesSplit> Split { get; init; } = [];
+
+    /// How many extra species a list with these sources has at most. Species placed under a family
+    /// are left out with genera=0. When the list includes IUCN and prefers it, the species that are
+    /// likely an IUCN taxon are left out, as ListSourceMerge leaves them out of the list; likely
+    /// duplicates between CoL and Wikidata entries are still counted.
     public int For(ListSourceOptions sources) {
         var col = sources.Enabled.Contains(ListSource.Col);
         var wikidata = sources.Enabled.Contains(ListSource.Wikidata);
-        return (col ? Col : 0) + (wikidata ? Wikidata : 0) + (col || wikidata ? Both : 0);
+        if (Split.Count == 0) {
+            return (col ? Col : 0) + (wikidata ? Wikidata : 0) + (col || wikidata ? Both : 0);
+        }
+        var iucnFirst = sources.Enabled.Contains(ListSource.Iucn) && sources.Order.Count > 0 && sources.Order[0] == ListSource.Iucn;
+        return Split
+            .Where(s => (col && (s.Sources & 1) != 0) || (wikidata && (s.Sources & 2) != 0))
+            .Where(s => sources.OtherGenera || !s.UnderFamily)
+            .Where(s => !(iucnFirst && s.IucnLikely))
+            .Sum(s => s.Count);
     }
 }
 
@@ -22,13 +40,26 @@ public sealed partial class SiteQueries {
         using var command = connection.CreateCommand();
         command.CommandText = "SELECT last_node_id, col_count, wikidata_count, both_count FROM higher_taxon_extra WHERE node_id = @id";
         command.Parameters.AddWithValue("@id", nodeId);
-        using var reader = command.ExecuteReader();
-        return reader.Read() ? new ExtraSpeciesCounts(reader.GetInt32(0), reader.GetInt32(1), reader.GetInt32(2), reader.GetInt32(3)) : null;
+        ExtraSpeciesCounts counts;
+        using (var reader = command.ExecuteReader()) {
+            if (!reader.Read()) {
+                return null;
+            }
+            counts = new ExtraSpeciesCounts(reader.GetInt32(0), reader.GetInt32(1), reader.GetInt32(2), reader.GetInt32(3));
+        }
+        command.CommandText = "SELECT sources, under_family, iucn_likely, species_count FROM higher_taxon_extra_count WHERE node_id = @id";
+        var split = new List<ExtraSpeciesSplit>();
+        using (var reader = command.ExecuteReader()) {
+            while (reader.Read()) {
+                split.Add(new ExtraSpeciesSplit(reader.GetInt32(0), reader.GetInt64(1) != 0, reader.GetInt64(2) != 0, reader.GetInt32(3)));
+            }
+        }
+        return counts with { Split = split };
     }
 
     private const string ExtraColumns = """
         e.extra_id, e.sources, e.scientific_name, e.wikidata_name, h.kingdom, e.col_id, e.wikidata_qid,
-        e.common_name_en, e.enwiki_title, e.node_id, e.sort_pos
+        e.common_name_en, e.enwiki_title, e.node_id, e.sort_pos, e.authority
         """;
 
     private const string ExtraFrom = "extra_species e JOIN higher_taxon h ON h.node_id = e.node_id";
@@ -66,7 +97,7 @@ public sealed partial class SiteQueries {
                 reader.GetInt32(0), (sources & 1) != 0, (sources & 2) != 0, name, Text(reader, 3),
                 parts[0], parts.Length > 1 ? parts[1] : string.Empty, reader.GetString(4),
                 Text(reader, 5), reader.IsDBNull(6) ? null : "Q" + reader.GetInt64(6).ToString(System.Globalization.CultureInfo.InvariantCulture),
-                Text(reader, 7), Text(reader, 8), reader.GetInt32(9), reader.GetInt32(10)));
+                Text(reader, 7), Text(reader, 8), reader.GetInt32(9), reader.GetInt32(10), Text(reader, 11)));
         }
         return rows;
     }

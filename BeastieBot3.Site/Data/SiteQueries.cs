@@ -692,7 +692,7 @@ public sealed partial class SiteQueries {
             SELECT t.taxon_id, t.scientific_name, t.kind, t.kingdom, t.genus, t.species_epithet, t.infra_rank, t.infra_name,
                    t.subpopulation_name, COALESCE(t.common_name_en, p.common_name_en), t.list_article_title, t.list_parent_article_title,
                    t.parent_taxon_id, t.node_id, t.tree_pos, a.assessment_id, a.category, a.possibly_extinct, a.possibly_extinct_in_the_wild,
-                   a.year_published
+                   a.year_published, t.authority
             FROM taxon t LEFT JOIN assessment a ON a.assessment_id = t.latest_global_assessment_id
             LEFT JOIN taxon p ON p.taxon_id = t.parent_taxon_id AND t.kind = 'subpopulation'
             WHERE t.tree_pos BETWEEN @first AND @last AND t.kind IN ({string.Join(", ", kindNames)})
@@ -708,7 +708,7 @@ public sealed partial class SiteQueries {
                 Text(reader, 6), Text(reader, 7), Text(reader, 8), Text(reader, 9), Text(reader, 10), Text(reader, 11),
                 Long(reader, 12), reader.GetInt32(13), reader.GetInt32(14), Long(reader, 15), Text(reader, 16),
                 !reader.IsDBNull(17) && reader.GetInt64(17) != 0, !reader.IsDBNull(18) && reader.GetInt64(18) != 0,
-                reader.IsDBNull(19) ? null : reader.GetInt32(19)));
+                reader.IsDBNull(19) ? null : reader.GetInt32(19), Text(reader, 20)));
         }
         return rows;
     }

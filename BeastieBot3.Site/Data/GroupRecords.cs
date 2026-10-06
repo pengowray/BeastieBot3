@@ -67,4 +67,6 @@ public sealed record ListTaxonRow(
     string? Category,
     bool PossiblyExtinct,
     bool PossiblyExtinctInTheWild,
-    int? YearPublished);
+    int? YearPublished,
+    // The authority of ScientificName; null when unknown or when the line shows another source's name.
+    string? Authority = null);

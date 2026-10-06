@@ -598,12 +598,15 @@ public static class FixtureDb {
         w.Place(PolarBear, 7, 1, "Polar bear");
         // Species from the Catalogue of Life and Wikidata in Ursus: one in both, one only in CoL, and one
         // only on Wikidata that is likely the polar bear (another gender ending).
-        w.ExtraSpecies(1, 3, "Ursus americanus", "COLAM", 1001, "American black bear", "American black bear", 7, 0);
-        w.ExtraSpecies(2, 1, "Ursus arctos", "COLAR", null, null, null, 7, 0);
+        w.ExtraSpecies(1, 3, "Ursus americanus", "COLAM", 1001, "American black bear", "American black bear", 7, 0, authority: "Pallas, 1780");
+        w.ExtraSpecies(2, 1, "Ursus arctos", "COLAR", null, null, null, 7, 0, authority: "Linnaeus, 1758");
         w.ExtraSpecies(3, 2, "Ursus maritima", null, 1003, null, null, 7, 1);
         w.ExtraOverlap(3, PolarBear, null, "gender-ending", likely: true);
         foreach (var id in Enumerable.Range(1, 7)) {
             w.ExtraCounts(id, 7, col: 1, wikidata: 1, both: 1);
+            w.ExtraSplit(id, sources: 1, underFamily: false, iucnLikely: false, 1);
+            w.ExtraSplit(id, sources: 2, underFamily: false, iucnLikely: true, 1);
+            w.ExtraSplit(id, sources: 3, underFamily: false, iucnLikely: false, 1);
         }
         w.Group(8, null, 0, "kingdom", "Plantae", "iucn", "PLANTAE", 2, 1);
         w.Group(9, 4, 4, "genus", "Abronia", "iucn", "ANIMALIA", 2, 1, linkQuery: "kingdom=animalia");
@@ -780,11 +783,18 @@ public static class FixtureDb {
         public void Place(long taxonId, int nodeId, int treePos, string? listArticle) =>
             Run("UPDATE taxon SET node_id = @a, tree_pos = @b, list_article_title = @c WHERE taxon_id = @d", nodeId, treePos, listArticle, taxonId);
 
-        public void ExtraSpecies(int id, int sources, string name, string? colId, long? qid, string? commonEn, string? enwiki, int nodeId, int sortPos) =>
+        public void ExtraSpecies(int id, int sources, string name, string? colId, long? qid, string? commonEn, string? enwiki, int nodeId, int sortPos,
+            string? authority = null) =>
             Run("""
-                INSERT INTO extra_species(extra_id, sources, scientific_name, col_id, wikidata_qid, common_name_en, enwiki_title, node_id, sort_pos)
-                VALUES (@a, @b, @c, @d, @e, @f, @g, @h, @i)
-                """, id, sources, name, colId, qid, commonEn, enwiki, nodeId, sortPos);
+                INSERT INTO extra_species(extra_id, sources, scientific_name, col_id, wikidata_qid, common_name_en, enwiki_title, node_id, sort_pos, authority)
+                VALUES (@a, @b, @c, @d, @e, @f, @g, @h, @i, @j)
+                """, id, sources, name, colId, qid, commonEn, enwiki, nodeId, sortPos, authority);
+
+        public void ExtraSplit(int nodeId, int sources, bool underFamily, bool iucnLikely, int count) =>
+            Run("""
+                INSERT INTO higher_taxon_extra_count(node_id, sources, under_family, iucn_likely, species_count)
+                VALUES (@a, @b, @c, @d, @e)
+                """, nodeId, sources, underFamily ? 1 : 0, iucnLikely ? 1 : 0, count);
 
         public void ExtraOverlap(int extraId, long? taxonId, int? otherExtraId, string reason, bool likely) =>
             Run("INSERT INTO extra_overlap(extra_id, taxon_id, other_extra_id, reason, likely) VALUES (@a, @b, @c, @d, @e)",

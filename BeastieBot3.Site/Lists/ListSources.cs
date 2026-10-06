@@ -116,7 +116,9 @@ public sealed record ExtraSpeciesRow(
     string? CommonNameEn,
     string? EnwikiTitle,
     int NodeId,
-    int SortPos) {
+    int SortPos,
+    // CoL's authorship of ScientificName; null for a species only on Wikidata.
+    string? Authority = null) {
     /// The id the list uses for its row: negative, so it never equals an IUCN taxon id.
     public long RowId => -ExtraId;
 }

@@ -21,7 +21,8 @@ using Microsoft.Extensions.Primitives;
 namespace BeastieBot3.Site.Lists;
 
 public static class GroupListQuery {
-    public static readonly string[] Keys = ["style", "h", "cat", "status", "infra", "subpop", "sort", "tpl", "names", "level", "src", "prefer", "genera"];
+    public static readonly string[] Keys = ["style", "h", "cat", "status", "infra", "subpop", "sort", "tpl", "names", "level", "src", "prefer", "genera",
+        .. ListLineOptions.Keys];
 
     /// Ranks in the order they nest, broad to narrow, for ordering the heading choices. A rank not
     /// listed goes after the listed ranks above it, by depth.
@@ -131,6 +132,7 @@ public static class GroupListQuery {
         if (First(query, "level") is { } level && int.TryParse(level, NumberStyles.None, CultureInfo.InvariantCulture, out var n)) {
             options = options with { TopLevel = Math.Clamp(n, 2, 4) };
         }
+        options = options with { Line = ListLineOptions.Read(query) };
         return ReadSources(query, options);
     }
 
@@ -172,6 +174,7 @@ public static class GroupListQuery {
             parts.Add("level=" + options.TopLevel.ToString(CultureInfo.InvariantCulture));
         }
         parts.AddRange(options.Sources.Write());
+        parts.AddRange(options.Line.Write());
         return parts.Count == 0 ? string.Empty : "?" + string.Join("&", parts);
     }
 

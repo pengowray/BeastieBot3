@@ -7,15 +7,15 @@ internal static class ExtraSpeciesWriter {
     public static void Write(SiteDbWriter writer, SiteExtraSpeciesBuild build) {
         writer.InsertRows("""
             INSERT INTO extra_species (extra_id, sources, scientific_name, wikidata_name, col_id, wikidata_qid, common_name_en,
-                enwiki_title, node_id, sort_pos)
+                enwiki_title, authority, node_id, sort_pos)
             VALUES (@extra_id, @sources, @scientific_name, @wikidata_name, @col_id, @wikidata_qid, @common_name_en,
-                @enwiki_title, @node_id, @sort_pos)
+                @enwiki_title, @authority, @node_id, @sort_pos)
             """,
             ["@extra_id", "@sources", "@scientific_name", "@wikidata_name", "@col_id", "@wikidata_qid", "@common_name_en",
-                "@enwiki_title", "@node_id", "@sort_pos"],
+                "@enwiki_title", "@authority", "@node_id", "@sort_pos"],
             build.Entries.Select(e => new object?[] {
                 e.ExtraId, (e.ColId is not null ? 1 : 0) | (e.Qid is not null ? 2 : 0), e.Name, e.WikidataName, e.ColId, e.Qid,
-                e.CommonNameEn, e.EnwikiTitle, e.Node.NodeId, e.SortPos,
+                e.CommonNameEn, e.EnwikiTitle, e.ColId is not null ? e.Authority : null, e.Node.NodeId, e.SortPos,
             }));
         writer.InsertRows("""
             INSERT INTO extra_overlap (extra_id, taxon_id, other_extra_id, reason, likely)
@@ -32,6 +32,14 @@ internal static class ExtraSpeciesWriter {
             ["@node_id", "@last_node_id", "@col_count", "@wikidata_count", "@both_count"],
             build.NodeCounts.OrderBy(p => p.Key).Select(p => new object?[] {
                 p.Key, p.Value.LastNodeId, p.Value.Col, p.Value.Wikidata, p.Value.Both,
+            }));
+        writer.InsertRows("""
+            INSERT INTO higher_taxon_extra_count (node_id, sources, under_family, iucn_likely, species_count)
+            VALUES (@node_id, @sources, @under_family, @iucn_likely, @species_count)
+            """,
+            ["@node_id", "@sources", "@under_family", "@iucn_likely", "@species_count"],
+            build.SplitCounts.OrderBy(p => p.Key).Select(p => new object?[] {
+                p.Key.NodeId, p.Key.Sources, p.Key.UnderFamily ? 1 : 0, p.Key.IucnLikely ? 1 : 0, p.Value,
             }));
         writer.InsertRows("""
             INSERT OR IGNORE INTO taxon_source_name (taxon_id, source, scientific_name) VALUES (@taxon_id, @source, @scientific_name)
