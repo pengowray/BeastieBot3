@@ -7,7 +7,7 @@ public sealed class SpeciesTablePageTests(SiteFactory factory) : IClassFixture<S
     [Fact]
     public async Task TableTypeWritesASpeciesTableWithAListDefinedReference() {
         var html = await _client.GetStringAsync("/taxa/family/ursidae?type=table");
-        var wikitext = Html.Textarea(html, "list-wikitext");
+        var wikitext = Html.Textarea(html, "list-wikitext")!;
 
         Assert.Equal("""
             {{IUCN statuses|ex=0|ew=0|cr=0|en=0|vu=1|nt=0|lc=0|dd=0|ne=0}}
@@ -36,7 +36,7 @@ public sealed class SpeciesTablePageTests(SiteFactory factory) : IClassFixture<S
     [Fact]
     public async Task CiteQWithNoWikidataItemFallsBackToCiteIucnInTheRow() {
         var html = await _client.GetStringAsync("/taxa/family/ursidae?type=table&refs=inline&refnames=id&cite=q&cols=noecology&summary=0");
-        var wikitext = Html.Textarea(html, "list-wikitext");
+        var wikitext = Html.Textarea(html, "list-wikitext")!;
 
         Assert.StartsWith("{{Species table |no-note=y |no-ecology=yes |genus=[[Ursus]]", wikitext);
         Assert.Contains("{{population change unknown}}<ref name=\"iucn-22823\">{{cite iucn |author=Wiig, Ø.", wikitext);
