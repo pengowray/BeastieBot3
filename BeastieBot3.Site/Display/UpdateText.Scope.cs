@@ -42,7 +42,7 @@ public static partial class UpdateText {
     // Putting the missing species into the wikitext (ListPlacement).
     public const string AddMissingOption = "Add the missing species to the updated wikitext";
     public const string AddMissingButton = "Add the missing species";
-    public const string AddMissingHelp = "Each species goes on a new list line next to a species of the same genus, in the same style as that line. Not added: subspecies, varieties, species of a genus that has no species on a list line, and species missing from a list written as a table.";
+    public const string AddMissingHelp = "Each species goes next to a species of the same genus, in the same form: a list line, a {{Species table/row}} or a table row. A genus with no {{Species table}} gets a new one next to the other genera of its family. A missing subspecies or variety goes on a line under its species. Not added: taxa of a genus that the wikitext has no taxon of, and taxa missing from tables with rowspan or colspan.";
     public const string AddMissingPartial = "Missing species were not added, because this may be a regional list or a list of part of the group.";
 
     public static string AddMissingResult(int added, int missing) => (added, missing) switch {

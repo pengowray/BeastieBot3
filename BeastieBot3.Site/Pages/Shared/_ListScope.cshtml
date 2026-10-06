@@ -46,25 +46,6 @@
             }
         }
     }
-    @if (r.Categories is null && r.Missing is not null) {
-        <p class="update-scope-add">
-            @if (Model.ExtraSpecies) {
-                <label><input type="checkbox" name="@UpdateModel.ExtraSpeciesField" value="1" form="update-form" checked aria-describedby="scope-extra-option-help"> @UpdateText.ExtraSpeciesOption</label>
-            } else {
-                <button type="submit" form="update-form" name="@UpdateModel.ExtraSpeciesField" value="1" aria-describedby="scope-extra-option-help">@UpdateText.ExtraSpeciesButton</button>
-            }
-        </p>
-        <p class="help" id="scope-extra-option-help">@UpdateText.ExtraSpeciesHelp</p>
-    }
-    @if (r.MissingExtra is { } extra) {
-        @if (r.ExtraTotal == 0) {
-            <p>@UpdateText.ExtraNoneExist(r.Scope)</p>
-        } else if (extra.Count == 0) {
-            <p>@UpdateText.ExtraNone(r.Scope)</p>
-        } else {
-            <h4>@UpdateText.ExtraHeading(extra.Count)</h4>
-        }
-    }
     @if (!r.Partial && (r.Missing?.Count > 0 || r.MissingExtra?.Count > 0)) {
         @* Off: a button that sends the text again with the option on. On: a ticked checkbox, so
            the option stays on when the form is sent again, and can be turned off. *@
@@ -111,6 +92,25 @@
             <textarea id="scope-missing" class="update-readonly" readonly rows="8" spellcheck="false" autocapitalize="off" autocomplete="off" aria-describedby="scope-missing-help">@("\n" + ListScope.MissingLines(copy, r.Style))</textarea>
             <p class="help" id="scope-missing-help">@UpdateText.MissingLinesHelp</p>
         </div>
+    }
+    @if (r.Categories is null && r.Missing is not null) {
+        <p class="update-scope-add">
+            @if (Model.ExtraSpecies) {
+                <label><input type="checkbox" name="@UpdateModel.ExtraSpeciesField" value="1" form="update-form" checked aria-describedby="scope-extra-option-help"> @UpdateText.ExtraSpeciesOption</label>
+            } else {
+                <button type="submit" form="update-form" name="@UpdateModel.ExtraSpeciesField" value="1" aria-describedby="scope-extra-option-help">@UpdateText.ExtraSpeciesButton</button>
+            }
+        </p>
+        <p class="help" id="scope-extra-option-help">@UpdateText.ExtraSpeciesHelp</p>
+    }
+    @if (r.MissingExtra is { } extra) {
+        @if (r.ExtraTotal == 0) {
+            <p>@UpdateText.ExtraNoneExist(r.Scope)</p>
+        } else if (extra.Count == 0) {
+            <p>@UpdateText.ExtraNone(r.Scope)</p>
+        } else {
+            <h4>@UpdateText.ExtraHeading(extra.Count)</h4>
+        }
     }
     @if (extraToCopy is { Count: > 0 } extraCopy) {
         <div class="wikitext-box">
