@@ -1608,6 +1608,12 @@ colspan and rowspan; `StatusUpdater` decides the edits, and `StatusTaxonResolver
   table). A status added after a name also goes after a plain-text authority ("Kosterm.",
   "(C.K.Allen) Kosterm.", "Brown & Wright, 1978"). Status cells with references after the code
   ("VU<ref name=a/>") are status cells: the code is read and replaced without the references.
+- Round-trip check: `BeastieBot3.Site.Tests/browser/update-roundtrip.py <folder>` sends each page in
+  a folder of wikitext to a running site twice, with two sets of options, in LF and CRLF, and
+  reports any page whose second run changes the text (a second run must find every added status up
+  to date and every added taxon listed), whose CRLF output has a bare LF, or that takes over 1.5 s.
+  Run it against `site-preview-nolimit` (no update rate limit) after changing `Update/`. In October
+  2026 it passed on 12 Wikipedia lists and 51 cached articles.
 - `citeq` (off by default): every citation the page replaces, in `status_ref` or elsewhere, is
   `{{cite Q|<item>}}` when the latest assessment has a Wikidata item, else `{{cite iucn}}`
   (`StatusUpdater.ReplacementCitation`, through `IucnReference`). An existing `{{cite Q}}` is not
