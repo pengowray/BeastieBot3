@@ -15,8 +15,9 @@ using BeastieBot3.Site.Data;
 //       neither is left out and the notice names both.
 //     possible: both stay, with a notice.
 //   An entry outside the group (another genus, say) counts when one of its sources is picked: it
-//   can make an entry in the list be left out, but is never listed itself. An overlap with an entry
-//   none of whose sources is picked is ignored.
+//   can make an entry in the list be left out, but is never listed itself, and a likely duplicate
+//   that is outside the group and less preferred gets no notice here. An overlap with an entry none
+//   of whose sources is picked is ignored.
 // - Line counts before reading the rows (GroupModel) are therefore an upper bound.
 
 namespace BeastieBot3.Site.Lists;
@@ -111,10 +112,12 @@ public static class ListSourceMerge {
             var rankB = options.Rank(b.Source);
             if (overlap.Likely && rankA != rankB) {
                 var (loser, winner) = rankA > rankB ? (a, b) : (b, a);
+                // A less preferred entry outside the group is left out of its own group's list, and
+                // has nothing to do with this one.
                 if (loser.InGroup) {
                     leftOut.Add(loser.RowId);
+                    notices.Add(new ListNotice(loser, winner, overlap.Reason, LeftOut: true));
                 }
-                notices.Add(new ListNotice(loser, winner, overlap.Reason, LeftOut: loser.InGroup));
                 continue;
             }
             // The entry in the list first; for two in the list, the less preferred first.

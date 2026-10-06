@@ -19,13 +19,19 @@ public static class PublicSiteProbes {
     public const string Gbif = "site-gbif";
     public const string Dois = "site-dois";
     public const string Build = "site-build";
+    public const string WikidataSweep = "site-wikidata-sweep";
 
-    public static bool IsProbe(string probe) => probe is Gbif or Dois or Build;
+    /// The age after which the workflow asks for a new pass of `wikidata sweep-taxa`; the step's
+    /// command passes the same number as --refresh-days.
+    public const int SweepRefreshDays = 30;
+
+    public static bool IsProbe(string probe) => probe is Gbif or Dois or Build or WikidataSweep;
 
     public static FlowProbeResult? Evaluate(string probe, PublicSiteState s) => probe switch {
         Gbif => GbifStep(s),
         Dois => DoiStep(s),
         Build => BuildStep(s),
+        WikidataSweep => SweepStep(s),
         _ => null,
     };
 
@@ -111,6 +117,25 @@ public static class PublicSiteProbes {
     }
 
     // ---- the site database ----
+
+    // ---- `wikidata sweep-taxa` ----
+
+    internal static FlowProbeResult SweepStep(PublicSiteState s) {
+        if (!s.WikidataCacheExists) {
+            return new FlowProbeResult("todo", "No Wikidata cache yet.");
+        }
+        if (s.SweepPassStartedUtc is { } started) {
+            return new FlowProbeResult("backlog",
+                $"A pass started {started:yyyy-MM-dd} and has reached Q{s.SweepCursor}. Run the step again to finish it.");
+        }
+        if (s.SweepCompletedUtc is not { } completed) {
+            return new FlowProbeResult("todo", "Never run, so the site lists no species from Wikidata that IUCN does not have.");
+        }
+        var days = (int)Math.Floor((s.ReadAtUtc - completed).TotalDays);
+        return days > SweepRefreshDays
+            ? new FlowProbeResult("todo", $"The last pass finished {completed:yyyy-MM-dd}, {days} days ago.")
+            : new FlowProbeResult("ok", $"The last pass finished {completed:yyyy-MM-dd}.");
+    }
 
     internal static FlowProbeResult BuildStep(PublicSiteState s) {
         if (s.SitePath is null) {

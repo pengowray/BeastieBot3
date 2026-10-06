@@ -50,19 +50,12 @@ internal sealed class SiteExtraSpeciesBuild {
         }
         build.Index(taxonList, tree);
 
+        // Wikidata is read first, for the fossil species it marks; the CoL rows go in first, so a
+        // Wikidata item can merge into its CoL species.
         var hasCol = colDatabase is not null && File.Exists(colDatabase);
-        if (hasCol) {
-            progress("Catalogue of Life: accepted species of the IUCN genera" + (placement == ExtraPlacement.Family ? " and families" : string.Empty));
-            var genera = build._genusNodes.Keys.Select(k => k.Genus).Distinct(StringComparer.Ordinal).ToList();
-            var families = placement == ExtraPlacement.Family
-                ? build._familyNodes.Keys.Select(k => SiteTaxonTree.TitleCase(k.Family)).Distinct(StringComparer.Ordinal).ToList()
-                : new List<string>();
-            build.AddCol(ExtraSpeciesColReader.ReadSpecies(colDatabase!, genera, families, build.Stats, ct), placement);
-        } else {
-            build.Warnings.Add("The Catalogue of Life database was not found, so no species from the Catalogue of Life were added.");
-        }
-
         var wikidataOnly = new List<(ExtraEntry Entry, IReadOnlyList<string> ColIds)>();
+        var fossils = (Names: new HashSet<string>(StringComparer.Ordinal), ColIds: new HashSet<string>(StringComparer.Ordinal));
+        List<WikidataSpeciesRow>? wikidataRows = null;
         if (wikidataCache is not null && File.Exists(wikidataCache)) {
             if (ExtraSpeciesWikidataReader.HasSweep(wikidataCache, out var finished, out var warning)) {
                 build.Stats.WikidataSweepFinished = finished;
@@ -71,12 +64,25 @@ internal sealed class SiteExtraSpeciesBuild {
                 var familyFilter = placement == ExtraPlacement.Family
                     ? build._familyNodes.Keys.Select(k => k.Family).ToHashSet(StringComparer.Ordinal)
                     : new HashSet<string>();
-                var rows = ExtraSpeciesWikidataReader.Read(wikidataCache, genusFilter, familyFilter, build.Stats, ct);
-                build.AddWikidata(rows, taxa, placement, wikidataOnly);
+                wikidataRows = ExtraSpeciesWikidataReader.Read(wikidataCache, genusFilter, familyFilter, build.Stats, fossils, ct);
             }
             if (warning is not null) {
                 build.Warnings.Add(warning);
             }
+        }
+
+        if (hasCol) {
+            progress("Catalogue of Life: accepted species of the IUCN genera" + (placement == ExtraPlacement.Family ? " and families" : string.Empty));
+            var genera = build._genusNodes.Keys.Select(k => k.Genus).Distinct(StringComparer.Ordinal).ToList();
+            var families = placement == ExtraPlacement.Family
+                ? build._familyNodes.Keys.Select(k => SiteTaxonTree.TitleCase(k.Family)).Distinct(StringComparer.Ordinal).ToList()
+                : new List<string>();
+            build.AddCol(ExtraSpeciesColReader.ReadSpecies(colDatabase!, genera, families, build.Stats, ct), placement, fossils);
+        } else {
+            build.Warnings.Add("The Catalogue of Life database was not found, so no species from the Catalogue of Life were added.");
+        }
+        if (wikidataRows is not null) {
+            build.AddWikidata(wikidataRows, taxa, placement, wikidataOnly);
         }
 
         if (hasCol) {
@@ -157,9 +163,13 @@ internal sealed class SiteExtraSpeciesBuild {
 
     // ------------------------------------------------------------ Catalogue of Life
 
-    private void AddCol(List<ColSpeciesRow> rows, ExtraPlacement placement) {
+    private void AddCol(List<ColSpeciesRow> rows, ExtraPlacement placement, (HashSet<string> Names, HashSet<string> ColIds) fossils) {
         foreach (var row in rows.OrderBy(r => r.Genus, StringComparer.Ordinal).ThenBy(r => r.Epithet, StringComparer.Ordinal)) {
             var name = row.Genus + " " + row.Epithet;
+            if (fossils.ColIds.Contains(row.Id) || fossils.Names.Contains(name)) {
+                Stats.ColFossilOnWikidata++;
+                continue;
+            }
             if (_iucnByColId.ContainsKey(row.Id) || _iucnSpecies.ContainsKey((row.Kingdom, name))) {
                 Stats.ColSameAsIucn++;
                 continue;

@@ -993,6 +993,16 @@ public static class FlowCatalogue {
                     Note = "Run it after updating the caches. Queueing reads every downloaded item (about a minute); downloading takes about a second per item, so the first run (about 8,300 items in October 2026) takes over two hours.",
                 },
                 new FlowStep {
+                    Id = "site-wikidata-sweep",
+                    Title = "Download the Wikidata taxon list",
+                    Description = "The group pages' lists can include species that are on Wikidata but not on the IUCN Red List. wikidata sweep-taxa downloads the taxon name, rank, parent taxon, Catalogue of Life ID, IUCN taxon ID, English Wikipedia article and English label of every Wikidata taxon item (about 4 million) from the QLever Wikidata endpoint into the Wikidata cache.",
+                    Commands = new[] { "wikidata sweep-taxa --refresh-days 30" },
+                    OutputSourceIds = new[] { "wikidata-cache" },
+                    Probe = PublicSiteProbes.WikidataSweep,
+                    Group = "1 · Inputs",
+                    Note = "A full pass takes about 10 minutes. The button does nothing when the last pass finished in the last 30 days; --restart under Options starts a new pass anyway. A stopped pass carries on from the last item stored.",
+                },
+                new FlowStep {
                     Id = "site-common-names",
                     Title = "Aggregate common names",
                     Description = "The site's English names come from the Common names store.",

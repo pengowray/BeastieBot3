@@ -63,6 +63,17 @@ public sealed record PublicSiteState {
     public string? SiteIucnRelease { get; init; }
     public long? SiteTaxonCount { get; init; }
 
+    // --- `wikidata sweep-taxa`'s progress, from wikidata_sync_state in the Wikidata cache ---
+    public bool WikidataCacheExists { get; init; }
+    /// When the last full pass finished; null when none has.
+    public DateTime? SweepCompletedUtc { get; init; }
+    /// When the pass under way started; null when none is under way.
+    public DateTime? SweepPassStartedUtc { get; init; }
+    /// The last item the pass under way stored (Q-number).
+    public long SweepCursor { get; init; }
+    /// When the state was read, for the age of the last pass.
+    public DateTime ReadAtUtc { get; init; } = DateTime.UtcNow;
+
     /// When each input of `site build-db` last changed, in the order the build reads them.
     /// Inputs that do not exist are left out, as the build leaves them out.
     public IReadOnlyList<SiteInputChange> Inputs { get; init; } = Array.Empty<SiteInputChange>();
@@ -165,7 +176,38 @@ public static class PublicSiteStateReader {
             SiteExists = Exists(p.SiteDatabase),
             Inputs = inputs,
         };
+        state = ReadSweep(state, p.WikidataCache);
         return state.SiteExists ? ReadSite(state, p.SiteDatabase!) : state;
+    }
+
+    // ---- `wikidata sweep-taxa` ----
+
+    // Three keys of the sync table, read without WikidataCacheStore.Open, which would run its schema
+    // work (and a column migration) on every poll.
+    private static PublicSiteState ReadSweep(PublicSiteState state, string? path) {
+        if (!Exists(path)) return state;
+        state = state with { WikidataCacheExists = true };
+        try {
+            using var conn = OpenReadOnly(path!);
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = "SELECT key, value FROM wikidata_sync_state WHERE key IN (@completed, @started, @cursor)";
+            cmd.Parameters.AddWithValue("@completed", Wikidata.WikidataCacheStore.TaxonSweepCompletedKey);
+            cmd.Parameters.AddWithValue("@started", Wikidata.WikidataCacheStore.TaxonSweepStartedKey);
+            cmd.Parameters.AddWithValue("@cursor", Wikidata.WikidataCacheStore.TaxonSweepCursorKey);
+            cmd.CommandTimeout = 5;
+            using var reader = cmd.ExecuteReader();
+            while (reader.Read()) {
+                var value = reader.IsDBNull(1) ? null : reader.GetString(1);
+                state = reader.GetString(0) switch {
+                    Wikidata.WikidataCacheStore.TaxonSweepCompletedKey => state with { SweepCompletedUtc = StoredUtc.Parse(value) },
+                    Wikidata.WikidataCacheStore.TaxonSweepStartedKey => state with { SweepPassStartedUtc = StoredUtc.Parse(value) },
+                    _ => state with { SweepCursor = long.TryParse(value, out var cursor) ? cursor : 0 },
+                };
+            }
+        } catch (Exception) {
+            // No sync table yet: the sweep has never run.
+        }
+        return state;
     }
 
     // ---- the IUCN Red List database ----

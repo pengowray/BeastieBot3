@@ -18,6 +18,11 @@ internal static class ExtraSpeciesWikidataReader {
     /// taxon, synonym, unavailable combination, original combination, extinct taxon.
     internal static readonly IReadOnlySet<long> LeftOutInstances = new HashSet<long> { 23038290, 1040689, 17487588, 14594740, 98961713 };
 
+    /// Of those, the ones that say the species is not living: fossil taxon, extinct taxon. A CoL
+    /// species with the name or CoL ID of such an item is left out too, since CoL marks many fossil
+    /// species as neither extinct nor extant.
+    internal static readonly IReadOnlySet<long> FossilInstances = new HashSet<long> { 23038290, 98961713 };
+
     /// Whether the cache has the sweep's table, and when the sweep last finished. Null when there is
     /// no table; a warning names what is missing.
     public static bool HasSweep(string cachePath, out string? finished, out string? warning) {
@@ -48,8 +53,10 @@ internal static class ExtraSpeciesWikidataReader {
 
     /// The species items. genusFilter: only items whose genus is one of these names, or whose family
     /// (found through P171) is one of familyFilter (upper case), are returned.
+    /// fossils: the names ("Genus epithet") and CoL IDs of items in genusFilter that are fossil or
+    /// extinct taxa (FossilInstances).
     public static List<WikidataSpeciesRow> Read(string cachePath, IReadOnlySet<string> genusFilter, IReadOnlySet<string> familyFilter,
-        ExtraSpeciesStats stats, CancellationToken ct) {
+        ExtraSpeciesStats stats, (HashSet<string> Names, HashSet<string> ColIds) fossils, CancellationToken ct) {
         using var connection = SiteLinkReaders.OpenReadOnly(cachePath);
         var hasInstance = HasColumn(connection, "instance_of");
 
@@ -116,8 +123,13 @@ internal static class ExtraSpeciesWikidataReader {
                     ct.ThrowIfCancellationRequested();
                 }
                 stats.WikidataRead++;
-                if (!reader.IsDBNull(7) && Numbers(reader.GetString(7)).Any(LeftOutInstances.Contains)) {
+                if (!reader.IsDBNull(7) && Numbers(reader.GetString(7)) is var instances && instances.Any(LeftOutInstances.Contains)) {
                     stats.WikidataLeftOutByInstance++;
+                    if (instances.Any(FossilInstances.Contains) && ExtraSpeciesNameRules.SplitBinomial(reader.GetString(1)) is { } fossil
+                        && genusFilter.Contains(fossil.Genus)) {
+                        fossils.Names.Add(fossil.Genus + " " + fossil.Epithet);
+                        fossils.ColIds.UnionWith(Words(reader.IsDBNull(3) ? null : reader.GetString(3)));
+                    }
                     continue;
                 }
                 if (ExtraSpeciesNameRules.SplitBinomial(reader.GetString(1)) is not { } name) {

@@ -64,6 +64,7 @@ internal sealed class ExtraSpeciesStats {
     public int ColRead;
     public int ColSameAsIucn;
     public int ColExtinct;
+    public int ColFossilOnWikidata;
     public int WikidataRead;
     public int WikidataLeftOutByInstance;
     public int WikidataNotBinomial;

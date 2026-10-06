@@ -320,6 +320,7 @@ internal sealed class SiteBuildDbCommand : Command<SiteBuildDbCommand.Settings> 
             Text("Placed under", x.Placement == ExtraSpecies.ExtraPlacement.Family ? "IUCN genera and families" : "IUCN genera");
             Row("CoL accepted species read in IUCN genera" + (x.Placement == ExtraSpecies.ExtraPlacement.Family ? " and families" : string.Empty), x.ColRead);
             Row("Of those, fossil species (left out)", x.ColExtinct);
+            Row("Of those, fossil or extinct species on Wikidata (left out)", x.ColFossilOnWikidata);
             Row("Of those, the same as an IUCN species (CoL id or name)", x.ColSameAsIucn);
             Row("Wikidata species items read", x.WikidataRead);
             Row("Of those, left out as fossil taxa, synonyms or extinct taxa (instance of)", x.WikidataLeftOutByInstance);
