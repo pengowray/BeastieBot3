@@ -48,8 +48,6 @@ internal sealed class ExtraEntry {
     /// Sorts after the taxon with this tree_pos.
     public int SortPos { get; set; }
     public int ExtraId { get; set; }
-
-    public string Sources => ColId is not null && Qid is not null ? "col wikidata" : ColId is not null ? "col" : "wikidata";
 }
 
 /// A possible match between an extra entry and an IUCN taxon or another extra entry.

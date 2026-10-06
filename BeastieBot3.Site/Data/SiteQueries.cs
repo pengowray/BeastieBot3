@@ -5,7 +5,7 @@ using Microsoft.Data.Sqlite;
 namespace BeastieBot3.Site.Data;
 
 /// Every query the site runs. All of them are parameterized and read-only.
-public sealed class SiteQueries {
+public sealed partial class SiteQueries {
     private readonly SiteDatabase _db;
 
     public SiteQueries(SiteDatabase db) {

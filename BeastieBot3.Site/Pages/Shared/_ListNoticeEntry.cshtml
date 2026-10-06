@@ -1,0 +1,14 @@
+@using BeastieBot3.Site.Lists
+@model NoticeEntry
+@* One name in a possible-duplicate notice, linked to where its source has it: this site's species page
+   for IUCN, the Catalogue of Life page, or the Wikidata item; then its source and whether it is in the list. *@
+@{
+    var href = Model.Source switch {
+        ListSource.Iucn when Model.TaxonId is { } id => "/species/" + id.ToString(System.Globalization.CultureInfo.InvariantCulture),
+        ListSource.Col when Model.ColId is { } colId => SiteFormat.CatalogueOfLifeUrl(colId),
+        ListSource.Wikidata when Model.WikidataQid is { } qid => SiteFormat.WikidataUrl(qid),
+        _ => null,
+    };
+    var source = GroupSourceText.ShortName(Model.Source) + (Model.InGroup ? string.Empty : ", " + GroupSourceText.NotInList);
+}
+@if (href is null) {<i>@Model.ScientificName</i>} else {<a href="@href" class="sci-name">@Model.ScientificName</a>} (@source)

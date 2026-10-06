@@ -58,6 +58,8 @@ public sealed record GroupListOptions {
     public IReadOnlySet<string> IncludedSections => Sections.Count == 0 ? StatusSection.AllKeys : Sections;
     /// The "Members of the [[Felidae]] family are called cats." line under a rank heading.
     public bool HeadingNames { get; init; }
+    /// Which sources the species come from, and which is preferred (ListSources.cs).
+    public ListSourceOptions Sources { get; init; } = ListSourceOptions.Default;
     /// Wikitext level of the top headings: 2 is "== ... ==".
     public int TopLevel { get; init; } = 2;
 }

@@ -161,15 +161,12 @@ public static class SiteDbSchema {
         -- CoL database and `wikidata sweep-taxa`'s table in the Wikidata cache (SiteExtraSpeciesBuild).
         CREATE TABLE extra_species (
             extra_id         INTEGER PRIMARY KEY,         -- numbered in sort_pos order, then by name
-            sources          TEXT NOT NULL,               -- 'col' | 'wikidata' | 'col wikidata'
-            scientific_name  TEXT NOT NULL,               -- "Genus epithet": CoL's name when in CoL, else Wikidata's taxon name (P225)
+            sources          INTEGER NOT NULL,            -- 1: in CoL only; 2: in Wikidata only; 3: in both
+            scientific_name  TEXT NOT NULL,               -- "Genus epithet": CoL's name when in CoL, else Wikidata's taxon name (P225).
+                                                          -- The kingdom is the kingdom of node_id
             wikidata_name    TEXT,                        -- in both sources: Wikidata's taxon name when it differs from CoL's
-            authority        TEXT,                        -- CoL's authorship; NULL for a species only in Wikidata
-            genus            TEXT NOT NULL,
-            species_epithet  TEXT NOT NULL,
-            kingdom          TEXT NOT NULL,               -- upper case, as IUCN writes it
             col_id           TEXT,                        -- Catalogue of Life accepted name usage id
-            wikidata_qid     TEXT,                        -- 'Q123'
+            wikidata_qid     INTEGER,                     -- the Wikidata item's number (123 for Q123)
             common_name_en   TEXT,                        -- the Wikidata item's English label when it is not a taxon name and not junk,
                                                           -- first letter capitalised; CoL's vernacular names are not checked, so never used
             enwiki_title     TEXT,                        -- the Wikidata item's English Wikipedia sitelink
@@ -194,6 +191,7 @@ public static class SiteDbSchema {
                                                           -- less preferred source; 0: a list shows both, with a notice
         );
         CREATE INDEX extra_overlap_extra ON extra_overlap(extra_id);
+        CREATE INDEX extra_overlap_taxon ON extra_overlap(taxon_id);
 
         -- The extra species under each group, for the line count of a list without reading them. Only
         -- groups with extra species under them have a row.

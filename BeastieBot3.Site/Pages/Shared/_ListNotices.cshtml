@@ -1,0 +1,31 @@
+@using BeastieBot3.Site.Lists
+@model ListSourceMergeResult
+@* Possible duplicates between a list's sources (ListSourceMerge): entries left out of the list, then
+   entries kept in it that may be the same species as another. *@
+@{
+    var leftOut = Model.Notices.Where(n => n.LeftOut).ToList();
+    var kept = Model.Notices.Where(n => !n.LeftOut).ToList();
+}
+@if (Model.Notices.Count > 0) {
+    <section class="list-notices" aria-labelledby="list-notices-heading">
+        <h3 id="list-notices-heading">@GroupSourceText.NoticesHeading</h3>
+        @foreach (var (heading, notices) in new[] { (GroupSourceText.LeftOutHeading(leftOut.Count), leftOut), (GroupSourceText.KeptHeading(kept.Count), kept) }) {
+            if (notices.Count == 0) {
+                continue;
+            }
+            <h4>@heading</h4>
+            <ul>
+                @foreach (var notice in notices) {
+                    <li>
+                        @if (notice.LeftOut) {
+                            <partial name="_ListNoticeEntry" model="@notice.Entry" /><text>: @GroupSourceText.LikelySame </text><partial name="_ListNoticeEntry" model="@notice.Kept" /><text>. </text>
+                        } else {
+                            <partial name="_ListNoticeEntry" model="@notice.Entry" /><text> and </text><partial name="_ListNoticeEntry" model="@notice.Kept" /><text> @GroupSourceText.MaySame. </text>
+                        }
+                        @GroupSourceText.Reason(notice.Reason)
+                    </li>
+                }
+            </ul>
+        }
+    </section>
+}

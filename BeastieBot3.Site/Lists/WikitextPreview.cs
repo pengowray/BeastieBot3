@@ -33,9 +33,12 @@ public static class WikitextPreview {
 
     private static readonly Regex Heading = new(@"^(={2,6})\s*(.*?)\s*\1\s*$", RegexOptions.Compiled);
 
-    public static string ToHtml(string wikitext) {
+    /// lineSuffixes: HTML added after each bullet line, in order (null: nothing); used for the links
+    /// to the Catalogue of Life and Wikidata of species from those sources (GroupListSources).
+    public static string ToHtml(string wikitext, IReadOnlyList<string?>? lineSuffixes = null) {
         var html = new StringBuilder();
         var depth = 0;
+        var bullet = 0;
         foreach (var line in wikitext.Replace("\r", string.Empty).Split('\n')) {
             var stars = line.TakeWhile(c => c == '*').Count();
             for (; depth > stars; depth--) {
@@ -49,6 +52,10 @@ public static class WikitextPreview {
                     html.Append("<ul class=\"preview-lines\">");
                 }
                 html.Append("<li>").Append(Inline(line[stars..].TrimStart()));
+                if (lineSuffixes is not null && bullet < lineSuffixes.Count && lineSuffixes[bullet] is { } suffix) {
+                    html.Append(suffix);
+                }
+                bullet++;
                 continue;
             }
             if (line.Trim().Length == 0) {

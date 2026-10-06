@@ -1,0 +1,20 @@
+@using BeastieBot3.Site.Lists
+@model ListSourceOptions
+@* The group page's list option for species sources (ListSourceOptions: src, prefer). The hidden empty
+   src makes an unticked form still say which boxes are ticked. *@
+<fieldset class="option-group">
+    <legend>@GroupSourceText.Legend</legend>
+    <input type="hidden" name="src" value="">
+    @foreach (var (source, label) in new[] { (ListSource.Iucn, GroupSourceText.SourceIucn), (ListSource.Col, GroupSourceText.SourceCol), (ListSource.Wikidata, GroupSourceText.SourceWikidata) }) {
+        <label><input type="checkbox" name="src" value="@ListSourceOptions.Key(source)" checked="@Model.Enabled.Contains(source)"> @label</label>
+    }
+    <p class="help">@GroupSourceText.Help</p>
+    <label class="inline-select">@GroupSourceText.OrderLabel
+        <select name="prefer">
+            @foreach (var (key, order) in ListSourceOptions.Orders) {
+                <option value="@key" selected="@(Model.OrderKey == key)">@GroupSourceText.OrderOption(order)</option>
+            }
+        </select>
+    </label>
+    <p class="help">@GroupSourceText.OrderHelp</p>
+</fieldset>

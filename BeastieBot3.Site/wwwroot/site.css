@@ -1274,3 +1274,10 @@ th.num {
 .update-report tr.outcome-updated {
     background: var(--shown-bg);
 }
+
+/* Species from the Catalogue of Life or Wikidata in a group list: links after a preview line, and the
+   notices about possible duplicates (GroupListSources, _ListNotices). */
+.preview-source { font-size: 0.8em; }
+.preview-source a + a { margin-left: 0.3em; }
+.list-notices h4 { margin: 0.8em 0 0.3em; }
+.list-notices ul { margin-top: 0; padding-left: 1.2em; }

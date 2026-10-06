@@ -21,7 +21,7 @@ using Microsoft.Extensions.Primitives;
 namespace BeastieBot3.Site.Lists;
 
 public static class GroupListQuery {
-    public static readonly string[] Keys = ["style", "h", "cat", "status", "infra", "subpop", "sort", "tpl", "names", "level"];
+    public static readonly string[] Keys = ["style", "h", "cat", "status", "infra", "subpop", "sort", "tpl", "names", "level", "src", "prefer"];
 
     /// Ranks in the order they nest, broad to narrow, for ordering the heading choices. A rank not
     /// listed goes after the listed ranks above it, by depth.
@@ -131,7 +131,7 @@ public static class GroupListQuery {
         if (First(query, "level") is { } level && int.TryParse(level, NumberStyles.None, CultureInfo.InvariantCulture, out var n)) {
             options = options with { TopLevel = Math.Clamp(n, 2, 4) };
         }
-        return options;
+        return ReadSources(query, options);
     }
 
     /// The query string for these options: only the values that differ from the defaults, so the
@@ -171,7 +171,18 @@ public static class GroupListQuery {
         if (options.TopLevel != defaults.TopLevel) {
             parts.Add("level=" + options.TopLevel.ToString(CultureInfo.InvariantCulture));
         }
+        parts.AddRange(options.Sources.Write());
         return parts.Count == 0 ? string.Empty : "?" + string.Join("&", parts);
+    }
+
+    // The sources (src, prefer: ListSourceOptions). Species from CoL and Wikidata that IUCN does not
+    // have are listed under NE, so picking either source includes the NE section.
+    private static GroupListOptions ReadSources(IQueryCollection query, GroupListOptions options) {
+        options = options with { Sources = ListSourceOptions.Read(query) };
+        if (options.Sources.HasOtherSources && !options.IncludedSections.Contains(StatusSection.NotEvaluated)) {
+            options = options with { Sections = options.Sections.Append(StatusSection.NotEvaluated).ToHashSet() };
+        }
+        return options;
     }
 
     public static string StyleKey(SpeciesListStyle style) => style switch {

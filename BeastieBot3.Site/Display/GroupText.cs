@@ -98,7 +98,7 @@ public static class GroupText {
     public const string OptionTopLevel = "Top heading level";
     public static string LevelOption(int level) => $"Level {level} ({new string('=', level)})";
     public const string OptionCategories = "Red List categories";
-    public const string CategoriesHelp = "Not Evaluated: taxa with no global IUCN assessment (only a regional one, such as Europe), whose lines have no {{IUCN status}} after the name. If no box is ticked, the list includes every category.";
+    public const string CategoriesHelp = "Not Evaluated: taxa with no global IUCN assessment, such as taxa with only a regional assessment (for example Europe) and species from Catalogue of Life or Wikidata that are not on the IUCN Red List. Their lines have no {{IUCN status}} after the name. If no box is ticked, the list includes every category.";
     public const string OptionTaxa = "Taxa";
     public const string InfraNone = "Species only";
     public const string InfraSeparate = "Subspecies and varieties in a separate section";

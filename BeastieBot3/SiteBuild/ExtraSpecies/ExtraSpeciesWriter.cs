@@ -6,16 +6,16 @@ namespace BeastieBot3.SiteBuild.ExtraSpecies;
 internal static class ExtraSpeciesWriter {
     public static void Write(SiteDbWriter writer, SiteExtraSpeciesBuild build) {
         writer.InsertRows("""
-            INSERT INTO extra_species (extra_id, sources, scientific_name, wikidata_name, authority, genus, species_epithet, kingdom,
-                col_id, wikidata_qid, common_name_en, enwiki_title, node_id, sort_pos)
-            VALUES (@extra_id, @sources, @scientific_name, @wikidata_name, @authority, @genus, @species_epithet, @kingdom,
-                @col_id, @wikidata_qid, @common_name_en, @enwiki_title, @node_id, @sort_pos)
+            INSERT INTO extra_species (extra_id, sources, scientific_name, wikidata_name, col_id, wikidata_qid, common_name_en,
+                enwiki_title, node_id, sort_pos)
+            VALUES (@extra_id, @sources, @scientific_name, @wikidata_name, @col_id, @wikidata_qid, @common_name_en,
+                @enwiki_title, @node_id, @sort_pos)
             """,
-            ["@extra_id", "@sources", "@scientific_name", "@wikidata_name", "@authority", "@genus", "@species_epithet", "@kingdom",
-                "@col_id", "@wikidata_qid", "@common_name_en", "@enwiki_title", "@node_id", "@sort_pos"],
+            ["@extra_id", "@sources", "@scientific_name", "@wikidata_name", "@col_id", "@wikidata_qid", "@common_name_en",
+                "@enwiki_title", "@node_id", "@sort_pos"],
             build.Entries.Select(e => new object?[] {
-                e.ExtraId, e.Sources, e.Name, e.WikidataName, e.Authority, e.Genus, e.Epithet, e.Kingdom,
-                e.ColId, e.Qid is { } q ? "Q" + q : null, e.CommonNameEn, e.EnwikiTitle, e.Node.NodeId, e.SortPos,
+                e.ExtraId, (e.ColId is not null ? 1 : 0) | (e.Qid is not null ? 2 : 0), e.Name, e.WikidataName, e.ColId, e.Qid,
+                e.CommonNameEn, e.EnwikiTitle, e.Node.NodeId, e.SortPos,
             }));
         writer.InsertRows("""
             INSERT INTO extra_overlap (extra_id, taxon_id, other_extra_id, reason, likely)

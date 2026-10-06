@@ -253,6 +253,7 @@
                     }
                     <label><input type="hidden" name="subpop" value="0"><input type="checkbox" name="subpop" value="1" checked="@options.Subpopulations"> @GroupText.OptionSubpopulations</label>
                 </fieldset>
+                <partial name="_ListSourceOptions" model="@options.Sources" />
                 <fieldset class="option-group">
                     <legend>@GroupText.OptionSort</legend>
                     <label><input type="radio" name="sort" value="first" checked="@(options.Sort == ListSort.FirstName)"> @GroupText.SortFirst</label>
@@ -268,10 +269,13 @@
         <div class="list-output" id="list-output" data-live-region>
             @if (Model.TooLong) {
                 <p class="note">@GroupText.TooLong(Model.LineCount, GroupList.MaxLines)</p>
+                @if (options.Sources.HasOtherSources) {
+                    <p class="note">@GroupSourceText.TooLongNote</p>
+                }
             } else if (Model.List is not { LineCount: > 0 } list) {
                 <p class="note">@GroupText.EmptyList(group.Name)</p>
             } else {
-                <p class="list-size">@GroupText.ListSize(list.LineCount)</p>
+                <p class="list-size">@GroupText.ListSize(list.LineCount)@GroupSourceText.ExtraCountSuffix(GroupListSources.ExtraLineCount(list))</p>
                 @if (list.SkippedRanks.Count > 0) {
                     <p class="note">@GroupText.RanksLeftOut(list.SkippedRanks)</p>
                 }
@@ -281,10 +285,16 @@
                 <details class="list-preview" id="list-preview">
                     <summary>@GroupText.Preview</summary>
                     <p class="help">@GroupText.PreviewNote</p>
+                    @if (Model.Sources is not null) {
+                        <p class="help">@GroupSourceText.PreviewNote</p>
+                    }
                     <div class="preview-body">
-                        @Html.Raw(WikitextPreview.ToHtml(Model.Wikitext))
+                        @Html.Raw(WikitextPreview.ToHtml(Model.Wikitext, Model.Sources is null ? null : GroupListSources.PreviewSuffixes(list, Model.Sources)))
                     </div>
                 </details>
+                @if (Model.Sources is { } merged) {
+                    <partial name="_ListNotices" model="@merged" />
+                }
             }
         </div>
     </div>

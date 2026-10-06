@@ -53,6 +53,9 @@ public sealed class GroupModel : PageModel {
     public bool TooLong => LineCount > GroupList.MaxLines;
     public GroupListResult? List { get; private set; }
     public string Wikitext { get; private set; } = string.Empty;
+    /// The list's rows from the picked sources and the notices about possible duplicates; null for
+    /// a list of IUCN's taxa only.
+    public ListSourceMergeResult? Sources { get; private set; }
 
     /// This page's address with the current options, for the address bar after a live update.
     public string CurrentOptionsUrl => SiteUrls.Group(Group!, GroupListQuery.Write(Options, DefaultOptions));
@@ -92,7 +95,8 @@ public sealed class GroupModel : PageModel {
             .OrderBy(r => GroupListQuery.RankIndex(r.Rank)).ThenBy(r => r.MinDepth)
             .Select(r => new HeadingChoice(r.Rank, r.OnlyFromCol, Options.HeadingRanks.Contains(r.Rank)))
             .ToList();
-        LineCount = GroupList.CountLines(group, Counts, Options);
+        var extraCounts = Options.Sources.HasOtherSources ? _queries.GetExtraSpeciesCounts(group.NodeId) : null;
+        LineCount = GroupList.CountLines(group, Counts, Options) + GroupListSources.ExtraLines(extraCounts, Options);
         if (!TooLong && LineCount > 0) {
             var kinds = new List<string> { TaxonKinds.Species };
             if (Options.Infra != InfraMode.None) {
@@ -103,6 +107,10 @@ public sealed class GroupModel : PageModel {
                 kinds.Add(TaxonKinds.Subpopulation);
             }
             var taxa = _queries.GetListTaxa(group, kinds);
+            if (GroupListSources.Active(Options)) {
+                Sources = GroupListSources.Merge(_queries, group, extraCounts, taxa, Options);
+                taxa = Sources.Rows;
+            }
             var groups = _queries.GetGroupsWithin(group).Append(group).ToDictionary(g => g.NodeId);
             List = GroupList.Build(taxa, groups, Options);
             Wikitext = GroupList.ToWikitext(List, Options);
