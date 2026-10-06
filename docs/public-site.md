@@ -54,6 +54,9 @@ must never be reachable from outside the machine.
    The command replaces the rows of each of the two tables only when that table's query succeeds.
    See [IUCN conservation status on Wikidata](#iucn-conservation-status-on-wikidata) for how the
    build uses the tables.
+   Run `wikidata sweep-taxa --refresh-days 30` for the species on Wikidata that IUCN does not have
+   (about 10 minutes for a full pass; see
+   [Species from the Catalogue of Life and Wikidata](#species-from-the-catalogue-of-life-and-wikidata)).
 3. Run `iucn gbif-download`. It keeps the new checklist zip only when it differs from the newest
    zip (by the date in the file name) in `Datasets:GBIF_IUCN_dir`; `site build-db` reads the newest.
 4. Run `iucn resolve-dois --refresh-crossref`, then `iucn resolve-dois --scope latest-regional`.
@@ -101,7 +104,9 @@ database as its input, and is blocked when that file is missing.
 `SiteDbSchema.Version` whenever you add, remove or rename a table or column, or change what a column
 holds, then run `site build-db` again. The site answers 503 (on `/healthz` and every page) for a
 database with any other version, so deploy the new site and the rebuilt database together. The
-current version is 11. Schema versions 6 and 7 were used only on a branch before it was merged
+current version is 13 (version 12 is used on a branch). Version 13 added the species from the
+Catalogue of Life and Wikidata that IUCN does not have (see
+[Species from the Catalogue of Life and Wikidata](#species-from-the-catalogue-of-life-and-wikidata)). Schema versions 6 and 7 were used only on a branch before it was merged
 into main, and no database built from main has them. Version 9 added the tree of groups (see
 [Groups and lists](#groups-and-lists)), version 10 `assessment.population_size`, and version 11
 `name.authority`, `assessment.api_not_found` and assessments with no scope (`scope = ''`).
@@ -405,6 +410,93 @@ chosen by the same `CommonNameChooser`.
   three of CoL's names (muted, with a tooltip naming the source and saying they are unchecked). CoL groups are hidden until the
   reader ticks "Show N ranks from the Catalogue of Life"; the toggle is CSS only (`:has`). A taxon not in the
   release has no place in the tree and shows IUCN's ranks as text, as before.
+
+### Species from the Catalogue of Life and Wikidata
+
+Schema 13 lets a group's list include species from the Catalogue of Life and Wikidata that are not
+on the IUCN Red List. Species rank only: no subspecies, varieties or populations from those sources.
+
+**Wikidata taxon sweep** (`wikidata sweep-taxa`, `Wikidata/WikidataSweepTaxaCommand.cs`). The
+Wikidata cache only holds the ~196,000 items linked to IUCN, so the command reads a short record of
+every item with a taxon name (P225), about 4 million, into `wikidata_taxon_sweep` in the Wikidata
+cache: taxon name, rank (P105), parent taxa (P171), CoL IDs (P10585), IUCN taxon IDs (P627),
+English Wikipedia sitelink, English label (only when it is not a taxon name), instance of (P31)
+values other than taxon, and the items that name the item as taxon synonym (P1420). It queries the
+QLever Wikidata endpoint (`https://qlever.dev/api/wikidata`, `--endpoint` or
+`WIKIDATA_QLEVER_ENDPOINT`), 100,000 result rows per page ordered by Q-number after a cursor; a
+full pass takes 6 to 12 minutes. The Wikidata Query Service cannot run the query in its 60-second
+limit. Each page is stored with the cursor in one transaction, so a stopped run carries on from the
+last item. When a pass reaches the last item it deletes the rows it did not see (deleted or merged
+items) and records the finish time (`taxon_sweep_completed` in `wikidata_sync_state`). A later run
+does nothing unless `--restart` or `--refresh-days N` starts a new pass; `--status` prints the
+counts without a query. The table adds about 430 MB to the cache. The `public-site` workflow runs it
+as "Download the Wikidata taxon list" (`--refresh-days 30`), with a light from the sync table.
+
+**Build** (`SiteBuild/ExtraSpecies/`, `site build-db --extra-species genus|family|none`, default
+`genus`). After the tree of groups and before the names are written:
+
+- CoL: the accepted and provisionally accepted species of each IUCN genus (one indexed query per
+  genus on the CoL database; with `family`, also per IUCN family). Left out: `extinct = true`,
+  usages that are an IUCN taxon's `col_id` or have an IUCN species' name, and species whose name or
+  CoL ID is a Wikidata item that is a fossil or extinct taxon (CoL leaves `extinct` empty for many
+  fossil species, such as the Panthera fossils from ZooBank).
+- Wikidata: the species items of the sweep. Left out: instance of fossil taxon, synonym,
+  unavailable combination, original combination or extinct taxon; names that are not a plain
+  binomial; items that are an IUCN taxon (the taxon's item, P627 of a taxon in the database, P10585
+  of an IUCN species' CoL usage, or an IUCN species' name). An item whose P10585 is a CoL entry's id,
+  or with a CoL entry's name, is merged into it (one row in both sources; Wikidata's name kept when
+  it differs). The kingdom and family come from the parent taxa (P171); with no kingdom, the genus
+  name must be in one kingdom only.
+- Placement: under the IUCN genus with the same name in the same kingdom; with `family`, else under
+  the IUCN family. A species in a genus or family IUCN does not have is left out (counted in the
+  summary).
+- English name: the Wikidata label when it is not a taxon name and not junk (`CommonNameQuality`);
+  CoL's vernacular names are unchecked and never used. Article: the Wikidata enwiki sitelink.
+- `taxon_source_name`: CoL's accepted name of an IUCN species that the placement file matched
+  through a CoL synonym, and the Wikidata taxon name of an IUCN species' item when it differs.
+- Overlaps (`extra_overlap`, `ExtraSpeciesNameRules`, `OverlapReason`): an entry's name is an IUCN,
+  CoL or Wikidata synonym of an IUCN species; a Wikidata-only entry's name (or P10585) is a CoL
+  synonym of another entry, of a subspecies of it, or of an IUCN species; a Wikidata-only entry's
+  item is named as taxon synonym (P1420) by an IUCN species' item or another entry's item; an IUCN
+  species' name is a CoL synonym of a CoL entry; same genus and epithets that differ by a Latin
+  gender ending (likely); same genus and epithets one or two letters apart (possible); the same
+  epithet in another genus of the same family with the same author and year, or for a Wikidata
+  species an epithet no other species in the family has (possible). Entries from one source are not
+  compared with each other.
+- `higher_taxon_extra` counts the extra species under each group by source, with the group's last
+  descendant node id (node ids are depth-first), so the page checks the line cap with one lookup
+  and reads a group's extra species by a node-id range. `sort_pos` puts an entry after the IUCN
+  taxon before it in name order (after that species' subspecies), or after a family's taxa.
+
+Build of 6 October 2026 (release 2026-1, CoL 26.7 XR): with `genus`, 998,573 extra species
+(60,939 only in CoL, 477,256 only in Wikidata, 460,378 in both) and 318,647 overlap rows, adding
+about 80 MB to the site database (572 MB to 651 MB) and about 75 seconds to the build. Most
+Wikidata-only entries are old combinations that Wikidata keeps as separate items; 287,217 of the
+overlaps are of this kind (CoL synonym). With `family` the build had 2,386,895 extra species
+(1,387,673 of them under a family) and, before the columns were made smaller, added 305 MB.
+
+**Site** (`Lists/ListSources.cs`, `Lists/ListSourceMerge.cs`, `Lists/GroupListSources.cs`,
+`Data/SiteQueries.Extra.cs`, strings in `Display/GroupSourceText.cs`). The list option "Species
+sources" has a checkbox for each source (`src=iucn|col|wd`, IUCN only by default) and an order of
+preference (`prefer=icw|iwc|ciw|cwi|wic|wci`, IUCN, then CoL, then Wikidata by default):
+
+- An IUCN species is listed when IUCN is ticked, or when it has a CoL usage (`col_id`) and CoL is
+  ticked, or a Wikidata item and Wikidata is ticked; subspecies, varieties and subpopulations come
+  from IUCN only. An extra species is listed when one of its sources is ticked. Extra species have
+  no assessment, so they go in the NE section with no `{{IUCN status}}`; ticking CoL or Wikidata
+  also ticks NE.
+- Each entry's name comes from the most preferred ticked source that has it (`taxon_source_name`
+  for IUCN species).
+- A likely duplicate: the entry whose most preferred ticked source comes later in the order is left
+  out, with a notice under the list ("Left out of the list"). When both entries have the same best
+  source, or the reason is only possible, both stay ("Kept in the list"). An entry outside the group
+  counts when one of its sources is ticked: it can leave out an entry here, but a less preferred
+  entry outside the group gets no notice here.
+- The line cap uses the IUCN counts plus `higher_taxon_extra`, before duplicates are left out, so
+  the count can be higher than the final list; the "too many taxa" note says so.
+- Preview lines of extra species end with links to their CoL page and Wikidata item (preview only,
+  `WikitextPreview.ToHtml`'s line suffixes).
+- No overlap notice goes in the wikitext.
 
 ## Citations
 
