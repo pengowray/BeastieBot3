@@ -1559,21 +1559,55 @@ colspan and rowspan; `StatusUpdater` decides the edits, and `StatusTaxonResolver
     give only a common name link are found by the article (the live List of critically endangered
     mammals: 187 of IUCN's 236 CR species). A missing taxon whose article is a list (its own name
     redirects there) is written without a link.
-- Missing species put into the list (`Update/ListPlacement.cs`, form field `addmissing`, off by
-  default; a button under the missing taxa sends the text again with it on, then a ticked checkbox
-  keeps it on). Each missing species goes on a new list line next to a listed species of the same
-  genus (the lines with fewest markers among the genus's lines): when the genus's lines are in
-  alphabetical order by the names as written (one pair in ten may be out of order), after the last
-  line, counting lines of species IUCN does not have, whose name sorts before it; else after the
-  genus's last species. It goes after the lines under its neighbour (more markers, or a ":" note).
-  The line copies the neighbour's markers and name style and has `{{IUCN status}}` (with ids and
-  year when those options are on) when the neighbour has one; a link to a "List of" page is left
-  out. Not placed, and left in the copy box: subspecies, varieties, species of a genus with no
-  species on a list line, lists written as tables, and lists that may be regional. The insertions
-  are applied with the updater's edits on the pasted text (`StatusUpdater.TextWith`), and the edit
-  summary says "2 species added". In October 2026 it put the missing species of List of Acer
-  species, List of Carex species, Bulinus and Citharexylum in alphabetical place, and 78 of the 92
-  missing EN species into List of endangered amphibians.
+- Missing taxa put into the list (`Update/ListPlacement.cs`, `ListPlacement.SpeciesTables.cs`,
+  `ListPlacement.Tables.cs`; form field `addmissing`, off by default; a button under the missing
+  taxa sends the text again with it on, then a ticked checkbox keeps it on). Each missing taxon
+  goes where the list has a place for it, next to a taxon the comparison found
+  (`ListMember.Source` says where that is):
+  - a species with a species of its genus on a list line: a new line among the genus's lines (the
+    lines with fewest markers), after the lines under its neighbour (more markers, or a ":" note),
+    copying the neighbour's markers and name style, with `{{IUCN status}}` (ids and year when those
+    options are on) when the neighbour has one;
+  - a subspecies or variety whose species is on a list line: a line one marker deeper, after the
+    lines already under the species, in their style;
+  - a species with a species of its genus in a `{{Species table}}`: a new `{{Species table/row}}` in
+    the neighbour row's layout, with name, binomial, authority, status, population and trend filled
+    in (`SpeciesTable.Row`), the other values (image, range, size, habitat, diet, subspecies) left
+    blank, layout switches such as `no-diet=yes` kept, and an inline reference, or
+    `<ref name="X"/>` when the text already defines a reference citing the taxon (`ReferenceIndex`);
+  - a species whose genus has no table, in a list of `{{Species table}}`s that has a table of a genus
+    of the same family: a new `{{Species table}}` for the genus (no authority, species count in
+    words) with a row for each missing species, among the family's tables in order of genus name;
+  - a species with a species of its genus in a row of a simple wikitable (the same layout rule as
+    `addcols`): a new row copying the neighbour row's cells, with the scientific name, common name
+    and status cells filled in and the others empty.
+  Among its neighbours a taxon goes in alphabetical order by the scientific names as written (a
+  synonym sorts where the list put it; lines of species IUCN does not have count), or by common
+  names when the list keeps that order instead (List of canids sorts its rows by common name); one
+  pair in ten may be out of order; a list in neither order gets it after the genus's last taxon.
+  Missing taxa with no place stay in the copy box, as do all of them for a list that may be
+  regional. The insertions are applied with the updater's edits on the pasted text
+  (`StatusUpdater.TextWith`), and the edit summary says "2 species added". In October 2026 it put the
+  missing species of List of Acer species, List of Carex species, Bulinus and Citharexylum in
+  alphabetical place, 78 of the 92 missing EN species into List of endangered amphibians, the red
+  wolf between the golden jackal and the wolf in List of canids, and all 8 missing species into List
+  of vespertilionines. List of cetaceans gets none: its tables use rowspan.
+- Catalogue of Life species (form field `extra`, off by default; shown for a list of every
+  category): the species of the Catalogue of Life in the group that are not in the IUCN Red List
+  (`extra_species` with a CoL id, less likely IUCN duplicates; the species only on Wikidata are left
+  out because most are fossil species), less every name the wikitext writes, are listed in their
+  own box with no `{{IUCN status}}`, and put into the list with the missing IUCN taxa when
+  `addmissing` is on. The group choice shows how many of each group's species the wikitext
+  includes.
+- More options for added statuses: `addend` puts a status added to a list line at the end of the
+  line, before references and footnotes at the end; `addrefs` adds a reference after each added
+  status (the named reference the text defines for the latest assessment, else `{{cite iucn}}` or
+  `{{cite Q}}` in a `<ref>`); `colhead` is the heading of an added column (IUCN status, Conservation
+  status, Red List status or Status); and each table that gets a column has a checkbox in the
+  report (`cols`, with `colsshown` holding a key of the pasted text, so a new text starts with every
+  table). A status added after a name also goes after a plain-text authority ("Kosterm.",
+  "(C.K.Allen) Kosterm.", "Brown & Wright, 1978"). Status cells with references after the code
+  ("VU<ref name=a/>") are status cells: the code is read and replaced without the references.
 - `citeq` (off by default): every citation the page replaces, in `status_ref` or elsewhere, is
   `{{cite Q|<item>}}` when the latest assessment has a Wikidata item, else `{{cite iucn}}`
   (`StatusUpdater.ReplacementCitation`, through `IucnReference`). An existing `{{cite Q}}` is not
