@@ -2,8 +2,8 @@
 @using BeastieBot3.Site.Lists
 @* The list type of the group page's list editor. site.js shows the options of the chosen type
    (data-list-type) when the choice changes; the server renders them for the type in the address. *@
-<fieldset class="option-group">
-    <legend>@GroupText.OptionListType <partial name="_InfoTip" model="@(new InfoTipModel("tip-list-type", GroupText.InfoTipLabel(GroupText.OptionListType), GroupText.ListTypeTablesHelp))" /></legend>
+<fieldset class="option-group" aria-labelledby="legend-list-type">
+    <legend><span id="legend-list-type">@GroupText.OptionListType</span> <partial name="_InfoTip" model="@(new InfoTipModel("tip-list-type", GroupText.InfoTipLabel(GroupText.OptionListType), GroupText.ListTypeTablesHelp))" /></legend>
     <label><input type="radio" name="type" value="bullets" checked="@(!Model.Table.IsTable)"> @GroupText.ListTypeBullets</label>
     <label>
         <input type="radio" name="type" value="table" checked="@Model.Table.IsTable">

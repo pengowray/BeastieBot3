@@ -2,8 +2,8 @@
 @model ListSourceOptions
 @* The group page's list option for species sources (ListSourceOptions: src, prefer). The hidden empty
    src makes an unticked form still say which boxes are ticked. *@
-<fieldset class="option-group">
-    <legend>@GroupSourceText.Legend <partial name="_InfoTip" model="@(new InfoTipModel("tip-sources", GroupText.InfoTipLabel(GroupSourceText.Legend), GroupSourceText.Help))" /></legend>
+<fieldset class="option-group" aria-labelledby="legend-sources">
+    <legend><span id="legend-sources">@GroupSourceText.Legend</span> <partial name="_InfoTip" model="@(new InfoTipModel("tip-sources", GroupText.InfoTipLabel(GroupSourceText.Legend), GroupSourceText.Help))" /></legend>
     <input type="hidden" name="src" value="">
     @foreach (var (source, label) in new[] { (ListSource.Iucn, GroupSourceText.SourceIucn), (ListSource.Col, GroupSourceText.SourceCol), (ListSource.Wikidata, GroupSourceText.SourceWikidata) }) {
         <label><input type="checkbox" name="src" value="@ListSourceOptions.Key(source)" checked="@Model.Enabled.Contains(source)"> @label</label>

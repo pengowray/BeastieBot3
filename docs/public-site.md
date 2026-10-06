@@ -436,7 +436,9 @@ chosen by the same `CommonNameChooser`.
   the text in place. `site.js` (`setUpInfoTips`) places it below the button (above when there is
   no room), opens it on mouse hover and on keyboard focus (closing when the pointer or focus
   leaves), keeps it open after a click, and sets `aria-expanded`. The partial is phrasing content,
-  so it can go inside a `<legend>`, but never inside a `<label>`.
+  so it can go inside a `<legend>`, but never inside a `<label>`. A fieldset whose legend has one
+  gets `aria-labelledby` pointing at a span around the legend's text, so screen readers name the
+  group "Red List categories", not "Red List categories Help for Red List categories".
 - "Wikipedia list": the list as wikitext, with a preview, and the options beside it
   (`Lists/GroupListQuery.cs` reads and writes them as query parameters, so a list can be linked):
   line format (the lists' styles A, B and C; the default is the style the generated lists use for
@@ -611,7 +613,8 @@ preference (`prefer=icw|iwc|ciw|cwi|wic|wci`, IUCN, then CoL, then Wikidata by d
   in which either entry was left out by another pair (that entry is in the first section with its
   reason, and the pair puts no duplicate in the list), and puts the entry in the list first. The
   details and run boxes have ids, so a live update keeps them open and ticked (`data-keep-checked`).
-  Genus *Rana* with all three sources (October 2026): 313 notices, 278 entries left out, nearly all
+  Genus *Rana* with all three sources (October 2026): 318 notices, 313 of them left-out pairs with
+  278 entries left out, nearly all
   of them old Wikidata combinations; the 299 CoL synonym pairs show as 26 run rows and 58 single
   rows, and the second section has 1 pair (it had 5 before pairs with a left-out entry were left
   out of it).
