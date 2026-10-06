@@ -52,6 +52,12 @@
             if (!Model.Options.MatchCommonNames && result.CountNotes(StatusNoteKind.CommonNameNotUsed) is > 0 and var commons) {
                 offers.Add((commons, UpdateText.OfferCommonNames(commons), UpdateModel.CommonNamesField, UpdateText.OfferCommonNamesButton));
             }
+            if (!Model.Options.AddToListLines && result.ListLinesWithoutStatus is > 0 and var lines) {
+                offers.Add((lines, UpdateText.OfferListLines(lines), UpdateModel.AddToListLinesField, UpdateText.OfferListLinesButton));
+            }
+            if (!Model.Options.AddStatusColumns && result.TablesWithoutStatus is > 0 and var tables) {
+                offers.Add((tables, UpdateText.OfferStatusColumns(tables), UpdateModel.AddStatusColumnsField, UpdateText.OfferStatusColumnsButton(tables)));
+            }
             if (!Model.Options.UpdateCitations && result.CountNotes(StatusNoteKind.CitationOlder) is > 0 and var cites) {
                 offers.Add((cites, UpdateText.OfferCitations(cites), UpdateModel.CitationsField, UpdateText.OfferCitationsButton));
             }
@@ -178,6 +184,12 @@
         <label><input type="checkbox" name="@UpdateModel.CitationsField" value="1" checked="@Model.Options.UpdateCitations"> @UpdateText.OptionCitations</label>
         <label><input type="checkbox" name="@UpdateModel.CiteQField" value="1" checked="@Model.Options.CiteQ"> @UpdateText.OptionCiteQ</label>
         <label><input type="checkbox" name="@UpdateModel.CommonNamesField" value="1" checked="@Model.Options.MatchCommonNames"> @UpdateText.OptionCommonNames</label>
+    </fieldset>
+    <fieldset class="update-options" aria-describedby="update-add-help">
+        <legend>@UpdateText.AddOptionsLegend</legend>
+        <label><input type="checkbox" name="@UpdateModel.AddToListLinesField" value="1" checked="@Model.Options.AddToListLines"> @UpdateText.OptionAddToListLines</label>
+        <label><input type="checkbox" name="@UpdateModel.AddStatusColumnsField" value="1" checked="@Model.Options.AddStatusColumns"> @UpdateText.OptionAddStatusColumns</label>
+        <p class="help" id="update-add-help">@UpdateText.AddOptionsHelp</p>
     </fieldset>
     <div class="update-actions">
         <button type="submit">@UpdateText.Submit</button>

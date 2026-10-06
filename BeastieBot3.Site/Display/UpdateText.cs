@@ -49,6 +49,11 @@ public static partial class UpdateText {
     public const string OptionCiteQ = "Use {{cite Q}} instead of {{cite iucn}} in replaced citations when the latest assessment has a Wikidata item";
     public const string OptionCommonNames = "Match common names: when no scientific name in an item matches IUCN's, find the taxon by its English common name, if only one taxon has that name";
 
+    public const string AddOptionsLegend = "Also add statuses";
+    public const string OptionAddToListLines = "Add {{IUCN status}} after the scientific name on list lines that have no status";
+    public const string OptionAddStatusColumns = "Add an \"IUCN status\" column after the scientific name column in tables that have no status column";
+    public const string AddOptionsHelp = "The template goes after the scientific name and any authority in brackets, on list lines (* or #) that name one IUCN taxon. A column is added only to tables with one header row at the top, the same number of cells in every row, and no rowspan or colspan.";
+
     // Offers above the result, shown when an option that is off would change items.
     public static string OfferPossiblyExtinct(int n) =>
         n == 1 ? "1 item kept CR for a possibly extinct taxon." : $"{Count(n)} items kept CR for possibly extinct taxa.";
@@ -68,6 +73,12 @@ public static partial class UpdateText {
         n == 1 ? "1 item was not found by scientific name. Its English common name matches one taxon."
             : $"{Count(n)} items were not found by scientific name. Their English common names each match one taxon.";
     public const string OfferCommonNamesButton = "Match common names";
+    public static string OfferListLines(int n) =>
+        n == 1 ? "1 list line names an IUCN taxon and has no status." : $"{Count(n)} list lines name an IUCN taxon and have no status.";
+    public const string OfferListLinesButton = "Add statuses to list lines";
+    public static string OfferStatusColumns(int n) =>
+        n == 1 ? "1 table lists IUCN taxa and has no status column." : $"{Count(n)} tables list IUCN taxa and have no status column.";
+    public static string OfferStatusColumnsButton(int n) => n == 1 ? "Add status column" : "Add status columns";
 
     public const string ResultHeading = "Result";
 

@@ -49,24 +49,36 @@ public sealed partial class StatusUpdater {
         return Finish(s, StatusItemKind.ListLine, line, template.Span, edits, taxon, notes);
     }
 
-    // The scientific names on a list line before the template. An abbreviated name ("''G. aurita''")
-    // takes its genus from the nearest "Genus ''[[Geogale]]''" line above it, as the lists by
-    // country write it.
+    // The scientific names on a list line before the template.
     private List<string> LineNames(WikitextScanner s, WikiTemplate template) {
         var lineStart = s.Text.LastIndexOf('\n', Math.Max(0, template.Span.Start - 1)) + 1;
-        var span = new TextSpan(lineStart, template.Span.Start);
-        var names = NamesIn(s, span).ToList();
+        return LineNames(s, new TextSpan(lineStart, template.Span.Start));
+    }
+
+    // The scientific names in a span of a list line that starts at the line's start.
+    private List<string> LineNames(WikitextScanner s, TextSpan span) =>
+        LineNameOccurrences(s, span).Select(o => o.Name).Distinct().ToList();
+
+    // The scientific names in a span of a list line, each with the span of the markup it is written
+    // in: italics, links, {{sp}} or {{taxlink}}, in that order. An abbreviated name ("''G. aurita''")
+    // takes its genus from the nearest "Genus ''[[Geogale]]''" line above it, as the lists by country
+    // write it, and a plain binomial in brackets counts.
+    private List<(string Name, TextSpan Span)> LineNameOccurrences(WikitextScanner s, TextSpan span) {
+        var found = NameOccurrencesIn(s, span);
+        if (span.Length > MaxNameCellLength) {
+            return found;
+        }
         var text = s.Masked[span.Start..span.End];
         foreach (Match m in AbbreviatedInText().Matches(text)) {
-            if (GenusAbove(s, lineStart) is { } genus && genus.StartsWith(m.Groups["initial"].Value, StringComparison.Ordinal)) {
-                names.Add($"{genus} {m.Groups["rest"].Value}");
+            if (GenusAbove(s, span.Start) is { } genus && genus.StartsWith(m.Groups["initial"].Value, StringComparison.Ordinal)) {
+                found.Add(($"{genus} {m.Groups["rest"].Value}", new TextSpan(span.Start + m.Index, span.Start + m.Index + m.Length)));
             }
         }
         // "[[Large-eared tenrec]] (Geogale aurita)": a binomial in brackets with no italics.
         foreach (Match m in BracketedBinomial().Matches(text)) {
-            names.Add(m.Groups["name"].Value);
+            found.Add((m.Groups["name"].Value, new TextSpan(span.Start + m.Index, span.Start + m.Index + m.Length)));
         }
-        return names.Where(IsScientificNameShape).Distinct().ToList();
+        return found.Where(o => IsScientificNameShape(o.Name)).ToList();
     }
 
     // The genus of the nearest "Genus ''[[Name]]''" line before a position. The lines are found once

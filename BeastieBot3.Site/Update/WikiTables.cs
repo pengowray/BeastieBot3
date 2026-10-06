@@ -3,7 +3,7 @@ namespace BeastieBot3.Site.Update;
 /// One cell of a wikitable. Whole: from the cell's first character after "|", "!", "||" or "!!" to
 /// its end (the cell can run over several lines). Content: the part after the attributes.
 /// Column: the 0-based column the cell starts in, counting colspan and rowspan of earlier cells.
-public sealed record TableCell(bool IsHeader, TextSpan Whole, TextSpan Content, string Attributes, int Column, int Colspan);
+public sealed record TableCell(bool IsHeader, TextSpan Whole, TextSpan Content, string Attributes, int Column, int Colspan, int Rowspan = 1);
 
 /// Spanning: cells of earlier rows whose rowspan covers this row.
 public sealed record TableRow(IReadOnlyList<TableCell> Cells, IReadOnlyList<TableCell> Spanning) {
@@ -197,7 +197,7 @@ public static class WikiTables {
                 return;
             }
             var cells = _cells.Select(c => new TableCell(c.Header, new TextSpan(c.Start, c.End),
-                new TextSpan(c.ContentStart, c.End), c.Attributes, c.Column, c.Colspan)).ToList();
+                new TextSpan(c.ContentStart, c.End), c.Attributes, c.Column, c.Colspan, c.Rowspan)).ToList();
             Rows.Add(new TableRow(cells, _spanning.Select(s => s.Cell).ToList()));
             for (var i = _spanning.Count - 1; i >= 0; i--) {
                 if (_spanning[i].Rows <= 1) {

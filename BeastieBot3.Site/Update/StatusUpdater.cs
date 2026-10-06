@@ -11,7 +11,7 @@ using BeastieBot3.Site.Pages;
 namespace BeastieBot3.Site.Update;
 
 /// Brings the IUCN statuses in pasted wikitext up to date with the latest global assessments in the
-/// site database, and reports what it found. Three kinds of item are updated:
+/// site database, and reports what it found. Six kinds of item are updated:
 /// 1. {{IUCN status|CODE|taxonId/assessmentId|1|year=YYYY}}, found by the taxon id it names;
 /// 2. a cell in a wikitable column whose header names the status, holding a code ("EN") or
 ///    {{IUCN status|EN}} with no ids, found by the scientific name in the same row;
@@ -19,6 +19,8 @@ namespace BeastieBot3.Site.Update;
 /// 4. {{IUCN status}} with no ids on a list line, found by the scientific name on the line;
 /// 5. the iucn-status parameter of {{Species table/row}}, found by its binomial;
 /// 6. {{cite iucn}} citations of an older global assessment (StatusUpdateOptions.UpdateCitations).
+/// It also adds statuses where there are none (StatusUpdater.Add.cs): {{IUCN status}} on list lines
+/// and a status column in wikitables, when the reader asks for them.
 /// StatusUpdateOptions turns on the changes that are off by default. Only the values that change
 /// are replaced, so the text outside them comes back byte for byte.
 public sealed partial class StatusUpdater {
@@ -89,7 +91,8 @@ public sealed partial class StatusUpdater {
         }
 
         var cellTemplates = new HashSet<WikiTemplate>();
-        foreach (var table in WikiTables.Find(scanner)) {
+        var tables = WikiTables.Find(scanner);
+        foreach (var table in tables) {
             foreach (var row in table.Rows.Where(r => !r.IsHeaderRow)) {
                 foreach (var cell in row.Cells) {
                     if (cell.Content.Length <= MaxStatusCellLength) {
@@ -128,10 +131,19 @@ public sealed partial class StatusUpdater {
             candidates.Add(new CitationCandidate(cite));
         }
 
+        var (missingLines, missingTables) = FindMissing(scanner, tables, candidates);
+
         candidates.Sort((a, b) => a.Position.CompareTo(b.Position));
         var findings = new List<StatusFinding>();
         var edits = new List<Edit>();
         foreach (var candidate in candidates.Take(_maxItems)) {
+            // A table's new column is one item: its header and all its cells are added together.
+            if (candidate is TableAddCandidate tableCandidate) {
+                var (tableFindings, tableEdits) = AddColumn(scanner, tableCandidate.Table);
+                findings.AddRange(tableFindings);
+                edits.AddRange(tableEdits);
+                continue;
+            }
             var itemEdits = new List<Edit>();
             _nameNote = null;
             StatusFinding? finding = candidate switch {
@@ -140,6 +152,7 @@ public sealed partial class StatusUpdater {
                 TaxoboxCandidate b => Taxobox(scanner, b.Template, itemEdits),
                 SpeciesRowCandidate r => SpeciesRow(scanner, r, itemEdits),
                 CitationCandidate c => CitationFinding(scanner, c.Template, itemEdits),
+                LineAddCandidate l => AddToLine(scanner, l.Line, itemEdits),
                 _ => throw new InvalidOperationException(),
             };
             // A citation of a regional assessment is not an item.
@@ -152,7 +165,8 @@ public sealed partial class StatusUpdater {
             findings.Add(finding);
             edits.AddRange(itemEdits);
         }
-        return new StatusUpdateResult(Apply(text, edits), findings, Math.Max(0, candidates.Count - _maxItems), [.. _populations]);
+        return new StatusUpdateResult(Apply(text, edits), findings, Math.Max(0, candidates.Count - _maxItems), [.. _populations],
+            missingLines, missingTables);
     }
 
     // ---------------------------------------------------------------- {{IUCN status}} with ids
@@ -546,28 +560,33 @@ public sealed partial class StatusUpdater {
     // ---------------------------------------------------------------- names
 
     // The scientific names a cell writes in italics, links or a {{sp}} or {{taxlink}} template.
-    private static IEnumerable<string> NamesIn(WikitextScanner s, TextSpan content) {
+    private static IEnumerable<string> NamesIn(WikitextScanner s, TextSpan content) =>
+        NameOccurrencesIn(s, content).Select(o => o.Name);
+
+    // The scientific names in a span, each with the span of the link, italics or template it is in.
+    private static List<(string Name, TextSpan Span)> NameOccurrencesIn(WikitextScanner s, TextSpan content) {
         if (content.Length > MaxNameCellLength) {
             return [];
         }
         var text = s.Masked[content.Start..content.End];
-        var found = new List<string>();
+        var found = new List<(string Name, TextSpan Span)>();
+        TextSpan At(Match m) => new(content.Start + m.Index, content.Start + m.Index + m.Length);
         foreach (Match m in Link().Matches(text)) {
-            found.Add(m.Groups["target"].Value.Split('#')[0].TrimStart(':'));
+            found.Add((m.Groups["target"].Value.Split('#')[0].TrimStart(':'), At(m)));
             if (m.Groups["label"].Success) {
-                found.Add(m.Groups["label"].Value);
+                found.Add((m.Groups["label"].Value, At(m)));
             }
         }
         foreach (Match m in Italic().Matches(text)) {
-            found.Add(Link().Replace(m.Groups["inner"].Value, l => l.Groups["label"].Success ? l.Groups["label"].Value : l.Groups["target"].Value));
+            found.Add((Link().Replace(m.Groups["inner"].Value, l => l.Groups["label"].Success ? l.Groups["label"].Value : l.Groups["target"].Value), At(m)));
         }
         foreach (var t in s.TemplatesWithin(content)) {
             if (t.Name is "sp" or "taxlink" or "taxon link") {
                 var parts = t.Parameters.Where(p => p.Name is null).Select(p => s.CoreText(p.Value)).ToList();
-                found.Add(t.Name == "sp" ? string.Join(' ', parts.Take(3)) : parts.FirstOrDefault() ?? string.Empty);
+                found.Add((t.Name == "sp" ? string.Join(' ', parts.Take(3)) : parts.FirstOrDefault() ?? string.Empty, t.Span));
             }
         }
-        return found.Select(CleanName).Where(IsScientificNameShape);
+        return found.Select(o => (CleanName(o.Item1), o.Item2)).Where(o => IsScientificNameShape(o.Item1)).ToList();
     }
 
     internal static string CleanName(string text) {

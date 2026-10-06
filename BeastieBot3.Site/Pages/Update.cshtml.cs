@@ -51,6 +51,8 @@ public sealed class UpdateModel : PageModel {
     public const string CitationsField = "cites";
     public const string CommonNamesField = "common";
     public const string CiteQField = "citeq";
+    public const string AddToListLinesField = "addlines";
+    public const string AddStatusColumnsField = "addcols";
 
     public string? Error { get; private set; }
 
@@ -87,6 +89,8 @@ public sealed class UpdateModel : PageModel {
             UpdateCitations = On(CitationsField),
             MatchCommonNames = On(CommonNamesField),
             CiteQ = On(CiteQField),
+            AddToListLines = On(AddToListLinesField),
+            AddStatusColumns = On(AddStatusColumnsField),
         };
         if (string.IsNullOrWhiteSpace(text)) {
             Error = UpdateText.ErrorEmpty;

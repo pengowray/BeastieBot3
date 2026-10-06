@@ -38,6 +38,12 @@ public sealed record StatusUpdateOptions {
     /// When no scientific name or synonym in a row or line names a taxon, use an English common name
     /// in it that names exactly one taxon.
     public bool MatchCommonNames { get; init; }
+    /// Add {{IUCN status}} after the scientific name on list lines ("*" or "#") that name exactly one
+    /// taxon and have no status. Off: the lines are only counted (StatusUpdateResult.ListLinesWithoutStatus).
+    public bool AddToListLines { get; init; }
+    /// Add an "IUCN status" column to wikitables whose rows name taxa and that have no status column.
+    /// Off: the tables are only counted (StatusUpdateResult.TablesWithoutStatus).
+    public bool AddStatusColumns { get; init; }
 }
 
 public enum StatusItemKind {
@@ -53,6 +59,13 @@ public enum StatusItemKind {
     SpeciesTableRow,
     /// A {{cite iucn}} citation outside a taxobox's status_ref.
     Citation,
+    /// A list line with no status, which StatusUpdateOptions.AddToListLines gives {{IUCN status}}.
+    ListLineAdded,
+    /// A wikitable with no status column, which StatusUpdateOptions.AddStatusColumns gives one; the
+    /// finding is the header row.
+    TableColumnAdded,
+    /// A row of a table that got a status column: the new cell.
+    TableRowAdded,
 }
 
 public enum StatusOutcome { Updated, Current, NotUpdated }
@@ -133,6 +146,15 @@ public enum StatusNoteKind {
     /// No name matched, but an English common name (Detail) names exactly one taxon;
     /// StatusUpdateOptions.MatchCommonNames would use it.
     CommonNameNotUsed,
+    /// The list line already gives a status in its text or as a status image (Detail), so no template was added.
+    StatusInText,
+    /// A status column was added to the table after column Id (1-based); Detail: "rows with a status/data rows".
+    ColumnAdded,
+    /// No status column was added. Detail: why (StatusUpdater.Layout*); Id: the line of the first row
+    /// with the problem, or of the table when it has no header row at the top.
+    ColumnLayout,
+    /// The row got an empty status cell, because no status was found for it.
+    EmptyCellAdded,
 }
 
 public sealed record StatusNote(StatusNoteKind Kind, string? Detail = null, long? Id = null);
@@ -151,8 +173,10 @@ public sealed record StatusFinding(
 /// Text: the input with the updates applied. Findings: in the order of the text. NotChecked: items
 /// found after the first MaxItems, which were left as they are. Populations: species table rows whose
 /// population differs from IUCN's number of mature individuals, which are listed and not changed.
+/// ListLinesWithoutStatus and TablesWithoutStatus: the list lines and tables that the options
+/// AddToListLines and AddStatusColumns would give a status, counted when those options are off.
 public sealed record StatusUpdateResult(string Text, IReadOnlyList<StatusFinding> Findings, int NotChecked,
-    IReadOnlyList<PopulationSuggestion> Populations) {
+    IReadOnlyList<PopulationSuggestion> Populations, int ListLinesWithoutStatus = 0, int TablesWithoutStatus = 0) {
     /// How many items have a note of this kind: used to offer an option that would change them.
     public int CountNotes(StatusNoteKind kind) => Findings.Count(f => f.Notes.Any(n => n.Kind == kind));
 

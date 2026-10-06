@@ -7,7 +7,8 @@ namespace BeastieBot3.Site.Update;
 /// each taxon whose category changed, with the old and new codes, while that fits in MaxListLength;
 /// otherwise it counts the changes by new category. Items that changed without a category change
 /// (ids, year, status_system, status_ref, direction) and replaced citations are counted after it.
-/// Items that were not changed are left out. Null when nothing changed.
+/// Statuses added to list lines and new table columns are counted after those. Items that were not
+/// changed are left out. Null when nothing changed.
 public static partial class EditSummary {
     /// Room left for the reader's own words: MediaWiki keeps the first 500 characters of a summary.
     public const int MaxListLength = 300;
@@ -18,9 +19,17 @@ public static partial class EditSummary {
         var changes = new List<CategoryChange>();
         var otherItems = 0;
         var citations = 0;
+        var added = 0;
         foreach (var finding in result.Findings.Where(f => f.Outcome == StatusOutcome.Updated)) {
             if (finding.Kind == StatusItemKind.Citation) {
                 citations++;
+                continue;
+            }
+            if (finding.Kind is StatusItemKind.ListLineAdded or StatusItemKind.TableRowAdded) {
+                added++;
+                continue;
+            }
+            if (finding.Kind == StatusItemKind.TableColumnAdded) {
                 continue;
             }
             var from = CodeIn(finding.Before);
@@ -33,7 +42,7 @@ public static partial class EditSummary {
                 otherItems++;
             }
         }
-        return UpdateText.EditSummary(version, changes, otherItems, citations);
+        return UpdateText.EditSummary(version, changes, otherItems, citations, added);
     }
 
     /// The status code in an item's text: {{IUCN status|EN|...}}, "| status = EN",

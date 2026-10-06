@@ -21,7 +21,9 @@ public static partial class UpdateText {
     public static string Kind(StatusItemKind kind) => kind switch {
         StatusItemKind.StatusTemplate => "{{IUCN status}} template",
         StatusItemKind.TableCell => "Table cell",
-        StatusItemKind.ListLine => "List line",
+        StatusItemKind.ListLine or StatusItemKind.ListLineAdded => "List line",
+        StatusItemKind.TableColumnAdded => "Table header row",
+        StatusItemKind.TableRowAdded => "Table row",
         StatusItemKind.SpeciesTableRow => "Species table row",
         StatusItemKind.Citation => "{{cite iucn}}",
         _ => "Taxobox",
@@ -76,7 +78,34 @@ public static partial class UpdateText {
                 $"Matched by the English common name “{note.Detail}”. The Taxon column shows IUCN's scientific name.",
             StatusNoteKind.CommonNameNotUsed =>
                 $"The English common name “{note.Detail}” matches one taxon, but common names were not used. To use them, click Match common names above the result.",
+            StatusNoteKind.StatusInText when note.Detail?.StartsWith('(') == true =>
+                $"The line already gives a status in its text: {note.Detail}.",
+            StatusNoteKind.StatusInText => $"The line already gives a status with the image {note.Detail}.",
+            StatusNoteKind.ColumnAdded => ColumnAdded(note),
+            StatusNoteKind.ColumnLayout => ColumnLayout(note),
+            StatusNoteKind.EmptyCellAdded => "Added an empty status cell.",
             _ => note.Kind.ToString(),
+        };
+    }
+
+    // "Added an IUCN status column after column 2. 14 of 15 rows have a status."
+    private static string ColumnAdded(StatusNote note) {
+        var parts = (note.Detail ?? "0/0").Split('/');
+        var rows = parts.Length == 2 && int.TryParse(parts[1], CultureInfo.InvariantCulture, out var r) ? r : 0;
+        var verb = parts[0] == "1" ? "has" : "have";
+        return $"Added an IUCN status column after column {note.Id}. {parts[0]} of {Count(rows)} {(rows == 1 ? "row" : "rows")} {verb} a status.";
+    }
+
+    private static string ColumnLayout(StatusNote note) {
+        var detail = note.Detail ?? string.Empty;
+        if (detail.StartsWith(StatusUpdater.LayoutCellCount + ":", StringComparison.Ordinal)) {
+            var parts = detail.Split(':');
+            return $"Status column not added: the row on line {note.Id} has {parts[1]} cells and the header row has {parts[2]}.";
+        }
+        return detail switch {
+            StatusUpdater.LayoutNoHeader => "Status column not added: the table has no header row at the top.",
+            StatusUpdater.LayoutSecondHeader => $"Status column not added: line {note.Id} is a second header row.",
+            _ => $"Status column not added: the row on line {note.Id} uses rowspan or colspan.",
         };
     }
 }
