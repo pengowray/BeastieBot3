@@ -31,9 +31,24 @@ internal sealed partial class WikipediaCacheStore {
                 continue;
             }
             return new WikiGroupArticle(page.PageRowId, page.PageTitle, page.NormalizedTitle, page.IsDisambiguation,
-                readTaxobox ? GetTaxoboxData(page.PageRowId)?.ScientificName?.Trim() : null, redirected);
+                readTaxobox ? TaxoboxName(GetTaxoboxData(page.PageRowId)) : null, redirected);
         }
         return null;
+    }
+
+    // The taxon of the taxobox: "genus species" for a speciesbox (the Harpy eagle article gives genus
+    // Harpia and species harpyja and no scientific name; the Calabar python article's stored
+    // scientific name is its English name), else the stored scientific name.
+    private static string? TaxoboxName(WikiTaxoboxData? taxobox) {
+        if (taxobox is null) {
+            return null;
+        }
+        if (!string.IsNullOrWhiteSpace(taxobox.Genus) && !string.IsNullOrWhiteSpace(taxobox.Species)) {
+            var species = taxobox.Species.Trim();
+            var genus = taxobox.Genus.Trim();
+            return species.StartsWith(genus + " ", StringComparison.OrdinalIgnoreCase) ? species : $"{genus} {species}";
+        }
+        return string.IsNullOrWhiteSpace(taxobox.ScientificName) ? null : taxobox.ScientificName.Trim();
     }
 
     /// Whether the list of every article title (enwiki_dump_titles) is there and has rows.

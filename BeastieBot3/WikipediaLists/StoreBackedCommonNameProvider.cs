@@ -258,13 +258,22 @@ internal sealed class StoreBackedCommonNameProvider : IDisposable {
             return null;
         }
 
-        // A redirect to the article of a species gives no name for a higher taxon: genus Ashbyia
-        // redirects to "Gibberbird", the article of its one species. A taxobox with a one-word name
-        // (Cetartiodactyla -> "Even-toed ungulate", taxobox Artiodactyla), no taxobox, or a page not
-        // downloaded keep the redirect target as before (Araneae -> Spider).
-        if (_wikiCache.ResolveDownloadedArticle(normalized) is { TaxoboxName: { } taxobox } article
-            && taxobox.Trim().Contains(' ') && !article.TaxoboxIs(scientificName)) {
-            return null;
+        // A downloaded redirect target gives no name when it has no taxobox (genus Thera redirects to
+        // "Santorini", genus Athene to "Athena"), or when its taxobox is another taxon and that taxon
+        // is a species of this genus (genus Ashbyia redirects to "Gibberbird", the article of its one
+        // species, Ashbyia lovensis) or the target's title is that taxon's scientific name (genus
+        // Thrasya redirects to "Paspalum", order Psilotales to "Psilotaceae"). Other targets keep the
+        // name as before: Araneae -> "Spider" (taxobox Araneae), Cetartiodactyla -> "Even-toed
+        // ungulate" (taxobox Artiodactyla), a monotypic family -> its species' article (Pedionomidae
+        // -> "Plains-wanderer"), and a target that is not downloaded.
+        if (_wikiCache.ResolveDownloadedArticle(normalized) is { } article) {
+            if (article.TaxoboxName is not { } taxobox) {
+                return null;
+            }
+            if (!article.TaxoboxIs(scientificName)
+                && (taxobox.StartsWith(scientificName.Trim() + " ", StringComparison.OrdinalIgnoreCase) || article.TaxoboxIs(article.Title))) {
+                return null;
+            }
         }
 
         return summary.RedirectTarget;
