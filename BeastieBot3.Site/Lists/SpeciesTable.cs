@@ -128,6 +128,9 @@ public static class SpeciesTable {
     public const int MaxRowsWithReferences = 400;
     public const int MaxRowsWithoutReferences = 1000;
 
+    /// The mark after an extinct species' name.
+    public const string Dagger = "{{dagger|alt=Extinct}}";
+
     public static int MaxRows(SpeciesTableOptions options) =>
         options.References == TableReferences.None ? MaxRowsWithoutReferences : MaxRowsWithReferences;
 
@@ -202,8 +205,11 @@ public static class SpeciesTable {
             name = string.Empty;
             binomial = $"[[{Value(target)}|{Value(abbreviated)}]]";
         }
-        if (code == "EX") {
-            name += "{{dagger|alt=Extinct}}";
+        // The featured lists mark an extinct species with a dagger after its name.
+        if (code == "EX" && hasCommon) {
+            name += Dagger;
+        } else if (code == "EX") {
+            binomial += Dagger;
         }
         var (authorName, authorYear, notOriginal) = SplitAuthority(extra?.Authority);
         var assessed = taxon.Category is not null;

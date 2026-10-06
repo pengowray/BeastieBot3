@@ -12,7 +12,6 @@ using BeastieBot3.Site.Update;
 namespace BeastieBot3.Site.Lists;
 
 public static class SpeciesTablePreview {
-    private const string Dagger = "{{dagger|alt=Extinct}}";
 
     public static string ToHtml(SpeciesTableResult result) {
         var html = new StringBuilder();
@@ -41,13 +40,7 @@ public static class SpeciesTablePreview {
             .Append("<thead><tr><th scope=\"col\">Common name</th><th scope=\"col\">Scientific name</th>")
             .Append("<th scope=\"col\">IUCN status and estimated population</th></tr></thead><tbody>");
         foreach (var row in table.Rows) {
-            html.Append("<tr><th scope=\"row\">");
-            var extinct = row.Name.EndsWith(Dagger, StringComparison.Ordinal);
-            html.Append(WikitextPreview.Inline(extinct ? row.Name[..^Dagger.Length] : row.Name));
-            if (extinct) {
-                html.Append("<span title=\"Extinct\">†</span>");
-            }
-            html.Append("</th><td><i>").Append(WikitextPreview.Inline(row.Binomial)).Append("</i><br><small>");
+            html.Append("<tr><th scope=\"row\">").Append(Cell(row.Name)).Append("</th><td><i>").Append(Cell(row.Binomial)).Append("</i><br><small>");
             var authority = row.AuthorityYear.Length > 0 ? $"{row.AuthorityName}, {row.AuthorityYear}" : row.AuthorityName;
             html.Append(Encode(row.AuthorityNotOriginal ? $"({authority})" : authority)).Append("</small></td><td>");
             var taxon = row.Taxon;
@@ -60,6 +53,11 @@ public static class SpeciesTablePreview {
         }
         html.Append("</tbody></table></div>");
     }
+
+    // A name cell, with the extinct dagger as a dagger.
+    private static string Cell(string wikitext) => wikitext.EndsWith(SpeciesTable.Dagger, StringComparison.Ordinal)
+        ? WikitextPreview.Inline(wikitext[..^SpeciesTable.Dagger.Length]) + "<span title=\"Extinct\">†</span>"
+        : WikitextPreview.Inline(wikitext);
 
     // The trend templates' own words (their label or alt text).
     private static string TrendText(string direction) => direction switch {
