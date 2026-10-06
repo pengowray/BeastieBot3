@@ -19,7 +19,7 @@ public sealed record ListPlacementResult(IReadOnlyList<PlacedTaxon> Placed, IRea
 
 /// What the comparison section of the update page shows: the comparison, the missing taxa put into
 /// the wikitext (null when not asked for), and whether the reader asked for them.
-public sealed record ListScopeView(ListScopeResult Scope, ListPlacementResult? Placement, bool AddMissing);
+public sealed record ListScopeView(ListScopeResult Scope, ListPlacementResult? Placement, bool AddMissing, bool ExtraSpecies = false);
 
 /// The updater's options that change the text put in: ids and year in {{IUCN status}}, and {{cite Q}}
 /// for the references of new {{Species table/row}} rows.
@@ -39,7 +39,8 @@ public sealed record ListPlacementOptions(bool AddIds = false, bool AddYear = fa
 public static partial class ListPlacement {
     public static ListPlacementResult Place(string text, IReadOnlyList<ListMember> members, ListScopeResult scope,
         ListPlacementOptions options, IListScopeLookup lookup) {
-        var missing = scope.Missing ?? [];
+        // The species IUCN has not assessed (MissingExtra) go in the same way, with no status.
+        IReadOnlyList<ListTaxonRow> missing = [.. scope.Missing ?? [], .. scope.MissingExtra ?? []];
         if (scope.Partial || missing.Count == 0) {
             return new ListPlacementResult([], missing);
         }

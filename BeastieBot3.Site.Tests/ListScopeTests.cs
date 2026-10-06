@@ -1,3 +1,4 @@
+using BeastieBot3.Shared.SiteData;
 using BeastieBot3.Shared.Wikitext;
 using BeastieBot3.Site.Data;
 using BeastieBot3.Site.Lists;
@@ -81,6 +82,18 @@ internal sealed class FakeScopeLookup : IListScopeLookup {
 
     public IReadOnlyDictionary<long, TableTaxonExtra> ExtrasOf(GroupRow group) =>
         Within(group.NodeId).ToDictionary(t => t.Row.TaxonId, t => new TableTaxonExtra(t.Row.TaxonId, "(Smith, 1900)", "Decreasing", "1000", null, null, null));
+
+    private readonly List<ExtraSpeciesRow> _extra = [];
+
+    /// A species of the Catalogue of Life that IUCN does not have, in a genus.
+    public FakeScopeLookup Extra(int id, int node, string epithet) {
+        var genus = _groups[node].Name;
+        _extra.Add(new ExtraSpeciesRow(id, true, false, $"{genus} {epithet}", null, genus, epithet, "ANIMALIA", null, null, null, null, node, id,
+            "(Jones, 2001)"));
+        return this;
+    }
+
+    public IReadOnlyList<ExtraSpeciesRow> ExtraSpeciesIn(GroupRow group) => [.. _extra.Where(e => Under(e.NodeId, group.NodeId))];
 
     public IReadOnlyList<ListTaxonRow> TaxaIn(GroupRow group, IReadOnlyCollection<string> kinds) =>
         [.. Within(group.NodeId).Select(t => t.Row).Where(r => kinds.Contains(r.Kind))];
@@ -223,6 +236,18 @@ public sealed class ListScopeTests {
         Assert.DoesNotContain("List of", line);
         Assert.StartsWith("* ''Panthera spbad'' {{IUCN status|LC", line);
         Assert.Contains("[[List of Panthera species", SpeciesListLine.Format(GroupList.Entry(missing.Missing![0]), new SpeciesListLineOptions { Style = missing.Style }));
+    }
+
+    [Fact]
+    public void SpeciesIucnHasNotAssessedAreComparedWhenAsked() {
+        var lookup = Tree().Species(4, 100, 3).Extra(1, 4, "spzz").Extra(2, 4, "spyy");
+        var members = Members(lookup, [100, 101, 102]);
+        Assert.Null(ListScope.Check(members, lookup)!.MissingExtra);
+        var result = ListScope.Check(members, lookup, new ListScopeOptions(Extra: true, WrittenNames: new HashSet<string> { SiteNameKey.Fold("Panthera spyy") }))!;
+        var extra = Assert.Single(result.MissingExtra!);
+        Assert.Equal(-1, extra.TaxonId);
+        Assert.Equal("* ''[[Panthera spzz]]''", ListScope.MissingLines(result.MissingExtra!, SpeciesListStyle.ScientificNameFirst));
+        Assert.Equal(3, result.ListedIn[4]);
     }
 
     [Theory]

@@ -1,4 +1,5 @@
 using System.Text;
+using BeastieBot3.Shared.SiteData;
 using BeastieBot3.Site.Data;
 using BeastieBot3.Site.Display;
 using BeastieBot3.Site.Update;
@@ -52,6 +53,23 @@ public sealed class UpdateModel : PageModel {
     /// The reader asked for the missing taxa to be put into the wikitext.
     public bool AddMissing { get; private set; }
 
+    /// The reader asked to compare with the species of the Catalogue of Life and Wikidata too.
+    public bool ExtraSpecies { get; private set; }
+
+    // Every scientific name the text writes, folded: a species of the Catalogue of Life or Wikidata
+    // that the text names is not missing from it.
+    private static HashSet<string> WrittenNames(string text) {
+        var scanner = new WikitextScanner(text);
+        var names = new HashSet<string>();
+        for (var start = 0; start < text.Length;) {
+            var end = text.IndexOf('\n', start);
+            end = end < 0 ? text.Length : end;
+            names.UnionWith(StatusUpdater.NameOccurrencesIn(scanner, new TextSpan(start, end)).Select(o => SiteNameKey.Fold(o.Name)));
+            start = end + 1;
+        }
+        return names;
+    }
+
     /// The options the form sent ("1" in the fields below); all off on a first visit.
     public StatusUpdateOptions Options { get; private set; } = new();
 
@@ -80,6 +98,7 @@ public sealed class UpdateModel : PageModel {
 
     public const string ScopeField = "scope";
     public const string ListAnywayField = "anyway";
+    public const string ExtraSpeciesField = "extra";
     public const string AddMissingField = "addmissing";
 
     public string? Error { get; private set; }
@@ -136,7 +155,9 @@ public sealed class UpdateModel : PageModel {
         var scope = form[ScopeField].LastOrDefault();
         var scopeLookup = new SiteListScopeLookup(_queries, new SpeciesTableQueries(_db));
         Scope = ListScope.Check(Result.Members ?? [], scopeLookup,
-            new ListScopeOptions(string.IsNullOrWhiteSpace(scope) ? null : scope, On(ListAnywayField)));
+            new ListScopeOptions(string.IsNullOrWhiteSpace(scope) ? null : scope, On(ListAnywayField), On(ExtraSpeciesField),
+                On(ExtraSpeciesField) ? WrittenNames(text) : null));
+        ExtraSpecies = On(ExtraSpeciesField);
         AddMissing = On(AddMissingField);
         if (AddMissing && Scope is { Partial: false, Missing.Count: > 0 }) {
             Placement = ListPlacement.Place(text, Result.Members ?? [], Scope,

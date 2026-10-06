@@ -176,7 +176,7 @@
         }
 
         @if (Model.Scope is { } scope) {
-            @await Html.PartialAsync("_ListScope", new ListScopeView(scope, Model.Placement, Model.AddMissing))
+            @await Html.PartialAsync("_ListScope", new ListScopeView(scope, Model.Placement, Model.AddMissing, Model.ExtraSpecies))
         }
     </section>
 }

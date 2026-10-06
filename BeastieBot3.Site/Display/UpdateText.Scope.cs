@@ -58,6 +58,21 @@ public static partial class UpdateText {
     public static string UnplacedLinesLabel(int n) =>
         n == 1 ? "List line for the 1 missing taxon that was not added (read only)" : $"List lines for the {Count(n)} missing taxa that were not added (read only)";
 
+    // PROVISIONAL wording.
+    public static string ScopeOption(GroupRow group, int listed) =>
+        $"{GroupList.HeadingText(group)} ({Count(listed)} of {Count(group.SpeciesCount)} species)";
+    public const string ExtraSpeciesOption = "Also compare with species of the Catalogue of Life that IUCN has not assessed";
+    public const string ExtraSpeciesButton = "Compare with the Catalogue of Life too";
+    public static string AddExtraResult(int added, int missing) =>
+        $"Added {Count(added)} of the {Count(missing)} missing species not assessed by IUCN to the updated wikitext.";
+    public static string ExtraHeading(int n) =>
+        n == 1 ? "1 species not assessed by IUCN is missing from the wikitext" : $"{Count(n)} species not assessed by IUCN are missing from the wikitext";
+    public const string ExtraNone = "Every species of the Catalogue of Life in this group is in the wikitext.";
+    public static string ExtraLinesLabel(int n) =>
+        n == 1 ? "List line for the 1 species not assessed by IUCN (read only)" : $"List lines for the {Count(n)} species not assessed by IUCN (read only)";
+    public const string CopyExtraAccessible = "Copy the list lines for the species not assessed by IUCN";
+    public const string ExtraLinesHelp = "These species are in the Catalogue of Life. The lines have no {{IUCN status}}. Check each species before you add it: some may be names IUCN treats as synonyms.";
+
     public static string OtherCategoryHeading(int n, IReadOnlySet<string> categories) =>
         $"{Taxa(n)} now in a category other than {CategoryList(categories, "or")}";
     public static string OutsideHeading(int n, GroupRow group) =>

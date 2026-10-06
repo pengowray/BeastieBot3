@@ -115,7 +115,9 @@ public static partial class ListPlacement {
                 References = TableReferences.Inline,
                 Template = _options.CiteQ ? Pages.ReferenceTemplate.CiteQ : Pages.ReferenceTemplate.CiteIucn,
             };
-            var row = SpeciesTable.Row(taxon, extras.GetValueOrDefault(taxon.TaxonId), options, new SpeciesTable.RefNamer(TableRefNames.CommonName));
+            // A species IUCN has not assessed has no extras: its authority comes from the Catalogue of Life.
+            var extra = extras.GetValueOrDefault(taxon.TaxonId) ?? new TableTaxonExtra(taxon.TaxonId, taxon.Authority, null, null, null, null, null);
+            var row = SpeciesTable.Row(taxon, extra, options, new SpeciesTable.RefNamer(TableRefNames.CommonName));
             // A reference the text already defines for the taxon's assessment is used again by name.
             var cited = CitedBy(taxon);
             var refName = row.RefName is { } name && _text.Contains(name, StringComparison.Ordinal) ? $"{name}-{taxon.TaxonId}" : row.RefName;

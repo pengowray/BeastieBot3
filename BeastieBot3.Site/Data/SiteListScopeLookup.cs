@@ -16,4 +16,15 @@ public sealed class SiteListScopeLookup(SiteQueries queries, SpeciesTableQueries
     public IReadOnlyList<ListTaxonRow> TaxaIn(GroupRow group, IReadOnlyCollection<string> kinds) => queries.GetListTaxa(group, kinds);
 
     public IReadOnlyDictionary<long, TableTaxonExtra> ExtrasOf(GroupRow group) => tables.GetExtras(group);
+
+    public IReadOnlyList<ExtraSpeciesRow> ExtraSpeciesIn(GroupRow group) {
+        if (queries.GetExtraSpeciesCounts(group.NodeId) is not { } counts) {
+            return [];
+        }
+        var likely = queries.GetExtraOverlaps(group, counts.LastNodeId).Where(o => o.Likely && o.TaxonId is not null)
+            .Select(o => o.ExtraId).ToHashSet();
+        // Only species the Catalogue of Life has: those only on Wikidata are mostly fossil species
+        // (123 of the 161 extra species of six cat genera in October 2026).
+        return [.. queries.GetExtraSpecies(group.NodeId, counts.LastNodeId).Where(e => e.InCol && !likely.Contains(e.ExtraId))];
+    }
 }

@@ -7,7 +7,8 @@
     var r = Model.Scope;
     var placement = Model.Placement;
     // The missing taxa to copy: all of them, or the ones not put into the wikitext.
-    var toCopy = placement?.Unplaced ?? r.Missing;
+    var toCopy = (placement?.Unplaced ?? r.Missing)?.Where(t => t.TaxonId > 0).ToList();
+    var extraToCopy = placement is null ? r.MissingExtra : placement.Unplaced.Where(t => t.TaxonId < 0).ToList();
 }
 <section class="update-scope" aria-labelledby="scope-heading">
     <h3 id="scope-heading">@UpdateText.ScopeHeading(r.Scope)</h3>
@@ -23,7 +24,7 @@
             <label for="scope-choice">@UpdateText.ScopeChooseLabel</label>
             <select id="scope-choice" name="@UpdateModel.ScopeField" form="update-form">
                 @foreach (var group in r.Path.Reverse()) {
-                    <option value="@ListScope.Key(group)" selected="@(group.NodeId == r.Scope.NodeId)">@GroupList.HeadingText(group)</option>
+                    <option value="@ListScope.Key(group)" selected="@(group.NodeId == r.Scope.NodeId)">@UpdateText.ScopeOption(group, r.ListedIn.GetValueOrDefault(group.NodeId))</option>
                 }
             </select>
             <button type="submit" form="update-form">@UpdateText.ScopeChooseButton</button>
@@ -43,49 +44,80 @@
             @if (missing.Count < r.MissingTotal) {
                 <p>@UpdateText.MissingCapped(missing.Count, r.MissingTotal)</p>
             }
-            @if (!r.Partial) {
-                @* Off: a button that sends the text again with the option on. On: a ticked checkbox, so
-                   the option stays on when the form is sent again, and can be turned off. *@
-                <p class="update-scope-add">
-                    @if (Model.AddMissing) {
-                        <label><input type="checkbox" name="@UpdateModel.AddMissingField" value="1" form="update-form" checked aria-describedby="scope-add-help"> @UpdateText.AddMissingOption</label>
-                    } else {
-                        <button type="submit" form="update-form" name="@UpdateModel.AddMissingField" value="1" aria-describedby="scope-add-help">@UpdateText.AddMissingButton</button>
-                    }
-                </p>
-                <p class="help" id="scope-add-help">@UpdateText.AddMissingHelp</p>
+        }
+    }
+    @if (r.Categories is null && r.Missing is not null) {
+        <p class="update-scope-add">
+            <label><input type="checkbox" name="@UpdateModel.ExtraSpeciesField" value="1" form="update-form" checked="@Model.ExtraSpecies"> @UpdateText.ExtraSpeciesOption</label>
+            @if (!Model.ExtraSpecies) {
+                <button type="submit" form="update-form" name="@UpdateModel.ExtraSpeciesField" value="1">@UpdateText.ExtraSpeciesButton</button>
             }
-            @if (placement is not null) {
-                <p>@UpdateText.AddMissingResult(placement.Placed.Count, r.MissingTotal)</p>
-                @if (placement.Placed.Count > 0) {
-                    <div class="table-scroll">
-                        <table class="update-report">
-                            <thead><tr><th scope="col">@UpdateText.ColumnTaxon</th><th scope="col">@UpdateText.ColumnPlacedNextTo</th><th scope="col">@UpdateText.ColumnLine</th></tr></thead>
-                            <tbody>
-                                @foreach (var p in placement.Placed) {
-                                    <tr>
-                                        <td><a href="/species/@p.Taxon.TaxonId">@Html.Raw(ScientificNameMarkup.ToHtml(p.Taxon.ScientificName))</a></td>
-                                        <td>@UpdateText.PlacedNextTo(p.Before) @if (p.NeighbourTaxon is { } n) {<a href="/species/@n.TaxonId">@Html.Raw(ScientificNameMarkup.ToHtml(p.NeighbourName))</a>} else {@Html.Raw(ScientificNameMarkup.ToHtml(p.NeighbourName))}</td>
-                                        <td>@p.NeighbourLine.ToString("N0", System.Globalization.CultureInfo.InvariantCulture)</td>
-                                    </tr>
-                                }
-                            </tbody>
-                        </table>
-                    </div>
-                }
+        </p>
+    }
+    @if (r.MissingExtra is { } extra) {
+        @if (extra.Count == 0) {
+            <p>@UpdateText.ExtraNone</p>
+        } else {
+            <h4>@UpdateText.ExtraHeading(extra.Count)</h4>
+        }
+    }
+    @if (!r.Partial && (r.Missing?.Count > 0 || r.MissingExtra?.Count > 0)) {
+        @* Off: a button that sends the text again with the option on. On: a ticked checkbox, so
+           the option stays on when the form is sent again, and can be turned off. *@
+        <p class="update-scope-add">
+            @if (Model.AddMissing) {
+                <label><input type="checkbox" name="@UpdateModel.AddMissingField" value="1" form="update-form" checked aria-describedby="scope-add-help"> @UpdateText.AddMissingOption</label>
+            } else {
+                <button type="submit" form="update-form" name="@UpdateModel.AddMissingField" value="1" aria-describedby="scope-add-help">@UpdateText.AddMissingButton</button>
             }
+        </p>
+        <p class="help" id="scope-add-help">@UpdateText.AddMissingHelp</p>
+    }
+    @if (placement is not null) {
+        @if (r.Missing is { Count: > 0 }) {
+            <p>@UpdateText.AddMissingResult(placement.Placed.Count(p => p.Taxon.TaxonId > 0), r.MissingTotal)</p>
+        }
+        @if (r.MissingExtra is { Count: > 0 } extraMissing) {
+            <p>@UpdateText.AddExtraResult(placement.Placed.Count(p => p.Taxon.TaxonId < 0), extraMissing.Count)</p>
+        }
+        @if (placement.Placed.Count > 0) {
+            <div class="table-scroll">
+                <table class="update-report">
+                    <thead><tr><th scope="col">@UpdateText.ColumnTaxon</th><th scope="col">@UpdateText.ColumnPlacedNextTo</th><th scope="col">@UpdateText.ColumnLine</th></tr></thead>
+                    <tbody>
+                        @foreach (var p in placement.Placed) {
+                            <tr>
+                                <td>@if (p.Taxon.TaxonId > 0) {<a href="/species/@p.Taxon.TaxonId">@Html.Raw(ScientificNameMarkup.ToHtml(p.Taxon.ScientificName))</a>} else {@Html.Raw(ScientificNameMarkup.ToHtml(p.Taxon.ScientificName))}</td>
+                                <td>@UpdateText.PlacedNextTo(p.Before) @if (p.NeighbourTaxon is { } n) {<a href="/species/@n.TaxonId">@Html.Raw(ScientificNameMarkup.ToHtml(p.NeighbourName))</a>} else {@Html.Raw(ScientificNameMarkup.ToHtml(p.NeighbourName))}</td>
+                                <td>@p.NeighbourLine.ToString("N0", System.Globalization.CultureInfo.InvariantCulture)</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
         }
     }
     @if (toCopy is { Count: > 0 } copy) {
-            <div class="wikitext-box">
-                <div class="wikitext-box-head">
-                    <label for="scope-missing">@(placement is null ? UpdateText.MissingLinesLabel : UpdateText.UnplacedLinesLabel(copy.Count))</label>
-                    <button type="button" class="copy-button" data-copy="scope-missing" aria-label="@UpdateText.CopyMissingAccessible" hidden>@SiteText.Copy</button>
-                    <p class="copy-status" role="status" aria-live="polite"></p>
-                </div>
-                <textarea id="scope-missing" class="update-readonly" readonly rows="8" spellcheck="false" autocapitalize="off" autocomplete="off" aria-describedby="scope-missing-help">@("\n" + ListScope.MissingLines(copy, r.Style))</textarea>
-                <p class="help" id="scope-missing-help">@UpdateText.MissingLinesHelp</p>
+        <div class="wikitext-box">
+            <div class="wikitext-box-head">
+                <label for="scope-missing">@(placement is null ? UpdateText.MissingLinesLabel : UpdateText.UnplacedLinesLabel(copy.Count))</label>
+                <button type="button" class="copy-button" data-copy="scope-missing" aria-label="@UpdateText.CopyMissingAccessible" hidden>@SiteText.Copy</button>
+                <p class="copy-status" role="status" aria-live="polite"></p>
             </div>
+            <textarea id="scope-missing" class="update-readonly" readonly rows="8" spellcheck="false" autocapitalize="off" autocomplete="off" aria-describedby="scope-missing-help">@("\n" + ListScope.MissingLines(copy, r.Style))</textarea>
+            <p class="help" id="scope-missing-help">@UpdateText.MissingLinesHelp</p>
+        </div>
+    }
+    @if (extraToCopy is { Count: > 0 } extraCopy) {
+        <div class="wikitext-box">
+            <div class="wikitext-box-head">
+                <label for="scope-extra">@UpdateText.ExtraLinesLabel(extraCopy.Count)</label>
+                <button type="button" class="copy-button" data-copy="scope-extra" aria-label="@UpdateText.CopyExtraAccessible" hidden>@SiteText.Copy</button>
+                <p class="copy-status" role="status" aria-live="polite"></p>
+            </div>
+            <textarea id="scope-extra" class="update-readonly" readonly rows="6" spellcheck="false" autocapitalize="off" autocomplete="off" aria-describedby="scope-extra-help">@("\n" + ListScope.MissingLines(extraCopy, r.Style))</textarea>
+            <p class="help" id="scope-extra-help">@UpdateText.ExtraLinesHelp</p>
+        </div>
     }
     @if (r.OtherCategory.Count > 0) {
         <h4>@UpdateText.OtherCategoryHeading(r.OtherCategory.Count, r.Categories!)</h4>

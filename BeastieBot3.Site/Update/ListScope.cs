@@ -18,12 +18,20 @@ public interface IListScopeLookup {
 
     /// What a {{Species table/row}} needs for the group's species (authority, population, citation), by taxon id.
     IReadOnlyDictionary<long, TableTaxonExtra> ExtrasOf(GroupRow group);
+
+    /// The species of the Catalogue of Life (and Wikidata) that IUCN does not have, placed in the group,
+    /// less those that are likely an IUCN taxon under another name.
+    IReadOnlyList<ExtraSpeciesRow> ExtraSpeciesIn(GroupRow group);
 }
 
 /// What the reader chose. Scope: "rank/name" of a group above the taxa ("family/Felidae"), or null for
 /// the group ListScope finds. ListAnyway: list the missing taxa when the text covers too little of
 /// the group to be a list of it.
-public sealed record ListScopeOptions(string? Scope = null, bool ListAnyway = false);
+/// Extra: also compare with the species the Catalogue of Life and Wikidata have that IUCN does not
+/// (extra_species), leaving out those whose name WrittenNames has (SiteNameKey.Fold of every
+/// scientific name the text writes).
+public sealed record ListScopeOptions(string? Scope = null, bool ListAnyway = false, bool Extra = false,
+    IReadOnlySet<string>? WrittenNames = null);
 
 /// A taxon the text lists that is outside the group, or whose latest category is outside the
 /// categories the list gives. Lines: where the text lists it.
@@ -61,7 +69,14 @@ public sealed record ListScopeResult(
     SpeciesListStyle Style,
     IReadOnlyList<ListScopeMember> Outside,
     IReadOnlyList<ListScopeMember> OtherCategory,
-    IReadOnlyList<ListScopeDuplicate> Duplicates);
+    IReadOnlyList<ListScopeDuplicate> Duplicates) {
+    /// How many listed species each group of Path holds, by node id.
+    public IReadOnlyDictionary<int, int> ListedIn { get; init; } = new Dictionary<int, int>();
+
+    /// The species of the Catalogue of Life and Wikidata in the scope that the text does not name, as
+    /// list rows (TaxonId: minus the extra species id; no assessment); null when not asked for.
+    public IReadOnlyList<ListTaxonRow>? MissingExtra { get; init; }
+}
 
 /// Compares the taxa a text lists (StatusUpdateResult.Members) with the IUCN group they are in, and
 /// finds the group's taxa the text leaves out, the taxa it lists that are outside the group or now
@@ -209,8 +224,21 @@ public static partial class ListScope {
         return new ListScopeResult(scope, path, species.Count(t => InCategories(t.First().Taxon)), species.Count, speciesInScope,
             infraListed, infraInScope, infraChecked, categories,
             codes.Count > 0, partial,
-            missing, missingTotal, GroupListQuery.DefaultStyle(PathOf(scope.NodeId)), outside, otherCategory, duplicates);
+            missing, missingTotal, GroupListQuery.DefaultStyle(PathOf(scope.NodeId)), outside, otherCategory, duplicates) {
+            ListedIn = path.ToDictionary(g => g.NodeId, g => listed.Count(t => t.First().Taxon.Kind == TaxonKinds.Species
+                && PathOf(t.First().Taxon.NodeId!.Value).Any(p => p.NodeId == g.NodeId))),
+            // Species IUCN has not assessed: only for a list of every category.
+            MissingExtra = options.Extra && categories is null && (!partial || options.ListAnyway)
+                ? [.. lookup.ExtraSpeciesIn(scope)
+                    .Where(e => options.WrittenNames is null || !options.WrittenNames.Contains(Shared.SiteData.SiteNameKey.Fold(e.ScientificName)))
+                    .Select(ExtraRow)]
+                : null,
+        };
     }
+
+    // An extra species as a list row: no assessment, its CoL or Wikidata name, its article.
+    private static ListTaxonRow ExtraRow(ExtraSpeciesRow e) => new(-e.ExtraId, e.ScientificName, TaxonKinds.Species, e.Kingdom, e.Genus,
+        e.Epithet, null, null, null, e.CommonNameEn, e.EnwikiTitle, null, null, e.NodeId, e.SortPos, null, null, false, false, null, e.Authority);
 
     /// The value of the Scope option for a group: "family/Felidae".
     public static string Key(GroupRow group) => $"{group.Rank}/{group.Name}";
@@ -221,9 +249,10 @@ public static partial class ListScope {
     public static string MissingLines(ListScopeResult result) =>
         MissingLines(result.Missing ?? [], result.Style);
 
-    /// The bullet lines for these taxa.
+    /// The bullet lines for these taxa; {{IUCN status}} only for taxa IUCN has assessed.
     public static string MissingLines(IEnumerable<ListTaxonRow> taxa, SpeciesListStyle style) =>
-        string.Join("\n", taxa.Select(t => UnlinkLists(SpeciesListLine.Format(GroupList.Entry(t), new SpeciesListLineOptions { Style = style }))));
+        string.Join("\n", taxa.Select(t => UnlinkLists(SpeciesListLine.Format(GroupList.Entry(t),
+            new SpeciesListLineOptions { Style = style, IncludeStatusTemplate = t.Category is not null }))));
 
     /// The line with its links to "List of ..." pages replaced by their text.
     internal static string UnlinkLists(string line) =>
