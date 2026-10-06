@@ -12,8 +12,8 @@ public static partial class UpdateText {
     /// With more changes than fit in EditSummary.MaxListLength: "42 IUCN statuses changed (12 to EN,
     /// 20 to VU, 10 to LC)". Null when nothing changed.
     public static string? EditSummary(string? version, IReadOnlyList<Update.EditSummary.CategoryChange> changes, int otherItems, int citations,
-        int added = 0) {
-        if (changes.Count == 0 && otherItems == 0 && citations == 0 && added == 0) {
+        int added = 0, int columns = 0, int columnStatuses = 0) {
+        if (changes.Count == 0 && otherItems == 0 && citations == 0 && added == 0 && columns == 0) {
             return null;
         }
         var parts = new List<string>();
@@ -36,6 +36,10 @@ public static partial class UpdateText {
         }
         if (added > 0) {
             parts.Add(added == 1 ? "1 IUCN status added" : $"{Count(added)} IUCN statuses added");
+        }
+        if (columns > 0) {
+            var statuses = columnStatuses == 1 ? "1 status" : $"{Count(columnStatuses)} statuses";
+            parts.Add(columns == 1 ? $"IUCN status column added ({statuses})" : $"IUCN status columns added to {Count(columns)} tables ({statuses})");
         }
         if (citations > 0) {
             parts.Add(citations == 1 ? "1 IUCN citation updated" : $"{Count(citations)} IUCN citations updated");

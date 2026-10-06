@@ -1518,7 +1518,8 @@ colspan and rowspan; `StatusUpdater` decides the edits, and `StatusTaxonResolver
     (`ColumnLayout`). Each new cell is written the way its row writes cells (after `||` or `!!` on
     the same line, or on a line of its own); a row whose taxon is not found gets an empty cell. The
     table's findings are one item, so a table is never half changed.
-  - The edit summary counts added statuses ("12 IUCN statuses added"). Feeding the result back
+  - The edit summary counts added statuses ("12 IUCN statuses added") and new columns ("IUCN status
+    column added (14 statuses)", or "IUCN status columns added to 2 tables (30 statuses)"). Feeding the result back
     through the page finds every added status already up to date.
 - `citeq` (off by default): every citation the page replaces, in `status_ref` or elsewhere, is
   `{{cite Q|<item>}}` when the latest assessment has a Wikidata item, else `{{cite iucn}}`
