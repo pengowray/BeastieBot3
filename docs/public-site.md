@@ -419,6 +419,48 @@ redirect with the taxon's own name is linked as it is) and, for a subspecies or 
 article, `list_parent_article_title` (its species' article). The English name is `common_name_en`,
 chosen by the same `CommonNameChooser`.
 
+Two bullet list options add to a line (`Lists/ListLineOptions.cs`, the partial
+`Pages/Shared/_ListLineOptions.cshtml`, strings in `Display/GroupLineText.cs`). Their query keys differ
+from the species tables' `refs` and `cite`, because both sets of options are in one form.
+
+- **Taxon authority** (`auth=small|plain`, none by default): `SpeciesListLineOptions.Authority` puts
+  `SpeciesListEntry.Authority` right after the scientific name, before the `, common name` of the
+  scientific-name-first style and inside the brackets of the common-name-first style:
+  `* ''[[Panthera leo]]'' <small>(Linnaeus, 1758)</small>, Lion`,
+  `* [[Lion]] (''Panthera leo'' <small>(Linnaeus, 1758)</small>)`. A line in the common-name-only
+  style shows no scientific name, so no authority, unless the taxon has no English name. `<small>` is
+  the form most species lists on English Wikipedia use (featured list "List of Banksia species";
+  also the Conus, Anolis, Eucalyptus, Cortinarius and Tipula lists, the last with `{{small}}`); plain
+  text is the other choice. Authorities with wikitext markup characters are wrapped in `<nowiki>`.
+  The CLI never sets the option, so the generated lists are unchanged. IUCN taxa use
+  `taxon.authority`, species from CoL use `extra_species.authority`; Wikidata-only species have none
+  (the author and year are qualifiers P405/P574 on the taxon name, and the author is an item, so the
+  sweep would need a qualifier join and label lookups and a full new pass). A line shown under
+  another source's name has no authority: an IUCN taxon under CoL's or Wikidata's name, or a species
+  in both sources under Wikidata's spelling, since the brackets of an authority depend on the genus.
+- **References** (`lrefs=list|inline`, none by default; `lcite=q` for `{{cite Q}}`):
+  `Lists/ListReferences.cs` gives each line a reference to the source it is listed from (the most
+  preferred ticked source, `ListSourceMerge`): an IUCN taxon its latest global assessment, as the
+  species tables cite it (`IucnReference`, ref name "IUCN" + English name, `SpeciesTable.RefNamer`;
+  NE taxa get none); a species from CoL `{{Catalogue of Life |id=... |title=''Name'' Authority}}`
+  (the template English Wikipedia uses, a CS1 wrapper in Module:Cite taxon; ref name `col-<id>`); a
+  species from Wikidata `{{cite Q|Q...}}` of the taxon item (`wd-Q<n>`), which renders as
+  "Name, Wikidata Q...". English Wikipedia treats Wikidata as user-generated and not a reliable
+  source (WP:UGC), so the help line asks editors to replace those references. The `<ref>` goes after
+  the `{{IUCN status}}` template, as in "List of mammals of Madagascar". List-defined references
+  are in a `{{reflist|refs=}}` at the end; inline ones are written in full the first time a ref name
+  is used. As with the species tables, inline references add no `{{reflist}}`. No external-link
+  form: MOS:EL keeps external links out of article text. `Data/ListReferenceQueries.cs` reads the
+  citation of every kind of taxon in the group (the species tables read species only). The preview
+  shows each reference as a superscript number and lists the citations as written.
+- Lists with references are capped at `ListReferences.MaxLines` (550). Measured with `action=parse`
+  (October 2026) on genus Pristimantis, 531 lines with authorities and `{{IUCN status}}`: post-expand
+  include size 1,522,686 bytes with `{{cite iucn}}` references, list-defined or inline (2.9 KB a
+  line), and 299,422 bytes without references (0.56 KB a line). 731 lines would fill Wikipedia's
+  2 MB; the cap leaves about a quarter for the article, as the species tables' caps do. Lua time was
+  1.8 s of 10 s. The parse showed no error or maintenance categories for any of the forms, including
+  `{{Catalogue of Life}}` with no access date and `{{cite Q}}` of a taxon item.
+
 ### The group page (`Pages/Group.cshtml`)
 
 - The page shows the classification above the group (CoL groups marked), counts (species,
@@ -444,8 +486,9 @@ chosen by the same `CommonNameChooser`.
   the category code linked to its Wikipedia article plus a superscript "IUCN <year>" link to the
   assessment, as the template renders it.
 - A list is made only up to `GroupList.MaxLines` (3,600) lines, about as many `{{IUCN status}}`
-  templates as one Wikipedia page holds. The page counts the lines from `higher_taxon_count` first
-  and reads no taxa for a longer list. The cap also keeps the site from handing out the categories
+  templates as one Wikipedia page holds, or 550 with references (`ListReferences.MaxLines`, see
+  "List lines"). The page counts the lines from `higher_taxon_count` first and reads no taxa for a
+  longer list. The cap also keeps the site from handing out the categories
   of a whole kingdom at once.
 - List type "Species tables" (`type=table`; `Lists/SpeciesTable.cs`, options in
   `Lists/SpeciesTableQuery.cs`, extra columns read by `Data/SpeciesTableQueries.cs`): one
@@ -548,6 +591,11 @@ as "Download the Wikidata taxon list" (`--refresh-days 30`), with a light from t
   descendant node id (node ids are depth-first), so the page checks the line cap with one lookup
   and reads a group's extra species by a node-id range. `sort_pos` puts an entry after the IUCN
   taxon before it in name order (after that species' subspecies), or after a family's taxa.
+- Schema 15: `higher_taxon_extra_count` splits those counts by sources, by placement (under a family
+  because IUCN does not have the genus, or under the genus) and by whether a likely `extra_overlap`
+  row pairs the species with an IUCN taxon (`SiteExtraSpeciesBuild.SplitCounts`); and
+  `extra_species.authority` holds CoL's authorship for species in CoL (the list option "Taxon
+  authority").
 
 Build of 6 October 2026 (release 2026-1, CoL 26.7 XR): with `genus`, 998,573 extra species
 (60,939 only in CoL, 477,256 only in Wikidata, 460,378 in both) and 318,647 overlap rows, adding
@@ -555,6 +603,12 @@ about 80 MB to the site database (572 MB to 651 MB) and about 75 seconds to the 
 Wikidata-only entries are old combinations that Wikidata keeps as separate items; 287,217 of the
 overlaps are of this kind (CoL synonym). With `family` the build had 2,386,895 extra species
 (1,387,673 of them under a family) and, before the columns were made smaller, added 305 MB.
+
+Schema 15 build of 6 October 2026 (`family`, the default): 2,386,524 extra species (209,864 only in
+CoL, 943,136 only in Wikidata, 1,233,524 in both; 1,387,670 under a family), 1,432,284 of the
+1,443,388 in CoL with an authority, and 80,515 `higher_taxon_extra_count` rows (1 MB). The database
+is 787.7 MB (761.3 MB at schema 14; the authorities are most of the difference) and the build took
+267 s (270 s before).
 
 **Site** (`Lists/ListSources.cs`, `Lists/ListSourceMerge.cs`, `Lists/GroupListSources.cs`,
 `Data/SiteQueries.Extra.cs`, strings in `Display/GroupSourceText.cs`). The list option "Species
@@ -573,8 +627,16 @@ preference (`prefer=icw|iwc|ciw|cwi|wic|wci`, IUCN, then CoL, then Wikidata by d
   source, or the reason is only possible, both stay ("Kept in the list"). An entry outside the group
   counts when one of its sources is ticked: it can leave out an entry here, but a less preferred
   entry outside the group gets no notice here.
-- The line cap uses the IUCN counts plus `higher_taxon_extra`, before duplicates are left out, so
-  the count can be higher than the final list; the "too many taxa" note says so.
+- The line cap uses the IUCN counts plus `higher_taxon_extra_count` (`ExtraSpeciesCounts.For`):
+  with `genera=0` it leaves out the species placed under a family, and when IUCN is ticked and first
+  in the order it leaves out the species that are likely an IUCN taxon, since the merge always
+  leaves those out then (with IUCN not first or not ticked, an IUCN taxon listed through its CoL
+  usage or Wikidata item can tie with the extra species, and both stay). Likely duplicates between
+  CoL and Wikidata entries are still counted, so the count can be higher than the final list; the
+  "too many taxa" note says so. With all three sources ticked (October 2026), the count is 173 for a
+  list of 169 in family Felidae (254 before schema 15), 1,058 for 1,022 in genus Conus (1,704),
+  1,769 for 1,553 in family Conidae (3,480), and exact for Rattus, Ursidae and Panthera; with
+  `genera=0`, 126 for 122 in Felidae (254).
 - Preview lines of extra species end with links to their CoL page and Wikidata item (preview only,
   `WikitextPreview.ToHtml`'s line suffixes).
 - No overlap notice goes in the wikitext.
