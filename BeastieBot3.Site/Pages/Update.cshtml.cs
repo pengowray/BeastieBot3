@@ -153,7 +153,7 @@ public sealed class UpdateModel : PageModel {
         var updater = new StatusUpdater(lookup, DateOnly.FromDateTime(DateTime.UtcNow), options: Options);
         Result = updater.Update(text);
         var scope = form[ScopeField].LastOrDefault();
-        var scopeLookup = new SiteListScopeLookup(_queries, new SpeciesTableQueries(_db));
+        var scopeLookup = new SiteListScopeLookup(_queries, new SpeciesTableQueries(_db), lookup);
         Scope = ListScope.Check(Result.Members ?? [], scopeLookup,
             new ListScopeOptions(string.IsNullOrWhiteSpace(scope) ? null : scope, On(ListAnywayField), On(ExtraSpeciesField),
                 On(ExtraSpeciesField) ? WrittenNames(text) : null));
@@ -161,7 +161,7 @@ public sealed class UpdateModel : PageModel {
         AddMissing = On(AddMissingField);
         if (AddMissing && Scope is { Partial: false, Missing.Count: > 0 }) {
             Placement = ListPlacement.Place(text, Result.Members ?? [], Scope,
-                new ListPlacementOptions(Options.AddIds, Options.AddYear, Options.CiteQ), scopeLookup);
+                new ListPlacementOptions(Options.AddIds, Options.AddYear, Options.CiteQ, Options.AddToListLines), scopeLookup);
             if (Placement.Placed.Count > 0) {
                 Result = Result with {
                     Text = updater.TextWith(ListPlacement.Insertions(text, Placement)),

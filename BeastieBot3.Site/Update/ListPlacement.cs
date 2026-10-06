@@ -22,7 +22,9 @@ public sealed record ListScopeView(ListScopeResult Scope, ListPlacementResult? P
 
 /// The updater's options that change the text put in: ids and year in {{IUCN status}}, and {{cite Q}}
 /// for the references of new {{Species table/row}} rows.
-public sealed record ListPlacementOptions(bool AddIds = false, bool AddYear = false, bool CiteQ = false);
+/// StatusOnLines: every new list line gets {{IUCN status}}, as StatusUpdateOptions.AddToListLines gives
+/// the other lines one; otherwise a new line has one when its neighbour has.
+public sealed record ListPlacementOptions(bool AddIds = false, bool AddYear = false, bool CiteQ = false, bool StatusOnLines = false);
 
 /// Puts the missing taxa of a list comparison (ListScope) into the list, where the list has a place
 /// for them:
@@ -179,7 +181,7 @@ public static partial class ListPlacement {
                     anchorTaxon = null;
                 }
             }
-            var line = NewLine(anchorText[listStart..], taxon, _scope.Style, anchor.HasStatusTemplate, _options);
+            var line = NewLine(anchorText[listStart..], taxon, _scope.Style, anchor.HasStatusTemplate || _options.StatusOnLines, _options);
             var position = before ? _lines.Start(anchorLine) + listStart : _lines.End(_lines.LastOfBlock(anchorLine));
             return new PlacedTaxon(taxon, line, position, anchorName, anchorTaxon, anchorLine, before);
         }
@@ -208,15 +210,14 @@ public static partial class ListPlacement {
             var trimmed = markers.TrimEnd();
             var prefix = trimmed + trimmed[^1] + (markers.Length > trimmed.Length ? " " : string.Empty);
             var last = _lines.LastOfBlock(species.Line);
-            // In the style of the lines already under the species ("**[[Western lowland gorilla]]"),
-            // else with the genus and species abbreviated.
-            var style = last > species.Line ? StyleOf(_lines.Text(species.Line + 1).TrimStart('*', '#', ' ')) : null;
-            var entry = GroupList.Entry(taxon);
-            var line = style is { } s
-                ? SpeciesListLine.Format(entry, new SpeciesListLineOptions { Style = s, IncludeStatusTemplate = false })
-                : SpeciesListLine.FormatInfraspecificUnderSpecies(entry, new SpeciesListLineOptions { Style = _scope.Style, IncludeStatusTemplate = false });
+            // In the style of the lines already under the species ("**[[Western lowland gorilla]]"), else
+            // of the species' line. The name is written in full, so that the next run finds the taxon
+            // by it (an abbreviated "''P. i. stockleyi''" names no taxon on a line of its own).
+            var style = (last > species.Line ? StyleOf(_lines.Text(species.Line + 1).TrimStart('*', '#', ' ')) : null)
+                ?? StyleOf(speciesText[listStart..].TrimStart('*', '#', ' ')) ?? SpeciesListStyle.ScientificNameFirst;
+            var line = SpeciesListLine.Format(GroupList.Entry(taxon), new SpeciesListLineOptions { Style = style, IncludeStatusTemplate = false });
             line = prefix + ListScope.UnlinkLists(line["* ".Length..]);
-            if (species.HasStatusTemplate && taxon.Category is not null) {
+            if ((species.HasStatusTemplate || _options.StatusOnLines) && taxon.Category is not null) {
                 line += " " + StatusTemplate(taxon, _options);
             }
             return new PlacedTaxon(taxon, line, _lines.End(last), species.Written, species.Taxon, species.Line, false);

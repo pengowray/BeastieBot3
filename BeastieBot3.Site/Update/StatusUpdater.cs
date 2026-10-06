@@ -614,15 +614,23 @@ public sealed partial class StatusUpdater {
     }
 
     // The articles linked in a span: each wikilink's target, with its span. Links to other
-    // namespaces ("File:", "Category:", "wikt:") and to sections only are left out.
+    // namespaces ("File:", "Category:", "wikt:"), to sections only, and links in italics or with an
+    // italic label are left out.
     internal static List<(string Title, TextSpan Span)> ArticleLinks(WikitextScanner s, TextSpan content) {
         if (content.Length > MaxNameCellLength) {
             return [];
         }
         var found = new List<(string, TextSpan)>();
-        foreach (Match m in Link().Matches(s.Masked[content.Start..content.End])) {
+        var text = s.Masked[content.Start..content.End];
+        // A link in italics, or with an italic label ("[[East African potto|''P. ibeanus stockleyi'']]"),
+        // names a taxon by its scientific name, which may not be the taxon of the article it links.
+        var italics = Italic().Matches(text).Where(m => !m.Value.StartsWith("'''", StringComparison.Ordinal) || m.Value.StartsWith("'''''", StringComparison.Ordinal))
+            .Select(m => (m.Index, End: m.Index + m.Length)).ToList();
+        foreach (Match m in Link().Matches(text)) {
             var target = m.Groups["target"].Value.Split('#')[0].Trim().Replace('_', ' ');
-            if (target.Length == 0 || target.Contains(':')) {
+            if (target.Length == 0 || target.Contains(':')
+                || (m.Groups["label"].Success && m.Groups["label"].Value.TrimStart().StartsWith("''", StringComparison.Ordinal))
+                || italics.Any(i => i.Index <= m.Index && m.Index + m.Length <= i.End)) {
                 continue;
             }
             found.Add((target, new TextSpan(content.Start + m.Index, content.Start + m.Index + m.Length)));

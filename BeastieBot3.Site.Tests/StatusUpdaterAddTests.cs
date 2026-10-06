@@ -175,9 +175,16 @@ public sealed class StatusUpdaterAddTests {
     }
 
     [Fact]
-    public void StatusGoesAfterItalicsAroundALink() {
-        var result = Run("* ''[[Tiger|the tiger]]'' of Asia\n", Lines);
-        Assert.Equal("* ''[[Tiger|the tiger]]'' {{IUCN status|EN}} of Asia\n", result.Text);
+    public void StatusGoesAfterBoldAroundALink() {
+        var result = Run("* '''[[Tiger|the tiger]]''' of Asia\n", Lines);
+        Assert.Equal("* '''[[Tiger|the tiger]]''' {{IUCN status|EN}} of Asia\n", result.Text);
+    }
+
+    [Theory]
+    [InlineData("* ''[[Tiger|the tiger]]'' of Asia")]                 // a link in italics names a scientific name
+    [InlineData("** [[Tiger|''P. tigris altaica'']], Amur tiger")]    // an italic label: a subspecies, not the article's species
+    public void ItalicLinksDoNotFindTaxaByTheirArticle(string line) {
+        Assert.Equal(0, Run(line + "\n").ListLinesWithoutStatus);
     }
 
     [Fact]
