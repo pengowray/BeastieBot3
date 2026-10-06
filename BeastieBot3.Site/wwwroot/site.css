@@ -1026,7 +1026,8 @@ abbr[title] {
     margin-right: 0.3em;
 }
 
-.group-col-names .label {
+.group-col-names .label,
+.group-wikipedia-names .label {
     color: var(--muted);
 }
 

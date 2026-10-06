@@ -83,6 +83,17 @@ public static class Html {
         return Regex.Replace(decoded, "\\s+", " ").Trim();
     }
 
+    /// The html after the first start and before the next end; empty when start is missing.
+    public static string Between(string html, string start, string end) {
+        var from = html.IndexOf(start, StringComparison.Ordinal);
+        if (from < 0) {
+            return string.Empty;
+        }
+        from += start.Length;
+        var to = html.IndexOf(end, from, StringComparison.Ordinal);
+        return to < 0 ? html[from..] : html[from..to];
+    }
+
     /// Position of the first match, or -1.
     public static int IndexOf(string html, string text) => html.IndexOf(text, StringComparison.Ordinal);
 }

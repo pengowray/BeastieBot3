@@ -45,6 +45,12 @@
     var iucnParent = above.LastOrDefault(p => !p.IsCol);
 }
 
+@if (Model.ArrivedQuery is { } arrived) {
+    <p class="arrival">
+        <a href="/search?q=@Uri.EscapeDataString(arrived)&amp;all=1">@SiteText.ArrivedAllResults(arrived)</a>
+    </p>
+}
+
 <header class="taxon-header group-header">
     <h1>
         @if (group.ShowRank && group.Rank != "unranked") {
@@ -92,6 +98,14 @@
         <p class="note">@GroupText.ColGroupNote(GroupList.HeadingText(group), group.Rank, iucnParent?.Rank, iucnParent?.Name)</p>
     } else if (group.IsFromRule) {
         <p class="note">@GroupText.RuleGroupNote(group.Rank)</p>
+    }
+    @if (Model.WikipediaNames.Count > 0) {
+        <p class="group-wikipedia-names"><span class="label">@GroupText.WikipediaNamesLabel</span>
+            @for (var i = 0; i < Model.WikipediaNames.Count; i++) {
+                var title = Model.WikipediaNames[i];
+                <a href="@SiteFormat.WikipediaUrl(title)" hreflang="en">@title</a>@(i < Model.WikipediaNames.Count - 1 ? ", " : null)
+            }
+        </p>
     }
     @if (Model.ColNames.Count > 0) {
         <p class="group-col-names"><span class="label">@GroupText.OtherNamesLabel</span> @string.Join(", ", Model.ColNames)</p>

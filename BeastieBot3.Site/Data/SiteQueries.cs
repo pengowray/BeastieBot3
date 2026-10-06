@@ -660,11 +660,18 @@ public sealed partial class SiteQueries {
     }
 
     /// The Catalogue of Life's English names of a group, as CoL writes them.
-    public IReadOnlyList<string> GetGroupColNames(int nodeId) {
+    public IReadOnlyList<string> GetGroupColNames(int nodeId) => GetGroupNames(nodeId, "col");
+
+    /// The group's names from English Wikipedia: the title of its article and the titles of the
+    /// redirects to it. Each is a page title on English Wikipedia.
+    public IReadOnlyList<string> GetGroupWikipediaNames(int nodeId) => GetGroupNames(nodeId, "wikipedia");
+
+    private IReadOnlyList<string> GetGroupNames(int nodeId, string source) {
         using var connection = _db.OpenConnection();
         using var command = connection.CreateCommand();
-        command.CommandText = "SELECT name FROM higher_taxon_name WHERE node_id = @id AND source = 'col' ORDER BY name COLLATE NOCASE";
+        command.CommandText = "SELECT name FROM higher_taxon_name WHERE node_id = @id AND source = @source ORDER BY name COLLATE NOCASE";
         command.Parameters.AddWithValue("@id", nodeId);
+        command.Parameters.AddWithValue("@source", source);
         using var reader = command.ExecuteReader();
         var names = new List<string>();
         while (reader.Read()) {

@@ -30,6 +30,7 @@ public static partial class GroupText {
     public const string ColumnSpecies = "Species";
     public const string ColumnInfra = "Subspecies and varieties";
     public const string OtherNamesLabel = "Common names in the Catalogue of Life (unchecked):";
+    public const string WikipediaNamesLabel = "Names on English Wikipedia (the article title and redirects to it):";
     public const string LinkWikipedia = "English Wikipedia";
     public const string LinkCol = "Catalogue of Life";
 
