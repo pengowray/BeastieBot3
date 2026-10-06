@@ -384,12 +384,17 @@ take their order from `iucn-not-assigned.yml`, and 43 have a rank still "NOT ASS
   about). Families and above go first, then subfamilies and tribes, then genera. Names that are not
   in the all-titles list are not asked for. `--status` prints what is left; each run writes its
   counts to `wiki_group_title_status`, which the workflow light reads. The first full run in October
-  2026 took about 40 minutes.
+  2026 sent 1,038 requests and took under an hour: 24,063 pages and 27,510 redirect lists (60,154
+  redirects).
 - Once the genus pages are downloaded, the last fallback of `common_name_en` (the title the
-  scientific name redirects to) would give a monotypic genus its species' name (genus *Ashbyia*
-  redirects to "Gibberbird"). `StoreBackedCommonNameProvider.GetWikipediaRedirectTitleByScientificName`
-  therefore gives no name when the target's taxobox has a species name (two or more words) that is
-  not the group's.
+  scientific name redirects to) gave 5,530 groups an English name instead of 1,182, many of them
+  wrong: a monotypic genus took its species' name (genus *Ashbyia* redirects to "Gibberbird"), and
+  genera took the titles of unrelated pages (genus *Thera* redirects to "Santorini") or of other
+  taxa ("Paspalum"). `StoreBackedCommonNameProvider.GetWikipediaRedirectTitleByScientificName`
+  therefore gives no name when the downloaded target has no taxobox, or when its taxobox is another
+  taxon and that taxon is a species of the genus or the target's title is that taxon's scientific
+  name. With that rule, 1,705 groups have an English name (October 2026). It also removes about
+  300 names that were scientific names of other taxa ("Psilotaceae" for order Psilotales).
 - `enwiki_title`: a wikilink from the rules, else the group's name when English Wikipedia has a
   page or redirect with that title that is not about another kingdom (`EnwikiTitleCheck`), else
   the name with a bracketed word for its kingdom when the name is a disambiguation page.
