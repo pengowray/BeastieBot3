@@ -376,16 +376,25 @@ chosen by the same `CommonNameChooser`.
 - The page shows the classification above the group (CoL groups marked), counts (species,
   threatened, extinct, subspecies and varieties, subpopulations), the counts by category, CoL's
   English names, links, and a table of the groups directly in it.
-- "Wikipedia list": the list as wikitext, with a preview that links to the site's taxon pages, and
-  the options beside it (`Lists/GroupListQuery.cs` reads and writes them as query parameters, so a
-  list can be linked): line format (the lists' styles A, B and C; the default is the style the
-  generated lists use for such a group), `{{IUCN status}}` on or off, a section for each category,
-  a heading for each of the ranks the reader ticks (any rank found inside the group, CoL ranks
+- "Wikipedia list": the list as wikitext, with a preview, and the options beside it
+  (`Lists/GroupListQuery.cs` reads and writes them as query parameters, so a list can be linked):
+  line format (the lists' styles A, B and C; the default is the style the generated lists use for
+  such a group), `{{IUCN status}}` on or off, a section for each category (off by default), a
+  heading for each of the ranks the reader ticks (any rank found inside the group, CoL ranks
   included; default: two of class, order and family below the group's rank), the "Members of ..."
-  line under headings, the top heading level (2 to 4; ranks that would go below level 6 are left
-  out and the page says so), categories, subspecies and varieties (none, after the species, or
-  under their species as `**` lines), subpopulations, and the order of names. `site.js` updates the
-  list as options change, as it does the citation options (`#wikitext`, `data-live-region`).
+  line under headings (off by default), the top heading level (2 to 4; ranks that would go below
+  level 6 are left out and the page says so), categories, subspecies and varieties (none, after the
+  species, or under their species as `**` lines), subpopulations, and the order of names.
+  `site.js` updates the list as options change, as it does the citation options (`#wikitext`,
+  `data-live-region`).
+- Categories: every category except NE is ticked by default; ticking none means all of them, NE
+  included. NE holds the taxa with no global assessment (IUCN assessed them only regionally; 9,142
+  species in 2026-1). Their lines have no `{{IUCN status}}`. `GroupList.CountLines` counts them as
+  the group's totals less the counts in `higher_taxon_count`, so no table holds them.
+- The preview is the wikitext rendered by `Lists/WikitextPreview.cs`: only the wikilinked part of a
+  line links (to the Wikipedia article), `''`/`'''` are italics and bold, and `{{IUCN status}}` is
+  the category code linked to its Wikipedia article plus a superscript "IUCN <year>" link to the
+  assessment, as the template renders it.
 - A list is made only up to `GroupList.MaxLines` (3,600) lines, about as many `{{IUCN status}}`
   templates as one Wikipedia page holds. The page counts the lines from `higher_taxon_count` first
   and reads no taxa for a longer list. The cap also keeps the site from handing out the categories

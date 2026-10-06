@@ -92,7 +92,7 @@ public sealed class GroupModel : PageModel {
             .OrderBy(r => GroupListQuery.RankIndex(r.Rank)).ThenBy(r => r.MinDepth)
             .Select(r => new HeadingChoice(r.Rank, r.OnlyFromCol, Options.HeadingRanks.Contains(r.Rank)))
             .ToList();
-        LineCount = GroupList.CountLines(Counts, Options);
+        LineCount = GroupList.CountLines(group, Counts, Options);
         if (!TooLong && LineCount > 0) {
             var kinds = new List<string> { TaxonKinds.Species };
             if (Options.Infra != InfraMode.None) {

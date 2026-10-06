@@ -8,13 +8,14 @@ using Microsoft.Extensions.Primitives;
 //
 //   style   sci | common | commononly   (SpeciesListStyle A, B, C)
 //   h       a rank to use as a heading; repeated, broad to narrow ("h=order&h=family"); "none" for no headings
-//   cat     a status section to include (EX EW CR EN VU NT LC DD); repeated; all when absent
-//   status  0: no status sections
+//   cat     a status section to include (EX EW CR EN VU NT LC DD NE); repeated; all but NE when
+//           absent; all, NE included, when present with no section ("cat=")
+//   status  1: a status section for each category (0: none, the default)
 //   infra   none | separate | under    (subspecies and varieties)
 //   subpop  1: include subpopulations
 //   sort    first | sci | common
 //   tpl     0: no {{IUCN status}} templates
-//   names   0: no "Members of ... are called ..." lines
+//   names   1: "Members of ... are called ..." lines (0: none, the default)
 //   level   2 to 4: wikitext level of the top headings
 
 namespace BeastieBot3.Site.Lists;
@@ -33,7 +34,7 @@ public static class GroupListQuery {
     private static readonly string[] IucnRanks = ["kingdom", "phylum", "class", "order", "family", "genus"];
 
     /// The options a group's list starts with: a style and headings that suit the group (see
-    /// DefaultStyle and DefaultHeadings), every status, species only.
+    /// DefaultStyle and DefaultHeadings), every category but NE, no status sections, species only.
     public static GroupListOptions Defaults(IReadOnlyList<GroupRow> path) {
         var style = DefaultStyle(path);
         return new GroupListOptions {
@@ -95,12 +96,15 @@ public static class GroupListQuery {
             options = options with { HeadingRanks = options.HeadingRanks.Where(availableRanks.Contains).ToList() };
         }
         if (query.TryGetValue("cat", out var cats)) {
-            var keys = Values(cats).Where(c => StatusSection.All.Any(s => s.Key == c)).ToHashSet();
-            options = options with { Sections = keys };
+            // None ticked means all of them.
+            var keys = Values(cats).Where(c => StatusSection.AllKeys.Contains(c)).ToHashSet();
+            options = options with { Sections = keys.Count == 0 ? StatusSection.AllKeys : keys };
         }
-        if (First(query, "status") == "0") {
-            options = options with { ByStatus = false };
-        }
+        options = First(query, "status") switch {
+            "1" => options with { ByStatus = true },
+            "0" => options with { ByStatus = false },
+            _ => options,
+        };
         options = First(query, "infra") switch {
             "separate" => options with { Infra = InfraMode.Separate },
             "under" => options with { Infra = InfraMode.UnderSpecies },
@@ -119,9 +123,11 @@ public static class GroupListQuery {
         if (First(query, "tpl") == "0") {
             options = options with { StatusTemplate = false };
         }
-        if (First(query, "names") == "0") {
-            options = options with { HeadingNames = false };
-        }
+        options = First(query, "names") switch {
+            "1" => options with { HeadingNames = true },
+            "0" => options with { HeadingNames = false },
+            _ => options,
+        };
         if (First(query, "level") is { } level && int.TryParse(level, NumberStyles.None, CultureInfo.InvariantCulture, out var n)) {
             options = options with { TopLevel = Math.Clamp(n, 2, 4) };
         }
@@ -141,14 +147,11 @@ public static class GroupListQuery {
             }
             parts.AddRange(options.HeadingRanks.Select(r => "h=" + Uri.EscapeDataString(r)));
         }
-        if (!options.Sections.SetEquals(defaults.Sections)) {
-            parts.AddRange(StatusSection.All.Where(s => options.Sections.Contains(s.Key)).Select(s => "cat=" + s.Key));
-            if (options.Sections.Count == 0) {
-                parts.Add("cat=");
-            }
+        if (!options.IncludedSections.SetEquals(defaults.IncludedSections)) {
+            parts.AddRange(StatusSection.All.Where(s => options.IncludedSections.Contains(s.Key)).Select(s => "cat=" + s.Key));
         }
-        if (!options.ByStatus) {
-            parts.Add("status=0");
+        if (options.ByStatus != defaults.ByStatus) {
+            parts.Add("status=" + (options.ByStatus ? "1" : "0"));
         }
         if (options.Infra != defaults.Infra) {
             parts.Add("infra=" + InfraKey(options.Infra));
@@ -162,8 +165,8 @@ public static class GroupListQuery {
         if (!options.StatusTemplate) {
             parts.Add("tpl=0");
         }
-        if (!options.HeadingNames) {
-            parts.Add("names=0");
+        if (options.HeadingNames != defaults.HeadingNames) {
+            parts.Add("names=" + (options.HeadingNames ? "1" : "0"));
         }
         if (options.TopLevel != defaults.TopLevel) {
             parts.Add("level=" + options.TopLevel.ToString(CultureInfo.InvariantCulture));

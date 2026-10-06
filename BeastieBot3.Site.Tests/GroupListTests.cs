@@ -39,7 +39,7 @@ public sealed class GroupListTests {
 
     [Fact]
     public void Status_sections_then_family_headings_in_the_lists_format() {
-        var options = new GroupListOptions { HeadingRanks = ["family"], Style = SpeciesListStyle.CommonNameFirst };
+        var options = new GroupListOptions { HeadingRanks = ["family"], Style = SpeciesListStyle.CommonNameFirst, ByStatus = true, HeadingNames = true };
         var list = GroupList.Build(Taxa, Groups, options);
         var wikitext = GroupList.ToWikitext(list, options);
 
@@ -113,7 +113,7 @@ public sealed class GroupListTests {
 
     [Fact]
     public void Leaves_out_heading_ranks_below_level_6() {
-        var options = new GroupListOptions { TopLevel = 4, HeadingRanks = ["order", "family", "genus"] };
+        var options = new GroupListOptions { TopLevel = 4, HeadingRanks = ["order", "family", "genus"], ByStatus = true };
         var list = GroupList.Build(Taxa, Groups, options);
 
         Assert.Equal(["genus"], list.SkippedRanks);
@@ -123,9 +123,38 @@ public sealed class GroupListTests {
     [Fact]
     public void Counts_lines_from_the_category_counts() {
         GroupCategoryCount[] counts = [new("CR(PE)", 2, 1, 0), new("EN", 10, 3, 1), new("LR/nt", 4, 0, 0)];
-        Assert.Equal(16, GroupList.CountLines(counts, new GroupListOptions()));
-        Assert.Equal(21, GroupList.CountLines(counts, new GroupListOptions { Infra = InfraMode.Separate, Subpopulations = true }));
-        Assert.Equal(4, GroupList.CountLines(counts, new GroupListOptions { Sections = new HashSet<string> { "NT" } }));
+        // 3 species and 1 subspecies with no global assessment.
+        var group = Felidae with { SpeciesCount = 19, InfraCount = 5, SubpopulationCount = 1 };
+        Assert.Equal(16, GroupList.CountLines(group, counts, new GroupListOptions()));
+        Assert.Equal(21, GroupList.CountLines(group, counts, new GroupListOptions { Infra = InfraMode.Separate, Subpopulations = true }));
+        Assert.Equal(4, GroupList.CountLines(group, counts, new GroupListOptions { Sections = new HashSet<string> { "NT" } }));
+        Assert.Equal(3, GroupList.CountLines(group, counts, new GroupListOptions { Sections = new HashSet<string> { "NE" } }));
+        Assert.Equal(19, GroupList.CountLines(group, counts, new GroupListOptions { Sections = new HashSet<string>() }));
+    }
+
+    [Fact]
+    public void A_taxon_with_no_global_assessment_is_listed_under_NE_with_no_template() {
+        var unassessed = Taxon(7, "Panthera spelaea", 4, 4, "LC", "Cave lion") with { Category = null, AssessmentId = null, YearPublished = null };
+        var taxa = Taxa.Append(unassessed).ToList();
+        var defaults = GroupList.Build(taxa, Groups, new GroupListOptions());
+        Assert.DoesNotContain(defaults.Blocks, b => b is LineBlock { Taxon.TaxonId: 7 });
+
+        var options = new GroupListOptions { ByStatus = true, Sections = new HashSet<string>() };
+        var list = GroupList.Build(taxa, Groups, options);
+        var wikitext = GroupList.ToWikitext(list, options);
+        Assert.EndsWith("== Not evaluated ==\n* [[Cave lion]] (''Panthera spelaea'')", wikitext);
+        Assert.Equal(5, list.TemplateCount);
+        Assert.Equal(6, list.LineCount);
+    }
+
+    [Fact]
+    public void Preview_links_only_the_wikilink_and_renders_the_status_template() {
+        var html = WikitextPreview.ToHtml("== Bats ==\n* [[Lombok flying fox]] (''Pteropus lombocensis'') {{IUCN status|DD|18733/22082270|1|year=2016}}\n** ''[[A b]]''");
+
+        Assert.Equal("<h3 class=\"preview-heading\">Bats</h3><ul class=\"preview-lines\"><li><a href=\"https://en.wikipedia.org/wiki/Lombok_flying_fox\">Lombok flying fox</a> (<i>Pteropus lombocensis</i>) "
+            + "<a class=\"preview-status\" href=\"https://en.wikipedia.org/wiki/Data_deficient\"><span class=\"badge cat-grey\">DD</span></a>"
+            + "<sup> <a href=\"https://www.iucnredlist.org/species/18733/22082270\">IUCN 2016</a></sup>"
+            + "<ul class=\"preview-lines\"><li><i><a href=\"https://en.wikipedia.org/wiki/A_b\">A b</a></i></li></ul></li></ul>", html);
     }
 
     [Fact]
@@ -142,7 +171,7 @@ public sealed class GroupListTests {
         var defaults = new GroupListOptions { HeadingRanks = ["order", "family"] };
         var query = new QueryCollection(new Dictionary<string, StringValues> {
             ["style"] = "sci", ["h"] = new(["none", "family", "suborder"]), ["cat"] = new(["", "CR", "EN"]),
-            ["tpl"] = new(["0", "1"]), ["names"] = "0", ["level"] = "9",
+            ["tpl"] = new(["0", "1"]), ["names"] = new(["0", "1"]), ["status"] = "1", ["level"] = "9",
         });
         var options = GroupListQuery.Read(query, defaults, ["order", "suborder", "family"]);
 
@@ -150,9 +179,19 @@ public sealed class GroupListTests {
         Assert.Equal(["suborder", "family"], options.HeadingRanks);
         Assert.Equal(["CR", "EN"], options.Sections.Order());
         Assert.True(options.StatusTemplate);
-        Assert.False(options.HeadingNames);
+        Assert.True(options.HeadingNames);
+        Assert.True(options.ByStatus);
         Assert.Equal(4, options.TopLevel);
-        Assert.Equal("?style=sci&h=suborder&h=family&cat=CR&cat=EN&names=0&level=4", GroupListQuery.Write(options, defaults));
+        Assert.Equal("?style=sci&h=suborder&h=family&cat=CR&cat=EN&status=1&names=1&level=4", GroupListQuery.Write(options, defaults));
         Assert.Equal(string.Empty, GroupListQuery.Write(defaults, defaults));
+    }
+
+    [Fact]
+    public void No_category_ticked_means_every_category() {
+        var query = new QueryCollection(new Dictionary<string, StringValues> { ["cat"] = "" });
+        var options = GroupListQuery.Read(query, new GroupListOptions(), []);
+
+        Assert.True(options.IncludedSections.SetEquals(StatusSection.AllKeys));
+        Assert.Contains("cat=NE", GroupListQuery.Write(options, new GroupListOptions()));
     }
 }

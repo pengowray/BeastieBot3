@@ -41,7 +41,8 @@ public static class GroupSources {
 /// How many taxa in a group have a category ({{IUCN status}} code) in their latest global assessment.
 public sealed record GroupCategoryCount(string Category, int Species, int Infra, int Subpopulations);
 
-/// One taxon for a list: what a Wikipedia list line needs, with its place in the tree.
+/// One taxon for a list: what a Wikipedia list line needs, with its place in the tree. The assessment
+/// columns are null for a taxon with no global assessment.
 public sealed record ListTaxonRow(
     long TaxonId,
     string ScientificName,
@@ -58,8 +59,8 @@ public sealed record ListTaxonRow(
     long? ParentTaxonId,
     int NodeId,
     int TreePos,
-    long AssessmentId,
-    string Category,
+    long? AssessmentId,
+    string? Category,
     bool PossiblyExtinct,
     bool PossiblyExtinctInTheWild,
     int? YearPublished);

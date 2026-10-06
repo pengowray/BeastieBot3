@@ -244,6 +244,7 @@
                             <label><input type="checkbox" name="cat" value="@statusSection.Key" checked="@(options.Sections.Contains(statusSection.Key))"> <partial name="_Badge" model="@BadgeModel.ForStatusCode(statusSection.Key, showLabel: true)" /></label>
                         }
                     </div>
+                    <p class="help">@GroupText.CategoriesHelp</p>
                 </fieldset>
                 <fieldset class="option-group">
                     <legend>@GroupText.OptionTaxa</legend>
@@ -281,52 +282,7 @@
                     <summary>@GroupText.Preview</summary>
                     <p class="help">@GroupText.PreviewNote</p>
                     <div class="preview-body">
-                        @{ var inList = false; }
-                        @foreach (var block in list.Blocks) {
-                            if (block is LineBlock line) {
-                                if (!inList) {
-                                    @Html.Raw("<ul class=\"preview-lines\">")
-                                    inList = true;
-                                }
-                                var t = line.Taxon;
-                                var sci = ScientificNameMarkup.ToHtml(t.ScientificName, t.SubpopulationName);
-                                <li class="@(line.Nested ? "nested" : null)">
-                                    <a href="/species/@t.TaxonId">@switch (options.Style) {
-                                        case SpeciesListStyle.ScientificNameFirst:
-                                            @Html.Raw(sci)
-                                            if (t.CommonNameEn is not null) {<text>, @t.CommonNameEn</text>}
-                                            break;
-                                        case SpeciesListStyle.CommonNameOnly when t.CommonNameEn is not null:
-                                            @t.CommonNameEn
-                                            break;
-                                        default:
-                                            if (t.CommonNameEn is not null) {<text>@t.CommonNameEn (</text>@Html.Raw(sci)<text>)</text>} else {@Html.Raw(sci)}
-                                            break;
-                                    }</a>
-                                    <partial name="_Badge" model="@BadgeModel.ForStatusCode(GroupList.StatusCode(t))" />
-                                </li>
-                                continue;
-                            }
-                            if (inList) {
-                                @Html.Raw("</ul>")
-                                inList = false;
-                            }
-                            switch (block) {
-                                case HeadingBlock heading:
-                                    var tag = "h" + Math.Min(6, heading.Level + 1);
-                                    @Html.Raw($"<{tag} class=\"preview-heading\">")@heading.Text@Html.Raw($"</{tag}>")
-                                    break;
-                                case GroupNameBlock name:
-                                    <p class="preview-group-name">@GroupList.Capitalize(name.Group.CommonNameEn ?? string.Empty)</p>
-                                    break;
-                                case LabelBlock label:
-                                    <p class="preview-label"><b>@label.Text</b></p>
-                                    break;
-                            }
-                        }
-                        @if (inList) {
-                            @Html.Raw("</ul>")
-                        }
+                        @Html.Raw(WikitextPreview.ToHtml(Model.Wikitext))
                     </div>
                 </details>
             }

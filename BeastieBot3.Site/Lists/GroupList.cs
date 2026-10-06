@@ -17,6 +17,8 @@ public enum ListSort { FirstName, ScientificName, CommonName }
 
 /// The status sections of a list, in the order the Wikipedia lists use. Each holds the {{IUCN
 /// status}} codes that go in it; LR/nt and LR/cd go with NT and LR/lc with LC, as in the lists.
+/// NE holds the taxa with no global assessment (IUCN assessed them only regionally); their lines
+/// have no {{IUCN status}} template.
 public sealed record StatusSection(string Key, string Heading, IReadOnlyList<string> Codes, string? StatusContext) {
     public static readonly IReadOnlyList<StatusSection> All = [
         new("EX", "Extinct", ["EX"], "EX"),
@@ -27,7 +29,15 @@ public sealed record StatusSection(string Key, string Heading, IReadOnlyList<str
         new("NT", "Near threatened", ["NT", "LR/nt", "LR/cd"], "NT"),
         new("LC", "Least concern", ["LC", "LR/lc"], "LC"),
         new("DD", "Data deficient", ["DD"], "DD"),
+        new(NotEvaluated, "Not evaluated", [NotEvaluated], NotEvaluated),
     ];
+
+    public const string NotEvaluated = "NE";
+
+    /// The sections a list has unless the reader picks others: every category except NE.
+    public static readonly IReadOnlySet<string> DefaultKeys = All.Where(s => s.Key != NotEvaluated).Select(s => s.Key).ToHashSet();
+
+    public static readonly IReadOnlySet<string> AllKeys = All.Select(s => s.Key).ToHashSet();
 
     public static StatusSection? For(string code) => All.FirstOrDefault(s => s.Codes.Contains(code, StringComparer.Ordinal));
 }
@@ -36,15 +46,18 @@ public sealed record GroupListOptions {
     public SpeciesListStyle Style { get; init; } = SpeciesListStyle.CommonNameFirst;
     /// Ranks that become headings, broad to narrow ("order", "family", or a CoL rank such as "suborder").
     public IReadOnlyList<string> HeadingRanks { get; init; } = [];
-    /// Keys of StatusSection.All to include.
-    public IReadOnlySet<string> Sections { get; init; } = StatusSection.All.Select(s => s.Key).ToHashSet();
-    public bool ByStatus { get; init; } = true;
+    /// Keys of StatusSection.All to include. Empty means all of them, NE included.
+    public IReadOnlySet<string> Sections { get; init; } = StatusSection.DefaultKeys;
+    public bool ByStatus { get; init; }
     public InfraMode Infra { get; init; } = InfraMode.None;
     public bool Subpopulations { get; init; }
     public ListSort Sort { get; init; } = ListSort.FirstName;
     public bool StatusTemplate { get; init; } = true;
+
+    /// The sections that are included: all of them when none is picked.
+    public IReadOnlySet<string> IncludedSections => Sections.Count == 0 ? StatusSection.AllKeys : Sections;
     /// The "Members of the [[Felidae]] family are called cats." line under a rank heading.
-    public bool HeadingNames { get; init; } = true;
+    public bool HeadingNames { get; init; }
     /// Wikitext level of the top headings: 2 is "== ... ==".
     public int TopLevel { get; init; } = 2;
 }
@@ -85,7 +98,7 @@ public static class GroupList {
         var skipped = options.HeadingRanks.Skip(ranks.Count).ToList();
 
         if (options.ByStatus) {
-            foreach (var section in StatusSection.All.Where(s => options.Sections.Contains(s.Key))) {
+            foreach (var section in StatusSection.All.Where(s => options.IncludedSections.Contains(s.Key))) {
                 var inSection = kept.Where(t => section.Codes.Contains(StatusCode(t), StringComparer.Ordinal)).ToList();
                 if (inSection.Count == 0) {
                     continue;
@@ -97,15 +110,21 @@ public static class GroupList {
             AddGroups(blocks, kept, groups, ranks, level, options);
         }
 
-        var lines = blocks.Count(b => b is LineBlock);
-        return new GroupListResult(blocks, lines, options.StatusTemplate ? lines : 0, skipped);
+        var lines = blocks.OfType<LineBlock>().ToList();
+        var templates = options.StatusTemplate ? lines.Count(l => l.Taxon.Category is not null) : 0;
+        return new GroupListResult(blocks, lines.Count, templates, skipped);
     }
 
     /// How many lines the list would have, from the counts of the group, without reading the taxa.
-    public static int CountLines(IReadOnlyList<GroupCategoryCount> counts, GroupListOptions options) {
+    /// The taxa with no global assessment (NE) are the group's totals less the counted ones.
+    public static int CountLines(GroupRow group, IReadOnlyList<GroupCategoryCount> counts, GroupListOptions options) {
+        var notEvaluated = new GroupCategoryCount(StatusSection.NotEvaluated,
+            group.SpeciesCount - counts.Sum(c => c.Species),
+            group.InfraCount - counts.Sum(c => c.Infra),
+            group.SubpopulationCount - counts.Sum(c => c.Subpopulations));
         var total = 0;
-        foreach (var count in counts) {
-            if (StatusSection.For(count.Category) is not { } section || !options.Sections.Contains(section.Key)) {
+        foreach (var count in counts.Append(notEvaluated)) {
+            if (StatusSection.For(count.Category) is not { } section || !options.IncludedSections.Contains(section.Key)) {
                 continue;
             }
             total += count.Species;
@@ -119,11 +138,13 @@ public static class GroupList {
         return total;
     }
 
-    public static string StatusCode(ListTaxonRow taxon) =>
-        IucnStatusTemplate.ToTemplateCode(taxon.Category, taxon.PossiblyExtinct, taxon.PossiblyExtinctInTheWild);
+    /// The {{IUCN status}} code of the taxon's latest global assessment; NE when it has none.
+    public static string StatusCode(ListTaxonRow taxon) => taxon.Category is { } category
+        ? IucnStatusTemplate.ToTemplateCode(category, taxon.PossiblyExtinct, taxon.PossiblyExtinctInTheWild)
+        : StatusSection.NotEvaluated;
 
     private static bool Included(ListTaxonRow taxon, GroupListOptions options) {
-        if (StatusSection.For(StatusCode(taxon)) is not { } section || !options.Sections.Contains(section.Key)) {
+        if (StatusSection.For(StatusCode(taxon)) is not { } section || !options.IncludedSections.Contains(section.Key)) {
             return false;
         }
         return taxon.Kind switch {
@@ -217,9 +238,9 @@ public static class GroupList {
             : taxa.OrderBy(t => t.TreePos);
     }
 
-    public static SpeciesListLineOptions LineOptions(GroupListOptions options, string? statusContext) => new() {
+    public static SpeciesListLineOptions LineOptions(GroupListOptions options, string? statusContext, bool assessed = true) => new() {
         Style = options.Style,
-        IncludeStatusTemplate = options.StatusTemplate,
+        IncludeStatusTemplate = options.StatusTemplate && assessed,
         StatusContext = statusContext,
     };
 
@@ -238,7 +259,7 @@ public static class GroupList {
         PossiblyExtinct = taxon.PossiblyExtinct,
         PossiblyExtinctInTheWild = taxon.PossiblyExtinctInTheWild,
         TaxonId = taxon.TaxonId,
-        AssessmentId = taxon.AssessmentId,
+        AssessmentId = taxon.AssessmentId ?? 0,
         YearPublished = taxon.YearPublished?.ToString(System.Globalization.CultureInfo.InvariantCulture),
     };
 
@@ -300,7 +321,7 @@ public static class GroupList {
                     previousWasLine = false;
                     break;
                 case LineBlock line:
-                    var lineOptions = LineOptions(options, options.ByStatus ? context : null);
+                    var lineOptions = LineOptions(options, options.ByStatus ? context : null, line.Taxon.Category is not null);
                     sb.Append(line.Nested
                         ? "*" + SpeciesListLine.FormatInfraspecificUnderSpecies(line.Entry, lineOptions)
                         : SpeciesListLine.Format(line.Entry, lineOptions)).Append('\n');

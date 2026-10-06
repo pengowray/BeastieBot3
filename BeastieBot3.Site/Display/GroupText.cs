@@ -75,7 +75,7 @@ public static class GroupText {
     public const string WikitextLabel = "Wikitext";
     public const string CopyListAccessible = "Copy the list wikitext";
     public const string Preview = "Preview";
-    public const string PreviewNote = "In this preview, names link to this site. In the wikitext, they link to Wikipedia articles.";
+    public const string PreviewNote = "Approximate preview of how Wikipedia displays this wikitext. Names link to English Wikipedia articles. Each category code links to the Wikipedia article for that category, and the small superscript link (such as “IUCN 2016”) links to the assessment on the IUCN Red List website.";
     public const string ListUpdated = "List updated";
     public const string ListTooManyRequests = "Too many requests: the list was not updated. Wait a minute, then select Update list.";
 
@@ -98,6 +98,7 @@ public static class GroupText {
     public const string OptionTopLevel = "Top heading level";
     public static string LevelOption(int level) => $"Level {level} ({new string('=', level)})";
     public const string OptionCategories = "Red List categories";
+    public const string CategoriesHelp = "Not Evaluated: taxa with no global IUCN assessment (only a regional one, such as Europe), whose lines have no {{IUCN status}} after the name. If no box is ticked, the list includes every category.";
     public const string OptionTaxa = "Taxa";
     public const string InfraNone = "Species only";
     public const string InfraSeparate = "Subspecies and varieties in a separate section";

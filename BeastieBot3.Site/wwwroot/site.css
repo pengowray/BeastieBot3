@@ -1140,18 +1140,20 @@ th.num {
     padding-left: 1.25rem;
 }
 
-.preview-lines li.nested {
-    margin-left: 1.5rem;
+.preview-lines .preview-lines {
     list-style-type: circle;
 }
 
-.preview-group-name,
-.preview-label {
+.preview-body p {
     margin: 0.25rem 0;
 }
 
-.preview-group-name {
-    color: var(--muted);
+.preview-status {
+    text-decoration: none;
+}
+
+.preview-body sup {
+    font-size: 0.75em;
 }
 
 /* ---------------------------------------------------------------- status updater */

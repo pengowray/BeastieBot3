@@ -657,7 +657,7 @@ public sealed class SiteQueries {
                    t.subpopulation_name, COALESCE(t.common_name_en, p.common_name_en), t.list_article_title, t.list_parent_article_title,
                    t.parent_taxon_id, t.node_id, t.tree_pos, a.assessment_id, a.category, a.possibly_extinct, a.possibly_extinct_in_the_wild,
                    a.year_published
-            FROM taxon t JOIN assessment a ON a.assessment_id = t.latest_global_assessment_id
+            FROM taxon t LEFT JOIN assessment a ON a.assessment_id = t.latest_global_assessment_id
             LEFT JOIN taxon p ON p.taxon_id = t.parent_taxon_id AND t.kind = 'subpopulation'
             WHERE t.tree_pos BETWEEN @first AND @last AND t.kind IN ({string.Join(", ", kindNames)})
             ORDER BY t.tree_pos
@@ -670,8 +670,9 @@ public sealed class SiteQueries {
             rows.Add(new ListTaxonRow(
                 reader.GetInt64(0), reader.GetString(1), reader.GetString(2), Text(reader, 3), Text(reader, 4), Text(reader, 5),
                 Text(reader, 6), Text(reader, 7), Text(reader, 8), Text(reader, 9), Text(reader, 10), Text(reader, 11),
-                Long(reader, 12), reader.GetInt32(13), reader.GetInt32(14), reader.GetInt64(15), reader.GetString(16),
-                reader.GetInt64(17) != 0, reader.GetInt64(18) != 0, reader.IsDBNull(19) ? null : reader.GetInt32(19)));
+                Long(reader, 12), reader.GetInt32(13), reader.GetInt32(14), Long(reader, 15), Text(reader, 16),
+                !reader.IsDBNull(17) && reader.GetInt64(17) != 0, !reader.IsDBNull(18) && reader.GetInt64(18) != 0,
+                reader.IsDBNull(19) ? null : reader.GetInt32(19)));
         }
         return rows;
     }

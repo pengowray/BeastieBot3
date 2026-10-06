@@ -28,13 +28,13 @@ public sealed class GroupPageTests(SiteFactory factory) : IClassFixture<SiteFact
         Assert.Contains("Family Ursidae", html);
         Assert.Contains("rel=\"canonical\" href=\"http://localhost/taxa/family/ursidae\"", html);
         Assert.Contains("Common names in the Catalogue of Life (unchecked):", html);
-        // Mammals default to common name only, with no rank headings below a family.
-        Assert.Equal("== Vulnerable ==\n* [[Polar bear]] {{IUCN status|VU|22823/14871490|1|year=2015}}", Html.Textarea(html, "list-wikitext"));
+        // Mammals default to common name only, with no rank headings below a family and no status sections.
+        Assert.Equal("* [[Polar bear]] {{IUCN status|VU|22823/14871490|1|year=2015}}", Html.Textarea(html, "list-wikitext"));
     }
 
     [Fact]
     public async Task ListOptionsComeFromTheQuery() {
-        var html = await _client.GetStringAsync("/taxa/order/carnivora?style=sci&status=0&h=family&tpl=0");
+        var html = await _client.GetStringAsync("/taxa/order/carnivora?style=sci&status=0&h=family&tpl=0&names=1");
 
         Assert.Equal("== Family Ursidae ==\nMembers of the [[Bear|Ursidae]] family are called bears.\n* [[Polar bear|''Ursus maritimus'']], Polar bear",
             Html.Textarea(html, "list-wikitext"));
