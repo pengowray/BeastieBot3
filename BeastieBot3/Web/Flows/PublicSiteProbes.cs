@@ -19,13 +19,15 @@ public static class PublicSiteProbes {
     public const string Gbif = "site-gbif";
     public const string Dois = "site-dois";
     public const string Build = "site-build";
+    public const string GroupTitles = "site-group-titles";
 
-    public static bool IsProbe(string probe) => probe is Gbif or Dois or Build;
+    public static bool IsProbe(string probe) => probe is Gbif or Dois or Build or GroupTitles;
 
     public static FlowProbeResult? Evaluate(string probe, PublicSiteState s) => probe switch {
         Gbif => GbifStep(s),
         Dois => DoiStep(s),
         Build => BuildStep(s),
+        GroupTitles => GroupTitlesStep(s),
         _ => null,
     };
 
@@ -108,6 +110,29 @@ public static class PublicSiteProbes {
         }
         return new FlowProbeResult("ok",
             $"Checked the {c.WithoutSourceDoi:n0} latest global assessments that have no DOI from {OtherSources}: found a DOI for {c.Found:n0} and none for {c.NotFound:n0}.");
+    }
+
+    // ---- the pages and redirects of the groups' titles ----
+
+    // "todo" when it has never run, or when the IUCN Red List database (where the groups come from)
+    // changed after the last run; "backlog" while the last run left pages or redirect lists to download.
+    internal static FlowProbeResult GroupTitlesStep(PublicSiteState s) {
+        if (s.WikipediaCachePath is null) {
+            return new FlowProbeResult("todo", "No path set for the Wikipedia cache: add [Datastore] enwiki_cache_sqlite to paths.ini.");
+        }
+        if (s.GroupTitles is not { } run) {
+            return new FlowProbeResult("todo", "Not run yet.");
+        }
+        var stamp = IucnRefreshMath.Stamp(run.FinishedAtUtc);
+        if (s.IucnFileChangedAtUtc is { } changed && (run.IucnChangedAtUtc is not { } seen || changed > seen)) {
+            return new FlowProbeResult("todo",
+                $"The IUCN Red List database changed after the last run ({stamp}), so the list of groups may be different. Run it again.");
+        }
+        if (run.PagesToDownload > 0 || run.RedirectListsToDownload > 0) {
+            return new FlowProbeResult("backlog",
+                $"Last run {stamp}: {run.PagesToDownload:n0} pages and {run.RedirectListsToDownload:n0} redirect lists still to download.");
+        }
+        return new FlowProbeResult("ok", $"Last run {stamp}: {run.Articles:n0} articles of groups, all with their redirects downloaded.");
     }
 
     // ---- the site database ----

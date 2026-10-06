@@ -53,6 +53,13 @@ public sealed record PublicSiteState {
     /// the background count has finished once, or when it could not be made (SiteDoiCountReader).
     public SiteDoiCount? DoiCount { get; init; }
 
+    // --- The pages and redirects of the groups' titles (`wikipedia fetch-group-titles`, in the Wikipedia cache) ---
+    public string? WikipediaCachePath { get; init; }
+    /// The counts the last run stored; null when it has never run (or the cache cannot be read).
+    public GroupTitleRunState? GroupTitles { get; init; }
+    /// When the IUCN Red List database file last changed, to compare with the time the last run saw.
+    public DateTime? IucnFileChangedAtUtc { get; init; }
+
     // --- The site database (`site build-db`, Datastore:site_sqlite) ---
     public string? SitePath { get; init; }
     public bool SiteExists { get; init; }
@@ -67,6 +74,13 @@ public sealed record PublicSiteState {
     /// Inputs that do not exist are left out, as the build leaves them out.
     public IReadOnlyList<SiteInputChange> Inputs { get; init; } = Array.Empty<SiteInputChange>();
 }
+
+/// <summary>
+/// What the last `wikipedia fetch-group-titles` run left to do, and the time it saw on the IUCN Red
+/// List database file (the groups come from that database).
+/// </summary>
+public sealed record GroupTitleRunState(DateTime FinishedAtUtc, long PagesToDownload, long RedirectListsToDownload, long Articles,
+    DateTime? IucnChangedAtUtc);
 
 /// <summary>The files the public site workflow reads, resolved from paths.ini.</summary>
 public sealed record PublicSitePaths {
@@ -161,6 +175,9 @@ public static class PublicSiteStateReader {
             GbifReadError = gbif?.Error,
             DoiCachePath = p.DoiCache,
             DoiCacheExists = Exists(p.DoiCache),
+            WikipediaCachePath = p.WikipediaCache,
+            GroupTitles = ReadGroupTitles(p.WikipediaCache),
+            IucnFileChangedAtUtc = SqliteChangedAt(p.IucnDatabase),
             SitePath = p.SiteDatabase,
             SiteExists = Exists(p.SiteDatabase),
             Inputs = inputs,
@@ -223,6 +240,35 @@ public static class PublicSiteStateReader {
             }
             return newest;
         } catch (Exception) {
+            return null;
+        }
+    }
+
+    // ---- the groups' titles in the Wikipedia cache ----
+
+    // One small key/value table that `wikipedia fetch-group-titles` writes at the end of each run.
+    private static GroupTitleRunState? ReadGroupTitles(string? path) {
+        if (!Exists(path)) return null;
+        try {
+            using var conn = OpenReadOnly(path!);
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = "SELECT key, value FROM wiki_group_title_status";
+            cmd.CommandTimeout = 5;
+            var values = new Dictionary<string, string>(StringComparer.Ordinal);
+            using (var reader = cmd.ExecuteReader()) {
+                while (reader.Read()) {
+                    values[reader.GetString(0)] = reader.GetString(1);
+                }
+            }
+            long Count(string key) => values.TryGetValue(key, out var v) && long.TryParse(v, NumberStyles.Integer, CultureInfo.InvariantCulture, out var n) ? n : 0;
+            if (!values.TryGetValue(Wikipedia.GroupTitleStatusKeys.FinishedAt, out var finished) || StoredUtc.Parse(finished) is not { } finishedAt) {
+                return null;
+            }
+            var iucnChanged = values.TryGetValue(Wikipedia.GroupTitleStatusKeys.IucnChangedAt, out var changed) ? StoredUtc.Parse(changed) : null;
+            return new GroupTitleRunState(finishedAt, Count(Wikipedia.GroupTitleStatusKeys.PagesToDownload),
+                Count(Wikipedia.GroupTitleStatusKeys.RedirectListsToDownload), Count(Wikipedia.GroupTitleStatusKeys.Articles), iucnChanged);
+        } catch (Exception) {
+            // No such table yet: the command has never run on this cache.
             return null;
         }
     }
