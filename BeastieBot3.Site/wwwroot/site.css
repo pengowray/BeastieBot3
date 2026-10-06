@@ -1375,13 +1375,17 @@ th.num {
     margin: 0;
 }
 
+/* A label, its info button and its select (Order of preference): the select wraps to the next line
+   when the three do not fit on one. */
 .option-with-tip {
     display: flex;
     align-items: center;
     flex-wrap: wrap;
-    gap: 0 0.2rem;
+    gap: 0.2rem 0.4rem;
+    margin: 0.2rem 0;
 }
 
-.option-with-tip .inline-select {
-    margin: 0.2rem 0;
+.options-form .option-with-tip label {
+    display: inline;
+    margin: 0;
 }

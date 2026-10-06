@@ -237,6 +237,25 @@ async function waitForCite(page, test, what) {
     check((await cite(page)).includes("|last1=Wiig"), "and its wikitext uses them");
     await page.unroute("**/species/**");
 
+    // The group page's list: ticking a source updates the list in place and ticks Not Evaluated,
+    // as the server does (data-live-sync).
+    await page.goto(`${base}/taxa/genus/ursus`);
+    await mark(page);
+    const ne = page.locator("input[name=cat][value=NE]");
+    check(!(await ne.isChecked()), "group list: Not Evaluated starts unticked");
+    await page.locator("input[name=src][value=col]").check();
+    await page.waitForFunction(() => location.search.includes("src=col"), null, { timeout: 5000 });
+    check(await stillSamePage(page), "ticking CoL updates the list without loading the page");
+    check(await ne.isChecked(), "and ticks Not Evaluated");
+
+    // An info button opens its help text on click, and Escape closes it.
+    await page.locator("[popovertarget=tip-categories]").click();
+    const tipOpen = await page.locator("#tip-categories").evaluate((tip) => tip.matches(":popover-open"));
+    check(tipOpen, "the Red List categories info button opens its help text");
+    await page.keyboard.press("Escape");
+    const tipClosed = await page.locator("#tip-categories").evaluate((tip) => !tip.matches(":popover-open"));
+    check(tipClosed, "and Escape closes it");
+
     check(posts.length === 0, "only GET requests" + (posts.length ? ": " + posts.join(", ") : ""));
     await browser.close();
     if (failures.length > 0) {
