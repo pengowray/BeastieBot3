@@ -298,6 +298,17 @@ public static class FixtureDb {
                 doi: "10.2305/IUCN.UK.2022-1.RLTS.T15955A214862019.en", doiSource: DoiSource.Gbif, text: null),
             wikidataItem: TigerLatestItem, wikidataItemProperties: "P31 P1476 P1433 P921 Len",
             wikidataItemTitles: WikidataTitle.ListToJson([new WikidataTitle(TigerItemOldTitle, "en")]), wikidataItemLabelEn: TigerItemOldTitle);
+        // Credits: the assessors in the citation's order, one of them also a facilitator with
+        // another affiliation (one name, counted once), and an organisation.
+        w.Credits(TigerLatest,
+            (CreditTypes.Assessor, ["John Goodrich (Panthera)", "Hariyo Wibisono (WCS)"], false),
+            (CreditTypes.Evaluator, ["Sugoto Roy (IUCN)"], false),
+            (CreditTypes.Facilitators, ["John Goodrich (IUCN SSC Cat Specialist Group)"], false),
+            (CreditTypes.Institutions, ["Wildlife Conservation Society"], false));
+        // A reviewer group IUCN gives only in citation form.
+        w.Credits(PolarBear2008,
+            (CreditTypes.Assessor, ["Scott Schliebe"], false),
+            (CreditTypes.Evaluator, ["Derocher, A. & Lunn, N."], true));
         w.Name(Tiger, "Panthera tigris", "scientific", null, "iucn");
         w.Name(Tiger, "Tiger", "common", "en", "iucn", preferred: true);
         w.Name(Tiger, "Big cat", "common", "en", "wikidata");
@@ -702,6 +713,24 @@ public static class FixtureDb {
 
     private sealed class Writer(SqliteConnection connection, SqliteTransaction tx) {
         private long _nextNameId = 1;
+        private readonly Dictionary<string, long> _creditNames = new(StringComparer.Ordinal);
+
+        /// Sets an assessment's credits, adding each text to credit_name once. Full: the group's one
+        /// text is IUCN's citation-form string.
+        public void Credits(long assessmentId, params (string Type, string[] Names, bool Full)[] groups) {
+            long IdOf(string text) {
+                if (!_creditNames.TryGetValue(text, out var id)) {
+                    id = _creditNames.Count + 1;
+                    _creditNames[text] = id;
+                    Run("INSERT INTO credit_name(credit_name_id, text) VALUES (@a, @b)", id, text);
+                }
+                return id;
+            }
+            var stored = groups.Select(g => g.Full
+                ? new StoredCreditGroup(g.Type, [], IdOf(g.Names[0]))
+                : new StoredCreditGroup(g.Type, g.Names.Select(IdOf).ToList(), null)).ToList();
+            Run("UPDATE assessment SET credits = @a WHERE assessment_id = @b", StoredCredits.ToJson(stored), assessmentId);
+        }
         public int TaxonCount { get; private set; }
         public int AssessmentCount { get; private set; }
 

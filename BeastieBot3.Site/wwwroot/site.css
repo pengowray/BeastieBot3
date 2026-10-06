@@ -648,6 +648,44 @@ textarea {
     margin: 0.3rem 0 0;
 }
 
+.iucn-credits {
+    margin-top: 0.4rem;
+}
+
+.iucn-credits summary {
+    cursor: pointer;
+    font-size: 0.9rem;
+}
+
+.credit-group {
+    font-size: 0.9rem;
+    margin: 0.5rem 0 0;
+}
+
+.credit-group p {
+    margin: 0.2rem 0 0;
+}
+
+.credit-type {
+    font-weight: 600;
+}
+
+.credit-count {
+    font-weight: normal;
+}
+
+.credit-names {
+    margin: 0.2rem 0 0;
+    padding-left: 1.25rem;
+    color: var(--fg);
+    overflow-wrap: anywhere;
+}
+
+.credit-full {
+    color: var(--fg);
+    overflow-wrap: anywhere;
+}
+
 /* Each box's copy status. While it only repeats what the button says ("Copied") it is read out
    but not shown; a failure message is shown on its own line under the label and button. */
 .copy-status {
