@@ -8,7 +8,7 @@ namespace BeastieBot3.Shared.SiteData;
 // narrative text (rationale, range, threats ...), no coded threats/habitats/countries, no downloads.
 // Keep such fields out of this database rather than hiding them in the site.
 public static class SiteDbSchema {
-    public const int Version = 11;
+    public const int Version = 13;
 
     public const string Ddl = """
         CREATE TABLE meta (
@@ -152,6 +152,69 @@ public static class SiteDbSchema {
             PRIMARY KEY (taxon_id, sprat_taxon_id)
         ) WITHOUT ROWID;
 
+        -- Species that are in the Catalogue of Life or Wikidata but are not IUCN taxa, for the group
+        -- pages' lists. Species rank only. A species is here only when its genus is an IUCN genus in the
+        -- same kingdom, or, when the build places by family (meta extra_species_placement = 'family'),
+        -- its family is an IUCN family. Fossil species are left out (CoL extinct = true; Wikidata instance
+        -- of fossil taxon, synonym, unavailable or original combination, extinct taxon). None has an IUCN
+        -- assessment, so a list shows them with no {{IUCN status}}. `site build-db` writes them from the
+        -- CoL database and `wikidata sweep-taxa`'s table in the Wikidata cache (SiteExtraSpeciesBuild).
+        CREATE TABLE extra_species (
+            extra_id         INTEGER PRIMARY KEY,         -- numbered in sort_pos order, then by name
+            sources          TEXT NOT NULL,               -- 'col' | 'wikidata' | 'col wikidata'
+            scientific_name  TEXT NOT NULL,               -- "Genus epithet": CoL's name when in CoL, else Wikidata's taxon name (P225)
+            wikidata_name    TEXT,                        -- in both sources: Wikidata's taxon name when it differs from CoL's
+            authority        TEXT,                        -- CoL's authorship; NULL for a species only in Wikidata
+            genus            TEXT NOT NULL,
+            species_epithet  TEXT NOT NULL,
+            kingdom          TEXT NOT NULL,               -- upper case, as IUCN writes it
+            col_id           TEXT,                        -- Catalogue of Life accepted name usage id
+            wikidata_qid     TEXT,                        -- 'Q123'
+            common_name_en   TEXT,                        -- the Wikidata item's English label when it is not a taxon name and not junk,
+                                                          -- first letter capitalised; CoL's vernacular names are not checked, so never used
+            enwiki_title     TEXT,                        -- the Wikidata item's English Wikipedia sitelink
+            node_id          INTEGER NOT NULL,            -- the higher_taxon it is placed under: its genus, or its family
+            sort_pos         INTEGER NOT NULL             -- in tree order it comes after the taxon with this tree_pos (ties by name)
+        );
+        CREATE INDEX extra_species_node ON extra_species(node_id);
+
+        -- Extra species that may be the same as an IUCN taxon, or as an extra species from the other
+        -- source, although no id links them. One row per pair.
+        CREATE TABLE extra_overlap (
+            extra_id         INTEGER NOT NULL,
+            taxon_id         INTEGER,                     -- the IUCN taxon it may be the same as; NULL when other_extra_id is set
+            other_extra_id   INTEGER,                     -- the extra species it may be the same as
+            reason           TEXT NOT NULL,               -- 'iucn-synonym': its name is an IUCN synonym of the taxon; 'col-synonym': its name
+                                                          -- (or its CoL ID on Wikidata) is a CoL synonym of the other; 'wikidata-synonym': a
+                                                          -- Wikidata synonym (P1420) of the taxon; 'gender-ending': same genus, epithets that
+                                                          -- differ by a Latin gender ending; 'spelling': same genus, epithets one or two letters
+                                                          -- apart; 'other-genus': same epithet in another genus of the same family, with the same
+                                                          -- author and year (or, for a Wikidata species, an epithet no other species there has)
+            likely           INTEGER NOT NULL             -- 1 for the synonym and gender-ending reasons: a list leaves out the entry from the
+                                                          -- less preferred source; 0: a list shows both, with a notice
+        );
+        CREATE INDEX extra_overlap_extra ON extra_overlap(extra_id);
+
+        -- The extra species under each group, for the line count of a list without reading them. Only
+        -- groups with extra species under them have a row.
+        CREATE TABLE higher_taxon_extra (
+            node_id          INTEGER PRIMARY KEY,
+            last_node_id     INTEGER NOT NULL,            -- node ids are numbered depth-first: the group's descendants are node_id to last_node_id
+            col_count        INTEGER NOT NULL,            -- extra species under the group only in CoL
+            wikidata_count   INTEGER NOT NULL,            -- only in Wikidata
+            both_count       INTEGER NOT NULL             -- in both
+        ) WITHOUT ROWID;
+
+        -- The name the Catalogue of Life or Wikidata gives an IUCN species in the release, when it differs
+        -- from IUCN's: CoL's accepted name when the placement file matched the taxon through a CoL synonym,
+        -- Wikidata's taxon name (P225) of the item linked to the taxon. A list that prefers that source uses it.
+        CREATE TABLE taxon_source_name (
+            taxon_id         INTEGER NOT NULL,
+            source           TEXT NOT NULL,               -- 'col' | 'wikidata'
+            scientific_name  TEXT NOT NULL,
+            PRIMARY KEY (taxon_id, source)
+        ) WITHOUT ROWID;
+
         CREATE TABLE assessment (
             assessment_id                INTEGER PRIMARY KEY,
             taxon_id                     INTEGER NOT NULL,
@@ -253,6 +316,10 @@ public static class SiteDbSchema {
         /// Whether higher_taxon has Catalogue of Life groups: 'current', 'out-of-date' (the placement
         /// file was built from another IUCN database, an older CoL file or older rules) or absent.
         public const string ColPlacementState = "col_placement_state";
+        /// How extra species were placed: 'genus' or 'family' (ExtraPlacement); absent when the build added none.
+        public const string ExtraSpeciesPlacement = "extra_species_placement";
+        /// When `wikidata sweep-taxa` last finished a pass (UTC, ISO 8601), for the Wikidata extra species.
+        public const string WikidataSweepFinished = "wikidata_sweep_finished";
         public const string TaxonCount = "taxon_count";
         public const string AssessmentCount = "assessment_count";
     }

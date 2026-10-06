@@ -204,6 +204,21 @@ internal sealed class SiteDbBuild {
                 + $"{_stats.GroupsWithColNames:N0} with Catalogue of Life English names; {_stats.ListArticleTitles:N0} taxa with an article for list lines";
         });
 
+        // Species from the Catalogue of Life and Wikidata that IUCN does not have. Before the names are
+        // written, which clears the synonym lists the overlap rules read.
+        ExtraSpecies.SiteExtraSpeciesBuild? extras = null;
+        if (_inputs.ExtraSpecies != ExtraSpecies.ExtraPlacement.None) {
+            Phase("Adding species from the Catalogue of Life and Wikidata", () => {
+                extras = ExtraSpecies.SiteExtraSpeciesBuild.Run(taxonList, taxa, tree, _inputs.ExtraSpecies, _inputs.ColDatabase,
+                    _inputs.ColPlacement, _inputs.WikidataCache, step => _console.MarkupLineInterpolated($"[grey]  {step}...[/]"), ct);
+                _stats.ExtraSpecies = extras.Stats;
+                _stats.Warnings.AddRange(extras.Warnings);
+                var e = extras.Stats;
+                return $"{extras.Entries.Count:N0} species ({e.ColEntries:N0} only in CoL, {e.WikidataEntries:N0} only in Wikidata, "
+                    + $"{e.BothEntries:N0} in both), {extras.Overlaps.Count:N0} possible overlaps";
+            });
+        }
+
         Phase("Writing taxa and names", () => {
             writer.AddHigherTaxa(tree.Nodes);
             foreach (var taxon in taxonList) {
@@ -216,6 +231,9 @@ internal sealed class SiteDbBuild {
             }
             foreach (var link in taxonLinks) {
                 writer.AddTaxonLink(link);
+            }
+            if (extras is not null) {
+                ExtraSpecies.ExtraSpeciesWriter.Write(writer, extras);
             }
             return $"{taxonList.Count:N0} taxa, {writer.NameCount:N0} names, {taxonLinks.Count:N0} links from old ids";
         });
@@ -407,6 +425,10 @@ internal sealed class SiteDbBuild {
         _stats.WikidataItemModelSource = _inputs.WikidataItemModelSource;
         writer.SetMeta(SiteDbSchema.MetaKeys.NotAssignedRules, _inputs.NotAssignedRules.IsEmpty ? null : _inputs.NotAssignedRules.Fingerprint);
         writer.SetMeta(SiteDbSchema.MetaKeys.ColPlacementState, _stats.ColPlacementState);
+        if (_stats.ExtraSpecies is { } extraStats) {
+            writer.SetMeta(SiteDbSchema.MetaKeys.ExtraSpeciesPlacement, extraStats.Placement.ToString().ToLowerInvariant());
+            writer.SetMeta(SiteDbSchema.MetaKeys.WikidataSweepFinished, extraStats.WikidataSweepFinished);
+        }
         writer.SetMeta(SiteDbSchema.MetaKeys.TaxonCount, taxonCount.ToString(CultureInfo.InvariantCulture));
         writer.SetMeta(SiteDbSchema.MetaKeys.AssessmentCount, assessmentCount);
     }

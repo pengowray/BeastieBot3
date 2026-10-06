@@ -172,6 +172,15 @@ internal sealed class SiteDbWriter : IDisposable {
         }
     }
 
+    /// Inserts rows with one prepared statement; each row's values are in the order of parameters.
+    public void InsertRows(string sql, string[] parameters, IEnumerable<object?[]> rows) {
+        using var command = Prepare(sql, parameters);
+        foreach (var row in rows) {
+            Bind(command, row);
+            command.ExecuteNonQuery();
+        }
+    }
+
     /// Sets replaced_by_assessment_id on an assessment already written.
     public void SetReplacedBy(long assessmentId, long replacedBy) {
         Bind(_replacedBy, replacedBy, assessmentId);

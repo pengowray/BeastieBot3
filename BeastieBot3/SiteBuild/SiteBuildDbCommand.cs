@@ -76,6 +76,10 @@ internal sealed class SiteBuildDbCommand : Command<SiteBuildDbCommand.Settings> 
         [CommandOption("--doi-cache <PATH>")]
         [Description("DOIs that iucn resolve-dois found in Crossref's list of IUCN DOIs or at doi.org. Default: Datastore:IUCN_doi_cache_sqlite in paths.ini.")]
         public string? DoiCache { get; init; }
+
+        [CommandOption("--extra-species <PLACEMENT>")]
+        [Description("Species from the Catalogue of Life and Wikidata that IUCN does not have, for the group pages' lists: genus (the default: only species whose genus IUCN has), family (also species whose family IUCN has, under that family) or none.")]
+        public string? ExtraSpecies { get; init; }
     }
 
     public override int Execute(CommandContext context, Settings settings, CancellationToken cancellationToken) {
@@ -85,6 +89,10 @@ internal sealed class SiteBuildDbCommand : Command<SiteBuildDbCommand.Settings> 
             return -1;
         }
         var paths = settings.CreatePaths();
+        if (!TryParseExtraSpecies(settings.ExtraSpecies, out var extraSpecies)) {
+            AnsiConsole.MarkupLine("[red]--extra-species must be genus, family or none.[/]");
+            return -1;
+        }
         SiteBuildInputs inputs;
         try {
             var colDatabase = paths.GetColSqlitePath();
@@ -114,6 +122,7 @@ internal sealed class SiteBuildDbCommand : Command<SiteBuildDbCommand.Settings> 
                 WikidataItemModelSource = wikidataConfigPath,
                 Output = Path.GetFullPath(output),
                 Limit = settings.Limit,
+                ExtraSpecies = extraSpecies,
             };
         } catch (InvalidOperationException ex) {
             AnsiConsole.MarkupLineInterpolated($"[red]{ex.Message}[/]");
@@ -157,6 +166,14 @@ internal sealed class SiteBuildDbCommand : Command<SiteBuildDbCommand.Settings> 
         AnsiConsole.MarkupLineInterpolated($"[green]Site database written:[/] {inputs.Output}");
         AnsiConsole.MarkupLine("[grey]A running site switches to the new file within about 30 seconds, without a restart.[/]");
         return 0;
+    }
+
+    private static bool TryParseExtraSpecies(string? text, out ExtraSpecies.ExtraPlacement placement) {
+        placement = ExtraSpecies.ExtraPlacement.Genus;
+        if (string.IsNullOrWhiteSpace(text)) {
+            return true;
+        }
+        return Enum.TryParse(text.Trim(), ignoreCase: true, out placement) && Enum.IsDefined(placement);
     }
 
     private static string? Full(string? path) => string.IsNullOrWhiteSpace(path) ? null : Path.GetFullPath(path);
@@ -297,6 +314,35 @@ internal sealed class SiteBuildDbCommand : Command<SiteBuildDbCommand.Settings> 
         Row("Groups with a Catalogue of Life id", s.GroupColIds);
         Row("Groups with Catalogue of Life English names", s.GroupsWithColNames);
         Row("Taxa with an article for Wikipedia list lines", s.ListArticleTitles);
+
+        if (s.ExtraSpecies is { } x) {
+            Section("Species from the Catalogue of Life and Wikidata (not in IUCN)");
+            Text("Placed under", x.Placement == ExtraSpecies.ExtraPlacement.Family ? "IUCN genera and families" : "IUCN genera");
+            Row("CoL accepted species read in IUCN genera" + (x.Placement == ExtraSpecies.ExtraPlacement.Family ? " and families" : string.Empty), x.ColRead);
+            Row("Of those, fossil species (left out)", x.ColExtinct);
+            Row("Of those, the same as an IUCN species (CoL id or name)", x.ColSameAsIucn);
+            Row("Wikidata species items read", x.WikidataRead);
+            Row("Of those, left out as fossil taxa, synonyms or extinct taxa (instance of)", x.WikidataLeftOutByInstance);
+            Row("Of those, names that are not a plain binomial (left out)", x.WikidataNotBinomial);
+            Row("Of those, with no IUCN genus or family to go under (left out)", x.WikidataUnplaced);
+            Row("Of those, the same as an IUCN species (item, P627, P10585 or name)", x.WikidataSameAsIucn);
+            Row("Of those, kingdom unknown and the genus name used in two kingdoms (left out)", x.WikidataAmbiguousKingdom);
+            Row("Of those, merged with a CoL species (P10585 or name)", x.WikidataMergedWithCol);
+            Row("Of those, a second item with a name already used (left out)", x.WikidataSameNameRepeat);
+            Row("Extra species: only in CoL", x.ColEntries);
+            Row("Extra species: only in Wikidata", x.WikidataEntries);
+            Row("Extra species: in both", x.BothEntries);
+            Row("Placed under an IUCN genus", x.PlacedUnderGenus);
+            Row("Placed under an IUCN family", x.PlacedUnderFamily);
+            Row("With an English name (Wikidata label)", x.CommonNames);
+            Row("With an English Wikipedia article (Wikidata sitelink)", x.Articles);
+            foreach (var (reason, count) in x.OverlapsByReason.OrderByDescending(p => p.Value)) {
+                Row($"Possible overlaps: {reason}", count);
+            }
+            Row("IUCN species with another name in CoL or Wikidata", x.TaxonSourceNames);
+            Row("CoL species-rank synonyms read", x.ColSynonymsRead);
+            Text("Wikidata taxon sweep finished", x.WikidataSweepFinished ?? "never");
+        }
 
         Section("Sources");
         Text("IUCN release", s.IucnRelease);

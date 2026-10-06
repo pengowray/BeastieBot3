@@ -40,6 +40,8 @@ internal sealed record SiteBuildInputs {
     public required string Output { get; init; }
     /// Only the first N taxa by taxon id.
     public int? Limit { get; init; }
+    /// Species from the Catalogue of Life and Wikidata that are not IUCN taxa (extra_species).
+    public ExtraSpecies.ExtraPlacement ExtraSpecies { get; init; } = SiteBuild.ExtraSpecies.ExtraPlacement.Genus;
 }
 
 /// One taxon row, filled in phase by phase. The name lists are only kept until the names are written.
@@ -166,6 +168,7 @@ internal sealed class SiteAssessment {
 /// What the summary reports. Plain counters: one build runs on one thread.
 internal sealed class SiteBuildStats {
     public string? IucnRelease;
+    public ExtraSpecies.ExtraSpeciesStats? ExtraSpecies;
     public readonly Dictionary<string, int> TaxaByKind = new(StringComparer.Ordinal);
     public int ParentsByName;
     public int ParentsFromApi;
