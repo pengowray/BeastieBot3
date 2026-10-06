@@ -254,7 +254,9 @@
                     }
                     <label><input type="hidden" name="subpop" value="0"><input type="checkbox" name="subpop" value="1" checked="@options.Subpopulations"> @GroupText.OptionSubpopulations</label>
                 </fieldset>
-                <partial name="_ListSourceOptions" model="@options.Sources" />
+                <div data-list-type="bullets" hidden="@Model.Table.IsTable">
+                    <partial name="_ListSourceOptions" model="@options.Sources" />
+                </div>
                 <fieldset class="option-group">
                     <legend>@GroupText.OptionSort</legend>
                     <label><input type="radio" name="sort" value="first" checked="@(options.Sort == ListSort.FirstName)"> @GroupText.SortFirst</label>
