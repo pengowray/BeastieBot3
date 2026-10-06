@@ -341,8 +341,9 @@ public sealed partial class StatusUpdater {
     [GeneratedRegex(@"''(?<initial>\p{Lu})\.\s*(?<rest>[\p{Ll}-]+(?: [\p{Ll}-]+)?)''")]
     private static partial Regex AbbreviatedInText();
 
-    // A line naming a genus: "**** Genus: ''[[Daubentonia]]''", "*** Genus ''[[Mirounga]]''".
-    [GeneratedRegex(@"Genus\W{0,10}\[\[(?:[^\]|]*\|)?(?<genus>\p{Lu}\p{Ll}+)")]
+    // A line naming a genus: "**** Genus: ''[[Daubentonia]]''", "*** Genus ''[[Mirounga]]''",
+    // "* '''Genus ''Sorex'''''".
+    [GeneratedRegex(@"Genus\W{0,10}(?:\[\[(?:[^\]|]*\|)?)?(?<genus>\p{Lu}\p{Ll}+)")]
     private static partial Regex GenusLine();
 
     [GeneratedRegex(@"\((?<name>\p{Lu}\p{Ll}+ \p{Ll}[\p{Ll}-]+)\)")]

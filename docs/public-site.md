@@ -1494,6 +1494,30 @@ colspan and rowspan; `StatusUpdater` decides the edits, and `StatusTaxonResolver
   in the row or line. When an option that is off would change
   items, the result lists it with the count and a button that sends the same text again with it on
   (`StatusUpdateResult.CountNotes`).
+- Statuses added where there are none (`Update/StatusUpdater.Add.cs`, form fields `addlines` and
+  `addcols`, both off by default). With an option off, the lines or tables are counted
+  (`StatusUpdateResult.ListLinesWithoutStatus`, `TablesWithoutStatus`) for an offer above the
+  result and are not items, so they do not count toward the item limit.
+  - `addlines`: `{{IUCN status|EN}}` on a `*` or `#` line with no `{{IUCN status}}`, outside
+    templates, tables and sections such as References, External links, See also and Further
+    reading, whose text before its first `<ref>` writes exactly one scientific name outside external
+    link labels, naming one taxon (a synonym counts, with a note). It goes after the name, after a
+    closing bracket when the name is in brackets ("[[Tiger]] (''P. tigris'')"), and after an
+    authority straight after it: in brackets with a year, `{{small}}` or `<small>`. A line that gives
+    a status as "(EN)" or a status image is reported and left. The `ids` and `year` options apply to
+    the new template. In a sample of 51 cached articles in October 2026 this gave statuses to every
+    line of List of Acer species (313), List of Phyllanthus species (375) and List of Carex species
+    (254 of 280), and to genus articles such as Alseodaphne and Bulinus.
+  - `addcols`: an "IUCN status" column after the column with the most scientific names, in a
+    wikitable with no header that names a status and no data cell holding a code or
+    `{{IUCN status}}`, not nested, with at least 3 data rows of which at least half name one taxon.
+    Only a table with one header row at the top, the same number of cells in every row and no
+    rowspan or colspan gets the column; another is reported with the first row that stops it
+    (`ColumnLayout`). Each new cell is written the way its row writes cells (after `||` or `!!` on
+    the same line, or on a line of its own); a row whose taxon is not found gets an empty cell. The
+    table's findings are one item, so a table is never half changed.
+  - The edit summary counts added statuses ("12 IUCN statuses added"). Feeding the result back
+    through the page finds every added status already up to date.
 - `citeq` (off by default): every citation the page replaces, in `status_ref` or elsewhere, is
   `{{cite Q|<item>}}` when the latest assessment has a Wikidata item, else `{{cite iucn}}`
   (`StatusUpdater.ReplacementCitation`, through `IucnReference`). An existing `{{cite Q}}` is not

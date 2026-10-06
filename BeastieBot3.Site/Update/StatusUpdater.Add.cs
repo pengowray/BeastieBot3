@@ -155,6 +155,18 @@ public sealed partial class StatusUpdater {
                 }
             }
         } while (grown);
+        // A name in brackets after the common name: "[[Tiger]] (''P. tigris'')".
+        var open = start - 1;
+        while (open >= 0 && s.Masked[open] == ' ') {
+            open--;
+        }
+        var close = end;
+        while (close < lineEnd && s.Masked[close] == ' ') {
+            close++;
+        }
+        if (open >= 0 && s.Masked[open] == '(' && close < lineEnd && s.Masked[close] == ')') {
+            end = close + 1;
+        }
         // The authority after the name: "(Linnaeus, 1758)", {{small|Kosterm.}} or <small>Mack.</small>.
         var authority = Authority().Match(s.Masked[end..lineEnd]);
         if (authority.Success) {
@@ -368,7 +380,9 @@ public sealed partial class StatusUpdater {
             inline = cell.Whole.Start >= 2 && s.Masked[(cell.Whole.Start - 2)..cell.Whole.Start] is "||" or "!!";
         }
         if (inline) {
-            return new Edit(at, at, $" {(header ? "!!" : "||")} {content}".TrimEnd());
+            // "a||b" gets "a || new ||b": a space before the next separator when the row has none.
+            var space = at < s.Text.Length && s.Text[at] is '|' or '!' ? " " : string.Empty;
+            return new Edit(at, at, $" {(header ? "!!" : "||")} {content}".TrimEnd() + space);
         }
         var newline = s.Text.IndexOf('\n', at);
         var eol = newline > 0 && s.Text[newline - 1] == '\r' ? "\r\n" : "\n";

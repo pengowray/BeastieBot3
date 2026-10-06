@@ -91,8 +91,12 @@ public static partial class UpdateText {
     public const string CopyOutputAccessible = "Copy updated wikitext";
     public const string NoChanges = "No items were changed. The updated wikitext is the same as the text you pasted.";
 
-    public static string Summary(int changed, int current, int left) {
+    /// missing: the text has list lines or tables with no status, which the offers below list.
+    public static string Summary(int changed, int current, int left, bool missing = false) {
         var total = changed + current + left;
+        if (total == 0 && missing) {
+            return "No IUCN statuses found.";
+        }
         if (total == 0) {
             return "No IUCN statuses found. This page looks for {{IUCN status}} templates, status columns in wikitables, and taxoboxes with a status parameter.";
         }

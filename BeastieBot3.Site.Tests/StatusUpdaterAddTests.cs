@@ -81,6 +81,19 @@ public sealed class StatusUpdaterAddTests {
     }
 
     [Fact]
+    public void AnAbbreviatedNameTakesTheGenusFromAGenusLineWithoutALink() {
+        var result = Run("* '''Genus ''Panthera'''''\n** [[Tiger]] (''P. tigris'') – Asia\n", Lines);
+        Assert.Equal("* '''Genus ''Panthera'''''\n** [[Tiger]] (''P. tigris'') {{IUCN status|EN}} – Asia\n", result.Text);
+    }
+
+    [Fact]
+    public void InlineRowsWithoutSpacesGetASpaceBeforeTheNextSeparator() {
+        var result = Run("{|\n!Name!!Range\n|-\n|''Panthera tigris''||Asia\n|-\n|''Felis silvestris''||Europe\n|-\n|''Neamblysomus gunningi''||Africa\n|}", Columns);
+        Assert.Contains("!Name !! IUCN status !!Range", result.Text);
+        Assert.Contains("|''Panthera tigris'' || {{IUCN status|EN}} ||Asia", result.Text);
+    }
+
+    [Fact]
     public void ANameInAReferenceDoesNotCount() {
         var result = Run("* ''Panthera tigris''<ref>See ''Felis silvestris''.</ref>\n", Lines);
         Assert.Equal("* ''Panthera tigris'' {{IUCN status|EN}}<ref>See ''Felis silvestris''.</ref>\n", result.Text);

@@ -31,7 +31,7 @@
         <h2 id="result-heading">@UpdateText.ResultHeading</h2>
         <p class="update-summary">@(result.NotChecked > 0
             ? UpdateText.SummaryCapped(StatusUpdater.DefaultMaxItems, result.Updated, result.Current, result.NotUpdated, result.NotChecked)
-            : UpdateText.Summary(result.Updated, result.Current, result.NotUpdated))</p>
+            : UpdateText.Summary(result.Updated, result.Current, result.NotUpdated, result.ListLinesWithoutStatus + result.TablesWithoutStatus > 0))</p>
         @if (result.Updated == 0 && result.Findings.Count > 0) {
             <p class="note">@UpdateText.NoChanges</p>
         }
