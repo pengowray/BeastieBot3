@@ -1,0 +1,48 @@
+@model GroupModel
+@using BeastieBot3.Site.Lists
+@* The options of the species tables ({{Species table}}), shown when the list type is tables. *@
+@{
+    var table = Model.Table;
+}
+<fieldset class="option-group" data-list-type="tables" hidden="@(!table.IsTable)">
+    <legend>@GroupText.OptionTables</legend>
+    <p class="help">@GroupText.SpeciesCountHelp</p>
+    <fieldset class="option-group">
+        <legend>@GroupText.OptionReferences</legend>
+        @foreach (var (value, label) in new[] {
+                     (TableReferences.None, GroupText.ReferencesNone),
+                     (TableReferences.ListDefined, GroupText.ReferencesListDefined),
+                     (TableReferences.Inline, GroupText.ReferencesInline),
+                 }) {
+            <label><input type="radio" name="refs" value="@SpeciesTableQuery.ReferencesKey(value)" checked="@(table.References == value)"> @label</label>
+        }
+        <p class="help">@GroupText.ReferencesHelp</p>
+    </fieldset>
+    <fieldset class="option-group">
+        <legend>@GroupText.OptionRefNames</legend>
+        @foreach (var (value, label) in new[] {
+                     (TableRefNames.CommonName, GroupText.RefNamesCommon),
+                     (TableRefNames.TaxonId, GroupText.RefNamesId),
+                     (TableRefNames.ScientificName, GroupText.RefNamesSci),
+                 }) {
+            <label><input type="radio" name="refnames" value="@SpeciesTableQuery.RefNamesKey(value)" checked="@(table.RefNames == value)"> @label</label>
+        }
+        <p class="help">@GroupText.RefNamesHelp</p>
+    </fieldset>
+    <fieldset class="option-group">
+        <legend>@GroupText.OptionCitationTemplate</legend>
+        <label><input type="radio" name="@IucnReference.QueryKey" value="@IucnReference.CiteIucnValue" checked="@(table.Template == ReferenceTemplate.CiteIucn)"> @GroupText.CitationTemplateIucn</label>
+        <label><input type="radio" name="@IucnReference.QueryKey" value="@IucnReference.CiteQValue" checked="@(table.Template == ReferenceTemplate.CiteQ)"> @GroupText.CitationTemplateQ</label>
+    </fieldset>
+    <fieldset class="option-group">
+        <legend>@GroupText.OptionColumns</legend>
+        @foreach (var (value, label) in new[] {
+                     (TableColumns.All, GroupText.ColumnsAll),
+                     (TableColumns.NoDiet, GroupText.ColumnsNoDiet),
+                     (TableColumns.NoEcology, GroupText.ColumnsNoEcology),
+                 }) {
+            <label><input type="radio" name="cols" value="@SpeciesTableQuery.ColumnsKey(value)" checked="@(table.Columns == value)"> @label</label>
+        }
+    </fieldset>
+    <label><input type="hidden" name="summary" value="0"><input type="checkbox" name="summary" value="1" checked="@table.Summary"> @GroupText.OptionSummary</label>
+</fieldset>

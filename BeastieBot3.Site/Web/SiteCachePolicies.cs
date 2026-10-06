@@ -22,7 +22,7 @@ public static class SiteCachePolicies {
     public const string DatabaseTag = "site-db";
 
     /// The query parameters a taxon page reads (Species.cshtml.cs and WikitextOptions).
-    public static readonly string[] SpeciesQueryKeys = ["assessment", "authors", "fullnames", "access", "opts", "ref", "refname", "amp", "q"];
+    public static readonly string[] SpeciesQueryKeys = ["assessment", "authors", "fullnames", "access", "opts", "ref", "refname", "amp", "q", Pages.IucnReference.QueryKey];
 
     private static readonly TimeSpan Lifetime = TimeSpan.FromHours(1);
 
@@ -40,7 +40,7 @@ public static class SiteCachePolicies {
         options.AddPolicy(Group, policy => policy
             .Expire(Lifetime)
             .Tag(DatabaseTag)
-            .SetVaryByQuery([.. Lists.GroupListQuery.Keys, "kingdom", "parent"]));
+            .SetVaryByQuery([.. Lists.GroupListQuery.Keys, .. Lists.SpeciesTableQuery.Keys, "kingdom", "parent"]));
 
         // The search page shows the query as typed (heading, title, search box), so the key is the
         // query with whitespace collapsed, case kept: two spellings that differ only in case would

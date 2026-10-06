@@ -1121,6 +1121,18 @@ th.num {
     margin-top: 1rem;
 }
 
+/* Options of the other list type (bulleted list or species tables); site.js switches them. The
+   rule beats ".options-form label { display: block }". */
+.list-options [hidden] {
+    display: none;
+}
+
+.preview-table caption {
+    font-weight: 600;
+    text-align: left;
+    padding: 0.25rem 0;
+}
+
 .list-preview summary {
     cursor: pointer;
     font-weight: 600;

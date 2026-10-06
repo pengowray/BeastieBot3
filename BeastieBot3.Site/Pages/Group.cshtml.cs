@@ -50,12 +50,20 @@ public sealed class GroupModel : PageModel {
     public IReadOnlyList<HeadingChoice> HeadingChoices { get; private set; } = [];
     /// Lines the list has with these options (from the counts, before reading the taxa).
     public int LineCount { get; private set; }
-    public bool TooLong => LineCount > GroupList.MaxLines;
+    /// The most lines (rows for species tables) a list may have.
+    public int MaxLines => Table.IsTable ? SpeciesTable.MaxRows(Table) : GroupList.MaxLines;
+    public bool TooLong => LineCount > MaxLines;
     public GroupListResult? List { get; private set; }
     public string Wikitext { get; private set; } = string.Empty;
 
+    /// The list type and the species table options (SpeciesTableQuery).
+    public SpeciesTableOptions Table { get; private set; } = new();
+    /// The species tables, when the list type is tables.
+    public SpeciesTableResult? Tables { get; private set; }
+
     /// This page's address with the current options, for the address bar after a live update.
-    public string CurrentOptionsUrl => SiteUrls.Group(Group!, GroupListQuery.Write(Options, DefaultOptions));
+    public string CurrentOptionsUrl =>
+        SiteUrls.Group(Group!, SpeciesTableQuery.Append(GroupListQuery.Write(Options, DefaultOptions), Table));
 
     public IActionResult OnGet(string rank, string name) {
         RequestedRank = rank;
@@ -87,13 +95,20 @@ public sealed class GroupModel : PageModel {
         var ranks = _queries.GetRanksWithin(group);
         DefaultOptions = GroupListQuery.Defaults(Path);
         DefaultOptions = DefaultOptions with { HeadingRanks = DefaultOptions.HeadingRanks.Where(r => ranks.Any(x => x.Rank == r)).ToList() };
+        Table = SpeciesTableQuery.Read(Request.Query);
+        if (Table.IsTable) {
+            // The featured lists' tables include the species IUCN has not evaluated.
+            DefaultOptions = DefaultOptions with { Sections = StatusSection.AllKeys };
+        }
         Options = GroupListQuery.Read(Request.Query, DefaultOptions, ranks.Select(r => r.Rank).ToList());
         HeadingChoices = ranks
             .OrderBy(r => GroupListQuery.RankIndex(r.Rank)).ThenBy(r => r.MinDepth)
             .Select(r => new HeadingChoice(r.Rank, r.OnlyFromCol, Options.HeadingRanks.Contains(r.Rank)))
             .ToList();
-        LineCount = GroupList.CountLines(group, Counts, Options);
-        if (!TooLong && LineCount > 0) {
+        LineCount = GroupList.CountLines(group, Counts, Table.IsTable ? SpeciesTable.ListOptions(Options) : Options);
+        if (!TooLong && LineCount > 0 && Table.IsTable) {
+            BuildTables(group);
+        } else if (!TooLong && LineCount > 0) {
             var kinds = new List<string> { TaxonKinds.Species };
             if (Options.Infra != InfraMode.None) {
                 kinds.Add(TaxonKinds.Subspecies);
@@ -108,6 +123,15 @@ public sealed class GroupModel : PageModel {
             Wikitext = GroupList.ToWikitext(List, Options);
         }
         return Page();
+    }
+
+    private void BuildTables(GroupRow group) {
+        var listOptions = SpeciesTable.ListOptions(Options);
+        var taxa = _queries.GetListTaxa(group, [TaxonKinds.Species]);
+        var groups = _queries.GetGroupsWithin(group).Append(group).ToDictionary(g => g.NodeId);
+        List = GroupList.Build(taxa, groups, listOptions);
+        Tables = SpeciesTable.Build(List, groups, new SpeciesTableQueries(_db).GetExtras(group), Table);
+        Wikitext = SpeciesTable.ToWikitext(Tables, Table);
     }
 
     // A ?kingdom= or ?parent= (the name of any group above it) that leaves one match picks it.

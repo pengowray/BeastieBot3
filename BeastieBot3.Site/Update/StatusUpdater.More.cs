@@ -241,10 +241,10 @@ public sealed partial class StatusUpdater {
 
     // What the species tables on English Wikipedia write, such as List of felids.
     private static string TrendTemplate(Trend trend) => trend switch {
-        Trend.Decreasing => "{{decrease|Population declining}}",
-        Trend.Stable => "{{steady|Population steady}}",
-        Trend.Increasing => "{{increase|Population increasing}}",
-        _ => "{{population change unknown}}",
+        Trend.Decreasing => PopulationTrendTemplate.Decreasing,
+        Trend.Stable => PopulationTrendTemplate.Stable,
+        Trend.Increasing => PopulationTrendTemplate.Increasing,
+        _ => PopulationTrendTemplate.Unknown,
     };
 
     // The trend templates and their redirects, by normalized name.
