@@ -10,9 +10,9 @@
     <h3 id="scope-heading">@UpdateText.ScopeHeading(r.Scope)</h3>
     <p>@UpdateText.ScopeSummary(r)</p>
     @if (r.Categories is { } categories) {
-        <p>@UpdateText.ScopeCategories(categories, r.CategoriesFromCodes)</p>
+        <p>@UpdateText.ScopeCategories(r, categories)</p>
     }
-    @if (r.Infra > 0 || r.InfraChecked) {
+    @if (r.Infra > 0) {
         <p>@UpdateText.ScopeInfra(r)</p>
     }
     @if (r.Path.Count > 1) {
@@ -27,13 +27,13 @@
         </p>
     }
     @if (r.Partial && r.Missing is null) {
-        <p>@UpdateText.ScopePartial <button type="submit" form="update-form" name="@UpdateModel.ListAnywayField" value="1">@UpdateText.ScopeListAnywayButton</button></p>
+        <p>@UpdateText.ScopePartial(r) <button type="submit" form="update-form" name="@UpdateModel.ListAnywayField" value="1">@UpdateText.ScopeListAnywayButton</button></p>
     }
     @if (r.Missing is { } missing) {
-        <h4>@UpdateText.MissingHeading(r.MissingTotal)</h4>
         @if (missing.Count == 0) {
             <p>@UpdateText.MissingNone</p>
         } else {
+            <h4>@UpdateText.MissingHeading(r.MissingTotal)</h4>
             @if (missing.Count < r.MissingTotal) {
                 <p>@UpdateText.MissingCapped(missing.Count, r.MissingTotal)</p>
             }
@@ -49,11 +49,11 @@
         }
     }
     @if (r.OtherCategory.Count > 0) {
-        <h4>@UpdateText.OtherCategoryHeading(r.OtherCategory.Count)</h4>
+        <h4>@UpdateText.OtherCategoryHeading(r.OtherCategory.Count, r.Categories!)</h4>
         @await Html.PartialAsync("_ListScopeMembers", r.OtherCategory)
     }
     @if (r.Outside.Count > 0) {
-        <h4>@UpdateText.OutsideHeading(r.Outside.Count)</h4>
+        <h4>@UpdateText.OutsideHeading(r.Outside.Count, r.Scope)</h4>
         @await Html.PartialAsync("_ListScopeMembers", r.Outside)
     }
     @if (r.Duplicates.Count > 0) {

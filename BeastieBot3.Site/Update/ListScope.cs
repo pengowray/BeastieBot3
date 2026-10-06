@@ -30,8 +30,10 @@ public sealed record ListScopeDuplicate(StatusTaxon Taxon, IReadOnlyList<string>
 
 /// The comparison of the taxa a text lists with the group they are in.
 /// Scope: the group compared with; Path: the groups the reader can choose instead, kingdom first,
-/// ending with the group found. Species: listed species in the scope; SpeciesInScope: the scope's
-/// species (in the categories, when Categories is set). Infra*: the same for subspecies and varieties.
+/// with the group found and any group below it that holds half the listed taxa. Species: listed
+/// species in the scope that are in the categories now (all of them when Categories is null);
+/// SpeciesListed: every listed species in the scope; SpeciesInScope: the scope's species in the
+/// categories. Infra and InfraInScope: the same for subspecies and varieties.
 /// Categories: the categories the list is of ("CR"), when the text gives only those, or (with
 /// CategoriesFromCodes false) when the text gives no codes and nearly all its species are in them now;
 /// null for all.
@@ -42,6 +44,7 @@ public sealed record ListScopeResult(
     GroupRow Scope,
     IReadOnlyList<GroupRow> Path,
     int Species,
+    int SpeciesListed,
     int SpeciesInScope,
     int Infra,
     int InfraInScope,
@@ -199,7 +202,8 @@ public static class ListScope {
             .Select(d => new ListScopeDuplicate(d.Taxon, d.Names, d.Lines))
             .ToList();
 
-        return new ListScopeResult(scope, path, species.Count, speciesInScope, infra.Count, infraInScope, infraChecked, categories,
+        return new ListScopeResult(scope, path, species.Count(t => InCategories(t.First().Taxon)), species.Count, speciesInScope,
+            infraListed, infraInScope, infraChecked, categories,
             codes.Count > 0, partial,
             missing, missingTotal, GroupListQuery.DefaultStyle(PathOf(scope.NodeId)), outside, otherCategory, duplicates);
     }

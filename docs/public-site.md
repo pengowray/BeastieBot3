@@ -1521,6 +1521,35 @@ colspan and rowspan; `StatusUpdater` decides the edits, and `StatusTaxonResolver
   - The edit summary counts added statuses ("12 IUCN statuses added") and new columns ("IUCN status
     column added (14 statuses)", or "IUCN status columns added to 2 tables (30 statuses)"). Feeding the result back
     through the page finds every added status already up to date.
+- Comparison with the group (`Update/ListScope.cs`, report only, the text is never changed;
+  section "Comparison with Family Felidae", `Pages/Shared/_ListScope.cshtml`, strings in
+  `Display/UpdateText.Scope.cs`). The taxa the text lists (`StatusUpdateResult.Members`: list lines,
+  table rows, species table rows and `{{IUCN status}}` templates, with or without a status; not
+  taxoboxes or citations) are compared with one group (`higher_taxon`), read through
+  `IListScopeLookup` (`Data/SiteListScopeLookup.cs`):
+  - The group is the deepest that holds 95% of the listed taxa; a Catalogue of Life group must hold
+    all of them (a list of CR mammals with two monotremes is compared with class Mammalia, not
+    subclass Theria). The reader can choose a group above it, or below it when that group holds
+    half the listed taxa (form field `scope`, "rank/name").
+  - Categories: when every code the text writes (5 or more) is one category, or all are CR, EN or
+    VU, or all EX or EW, only taxa in those categories are compared. A text with no codes is
+    compared in the category (or with the threatened categories) that 80% of its species are in
+    now. The written codes are used first because they still show where taxa that have moved were.
+  - The text is a list of the group when it lists half the group's species (in the categories).
+    Otherwise (a regional list) no missing taxa are listed unless the reader asks (`anyway`), and the
+    section is shown only for 10 or more listed taxa; under 3 listed taxa there is no section.
+    Subspecies and varieties are compared only when the text lists half of them.
+  - It lists the missing taxa with a latest global assessment as list lines (`SpeciesListLine`, the
+    group's default style from `GroupListQuery.DefaultStyle`, ids and year), at most 3,600; the taxa
+    listed that are now in another category; the taxa IUCN places outside the group (a genus move);
+    and taxa that appear under two or more names on different lines (a lump).
+  - Checked on 12 Wikipedia lists and 24 genus and family articles in October 2026: List of
+    endangered amphibians (no codes) gave 567 EN species missing and 38 listed taxa now in another
+    category; List of canids, List of cetaceans and Genus Fulica (Coot) one missing species each;
+    List of felids none; List of Acer species 2 missing and 5 lumps; the regional lists (mammals of
+    India and Madagascar, birds of Hawaii) are partial. Known gaps: a list whose lines give only a
+    common name link ("*[[Black crested gibbon]]") is not matched by name, and a missing taxon whose
+    article is a redirect to the list is linked to the list itself.
 - `citeq` (off by default): every citation the page replaces, in `status_ref` or elsewhere, is
   `{{cite Q|<item>}}` when the latest assessment has a Wikidata item, else `{{cite iucn}}`
   (`StatusUpdater.ReplacementCitation`, through `IucnReference`). An existing `{{cite Q}}` is not
