@@ -169,6 +169,63 @@ public sealed class SpeciesListLineTests {
             SpeciesListLine.Format(entry, Style(SpeciesListStyle.CommonNameOnly, template: true)));
     }
 
+    // ------------------------------------------------------------ authorities
+
+    private static SpeciesListLineOptions WithAuthority(SpeciesListStyle style, SpeciesListAuthority authority = SpeciesListAuthority.Small) =>
+        Style(style) with { Authority = authority };
+
+    [Fact]
+    public void Authority_DefaultOptions_LeaveTheLineUnchanged() {
+        var entry = Species("Panthera", "leo", "Lion", "Lion");
+        var withAuthority = entry with { Authority = "(Linnaeus, 1758)" };
+
+        foreach (var style in Enum.GetValues<SpeciesListStyle>()) {
+            Assert.Equal(SpeciesListLine.Format(entry, Style(style, template: true)),
+                SpeciesListLine.Format(withAuthority, Style(style, template: true)));
+        }
+    }
+
+    [Theory]
+    [InlineData(SpeciesListStyle.ScientificNameFirst, "Panthera leo", "* ''[[Panthera leo]]'' <small>(Linnaeus, 1758)</small>, Lion")]
+    [InlineData(SpeciesListStyle.ScientificNameFirst, "Lion", "* [[Lion|''Panthera leo'']] <small>(Linnaeus, 1758)</small>, Lion")]
+    [InlineData(SpeciesListStyle.CommonNameFirst, "Lion", "* [[Lion]] (''Panthera leo'' <small>(Linnaeus, 1758)</small>)")]
+    // Style C shows no scientific name, so no authority.
+    [InlineData(SpeciesListStyle.CommonNameOnly, "Lion", "* [[Lion]]")]
+    public void Authority_SmallText_AfterTheScientificName(SpeciesListStyle style, string article, string expected) {
+        var entry = Species("Panthera", "leo", "Lion", article) with { Authority = "(Linnaeus, 1758)" };
+
+        Assert.Equal(expected, SpeciesListLine.Format(entry, WithAuthority(style)));
+    }
+
+    [Theory]
+    [InlineData(SpeciesListStyle.ScientificNameFirst)]
+    [InlineData(SpeciesListStyle.CommonNameFirst)]
+    [InlineData(SpeciesListStyle.CommonNameOnly)]
+    public void Authority_NoCommonName_AfterTheScientificName(SpeciesListStyle style) {
+        var entry = Species("Panthera", "antiquorum") with { Authority = "(Cuvier, 1824)" };
+
+        Assert.Equal("* ''[[Panthera antiquorum]]'' (Cuvier, 1824)",
+            SpeciesListLine.Format(entry, WithAuthority(style, SpeciesListAuthority.Plain)));
+    }
+
+    [Fact]
+    public void Authority_Infraspecific_AfterTheFullNameAndBeforeTheCommonName() {
+        var entry = Infra("Abies", "pinsapo", "subsp.", "marocana", "PLANTAE", "Moroccan fir") with { Authority = "(Trab.) Emb. & Maire" };
+
+        Assert.Equal("* ''Abies pinsapo'' subsp. ''marocana'' <small>(Trab.) Emb. & Maire</small>, Moroccan fir",
+            SpeciesListLine.Format(entry, WithAuthority(SpeciesListStyle.ScientificNameFirst)));
+        Assert.Equal("** ''A. pinsapo'' subsp. ''marocana'' <small>(Trab.) Emb. & Maire</small>, Moroccan fir",
+            "*" + SpeciesListLine.FormatInfraspecificUnderSpecies(entry, WithAuthority(SpeciesListStyle.CommonNameFirst)));
+    }
+
+    [Fact]
+    public void Authority_WithMarkupCharacters_IsWrappedInNowiki() {
+        var entry = Species("Ficus", "x") with { Authority = "Smith [unpublished]" };
+
+        Assert.Equal("* ''[[Ficus x]]'' <small><nowiki>Smith [unpublished]</nowiki></small>",
+            SpeciesListLine.Format(entry, WithAuthority(SpeciesListStyle.ScientificNameFirst)));
+    }
+
     [Fact]
     public void SpeciesLineFormatter_RendersTheSharedLine() {
         var rulesPath = Path.GetTempFileName();

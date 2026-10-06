@@ -49,6 +49,19 @@ public sealed record SpeciesListEntry {
     public long AssessmentId { get; init; }
     /// The assessment's year; left out of the template for EX and EW.
     public string? YearPublished { get; init; }
+    /// The taxon authority of ScientificName as published ("(Linnaeus, 1758)", "L."); shown only
+    /// when SpeciesListLineOptions.Authority asks for it.
+    public string? Authority { get; init; }
+}
+
+/// How a list line shows the taxon authority after the scientific name.
+public enum SpeciesListAuthority {
+    /// No authority (the generated lists).
+    None,
+    /// ''Panthera leo'' <small>(Linnaeus, 1758)</small>, the form most species lists on English Wikipedia use.
+    Small,
+    /// ''Panthera leo'' (Linnaeus, 1758).
+    Plain,
 }
 
 public sealed record SpeciesListLineOptions {
@@ -58,6 +71,9 @@ public sealed record SpeciesListLineOptions {
     /// The status of the list or section ("CR(PE)", "EW"). The line leaves out a possibly extinct,
     /// possibly extinct in the wild or extinct in the wild label that the context already states.
     public string? StatusContext { get; init; }
+    /// The authority after the scientific name. A line that shows no scientific name (style C with
+    /// a common name) shows no authority.
+    public SpeciesListAuthority Authority { get; init; } = SpeciesListAuthority.None;
 }
 
 public static class SpeciesListLine {
@@ -80,6 +96,7 @@ public static class SpeciesListLine {
         var infraLink = BuildInfraspecificLink(entry, abbreviateGenus: true);
         if (!string.IsNullOrWhiteSpace(infraLink)) {
             builder.Append(infraLink);
+            builder.Append(AuthoritySuffix(entry, options));
             if (!string.IsNullOrWhiteSpace(entry.CommonName)) {
                 builder.Append(", ");
                 builder.Append(entry.CommonName);
@@ -104,11 +121,26 @@ public static class SpeciesListLine {
             ? BuildScientificNameForLink(entry)
             : entry.ScientificName;
 
+        var authority = AuthoritySuffix(entry, options);
         return options.Style switch {
-            SpeciesListStyle.ScientificNameFirst => BuildScientificNameFocusFragment(commonName, articleTitle, linkScientific, formattedScientific, entry),
-            SpeciesListStyle.CommonNameOnly => BuildCommonNameOnlyFragment(commonName, articleTitle, linkScientific, formattedScientific, entry),
-            _ => BuildCommonNameFocusFragment(commonName, articleTitle, linkScientific, formattedScientific, entry),
+            SpeciesListStyle.ScientificNameFirst => BuildScientificNameFocusFragment(commonName, articleTitle, linkScientific, formattedScientific, entry, authority),
+            SpeciesListStyle.CommonNameOnly => BuildCommonNameOnlyFragment(commonName, articleTitle, linkScientific, formattedScientific, entry, authority),
+            _ => BuildCommonNameFocusFragment(commonName, articleTitle, linkScientific, formattedScientific, entry, authority),
         };
+    }
+
+    /// The authority as the options show it after the scientific name, with a leading space:
+    /// " <small>(Linnaeus, 1758)</small>"; empty when the options or the entry have none. Text that
+    /// wikitext would read as markup is wrapped in nowiki.
+    public static string AuthoritySuffix(SpeciesListEntry entry, SpeciesListLineOptions options) {
+        if (options.Authority == SpeciesListAuthority.None || string.IsNullOrWhiteSpace(entry.Authority)) {
+            return string.Empty;
+        }
+        var text = string.Join(' ', entry.Authority.Split((char[])[' ', '\t', '\n', '\r'], StringSplitOptions.RemoveEmptyEntries));
+        if (text.IndexOfAny(['[', ']', '{', '}', '|', '<', '>', '~']) >= 0 || text.Contains("''", StringComparison.Ordinal)) {
+            text = $"<nowiki>{text}</nowiki>";
+        }
+        return options.Authority == SpeciesListAuthority.Small ? $" <small>{text}</small>" : " " + text;
     }
 
     /// The label for a possibly extinct, possibly extinct in the wild or extinct in the wild
@@ -181,16 +213,16 @@ public static class SpeciesListLine {
     /// - ''[[Scientific name]]''
     /// - ''[[Wikilink|Scientific name]]'', Common name
     /// </summary>
-    private static string BuildScientificNameFocusFragment(string? commonName, string? articleTitle, string? rawScientific, string formattedScientific, SpeciesListEntry entry) {
+    private static string BuildScientificNameFocusFragment(string? commonName, string? articleTitle, string? rawScientific, string formattedScientific, SpeciesListEntry entry, string authority) {
         // For infraspecific taxa with var./subsp., use special formatting
         var hasInfrarank = !string.IsNullOrWhiteSpace(entry.InfraType) && !string.IsNullOrWhiteSpace(entry.InfraName);
         var infraLink = hasInfrarank ? BuildInfraspecificLink(entry) : null;
 
         if (!string.IsNullOrWhiteSpace(infraLink)) {
             if (!string.IsNullOrWhiteSpace(commonName)) {
-                return $"{infraLink}, {commonName}";
+                return $"{infraLink}{authority}, {commonName}";
             }
-            return infraLink;
+            return infraLink + authority;
         }
 
         // Standard species formatting
@@ -199,12 +231,12 @@ public static class SpeciesListLine {
         if (string.IsNullOrWhiteSpace(linkTarget)) {
             // No linkable target (e.g. an undescribed "sp. nov." placeholder) — show plain italic,
             // keeping the common name if there is one.
-            return !string.IsNullOrWhiteSpace(commonName) ? $"{formattedScientific}, {commonName}" : formattedScientific;
+            return !string.IsNullOrWhiteSpace(commonName) ? $"{formattedScientific}{authority}, {commonName}" : formattedScientific + authority;
         }
 
         // Use ''[[X]]'' format when link target matches scientific name
         if (string.Equals(linkTarget, rawScientific, StringComparison.OrdinalIgnoreCase)) {
-            var linkedScientific = $"''[[{rawScientific}]]''";
+            var linkedScientific = $"''[[{rawScientific}]]''{authority}";
             if (!string.IsNullOrWhiteSpace(commonName)) {
                 return $"{linkedScientific}, {commonName}";
             }
@@ -212,7 +244,7 @@ public static class SpeciesListLine {
         }
 
         // Article uses common name as title, so use [[Wikilink|Scientific name]]
-        var linkedWithPipe = $"[[{linkTarget}|{formattedScientific}]]";
+        var linkedWithPipe = $"[[{linkTarget}|{formattedScientific}]]{authority}";
         if (!string.IsNullOrWhiteSpace(commonName)) {
             return $"{linkedWithPipe}, {commonName}";
         }
@@ -231,15 +263,15 @@ public static class SpeciesListLine {
     /// article. The article title is only a link target, never shown, because it is often another
     /// scientific name ("Crenimugil buchanani" for Moolgarda buchanani) or a genus.
     /// </summary>
-    private static string BuildCommonNameFocusFragment(string? commonName, string? articleTitle, string? rawScientific, string formattedScientific, SpeciesListEntry entry) {
+    private static string BuildCommonNameFocusFragment(string? commonName, string? articleTitle, string? rawScientific, string formattedScientific, SpeciesListEntry entry, string authority) {
         if (string.IsNullOrWhiteSpace(commonName)) {
-            return BuildScientificNameOnlyFragment(articleTitle, rawScientific, formattedScientific, entry);
+            return BuildScientificNameOnlyFragment(articleTitle, rawScientific, formattedScientific, entry) + authority;
         }
 
         var commonLinkTarget = ResolveLinkTargetForCommonName(articleTitle, rawScientific, commonName);
 
         if (string.IsNullOrWhiteSpace(commonLinkTarget)) {
-            return $"[[{commonName}]] ({formattedScientific})";
+            return $"[[{commonName}]] ({formattedScientific}{authority})";
         }
 
         string linkedCommonName;
@@ -249,7 +281,7 @@ public static class SpeciesListLine {
             linkedCommonName = $"[[{commonLinkTarget}|{commonName}]]";
         }
 
-        return $"{linkedCommonName} ({formattedScientific})";
+        return $"{linkedCommonName} ({formattedScientific}{authority})";
     }
 
     /// <summary>
@@ -259,9 +291,9 @@ public static class SpeciesListLine {
     /// - [[Wikilink|Common name]]
     /// - ''[[Scientific name]]'' (fallback when no common name)
     /// </summary>
-    private static string BuildCommonNameOnlyFragment(string? commonName, string? articleTitle, string? rawScientific, string formattedScientific, SpeciesListEntry entry) {
+    private static string BuildCommonNameOnlyFragment(string? commonName, string? articleTitle, string? rawScientific, string formattedScientific, SpeciesListEntry entry, string authority) {
         if (string.IsNullOrWhiteSpace(commonName)) {
-            return BuildScientificNameOnlyFragment(articleTitle, rawScientific, formattedScientific, entry);
+            return BuildScientificNameOnlyFragment(articleTitle, rawScientific, formattedScientific, entry) + authority;
         }
 
         var commonLinkTarget = ResolveLinkTargetForCommonName(articleTitle, rawScientific, commonName);
