@@ -1543,11 +1543,12 @@ colspan and rowspan; `StatusUpdater` decides the edits, and `StatusTaxonResolver
     group's default style from `GroupListQuery.DefaultStyle`, ids and year), at most 3,600; the taxa
     listed that are now in another category; the taxa IUCN places outside the group (a genus move);
     and taxa that appear under two or more names on different lines (a lump).
-  - Checked on 12 Wikipedia lists and 24 genus and family articles in October 2026: List of
+  - Checked in October 2026 on 12 Wikipedia lists and the 51 cached articles of the check above (16 of
+    them got a comparison): List of
     endangered amphibians (no codes) gave 567 EN species missing and 38 listed taxa now in another
     category; List of canids, List of cetaceans and Genus Fulica (Coot) one missing species each;
     List of felids none; List of Acer species 2 missing and 5 lumps; the regional lists (mammals of
-    India and Madagascar, birds of Hawaii) are partial. Known gaps: a list whose lines give only a
+    India and Madagascar, birds of Hawaii) are partial. A 320 KB list takes under 0.3 s. Known gaps: a list whose lines give only a
     common name link ("*[[Black crested gibbon]]") is not matched by name, and a missing taxon whose
     article is a redirect to the list is linked to the list itself.
 - `citeq` (off by default): every citation the page replaces, in `status_ref` or elsewhere, is

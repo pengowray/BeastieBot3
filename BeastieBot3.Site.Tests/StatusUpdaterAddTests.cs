@@ -100,6 +100,12 @@ public sealed class StatusUpdaterAddTests {
     }
 
     [Fact]
+    public void LinesInsideAColumnsListTemplateCount() {
+        var result = Run("{{columns-list|colwidth=30em|\n* ''Panthera tigris''\n* ''Felis silvestris''\n}}\n", Lines);
+        Assert.Equal("{{columns-list|colwidth=30em|\n* ''Panthera tigris'' {{IUCN status|EN}}\n* ''Felis silvestris'' {{IUCN status|LC}}\n}}\n", result.Text);
+    }
+
+    [Fact]
     public void ANameInAReferenceDoesNotCount() {
         var result = Run("* ''Panthera tigris''<ref>See ''Felis silvestris''.</ref>\n", Lines);
         Assert.Equal("* ''Panthera tigris'' {{IUCN status|EN}}<ref>See ''Felis silvestris''.</ref>\n", result.Text);
