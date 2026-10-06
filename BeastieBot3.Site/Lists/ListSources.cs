@@ -7,6 +7,7 @@ using Microsoft.Extensions.Primitives;
 //
 //   src     iucn | col | wd    a source to include; repeated; IUCN only when absent or none is given
 //   prefer  icw | ciw | cwi | wci | iwc | wic    the order of preference (i IUCN, c CoL, w Wikidata)
+//   genera  0: leave out the species placed under a family because IUCN does not have their genus
 //
 // Species from the Catalogue of Life or Wikidata that IUCN does not have come from the extra_species
 // table. They have no IUCN assessment, so they go in the NE section, which is included whenever CoL
@@ -33,6 +34,9 @@ public sealed record ListSourceOptions {
 
     public IReadOnlySet<ListSource> Enabled { get; init; } = new HashSet<ListSource> { ListSource.Iucn };
     public IReadOnlyList<ListSource> Order { get; init; } = DefaultOrder;
+    /// Whether to list the species that site build-db placed under a family, because IUCN does not
+    /// have their genus.
+    public bool OtherGenera { get; init; } = true;
 
     /// Whether the list has any species beyond IUCN's.
     public bool HasOtherSources => Enabled.Contains(ListSource.Col) || Enabled.Contains(ListSource.Wikidata);
@@ -72,6 +76,9 @@ public sealed record ListSourceOptions {
             && Orders.FirstOrDefault(o => o.Key == prefer[^1]?.Trim()) is { Key: not null } order) {
             options = options with { Order = order.Order };
         }
+        if (query.TryGetValue("genera", out var genera) && genera.Count > 0) {
+            options = options with { OtherGenera = genera[^1]?.Trim() != "0" };
+        }
         return options;
     }
 
@@ -84,6 +91,9 @@ public sealed record ListSourceOptions {
         }
         if (!Order.SequenceEqual(DefaultOrder)) {
             yield return "prefer=" + OrderKey;
+        }
+        if (!OtherGenera) {
+            yield return "genera=0";
         }
     }
 

@@ -26,7 +26,7 @@ public static class GroupListSources {
         var lastNode = counts?.LastNodeId ?? group.NodeId;
         IReadOnlyList<ExtraSpeciesRow> extras = counts is not null && options.Sources.HasOtherSources
             && options.IncludedSections.Contains(StatusSection.NotEvaluated)
-            ? queries.GetExtraSpecies(group.NodeId, counts.LastNodeId)
+            ? queries.GetExtraSpecies(group.NodeId, counts.LastNodeId, underGenusOnly: !options.Sources.OtherGenera)
             : [];
         var overlaps = options.Sources.HasOtherSources ? queries.GetExtraOverlaps(group, lastNode) : [];
         var extraIds = extras.Select(e => e.ExtraId).ToHashSet();

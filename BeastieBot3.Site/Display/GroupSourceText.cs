@@ -11,7 +11,8 @@ public static class GroupSourceText {
     public const string SourceCol = "Catalogue of Life (CoL)";
     public const string SourceWikidata = "Wikidata";
     public const string OrderLabel = "Order of preference";
-    public const string Help = "Species from Catalogue of Life or Wikidata that are not on the IUCN Red List are listed under Not Evaluated (NE). They are added only under genera or families that IUCN has. If no box is ticked, the list uses the IUCN Red List only.";
+    public const string OtherGenera = "Species in genera not on the IUCN Red List (listed under their family)";
+    public const string Help = "Species from Catalogue of Life or Wikidata that are not on the IUCN Red List are listed under Not Evaluated (NE). Each one is placed in the IUCN genus with the same name, or in its family when IUCN does not have the genus. If no box is ticked, the list uses the IUCN Red List only.";
     public const string OrderHelp = "When sources spell a species’ name differently, the list uses the spelling from the first ticked source in this order. When two entries are likely the same species, the list keeps the entry from the source that comes first.";
 
     /// "IUCN", "CoL", "Wikidata".

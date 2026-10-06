@@ -21,7 +21,7 @@ using Microsoft.Extensions.Primitives;
 namespace BeastieBot3.Site.Lists;
 
 public static class GroupListQuery {
-    public static readonly string[] Keys = ["style", "h", "cat", "status", "infra", "subpop", "sort", "tpl", "names", "level", "src", "prefer"];
+    public static readonly string[] Keys = ["style", "h", "cat", "status", "infra", "subpop", "sort", "tpl", "names", "level", "src", "prefer", "genera"];
 
     /// Ranks in the order they nest, broad to narrow, for ordering the heading choices. A rank not
     /// listed goes after the listed ranks above it, by depth.

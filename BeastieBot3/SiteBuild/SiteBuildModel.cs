@@ -41,7 +41,7 @@ internal sealed record SiteBuildInputs {
     /// Only the first N taxa by taxon id.
     public int? Limit { get; init; }
     /// Species from the Catalogue of Life and Wikidata that are not IUCN taxa (extra_species).
-    public ExtraSpecies.ExtraPlacement ExtraSpecies { get; init; } = SiteBuild.ExtraSpecies.ExtraPlacement.Genus;
+    public ExtraSpecies.ExtraPlacement ExtraSpecies { get; init; } = SiteBuild.ExtraSpecies.ExtraPlacement.Family;
 }
 
 /// One taxon row, filled in phase by phase. The name lists are only kept until the names are written.

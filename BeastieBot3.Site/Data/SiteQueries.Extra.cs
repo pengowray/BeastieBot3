@@ -33,11 +33,13 @@ public sealed partial class SiteQueries {
 
     private const string ExtraFrom = "extra_species e JOIN higher_taxon h ON h.node_id = e.node_id";
 
-    /// The extra species placed in a group or the groups under it, in sort order.
-    public IReadOnlyList<ExtraSpeciesRow> GetExtraSpecies(int nodeId, int lastNodeId) {
+    /// The extra species placed in a group or the groups under it, in sort order. underGenusOnly leaves
+    /// out the species placed under a family because IUCN does not have their genus.
+    public IReadOnlyList<ExtraSpeciesRow> GetExtraSpecies(int nodeId, int lastNodeId, bool underGenusOnly = false) {
         using var connection = _db.OpenConnection();
         using var command = connection.CreateCommand();
-        command.CommandText = $"SELECT {ExtraColumns} FROM {ExtraFrom} WHERE e.node_id BETWEEN @first AND @last ORDER BY e.extra_id";
+        var genusOnly = underGenusOnly ? " AND h.rank = 'genus'" : string.Empty;
+        command.CommandText = $"SELECT {ExtraColumns} FROM {ExtraFrom} WHERE e.node_id BETWEEN @first AND @last{genusOnly} ORDER BY e.extra_id";
         command.Parameters.AddWithValue("@first", nodeId);
         command.Parameters.AddWithValue("@last", lastNodeId);
         return ReadExtras(command);

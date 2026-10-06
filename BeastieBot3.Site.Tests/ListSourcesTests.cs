@@ -134,6 +134,11 @@ public sealed class ListSourcesTests(SiteFactory factory) : IClassFixture<SiteFa
         Assert.Equal(new HashSet<ListSource> { ListSource.Col, ListSource.Wikidata }, picked.Enabled);
         Assert.Equal(["src=col", "src=wd", "prefer=cwi"], picked.Write());
 
+        var genusOnly = ListSourceOptions.Read(new QueryCollection(new Dictionary<string, StringValues> { ["genera"] = new(["0"]) }));
+        Assert.False(genusOnly.OtherGenera);
+        Assert.Equal(["genera=0"], genusOnly.Write());
+        Assert.True(ListSourceOptions.Read(new QueryCollection(new Dictionary<string, StringValues> { ["genera"] = new(["0", "1"]) })).OtherGenera);
+
         // Only the hidden empty value: IUCN only.
         Assert.Equal([ListSource.Iucn], ListSourceOptions.Read(new QueryCollection(new Dictionary<string, StringValues> { ["src"] = "" })).Enabled);
     }

@@ -8,6 +8,7 @@
     @foreach (var (source, label) in new[] { (ListSource.Iucn, GroupSourceText.SourceIucn), (ListSource.Col, GroupSourceText.SourceCol), (ListSource.Wikidata, GroupSourceText.SourceWikidata) }) {
         <label><input type="checkbox" name="src" value="@ListSourceOptions.Key(source)" checked="@Model.Enabled.Contains(source)"> @label</label>
     }
+    <label><input type="hidden" name="genera" value="0"><input type="checkbox" name="genera" value="1" checked="@Model.OtherGenera"> @GroupSourceText.OtherGenera</label>
     <p class="help">@GroupSourceText.Help</p>
     <label class="inline-select">@GroupSourceText.OrderLabel
         <select name="prefer">

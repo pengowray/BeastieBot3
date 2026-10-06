@@ -78,7 +78,7 @@ internal sealed class SiteBuildDbCommand : Command<SiteBuildDbCommand.Settings> 
         public string? DoiCache { get; init; }
 
         [CommandOption("--extra-species <PLACEMENT>")]
-        [Description("Species from the Catalogue of Life and Wikidata that IUCN does not have, for the group pages' lists: genus (the default: only species whose genus IUCN has), family (also species whose family IUCN has, under that family) or none.")]
+        [Description("Species from the Catalogue of Life and Wikidata that IUCN does not have, for the group pages' lists: family (the default: species whose genus IUCN has, under that genus, and species whose family IUCN has, under that family), genus (only species whose genus IUCN has) or none.")]
         public string? ExtraSpecies { get; init; }
     }
 
@@ -169,7 +169,7 @@ internal sealed class SiteBuildDbCommand : Command<SiteBuildDbCommand.Settings> 
     }
 
     private static bool TryParseExtraSpecies(string? text, out ExtraSpecies.ExtraPlacement placement) {
-        placement = ExtraSpecies.ExtraPlacement.Genus;
+        placement = ExtraSpecies.ExtraPlacement.Family;
         if (string.IsNullOrWhiteSpace(text)) {
             return true;
         }
