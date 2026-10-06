@@ -7,11 +7,13 @@ using System.Threading.Tasks;
 using BeastieBot3.Taxonomy;
 
 // Orchestrates page downloads for WikipediaFetchCommand. For each queued title:
-// 1. Calls WikipediaApiClient.GetPageAsync() for HTML/wikitext
+// 1. Calls WikipediaApiClient.QueryPageAsync() for wikitext, categories and redirects
 // 2. Follows redirects, records redirect chains
-// 3. Computes SHA256 content hash for change detection
+// 3. Downloads the REST HTML and computes a SHA256 content hash for change detection
 // 4. Calls TaxoboxParser to extract taxon data from wikitext
 // 5. Stores everything in WikipediaCacheStore
+// SaveQueried stores a page that a batched action API query already returned, the same way but
+// without the REST HTML (`wikipedia fetch-group-titles`).
 
 namespace BeastieBot3.Wikipedia;
 
@@ -36,13 +38,80 @@ internal sealed class WikipediaPageFetcher {
         }
 
         if (!queryResult.Exists) {
-            var normalized = WikipediaTitleHelper.Normalize(workItem.PageTitle);
-            var missing = new WikiMissingTitle(workItem.PageTitle, normalized, queryResult.MissingReason ?? "missing", queryResult.MissingReason, DateTime.UtcNow);
-            _cache.RecordMissingTitle(missing);
-            _cache.MarkPageMissing(pageRowId, queryResult.MissingReason ?? "missing", DateTime.UtcNow);
-            return WikipediaFetchOutcome.CreateMissing(workItem.PageTitle, queryResult.MissingReason);
+            return SaveMissing(workItem, queryResult);
         }
 
+        var target = PrepareTarget(workItem, queryResult, out var skipped);
+        if (skipped is not null) {
+            return skipped;
+        }
+
+        var importId = _cache.BeginImport($"enwiki:{target.CanonicalTitle}");
+        var importStarted = DateTime.UtcNow;
+        WikipediaMobileHtmlResult htmlResult;
+        try {
+            htmlResult = await _client.GetMobileHtmlAsync(target.CanonicalTitle, cancellationToken).ConfigureAwait(false);
+        }
+        catch (WikipediaApiException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound) {
+            // The action API said the page exists, the REST endpoint says it does not. Either way
+            // there is no page to download, and "missing" is a settled answer where "failed" is
+            // retried on every --failed-only run.
+            var reason = "REST endpoint returned 404";
+            _cache.RecordMissingTitle(new WikiMissingTitle(workItem.PageTitle, target.NormalizedTitle, "missing", reason, DateTime.UtcNow));
+            _cache.MarkPageMissing(pageRowId, reason, DateTime.UtcNow);
+            _cache.CompleteImportFailure(importId, ex.Message, (int?)ex.StatusCode, DateTime.UtcNow - importStarted);
+            return WikipediaFetchOutcome.CreateMissing(workItem.PageTitle, reason);
+        }
+        catch (WikipediaApiException ex) {
+            _cache.RecordPageFailure(pageRowId, ex.Message, DateTime.UtcNow);
+            _cache.CompleteImportFailure(importId, ex.Message, (int?)ex.StatusCode, DateTime.UtcNow - importStarted);
+            return WikipediaFetchOutcome.CreateFailure(workItem.PageTitle, ex.Message);
+        }
+        try {
+            var outcome = SaveContent(workItem, queryResult, target, htmlResult.Html, importId);
+            _cache.CompleteImportSuccess(importId, (int)htmlResult.StatusCode, htmlResult.PayloadBytes, DateTime.UtcNow - importStarted);
+            return outcome;
+        }
+        catch (Exception ex) {
+            _cache.RecordPageFailure(pageRowId, ex.Message, DateTime.UtcNow);
+            _cache.CompleteImportFailure(importId, ex.Message, null, DateTime.UtcNow - importStarted);
+            return WikipediaFetchOutcome.CreateFailure(workItem.PageTitle, ex.Message);
+        }
+    }
+
+    /// <summary>
+    /// Saves a page that a batched action API query (<see cref="WikipediaApiClient.QueryPagesAsync"/>)
+    /// has already returned, without the REST HTML: the redirect stub and chain, the wikitext,
+    /// categories and parsed taxobox, as <see cref="FetchAsync"/> saves them. <paramref name="importId"/>
+    /// is the batch request's row in http_request_log.
+    /// </summary>
+    public WikipediaFetchOutcome SaveQueried(WikiPageWorkItem workItem, WikipediaQueryResult queryResult, long importId) {
+        if (!queryResult.Exists) {
+            return SaveMissing(workItem, queryResult);
+        }
+        var target = PrepareTarget(workItem, queryResult, out var skipped);
+        if (skipped is not null) {
+            return skipped;
+        }
+        return SaveContent(workItem, queryResult, target, html: null, importId);
+    }
+
+    private WikipediaFetchOutcome SaveMissing(WikiPageWorkItem workItem, WikipediaQueryResult queryResult) {
+        var normalized = WikipediaTitleHelper.Normalize(workItem.PageTitle);
+        var missing = new WikiMissingTitle(workItem.PageTitle, normalized, queryResult.MissingReason ?? "missing", queryResult.MissingReason, DateTime.UtcNow);
+        _cache.RecordMissingTitle(missing);
+        _cache.MarkPageMissing(workItem.PageRowId, queryResult.MissingReason ?? "missing", DateTime.UtcNow);
+        return WikipediaFetchOutcome.CreateMissing(workItem.PageTitle, queryResult.MissingReason);
+    }
+
+    private sealed record SaveTarget(string CanonicalTitle, string NormalizedTitle, bool IsRedirectRequest, long ContentRowId);
+
+    // Where the content goes: the requested row, or for a redirect the canonical page's row (made
+    // when there is none), with the requested row marked as a redirect stub. `skipped` is set when
+    // the redirect target is already cached, so there is nothing to save.
+    private SaveTarget PrepareTarget(WikiPageWorkItem workItem, WikipediaQueryResult queryResult, out WikipediaFetchOutcome? skipped) {
+        skipped = null;
+        var pageRowId = workItem.PageRowId;
         var canonicalTitle = queryResult.CanonicalTitle ?? workItem.PageTitle;
         var normalizedTitle = WikipediaTitleHelper.Normalize(canonicalTitle);
         var isRedirectRequest = !string.Equals(workItem.NormalizedTitle, normalizedTitle, StringComparison.Ordinal);
@@ -65,71 +134,45 @@ internal sealed class WikipediaPageFetcher {
             if (existingCanonical is not null && existingCanonical.DownloadStatus == WikiPageDownloadStatus.Cached) {
                 // The redirect target is already cached — nothing to download. Report this as
                 // skipped (a duplicate) rather than a fresh success, so the fetch counters are honest.
-                return WikipediaFetchOutcome.CreateSkipped(workItem.PageTitle, existingCanonical.PageTitle ?? canonicalTitle, "redirect target already cached");
+                skipped = WikipediaFetchOutcome.CreateSkipped(workItem.PageTitle, existingCanonical.PageTitle ?? canonicalTitle, "redirect target already cached");
             }
         }
+        return new SaveTarget(canonicalTitle, normalizedTitle, isRedirectRequest, contentRowId);
+    }
 
-        var importId = _cache.BeginImport($"enwiki:{canonicalTitle}");
-        var importStarted = DateTime.UtcNow;
-        WikipediaMobileHtmlResult htmlResult;
-        try {
-            htmlResult = await _client.GetMobileHtmlAsync(canonicalTitle, cancellationToken).ConfigureAwait(false);
-        }
-        catch (WikipediaApiException ex) when (ex.StatusCode == System.Net.HttpStatusCode.NotFound) {
-            // The action API said the page exists, the REST endpoint says it does not. Either way
-            // there is no page to download, and "missing" is a settled answer where "failed" is
-            // retried on every --failed-only run.
-            var reason = "REST endpoint returned 404";
-            _cache.RecordMissingTitle(new WikiMissingTitle(workItem.PageTitle, normalizedTitle, "missing", reason, DateTime.UtcNow));
-            _cache.MarkPageMissing(pageRowId, reason, DateTime.UtcNow);
-            _cache.CompleteImportFailure(importId, ex.Message, (int?)ex.StatusCode, DateTime.UtcNow - importStarted);
-            return WikipediaFetchOutcome.CreateMissing(workItem.PageTitle, reason);
-        }
-        catch (WikipediaApiException ex) {
-            _cache.RecordPageFailure(pageRowId, ex.Message, DateTime.UtcNow);
-            _cache.CompleteImportFailure(importId, ex.Message, (int?)ex.StatusCode, DateTime.UtcNow - importStarted);
-            return WikipediaFetchOutcome.CreateFailure(workItem.PageTitle, ex.Message);
-        }
-        try {
-            var hash = ComputeSha256(htmlResult.Html);
-            var hasTaxobox = HasTaxobox(queryResult.Wikitext);
-            var content = new WikiPageContent(
-                contentRowId,
-                queryResult.PageId,
-                canonicalTitle,
-                normalizedTitle,
-                queryResult.RevisionId,
-                isRedirectRequest,
-                isRedirectRequest ? canonicalTitle : null,
-                queryResult.IsDisambiguation,
-                queryResult.IsSetIndex,
-                hasTaxobox,
-                htmlResult.Html,
-                hash,
-                queryResult.Wikitext,
-                importId,
-                DateTime.UtcNow);
+    private WikipediaFetchOutcome SaveContent(WikiPageWorkItem workItem, WikipediaQueryResult queryResult, SaveTarget target, string? html, long importId) {
+        var hash = ComputeSha256(html);
+        var hasTaxobox = HasTaxobox(queryResult.Wikitext);
+        var content = new WikiPageContent(
+            target.ContentRowId,
+            queryResult.PageId,
+            target.CanonicalTitle,
+            target.NormalizedTitle,
+            queryResult.RevisionId,
+            target.IsRedirectRequest,
+            target.IsRedirectRequest ? target.CanonicalTitle : null,
+            queryResult.IsDisambiguation,
+            queryResult.IsSetIndex,
+            hasTaxobox,
+            html,
+            hash,
+            queryResult.Wikitext,
+            importId,
+            DateTime.UtcNow);
 
-            _cache.SavePageContent(content);
-            _cache.ReplaceCategories(contentRowId, queryResult.Categories);
-            if (!isRedirectRequest) {
-                _cache.ReplaceRedirectChain(contentRowId, BuildRedirectEdges(queryResult.Redirects));
-            }
-            var taxobox = TaxoboxParser.TryParse(contentRowId, queryResult.Wikitext);
-            if (taxobox is not null) {
-                _cache.UpsertTaxoboxData(taxobox);
-            }
-            else {
-                _cache.DeleteTaxoboxData(contentRowId);
-            }
-            _cache.CompleteImportSuccess(importId, (int)htmlResult.StatusCode, htmlResult.PayloadBytes, DateTime.UtcNow - importStarted);
-            return WikipediaFetchOutcome.CreateSuccess(workItem.PageTitle, canonicalTitle);
+        _cache.SavePageContent(content);
+        _cache.ReplaceCategories(target.ContentRowId, queryResult.Categories);
+        if (!target.IsRedirectRequest) {
+            _cache.ReplaceRedirectChain(target.ContentRowId, BuildRedirectEdges(queryResult.Redirects));
         }
-        catch (Exception ex) {
-            _cache.RecordPageFailure(pageRowId, ex.Message, DateTime.UtcNow);
-            _cache.CompleteImportFailure(importId, ex.Message, null, DateTime.UtcNow - importStarted);
-            return WikipediaFetchOutcome.CreateFailure(workItem.PageTitle, ex.Message);
+        var taxobox = TaxoboxParser.TryParse(target.ContentRowId, queryResult.Wikitext);
+        if (taxobox is not null) {
+            _cache.UpsertTaxoboxData(taxobox);
         }
+        else {
+            _cache.DeleteTaxoboxData(target.ContentRowId);
+        }
+        return WikipediaFetchOutcome.CreateSuccess(workItem.PageTitle, target.CanonicalTitle);
     }
 
     private static string? ComputeSha256(string? payload) {

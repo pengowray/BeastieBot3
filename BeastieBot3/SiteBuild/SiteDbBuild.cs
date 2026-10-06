@@ -235,23 +235,15 @@ internal sealed class SiteDbBuild {
     // the placement file only has one built from an older copy of the file, an older CoL file or
     // older rules, that one is used and the build warns.
     private SitePlacement ReadPlacement(CancellationToken ct) {
-        if (_inputs.ColPlacement is not { } path || !File.Exists(path) || _inputs.ColDatabase is not { } colDatabase) {
-            return SitePlacement.Empty;
+        var placement = SiteGroupTree.ReadPlacement(_inputs.IucnDatabase, _inputs.ColDatabase, _inputs.ColPlacement,
+            _inputs.NotAssignedRules, out var state, out var warning, ct);
+        if (state is not null) {
+            _stats.ColPlacementState = state;
         }
-        var status = Col.TaxonPlacementStore.Status(_inputs.IucnDatabase, colDatabase, _inputs.NotAssignedRules);
-        string sourceKey;
-        if (status.IsCurrent) {
-            sourceKey = status.SourceKey;
-            _stats.ColPlacementState = "current";
-        } else if (status.Source is { } earlier) {
-            sourceKey = earlier.SourceKey;
-            _stats.ColPlacementState = "out-of-date";
-            _stats.Warnings.Add($"The Catalogue of Life placement is out of date ({status.State}), so the Catalogue of Life groups may not match this IUCN release. To update it, run col build-placement.");
-        } else {
-            _stats.Warnings.Add($"The Catalogue of Life placement file has no placement for this IUCN database ({status.State}), so the tree has IUCN's ranks only. To add the Catalogue of Life groups, run col build-placement.");
-            return SitePlacement.Empty;
+        if (warning is not null) {
+            _stats.Warnings.Add(warning);
         }
-        return SiteLinkReaders.ReadPlacementPaths(path, sourceKey, ct);
+        return placement;
     }
 
     // English names and articles of the groups, as the Wikipedia list headings choose them, and the
