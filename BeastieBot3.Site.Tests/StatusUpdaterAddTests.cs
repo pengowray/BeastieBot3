@@ -75,6 +75,48 @@ public sealed class StatusUpdaterAddTests {
             result.Text);
     }
 
+    [Theory]
+    [InlineData("* ''Panthera tigris'' Kosterm. – Asia", "* ''Panthera tigris'' Kosterm. {{IUCN status|EN}} – Asia")]
+    [InlineData("* ''Panthera tigris'' (C.K.Allen) Kosterm. – Asia", "* ''Panthera tigris'' (C.K.Allen) Kosterm. {{IUCN status|EN}} – Asia")]
+    [InlineData("* ''Panthera tigris'' Brown & Wright, 1978", "* ''Panthera tigris'' Brown & Wright, 1978 {{IUCN status|EN}}")]
+    [InlineData("* ''Panthera tigris'' L.", "* ''Panthera tigris'' L. {{IUCN status|EN}}")]
+    [InlineData("* ''Panthera tigris'' – Asia and Russia", "* ''Panthera tigris'' {{IUCN status|EN}} – Asia and Russia")]
+    [InlineData("* ''Panthera tigris'', a big cat", "* ''Panthera tigris'' {{IUCN status|EN}}, a big cat")]
+    [InlineData("* ''Panthera tigris'' Tiger of Asia", "* ''Panthera tigris'' {{IUCN status|EN}} Tiger of Asia")]
+    public void StatusGoesAfterAPlainAuthority(string line, string expected) {
+        Assert.Equal(expected + "\n", Run(line + "\n", Lines).Text);
+    }
+
+    [Fact]
+    public void TheStatusCanGoAtTheEndOfTheLine() {
+        var result = Run("* ''Panthera tigris'' – Asia<ref>x</ref>\n", Lines with { StatusAtLineEnd = true });
+        Assert.Equal("* ''Panthera tigris'' – Asia {{IUCN status|EN}}<ref>x</ref>\n", result.Text);
+    }
+
+    [Fact]
+    public void AReferenceIsAddedOrReused() {
+        var text = "* ''Panthera tigris''\n* ''Felis silvestris''\n<ref name=\"wildcat\">{{cite iucn |doi=10.2305/IUCN.UK.2022.RLTS.T700A7001.en}}</ref>\n";
+        var result = Run(text, Lines with { AddReferences = true });
+        // The tiger has no citation on this fake site; the wildcat's assessment is cited by "wildcat".
+        Assert.StartsWith("* ''Panthera tigris'' {{IUCN status|EN}}\n* ''Felis silvestris'' {{IUCN status|LC}}<ref name=\"wildcat\"/>\n", result.Text);
+    }
+
+    [Fact]
+    public void ANewColumnCanHaveAnotherHeadingAndLeaveTablesOut() {
+        var result = Run(InlineTable, Columns with { ColumnHeader = "Conservation status" });
+        Assert.Contains("! Common name !! Scientific name !! Conservation status !! Range", result.Text);
+        var none = Run(InlineTable, Columns with { ColumnTables = new HashSet<int>() });
+        Assert.Equal(InlineTable, none.Text);
+        Assert.Equal(StatusNoteKind.ColumnNotChosen, Assert.Single(none.Findings).Notes.Single().Kind);
+        Assert.NotEqual(InlineTable, Run(InlineTable, Columns with { ColumnTables = new HashSet<int> { 2 } }).Text);
+    }
+
+    [Fact]
+    public void AStatusCellWithAReferenceIsUpdated() {
+        var text = "{|\n! Name !! IUCN status\n|-\n| ''Panthera tigris'' || VU<ref name=\"a\"/>\n|}";
+        Assert.Equal("{|\n! Name !! IUCN status\n|-\n| ''Panthera tigris'' || EN<ref name=\"a\"/>\n|}", Run(text).Text);
+    }
+
     [Fact]
     public void ListsInReferenceSectionsAndExternalLinksAreLeftOut() {
         var input = "== Species ==\n* ''Panthera tigris''\n== External links ==\n* ''Felis silvestris''\n=== Sub ===\n* ''Felis silvestris''\n"

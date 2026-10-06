@@ -22,9 +22,10 @@ public sealed partial class StatusUpdater {
     private sealed record LineAddCandidate(LineAddition Line) : Candidate(Line.Span.Start);
     private sealed record TableAddCandidate(TableAddition Table) : Candidate(Table.Table.Span.Start);
 
-    /// A list line with no status whose names name one taxon. Insert: where the template goes.
+    /// A list line with no status whose names name one taxon. Insert: where the template goes after
+    /// the name; EndInsert: where it goes at the end of the line (StatusUpdateOptions.StatusAtLineEnd).
     /// StatusText: a status the line gives some other way ("(EN)", a status image), or null.
-    private sealed record LineAddition(TextSpan Span, StatusTaxonResolver.NameMatch Match, int Insert, string? StatusText);
+    private sealed record LineAddition(TextSpan Span, StatusTaxonResolver.NameMatch Match, int Insert, string? StatusText, int EndInsert);
 
     /// A table with no status column whose rows name taxa. Column: the 0-based column the new
     /// column goes after. Layout: why the first row that keeps a column from being
@@ -36,6 +37,7 @@ public sealed partial class StatusUpdater {
     // candidates; with them off, the ones that would get a status are counted.
     private (int Lines, int Tables) FindMissing(WikitextScanner s, IReadOnlyList<WikiTable> tables, List<Candidate> candidates) {
         _bareMembers.Clear();
+        _refNames = null;
         var lines = 0;
         foreach (var line in BareListLines(s, tables)) {
             _bareMembers.Add(Member(line.Match.Taxon!, s.LineOf(line.Span.Start), line.Match.HowFound, null) with { Source = ListMemberSource.ListLine });
@@ -196,7 +198,9 @@ public sealed partial class StatusUpdater {
             var image = StatusImage().Match(lineText);
             var code = CodeInBrackets().Match(lineText);
             var statusText = image.Success ? image.Value : code.Success ? code.Value : null;
-            yield return new LineAddition(new TextSpan(lineStart, end), match, insert, statusText);
+            var trailing = TrailingReferences().Match(masked[lineStart..end]);
+            var endInsert = trailing.Success ? lineStart + trailing.Index : lineStart + masked[lineStart..end].TrimEnd().Length;
+            yield return new LineAddition(new TextSpan(lineStart, end), match, insert, statusText, Math.Max(insert, endInsert));
         }
     }
 
@@ -286,7 +290,14 @@ public sealed partial class StatusUpdater {
             return small.Span.End;
         }
         var smallTag = SmallTag().Match(s.Masked[gap..lineEnd]);
-        return smallTag.Success ? gap + smallTag.Length : end;
+        if (smallTag.Success) {
+            return gap + smallTag.Length;
+        }
+        // An authority as plain text, as genus articles write it: "''Alseodaphne albifrons'' Kosterm. –",
+        // "''Acer x'' (C.K.Allen) Kosterm.", "''Bulinus hightoni'' Brown & Wright, 1978", up to a dash,
+        // a comma, a bracket, a reference or the end of the line.
+        var plain = PlainAuthority().Match(s.Masked[end..lineEnd]);
+        return plain.Success ? end + plain.Groups["authority"].Index + plain.Groups["authority"].Length : end;
     }
 
     private StatusFinding AddToLine(WikitextScanner s, LineAddition addition, List<Edit> edits) {
@@ -308,9 +319,39 @@ public sealed partial class StatusUpdater {
         if (!IucnCategories.HasStatusTemplateCode(latest)) {
             return Fail(StatusNoteKind.NoCode, latest.Category);
         }
-        edits.Add(new Edit(addition.Insert, addition.Insert, " " + NewStatusTemplate(taxon, latest)));
+        var at = _options.StatusAtLineEnd ? addition.EndInsert : addition.Insert;
+        edits.Add(new Edit(at, at, " " + NewStatusTemplate(taxon, latest) + NewReference(s, taxon, latest)));
         var after = Apply(s.Text, edits, addition.Span).TrimEnd('\r');
         return new StatusFinding(StatusItemKind.ListLineAdded, line, StatusOutcome.Updated, before, after, taxon, notes);
+    }
+
+    // The reference after an added status (StatusUpdateOptions.AddReferences): the named reference the
+    // text defines for the taxon's latest assessment, else the citation of it in a <ref>; empty when
+    // not asked for or the site has no citation.
+    private string NewReference(WikitextScanner s, StatusTaxon taxon, AssessmentRow latest) {
+        if (!_options.AddReferences) {
+            return string.Empty;
+        }
+        _refNames ??= RefNamesByAssessment(s);
+        if (_refNames.TryGetValue(latest.AssessmentId, out var name)) {
+            return $"<ref name=\"{name}\"/>";
+        }
+        return ReadParts(latest.CitationJson) is { } parts ? $"<ref>{ReplacementCitation(latest, parts)}</ref>" : string.Empty;
+    }
+
+    private Dictionary<long, string>? _refNames;
+
+    // The names of the references the text defines, by the assessment id their citation has.
+    private static Dictionary<long, string> RefNamesByAssessment(WikitextScanner s) {
+        var names = new Dictionary<long, string>();
+        foreach (Match m in RefDefinitionWithBody().Matches(s.Masked)) {
+            foreach (Match id in AssessmentInText().Matches(m.Groups["body"].Value)) {
+                if (long.TryParse(id.Groups["a"].Value, out var assessmentId)) {
+                    names.TryAdd(assessmentId, m.Groups["name"].Value.Trim());
+                }
+            }
+        }
+        return names;
     }
 
     // {{IUCN status|EN}}, with the ids and the year when the reader asks for them (EX and EW have no year).
@@ -386,7 +427,7 @@ public sealed partial class StatusUpdater {
                 if (row.IsHeaderRow) {
                     continue;
                 }
-                var core = s.Core(cell.Content);
+                var core = StatusPart(s, cell.Content);
                 if ((core.Length <= MaxCodeLength && BareCode(s.Masked[core.Start..core.End]) is not null)
                     || s.TemplatesWithin(cell.Content).Any(t => t.Name == "iucn status")) {
                     return true;
@@ -433,6 +474,10 @@ public sealed partial class StatusUpdater {
         var headerSpan = new TextSpan(s.Text.LastIndexOf('\n', Math.Max(0, header.Cells[0].Whole.Start - 1)) + 1, header.Cells[^1].Whole.End);
         var headerLine = s.LineOf(headerSpan.Start);
         var headerBefore = s.Original(headerSpan).TrimEnd('\r');
+        if (_options.ColumnTables is { } chosen && !chosen.Contains(headerLine)) {
+            return ([new StatusFinding(StatusItemKind.TableColumnAdded, headerLine, StatusOutcome.NotUpdated, headerBefore, null, null,
+                [new StatusNote(StatusNoteKind.ColumnNotChosen)])], []);
+        }
         if (addition.Layout is { } layout) {
             return ([new StatusFinding(StatusItemKind.TableColumnAdded, headerLine, StatusOutcome.NotUpdated, headerBefore, null, null,
                 [layout])], []);
@@ -440,7 +485,7 @@ public sealed partial class StatusUpdater {
         var c = addition.Column;
         var edits = new List<Edit>();
         var findings = new List<StatusFinding>();
-        var headerEdit = NewCell(s, header, c, StatusColumnHeader);
+        var headerEdit = NewCell(s, header, c, _options.ColumnHeader ?? StatusColumnHeader);
         var added = 0;
         foreach (var (row, match) in addition.Rows) {
             var cell = row.Cells[c];
@@ -462,7 +507,7 @@ public sealed partial class StatusUpdater {
                     [.. notes, failure, new StatusNote(StatusNoteKind.EmptyCellAdded)]));
                 continue;
             }
-            var edit = NewCell(s, row, c, NewStatusTemplate(taxon!, taxon!.LatestGlobal!));
+            var edit = NewCell(s, row, c, NewStatusTemplate(taxon!, taxon!.LatestGlobal!) + NewReference(s, taxon, taxon.LatestGlobal!));
             edits.Add(edit);
             added++;
             var span = s.Core(cell.Content);
@@ -527,6 +572,13 @@ public sealed partial class StatusUpdater {
     [GeneratedRegex(@"\G\{\{(?<name>[^|{}\n]+)\|(?:[^|{}\n]*\|)*?(?=[*#])")]
     private static partial Regex WrapperStart();
 
+    // References, footnotes and spaces at the end of a line.
+    [GeneratedRegex(@"(?:\s*(?:<ref[^>]*/>|<ref[^>]*>.*?</ref\s*>|\{\{\s*(?:efn|sfn|r|refn)\b[^{}]*\}\}))+\s*$", RegexOptions.IgnoreCase)]
+    private static partial Regex TrailingReferences();
+
+    [GeneratedRegex(@"<ref\s+name\s*=\s*[""']?(?<name>[^""'/>]+?)[""']?\s*>(?<body>.*?)</ref\s*>", RegexOptions.IgnoreCase | RegexOptions.Singleline)]
+    private static partial Regex RefDefinitionWithBody();
+
     // [[File:Status iucn3.1 EN.svg]] and the like.
     [GeneratedRegex(@"status[ _]iucn[^|\]]*", RegexOptions.IgnoreCase)]
     private static partial Regex StatusImage();
@@ -534,6 +586,11 @@ public sealed partial class StatusUpdater {
     // A category code in brackets, as some lists write it: "(EN)", "(CR)".
     [GeneratedRegex(@"\(\s*(?:EX|EW|CR|EN|VU|NT|LC|DD|NE|LR/(?:cd|nt|lc))\s*\)")]
     private static partial Regex CodeInBrackets();
+
+    // Author names (capitalised, often abbreviated with a full stop), joined by "&", "and", "ex", "et al.",
+    // with particles such as "de" or "von" and a year, perhaps in brackets.
+    [GeneratedRegex(@"^\s+(?<authority>\(?(?:\p{Lu}[\p{L}'’-]*\.?(?:\p{Lu}[\p{L}'’-]*\.?)*)(?:(?:\s*[,&]\s*|\s+)(?:&|and|ex|et\s+al\.|in|de|du|da|von|van|der|f\.|\p{Lu}[\p{L}'’-]*\.?(?:\p{Lu}[\p{L}'’-]*\.?)*|\d{4}\)?|\))){0,8}\)?(?:\s*\p{Lu}[\p{L}'’-]*\.?(?:\p{Lu}[\p{L}'’-]*\.?)*)*)(?=\s*(?:[–—-]\s|,|\(|<ref|$))")]
+    private static partial Regex PlainAuthority();
 
     [GeneratedRegex(@"^<small>[^<\n]*</small>", RegexOptions.IgnoreCase)]
     private static partial Regex SmallTag();

@@ -47,6 +47,16 @@ public sealed record StatusUpdateOptions {
     /// Add an "IUCN status" column to wikitables whose rows name taxa and that have no status column.
     /// Off: the tables are only counted (StatusUpdateResult.TablesWithoutStatus).
     public bool AddStatusColumns { get; init; }
+    /// Put a status added to a list line at the end of the line, before its references, instead of
+    /// after the scientific name.
+    public bool StatusAtLineEnd { get; init; }
+    /// Add a reference to each status added to a list line or a new column: the named reference the
+    /// text already defines for the assessment, else {{cite iucn}} (or {{cite Q}}, CiteQ) in a <ref>.
+    public bool AddReferences { get; init; }
+    /// The heading of an added status column; null for StatusUpdater.StatusColumnHeader.
+    public string? ColumnHeader { get; init; }
+    /// The tables that get a status column, by the line of their header row in the text; null for all.
+    public IReadOnlySet<int>? ColumnTables { get; init; }
 }
 
 public enum StatusItemKind {
@@ -161,6 +171,8 @@ public enum StatusNoteKind {
     ColumnLayout,
     /// The row got an empty status cell, because no status was found for it.
     EmptyCellAdded,
+    /// No status column was added: the reader left the table out (StatusUpdateOptions.ColumnTables).
+    ColumnNotChosen,
 }
 
 public sealed record StatusNote(StatusNoteKind Kind, string? Detail = null, long? Id = null);

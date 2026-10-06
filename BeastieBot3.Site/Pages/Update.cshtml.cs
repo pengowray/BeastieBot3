@@ -63,6 +63,21 @@ public sealed class UpdateModel : PageModel {
     public const string CiteQField = "citeq";
     public const string AddToListLinesField = "addlines";
     public const string AddStatusColumnsField = "addcols";
+    public const string AtLineEndField = "addend";
+    public const string AddReferencesField = "addrefs";
+    public const string ColumnHeaderField = "colhead";
+    public const string ColumnTablesField = "cols";
+    /// Sent with the table checkboxes, so that a form with none of them ticked means no tables. Its
+    /// value is TextKey of the text they were shown for: pasting another text drops the choice.
+    public const string ColumnTablesShownField = "colsshown";
+
+    /// A short key of a text: the start of its SHA-256 in hex.
+    public static string TextKey(string text) =>
+        Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(Encoding.UTF8.GetBytes(text)))[..16];
+
+    /// The headings a new status column can have; the first is the default.
+    public static readonly string[] ColumnHeaders = [StatusUpdater.StatusColumnHeader, "Conservation status", "Red List status", "Status"];
+
     public const string ScopeField = "scope";
     public const string ListAnywayField = "anyway";
     public const string AddMissingField = "addmissing";
@@ -104,6 +119,12 @@ public sealed class UpdateModel : PageModel {
             CiteQ = On(CiteQField),
             AddToListLines = On(AddToListLinesField),
             AddStatusColumns = On(AddStatusColumnsField),
+            StatusAtLineEnd = On(AtLineEndField),
+            AddReferences = On(AddReferencesField),
+            ColumnHeader = form[ColumnHeaderField].LastOrDefault() is { } header && ColumnHeaders.Contains(header) ? header : null,
+            ColumnTables = form[ColumnTablesShownField].LastOrDefault() == TextKey(text)
+                ? form[ColumnTablesField].Select(v => int.TryParse(v, out var line) ? line : -1).Where(l => l > 0).ToHashSet()
+                : null,
         };
         if (string.IsNullOrWhiteSpace(text)) {
             Error = UpdateText.ErrorEmpty;

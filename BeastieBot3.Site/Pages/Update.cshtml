@@ -132,6 +132,10 @@
                                     @foreach (var note in finding.Notes) {
                                         <p class="update-note">@UpdateText.Note(note, finding.Kind)</p>
                                     }
+                                    @if (finding.Kind == StatusItemKind.TableColumnAdded && !finding.Notes.Any(n => n.Kind == StatusNoteKind.ColumnLayout)) {
+                                        @* Belongs to the update form, so it is sent with the text. *@
+                                        <label class="update-note"><input type="checkbox" form="update-form" name="@UpdateModel.ColumnTablesField" value="@finding.Line" checked="@(finding.Outcome == StatusOutcome.Updated)"> @UpdateText.ColumnChosen</label>
+                                    }
                                 </td>
                             </tr>
                         }
@@ -193,8 +197,20 @@
         <legend>@UpdateText.AddOptionsLegend</legend>
         <label><input type="checkbox" name="@UpdateModel.AddToListLinesField" value="1" checked="@Model.Options.AddToListLines"> @UpdateText.OptionAddToListLines</label>
         <label><input type="checkbox" name="@UpdateModel.AddStatusColumnsField" value="1" checked="@Model.Options.AddStatusColumns"> @UpdateText.OptionAddStatusColumns</label>
+        <label><input type="checkbox" name="@UpdateModel.AtLineEndField" value="1" checked="@Model.Options.StatusAtLineEnd"> @UpdateText.OptionAtLineEnd</label>
+        <label><input type="checkbox" name="@UpdateModel.AddReferencesField" value="1" checked="@Model.Options.AddReferences"> @UpdateText.OptionAddReferences</label>
+        <label>@UpdateText.OptionColumnHeader
+            <select name="@UpdateModel.ColumnHeaderField">
+                @foreach (var heading in UpdateModel.ColumnHeaders) {
+                    <option value="@heading" selected="@(heading == (Model.Options.ColumnHeader ?? UpdateModel.ColumnHeaders[0]))">@heading</option>
+                }
+            </select>
+        </label>
         <p class="help" id="update-add-help">@UpdateText.AddOptionsHelp</p>
     </fieldset>
+    @if (result?.Findings.Any(f => f.Kind == StatusItemKind.TableColumnAdded) == true) {
+        <input type="hidden" name="@UpdateModel.ColumnTablesShownField" value="@UpdateModel.TextKey(Model.Input)">
+    }
     <div class="update-actions">
         <button type="submit">@UpdateText.Submit</button>
         <p class="help">@UpdateText.NotSaved</p>

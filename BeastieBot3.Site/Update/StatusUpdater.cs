@@ -325,7 +325,7 @@ public sealed partial class StatusUpdater {
         }
         foreach (var row in table.Rows.Where(r => !r.IsHeaderRow)) {
             foreach (var cell in row.Cells.Where(c => statusColumns.Contains(c.Column))) {
-                var core = s.Core(cell.Content);
+                var core = StatusPart(s, cell.Content);
                 if (core.Length <= MaxCodeLength && BareCode(s.Masked[core.Start..core.End]) is not null) {
                     yield return (row, cell, null);
                     continue;
@@ -337,6 +337,17 @@ public sealed partial class StatusUpdater {
                 }
             }
         }
+    }
+
+    /// The status in a cell: its content without the references after it ("EN<ref name="x"/>" is
+    /// "EN"), trimmed.
+    internal static TextSpan StatusPart(WikitextScanner s, TextSpan content) {
+        var core = s.Core(content);
+        if (core.Length > MaxStatusCellLength) {
+            return core;
+        }
+        var trailing = TrailingReferences().Match(s.Masked, core.Start, core.Length);
+        return trailing.Success && trailing.Index > core.Start ? s.Core(new TextSpan(core.Start, trailing.Index)) : core;
     }
 
     // A header that names the IUCN status: it mentions IUCN or the Red List, or says "status" and
@@ -363,7 +374,7 @@ public sealed partial class StatusUpdater {
     }
 
     private StatusFinding TableCell(WikitextScanner s, CellCandidate candidate, List<Edit> edits) {
-        var core = s.Core(candidate.Cell.Content);
+        var core = StatusPart(s, candidate.Cell.Content);
         var line = s.LineOf(core.Start);
         var before = s.Original(core);
         var names = candidate.Row.Cells.Concat(candidate.Row.Spanning).Where(c => c != candidate.Cell)

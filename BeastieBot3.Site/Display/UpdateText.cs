@@ -52,6 +52,12 @@ public static partial class UpdateText {
     public const string AddOptionsLegend = "Also add statuses";
     public const string OptionAddToListLines = "Add {{IUCN status}} after the scientific name on list lines that have no status";
     public const string OptionAddStatusColumns = "Add an \"IUCN status\" column after the scientific name column in tables that have no status column";
+    // PROVISIONAL wording.
+    public const string OptionAtLineEnd = "Put an added status at the end of the line, before its references, instead of after the scientific name";
+    public const string OptionAddReferences = "Add a reference to each added status";
+    public const string OptionColumnHeader = "Heading of an added status column:";
+    public const string ColumnChosen = "Add the column to this table";
+
     public const string AddOptionsHelp = "The template goes after the scientific name and any authority in brackets, on list lines (* or #) that name one IUCN taxon. A column is added only to tables with one header row at the top, the same number of cells in every row, and no rowspan or colspan.";
 
     // Offers above the result, shown when an option that is off would change items.

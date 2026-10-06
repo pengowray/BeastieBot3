@@ -86,6 +86,7 @@ public static partial class UpdateText {
             StatusNoteKind.ColumnAdded => ColumnAdded(note),
             StatusNoteKind.ColumnLayout => ColumnLayout(note),
             StatusNoteKind.EmptyCellAdded => "Added an empty status cell.",
+            StatusNoteKind.ColumnNotChosen => "Status column not added: this table is not ticked.",
             _ => note.Kind.ToString(),
         };
     }
