@@ -96,7 +96,36 @@ internal static class ExtraSpeciesColReader {
                 }
             }
         }
+        // A synonym of a subspecies or variety stands for the species above it.
+        var parents = byName.Values.SelectMany(l => l).Concat(byId.Values).ToHashSet(StringComparer.Ordinal);
+        var up = SpeciesOfInfraspecific(connection, parents, ct);
+        foreach (var list in byName.Values) {
+            for (var i = 0; i < list.Count; i++) {
+                list[i] = up.GetValueOrDefault(list[i], list[i]);
+            }
+        }
+        foreach (var id in byId.Keys.ToList()) {
+            byId[id] = up.GetValueOrDefault(byId[id], byId[id]);
+        }
         return (byName, byId);
+    }
+
+    // Of the given usage ids, those of subspecies, varieties and forms, with the id of the usage they
+    // are under (their species).
+    private static Dictionary<string, string> SpeciesOfInfraspecific(SqliteConnection connection, IEnumerable<string> ids, CancellationToken ct) {
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT parentID, rank FROM nameusage INDEXED BY idx_nameusage_ID WHERE ID = @id LIMIT 1";
+        var id = command.Parameters.Add("@id", SqliteType.Text);
+        var result = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var value in ids) {
+            ct.ThrowIfCancellationRequested();
+            id.Value = value;
+            using var reader = command.ExecuteReader();
+            if (reader.Read() && Text(reader, 0) is { } parent && Text(reader, 1) is "subspecies" or "variety" or "form" or "infraspecific name") {
+                result[value] = parent;
+            }
+        }
+        return result;
     }
 
     /// CoL's accepted names for the given usage ids ("Panthera leo"), for IUCN taxa that the

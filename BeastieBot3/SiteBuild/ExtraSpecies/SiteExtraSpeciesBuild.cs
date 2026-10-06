@@ -96,6 +96,7 @@ internal sealed class SiteExtraSpeciesBuild {
             }
         }
         progress("Comparing names");
+        build.AddWikidataSynonymOverlaps(wikidataOnly);
         build.AddSynonymListOverlaps();
         build.AddNameOverlaps();
         build.SetPositions(taxonList);
@@ -253,6 +254,9 @@ internal sealed class SiteExtraSpeciesBuild {
             SetNames(entry, row);
             Add(entry, underGenus);
             wikidataOnly.Add((entry, row.ColIds));
+            if (row.SynonymOf.Count > 0) {
+                _synonymOf[entry] = row.SynonymOf;
+            }
         }
     }
 
@@ -346,6 +350,23 @@ internal sealed class SiteExtraSpeciesBuild {
             foreach (var accepted in byName.GetValueOrDefault(name) ?? []) {
                 if (_byColId.TryGetValue(accepted, out var entry) && entry.Kingdom == kingdom) {
                     AddOverlap(entry, taxon.TaxonId, null, OverlapReason.ColSynonym);
+                }
+            }
+        }
+    }
+
+    private readonly Dictionary<ExtraEntry, IReadOnlyList<long>> _synonymOf = new();
+
+    // A Wikidata-only entry whose item another item names as taxon synonym (P1420): that item's IUCN
+    // taxon, or its extra entry.
+    private void AddWikidataSynonymOverlaps(List<(ExtraEntry Entry, IReadOnlyList<string> ColIds)> wikidataOnly) {
+        var byQid = Entries.Where(e => e.Qid is not null).GroupBy(e => e.Qid!.Value).ToDictionary(g => g.Key, g => g.First());
+        foreach (var (entry, _) in wikidataOnly) {
+            foreach (var qid in _synonymOf.GetValueOrDefault(entry) ?? []) {
+                if (_iucnByQid.TryGetValue("Q" + qid, out var taxon) && taxon.InRelease) {
+                    AddOverlap(entry, taxon.TaxonId, null, OverlapReason.WikidataSynonym);
+                } else if (byQid.TryGetValue(qid, out var other) && other != entry) {
+                    AddOverlap(entry, null, other, OverlapReason.WikidataSynonym);
                 }
             }
         }

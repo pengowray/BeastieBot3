@@ -41,7 +41,7 @@ public sealed class SiteDbBuildExtraSpeciesTests : IDisposable {
         Assert.DoesNotContain("Panthera fossilis", byName.Keys);
         Assert.DoesNotContain("Panthera spelaea", byName.Keys);
         Assert.DoesNotContain("Acinonyx jubatus", byName.Keys);
-        Assert.Equal(4, rows.Count);
+        Assert.Equal(5, rows.Count);
     }
 
     [Fact]
@@ -57,6 +57,8 @@ public sealed class SiteDbBuildExtraSpeciesTests : IDisposable {
         // Wikidata's "Felis libyca" is a CoL synonym of CoL's Felis lybica.
         Assert.Contains(overlaps, o => (string)o[0]! == "Felis libyca" && (string?)o[2] == "Felis lybica" && (string)o[3]! == OverlapReason.ColSynonym
             && (long)o[4]! == 1);
+        // Wikidata's Felis lybica item names "Felis ornata" as a taxon synonym (P1420).
+        Assert.Contains(overlaps, o => (string)o[0]! == "Felis ornata" && (string?)o[2] == "Felis lybica" && (string)o[3]! == OverlapReason.WikidataSynonym);
         // "parda" is "pardus" with another gender ending.
         Assert.Contains(overlaps, o => (string)o[0]! == "Panthera parda" && (long?)o[1] == 15954 && (string)o[3]! == OverlapReason.GenderEnding);
     }
@@ -73,7 +75,7 @@ public sealed class SiteDbBuildExtraSpeciesTests : IDisposable {
             SELECT x.col_count, x.wikidata_count, x.both_count
             FROM higher_taxon_extra x JOIN higher_taxon h ON h.node_id = x.node_id WHERE h.rank = 'family'
             """).Single();
-        Assert.Equal(new object?[] { 1L, 2L, 1L }, family);
+        Assert.Equal(new object?[] { 1L, 3L, 1L }, family);
     }
 
     [Fact]
@@ -143,11 +145,12 @@ public sealed class SiteDbBuildExtraSpeciesTests : IDisposable {
     private static void WriteWikidata(string path) {
         using (var store = WikidataCacheStore.Open(path)) {
             WikidataSweptTaxon Item(long qid, string name, IReadOnlyList<string>? col = null, IReadOnlyList<string>? iucn = null,
-                string? enwiki = null, string? label = null, IReadOnlyList<long>? instance = null) =>
-                new(qid, name, [], WikidataTaxonSweep.SpeciesRank, [], col ?? [], iucn ?? [], enwiki, label, instance ?? []);
+                string? enwiki = null, string? label = null, IReadOnlyList<long>? instance = null, IReadOnlyList<long>? synonymOf = null) =>
+                new(qid, name, [], WikidataTaxonSweep.SpeciesRank, [], col ?? [], iucn ?? [], enwiki, label, instance ?? [], synonymOf ?? []);
             store.StoreTaxonSweepPage([
                 Item(100, "Felis lybica", col: ["F2"], enwiki: "African wildcat", label: "African wildcat"),
                 Item(101, "Felis libyca"),
+                Item(102, "Felis ornata", synonymOf: [100]),
                 Item(140, "Panthera leo", iucn: ["15951"]),
                 Item(200, "Panthera fossilis", instance: [23038290]),
                 Item(201, "Panthera spelaea", instance: [23038290]),

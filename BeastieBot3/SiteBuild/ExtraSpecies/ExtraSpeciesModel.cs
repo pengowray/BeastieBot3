@@ -26,7 +26,8 @@ internal sealed record WikidataSpeciesRow(
     string? EnwikiTitle,
     string? LabelEn,
     string? Kingdom,
-    string? Family);
+    string? Family,
+    IReadOnlyList<long> SynonymOf);
 
 /// A species that will be an extra_species row: from CoL, Wikidata or both.
 internal sealed class ExtraEntry {

@@ -112,7 +112,8 @@ internal static class ExtraSpeciesWikidataReader {
         var rows = new List<WikidataSpeciesRow>();
         using (var command = connection.CreateCommand()) {
             command.CommandText = $"""
-                SELECT qid, taxon_name, parent_qids, col_ids, iucn_taxon_ids, enwiki_title, label_en, {(hasInstance ? "instance_of" : "NULL")}
+                SELECT qid, taxon_name, parent_qids, col_ids, iucn_taxon_ids, enwiki_title, label_en, {(hasInstance ? "instance_of" : "NULL")},
+                       {(HasColumn(connection, "synonym_of") ? "synonym_of" : "NULL")}
                 FROM wikidata_taxon_sweep WHERE rank_qid = {WikidataTaxonSweep.SpeciesRank}
                 """;
             command.CommandTimeout = 0;
@@ -154,7 +155,8 @@ internal static class ExtraSpeciesWikidataReader {
                     reader.IsDBNull(5) ? null : reader.GetString(5),
                     reader.IsDBNull(6) ? null : reader.GetString(6),
                     kingdom.Count == 1 ? kingdom[0] : null,
-                    family));
+                    family,
+                    Numbers(reader.IsDBNull(8) ? null : reader.GetString(8))));
             }
         }
         return rows;

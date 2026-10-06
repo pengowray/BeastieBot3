@@ -44,18 +44,22 @@ internal sealed partial class WikidataCacheStore {
                 label_en       TEXT,                  -- English label, only when it is not one of the taxon names
                 instance_of    TEXT,                  -- instance of (P31) values other than taxon (Q16521), numeric, space between them:
                                                       -- 23038290 fossil taxon, 1040689 synonym, 98961713 extinct taxon ...
+                synonym_of     TEXT,                  -- the items that name this one as taxon synonym (P1420), numeric, space between them
                 seen_at        TEXT NOT NULL          -- UTC "O": when a sweep pass last read the item
             );
             CREATE INDEX IF NOT EXISTS idx_wikidata_taxon_sweep_rank ON wikidata_taxon_sweep(rank_qid);
             """;
         command.ExecuteNonQuery();
-        // instance_of was added after the first sweeps.
-        using var columns = _connection.CreateCommand();
-        columns.CommandText = "SELECT COUNT(*) FROM pragma_table_info('wikidata_taxon_sweep') WHERE name = 'instance_of'";
-        if (Convert.ToInt64(columns.ExecuteScalar(), CultureInfo.InvariantCulture) == 0) {
-            using var alter = _connection.CreateCommand();
-            alter.CommandText = "ALTER TABLE wikidata_taxon_sweep ADD COLUMN instance_of TEXT";
-            alter.ExecuteNonQuery();
+        // instance_of and synonym_of were added after the first sweeps.
+        foreach (var column in new[] { "instance_of", "synonym_of" }) {
+            using var columns = _connection.CreateCommand();
+            columns.CommandText = "SELECT COUNT(*) FROM pragma_table_info('wikidata_taxon_sweep') WHERE name = @name";
+            columns.Parameters.AddWithValue("@name", column);
+            if (Convert.ToInt64(columns.ExecuteScalar(), CultureInfo.InvariantCulture) == 0) {
+                using var alter = _connection.CreateCommand();
+                alter.CommandText = $"ALTER TABLE wikidata_taxon_sweep ADD COLUMN {column} TEXT";
+                alter.ExecuteNonQuery();
+            }
         }
     }
 
@@ -89,12 +93,12 @@ ON CONFLICT(key) DO UPDATE SET value=excluded.value";
         using var command = _connection.CreateCommand();
         command.Transaction = tx;
         command.CommandText = """
-            INSERT INTO wikidata_taxon_sweep(qid, taxon_name, other_names, rank_qid, parent_qids, col_ids, iucn_taxon_ids, enwiki_title, label_en, instance_of, seen_at)
-            VALUES (@qid, @name, @other, @rank, @parents, @col, @iucn, @enwiki, @label, @instance, @seen)
+            INSERT INTO wikidata_taxon_sweep(qid, taxon_name, other_names, rank_qid, parent_qids, col_ids, iucn_taxon_ids, enwiki_title, label_en, instance_of, synonym_of, seen_at)
+            VALUES (@qid, @name, @other, @rank, @parents, @col, @iucn, @enwiki, @label, @instance, @synonym_of, @seen)
             ON CONFLICT(qid) DO UPDATE SET taxon_name=excluded.taxon_name, other_names=excluded.other_names,
                 rank_qid=excluded.rank_qid, parent_qids=excluded.parent_qids, col_ids=excluded.col_ids,
                 iucn_taxon_ids=excluded.iucn_taxon_ids, enwiki_title=excluded.enwiki_title,
-                label_en=excluded.label_en, instance_of=excluded.instance_of, seen_at=excluded.seen_at
+                label_en=excluded.label_en, instance_of=excluded.instance_of, synonym_of=excluded.synonym_of, seen_at=excluded.seen_at
             """;
         var qid = command.Parameters.Add("@qid", SqliteType.Integer);
         var name = command.Parameters.Add("@name", SqliteType.Text);
@@ -106,6 +110,7 @@ ON CONFLICT(key) DO UPDATE SET value=excluded.value";
         var enwiki = command.Parameters.Add("@enwiki", SqliteType.Text);
         var label = command.Parameters.Add("@label", SqliteType.Text);
         var instance = command.Parameters.Add("@instance", SqliteType.Text);
+        var synonymOf = command.Parameters.Add("@synonym_of", SqliteType.Text);
         command.Parameters.AddWithValue("@seen", seenAtUtc.ToString("O", CultureInfo.InvariantCulture));
         foreach (var item in items) {
             qid.Value = item.Qid;
@@ -118,6 +123,7 @@ ON CONFLICT(key) DO UPDATE SET value=excluded.value";
             enwiki.Value = (object?)item.EnwikiTitle ?? DBNull.Value;
             label.Value = (object?)item.LabelEn ?? DBNull.Value;
             instance.Value = item.InstanceOf.Count == 0 ? DBNull.Value : string.Join(' ', item.InstanceOf);
+            synonymOf.Value = item.SynonymOf.Count == 0 ? DBNull.Value : string.Join(' ', item.SynonymOf);
             command.ExecuteNonQuery();
         }
         using (var cursor = _connection.CreateCommand()) {
