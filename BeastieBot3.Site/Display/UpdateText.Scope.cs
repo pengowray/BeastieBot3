@@ -39,16 +39,24 @@ public static partial class UpdateText {
     public const string CopyMissingAccessible = "Copy the list lines for the missing taxa";
     public const string MissingLinesHelp = "One line for each missing taxon, with {{IUCN status}} filled in. Paste each line into the right section of the list.";
 
-    // Putting the missing taxa into the wikitext (ListPlacement). PROVISIONAL wording.
-    public const string AddMissingOption = "Add the missing species to the wikitext, each next to a listed species of the same genus";
+    // Putting the missing species into the wikitext (ListPlacement).
+    public const string AddMissingOption = "Add the missing species to the updated wikitext";
     public const string AddMissingButton = "Add the missing species";
-    public const string AddMissingHelp = "Only list lines are changed, not tables. Missing subspecies and varieties, and species of a genus the list does not have, stay in the box below.";
-    public const string AddMissingPartial = "The missing taxa are not added to a list that may be regional.";
-    public static string AddMissingResult(int added, int missing) =>
-        $"Added {Count(added)} of the {Count(missing)} missing taxa to the wikitext.";
+    public const string AddMissingHelp = "Each species goes on a new list line next to a species of the same genus, in the same style as that line. Not added: subspecies, varieties, species of a genus that has no species on a list line, and species missing from a list written as a table.";
+    public const string AddMissingPartial = "Missing species were not added, because this may be a regional list or a list of part of the group.";
+
+    public static string AddMissingResult(int added, int missing) => (added, missing) switch {
+        (1, 1) => "Added the missing taxon to the updated wikitext.",
+        (0, 1) => "The missing taxon was not added to the updated wikitext.",
+        (0, _) => $"None of the {Count(missing)} missing taxa were added to the updated wikitext.",
+        _ when added == missing => $"Added all {Count(missing)} missing taxa to the updated wikitext.",
+        _ => $"Added {Count(added)} of the {Count(missing)} missing taxa to the updated wikitext.",
+    };
+
     public const string ColumnPlacedNextTo = "Added";
-    public static string PlacedNextTo(bool before) => before ? "before" : "after";
-    public const string UnplacedLinesLabel = "List lines for the missing taxa that were not added (read only)";
+    public static string PlacedNextTo(bool before) => before ? "Before" : "After";
+    public static string UnplacedLinesLabel(int n) =>
+        n == 1 ? "List line for the 1 missing taxon that was not added (read only)" : $"List lines for the {Count(n)} missing taxa that were not added (read only)";
 
     public static string OtherCategoryHeading(int n, IReadOnlySet<string> categories) =>
         $"{Taxa(n)} now in a category other than {CategoryList(categories, "or")}";

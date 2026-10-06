@@ -42,7 +42,8 @@ public static partial class UpdateText {
             parts.Add(columns == 1 ? $"IUCN status column added ({statuses})" : $"IUCN status columns added to {Count(columns)} tables ({statuses})");
         }
         if (missingAdded > 0) {
-            parts.Add(missingAdded == 1 ? "1 missing taxon added" : $"{Count(missingAdded)} missing taxa added");
+            // After "IUCN Red List 2026-1:", so "2 species added" says where they are from.
+            parts.Add($"{Count(missingAdded)} species added");
         }
         if (citations > 0) {
             parts.Add(citations == 1 ? "1 IUCN citation updated" : $"{Count(citations)} IUCN citations updated");

@@ -1559,6 +1559,21 @@ colspan and rowspan; `StatusUpdater` decides the edits, and `StatusTaxonResolver
     give only a common name link are found by the article (the live List of critically endangered
     mammals: 187 of IUCN's 236 CR species). A missing taxon whose article is a list (its own name
     redirects there) is written without a link.
+- Missing species put into the list (`Update/ListPlacement.cs`, form field `addmissing`, off by
+  default; a button under the missing taxa sends the text again with it on, then a ticked checkbox
+  keeps it on). Each missing species goes on a new list line next to a listed species of the same
+  genus (the lines with fewest markers among the genus's lines): when the genus's lines are in
+  alphabetical order by the names as written (one pair in ten may be out of order), after the last
+  line, counting lines of species IUCN does not have, whose name sorts before it; else after the
+  genus's last species. It goes after the lines under its neighbour (more markers, or a ":" note).
+  The line copies the neighbour's markers and name style and has `{{IUCN status}}` (with ids and
+  year when those options are on) when the neighbour has one; a link to a "List of" page is left
+  out. Not placed, and left in the copy box: subspecies, varieties, species of a genus with no
+  species on a list line, lists written as tables, and lists that may be regional. The insertions
+  are applied with the updater's edits on the pasted text (`StatusUpdater.TextWith`), and the edit
+  summary says "2 species added". In October 2026 it put the missing species of List of Acer
+  species, List of Carex species, Bulinus and Citharexylum in alphabetical place, and 78 of the 92
+  missing EN species into List of endangered amphibians.
 - `citeq` (off by default): every citation the page replaces, in `status_ref` or elsewhere, is
   `{{cite Q|<item>}}` when the latest assessment has a Wikidata item, else `{{cite iucn}}`
   (`StatusUpdater.ReplacementCitation`, through `IucnReference`). An existing `{{cite Q}}` is not
