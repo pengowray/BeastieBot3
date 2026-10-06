@@ -3,11 +3,10 @@
 @* The list type of the group page's list editor. site.js shows the options of the chosen type
    (data-list-type) when the choice changes; the server renders them for the type in the address. *@
 <fieldset class="option-group">
-    <legend>@GroupText.OptionListType</legend>
+    <legend>@GroupText.OptionListType <partial name="_InfoTip" model="@(new InfoTipModel("tip-list-type", GroupText.InfoTipLabel(GroupText.OptionListType), GroupText.ListTypeTablesHelp))" /></legend>
     <label><input type="radio" name="type" value="bullets" checked="@(!Model.Table.IsTable)"> @GroupText.ListTypeBullets</label>
     <label>
-        <input type="radio" name="type" value="table" checked="@Model.Table.IsTable" aria-describedby="list-type-help">
+        <input type="radio" name="type" value="table" checked="@Model.Table.IsTable">
         @GroupText.ListTypeTables <span class="example">@GroupText.ListTypeTablesExample</span>
     </label>
-    <p class="help" id="list-type-help" data-list-type="tables" hidden="@(!Model.Table.IsTable)">@GroupText.ListTypeTablesHelp</p>
 </fieldset>

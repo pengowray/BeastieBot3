@@ -230,7 +230,8 @@
     // Puts each data-live-region element of next (the wikitext section of the new page) in place
     // of the element with the same id. Returns false, changing nothing, when the two sections do
     // not have the same regions. Keeps the form where it is on the screen, the open state of
-    // details elements that have an id, and the focus when it was in a region.
+    // details elements that have an id, the state of data-keep-checked boxes that have an id, and
+    // the focus when it was in a region.
     function replaceRegions(section, next, form) {
         var oldRegions = Array.prototype.slice.call(section.querySelectorAll("[data-live-region]"));
         var newRegions = Array.prototype.slice.call(next.querySelectorAll("[data-live-region]"));
@@ -267,6 +268,13 @@
                 var same = replacement.querySelector("details[id=\"" + details.id + "\"]");
                 if (same) {
                     same.open = details.open;
+                }
+            });
+            // So do the boxes that show a run of pairs in the possible-duplicates panel.
+            old.querySelectorAll("input[data-keep-checked][id]").forEach(function (box) {
+                var same = replacement.querySelector("input[data-keep-checked][id=\"" + box.id + "\"]");
+                if (same) {
+                    same.checked = box.checked;
                 }
             });
             old.parentNode.replaceChild(replacement, old);
@@ -459,7 +467,122 @@
         });
     }
 
+    // Info tips (_InfoTip): each "i" button opens its help text as a popover, which the browser
+    // opens and closes on click, Escape and a click outside without this script. This adds:
+    // - the text placed just below the button (above it when there is no room below), and kept
+    //   there while the page scrolls;
+    // - opening on mouse hover and on keyboard focus. A tip opened that way closes when the
+    //   pointer or focus leaves; a click keeps it open until a second click, Escape or a click
+    //   outside;
+    // - aria-expanded on the button, which the style uses.
+    function setUpInfoTips() {
+        var buttons = document.querySelectorAll("button[data-info-tip]");
+        if (buttons.length === 0 || !HTMLElement.prototype.hasOwnProperty("popover")) {
+            return;
+        }
+        buttons.forEach(function (button) {
+            var tip = document.getElementById(button.getAttribute("popovertarget"));
+            if (!tip) {
+                return;
+            }
+            var pinned = false;
+            var hideTimer = 0;
+            var showTimer = 0;
+
+            function isOpen() {
+                return tip.matches(":popover-open");
+            }
+            function show() {
+                window.clearTimeout(hideTimer);
+                if (!isOpen()) {
+                    pinned = false;
+                    tip.showPopover();
+                }
+            }
+            function hideSoon() {
+                window.clearTimeout(showTimer);
+                window.clearTimeout(hideTimer);
+                hideTimer = window.setTimeout(function () {
+                    if (!pinned && isOpen() && !button.matches(":hover") && !tip.matches(":hover")
+                        && document.activeElement !== button) {
+                        tip.hidePopover();
+                    }
+                }, 250);
+            }
+
+            button.setAttribute("aria-expanded", "false");
+            button.addEventListener("click", function (event) {
+                if (isOpen() && !pinned) {
+                    // Open from hover or focus: the click keeps it open instead of closing it.
+                    event.preventDefault();
+                    pinned = true;
+                    return;
+                }
+                pinned = !isOpen();
+            });
+            button.addEventListener("pointerenter", function (event) {
+                if (event.pointerType === "mouse") {
+                    window.clearTimeout(showTimer);
+                    showTimer = window.setTimeout(show, 150);
+                }
+            });
+            button.addEventListener("pointerleave", hideSoon);
+            tip.addEventListener("pointerleave", hideSoon);
+            tip.addEventListener("pointerenter", function () {
+                window.clearTimeout(hideTimer);
+            });
+            button.addEventListener("focus", function () {
+                if (button.matches(":focus-visible")) {
+                    show();
+                }
+            });
+            button.addEventListener("blur", hideSoon);
+            tip.addEventListener("toggle", function (event) {
+                var open = event.newState === "open";
+                button.setAttribute("aria-expanded", open ? "true" : "false");
+                if (open) {
+                    place(button, tip);
+                } else {
+                    pinned = false;
+                }
+            });
+        });
+
+        // A placed tip has a fixed position, so it follows its button when the page scrolls or the
+        // window changes size.
+        function placeOpenTips() {
+            buttons.forEach(function (button) {
+                var tip = document.getElementById(button.getAttribute("popovertarget"));
+                if (tip && tip.matches(":popover-open")) {
+                    place(button, tip);
+                }
+            });
+        }
+        window.addEventListener("scroll", placeOpenTips, { passive: true });
+        window.addEventListener("resize", placeOpenTips);
+    }
+
+    function place(button, tip) {
+        tip.classList.add("info-tip-placed");
+        var gap = 6;
+        var edge = 8;
+        var anchor = button.getBoundingClientRect();
+        var width = tip.offsetWidth;
+        var height = tip.offsetHeight;
+        // The viewport without its scroll bars.
+        var viewWidth = document.documentElement.clientWidth;
+        var viewHeight = document.documentElement.clientHeight;
+        var left = Math.max(edge, Math.min(anchor.left - 12, viewWidth - width - edge));
+        var top = anchor.bottom + gap;
+        if (top + height > viewHeight - edge && anchor.top - gap - height >= edge) {
+            top = anchor.top - gap - height;
+        }
+        tip.style.left = left + "px";
+        tip.style.top = top + "px";
+    }
+
     setUpCopyButtons();
+    setUpInfoTips();
     setUpListType();
     setUpLiveOptions();
     setUpSuggestions();

@@ -64,6 +64,8 @@ public sealed class GroupModel : PageModel {
     /// The list's rows from the picked sources and the notices about possible duplicates; null for
     /// a list of IUCN's taxa only.
     public ListSourceMergeResult? Sources { get; private set; }
+    /// The notices of Sources arranged for the possible-duplicates panel.
+    public ListNoticeGroups? NoticeGroups { get; private set; }
 
     /// The list type and the species table options (SpeciesTableQuery).
     public SpeciesTableOptions Table { get; private set; } = new();
@@ -134,6 +136,7 @@ public sealed class GroupModel : PageModel {
             var taxa = _queries.GetListTaxa(group, kinds);
             if (GroupListSources.Active(Options)) {
                 Sources = GroupListSources.Merge(_queries, group, extraCounts, taxa, Options);
+                NoticeGroups = ListNoticeGroups.Build(Sources);
                 taxa = Sources.Rows;
             }
             var groups = _queries.GetGroupsWithin(group).Append(group).ToDictionary(g => g.NodeId);

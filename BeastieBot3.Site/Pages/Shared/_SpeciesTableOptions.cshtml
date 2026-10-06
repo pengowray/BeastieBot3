@@ -5,10 +5,9 @@
     var table = Model.Table;
 }
 <fieldset class="option-group" data-list-type="tables" hidden="@(!table.IsTable)">
-    <legend>@GroupText.OptionTables</legend>
-    <p class="help">@GroupText.SpeciesCountHelp</p>
+    <legend>@GroupText.OptionTables <partial name="_InfoTip" model="@(new InfoTipModel("tip-tables", GroupText.InfoTipLabel(GroupText.OptionTables), GroupText.SpeciesCountHelp))" /></legend>
     <fieldset class="option-group">
-        <legend>@GroupText.OptionReferences</legend>
+        <legend>@GroupText.OptionReferences <partial name="_InfoTip" model="@(new InfoTipModel("tip-references", GroupText.InfoTipLabel(GroupText.OptionReferences), GroupText.ReferencesHelp))" /></legend>
         @foreach (var (value, label) in new[] {
                      (TableReferences.None, GroupText.ReferencesNone),
                      (TableReferences.ListDefined, GroupText.ReferencesListDefined),
@@ -16,10 +15,9 @@
                  }) {
             <label><input type="radio" name="refs" value="@SpeciesTableQuery.ReferencesKey(value)" checked="@(table.References == value)"> @label</label>
         }
-        <p class="help">@GroupText.ReferencesHelp</p>
     </fieldset>
     <fieldset class="option-group">
-        <legend>@GroupText.OptionRefNames</legend>
+        <legend>@GroupText.OptionRefNames <partial name="_InfoTip" model="@(new InfoTipModel("tip-ref-names", GroupText.InfoTipLabel(GroupText.OptionRefNames), GroupText.RefNamesHelp))" /></legend>
         @foreach (var (value, label) in new[] {
                      (TableRefNames.CommonName, GroupText.RefNamesCommon),
                      (TableRefNames.TaxonId, GroupText.RefNamesId),
@@ -27,7 +25,6 @@
                  }) {
             <label><input type="radio" name="refnames" value="@SpeciesTableQuery.RefNamesKey(value)" checked="@(table.RefNames == value)"> @label</label>
         }
-        <p class="help">@GroupText.RefNamesHelp</p>
     </fieldset>
     <fieldset class="option-group">
         <legend>@GroupText.OptionCitationTemplate</legend>

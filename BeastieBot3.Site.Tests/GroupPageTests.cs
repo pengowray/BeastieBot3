@@ -79,6 +79,21 @@ public sealed class GroupPageTests(SiteFactory factory) : IClassFixture<SiteFact
     }
 
     [Fact]
+    public async Task LongOptionHelpIsBehindInfoButtons() {
+        var html = await _client.GetStringAsync("/taxa/family/ursidae");
+
+        // A button in the legend that opens the help text as a popover, named for the option it explains.
+        Assert.Contains("<legend>Red List categories <button type=\"button\" class=\"info-tip-button\" popovertarget=\"tip-categories\" data-info-tip>"
+            + "<span aria-hidden=\"true\">i</span><span class=\"visually-hidden\">Help for Red List categories</span></button>"
+            + "<span class=\"info-tip\" id=\"tip-categories\" popover>Not Evaluated:", html);
+        foreach (var id in new[] { "tip-list-type", "tip-sources", "tip-source-order", "tip-tables", "tip-references", "tip-ref-names" }) {
+            Assert.Contains($"popovertarget=\"{id}\"", html);
+            Assert.Contains($"id=\"{id}\" popover>", html);
+        }
+        Assert.DoesNotContain("<p class=\"help\">Not Evaluated:", html);
+    }
+
+    [Fact]
     public async Task GroupPageLinksBackToAllTheSearchResults() {
         var html = await _client.GetStringAsync("/taxa/family/ursidae?q=bear");
 

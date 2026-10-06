@@ -38,11 +38,42 @@ public static class GroupSourceText {
 
     // Notices
     public const string NoticesHeading = "Possible duplicates";
-    public static string LeftOutHeading(int count) => $"Left out of the list ({SiteFormat.Number(count)})";
-    public static string KeptHeading(int count) => $"Kept in the list ({SiteFormat.Number(count)})";
-    public const string LikelySame = "likely the same species as";
-    public const string MaySame = "may be the same species";
-    public const string NotInList = "not in this list";
+    public static string LeftOutHeading(int entries) => $"Left out of the list ({Entries(entries)})";
+    public static string KeptHeading(int pairs) => $"Both entries kept ({Pairs(pairs)})";
+    public const string LeftOutRule = "Of two entries that are likely the same species, the one from the source later in the order of preference is left out.";
+
+    /// The line under the list's size that links to the panel: "Possible duplicates: 302 entries
+    /// left out, 5 pairs with both entries kept". The link is on the first part (NoticesHeading).
+    public static string SummaryCounts(int leftOutEntries, int keptPairs) => string.Join(", ", new[] {
+        leftOutEntries > 0 ? $"{Entries(leftOutEntries)} left out" : null,
+        keptPairs > 0 ? $"{Pairs(keptPairs)} with both entries kept" : null,
+    }.Where(p => p is not null));
+
+    // Column headings
+    public const string ColumnLeftOut = "Left out";
+    public const string ColumnLikelySame = "Likely the same species as";
+    public const string ColumnInList = "In the list";
+    public const string ColumnMaySame = "May be the same species as";
+
+    /// The state of an entry, after its source: "in this list", "left out", "in another genus".
+    /// groupRank: the page's IUCN rank, or null for a Catalogue of Life group (an entry outside such
+    /// a group need not have a rank of that kind).
+    public static string State(NoticeState state, string? groupRank) => state switch {
+        NoticeState.InList => "in this list",
+        NoticeState.LeftOut => "left out",
+        _ => groupRank is null ? "outside this group" : $"in another {groupRank}",
+    };
+
+    /// "41 pairs: Catalogue of Life lists one name as a synonym of the other."
+    public static string ReasonSummary(string reason, int pairs) => $"{Pairs(pairs)}: {Reason(reason)}";
+
+    /// A collapsed run: "Rana names" in each column (the genus in italics, then this word), and the
+    /// box that shows its pairs.
+    public const string RunNamesWord = "names";
+    public static string RunShow(int pairs) => $"Show {Pairs(pairs)}";
+
+    private static string Entries(int count) => count == 1 ? "1 entry" : $"{SiteFormat.Number(count)} entries";
+    private static string Pairs(int count) => count == 1 ? "1 pair" : $"{SiteFormat.Number(count)} pairs";
 
     public static string Reason(string reason) => reason switch {
         "iucn-synonym" => "IUCN lists one name as a synonym of the other.",

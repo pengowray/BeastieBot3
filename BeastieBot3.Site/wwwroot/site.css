@@ -35,6 +35,8 @@
     --id-mark-5: #bb3a62;
     --id-tint-6: #dff2f2;
     --id-mark-6: #1a7f80;
+    /* The shadow under an info tip's text (_InfoTip), which is drawn over the page. */
+    --tip-shadow: rgba(0, 0, 0, 0.18);
     color-scheme: light;
 }
 
@@ -69,6 +71,7 @@
         --id-mark-5: #ee86a6;
         --id-tint-6: #152f30;
         --id-mark-6: #4dbfbf;
+        --tip-shadow: rgba(0, 0, 0, 0.6);
         color-scheme: dark;
     }
 }
@@ -103,6 +106,7 @@
     --id-mark-5: #ee86a6;
     --id-tint-6: #152f30;
     --id-mark-6: #4dbfbf;
+    --tip-shadow: rgba(0, 0, 0, 0.6);
     color-scheme: dark;
 }
 
@@ -1292,5 +1296,92 @@ th.num {
    notices about possible duplicates (GroupListSources, _ListNotices). */
 .preview-source { font-size: 0.8em; }
 .preview-source a + a { margin-left: 0.3em; }
-.list-notices h4 { margin: 0.8em 0 0.3em; }
-.list-notices ul { margin-top: 0; padding-left: 1.2em; }
+.list-notices h4 { margin: 1em 0 0.2em; }
+.list-notices > .help { margin-bottom: 0.5rem; }
+.notices-summary { margin: -0.3rem 0 0.5rem; font-size: 0.9rem; }
+
+/* A reason group: its summary is the reason and its count; the table holds the pairs. */
+.notice-group { margin: 0.3rem 0; }
+.notice-group > summary { cursor: pointer; padding: 0.2rem 0; }
+.notice-group[open] > summary { margin-bottom: 0.2rem; }
+.notice-table { font-size: 0.9rem; margin-bottom: 0.6rem; }
+.notice-table th, .notice-table td { width: 50%; overflow-wrap: anywhere; }
+.notice-tags { color: var(--muted); font-size: 0.85em; white-space: nowrap; }
+/* A run of pairs between two genera: one row, with a box that shows the pairs. Without :has every
+   pair is shown. */
+.notice-run .run-head td { background: var(--surface); }
+.notice-run .run-toggle { display: block; margin-top: 0.15rem; font-size: 0.9em; cursor: pointer; }
+.notice-run .run-pair td:first-child { padding-left: 1rem; }
+.notice-run:has(.run-toggle input:not(:checked)) .run-pair { display: none; }
+
+/* Info tips (_InfoTip): a small "i" button beside an option's name, and its help text in a popover.
+   The button is 24px square for touch, with a smaller circle drawn inside. Without site.js the
+   browser centres the popover on the screen; site.js adds .info-tip-placed and sets its position
+   beside the button. A browser without popovers ignores the attribute and shows the text in place. */
+.info-tip-button {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.5rem;
+    height: 1.5rem;
+    margin: -0.2rem 0 -0.2rem 0.15rem;
+    padding: 0;
+    border: 0;
+    background: none;
+    color: var(--link);
+    font: inherit;
+    font-weight: 700;
+    vertical-align: middle;
+    cursor: pointer;
+}
+
+.info-tip-button > span[aria-hidden] {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 1.05rem;
+    height: 1.05rem;
+    border: 1.5px solid currentColor;
+    border-radius: 50%;
+    font-family: Georgia, "Times New Roman", serif;
+    font-size: 0.75rem;
+    line-height: 1;
+}
+
+.info-tip-button:hover > span[aria-hidden],
+.info-tip-button[aria-expanded="true"] > span[aria-hidden] {
+    background: var(--link);
+    color: var(--bg);
+}
+
+.info-tip {
+    font-size: 0.9rem;
+    font-weight: 400;
+    line-height: 1.45;
+    color: var(--fg);
+}
+
+.info-tip:popover-open {
+    max-width: min(22rem, calc(100vw - 2rem));
+    padding: 0.6rem 0.8rem;
+    background: var(--bg);
+    border: 1px solid var(--control-border);
+    border-radius: 4px;
+    box-shadow: 0 4px 14px var(--tip-shadow);
+}
+
+.info-tip.info-tip-placed {
+    inset: auto;
+    margin: 0;
+}
+
+.option-with-tip {
+    display: flex;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0 0.2rem;
+}
+
+.option-with-tip .inline-select {
+    margin: 0.2rem 0;
+}

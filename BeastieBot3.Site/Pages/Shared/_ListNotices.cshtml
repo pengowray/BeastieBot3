@@ -1,31 +1,75 @@
 @using BeastieBot3.Site.Lists
-@model ListSourceMergeResult
-@* Possible duplicates between a list's sources (ListSourceMerge): entries left out of the list, then
-   entries kept in it that may be the same species as another. *@
+@model ListNoticesModel
+@* Possible duplicates between a list's sources (ListSourceMerge, arranged by ListNoticeGroups):
+   entries left out of the list, then pairs whose entries both stay. In each section a collapsible
+   group per reason (open when it has at most ListNoticeGroups.MaxOpenRows rows) with a two-column
+   table: the entry left out (or in the list), and the entry it may be the same species as with its
+   source and state. Runs of pairs between the same two genera are one row whose checkbox shows the
+   pairs (CSS :has; a browser without :has shows them all). The ids keep each group's open state and
+   each run's box across a live update (site.js). *@
 @{
-    var leftOut = Model.Notices.Where(n => n.LeftOut).ToList();
-    var kept = Model.Notices.Where(n => !n.LeftOut).ToList();
+    var groups = Model.Groups;
 }
-@if (Model.Notices.Count > 0) {
-    <section class="list-notices" aria-labelledby="list-notices-heading">
+@if (!groups.IsEmpty) {
+    <section class="list-notices" id="list-notices" aria-labelledby="list-notices-heading">
         <h3 id="list-notices-heading">@GroupSourceText.NoticesHeading</h3>
-        @foreach (var (heading, notices) in new[] { (GroupSourceText.LeftOutHeading(leftOut.Count), leftOut), (GroupSourceText.KeptHeading(kept.Count), kept) }) {
-            if (notices.Count == 0) {
+        @foreach (var (section, leftOut) in new[] { (groups.LeftOut, true), (groups.Kept, false) }) {
+            if (section.PairCount == 0) {
                 continue;
             }
-            <h4>@heading</h4>
-            <ul>
-                @foreach (var notice in notices) {
-                    <li>
-                        @if (notice.LeftOut) {
-                            <partial name="_ListNoticeEntry" model="@notice.Entry" /><text>: @GroupSourceText.LikelySame </text><partial name="_ListNoticeEntry" model="@notice.Kept" /><text>. </text>
-                        } else {
-                            <partial name="_ListNoticeEntry" model="@notice.Entry" /><text> and </text><partial name="_ListNoticeEntry" model="@notice.Kept" /><text> @GroupSourceText.MaySame. </text>
-                        }
-                        @GroupSourceText.Reason(notice.Reason)
-                    </li>
-                }
-            </ul>
+            var implied = leftOut ? NoticeState.LeftOut : NoticeState.InList;
+            <h4>@(leftOut ? GroupSourceText.LeftOutHeading(section.EntryCount) : GroupSourceText.KeptHeading(section.PairCount))</h4>
+            @if (leftOut) {
+                <p class="help">@GroupSourceText.LeftOutRule</p>
+            }
+            @foreach (var group in section.Groups) {
+                <details class="notice-group" id="@group.Id" open="@(group.RowCount <= ListNoticeGroups.MaxOpenRows)">
+                    <summary>@GroupSourceText.ReasonSummary(group.Reason, group.PairCount)</summary>
+                    <div class="table-scroll">
+                        <table class="notice-table">
+                            <thead>
+                                <tr>
+                                    <th scope="col">@(leftOut ? GroupSourceText.ColumnLeftOut : GroupSourceText.ColumnInList)</th>
+                                    <th scope="col">@(leftOut ? GroupSourceText.ColumnLikelySame : GroupSourceText.ColumnMaySame)</th>
+                                </tr>
+                            </thead>
+                            @foreach (var run in group.Runs) {
+                                var first = run.FirstSample;
+                                var second = run.SecondSample;
+                                <tbody class="notice-run">
+                                    <tr class="run-head">
+                                        <td>
+                                            <i>@first.Genus</i> @GroupSourceText.RunNamesWord
+                                            <span class="notice-tags"><span class="notice-source">@GroupSourceText.ShortName(first.Entry.Source)</span>@if (first.State != implied) {<text> · </text><span class="notice-state">@GroupSourceText.State(first.State, Model.GroupRank)</span>}</span>
+                                            <label class="run-toggle"><input type="checkbox" id="@run.Id" data-keep-checked> @GroupSourceText.RunShow(run.Pairs.Count)</label>
+                                        </td>
+                                        <td>
+                                            <i>@second.Genus</i> @GroupSourceText.RunNamesWord
+                                            <span class="notice-tags"><span class="notice-source">@GroupSourceText.ShortName(second.Entry.Source)</span> · <span class="notice-state">@GroupSourceText.State(second.State, Model.GroupRank)</span></span>
+                                        </td>
+                                    </tr>
+                                    @foreach (var pair in run.Pairs) {
+                                        <tr class="run-pair">
+                                            <td><partial name="_ListNoticeEntry" model="@(new ListNoticeSideModel(pair.First, Model.GroupRank, pair.First.State != implied))" /></td>
+                                            <td><partial name="_ListNoticeEntry" model="@(new ListNoticeSideModel(pair.Second, Model.GroupRank, true))" /></td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            }
+                            @if (group.Pairs.Count > 0) {
+                                <tbody>
+                                    @foreach (var pair in group.Pairs) {
+                                        <tr>
+                                            <td><partial name="_ListNoticeEntry" model="@(new ListNoticeSideModel(pair.First, Model.GroupRank, pair.First.State != implied))" /></td>
+                                            <td><partial name="_ListNoticeEntry" model="@(new ListNoticeSideModel(pair.Second, Model.GroupRank, true))" /></td>
+                                        </tr>
+                                    }
+                                </tbody>
+                            }
+                        </table>
+                    </div>
+                </details>
+            }
         }
     </section>
 }
