@@ -128,6 +128,8 @@ public sealed partial class StatusUpdater {
     private static readonly HashSet<string> SkippedSectionTitles = new(StringComparer.OrdinalIgnoreCase) {
         "References", "External links", "Further reading", "See also", "Bibliography", "Sources", "Notes", "Footnotes",
         "Citations", "Literature", "Literature cited", "Works cited", "Notes and references",
+        // A list of synonyms would get the status of the taxon after every old name.
+        "Synonyms", "Synonymy",
     };
 
     private static bool HasTemplateStartIn(List<int> starts, int from, int to) {

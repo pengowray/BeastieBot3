@@ -1499,15 +1499,17 @@ colspan and rowspan; `StatusUpdater` decides the edits, and `StatusTaxonResolver
   (`StatusUpdateResult.ListLinesWithoutStatus`, `TablesWithoutStatus`) for an offer above the
   result and are not items, so they do not count toward the item limit.
   - `addlines`: `{{IUCN status|EN}}` on a `*` or `#` line with no `{{IUCN status}}`, outside
-    templates, tables and sections such as References, External links, See also and Further
-    reading, whose text before its first `<ref>` writes exactly one scientific name outside external
+    templates, tables and sections such as References, External links, See also, Further
+    reading and Synonyms, whose text before its first `<ref>` writes exactly one scientific name outside external
     link labels, naming one taxon (a synonym counts, with a note). It goes after the name, after a
     closing bracket when the name is in brackets ("[[Tiger]] (''P. tigris'')"), and after an
     authority straight after it: in brackets with a year, `{{small}}` or `<small>`. A line that gives
     a status as "(EN)" or a status image is reported and left. The `ids` and `year` options apply to
-    the new template. In a sample of 51 cached articles in October 2026 this gave statuses to every
-    line of List of Acer species (313), List of Phyllanthus species (375) and List of Carex species
-    (254 of 280), and to genus articles such as Alseodaphne and Bulinus.
+    the new template. In a sample of 51 cached articles in October 2026 this added a status to 313
+    lines of List of Acer species, 375 of List of Phyllanthus species and 254 of the 280 lines of
+    List of Carex species that name an IUCN taxon (the other 26 name a taxon IUCN has not assessed
+    globally), and to the species lines of genus articles such as Alseodaphne and Bulinus. Fossil
+    and hybrid lines name no IUCN taxon and are not items.
   - `addcols`: an "IUCN status" column after the column with the most scientific names, in a
     wikitable with no header that names a status and no data cell holding a code or
     `{{IUCN status}}`, not nested, with at least 3 data rows of which at least half name one taxon.

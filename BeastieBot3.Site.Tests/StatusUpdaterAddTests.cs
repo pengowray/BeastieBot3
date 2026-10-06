@@ -94,6 +94,12 @@ public sealed class StatusUpdaterAddTests {
     }
 
     [Fact]
+    public void SynonymSectionsAreLeftOut() {
+        var result = Run("==Synonyms==\n* ''Felis tigris'' Linnaeus, 1758\n", Lines);
+        Assert.Empty(result.Findings);
+    }
+
+    [Fact]
     public void ANameInAReferenceDoesNotCount() {
         var result = Run("* ''Panthera tigris''<ref>See ''Felis silvestris''.</ref>\n", Lines);
         Assert.Equal("* ''Panthera tigris'' {{IUCN status|EN}}<ref>See ''Felis silvestris''.</ref>\n", result.Text);
@@ -233,10 +239,12 @@ public sealed class StatusUpdaterAddTests {
 
     // ---------------------------------------------------------------- round trip
 
-    [Fact]
-    public void AddedStatusesAreUpToDateOnTheNextRun() {
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void AddedStatusesAreUpToDateOnTheNextRun(bool idsAndYear) {
         var input = "Intro.\n* [[Tiger]], ''Panthera tigris'' (Linnaeus, 1758), Asia\n* ''Bromus interruptus''\n\n" + InlineTable + "\n";
-        var options = new StatusUpdateOptions { AddToListLines = true, AddStatusColumns = true, AddIds = true, AddYear = true };
+        var options = new StatusUpdateOptions { AddToListLines = true, AddStatusColumns = true, AddIds = idsAndYear, AddYear = idsAndYear };
         var first = Run(input, options);
         Assert.Equal(5, first.Findings.Count(f => f.Outcome == StatusOutcome.Updated && f.Kind != StatusItemKind.TableColumnAdded));
         var second = Run(first.Text, options);
