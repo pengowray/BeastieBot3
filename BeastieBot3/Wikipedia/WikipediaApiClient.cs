@@ -17,7 +17,7 @@ using BeastieBot3.Configuration;
 
 namespace BeastieBot3.Wikipedia;
 
-internal sealed class WikipediaApiClient : IDisposable {
+internal sealed partial class WikipediaApiClient : IDisposable {
     private readonly HttpClient _actionClient;
     private readonly HttpClient _restClient;
     private readonly WikipediaConfiguration _configuration;

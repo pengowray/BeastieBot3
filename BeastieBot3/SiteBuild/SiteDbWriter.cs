@@ -154,8 +154,8 @@ internal sealed class SiteDbWriter : IDisposable {
             INSERT INTO higher_taxon_count (node_id, category, species_count, infra_count, subpopulation_count)
             VALUES (@node_id, @category, @species_count, @infra_count, @subpopulation_count)
             """, "@node_id", "@category", "@species_count", "@infra_count", "@subpopulation_count");
-        using var name = Prepare("INSERT OR IGNORE INTO higher_taxon_name (node_id, name, source) VALUES (@node_id, @name, @source)",
-            "@node_id", "@name", "@source");
+        using var name = Prepare("INSERT OR IGNORE INTO higher_taxon_name (node_id, name, source, name_key) VALUES (@node_id, @name, @source, @name_key)",
+            "@node_id", "@name", "@source", "@name_key");
         foreach (var n in nodes) {
             Bind(node, n.NodeId, n.Parent?.NodeId, n.Depth, n.Rank, n.Name, SiteNameKey.Fold(n.Name), n.LinkQuery, n.Source, n.ShowRank ? 1 : 0,
                 n.Kingdom, n.ColId, n.CommonNameEn, n.CommonNameSource, n.EnwikiTitle, n.FirstPos, n.LastPos, n.SpeciesCount,
@@ -166,7 +166,11 @@ internal sealed class SiteDbWriter : IDisposable {
                 count.ExecuteNonQuery();
             }
             foreach (var colName in n.ColNames) {
-                Bind(name, n.NodeId, colName, SiteTreeSource.Col);
+                Bind(name, n.NodeId, colName, SiteTreeSource.Col, SiteNameKey.Fold(colName));
+                name.ExecuteNonQuery();
+            }
+            foreach (var wikipediaName in n.WikipediaNames) {
+                Bind(name, n.NodeId, wikipediaName, SiteNameSource.Wikipedia, SiteNameKey.Fold(wikipediaName));
                 name.ExecuteNonQuery();
             }
         }

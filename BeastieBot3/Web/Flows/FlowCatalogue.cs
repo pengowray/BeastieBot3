@@ -1047,6 +1047,17 @@ public static class FlowCatalogue {
                     Note = "Each run skips the assessments already in the DOI cache. The status line under this step's title counts latest global assessments only, the default --scope. --scope under Options also takes latest-regional, all-latest or history, and `site build-db` uses the DOIs found in every scope. After a new Red List release, run `iucn resolve-dois --refresh-crossref`, so that Crossref's list includes the new release's DOIs, then `iucn resolve-dois --scope latest-regional`. Without --refresh-crossref, a run downloads Crossref's list again (about 260 requests, 3 minutes) only when the cached copy is more than 7 days old. `iucn resolve-dois --status` prints the counts for a scope and sends no requests.",
                 },
                 new FlowStep {
+                    Id = "site-group-titles",
+                    Title = "Download the Wikipedia pages of the groups",
+                    Description = "`wikipedia fetch-group-titles` downloads the English Wikipedia page for the name of each group on the site (kingdom to genus, with the Catalogue of Life groups between them), and the redirects to each article it reaches, into the Wikipedia cache. `site build-db` stores the article titles and redirects as other names of the groups, so that searching the site for \"fruit bat\" finds family Pteropodidae (\"Fruit bat\" redirects to \"Megabat\", whose taxobox is Pteropodidae).",
+                    Commands = new[] { "wikipedia fetch-group-titles", "wikipedia fetch-group-titles --status" },
+                    InputSourceIds = new[] { "iucn-main" },
+                    OutputSourceIds = new[] { "wikipedia-cache" },
+                    Probe = PublicSiteProbes.GroupTitles,
+                    Group = "2 · Build the site database",
+                    Note = "It asks for 50 titles per request: families and above first, then subfamilies and tribes, then genera. Each run asks only for what is not downloaded yet, so a stopped run carries on where it left off. The first full run (about 33,000 names in October 2026) took under an hour. Names that are not in the list of all English Wikipedia titles (`wikipedia titles-dump`) are not asked for. `--refresh-days` under Options also downloads again the pages and redirect lists older than that.",
+                },
+                new FlowStep {
                     Id = "site-build-db",
                     Title = "Build the site database",
                     Description = "`site build-db` builds the site database (Datastore:site_sqlite) from the IUCN Red List database, the IUCN API cache, the GBIF checklist, the DOI cache, the Common names store, the Wikidata and Wikipedia caches, the CoL placement and the SPRAT (EPBC) database. It writes the new database to a separate file and replaces the old one only when the build finishes.",

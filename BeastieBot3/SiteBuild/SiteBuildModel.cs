@@ -185,6 +185,11 @@ internal sealed class SiteBuildStats {
     public int GroupArticles;
     public int GroupColIds;
     public int GroupsWithColNames;
+    public int GroupWikipediaArticles;
+    public int GroupWikipediaArticlesWithoutRedirects;
+    public int GroupsWithWikipediaNames;
+    public int GroupWikipediaNames;
+    public int GroupsGainingEnglishNameCandidate;
     public int ListArticleTitles;
 
     public int CsvAssessments;

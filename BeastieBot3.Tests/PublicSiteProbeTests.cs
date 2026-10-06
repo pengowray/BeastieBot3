@@ -252,4 +252,38 @@ public class PublicSiteProbeTests {
         Assert.Equal("ok", PublicSiteProbes.Evaluate(PublicSiteProbes.Build, Site())!.Status);
         Assert.Null(PublicSiteProbes.Evaluate("not-a-probe", Site()));
     }
+
+    // ---- the pages and redirects of the groups' titles ----
+
+    private static readonly DateTime IucnChanged = new(2026, 8, 14, 7, 48, 0, DateTimeKind.Utc);
+
+    private static PublicSiteState Titles(long pages, long redirects, DateTime? seen) => Site() with {
+        WikipediaCachePath = "/data/enwiki_cache.sqlite",
+        IucnFileChangedAtUtc = IucnChanged,
+        GroupTitles = new GroupTitleRunState(Built, pages, redirects, 6400, seen),
+    };
+
+    [Fact]
+    public void GroupTitlesNotRunIsTodo() {
+        var r = PublicSiteProbes.GroupTitlesStep(Site() with { WikipediaCachePath = "/data/enwiki_cache.sqlite" });
+        Assert.Equal(("todo", "Not run yet."), (r.Status, r.Detail));
+    }
+
+    [Fact]
+    public void GroupTitlesWithWorkLeftIsBacklog() {
+        var r = PublicSiteProbes.GroupTitlesStep(Titles(20452, 2504, IucnChanged));
+        Assert.Equal("backlog", r.Status);
+        Assert.Contains("20,452 pages and 2,504 redirect lists still to download", r.Detail);
+    }
+
+    [Fact]
+    public void GroupTitlesAllDownloadedIsOk() =>
+        Assert.Equal("ok", PublicSiteProbes.GroupTitlesStep(Titles(0, 0, IucnChanged)).Status);
+
+    [Fact]
+    public void GroupTitlesAfterANewIucnDatabaseIsTodo() {
+        var r = PublicSiteProbes.GroupTitlesStep(Titles(0, 0, IucnChanged.AddDays(-30)));
+        Assert.Equal("todo", r.Status);
+        Assert.Contains("The IUCN Red List database changed after the last run", r.Detail);
+    }
 }

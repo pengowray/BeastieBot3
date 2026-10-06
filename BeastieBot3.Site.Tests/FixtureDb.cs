@@ -419,6 +419,7 @@ public static class FixtureDb {
             trend: "Decreasing", wikidataItem: KoalaLatestItem, wikidataItemProperties: "P31 P1476 P1433 P921 P953 P577 P356 P2093 Len");
         w.Name(Koala, "Phascolarctos cinereus", "scientific", null, "iucn");
         w.Name(Koala, "Koala", "common", "en", "iucn", preferred: true);
+        w.Name(Koala, "Bear", "common", "en", "col");
 
         // Southern cassowary: the EPBC Act lists the whole species under another name.
         w.Taxon(Cassowary, "Casuarius casuarius", "species", "ANIMALIA", "CHORDATA", "AVES", "CASUARIIFORMES", "CASUARIIDAE", "Casuarius",
@@ -610,6 +611,13 @@ public static class FixtureDb {
         w.Group(11, null, 0, "genus", "Hirtella", "iucn", "PLANTAE", 20, 21);
         w.Place(PlantSubspecies, 11, 20, null);
         w.Place(PlantSubspeciesSibling, 11, 21, null);
+        // Names from English Wikipedia (the article title and redirects). "Bear" is also a Catalogue
+        // of Life name of the koala, which is not the koala's English name, so a search for "bear"
+        // goes to Ursidae. "Baiji" is the baiji's own English name, so a search for it lists both.
+        w.GroupName(6, "Bear", "wikipedia");
+        w.GroupName(6, "Bears", "wikipedia");
+        w.Group(12, null, 0, "genus", "Lipotes", "iucn", "ANIMALIA", 30, 30, species: 1);
+        w.GroupName(12, "Baiji", "wikipedia");
 
         w.Meta(SiteDbSchema.MetaKeys.SchemaVersion, schemaVersion);
         w.Meta(SiteDbSchema.MetaKeys.BuiltAtUtc, "2026-10-02T09:00:00Z");
@@ -766,8 +774,8 @@ public static class FixtureDb {
             Run("INSERT INTO higher_taxon_count(node_id, category, species_count, infra_count, subpopulation_count) VALUES (@a, @b, @c, 0, 0)",
                 id, category, species);
 
-        public void GroupName(int id, string name) =>
-            Run("INSERT INTO higher_taxon_name(node_id, name, source) VALUES (@a, @b, 'col')", id, name);
+        public void GroupName(int id, string name, string source = "col") =>
+            Run("INSERT INTO higher_taxon_name(node_id, name, source, name_key) VALUES (@a, @b, @c, @d)", id, name, source, SiteNameKey.Fold(name));
 
         public void Place(long taxonId, int nodeId, int treePos, string? listArticle) =>
             Run("UPDATE taxon SET node_id = @a, tree_pos = @b, list_article_title = @c WHERE taxon_id = @d", nodeId, treePos, listArticle, taxonId);

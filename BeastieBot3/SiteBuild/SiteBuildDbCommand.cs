@@ -313,6 +313,11 @@ internal sealed class SiteBuildDbCommand : Command<SiteBuildDbCommand.Settings> 
         Row("Groups with an English Wikipedia page", s.GroupArticles);
         Row("Groups with a Catalogue of Life id", s.GroupColIds);
         Row("Groups with Catalogue of Life English names", s.GroupsWithColNames);
+        Row("Groups whose downloaded English Wikipedia article is about the group", s.GroupWikipediaArticles);
+        Row("  of them with no redirect list downloaded (wikipedia fetch-group-titles)", s.GroupWikipediaArticlesWithoutRedirects);
+        Row("Groups with names from English Wikipedia (article title and redirects)", s.GroupsWithWikipediaNames);
+        Row("Names from English Wikipedia for groups", s.GroupWikipediaNames);
+        Row("Groups with no English name that have a name from English Wikipedia that is not a scientific name", s.GroupsGainingEnglishNameCandidate);
         Row("Taxa with an article for Wikipedia list lines", s.ListArticleTitles);
 
         if (s.ExtraSpecies is { } x) {

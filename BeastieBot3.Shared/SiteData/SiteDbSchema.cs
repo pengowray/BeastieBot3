@@ -8,7 +8,7 @@ namespace BeastieBot3.Shared.SiteData;
 // narrative text (rationale, range, threats ...), no coded threats/habitats/countries, no downloads.
 // Keep such fields out of this database rather than hiding them in the site.
 public static class SiteDbSchema {
-    public const int Version = 13;
+    public const int Version = 14;
 
     public const string Ddl = """
         CREATE TABLE meta (
@@ -116,14 +116,19 @@ public static class SiteDbSchema {
             PRIMARY KEY (node_id, category)
         ) WITHOUT ROWID;
 
-        -- Other English names of a group: the Catalogue of Life's vernacular names. They are not
-        -- checked, so a page lists them as CoL gives them, and never uses one as the group's name.
+        -- Other names of a group. 'col': the Catalogue of Life's English vernacular names, not checked,
+        -- so a page lists them as CoL gives them. 'wikipedia': the title of the group's English
+        -- Wikipedia article and of the redirects to it (English names, and other scientific names),
+        -- kept only when the article is about the group (SiteGroupWikipediaNames); search finds a
+        -- group by them. Neither is ever used as the group's name.
         CREATE TABLE higher_taxon_name (
             node_id  INTEGER NOT NULL,
             name     TEXT NOT NULL,
-            source   TEXT NOT NULL,                           -- 'col'
-            PRIMARY KEY (node_id, name)
+            source   TEXT NOT NULL,                           -- 'col' | 'wikipedia'
+            name_key TEXT NOT NULL,                           -- SiteNameKey.Fold(name)
+            PRIMARY KEY (node_id, source, name)
         ) WITHOUT ROWID;
+        CREATE INDEX higher_taxon_name_key ON higher_taxon_name(name_key, source);
 
         -- Links from a taxon not in the release (in_release = 0) to a taxon in the release. An old id
         -- can have two links: the taxon with its name, and the one taxon whose IUCN synonyms list its

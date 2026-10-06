@@ -67,4 +67,43 @@ public sealed class GroupPageTests(SiteFactory factory) : IClassFixture<SiteFact
         Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
         Assert.Equal("/taxa/family/ursidae", response.Headers.Location?.OriginalString);
     }
+
+    [Fact]
+    public async Task SearchGoesToTheGroupWhoseWikipediaTitleIsTheText() {
+        // "Bear" is a redirect to the Ursidae article, and only a Catalogue of Life name of the koala.
+        var response = await _client.GetAsync("/search?q=bear");
+
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+        Assert.Equal("/taxa/family/ursidae", response.Headers.Location?.OriginalString);
+    }
+
+    [Fact]
+    public async Task AllResultsListTheGroupFirstWithTheMatchedTitle() {
+        var html = await _client.GetStringAsync("/search?q=bear&all=1");
+
+        Assert.Contains("Matched English Wikipedia title: Bear", Html.Text(html));
+        var group = html.IndexOf("/taxa/family/ursidae", StringComparison.Ordinal);
+        var koala = html.IndexOf($"/species/{FixtureDb.Koala}", StringComparison.Ordinal);
+        Assert.True(group >= 0 && koala > group);
+    }
+
+    [Fact]
+    public async Task SearchListsGroupAndTaxonWhenBothMatchStrongly() {
+        // "Baiji" is the baiji's English name and a Wikipedia title of genus Lipotes.
+        var response = await _client.GetAsync("/search?q=baiji");
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var html = await response.Content.ReadAsStringAsync();
+        var group = html.IndexOf("/taxa/genus/lipotes", StringComparison.Ordinal);
+        var taxon = html.IndexOf($"/species/{FixtureDb.Baiji}", StringComparison.Ordinal);
+        Assert.True(group >= 0 && taxon > group);
+    }
+
+    [Fact]
+    public async Task WikipediaNamesAreNotListedAsCatalogueOfLifeNames() {
+        var text = Html.Text(await _client.GetStringAsync("/taxa/family/ursidae"));
+
+        Assert.Contains("Common names in the Catalogue of Life (unchecked): Bears", text);
+        Assert.DoesNotContain("Bear, Bears", text);
+    }
 }

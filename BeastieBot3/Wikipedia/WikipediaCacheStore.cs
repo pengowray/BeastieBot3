@@ -16,7 +16,7 @@ using BeastieBot3.Infrastructure;
 
 namespace BeastieBot3.Wikipedia;
 
-internal sealed class WikipediaCacheStore : HttpCacheSqliteStore {
+internal sealed partial class WikipediaCacheStore : HttpCacheSqliteStore {
     private bool? _hasTitleList;
 
     private WikipediaCacheStore(SqliteConnection connection) : base(connection) {
@@ -171,6 +171,28 @@ CREATE TABLE IF NOT EXISTS enwiki_dump_info (
     key TEXT PRIMARY KEY,
     value TEXT NOT NULL
 );
+-- Redirects in the article namespace that point at a page (prop=redirects), written by
+-- `wikipedia fetch-group-titles` for the articles of higher taxa. target_title is the normalized
+-- title of the page the redirects point at; fragment is the section a redirect points at.
+CREATE TABLE IF NOT EXISTS wiki_incoming_redirects (
+    target_title TEXT NOT NULL,
+    redirect_title TEXT NOT NULL,
+    fragment TEXT,
+    PRIMARY KEY (target_title, redirect_title)
+) WITHOUT ROWID;
+-- One row per title whose incoming redirects were asked for, so a page with no redirects is not
+-- asked about again. resolved_title is the page the title reached (NULL when there was none).
+CREATE TABLE IF NOT EXISTS wiki_incoming_redirect_fetches (
+    title TEXT PRIMARY KEY,
+    resolved_title TEXT,
+    redirect_count INTEGER NOT NULL,
+    fetched_at TEXT NOT NULL
+) WITHOUT ROWID;
+-- Counts from the last `wikipedia fetch-group-titles` run, for the web UI's workflow light.
+CREATE TABLE IF NOT EXISTS wiki_group_title_status (
+    key TEXT PRIMARY KEY,
+    value TEXT NOT NULL
+) WITHOUT ROWID;
 """;
         command.ExecuteNonQuery();
     }

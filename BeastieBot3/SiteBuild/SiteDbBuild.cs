@@ -201,7 +201,8 @@ internal sealed class SiteDbBuild {
         Phase("Naming the groups and finding the articles list lines link", () => {
             NameGroupsAndLinks(taxonList, tree, ct);
             return $"{_stats.GroupCommonNames:N0} groups with an English name, {_stats.GroupArticles:N0} with an article, "
-                + $"{_stats.GroupsWithColNames:N0} with Catalogue of Life English names; {_stats.ListArticleTitles:N0} taxa with an article for list lines";
+                + $"{_stats.GroupsWithColNames:N0} with Catalogue of Life English names, {_stats.GroupsWithWikipediaNames:N0} with names from English Wikipedia; "
+                + $"{_stats.ListArticleTitles:N0} taxa with an article for list lines";
         });
 
         // Species from the Catalogue of Life and Wikidata that IUCN does not have. Before the names are
@@ -253,23 +254,15 @@ internal sealed class SiteDbBuild {
     // the placement file only has one built from an older copy of the file, an older CoL file or
     // older rules, that one is used and the build warns.
     private SitePlacement ReadPlacement(CancellationToken ct) {
-        if (_inputs.ColPlacement is not { } path || !File.Exists(path) || _inputs.ColDatabase is not { } colDatabase) {
-            return SitePlacement.Empty;
+        var placement = SiteGroupTree.ReadPlacement(_inputs.IucnDatabase, _inputs.ColDatabase, _inputs.ColPlacement,
+            _inputs.NotAssignedRules, out var state, out var warning, ct);
+        if (state is not null) {
+            _stats.ColPlacementState = state;
         }
-        var status = Col.TaxonPlacementStore.Status(_inputs.IucnDatabase, colDatabase, _inputs.NotAssignedRules);
-        string sourceKey;
-        if (status.IsCurrent) {
-            sourceKey = status.SourceKey;
-            _stats.ColPlacementState = "current";
-        } else if (status.Source is { } earlier) {
-            sourceKey = earlier.SourceKey;
-            _stats.ColPlacementState = "out-of-date";
-            _stats.Warnings.Add($"The Catalogue of Life placement is out of date ({status.State}), so the Catalogue of Life groups may not match this IUCN release. To update it, run col build-placement.");
-        } else {
-            _stats.Warnings.Add($"The Catalogue of Life placement file has no placement for this IUCN database ({status.State}), so the tree has IUCN's ranks only. To add the Catalogue of Life groups, run col build-placement.");
-            return SitePlacement.Empty;
+        if (warning is not null) {
+            _stats.Warnings.Add(warning);
         }
-        return SiteLinkReaders.ReadPlacementPaths(path, sourceKey, ct);
+        return placement;
     }
 
     // English names and articles of the groups, as the Wikipedia list headings choose them, and the
@@ -287,6 +280,30 @@ internal sealed class SiteDbBuild {
         using var titles = wikiCache is null ? null : WikipediaLists.EnwikiTitleCheck.OpenReadOnly(wikiCache);
         var headings = new WikipediaLists.HeadingFormatter(legacy, taxonRules, provider);
         SiteGroupNames.Resolve(tree.Nodes, headings, titles, _inputs.ColDatabase, _stats, ct);
+        if (wikiCache is not null && Wikipedia.WikipediaCacheStore.OpenReadOnly(wikiCache) is { } cache) {
+            using (cache) {
+                var scientificNames = new HashSet<string>(StringComparer.Ordinal);
+                foreach (var node in tree.Nodes) {
+                    scientificNames.Add(Shared.SiteData.SiteNameKey.Fold(node.Name));
+                }
+                var taxonArticles = new HashSet<string>(StringComparer.Ordinal);
+                var englishNamePositions = new Dictionary<string, List<int>>(StringComparer.Ordinal);
+                foreach (var taxon in taxonList) {
+                    scientificNames.Add(Shared.SiteData.SiteNameKey.Fold(taxon.ScientificName));
+                    if (taxon.EnwikiTitle is { } article) {
+                        taxonArticles.Add(Wikipedia.WikipediaTitleHelper.Normalize(article));
+                    }
+                    if (taxon.CommonNameEn is { } english && taxon.TreePos is { } pos) {
+                        var key = Shared.SiteData.SiteNameKey.Fold(english);
+                        if (!englishNamePositions.TryGetValue(key, out var list)) {
+                            englishNamePositions[key] = list = new List<int>();
+                        }
+                        list.Add(pos);
+                    }
+                }
+                SiteGroupWikipediaNames.Resolve(tree.Nodes, cache, scientificNames, taxonArticles, englishNamePositions, _stats, ct);
+            }
+        }
         var lines = new WikipediaLists.SpeciesLineFormatter(legacy, provider, commonNameProvider: null);
         SiteListLinks.Resolve(taxonList, lines, _stats, ct);
     }

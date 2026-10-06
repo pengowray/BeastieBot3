@@ -63,6 +63,8 @@ internal sealed class SiteTreeNode {
     public string? CommonNameSource { get; set; }
     public string? EnwikiTitle { get; set; }
     public List<string> ColNames { get; } = new();
+    /// The title of the group's English Wikipedia article and of the redirects to it (SiteGroupWikipediaNames).
+    public List<string> WikipediaNames { get; } = new();
 
     internal Dictionary<string, SiteTreeNode> ChildrenByKey { get; } = new(StringComparer.Ordinal);
     internal List<SiteTaxon> Taxa { get; } = new();
