@@ -43,6 +43,8 @@ public sealed class ListPlacementTests {
         // In order of scientific name: Felis first.
         Assert.Equal([201L, 101L], placement.Placed.Select(p => p.Taxon.TaxonId));
         Assert.Equal(2, placement.Placed[1].NeighbourLine);
+        Assert.Equal("Panthera spbaa", placement.Placed[1].NeighbourName);
+        Assert.False(placement.Placed[1].Before);
     }
 
     [Fact]
@@ -86,6 +88,38 @@ public sealed class ListPlacementTests {
         var (text, _) = Run("* [[Panthera spbaa|Big cat]] (''Panthera spbaa'')\n* [[Panthera spbac|Other cat]] (''Panthera spbac'')\n"
             + "* [[Panthera spbad|Third cat]] (''Panthera spbad'')\n");
         Assert.Contains("\n* ''[[Panthera spbab]]''\n", text);
+    }
+
+    [Fact]
+    public void ASynonymSortsWhereTheListWritesIt() {
+        // spbad is written as its synonym "Panthera aaa", first in the list.
+        var statuses = Statuses().Synonym(103, "Panthera aaa");
+        var updater = new StatusUpdater(statuses, new DateOnly(2026, 10, 7));
+        var text = "* ''Panthera aaa''\n* ''Panthera spbaa''\n* ''Panthera spbac''\n";
+        var result = updater.Update(text);
+        var scope = ListScope.Check(result.Members!, Tree())!;
+        var placement = ListPlacement.Place(text, result.Members!, scope, false, false);
+        Assert.Equal("* ''Panthera aaa''\n* ''Panthera spbaa''\n* ''[[Panthera spbab]]''\n* ''Panthera spbac''\n",
+            updater.TextWith(ListPlacement.Insertions(text, placement)));
+    }
+
+    [Fact]
+    public void AListStartingOnItsTemplateLine() {
+        var (text, _) = Run("{{columns-list|colwidth=30em|*''Panthera spbaa''\n*''Panthera spbac''\n*''Panthera spbad''}}\n");
+        Assert.Equal("{{columns-list|colwidth=30em|*''Panthera spbaa''\n*''[[Panthera spbab]]''\n*''Panthera spbac''\n*''Panthera spbad''}}\n", text);
+        var (first, _) = Run("{{columns-list|colwidth=30em|*''Panthera spbab''\n*''Panthera spbac''\n*''Panthera spbad''}}\n");
+        Assert.Equal("{{columns-list|colwidth=30em|*''[[Panthera spbaa]]''\n*''Panthera spbab''\n*''Panthera spbac''\n*''Panthera spbad''}}\n", first);
+    }
+
+    [Fact]
+    public void LinesOfSpeciesIucnDoesNotHaveKeepTheOrder() {
+        // "Panthera spbaaz" is not an IUCN species; it sorts before spbab.
+        var (text, placement) = Run("* ''Panthera spbaa''\n** ''Panthera spbaa'' subsp. x\n* ''Panthera spbaaz''\n* ''Panthera spbabz''\n"
+            + "* ''Panthera spbac''\n* ''Panthera spbad''\n");
+        Assert.Equal("* ''Panthera spbaa''\n** ''Panthera spbaa'' subsp. x\n* ''Panthera spbaaz''\n* ''[[Panthera spbab]]''\n* ''Panthera spbabz''\n"
+            + "* ''Panthera spbac''\n* ''Panthera spbad''\n", text);
+        Assert.Null(placement.Placed[0].NeighbourTaxon);
+        Assert.Equal("Panthera spbaaz", placement.Placed[0].NeighbourName);
     }
 
     [Fact]

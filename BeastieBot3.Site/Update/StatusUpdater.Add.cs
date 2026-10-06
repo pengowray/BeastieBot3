@@ -119,6 +119,12 @@ public sealed partial class StatusUpdater {
             var end = newline < 0 ? masked.Length : newline;
             var lineStart = start;
             start = end + 1;
+            // "{{columns-list|colwidth=30em|*[[Black crested gibbon]]": the list starts on the
+            // template's own line.
+            if (masked[lineStart] == '{' && WrapperStart().Match(masked, lineStart, end - lineStart) is { Success: true } wrapper
+                && ListWrappers.Contains(WikitextScanner.NormalizeName(wrapper.Groups["name"].Value))) {
+                lineStart = wrapper.Index + wrapper.Length;
+            }
             if (masked[lineStart] is not ('*' or '#')
                 || (s.OuterTemplateAt(lineStart) is { } outer && !ListWrappers.Contains(outer.Name))) {
                 continue;
@@ -508,6 +514,10 @@ public sealed partial class StatusUpdater {
 
     [GeneratedRegex(@"(?:idae|inae|ini|oidea|iformes|aceae|oideae|eae|ales)$")]
     private static partial Regex GroupEnding();
+
+    // The start of a list layout template, up to the first list marker on its line.
+    [GeneratedRegex(@"\G\{\{(?<name>[^|{}\n]+)\|(?:[^|{}\n]*\|)*?(?=[*#])")]
+    private static partial Regex WrapperStart();
 
     // [[File:Status iucn3.1 EN.svg]] and the like.
     [GeneratedRegex(@"status[ _]iucn[^|\]]*", RegexOptions.IgnoreCase)]

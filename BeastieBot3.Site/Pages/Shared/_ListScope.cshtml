@@ -62,7 +62,7 @@
                                 @foreach (var p in placement.Placed) {
                                     <tr>
                                         <td><a href="/species/@p.Taxon.TaxonId">@Html.Raw(ScientificNameMarkup.ToHtml(p.Taxon.ScientificName))</a></td>
-                                        <td>@UpdateText.PlacedNextTo(p.Before) <a href="/species/@p.Neighbour.TaxonId">@Html.Raw(ScientificNameMarkup.ToHtml(p.Neighbour.ScientificName))</a></td>
+                                        <td>@UpdateText.PlacedNextTo(p.Before) @if (p.NeighbourTaxon is { } n) {<a href="/species/@n.TaxonId">@Html.Raw(ScientificNameMarkup.ToHtml(p.NeighbourName))</a>} else {@Html.Raw(ScientificNameMarkup.ToHtml(p.NeighbourName))}</td>
                                         <td>@p.NeighbourLine.ToString("N0", System.Globalization.CultureInfo.InvariantCulture)</td>
                                     </tr>
                                 }
