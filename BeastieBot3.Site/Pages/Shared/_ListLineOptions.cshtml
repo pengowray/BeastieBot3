@@ -3,8 +3,8 @@
 @model ListLineOptions
 @* The bullet list options for the taxon authority and the references after each line (ListLineOptions:
    auth, lrefs, lcite). The keys differ from the species tables' refs and cite, which are in the same form. *@
-<fieldset class="option-group">
-    <legend>@GroupLineText.AuthorityLegend</legend>
+<fieldset class="option-group" aria-labelledby="legend-authority">
+    <legend><span id="legend-authority">@GroupLineText.AuthorityLegend</span> <partial name="_InfoTip" model="@(new InfoTipModel("tip-authority", GroupText.InfoTipLabel(GroupLineText.AuthorityLegend), GroupLineText.AuthorityHelp))" /></legend>
     @foreach (var (value, label, example) in new[] {
                  (SpeciesListAuthority.None, GroupLineText.AuthorityNone, (string?)null),
                  (SpeciesListAuthority.Small, GroupLineText.AuthoritySmall, GroupLineText.AuthoritySmallExample),
@@ -18,10 +18,9 @@
             }
         </label>
     }
-    <p class="help">@GroupLineText.AuthorityHelp</p>
 </fieldset>
-<fieldset class="option-group">
-    <legend>@GroupText.OptionReferences</legend>
+<fieldset class="option-group" aria-labelledby="legend-line-references">
+    <legend><span id="legend-line-references">@GroupText.OptionReferences</span> <partial name="_InfoTip" model="@(new InfoTipModel("tip-line-references", GroupText.InfoTipLabel(GroupText.OptionReferences), GroupLineText.ReferencesHelp + " " + GroupLineText.ReferencesWikidataHelp))" /></legend>
     @foreach (var (value, label) in new[] {
                  (ListReferenceMode.None, GroupText.ReferencesNone),
                  (ListReferenceMode.ListDefined, GroupText.ReferencesListDefined),
@@ -29,8 +28,6 @@
              }) {
         <label><input type="radio" name="lrefs" value="@ListLineOptions.ReferencesKey(value)" checked="@(Model.References == value)"> @label</label>
     }
-    <p class="help">@GroupLineText.ReferencesHelp</p>
-    <p class="help">@GroupLineText.ReferencesWikidataHelp</p>
     <p class="option-sublabel">@GroupText.OptionCitationTemplate</p>
     <label><input type="radio" name="lcite" value="@IucnReference.CiteIucnValue" checked="@(Model.Template == ReferenceTemplate.CiteIucn)"> @GroupText.CitationTemplateIucn</label>
     <label><input type="radio" name="lcite" value="@IucnReference.CiteQValue" checked="@(Model.Template == ReferenceTemplate.CiteQ)"> @GroupText.CitationTemplateQ</label>
