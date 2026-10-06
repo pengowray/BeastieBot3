@@ -31,7 +31,7 @@ public static class GroupSourceText {
         1 => ", including 1 species from CoL or Wikidata that is not on the IUCN Red List",
         _ => $", including {SiteFormat.Number(species)} species from CoL or Wikidata that are not on the IUCN Red List",
     };
-    public const string TooLongNote = "This count includes likely duplicates, so a list with these options could have fewer lines.";
+    public const string TooLongNote = "This count may include species that Catalogue of Life and Wikidata list under different names, so a list with these options could have fewer lines.";
     public const string PreviewNote = "For species that are not on the IUCN Red List, small “CoL” and “Wikidata” links after the line go to the species’ Catalogue of Life page and Wikidata item. These links are in the preview only, not in the wikitext.";
     public const string PreviewColLink = "CoL";
     public const string PreviewWikidataLink = "Wikidata";
