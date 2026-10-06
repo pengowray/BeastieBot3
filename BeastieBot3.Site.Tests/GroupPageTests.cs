@@ -70,11 +70,61 @@ public sealed class GroupPageTests(SiteFactory factory) : IClassFixture<SiteFact
 
     [Fact]
     public async Task SearchGoesToTheGroupWhoseWikipediaTitleIsTheText() {
-        // "Bear" is a redirect to the Ursidae article, and only a Catalogue of Life name of the koala.
+        // "Bear" is a redirect to the Ursidae article, and only a Catalogue of Life name of the koala,
+        // so the group page gets the text for its link back to all the results.
         var response = await _client.GetAsync("/search?q=bear");
 
         Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
-        Assert.Equal("/taxa/family/ursidae", response.Headers.Location?.OriginalString);
+        Assert.Equal("/taxa/family/ursidae?q=bear", response.Headers.Location?.OriginalString);
+    }
+
+    [Fact]
+    public async Task LongOptionHelpIsBehindInfoButtons() {
+        var html = await _client.GetStringAsync("/taxa/family/ursidae");
+
+        // A button in the legend that opens the help text as a popover, named for the option it explains.
+        // The fieldset is named by the legend's text alone, not by the button's name too.
+        Assert.Contains("<fieldset class=\"option-group\" aria-labelledby=\"legend-categories\">", html);
+        Assert.Contains("<legend><span id=\"legend-categories\">Red List categories</span> <button type=\"button\" class=\"info-tip-button\" popovertarget=\"tip-categories\" data-info-tip>"
+            + "<span aria-hidden=\"true\">i</span><span class=\"visually-hidden\">Help for Red List categories</span></button>"
+            + "<span class=\"info-tip\" id=\"tip-categories\" popover>Not Evaluated:", html);
+        foreach (var id in new[] { "tip-list-type", "tip-sources", "tip-source-order", "tip-tables", "tip-references", "tip-ref-names" }) {
+            Assert.Contains($"popovertarget=\"{id}\"", html);
+            Assert.Contains($"id=\"{id}\" popover>", html);
+        }
+        foreach (var id in new[] { "legend-list-type", "legend-sources", "legend-tables", "legend-references", "legend-ref-names" }) {
+            Assert.Contains($"aria-labelledby=\"{id}\"", html);
+            Assert.Contains($"<span id=\"{id}\">", html);
+        }
+        Assert.DoesNotContain("<p class=\"help\">Not Evaluated:", html);
+    }
+
+    [Fact]
+    public async Task GroupPageLinksBackToAllTheSearchResults() {
+        var html = await _client.GetStringAsync("/taxa/family/ursidae?q=bear");
+
+        Assert.Contains("<a href=\"/search?q=bear&amp;all=1\">See all search results for “bear”</a>", html);
+    }
+
+    [Fact]
+    public async Task GroupPageLinksBackOnlyForOneOfTheGroupsNames() {
+        var html = await _client.GetStringAsync("/taxa/family/ursidae?q=Buy+cheap+pills");
+
+        Assert.DoesNotContain("Buy cheap pills", html);
+        Assert.DoesNotContain("See all search results", html);
+        Assert.Contains("See all search results for “URSIDAE”", await _client.GetStringAsync("/taxa/family/ursidae?q=URSIDAE"));
+    }
+
+    [Fact]
+    public async Task GroupPageListsTheNamesFromEnglishWikipediaApartFromCatalogueOfLifeNames() {
+        var html = await _client.GetStringAsync("/taxa/family/ursidae");
+
+        var wikipedia = Html.Between(html, "<p class=\"group-wikipedia-names\">", "</p>");
+        Assert.Contains("<a href=\"https://en.wikipedia.org/wiki/Bear\" hreflang=\"en\">Bear</a>", wikipedia);
+        Assert.Contains("<a href=\"https://en.wikipedia.org/wiki/Bears\" hreflang=\"en\">Bears</a>", wikipedia);
+        var col = Html.Between(html, "<p class=\"group-col-names\">", "</p>");
+        Assert.Contains("Bears", col);
+        Assert.DoesNotContain("wikipedia.org", col);
     }
 
     [Fact]
@@ -104,6 +154,6 @@ public sealed class GroupPageTests(SiteFactory factory) : IClassFixture<SiteFact
         var text = Html.Text(await _client.GetStringAsync("/taxa/family/ursidae"));
 
         Assert.Contains("Common names in the Catalogue of Life (unchecked): Bears", text);
-        Assert.DoesNotContain("Bear, Bears", text);
+        Assert.DoesNotContain("(unchecked): Bear, Bears", text);
     }
 }

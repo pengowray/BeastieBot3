@@ -36,11 +36,12 @@ public static class SiteCachePolicies {
             .SetVaryByQuery(SpeciesQueryKeys)
             .VaryByValue(_ => new KeyValuePair<string, string>("utc-day", DateTime.UtcNow.ToString("yyyy-MM-dd"))));
 
-        // Group pages vary by the list options and by what picks one of two groups with the same name.
+        // Group pages vary by the list options, by what picks one of two groups with the same name, and
+        // by the search text (q) that the link back to the search results repeats.
         options.AddPolicy(Group, policy => policy
             .Expire(Lifetime)
             .Tag(DatabaseTag)
-            .SetVaryByQuery([.. Lists.GroupListQuery.Keys, .. Lists.SpeciesTableQuery.Keys, "kingdom", "parent"]));
+            .SetVaryByQuery([.. Lists.GroupListQuery.Keys, .. Lists.SpeciesTableQuery.Keys, "kingdom", "parent", "q"]));
 
         // The search page shows the query as typed (heading, title, search box), so the key is the
         // query with whitespace collapsed, case kept: two spellings that differ only in case would

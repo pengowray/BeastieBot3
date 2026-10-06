@@ -364,8 +364,11 @@ take their order from `iucn-not-assigned.yml`, and 43 have a rank still "NOT ASS
   source and never uses one as the group's name. 10,651 groups have some.
 - Names from English Wikipedia (`SiteGroupWikipediaNames`, `higher_taxon_name` rows with source
   `wikipedia`): the title of the group's article and the titles of the redirects to it, which
-  `wikipedia fetch-group-titles` downloads (below). Search finds a group by them; the group page
-  does not list them. The article (from `enwiki_title`, else the group's name, followed through
+  `wikipedia fetch-group-titles` downloads (below). Search finds a group by them, and the group
+  page lists them ("Names in English Wikipedia (article title and redirects):"), each linked to its
+  Wikipedia page, on a line of their own before CoL's names. The table does not say which title is
+  the article, so the list cannot mark it; every title is a page or redirect, so every link works.
+  The article (from `enwiki_title`, else the group's name, followed through
   redirects) counts only when it is about the group: not a disambiguation page, nothing in it about
   another kingdom (`WikiPageKingdom`), and its taxobox taxon is the group's name, or, with no
   taxobox name, the group's title redirects to it and no taxon is matched to it. Genus
@@ -464,8 +467,20 @@ from the species tables' `refs` and `cite`, because both sets of options are in 
 ### The group page (`Pages/Group.cshtml`)
 
 - The page shows the classification above the group (CoL groups marked), counts (species,
-  threatened, extinct, subspecies and varieties, subpopulations), the counts by category, CoL's
-  English names, links, and a table of the groups directly in it.
+  threatened, extinct, subspecies and varieties, subpopulations), the counts by category, the names
+  from English Wikipedia, CoL's English names, links, and a table of the groups directly in it.
+- Help for an option that takes more than a line is behind a small "i" button beside the option's
+  name (`Pages/Shared/_InfoTip.cshtml`, model `InfoTipModel(Id, Label, Text)`; Label is the
+  button's accessible name, "Help for Red List categories"): Red List categories, list type,
+  species sources, order of preference, and the species table options, references and ref names.
+  One-line hints stay visible. The text is a popover (`popover="auto"`), so without JavaScript a
+  click or tap opens it and Escape or a click outside closes it; a browser without popovers shows
+  the text in place. `site.js` (`setUpInfoTips`) places it below the button (above when there is
+  no room), opens it on mouse hover and on keyboard focus (closing when the pointer or focus
+  leaves), keeps it open after a click, and sets `aria-expanded`. The partial is phrasing content,
+  so it can go inside a `<legend>`, but never inside a `<label>`. A fieldset whose legend has one
+  gets `aria-labelledby` pointing at a span around the legend's text, so screen readers name the
+  group "Red List categories", not "Red List categories Help for Red List categories".
 - "Wikipedia list": the list as wikitext, with a preview, and the options beside it
   (`Lists/GroupListQuery.cs` reads and writes them as query parameters, so a list can be linked):
   line format (the lists' styles A, B and C; the default is the style the generated lists use for
@@ -529,7 +544,12 @@ from the species tables' `refs` and `cite`, because both sets of options are in 
   weak: "fruit bat" goes to family Pteropodidae, although "Fruit Bat" is a CoL vernacular of
   *Epomophorus pusillus*. When a group is found and a taxon matches strongly, or two or more groups
   are found, the results are listed, groups first. With no group found, search goes to the taxon
-  as before (`SingleExactMatch`). `all=1` always lists.
+  as before (`SingleExactMatch`). `all=1` always lists. When search goes to a group and taxa
+  matched too, the address has `?q=` and the group page links to all the results ("See all search
+  results for “fruit bat”", for the species *Epomophorus pusillus*), as a taxon page does. The
+  link is shown only when the text is the group's name or one of its names from English Wikipedia
+  (`GroupModel.ArrivalText`), so it cannot put other text on the page; `q` is part of the group
+  pages' output cache key.
 - On a taxon page, each rank links to its group page, with the group's English name, or else up to
   three of CoL's names (muted, with a tooltip naming the source and saying they are unchecked). CoL groups are hidden until the
   reader ticks "Show N ranks from the Catalogue of Life"; the toggle is CSS only (`:has`). A taxon not in the
@@ -619,14 +639,39 @@ preference (`prefer=icw|iwc|ciw|cwi|wic|wci`, IUCN, then CoL, then Wikidata by d
   ticked, or a Wikidata item and Wikidata is ticked; subspecies, varieties and subpopulations come
   from IUCN only. An extra species is listed when one of its sources is ticked. Extra species have
   no assessment, so they go in the NE section with no `{{IUCN status}}`; ticking CoL or Wikidata
-  also ticks NE.
+  also ticks NE. The NE box carries `data-live-sync`: after a live update `site.js` copies its
+  ticked state from the new page's form (only when the form still sends the query the page was made
+  for), so the box shows what the server used without a reload.
 - Each entry's name comes from the most preferred ticked source that has it (`taxon_source_name`
   for IUCN species).
 - A likely duplicate: the entry whose most preferred ticked source comes later in the order is left
-  out, with a notice under the list ("Left out of the list"). When both entries have the same best
-  source, or the reason is only possible, both stay ("Kept in the list"). An entry outside the group
-  counts when one of its sources is ticked: it can leave out an entry here, but a less preferred
-  entry outside the group gets no notice here.
+  out. When both entries have the same best source, or the reason is only possible, both stay. An
+  entry outside the group counts when one of its sources is ticked: it can leave out an entry here,
+  but a less preferred entry outside the group gets no notice here.
+- The "Possible duplicates" panel under the list (`_ListNotices.cshtml`, arranged by the pure
+  `Lists/ListNoticeGroups.cs`; strings in `GroupSourceText`). A line under the list's size gives
+  the counts and links to it ("Possible duplicates: 278 entries left out, 1 pair with both entries
+  kept"). Two sections: "Left out of the list (N entries)", with a line on how the order of
+  preference decides, and "Both entries kept (N pairs)". Each section has a collapsible group per
+  reason ("299 pairs: Catalogue of Life lists one name as a synonym of the other."), open when it
+  has at most 10 rows, in a fixed reason order (synonyms, gender endings, spellings, other genus).
+  Each group is a two-column table: the entry left out, or in the list, and the entry it is likely
+  (or may be) the same species as. After each name come its source and, where the column heading
+  does not say it, its state in this list: "in this list", "left out", or "in another genus"
+  (the page's rank; "outside this group" on a Catalogue of Life group). The state is read from the
+  merged rows, not from the notice, because an entry kept by one pair can be left out by another.
+  Three or more pairs with one reason between the same two genera, from the same sources and in the
+  same states, are one row ("*Rana* names Wikidata | *Lithobates* names IUCN · in another genus")
+  with a "Show 41 pairs" checkbox that shows them (CSS `:has`; without it every pair shows). These
+  runs are the old names of species moved to another genus. "Both entries kept" leaves out a pair
+  in which either entry was left out by another pair (that entry is in the first section with its
+  reason, and the pair puts no duplicate in the list), and puts the entry in the list first. The
+  details and run boxes have ids, so a live update keeps them open and ticked (`data-keep-checked`).
+  Genus *Rana* with all three sources (October 2026): 318 notices, 313 of them left-out pairs with
+  278 entries left out, nearly all
+  of them old Wikidata combinations; the 299 CoL synonym pairs show as 26 run rows and 58 single
+  rows, and the second section has 1 pair (it had 5 before pairs with a left-out entry were left
+  out of it).
 - The line cap uses the IUCN counts plus `higher_taxon_extra_count` (`ExtraSpeciesCounts.For`):
   with `genera=0` it leaves out the species placed under a family, and when IUCN is ticked and first
   in the order it leaves out the species that are likely an IUCN taxon, since the merge always
@@ -1306,8 +1351,9 @@ links to other assessments of the taxon keep the options.
 - The page has no inline script. The Content Security Policy (`Web/SiteMiddleware.cs`) has
   `connect-src 'self'`, which allows the script's request.
 
-`BeastieBot3.Site.Tests/browser/live-update.cjs` checks the updates in a browser. It is not part
-of `dotnet test`. To run it:
+`BeastieBot3.Site.Tests/browser/live-update.cjs` checks the updates in a browser, on a taxon page
+and on a group page's list (ticking CoL updates the list in place and ticks Not Evaluated; an info
+button opens its help text and Escape closes it). It is not part of `dotnet test`. To run it:
 
 1. `SITE_FIXTURE_DB_OUT=/tmp/site-fixture.sqlite dotnet test BeastieBot3.Site.Tests --filter FixtureExport`
    writes the test fixture database to a file.

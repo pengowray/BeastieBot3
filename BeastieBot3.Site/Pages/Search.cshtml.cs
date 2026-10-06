@@ -54,7 +54,8 @@ public sealed class SearchModel : PageModel {
         var result = _queries.Search(Query, MaxResults, cancellationToken: HttpContext.RequestAborted);
         Groups = _queries.FindGroupsByName(Query, MaxGroups);
         if (all != "1" && GroupToGoTo(Groups, result.Hits) is { } group) {
-            return Redirect(Web.SiteUrls.Group(group.Group));
+            // When taxa matched too, the group page links back to all the results.
+            return Redirect(Web.SiteUrls.Group(group.Group, result.Hits.Count > 0 ? "q=" + Uri.EscapeDataString(Query) : ""));
         }
         if (all != "1" && Groups.Count == 0 && SingleExactMatch(result.Hits) is { } hit) {
             var url = $"/species/{hit.Taxon.TaxonId}";

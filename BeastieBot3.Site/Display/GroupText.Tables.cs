@@ -9,7 +9,7 @@ public static partial class GroupText {
     public const string ListTypeTables = "Species tables, one per genus";
     public const string ListTypeTablesExample = "{{Species table}}";
     public const string ListTypeTablesHelp =
-        "Tables list species only. This site has no data for image, range, size, habitat or diet.";
+        "Species tables, one per genus, list species only, without subspecies or varieties. This site has no data for image, range, size, habitat or diet.";
 
     // Table options
     public const string OptionTables = "Table options";

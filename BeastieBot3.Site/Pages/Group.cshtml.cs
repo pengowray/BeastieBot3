@@ -1,3 +1,4 @@
+using BeastieBot3.Shared.SiteData;
 using BeastieBot3.Site.Data;
 using BeastieBot3.Site.Display;
 using BeastieBot3.Site.Lists;
@@ -44,6 +45,11 @@ public sealed class GroupModel : PageModel {
     public IReadOnlyList<GroupCategoryCount> Counts { get; private set; } = [];
     public IReadOnlyList<ChildGroup> Children { get; private set; } = [];
     public IReadOnlyList<string> ColNames { get; private set; } = [];
+    /// The group's names from English Wikipedia (its article's title and the redirects to it).
+    public IReadOnlyList<string> WikipediaNames { get; private set; } = [];
+    /// The search text (q) when search sent the reader here and the text is one of the group's names,
+    /// for the link back to all the results.
+    public string? ArrivedQuery { get; private set; }
 
     public GroupListOptions Options { get; private set; } = new();
     public GroupListOptions DefaultOptions { get; private set; } = new();
@@ -59,6 +65,8 @@ public sealed class GroupModel : PageModel {
     /// The list's rows from the picked sources and the notices about possible duplicates; null for
     /// a list of IUCN's taxa only.
     public ListSourceMergeResult? Sources { get; private set; }
+    /// The notices of Sources arranged for the possible-duplicates panel.
+    public ListNoticeGroups? NoticeGroups { get; private set; }
 
     /// The list type and the species table options (SpeciesTableQuery).
     public SpeciesTableOptions Table { get; private set; } = new();
@@ -89,6 +97,8 @@ public sealed class GroupModel : PageModel {
         Path = _queries.GetGroupPath(group.NodeId);
         Counts = _queries.GetGroupCounts(group.NodeId);
         ColNames = _queries.GetGroupColNames(group.NodeId);
+        WikipediaNames = _queries.GetGroupWikipediaNames(group.NodeId);
+        ArrivedQuery = ArrivalText(SiteEndpoints.FirstQueryValue(Request, "q"), group, WikipediaNames);
         var children = _queries.GetChildGroups(group.NodeId);
         var childCounts = _queries.GetGroupCounts(children.Select(c => c.NodeId).ToList());
         Children = children.Select(c => {
@@ -127,6 +137,7 @@ public sealed class GroupModel : PageModel {
             var taxa = _queries.GetListTaxa(group, kinds);
             if (GroupListSources.Active(Options)) {
                 Sources = GroupListSources.Merge(_queries, group, extraCounts, taxa, Options);
+                NoticeGroups = ListNoticeGroups.Build(Sources);
                 taxa = Sources.Rows;
             }
             var groups = _queries.GetGroupsWithin(group).Append(group).ToDictionary(g => g.NodeId);
@@ -164,6 +175,17 @@ public sealed class GroupModel : PageModel {
         }
         var list = left.ToList();
         return list.Count == 1 && list.Count < matches.Count ? list[0] : null;
+    }
+
+    /// The search text to link back to: only one of the group's names (its own name or a name from
+    /// English Wikipedia, ignoring case and accents), so the link cannot put arbitrary text on the page.
+    public static string? ArrivalText(string? q, GroupRow group, IReadOnlyList<string> wikipediaNames) {
+        var text = SiteEndpoints.NormalizeQuery(q);
+        if (text.Length < 2) {
+            return null;
+        }
+        var key = SiteNameKey.Fold(text);
+        return key == SiteNameKey.Fold(group.Name) || wikipediaNames.Any(n => SiteNameKey.Fold(n) == key) ? text : null;
     }
 
     private static int Sum(IReadOnlyList<GroupCategoryCount> counts, IReadOnlySet<string> codes) =>

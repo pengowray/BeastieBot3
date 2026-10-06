@@ -4,11 +4,11 @@
 @{
     var table = Model.Table;
 }
-<fieldset class="option-group" data-list-type="tables" hidden="@(!table.IsTable)">
-    <legend>@GroupText.OptionTables</legend>
-    <p class="help">@GroupText.SpeciesCountHelp</p>
-    <fieldset class="option-group">
-        <legend>@GroupText.OptionReferences</legend>
+@* Each fieldset with an info button is named by its legend's text alone (aria-labelledby). *@
+<fieldset class="option-group" data-list-type="tables" hidden="@(!table.IsTable)" aria-labelledby="legend-tables">
+    <legend><span id="legend-tables">@GroupText.OptionTables</span> <partial name="_InfoTip" model="@(new InfoTipModel("tip-tables", GroupText.InfoTipLabel(GroupText.OptionTables), GroupText.SpeciesCountHelp))" /></legend>
+    <fieldset class="option-group" aria-labelledby="legend-references">
+        <legend><span id="legend-references">@GroupText.OptionReferences</span> <partial name="_InfoTip" model="@(new InfoTipModel("tip-references", GroupText.InfoTipLabel(GroupText.OptionReferences), GroupText.ReferencesHelp))" /></legend>
         @foreach (var (value, label) in new[] {
                      (TableReferences.None, GroupText.ReferencesNone),
                      (TableReferences.ListDefined, GroupText.ReferencesListDefined),
@@ -16,10 +16,9 @@
                  }) {
             <label><input type="radio" name="refs" value="@SpeciesTableQuery.ReferencesKey(value)" checked="@(table.References == value)"> @label</label>
         }
-        <p class="help">@GroupText.ReferencesHelp</p>
     </fieldset>
-    <fieldset class="option-group">
-        <legend>@GroupText.OptionRefNames</legend>
+    <fieldset class="option-group" aria-labelledby="legend-ref-names">
+        <legend><span id="legend-ref-names">@GroupText.OptionRefNames</span> <partial name="_InfoTip" model="@(new InfoTipModel("tip-ref-names", GroupText.InfoTipLabel(GroupText.OptionRefNames), GroupText.RefNamesHelp))" /></legend>
         @foreach (var (value, label) in new[] {
                      (TableRefNames.CommonName, GroupText.RefNamesCommon),
                      (TableRefNames.TaxonId, GroupText.RefNamesId),
@@ -27,7 +26,6 @@
                  }) {
             <label><input type="radio" name="refnames" value="@SpeciesTableQuery.RefNamesKey(value)" checked="@(table.RefNames == value)"> @label</label>
         }
-        <p class="help">@GroupText.RefNamesHelp</p>
     </fieldset>
     <fieldset class="option-group">
         <legend>@GroupText.OptionCitationTemplate</legend>

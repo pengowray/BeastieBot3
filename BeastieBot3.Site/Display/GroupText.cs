@@ -30,6 +30,7 @@ public static partial class GroupText {
     public const string ColumnSpecies = "Species";
     public const string ColumnInfra = "Subspecies and varieties";
     public const string OtherNamesLabel = "Common names in the Catalogue of Life (unchecked):";
+    public const string WikipediaNamesLabel = "Names in English Wikipedia (article title and redirects):";
     public const string LinkWikipedia = "English Wikipedia";
     public const string LinkCol = "Catalogue of Life";
 
@@ -97,6 +98,8 @@ public static partial class GroupText {
     public const string OptionHeadingNames = "“Members of … are called …” under each heading";
     public const string OptionTopLevel = "Top heading level";
     public static string LevelOption(int level) => $"Level {level} ({new string('=', level)})";
+    /// The accessible name of the "i" button beside an option's name: "Help for Red List categories".
+    public static string InfoTipLabel(string option) => $"Help for {option}";
     public const string OptionCategories = "Red List categories";
     public const string CategoriesHelp = "Not Evaluated: taxa with no global IUCN assessment, such as taxa with only a regional assessment (for example Europe) and species from Catalogue of Life or Wikidata that are not on the IUCN Red List. Their lines have no {{IUCN status}} after the name. If no box is ticked, the list includes every category.";
     public const string OptionTaxa = "Taxa";

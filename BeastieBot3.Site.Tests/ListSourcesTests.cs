@@ -155,9 +155,18 @@ public sealed class ListSourcesTests(SiteFactory factory) : IClassFixture<SiteFa
             * [[Polar bear|''Ursus maritimus'']], Polar bear {{IUCN status|VU|22823/14871490|1|year=2015}}
             """.ReplaceLineEndings("\n"), Html.Textarea(html, "list-wikitext"));
         Assert.Contains("3 taxa, including 2 species from CoL or Wikidata that are not on the IUCN Red List", html);
-        Assert.Contains("Left out of the list (1)", html);
-        Assert.Contains("href=\"https://www.wikidata.org/wiki/Q1003\" class=\"sci-name\">Ursus maritima</a> (Wikidata)", html);
-        Assert.Contains("Same genus, and the epithets differ only in the Latin gender ending.", html);
+        // The duplicates: counted under the list's size, then a table per reason in the panel.
+        var text = Html.Text(html);
+        Assert.Contains("Possible duplicates: 1 entry left out", text);
+        Assert.Contains("<a href=\"#list-notices\">Possible duplicates</a>", html);
+        Assert.Contains("Left out of the list (1 entry)", text);
+        Assert.Contains("1 pair: Same genus, and the epithets differ only in the Latin gender ending.", text);
+        var panel = Html.Between(html, "<section class=\"list-notices\"", "</section>");
+        Assert.Contains("<th scope=\"col\">Left out</th>", panel);
+        Assert.Contains("<th scope=\"col\">Likely the same species as</th>", panel);
+        Assert.Contains("href=\"https://www.wikidata.org/wiki/Q1003\" class=\"sci-name\">Ursus maritima</a> <span class=\"notice-tags\"><span class=\"notice-source\">Wikidata</span></span>", panel);
+        Assert.Contains("Ursus maritimus</a> <span class=\"notice-tags\"><span class=\"notice-source\">IUCN</span> · <span class=\"notice-state notice-state-inlist\">in this list</span></span>", panel);
+        Assert.Contains("<details class=\"notice-group\" id=\"dup-out-gender-ending\" open=\"open\">", panel);
         // The preview links the CoL page and the Wikidata item of a species from those sources.
         Assert.Contains("href=\"https://www.catalogueoflife.org/data/taxon/COLAR\">CoL</a>", html);
         Assert.Contains("href=\"https://www.wikidata.org/wiki/Q1001\">Wikidata</a>", html);
@@ -175,7 +184,21 @@ public sealed class ListSourcesTests(SiteFactory factory) : IClassFixture<SiteFa
             * [[Polar bear|''Ursus maritimus'']], Polar bear {{IUCN status|VU|22823/14871490|1|year=2015}}
             * ''[[Ursus maritima]]''
             """.ReplaceLineEndings("\n"), Html.Textarea(html, "list-wikitext"));
-        Assert.Contains("Kept in the list (1)", html);
+        var text = Html.Text(html);
+        Assert.Contains("Possible duplicates: 1 pair with both entries kept", text);
+        Assert.Contains("Both entries kept (1 pair)", text);
+        Assert.Contains("In the list May be the same species as", text);
+        Assert.DoesNotContain("Left out of the list", text);
+    }
+
+    [Fact]
+    public async Task NotEvaluatedBoxIsTickedWithAnotherSourceAndMarkedForLiveUpdates() {
+        // site.js copies the box's state from the new page after a live update (data-live-sync).
+        var withCol = await _client.GetStringAsync("/taxa/genus/ursus?src=iucn&src=col");
+        Assert.Contains("value=\"NE\" checked=\"checked\" data-live-sync=\"\"", withCol);
+
+        var iucnOnly = await _client.GetStringAsync("/taxa/genus/ursus");
+        Assert.Contains("value=\"NE\" data-live-sync=\"\"", iucnOnly);
     }
 
     [Fact]

@@ -1,0 +1,8 @@
+@model InfoTipModel
+@* A help text behind a small "i" button, for a fieldset legend or beside a label (never inside a
+   <label>, where a click would also change the control). The text is a popover (popover="auto"), so
+   without JavaScript a click or tap opens it and Escape or a click outside closes it; site.js
+   (setUpInfoTips) places it beside the button and also opens it on hover and on keyboard focus. A
+   browser without popovers shows the text in place. Both elements are phrasing content, so the
+   partial can go inside a <legend>. *@
+<button type="button" class="info-tip-button" popovertarget="@Model.Id" data-info-tip><span aria-hidden="true">i</span><span class="visually-hidden">@Model.Label</span></button><span class="info-tip" id="@Model.Id" popover>@Model.Text</span>

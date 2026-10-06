@@ -1,14 +1,15 @@
 @using BeastieBot3.Site.Lists
-@model NoticeEntry
-@* One name in a possible-duplicate notice, linked to where its source has it: this site's species page
-   for IUCN, the Catalogue of Life page, or the Wikidata item; then its source and whether it is in the list. *@
+@model ListNoticeSideModel
+@* One name in the possible-duplicates panel, linked to where its source has it: this site's species
+   page for IUCN, the Catalogue of Life page, or the Wikidata item; then its source and, when the
+   column heading does not say it, whether it is in this list. *@
 @{
-    var href = Model.Source switch {
-        ListSource.Iucn when Model.TaxonId is { } id => "/species/" + id.ToString(System.Globalization.CultureInfo.InvariantCulture),
-        ListSource.Col when Model.ColId is { } colId => SiteFormat.CatalogueOfLifeUrl(colId),
-        ListSource.Wikidata when Model.WikidataQid is { } qid => SiteFormat.WikidataUrl(qid),
+    var entry = Model.Side.Entry;
+    var href = entry.Source switch {
+        ListSource.Iucn when entry.TaxonId is { } id => "/species/" + id.ToString(System.Globalization.CultureInfo.InvariantCulture),
+        ListSource.Col when entry.ColId is { } colId => SiteFormat.CatalogueOfLifeUrl(colId),
+        ListSource.Wikidata when entry.WikidataQid is { } qid => SiteFormat.WikidataUrl(qid),
         _ => null,
     };
-    var source = GroupSourceText.ShortName(Model.Source) + (Model.InGroup ? string.Empty : ", " + GroupSourceText.NotInList);
 }
-@if (href is null) {<i>@Model.ScientificName</i>} else {<a href="@href" class="sci-name">@Model.ScientificName</a>} (@source)
+@if (href is null) {<i>@entry.ScientificName</i>} else {<a href="@href" class="sci-name">@entry.ScientificName</a>} <span class="notice-tags"><span class="notice-source">@GroupSourceText.ShortName(entry.Source)</span>@if (Model.ShowState) {<text> · </text><span class="notice-state notice-state-@Model.Side.State.ToString().ToLowerInvariant()">@GroupSourceText.State(Model.Side.State, Model.GroupRank)</span>}</span>

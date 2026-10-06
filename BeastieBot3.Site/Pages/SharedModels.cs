@@ -33,6 +33,18 @@ public sealed record BadgeModel(CategoryDisplay Category, bool Large = false, bo
     };
 }
 
+/// A help text behind a small "i" button (_InfoTip). Id: the id of the text, unique on the page.
+/// Label: the button's accessible name, naming what the text explains.
+public sealed record InfoTipModel(string Id, string Label, string Text);
+
+/// The possible-duplicates panel under a group's list (_ListNotices). GroupRank: the page's rank, or
+/// null for a Catalogue of Life group, for the state of an entry outside the group.
+public sealed record ListNoticesModel(BeastieBot3.Site.Lists.ListNoticeGroups Groups, string? GroupRank);
+
+/// One side of a pair in that panel (_ListNoticeEntry). ShowState: whether to write the entry's state
+/// after its source (left out when the column heading already says it).
+public sealed record ListNoticeSideModel(BeastieBot3.Site.Lists.NoticeSide Side, string? GroupRank, bool ShowState);
+
 /// One taxon in a list of results (search, name lookup) or of child taxa, with a note saying which
 /// of its names matched when that is not its scientific or displayed common name.
 /// Url: where the name links, when not the taxon page (an assessment found by its id links the page

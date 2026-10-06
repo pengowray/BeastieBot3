@@ -45,6 +45,12 @@
     var iucnParent = above.LastOrDefault(p => !p.IsCol);
 }
 
+@if (Model.ArrivedQuery is { } arrived) {
+    <p class="arrival">
+        <a href="/search?q=@Uri.EscapeDataString(arrived)&amp;all=1">@SiteText.ArrivedAllResults(arrived)</a>
+    </p>
+}
+
 <header class="taxon-header group-header">
     <h1>
         @if (group.ShowRank && group.Rank != "unranked") {
@@ -92,6 +98,14 @@
         <p class="note">@GroupText.ColGroupNote(GroupList.HeadingText(group), group.Rank, iucnParent?.Rank, iucnParent?.Name)</p>
     } else if (group.IsFromRule) {
         <p class="note">@GroupText.RuleGroupNote(group.Rank)</p>
+    }
+    @if (Model.WikipediaNames.Count > 0) {
+        <p class="group-wikipedia-names"><span class="label">@GroupText.WikipediaNamesLabel</span>
+            @for (var i = 0; i < Model.WikipediaNames.Count; i++) {
+                var title = Model.WikipediaNames[i];
+                <a href="@SiteFormat.WikipediaUrl(title)" hreflang="en">@title</a>@(i < Model.WikipediaNames.Count - 1 ? ", " : null)
+            }
+        </p>
     }
     @if (Model.ColNames.Count > 0) {
         <p class="group-col-names"><span class="label">@GroupText.OtherNamesLabel</span> @string.Join(", ", Model.ColNames)</p>
@@ -237,15 +251,17 @@
                         </select>
                     </label>
                 </fieldset>
-                <fieldset class="option-group">
-                    <legend>@GroupText.OptionCategories</legend>
+                @* aria-labelledby names the group by the legend's text alone, without the info button's name. *@
+                <fieldset class="option-group" aria-labelledby="legend-categories">
+                    <legend><span id="legend-categories">@GroupText.OptionCategories</span> <partial name="_InfoTip" model="@(new InfoTipModel("tip-categories", GroupText.InfoTipLabel(GroupText.OptionCategories), GroupText.CategoriesHelp))" /></legend>
                     <input type="hidden" name="cat" value="">
                     <div class="category-choices">
                         @foreach (var statusSection in StatusSection.All) {
-                            <label><input type="checkbox" name="cat" value="@statusSection.Key" checked="@(options.Sections.Contains(statusSection.Key))"> <partial name="_Badge" model="@BadgeModel.ForStatusCode(statusSection.Key, showLabel: true)" /></label>
+                            @* data-live-sync: ticking CoL or Wikidata includes NE, so after a live update site.js
+                               ticks the box as the server does. *@
+                            <label><input type="checkbox" name="cat" value="@statusSection.Key" checked="@(options.Sections.Contains(statusSection.Key))" data-live-sync="@(statusSection.Key == StatusSection.NotEvaluated ? "" : null)"> <partial name="_Badge" model="@BadgeModel.ForStatusCode(statusSection.Key, showLabel: true)" /></label>
                         }
                     </div>
-                    <p class="help">@GroupText.CategoriesHelp</p>
                 </fieldset>
                 <fieldset class="option-group" data-list-type="bullets" hidden="@Model.Table.IsTable">
                     <legend>@GroupText.OptionTaxa</legend>
@@ -285,6 +301,9 @@
                 <p class="note">@GroupText.EmptyList(group.Name)</p>
             } else {
                 <p class="list-size">@GroupText.ListSize(list.LineCount)@GroupSourceText.ExtraCountSuffix(GroupListSources.ExtraLineCount(list))</p>
+                @if (Model.NoticeGroups is { IsEmpty: false } duplicates) {
+                    <p class="notices-summary"><a href="#list-notices">@GroupSourceText.NoticesHeading</a>: @GroupSourceText.SummaryCounts(duplicates.LeftOut.EntryCount, duplicates.Kept.PairCount)</p>
+                }
                 @if (list.SkippedRanks.Count > 0) {
                     <p class="note">@GroupText.RanksLeftOut(list.SkippedRanks)</p>
                 }
@@ -301,8 +320,8 @@
                         @Html.Raw(WikitextPreview.ToHtml(Model.Wikitext, Model.Sources is null ? null : GroupListSources.PreviewSuffixes(list, Model.Sources)))
                     </div>
                 </details>
-                @if (Model.Sources is { } merged) {
-                    <partial name="_ListNotices" model="@merged" />
+                @if (Model.NoticeGroups is { } noticeGroups) {
+                    <partial name="_ListNotices" model="@(new ListNoticesModel(noticeGroups, group.IsCol ? null : group.Rank))" />
                 }
             }
         </div>
