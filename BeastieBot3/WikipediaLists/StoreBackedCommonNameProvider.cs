@@ -258,6 +258,15 @@ internal sealed class StoreBackedCommonNameProvider : IDisposable {
             return null;
         }
 
+        // A redirect to the article of a species gives no name for a higher taxon: genus Ashbyia
+        // redirects to "Gibberbird", the article of its one species. A taxobox with a one-word name
+        // (Cetartiodactyla -> "Even-toed ungulate", taxobox Artiodactyla), no taxobox, or a page not
+        // downloaded keep the redirect target as before (Araneae -> Spider).
+        if (_wikiCache.ResolveDownloadedArticle(normalized) is { TaxoboxName: { } taxobox } article
+            && taxobox.Trim().Contains(' ') && !article.TaxoboxIs(scientificName)) {
+            return null;
+        }
+
         return summary.RedirectTarget;
     }
 
