@@ -1543,7 +1543,7 @@ colspan and rowspan; `StatusUpdater` decides the edits, and `StatusTaxonResolver
     group's default style from `GroupListQuery.DefaultStyle`, ids and year), at most 3,600; the taxa
     listed that are now in another category; the taxa IUCN places outside the group (a genus move);
     and taxa that appear under two or more names on different lines (a lump).
-  - Checked in October 2026 on 12 Wikipedia lists and the 51 cached articles of the check above (16 of
+  - Checked in October 2026 on 12 Wikipedia lists and the 51 cached articles of the check above (14 of
     them got a comparison): List of
     endangered amphibians (no codes) gave 567 EN species missing and 38 listed taxa now in another
     category; List of canids, List of cetaceans and Genus Fulica (Coot) one missing species each;
