@@ -21,6 +21,8 @@ public class SpeciesListTests {
     [InlineData("CR(PE)", "CR(PEW)", StatusItemKind.StatusTemplate, "PossiblyExtinct")]
     [InlineData("CR(PE)", "CR", StatusItemKind.StatusTemplate, "PossiblyExtinct")]
     [InlineData("LC", "LC", StatusItemKind.SpeciesTableRow, "Trend")]
+    [InlineData("NA", "LC", StatusItemKind.StatusTemplate, "RegionalCode")]
+    [InlineData("RE", "EN", StatusItemKind.TableCell, "RegionalCode")]
     [InlineData(" lc ", "LC", StatusItemKind.StatusTemplate, "Assessment")]
     [InlineData("LC", "LR/lc", StatusItemKind.StatusTemplate, "Assessment")]
     [InlineData("NT", "LR/cd", StatusItemKind.StatusTemplate, "Assessment")]

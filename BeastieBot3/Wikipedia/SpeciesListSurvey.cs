@@ -12,12 +12,18 @@ namespace BeastieBot3.Wikipedia;
 internal enum SpeciesListChangeKind {
     /// The code on the page is a different category from the latest assessment's.
     Category,
+    /// The code on the page is NA or RE, categories of regional assessments only: the page may give
+    /// regional statuses (the European Red List's, say), which the global category does not replace.
+    RegionalCode,
     /// CR on one side and CR(PE) or CR(PEW) on the other, or CR(PE) and CR(PEW).
     PossiblyExtinct,
     /// Same category; a {{Species table/row}} whose population trend (direction) is empty or differs.
     Trend,
     /// Same category; the assessment ids or year of an {{IUCN status}} are of an older assessment.
     Assessment,
+    /// Not changed: the {{IUCN status}}'s taxon id is of another taxon than its row or line names, or
+    /// was copied to rows that name other taxa (StatusNoteKind.IdUsedForOtherTaxa).
+    IdOfAnotherTaxon,
 }
 
 /// A status on the page that the /update page would change. WrittenCode: the code on the page (null
@@ -37,11 +43,13 @@ internal sealed record SpeciesListPageResult(
     int TaxaListed,
     int Statuses,
     int CategoryChanged,
+    int RegionalCodes,
     int PossiblyExtinctChanged,
     int TrendChanged,
     int NewerAssessment,
     int UpToDate,
     int NotMatched,
+    int IdOfAnotherTaxon,
     int NameNotFound,
     int NameAmbiguous,
     int TaxaWithoutStatus,
@@ -84,12 +92,18 @@ internal static class SpeciesListSurvey {
         }
 
         var changes = new List<SpeciesListChange>();
-        int statusCount = 0, upToDate = 0, notMatched = 0, nameNotFound = 0, nameAmbiguous = 0;
+        int statusCount = 0, upToDate = 0, notMatched = 0, nameNotFound = 0, nameAmbiguous = 0, idOfAnother = 0;
         foreach (var finding in result.Findings.Where(f => StatusKinds.Contains(f.Kind))) {
             statusCount++;
             switch (finding.Outcome) {
                 case StatusOutcome.Current:
                     upToDate++;
+                    break;
+                case StatusOutcome.NotUpdated when finding.Notes.FirstOrDefault(n => n.Kind is StatusNoteKind.IdOfAnotherTaxon or StatusNoteKind.IdUsedForOtherTaxa) is { } wrongId:
+                    idOfAnother++;
+                    changes.Add(new SpeciesListChange(finding.Line, finding.Kind, finding.Taxon?.ScientificName ?? wrongId.Detail ?? "",
+                        wrongId.Id ?? 0, WrittenCode: null, IucnCode: "", IucnYear: null, SpeciesListChangeKind.IdOfAnotherTaxon,
+                        OneLine(finding.Before), After: ""));
                     break;
                 case StatusOutcome.NotUpdated:
                     notMatched++;
@@ -121,11 +135,13 @@ internal static class SpeciesListSurvey {
             TaxaListed: members.Where(mb => mb.Taxon.InRelease).Select(mb => mb.Taxon.TaxonId).Distinct().Count(),
             Statuses: statusCount,
             CategoryChanged: changes.Count(c => c.Change == SpeciesListChangeKind.Category),
+            RegionalCodes: changes.Count(c => c.Change == SpeciesListChangeKind.RegionalCode),
             PossiblyExtinctChanged: changes.Count(c => c.Change == SpeciesListChangeKind.PossiblyExtinct),
             TrendChanged: changes.Count(c => c.Change == SpeciesListChangeKind.Trend),
             NewerAssessment: changes.Count(c => c.Change == SpeciesListChangeKind.Assessment),
             UpToDate: upToDate,
             NotMatched: notMatched,
+            IdOfAnotherTaxon: idOfAnother,
             NameNotFound: nameNotFound,
             NameAmbiguous: nameAmbiguous,
             TaxaWithoutStatus: members.Where(mb => mb.Taxon.InRelease && mb.WrittenCode is null && !mb.HasStatusTemplate)
@@ -150,6 +166,9 @@ internal static class SpeciesListSurvey {
     /// What an update changes, from the code on the page (null when it could not be read), the
     /// latest assessment's code and the kind of item.
     internal static SpeciesListChangeKind Classify(string? writtenCode, string iucnCode, StatusItemKind kind) {
+        if (writtenCode is not null && Category(writtenCode) is "NA" or "RE") {
+            return SpeciesListChangeKind.RegionalCode;
+        }
         if (writtenCode is null || !SameCategory(writtenCode, iucnCode)) {
             return SpeciesListChangeKind.Category;
         }

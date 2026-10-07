@@ -61,6 +61,8 @@ public static partial class UpdateText {
             StatusNoteKind.IdsAdded => $"Added the ids {note.Detail}.",
             StatusNoteKind.AssessmentIdNotAdded => $"No assessment id. Add ids would write {note.Detail}.",
             StatusNoteKind.IdNotFoundMatchedByName => $"No taxon on this site has taxon id {note.Id}. Found by the scientific name {note.Detail} instead.",
+            StatusNoteKind.IdOfAnotherTaxon => $"Taxon id {note.Id} is not the id of {note.Detail}, the taxon this row or line names. Not changed: check the id.",
+            StatusNoteKind.IdUsedForOtherTaxa => $"Taxon id {note.Id} is also on rows or lines that name other taxa, and this site has no taxon with the name on this row or line. Not changed: check the id.",
             StatusNoteKind.IdNotInReleaseMatchedByName => $"Taxon id {note.Id} is not in this Red List version. Found by the scientific name {note.Detail} instead.",
             StatusNoteKind.YearAdded => $"Added year={note.Detail}.",
             StatusNoteKind.CitationWithoutIds => "No assessment id (such as e.T22823A14871490) in article-number, id, url or doi, so the citation was not checked.",

@@ -134,6 +134,12 @@ public enum StatusNoteKind {
     IdNotFoundMatchedByName,
     /// The template's taxon id (Id) is not in the release; the taxon (Detail) was found by name.
     IdNotInReleaseMatchedByName,
+    /// The template's taxon id (Id) is of another taxon than the one its row or line names (Detail);
+    /// the template was not changed.
+    IdOfAnotherTaxon,
+    /// The template's taxon id (Id) is also on rows or lines that name other taxa (IdOfAnotherTaxon),
+    /// and this row or line names no taxon the site has; the template was not changed.
+    IdUsedForOtherTaxa,
     /// year= (Detail) was added.
     YearAdded,
     /// The citation names no assessment (no T…A… id in article-number, id, url or doi).

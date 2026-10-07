@@ -183,6 +183,34 @@ public sealed class StatusUpdaterTests {
     }
 
     [Fact]
+    public void ATaxonIdOfAnotherTaxonThanTheNameOnTheLineIsLeftAsItIs() {
+        // 4828 is the id of Amblysomus hottentotus; the line names Neamblysomus gunningi.
+        var text = "*''Neamblysomus gunningi'' {{IUCN status|EN|4828}}\n";
+        var result = Run(text);
+        Assert.Equal(text, result.Text);
+        var finding = Assert.Single(result.Findings);
+        Assert.Equal(StatusOutcome.NotUpdated, finding.Outcome);
+        Assert.Contains(finding.Notes, n => n.Kind == StatusNoteKind.IdOfAnotherTaxon && n.Id == 4828);
+    }
+
+    [Fact]
+    public void AnIdCopiedToARowThatNamesNoKnownTaxonIsLeftAsItIs() {
+        // The second line names Neamblysomus gunningi with Amblysomus hottentotus's id, so the id was
+        // copied; the third line's name is not on the site, and its template keeps the copied id too.
+        var text = "*''Amblysomus hottentotus'' {{IUCN status|VU|4828}}\n*''Neamblysomus gunningi'' {{IUCN status|VU|4828}}\n*''Unknownia nova'' {{IUCN status|VU|4828}}\n";
+        var result = Run(text);
+        Assert.Equal(text.Replace("{{IUCN status|VU|4828}}\n*''Neamblysomus", "{{IUCN status|EN|4828}}\n*''Neamblysomus"), result.Text);
+        Assert.Equal([StatusOutcome.Updated, StatusOutcome.NotUpdated, StatusOutcome.NotUpdated], result.Findings.Select(f => f.Outcome));
+        Assert.Equal(1, result.CountNotes(StatusNoteKind.IdUsedForOtherTaxa));
+    }
+
+    [Fact]
+    public void AnIdOnARowThatNamesNoKnownTaxonIsUpdatedWhenNoOtherRowShowsItWasCopied() {
+        var result = Run("*''Unknownia nova'' {{IUCN status|VU|4828}}\n");
+        Assert.Equal("*''Unknownia nova'' {{IUCN status|EN|4828}}\n", result.Text);
+    }
+
+    [Fact]
     public void AbbreviatedNameOnAListLineTakesTheGenusLineAbove() {
         var result = Run("*** Genus: ''[[Panthera]]''\n**** [[Tiger]], ''P. tigris'' {{IUCN status|VU}}\n");
         Assert.Contains("{{IUCN status|EN}}", result.Text);
@@ -455,7 +483,9 @@ public sealed class StatusUpdaterTests {
         Assert.Equal(2, result.NotChecked);
         Assert.Equal(3, result.Text.Split("4828/21289898").Length - 1);
         Assert.Equal(2, result.Text.Split("4828/1|").Length - 1);
-        Assert.Equal(3, lookup.Lookups);
+        // One lookup per item checked, and one more for the id the first three items share, to see
+        // whether it was copied (StatusUpdater.CopiedIds).
+        Assert.Equal(4, lookup.Lookups);
     }
 
     [Fact]

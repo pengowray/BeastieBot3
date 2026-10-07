@@ -134,6 +134,7 @@ public sealed partial class StatusUpdater {
         var (missingLines, missingTables) = FindMissing(scanner, tables, candidates);
 
         candidates.Sort((a, b) => a.Position.CompareTo(b.Position));
+        _copiedIds = CopiedIds(scanner, candidates.Take(_maxItems).OfType<TemplateCandidate>());
         var findings = new List<StatusFinding>();
         var edits = new List<Edit>();
         foreach (var candidate in candidates.Take(_maxItems)) {
@@ -218,6 +219,10 @@ public sealed partial class StatusUpdater {
             notes.Add(new StatusNote(taxon is null ? StatusNoteKind.IdNotFoundMatchedByName : StatusNoteKind.IdNotInReleaseMatchedByName,
                 byName.ScientificName, taxonId));
             taxon = byName;
+        } else if (OtherNamedTaxon(s, template, taxon, out var nameFound) is { } named) {
+            return Fail(StatusNoteKind.IdOfAnotherTaxon, named.ScientificName, taxonId, named);
+        } else if (!nameFound && _copiedIds.Contains(taxonId)) {
+            return Fail(StatusNoteKind.IdUsedForOtherTaxa, id: taxonId);
         }
         var latest = taxon.LatestGlobal;
         if (latest is null) {
@@ -245,6 +250,46 @@ public sealed partial class StatusUpdater {
         UpdateYear(s, template, code, latest.YearPublished, edits);
         AddIdsAndYear(s, template, taxon, latest, code, hasIds: true, edits, notes);
         return Finish(s, StatusItemKind.StatusTemplate, line, template.Span, edits, taxon, notes);
+    }
+
+    // The taxon the template's table row or list line names, when it is not the taxon of the template's
+    // id: an id copied from another row (one page had 433 rows with the same bird's id). Either the
+    // id or the name is wrong, so the template is left as it is. ResolveNames's note is for the
+    // item's own match, so it is put back.
+    // nameFound: whether the row or line names a taxon at all.
+    private StatusTaxon? OtherNamedTaxon(WikitextScanner s, WikiTemplate template, StatusTaxon taxon, out bool nameFound) {
+        var saved = _nameNote;
+        var named = NameNear(s, template);
+        _nameNote = saved;
+        nameFound = named is not null;
+        return named is not null && named.TaxonId != taxon.TaxonId ? named : null;
+    }
+
+    // Taxon ids of {{IUCN status}} templates in a row or on a line that names another taxon. A row
+    // with such an id that names no taxon the site has is left as it is too: the 433 rows that had
+    // one bird's id included bats that IUCN lists under other names.
+    private HashSet<long> _copiedIds = [];
+
+    private HashSet<long> CopiedIds(WikitextScanner s, IEnumerable<TemplateCandidate> templates) {
+        var withId = new List<(WikiTemplate Template, long TaxonId)>();
+        foreach (var candidate in templates) {
+            var idsParam = candidate.Template.Positional(2);
+            var ids = idsParam is null ? null : IdsPattern().Match(s.CoreText(idsParam.Value));
+            if (ids is { Success: true } && long.TryParse(ids.Groups[1].Value, NumberStyles.None, CultureInfo.InvariantCulture, out var taxonId)) {
+                withId.Add((candidate.Template, taxonId));
+            }
+        }
+        // A copied id is on two or more templates; an id used once needs no check here.
+        var copied = new HashSet<long>();
+        foreach (var group in withId.GroupBy(t => t.TaxonId).Where(g => g.Count() > 1)) {
+            if (_lookup.GetTaxon(group.Key) is not { InRelease: true } taxon) {
+                continue;
+            }
+            if (group.Any(t => OtherNamedTaxon(s, t.Template, taxon, out _) is not null)) {
+                copied.Add(group.Key);
+            }
+        }
+        return copied;
     }
 
     // year= (and label= when it holds a year) follow the assessment; EX and EW have no year, as
