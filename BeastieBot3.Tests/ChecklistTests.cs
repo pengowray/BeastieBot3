@@ -58,4 +58,34 @@ public class ChecklistTests {
             parse.Rows.Select(r => $"{r.ScientificName} {r.Area} {r.Origin}"));
         Assert.Equal([("Rhinella sp", "Adhaerobufo sp")], parse.Synonyms);
     }
+
+    private static string BackboneRow(long id, string status, string rank, long kingdom, long species, string name) =>
+        string.Join('\t', [id.ToString(), "0", "\\N", status == "SYNONYM" ? "t" : "f", status, rank, "{}", "x", "SOURCE", "0",
+            kingdom.ToString(), "0", "0", "0", "0", "0", species.ToString(), "0", name + " Author", name]);
+
+    [Fact]
+    public void GbifBackboneMatchesByNameAndKingdomPreferringAcceptedNames() {
+        var backbone = string.Join('\n', [
+            BackboneRow(10, "ACCEPTED", "SPECIES", 1, 10, "Panthera leo"),
+            BackboneRow(11, "SYNONYM", "SPECIES", 1, 99, "Panthera leo"),
+            BackboneRow(20, "ACCEPTED", "SPECIES", 6, 20, "Morus alba"),
+            BackboneRow(21, "ACCEPTED", "SPECIES", 1, 21, "Morus alba"),
+            BackboneRow(30, "SYNONYM", "SPECIES", 1, 31, "Aus bus"),
+            BackboneRow(32, "SYNONYM", "SPECIES", 1, 33, "Aus bus"),
+            BackboneRow(40, "ACCEPTED", "GENUS", 1, 40, "Panthera"),
+        ]);
+        var wanted = new HashSet<(string, long)> { ("Panthera leo", 1), ("Morus alba", 6), ("Aus bus", 1) };
+        var keys = GbifChecklist.MatchBackbone(new StringReader(backbone), wanted);
+        Assert.Equal(10, keys[("Panthera leo", 1)]);
+        Assert.Equal(20, keys[("Morus alba", 6)]);
+        // Two synonyms leading to two species: not matched.
+        Assert.False(keys.ContainsKey(("Aus bus", 1)));
+    }
+
+    [Fact]
+    public void GbifFacetCountsAreRead() {
+        using var json = new MemoryStream(System.Text.Encoding.UTF8.GetBytes(
+            """{"count":3,"facets":[{"field":"SPECIES_KEY","counts":[{"name":"5220126","count":3795},{"name":"2724925","count":12}]}]}"""));
+        Assert.Equal([(5220126L, 3795L), (2724925L, 12L)], GbifChecklist.ReadFacet(json));
+    }
 }
