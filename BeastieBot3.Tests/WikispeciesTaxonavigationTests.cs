@@ -64,6 +64,53 @@ public class WikispeciesTaxonavigationTests {
     }
 
     [Fact]
+    public void ANameInBoldItalicsOrOnTheNextLineIsRead() {
+        Assert.Equal(new[] { new WikispeciesStep("species", "Abuta grandifolia") },
+            WikispeciesTaxonavigation.ParsePage("== {{int:Taxonavigation}} ==\n{{Abuta}}\nSpecies: '''''Abuta grandifolia'''''\n", "Abuta grandifolia")!.Steps);
+        var t = WikispeciesTaxonavigation.ParsePage("=={{int:Taxonavigation}}==\n{{Acanthopale (Acanthaceae)|Acanthopale}}\nSpecies:\n''[[Acanthopale decempedalis]]''\n",
+            "Acanthopale decempedalis")!;
+        Assert.Equal("Acanthopale (Acanthaceae)", t.Parent);
+        Assert.Equal(new[] { new WikispeciesStep("species", "Acanthopale decempedalis") }, t.Steps);
+        Assert.Equal(new[] { new WikispeciesStep("species", "Allium carmeli") },
+            WikispeciesTaxonavigation.ParsePage("=={{int:Taxonavigation}}==\n{{Allium}}\nSpecies: {{Taxit|Allium carmeli|linked=yes}}\n", "Allium carmeli")!.Steps);
+    }
+
+    [Theory]
+    [InlineData("Species: {{splast|T|odarodes|pacificus}}", "Todarodes pacificus", "species", "Todarodes pacificus")]
+    [InlineData("Subspecies: {{ssplast|P|anthera|l|eo|persica}}", "Panthera leo persica", "subspecies", "Panthera leo persica")]
+    [InlineData("Varietas: {{varlast|C|assia|a|frofistula|patentipila}}", "Cassia afrofistula var. patentipila", "variety", "Cassia afrofistula var. patentipila")]
+    [InlineData("species: '''''Corydoras urucu'''''", "Corydoras urucu", "species", "Corydoras urucu")]
+    [InlineData("Species ''[[Opuntia decumbens]]''", "Opuntia decumbens", "species", "Opuntia decumbens")]
+    [InlineData("Species: ''[[Passer&nbsp;diffusus]]'' <br>", "Passer diffusus", "species", "Passer diffusus")]
+    public void OtherWaysOfWritingTheTaxonLine(string line, string title, string rank, string name) =>
+        Assert.Equal(new[] { new WikispeciesStep(rank, name) },
+            WikispeciesTaxonavigation.ParsePage($"=={{{{int:Taxonavigation}}}}==\n{{{{Genus}}}}\n{line}\n", title)!.Steps);
+
+    [Fact]
+    public void ASpeciesWithATemplateOfItsOwnTakesItsTaxonFromIt() {
+        var path = Path.Combine(Path.GetTempPath(), $"wikispecies-{Guid.NewGuid():N}.sqlite");
+        try {
+            using (var store = WikipediaCacheStore.Open(path)) {
+                Add(store, "Afriodinia delicata", "=={{int:Taxonavigation}}==\n{{Afriodinia delicata}}\nSubspecies:\n{{ssp|A|friodinia|d|elicata|delicata}}\n{{ssplast|A|friodinia|d|elicata|tanzania}}\n");
+                Add(store, "Template:Afriodinia delicata", "{{Afriodinia}}\nSpecies: ''[[Afriodinia delicata]]''\n");
+                Add(store, "Template:Afriodinia", "{{Riodinidae}}\nGenus: {{gbr|Afriodinia}}\n");
+            }
+            SqliteConnection.ClearAllPools();
+
+            var nodes = SiteLadders.ReadWikispecies(path, ["Afriodinia delicata"], default).ToDictionary(n => n.Id);
+
+            var page = nodes["page:Afriodinia delicata"];
+            Assert.Equal(("species", "Afriodinia delicata"), (page.Rank, page.Name));
+            Assert.Equal("genus Afriodinia", $"{nodes[page.ParentId!].Rank} {nodes[page.ParentId!].Name}");
+        } finally {
+            SqliteConnection.ClearAllPools();
+            foreach (var suffix in new[] { "", "-wal", "-shm" }) {
+                try { File.Delete(path + suffix); } catch (IOException) { }
+            }
+        }
+    }
+
+    [Fact]
     public void ATemplateCanNameSeveralTaxa() {
         var t = WikispeciesTaxonavigation.ParseTemplate("{{Aves}}\nOrdo: [[Passeriformes]]\nSubordo: [[Passeri]]\n")!;
         Assert.Equal(new[] { new WikispeciesStep("order", "Passeriformes"), new WikispeciesStep("suborder", "Passeri") }, t.Steps);

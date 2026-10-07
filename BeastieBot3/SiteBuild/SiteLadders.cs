@@ -40,6 +40,8 @@ internal static class SiteLadders {
         var nodes = new List<LadderNode>();
         // Template name -> the id of its last taxon (or of the nearest template above that has one).
         var tops = new Dictionary<string, string?>(StringComparer.Ordinal);
+        // The node of each template's last taxon, by its id.
+        var topNodes = new Dictionary<string, LadderNode>(StringComparer.Ordinal);
         string? TopOf(string name, int depth) {
             if (tops.TryGetValue(name, out var known)) {
                 return known;
@@ -59,19 +61,29 @@ internal static class SiteLadders {
                 return null;
             }
             var parent = template.Parent is { } p ? TopOf(p, depth + 1) : null;
-            return tops[name] = AddChain(nodes, name, template.Steps, parent);
+            var top = tops[name] = AddChain(nodes, name, template.Steps, parent);
+            if (template.Steps.Count > 0) {
+                topNodes[top!] = nodes[^1];
+            }
+            return top;
         }
         foreach (var scientificName in scientificNames.Distinct(StringComparer.Ordinal)) {
             ct.ThrowIfCancellationRequested();
             var title = Taxonomy.WikispeciesTaxonavigation.TitleFor(scientificName);
             if (cache.ReadArticleText(title) is not { } page
-                || Taxonomy.WikispeciesTaxonavigation.ParsePage(page.Wikitext, page.Title) is not { Steps.Count: > 0 } taxonav
-                // The last step must be the page's own taxon, or the ladder would end above it.
-                || !string.Equals(taxonav.Steps[^1].Name, page.Title, StringComparison.Ordinal)) {
+                || Taxonomy.WikispeciesTaxonavigation.ParsePage(page.Wikitext, page.Title) is not { } taxonav) {
                 continue;
             }
             var parent = taxonav.Parent is { } p ? TopOf(p, 0) : null;
-            AddChain(nodes, PagePrefix + scientificName, taxonav.Steps, parent);
+            // The last step must be the page's own taxon, or the ladder would end above it.
+            if (taxonav.Steps.Count > 0 && string.Equals(taxonav.Steps[^1].Name, page.Title, StringComparison.Ordinal)) {
+                AddChain(nodes, PagePrefix + scientificName, taxonav.Steps, parent);
+            } else if (taxonav.Steps.Count == 0 && parent is not null
+                && topNodes.TryGetValue(parent, out var top) && string.Equals(top.Name, page.Title, StringComparison.Ordinal)) {
+                // A species with a template of its own ({{Afriodinia delicata}}, which names the
+                // species): the page's node is that template's taxon.
+                nodes.Add(top with { Id = PagePrefix + scientificName });
+            }
         }
         return nodes;
     }

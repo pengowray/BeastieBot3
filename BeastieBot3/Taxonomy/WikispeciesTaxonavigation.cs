@@ -62,20 +62,27 @@ internal static partial class WikispeciesTaxonavigation {
     private static WikispeciesTaxonav Read(string text, string? stopAt) {
         string? parent = null;
         var steps = new List<WikispeciesStep>();
-        foreach (var raw in text.Split('\n')) {
-            var line = raw.Replace("‎", "").Replace("‏", "").Trim();
-            line = BreakRegex().Replace(line, "").Trim();
-            if (line.Length == 0) {
-                continue;
-            }
+        var lines = text.Split('\n')
+            .Select(raw => BreakRegex().Replace(raw.Replace("‎", "").Replace("‏", ""), "").Trim())
+            .Where(l => l.Length > 0).ToList();
+        for (var i = 0; i < lines.Count; i++) {
+            var line = lines[i];
             if (steps.Count == 0 && parent is null && ParentCall(line) is { } call) {
                 parent = call;
                 continue;
+            }
+            // "Species:" with the name on the next line.
+            if (RankOnlyRegex().IsMatch(line) && i + 1 < lines.Count && !RankLineRegex().IsMatch(lines[i + 1])) {
+                line += " " + lines[++i];
             }
             if (RankLineRegex().Match(line) is not { Success: true } m) {
                 continue;
             }
             if (NameOf(m.Groups["rest"].Value) is not { } name) {
+                continue;
+            }
+            // A taxon below the page's own (its subspecies) is not part of the page's classification.
+            if (stopAt is not null && name.StartsWith(stopAt + " ", StringComparison.Ordinal)) {
                 continue;
             }
             steps.Add(new WikispeciesStep(TaxonomyTemplates.EnglishRank(m.Groups["rank"].Value), name));
@@ -86,7 +93,8 @@ internal static partial class WikispeciesTaxonavigation {
         return new WikispeciesTaxonav(parent, steps);
     }
 
-    // "{{Pantherinae}}" or "{{Taxonav|Feloidea}}" alone on a line: the template above.
+    // "{{Pantherinae}}" or "{{Taxonav|Feloidea}}" alone on a line: the template above. A template
+    // called with arguments ("{{Acanthopale (Acanthaceae)|Acanthopale}}") is the template above too.
     private static string? ParentCall(string line) {
         if (ParentCallRegex().Match(line) is not { Success: true } m) {
             return null;
@@ -97,7 +105,7 @@ internal static partial class WikispeciesTaxonavigation {
             return arg is { Length: > 0 } ? Capitalize(arg) : null;
         }
         // Magic words, parser functions and page furniture are not taxonavigation templates.
-        if (arg is not null || name.Contains(':') || name.StartsWith('#') || NotParents.Contains(name)) {
+        if (name.Contains(':') || name.StartsWith('#') || NotParents.Contains(name)) {
             return null;
         }
         return Capitalize(name);
@@ -105,11 +113,18 @@ internal static partial class WikispeciesTaxonavigation {
 
     private static readonly HashSet<string> NotParents = new(StringComparer.OrdinalIgnoreCase) {
         "image", "images", "clear", "-", "!", "!!", "taxonbar", "reflist", "PAGENAME", "BASEPAGENAME", "nowrap",
+        "ssp", "ssplast", "subspplant", "subspplantlast", "sp", "splast", "var", "varlast", "taxit", "a", "aut", "BHL", "Wikipedia", "commons",
     };
 
     // The taxon a line names: one link, one {{fbr|...}}-style template, or plain text. A line naming
     // several taxa ("Subspecies: {{ssp|...}}, {{ssp|...}}") names none.
     private static string? NameOf(string rest) {
+        rest = rest.Replace("&nbsp;", " ", StringComparison.OrdinalIgnoreCase);
+        // {{splast|T|odarodes|pacificus}}, {{ssp|P|anthera|l|eo|persica}}: a name split for display.
+        var split = SplitNameRegex().Matches(rest);
+        if (split.Count == 1 && rest.Split("{{").Length == 2 && LinkRegex().Matches(rest).Count == 0) {
+            return SplitName(split[0].Groups["kind"].Value.ToLowerInvariant(), split[0].Groups["args"].Value.Split('|').Select(a => a.Trim()).ToArray());
+        }
         var links = LinkRegex().Matches(rest);
         var brs = BrTemplateRegex().Matches(rest);
         var templates = rest.Split("{{").Length - 1;
@@ -125,13 +140,26 @@ internal static partial class WikispeciesTaxonavigation {
         } else if (links.Count == 1) {
             name = links[0].Groups["target"].Value;
         } else {
-            name = rest.Replace("''", "").Trim().TrimStart('†', '?').Trim();
+            name = ApostrophesRegex().Replace(rest, "").Trim().TrimStart('†', '?').Trim();
             if (!PlainNameRegex().IsMatch(name)) {
                 return null;
             }
         }
         name = SpacesRegex().Replace(name.Replace('_', ' '), " ").Trim();
         return name.Length == 0 || name.IndexOfAny(['{', '}', '[', ']', '|', '<', '>', '#', ':']) >= 0 ? null : Capitalize(name);
+    }
+
+    // The name a {{sp}}, {{ssp}}, {{subspplant}} or {{var}} template (or its "last" form) shows.
+    private static string? SplitName(string kind, string[] a) {
+        var baseKind = kind.EndsWith("last", StringComparison.Ordinal) ? kind[..^4] : kind;
+        string? name = (baseKind, a.Length) switch {
+            ("sp", >= 3) => $"{a[0]}{a[1]} {a[2]}",
+            ("ssp", >= 5) => $"{a[0]}{a[1]} {a[2]}{a[3]} {a[4]}",
+            ("subspplant", >= 5) => $"{a[0]}{a[1]} {a[2]}{a[3]} subsp. {a[4]}",
+            ("var", >= 5) => $"{a[0]}{a[1]} {a[2]}{a[3]} var. {a[4]}",
+            _ => null,
+        };
+        return name is not null && PlainNameRegex().IsMatch(name) ? name : null;
     }
 
     private static bool SameTitle(string a, string b) =>
@@ -198,19 +226,28 @@ internal static partial class WikispeciesTaxonavigation {
     [GeneratedRegex(@"^\{\{\s*(?<name>[^{}|]+?)\s*(\|\s*(?<arg>[^{}|]*?)\s*(\|[^{}]*)?)?\}\}$")]
     private static partial Regex ParentCallRegex();
 
-    [GeneratedRegex(@"^[†?\s]*(?<rank>[A-Z][a-z]+)\s*:\s*(?<rest>.+)$")]
+    [GeneratedRegex(@"^[†?\s]*(?:(?<rank>[A-Za-z][a-z]+)\s*:|(?<rank>Genus|Species|Subspecies|Varietas)(?=\s+['\[{]))\s*(?<rest>.+)$")]
     private static partial Regex RankLineRegex();
 
     [GeneratedRegex(@"\[\[\s*(?<target>[^\]|]+?)\s*(\|[^\]]*)?\]\]")]
     private static partial Regex LinkRegex();
 
-    [GeneratedRegex(@"\{\{\s*[a-z]{1,4}br\s*\|\s*(?<name>[^}|]+?)\s*(\|[^}]*)?\}\}")]
+    [GeneratedRegex(@"\{\{\s*(?:[a-z]{1,4}br|[Tt]axit)\s*\|\s*(?<name>[^}|]+?)\s*(\|[^}]*)?\}\}")]
     private static partial Regex BrTemplateRegex();
 
     [GeneratedRegex(@"^[A-Z][a-z-]+( [a-z-]+| subsp\.| var\.| subg\.| sect\.| ×){0,4}$")]
     private static partial Regex PlainNameRegex();
 
-    [GeneratedRegex(@"<br\s*/?>", RegexOptions.IgnoreCase)]
+    [GeneratedRegex(@"^[†?\s]*[A-Za-z][a-z]+\s*:\s*$")]
+    private static partial Regex RankOnlyRegex();
+
+    [GeneratedRegex(@"\{\{\s*(?<kind>sp|splast|ssp|ssplast|subspplant|subspplantlast|var|varlast)\s*\|(?<args>[^{}]*)\}\}", RegexOptions.IgnoreCase)]
+    private static partial Regex SplitNameRegex();
+
+    [GeneratedRegex(@"'{2,}")]
+    private static partial Regex ApostrophesRegex();
+
+    [GeneratedRegex(@"</?br\s*/?>", RegexOptions.IgnoreCase)]
     private static partial Regex BreakRegex();
 
     [GeneratedRegex(@"<!--.*?(-->|$)", RegexOptions.Singleline)]
