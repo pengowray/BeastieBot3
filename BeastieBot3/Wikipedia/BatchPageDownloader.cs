@@ -37,9 +37,12 @@ internal sealed class BatchPageDownloader {
             foreach (var chunk in titles.Chunk(Math.Clamp(titlesPerRequest, 1, WikipediaApiClient.MaxTitlesPerRequest))) {
                 cancellationToken.ThrowIfCancellationRequested();
                 var now = DateTime.UtcNow;
+                // Rows are keyed by the normalized title, which is what every lookup uses: a title
+                // written "Mammillaria_ser._Discolores" must be found as "Mammillaria ser. Discolores".
                 var items = chunk.Select(title => {
-                    var row = _cache.UpsertPageCandidate(new WikiPageCandidate(title, title, PageId: null, now, now));
-                    return new WikiPageWorkItem(row.PageRowId, title, title, WikiPageDownloadStatus.Pending, null, 0);
+                    var normalized = WikipediaTitleHelper.Normalize(title);
+                    var row = _cache.UpsertPageCandidate(new WikiPageCandidate(title, normalized, PageId: null, now, now));
+                    return new WikiPageWorkItem(row.PageRowId, title, normalized, WikiPageDownloadStatus.Pending, null, 0);
                 }).ToList();
                 var importId = _cache.BeginImport($"enwiki:batch of {chunk.Length} from {chunk[0]}");
                 var watch = Stopwatch.StartNew();

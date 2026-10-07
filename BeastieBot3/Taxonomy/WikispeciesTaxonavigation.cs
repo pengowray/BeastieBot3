@@ -25,7 +25,9 @@ internal sealed record WikispeciesTaxonav(string? Parent, IReadOnlyList<Wikispec
 internal static partial class WikispeciesTaxonavigation {
     public const string TemplatePrefix = "Template:";
 
-    public static string TemplateTitle(string name) => TemplatePrefix + name.Trim();
+    /// "Template:Mammillaria ser. Discolores" for "Mammillaria_ser._Discolores" (MediaWiki reads
+    /// underscores as spaces and runs of spaces as one).
+    public static string TemplateTitle(string name) => TemplatePrefix + SpacesRegex().Replace(name.Replace('_', ' '), " ").Trim();
 
     /// The Wikispecies page title for an IUCN scientific name: "Panthera leo persica" for IUCN's
     /// "Panthera leo ssp. persica"; plant "subsp." and "var." stay in the title.
