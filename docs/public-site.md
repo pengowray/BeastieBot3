@@ -1431,7 +1431,12 @@ colspan and rowspan; `StatusUpdater` decides the edits, and `StatusTaxonResolver
   of cetaceans writes it) keeps that form, unless the reader asks for them (options below). An id
   with `in_release = 0` and a `current_taxon_id` uses the current taxon. An id the site does not
   have, or one not in the release with no current taxon (List of birds of Hawaii has old BirdLife
-  ids), falls back to the scientific name in the template's table row or on its list line.
+  ids), falls back to the scientific name in the template's table row or on its list line. A
+  template whose id is of another taxon than the one its row or line names is left as it is, with
+  a note to check the id; so is a template with such an id whose row names no taxon the site has.
+  List of animals in the Galápagos Islands had one mockingbird's id on 433 rows, including bats
+  IUCN lists under other names; List of mammals of Europe has rows naming a species with the id of
+  one of its subpopulations.
 - `{{IUCN status}}` with no ids on a list line (`*`, `#`, `:` or `;` first), as the lists by country
   write it ("**** [[Aye-aye]], ''Daubentonia madagascariensis'' {{IUCN status|EN}}"): the taxon is
   the one the scientific names on the line before the template name. An abbreviated name
