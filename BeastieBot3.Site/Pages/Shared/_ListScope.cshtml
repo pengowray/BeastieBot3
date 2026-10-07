@@ -46,12 +46,12 @@
             <select id="area-choice" name="@UpdateModel.AreaField" form="update-form">
                 <option value="" selected="@(r.Area is null)">@UpdateText.AreaWholeGroupOption</option>
                 <optgroup label="@UpdateText.AreaCountriesGroup">
-                    @foreach (var a in all.Where(a => a.IsCountry).OrderBy(a => a.Name, StringComparer.Ordinal)) {
-                        <option value="@a.Code" selected="@(r.Area == a.Code)">@a.Name</option>
+                    @foreach (var a in all.Where(a => a.IsCountry).OrderBy(a => a.DisplayName, StringComparer.Ordinal)) {
+                        <option value="@a.Code" selected="@(r.Area == a.Code)">@a.DisplayName</option>
                     }
                 </optgroup>
                 <optgroup label="@UpdateText.AreaPartsGroup">
-                    @foreach (var a in all.Where(a => !a.IsCountry).OrderBy(a => a.Name, StringComparer.Ordinal)) {
+                    @foreach (var a in all.Where(a => !a.IsCountry).OrderBy(a => a.DisplayName, StringComparer.Ordinal)) {
                         <option value="@a.Code" selected="@(r.Area == a.Code)">@UpdateText.AreaOption(a, areas)</option>
                     }
                 </optgroup>
@@ -87,16 +87,17 @@
             }
             @if (Model.AreaName is { } areaName && r.MissingAreaRecords.Count > 0) {
                 var noted = missing.Where(t => r.MissingAreaRecords.ContainsKey(t.TaxonId)).ToList();
-                <h4>@UpdateText.MissingAreaNotesHeading(noted.Count, areaName)</h4>
+                <h4>@UpdateText.MissingAreaNotesHeading(noted.Count)</h4>
+                <p>@UpdateText.MissingAreaNotesIntro(noted.Select(t => r.MissingAreaRecords[t.TaxonId]), areaName)</p>
                 <div class="table-scroll">
                     <table class="update-report">
-                        <thead><tr><th scope="col">@UpdateText.ColumnTaxon</th><th scope="col">@UpdateText.ColumnLatestStatus</th><th scope="col">@UpdateText.ColumnInArea(areaName)</th></tr></thead>
+                        <thead><tr><th scope="col">@UpdateText.ColumnTaxon</th><th scope="col">@UpdateText.ColumnLatestStatus</th><th scope="col" title="@UpdateText.ColumnInAreaHelp">@UpdateText.ColumnInArea(Model.AreaHeadingName!)</th></tr></thead>
                         <tbody>
                             @foreach (var t in noted) {
                                 <tr>
                                     <td><a href="/species/@t.TaxonId">@Html.Raw(ScientificNameMarkup.ToHtml(t.ScientificName))</a></td>
                                     <td>@GroupList.StatusCode(t)</td>
-                                    <td>@UpdateText.AreaRecordText(r.MissingAreaRecords[t.TaxonId], areaName)</td>
+                                    <td>@UpdateText.AreaRecordText(r.MissingAreaRecords[t.TaxonId])</td>
                                 </tr>
                             }
                         </tbody>
@@ -203,16 +204,16 @@
         </div>
     }
     @if (Model.AreaName is { } notInName && r.NotInArea.Count > 0) {
-        <h4>@UpdateText.NotInAreaHeading(r.NotInArea.Count, notInName)</h4>
+        <h4>@UpdateText.NotInAreaHeading(r.NotInArea.Count, r.AreaMode, notInName)</h4>
         <div class="table-scroll">
             <table class="update-report">
-                <thead><tr><th scope="col">@UpdateText.ColumnTaxon</th><th scope="col">@UpdateText.ColumnLatestStatus</th><th scope="col">@UpdateText.ColumnInArea(notInName)</th><th scope="col">@UpdateText.ColumnLines</th></tr></thead>
+                <thead><tr><th scope="col">@UpdateText.ColumnTaxon</th><th scope="col">@UpdateText.ColumnLatestStatus</th><th scope="col" title="@UpdateText.ColumnInAreaHelp">@UpdateText.ColumnInArea(Model.AreaHeadingName!)</th><th scope="col">@UpdateText.ColumnLines</th></tr></thead>
                 <tbody>
                     @foreach (var m in r.NotInArea) {
                         <tr>
                             <td><a href="/species/@m.Member.Taxon.TaxonId">@Html.Raw(ScientificNameMarkup.ToHtml(m.Member.Taxon.ScientificName))</a></td>
                             <td>@m.Member.CurrentCode</td>
-                            <td>@UpdateText.AreaRecordText(m.Record, notInName)</td>
+                            <td>@UpdateText.AreaRecordText(m.Record)</td>
                             <td>@UpdateText.LineNumbers(m.Member.Lines)</td>
                         </tr>
                     }

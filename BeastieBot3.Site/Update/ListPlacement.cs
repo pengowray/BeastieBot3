@@ -22,8 +22,11 @@ public sealed record ListScopeView(ListScopeResult Scope, ListPlacementResult? P
     BeastieBot3.Shared.Wikitext.ListCategoryChoice? Categories = null,
     IReadOnlyDictionary<long, IReadOnlyList<EpbcListingRow>>? Epbc = null, bool CategoriesFromTitle = false,
     BeastieBot3.Shared.Wikitext.AreaNames? Areas = null) {
-    /// The name of the area compared with, or null.
-    public string? AreaName => Scope.Area is { } code ? Areas?.ByCode(code)?.Name ?? code : null;
+    /// The name of the area compared with, for a sentence ("the United States"), or null.
+    public string? AreaName => Scope.Area is { } code ? Areas?.ByCode(code)?.SentenceName ?? code : null;
+
+    /// The name of the area for a column heading ("United States"), or null.
+    public string? AreaHeadingName => Scope.Area is { } code ? Areas?.ByCode(code)?.DisplayName ?? code : null;
 }
 
 /// A table of listed taxa in the comparison; Epbc: their EPBC Act listings, when they are shown.

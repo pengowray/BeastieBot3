@@ -7,6 +7,64 @@ namespace BeastieBot3.Shared.Wikitext;
 /// Country: for part of a country, the code of the country it is in.
 public sealed record AreaName(string Code, string Name, string? Country) {
     public bool IsCountry => Country is null && Code.Length == 2;
+
+    // IUCN's catalogue forms, as English Wikipedia names them.
+    private static readonly Dictionary<string, string> Common = new(StringComparer.Ordinal) {
+        ["Bolivia, Plurinational States of"] = "Bolivia",
+        ["Bolivia, Plurinational State of"] = "Bolivia",
+        ["Congo, The Democratic Republic of the"] = "Democratic Republic of the Congo",
+        ["Iran, Islamic Republic of"] = "Iran",
+        ["Korea, Democratic People's Republic of"] = "North Korea",
+        ["Korea, Republic of"] = "South Korea",
+        ["Lao People's Democratic Republic"] = "Laos",
+        ["Micronesia, Federated States of"] = "Federated States of Micronesia",
+        ["Moldova, Republic of"] = "Moldova",
+        ["Palestine, State of"] = "Palestine",
+        ["Russian Federation"] = "Russia",
+        ["Syrian Arab Republic"] = "Syria",
+        ["Taiwan, Province of China"] = "Taiwan",
+        ["Tanzania, United Republic of"] = "Tanzania",
+        ["Venezuela, Bolivarian Republic of"] = "Venezuela",
+        ["Viet Nam"] = "Vietnam",
+        ["Virgin Islands, British"] = "British Virgin Islands",
+        ["Virgin Islands, U.S."] = "United States Virgin Islands",
+        ["Brunei Darussalam"] = "Brunei",
+        ["Falkland Islands (Malvinas)"] = "Falkland Islands",
+        ["Holy See (Vatican City State)"] = "Vatican City",
+    };
+
+    // Names that take "the" in a sentence ("native to the Netherlands"), besides those starting
+    // "United", "Republic" or "Democratic" and those ending "Islands".
+    private static readonly HashSet<string> WithThe = new(StringComparer.Ordinal) {
+        "Netherlands", "Philippines", "Bahamas", "Gambia", "Maldives", "Comoros", "Central African Republic",
+        "Dominican Republic", "Czech Republic", "Seychelles", "Federated States of Micronesia",
+    };
+
+    /// The name as English Wikipedia writes it: "Tanzania" for "Tanzania, United Republic of",
+    /// "Hawaiian Islands" for "Hawaiian Is.".
+    public string DisplayName {
+        get {
+            if (Common.TryGetValue(Name, out var common)) {
+                return common;
+            }
+            var name = Name.EndsWith(" Is.", StringComparison.Ordinal) ? Name[..^4] + " Islands"
+                : Name.EndsWith(" I.", StringComparison.Ordinal) ? Name[..^3] + " Island"
+                : Name;
+            return name.Replace(" Is. ", " Islands ", StringComparison.Ordinal);
+        }
+    }
+
+    /// The name in a sentence: "the United States", "the Hawaiian Islands", "Brazil".
+    public string SentenceName {
+        get {
+            var name = DisplayName;
+            return WithThe.Contains(name) || name.StartsWith("United ", StringComparison.Ordinal)
+                || name.StartsWith("Republic ", StringComparison.Ordinal) || name.StartsWith("Democratic ", StringComparison.Ordinal)
+                || name.EndsWith(" Islands", StringComparison.Ordinal)
+                ? "the " + name
+                : name;
+        }
+    }
 }
 
 /// Which of a taxon's records for an area put it on a list of that area.
@@ -75,6 +133,9 @@ public sealed class AreaNames {
         }
         foreach (var area in list) {
             Add(area.Name, area);
+            if (area.DisplayName != area.Name) {
+                Add(area.DisplayName, area);
+            }
             // "Tanzania, United Republic of", "Congo, The Democratic Republic of the": the part before the comma.
             var comma = area.Name.IndexOf(',');
             if (comma > 0) {

@@ -50,6 +50,21 @@ public sealed class AreaNamesTests {
     [InlineData("List of mammals of South America")]
     public void ATitleOfNoAreaFindsNone(string title) => Assert.Null(Names.FromTitle(title));
 
+    [Theory]
+    [InlineData("Tanzania, United Republic of", "Tanzania", "Tanzania")]
+    [InlineData("United States", "United States", "the United States")]
+    [InlineData("Hawaiian Is.", "Hawaiian Islands", "the Hawaiian Islands")]
+    [InlineData("Johnston I.", "Johnston Island", "Johnston Island")]
+    [InlineData("Congo, The Democratic Republic of the", "Democratic Republic of the Congo", "the Democratic Republic of the Congo")]
+    [InlineData("Viet Nam", "Vietnam", "Vietnam")]
+    [InlineData("Netherlands", "Netherlands", "the Netherlands")]
+    [InlineData("Brazil", "Brazil", "Brazil")]
+    public void NamesReadAsEnglishWikipediaWritesThem(string iucn, string display, string sentence) {
+        var area = new AreaName("XX", iucn, null);
+        Assert.Equal(display, area.DisplayName);
+        Assert.Equal(sentence, area.SentenceName);
+    }
+
     [Fact]
     public void EndemicInTheTitleMeansEndemicSpecies() {
         Assert.Equal(AreaMode.Endemic, AreaNames.ModeFromTitle("List of endemic birds of Brazil"));
