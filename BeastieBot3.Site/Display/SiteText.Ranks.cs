@@ -6,7 +6,7 @@ public static partial class SiteText {
     public const string HeadingRanks = "Classification in other sources";
 
     public static string RanksIntro(int differences) =>
-        "The taxon's classification in each source, one group to a row: a group that two or more sources have is on one row. \"This site\" is IUCN's classification with Catalogue of Life groups between its ranks; \"English Wikipedia\" is the taxobox of the taxon's article; \"Wikispecies\" is the Taxonavigation section of the taxon's Wikispecies page."
+        "\"This site\" is IUCN's classification with Catalogue of Life groups between its ranks; \"Wikispecies\" is the Taxonavigation section of the taxon's Wikispecies page."
         + (differences == 0 ? " Every main rank has the same name as in IUCN's classification." : differences == 1
             ? " 1 main rank has another name than in IUCN's classification (marked ≠)."
             : $" {differences} main ranks have another name than in IUCN's classification (marked ≠).");
@@ -18,7 +18,7 @@ public static partial class SiteText {
     public const string RanksThisSite = "This site";
     public const string RanksCol = "Catalogue of Life";
     public const string RanksWikidata = "Wikidata";
-    public const string RanksWikipedia = "English Wikipedia";
+    public const string RanksWikipedia = "English Wikipedia taxobox";
     public const string RanksWikispecies = "Wikispecies";
     public const string RanksNoRank = "no rank";
 
