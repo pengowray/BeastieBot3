@@ -1485,3 +1485,12 @@ th.num {
     font-weight: bold;
     text-decoration: none;
 }
+
+/* A list or table whose items after the first few are hidden until its "Show all" box is ticked
+   (synonyms and names in other languages on a taxon page). */
+.more-list .more-item {
+    display: none;
+}
+.more-list:has(.show-more:checked) .more-item {
+    display: revert;
+}

@@ -91,8 +91,8 @@ public static partial class SiteText {
     public const string IucnMainName = "IUCN's main English name";
     public const string NoEnglishName = "No English common name found";
     public const string LanguageNotGiven = "Language not given";
-    public static string ShowMoreLanguages(int n) => n == 1 ? "Show 1 more language" : $"Show {SiteFormat.Number(n)} more languages";
-    public static string ShowMoreSynonyms(int n) => n == 1 ? "Show 1 more synonym" : $"Show {SiteFormat.Number(n)} more synonyms";
+    public static string ShowMoreLanguages(int n) => $"Show all languages ({SiteFormat.Number(n)} more)";
+    public static string ShowMoreSynonyms(int n) => $"Show all synonyms ({SiteFormat.Number(n)} more)";
 
     public static string SourceLabel(string source) => source switch {
         "iucn" => "IUCN Red List",

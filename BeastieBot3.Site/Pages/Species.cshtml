@@ -488,36 +488,32 @@
 
     @if (Model.OtherLanguages.Count > 0) {
         <h3>@SiteText.NamesOtherLanguages</h3>
-        var visibleGroups = Model.OtherLanguages.Take(SpeciesModel.ShortListLength).ToList();
-        var hiddenGroups = Model.OtherLanguages.Skip(SpeciesModel.ShortListLength).ToList();
-        <dl class="language-names">
-            @foreach (var g in visibleGroups) {
-                <dt>@g.Language</dt>
-                <dd lang="@g.Lang">@string.Join(", ", g.Names)</dd>
+        var hiddenLanguages = Math.Max(0, Model.OtherLanguages.Count - SpeciesModel.ShortListLength);
+        @* One list; the languages after the first few are hidden until the box is ticked. *@
+        <div class="more-list">
+            <dl class="language-names">
+                @for (var i = 0; i < Model.OtherLanguages.Count; i++) {
+                    var g = Model.OtherLanguages[i];
+                    var more = i >= SpeciesModel.ShortListLength ? "more-item" : null;
+                    <dt class="@more">@g.Language</dt>
+                    <dd class="@more" lang="@g.Lang">@string.Join(", ", g.Names)</dd>
+                }
+            </dl>
+            @if (hiddenLanguages > 0) {
+                <p class="more-toggle"><label><input type="checkbox" class="show-more" autocomplete="off"> @SiteText.ShowMoreLanguages(hiddenLanguages)</label></p>
             }
-        </dl>
-        @if (hiddenGroups.Count > 0) {
-            <details>
-                <summary>@SiteText.ShowMoreLanguages(hiddenGroups.Count)</summary>
-                <dl class="language-names">
-                    @foreach (var g in hiddenGroups) {
-                        <dt>@g.Language</dt>
-                        <dd lang="@g.Lang">@string.Join(", ", g.Names)</dd>
-                    }
-                </dl>
-            </details>
-        }
+        </div>
     }
 
     @if (Model.Synonyms.Count > 0) {
         <h3>@SiteText.NamesSynonyms</h3>
-        <partial name="_SynonymTable" model="Model.Synonyms.Take(SpeciesModel.ShortListLength)" />
-        @if (Model.Synonyms.Count > SpeciesModel.ShortListLength) {
-            <details>
-                <summary>@SiteText.ShowMoreSynonyms(Model.Synonyms.Count - SpeciesModel.ShortListLength)</summary>
-                <partial name="_SynonymTable" model="Model.Synonyms.Skip(SpeciesModel.ShortListLength)" />
-            </details>
-        }
+        @* One table; the synonyms after the first few are hidden until the box is ticked. *@
+        <div class="more-list">
+            <partial name="_SynonymTable" model="Model.Synonyms" />
+            @if (Model.Synonyms.Count > SpeciesModel.ShortListLength) {
+                <p class="more-toggle"><label><input type="checkbox" class="show-more" autocomplete="off"> @SiteText.ShowMoreSynonyms(Model.Synonyms.Count - SpeciesModel.ShortListLength)</label></p>
+            }
+        </div>
     }
 </section>
 

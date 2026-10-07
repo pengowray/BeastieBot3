@@ -1,4 +1,5 @@
-@model IEnumerable<SynonymRow>
+@model IReadOnlyList<SynonymRow>
+@* Rows after the first SpeciesModel.ShortListLength are "more-item", hidden until the box below the table is ticked. *@
 <div class="table-scroll">
     <table class="names-table synonyms-table">
         <thead>
@@ -8,8 +9,9 @@
             </tr>
         </thead>
         <tbody>
-            @foreach (var s in Model) {
-                <tr>
+            @for (var row = 0; row < Model.Count; row++) {
+                var s = Model[row];
+                <tr class="@(row >= SpeciesModel.ShortListLength ? "more-item" : null)">
                     <th scope="row">@Html.Raw(ScientificNameMarkup.ToSynonymHtml(s.Name))@if (s.Authority is not null) {<text> </text><span class="authority">@s.Authority</span>}</th>
                     <td>@for (var i = 0; i < s.Sources.Count; i++) {
                             var source = s.Sources[i];
