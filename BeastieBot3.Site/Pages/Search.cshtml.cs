@@ -49,6 +49,11 @@ public sealed class SearchModel : PageModel {
     // Candidate texts looked up before giving up: each is one exact name lookup, and at most one search.
     private const int MaxCandidates = 12;
 
+    /// Species from the Catalogue of Life and Wikidata that are not on the IUCN Red List, listed after
+    /// the IUCN taxa, and how many match in all.
+    public IReadOnlyList<ExtraSearchHit> ExtraItems { get; private set; } = [];
+    public long ExtraTotal { get; private set; }
+
     /// True when the results are taxa found by an IUCN id in the text, not by a name.
     public bool FoundById { get; private set; }
 
@@ -76,6 +81,9 @@ public sealed class SearchModel : PageModel {
             return idResult;
         }
         if (ids?.WikidataItem is { } item) {
+            if (_queries.GetExtraSpeciesByWikidataItem(item) is { } extraSpecies) {
+                return Redirect(Web.SiteUrls.Extra(extraSpecies));
+            }
             MissingWikidataItem = "Q" + item.ToString(System.Globalization.CultureInfo.InvariantCulture);
             return Page();
         }
@@ -99,9 +107,18 @@ public sealed class SearchModel : PageModel {
             return Redirect(url);
         }
 
+        var extra = _queries.SearchExtra(Query, MaxResults, HttpContext.RequestAborted);
+        // A species name that only the Catalogue of Life or Wikidata has.
+        if (all != "1" && Groups.Count == 0 && !result.Hits.Any(h => h.IsExactMatch)
+            && extra.Hits.Where(h => h.IsExactMatch).ToList() is [var onlyExact]) {
+            return Redirect(Web.SiteUrls.Extra(onlyExact.Species));
+        }
+
         Items = result.Hits.Select(TaxonListItem.FromHit).ToList();
         TotalTaxa = result.TotalTaxa;
-        if (Items.Count == 0 && Groups.Count == 0) {
+        ExtraItems = extra.Hits;
+        ExtraTotal = extra.Total;
+        if (Items.Count == 0 && Groups.Count == 0 && ExtraItems.Count == 0) {
             Suggestions = FindSuggestions(Query);
         }
         return Page();

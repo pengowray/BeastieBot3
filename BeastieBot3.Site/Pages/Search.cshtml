@@ -37,13 +37,10 @@
                 </li>
             }
         </ul>
-        @if (Model.Items.Count > 0) {
-            <h2>@GroupText.SearchTaxaHeading</h2>
-        }
     }
     @if (Model.MissingWikidataItem is { } qid) {
         <p class="message">@SiteText.WikidataItemNotFound(qid)</p>
-    } else if (Model.Items.Count == 0 && Model.Groups.Count == 0) {
+    } else if (Model.Items.Count == 0 && Model.Groups.Count == 0 && Model.ExtraItems.Count == 0) {
         <p class="message">@SiteText.NoResults(Model.Query)</p>
         @if (Model.Suggestions.Count > 0) {
             <p class="similar-names">@SiteText.SimilarNames
@@ -53,13 +50,23 @@
                 }
             </p>
         }
-    } else if (Model.Items.Count > 0) {
+    } else {
+        @if (Model.Items.Count > 0 && (Model.Groups.Count > 0 || Model.ExtraItems.Count > 0)) {
+            <h2>@GroupText.SearchTaxaHeading</h2>
+        }
         @if (Model.MissingAssessmentId is { } missing) {
             <p class="message">@SiteText.AssessmentIdNotFound(missing)</p>
         }
-        <p class="result-count">@(Model.TotalTaxa > Model.Items.Count
-            ? SiteText.SearchTruncated(Model.Items.Count, Model.TotalTaxa)
-            : SiteText.SearchCount(Model.Items.Count))</p>
-        <partial name="_TaxonList" model="Model.Items" />
+        @if (Model.Items.Count > 0) {
+            <p class="result-count">@(Model.TotalTaxa > Model.Items.Count
+                ? SiteText.SearchTruncated(Model.Items.Count, Model.TotalTaxa)
+                : SiteText.SearchCount(Model.Items.Count))</p>
+            <partial name="_TaxonList" model="Model.Items" />
+        }
+        @if (Model.ExtraItems.Count > 0) {
+            <h2>@SiteText.SearchExtraHeading</h2>
+            <p class="result-count">@SiteText.SearchExtraNote @(Model.ExtraTotal > Model.ExtraItems.Count ? SiteText.SearchExtraTruncated(Model.ExtraItems.Count, Model.ExtraTotal) : null)</p>
+            <partial name="_ExtraSpeciesList" model="Model.ExtraItems" />
+        }
     }
 }

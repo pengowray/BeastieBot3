@@ -55,6 +55,8 @@ public sealed class SpeciesModel : PageModel {
 
     public long RequestedTaxonId { get; private set; }
     public string? Version { get; private set; }
+    /// Species from the Catalogue of Life and Wikidata that may be the same as this taxon.
+    public IReadOnlyList<ExtraPairRow> ExtraPairs { get; private set; } = [];
     public TaxonRow? Taxon { get; private set; }
     public TaxonSummary? Parent { get; private set; }
 
@@ -239,6 +241,7 @@ public sealed class SpeciesModel : PageModel {
         RankComparison = BuildRankComparison(Taxon);
         LinkedTaxa = _queries.GetLinkedTaxa(Taxon.TaxonId);
         EpbcListings = _queries.GetEpbcListings(Taxon.TaxonId);
+        ExtraPairs = _queries.GetExtraOverlapsOfTaxon(Taxon.TaxonId);
         LoadAssessments(assessment);
         var externalIds = _queries.GetExternalIds(Taxon.TaxonId);
         (CommonsGallery, CommonsCategory) = BeastieBot3.Shared.SiteData.ExternalDatabases.Commons(externalIds);

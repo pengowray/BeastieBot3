@@ -1,0 +1,109 @@
+@page "/{source:regex(^(col|wikidata)$)}/{id}"
+@model ExtraSpeciesModel
+@using BeastieBot3.Site.Lists
+@using BeastieBot3.Site.Web
+@{
+    var species = Model.Species;
+    if (species is null) {
+        ViewData["Title"] = Model.NotFoundHeading;
+        ViewData["HideHeaderSearch"] = true;
+    } else {
+        ViewData["Title"] = species.CommonNameEn is null ? species.ScientificName : $"{species.ScientificName} ({species.CommonNameEn})";
+    }
+}
+@if (species is null) {
+    <h1>@Model.NotFoundHeading</h1>
+    <p>@Model.NotFoundLine</p>
+    <partial name="_SearchForm" model="@(new SearchFormModel(null, "main"))" />
+    return;
+}
+@{
+    var placedUnder = Model.Path.Count > 0 ? Model.Path[^1] : null;
+    var colCount = Model.Path.Count(g => g.IsCol);
+}
+
+<header class="taxon-header">
+    <h1>
+        <span class="sci-name">@Html.Raw(ScientificNameMarkup.ToHtml(species.ScientificName))</span>
+        @if (!string.IsNullOrWhiteSpace(species.Authority)) {
+            <span class="authority">@species.Authority</span>
+        }
+    </h1>
+    @if (species.CommonNameEn is not null) {
+        <p class="taxon-common-name">@species.CommonNameEn</p>
+    }
+    @if (Model.Path.Count > 0) {
+        <div class="classification has-col-toggle">
+            <h2 id="classification-heading" class="visually-hidden">@SiteText.HeadingClassification</h2>
+            <ol>
+                @foreach (var step in Model.Path) {
+                    <li class="@(step.IsCol ? "col-group" : null)">
+                        @if (step.ShowRank && step.Rank != "unranked") {
+                            <span class="rank">@GroupList.Capitalize(step.Rank)</span>
+                        }
+                        <a href="@SiteUrls.Group(step)">@if (step.IsGenus) {<i>@step.Name</i>} else {@step.Name}</a>
+                        @if (step.CommonNameEn is not null) {
+                            <span class="group-common">@step.CommonNameEn</span>
+                        }
+                        @if (step.IsCol) {
+                            <abbr class="col-marker" title="@GroupText.ColMarkerTitle">@GroupText.ColMarker</abbr>
+                        }
+                    </li>
+                }
+            </ol>
+            @if (colCount > 0) {
+                <label class="col-toggle"><input type="checkbox" class="show-col" autocomplete="off"> @GroupText.ShowColRanks(colCount)</label>
+            }
+        </div>
+    }
+</header>
+
+<section class="status" aria-labelledby="status-heading">
+    <h2 id="status-heading">@SiteText.HeadingStatusNoGlobal</h2>
+    <p class="no-global-line">@SiteText.ExtraStatusLine(species.InCol, species.InWikidata)</p>
+    @if (Model.UnderFamily && placedUnder is not null) {
+        <p class="no-global-line">@SiteText.ExtraUnderFamilyBefore(placedUnder.Name)<i>@species.Genus</i>@SiteText.ExtraUnderFamilyAfter</p>
+    }
+    @if (Model.SameColIdTaxa.Count > 0) {
+        <p class="current-taxon">@SiteText.LabelSameColId
+            @for (var i = 0; i < Model.SameColIdTaxa.Count; i++) {
+                var taxon = Model.SameColIdTaxa[i];
+                <a href="/species/@taxon.TaxonId" class="sci-name">@Html.Raw(ScientificNameMarkup.ToHtml(taxon.ScientificName, taxon.SubpopulationName))</a>@(i < Model.SameColIdTaxa.Count - 1 ? ", " : "")
+            }
+        </p>
+    }
+</section>
+
+@if (Model.Pairs.Count > 0) {
+    <section class="extra-pairs-section" aria-labelledby="pairs-heading">
+        <h2 id="pairs-heading">@SiteText.ExtraPairsHeading</h2>
+        <p>@SiteText.ExtraPairsIntro</p>
+        <partial name="_ExtraPairs" model="Model.Pairs" />
+    </section>
+}
+
+<section class="links" aria-labelledby="links-heading">
+    <h2 id="links-heading">@SiteText.HeadingLinks</h2>
+    <dl class="facts">
+        <dt>@SiteText.LinkWikipedia</dt>
+        <dd>
+            @if (species.EnwikiTitle is not null) {
+                <a href="@SiteFormat.WikipediaUrl(species.EnwikiTitle)">@species.EnwikiTitle</a>
+            } else {
+                @SiteText.LinkWikipediaNone
+            }
+        </dd>
+        @if (species.WikidataQid is not null) {
+            <dt>@SiteText.LinkWikidata</dt>
+            <dd><a href="@SiteFormat.WikidataUrl(species.WikidataQid)">@species.WikidataQid</a></dd>
+        }
+        @if (species.WikidataName is not null) {
+            <dt>@SiteText.LabelWikidataName</dt>
+            <dd class="sci-name">@Html.Raw(ScientificNameMarkup.ToHtml(species.WikidataName))</dd>
+        }
+        @if (species.ColId is not null) {
+            <dt>@SiteText.LinkCol</dt>
+            <dd><a href="@SiteFormat.CatalogueOfLifeUrl(species.ColId)">@Html.Raw(ScientificNameMarkup.ToHtml(species.ScientificName))</a></dd>
+        }
+    </dl>
+</section>

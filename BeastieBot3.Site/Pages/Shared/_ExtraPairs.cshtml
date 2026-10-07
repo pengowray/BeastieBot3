@@ -1,0 +1,20 @@
+@model IReadOnlyList<BeastieBot3.Site.Data.ExtraPairRow>
+@* Possible duplicates of a taxon or extra species, likely ones first, under the column words of the
+   group page's duplicates panel. *@
+@foreach (var group in Model.GroupBy(p => p.Likely)) {
+    <h3>@(group.Key ? GroupSourceText.ColumnLikelySame : GroupSourceText.ColumnMaySame)</h3>
+    <ul class="extra-pairs">
+        @foreach (var pair in group) {
+            <li>
+                @if (pair.Taxon is { } taxon) {
+                    <a href="/species/@taxon.TaxonId" class="sci-name">@Html.Raw(ScientificNameMarkup.ToHtml(taxon.ScientificName, taxon.SubpopulationName))</a>
+                    <span class="kind">@SiteText.PairIucn</span>
+                } else if (pair.Extra is { } extra) {
+                    <a href="@BeastieBot3.Site.Web.SiteUrls.Extra(extra)" class="sci-name">@Html.Raw(ScientificNameMarkup.ToHtml(extra.ScientificName))</a>
+                    <span class="kind">@SiteText.ExtraSourcesTag(extra.InCol, extra.InWikidata)</span>
+                }
+                <div class="match-note">@GroupSourceText.Reason(pair.Reason)</div>
+            </li>
+        }
+    </ul>
+}

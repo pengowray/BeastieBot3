@@ -1,0 +1,22 @@
+@model IReadOnlyList<BeastieBot3.Site.Data.ExtraSearchHit>
+@* Species from the Catalogue of Life and Wikidata in search results, laid out like _TaxonList, with
+   the sources where an IUCN taxon has its category. *@
+<ul class="taxon-list">
+    @foreach (var hit in Model) {
+        var species = hit.Species;
+        <li>
+            <div class="taxon-list-status">
+                <span class="no-global">@SiteText.ExtraSourcesTag(species.InCol, species.InWikidata)</span>
+            </div>
+            <div class="taxon-list-name">
+                <a href="@BeastieBot3.Site.Web.SiteUrls.Extra(species)">@Html.Raw(ScientificNameMarkup.ToHtml(species.ScientificName))</a>
+                @if (species.CommonNameEn is not null) {
+                    <span class="common-name">@species.CommonNameEn</span>
+                }
+                @if (hit.MatchedName is not null) {
+                    <div class="match-note">@SiteText.LabelWikidataName: @Html.Raw(ScientificNameMarkup.ToHtml(hit.MatchedName))</div>
+                }
+            </div>
+        </li>
+    }
+</ul>

@@ -10,7 +10,7 @@ namespace BeastieBot3.Shared.SiteData;
 // each taxon's latest global assessment (taxon_area) are here only to compare a list with the one
 // area a reader chooses on the status update page; no page lists a taxon's areas.
 public static class SiteDbSchema {
-    public const int Version = 21;
+    public const int Version = 22;
 
     public const string Ddl = """
         CREATE TABLE meta (
@@ -72,6 +72,7 @@ public static class SiteDbSchema {
         CREATE INDEX taxon_current ON taxon(current_taxon_id);
         CREATE INDEX taxon_tree ON taxon(tree_pos);
         CREATE INDEX taxon_wikidata ON taxon(wikidata_qid) WHERE wikidata_qid IS NOT NULL;
+        CREATE INDEX taxon_col ON taxon(col_id) WHERE col_id IS NOT NULL;
 
         -- The groups the taxa in the release are in: IUCN's kingdom, phylum, class, order, family and
         -- genus, and the Catalogue of Life groups between them that the placement file (`col build-placement`)
@@ -218,6 +219,8 @@ public static class SiteDbSchema {
             sort_pos         INTEGER NOT NULL             -- in tree order it comes after the taxon with this tree_pos (ties by name)
         );
         CREATE INDEX extra_species_node ON extra_species(node_id);
+        CREATE INDEX extra_species_col ON extra_species(col_id) WHERE col_id IS NOT NULL;
+        CREATE INDEX extra_species_wikidata ON extra_species(wikidata_qid) WHERE wikidata_qid IS NOT NULL;
 
         -- Extra species that may be the same as an IUCN taxon, or as an extra species from the other
         -- source, although no id links them. One row per pair.
@@ -367,6 +370,18 @@ public static class SiteDbSchema {
             word TEXT PRIMARY KEY,
             uses INTEGER NOT NULL
         ) WITHOUT ROWID;
+
+        -- The names of the extra species, for search: the scientific name, Wikidata's name when it differs
+        -- and the English name. Its content is extra_species, so it is rebuilt after the rows are in.
+        CREATE VIRTUAL TABLE extra_name_fts USING fts5(
+            scientific_name,
+            wikidata_name,
+            common_name_en,
+            content = 'extra_species',
+            content_rowid = 'extra_id',
+            tokenize = 'unicode61 remove_diacritics 2',
+            prefix = '2 3'
+        );
 
         CREATE VIRTUAL TABLE name_fts USING fts5(
             name,

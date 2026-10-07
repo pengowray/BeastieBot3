@@ -164,7 +164,7 @@ public sealed class ListSourcesTests(SiteFactory factory) : IClassFixture<SiteFa
         var panel = Html.Between(html, "<section class=\"list-notices\"", "</section>");
         Assert.Contains("<th scope=\"col\">Left out</th>", panel);
         Assert.Contains("<th scope=\"col\">Likely the same species as</th>", panel);
-        Assert.Contains("href=\"https://www.wikidata.org/wiki/Q1003\" class=\"sci-name\">Ursus maritima</a> <span class=\"notice-tags\"><span class=\"notice-source\">Wikidata</span></span>", panel);
+        Assert.Contains("href=\"/wikidata/Q1003\" class=\"sci-name\">Ursus maritima</a> <span class=\"notice-tags\"><span class=\"notice-source\">Wikidata</span></span>", panel);
         Assert.Contains("Ursus maritimus</a> <span class=\"notice-tags\"><span class=\"notice-source\">IUCN</span> · <span class=\"notice-state notice-state-inlist\">in this list</span></span>", panel);
         Assert.Contains("<details class=\"notice-group\" id=\"dup-out-gender-ending\" open=\"open\">", panel);
         // The preview links the CoL page and the Wikidata item of a species from those sources.

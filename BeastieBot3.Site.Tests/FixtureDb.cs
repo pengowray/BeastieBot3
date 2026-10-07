@@ -212,6 +212,7 @@ public static class FixtureDb {
                 wikidataItemModelJson ?? new WikidataItemModel().ToJson());
             tx.Commit();
             Exec(connection, "INSERT INTO name_fts(name_fts) VALUES('rebuild')");
+            Exec(connection, "INSERT INTO extra_name_fts(extra_name_fts) VALUES('rebuild')");
             WriteNameWords(connection);
             // The tiger's ids in two other databases.
             Exec(connection, $"INSERT INTO taxon_external_id (taxon_id, property, value) VALUES ({Tiger}, 'P846', '5219416'), ({Tiger}, 'P3151', '41967'), ({Tiger}, 'P373', 'Panthera tigris'), ({Tiger}, 'commonswiki', 'Panthera tigris')");

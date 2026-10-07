@@ -562,6 +562,14 @@
     </section>
 }
 
+@if (Model.ExtraPairs.Count > 0) {
+    <section class="extra-pairs-section" id="duplicates" aria-labelledby="pairs-heading">
+        <h2 id="pairs-heading">@SiteText.TaxonExtraPairsHeading</h2>
+        <p>@SiteText.TaxonExtraPairsIntro</p>
+        <partial name="_ExtraPairs" model="Model.ExtraPairs" />
+    </section>
+}
+
 <section class="links" aria-labelledby="links-heading">
     <h2 id="links-heading">@SiteText.HeadingLinks</h2>
     <dl class="facts">

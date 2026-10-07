@@ -1,14 +1,14 @@
 @using BeastieBot3.Site.Lists
 @model ListNoticeSideModel
-@* One name in the possible-duplicates panel, linked to where its source has it: this site's species
-   page for IUCN, the Catalogue of Life page, or the Wikidata item; then its source and, when the
-   column heading does not say it, whether it is in this list. *@
+@* One name in the possible-duplicates panel, linked to its page on this site (/species/{id} for
+   IUCN, /col/{id} or /wikidata/{qid} for a species from the Catalogue of Life or Wikidata); then its
+   source and, when the column heading does not say it, whether it is in this list. *@
 @{
     var entry = Model.Side.Entry;
     var href = entry.Source switch {
         ListSource.Iucn when entry.TaxonId is { } id => "/species/" + id.ToString(System.Globalization.CultureInfo.InvariantCulture),
-        ListSource.Col when entry.ColId is { } colId => SiteFormat.CatalogueOfLifeUrl(colId),
-        ListSource.Wikidata when entry.WikidataQid is { } qid => SiteFormat.WikidataUrl(qid),
+        ListSource.Col when entry.ColId is { } colId => "/col/" + Uri.EscapeDataString(colId),
+        ListSource.Wikidata when entry.WikidataQid is { } qid => "/wikidata/" + Uri.EscapeDataString(qid),
         _ => null,
     };
 }

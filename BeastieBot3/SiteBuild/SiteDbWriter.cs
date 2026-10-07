@@ -259,6 +259,7 @@ internal sealed class SiteDbWriter : IDisposable {
             }
         });
         step("Building the search index", () => Execute("INSERT INTO name_fts(name_fts) VALUES('rebuild');"));
+        step("Building the search index of extra species", () => Execute("INSERT INTO extra_name_fts(extra_name_fts) VALUES('rebuild');"));
         step("Running ANALYZE", () => Execute("ANALYZE;"));
         step("Compacting the file (VACUUM)", () => {
             Execute("PRAGMA journal_mode = DELETE;");

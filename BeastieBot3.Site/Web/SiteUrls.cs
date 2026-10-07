@@ -13,6 +13,12 @@ public static class SiteUrls {
         return query.Length == 0 ? url : url + "?" + query;
     }
 
+    /// The page of a species from the Catalogue of Life or Wikidata that is not on the IUCN Red List:
+    /// "/col/4QHKG" when the Catalogue of Life has it, else "/wikidata/Q1003".
+    public static string Extra(Lists.ExtraSpeciesRow species) => species.ColId is { } colId
+        ? "/col/" + Uri.EscapeDataString(colId)
+        : "/wikidata/" + Uri.EscapeDataString(species.WikidataQid ?? string.Empty);
+
     /// The absolute URL of a path on this site ("/species/22823"), for canonical links. Built from
     /// Site:BaseUrl when it is an absolute http or https URL. Otherwise from the request: its scheme,
     /// its host in lower case, and its port only when it is not the scheme's default. Output-cached
