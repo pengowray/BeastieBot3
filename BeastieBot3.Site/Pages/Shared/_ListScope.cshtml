@@ -58,6 +58,26 @@
             @if (missing.Count < r.MissingTotal) {
                 <p>@UpdateText.MissingCapped(missing.Count, r.MissingTotal)</p>
             }
+            @if (Model.Epbc is { } epbc) {
+                var listed = missing.Where(t => epbc.ContainsKey(t.TaxonId)).ToList();
+                <p>@UpdateText.MissingEpbc(listed.Count, missing.Count)</p>
+                @if (listed.Count > 0) {
+                    <div class="table-scroll">
+                        <table class="update-report">
+                            <thead><tr><th scope="col">@UpdateText.ColumnTaxon</th><th scope="col">@UpdateText.ColumnLatestStatus</th><th scope="col">@UpdateText.ColumnEpbc</th></tr></thead>
+                            <tbody>
+                                @foreach (var t in listed) {
+                                    <tr>
+                                        <td><a href="/species/@t.TaxonId">@Html.Raw(ScientificNameMarkup.ToHtml(t.ScientificName))</a></td>
+                                        <td>@GroupList.StatusCode(t)</td>
+                                        <td>@UpdateText.Epbc(epbc[t.TaxonId])</td>
+                                    </tr>
+                                }
+                            </tbody>
+                        </table>
+                    </div>
+                }
+            }
         }
     }
     @if (!r.Partial && (r.Missing?.Count > 0 || r.MissingExtra?.Count > 0)) {
@@ -139,11 +159,11 @@
     }
     @if (r.OtherCategory.Count > 0) {
         <h4>@UpdateText.OtherCategoryHeading(r.OtherCategory.Count, r.Categories!)</h4>
-        @await Html.PartialAsync("_ListScopeMembers", r.OtherCategory)
+        @await Html.PartialAsync("_ListScopeMembers", new ListScopeMembersView(r.OtherCategory, Model.Epbc))
     }
     @if (r.Outside.Count > 0) {
         <h4>@UpdateText.OutsideHeading(r.Outside.Count, r.Scope)</h4>
-        @await Html.PartialAsync("_ListScopeMembers", r.Outside)
+        @await Html.PartialAsync("_ListScopeMembers", new ListScopeMembersView(r.Outside, Model.Epbc))
     }
     @if (r.Duplicates.Count > 0) {
         <h4>@UpdateText.DuplicatesHeading(r.Duplicates.Count)</h4>

@@ -123,6 +123,7 @@
                             <th scope="col">@UpdateText.ColumnBefore</th>
                             <th scope="col">@UpdateText.ColumnAfter</th>
                             <th scope="col">@UpdateText.ColumnTaxon</th>
+                            @if (Model.ShowEpbc) {<th scope="col">@UpdateText.ColumnEpbc</th>}
                             <th scope="col">@UpdateText.ColumnNotes</th>
                         </tr>
                     </thead>
@@ -135,6 +136,7 @@
                                 <td><code class="update-code">@finding.Before</code></td>
                                 <td>@if (finding.After is not null) {<code class="update-code">@finding.After</code>}</td>
                                 <td>@if (finding.Taxon is { } taxon) {<a href="/species/@taxon.TaxonId">@Html.Raw(ScientificNameMarkup.ToHtml(taxon.ScientificName))</a>}</td>
+                                @if (Model.ShowEpbc) {<td>@UpdateText.Epbc(finding.Taxon is { } t ? Model.Epbc.GetValueOrDefault(t.TaxonId) : null)</td>}
                                 <td>
                                     @foreach (var note in finding.Notes) {
                                         <p class="update-note">@UpdateText.Note(note, finding.Kind)</p>
@@ -183,7 +185,7 @@
         }
 
         @if (Model.Scope is { } scope) {
-            @await Html.PartialAsync("_ListScope", new ListScopeView(scope, Model.Placement, Model.AddMissing, Model.ExtraSpecies, Model.Categories))
+            @await Html.PartialAsync("_ListScope", new ListScopeView(scope, Model.Placement, Model.AddMissing, Model.ExtraSpecies, Model.Categories, Model.ShowEpbc ? Model.Epbc : null))
         }
     </section>
 }
@@ -199,6 +201,7 @@
         <label><input type="checkbox" name="@UpdateModel.CitationsField" value="1" checked="@Model.Options.UpdateCitations"> @UpdateText.OptionCitations</label>
         <label><input type="checkbox" name="@UpdateModel.CiteQField" value="1" checked="@Model.Options.CiteQ"> @UpdateText.OptionCiteQ</label>
         <label><input type="checkbox" name="@UpdateModel.CommonNamesField" value="1" checked="@Model.Options.MatchCommonNames"> @UpdateText.OptionCommonNames</label>
+        <label><input type="checkbox" name="@UpdateModel.EpbcField" value="1" checked="@Model.ShowEpbc"> @UpdateText.OptionEpbc</label>
     </fieldset>
     <fieldset class="update-options" aria-describedby="update-add-help">
         <legend>@UpdateText.AddOptionsLegend</legend>

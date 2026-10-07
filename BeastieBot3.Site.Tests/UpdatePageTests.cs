@@ -46,6 +46,26 @@ public sealed class UpdatePageTests(SiteFactory factory) : IClassFixture<SiteFac
     }
 
     [Fact]
+    public async Task TheEpbcActStatusIsShownWhenAskedFor() {
+        var text = "* ''Phascolarctos cinereus'' {{IUCN status|EN}}\n* ''Casuarius casuarius'' {{IUCN status|LC}}\n";
+        var form = Form(text);
+        form.Add(new StringContent("1"), UpdateModel.EpbcField);
+        var html = await (await _client.PostAsync("/update", form)).Content.ReadAsStringAsync();
+        Assert.Contains("<th scope=\"col\">EPBC Act</th>", html);
+        Assert.Contains("<td>EN (combined populations of Qld, NSW and the ACT)</td>", html);
+        Assert.Contains("<td>EN</td>", html);
+        var (_, without) = await Post(text);
+        Assert.DoesNotContain("EPBC Act</th>", without);
+    }
+
+    [Theory]
+    [InlineData("List of reptiles of Australia", true)]
+    [InlineData("List of Australian birds", true)]
+    [InlineData("List of mammals of Australasia", true)]
+    [InlineData("List of birds of Austria", false)]
+    public void AustralianTitlesShowTheEpbcActStatus(string title, bool expected) => Assert.Equal(expected, UpdateModel.IsAustralianTitle(title));
+
+    [Fact]
     public async Task WithNothingChangedTheReportShowsTheItemsLeftAsIs() {
         var (_, html) = await Post("* {{IUCN status|VU|999999/1|1}}\n");
         Assert.Contains("id=\"show-left\" checked=\"checked\">", html);

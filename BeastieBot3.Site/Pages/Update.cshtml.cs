@@ -133,6 +133,18 @@ public sealed class UpdateModel : PageModel {
     public const string ScopeField = "scope";
     /// The categories to compare (ListCategories key); empty: from the codes in the wikitext.
     public const string CategoriesField = "cats";
+    /// Show each taxon's EPBC Act listing beside its IUCN status (ticked for a page loaded from
+    /// Wikipedia whose title names Australia).
+    public const string EpbcField = "epbc";
+
+    public bool ShowEpbc { get; private set; }
+
+    /// The EPBC Act listings of the taxa in the report and the comparison, when ShowEpbc.
+    public IReadOnlyDictionary<long, IReadOnlyList<EpbcListingRow>> Epbc { get; private set; } = new Dictionary<long, IReadOnlyList<EpbcListingRow>>();
+
+    /// "List of reptiles of Australia", "List of Australian birds", "Fauna of Australia".
+    public static bool IsAustralianTitle(string title) =>
+        System.Text.RegularExpressions.Regex.IsMatch(title, @"\bAustral(ia|ian|asia|asian)\b", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
 
     /// The categories chosen, or read from the title of a page loaded from Wikipedia; null: from the codes.
     public ListCategoryChoice? Categories { get; private set; }
@@ -167,6 +179,7 @@ public sealed class UpdateModel : PageModel {
         LoadedPage = wikiPage;
         Input = wikiPage.Text;
         Categories = ListCategories.FromTitle(wikiPage.Title);
+        ShowEpbc = IsAustralianTitle(wikiPage.Title);
         Run(wikiPage.Text, scope: null, listAnyway: false, extraSpecies: false, addMissing: false);
         return Page();
     }
@@ -220,6 +233,7 @@ public sealed class UpdateModel : PageModel {
                     System.Globalization.DateTimeStyles.AssumeUniversal, out var time) ? time : null);
         }
         Categories = ListCategories.Find(form[CategoriesField].LastOrDefault());
+        ShowEpbc = On(EpbcField);
         Run(text, form[ScopeField].LastOrDefault(), On(ListAnywayField), On(ExtraSpeciesField), On(AddMissingField));
         return Page();
     }
@@ -248,6 +262,13 @@ public sealed class UpdateModel : PageModel {
                     MissingAdded = Placement.Placed.Count,
                 };
             }
+        }
+        if (ShowEpbc) {
+            var ids = Result.Findings.Select(f => f.Taxon?.TaxonId).OfType<long>()
+                .Concat(Scope?.OtherCategory.Concat(Scope.Outside).Select(m => m.Taxon.TaxonId) ?? [])
+                .Concat(Scope?.Missing?.Select(t => t.TaxonId).Where(id => id > 0) ?? [])
+                .ToHashSet();
+            Epbc = _queries.GetEpbcListings(ids);
         }
     }
 

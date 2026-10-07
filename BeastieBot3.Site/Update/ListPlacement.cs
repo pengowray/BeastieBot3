@@ -19,7 +19,11 @@ public sealed record ListPlacementResult(IReadOnlyList<PlacedTaxon> Placed, IRea
 /// What the comparison section of the update page shows: the comparison, the missing taxa put into
 /// the wikitext (null when not asked for), and whether the reader asked for them.
 public sealed record ListScopeView(ListScopeResult Scope, ListPlacementResult? Placement, bool AddMissing, bool ExtraSpecies = false,
-    BeastieBot3.Shared.Wikitext.ListCategoryChoice? Categories = null);
+    BeastieBot3.Shared.Wikitext.ListCategoryChoice? Categories = null,
+    IReadOnlyDictionary<long, IReadOnlyList<EpbcListingRow>>? Epbc = null);
+
+/// A table of listed taxa in the comparison; Epbc: their EPBC Act listings, when they are shown.
+public sealed record ListScopeMembersView(IReadOnlyList<ListScopeMember> Members, IReadOnlyDictionary<long, IReadOnlyList<EpbcListingRow>>? Epbc);
 
 /// The updater's options that change the text put in: ids and year in {{IUCN status}}, and {{cite Q}}
 /// for the references of new {{Species table/row}} rows.
