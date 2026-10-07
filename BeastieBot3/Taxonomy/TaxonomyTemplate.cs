@@ -20,7 +20,7 @@ internal static partial class TaxonomyTemplates {
     public static TaxonomyTemplate? Parse(string name, string wikitext) {
         var rank = Field(wikitext, "rank");
         var parent = Field(wikitext, "parent");
-        var sameAs = CleanName(Field(wikitext, "same as"));
+        var sameAs = CleanName(Field(wikitext, "same[ _]as"));
         if (rank is null && parent is null && sameAs is null) {
             return null;
         }

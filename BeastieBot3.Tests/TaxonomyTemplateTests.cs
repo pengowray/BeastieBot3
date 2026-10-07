@@ -26,6 +26,7 @@ public class TaxonomyTemplateTests {
     public void ASkipTemplateNamesTheTemplateItIsTheSameAs() {
         var t = TaxonomyTemplates.Parse("Mammalia/skip", "{{Don't edit this line {{{machine code|}}}\n|same as=Mammalia\n|parent=Amniota\n}}")!;
         Assert.Equal(("Mammalia", "Amniota"), (t.SameAs, t.Parent));
+        Assert.Equal("Theria", TaxonomyTemplates.Parse("Theria/skip", "|same_as=Theria\n|parent=Mammalia/skip\n")!.SameAs);
     }
 
     [Theory]
