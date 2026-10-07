@@ -337,7 +337,8 @@ public static class SiteDbSchema {
         ) WITHOUT ROWID;
 
         -- The taxon's ids in other databases (ExternalDatabases), from the external identifiers on its
-        -- Wikidata item (taxon.wikidata_qid), leaving out deprecated statements.
+        -- Wikidata item (taxon.wikidata_qid), leaving out deprecated statements; also its Commons
+        -- category (P373) and gallery (P935) and the item's Commons sitelink (property 'commonswiki').
         CREATE TABLE taxon_external_id (
             taxon_id INTEGER NOT NULL,
             property TEXT NOT NULL,                       -- the Wikidata property: 'P846' (GBIF)

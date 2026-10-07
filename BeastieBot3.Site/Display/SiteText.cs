@@ -111,6 +111,7 @@ public static partial class SiteText {
     public const string LinkWikidata = "Wikidata item";
     public const string LinkCol = "Catalogue of Life";
     public const string LinkWikispecies = "Wikispecies";
+    public const string LinkCommons = "Wikimedia Commons";
     public const string LinkOtherDatabases = "Other databases";
     public const string LinkSprat = "SPRAT profile";
     public const string LinkSpratPlural = "SPRAT profiles";

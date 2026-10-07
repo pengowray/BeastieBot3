@@ -358,5 +358,7 @@ public sealed class HomeAndSearchTests(SiteFactory factory) : IClassFixture<Site
         Assert.Contains("<dt>Other databases</dt>", html);
         Assert.Contains("<a href=\"https://www.gbif.org/species/5219416\">GBIF</a> · ", html);
         Assert.Contains("<a href=\"https://www.inaturalist.org/taxa/41967\">iNaturalist</a>", html);
+        Assert.Contains("<a href=\"https://commons.wikimedia.org/wiki/Panthera_tigris\">Panthera tigris</a> · ", html);
+        Assert.Contains("<a href=\"https://commons.wikimedia.org/wiki/Category:Panthera_tigris\">Category:Panthera tigris</a>", html);
     }
 }

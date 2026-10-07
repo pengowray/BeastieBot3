@@ -30,4 +30,26 @@ public static class ExternalDatabases {
     ];
 
     public static Database? ByProperty(string property) => All.FirstOrDefault(d => d.Property == property);
+
+    /// Wikimedia Commons: the Commons category (P373) and gallery (P935) statements and the item's
+    /// Commons sitelink (stored as property "commonswiki"), which is a gallery or a category page.
+    public const string CommonsCategory = "P373";
+    public const string CommonsGallery = "P935";
+    public const string CommonsSitelink = "commonswiki";
+    public static readonly IReadOnlyList<string> CommonsProperties = [CommonsCategory, CommonsGallery];
+
+    /// "https://commons.wikimedia.org/wiki/Category:Panthera_leo" for the title "Category:Panthera leo".
+    public static string CommonsUrl(string title) =>
+        "https://commons.wikimedia.org/wiki/" + Uri.EscapeDataString(title.Trim().Replace(' ', '_')).Replace("%3A", ":").Replace("%2F", "/");
+
+    /// The taxon's Commons gallery and category, from its stored ids: P935 or a sitelink that is not a
+    /// category; P373 or a sitelink that is a category.
+    public static (string? Gallery, string? Category) Commons(IReadOnlyList<(string Property, string Value)> ids) {
+        string? Value(string property) => ids.FirstOrDefault(i => i.Property == property).Value;
+        var sitelink = Value(CommonsSitelink);
+        var sitelinkIsCategory = sitelink?.StartsWith("Category:", StringComparison.OrdinalIgnoreCase) == true;
+        var gallery = Value(CommonsGallery) ?? (sitelinkIsCategory ? null : sitelink);
+        var category = Value(CommonsCategory) is { } c ? "Category:" + c : sitelinkIsCategory ? sitelink : null;
+        return (gallery, category);
+    }
 }

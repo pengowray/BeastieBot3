@@ -584,6 +584,10 @@
             <dt>@SiteText.LinkWikispecies</dt>
             <dd><a href="@SiteFormat.WikispeciesUrl(wikispeciesTitle)">@Html.Raw(ScientificNameMarkup.ToHtml(wikispeciesTitle))</a></dd>
         }
+        @if (Model.CommonsGallery is not null || Model.CommonsCategory is not null) {
+            <dt>@SiteText.LinkCommons</dt>
+            <dd>@if (Model.CommonsGallery is { } gallery) {<a href="@BeastieBot3.Shared.SiteData.ExternalDatabases.CommonsUrl(gallery)">@gallery</a>}@if (Model.CommonsGallery is not null && Model.CommonsCategory is not null) {<text> · </text>}@if (Model.CommonsCategory is { } category) {<a href="@BeastieBot3.Shared.SiteData.ExternalDatabases.CommonsUrl(category)">@category</a>}</dd>
+        }
         @if (taxon.ColId is not null) {
             <dt>@SiteText.LinkCol</dt>
             <dd><a href="@SiteFormat.CatalogueOfLifeUrl(taxon.ColId)">@Html.Raw(ScientificNameMarkup.ToHtml(taxon.ScientificName, taxon.SubpopulationName))</a></dd>

@@ -16,7 +16,8 @@ internal static class SiteExternalIds {
         }.ConnectionString);
         connection.Open();
         using var command = connection.CreateCommand();
-        var properties = string.Join(", ", ExternalDatabases.All.Select((d, i) => $"@p{i}"));
+        string[] wanted = [.. ExternalDatabases.All.Select(d => d.Property), .. ExternalDatabases.CommonsProperties];
+        var properties = string.Join(", ", wanted.Select((_, i) => $"@p{i}"));
         command.CommandText = $"""
             SELECT p.key, json_extract(c.value, '$.mainsnak.datavalue.value'), json_extract(c.value, '$.rank')
             FROM wikidata_entities e,
@@ -25,9 +26,15 @@ internal static class SiteExternalIds {
             WHERE e.entity_numeric_id = @id AND e.json_downloaded = 1 AND p.key IN ({properties})
             """;
         var id = command.Parameters.Add("@id", SqliteType.Integer);
-        for (var i = 0; i < ExternalDatabases.All.Count; i++) {
-            command.Parameters.AddWithValue($"@p{i}", ExternalDatabases.All[i].Property);
+        for (var i = 0; i < wanted.Length; i++) {
+            command.Parameters.AddWithValue($"@p{i}", wanted[i]);
         }
+        using var sitelink = connection.CreateCommand();
+        sitelink.CommandText = """
+            SELECT json_extract(json, '$.entities.' || entity_id || '.sitelinks.commonswiki.title')
+            FROM wikidata_entities WHERE entity_numeric_id = @id AND json_downloaded = 1
+            """;
+        var sitelinkId = sitelink.Parameters.Add("@id", SqliteType.Integer);
         var rows = new List<SiteExternalId>();
         foreach (var (taxonId, qid) in taxa) {
             ct.ThrowIfCancellationRequested();
@@ -35,6 +42,10 @@ internal static class SiteExternalIds {
                 continue;
             }
             id.Value = number;
+            sitelinkId.Value = number;
+            if (sitelink.ExecuteScalar() is string commons && commons.Trim().Length > 0) {
+                rows.Add(new SiteExternalId(taxonId, ExternalDatabases.CommonsSitelink, commons.Trim()));
+            }
             using var reader = command.ExecuteReader();
             var seen = new HashSet<(string, string)>();
             while (reader.Read()) {

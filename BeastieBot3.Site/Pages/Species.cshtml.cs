@@ -127,6 +127,10 @@ public sealed class SpeciesModel : PageModel {
     /// SPRAT profiles and EPBC Act listings: the whole taxon's first, then populations'.
     public IReadOnlyList<EpbcListingRow> EpbcListings { get; private set; } = [];
 
+    /// The taxon's Wikimedia Commons gallery and category ("Category:Panthera leo"), from its Wikidata item.
+    public string? CommonsGallery { get; private set; }
+    public string? CommonsCategory { get; private set; }
+
     /// The taxon's Wikispecies page (from its classification there), or null.
     public string? WikispeciesTitle { get; private set; }
 
@@ -237,6 +241,7 @@ public sealed class SpeciesModel : PageModel {
         EpbcListings = _queries.GetEpbcListings(Taxon.TaxonId);
         LoadAssessments(assessment);
         var externalIds = _queries.GetExternalIds(Taxon.TaxonId);
+        (CommonsGallery, CommonsCategory) = BeastieBot3.Shared.SiteData.ExternalDatabases.Commons(externalIds);
         ExternalLinks = [.. BeastieBot3.Shared.SiteData.ExternalDatabases.All
             .Select(d => (Database: d, Id: externalIds.FirstOrDefault(x => x.Property == d.Property).Value))
             .Where(x => x.Id is not null)
