@@ -12,7 +12,7 @@
 
 //todo?
 //locations?, e.g. of Pitheciidae
-//Carnivora = carnivoran // meh
+Carnivora = carnivoran ! carnivorans
 
 Mammalia blurb According to the IUCN, all known living mammal species have been assessed for the red list of threatened species.<ref>http://www.iucnredlist.org/initiatives/mammals/process/methods</ref>
 
@@ -545,11 +545,11 @@ Decapoda = decapod ! decapods
 Lepidoptera comprises moths and butterflies 
 Odonata includes dragonflies and damselflies
 Phasmida = phasmid ! phasmids
-//Tettigoniidae = katydid ! katydids
+Tettigoniidae = katydid ! katydids
 //Phaneropterids = katydid ! katydids
 Colletidae = plasterer bee ! plasterer bees // or polyester bees
 Apidae includes honey bees and bumblebees
-//Halictidae = sweat bee ! sweat bees // may only refer to smaller species?
+Halictidae = sweat bee ! sweat bees // may only refer to smaller species?
 Andrenidae = mining bee ! mining bees
 Lycaenidae = gossamer-winged butterfly ! gossamer-winged butterflies
 Nymphalidae = brush-footed butterfly ! brush-footed butterflies 
@@ -1081,3 +1081,62 @@ Coenagrionidae plural narrow-winged damselflies
 Astacoidea plural crayfishes
 Cambaridae plural crayfishes
 Potamidae plural freshwater crabs
+
+// Plant family names (October 2026), from `site report-group-names` and the names the families'
+// English Wikipedia articles give first. A name ending in "family" names the family itself, so the
+// list heading's sentence reads "[[Fabaceae]] is also known as the legume family."
+Fabaceae = legume family
+Rubiaceae = coffee family
+Myrtaceae = myrtle family
+Lauraceae = laurel family
+Asteraceae = daisy family
+Euphorbiaceae = spurge family
+Melastomataceae = melastome family
+Malvaceae = mallow family
+Annonaceae = custard apple family
+Proteaceae = protea family
+Arecaceae = palm family
+Poaceae = grass family
+Sapindaceae = soapberry family
+Phyllanthaceae = leafflower family
+Cyperaceae = sedge family
+Lamiaceae = mint family
+Araliaceae = ivy family
+Apocynaceae = dogbane family
+Rosaceae = rose family
+Primulaceae = primrose family
+Moraceae = mulberry family
+Rutaceae = rue family
+Fagaceae = beech family
+Solanaceae = nightshade family
+Zingiberaceae = ginger family
+Salicaceae = willow family
+Acanthaceae = acanthus family
+Anacardiaceae = cashew family
+Meliaceae = mahogany family
+Ericaceae = heath family
+Ebenaceae = ebony family
+Bromeliaceae = bromeliad family
+Celastraceae = bittersweet family
+Asparagaceae = asparagus family
+Chrysobalanaceae = cocoplum family
+Myristicaceae = nutmeg family
+Araceae = arum family
+Amaryllidaceae = amaryllis family
+Pandanaceae = screwpine family
+Campanulaceae = bellflower family
+Oleaceae = olive family
+Brassicaceae = mustard family
+Magnoliaceae = magnolia family
+Gesneriaceae = gesneriad family
+Urticaceae = nettle family
+Lecythidaceae = Brazil nut family
+Bignoniaceae = bignonia family
+Apiaceae = carrot family
+Caryophyllaceae = carnation family
+Rhamnaceae = buckthorn family
+Theaceae = tea family
+Piperaceae = pepper family
+Polygonaceae = knotweed family
+Gentianaceae = gentian family
+Pinaceae = pine family

@@ -214,6 +214,11 @@ internal sealed class HeadingFormatter {
             wikilink = $"[[{scientificName}]]";
         }
 
+        // A plant family's name names the family itself: "[[Fabaceae]] is also known as the legume family."
+        if (IsFamilyName(commonNameOrPlural)) {
+            return $"{wikilink} is also known as the {commonNameOrPlural}.";
+        }
+
         // Build sentence with or without rank
         if (!string.IsNullOrWhiteSpace(rank)) {
             var lowerRank = rank.ToLowerInvariant();
@@ -222,6 +227,9 @@ internal sealed class HeadingFormatter {
 
         return $"Members of {wikilink} are called {commonNameOrPlural}.";
     }
+
+    /// A name of the form "legume family", which names the family rather than its members.
+    internal static bool IsFamilyName(string name) => name.Trim().EndsWith(" family", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
     /// True when a rule's "common name" is a scientific name, so no "Members of ..." sentence is

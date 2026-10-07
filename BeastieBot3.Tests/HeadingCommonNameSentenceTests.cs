@@ -38,6 +38,13 @@ public sealed class HeadingCommonNameSentenceTests : IDisposable {
     }
 
     [Fact]
+    public void AFamilyNameIsSaidToBeAnotherNameOfTheFamily() {
+        var heading = Heading("FABACEAE", "family", "Fabaceae = legume family");
+
+        Assert.Equal("[[Fabaceae]] is also known as the legume family.", heading.CommonNameSentence);
+    }
+
+    [Fact]
     public void KeepsALowercaseNameThatMatchesTheTaxon() {
         var heading = Heading("PRIMATES", "order", "Primates = primate ! primates");
 
@@ -80,7 +87,8 @@ public sealed class HeadingCommonNameSentenceTests : IDisposable {
             .Distinct()
             .Where(taxon => rules.Get(taxon) is { } rule
                 && rule.CommonPlural is null
-                && !HeadingFormatter.IsScientificName(taxon, rule.CommonName))
+                && !HeadingFormatter.IsScientificName(taxon, rule.CommonName)
+                && !HeadingFormatter.IsFamilyName(rule.CommonName!))
             .Select(taxon => $"{taxon} = {rules.Get(taxon)!.CommonName}")
             .ToList();
 
