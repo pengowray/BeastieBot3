@@ -6,7 +6,7 @@ public static partial class SiteText {
     public const string HeadingRanks = "Classification in other sources";
 
     public static string RanksIntro(int differences) =>
-        "\"This site\" is IUCN's classification with Catalogue of Life groups between its ranks; \"Wikispecies\" is the Taxonavigation section of the taxon's Wikispecies page."
+        "\"Wikispecies\" is the Taxonavigation section of the taxon's Wikispecies page."
         + (differences == 0 ? " Every main rank has the same name as in IUCN's classification." : differences == 1
             ? " 1 main rank has another name than in IUCN's classification (marked ≠)."
             : $" {differences} main ranks have another name than in IUCN's classification (marked ≠).");
@@ -16,7 +16,6 @@ public static partial class SiteText {
         "Also shows the groups that are not in IUCN's or the Catalogue of Life's classification: clades and other groups that only Wikidata, the English Wikipedia taxobox or Wikispecies has.";
 
     public const string RanksIucn = "IUCN";
-    public const string RanksThisSite = "This site";
     public const string RanksCol = "Catalogue of Life";
     public const string RanksWikidata = "Wikidata";
     public const string RanksWikipedia = "English Wikipedia taxobox";

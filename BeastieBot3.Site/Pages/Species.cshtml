@@ -543,12 +543,13 @@
                             @foreach (var cell in row.Cells) {
                                 <td class="@(cell.Differs ? "differs" : null)">
                                     @if (cell.Step is { } step) {
-                                        @if (cell.OtherRank) {
-                                            <span class="rank">@(step.Rank ?? SiteText.RanksNoRank)</span>
-                                        }
                                         @if (step.Url is { } u) {<a href="@u">@Html.Raw(ScientificNameMarkup.ToHtml(step.Name))</a>} else {@Html.Raw(ScientificNameMarkup.ToHtml(step.Name))}
                                         @if (cell.Differs) {
                                             <abbr class="differs-marker" title="@SiteText.RanksDiffersTitle">≠</abbr>
+                                        }
+                                        @* Another rank than the row's goes under the name, so the names stay in line. *@
+                                        @if (cell.OtherRank) {
+                                            <span class="rank other-rank">@(step.Rank ?? SiteText.RanksNoRank)</span>
                                         }
                                     }
                                 </td>

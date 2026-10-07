@@ -74,13 +74,13 @@ public sealed class SpeciesModel : PageModel {
         }
         var leaf = new LadderStep(leafRank, taxon.ScientificName);
         string?[] iucnRanks = [taxon.Kingdom, taxon.Phylum, taxon.ClassName, taxon.OrderName, taxon.Family, taxon.Genus];
-        var iucn = iucnRanks.Select((name, i) => name is null ? null : new LadderStep(ClassificationComparison.MainRanks[i], SiteFormat.TitleCase(name)))
+        // IUCN's ranks, each linked to this site's page of the group.
+        string? GroupUrl(string rank, string name) => Classification
+            .FirstOrDefault(g => g.Rank == rank && string.Equals(g.Name, name, StringComparison.OrdinalIgnoreCase)) is { } g ? Web.SiteUrls.Group(g) : null;
+        var iucn = iucnRanks.Select((name, i) => name is null ? null
+                : new LadderStep(ClassificationComparison.MainRanks[i], SiteFormat.TitleCase(name), GroupUrl(ClassificationComparison.MainRanks[i], name)))
             .OfType<LadderStep>().Append(leaf).ToList();
         var columns = new List<LadderColumn> { new(SiteText.RanksIucn, null, iucn, Backbone: true) };
-        if (Classification.Count > 0) {
-            columns.Add(new LadderColumn(SiteText.RanksThisSite, null,
-                [.. Classification.Select(g => new LadderStep(g.Rank == "unranked" ? null : g.Rank, g.Name, Web.SiteUrls.Group(g))), leaf], Backbone: true));
-        }
         if (taxon.ColId is { } colId && _queries.GetLadder("col", colId) is { Count: > 0 } col) {
             columns.Add(new LadderColumn(SiteText.RanksCol, SiteFormat.CatalogueOfLifeUrl(colId),
                 [.. col.Select(s => new LadderStep(s.Rank == "unranked" ? null : s.Rank, s.Name, SiteFormat.CatalogueOfLifeUrl(s.Id)))], Backbone: true));
@@ -100,7 +100,7 @@ public sealed class SpeciesModel : PageModel {
             columns.Add(new LadderColumn(SiteText.RanksWikispecies, SiteFormat.WikispeciesUrl(wikispecies[^1].Name),
                 [.. wikispecies.Select(s => new LadderStep(s.Rank, s.Name, SiteFormat.WikispeciesUrl(s.Name)))]));
         }
-        if (columns.Count < 3) {
+        if (columns.Count < 2) {
             return [];
         }
         RankColumns = columns;

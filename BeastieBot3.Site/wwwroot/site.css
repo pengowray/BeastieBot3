@@ -1468,7 +1468,16 @@ th.num {
 .ranks-table .rank {
     color: var(--muted);
     font-size: 0.9em;
-    margin-right: 0.25rem;
+}
+.ranks-table .other-rank {
+    display: block;
+}
+.ranks-table a {
+    text-decoration: none;
+}
+.ranks-table a:hover,
+.ranks-table a:focus-visible {
+    text-decoration: underline;
 }
 .rank-comparison .minor-rank {
     display: none;
