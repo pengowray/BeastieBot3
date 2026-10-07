@@ -582,6 +582,34 @@
                 @SiteText.LinkWikipediaNone
             }
         </dd>
+        @if (Model.TaxoboxCheck is { } check) {
+            <dt>@SiteText.TaxoboxStatusHeading</dt>
+            <dd class="taxobox-status">
+                @switch (check.Outcome) {
+                    case TaxoboxStatusOutcome.NoStatus:
+                        @SiteText.TaxoboxNoStatus
+                        break;
+                    case TaxoboxStatusOutcome.OtherCategory:
+                        <partial name="_Badge" model="@(new BadgeModel(check.Wikipedia!))" /><text>. @SiteText.TaxoboxLatestIs </text><partial name="_Badge" model="@BadgeModel.For(Model.LatestGlobal!)" /><text>.</text>
+                        break;
+                    case TaxoboxStatusOutcome.OtherSystem:
+                        <partial name="_Badge" model="@(new BadgeModel(check.Wikipedia!))" /> @SiteText.TaxoboxOtherSystem(check.WikipediaSystem!, check.LatestSystem)
+                        break;
+                    case TaxoboxStatusOutcome.CitesLatest:
+                        <partial name="_Badge" model="@(new BadgeModel(check.Wikipedia!))" /> @SiteText.TaxoboxCitesLatest
+                        break;
+                    case TaxoboxStatusOutcome.CitesOther:
+                        <partial name="_Badge" model="@(new BadgeModel(check.Wikipedia!))" /> @SiteText.TaxoboxCitesOther(check.CitedAssessment?.YearPublished, check.CitedAssessmentId!.Value)
+                        break;
+                    case TaxoboxStatusOutcome.CitesNone:
+                        <partial name="_Badge" model="@(new BadgeModel(check.Wikipedia!))" /> @SiteText.TaxoboxCitesNone
+                        break;
+                }
+                @if (check.Downloaded is { } downloaded) {
+                    <div class="note">@SiteText.TaxoboxCopyDate(SiteFormat.Date(downloaded))</div>
+                }
+            </dd>
+        }
         @if (taxon.WikidataQid is not null) {
             <dt>@SiteText.LinkWikidata</dt>
             <dd><a href="@SiteFormat.WikidataUrl(taxon.WikidataQid)">@taxon.WikidataQid</a></dd>

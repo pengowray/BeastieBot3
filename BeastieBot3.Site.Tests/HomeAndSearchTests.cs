@@ -331,4 +331,15 @@ public sealed class HomeAndSearchTests(SiteFactory factory) : IClassFixture<Site
         var html = await factory.CreateClient().GetStringAsync("/search?q=qwxzvbnm");
         Assert.DoesNotContain(BeastieBot3.Site.Display.SiteText.SimilarNames, html);
     }
+
+    [Theory]
+    [InlineData(FixtureDb.Tiger, "The latest assessment is")]
+    [InlineData(FixtureDb.SumatranTiger, "Up to date, with a reference to the latest assessment.")]
+    [InlineData(FixtureDb.Lion, "but the reference cites another assessment (ID 99999).")]
+    public async Task TheSpeciesPageComparesTheTaxoboxStatusWithTheLatestAssessment(long taxonId, string text) {
+        var html = await factory.CreateClient().GetStringAsync($"/species/{taxonId}");
+        Assert.Contains("Status in the Wikipedia taxobox", html);
+        Assert.Contains(text, html);
+        Assert.Contains("From the copy of the article downloaded on 29 November 2025.", html);
+    }
 }

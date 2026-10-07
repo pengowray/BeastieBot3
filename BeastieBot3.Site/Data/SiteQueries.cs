@@ -168,6 +168,18 @@ public sealed partial class SiteQueries {
 
     /// A taxon's classification in another source (ladder_node: "col" or "wikidata"), top down, from
     /// the node with this id. Empty when the database has none.
+    public EnwikiTaxoboxStatusRow? GetEnwikiTaxoboxStatus(long taxonId) {
+        using var connection = _db.OpenConnection();
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT status, status_system, ref_assessment_id, revision_id, downloaded FROM enwiki_taxobox_status WHERE taxon_id = @id";
+        command.Parameters.AddWithValue("@id", taxonId);
+        using var reader = command.ExecuteReader();
+        return reader.Read()
+            ? new EnwikiTaxoboxStatusRow(Text(reader, 0), Text(reader, 1), reader.IsDBNull(2) ? null : reader.GetInt64(2),
+                reader.IsDBNull(3) ? null : reader.GetInt64(3), reader.GetString(4))
+            : null;
+    }
+
     public IReadOnlyList<(string Id, string? Rank, string Name)> GetLadder(string source, string id) {
         using var connection = _db.OpenConnection();
         using var command = connection.CreateCommand();

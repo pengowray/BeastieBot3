@@ -179,7 +179,7 @@ internal static class SiteLadders {
     }
 
     // A taxobox value as a name: no references, templates, comments, links or italics.
-    private static string? Plain(string? value) {
+    internal static string? Plain(string? value) {
         if (value is null) {
             return null;
         }

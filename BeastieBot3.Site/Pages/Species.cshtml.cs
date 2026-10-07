@@ -123,6 +123,11 @@ public sealed class SpeciesModel : PageModel {
     /// SPRAT profiles and EPBC Act listings: the whole taxon's first, then populations'.
     public IReadOnlyList<EpbcListingRow> EpbcListings { get; private set; } = [];
 
+    /// The status in the taxobox of the taxon's English Wikipedia article compared with the latest
+    /// global assessment; null when there is no article, no taxobox about the taxon, or no latest
+    /// global assessment.
+    public TaxoboxStatusCheck? TaxoboxCheck { get; private set; }
+
     public IReadOnlyList<AssessmentRow> GlobalHistory { get; private set; } = [];
     /// The rows of the Regional assessments table. For a taxon in the release, the latest assessment
     /// in each region. For a taxon not in the release, none is current, so every regional assessment,
@@ -220,6 +225,9 @@ public sealed class SpeciesModel : PageModel {
         LinkedTaxa = _queries.GetLinkedTaxa(Taxon.TaxonId);
         EpbcListings = _queries.GetEpbcListings(Taxon.TaxonId);
         LoadAssessments(assessment);
+        TaxoboxCheck = LatestGlobal is { } latest && Taxon.EnwikiTitle is not null && _queries.GetEnwikiTaxoboxStatus(Taxon.TaxonId) is { } taxobox
+            ? TaxoboxStatusCheck.For(taxobox, latest, GlobalHistory)
+            : null;
         Combined = CombinedHistory.Build(Taxon, LinkedTaxa,
             id => id == Taxon.TaxonId ? _assessments : _queries.GetAssessments(id), _queries.GetTaxonomicNotesFlags);
         Options = WikitextOptions.FromQuery(authors, access, opts, wrapRef, refname, amp,

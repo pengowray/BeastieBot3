@@ -328,4 +328,18 @@ public static partial class SiteText {
     public const string EarlierSynonymIdBefore = "Earlier assessments of ";
     public const string EarlierSynonymIdMiddle = " are under ";
 
+
+    // The status in the taxobox of the English Wikipedia article, in the Links section.
+    public const string TaxoboxStatusHeading = "Status in the Wikipedia taxobox";
+    public const string TaxoboxNoStatus = "The taxobox has no IUCN status.";
+    public const string TaxoboxLatestIs = "The latest assessment is";
+    public static string TaxoboxOtherSystem(string wikipediaSystem, string latestSystem) =>
+        $"with status_system = {wikipediaSystem}. The latest assessment uses status_system = {latestSystem}.";
+    public const string TaxoboxCitesLatest = "Up to date, with a reference to the latest assessment.";
+    public static string TaxoboxCitesOther(int? year, long assessmentId) => year is { } y
+        ? $"The same category as the latest assessment, but the reference cites the {y.ToString(CultureInfo.InvariantCulture)} assessment."
+        : $"The same category as the latest assessment, but the reference cites another assessment (ID {assessmentId.ToString(CultureInfo.InvariantCulture)}).";
+    public const string TaxoboxCitesNone = "The same category as the latest assessment. The reference names no assessment.";
+    public static string TaxoboxCopyDate(string date) =>
+        $"From the copy of the article downloaded on {date}. The article may have changed since then.";
 }

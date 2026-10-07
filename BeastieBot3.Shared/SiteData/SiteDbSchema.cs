@@ -336,6 +336,18 @@ public static class SiteDbSchema {
             PRIMARY KEY (key, name_id)
         ) WITHOUT ROWID;
 
+        -- The IUCN status in the taxobox of the taxon's English Wikipedia article (taxon.enwiki_title),
+        -- from the Wikipedia cache's copy, when the taxobox is about the taxon. status and status_system
+        -- NULL: the taxobox has no IUCN status (status_system IUCN3.1 or IUCN2.3).
+        CREATE TABLE enwiki_taxobox_status (
+            taxon_id          INTEGER PRIMARY KEY,
+            status            TEXT,                       -- as written: 'VU', 'PE', 'LR/nt'
+            status_system     TEXT,                       -- 'IUCN3.1' | 'IUCN2.3'
+            ref_assessment_id INTEGER,                    -- the assessment id that status_ref (or the named reference it reuses) cites
+            revision_id       INTEGER,
+            downloaded        TEXT NOT NULL               -- 'yyyy-MM-dd': when the cache downloaded the article
+        ) WITHOUT ROWID;
+
         -- The words of the names (NameWords.Find on name_key's keys), for spelling suggestions when
         -- a search finds nothing. uses: how many keys have the word.
         CREATE TABLE name_word (

@@ -243,6 +243,15 @@ internal sealed class SiteDbBuild {
             return $"{taxonList.Count:N0} taxa, {writer.NameCount:N0} names, {taxonLinks.Count:N0} links from old ids";
         });
 
+        Optional("Wikipedia cache: taxobox statuses", _inputs.WikipediaCache, path => {
+            var rows = SiteTaxoboxStatusReader.Read(path, taxonList.Where(t => t.InRelease && t.SubpopulationName is null), ct);
+            writer.InsertRows(
+                "INSERT INTO enwiki_taxobox_status (taxon_id, status, status_system, ref_assessment_id, revision_id, downloaded) VALUES (@t, @s, @y, @a, @r, @d)",
+                ["@t", "@s", "@y", "@a", "@r", "@d"],
+                rows.Select(r => new object?[] { r.TaxonId, r.Status, r.StatusSystem, r.RefAssessmentId, r.RevisionId, r.Downloaded }));
+            return $"{rows.Count(r => r.Status is not null):N0} taxa whose article's taxobox has an IUCN status, {rows.Count(r => r.Status is null):N0} with none";
+        });
+
         // The classification in other sources, for the comparison of ranks on the species page.
         const string ladderInsert = "INSERT OR IGNORE INTO ladder_node (source, id, parent_id, rank, name) VALUES (@source, @id, @parent, @rank, @name)";
         string[] ladderParameters = ["@source", "@id", "@parent", "@rank", "@name"];

@@ -140,3 +140,6 @@ public static class TaxonKinds {
     public const string Variety = "variety";
     public const string Subpopulation = "subpopulation";
 }
+
+/// The IUCN status in the taxobox of the taxon's English Wikipedia article (enwiki_taxobox_status).
+public sealed record EnwikiTaxoboxStatusRow(string? Status, string? StatusSystem, long? RefAssessmentId, long? RevisionId, string Downloaded);

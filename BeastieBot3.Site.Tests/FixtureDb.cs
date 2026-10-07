@@ -213,6 +213,14 @@ public static class FixtureDb {
             tx.Commit();
             Exec(connection, "INSERT INTO name_fts(name_fts) VALUES('rebuild')");
             WriteNameWords(connection);
+            // The taxobox statuses of three articles: another category (Tiger: VU, latest EN), up to
+            // date (Sumatran tiger), the right category citing another assessment (Lion).
+            Exec(connection, $"""
+                INSERT INTO enwiki_taxobox_status (taxon_id, status, status_system, ref_assessment_id, revision_id, downloaded) VALUES
+                ({Tiger}, 'VU', 'IUCN3.1', 123, 1001, '2025-11-29'),
+                ({SumatranTiger}, 'CR', 'IUCN3.1', {SumatranTigerLatest}, 1002, '2025-11-29'),
+                ({Lion}, 'VU', 'IUCN3.1', 99999, 1003, '2025-11-29')
+                """);
             if (dropTable is not null) {
                 Exec(connection, $"DROP TABLE {dropTable}");
             }
