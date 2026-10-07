@@ -169,6 +169,20 @@ public sealed partial class SiteQueries {
 
     /// A taxon's classification in another source (ladder_node: "col" or "wikidata"), top down, from
     /// the node with this id. Empty when the database has none.
+    /// The taxon's ids in other databases (taxon_external_id), by Wikidata property.
+    public IReadOnlyList<(string Property, string Value)> GetExternalIds(long taxonId) {
+        using var connection = _db.OpenConnection();
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT property, value FROM taxon_external_id WHERE taxon_id = @id ORDER BY property, value";
+        command.Parameters.AddWithValue("@id", taxonId);
+        using var reader = command.ExecuteReader();
+        var ids = new List<(string, string)>();
+        while (reader.Read()) {
+            ids.Add((reader.GetString(0), reader.GetString(1)));
+        }
+        return ids;
+    }
+
     public EnwikiTaxoboxStatusRow? GetEnwikiTaxoboxStatus(long taxonId) {
         using var connection = _db.OpenConnection();
         using var command = connection.CreateCommand();

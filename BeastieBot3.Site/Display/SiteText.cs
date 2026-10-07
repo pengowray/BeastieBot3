@@ -110,6 +110,8 @@ public static partial class SiteText {
     public const string LinkWikipediaNone = "No English Wikipedia article found";
     public const string LinkWikidata = "Wikidata item";
     public const string LinkCol = "Catalogue of Life";
+    public const string LinkWikispecies = "Wikispecies";
+    public const string LinkOtherDatabases = "Other databases";
     public const string LinkSprat = "SPRAT profile";
     public const string LinkSpratPlural = "SPRAT profiles";
     public const string SpratFullName = "Species Profile and Threats Database, Australian Government";

@@ -351,4 +351,12 @@ public sealed class HomeAndSearchTests(SiteFactory factory) : IClassFixture<Site
         var html = await factory.CreateClient().GetStringAsync("/about");
         Assert.Contains("<p>Data last updated on 2 October 2026.</p>", html);
     }
+
+    [Fact]
+    public async Task TheSpeciesPageLinksOtherDatabasesFromTheIdsOnItsWikidataItem() {
+        var html = await factory.CreateClient().GetStringAsync($"/species/{FixtureDb.Tiger}");
+        Assert.Contains("<dt>Other databases</dt>", html);
+        Assert.Contains("<a href=\"https://www.gbif.org/species/5219416\">GBIF</a> · ", html);
+        Assert.Contains("<a href=\"https://www.inaturalist.org/taxa/41967\">iNaturalist</a>", html);
+    }
 }

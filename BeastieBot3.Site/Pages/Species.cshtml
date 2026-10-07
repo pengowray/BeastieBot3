@@ -584,6 +584,10 @@
             <dt>@SiteText.LinkWikidata</dt>
             <dd><a href="@SiteFormat.WikidataUrl(taxon.WikidataQid)">@taxon.WikidataQid</a></dd>
         }
+        @if (Model.WikispeciesTitle is { } wikispeciesTitle) {
+            <dt>@SiteText.LinkWikispecies</dt>
+            <dd><a href="@SiteFormat.WikispeciesUrl(wikispeciesTitle)">@Html.Raw(ScientificNameMarkup.ToHtml(wikispeciesTitle))</a></dd>
+        }
         @if (taxon.ColId is not null) {
             <dt>@SiteText.LinkCol</dt>
             <dd><a href="@SiteFormat.CatalogueOfLifeUrl(taxon.ColId)">@Html.Raw(ScientificNameMarkup.ToHtml(taxon.ScientificName, taxon.SubpopulationName))</a></dd>
@@ -611,6 +615,14 @@
                         </li>
                     }
                 </ul>
+            </dd>
+        }
+        @if (Model.ExternalLinks.Count > 0) {
+            <dt>@SiteText.LinkOtherDatabases</dt>
+            <dd class="external-links">
+                @for (var i = 0; i < Model.ExternalLinks.Count; i++) {
+                    <a href="@Model.ExternalLinks[i].Url">@Model.ExternalLinks[i].Name</a>@(i < Model.ExternalLinks.Count - 1 ? " · " : "")
+                }
             </dd>
         }
     </dl>

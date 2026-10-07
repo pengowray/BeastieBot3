@@ -213,6 +213,8 @@ public static class FixtureDb {
             tx.Commit();
             Exec(connection, "INSERT INTO name_fts(name_fts) VALUES('rebuild')");
             WriteNameWords(connection);
+            // The tiger's ids in two other databases.
+            Exec(connection, $"INSERT INTO taxon_external_id (taxon_id, property, value) VALUES ({Tiger}, 'P846', '5219416'), ({Tiger}, 'P3151', '41967')");
             // The taxobox statuses of three articles: another category (Tiger: VU, latest EN), up to
             // date (Sumatran tiger), the right category citing another assessment (Lion).
             Exec(connection, $"""

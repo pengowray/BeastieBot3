@@ -10,7 +10,7 @@ namespace BeastieBot3.Shared.SiteData;
 // each taxon's latest global assessment (taxon_area) are here only to compare a list with the one
 // area a reader chooses on the status update page; no page lists a taxon's areas.
 public static class SiteDbSchema {
-    public const int Version = 20;
+    public const int Version = 21;
 
     public const string Ddl = """
         CREATE TABLE meta (
@@ -334,6 +334,15 @@ public static class SiteDbSchema {
             taxon_id INTEGER NOT NULL,
             name_id  INTEGER NOT NULL,
             PRIMARY KEY (key, name_id)
+        ) WITHOUT ROWID;
+
+        -- The taxon's ids in other databases (ExternalDatabases), from the external identifiers on its
+        -- Wikidata item (taxon.wikidata_qid), leaving out deprecated statements.
+        CREATE TABLE taxon_external_id (
+            taxon_id INTEGER NOT NULL,
+            property TEXT NOT NULL,                       -- the Wikidata property: 'P846' (GBIF)
+            value    TEXT NOT NULL,
+            PRIMARY KEY (taxon_id, property, value)
         ) WITHOUT ROWID;
 
         -- The IUCN status in the taxobox of the taxon's English Wikipedia article (taxon.enwiki_title),

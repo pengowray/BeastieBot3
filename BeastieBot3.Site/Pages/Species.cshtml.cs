@@ -96,6 +96,7 @@ public sealed class SpeciesModel : PageModel {
         }
         // Wikispecies: the page of IUCN's name, through any redirect (site build-db keys it by that name).
         if (_queries.GetLadder("wikispecies", "page:" + taxon.ScientificName) is { Count: > 0 } wikispecies) {
+            WikispeciesTitle = wikispecies[^1].Name;
             columns.Add(new LadderColumn(SiteText.RanksWikispecies, SiteFormat.WikispeciesUrl(wikispecies[^1].Name),
                 [.. wikispecies.Select(s => new LadderStep(s.Rank, s.Name, SiteFormat.WikispeciesUrl(s.Name)))]));
         }
@@ -125,6 +126,13 @@ public sealed class SpeciesModel : PageModel {
 
     /// SPRAT profiles and EPBC Act listings: the whole taxon's first, then populations'.
     public IReadOnlyList<EpbcListingRow> EpbcListings { get; private set; } = [];
+
+    /// The taxon's Wikispecies page (from its classification there), or null.
+    public string? WikispeciesTitle { get; private set; }
+
+    /// Links to the taxon in other databases (from the ids on its Wikidata item), in the order of
+    /// ExternalDatabases, one link per database.
+    public IReadOnlyList<(string Name, string Url)> ExternalLinks { get; private set; } = [];
 
     /// The status in the taxobox of the taxon's English Wikipedia article compared with the latest
     /// global assessment; null when there is no article, no taxobox about the taxon, or no latest
@@ -228,6 +236,11 @@ public sealed class SpeciesModel : PageModel {
         LinkedTaxa = _queries.GetLinkedTaxa(Taxon.TaxonId);
         EpbcListings = _queries.GetEpbcListings(Taxon.TaxonId);
         LoadAssessments(assessment);
+        var externalIds = _queries.GetExternalIds(Taxon.TaxonId);
+        ExternalLinks = [.. BeastieBot3.Shared.SiteData.ExternalDatabases.All
+            .Select(d => (Database: d, Id: externalIds.FirstOrDefault(x => x.Property == d.Property).Value))
+            .Where(x => x.Id is not null)
+            .Select(x => (x.Database.Name, x.Database.UrlFor(x.Id)))];
         TaxoboxCheck = LatestGlobal is { } latest && Taxon.EnwikiTitle is not null && _queries.GetEnwikiTaxoboxStatus(Taxon.TaxonId) is { } taxobox
             ? TaxoboxStatusCheck.For(taxobox, latest, GlobalHistory)
             : null;

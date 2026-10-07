@@ -243,6 +243,13 @@ internal sealed class SiteDbBuild {
             return $"{taxonList.Count:N0} taxa, {writer.NameCount:N0} names, {taxonLinks.Count:N0} links from old ids";
         });
 
+        Optional("Wikidata cache: ids in other databases", _inputs.WikidataCache, path => {
+            var rows = SiteExternalIds.Read(path,
+                taxonList.Where(t => t.InRelease && t.WikidataQid is not null).Select(t => (t.TaxonId, t.WikidataQid!)), ct);
+            writer.InsertRows("INSERT OR IGNORE INTO taxon_external_id (taxon_id, property, value) VALUES (@t, @p, @v)", ["@t", "@p", "@v"],
+                rows.Select(r => new object?[] { r.TaxonId, r.Property, r.Value }));
+            return $"{rows.Select(r => r.TaxonId).Distinct().Count():N0} taxa, {rows.Count:N0} ids";
+        });
         Optional("Wikipedia cache: taxobox statuses", _inputs.WikipediaCache, path => {
             var rows = SiteTaxoboxStatusReader.Read(path, taxonList.Where(t => t.InRelease && t.SubpopulationName is null), ct);
             writer.InsertRows(
