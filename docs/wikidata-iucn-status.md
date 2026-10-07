@@ -67,6 +67,10 @@ in these ways:
 - DOI (P356) is written only when the DOI names the assessment's own taxon and assessment ids, so
   an errata version's commands leave out the DOI of the assessment it corrects; the dry run writes
   the assessment's DOI whatever ids it names;
+- an author whose full given names are known gets author last names (P9688) and author given
+  names (P9687) qualifiers on the site's commands only; the dry run reads its authors from the
+  credits, not the parsed citation, so it has no given names. Both write an organisation listed in
+  `IucnAuthorItems` as author (P50) with object named as (P1932);
 - a second author with the same printed name is written as a new statement (`!P2093`), because
   QuickStatements would otherwise add that author's series ordinal to the first author's
   statement. The dry run's payload has a separate statement for each author already;

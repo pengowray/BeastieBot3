@@ -985,7 +985,18 @@ an access date without a URL as an error.
 - one author name string (P2093) for each author, as IUCN's citation prints the name (never the
   full given names), with a series ordinal (P1545) qualifier. A second author with the same
   printed name is written with `!P2093`, so that its ordinal goes on a new statement and not on
-  the first author's.
+  the first author's. When `AssessorGivenNames` found a person's full given names, the statement
+  also has author last names (P9688) and author given names (P9687) qualifiers ("Sayer",
+  "Catherine"). `{{cite Q}}` passes these to the citation as `|last=` and `|first=`, so it shows
+  the full given names, or the initials with `|name-list-style=apa` (which writes "R. L." where
+  IUCN prints "R.L."). A name with a suffix ("Lowry, P.P., II") gets neither qualifier, because
+  `{{cite Q}}` would leave the suffix out;
+- author (P50) instead of an author name string for an organisation listed in `IucnAuthorItems`
+  (`BeastieBot3.Shared/Wikitext/IucnAuthorItems.cs`: BirdLife International, BGCI, UNEP-WCMC,
+  ICMBio, NatureServe and a few others, checked on Wikidata on 2026-10-08), with the series
+  ordinal and object named as (P1932) holding the name as IUCN prints it. `{{cite Q}}` shows the
+  P1932 name and links the organisation's English Wikipedia article. Most IUCN SSC specialist
+  groups had no Wikidata item then; add a row to the table when one is created.
 
 No statement has a reference. When `TitleNameFor` finds no usable name, `CreateItemCommands`
 returns no commands, because an item with no title or label could not be found again.
@@ -993,8 +1004,8 @@ returns no commands, because an item with no title or label could not be found a
 `AddMissingCommands` writes commands that add to an existing item what it lacks, judged from
 `wikidata_item_properties`: the English label when `Len` is missing, and each statement above
 whose property is missing. The label and the title use the name from `TitleNameFor`, given the
-item's own titles (`wikidata_item_titles`). An item with an author item (P50) gets no author name
-strings (P2093). `AddMissingCommands` never adds publisher (P123), language (P407) or a
+item's own titles (`wikidata_item_titles`). An item with any author statement (P50 or P2093) gets
+no author statements. `AddMissingCommands` never adds publisher (P123), language (P407) or a
 description, because the cache does not record whether the item has them, and it never removes or
 changes a statement. When the item lacks nothing, it returns no commands.
 

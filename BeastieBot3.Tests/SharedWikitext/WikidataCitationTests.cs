@@ -148,7 +148,7 @@ public class WikidataCitationTests {
                 Person("Sayer", "C.") with { GivenNames = "Catherine" },
                 Person("Lajus", "D."),
                 Person("Lowry", "P.P., II") with { GivenNames = "Porter P." },
-                new CitationAuthor(CitationAuthorKind.Organisation, "BirdLife International", GivenNames: "Birdlife"),
+                new CitationAuthor(CitationAuthorKind.Organisation, "Royal Botanic Gardens, Kew", GivenNames: "Kew"),
             ],
         };
         var authors = WikidataCitation.CreateItemCommands(parts, null, Model).Where(c => c.Contains("P2093", StringComparison.Ordinal)).ToList();
@@ -157,8 +157,32 @@ public class WikidataCitationTests {
             L("LAST", "P2093", "\"Lajus, D.\"", "P1545", "\"2\""),
             // {{cite Q}} has no place for the suffix, so the name string is left to carry it.
             L("LAST", "P2093", "\"Lowry, P.P., II\"", "P1545", "\"3\""),
-            L("LAST", "P2093", "\"BirdLife International\"", "P1545", "\"4\""),
+            L("LAST", "P2093", "\"Royal Botanic Gardens, Kew\"", "P1545", "\"4\""),
         }, authors);
+    }
+
+    [Fact]
+    public void CreateItemCommands_OrganisationWithAnItem_IsP50NamedAsPrinted() {
+        // {{cite Q}} shows the P1932 name, linked to the organisation's article.
+        var birdLife = new CitationAuthor(CitationAuthorKind.Organisation, "BirdLife International");
+        var parts = Salmon with { Authors = [birdLife, Person("Sayer", "C."), birdLife] };
+        var authors = WikidataCitation.CreateItemCommands(parts, null, Model)
+            .Where(c => c.Contains("P2093", StringComparison.Ordinal) || c.Contains("P50", StringComparison.Ordinal)).ToList();
+        Assert.Equal(new[] {
+            L("LAST", "P50", "Q210108", "P1545", "\"1\"", "P1932", "\"BirdLife International\""),
+            L("LAST", "P2093", "\"Sayer, C.\"", "P1545", "\"2\""),
+            L("LAST", "!P50", "Q210108", "P1545", "\"3\"", "P1932", "\"BirdLife International\""),
+        }, authors);
+    }
+
+    [Fact]
+    public void AddMissingCommands_NoAuthorItemWhenTheItemHasAuthorStrings() {
+        var parts = Salmon with { Authors = [new CitationAuthor(CitationAuthorKind.Organisation, "BirdLife International")] };
+        var present = new HashSet<string> { "P2093" };
+        Assert.DoesNotContain(WikidataCitation.AddMissingCommands(parts, "Q1", present, null, Model),
+            c => c.Contains("\tP50\t", StringComparison.Ordinal));
+        Assert.Contains(WikidataCitation.AddMissingCommands(parts, "Q1", new HashSet<string>(), null, Model),
+            c => c.StartsWith(L("Q1", "P50", "Q210108"), StringComparison.Ordinal));
     }
 
     [Fact]

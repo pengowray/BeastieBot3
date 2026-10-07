@@ -37,4 +37,4 @@ assessment_item:
   title_language: en           # language of the title statement (P1476), which is the scientific name
   publisher: Q48268            # International Union for Conservation of Nature
   language: Q1860              # English
-  author_credit_types: [assessor]   # IUCN credit types written as author name strings (P2093), in citation order
+  author_credit_types: [assessor]   # IUCN credit types written as authors, in citation order: author name strings (P2093), or author (P50) for the organisations in IucnAuthorItems

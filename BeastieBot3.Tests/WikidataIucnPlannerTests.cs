@@ -269,4 +269,18 @@ public class WikidataIucnPlannerTests {
         Assert.Equal("Tapirus indicus. The IUCN Red List of Threatened Species 2026: e.T31317A45173922",
             (string)payload["labels"]!["en"]!["value"]!);
     }
+
+    [Fact]
+    public void Assessment_item_names_an_organisation_with_an_item_as_P50() {
+        var assessment = Assessment() with {
+            Credits = new[] { new IucnCredit("assessor", "BirdLife International", 1), new IucnCredit("assessor", "Novarino, W.", 2) },
+        };
+        var claims = AssessmentItemPayloadBuilder.Build(assessment, "Q24024", Config)["claims"]!.AsArray();
+        var org = Assert.Single(claims, c => (string)c!["mainsnak"]!["property"]! == "P50")!;
+        Assert.Equal("Q210108", (string)org["mainsnak"]!["datavalue"]!["value"]!["id"]!);
+        Assert.Equal("1", (string)org["qualifiers"]!["P1545"]![0]!["datavalue"]!["value"]!);
+        Assert.Equal("BirdLife International", (string)org["qualifiers"]!["P1932"]![0]!["datavalue"]!["value"]!);
+        var person = Assert.Single(claims, c => (string)c!["mainsnak"]!["property"]! == "P2093")!;
+        Assert.Equal("2", (string)person["qualifiers"]!["P1545"]![0]!["datavalue"]!["value"]!);
+    }
 }

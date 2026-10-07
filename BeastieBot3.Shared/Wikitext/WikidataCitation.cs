@@ -40,6 +40,9 @@ namespace BeastieBot3.Shared.Wikitext;
 //                        default and "Sayer, C." with |name-list-style=apa. A person whose initials
 //                        end with a suffix ("Lowry, P.P., II") gets neither, because {{cite Q}} has no
 //                        place for the suffix and would leave it out.
+//   P50 author           instead of P2093 for an organisation listed in IucnAuthorItems ("BirdLife
+//                        International"), with the P1545 ordinal and P1932 "object named as" holding
+//                        the name as printed, which {{cite Q}} shows.
 //
 // plus the English label and description from model.LabelTemplate and model.DescriptionTemplate,
 // with the same name. No statement gets a reference: the dry run adds none to the item's own
@@ -319,7 +322,7 @@ public static partial class WikidataCitation {
         }
         var hasAuthors = presentProperties.Contains("P2093") || presentProperties.Contains("P50");
         foreach (var statement in Statements(parts, name, taxonQid, model, includeUnjudged: false)) {
-            var present = statement.Property == "P2093" ? hasAuthors : presentProperties.Contains(statement.Property);
+            var present = statement.Property is "P2093" or "P50" ? hasAuthors : presentProperties.Contains(statement.Property);
             if (!present) {
                 commands.Add(statement.ToLine(item));
             }
@@ -441,6 +444,11 @@ public static partial class WikidataCitation {
             }
             ordinal++;
             var qualifiers = new List<string> { "P1545", Quote(ordinal.ToString(CultureInfo.InvariantCulture)) };
+            if (author.Kind == CitationAuthorKind.Organisation && IucnAuthorItems.ItemFor(display) is { } authorItem) {
+                qualifiers.AddRange(["P1932", Quote(display)]);
+                yield return new Statement("P50", authorItem, qualifiers, NewStatement: !seen.Add(authorItem));
+                continue;
+            }
             if (NameParts(author) is var (last, given)) {
                 qualifiers.AddRange(["P9688", Quote(last), "P9687", Quote(given)]);
             }
