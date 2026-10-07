@@ -10,7 +10,7 @@ namespace BeastieBot3.Shared.SiteData;
 // each taxon's latest global assessment (taxon_area) are here only to compare a list with the one
 // area a reader chooses on the status update page; no page lists a taxon's areas.
 public static class SiteDbSchema {
-    public const int Version = 18;
+    public const int Version = 19;
 
     public const string Ddl = """
         CREATE TABLE meta (
@@ -177,6 +177,20 @@ public static class SiteDbSchema {
             presence  INTEGER NOT NULL,                      -- AreaPresence: 1 extant, 2 possibly extant, 3 presence uncertain, 4 possibly extinct, 5 extinct post-1500
             endemic   INTEGER NOT NULL,                      -- 1: endemic to this area. IUCN flags countries only; for part of a country: endemic to the country and recorded in no other part of it
             PRIMARY KEY (area, taxon_id)
+        ) WITHOUT ROWID;
+
+        -- The classification of the taxa in other sources, for the species page's comparison of ranks:
+        -- each node above a taxon, with its parent. source 'col': id is a CoL ID (taxon.col_id);
+        -- source 'wikidata': id is a QID (taxon.wikidata_qid), followed through the first parent taxon;
+        -- source 'wikipedia': id 'article:<taxon.enwiki_title>' for the article's taxobox, whose parent is
+        -- the name of the taxonomy template it starts from ('Felis' for Template:Taxonomy/Felis).
+        CREATE TABLE ladder_node (
+            source     TEXT NOT NULL,
+            id         TEXT NOT NULL,
+            parent_id  TEXT,
+            rank       TEXT,                                 -- as the source names it: 'family', 'subtribe', 'clade'; NULL when it gives none
+            name       TEXT NOT NULL,
+            PRIMARY KEY (source, id)
         ) WITHOUT ROWID;
 
         -- Species that are in the Catalogue of Life or Wikidata but are not IUCN taxa, for the group

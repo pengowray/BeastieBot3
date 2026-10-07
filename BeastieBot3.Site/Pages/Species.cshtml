@@ -515,6 +515,46 @@
     }
 </section>
 
+@if (Model.RankComparison.Count > 0) {
+    var differences = Model.RankComparison.Sum(r => r.Cells.Count(c => c.Differs));
+    <section class="rank-comparison" id="ranks" aria-labelledby="ranks-heading">
+        <h2 id="ranks-heading">@SiteText.HeadingRanks</h2>
+        <p>@SiteText.RanksIntro(differences)</p>
+        <div class="table-scroll">
+            <table class="ranks-table" aria-labelledby="ranks-heading">
+                <thead>
+                    <tr>
+                        <td></td>
+                        @foreach (var column in Model.RankColumns) {
+                            <th scope="col">@if (column.Url is { } url) {<a href="@url">@column.Title</a>} else {@column.Title}</th>
+                        }
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var row in Model.RankComparison) {
+                        <tr>
+                            <th scope="row">@SiteText.RankRowLabel(row.RankLabel)</th>
+                            @foreach (var cell in row.Cells) {
+                                <td class="@(cell.Differs ? "differs" : null)">
+                                    @if (cell.Main is { } main) {
+                                        <span class="rank-main">@if (main.Url is { } u) {<a href="@u">@Html.Raw(ScientificNameMarkup.ToHtml(main.Name))</a>} else {@Html.Raw(ScientificNameMarkup.ToHtml(main.Name))}</span>
+                                        @if (cell.Differs) {
+                                            <abbr class="differs-marker" title="@SiteText.RanksDiffersTitle">≠</abbr>
+                                        }
+                                    }
+                                    @foreach (var step in cell.Between) {
+                                        <span class="rank-between"><span class="rank">@(step.Rank ?? SiteText.RanksNoRank)</span> @if (step.Url is { } u) {<a href="@u">@Html.Raw(ScientificNameMarkup.ToHtml(step.Name))</a>} else {@Html.Raw(ScientificNameMarkup.ToHtml(step.Name))}</span>
+                                    }
+                                </td>
+                            }
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    </section>
+}
+
 <section class="links" aria-labelledby="links-heading">
     <h2 id="links-heading">@SiteText.HeadingLinks</h2>
     <dl class="facts">

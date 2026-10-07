@@ -117,6 +117,7 @@ internal sealed class SiteBuildDbCommand : Command<SiteBuildDbCommand.Settings> 
                 DoiCache = Full(settings.DoiCache ?? paths.GetIucnDoiCachePath()),
                 RulesList = rulesList,
                 TaxonRules = Full(Path.Combine(Path.GetDirectoryName(rulesList)!, "taxon-rules.yml")),
+                WikidataRanks = Full(Path.Combine(Path.GetDirectoryName(rulesList)!, "wikidata-taxon-ranks.csv")),
                 NotAssignedRules = Iucn.IucnNotAssignedRules.LoadForPaths(paths),
                 WikidataItemModel = wikidataConfig.ToItemModel(),
                 WikidataItemModelSource = wikidataConfigPath,

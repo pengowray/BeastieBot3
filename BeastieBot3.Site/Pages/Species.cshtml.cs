@@ -59,6 +59,45 @@ public sealed class SpeciesModel : PageModel {
     /// ranks. Empty for a taxon not in the release, whose page lists its ranks as IUCN gave them.
     public IReadOnlyList<GroupRow> Classification { get; private set; } = [];
 
+    /// The taxon's ranks in IUCN, on this site, in the Catalogue of Life and in Wikidata, side by
+    /// side; empty when only IUCN's are known.
+    public IReadOnlyList<ComparisonRow> RankComparison { get; private set; } = [];
+    public IReadOnlyList<LadderColumn> RankColumns { get; private set; } = [];
+
+    private IReadOnlyList<ComparisonRow> BuildRankComparison(TaxonRow taxon) {
+        var leafRank = taxon.Kind switch { TaxonKinds.Species => "species", TaxonKinds.Variety => "variety", TaxonKinds.Subspecies => "subspecies", _ => null };
+        if (leafRank is null) {
+            return [];
+        }
+        var leaf = new LadderStep(leafRank, taxon.ScientificName);
+        string?[] iucnRanks = [taxon.Kingdom, taxon.Phylum, taxon.ClassName, taxon.OrderName, taxon.Family, taxon.Genus];
+        var iucn = iucnRanks.Select((name, i) => name is null ? null : new LadderStep(ClassificationComparison.MainRanks[i], SiteFormat.TitleCase(name)))
+            .OfType<LadderStep>().Append(leaf).ToList();
+        var columns = new List<LadderColumn> { new(SiteText.RanksIucn, null, iucn) };
+        if (Classification.Count > 0) {
+            columns.Add(new LadderColumn(SiteText.RanksThisSite, null,
+                [.. Classification.Select(g => new LadderStep(g.Rank == "unranked" ? null : g.Rank, g.Name, Web.SiteUrls.Group(g))), leaf]));
+        }
+        if (taxon.ColId is { } colId && _queries.GetLadder("col", colId) is { Count: > 0 } col) {
+            columns.Add(new LadderColumn(SiteText.RanksCol, SiteFormat.CatalogueOfLifeUrl(colId),
+                [.. col.Select(s => new LadderStep(s.Rank == "unranked" ? null : s.Rank, s.Name, SiteFormat.CatalogueOfLifeUrl(s.Id)))]));
+        }
+        if (taxon.WikidataQid is { } qid && _queries.GetLadder("wikidata", qid) is { Count: > 0 } wikidata) {
+            columns.Add(new LadderColumn(SiteText.RanksWikidata, SiteFormat.WikidataUrl(qid),
+                [.. wikidata.Select(s => new LadderStep(s.Rank, s.Name, SiteFormat.WikidataUrl(s.Id)))]));
+        }
+        if (taxon.EnwikiTitle is { } article && _queries.GetLadder("wikipedia", "article:" + article) is { Count: > 0 } wikipedia) {
+            columns.Add(new LadderColumn(SiteText.RanksWikipedia, SiteFormat.WikipediaUrl(article),
+                [.. wikipedia.Select(s => new LadderStep(s.Rank, s.Name,
+                    s.Id.StartsWith("article:", StringComparison.Ordinal) ? null : SiteFormat.WikipediaUrl("Template:Taxonomy/" + s.Id)))]));
+        }
+        if (columns.Count < 3) {
+            return [];
+        }
+        RankColumns = columns;
+        return ClassificationComparison.Build(columns);
+    }
+
     /// The Catalogue of Life's English names of the classification's groups that have no English name of their own.
     public IReadOnlyDictionary<int, IReadOnlyList<string>> ClassificationColNames { get; private set; } =
         new Dictionary<int, IReadOnlyList<string>>();
@@ -172,6 +211,7 @@ public sealed class SpeciesModel : PageModel {
             Classification = _queries.GetGroupPath(nodeId);
             ClassificationColNames = _queries.GetGroupColNames(Classification.Where(g => g.CommonNameEn is null).Select(g => g.NodeId).ToList());
         }
+        RankComparison = BuildRankComparison(Taxon);
         LinkedTaxa = _queries.GetLinkedTaxa(Taxon.TaxonId);
         EpbcListings = _queries.GetEpbcListings(Taxon.TaxonId);
         LoadAssessments(assessment);

@@ -183,6 +183,42 @@ ORDER BY p.normalized_title
             reader.IsDBNull(3) ? null : StoredUtc.Parse(reader.GetString(3)));
     }
 
+    /// The taxonomy templates the downloaded taxoboxes start from (TaxonomyTemplates.StartOf), distinct.
+    public IEnumerable<string> TaxoboxStarts() {
+        using var command = _connection.CreateCommand();
+        command.CommandText = "SELECT data_json FROM wiki_taxobox_data WHERE data_json IS NOT NULL";
+        using var reader = command.ExecuteReader();
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        while (reader.Read()) {
+            if (TaxoboxFields(reader.GetString(0)) is { } fields && Taxonomy.TaxonomyTemplates.StartOf(fields) is { } start && seen.Add(start)) {
+                yield return start;
+            }
+        }
+    }
+
+    /// The taxobox parameters of a page, or null.
+    public IReadOnlyDictionary<string, string>? GetTaxoboxFields(long pageRowId) {
+        using var command = _connection.CreateCommand();
+        command.CommandText = "SELECT data_json FROM wiki_taxobox_data WHERE page_row_id = @id";
+        command.Parameters.AddWithValue("@id", pageRowId);
+        return command.ExecuteScalar() is string json ? TaxoboxFields(json) : null;
+    }
+
+    private static Dictionary<string, string>? TaxoboxFields(string json) {
+        try {
+            using var doc = System.Text.Json.JsonDocument.Parse(json);
+            var fields = new Dictionary<string, string>(StringComparer.Ordinal);
+            foreach (var p in doc.RootElement.EnumerateObject()) {
+                if (p.Value.ValueKind == System.Text.Json.JsonValueKind.String) {
+                    fields[p.Name] = p.Value.GetString()!;
+                }
+            }
+            return fields;
+        } catch (System.Text.Json.JsonException) {
+            return null;
+        }
+    }
+
     /// The articles of the public site's groups that `wikipedia fetch-group-titles` reached.
     public IReadOnlyList<string> GetGroupArticleTitles() {
         var titles = new List<string>();

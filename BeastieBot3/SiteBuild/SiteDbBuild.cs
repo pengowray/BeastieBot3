@@ -238,6 +238,28 @@ internal sealed class SiteDbBuild {
             }
             return $"{taxonList.Count:N0} taxa, {writer.NameCount:N0} names, {taxonLinks.Count:N0} links from old ids";
         });
+
+        // The classification in other sources, for the comparison of ranks on the species page.
+        const string ladderInsert = "INSERT OR IGNORE INTO ladder_node (source, id, parent_id, rank, name) VALUES (@source, @id, @parent, @rank, @name)";
+        string[] ladderParameters = ["@source", "@id", "@parent", "@rank", "@name"];
+        Optional("Catalogue of Life database: classification", _inputs.ColDatabase, path => {
+            var nodes = SiteLadders.ReadCol(path, taxonList.Select(t => t.ColId).OfType<string>(), ct);
+            writer.InsertRows(ladderInsert, ladderParameters, nodes.Select(n => new object?[] { n.Source, n.Id, n.ParentId, n.Rank, n.Name }));
+            _stats.ColLadderNodes = nodes.Count;
+            return $"{nodes.Count:N0} nodes";
+        });
+        Optional("Wikidata cache: classification", _inputs.WikidataCache, path => {
+            var ranks = SiteLadders.ReadRankNames(_inputs.WikidataRanks);
+            var nodes = SiteLadders.ReadWikidata(path, taxonList.Select(t => t.WikidataQid).OfType<string>(), ranks, ct);
+            writer.InsertRows(ladderInsert, ladderParameters, nodes.Select(n => new object?[] { n.Source, n.Id, n.ParentId, n.Rank, n.Name }));
+            _stats.WikidataLadderNodes = nodes.Count;
+            return $"{nodes.Count:N0} nodes, {ranks.Count:N0} rank names";
+        });
+        Optional("Wikipedia cache: taxobox classification", _inputs.WikipediaCache, path => {
+            var nodes = SiteLadders.ReadWikipedia(path, taxonList.Select(t => t.EnwikiTitle).OfType<string>(), ct);
+            writer.InsertRows(ladderInsert, ladderParameters, nodes.Select(n => new object?[] { n.Source, n.Id, n.ParentId, n.Rank, n.Name }));
+            return $"{nodes.Count(n => n.Id.StartsWith(SiteLadders.ArticlePrefix, StringComparison.Ordinal)):N0} articles, {nodes.Count:N0} nodes";
+        });
         WriteMeta(writer, taxonList.Count);
 
         // 9. Indexes and compaction.

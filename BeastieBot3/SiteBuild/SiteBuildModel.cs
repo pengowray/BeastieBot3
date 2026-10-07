@@ -36,6 +36,8 @@ internal sealed record SiteBuildInputs {
     /// defaults, when no file was found).
     public Shared.Wikitext.WikidataItemModel WikidataItemModel { get; init; } = new();
     public string? WikidataItemModelSource { get; init; }
+    /// rules/wikidata-taxon-ranks.csv: the names of Wikidata's rank items, for ladder_node.
+    public string? WikidataRanks { get; init; }
     /// The site database to replace.
     public required string Output { get; init; }
     /// Only the first N taxa by taxon id.
@@ -217,6 +219,8 @@ internal sealed class SiteBuildStats {
     public int CitationsNotCached;
     /// Payloads whose documentation.taxonomic_notes has text.
     public int PayloadsWithTaxonomicNotes;
+    public int ColLadderNodes;
+    public int WikidataLadderNodes;
     public int TaxaWithAreas;
     public int TaxonAreaRows;
     public int Areas;

@@ -1455,3 +1455,23 @@ th.num {
 .update-scope-choice select {
     max-width: 100%;
 }
+
+/* The species page's comparison of ranks: one column per source, groups between main ranks under them. */
+.ranks-table td {
+    vertical-align: top;
+}
+.ranks-table .rank-main {
+    display: block;
+}
+.ranks-table .rank-between {
+    display: block;
+    font-size: 0.9em;
+    padding-left: 0.75rem;
+}
+.ranks-table .rank-between .rank {
+    color: var(--muted);
+}
+.ranks-table .differs-marker {
+    font-weight: bold;
+    text-decoration: none;
+}

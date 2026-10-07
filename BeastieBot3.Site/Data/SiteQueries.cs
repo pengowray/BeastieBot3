@@ -166,6 +166,33 @@ public sealed partial class SiteQueries {
         return listings.ToDictionary(p => p.Key, p => (IReadOnlyList<EpbcListingRow>)p.Value);
     }
 
+    /// A taxon's classification in another source (ladder_node: "col" or "wikidata"), top down, from
+    /// the node with this id. Empty when the database has none.
+    public IReadOnlyList<(string Id, string? Rank, string Name)> GetLadder(string source, string id) {
+        using var connection = _db.OpenConnection();
+        using var command = connection.CreateCommand();
+        command.CommandText = """
+            WITH RECURSIVE up(id, depth) AS (
+                SELECT @id, 0
+                UNION ALL
+                SELECT n.parent_id, up.depth + 1 FROM up JOIN ladder_node n ON n.source = @source AND n.id = up.id
+                WHERE n.parent_id IS NOT NULL AND up.depth < 80
+            )
+            SELECT n.id, n.rank, n.name FROM up JOIN ladder_node n ON n.source = @source AND n.id = up.id ORDER BY up.depth DESC
+            """;
+        command.Parameters.AddWithValue("@source", source);
+        command.Parameters.AddWithValue("@id", id);
+        using var reader = command.ExecuteReader();
+        var steps = new List<(string, string?, string)>();
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        while (reader.Read()) {
+            if (seen.Add(reader.GetString(0))) {
+                steps.Add((reader.GetString(0), Text(reader, 1), reader.GetString(2)));
+            }
+        }
+        return steps;
+    }
+
     public TaxonSummary? GetSummary(long taxonId) {
         using var connection = _db.OpenConnection();
         using var command = connection.CreateCommand();
