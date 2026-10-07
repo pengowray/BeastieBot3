@@ -6,6 +6,7 @@ using Spectre.Console;
 // The files of `wikipedia report-species-lists`:
 //   <name>.md            totals, the pages with statuses to update, then the pages with taxa that have
 //                        no status or are missing from the group (the largest MaxTaxaPages);
+//   <name>.wikitext      the same, for a user page on English Wikipedia (SpeciesListReportDocument);
 //   <name>-pages.csv     every page checked, with every count;
 //   <name>-statuses.csv  every status that can be updated: the page, line, taxon, code on the page and IUCN's code;
 //   <name>-missing.csv   every taxon of a page's group that the page does not list.
@@ -39,11 +40,15 @@ internal sealed class SpeciesListReport {
         var pages = Path.Combine(directory, name + "-pages.csv");
         var statuses = Path.Combine(directory, name + "-statuses.csv");
         var missing = Path.Combine(directory, name + "-missing.csv");
-        File.WriteAllText(md, BuildMarkdown(Path.GetFileName(pages), Path.GetFileName(statuses), Path.GetFileName(missing)), Encoding.UTF8);
+        var wiki = Path.Combine(directory, name + ".wikitext");
+        var (pagesName, statusesName, missingName) = (Path.GetFileName(pages), Path.GetFileName(statuses), Path.GetFileName(missing));
+        var csvNote = $"Full data is in three CSV files: {pagesName} lists every page with every count; {statusesName} lists every status that can be updated or has the id of another taxon (page, line number, taxon, status on the page, IUCN category); {missingName} lists every taxon missing from a page's group.";
+        File.WriteAllText(md, BuildDocument(new MarkdownReportDocument(), pagesName, csvNote), Encoding.UTF8);
+        File.WriteAllText(wiki, BuildDocument(new WikitextReportDocument(), "the CSV file of every page, which is not on Wikipedia", csvNote: null), new UTF8Encoding(false));
         WritePagesCsv(pages);
         WriteStatusesCsv(statuses);
         WriteMissingCsv(missing);
-        return [md, pages, statuses, missing];
+        return [md, wiki, pages, statuses, missing];
     }
 
     public void PrintSummary() {
@@ -77,96 +82,84 @@ internal sealed class SpeciesListReport {
         yield return Sum("{{Species table/row}} populations that differ from IUCN's number of mature individuals", null, r => r.PopulationDiffers);
     }
 
-    private string BuildMarkdown(string pagesCsv, string statusesCsv, string missingCsv) {
+    // The report as Markdown, or as wikitext for a user page on English Wikipedia. pagesCsv: how the
+    // pages CSV is named in the text; csvNote: the line naming the CSV files (Markdown only).
+    private string BuildDocument(ReportDocument doc, string pagesCsv, string? csvNote) {
         var results = Results.ToList();
-        var sb = new StringBuilder();
-        sb.AppendLine($"# Wikipedia species lists checked against IUCN Red List release {_release ?? "(unknown release)"}");
-        sb.AppendLine();
-        sb.AppendLine($"- IUCN Red List release: {_release ?? "unknown"}. From the species site's database, built {SiteBuilt()}.");
+        doc.Heading(1, $"Wikipedia species lists checked against IUCN Red List release {_release ?? "(unknown release)"}");
+        var facts = new List<string> { $"IUCN Red List release: {_release ?? "unknown"}. From the species site's database, built {SiteBuilt()}." };
         var downloaded = results.Where(r => r.DownloadedAt is not null).Select(r => r.DownloadedAt!.Value).ToList();
         if (downloaded.Count > 0) {
-            sb.AppendLine($"- Wikipedia pages downloaded between {downloaded.Min():yyyy-MM-dd} and {downloaded.Max():yyyy-MM-dd}.");
+            facts.Add($"Wikipedia pages downloaded between {downloaded.Min():yyyy-MM-dd} and {downloaded.Max():yyyy-MM-dd}.");
         }
-        sb.AppendLine($"- Pages checked: {results.Count:N0}.");
-        sb.AppendLine($"- \"List of\" pages and pages that use {{{{IUCN status}}}} or {{{{Species table/row}}}}: {_plan.ListsFound:N0} found, {_plan.ListsNotDownloaded:N0} not downloaded yet.");
-        sb.AppendLine($"- Downloaded group articles with a list or table of species: {_plan.GroupArticles:N0} of {_plan.GroupArticlesRead:N0}. A group article is an article about a genus, family or other group above species.");
-        sb.AppendLine($"- Pages with no IUCN taxon recognised: {results.Count(r => r.TaxaListed == 0 && r.Statuses == 0):N0} (for example, lists of dog breeds, or lists whose names match no IUCN taxon).");
+        facts.Add($"Pages checked: {results.Count:N0}.");
+        facts.Add($"\"List of\" pages and pages that use {{{{IUCN status}}}} or {{{{Species table/row}}}}: {_plan.ListsFound:N0} found, {_plan.ListsNotDownloaded:N0} not downloaded yet.");
+        facts.Add($"Downloaded group articles with a list or table of species: {_plan.GroupArticles:N0} of {_plan.GroupArticlesRead:N0}. A group article is an article about a genus, family or other group above species.");
+        facts.Add($"Pages with no IUCN taxon recognised: {results.Count(r => r.TaxaListed == 0 && r.Statuses == 0):N0} (for example, lists of dog breeds, or lists whose names match no IUCN taxon).");
         if (_failures.Count > 0) {
-            sb.AppendLine($"- Pages that could not be checked because of an error: {_failures.Count:N0}. They are listed at the end of this file with the error.");
+            facts.Add($"Pages that could not be checked because of an error: {_failures.Count:N0}. They are listed at the end of this report with the error.");
         }
-        sb.AppendLine();
-        sb.AppendLine("| | Number | Pages with at least one |");
-        sb.AppendLine("|---|---:|---:|");
-        foreach (var total in Totals()) {
-            var label = total.Example is null ? total.Label : $"{total.Label} ({total.Example})";
-            sb.AppendLine($"| {label} | {total.Count:N0} | {total.Pages:N0} |");
+        doc.Bullets(facts);
+        doc.Table(["", "Number", "Pages with at least one"], [false, true, true],
+            Totals().Select(t => (IReadOnlyList<string>)[doc.Text(t.Example is null ? t.Label : $"{t.Label} ({t.Example})"), $"{t.Count:N0}", $"{t.Pages:N0}"]));
+        doc.Paragraph("A taxon on several pages is counted once for each page.");
+        if (csvNote is not null) {
+            doc.Paragraph(csvNote);
         }
-        sb.AppendLine();
-        sb.AppendLine("A taxon on several pages is counted once for each page.");
-        sb.AppendLine();
-        sb.AppendLine($"Full data is in three CSV files: {pagesCsv} lists every page with every count; {statusesCsv} lists every status that can be updated or has the id of another taxon (page, line number, taxon, status on the page, IUCN category); {missingCsv} lists every taxon missing from a page's group.");
-        sb.AppendLine();
 
         var statusPages = _rows.Where(r => r.Result.Outdated > 0 || r.Result.IdOfAnotherTaxon > 0 || r.Result.RegionalCodes > 0)
             .OrderByDescending(r => r.Result.CategoryChanged)
             .ThenByDescending(r => r.Result.Outdated)
             .ThenBy(r => r.Result.Title, StringComparer.Ordinal)
             .ToList();
-        sb.AppendLine($"## Pages with statuses to update or check ({statusPages.Count:N0})");
-        sb.AppendLine();
-        sb.AppendLine("Sorted by the number of statuses with a different category, then by the number of other statuses to update, most first. To get a page's updated wikitext, paste the page's wikitext into the update page on Beastie Bot Species Status.");
-        sb.AppendLine();
-        sb.AppendLine("| Page | Different category | CR(PE) or CR(PEW) | Same category, new trend | Same category, older assessment | Up to date | Id of another taxon | Not matched | Compared with IUCN group |");
-        sb.AppendLine("|---|---:|---:|---:|---:|---:|---:|---:|---|");
-        foreach (var row in statusPages) {
-            var r = row.Result;
-            sb.AppendLine($"| {PageCell(row)} | {Num(r.CategoryChanged)} | {Num(r.PossiblyExtinctChanged)} | {Num(r.TrendChanged)} | {Num(r.NewerAssessment)} | {Num(r.UpToDate)} | {Num(r.IdOfAnotherTaxon)} | {Num(r.NotMatched)} | {Group(r)} |");
-        }
-        sb.AppendLine();
-        sb.AppendLine("- Different category: statuses whose code differs from the category of the latest IUCN assessment.");
-        sb.AppendLine("- CR(PE) or CR(PEW): CR statuses that need (PE) or (PEW) added or removed to match the latest assessment.");
-        sb.AppendLine("- Same category, new trend: {{Species table/row}} rows with the latest category whose population trend (direction) is empty or differs from the latest assessment's.");
-        sb.AppendLine("- Same category, older assessment: {{IUCN status}} templates with the latest category that cite an older assessment. Only the assessment ids or year change.");
-        sb.AppendLine("- Id of another taxon: {{IUCN status}} templates whose taxon id is not the id of the taxon the row or line names, or whose id is also on rows that name other taxa. The update page does not change them: check the id.");
-        sb.AppendLine("- Not matched: statuses whose name is not an IUCN name, or matches more than one IUCN taxon.");
-        sb.AppendLine("- \"has NA or RE\": the page writes some statuses as NA or RE, categories used only in regional assessments. Its other statuses may be regional too, so check them before updating the page.");
-        sb.AppendLine("- Empty cells are 0.");
-        sb.AppendLine();
+        doc.Heading(2, $"Pages with statuses to update or check ({statusPages.Count:N0})");
+        doc.Paragraph("Sorted by the number of statuses with a different category, then by the number of other statuses to update, most first. To get a page's updated wikitext, paste the page's wikitext into the update page on Beastie Bot Species Status.");
+        doc.Table(["Page", "Different category", "CR(PE) or CR(PEW)", "Same category, new trend", "Same category, older assessment", "Up to date", "Id of another taxon", "Not matched", "Compared with IUCN group"],
+            [false, true, true, true, true, true, true, true, false],
+            statusPages.Select(row => {
+                var r = row.Result;
+                return (IReadOnlyList<string>)[PageCell(doc, row), Num(r.CategoryChanged), Num(r.PossiblyExtinctChanged), Num(r.TrendChanged), Num(r.NewerAssessment),
+                    Num(r.UpToDate), Num(r.IdOfAnotherTaxon), Num(r.NotMatched), Group(r)];
+            }));
+        doc.Bullets([
+            "Different category: statuses whose code differs from the category of the latest IUCN assessment.",
+            "CR(PE) or CR(PEW): CR statuses that need (PE) or (PEW) added or removed to match the latest assessment.",
+            "Same category, new trend: {{Species table/row}} rows with the latest category whose population trend (direction) is empty or differs from the latest assessment's.",
+            "Same category, older assessment: {{IUCN status}} templates with the latest category that cite an older assessment. Only the assessment ids or year change.",
+            "Id of another taxon: {{IUCN status}} templates whose taxon id is not the id of the taxon the row or line names, or whose id is also on rows that name other taxa. The update page does not change them: check the id.",
+            "Not matched: statuses whose name is not an IUCN name, or matches more than one IUCN taxon.",
+            "\"has NA or RE\": the page writes some statuses as NA or RE, categories used only in regional assessments. Its other statuses may be regional too, so check them before updating the page.",
+            "Empty cells are 0.",
+        ]);
 
         var taxaPages = _rows.Where(r => r.Result.TaxaWithoutStatus > 0 || (r.Result.MissingFromGroup ?? 0) > 0 || r.Result.ListedTwice > 0 || r.Result.OutsideGroup > 0)
             .OrderByDescending(r => r.Result.TaxaWithoutStatus + (r.Result.MissingFromGroup ?? 0))
             .ThenBy(r => r.Result.Title, StringComparer.Ordinal)
             .ToList();
         var shown = taxaPages.Take(MaxTaxaPages).ToList();
-        sb.AppendLine($"## Pages with taxa that have no status or are missing ({taxaPages.Count:N0})");
-        sb.AppendLine();
-        sb.AppendLine(shown.Count < taxaPages.Count
+        doc.Heading(2, $"Pages with taxa that have no status or are missing ({taxaPages.Count:N0})");
+        doc.Paragraph(shown.Count < taxaPages.Count
             ? $"The {shown.Count:N0} pages with the most taxa with no status or missing from the group, most first. The other {taxaPages.Count - shown.Count:N0} pages are in {pagesCsv}."
             : "Sorted by the number of taxa with no status or missing from the group, most first.");
-        sb.AppendLine();
-        sb.AppendLine("| Page | Listed, no status | Missing from group | Listed twice | Outside the group | Compared with IUCN group |");
-        sb.AppendLine("|---|---:|---:|---:|---:|---|");
-        foreach (var row in shown) {
-            var r = row.Result;
-            var missing = r.MissingFromGroup is { } m ? Num(m) : r.GroupName is null ? "" : "lists part of group";
-            sb.AppendLine($"| {PageCell(row)} | {Num(r.TaxaWithoutStatus)} | {missing} | {Num(r.ListedTwice)} | {Num(r.OutsideGroup)} | {Group(r)} |");
-        }
-        sb.AppendLine();
-        sb.AppendLine("- Listed, no status: taxa on the page, found by their scientific name, with no IUCN status next to them.");
-        sb.AppendLine("- Missing from group: taxa in the IUCN group that the page does not list. \"lists part of group\" means the page lists less than half of the group, so missing taxa are not counted.");
-        sb.AppendLine("- Listed twice: taxa listed under two names, such as an old synonym and the current name.");
-        sb.AppendLine("- Outside the group: listed taxa outside the group that most of the page's taxa are in.");
-        sb.AppendLine("- Empty cells are 0.");
-        sb.AppendLine();
+        doc.Table(["Page", "Listed, no status", "Missing from group", "Listed twice", "Outside the group", "Compared with IUCN group"],
+            [false, true, true, true, true, false],
+            shown.Select(row => {
+                var r = row.Result;
+                var missing = r.MissingFromGroup is { } m ? Num(m) : r.GroupName is null ? "" : "lists part of group";
+                return (IReadOnlyList<string>)[PageCell(doc, row), Num(r.TaxaWithoutStatus), missing, Num(r.ListedTwice), Num(r.OutsideGroup), Group(r)];
+            }));
+        doc.Bullets([
+            "Listed, no status: taxa on the page, found by their scientific name, with no IUCN status next to them.",
+            "Missing from group: taxa in the IUCN group that the page does not list. \"lists part of group\" means the page lists less than half of the group, so missing taxa are not counted.",
+            "Listed twice: taxa listed under two names, such as an old synonym and the current name.",
+            "Outside the group: listed taxa outside the group that most of the page's taxa are in.",
+            "Empty cells are 0.",
+        ]);
         if (_failures.Count > 0) {
-            sb.AppendLine("## Pages that could not be checked");
-            sb.AppendLine();
-            foreach (var (title, error) in _failures) {
-                sb.AppendLine($"- {Link(title)}: {error}");
-            }
-            sb.AppendLine();
+            doc.Heading(2, "Pages that could not be checked");
+            doc.Bullets(_failures.Select(f => $"{doc.Link(f.Title)}: {f.Error}").ToList());
         }
-        return sb.ToString();
+        return doc.ToString();
     }
 
     private string SiteBuilt() =>
@@ -183,8 +176,8 @@ internal sealed class SpeciesListReport {
         _ => "id of another taxon",
     };
 
-    private static string PageCell(SpeciesListReportRow row) =>
-        Link(row.Result.Title) + (row.Sources.Contains(SpeciesListPlanPage.GroupArticle) ? " (group article)" : "")
+    private static string PageCell(ReportDocument doc, SpeciesListReportRow row) =>
+        doc.Link(row.Result.Title) + (row.Sources.Contains(SpeciesListPlanPage.GroupArticle) ? " (group article)" : "")
         + (row.Result.RegionalCodes > 0 ? " (has NA or RE: may give regional statuses)" : "");
 
     private static string Num(int n) => n == 0 ? "" : n.ToString("N0", CultureInfo.InvariantCulture);
@@ -199,8 +192,6 @@ internal sealed class SpeciesListReport {
 
     internal static string Url(string title) =>
         "https://en.wikipedia.org/wiki/" + Uri.EscapeDataString(title.Replace(' ', '_')).Replace("%2F", "/").Replace("%3A", ":");
-
-    private static string Link(string title) => $"[{title.Replace("|", "\\|").Replace("[", "\\[").Replace("]", "\\]")}]({Url(title)})";
 
     private void WritePagesCsv(string path) {
         using var writer = new StreamWriter(path, false, new UTF8Encoding(false));
