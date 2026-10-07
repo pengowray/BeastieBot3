@@ -21,6 +21,9 @@ public sealed class AboutModel : PageModel {
     public string? ApiDateRange { get; private set; }
     public string? GbifVersion { get; private set; }
     public string? ColRelease { get; private set; }
+    /// The Mammal Diversity Database's version ("v2.5") and the date of AmphibiaWeb's names file, when the site has their names.
+    public string? MddVersion { get; private set; }
+    public string? AmphibiaWebDate { get; private set; }
     public string? SpratDate { get; private set; }
     public string? BuiltDate { get; private set; }
 
@@ -61,6 +64,8 @@ public sealed class AboutModel : PageModel {
             ? SiteFormat.Date(gbif)
             : snapshot.Get(SiteDbSchema.MetaKeys.GbifChecklistVersion);
         ColRelease = snapshot.Get(SiteDbSchema.MetaKeys.ColRelease);
+        MddVersion = snapshot.Get(SiteDbSchema.MetaKeys.MddVersion);
+        AmphibiaWebDate = SiteFormat.TryParseDate(snapshot.Get(SiteDbSchema.MetaKeys.AmphibiaWebVersion), out var aw) ? SiteFormat.Date(aw) : null;
         GbifCitation = snapshot.Get(SiteDbSchema.MetaKeys.GbifChecklistCitation);
         if (snapshot.Get(SiteDbSchema.MetaKeys.GbifChecklistDoi) is { } gbifDoi) {
             GbifUrl = DoiUrl(gbifDoi);

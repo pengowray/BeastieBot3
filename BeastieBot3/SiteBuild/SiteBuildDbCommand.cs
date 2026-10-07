@@ -118,6 +118,7 @@ internal sealed class SiteBuildDbCommand : Command<SiteBuildDbCommand.Settings> 
                 RulesList = rulesList,
                 TaxonRules = Full(Path.Combine(Path.GetDirectoryName(rulesList)!, "taxon-rules.yml")),
                 WikidataRanks = Full(Path.Combine(Path.GetDirectoryName(rulesList)!, "wikidata-taxon-ranks.csv")),
+                Checklists = Full(paths.GetChecklistsPath()),
                 NotAssignedRules = Iucn.IucnNotAssignedRules.LoadForPaths(paths),
                 WikidataItemModel = wikidataConfig.ToItemModel(),
                 WikidataItemModelSource = wikidataConfigPath,
@@ -231,6 +232,7 @@ internal sealed class SiteBuildDbCommand : Command<SiteBuildDbCommand.Settings> 
         Row("Citations parsed from cached API assessments", s.CitationsParsed);
         Row("Assessments not in the API cache (no citation)", s.CitationsNotCached);
         Row("Cached assessments with taxonomic notes (has_taxonomic_notes = 1)", s.PayloadsWithTaxonomicNotes);
+        Row("Taxa with names from the Mammal Diversity Database or AmphibiaWeb", s.ChecklistTaxa);
         Row("Taxa whose latest global assessment codes countries or areas", s.TaxaWithAreas);
         Row("Taxon and area rows (taxon_area)", s.TaxonAreaRows);
         Row("Countries and areas (area)", s.Areas);

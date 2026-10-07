@@ -20,14 +20,22 @@ using CsvHelper.Configuration;
 namespace BeastieBot3.Checklists;
 
 internal sealed record ChecklistParse(string? Version, IReadOnlyList<ChecklistArea> Rows, IReadOnlyList<(string Name, string Accepted)> Synonyms,
-    IReadOnlyList<string> Notes);
+    IReadOnlyList<string> Notes) {
+    /// English common names and synonyms of the source's species.
+    public IReadOnlyList<ChecklistName> Names { get; init; } = [];
+}
 
-internal sealed record ChecklistSource(string Key, string Title, string Url, string FileName, string Licence, Func<string, ChecklistParse> Parse);
+/// ExtraFiles: more files the parser reads from the same folder (published path, URL).
+internal sealed record ChecklistSource(string Key, string Title, string Url, string FileName, string Licence, Func<string, ChecklistParse> Parse) {
+    public IReadOnlyList<(string FileName, string Url)> ExtraFiles { get; init; } = [];
+}
 
 internal static partial class ChecklistSources {
     public static readonly IReadOnlyList<ChecklistSource> All = [
         new("mdd", "Mammal Diversity Database",
-            "https://zenodo.org/api/records/21654811/files/MDD_v2.5_6904species.csv/content", "MDD_v2.5_6904species.csv", "CC BY 4.0", ParseMdd),
+            "https://zenodo.org/api/records/21654811/files/MDD_v2.5_6904species.csv/content", "MDD_v2.5_6904species.csv", "CC BY 4.0", ParseMdd) {
+            ExtraFiles = [(MddSynonymsFile, "https://zenodo.org/api/records/21654811/files/Species_Syn_v2.5.csv/content")],
+        },
         new("wcvp", "World Checklist of Vascular Plants (Kew)",
             "https://sftp.kew.org/pub/data-repositories/WCVP/wcvp.zip", "wcvp.zip", "CC BY", ParseWcvp),
         new("reptiledb", "The Reptile Database (ChecklistBank dataset 1008)",
@@ -44,9 +52,46 @@ internal static partial class ChecklistSources {
 
     // ---------------------------------------------------------------- MDD
 
+    public const string MddSynonymsFile = "MDD_Species_Syn_v2.5.csv";
+
     internal static ChecklistParse ParseMdd(string path) {
-        using var reader = new StreamReader(path, Encoding.UTF8);
-        return ParseMdd(reader, Path.GetFileNameWithoutExtension(path));
+        ChecklistParse parse;
+        using (var reader = new StreamReader(path, Encoding.UTF8)) {
+            parse = ParseMdd(reader, Regex.Match(Path.GetFileName(path), @"v\d+(\.\d+)*") is { Success: true } v ? v.Value : null);
+        }
+        var synonyms = Path.Combine(Path.GetDirectoryName(path) ?? ".", MddSynonymsFile);
+        if (File.Exists(synonyms)) {
+            using var reader = new StreamReader(synonyms, Encoding.UTF8);
+            parse = parse with { Names = [.. parse.Names, .. ParseMddSynonyms(reader)] };
+        }
+        return parse;
+    }
+
+    // Species_Syn: one row per name of a species. Kept: the synonyms, and the original combination of
+    // each valid species ("Rattus latidens" for Abditomys latidens), with the author and year; left
+    // out: nomina dubia, species inquirendae, hybrids, unavailable and composite names.
+    internal static IEnumerable<ChecklistName> ParseMddSynonyms(TextReader text) {
+        using var csv = new CsvReader(text, new CsvConfiguration(CultureInfo.InvariantCulture) { BadDataFound = null, MissingFieldFound = null });
+        csv.Read();
+        csv.ReadHeader();
+        var names = new List<ChecklistName>();
+        while (csv.Read()) {
+            var validity = csv.GetField("MDD_validity");
+            var species = csv.GetField("MDD_species")?.Replace('_', ' ').Trim();
+            var name = csv.GetField("MDD_original_combination")?.Trim();
+            if (validity is not ("synonym" or "species") || string.IsNullOrEmpty(species) || string.IsNullOrEmpty(name) || name == species) {
+                continue;
+            }
+            var author = csv.GetField("MDD_author")?.Trim();
+            var year = csv.GetField("MDD_year")?.Trim();
+            string? authority = string.IsNullOrEmpty(author) || author == "NA" ? null
+                : string.IsNullOrEmpty(year) || year == "NA" ? author : $"{author}, {year}";
+            if (authority is not null && csv.GetField("MDD_authority_parentheses") == "1") {
+                authority = $"({authority})";
+            }
+            names.Add(new ChecklistName(species, name, ChecklistNameTypes.Synonym, authority));
+        }
+        return names;
     }
 
     internal static ChecklistParse ParseMdd(TextReader text, string? version) {
@@ -54,8 +99,16 @@ internal static partial class ChecklistSources {
         csv.Read();
         csv.ReadHeader();
         var rows = new List<ChecklistArea>();
+        var names = new List<ChecklistName>();
         while (csv.Read()) {
             var name = csv.GetField("sciName")?.Replace('_', ' ').Trim();
+            if (!string.IsNullOrEmpty(name)) {
+                // English names: mainCommonName, then otherCommonNames separated by "|".
+                var common = new[] { csv.GetField("mainCommonName") }.Concat((csv.GetField("otherCommonNames") ?? "").Split('|'));
+                foreach (var c in common.Select(c => c?.Trim()).Where(c => c is { Length: > 0 } && c != "NA").Distinct()) {
+                    names.Add(new ChecklistName(name, c!, ChecklistNameTypes.Common));
+                }
+            }
             var countries = csv.GetField("countryDistribution");
             if (string.IsNullOrEmpty(name) || string.IsNullOrWhiteSpace(countries) || countries == "NA") {
                 continue;
@@ -68,7 +121,7 @@ internal static partial class ChecklistSources {
                 rows.Add(new ChecklistArea(name, part.TrimEnd('?').Trim(), ChecklistSchemes.Name, uncertain ? ChecklistOrigins.Uncertain : ChecklistOrigins.Native));
             }
         }
-        return new ChecklistParse(version, rows, [], []);
+        return new ChecklistParse(version, rows, [], []) { Names = names };
     }
 
     // ---------------------------------------------------------------- WCVP
@@ -198,14 +251,15 @@ internal static partial class ChecklistSources {
 
     internal static ChecklistParse ParseAmphibiaWeb(string path) {
         using var reader = new StreamReader(path, Encoding.UTF8);
-        var date = Regex.Match(Path.GetFileName(path), @"\d{8}") is { Success: true } m ? m.Value : null;
-        return ParseAmphibiaWeb(reader, date is null ? null : $"names file of {date}");
+        var date = Regex.Match(Path.GetFileName(path), @"(\d{4})(\d{2})(\d{2})") is { Success: true } m ? $"{m.Groups[1]}-{m.Groups[2]}-{m.Groups[3]}" : null;
+        return ParseAmphibiaWeb(reader, date);
     }
 
     internal static ChecklistParse ParseAmphibiaWeb(TextReader text, string? version) {
         var h = Header(text.ReadLine(), '\t');
         var rows = new List<ChecklistArea>();
         var synonyms = new List<(string, string)>();
+        var names = new List<ChecklistName>();
         for (var line = text.ReadLine(); line is not null; line = text.ReadLine()) {
             var f = line.Split('\t');
             if (f.Length <= h["intro_isocc"]) {
@@ -222,8 +276,21 @@ internal static partial class ChecklistSources {
             if (h.TryGetValue("gaa_name", out var gaa) && f[gaa].Trim() is { Length: > 0 } iucnName && iucnName != name) {
                 synonyms.Add((iucnName, name));
             }
+            // common_name and synonymies: comma-separated.
+            if (h.TryGetValue("common_name", out var commonColumn)) {
+                foreach (var c in f[commonColumn].Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Distinct()) {
+                    names.Add(new ChecklistName(name, c, ChecklistNameTypes.Common));
+                }
+            }
+            if (h.TryGetValue("synonymies", out var synonymColumn)) {
+                foreach (var s in f[synonymColumn].Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries).Distinct()) {
+                    if (s != name) {
+                        names.Add(new ChecklistName(name, s, ChecklistNameTypes.Synonym));
+                    }
+                }
+            }
         }
-        return new ChecklistParse(version, rows, synonyms, []);
+        return new ChecklistParse(version, rows, synonyms, []) { Names = names };
     }
 
     private static Dictionary<string, int> Header(string? line, char separator) {

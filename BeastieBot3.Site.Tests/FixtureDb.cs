@@ -637,6 +637,8 @@ public static class FixtureDb {
         w.Meta(SiteDbSchema.MetaKeys.SchemaVersion, schemaVersion);
         w.Meta(SiteDbSchema.MetaKeys.BuiltAtUtc, "2026-10-02T09:00:00Z");
         w.Meta(SiteDbSchema.MetaKeys.IucnRelease, release);
+        w.Meta(SiteDbSchema.MetaKeys.MddVersion, "v2.5");
+        w.Meta(SiteDbSchema.MetaKeys.AmphibiaWebVersion, "2026-04-01");
         w.Meta(SiteDbSchema.MetaKeys.IucnApiDownloadedFrom, "2026-08-18");
         w.Meta(SiteDbSchema.MetaKeys.IucnApiDownloadedTo, "2026-09-01");
         w.Meta(SiteDbSchema.MetaKeys.GbifChecklistVersion, "2026-1");

@@ -88,4 +88,26 @@ public class ChecklistTests {
             """{"count":3,"facets":[{"field":"SPECIES_KEY","counts":[{"name":"5220126","count":3795},{"name":"2724925","count":12}]}]}"""));
         Assert.Equal([(5220126L, 3795L), (2724925L, 12L)], GbifChecklist.ReadFacet(json));
     }
+
+    [Fact]
+    public void MddGivesEnglishNamesAndSynonymsWithAuthorities() {
+        var csv = "sciName,mainCommonName,otherCommonNames,countryDistribution\nAbditomys_latidens,Broad-toothed Rat,Luzon Broad-toothed Rat|NA,Philippines\n";
+        var parse = ChecklistSources.ParseMdd(new StringReader(csv), "v2.5");
+        Assert.Equal(["Broad-toothed Rat", "Luzon Broad-toothed Rat"], parse.Names.Select(n => n.Name));
+        var synonyms = "MDD_species,MDD_author,MDD_year,MDD_authority_parentheses,MDD_validity,MDD_original_combination\n"
+            + "Abditomys latidens,Sanborn,1952,0,species,Rattus latidens\n"
+            + "Abditomys latidens,Musser,1982,0,synonym,Abditomys latidens\n"
+            + "Abeomelomys sevia,Tate,1951,1,synonym,Pogonomelomys sevia\n"
+            + "Abeomelomys sevia,Someone,1900,0,nomen_dubium,Mus dubius\n";
+        var names = ChecklistSources.ParseMddSynonyms(new StringReader(synonyms)).ToList();
+        Assert.Equal([new ChecklistName("Abditomys latidens", "Rattus latidens", ChecklistNameTypes.Synonym, "Sanborn, 1952"),
+            new ChecklistName("Abeomelomys sevia", "Pogonomelomys sevia", ChecklistNameTypes.Synonym, "(Tate, 1951)")], names);
+    }
+
+    [Fact]
+    public void AmphibiaWebGivesEnglishNamesAndSynonyms() {
+        var text = "genus\tspecies\tcommon_name\tgaa_name\tsynonymies\tisocc\tintro_isocc\nRhinella\tbeebei\tBeebe's Toad,Beebe Toad\t\tBufo beebei\tCO\t\n";
+        var parse = ChecklistSources.ParseAmphibiaWeb(new StringReader(text), "2026-04-01");
+        Assert.Equal(["Beebe's Toad common", "Beebe Toad common", "Bufo beebei synonym"], parse.Names.Select(n => $"{n.Name} {n.NameType}"));
+    }
 }

@@ -77,12 +77,19 @@ internal sealed class ChecklistsImportCommand : AsyncCommand<ChecklistsImportCom
                     AnsiConsole.MarkupLineInterpolated($"[grey]Downloading {source.Title} from[/] {source.Url}");
                     await Download(http, source.Url, file, cancellationToken);
                 }
+                foreach (var (extraName, extraUrl) in source.ExtraFiles) {
+                    var extra = Path.Combine(Path.GetDirectoryName(file) ?? folder, extraName);
+                    if (settings.Download || !System.IO.File.Exists(extra)) {
+                        AnsiConsole.MarkupLineInterpolated($"[grey]Downloading[/] {extraUrl}");
+                        await Download(http, extraUrl, extra, cancellationToken);
+                    }
+                }
                 AnsiConsole.MarkupLineInterpolated($"[grey]Reading[/] {file}");
                 var parse = source.Parse(file);
-                store.Replace(source.Key, parse.Version, source.Licence, source.Url, parse.Rows, parse.Synonyms);
+                store.Replace(source.Key, parse.Version, source.Licence, source.Url, parse.Rows, parse.Synonyms, parse.Names);
                 var taxa = parse.Rows.Select(r => r.ScientificName).Distinct(StringComparer.Ordinal).Count();
                 AnsiConsole.MarkupLineInterpolated(
-                    $"[green]{source.Title}:[/] {ChecklistStore.Count(parse.Rows.Count)} taxon and area rows for {ChecklistStore.Count(taxa)} taxa, {ChecklistStore.Count(parse.Synonyms.Count)} synonyms. Licence: {source.Licence}.");
+                    $"[green]{source.Title}:[/] {ChecklistStore.Count(parse.Rows.Count)} taxon and area rows for {ChecklistStore.Count(taxa)} taxa, {ChecklistStore.Count(parse.Synonyms.Count)} synonyms for matching, {ChecklistStore.Count(parse.Names.Count(n => n.NameType == ChecklistNameTypes.Common))} English names and {ChecklistStore.Count(parse.Names.Count(n => n.NameType == ChecklistNameTypes.Synonym))} synonyms for the site. Licence: {source.Licence}.");
             } catch (Exception e) when (e is HttpRequestException or IOException or InvalidDataException or KeyNotFoundException or TaskCanceledException) {
                 AnsiConsole.MarkupLineInterpolated($"[red]{source.Title} not imported:[/] {e.Message}");
                 failed = true;

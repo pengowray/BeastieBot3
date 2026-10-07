@@ -97,6 +97,8 @@ public static partial class SiteText {
         "wikidata" => "Wikidata",
         "wikipedia" => "Wikipedia",
         "wikipedia-taxobox" => "Wikipedia taxobox",
+        "mdd" => "Mammal Diversity Database",
+        "amphibiaweb" => "AmphibiaWeb",
         _ => source,
     };
 
@@ -172,6 +174,11 @@ public static partial class SiteText {
     // page text is in Pages/About.cshtml.
     public const string LicenceCcBy = "https://creativecommons.org/licenses/by/4.0/";
     public const string LicenceCcBySa = "https://creativecommons.org/licenses/by-sa/4.0/";
+    public const string LicenceCcByNc = "https://creativecommons.org/licenses/by-nc/4.0/";
+    public const string MddUrl = "https://www.mammaldiversity.org/";
+    /// The Mammal Diversity Database's releases on Zenodo (the concept DOI, which leads to the newest).
+    public const string MddDoiUrl = "https://doi.org/10.5281/zenodo.4139722";
+    public const string AmphibiaWebUrl = "https://amphibiaweb.org/";
     public const string LicenceCc0 = "https://creativecommons.org/publicdomain/zero/1.0/";
     public const string IucnRedListUrl = "https://www.iucnredlist.org";
     public const string WikidataUrl = "https://www.wikidata.org";

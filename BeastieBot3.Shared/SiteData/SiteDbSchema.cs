@@ -364,6 +364,9 @@ public static class SiteDbSchema {
         public const string GbifChecklistDoi = "gbif_checklist_doi";
         /// Catalogue of Life release used for CoL ids ("COL26.7 XR").
         public const string ColRelease = "col_release";
+        /// The Mammal Diversity Database and AmphibiaWeb versions the names come from.
+        public const string MddVersion = "mdd_version";
+        public const string AmphibiaWebVersion = "amphibiaweb_version";
         /// The release's recommended citation and DOI from the ColDP metadata ("10.48580/dgykv").
         public const string ColCitation = "col_citation";
         public const string ColDoi = "col_doi";

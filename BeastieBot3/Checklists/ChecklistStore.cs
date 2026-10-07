@@ -19,6 +19,14 @@ namespace BeastieBot3.Checklists;
 /// does not say. Records: the number of occurrence records (GBIF only).
 internal sealed record ChecklistArea(string ScientificName, string Area, string Scheme, string? Origin, long? Records = null);
 
+/// A name a source gives a species: an English common name, or a synonym with its authority.
+internal sealed record ChecklistName(string ScientificName, string Name, string NameType, string? Authority = null);
+
+internal static class ChecklistNameTypes {
+    public const string Common = "common";
+    public const string Synonym = "synonym";
+}
+
 internal sealed record ChecklistSourceInfo(string Source, string? Version, string? Licence, string? Url, DateTime? ImportedAt, long Rows, long Taxa);
 
 internal static class ChecklistSchemes {
@@ -85,6 +93,14 @@ internal sealed class ChecklistStore : IDisposable {
                 PRIMARY KEY (source, scientific_name, area)
             ) WITHOUT ROWID;
             CREATE INDEX IF NOT EXISTS checklist_area_name ON checklist_area(scientific_name);
+            CREATE TABLE IF NOT EXISTS checklist_name (
+                source          TEXT NOT NULL,
+                scientific_name TEXT NOT NULL,
+                name            TEXT NOT NULL,
+                name_type       TEXT NOT NULL,
+                authority       TEXT,
+                PRIMARY KEY (source, scientific_name, name, name_type)
+            ) WITHOUT ROWID;
             CREATE TABLE IF NOT EXISTS gbif_species_country (
                 country     TEXT NOT NULL,
                 species_key INTEGER NOT NULL,
@@ -115,11 +131,11 @@ internal sealed class ChecklistStore : IDisposable {
 
     /// Replaces the source's rows. A name and area given twice keeps the first origin given.
     public void Replace(string source, string? version, string? licence, string? url, IEnumerable<ChecklistArea> rows,
-        IEnumerable<(string Name, string Accepted)>? synonyms = null) {
+        IEnumerable<(string Name, string Accepted)>? synonyms = null, IEnumerable<ChecklistName>? names = null) {
         using var tx = _connection.BeginTransaction();
         using (var delete = _connection.CreateCommand()) {
             delete.Transaction = tx;
-            delete.CommandText = "DELETE FROM checklist_area WHERE source = @source; DELETE FROM checklist_synonym WHERE source = @source; DELETE FROM checklist_source WHERE source = @source;";
+            delete.CommandText = "DELETE FROM checklist_area WHERE source = @source; DELETE FROM checklist_synonym WHERE source = @source; DELETE FROM checklist_name WHERE source = @source; DELETE FROM checklist_source WHERE source = @source;";
             delete.Parameters.AddWithValue("@source", source);
             delete.ExecuteNonQuery();
         }
@@ -151,6 +167,23 @@ internal sealed class ChecklistStore : IDisposable {
             foreach (var (n, a) in synonyms) {
                 name.Value = n;
                 accepted.Value = a;
+                insert.ExecuteNonQuery();
+            }
+        }
+        if (names is not null) {
+            using var insert = _connection.CreateCommand();
+            insert.Transaction = tx;
+            insert.CommandText = "INSERT OR IGNORE INTO checklist_name (source, scientific_name, name, name_type, authority) VALUES (@source, @species, @name, @type, @authority)";
+            insert.Parameters.AddWithValue("@source", source);
+            var species = insert.Parameters.Add("@species", SqliteType.Text);
+            var name = insert.Parameters.Add("@name", SqliteType.Text);
+            var type = insert.Parameters.Add("@type", SqliteType.Text);
+            var authority = insert.Parameters.Add("@authority", SqliteType.Text);
+            foreach (var n in names) {
+                species.Value = n.ScientificName;
+                name.Value = n.Name;
+                type.Value = n.NameType;
+                authority.Value = (object?)n.Authority ?? DBNull.Value;
                 insert.ExecuteNonQuery();
             }
         }
@@ -194,6 +227,17 @@ internal sealed class ChecklistStore : IDisposable {
         while (reader.Read()) {
             yield return new ChecklistArea(reader.GetString(0), reader.GetString(1), reader.GetString(2), reader.IsDBNull(3) ? null : reader.GetString(3),
                 reader.IsDBNull(4) ? null : reader.GetInt64(4));
+        }
+    }
+
+    /// The source's names (common names and synonyms), by species.
+    public IEnumerable<ChecklistName> Names(string source) {
+        using var command = _connection.CreateCommand();
+        command.CommandText = "SELECT scientific_name, name, name_type, authority FROM checklist_name WHERE source = @source ORDER BY scientific_name";
+        command.Parameters.AddWithValue("@source", source);
+        using var reader = command.ExecuteReader();
+        while (reader.Read()) {
+            yield return new ChecklistName(reader.GetString(0), reader.GetString(1), reader.GetString(2), reader.IsDBNull(3) ? null : reader.GetString(3));
         }
     }
 

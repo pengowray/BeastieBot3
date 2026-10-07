@@ -29,6 +29,10 @@ internal static class SiteNameSource {
     public const string Wikipedia = "wikipedia";
     /// The English name in a Wikipedia article's taxobox.
     public const string WikipediaTaxobox = "wikipedia-taxobox";
+    /// Mammal Diversity Database (`checklists import --source mdd`).
+    public const string Mdd = "mdd";
+    /// AmphibiaWeb (`checklists import --source amphibiaweb`).
+    public const string AmphibiaWeb = "amphibiaweb";
 }
 
 internal static class SiteBuildRules {

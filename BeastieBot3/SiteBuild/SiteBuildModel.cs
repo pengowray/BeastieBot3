@@ -36,6 +36,8 @@ internal sealed record SiteBuildInputs {
     /// defaults, when no file was found).
     public Shared.Wikitext.WikidataItemModel WikidataItemModel { get; init; } = new();
     public string? WikidataItemModelSource { get; init; }
+    /// The checklists store (`checklists import`), for the Mammal Diversity Database's and AmphibiaWeb's names.
+    public string? Checklists { get; init; }
     /// rules/wikidata-taxon-ranks.csv: the names of Wikidata's rank items, for ladder_node.
     public string? WikidataRanks { get; init; }
     /// The site database to replace.
@@ -111,6 +113,8 @@ internal sealed class SiteTaxon {
     public List<(string Name, string Source, bool IsPreferred)> EnglishNames { get; } = new();
     public List<SiteSynonym> ColSynonyms { get; } = new();
     public List<SiteSynonym> WikidataSynonyms { get; } = new();
+    /// English names and synonyms from the Mammal Diversity Database and AmphibiaWeb: name, type, authority, source.
+    public List<(string Name, string Type, string? Authority, string Source)> ChecklistNames { get; } = new();
     /// The scientific name and the synonyms in the taxobox of the taxon's English Wikipedia article.
     public List<SiteSynonym> WikipediaSynonyms { get; } = new();
 }
@@ -220,6 +224,11 @@ internal sealed class SiteBuildStats {
     /// Payloads whose documentation.taxonomic_notes has text.
     public int PayloadsWithTaxonomicNotes;
     public int ColLadderNodes;
+    public int ChecklistTaxa;
+    public int ChecklistCommonNames;
+    public int ChecklistSynonyms;
+    public string? MddVersion;
+    public string? AmphibiaWebVersion;
     public int WikidataLadderNodes;
     public int TaxaWithAreas;
     public int TaxonAreaRows;

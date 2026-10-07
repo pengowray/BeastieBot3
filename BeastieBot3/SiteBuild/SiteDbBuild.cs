@@ -121,6 +121,10 @@ internal sealed class SiteDbBuild {
             SiteLinkReaders.ReadWikidataSynonyms(path, taxa, _stats, ct);
             return $"{_stats.WikidataSynonymItems:N0} synonym items, {_stats.WikidataSynonymsNamed:N0} with a name in the cache";
         });
+        Optional("checklists store: Mammal Diversity Database and AmphibiaWeb names", _inputs.Checklists, path => {
+            SiteChecklistNames.Read(path, taxa, _stats);
+            return $"{_stats.ChecklistTaxa:N0} taxa matched, {_stats.ChecklistCommonNames:N0} English names, {_stats.ChecklistSynonyms:N0} synonyms";
+        });
         Optional("DOI cache (iucn resolve-dois)", _inputs.DoiCache, path => {
             SiteLinkReaders.ReadDoiCache(path, dois, _stats, ct);
             var newest = _stats.DoiCheckedTo is { } at ? at.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture) : "none";
@@ -415,6 +419,9 @@ internal sealed class SiteDbBuild {
         foreach (var synonym in taxon.WikipediaSynonyms) {
             names.Add(synonym.Name, SiteNameType.Synonym, null, SiteNameSource.WikipediaTaxobox, authority: synonym.Authority);
         }
+        foreach (var (name, type, authority, source) in taxon.ChecklistNames) {
+            names.Add(name, type == "common" ? SiteNameType.Common : SiteNameType.Synonym, type == "common" ? "en" : null, source, authority: authority);
+        }
         foreach (var name in names.Names) {
             writer.AddName(taxon.TaxonId, name);
             _stats.Count(_stats.NamesByType, name.NameType);
@@ -456,6 +463,8 @@ internal sealed class SiteDbBuild {
         writer.SetMeta(SiteDbSchema.MetaKeys.GbifChecklistCitation, _stats.GbifCitation);
         writer.SetMeta(SiteDbSchema.MetaKeys.GbifChecklistDoi, _stats.GbifDoi);
         writer.SetMeta(SiteDbSchema.MetaKeys.ColRelease, _stats.ColRelease);
+        writer.SetMeta(SiteDbSchema.MetaKeys.MddVersion, _stats.MddVersion);
+        writer.SetMeta(SiteDbSchema.MetaKeys.AmphibiaWebVersion, _stats.AmphibiaWebVersion);
         writer.SetMeta(SiteDbSchema.MetaKeys.ColCitation, _stats.ColCitation);
         writer.SetMeta(SiteDbSchema.MetaKeys.ColDoi, _stats.ColDoi);
         writer.SetMeta(SiteDbSchema.MetaKeys.SpratReport, _stats.SpratReport);
