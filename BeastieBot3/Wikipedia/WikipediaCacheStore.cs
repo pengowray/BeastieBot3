@@ -195,6 +195,7 @@ CREATE TABLE IF NOT EXISTS wiki_group_title_status (
 ) WITHOUT ROWID;
 """;
         command.ExecuteNonQuery();
+        EnsureSpeciesListSchema();
     }
 
     public WikiCacheStats GetCacheStats() {

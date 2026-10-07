@@ -19,6 +19,9 @@
 
   <ItemGroup>
     <ProjectReference Include="..\BeastieBot3.Shared\BeastieBot3.Shared.csproj" />
+    <!-- The status updater of the public site's /update page, for `wikipedia report-species-lists`.
+         The site must never reference this project; this direction is allowed. -->
+    <ProjectReference Include="..\BeastieBot3.Site\BeastieBot3.Site.csproj" />
   </ItemGroup>
 
   <ItemGroup>
@@ -102,5 +105,10 @@
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
   </ItemGroup>
+
+  <!-- The site's appsettings files come along with the site reference; the CLI has no use for them. -->
+  <Target Name="RemoveSiteAppSettings" AfterTargets="Build">
+    <Delete Files="$(OutDir)appsettings.json;$(OutDir)appsettings.Development.json" />
+  </Target>
 
 </Project>
