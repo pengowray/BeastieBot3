@@ -1745,7 +1745,10 @@ colspan and rowspan; `StatusUpdater` decides the edits, and `StatusTaxonResolver
 - Few groups have an English name of their own (1,182 of 33,559 in the build of 5 October 2026).
   The rules files name the groups the Wikipedia lists needed; the common names store has names for
   species only. Adding plurals to `rules-list.txt` or `taxon-rules.yml` names a group on the site
-  and in the lists at once.
+  and in the lists at once. `site report-group-names` lists the groups with no English name,
+  largest first, with candidate names (English Wikipedia redirects to the group's article and the
+  Catalogue of Life's English names) and a `rules-list.txt` line for each; the first 42 were added
+  in October 2026.
 
 - Most taxa that are not in the release have no Wikipedia article and no English name on the site:
   in the build of 3 October 2026, 195 of the 4,223 have an `enwiki_title` and 104 have a

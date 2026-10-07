@@ -1035,3 +1035,49 @@ Liliopsida = monocotyledon ! monocotyledons
 
 //Plantae sort order (TODO: currently specified plantaeSortOrder in RedlistCSV)
 //plantae sort-order Algae, Bryophytes, Pteridophytes, Gymnosperms, Magnoliopsida, Liliopsida
+
+// Group names for the species site and the list headings (October 2026), chosen from
+// `site report-group-names` (English Wikipedia redirects and Catalogue of Life English names)
+// for the largest groups that had no English name.
+Squamata = squamate ! squamates
+Odonata plural dragonflies and damselflies
+Lepidoptera plural moths and butterflies
+Perciformes plural perch-like fishes
+Aculeata plural stinging wasps
+Brachyura plural true crabs
+Elasmobranchii plural sharks and rays
+Scleractinia plural stony corals
+Bivalvia = bivalve ! bivalves
+Gobiidae = goby ! gobies
+Loricariidae plural suckermouth armored catfishes
+Trichomycteridae plural pencil catfishes
+Caelifera plural grasshoppers
+Acrididae plural short-horned grasshoppers
+Hydrobiidae plural mud snails
+Clausiliidae plural door snails
+Planorbidae plural ramshorn snails
+Unionidae plural river mussels
+Hylidae = hylid ! hylids
+Plethodontidae plural lungless salamanders
+Murinae plural Old World rats and mice
+Sigmodontinae plural New World rats and mice
+Myomorpha plural mouse-like rodents
+Vespertilionidae = vesper bat ! vesper bats
+Apodiformes plural swifts and hummingbirds
+Galliformes plural landfowl
+Scolecophidia plural blind snakes
+Elapidae = elapid ! elapids
+Anolidae = anole ! anoles
+Pomacentridae plural damselfishes
+Syngnathidae plural seahorses and pipefishes
+Sciaenidae plural drums and croakers
+Ophichthidae plural snake eels
+Stomiidae plural barbeled dragonfishes
+Poeciliidae plural livebearers
+Nemacheilidae plural stone loaches
+Erebidae plural erebid moths
+Noctuidae plural owlet moths
+Coenagrionidae plural narrow-winged damselflies
+Astacoidea plural crayfishes
+Cambaridae plural crayfishes
+Potamidae plural freshwater crabs
