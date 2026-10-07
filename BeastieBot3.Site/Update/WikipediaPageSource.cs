@@ -19,6 +19,8 @@ public enum WikipediaPageError {
     TooLarge,
     /// Wikipedia did not answer, or answered with an error.
     Failed,
+    /// The site has loaded as many pages as it may this minute (RateLimitOptions.WikipediaLoadsPerMinute).
+    Busy,
 }
 
 public sealed record WikipediaPageResult(WikipediaPageText? Page, WikipediaPageError? Error) {
@@ -42,11 +44,19 @@ public sealed class WikipediaPageSource : IWikipediaPageSource {
     private readonly string? _userAgent;
     private readonly int _maxTextBytes;
     private readonly MemoryCache _cache = new(new MemoryCacheOptions { SizeLimit = 64L * 1024 * 1024 });
+    // Loads from Wikipedia per minute, all clients together; null: no limit.
+    private readonly System.Threading.RateLimiting.RateLimiter? _loads;
 
-    public WikipediaPageSource(HttpClient http, IOptions<SiteOptions> options) : this(http, options.Value.WikipediaUserAgent, Pages.UpdateModel.MaxTextBytes) {
+    public WikipediaPageSource(HttpClient http, IOptions<SiteOptions> options)
+        : this(http, options.Value.WikipediaUserAgent, Pages.UpdateModel.MaxTextBytes, options.Value.RateLimits.WikipediaLoadsPerMinute) {
     }
 
-    internal WikipediaPageSource(HttpClient http, string? userAgent, int maxTextBytes) {
+    internal WikipediaPageSource(HttpClient http, string? userAgent, int maxTextBytes, int loadsPerMinute = 0) {
+        _loads = loadsPerMinute > 0
+            ? new System.Threading.RateLimiting.SlidingWindowRateLimiter(new System.Threading.RateLimiting.SlidingWindowRateLimiterOptions {
+                PermitLimit = loadsPerMinute, Window = TimeSpan.FromMinutes(1), SegmentsPerWindow = 6, QueueLimit = 0,
+            })
+            : null;
         _http = http;
         _http.Timeout = TimeSpan.FromSeconds(15);
         _http.MaxResponseContentBufferSize = 4L * maxTextBytes + 1024 * 1024;
@@ -61,6 +71,10 @@ public sealed class WikipediaPageSource : IWikipediaPageSource {
         var key = revisionId is { } rev ? "rev|" + rev : "title|" + title;
         if (_cache.TryGetValue(key, out WikipediaPageResult? kept) && kept is not null) {
             return kept;
+        }
+        using var permit = _loads?.AttemptAcquire();
+        if (permit is { IsAcquired: false }) {
+            return WikipediaPageResult.Failure(WikipediaPageError.Busy);
         }
         var parameters = new Dictionary<string, string> {
             ["action"] = "query",

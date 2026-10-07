@@ -1427,8 +1427,10 @@ into the search box (`WikipediaPageInput` in `BeastieBot3.Shared`) redirects to
 and runs the update as a POST would, with the categories its title names and, for a title that
 names Australia, the EPBC Act column. The page says which page and revision the text is; hidden
 fields keep that line on later POSTs while the text is unchanged (`pagekey`). The site asks
-Wikipedia only when `Site:WikipediaUserAgent` is set, and a load counts against
-`UpdatesPerMinute` like a POST. The systemd unit allows connections to Wikimedia's address ranges
+Wikipedia only when `Site:WikipediaUserAgent` is set. A load counts against the client's
+`UpdatesPerMinute` like a POST and the shared limit on updates at once, and loads for all clients
+together are capped at `WikipediaLoadsPerMinute` (default 30; a page held from the last 5 minutes
+does not count), after which the page answers 429 and says so. The systemd unit allows connections to Wikimedia's address ranges
 for it. The option "Show the EPBC Act status" (`epbc`) adds each taxon's EPBC Act listing
 (`epbc_listing`, so only taxa IUCN also has) to the report and the comparison's tables, and lists
 the missing taxa that have one.

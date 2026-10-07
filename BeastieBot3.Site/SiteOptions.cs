@@ -40,6 +40,11 @@ public sealed class RateLimitOptions {
     /// (GET /update?page=...), counted together.
     public int UpdatesPerMinute { get; set; } = 10;
 
+    /// Pages the status update page loads from Wikipedia per minute for all clients together (pages
+    /// it already holds from the last 5 minutes do not count), so that many clients cannot make the
+    /// site send Wikipedia many requests. 0: no limit.
+    public int WikipediaLoadsPerMinute { get; set; } = 30;
+
     /// Search pages, suggestion requests and status updates handled at the same time, counting every client.
     /// More wait in a queue of SearchQueueLength; when the queue is full they get status 429.
     public int ConcurrentSearches { get; set; } = 4;

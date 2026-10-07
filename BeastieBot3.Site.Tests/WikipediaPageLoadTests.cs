@@ -53,6 +53,28 @@ public sealed class WikipediaPageInputTests {
         Assert.Equal(new WikipediaPageText("List of parrots", "* text", 42, new DateTimeOffset(2026, 10, 1, 12, 30, 0, TimeSpan.Zero)), result.Page);
     }
 
+    [Fact]
+    public async Task LoadsForAllClientsTogetherAreLimited() {
+        // A server that answers every request with the same page, counting the requests.
+        var handler = new CountingHandler("""{"query":{"pages":[{"title":"A","revisions":[{"revid":1,"slots":{"main":{"content":"x"}}}]}]}}""");
+        var source = new WikipediaPageSource(new HttpClient(handler), "test agent", 1000, loadsPerMinute: 2);
+        Assert.NotNull((await source.GetAsync("A", null, default)).Page);
+        Assert.NotNull((await source.GetAsync("B", null, default)).Page);
+        Assert.Equal(WikipediaPageError.Busy, (await source.GetAsync("C", null, default)).Error);
+        // A page already held does not count, and is not asked for again.
+        Assert.NotNull((await source.GetAsync("A", null, default)).Page);
+        Assert.Equal(2, handler.Requests);
+    }
+
+    private sealed class CountingHandler(string body) : HttpMessageHandler {
+        public int Requests { get; private set; }
+
+        protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken) {
+            Requests++;
+            return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK) { Content = new StringContent(body) });
+        }
+    }
+
     [Theory]
     [InlineData("""{"query":{"pages":[{"ns":0,"title":"Nope","missing":true}]}}""", WikipediaPageError.NotFound)]
     [InlineData("""{"query":{"badrevids":{"99":{"revid":99,"missing":true}}}}""", WikipediaPageError.NotFound)]

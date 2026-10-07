@@ -80,6 +80,19 @@ public sealed class RateLimitTests(RateLimitedSiteFactory factory) : IClassFixtu
         // Health checks are never limited.
         Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/healthz")).StatusCode);
     }
+
+    [Fact]
+    public async Task LoadingPagesFromWikipediaCountsAgainstTheUpdateLimit() {
+        var client = factory.Client();
+        for (var i = 0; i < RateLimitedSiteFactory.Limit; i++) {
+            // No Wikipedia user agent is set in tests, so the page answers at once without asking Wikipedia.
+            var answer = await client.GetAsync("/update?page=List%20of%20bears" + i);
+            Assert.NotEqual(HttpStatusCode.TooManyRequests, answer.StatusCode);
+        }
+        Assert.Equal(HttpStatusCode.TooManyRequests, (await client.GetAsync("/update?page=List%20of%20bears")).StatusCode);
+        // The form itself, with no page to load, is not an update.
+        Assert.Equal(HttpStatusCode.OK, (await client.GetAsync("/update")).StatusCode);
+    }
 }
 
 public sealed class TaxonPageLimitTests(TaxonPageLimitedSiteFactory factory) : IClassFixture<TaxonPageLimitedSiteFactory> {

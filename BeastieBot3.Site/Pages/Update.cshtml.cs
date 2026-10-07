@@ -187,6 +187,7 @@ public sealed class UpdateModel : PageModel {
                 WikipediaPageError.NotFound => Failed(StatusCodes.Status404NotFound, UpdateText.ErrorPageNotFound(input.Title, revision)),
                 WikipediaPageError.TooLarge => Failed(StatusCodes.Status413PayloadTooLarge, UpdateText.ErrorPageTooLarge(input.Title)),
                 WikipediaPageError.NotConfigured => Failed(StatusCodes.Status503ServiceUnavailable, UpdateText.ErrorLoadingNotSetUp),
+                WikipediaPageError.Busy => Failed(StatusCodes.Status429TooManyRequests, UpdateText.ErrorLoadingBusy),
                 _ => Failed(StatusCodes.Status502BadGateway, UpdateText.ErrorPageNotLoaded(input.Title)),
             };
         }

@@ -25,6 +25,8 @@ public static partial class UpdateText {
     public static string ErrorPageTooLarge(string title) =>
         $"Page too large: the wikitext of \"{title}\" is over the 2 MB limit. Copy the wikitext from Wikipedia in parts and update each part separately.";
 
+    public const string ErrorLoadingBusy = "Too many pages loaded: this site loads a limited number of pages from Wikipedia each minute, for all visitors together. Try again in a minute, or paste the page's wikitext.";
+
     public const string ErrorLoadingNotSetUp = "Loading not available: this site is not set up to load pages from Wikipedia. Paste the page's wikitext instead.";
 
     public static string ErrorPageNotLoaded(string title) =>
