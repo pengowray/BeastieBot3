@@ -1417,6 +1417,19 @@ button opens its help text and Escape closes it). It is not part of `dotnet test
 
 ### Status update page (`/update`)
 
+A Wikipedia URL (desktop, mobile, or `index.php` with `title=` and `oldid=`) or a wikilink typed
+into the search box (`WikipediaPageInput` in `BeastieBot3.Shared`) redirects to
+`/update?page=Title`, which loads the wikitext from English Wikipedia's action API
+(`Update/WikipediaPageSource.cs`: redirects followed, answers kept for 5 minutes, at most 2 MB)
+and runs the update as a POST would, with the categories its title names and, for a title that
+names Australia, the EPBC Act column. The page says which page and revision the text is; hidden
+fields keep that line on later POSTs while the text is unchanged (`pagekey`). The site asks
+Wikipedia only when `Site:WikipediaUserAgent` is set, and a load counts against
+`UpdatesPerMinute` like a POST. The systemd unit allows connections to Wikimedia's address ranges
+for it. The option "Show the EPBC Act status" (`epbc`) adds each taxon's EPBC Act listing
+(`epbc_listing`, so only taxa IUCN also has) to the report and the comparison's tables, and lists
+the missing taxa that have one.
+
 An editor pastes the wikitext of an article or list and gets the same text back with the IUCN
 statuses changed to match the latest global assessments, and a report with one row per item (line,
 result, item, text before and after, taxon, notes). Strings are in `Display/UpdateText.cs`; the
@@ -1547,6 +1560,13 @@ colspan and rowspan; `StatusUpdater` decides the edits, and `StatusTaxonResolver
     VU, or all EX or EW, only taxa in those categories are compared. A text with no codes is
     compared in the category (or with the threatened categories) that 80% of its species are in
     now. The written codes are used first because they still show where taxa that have moved were.
+    The reader can choose the categories instead (form field `cats`, a `ListCategories` key in
+    `BeastieBot3.Shared`: all, threatened, extinct (EX, CR(PE), CR(PEW), as the recently extinct
+    lists), or one category); a page loaded from Wikipedia takes them from its title
+    (`ListCategories.FromTitle`, "List of threatened birds of Brazil" is threatened). Chosen
+    categories are kept when the text lists less than half of their taxa, and the list is then
+    partial. A taxon matches a category by its code ("CR(PE)" for the extinct choice) or by the
+    code's category (CR(PE) is CR).
   - The text is a list of the group when it lists half the group's species (in the categories).
     Otherwise (a regional list) no missing taxa are listed unless the reader asks (`anyway`), and the
     section is shown only for 10 or more listed taxa; under 3 listed taxa there is no section.
