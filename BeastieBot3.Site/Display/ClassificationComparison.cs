@@ -23,7 +23,7 @@ public static class ClassificationComparison {
 
     public const string AboveKingdom = "above kingdom";
 
-    private static string? Main(string? rank) => rank?.Trim().ToLowerInvariant() switch {
+    private static string? MainRankOf(string? rank) => rank?.Trim().ToLowerInvariant() switch {
         "division" => "phylum",
         var r when r is not null && MainRanks.Contains(r) => r,
         _ => null,
@@ -36,7 +36,7 @@ public static class ClassificationComparison {
             var current = AboveKingdom;
             map[current] = (null, []);
             foreach (var step in column.Steps) {
-                if (Main(step.Rank) is { } rank && !map.ContainsKey(rank)) {
+                if (MainRankOf(step.Rank) is { } rank && !map.ContainsKey(rank)) {
                     current = rank;
                     map[current] = (step, []);
                 } else {

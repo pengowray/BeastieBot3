@@ -6,7 +6,7 @@ public static partial class SiteText {
     public const string HeadingRanks = "Classification in other sources";
 
     public static string RanksIntro(int differences) =>
-        "The taxon's ranks in IUCN's classification, on this site (IUCN's, with Catalogue of Life groups between its ranks), in the Catalogue of Life, in Wikidata and in the taxobox of its English Wikipedia article. Groups between two main ranks are listed under the higher one."
+        "The taxon's ranks in each source. \"This site\" is IUCN's classification with Catalogue of Life groups between its ranks; \"English Wikipedia\" is the taxobox of the taxon's article. Groups between two main ranks are listed under the higher one."
         + (differences == 0 ? " Every main rank has the same name as in IUCN's classification." : differences == 1
             ? " 1 main rank has another name than in IUCN's classification (marked ≠)."
             : $" {differences} main ranks have another name than in IUCN's classification (marked ≠).");
@@ -17,6 +17,8 @@ public static partial class SiteText {
     public const string RanksWikidata = "Wikidata";
     public const string RanksWikipedia = "English Wikipedia";
     public const string RanksNoRank = "no rank";
+
+    public static string RanksUnrankedFolded(int n) => $"{n} groups with no rank";
     public const string RanksDiffersTitle = "Another name than in IUCN's classification";
 
     public static string RankRowLabel(string rank) => rank == ClassificationComparison.AboveKingdom

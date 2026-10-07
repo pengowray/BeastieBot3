@@ -542,8 +542,21 @@
                                             <abbr class="differs-marker" title="@SiteText.RanksDiffersTitle">≠</abbr>
                                         }
                                     }
-                                    @foreach (var step in cell.Between) {
+                                    @{
+                                        // Many groups without a rank (Wikidata's clades) fold into one line.
+                                        var unranked = cell.Between.Count(s => s.Rank is null);
+                                        var fold = unranked > 3;
+                                    }
+                                    @foreach (var step in cell.Between.Where(s => !fold || s.Rank is not null)) {
                                         <span class="rank-between"><span class="rank">@(step.Rank ?? SiteText.RanksNoRank)</span> @if (step.Url is { } u) {<a href="@u">@Html.Raw(ScientificNameMarkup.ToHtml(step.Name))</a>} else {@Html.Raw(ScientificNameMarkup.ToHtml(step.Name))}</span>
+                                    }
+                                    @if (fold) {
+                                        <details class="rank-between">
+                                            <summary>@SiteText.RanksUnrankedFolded(unranked)</summary>
+                                            @foreach (var step in cell.Between.Where(s => s.Rank is null)) {
+                                                <span class="rank-between">@if (step.Url is { } u) {<a href="@u">@Html.Raw(ScientificNameMarkup.ToHtml(step.Name))</a>} else {@Html.Raw(ScientificNameMarkup.ToHtml(step.Name))}</span>
+                                            }
+                                        </details>
                                     }
                                 </td>
                             }
