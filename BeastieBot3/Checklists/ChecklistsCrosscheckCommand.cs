@@ -142,6 +142,11 @@ internal sealed class ChecklistsCrosscheckCommand : Command<ChecklistsCrosscheck
             var title = ChecklistSources.TitleOf(r.Source);
             sb.AppendLine($"## {title}");
             sb.AppendLine();
+            if (r.Source == GbifChecklist.Source) {
+                sb.AppendLine($"GBIF counts occurrence records, not native range: a country counts from {ChecklistCrosscheck.GbifMinRecords} records, whatever their origin (cultivated plants, escapes, vagrants and misidentifications included). "
+                    + "\"IUCN lists, checklist does not\" mostly shows countries with few records in GBIF; \"Checklist lists, IUCN does not\" is worth checking where the counts are high.");
+                sb.AppendLine();
+            }
             sb.AppendLine($"- Endemic to one country in both: {N(t.EndemicBoth)}");
             sb.AppendLine($"- Endemic in IUCN, more than one native country in the checklist: {N(t.EndemicIucnOnly)}");
             sb.AppendLine($"- One native country in the checklist, more than one in IUCN: {N(t.EndemicSourceOnly)}");
