@@ -31,6 +31,9 @@ public sealed class SearchModel : PageModel {
     /// and the site has the taxon but not the assessment.
     public long? MissingAssessmentId { get; private set; }
 
+    /// Set when the text was a Wikidata item ("Q33609") that no taxon or assessment on the site has.
+    public string? MissingWikidataItem { get; private set; }
+
     /// The language of the Wikipedia the search text links to, when it is not English.
     public string? NotEnglishWikipedia { get; private set; }
 
@@ -58,9 +61,10 @@ public sealed class SearchModel : PageModel {
         if (Query.Length == 0) {
             return Page();
         }
+        var ids = IdQuery.Parse(Query);
         // A Wikipedia URL or wikilink opens the status update page with that page loaded. Before the
         // id check: a URL with oldid= has digits that would read as an IUCN id.
-        if (WikipediaPageInput.Parse(Query) is { } wikiPage) {
+        if (ids?.WikidataItem is null && WikipediaPageInput.Parse(Query) is { } wikiPage) {
             if (!wikiPage.English) {
                 NotEnglishWikipedia = wikiPage.Language;
                 return Page();
@@ -68,8 +72,12 @@ public sealed class SearchModel : PageModel {
             return Redirect(UpdateUrl(wikiPage));
         }
         // Before the length check: a taxon id can be a single digit.
-        if (IdQuery.Parse(Query) is { } ids && FindById(ids, all == "1") is { } idResult) {
+        if (ids is not null && FindById(ids, all == "1") is { } idResult) {
             return idResult;
+        }
+        if (ids?.WikidataItem is { } item) {
+            MissingWikidataItem = "Q" + item.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            return Page();
         }
         if (FtsQuery.IsTooShort(Query)) {
             TooShort = true;
@@ -128,6 +136,10 @@ public sealed class SearchModel : PageModel {
         }
         if (!all && hits.Count == 1 && MissingAssessmentId is null) {
             return Redirect(SpeciesUrl(hits[0]));
+        }
+        // A Wikidata item of a taxon in the release is often also the item of an old IUCN id of it.
+        if (!all && ids.WikidataItem is not null && hits.Count(h => h.Taxon.InRelease) == 1) {
+            return Redirect(SpeciesUrl(hits.Single(h => h.Taxon.InRelease)));
         }
         FoundById = true;
         Items = hits.Select(TaxonListItem.FromIdHit).ToList();

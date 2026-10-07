@@ -1332,6 +1332,13 @@ title statements are not recorded (run wikidata iucn-assessment-items)".
   version that names the assessment it corrects finds that assessment. When the text names a
   taxon and an assessment and the site has only the taxon, the taxon is listed under a line
   saying the assessment was not found. No id matches: the text is searched as a name.
+  A Wikidata item (`Q33609`, or a `wikidata.org/wiki/Q33609` or `/entity/Q33609` address) finds
+  the taxa whose item it is (`taxon.wikidata_qid`) and the assessments whose item it is
+  (`assessment.wikidata_item_qid`), listed with "Matched Wikidata item". It redirects when it finds
+  one taxon in the release, so an old IUCN id with the same item is passed over. An item that
+  nothing has gets "This site has no taxon or assessment with Wikidata item Q…" and no name
+  search. Not searched: the other items that state a taxon's IUCN id
+  (`taxon.wikidata_other_items`) and the items of extra species (`extra_species.wikidata_qid`).
 - The table under the regional assessments (`_RelatedTaxaTable.cshtml`) lists, on a species page,
   its subspecies, varieties and subpopulations with the category, criteria and year of each one's
   latest global assessment, or a line saying IUCN has assessed none (animals: "subspecies or
@@ -1376,7 +1383,7 @@ title statements are not recorded (run wikidata iucn-assessment-items)".
 - Run locally with `dotnet run --project BeastieBot3.Site`. `appsettings.Development.json` points to
   `~/datasets/beastiebot/site.sqlite`; set `Site__DatabasePath` to use another file.
 
-### Classification in other sources (`ladder_node`)
+### Classification (`ladder_node`)
 
 The species page lines up the taxon's classification in IUCN, on this site (IUCN with the
 Catalogue of Life groups between its ranks), in the Catalogue of Life, Wikidata, English

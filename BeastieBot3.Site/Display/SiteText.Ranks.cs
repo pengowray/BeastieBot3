@@ -3,7 +3,7 @@ namespace BeastieBot3.Site.Display;
 // The species page's comparison of ranks in IUCN, on this site, in the Catalogue of Life, Wikidata, English Wikipedia and Wikispecies.
 
 public static partial class SiteText {
-    public const string HeadingRanks = "Classification in other sources";
+    public const string HeadingRanks = "Classification";
 
     public static string RanksIntro(int differences) =>
         (differences == 0 ? "Every main rank has the same name as in IUCN's classification." : differences == 1

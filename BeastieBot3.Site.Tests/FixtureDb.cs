@@ -505,7 +505,7 @@ public static class FixtureDb {
         w.Name(Woylie, "Woylie", "common", "en", "iucn", preferred: true);
 
         w.Taxon(WoylieOld, "Bettongia penicillata", "species", "ANIMALIA", "CHORDATA", "MAMMALIA", "DIPROTODONTIA", "POTOROIDAE", "Bettongia",
-            authority: "Gray, 1837", commonEn: "Woylie", inRelease: false, currentTaxon: Woylie);
+            authority: "Gray, 1837", commonEn: "Woylie", inRelease: false, currentTaxon: Woylie, qid: WoylieItem);
         w.Assessment(WoylieOld2008, WoylieOld, "Global", false, "CR", criteria: "A2ce", criteriaVersion: "3.1", year: 2008, date: "2008-06-30",
             citation: Citation(WoylieOld, WoylieOld2008, 2008, "Bettongia penicillata", [Person("Woinarski", "J.")],
                 doi: null, doiSource: DoiSource.None, text: null), taxonomicNotes: true);

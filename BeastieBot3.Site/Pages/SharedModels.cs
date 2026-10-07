@@ -55,7 +55,14 @@ public sealed record ListNoticeSideModel(BeastieBot3.Site.Lists.NoticeSide Side,
 /// Url: where the name links, when not the taxon page (an assessment found by its id links the page
 /// with that assessment shown).
 public sealed record TaxonListItem(TaxonSummary Taxon, string? MatchNoteLabel = null, string? MatchedNameHtml = null, string? Url = null) {
-    public static TaxonListItem FromIdHit(IdHit hit) => hit.AssessmentId is { } aid
+    public static TaxonListItem FromIdHit(IdHit hit) => hit switch {
+        { WikidataQid: { } qid, AssessmentId: { } aid } => new TaxonListItem(hit.Taxon, SiteText.MatchWikidataItemLabel,
+            SiteHtml.Encode(SiteText.MatchAssessmentWikidataItem(qid, aid, hit.Scope, hit.YearPublished)), SearchModel.SpeciesUrl(hit)),
+        { WikidataQid: { } qid } => new TaxonListItem(hit.Taxon, SiteText.MatchWikidataItemLabel, SiteHtml.Encode(qid)),
+        _ => FromIucnIdHit(hit),
+    };
+
+    private static TaxonListItem FromIucnIdHit(IdHit hit) => hit.AssessmentId is { } aid
         ? new TaxonListItem(hit.Taxon, SiteText.MatchAssessmentIdLabel,
             SiteHtml.Encode(SiteText.MatchAssessmentId(aid, hit.Scope, hit.YearPublished)), SearchModel.SpeciesUrl(hit))
         : new TaxonListItem(hit.Taxon, SiteText.MatchTaxonIdLabel, SiteHtml.Encode(hit.Taxon.TaxonId.ToString(System.Globalization.CultureInfo.InvariantCulture)));

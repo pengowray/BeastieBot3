@@ -53,6 +53,12 @@ public static partial class SiteText {
         var id = assessmentId.ToString(CultureInfo.InvariantCulture);
         return details.Length == 0 ? id : $"{id} ({details})";
     }
+    public const string MatchWikidataItemLabel = "Matched Wikidata item:";
+    /// "Q900000001, the item of IUCN assessment 14871490 (Global, 2016)".
+    public static string MatchAssessmentWikidataItem(string qid, long assessmentId, string? scope, int? year) =>
+        $"{qid}, the item of IUCN assessment {MatchAssessmentId(assessmentId, scope, year)}";
+    public static string WikidataItemNotFound(string qid) =>
+        $"This site has no taxon or assessment with Wikidata item {qid}.";
     public static string AssessmentIdNotFound(long assessmentId) =>
         $"This site has no assessment with IUCN assessment ID {assessmentId.ToString(CultureInfo.InvariantCulture)}.";
     public static string NoResults(string query) =>

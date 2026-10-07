@@ -356,6 +356,9 @@ public sealed partial class SiteQueries {
     public IReadOnlyList<IdHit> FindByIds(IdQuery query) {
         using var connection = _db.OpenConnection();
         var hits = new List<IdHit>();
+        if (query.WikidataItem is { } item) {
+            FindByWikidataItem(connection, "Q" + item.ToString(System.Globalization.CultureInfo.InvariantCulture), hits);
+        }
         var assessmentId = query.AssessmentId ?? query.Number;
         IdHit? assessmentHit = null;
         if (assessmentId is { } aid) {
@@ -392,6 +395,37 @@ public sealed partial class SiteQueries {
             hits.Add(assessmentHit);
         }
         return hits;
+    }
+
+    // The taxa whose Wikidata item is qid, then the assessments whose Wikidata item is qid.
+    private static void FindByWikidataItem(SqliteConnection connection, string qid, List<IdHit> hits) {
+        using (var command = connection.CreateCommand()) {
+            command.CommandText = $"SELECT {SummaryColumns} FROM taxon t {SummaryJoin} WHERE t.wikidata_qid = @qid ORDER BY t.taxon_id";
+            command.Parameters.AddWithValue("@qid", qid);
+            using var reader = command.ExecuteReader();
+            while (reader.Read()) {
+                hits.Add(new IdHit(SummaryAt(reader, 0), null, null, null, true, qid));
+            }
+        }
+        using (var command = connection.CreateCommand()) {
+            command.CommandText = $"""
+                SELECT {SummaryColumns}, s.assessment_id, s.scope, s.year_published, t.latest_global_assessment_id
+                FROM assessment s
+                JOIN taxon t ON t.taxon_id = s.taxon_id
+                {SummaryJoin}
+                WHERE s.wikidata_item_qid = @qid
+                ORDER BY s.assessment_id
+                """;
+            command.Parameters.AddWithValue("@qid", qid);
+            using var reader = command.ExecuteReader();
+            while (reader.Read()) {
+                const int next = SummaryColumnCount;
+                var aid = reader.GetInt64(next);
+                var latest = Long(reader, next + 3);
+                hits.Add(new IdHit(SummaryAt(reader, 0), aid, reader.GetString(next + 1),
+                    reader.IsDBNull(next + 2) ? null : reader.GetInt32(next + 2), latest == aid, qid));
+            }
+        }
     }
 
     /// The name type ("scientific", "common", "synonym") by which the text names this taxon, best

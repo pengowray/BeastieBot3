@@ -41,7 +41,9 @@
             <h2>@GroupText.SearchTaxaHeading</h2>
         }
     }
-    @if (Model.Items.Count == 0 && Model.Groups.Count == 0) {
+    @if (Model.MissingWikidataItem is { } qid) {
+        <p class="message">@SiteText.WikidataItemNotFound(qid)</p>
+    } else if (Model.Items.Count == 0 && Model.Groups.Count == 0) {
         <p class="message">@SiteText.NoResults(Model.Query)</p>
         @if (Model.Suggestions.Count > 0) {
             <p class="similar-names">@SiteText.SimilarNames

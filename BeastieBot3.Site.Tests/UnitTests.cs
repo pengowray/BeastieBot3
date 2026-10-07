@@ -588,12 +588,27 @@ public sealed class IdQueryTests {
         Assert.Equal(new IdQuery(taxonId, assessmentId, number), IdQuery.Parse(text));
 
     [Theory]
+    [InlineData("Q13442814", 13442814L)]
+    [InlineData("q33609", 33609L)]
+    [InlineData(" Q33609. ", 33609L)]
+    [InlineData("https://www.wikidata.org/wiki/Q33609", 33609L)]
+    [InlineData("https://m.wikidata.org/wiki/Q33609#P141", 33609L)]
+    [InlineData("http://www.wikidata.org/entity/Q33609", 33609L)]
+    [InlineData("https://www.wikidata.org/wiki/Special:EntityPage/Q33609", 33609L)]
+    public void ReadsAWikidataItem(string text, long item) =>
+        Assert.Equal(new IdQuery(null, null, null, item), IdQuery.Parse(text));
+
+    [Theory]
     [InlineData("")]
     [InlineData("Ursus maritimus")]
     [InlineData("T22823 maritimus")]
     [InlineData("0")]
     [InlineData("1234567890123456789012")]
     [InlineData("10.1234/some.other.doi")]
+    [InlineData("Q")]
+    [InlineData("Q0")]
+    [InlineData("Qabc")]
+    [InlineData("https://www.wikidata.org/wiki/Property:P141")]
     public void IsNullForOtherText(string text) => Assert.Null(IdQuery.Parse(text));
 }
 

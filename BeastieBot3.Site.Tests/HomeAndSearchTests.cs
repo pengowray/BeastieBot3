@@ -284,6 +284,52 @@ public sealed class HomeAndSearchTests(SiteFactory factory) : IClassFixture<Site
         Assert.Equal($"/species/{FixtureDb.PolarBear}", response.Headers.Location?.OriginalString);
     }
 
+    [Theory]
+    [InlineData("Q33609")]
+    [InlineData("https://www.wikidata.org/wiki/Q33609")]
+    public async Task TheWikidataItemOfATaxonRedirectsToTheTaxonPage(string q) {
+        var response = await _client.GetAsync("/search?q=" + Uri.EscapeDataString(q));
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+        Assert.Equal($"/species/{FixtureDb.PolarBear}", response.Headers.Location?.OriginalString);
+    }
+
+    [Fact]
+    public async Task TheWikidataItemOfALatestAssessmentRedirectsToTheTaxonPage() {
+        var response = await _client.GetAsync("/search?q=" + FixtureDb.TigerLatestItem);
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+        Assert.Equal($"/species/{FixtureDb.Tiger}", response.Headers.Location?.OriginalString);
+    }
+
+    [Fact]
+    public async Task AWikidataItemOfATaxonAndAnOldIdRedirectsToTheTaxonInTheRelease() {
+        var response = await _client.GetAsync("/search?q=" + FixtureDb.WoylieItem);
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+        Assert.Equal($"/species/{FixtureDb.Woylie}", response.Headers.Location?.OriginalString);
+    }
+
+    [Fact]
+    public async Task AllResultsListsWikidataItemMatches() {
+        var text = Html.Text(await _client.GetStringAsync($"/search?q={FixtureDb.WoylieItem}&all=1"));
+        Assert.Contains($"Matched Wikidata item: {FixtureDb.WoylieItem}", text);
+        var assessment = Html.Text(await _client.GetStringAsync($"/search?q={FixtureDb.TigerLatestItem}&all=1"));
+        Assert.Contains($"Matched Wikidata item: {FixtureDb.TigerLatestItem}, the item of IUCN assessment {FixtureDb.TigerLatest}", assessment);
+    }
+
+    [Fact]
+    public async Task AWikidataItemNotOnTheSiteSaysSo() {
+        var response = await _client.GetAsync("/search?q=Q13442814");
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var text = Html.Text(await response.Content.ReadAsStringAsync());
+        Assert.Contains("This site has no taxon or assessment with Wikidata item Q13442814.", text);
+        Assert.DoesNotContain("Check the spelling", text);
+    }
+
+    [Fact]
+    public async Task SuggestFindsATaxonByItsWikidataItem() {
+        var json = await _client.GetStringAsync("/api/suggest?q=Q33609");
+        Assert.Contains($"\"taxonId\":{FixtureDb.PolarBear}", json);
+    }
+
     [Fact]
     public async Task AnEarlierAssessmentIdRedirectsWithThatAssessmentShown() {
         var response = await _client.GetAsync($"/search?q=e.T{FixtureDb.PolarBear}A{FixtureDb.PolarBear2008}");

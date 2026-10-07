@@ -71,6 +71,7 @@ public static class SiteDbSchema {
         CREATE INDEX taxon_parent ON taxon(parent_taxon_id);
         CREATE INDEX taxon_current ON taxon(current_taxon_id);
         CREATE INDEX taxon_tree ON taxon(tree_pos);
+        CREATE INDEX taxon_wikidata ON taxon(wikidata_qid) WHERE wikidata_qid IS NOT NULL;
 
         -- The groups the taxa in the release are in: IUCN's kingdom, phylum, class, order, family and
         -- genus, and the Catalogue of Life groups between them that the placement file (`col build-placement`)
@@ -306,6 +307,7 @@ public static class SiteDbSchema {
                                                               -- value[] is empty, "emails" (when not 0) the value[] entries that were only an email address. NULL when the payload is not cached or has no credits
         );
         CREATE INDEX assessment_taxon ON assessment(taxon_id, year_published);
+        CREATE INDEX assessment_wikidata ON assessment(wikidata_item_qid) WHERE wikidata_item_qid IS NOT NULL;
 
         -- The text of each distinct credit entry ("Catherine Sayer (IUCN Red List Unit)") or citation-form
         -- credit string ("Tolley, K. & Menegon, M."), for assessment.credits. Names and affiliations only.
