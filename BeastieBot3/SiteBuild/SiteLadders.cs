@@ -55,7 +55,7 @@ internal static class SiteLadders {
             if (key != name) {
                 return tops[name] = TopOf(key, depth + 1);
             }
-            if (Taxonomy.WikispeciesTaxonavigation.ParseTemplate(page.Wikitext) is not { } template) {
+            if (Taxonomy.WikispeciesTaxonavigation.ParseTemplate(page.Wikitext, name) is not { } template) {
                 return null;
             }
             var parent = template.Parent is { } p ? TopOf(p, depth + 1) : null;

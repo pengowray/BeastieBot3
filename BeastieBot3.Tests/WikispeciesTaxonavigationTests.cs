@@ -27,8 +27,21 @@ public class WikispeciesTaxonavigationTests {
     }
 
     [Fact]
-    public void APageWithNoTaxonavigationSectionGivesNothing() =>
-        Assert.Null(WikispeciesTaxonavigation.ParsePage("Some text about [[Panthera]].", "Panthera leo"));
+    public void APageWithNoTaxonavigationGivesNothing() =>
+        Assert.Null(WikispeciesTaxonavigation.ParsePage("Some text about [[Panthera]].\n\n==Name==\n", "Panthera leo"));
+
+    [Fact]
+    public void APageWithNoHeadingHasItsTaxonavigationAtTheTop() {
+        var t = WikispeciesTaxonavigation.ParsePage("{{Abyssobrotula}}\nSpecies: ''{{BASEPAGENAME}}''\n\n=={{int:Name}}==\n''{{BASEPAGENAME}}'' Ohashi & Nielsen, 2016\n",
+            "Abyssobrotula hadropercularis")!;
+        Assert.Equal("Abyssobrotula", t.Parent);
+        Assert.Equal(new[] { new WikispeciesStep("species", "Abyssobrotula hadropercularis") }, t.Steps);
+    }
+
+    [Fact]
+    public void ATemplateCanNameItsTaxonWithPageName() =>
+        Assert.Equal(new[] { new WikispeciesStep("genus", "Quercus") },
+            WikispeciesTaxonavigation.ParseTemplate("{{Fagaceae}}\nGenus: {{gbr|{{PAGENAME}}}}\n", "Quercus")!.Steps);
 
     [Theory]
     [InlineData(PantheraLeoSubgenus, "Panthera", "subgenus", "Panthera (Leo)")]

@@ -33,20 +33,18 @@ internal static partial class WikispeciesTaxonavigation {
         SpacesRegex().Replace(iucnScientificName.Replace(" ssp. ", " ", StringComparison.Ordinal), " ").Trim();
 
     /// A taxonavigation template's parent and steps; null when the text names no parent and no step.
-    public static WikispeciesTaxonav? ParseTemplate(string wikitext) {
-        var result = Read(Clean(wikitext), stopAt: null);
+    /// Name: the template's name without "Template:", for {{PAGENAME}} in its text.
+    public static WikispeciesTaxonav? ParseTemplate(string wikitext, string? name = null) {
+        var result = Read(Clean(name is null ? wikitext : WithPageName(wikitext, name, TemplatePrefix + name)), stopAt: null);
         return result.Parent is null && result.Steps.Count == 0 ? null : result;
     }
 
     /// The Taxonavigation section of a taxon page: the template it calls and its steps down to the
-    /// page's own taxon (pageTitle; the steps after it list lower taxa). Null when the page has no
-    /// Taxonavigation section.
+    /// page's own taxon (pageTitle; the steps after it list lower taxa). A page with no
+    /// Taxonavigation heading has its taxonavigation above its first heading.
     public static WikispeciesTaxonav? ParsePage(string wikitext, string pageTitle) {
-        var lines = wikitext.Split('\n');
+        var lines = WithPageName(wikitext, pageTitle, pageTitle).Split('\n');
         var start = Array.FindIndex(lines, l => TaxonavHeadingRegex().IsMatch(l));
-        if (start < 0) {
-            return null;
-        }
         var section = new StringBuilder();
         for (var i = start + 1; i < lines.Length && !lines[i].TrimStart().StartsWith("==", StringComparison.Ordinal); i++) {
             section.Append(lines[i]).Append('\n');
@@ -54,6 +52,10 @@ internal static partial class WikispeciesTaxonavigation {
         var result = Read(Clean(section.ToString()), stopAt: pageTitle);
         return result.Parent is null && result.Steps.Count == 0 ? null : result;
     }
+
+    // {{PAGENAME}} and {{BASEPAGENAME}} as the page's name, {{FULLPAGENAME}} as its title.
+    private static string WithPageName(string text, string name, string fullTitle) =>
+        PageNameRegex().Replace(text, m => m.Groups["full"].Success ? fullTitle : name);
 
     private static WikispeciesTaxonav Read(string text, string? stopAt) {
         string? parent = null;
@@ -217,6 +219,9 @@ internal static partial class WikispeciesTaxonavigation {
 
     [GeneratedRegex(@"</?(section|includeonly|onlyinclude)\b[^>]*>", RegexOptions.IgnoreCase)]
     private static partial Regex TagRegex();
+
+    [GeneratedRegex(@"\{\{\s*(?:(?<full>FULLPAGENAME)|BASEPAGENAME|PAGENAME|SUBPAGENAME)\s*\}\}")]
+    private static partial Regex PageNameRegex();
 
     [GeneratedRegex(@"\s+")]
     private static partial Regex SpacesRegex();

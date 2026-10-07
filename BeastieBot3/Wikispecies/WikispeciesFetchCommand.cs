@@ -98,7 +98,8 @@ internal sealed class WikispeciesFetchCommand : AsyncCommand<WikispeciesFetchCom
                     }
                     var parsed = level == 0
                         ? WikispeciesTaxonavigation.ParsePage(page.Wikitext, page.Title)
-                        : WikispeciesTaxonavigation.ParseTemplate(page.Wikitext);
+                        : WikispeciesTaxonavigation.ParseTemplate(page.Wikitext,
+                            page.Title.StartsWith(WikispeciesTaxonavigation.TemplatePrefix, StringComparison.Ordinal) ? page.Title[WikispeciesTaxonavigation.TemplatePrefix.Length..] : null);
                     if (level == 0 && parsed is not null) {
                         pages++;
                     }
