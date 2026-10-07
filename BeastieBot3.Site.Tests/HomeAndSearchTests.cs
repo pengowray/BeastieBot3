@@ -341,6 +341,9 @@ public sealed class HomeAndSearchTests(SiteFactory factory) : IClassFixture<Site
         Assert.Contains("Status in the Wikipedia taxobox", html);
         Assert.Contains(text, html);
         Assert.Contains("From the copy of the article downloaded on 29 November 2025.", html);
+        // Under the taxobox status parameters box, not in the links section.
+        Assert.True(html.IndexOf("status parameters", StringComparison.Ordinal) < html.IndexOf("Status in the Wikipedia taxobox", StringComparison.Ordinal));
+        Assert.DoesNotContain("<dt>Status in the Wikipedia taxobox</dt>", html);
     }
 
     [Fact]

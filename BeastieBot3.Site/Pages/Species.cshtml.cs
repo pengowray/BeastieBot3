@@ -14,6 +14,9 @@ namespace BeastieBot3.Site.Pages;
 /// One wikitext box: its label, the template name used in the copy button's accessible name, and
 /// the text. CopyName replaces that accessible name, for a box that holds something other than
 /// wikitext.
+/// The taxobox status comparison and the latest global assessment it compares with, for _TaxoboxStatus.
+public sealed record TaxoboxStatusView(TaxoboxStatusCheck Check, AssessmentRow? Latest);
+
 public sealed record WikitextBox(string Id, string Label, string Template, string Text, int Rows, string? CopyName = null) {
     public string CopyAccessibleName => CopyName ?? SiteText.CopyAccessible(Template);
 }

@@ -195,6 +195,12 @@
         @foreach (var box in Model.Boxes) {
             <div class="wikitext-box">
                 <partial name="_WikitextBoxContent" model="box" />
+                @if (box.Id == "wikitext-speciesbox" && Model.TaxoboxCheck is { } taxoboxCheck) {
+                    <div class="taxobox-status note">
+                        <strong>@SiteText.TaxoboxStatusHeading:</strong>
+                        <partial name="_TaxoboxStatus" model="@(new TaxoboxStatusView(taxoboxCheck, Model.LatestGlobal))" />
+                    </div>
+                }
                 @if (box.Id == "wikitext-cite") {
                     <div class="citation-notes">
                         @if (Model.DoiNote is not null) {
@@ -582,33 +588,9 @@
                 @SiteText.LinkWikipediaNone
             }
         </dd>
-        @if (Model.TaxoboxCheck is { } check) {
+        @if (Model.TaxoboxCheck is { } check && !Model.Boxes.Any(b => b.Id == "wikitext-speciesbox")) {
             <dt>@SiteText.TaxoboxStatusHeading</dt>
-            <dd class="taxobox-status">
-                @switch (check.Outcome) {
-                    case TaxoboxStatusOutcome.NoStatus:
-                        @SiteText.TaxoboxNoStatus
-                        break;
-                    case TaxoboxStatusOutcome.OtherCategory:
-                        <partial name="_Badge" model="@(new BadgeModel(check.Wikipedia!))" /><text>. @SiteText.TaxoboxLatestIs </text><partial name="_Badge" model="@BadgeModel.For(Model.LatestGlobal!)" /><text>.</text>
-                        break;
-                    case TaxoboxStatusOutcome.OtherSystem:
-                        <partial name="_Badge" model="@(new BadgeModel(check.Wikipedia!))" /> @SiteText.TaxoboxOtherSystem(check.WikipediaSystem!, check.LatestSystem)
-                        break;
-                    case TaxoboxStatusOutcome.CitesLatest:
-                        <partial name="_Badge" model="@(new BadgeModel(check.Wikipedia!))" /> @SiteText.TaxoboxCitesLatest
-                        break;
-                    case TaxoboxStatusOutcome.CitesOther:
-                        <partial name="_Badge" model="@(new BadgeModel(check.Wikipedia!))" /> @SiteText.TaxoboxCitesOther(check.CitedAssessment?.YearPublished, check.CitedAssessmentId!.Value, Model.LatestGlobal?.YearPublished)
-                        break;
-                    case TaxoboxStatusOutcome.CitesNone:
-                        <partial name="_Badge" model="@(new BadgeModel(check.Wikipedia!))" /> @SiteText.TaxoboxCitesNone
-                        break;
-                }
-                @if (check.Downloaded is { } downloaded) {
-                    <div class="note">@SiteText.TaxoboxCopyDate(SiteFormat.Date(downloaded))</div>
-                }
-            </dd>
+            <dd class="taxobox-status"><partial name="_TaxoboxStatus" model="@(new TaxoboxStatusView(check, Model.LatestGlobal))" /></dd>
         }
         @if (taxon.WikidataQid is not null) {
             <dt>@SiteText.LinkWikidata</dt>

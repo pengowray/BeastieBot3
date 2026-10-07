@@ -1,0 +1,29 @@
+@model BeastieBot3.Site.Pages.TaxoboxStatusView
+@* The status in the taxobox of the English Wikipedia article compared with the latest global
+   assessment (TaxoboxStatusCheck). *@
+@{
+    var check = Model.Check;
+}
+@switch (check.Outcome) {
+    case TaxoboxStatusOutcome.NoStatus:
+        @SiteText.TaxoboxNoStatus
+        break;
+    case TaxoboxStatusOutcome.OtherCategory:
+        <partial name="_Badge" model="@(new BadgeModel(check.Wikipedia!))" /><text>. @SiteText.TaxoboxLatestIs </text><partial name="_Badge" model="@BadgeModel.For(Model.Latest!)" /><text>.</text>
+        break;
+    case TaxoboxStatusOutcome.OtherSystem:
+        <partial name="_Badge" model="@(new BadgeModel(check.Wikipedia!))" /> @SiteText.TaxoboxOtherSystem(check.WikipediaSystem!, check.LatestSystem)
+        break;
+    case TaxoboxStatusOutcome.CitesLatest:
+        <partial name="_Badge" model="@(new BadgeModel(check.Wikipedia!))" /><text>. </text>@SiteText.TaxoboxCitesLatest
+        break;
+    case TaxoboxStatusOutcome.CitesOther:
+        <partial name="_Badge" model="@(new BadgeModel(check.Wikipedia!))" /><text>. </text>@SiteText.TaxoboxCitesOther(check.CitedAssessment?.YearPublished, check.CitedAssessmentId!.Value, Model.Latest?.YearPublished)
+        break;
+    case TaxoboxStatusOutcome.CitesNone:
+        <partial name="_Badge" model="@(new BadgeModel(check.Wikipedia!))" /><text>. </text>@SiteText.TaxoboxCitesNone
+        break;
+}
+@if (check.Downloaded is { } downloaded) {
+    <div class="note">@SiteText.TaxoboxCopyDate(SiteFormat.Date(downloaded))</div>
+}
