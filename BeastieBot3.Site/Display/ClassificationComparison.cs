@@ -7,7 +7,8 @@ public sealed record LadderStep(string? Rank, string Name, string? Url = null);
 /// One classification beside the others: its title, a link to the taxon in that source, its steps.
 /// Backbone: IUCN's classification or the Catalogue of Life's (or this site's, built from both),
 /// whose groups are shown at first; a group only the other sources have is a hidden row.
-public sealed record LadderColumn(string Title, string? Url, IReadOnlyList<LadderStep> Steps, bool Backbone = false);
+/// Help: what the column shows, as hover text on its heading.
+public sealed record LadderColumn(string Title, string? Url, IReadOnlyList<LadderStep> Steps, bool Backbone = false, string? Help = null);
 
 /// A row of the comparison: one group, in every column that has it. RankLabel: the main rank
 /// (kingdom to species), else the rank a backbone column gives, else the rank most of its cells

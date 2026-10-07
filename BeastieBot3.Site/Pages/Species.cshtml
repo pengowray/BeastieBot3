@@ -532,7 +532,7 @@
                     <tr>
                         <td></td>
                         @foreach (var column in Model.RankColumns) {
-                            <th scope="col">@if (column.Url is { } url) {<a href="@url">@column.Title</a>} else {@column.Title}</th>
+                            <th scope="col" title="@column.Help">@if (column.Url is { } url) {<a href="@url">@column.Title</a>} else {@column.Title}</th>
                         }
                     </tr>
                 </thead>
