@@ -140,6 +140,28 @@ public class WikidataCitationTests {
     }
 
     [Fact]
+    public void CreateItemCommands_FullGivenNames_AreLastAndGivenNameQualifiers() {
+        // {{cite Q}} passes P9688/P9687 as |last=/|first=; |name-list-style=apa turns the given names
+        // back into initials. The name string stays as IUCN prints it.
+        var parts = Salmon with {
+            Authors = [
+                Person("Sayer", "C.") with { GivenNames = "Catherine" },
+                Person("Lajus", "D."),
+                Person("Lowry", "P.P., II") with { GivenNames = "Porter P." },
+                new CitationAuthor(CitationAuthorKind.Organisation, "BirdLife International", GivenNames: "Birdlife"),
+            ],
+        };
+        var authors = WikidataCitation.CreateItemCommands(parts, null, Model).Where(c => c.Contains("P2093", StringComparison.Ordinal)).ToList();
+        Assert.Equal(new[] {
+            L("LAST", "P2093", "\"Sayer, C.\"", "P1545", "\"1\"", "P9688", "\"Sayer\"", "P9687", "\"Catherine\""),
+            L("LAST", "P2093", "\"Lajus, D.\"", "P1545", "\"2\""),
+            // {{cite Q}} has no place for the suffix, so the name string is left to carry it.
+            L("LAST", "P2093", "\"Lowry, P.P., II\"", "P1545", "\"3\""),
+            L("LAST", "P2093", "\"BirdLife International\"", "P1545", "\"4\""),
+        }, authors);
+    }
+
+    [Fact]
     public void CreateItemCommands_Values_AreOneLineAndQuotedVerbatim() {
         var parts = Salmon with {
             ScientificName = "Panthera leo\tWest Africa\nsubpopulation",

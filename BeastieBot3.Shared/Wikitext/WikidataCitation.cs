@@ -33,7 +33,13 @@ namespace BeastieBot3.Shared.Wikitext;
 //                        constraint, and two items with one DOI would be a duplicate to merge.
 //   P2093 author name    each author as IUCN's citation prints the name ("Sayer, C.", "BirdLife
 //                        International"), never the full given names, with a P1545 series ordinal
-//                        qualifier ("1", "2" ...). Names before an "et al." only.
+//                        qualifier ("1", "2" ...). Names before an "et al." only. A person whose full
+//                        given names are known (CitationAuthor.GivenNames) also gets P9688 author last
+//                        names ("Sayer") and P9687 author given names ("Catherine"). {{cite Q}} then
+//                        passes |last= and |first= to the citation, showing the full given names by
+//                        default and "Sayer, C." with |name-list-style=apa. A person whose initials
+//                        end with a suffix ("Lowry, P.P., II") gets neither, because {{cite Q}} has no
+//                        place for the suffix and would leave it out.
 //
 // plus the English label and description from model.LabelTemplate and model.DescriptionTemplate,
 // with the same name. No statement gets a reference: the dry run adds none to the item's own
@@ -396,11 +402,12 @@ public static partial class WikidataCitation {
 
     // ------------------------------------------------------------ statements
 
-    private sealed record Statement(string Property, string Value, string? Qualifier = null, string? QualifierValue = null,
+    // Qualifiers: property and value pairs, written on the statement's line in order.
+    private sealed record Statement(string Property, string Value, IReadOnlyList<string>? Qualifiers = null,
         bool NewStatement = false) {
         public string ToLine(string item) {
             var property = NewStatement ? "!" + Property : Property;
-            return Qualifier is null ? Line(item, property, Value) : Line(item, property, Value, Qualifier, QualifierValue!);
+            return Line([item, property, Value, .. Qualifiers ?? []]);
         }
     }
 
@@ -433,9 +440,23 @@ public static partial class WikidataCitation {
                 continue;
             }
             ordinal++;
-            yield return new Statement("P2093", Quote(display), "P1545", Quote(ordinal.ToString(CultureInfo.InvariantCulture)),
-                NewStatement: !seen.Add(display));
+            var qualifiers = new List<string> { "P1545", Quote(ordinal.ToString(CultureInfo.InvariantCulture)) };
+            if (NameParts(author) is var (last, given)) {
+                qualifiers.AddRange(["P9688", Quote(last), "P9687", Quote(given)]);
+            }
+            yield return new Statement("P2093", Quote(display), qualifiers, NewStatement: !seen.Add(display));
         }
+    }
+
+    // The last name and full given names of a person whose given names are known; null for anyone
+    // else, and for a name with a suffix (see the file comment).
+    private static (string Last, string Given)? NameParts(CitationAuthor author) {
+        if (author.Kind != CitationAuthorKind.Person || NameSuffix().IsMatch(author.Initials ?? string.Empty)) {
+            return null;
+        }
+        var last = CleanValue(EtAlInName().Replace(author.Last ?? string.Empty, string.Empty));
+        var given = CleanValue(author.GivenNames);
+        return last.Length > 0 && given.Length > 0 ? (last, given) : null;
     }
 
     private static string? Label(IucnCitationParts parts, WikidataItemModel model, string name) => Fill(model.LabelTemplate, parts, name, 250);
@@ -523,6 +544,10 @@ public static partial class WikidataCitation {
     // An "et al." written inside a name ("Jaffré, T. <i>et al.</i>"), as CiteIucnRenderer removes it.
     [GeneratedRegex(@"[;,]?\s*(?:<i>)?\s*\bet\.?\s*al(?:ii|ia|iae)?\.?\s*(?:</i>)?\s*$", RegexOptions.IgnoreCase)]
     private static partial Regex EtAlInName();
+
+    // A generational suffix after the initials ("P.P., II"), as CiteIucnRenderer.TrailingSuffix reads it.
+    [GeneratedRegex(@"\s*,\s*(?:Jr|Jnr|Sr|Snr|II|III|IV)\.?$")]
+    private static partial Regex NameSuffix();
 
     [GeneratedRegex(@"^(?:https?://(?:dx\.)?doi\.org/|doi:\s*)", RegexOptions.IgnoreCase)]
     private static partial Regex DoiPrefix();
