@@ -136,6 +136,17 @@ public sealed class UpdateModel : PageModel {
     /// Show each taxon's EPBC Act listing beside its IUCN status (ticked for a page loaded from
     /// Wikipedia whose title names Australia).
     public const string EpbcField = "epbc";
+    /// The country or area to compare with (an area code); empty: the whole group.
+    public const string AreaField = "area";
+    /// Which of the area's records count (AreaMode, by name).
+    public const string AreaModeField = "areamode";
+
+    /// The area chosen, or found in the title of a page loaded from Wikipedia.
+    public AreaName? Area { get; private set; }
+    public AreaMode AreaMode { get; private set; } = AreaMode.Native;
+
+    /// Every area, for the choice.
+    public AreaNames Areas => _queries.AreaNames();
 
     public bool ShowEpbc { get; private set; }
 
@@ -182,6 +193,8 @@ public sealed class UpdateModel : PageModel {
         LoadedPage = wikiPage;
         Input = wikiPage.Text;
         Categories = ListCategories.FromTitle(wikiPage.Title);
+        Area = Areas.FromTitle(wikiPage.Title);
+        AreaMode = AreaNames.ModeFromTitle(wikiPage.Title);
         ShowEpbc = IsAustralianTitle(wikiPage.Title);
         Run(wikiPage.Text, scope: null, listAnyway: false, extraSpecies: false, addMissing: false);
         return Page();
@@ -236,6 +249,8 @@ public sealed class UpdateModel : PageModel {
                     System.Globalization.DateTimeStyles.AssumeUniversal, out var time) ? time : null);
         }
         Categories = ListCategories.Find(form[CategoriesField].LastOrDefault());
+        Area = Areas.ByCode(form[AreaField].LastOrDefault());
+        AreaMode = Enum.TryParse<AreaMode>(form[AreaModeField].LastOrDefault(), out var mode) && Enum.IsDefined(mode) ? mode : AreaMode.Native;
         ShowEpbc = On(EpbcField);
         Run(text, form[ScopeField].LastOrDefault(), On(ListAnywayField), On(ExtraSpeciesField), On(AddMissingField));
         return Page();
@@ -249,7 +264,7 @@ public sealed class UpdateModel : PageModel {
         var scopeLookup = new SiteListScopeLookup(_queries, new SpeciesTableQueries(_db), lookup);
         Scope = ListScope.Check(Result.Members ?? [], scopeLookup,
             new ListScopeOptions(string.IsNullOrWhiteSpace(scope) ? null : scope, listAnyway, extraSpecies,
-                extraSpecies ? WrittenNames(text) : null) { Categories = Categories });
+                extraSpecies ? WrittenNames(text) : null) { Categories = Categories, Area = Area?.Code, AreaMode = AreaMode });
         ExtraSpecies = extraSpecies;
         AddMissing = addMissing;
         if (AddMissing && Scope is { Partial: false } && (Scope.Missing?.Count ?? 0) + (Scope.MissingExtra?.Count ?? 0) > 0) {

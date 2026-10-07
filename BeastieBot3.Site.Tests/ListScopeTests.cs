@@ -97,6 +97,23 @@ internal sealed class FakeScopeLookup : IListScopeLookup {
 
     public IReadOnlyList<ListTaxonRow> TaxaIn(GroupRow group, IReadOnlyCollection<string> kinds) =>
         [.. Within(group.NodeId).Select(t => t.Row).Where(r => kinds.Contains(r.Kind))];
+
+    private readonly Dictionary<(string Area, long TaxonId), AreaRecord> _areas = [];
+
+    /// Gives taxa firstId .. firstId + count - 1 a record for the area.
+    public FakeScopeLookup Area(string area, long firstId, int count, AreaOrigin origin = AreaOrigin.Native,
+        AreaPresence presence = AreaPresence.Extant, bool endemic = false) {
+        for (var id = firstId; id < firstId + count; id++) {
+            _areas[(area, id)] = new AreaRecord(origin, presence, endemic);
+        }
+        return this;
+    }
+
+    public IReadOnlyList<(ListTaxonRow Row, AreaRecord Record)> TaxaInArea(GroupRow group, IReadOnlyCollection<string> kinds, string area) =>
+        [.. TaxaIn(group, kinds).Where(r => _areas.ContainsKey((area, r.TaxonId))).Select(r => (r, _areas[(area, r.TaxonId)]))];
+
+    public IReadOnlyDictionary<long, AreaRecord> AreaRecordsOf(string area, IReadOnlyCollection<long> taxonIds) =>
+        taxonIds.Where(id => _areas.ContainsKey((area, id))).Distinct().ToDictionary(id => id, id => _areas[(area, id)]);
 }
 
 public sealed class ListScopeTests {
@@ -200,6 +217,47 @@ public sealed class ListScopeTests {
         Assert.True(result.Partial);
         Assert.Null(result.Missing);
         Assert.Equal(ListCategories.Threatened.Codes, result.Categories);
+    }
+
+    // Genus Panthera: 10 native to BR, 2 introduced, 1 vagrant, 7 not in BR.
+    private static FakeScopeLookup BrazilTree() => Tree().Species(4, 100, 20)
+        .Area("BR", 100, 10).Area("BR", 106, 2, presence: AreaPresence.PossiblyExtinct)
+        .Area("BR", 110, 2, AreaOrigin.Introduced).Area("BR", 112, 1, AreaOrigin.Vagrant).Area("BR", 100, 3, endemic: true);
+
+    [Fact]
+    public void AListOfAnAreaIsComparedWithTheGroupsNativeTaxaThere() {
+        var lookup = BrazilTree();
+        var listed = Enumerable.Range(100, 6).Concat([113]).Select(i => (long)i);
+        var result = ListScope.Check(Members(lookup, listed), lookup, new ListScopeOptions { Area = "BR" })!;
+        Assert.Equal("BR", result.Area);
+        Assert.Equal(10, result.SpeciesInScope);
+        Assert.Equal(6, result.Species);
+        Assert.False(result.Partial);
+        Assert.Equal([106L, 107L, 108L, 109L], result.Missing!.Select(t => t.TaxonId));
+        // 106 and 107 are possibly extinct in BR: a note beside them.
+        Assert.Equal([106L, 107L], result.MissingAreaRecords.Keys.Order());
+        var notThere = Assert.Single(result.NotInArea);
+        Assert.Equal(113, notThere.Member.Taxon.TaxonId);
+        Assert.Null(notThere.Record);
+    }
+
+    [Fact]
+    public void IntroducedAndVagrantTaxaCountOnlyWhenAskedFor() {
+        var lookup = BrazilTree();
+        var listed = Enumerable.Range(100, 10).Select(i => (long)i);
+        var withIntroduced = ListScope.Check(Members(lookup, listed), lookup, new ListScopeOptions { Area = "BR", AreaMode = AreaMode.NativeAndIntroduced })!;
+        Assert.Equal([110L, 111L], withIntroduced.Missing!.Select(t => t.TaxonId));
+        Assert.Equal(AreaOrigin.Introduced, withIntroduced.MissingAreaRecords[110].Origin);
+        var all = ListScope.Check(Members(lookup, listed), lookup, new ListScopeOptions { Area = "BR", AreaMode = AreaMode.All })!;
+        Assert.Equal([110L, 111L, 112L], all.Missing!.Select(t => t.TaxonId));
+    }
+
+    [Fact]
+    public void AListOfEndemicsIsComparedWithTheEndemicTaxa() {
+        var lookup = BrazilTree();
+        var result = ListScope.Check(Members(lookup, [100L, 101L, 105L]), lookup, new ListScopeOptions { Area = "BR", AreaMode = AreaMode.Endemic })!;
+        Assert.Equal([102L], result.Missing!.Select(t => t.TaxonId));
+        Assert.Equal(105, Assert.Single(result.NotInArea).Member.Taxon.TaxonId);
     }
 
     [Fact]

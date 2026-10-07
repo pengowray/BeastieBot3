@@ -81,6 +81,8 @@ internal sealed class SiteAssessmentPass {
     private readonly List<(long Newer, List<long> Candidates, bool ByErrata)> _unsettled = new();
 
     private readonly AssessorNamePool _names = new();
+    // The countries and areas of each taxon's latest global assessment.
+    private readonly SiteAreaCollector _areas = new();
     // credit_name: each distinct credit entry or "full" string, with its id.
     private readonly Dictionary<string, long> _creditNames = new(StringComparer.Ordinal);
     // Rows with a damaged author name, parsed again once _names is complete.
@@ -266,6 +268,14 @@ internal sealed class SiteAssessmentPass {
         }
         _plan.Clear();
 
+        writer.InsertRows("INSERT INTO area (code, name, country) VALUES (@code, @name, @country)",
+            ["@code", "@name", "@country"], _areas.AreaRows());
+        writer.InsertRows("INSERT INTO taxon_area (area, taxon_id, origin, presence, endemic) VALUES (@area, @taxon_id, @origin, @presence, @endemic)",
+            ["@area", "@taxon_id", "@origin", "@presence", "@endemic"], _areas.TaxonAreaRows());
+        _stats.TaxaWithAreas = _areas.Taxa;
+        _stats.TaxonAreaRows = _areas.Rows;
+        _stats.Areas = _areas.Areas;
+
         writer.AddCreditNames(_creditNames);
         _stats.CreditNames = _creditNames.Count;
 
@@ -303,6 +313,9 @@ internal sealed class SiteAssessmentPass {
                 assessment.CriteriaVersion = CriteriaVersion(root);
             }
             assessment.PopulationSize = PopulationSize(root);
+            if (_taxa.TryGetValue(assessment.TaxonId, out var taxon) && taxon.LatestGlobalAssessmentId == assessment.AssessmentId) {
+                _areas.Add(assessment.TaxonId, root);
+            }
             assessment.CreditsJson = Credits(root);
             assessment.HasTaxonomicNotes = HasTaxonomicNotes(root);
             if (assessment.HasTaxonomicNotes == true) {

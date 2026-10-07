@@ -17,6 +17,12 @@ public sealed class SiteListScopeLookup(SiteQueries queries, SpeciesTableQueries
 
     public IReadOnlyList<ListTaxonRow> TaxaIn(GroupRow group, IReadOnlyCollection<string> kinds) => queries.GetListTaxa(group, kinds);
 
+    public IReadOnlyList<(ListTaxonRow Row, AreaRecord Record)> TaxaInArea(GroupRow group, IReadOnlyCollection<string> kinds, string area) =>
+        queries.GetListTaxaInArea(group, kinds, area);
+
+    public IReadOnlyDictionary<long, AreaRecord> AreaRecordsOf(string area, IReadOnlyCollection<long> taxonIds) =>
+        queries.GetAreaRecords(area, taxonIds);
+
     public IReadOnlyDictionary<long, TableTaxonExtra> ExtrasOf(GroupRow group) => tables.GetExtras(group);
 
     public IReadOnlyList<ExtraSpeciesRow> ExtraSpeciesIn(GroupRow group) {

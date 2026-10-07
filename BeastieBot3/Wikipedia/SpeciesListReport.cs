@@ -187,6 +187,9 @@ internal sealed class SpeciesListReport {
             return "";
         }
         var group = $"{r.GroupRank} {r.GroupName}";
+        if (r.Area is { } area) {
+            group += $", {area}";
+        }
         return r.GroupCategories is { } c ? $"{group} ({c})" : group;
     }
 
@@ -200,7 +203,7 @@ internal sealed class SpeciesListReport {
                      "page", "url", "found_by", "revision_id", "downloaded_at", "wikitext_chars", "taxa_listed", "statuses",
                      "different_category", "na_or_re_code", "possibly_extinct_tag", "same_category_new_trend", "same_category_older_assessment", "up_to_date", "id_of_another_taxon", "not_matched", "name_not_found", "name_matches_several",
                      "taxa_without_status", "list_lines_without_status", "tables_without_status_column", "older_citations", "population_differs",
-                     "items_not_checked", "group_rank", "group_name", "group_categories", "lists_part_of_group",
+                     "items_not_checked", "group_rank", "group_name", "group_categories", "area", "not_in_area", "lists_part_of_group",
                      "missing_from_group", "in_another_category", "outside_group", "listed_twice",
                  }) {
             csv.WriteField(header);
@@ -212,7 +215,7 @@ internal sealed class SpeciesListReport {
                 r.Title, Url(r.Title), string.Join("; ", row.Sources), r.RevisionId, r.DownloadedAt?.ToString("yyyy-MM-dd"), r.Bytes,
                 r.TaxaListed, r.Statuses, r.CategoryChanged, r.RegionalCodes, r.PossiblyExtinctChanged, r.TrendChanged, r.NewerAssessment, r.UpToDate, r.IdOfAnotherTaxon, r.NotMatched, r.NameNotFound, r.NameAmbiguous,
                 r.TaxaWithoutStatus, r.ListLinesWithoutStatus, r.TablesWithoutStatus, r.OlderCitations, r.PopulationDiffers, r.NotChecked,
-                r.GroupRank, r.GroupName, r.GroupCategories, r.GroupName is null ? null : r.GroupPartial ? "yes" : "no",
+                r.GroupRank, r.GroupName, r.GroupCategories, r.Area, r.NotInArea, r.GroupName is null ? null : r.GroupPartial ? "yes" : "no",
                 r.MissingFromGroup, r.InOtherCategory, r.OutsideGroup, r.ListedTwice,
             ];
             foreach (var field in fields) {

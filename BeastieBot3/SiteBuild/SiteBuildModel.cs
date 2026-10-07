@@ -217,6 +217,9 @@ internal sealed class SiteBuildStats {
     public int CitationsNotCached;
     /// Payloads whose documentation.taxonomic_notes has text.
     public int PayloadsWithTaxonomicNotes;
+    public int TaxaWithAreas;
+    public int TaxonAreaRows;
+    public int Areas;
     public int AssessmentsWithCredits;
     public long CreditEntries;
     public int CreditNames;

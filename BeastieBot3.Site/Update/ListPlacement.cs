@@ -20,7 +20,11 @@ public sealed record ListPlacementResult(IReadOnlyList<PlacedTaxon> Placed, IRea
 /// the wikitext (null when not asked for), and whether the reader asked for them.
 public sealed record ListScopeView(ListScopeResult Scope, ListPlacementResult? Placement, bool AddMissing, bool ExtraSpecies = false,
     BeastieBot3.Shared.Wikitext.ListCategoryChoice? Categories = null,
-    IReadOnlyDictionary<long, IReadOnlyList<EpbcListingRow>>? Epbc = null, bool CategoriesFromTitle = false);
+    IReadOnlyDictionary<long, IReadOnlyList<EpbcListingRow>>? Epbc = null, bool CategoriesFromTitle = false,
+    BeastieBot3.Shared.Wikitext.AreaNames? Areas = null) {
+    /// The name of the area compared with, or null.
+    public string? AreaName => Scope.Area is { } code ? Areas?.ByCode(code)?.Name ?? code : null;
+}
 
 /// A table of listed taxa in the comparison; Epbc: their EPBC Act listings, when they are shown.
 public sealed record ListScopeMembersView(IReadOnlyList<ListScopeMember> Members, IReadOnlyDictionary<long, IReadOnlyList<EpbcListingRow>>? Epbc);

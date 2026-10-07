@@ -12,7 +12,7 @@
 }
 <section class="update-scope" aria-labelledby="scope-heading">
     <h3 id="scope-heading">@UpdateText.ScopeHeading(r.Scope)</h3>
-    <p>@UpdateText.ScopeSummary(r)</p>
+    <p>@UpdateText.ScopeSummary(r, Model.AreaName)</p>
     @if (r.Categories is { } categories) {
         <p>@UpdateText.ScopeCategories(r, categories, Model.CategoriesFromTitle)</p>
     }
@@ -39,10 +39,37 @@
             }
         </select>
         </span>
+        @if (Model.Areas is { } areas) {
+            var all = areas.All.ToList();
+            <span class="choice">
+            <label for="area-choice">@UpdateText.AreaChooseLabel</label>
+            <select id="area-choice" name="@UpdateModel.AreaField" form="update-form">
+                <option value="" selected="@(r.Area is null)">@UpdateText.AreaWholeGroupOption</option>
+                <optgroup label="@UpdateText.AreaCountriesGroup">
+                    @foreach (var a in all.Where(a => a.IsCountry).OrderBy(a => a.Name, StringComparer.Ordinal)) {
+                        <option value="@a.Code" selected="@(r.Area == a.Code)">@a.Name</option>
+                    }
+                </optgroup>
+                <optgroup label="@UpdateText.AreaPartsGroup">
+                    @foreach (var a in all.Where(a => !a.IsCountry).OrderBy(a => a.Name, StringComparer.Ordinal)) {
+                        <option value="@a.Code" selected="@(r.Area == a.Code)">@UpdateText.AreaOption(a, areas)</option>
+                    }
+                </optgroup>
+            </select>
+            </span>
+            <span class="choice">
+            <label for="area-mode">@UpdateText.AreaModeLabel</label>
+            <select id="area-mode" name="@UpdateModel.AreaModeField" form="update-form">
+                @foreach (var mode in Enum.GetValues<BeastieBot3.Shared.Wikitext.AreaMode>()) {
+                    <option value="@mode" selected="@(r.AreaMode == mode)">@UpdateText.AreaModeOption(mode)</option>
+                }
+            </select>
+            </span>
+        }
         <button type="submit" form="update-form">@UpdateText.ScopeChooseButton</button>
     </p>
     @if (r.Partial && r.Missing is null) {
-        <p>@UpdateText.ScopePartial(r) <button type="submit" form="update-form" name="@UpdateModel.ListAnywayField" value="1">@UpdateText.ScopeListAnywayButton</button></p>
+        <p>@UpdateText.ScopePartial(r, Model.AreaName) <button type="submit" form="update-form" name="@UpdateModel.ListAnywayField" value="1">@UpdateText.ScopeListAnywayButton</button></p>
     } else if (r.Partial) {
         @* Asked for: kept on when the form is sent again (Compare, the Catalogue of Life button). *@
         <input type="hidden" name="@UpdateModel.ListAnywayField" value="1" form="update-form">
@@ -57,6 +84,24 @@
             <h4>@UpdateText.MissingHeading(r.MissingTotal)</h4>
             @if (missing.Count < r.MissingTotal) {
                 <p>@UpdateText.MissingCapped(missing.Count, r.MissingTotal)</p>
+            }
+            @if (Model.AreaName is { } areaName && r.MissingAreaRecords.Count > 0) {
+                var noted = missing.Where(t => r.MissingAreaRecords.ContainsKey(t.TaxonId)).ToList();
+                <h4>@UpdateText.MissingAreaNotesHeading(noted.Count, areaName)</h4>
+                <div class="table-scroll">
+                    <table class="update-report">
+                        <thead><tr><th scope="col">@UpdateText.ColumnTaxon</th><th scope="col">@UpdateText.ColumnLatestStatus</th><th scope="col">@UpdateText.ColumnInArea(areaName)</th></tr></thead>
+                        <tbody>
+                            @foreach (var t in noted) {
+                                <tr>
+                                    <td><a href="/species/@t.TaxonId">@Html.Raw(ScientificNameMarkup.ToHtml(t.ScientificName))</a></td>
+                                    <td>@GroupList.StatusCode(t)</td>
+                                    <td>@UpdateText.AreaRecordText(r.MissingAreaRecords[t.TaxonId], areaName)</td>
+                                </tr>
+                            }
+                        </tbody>
+                    </table>
+                </div>
             }
             @if (Model.Epbc is { } epbc) {
                 var listed = missing.Where(t => epbc.ContainsKey(t.TaxonId)).ToList();
@@ -155,6 +200,24 @@
             </div>
             <textarea id="scope-extra" class="update-readonly" readonly rows="6" spellcheck="false" autocapitalize="off" autocomplete="off" aria-describedby="scope-extra-help">@("\n" + ListScope.MissingLines(extraCopy, r.Style))</textarea>
             <p class="help" id="scope-extra-help">@UpdateText.ExtraLinesHelp</p>
+        </div>
+    }
+    @if (Model.AreaName is { } notInName && r.NotInArea.Count > 0) {
+        <h4>@UpdateText.NotInAreaHeading(r.NotInArea.Count, notInName)</h4>
+        <div class="table-scroll">
+            <table class="update-report">
+                <thead><tr><th scope="col">@UpdateText.ColumnTaxon</th><th scope="col">@UpdateText.ColumnLatestStatus</th><th scope="col">@UpdateText.ColumnInArea(notInName)</th><th scope="col">@UpdateText.ColumnLines</th></tr></thead>
+                <tbody>
+                    @foreach (var m in r.NotInArea) {
+                        <tr>
+                            <td><a href="/species/@m.Member.Taxon.TaxonId">@Html.Raw(ScientificNameMarkup.ToHtml(m.Member.Taxon.ScientificName))</a></td>
+                            <td>@m.Member.CurrentCode</td>
+                            <td>@UpdateText.AreaRecordText(m.Record, notInName)</td>
+                            <td>@UpdateText.LineNumbers(m.Member.Lines)</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
         </div>
     }
     @if (r.OtherCategory.Count > 0) {

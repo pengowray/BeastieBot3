@@ -185,7 +185,7 @@
         }
 
         @if (Model.Scope is { } scope) {
-            @await Html.PartialAsync("_ListScope", new ListScopeView(scope, Model.Placement, Model.AddMissing, Model.ExtraSpecies, Model.Categories, Model.ShowEpbc ? Model.Epbc : null, Model.CategoriesFromTitle))
+            @await Html.PartialAsync("_ListScope", new ListScopeView(scope, Model.Placement, Model.AddMissing, Model.ExtraSpecies, Model.Categories, Model.ShowEpbc ? Model.Epbc : null, Model.CategoriesFromTitle, Model.Areas))
         }
     </section>
 }

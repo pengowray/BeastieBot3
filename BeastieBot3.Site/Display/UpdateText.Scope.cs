@@ -11,8 +11,10 @@ public static partial class UpdateText {
 
     /// "The wikitext includes 39 of the 39 species that IUCN has in Family Felidae." With categories:
     /// "... 12 of the 15 EN species ...".
-    public static string ScopeSummary(ListScopeResult r) =>
-        $"The wikitext includes {Count(r.Species)} of the {Count(r.SpeciesInScope)} {CategoryAdjective(r.Categories)}species that IUCN has in {GroupList.HeadingText(r.Scope)}.";
+    /// With an area: "... of the 1,230 species in Class Aves that IUCN records as native to Brazil."
+    public static string ScopeSummary(ListScopeResult r, string? areaName = null) => areaName is null
+        ? $"The wikitext includes {Count(r.Species)} of the {Count(r.SpeciesInScope)} {CategoryAdjective(r.Categories)}species that IUCN has in {GroupList.HeadingText(r.Scope)}."
+        : $"The wikitext includes {Count(r.Species)} of the {Count(r.SpeciesInScope)} {CategoryAdjective(r.Categories)}species in {GroupList.HeadingText(r.Scope)} that IUCN records as {AreaPhrase(r.AreaMode, areaName)}.";
 
     /// fromTitle: the categories were set from the title of the page loaded from Wikipedia.
     public static string ScopeCategories(ListScopeResult r, IReadOnlySet<string> categories, bool fromTitle = false) => r.CategoriesChosen
@@ -36,8 +38,9 @@ public static partial class UpdateText {
     /// The category choice that leaves the categories to the codes in the wikitext.
     public const string CategoriesFromCodesOption = "From the status codes in the wikitext";
 
-    public static string ScopePartial(ListScopeResult r) =>
-        $"Missing taxa are not listed: the wikitext includes only {Count(r.Species)} of the {Count(r.SpeciesInScope)} {CategoryAdjective(r.Categories)}species in {GroupList.HeadingText(r.Scope)}, so it may be a regional list or a list of part of the group.";
+    public static string ScopePartial(ListScopeResult r, string? areaName = null) => areaName is null
+        ? $"Missing taxa are not listed: the wikitext includes only {Count(r.Species)} of the {Count(r.SpeciesInScope)} {CategoryAdjective(r.Categories)}species in {GroupList.HeadingText(r.Scope)}, so it may be a regional list or a list of part of the group."
+        : $"Missing taxa are not listed: the wikitext includes only {Count(r.Species)} of the {Count(r.SpeciesInScope)} {CategoryAdjective(r.Categories)}species in {GroupList.HeadingText(r.Scope)} that IUCN records as {AreaPhrase(r.AreaMode, areaName)}, so it may be a list of part of the group.";
     public const string ScopeListAnywayButton = "List the missing taxa anyway";
 
     public static string MissingHeading(int n) => n == 1 ? "1 taxon missing from the wikitext" : $"{Count(n)} taxa missing from the wikitext";

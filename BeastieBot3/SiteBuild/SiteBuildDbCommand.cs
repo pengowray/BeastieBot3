@@ -230,6 +230,9 @@ internal sealed class SiteBuildDbCommand : Command<SiteBuildDbCommand.Settings> 
         Row("Citations parsed from cached API assessments", s.CitationsParsed);
         Row("Assessments not in the API cache (no citation)", s.CitationsNotCached);
         Row("Cached assessments with taxonomic notes (has_taxonomic_notes = 1)", s.PayloadsWithTaxonomicNotes);
+        Row("Taxa whose latest global assessment codes countries or areas", s.TaxaWithAreas);
+        Row("Taxon and area rows (taxon_area)", s.TaxonAreaRows);
+        Row("Countries and areas (area)", s.Areas);
         Row("Assessments with credits (assessment.credits)", s.AssessmentsWithCredits);
         Row("Credit entries in those assessments", s.CreditEntries);
         Row("Distinct credit entries (credit_name rows)", s.CreditNames);

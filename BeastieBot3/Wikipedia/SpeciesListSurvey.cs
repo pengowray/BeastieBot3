@@ -61,6 +61,8 @@ internal sealed record SpeciesListPageResult(
     string? GroupRank,
     string? GroupName,
     string? GroupCategories,
+    string? Area,
+    int NotInArea,
     bool GroupPartial,
     int? MissingFromGroup,
     int InOtherCategory,
@@ -82,12 +84,17 @@ internal static class SpeciesListSurvey {
     /// threatened birds of Brazil": CR, EN and VU), as on the status update page. A page whose title
     /// does not start "List of" (a genus or family article) is taken to list its whole group, so
     /// ListScope does not guess that it lists only threatened taxa.
-    public static SpeciesListPageResult Check(StoredPageText page, IStatusLookup statuses, IListScopeLookup groups, DateOnly today) {
+    /// areas: the site database's countries and areas; a title of one ("List of birds of Brazil") is
+    /// compared with the group's taxa that IUCN records as native there (endemic for "endemic").
+    public static SpeciesListPageResult Check(StoredPageText page, IStatusLookup statuses, IListScopeLookup groups, DateOnly today,
+        AreaNames? areas = null) {
         var result = new StatusUpdater(statuses, today).Update(page.Wikitext);
         var members = result.Members ?? [];
         var scope = ListScope.Check(members, groups, new ListScopeOptions {
             GuessCategories = WikipediaFetchSpeciesListsCommand.IsListTitle(page.Title),
             Categories = ListCategories.FromTitle(page.Title),
+            Area = areas?.FromTitle(page.Title)?.Code,
+            AreaMode = AreaNames.ModeFromTitle(page.Title),
         });
 
         var written = new Dictionary<(int Line, long TaxonId), string?>();
@@ -158,6 +165,8 @@ internal static class SpeciesListSurvey {
             GroupRank: scope?.Scope.Rank,
             GroupName: scope?.Scope.Name,
             GroupCategories: scope?.Categories is { } c ? string.Join(" ", c.Order(StringComparer.Ordinal)) : null,
+            Area: scope?.Area,
+            NotInArea: scope?.NotInArea.Count ?? 0,
             GroupPartial: scope?.Partial ?? false,
             MissingFromGroup: scope is { Partial: false } ? scope.MissingTotal : null,
             InOtherCategory: scope?.OtherCategory.Count ?? 0,

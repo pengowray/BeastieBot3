@@ -5,10 +5,12 @@ namespace BeastieBot3.Shared.SiteData;
 // differs from Version, so bump Version whenever a table or column changes meaning.
 //
 // What the site may show from IUCN is limited by the IUCN Red List Terms of Use: no assessment
-// narrative text (rationale, range, threats ...), no coded threats/habitats/countries, no downloads.
-// Keep such fields out of this database rather than hiding them in the site.
+// narrative text (rationale, range, threats ...), no coded threats or habitats, no downloads. Keep
+// such fields out of this database rather than hiding them in the site. The countries and areas of
+// each taxon's latest global assessment (taxon_area) are here only to compare a list with the one
+// area a reader chooses on the status update page; no page lists a taxon's areas.
 public static class SiteDbSchema {
-    public const int Version = 17;
+    public const int Version = 18;
 
     public const string Ddl = """
         CREATE TABLE meta (
@@ -155,6 +157,26 @@ public static class SiteDbSchema {
             applies_to     TEXT NOT NULL,                     -- 'taxon' | 'population'
             population     TEXT,                              -- applies_to = 'population': the text in brackets after the taxon's name
             PRIMARY KEY (taxon_id, sprat_taxon_id)
+        ) WITHOUT ROWID;
+
+        -- The countries and parts of countries (areas) that the latest global assessments code, for
+        -- the status update page's comparison of a list with one area. Hash-coded regions ("Europe")
+        -- are left out.
+        CREATE TABLE area (
+            code     TEXT PRIMARY KEY,                       -- ISO 3166-1 alpha-2 ('BR'), or a TDWG code for part of a country ('HAW-HI')
+            name     TEXT NOT NULL,                          -- IUCN's English name: 'Brazil', 'Tanzania, United Republic of', 'Hawaiian Is.'
+            country  TEXT                                    -- part of a country: the code of the country it is in; NULL for a country
+        ) WITHOUT ROWID;
+
+        -- Each area a taxon's latest global assessment codes. An area coded twice (for two seasons, say)
+        -- keeps the lowest origin and presence values. No page lists a taxon's areas.
+        CREATE TABLE taxon_area (
+            area      TEXT NOT NULL,
+            taxon_id  INTEGER NOT NULL,
+            origin    INTEGER NOT NULL,                      -- AreaOrigin: 1 native, 2 reintroduced, 3 introduced, 4 assisted colonisation, 5 vagrant, 6 origin uncertain
+            presence  INTEGER NOT NULL,                      -- AreaPresence: 1 extant, 2 possibly extant, 3 presence uncertain, 4 possibly extinct, 5 extinct post-1500
+            endemic   INTEGER NOT NULL,                      -- 1: the assessment marks the taxon endemic to this area
+            PRIMARY KEY (area, taxon_id)
         ) WITHOUT ROWID;
 
         -- Species that are in the Catalogue of Life or Wikidata but are not IUCN taxa, for the group

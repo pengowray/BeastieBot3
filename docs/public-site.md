@@ -1344,8 +1344,11 @@ title statements are not recorded (run wikidata iucn-assessment-items)".
   `/api/suggest` returns both, and `site.js` keeps only the first, which is the taxon in the
   release.
 - The IUCN Red List Terms of Use limit what the site may hold and offer: no assessment narrative
-  text, no coded threats, habitats or countries, no downloads, and no API that returns assessment
-  fields (`/api/suggest` returns names, ids and the category only). Every page with IUCN data shows
+  text, no coded threats or habitats, no downloads, and no API that returns assessment fields. The
+  countries and areas of each taxon's latest global assessment (`area`, `taxon_area`, schema 18) are
+  held only to compare a list with the one area chosen on `/update` (owner's decision, October 2026,
+  being confirmed with IUCN); no page lists a taxon's areas.
+  `/api/suggest` returns names, ids and the category only. Every page with IUCN data shows
   the Red List version and links to the About page, which credits every source with its licence and
   citation. Crossref is one of those sources, for the DOIs that `iucn resolve-dois` finds; its
   licence is CC0, and its Version cell gives the date of the newest DOI check

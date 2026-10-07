@@ -98,6 +98,7 @@ internal sealed class WikipediaReportSpeciesListsCommand : Command<WikipediaRepo
         using var statuses = queries.OpenStatusLookup();
         var groups = new SiteListScopeLookup(queries, new SpeciesTableQueries(siteDb), statuses);
         var today = DateOnly.FromDateTime(DateTime.UtcNow);
+        var areas = queries.AreaNames();
         var results = new List<SpeciesListReportRow>();
         var failures = new List<(string Title, string Error)>();
         var watch = Stopwatch.StartNew();
@@ -107,7 +108,7 @@ internal sealed class WikipediaReportSpeciesListsCommand : Command<WikipediaRepo
                 var text = cache.ReadPageText(page.PageRowId);
                 if (text is not null) {
                     try {
-                        results.Add(new SpeciesListReportRow(SpeciesListSurvey.Check(text, statuses, groups, today), page.Sources));
+                        results.Add(new SpeciesListReportRow(SpeciesListSurvey.Check(text, statuses, groups, today, areas), page.Sources));
                     } catch (Exception ex) when (ex is not OperationCanceledException) {
                         failures.Add((page.Title, ex.Message));
                     }
