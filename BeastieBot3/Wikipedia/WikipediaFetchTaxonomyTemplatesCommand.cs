@@ -71,9 +71,9 @@ internal sealed class WikipediaFetchTaxonomyTemplatesCommand : AsyncCommand<Wiki
                     var take = due.Take(budget).ToList();
                     budget -= take.Count;
                     await downloader.FetchPagesAsync($"Templates, level {level + 1}", take, WikipediaApiClient.MaxTitlesPerRequest, cancellationToken);
-                    due = due.Skip(take.Count).ToList();
                 }
-                left += due.Count;
+                // Counted after the download: templates not asked for, or whose request failed.
+                left += round.Count(t => cache.GetDownloadState(t) is not { Status: WikiPageDownloadStatus.Cached or WikiPageDownloadStatus.Missing });
                 // The parents of this level's templates are the next level.
                 var next = new List<string>();
                 foreach (var title in round) {

@@ -28,7 +28,16 @@ internal static partial class TaxonomyTemplates {
         if (display.Length == 0) {
             display = name;
         }
-        return new TaxonomyTemplate(name, EnglishRank(rank), parent is { Length: > 0 } p ? p : null, display);
+        return new TaxonomyTemplate(name, EnglishRank(rank), CleanName(parent), display);
+    }
+
+    // A template name as a parent gives it: "Felidae", not "Felidae|..." or a template call.
+    internal static string? CleanName(string? value) {
+        if (value is null) {
+            return null;
+        }
+        var name = value.Split('|')[0].Trim();
+        return name.Length == 0 || name.IndexOfAny(['{', '}', '[', ']', '<', '>', '#']) >= 0 ? null : name;
     }
 
     // "|rank=familia" on a line of its own.
@@ -64,10 +73,10 @@ internal static partial class TaxonomyTemplates {
 
     /// The template a taxobox starts its classification from: an automatic taxobox's taxon, else a
     /// speciesbox's parent (a subgenus), else its genus.
-    public static string? StartOf(IReadOnlyDictionary<string, string> fields) =>
-        fields.TryGetValue("taxon", out var taxon) && taxon.Trim().Length > 0 && !taxon.Contains(' ') ? taxon.Trim()
+    public static string? StartOf(IReadOnlyDictionary<string, string> fields) => CleanName(
+        fields.TryGetValue("taxon", out var taxon) && taxon.Trim().Length > 0 && !taxon.Trim().Contains(' ') ? taxon.Trim()
         : fields.TryGetValue("parent", out var parent) && parent.Trim().Length > 0 ? parent.Trim()
         : fields.TryGetValue("genus", out var genus) && genus.Trim().Length > 0 ? genus.Trim()
         : fields.TryGetValue("taxon", out var speciesTaxon) && speciesTaxon.Trim().Split(' ') is [var g, ..] ? g
-        : null;
+        : null);
 }

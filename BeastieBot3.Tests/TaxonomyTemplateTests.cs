@@ -16,6 +16,12 @@ public class TaxonomyTemplateTests {
         Assert.Equal("Panthera", TaxonomyTemplates.Parse("Panthera (genus)", text)!.Display);
     }
 
+    [Fact]
+    public void AParentWithAPipeOrATemplateCallIsCleaned() {
+        Assert.Equal("Felidae", TaxonomyTemplates.Parse("X", "|rank=genus\n|parent=Felidae|extra\n")!.Parent);
+        Assert.Null(TaxonomyTemplates.Parse("X", "|rank=genus\n|parent={{#if:x|A|B}}\n")!.Parent);
+    }
+
     [Theory]
     [InlineData("regnum", "kingdom")]
     [InlineData("ordo", "order")]
