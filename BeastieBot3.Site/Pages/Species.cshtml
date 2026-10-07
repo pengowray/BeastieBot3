@@ -543,18 +543,21 @@
                                         }
                                     }
                                     @{
-                                        // Many groups without a rank (Wikidata's clades) fold into one line.
+                                        // More than three clades and groups with no rank in a cell fold into one
+                                        // line (a <details>, opened with one click), in their order.
+                                        static bool Foldable(LadderStep s) => s.Rank is null or "clade";
+                                        var clades = cell.Between.Count(s => s.Rank == "clade");
                                         var unranked = cell.Between.Count(s => s.Rank is null);
-                                        var fold = unranked > 3;
+                                        var fold = clades + unranked > 3;
                                     }
-                                    @foreach (var step in cell.Between.Where(s => !fold || s.Rank is not null)) {
+                                    @foreach (var step in cell.Between.Where(s => !fold || !Foldable(s))) {
                                         <span class="rank-between"><span class="rank">@(step.Rank ?? SiteText.RanksNoRank)</span> @if (step.Url is { } u) {<a href="@u">@Html.Raw(ScientificNameMarkup.ToHtml(step.Name))</a>} else {@Html.Raw(ScientificNameMarkup.ToHtml(step.Name))}</span>
                                     }
                                     @if (fold) {
                                         <details class="rank-between">
-                                            <summary>@SiteText.RanksUnrankedFolded(unranked)</summary>
-                                            @foreach (var step in cell.Between.Where(s => s.Rank is null)) {
-                                                <span class="rank-between">@if (step.Url is { } u) {<a href="@u">@Html.Raw(ScientificNameMarkup.ToHtml(step.Name))</a>} else {@Html.Raw(ScientificNameMarkup.ToHtml(step.Name))}</span>
+                                            <summary>@SiteText.RanksFolded(clades, unranked)</summary>
+                                            @foreach (var step in cell.Between.Where(Foldable)) {
+                                                <span class="rank-between">@if (clades > 0 && unranked > 0) {<span class="rank">@(step.Rank ?? SiteText.RanksNoRank)</span> }@if (step.Url is { } u) {<a href="@u">@Html.Raw(ScientificNameMarkup.ToHtml(step.Name))</a>} else {@Html.Raw(ScientificNameMarkup.ToHtml(step.Name))}</span>
                                             }
                                         </details>
                                     }

@@ -39,4 +39,12 @@ public sealed class ClassificationComparisonTests {
     [InlineData("FELIDAE", "felidae")]
     [InlineData("Felis silvestris ssp. lybica", "felis silvestris ssp. lybica")]
     public void NamesCompareWithoutAuthorityOrCase(string name, string clean) => Assert.Equal(clean, ClassificationComparison.Clean(name));
+
+    [Theory]
+    [InlineData(18, 0, "18 clades")]
+    [InlineData(0, 4, "4 groups with no rank")]
+    [InlineData(1, 3, "1 clade and 3 groups with no rank")]
+    [InlineData(5, 1, "5 clades and 1 group with no rank")]
+    public void FoldedLineCountsCladesAndGroupsWithNoRank(int clades, int unranked, string text) =>
+        Assert.Equal(text, SiteText.RanksFolded(clades, unranked));
 }

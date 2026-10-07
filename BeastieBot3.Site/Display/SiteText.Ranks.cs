@@ -19,7 +19,12 @@ public static partial class SiteText {
     public const string RanksWikispecies = "Wikispecies";
     public const string RanksNoRank = "no rank";
 
-    public static string RanksUnrankedFolded(int n) => $"{n} groups with no rank";
+    /// The line that opens the collapsed clades and groups with no rank of one cell.
+    public static string RanksFolded(int clades, int unranked) => (clades, unranked) switch {
+        (_, 0) => clades == 1 ? "1 clade" : $"{clades} clades",
+        (0, _) => unranked == 1 ? "1 group with no rank" : $"{unranked} groups with no rank",
+        _ => $"{clades} {(clades == 1 ? "clade" : "clades")} and {unranked} {(unranked == 1 ? "group" : "groups")} with no rank",
+    };
     public const string RanksDiffersTitle = "Another name than in IUCN's classification";
 
     public static string RankRowLabel(string rank) => rank == ClassificationComparison.AboveKingdom
