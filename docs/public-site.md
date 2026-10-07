@@ -1334,10 +1334,10 @@ title statements are not recorded (run wikidata iucn-assessment-items)".
   saying the assessment was not found. No id matches: the text is searched as a name.
   A Wikidata item (`Q33609`, or a `wikidata.org/wiki/Q33609` or `/entity/Q33609` address) finds
   the taxa whose item it is (`taxon.wikidata_qid`) and the assessments whose item it is
-  (`assessment.wikidata_item_qid`), listed with "Matched Wikidata item". It redirects when it finds
-  one taxon in the release, so an old IUCN id with the same item is passed over. An item that
-  nothing has gets "This site has no taxon or assessment with Wikidata item Q…" and no name
-  search. Not searched: the other items that state a taxon's IUCN id
+  (`assessment.wikidata_item_qid`), listed with "Matched Wikidata item". When one taxon in the
+  release has the item, search redirects to that taxon even when an old IUCN id also has the item.
+  When no taxon or assessment has the item, the page says so and does not search the text as a
+  name. Not searched: the other items that state a taxon's IUCN id
   (`taxon.wikidata_other_items`) and the items of extra species (`extra_species.wikidata_qid`).
 - The table under the regional assessments (`_RelatedTaxaTable.cshtml`) lists, on a species page,
   its subspecies, varieties and subpopulations with the category, criteria and year of each one's
