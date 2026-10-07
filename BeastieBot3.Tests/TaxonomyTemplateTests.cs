@@ -22,7 +22,14 @@ public class TaxonomyTemplateTests {
         Assert.Null(TaxonomyTemplates.Parse("X", "|rank=genus\n|parent={{#if:x|A|B}}\n")!.Parent);
     }
 
+    [Fact]
+    public void ASkipTemplateNamesTheTemplateItIsTheSameAs() {
+        var t = TaxonomyTemplates.Parse("Mammalia/skip", "{{Don't edit this line {{{machine code|}}}\n|same as=Mammalia\n|parent=Amniota\n}}")!;
+        Assert.Equal(("Mammalia", "Amniota"), (t.SameAs, t.Parent));
+    }
+
     [Theory]
+    [InlineData("grandordo-mb", "grandorder")]
     [InlineData("regnum", "kingdom")]
     [InlineData("ordo", "order")]
     [InlineData("superfamilia", "superfamily")]

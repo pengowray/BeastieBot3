@@ -77,10 +77,15 @@ internal sealed class WikipediaFetchTaxonomyTemplatesCommand : AsyncCommand<Wiki
                 // The parents of this level's templates are the next level.
                 var next = new List<string>();
                 foreach (var title in round) {
-                    if (cache.ReadArticleText(title) is { } page
-                        && TaxonomyTemplates.Parse(title[TaxonomyTemplates.Prefix.Length..], page.Wikitext) is { Parent: { } parent }
-                        && known.Add(TaxonomyTemplates.Title(parent))) {
-                        next.Add(TaxonomyTemplates.Title(parent));
+                    if (cache.ReadArticleText(title) is not { } page
+                        || TaxonomyTemplates.Parse(title[TaxonomyTemplates.Prefix.Length..], page.Wikitext) is not { } template) {
+                        continue;
+                    }
+                    // The parent, and the template a "same as" template takes its rank and name from.
+                    foreach (var name in new[] { template.Parent, template.SameAs }) {
+                        if (name is not null && known.Add(TaxonomyTemplates.Title(name))) {
+                            next.Add(TaxonomyTemplates.Title(name));
+                        }
                     }
                 }
                 round = next;

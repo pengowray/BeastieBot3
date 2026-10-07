@@ -34,7 +34,14 @@ internal static class SiteLadders {
         Taxonomy.TaxonomyTemplate? Template(string name) {
             if (!templates.TryGetValue(name, out var t)) {
                 var page = cache.ReadArticleText(Taxonomy.TaxonomyTemplates.Title(name));
-                templates[name] = t = page is null ? null : Taxonomy.TaxonomyTemplates.Parse(name, page.Wikitext);
+                t = page is null ? null : Taxonomy.TaxonomyTemplates.Parse(name, page.Wikitext);
+                // "Mammalia/skip" (same as=Mammalia): Mammalia's rank and name, its own parent.
+                if (t?.SameAs is { } sameAs && sameAs != name && Template(sameAs) is { } same) {
+                    t = t with { Rank = same.Rank, Display = same.Display };
+                } else if (t?.SameAs is { } other) {
+                    t = t with { Display = other };
+                }
+                templates[name] = t;
             }
             return t;
         }
@@ -47,11 +54,11 @@ internal static class SiteLadders {
                 || Taxonomy.TaxonomyTemplates.StartOf(fields) is not { } start || Template(start) is null) {
                 continue;
             }
-            var genus = fields.GetValueOrDefault("genus")?.Trim();
-            var species = fields.GetValueOrDefault("species")?.Trim();
+            var genus = Plain(fields.GetValueOrDefault("genus"));
+            var species = Plain(fields.GetValueOrDefault("species"));
             var name = genus is { Length: > 0 } && species is { Length: > 0 } ? $"{genus} {species}"
-                : fields.GetValueOrDefault("taxon")?.Trim() is { Length: > 0 } t ? t : article.Title;
-            var subspecies = fields.GetValueOrDefault("subspecies")?.Trim();
+                : Plain(fields.GetValueOrDefault("taxon")) is { Length: > 0 } t ? t : article.Title;
+            var subspecies = Plain(fields.GetValueOrDefault("subspecies"));
             var rank = subspecies is { Length: > 0 } ? "subspecies" : species is { Length: > 0 } || name.Contains(' ') ? "species" : null;
             if (subspecies is { Length: > 0 }) {
                 name = $"{name} {subspecies}";
@@ -108,6 +115,17 @@ internal static class SiteLadders {
                 rank is { Length: > 0 } r ? rankNames.GetValueOrDefault("Q" + r) : null,
                 reader.IsDBNull(2) ? nodeId : reader.GetString(2));
         });
+    }
+
+    // A taxobox value as a name: no references, templates, comments, links or italics.
+    private static string? Plain(string? value) {
+        if (value is null) {
+            return null;
+        }
+        var text = System.Text.RegularExpressions.Regex.Replace(value, @"<ref[^>]*/>|<ref[^>]*>.*?</ref>|<!--.*?-->|\{\{[^{}]*\}\}", "",
+            System.Text.RegularExpressions.RegexOptions.Singleline);
+        text = System.Text.RegularExpressions.Regex.Replace(text, @"'{2,}|\[\[|\]\]|<[^>]+>", "");
+        return text.Split('<')[0].Trim();
     }
 
     /// rules/wikidata-taxon-ranks.csv: rank item id and its English name.

@@ -7,8 +7,9 @@ using System.Text.RegularExpressions;
 namespace BeastieBot3.Taxonomy;
 
 /// One taxonomy template. Name: the part after "Template:Taxonomy/" ("Felis", "Panthera (genus)");
-/// Rank: in English ("family"), null for no rank; Display: the name shown (from link=).
-internal sealed record TaxonomyTemplate(string Name, string? Rank, string? Parent, string Display);
+/// Rank: in English ("family"), null for no rank; Display: the name shown (from link=). SameAs: a
+/// template ("Mammalia/skip" says "same as=Mammalia") whose rank and name this one takes, with its own parent.
+internal sealed record TaxonomyTemplate(string Name, string? Rank, string? Parent, string Display, string? SameAs = null);
 
 internal static partial class TaxonomyTemplates {
     public const string Prefix = "Template:Taxonomy/";
@@ -19,7 +20,8 @@ internal static partial class TaxonomyTemplates {
     public static TaxonomyTemplate? Parse(string name, string wikitext) {
         var rank = Field(wikitext, "rank");
         var parent = Field(wikitext, "parent");
-        if (rank is null && parent is null) {
+        var sameAs = CleanName(Field(wikitext, "same as"));
+        if (rank is null && parent is null && sameAs is null) {
             return null;
         }
         var link = Field(wikitext, "link");
@@ -28,7 +30,7 @@ internal static partial class TaxonomyTemplates {
         if (display.Length == 0) {
             display = name;
         }
-        return new TaxonomyTemplate(name, EnglishRank(rank), CleanName(parent), display);
+        return new TaxonomyTemplate(name, EnglishRank(rank), CleanName(parent), display, sameAs);
     }
 
     // A template name as a parent gives it: "Felidae", not "Felidae|..." or a template call.
@@ -59,7 +61,8 @@ internal static partial class TaxonomyTemplates {
         if (string.IsNullOrWhiteSpace(rank)) {
             return null;
         }
-        var r = rank.Trim().ToLowerInvariant();
+        // "grandordo-mb": the part after the hyphen is a display variant.
+        var r = rank.Trim().ToLowerInvariant().Split('-')[0];
         if (Latin.TryGetValue(r, out var english)) {
             return english is "unranked" ? null : english;
         }
