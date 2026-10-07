@@ -237,6 +237,7 @@ internal sealed class SiteDbWriter : IDisposable {
                 Bind(command, key, taxonId, nameId);
                 command.ExecuteNonQuery();
             }
+            WriteNameWords();
             _nameKeys.Clear();
             _transaction!.Commit();
             _transaction.Dispose();
@@ -258,6 +259,27 @@ internal sealed class SiteDbWriter : IDisposable {
             throw new InvalidOperationException($"The site database is in journal mode '{mode}', not 'delete'.");
         }
         _finished = true;
+    }
+
+    // name_word: each word of the distinct keys (sorted, so equal keys are next to each other).
+    private void WriteNameWords() {
+        var uses = new Dictionary<string, int>(StringComparer.Ordinal);
+        string? last = null;
+        foreach (var (key, _, _) in _nameKeys) {
+            if (key == last) {
+                continue;
+            }
+            last = key;
+            foreach (var (start, length) in BeastieBot3.Shared.SiteData.NameWords.Find(key)) {
+                var word = key.Substring(start, length);
+                uses[word] = uses.GetValueOrDefault(word) + 1;
+            }
+        }
+        using var command = Prepare("INSERT INTO name_word (word, uses) VALUES (@word, @uses)", "@word", "@uses");
+        foreach (var (word, n) in uses.OrderBy(p => p.Key, StringComparer.Ordinal)) {
+            Bind(command, word, n);
+            command.ExecuteNonQuery();
+        }
     }
 
     public string? Scalar(string sql) {

@@ -57,6 +57,9 @@ public static partial class SiteText {
         $"This site has no assessment with IUCN assessment ID {assessmentId.ToString(CultureInfo.InvariantCulture)}.";
     public static string NoResults(string query) =>
         $"No taxa found for “{query}”. Check the spelling, or search for the scientific name. If the spelling is right, the taxon may not be on the IUCN Red List.";
+    /// Before the links to searches with a misspelled word corrected, when a search found nothing.
+    public const string SimilarNames = "Similar names:";
+
     public const string TooShort = "Search term too short. Enter at least 2 letters or digits.";
     public const string NoGlobalShort = "No global assessment";
     /// In a list of taxa, in place of the category, for a taxon that is not in the release.

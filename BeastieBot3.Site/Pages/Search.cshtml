@@ -43,6 +43,14 @@
     }
     @if (Model.Items.Count == 0 && Model.Groups.Count == 0) {
         <p class="message">@SiteText.NoResults(Model.Query)</p>
+        @if (Model.Suggestions.Count > 0) {
+            <p class="similar-names">@SiteText.SimilarNames
+                @for (var i = 0; i < Model.Suggestions.Count; i++) {
+                    var suggestion = Model.Suggestions[i];
+                    <a href="/search?q=@Uri.EscapeDataString(suggestion)">@suggestion</a>@(i < Model.Suggestions.Count - 1 ? ", " : "")
+                }
+            </p>
+        }
     } else if (Model.Items.Count > 0) {
         @if (Model.MissingAssessmentId is { } missing) {
             <p class="message">@SiteText.AssessmentIdNotFound(missing)</p>

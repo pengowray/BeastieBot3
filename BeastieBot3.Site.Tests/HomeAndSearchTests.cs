@@ -318,4 +318,17 @@ public sealed class HomeAndSearchTests(SiteFactory factory) : IClassFixture<Site
         Assert.Contains($"Matched IUCN taxon ID: {FixtureDb.Tiger}", text);
         Assert.Contains($"Matched IUCN assessment ID: {FixtureDb.PolarBear2008}", text);
     }
+
+    [Fact]
+    public async Task ASearchWithAMisspelledWordSuggestsTheCorrectedName() {
+        var html = await factory.CreateClient().GetStringAsync("/search?q=Pantera+leoo");
+        Assert.Contains(BeastieBot3.Site.Display.SiteText.SimilarNames, html);
+        Assert.Contains("<a href=\"/search?q=Panthera%20leo\">Panthera leo</a>", html);
+    }
+
+    [Fact]
+    public async Task ASearchThatFindsNothingAndIsNotAMisspellingSuggestsNothing() {
+        var html = await factory.CreateClient().GetStringAsync("/search?q=qwxzvbnm");
+        Assert.DoesNotContain(BeastieBot3.Site.Display.SiteText.SimilarNames, html);
+    }
 }

@@ -39,6 +39,13 @@ public sealed class SearchModel : PageModel {
         $"{UpdateModel.Path}?{UpdateModel.PageField}={Uri.EscapeDataString(page.Title)}"
         + (page.RevisionId is { } r ? $"&{UpdateModel.RevisionField}={r}" : "") + "#result";
 
+    /// When the search found nothing: search texts with misspelled words corrected that find taxa
+    /// or groups, most likely first.
+    public IReadOnlyList<string> Suggestions { get; private set; } = [];
+    public const int MaxSuggestions = 3;
+    // Candidate texts searched before giving up: each is one search.
+    private const int MaxCandidates = 8;
+
     /// True when the results are taxa found by an IUCN id in the text, not by a name.
     public bool FoundById { get; private set; }
 
@@ -86,7 +93,28 @@ public sealed class SearchModel : PageModel {
 
         Items = result.Hits.Select(TaxonListItem.FromHit).ToList();
         TotalTaxa = result.TotalTaxa;
+        if (Items.Count == 0 && Groups.Count == 0) {
+            Suggestions = FindSuggestions(Query);
+        }
         return Page();
+    }
+
+    private IReadOnlyList<string> FindSuggestions(string text) {
+        if (_queries.GetNameWordIndex() is not { } index) {
+            return [];
+        }
+        var found = new List<string>();
+        foreach (var candidate in SpellingSuggestions.Candidates(text, index, MaxCandidates)) {
+            if (found.Count == MaxSuggestions) {
+                break;
+            }
+            HttpContext.RequestAborted.ThrowIfCancellationRequested();
+            if (_queries.Search(candidate, 1, countAll: false, cancellationToken: HttpContext.RequestAborted).Hits.Count > 0
+                || _queries.FindGroupsByName(candidate, 1).Count > 0) {
+                found.Add(char.ToUpperInvariant(candidate[0]) + candidate[1..]);
+            }
+        }
+        return found;
     }
 
     // The taxa the ids name: a redirect when there is exactly one, else the list. Null when the ids

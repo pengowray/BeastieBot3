@@ -212,6 +212,7 @@ public static class FixtureDb {
                 wikidataItemModelJson ?? new WikidataItemModel().ToJson());
             tx.Commit();
             Exec(connection, "INSERT INTO name_fts(name_fts) VALUES('rebuild')");
+            WriteNameWords(connection);
             if (dropTable is not null) {
                 Exec(connection, $"DROP TABLE {dropTable}");
             }
@@ -709,6 +710,29 @@ public static class FixtureDb {
         node["rationale"] = NarrativeMarker;
         node["threats"] = NarrativeMarker;
         return node.ToJsonString(new JsonSerializerOptions());
+    }
+
+    // name_word as site build-db writes it: each word of the distinct name keys.
+    private static void WriteNameWords(SqliteConnection connection) {
+        var uses = new Dictionary<string, int>(StringComparer.Ordinal);
+        using (var read = connection.CreateCommand()) {
+            read.CommandText = "SELECT DISTINCT key FROM name_key";
+            using var reader = read.ExecuteReader();
+            while (reader.Read()) {
+                var key = reader.GetString(0);
+                foreach (var (start, length) in NameWords.Find(key)) {
+                    var word = key.Substring(start, length);
+                    uses[word] = uses.GetValueOrDefault(word) + 1;
+                }
+            }
+        }
+        foreach (var (word, n) in uses) {
+            using var insert = connection.CreateCommand();
+            insert.CommandText = "INSERT INTO name_word (word, uses) VALUES (@w, @n)";
+            insert.Parameters.AddWithValue("@w", word);
+            insert.Parameters.AddWithValue("@n", n);
+            insert.ExecuteNonQuery();
+        }
     }
 
     private static void Exec(SqliteConnection connection, string sql) {

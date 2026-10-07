@@ -10,7 +10,7 @@ namespace BeastieBot3.Shared.SiteData;
 // each taxon's latest global assessment (taxon_area) are here only to compare a list with the one
 // area a reader chooses on the status update page; no page lists a taxon's areas.
 public static class SiteDbSchema {
-    public const int Version = 19;
+    public const int Version = 20;
 
     public const string Ddl = """
         CREATE TABLE meta (
@@ -334,6 +334,13 @@ public static class SiteDbSchema {
             taxon_id INTEGER NOT NULL,
             name_id  INTEGER NOT NULL,
             PRIMARY KEY (key, name_id)
+        ) WITHOUT ROWID;
+
+        -- The words of the names (NameWords.Find on name_key's keys), for spelling suggestions when
+        -- a search finds nothing. uses: how many keys have the word.
+        CREATE TABLE name_word (
+            word TEXT PRIMARY KEY,
+            uses INTEGER NOT NULL
         ) WITHOUT ROWID;
 
         CREATE VIRTUAL TABLE name_fts USING fts5(
