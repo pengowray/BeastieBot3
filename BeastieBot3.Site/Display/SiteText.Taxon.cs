@@ -336,8 +336,10 @@ public static partial class SiteText {
     public static string TaxoboxOtherSystem(string wikipediaSystem, string latestSystem) =>
         $"with status_system = {wikipediaSystem}. The latest assessment uses status_system = {latestSystem}.";
     public const string TaxoboxCitesLatest = "Up to date, with a reference to the latest assessment.";
-    public static string TaxoboxCitesOther(int? year, long assessmentId) => year is { } y
-        ? $"The same category as the latest assessment, but the reference cites the {y.ToString(CultureInfo.InvariantCulture)} assessment."
+    public static string TaxoboxCitesOther(int? year, long assessmentId, int? latestYear = null) => year is { } y
+        ? latestYear is { } ly
+            ? $"The same category as the latest assessment ({ly.ToString(CultureInfo.InvariantCulture)}), but the reference cites the {y.ToString(CultureInfo.InvariantCulture)} assessment."
+            : $"The same category as the latest assessment, but the reference cites the {y.ToString(CultureInfo.InvariantCulture)} assessment."
         : $"The same category as the latest assessment, but the reference cites another assessment (ID {assessmentId.ToString(CultureInfo.InvariantCulture)}).";
     public const string TaxoboxCitesNone = "The same category as the latest assessment. The reference names no assessment.";
     public static string TaxoboxCopyDate(string date) =>

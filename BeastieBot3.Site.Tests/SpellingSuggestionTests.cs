@@ -26,6 +26,14 @@ public sealed class SpellingSuggestionTests {
         Assert.Equal(["panthera leo", "panthera lea"], SpellingSuggestions.Candidates("Panthera lex", Index, 8));
 
     [Fact]
+    public void ARareWordBesideAFarCommonerOneIsTriedAsAMisspelling() {
+        var index = new NameWordIndex([("panthera", 400), ("pantera", 3), ("leo", 9)]);
+        Assert.Equal(["panthera leo"], SpellingSuggestions.Candidates("Pantera leo", index, 8));
+        // Not when the two are about as common.
+        Assert.Empty(SpellingSuggestions.Candidates("Pantera leo", new NameWordIndex([("panthera", 40), ("pantera", 3), ("leo", 9)]), 8));
+    }
+
+    [Fact]
     public void ACorrectlySpelledTextGivesNoCandidates() =>
         Assert.Empty(SpellingSuggestions.Candidates("Panthera leo", Index, 8));
 

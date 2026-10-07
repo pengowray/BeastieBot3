@@ -348,8 +348,9 @@ public static class SiteDbSchema {
             downloaded        TEXT NOT NULL               -- 'yyyy-MM-dd': when the cache downloaded the article
         ) WITHOUT ROWID;
 
-        -- The words of the names (NameWords.Find on name_key's keys), for spelling suggestions when
-        -- a search finds nothing. uses: how many keys have the word.
+        -- The words of the scientific names, synonyms and English names of taxa and of the names and
+        -- English names of groups (NameWords.Find on their folded keys), for spelling suggestions when
+        -- a search finds nothing. uses: how many of those keys have the word.
         CREATE TABLE name_word (
             word TEXT PRIMARY KEY,
             uses INTEGER NOT NULL

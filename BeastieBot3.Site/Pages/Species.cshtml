@@ -599,7 +599,7 @@
                         <partial name="_Badge" model="@(new BadgeModel(check.Wikipedia!))" /> @SiteText.TaxoboxCitesLatest
                         break;
                     case TaxoboxStatusOutcome.CitesOther:
-                        <partial name="_Badge" model="@(new BadgeModel(check.Wikipedia!))" /> @SiteText.TaxoboxCitesOther(check.CitedAssessment?.YearPublished, check.CitedAssessmentId!.Value)
+                        <partial name="_Badge" model="@(new BadgeModel(check.Wikipedia!))" /> @SiteText.TaxoboxCitesOther(check.CitedAssessment?.YearPublished, check.CitedAssessmentId!.Value, Model.LatestGlobal?.YearPublished)
                         break;
                     case TaxoboxStatusOutcome.CitesNone:
                         <partial name="_Badge" model="@(new BadgeModel(check.Wikipedia!))" /> @SiteText.TaxoboxCitesNone

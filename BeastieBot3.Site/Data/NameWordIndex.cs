@@ -99,7 +99,11 @@ public sealed class NameWordIndex {
 /// the site's names. The caller keeps the ones that find something.
 public static class SpellingSuggestions {
     /// Similar words tried for each misspelled word.
-    public const int WordsPerWord = 3;
+    public const int WordsPerWord = 5;
+
+    /// A word the names have is still tried as a misspelling when a similar word is used this many
+    /// times as often ("pantera", in a few names, beside "panthera").
+    public const int CommonerFactor = 20;
 
     /// Candidate search texts, most likely first: fewest letters changed, then the most used words.
     /// Empty when every word is already a word of the site's names, or a misspelled word has no
@@ -109,7 +113,12 @@ public static class SpellingSuggestions {
         var options = new List<(int Start, int Length, IReadOnlyList<(string Word, int Distance, int Uses)> Words)>();
         foreach (var (start, length) in NameWords.Find(folded)) {
             var word = folded.Substring(start, length);
-            if (index.Uses(word) > 0) {
+            var uses = index.Uses(word);
+            if (uses > 0) {
+                var commoner = index.Similar(word, WordsPerWord).Where(w => w.Uses >= CommonerFactor * uses).ToList();
+                if (commoner.Count > 0) {
+                    options.Add((start, length, [(word, 0, uses), .. commoner]));
+                }
                 continue;
             }
             var similar = index.Similar(word, WordsPerWord);
@@ -131,6 +140,7 @@ public static class SpellingSuggestions {
                 c.Weight + Math.Log(1 + w.Uses))));
         }
         return combinations
+            .Where(c => c.Distance > 0)
             .OrderBy(c => c.Distance).ThenByDescending(c => c.Weight).ThenBy(c => c.Text, StringComparer.Ordinal)
             .Select(c => c.Text).Distinct(StringComparer.Ordinal).Take(limit).ToList();
     }

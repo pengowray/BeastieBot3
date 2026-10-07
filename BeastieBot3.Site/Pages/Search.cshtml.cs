@@ -43,8 +43,8 @@ public sealed class SearchModel : PageModel {
     /// or groups, most likely first.
     public IReadOnlyList<string> Suggestions { get; private set; } = [];
     public const int MaxSuggestions = 3;
-    // Candidate texts searched before giving up: each is one search.
-    private const int MaxCandidates = 8;
+    // Candidate texts looked up before giving up: each is one exact name lookup, and at most one search.
+    private const int MaxCandidates = 12;
 
     /// True when the results are taxa found by an IUCN id in the text, not by a name.
     public bool FoundById { get; private set; }
@@ -103,18 +103,17 @@ public sealed class SearchModel : PageModel {
         if (_queries.GetNameWordIndex() is not { } index) {
             return [];
         }
-        var found = new List<string>();
-        foreach (var candidate in SpellingSuggestions.Candidates(text, index, MaxCandidates)) {
-            if (found.Count == MaxSuggestions) {
-                break;
-            }
-            HttpContext.RequestAborted.ThrowIfCancellationRequested();
-            if (_queries.Search(candidate, 1, countAll: false, cancellationToken: HttpContext.RequestAborted).Hits.Count > 0
-                || _queries.FindGroupsByName(candidate, 1).Count > 0) {
-                found.Add(char.ToUpperInvariant(candidate[0]) + candidate[1..]);
-            }
+        // A text that is a name (of a taxon or a group) first; a text that only finds names containing
+        // it ("Panthera le") only when no candidate is a name.
+        var candidates = SpellingSuggestions.Candidates(text, index, MaxCandidates);
+        var ct = HttpContext.RequestAborted;
+        var found = candidates.Where(c => _queries.Search(c, 1, exactOnly: true, countAll: false, cancellationToken: ct).Hits.Count > 0
+                || _queries.FindGroupsByName(c, 1).Count > 0)
+            .Take(MaxSuggestions).ToList();
+        if (found.Count == 0) {
+            found = [.. candidates.Take(3).Where(c => _queries.Search(c, 1, countAll: false, cancellationToken: ct).Hits.Count > 0).Take(1)];
         }
-        return found;
+        return [.. found.Select(c => char.ToUpperInvariant(c[0]) + c[1..])];
     }
 
     // The taxa the ids name: a redirect when there is exactly one, else the list. Null when the ids

@@ -20,6 +20,9 @@ internal sealed class SiteDbWriter : IDisposable {
     private SqliteTransaction? _transaction;
     private readonly List<string> _deferredIndexes = new();
     private readonly List<(string Key, long TaxonId, long NameId)> _nameKeys = new();
+    // The keys whose words go into name_word: scientific names, synonyms, English names and the
+    // names of groups (names in other languages would crowd the suggestions: "kaola" -> "Kola").
+    private readonly HashSet<string> _wordKeys = new(StringComparer.Ordinal);
     private readonly SqliteCommand _taxon;
     private readonly SqliteCommand _assessment;
     private readonly SqliteCommand _name;
@@ -166,6 +169,10 @@ internal sealed class SiteDbWriter : IDisposable {
         using var name = Prepare("INSERT OR IGNORE INTO higher_taxon_name (node_id, name, source, name_key) VALUES (@node_id, @name, @source, @name_key)",
             "@node_id", "@name", "@source", "@name_key");
         foreach (var n in nodes) {
+            _wordKeys.Add(SiteNameKey.Fold(n.Name));
+            if (n.CommonNameEn is { } groupName) {
+                _wordKeys.Add(SiteNameKey.Fold(groupName));
+            }
             Bind(node, n.NodeId, n.Parent?.NodeId, n.Depth, n.Rank, n.Name, SiteNameKey.Fold(n.Name), n.LinkQuery, n.Source, n.ShowRank ? 1 : 0,
                 n.Kingdom, n.ColId, n.CommonNameEn, n.CommonNameSource, n.EnwikiTitle, n.FirstPos, n.LastPos, n.SpeciesCount,
                 n.InfraCount, n.SubpopulationCount);
@@ -208,6 +215,9 @@ internal sealed class SiteDbWriter : IDisposable {
         var key = SiteNameKey.Fold(name.Name);
         if (key.Length > 0) {
             _nameKeys.Add((key, taxonId, nameId));
+            if (name.NameType != "common" || name.Language == "en") {
+                _wordKeys.Add(key);
+            }
         }
     }
 
@@ -261,15 +271,10 @@ internal sealed class SiteDbWriter : IDisposable {
         _finished = true;
     }
 
-    // name_word: each word of the distinct keys (sorted, so equal keys are next to each other).
+    // name_word: each word of the keys in _wordKeys, with how many of them have it.
     private void WriteNameWords() {
         var uses = new Dictionary<string, int>(StringComparer.Ordinal);
-        string? last = null;
-        foreach (var (key, _, _) in _nameKeys) {
-            if (key == last) {
-                continue;
-            }
-            last = key;
+        foreach (var key in _wordKeys) {
             foreach (var (start, length) in BeastieBot3.Shared.SiteData.NameWords.Find(key)) {
                 var word = key.Substring(start, length);
                 uses[word] = uses.GetValueOrDefault(word) + 1;
