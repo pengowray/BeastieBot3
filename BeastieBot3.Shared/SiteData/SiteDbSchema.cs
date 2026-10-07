@@ -175,7 +175,7 @@ public static class SiteDbSchema {
             taxon_id  INTEGER NOT NULL,
             origin    INTEGER NOT NULL,                      -- AreaOrigin: 1 native, 2 reintroduced, 3 introduced, 4 assisted colonisation, 5 vagrant, 6 origin uncertain
             presence  INTEGER NOT NULL,                      -- AreaPresence: 1 extant, 2 possibly extant, 3 presence uncertain, 4 possibly extinct, 5 extinct post-1500
-            endemic   INTEGER NOT NULL,                      -- 1: the assessment marks the taxon endemic to this area
+            endemic   INTEGER NOT NULL,                      -- 1: endemic to this area. IUCN flags countries only; for part of a country: endemic to the country and recorded in no other part of it
             PRIMARY KEY (area, taxon_id)
         ) WITHOUT ROWID;
 

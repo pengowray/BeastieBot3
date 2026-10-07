@@ -66,10 +66,24 @@ internal sealed class SiteAreaCollector {
                 : null,
         });
 
-    /// taxon_area rows: area, taxon id, origin, presence, endemic.
-    public IEnumerable<object?[]> TaxonAreaRows() =>
-        _rows.OrderBy(r => r.Key.Area, StringComparer.Ordinal).ThenBy(r => r.Key.TaxonId)
-            .Select(r => new object?[] { r.Key.Area, r.Key.TaxonId, (int)r.Value.Origin, (int)r.Value.Presence, r.Value.Endemic ? 1 : 0 });
+    /// taxon_area rows: area, taxon id, origin, presence, endemic. IUCN flags endemism only on
+    /// countries (about 100,000 flags in 2026-1, none on parts of countries), so a part's flag is
+    /// derived: the taxon is endemic to the country, and the part is the only part of that country
+    /// it is recorded in (the Tasmanian devil in Tasmania; not the koala, recorded in four states).
+    public IEnumerable<object?[]> TaxonAreaRows() {
+        var countryOf = AreaRows().ToDictionary(r => (string)r[0]!, r => (string?)r[2], StringComparer.Ordinal);
+        var partsByTaxon = _rows.Keys.Where(k => k.Area.Contains('-')).GroupBy(k => k.TaxonId)
+            .ToDictionary(g => g.Key, g => g.Select(k => k.Area).ToList());
+        bool EndemicToPart(string part, long taxonId) =>
+            countryOf.GetValueOrDefault(part) is { } country
+            && _rows.TryGetValue((country, taxonId), out var countryRecord) && countryRecord.Endemic
+            && partsByTaxon[taxonId].Count(p => countryOf.GetValueOrDefault(p) == country) == 1;
+        return _rows.OrderBy(r => r.Key.Area, StringComparer.Ordinal).ThenBy(r => r.Key.TaxonId)
+            .Select(r => new object?[] {
+                r.Key.Area, r.Key.TaxonId, (int)r.Value.Origin, (int)r.Value.Presence,
+                r.Value.Endemic || (r.Key.Area.Contains('-') && EndemicToPart(r.Key.Area, r.Key.TaxonId)) ? 1 : 0,
+            });
+    }
 
     private static string? String(JsonElement element, string name) =>
         element.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.String ? value.GetString() : null;
