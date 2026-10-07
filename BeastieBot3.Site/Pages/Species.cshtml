@@ -528,7 +528,7 @@
         <h2 id="ranks-heading">@SiteText.HeadingRanks</h2>
         <p>@SiteText.RanksIntro(differences)</p>
         @if (minorRows > 0) {
-            <p class="ranks-toggle"><label><input type="checkbox" class="show-minor-ranks" autocomplete="off"> @SiteText.RanksShowMinor(minorRows)</label></p>
+            <p class="ranks-toggle"><label title="@SiteText.RanksShowMinorHelp"><input type="checkbox" class="show-minor-ranks" autocomplete="off"> @SiteText.RanksShowMinor(minorRows)</label></p>
         }
         <div class="table-scroll">
             <table class="ranks-table" aria-labelledby="ranks-heading">

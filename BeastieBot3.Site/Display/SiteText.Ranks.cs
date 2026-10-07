@@ -11,8 +11,9 @@ public static partial class SiteText {
             ? " 1 main rank has another name than in IUCN's classification (marked ≠)."
             : $" {differences} main ranks have another name than in IUCN's classification (marked ≠).");
 
-    public static string RanksShowMinor(int rows) =>
-        $"Show the groups that are not in IUCN's or the Catalogue of Life's classification ({rows} {(rows == 1 ? "row" : "rows")})";
+    public static string RanksShowMinor(int rows) => $"Show all ranks ({rows} more)";
+    public const string RanksShowMinorHelp =
+        "Also shows the groups that are not in IUCN's or the Catalogue of Life's classification: clades and other groups that only Wikidata, the English Wikipedia taxobox or Wikispecies has.";
 
     public const string RanksIucn = "IUCN";
     public const string RanksThisSite = "This site";
