@@ -31,7 +31,12 @@ public interface IListScopeLookup {
 /// (extra_species), leaving out those whose name or English Wikipedia article WrittenNames has
 /// (SiteNameKey.Fold of every scientific name the text writes and every page it links).
 public sealed record ListScopeOptions(string? Scope = null, bool ListAnyway = false, bool Extra = false,
-    IReadOnlySet<string>? WrittenNames = null);
+    IReadOnlySet<string>? WrittenNames = null) {
+    /// When the text writes no codes, take it to be a list of the threatened or extinct category
+    /// nearly all its species are in now. Off for a text known to list a whole group whatever the
+    /// categories, such as a genus article (`wikipedia report-species-lists`).
+    public bool GuessCategories { get; init; } = true;
+}
 
 /// A taxon the text lists that is outside the group, or whose latest category is outside the
 /// categories the list gives. Lines: where the text lists it.
@@ -163,7 +168,7 @@ public static partial class ListScope {
                 : written.IsSubsetOf(Threatened) ? Threatened
                 : written.IsSubsetOf(Extinct) ? Extinct
                 : null;
-        } else if (codes.Count == 0 && species.Count >= MinCodes) {
+        } else if (options.GuessCategories && codes.Count == 0 && species.Count >= MinCodes) {
             // A list that writes no codes ("List of endangered amphibians" names the species only):
             // the category nearly all its species are in now, when that is a threatened or extinct
             // category. Most species of most genera are LC, so a genus article whose species are

@@ -181,6 +181,16 @@ public sealed class ListScopeTests {
     }
 
     [Fact]
+    public void WithoutGuessingCategoriesAListWithNoCodesIsOfTheWholeGroup() {
+        var lookup = Tree().Species(4, 100, 10, "EN").Species(4, 200, 30);
+        // 8 of the genus's 40 species: too little of the genus to compare with (the test above, with
+        // guessing, compares it with the genus's 10 EN species).
+        var result = ListScope.Check(Members(lookup, Enumerable.Range(100, 8).Select(i => (long)i)), lookup,
+            new ListScopeOptions { GuessCategories = false });
+        Assert.Null(result);
+    }
+
+    [Fact]
     public void ACatalogueOfLifeGroupMustHoldEveryListedTaxon() {
         // 28 cats and 2 monotremes: no IUCN group below the class holds 95%, and subclass Theria
         // holds all but the monotremes.
