@@ -183,14 +183,15 @@ public sealed class AreaNames {
         if (bracket > 0) {
             t = t[..bracket];
         }
-        // Try each " of " / " in " from the last, so "List of birds of the Isle of Man" finds "the Isle of Man".
+        // Try the longest ending first, so "List of birds of the Democratic Republic of the Congo" finds
+        // the whole name before "the Congo", and "List of birds of the Isle of Man" finds "the Isle of Man".
         var starts = new List<int>();
         foreach (var word in new[] { " of ", " in " }) {
             for (var i = t.IndexOf(word, StringComparison.OrdinalIgnoreCase); i >= 0; i = t.IndexOf(word, i + 1, StringComparison.OrdinalIgnoreCase)) {
                 starts.Add(i + word.Length);
             }
         }
-        foreach (var start in starts.OrderByDescending(s => s)) {
+        foreach (var start in starts.Order()) {
             if (Find(t[start..]) is { } area) {
                 return area;
             }
