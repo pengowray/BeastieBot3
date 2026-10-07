@@ -349,7 +349,7 @@ public sealed class HomeAndSearchTests(SiteFactory factory) : IClassFixture<Site
     [Fact]
     public async Task TheFooterGivesTheDateTheDataWasLastUpdated() {
         var html = await factory.CreateClient().GetStringAsync("/about");
-        Assert.Contains("<p>Data last updated on 2 October 2026.</p>", html);
+        Assert.Contains("<p>Data last updated on 2 October 2026. Assessments downloaded from the IUCN Red List API between 18 August and 1 September 2026.</p>", html);
     }
 
     [Fact]

@@ -20,7 +20,7 @@ public sealed class SpeciesPageTests(SiteFactory factory) : IClassFixture<SiteFa
             ">Assessment history</h2>",
             ">Names</h2>",
             ">Links to other sites</h2>",
-            "class=\"data-note\"",
+            "class=\"site-footer\"",
         ];
         var last = -1;
         foreach (var marker in markers) {
@@ -348,7 +348,9 @@ public sealed class SpeciesPageTests(SiteFactory factory) : IClassFixture<SiteFa
         Assert.Contains("<a href=\"https://en.wikipedia.org/wiki/Polar_bear\">Polar bear</a>", html);
         Assert.Contains("<a href=\"https://www.wikidata.org/wiki/Q33609\">Q33609</a>", html);
         Assert.Contains("<a href=\"https://www.catalogueoflife.org/data/taxon/4QHKG\"><i>Ursus maritimus</i></a>", html);
-        Assert.Contains("Data from IUCN Red List version 2026-1, downloaded from the IUCN Red List API between 18 August and 1 September 2026. Other data sources and their licences are listed on the About page.", text);
+        // One footer: the dates the assessments were downloaded are in it, not in a note of the page's own.
+        Assert.Contains("Assessments downloaded from the IUCN Red List API between 18 August and 1 September 2026.", text);
+        Assert.DoesNotContain("data-note", html);
     }
 
     [Fact]

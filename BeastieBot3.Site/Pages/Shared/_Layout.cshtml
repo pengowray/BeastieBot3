@@ -9,6 +9,10 @@
     var built = Db.Snapshot?.Get(BeastieBot3.Shared.SiteData.SiteDbSchema.MetaKeys.BuiltAtUtc) is { } builtAt
         && DateTimeOffset.TryParse(builtAt, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.AssumeUniversal, out var builtTime)
         ? SiteFormat.Date(DateOnly.FromDateTime(builtTime.UtcDateTime)) : null;
+    // When the assessments were downloaded from the IUCN Red List API: "between 16 November 2025 and 3 October 2026".
+    var apiRange = SiteFormat.TryParseDate(Db.Snapshot?.Get(BeastieBot3.Shared.SiteData.SiteDbSchema.MetaKeys.IucnApiDownloadedFrom), out var apiFrom)
+        && SiteFormat.TryParseDate(Db.Snapshot?.Get(BeastieBot3.Shared.SiteData.SiteDbSchema.MetaKeys.IucnApiDownloadedTo), out var apiTo)
+        ? SiteFormat.DateRange(apiFrom, apiTo) : null;
     var sourceUrl = SiteOptions.Value.SourceUrl;
 }
 <!DOCTYPE html>
@@ -71,7 +75,7 @@
                 <p>@SiteText.FooterLine2Before(version)<a href="@SiteText.TermsUrl">@SiteText.TermsLink</a>@SiteText.FooterLine2Middle<a href="/about">@SiteText.AboutPageLink</a>.</p>
             }
             @if (built is not null) {
-                <p>@SiteText.FooterUpdated(built)</p>
+                <p>@SiteText.FooterUpdated(built, apiRange)</p>
             }
             @if (!string.IsNullOrWhiteSpace(sourceUrl)) {
                 <p><a href="@sourceUrl">@SiteText.SourceCode</a></p>

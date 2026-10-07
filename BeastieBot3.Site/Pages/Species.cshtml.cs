@@ -215,7 +215,6 @@ public sealed class SpeciesModel : PageModel {
     /// all the results, as the search list leaves out its match note in the same case.
     public bool ArrivedNameIsShown { get; private set; }
 
-    public string? DataDateRange { get; private set; }
 
     public IActionResult OnGet(long taxonId, long? assessment, string? authors, string? access, string? opts,
         [FromQuery(Name = "ref")] string? wrapRef, string? refname, string? amp, string? fullnames, string? q,
@@ -260,7 +259,6 @@ public sealed class SpeciesModel : PageModel {
         LoadNames();
         LoadRelatedTaxa();
         LoadArrival(q);
-        DataDateRange = ReadDataDateRange(snapshot);
         ViewData["Canonical"] = SiteUrls.Absolute(_options.BaseUrl, Request, $"/species/{Taxon.TaxonId}");
         return Page();
     }
@@ -494,12 +492,4 @@ public sealed class SpeciesModel : PageModel {
         return plain ? "<i>" + SiteHtml.Encode(string.Join(' ', words)) + "</i>" : ScientificNameMarkup.ToHtml(name);
     }
 
-    private static string? ReadDataDateRange(SiteSnapshot? snapshot) {
-        if (snapshot is null
-            || !SiteFormat.TryParseDate(snapshot.Get(SiteDbSchema.MetaKeys.IucnApiDownloadedFrom), out var from)
-            || !SiteFormat.TryParseDate(snapshot.Get(SiteDbSchema.MetaKeys.IucnApiDownloadedTo), out var to)) {
-            return null;
-        }
-        return SiteFormat.DateRange(from, to);
-    }
 }

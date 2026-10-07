@@ -627,13 +627,3 @@
         }
     </dl>
 </section>
-
-@if (Model.Version is not null) {
-    <p class="data-note">
-        @if (Model.DataDateRange is not null) {
-            @SiteText.DataNoteBefore(Model.Version, Model.DataDateRange)
-        } else {
-            @SiteText.DataNoteBeforeNoDates(Model.Version)
-        }<a href="/about">@SiteText.AboutPageLink</a>@SiteText.DataNoteAfter
-    </p>
-}

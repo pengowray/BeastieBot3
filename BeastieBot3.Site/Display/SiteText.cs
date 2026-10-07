@@ -129,12 +129,6 @@ public static partial class SiteText {
     public const string EpbcListedNameBefore = "The listing uses the name ";
 
     // Taxon page: data note. Before + link("About page") + after.
-    public static string DataNoteBefore(string version, string dateRange) =>
-        $"Data from IUCN Red List version {version}, downloaded from the IUCN Red List API {dateRange}. Other data sources and their licences are listed on the ";
-    public static string DataNoteBeforeNoDates(string version) =>
-        $"Data from IUCN Red List version {version}. Other data sources and their licences are listed on the ";
-    public const string AboutPageLink = "About page";
-    public const string DataNoteAfter = ".";
 
     // Name lookup page
     public static string LookupHeading(string name) => $"Taxa with the name “{name}”";
@@ -145,7 +139,10 @@ public static partial class SiteText {
     public static string FooterLine2Before(string version) => $"Data from IUCN Red List version {version}, used under the ";
     public const string TermsLink = "IUCN Red List Terms of Use";
     public const string FooterLine2Middle = ", and from the other sources listed on the ";
-    public static string FooterUpdated(string date) => $"Data last updated on {date}.";
+    public const string AboutPageLink = "About page";
+    public static string FooterUpdated(string date, string? apiDateRange) => apiDateRange is null
+        ? $"Data last updated on {date}."
+        : $"Data last updated on {date}. Assessments downloaded from the IUCN Red List API {apiDateRange}.";
 
     // Error pages
     public const string NotFoundHeading = "Page not found";
