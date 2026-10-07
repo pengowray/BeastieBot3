@@ -142,6 +142,7 @@ public static partial class SiteText {
     public static string FooterLine2Before(string version) => $"Data from IUCN Red List version {version}, used under the ";
     public const string TermsLink = "IUCN Red List Terms of Use";
     public const string FooterLine2Middle = ", and from the other sources listed on the ";
+    public static string FooterUpdated(string date) => $"Data last updated on {date}.";
 
     // Error pages
     public const string NotFoundHeading = "Page not found";

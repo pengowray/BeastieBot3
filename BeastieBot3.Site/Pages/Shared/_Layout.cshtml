@@ -6,6 +6,9 @@
     var hideHeaderSearch = ViewData["HideHeaderSearch"] is true;
     var canonical = ViewData["Canonical"] as string;
     var version = Db.Snapshot?.IucnRelease;
+    var built = Db.Snapshot?.Get(BeastieBot3.Shared.SiteData.SiteDbSchema.MetaKeys.BuiltAtUtc) is { } builtAt
+        && DateTimeOffset.TryParse(builtAt, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.AssumeUniversal, out var builtTime)
+        ? SiteFormat.Date(DateOnly.FromDateTime(builtTime.UtcDateTime)) : null;
     var sourceUrl = SiteOptions.Value.SourceUrl;
 }
 <!DOCTYPE html>
@@ -66,6 +69,9 @@
             <p>@SiteText.FooterLine1</p>
             @if (version is not null) {
                 <p>@SiteText.FooterLine2Before(version)<a href="@SiteText.TermsUrl">@SiteText.TermsLink</a>@SiteText.FooterLine2Middle<a href="/about">@SiteText.AboutPageLink</a>.</p>
+            }
+            @if (built is not null) {
+                <p>@SiteText.FooterUpdated(built)</p>
             }
             @if (!string.IsNullOrWhiteSpace(sourceUrl)) {
                 <p><a href="@sourceUrl">@SiteText.SourceCode</a></p>

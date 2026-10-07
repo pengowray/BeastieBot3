@@ -342,4 +342,10 @@ public sealed class HomeAndSearchTests(SiteFactory factory) : IClassFixture<Site
         Assert.Contains(text, html);
         Assert.Contains("From the copy of the article downloaded on 29 November 2025.", html);
     }
+
+    [Fact]
+    public async Task TheFooterGivesTheDateTheDataWasLastUpdated() {
+        var html = await factory.CreateClient().GetStringAsync("/about");
+        Assert.Contains("<p>Data last updated on 2 October 2026.</p>", html);
+    }
 }
