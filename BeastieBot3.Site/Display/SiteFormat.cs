@@ -59,6 +59,9 @@ public static class SiteFormat {
     public static string WikipediaUrl(string title) =>
         "https://en.wikipedia.org/wiki/" + EscapePathSegment(title.Trim().Replace(' ', '_'));
 
+    public static string WikispeciesUrl(string title) =>
+        "https://species.wikimedia.org/wiki/" + EscapePathSegment(title.Trim().Replace(' ', '_'));
+
     public static string WikidataUrl(string qid) =>
         "https://www.wikidata.org/wiki/" + EscapePathSegment(qid.Trim());
 

@@ -53,6 +53,10 @@ internal sealed class SiteBuildDbCommand : Command<SiteBuildDbCommand.Settings> 
         [Description("Wikipedia cache database. Default: Datastore:enwiki_cache_sqlite in paths.ini.")]
         public string? WikipediaCache { get; init; }
 
+        [CommandOption("--wikispecies-cache <PATH>")]
+        [Description("Wikispecies cache database, filled by wikispecies fetch. Default: Datastore:wikispecies_cache_sqlite in paths.ini, else wikispecies_cache.sqlite in the datastore folder.")]
+        public string? WikispeciesCache { get; init; }
+
         [CommandOption("--col-placement <PATH>")]
         [Description("Catalogue of Life placement file, built by col build-placement. Default: the file beside Datastore:COL_sqlite.")]
         public string? ColPlacement { get; init; }
@@ -108,6 +112,7 @@ internal sealed class SiteBuildDbCommand : Command<SiteBuildDbCommand.Settings> 
                 CommonNames = Full(settings.CommonNamesDatabase ?? paths.GetCommonNameStorePath()),
                 WikidataCache = Full(settings.WikidataCache ?? paths.GetWikidataCachePath()),
                 WikipediaCache = Full(settings.WikipediaCache ?? paths.GetWikipediaCachePath()),
+                WikispeciesCache = Full(settings.WikispeciesCache ?? paths.GetWikispeciesCachePath()),
                 ColPlacement = Full(settings.ColPlacement
                     ?? (string.IsNullOrWhiteSpace(colDatabase) ? null : TaxonPlacementStore.SidecarPath(colDatabase))),
                 ColDatabase = Full(colDatabase),

@@ -264,6 +264,11 @@ internal sealed class SiteDbBuild {
             writer.InsertRows(ladderInsert, ladderParameters, nodes.Select(n => new object?[] { n.Source, n.Id, n.ParentId, n.Rank, n.Name }));
             return $"{nodes.Count(n => n.Id.StartsWith(SiteLadders.ArticlePrefix, StringComparison.Ordinal)):N0} articles, {nodes.Count:N0} nodes";
         });
+        Optional("Wikispecies cache: classification", _inputs.WikispeciesCache, path => {
+            var nodes = SiteLadders.ReadWikispecies(path, taxonList.Select(t => t.ScientificName), ct);
+            writer.InsertRows(ladderInsert, ladderParameters, nodes.Select(n => new object?[] { n.Source, n.Id, n.ParentId, n.Rank, n.Name }));
+            return $"{nodes.Count(n => n.Id.StartsWith(SiteLadders.PagePrefix, StringComparison.Ordinal) && !n.Id.Contains('#')):N0} taxon pages, {nodes.Count:N0} nodes";
+        });
         WriteMeta(writer, taxonList.Count);
 
         // 9. Indexes and compaction.

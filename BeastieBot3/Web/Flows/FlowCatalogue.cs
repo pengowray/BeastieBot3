@@ -1058,6 +1058,16 @@ public static class FlowCatalogue {
                     Note = "It asks for 50 titles per request: families and above first, then subfamilies and tribes, then genera. Each run asks only for what is not downloaded yet, so a stopped run carries on where it left off. The first full run (about 33,000 names in October 2026) took under an hour. Names that are not in the list of all English Wikipedia titles (`wikipedia titles-dump`) are not asked for. `--refresh-days` under Options also downloads again the pages and redirect lists older than that.",
                 },
                 new FlowStep {
+                    Id = "site-classifications",
+                    Title = "Download the classifications of English Wikipedia and Wikispecies",
+                    Description = "For the species page's comparison of ranks. `wikipedia fetch-taxonomy-templates` downloads the taxonomy templates (Template:Taxonomy/Felis) that the taxoboxes of downloaded articles start from, and every template above them, into the Wikipedia cache. `wikispecies fetch` downloads the Wikispecies page of each IUCN taxon and the taxonavigation templates above it into the Wikispecies cache (Datastore:wikispecies_cache_sqlite, else wikispecies_cache.sqlite in the datastore folder).",
+                    Commands = new[] { "wikipedia fetch-taxonomy-templates", "wikispecies fetch", "wikispecies fetch --status" },
+                    InputSourceIds = new[] { "iucn-main" },
+                    OutputSourceIds = new[] { "wikipedia-cache", "wikispecies-cache" },
+                    Group = "2 · Build the site database",
+                    Note = "Both ask for 50 titles per request and only for pages not downloaded yet, so a stopped run carries on where it left off. Each round finds the templates above the ones the last round downloaded. The first full `wikispecies fetch` (about 189,000 IUCN names, October 2026) takes about 2 hours. `--refresh-days` under Options also downloads again the pages older than that.",
+                },
+                new FlowStep {
                     Id = "site-build-db",
                     Title = "Build the site database",
                     Description = "`site build-db` builds the site database (Datastore:site_sqlite) from the IUCN Red List database, the IUCN API cache, the GBIF checklist, the DOI cache, the Common names store, the Wikidata and Wikipedia caches, the CoL placement and the SPRAT (EPBC) database. It writes the new database to a separate file and replaces the old one only when the build finishes.",

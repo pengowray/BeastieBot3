@@ -183,6 +183,7 @@ public static partial class SiteText {
     public const string IucnRedListUrl = "https://www.iucnredlist.org";
     public const string WikidataUrl = "https://www.wikidata.org";
     public const string EnglishWikipediaUrl = "https://en.wikipedia.org";
+    public const string WikispeciesUrl = "https://species.wikimedia.org";
     public const string CatalogueOfLifeUrl = "https://www.catalogueoflife.org";
     public const string SpratUrl = "https://www.environment.gov.au/cgi-bin/sprat/public/sprat.pl";
     public const string CrossrefUrl = "https://www.crossref.org/documentation/retrieve-metadata/rest-api/";

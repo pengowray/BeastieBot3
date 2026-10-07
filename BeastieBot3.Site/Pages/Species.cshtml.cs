@@ -91,6 +91,11 @@ public sealed class SpeciesModel : PageModel {
                 [.. wikipedia.Select(s => new LadderStep(s.Rank, s.Name,
                     s.Id.StartsWith("article:", StringComparison.Ordinal) ? null : SiteFormat.WikipediaUrl("Template:Taxonomy/" + s.Id)))]));
         }
+        // Wikispecies: the page of IUCN's name, through any redirect (site build-db keys it by that name).
+        if (_queries.GetLadder("wikispecies", "page:" + taxon.ScientificName) is { Count: > 0 } wikispecies) {
+            columns.Add(new LadderColumn(SiteText.RanksWikispecies, SiteFormat.WikispeciesUrl(wikispecies[^1].Name),
+                [.. wikispecies.Select(s => new LadderStep(s.Rank, s.Name, SiteFormat.WikispeciesUrl(s.Name)))]));
+        }
         if (columns.Count < 3) {
             return [];
         }

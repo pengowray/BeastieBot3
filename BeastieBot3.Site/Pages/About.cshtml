@@ -84,6 +84,12 @@
                     <td>@(Model.BuiltDate is null ? null : SiteText.CachedUpTo(Model.BuiltDate))</td>
                 </tr>
                 <tr>
+                    <th scope="row"><a href="@SiteText.WikispeciesUrl">Wikispecies</a></th>
+                    <td>Classification (from the Taxonavigation section of taxon pages)</td>
+                    <td><a href="@SiteText.LicenceCcBySa">CC BY-SA 4.0</a></td>
+                    <td>@(Model.BuiltDate is null ? null : SiteText.CachedUpTo(Model.BuiltDate))</td>
+                </tr>
+                <tr>
                     <th scope="row"><a href="@Model.ColUrl">Catalogue of Life</a></th>
                     <td>English common names, synonyms, classification, and links to Catalogue of Life pages</td>
                     <td><a href="@SiteText.LicenceCcBy">CC BY 4.0</a></td>

@@ -52,6 +52,23 @@ namespace BeastieBot3.Configuration;
         public string? GetWikipediaCachePath() =>
             _reader.Get("Datastore:enwiki_cache_sqlite") ?? _reader.Get("enwiki_cache_sqlite");
 
+        // The Wikispecies cache (`wikispecies fetch`): the same tables as the Wikipedia cache, in a
+        // file of its own. Defaults to a file in the datastore folder, so it needs no paths.ini line.
+        public string? GetWikispeciesCachePath() {
+            var configured = _reader.Get("Datastore:wikispecies_cache_sqlite");
+            if (!string.IsNullOrWhiteSpace(configured)) return configured;
+            var datastore = GetDatastoreDir();
+            return string.IsNullOrWhiteSpace(datastore) ? null : Path.Combine(datastore, "wikispecies_cache.sqlite");
+        }
+
+        public string ResolveWikispeciesCachePath(string? overridePath) {
+            var configuredPath = !string.IsNullOrWhiteSpace(overridePath) ? overridePath : GetWikispeciesCachePath();
+            if (string.IsNullOrWhiteSpace(configuredPath)) {
+                throw new InvalidOperationException("Wikispecies cache path is not configured. Set Datastore:wikispecies_cache_sqlite or pass --cache.");
+            }
+            return Path.GetFullPath(configuredPath);
+        }
+
         // The Wikidata IUCN status dry run's plan (`wikidata iucn-status-plan`). Defaults to a file
         // beside the Wikidata cache, so it needs no paths.ini line.
         public string? GetWikidataIucnPlanPath() {

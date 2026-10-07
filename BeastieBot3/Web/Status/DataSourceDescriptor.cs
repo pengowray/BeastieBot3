@@ -150,6 +150,17 @@ public static class DataSourceCatalogue {
             },
         },
         new DataSourceDescriptor {
+            Id = "wikispecies-cache",
+            Name = "Wikispecies cache",
+            Kind = "sqlite",
+            Description = "Wikispecies pages of IUCN taxa and the taxonavigation templates above them, for the species site's comparison of ranks (`wikispecies fetch`).",
+            ResolvePath = p => p.GetWikispeciesCachePath(),
+            Metrics = new[] {
+                new MetricSpec { Label = "pages cached",   Sql = "SELECT COUNT(*) FROM wiki_pages WHERE download_status = 'cached'" },
+                new MetricSpec { Label = "titles with no page", Sql = "SELECT COUNT(*) FROM wiki_missing_titles" },
+            },
+        },
+        new DataSourceDescriptor {
             Id = "common-names",
             Name = "Common names store",
             Kind = "sqlite",

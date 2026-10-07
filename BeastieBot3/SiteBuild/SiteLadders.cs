@@ -13,6 +13,11 @@ using Microsoft.Data.Sqlite;
 //             article (its taxobox's name and rank), whose parent is the taxonomy template its
 //             taxobox starts from (Template:Taxonomy/Felis, id "Felis"), then each template's parent
 //             (`wikipedia fetch-taxonomy-templates` downloads them).
+//   wikispecies from the Wikispecies cache (`wikispecies fetch`): a node "page:<IUCN scientific
+//             name>" for the taxon on its Wikispecies page (the page of that name, through any
+//             redirect), with "#<n>" for the taxa above it on the same page, then the taxonavigation
+//             templates the page climbs: a template's last taxon has the template's name as its id,
+//             the ones above it "<template>#<n>". A template with no taxon line is passed through.
 // Only the nodes above IUCN's taxa are kept, so the tables stay small.
 
 namespace BeastieBot3.SiteBuild;
@@ -24,6 +29,62 @@ internal static class SiteLadders {
     public const string Wikidata = "wikidata";
     public const string Wikipedia = "wikipedia";
     public const string ArticlePrefix = "article:";
+    public const string Wikispecies = "wikispecies";
+    public const string PagePrefix = "page:";
+
+    public static List<LadderNode> ReadWikispecies(string wikispeciesCache, IEnumerable<string> scientificNames, CancellationToken ct) {
+        using var cache = global::BeastieBot3.Wikipedia.WikipediaCacheStore.OpenReadOnly(wikispeciesCache);
+        if (cache is null) {
+            return [];
+        }
+        var nodes = new List<LadderNode>();
+        // Template name -> the id of its last taxon (or of the nearest template above that has one).
+        var tops = new Dictionary<string, string?>(StringComparer.Ordinal);
+        string? TopOf(string name, int depth) {
+            if (tops.TryGetValue(name, out var known)) {
+                return known;
+            }
+            tops[name] = null; // a loop of templates ends here
+            if (depth >= MaxDepth || cache.ReadArticleText(Taxonomy.WikispeciesTaxonavigation.TemplateTitle(name)) is not { } page) {
+                return null;
+            }
+            // A redirect: the template it leads to, under that template's name.
+            var key = page.Title.StartsWith(Taxonomy.WikispeciesTaxonavigation.TemplatePrefix, StringComparison.Ordinal)
+                ? page.Title[Taxonomy.WikispeciesTaxonavigation.TemplatePrefix.Length..]
+                : name;
+            if (key != name) {
+                return tops[name] = TopOf(key, depth + 1);
+            }
+            if (Taxonomy.WikispeciesTaxonavigation.ParseTemplate(page.Wikitext) is not { } template) {
+                return null;
+            }
+            var parent = template.Parent is { } p ? TopOf(p, depth + 1) : null;
+            return tops[name] = AddChain(nodes, name, template.Steps, parent);
+        }
+        foreach (var scientificName in scientificNames.Distinct(StringComparer.Ordinal)) {
+            ct.ThrowIfCancellationRequested();
+            var title = Taxonomy.WikispeciesTaxonavigation.TitleFor(scientificName);
+            if (cache.ReadArticleText(title) is not { } page
+                || Taxonomy.WikispeciesTaxonavigation.ParsePage(page.Wikitext, page.Title) is not { Steps.Count: > 0 } taxonav
+                // The last step must be the page's own taxon, or the ladder would end above it.
+                || !string.Equals(taxonav.Steps[^1].Name, page.Title, StringComparison.Ordinal)) {
+                continue;
+            }
+            var parent = taxonav.Parent is { } p ? TopOf(p, 0) : null;
+            AddChain(nodes, PagePrefix + scientificName, taxonav.Steps, parent);
+        }
+        return nodes;
+    }
+
+    // One node per step, each the parent of the next; the last has the id given, the others "<id>#<n>".
+    private static string? AddChain(List<LadderNode> nodes, string id, IReadOnlyList<Taxonomy.WikispeciesStep> steps, string? parent) {
+        for (var i = 0; i < steps.Count; i++) {
+            var stepId = i == steps.Count - 1 ? id : $"{id}#{i}";
+            nodes.Add(new LadderNode(Wikispecies, stepId, parent, steps[i].Rank, steps[i].Name));
+            parent = stepId;
+        }
+        return parent;
+    }
 
     public static List<LadderNode> ReadWikipedia(string wikipediaCache, IEnumerable<string> articleTitles, CancellationToken ct) {
         using var cache = global::BeastieBot3.Wikipedia.WikipediaCacheStore.OpenReadOnly(wikipediaCache);

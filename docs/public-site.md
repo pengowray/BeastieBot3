@@ -1356,6 +1356,30 @@ title statements are not recorded (run wikidata iucn-assessment-items)".
 - Run locally with `dotnet run --project BeastieBot3.Site`. `appsettings.Development.json` points to
   `~/datasets/beastiebot/site.sqlite`; set `Site__DatabasePath` to use another file.
 
+### Classification in other sources (`ladder_node`)
+
+The species page lines up the taxon's classification in IUCN, on this site (IUCN with the
+Catalogue of Life groups between its ranks), in the Catalogue of Life, Wikidata, English
+Wikipedia and Wikispecies, row by main rank (kingdom to species; `Display/ClassificationComparison.cs`).
+`site build-db` writes each source's nodes to `ladder_node` (`SiteBuild/SiteLadders.cs`); the page
+climbs `parent_id` from the taxon's start node.
+
+| Source | Start node | Downloaded by |
+| --- | --- | --- |
+| col | the taxon's `col_id` | `col import` |
+| wikidata | the taxon's `wikidata_qid` | `wikidata sweep-taxa` |
+| wikipedia | `article:<enwiki_title>`, then the taxonomy templates its taxobox climbs | `wikipedia fetch-taxonomy-templates` |
+| wikispecies | `page:<IUCN scientific name>`, then the taxonavigation templates its page climbs | `wikispecies fetch` |
+
+`wikispecies fetch` keeps its pages in a cache of their own (`Datastore:wikispecies_cache_sqlite`,
+else `wikispecies_cache.sqlite` in the datastore folder), with the same tables as the Wikipedia
+cache. It asks for the Wikispecies page of each IUCN name (animal subspecies without "ssp.", plant
+"subsp." and "var." kept; redirects followed), then, round by round, the templates the pages and
+templates call. `Taxonomy/WikispeciesTaxonavigation.cs` reads a page's Taxonavigation section and a
+template's "Rank: name" lines (Latin ranks in English, as for Wikipedia's templates), and leaves
+out comments, `<noinclude>` parts and the templates' "summary" blocks. A taxon gets a Wikispecies
+column only when its page's last taxonavigation line names the page itself.
+
 ### Citation options
 
 The options form in a taxon page's wikitext section is read from and written to the query string

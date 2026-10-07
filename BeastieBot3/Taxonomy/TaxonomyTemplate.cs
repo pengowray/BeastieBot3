@@ -55,6 +55,7 @@ internal static partial class TaxonomyTemplates {
         ["series"] = "series", ["species"] = "species", ["varietas"] = "variety", ["forma"] = "form", ["domain"] = "domain",
         ["dominium"] = "domain", ["legio"] = "legion", ["clade"] = "clade", ["cladus"] = "clade", ["unranked"] = "unranked",
         ["grandordo"] = "grandorder", ["mirordo"] = "mirorder", ["magnordo"] = "magnorder", ["alliance"] = "alliance",
+        ["imperium"] = "empire", ["regio"] = "region", ["subdivisio"] = "subdivision",
     };
 
     public static string? EnglishRank(string? rank) {
@@ -66,7 +67,7 @@ internal static partial class TaxonomyTemplates {
         if (Latin.TryGetValue(r, out var english)) {
             return english is "unranked" ? null : english;
         }
-        foreach (var prefix in new[] { "super", "sub", "infra", "parv", "epi", "nan" }) {
+        foreach (var prefix in new[] { "super", "sub", "infra", "parv", "epi", "nan", "giga", "mega", "hyper" }) {
             if (r.StartsWith(prefix, StringComparison.Ordinal) && Latin.TryGetValue(r[prefix.Length..], out var baseRank)) {
                 return prefix + baseRank;
             }

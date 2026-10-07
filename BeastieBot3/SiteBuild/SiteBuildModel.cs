@@ -11,6 +11,8 @@ internal sealed record SiteBuildInputs {
     public string? CommonNames { get; init; }
     public string? WikidataCache { get; init; }
     public string? WikipediaCache { get; init; }
+    /// The Wikispecies cache (`wikispecies fetch`), for the comparison of ranks.
+    public string? WikispeciesCache { get; init; }
     /// "<COL_sqlite>.placement.sqlite", built by `col build-placement`.
     public string? ColPlacement { get; init; }
     /// The folder with the release's ColDP zip (Datasets:COL_dir), for its citation and DOI.
