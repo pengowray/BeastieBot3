@@ -34,7 +34,7 @@
     }
     @if (Model.Path.Count > 0) {
         <div class="classification has-col-toggle">
-            <h2 id="classification-heading" class="visually-hidden">@SiteText.HeadingClassification</h2>
+            <h2 id="short-classification-heading" class="visually-hidden">@SiteText.HeadingShortClassification</h2>
             <ol>
                 @foreach (var step in Model.Path) {
                     <li class="@(step.IsCol ? "col-group" : null)">

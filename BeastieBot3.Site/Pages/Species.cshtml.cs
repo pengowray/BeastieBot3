@@ -66,10 +66,10 @@ public sealed class SpeciesModel : PageModel {
 
     /// The taxon's ranks in IUCN, on this site, in the Catalogue of Life and in Wikidata, side by
     /// side; empty when only IUCN's are known.
-    public IReadOnlyList<ComparisonRow> RankComparison { get; private set; } = [];
+    public IReadOnlyList<ComparisonRow> ComparativeClassification { get; private set; } = [];
     public IReadOnlyList<LadderColumn> RankColumns { get; private set; } = [];
 
-    private IReadOnlyList<ComparisonRow> BuildRankComparison(TaxonRow taxon) {
+    private IReadOnlyList<ComparisonRow> BuildComparativeClassification(TaxonRow taxon) {
         var leafRank = taxon.Kind switch { TaxonKinds.Species => "species", TaxonKinds.Variety => "variety", TaxonKinds.Subspecies => "subspecies", _ => null };
         if (leafRank is null) {
             return [];
@@ -238,17 +238,14 @@ public sealed class SpeciesModel : PageModel {
             Classification = _queries.GetGroupPath(nodeId);
             ClassificationColNames = _queries.GetGroupColNames(Classification.Where(g => g.CommonNameEn is null).Select(g => g.NodeId).ToList());
         }
-        RankComparison = BuildRankComparison(Taxon);
+        ComparativeClassification = BuildComparativeClassification(Taxon);
         LinkedTaxa = _queries.GetLinkedTaxa(Taxon.TaxonId);
         EpbcListings = _queries.GetEpbcListings(Taxon.TaxonId);
         ExtraPairs = _queries.GetExtraOverlapsOfTaxon(Taxon.TaxonId);
         LoadAssessments(assessment);
         var externalIds = _queries.GetExternalIds(Taxon.TaxonId);
         (CommonsGallery, CommonsCategory) = BeastieBot3.Shared.SiteData.ExternalDatabases.Commons(externalIds);
-        ExternalLinks = [.. BeastieBot3.Shared.SiteData.ExternalDatabases.All
-            .Select(d => (Database: d, Id: externalIds.FirstOrDefault(x => x.Property == d.Property).Value))
-            .Where(x => x.Id is not null)
-            .Select(x => (x.Database.Name, x.Database.UrlFor(x.Id)))];
+        ExternalLinks = BeastieBot3.Shared.SiteData.ExternalDatabases.Links(externalIds);
         TaxoboxCheck = LatestGlobal is { } latest && Taxon.EnwikiTitle is not null && _queries.GetEnwikiTaxoboxStatus(Taxon.TaxonId) is { } taxobox
             ? TaxoboxStatusCheck.For(taxobox, latest, GlobalHistory)
             : null;

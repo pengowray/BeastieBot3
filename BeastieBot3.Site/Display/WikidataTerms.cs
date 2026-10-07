@@ -47,6 +47,7 @@ public static class WikidataTerms {
             ["P815"] = "ITIS TSN",
             ["P830"] = "Encyclopedia of Life ID",
             ["P846"] = "GBIF-species-ID (before 2026 update)",
+            ["P14607"] = "GBIF taxon ID",
             ["P850"] = "WoRMS-ID for taxa",
             ["P938"] = "FishBase species ID",
             ["P960"] = "Tropicos ID",

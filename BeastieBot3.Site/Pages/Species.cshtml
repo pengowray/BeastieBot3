@@ -52,7 +52,7 @@
         @* The groups link to their pages. Catalogue of Life groups are hidden until the box is ticked
            (site.css, :has), so the page needs no script for it. *@
         <div class="classification has-col-toggle">
-            <h2 id="classification-heading" class="visually-hidden">@SiteText.HeadingClassification</h2>
+            <h2 id="short-classification-heading" class="visually-hidden">@SiteText.HeadingShortClassification</h2>
             <ol>
                 @foreach (var step in Model.Classification) {
                     var colNames = step.CommonNameEn is null ? Model.ClassificationColNames.GetValueOrDefault(step.NodeId) : null;
@@ -81,7 +81,7 @@
     } else if (ranks.Any(r => !string.IsNullOrWhiteSpace(r))) {
         @* The ranks are plain text, so they sit in a div with a hidden heading (a nav landmark is for links). *@
         <div class="classification">
-            <h2 id="classification-heading" class="visually-hidden">@SiteText.HeadingClassification</h2>
+            <h2 id="short-classification-heading" class="visually-hidden">@SiteText.HeadingShortClassification</h2>
             <ol>
                 @for (var i = 0; i < ranks.Length; i++) {
                     if (string.IsNullOrWhiteSpace(ranks[i])) {
@@ -517,17 +517,17 @@
     }
 </section>
 
-@if (Model.RankComparison.Count > 0) {
-    var differences = Model.RankComparison.Sum(r => r.Cells.Count(c => c.Differs));
-    var minorRows = Model.RankComparison.Count(r => r.Minor);
-    <section class="rank-comparison" id="ranks" aria-labelledby="ranks-heading">
-        <h2 id="ranks-heading">@SiteText.HeadingRanks</h2>
+@if (Model.ComparativeClassification.Count > 0) {
+    var differences = Model.ComparativeClassification.Sum(r => r.Cells.Count(c => c.Differs));
+    var minorRows = Model.ComparativeClassification.Count(r => r.Minor);
+    <section class="comparative-classification" id="comparative-classification" aria-labelledby="comparative-classification-heading">
+        <h2 id="comparative-classification-heading">@SiteText.HeadingComparativeClassification</h2>
         <p>@SiteText.RanksIntro(differences)</p>
         @if (minorRows > 0) {
             <p class="ranks-toggle"><label title="@SiteText.RanksShowMinorHelp"><input type="checkbox" class="show-minor-ranks" autocomplete="off"> @SiteText.RanksShowMinor(minorRows)</label></p>
         }
         <div class="table-scroll">
-            <table class="ranks-table" aria-labelledby="ranks-heading">
+            <table class="ranks-table" aria-labelledby="comparative-classification-heading">
                 <thead>
                     <tr>
                         <td></td>
@@ -537,7 +537,7 @@
                     </tr>
                 </thead>
                 <tbody>
-                    @foreach (var row in Model.RankComparison) {
+                    @foreach (var row in Model.ComparativeClassification) {
                         <tr class="@(row.IsMain ? "main-rank" : row.Minor ? "minor-rank" : null)">
                             <th scope="row">@SiteText.RankRowLabel(row.RankLabel)</th>
                             @foreach (var cell in row.Cells) {

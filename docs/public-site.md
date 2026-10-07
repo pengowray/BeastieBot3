@@ -1407,9 +1407,11 @@ title statements are not recorded (run wikidata iucn-assessment-items)".
 - Run locally with `dotnet run --project BeastieBot3.Site`. `appsettings.Development.json` points to
   `~/datasets/beastiebot/site.sqlite`; set `Site__DatabasePath` to use another file.
 
-### Classification (`ladder_node`)
+### Comparative classification (`ladder_node`)
 
-The species page lines up the taxon's classification in IUCN, on this site (IUCN with the
+The species page's comparative classification (headed "Classification" on the page; the hidden
+heading of the line of groups under the taxon's name is "Short classification") lines up the
+taxon's classification in IUCN, on this site (IUCN with the
 Catalogue of Life groups between its ranks), in the Catalogue of Life, Wikidata, English
 Wikipedia and Wikispecies, row by main rank (kingdom to species; `Display/ClassificationComparison.cs`).
 `site build-db` writes each source's nodes to `ladder_node` (`SiteBuild/SiteLadders.cs`); the page

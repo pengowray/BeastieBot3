@@ -132,7 +132,7 @@ public sealed class SpeciesPageTests(SiteFactory factory) : IClassFixture<SiteFa
         var html = await Page();
         Assert.DoesNotContain("<nav class=\"classification\"", html);
         Assert.Contains("<div class=\"classification has-col-toggle\">", html);
-        Assert.Contains("<h2 id=\"classification-heading\" class=\"visually-hidden\">Classification</h2>", html);
+        Assert.Contains("<h2 id=\"short-classification-heading\" class=\"visually-hidden\">Short classification</h2>", html);
     }
 
     [Fact]

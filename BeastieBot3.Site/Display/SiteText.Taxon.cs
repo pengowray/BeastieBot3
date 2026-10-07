@@ -17,7 +17,8 @@ public static partial class SiteText {
     public const string HeadingNoScope = "Assessments with no geographic scope";
     public const string HeadingNames = "Names";
     public const string HeadingLinks = "Links to other sites";
-    public const string HeadingClassification = "Classification";
+    /// The hidden heading of the line of groups under the taxon's name.
+    public const string HeadingShortClassification = "Short classification";
 
     /// "Subspecies", "Subspecies and subpopulations", "Subspecies, varieties and subpopulations".
     public static string HeadingChildren(bool subspecies, bool varieties, bool subpopulations) {

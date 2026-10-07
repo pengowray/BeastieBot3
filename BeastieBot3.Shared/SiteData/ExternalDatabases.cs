@@ -5,12 +5,20 @@ namespace BeastieBot3.Shared.SiteData;
 /// Url: the address of a taxon's page, with $1 for the id (each property's formatter URL, P1630,
 /// on Wikidata in October 2026). site build-db stores the ids in taxon_external_id.
 public static class ExternalDatabases {
-    public sealed record Database(string Property, string Name, string Url) {
+    /// SupersededBy: the property that replaced this one; the page links this one only when the
+    /// taxon has no id for that.
+    public sealed record Database(string Property, string Name, string Url, string? SupersededBy = null) {
         public string UrlFor(string id) => Url.Replace("$1", id.Trim().Replace(" ", "%20"), StringComparison.Ordinal);
     }
 
+    /// GBIF's taxon ids changed in 2026: P14607 holds the new ids, P846 the old ones, which most items
+    /// still have only.
+    public const string GbifTaxonId = "P14607";
+    public const string GbifSpeciesIdBefore2026 = "P846";
+
     public static readonly IReadOnlyList<Database> All = [
-        new("P846", "GBIF", "https://www.gbif.org/species/$1"),
+        new(GbifTaxonId, "GBIF", "https://www.gbif.org/taxon/$1"),
+        new(GbifSpeciesIdBefore2026, "GBIF", "https://www.gbif.org/species/$1", SupersededBy: GbifTaxonId),
         new("P3151", "iNaturalist", "https://www.inaturalist.org/taxa/$1"),
         new("P830", "Encyclopedia of Life", "https://eol.org/pages/$1"),
         new("P685", "NCBI Taxonomy", "https://www.ncbi.nlm.nih.gov/datasets/taxonomy/$1/"),
@@ -30,6 +38,18 @@ public static class ExternalDatabases {
     ];
 
     public static Database? ByProperty(string property) => All.FirstOrDefault(d => d.Property == property);
+
+    /// The links to the other databases for a taxon's stored ids (property, value), in the order of
+    /// All, one per database: the first id of each property, and no link for a property whose
+    /// replacement has an id.
+    public static IReadOnlyList<(string Name, string Url)> Links(IReadOnlyCollection<(string Property, string Value)> ids) {
+        string? IdOf(string property) => ids.FirstOrDefault(x => x.Property == property).Value;
+        return [.. All
+            .Where(d => d.SupersededBy is not { } newer || IdOf(newer) is null)
+            .Select(d => (Database: d, Id: IdOf(d.Property)))
+            .Where(x => x.Id is not null)
+            .Select(x => (x.Database.Name, x.Database.UrlFor(x.Id!)))];
+    }
 
     /// Wikimedia Commons: the Commons category (P373) and gallery (P935) statements and the item's
     /// Commons sitelink (stored as property "commonswiki"), which is a gallery or a category page.

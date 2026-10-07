@@ -1479,10 +1479,10 @@ th.num {
 .ranks-table a:focus-visible {
     text-decoration: underline;
 }
-.rank-comparison .minor-rank {
+.comparative-classification .minor-rank {
     display: none;
 }
-.rank-comparison:has(.show-minor-ranks:checked) .minor-rank {
+.comparative-classification:has(.show-minor-ranks:checked) .minor-rank {
     display: table-row;
 }
 .ranks-table .differs-marker {

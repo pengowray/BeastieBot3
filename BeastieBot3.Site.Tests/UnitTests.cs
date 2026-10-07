@@ -570,6 +570,18 @@ public sealed class SiteUrlsTests {
         Assert.Equal(expected, SiteUrls.Absolute(baseUrl, Request(scheme, host), "/species/1"));
 }
 
+public sealed class ExternalDatabaseLinkTests {
+    [Fact]
+    public void TheOldGbifIdIsLinkedWhenTheTaxonHasNoNewOne() =>
+        Assert.Equal([("GBIF", "https://www.gbif.org/species/5219416")],
+            BeastieBot3.Shared.SiteData.ExternalDatabases.Links([("P846", "5219416")]));
+
+    [Fact]
+    public void TheNewGbifIdReplacesTheOldOne() =>
+        Assert.Equal([("GBIF", "https://www.gbif.org/taxon/7VBF"), ("iNaturalist", "https://www.inaturalist.org/taxa/41967")],
+            BeastieBot3.Shared.SiteData.ExternalDatabases.Links([("P846", "5219416"), ("P14607", "7VBF"), ("P3151", "41967")]));
+}
+
 public sealed class WikidataTermsTests {
     [Fact]
     public void EveryDatabasePropertyHasALabel() => Assert.Empty(BeastieBot3.Site.Display.WikidataTerms.MissingDatabaseProperties());
