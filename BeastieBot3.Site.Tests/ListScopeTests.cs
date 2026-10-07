@@ -18,13 +18,13 @@ internal sealed class FakeScopeLookup : IListScopeLookup {
     }
 
     /// Adds count species to a genus: "Name1", "Name2" ... in category, with taxon ids from firstId.
-    public FakeScopeLookup Species(int node, long firstId, int count, string category = "LC", string kind = TaxonKinds.Species) {
+    public FakeScopeLookup Species(int node, long firstId, int count, string category = "LC", string kind = TaxonKinds.Species, bool pe = false) {
         for (var i = 0; i < count; i++) {
             var id = firstId + i;
             var name = $"{_groups[node].Name} {Epithet(id)}";
-            var latest = new AssessmentRow(id * 10, id, "Global", true, category, false, false, null, "3.1", 2020, null, null, null);
+            var latest = new AssessmentRow(id * 10, id, "Global", true, category, pe, false, null, "3.1", 2020, null, null, null);
             _taxa.Add((new ListTaxonRow(id, name, kind, "ANIMALIA", _groups[node].Name, Epithet(id), null, null, null, null, null, null, null,
-                node, _taxa.Count, id * 10, category, false, false, 2020), new StatusTaxon(id, name, true, null, latest, kind, node)));
+                node, _taxa.Count, id * 10, category, pe, false, 2020), new StatusTaxon(id, name, true, null, latest, kind, node)));
         }
         return this;
     }
@@ -77,7 +77,7 @@ internal sealed class FakeScopeLookup : IListScopeLookup {
     }
 
     public IReadOnlyList<GroupCategoryCount> CountsOf(int nodeId) =>
-        [.. Within(nodeId).GroupBy(t => t.Row.Category!).Select(g => new GroupCategoryCount(g.Key,
+        [.. Within(nodeId).GroupBy(t => GroupList.StatusCode(t.Row)).Select(g => new GroupCategoryCount(g.Key,
             g.Count(t => t.Row.Kind == TaxonKinds.Species), g.Count(t => t.Row.Kind != TaxonKinds.Species), 0))];
 
     public IReadOnlyDictionary<long, TableTaxonExtra> ExtrasOf(GroupRow group) =>
@@ -179,6 +179,62 @@ public sealed class ListScopeTests {
         Assert.False(result.CategoriesFromCodes);
         Assert.Equal(2, result.Missing!.Count);
     }
+
+    [Fact]
+    public void ChosenCategoriesAreComparedWhateverTheTextWrites() {
+        // 8 of the genus's 10 EN species, written as VU: the codes alone would make it a list of VU.
+        var lookup = Tree().Species(4, 100, 10, "EN").Species(4, 200, 30);
+        var result = ListScope.Check(Members(lookup, Enumerable.Range(100, 8).Select(i => (long)i), code: "VU"), lookup,
+            new ListScopeOptions { Categories = ListCategories.Threatened })!;
+        Assert.True(result.CategoriesChosen);
+        Assert.Equal(ListCategories.Threatened.Codes, result.Categories);
+        Assert.Equal([108L, 109L], result.Missing!.Select(t => t.TaxonId));
+    }
+
+    [Fact]
+    public void AListOfFewOfTheChosenCategoriesTaxaIsPartial() {
+        // 3 of 10 EN species and 20 LC: a list of threatened species of one country, say.
+        var lookup = Tree().Species(4, 100, 10, "EN").Species(4, 200, 30);
+        var listed = Enumerable.Range(100, 3).Concat(Enumerable.Range(200, 10)).Select(i => (long)i);
+        var result = ListScope.Check(Members(lookup, listed), lookup, new ListScopeOptions { Categories = ListCategories.Threatened })!;
+        Assert.True(result.Partial);
+        Assert.Null(result.Missing);
+        Assert.Equal(ListCategories.Threatened.Codes, result.Categories);
+    }
+
+    [Fact]
+    public void ChoosingAllCategoriesComparesTheWholeGroup() {
+        var lookup = Tree().Species(4, 100, 10, "EN").Species(4, 200, 30);
+        var listed = Enumerable.Range(100, 10).Concat(Enumerable.Range(200, 20)).Select(i => (long)i);
+        var result = ListScope.Check(Members(lookup, listed, code: "EN"), lookup, new ListScopeOptions { Categories = ListCategories.All })!;
+        Assert.Null(result.Categories);
+        Assert.Equal(10, result.MissingTotal);
+    }
+
+    [Fact]
+    public void TheExtinctChoiceTakesPossiblyExtinctTaxaButNotOtherCriticallyEndangeredOnes() {
+        var lookup = Tree().Species(4, 100, 6, "EX").Species(4, 200, 4, "CR", pe: true).Species(4, 300, 5, "CR").Species(4, 400, 20);
+        var result = ListScope.Check(Members(lookup, Enumerable.Range(100, 6).Select(i => (long)i)), lookup,
+            new ListScopeOptions { Categories = ListCategories.Extinct })!;
+        Assert.Equal(10, result.SpeciesInScope);
+        Assert.Equal([200L, 201L, 202L, 203L], result.Missing!.Select(t => t.TaxonId));
+    }
+
+    [Theory]
+    [InlineData("List of threatened birds of Brazil", "threatened")]
+    [InlineData("List of critically endangered amphibians", "CR")]
+    [InlineData("List of endangered mammals", "EN")]
+    [InlineData("List of vulnerable fish", "VU")]
+    [InlineData("List of near threatened reptiles", "NT")]
+    [InlineData("List of near-threatened insects", "NT")]
+    [InlineData("List of recently extinct mammals", "extinct")]
+    [InlineData("List of extinct animals of Europe", "extinct")]
+    [InlineData("List of birds that are extinct in the wild", "EW")]
+    [InlineData("List of least concern birds", "LC")]
+    [InlineData("List of data deficient molluscs", "DD")]
+    [InlineData("List of birds of Brazil", null)]
+    [InlineData("Endangered Species Act", "EN")]
+    public void TheTitleNamesTheCategories(string title, string? key) => Assert.Equal(key, ListCategories.FromTitle(title)?.Key);
 
     [Fact]
     public void WithoutGuessingCategoriesAListWithNoCodesIsOfTheWholeGroup() {

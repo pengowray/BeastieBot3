@@ -131,6 +131,11 @@ public sealed class UpdateModel : PageModel {
     public static readonly string[] ColumnHeaders = [StatusUpdater.StatusColumnHeader, "Conservation status", "Red List status", "Status"];
 
     public const string ScopeField = "scope";
+    /// The categories to compare (ListCategories key); empty: from the codes in the wikitext.
+    public const string CategoriesField = "cats";
+
+    /// The categories chosen, or read from the title of a page loaded from Wikipedia; null: from the codes.
+    public ListCategoryChoice? Categories { get; private set; }
     public const string ListAnywayField = "anyway";
     public const string ExtraSpeciesField = "extra";
     public const string AddMissingField = "addmissing";
@@ -161,6 +166,7 @@ public sealed class UpdateModel : PageModel {
         }
         LoadedPage = wikiPage;
         Input = wikiPage.Text;
+        Categories = ListCategories.FromTitle(wikiPage.Title);
         Run(wikiPage.Text, scope: null, listAnyway: false, extraSpecies: false, addMissing: false);
         return Page();
     }
@@ -213,6 +219,7 @@ public sealed class UpdateModel : PageModel {
                 DateTimeOffset.TryParse(form[PageTimeField].LastOrDefault(), System.Globalization.CultureInfo.InvariantCulture,
                     System.Globalization.DateTimeStyles.AssumeUniversal, out var time) ? time : null);
         }
+        Categories = ListCategories.Find(form[CategoriesField].LastOrDefault());
         Run(text, form[ScopeField].LastOrDefault(), On(ListAnywayField), On(ExtraSpeciesField), On(AddMissingField));
         return Page();
     }
@@ -225,7 +232,7 @@ public sealed class UpdateModel : PageModel {
         var scopeLookup = new SiteListScopeLookup(_queries, new SpeciesTableQueries(_db), lookup);
         Scope = ListScope.Check(Result.Members ?? [], scopeLookup,
             new ListScopeOptions(string.IsNullOrWhiteSpace(scope) ? null : scope, listAnyway, extraSpecies,
-                extraSpecies ? WrittenNames(text) : null));
+                extraSpecies ? WrittenNames(text) : null) { Categories = Categories });
         ExtraSpecies = extraSpecies;
         AddMissing = addMissing;
         if (AddMissing && Scope is { Partial: false } && (Scope.Missing?.Count ?? 0) + (Scope.MissingExtra?.Count ?? 0) > 0) {

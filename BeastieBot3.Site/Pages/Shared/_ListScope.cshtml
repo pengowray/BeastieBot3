@@ -19,17 +19,28 @@
     @if (r.Infra > 0) {
         <p>@UpdateText.ScopeInfra(r)</p>
     }
-    @if (r.Path.Count > 1) {
-        <p class="update-scope-choice">
+    <p class="update-scope-choice">
+        @if (r.Path.Count > 1) {
+            <span class="choice">
             <label for="scope-choice">@UpdateText.ScopeChooseLabel</label>
             <select id="scope-choice" name="@UpdateModel.ScopeField" form="update-form">
                 @foreach (var group in r.Path.Reverse()) {
                     <option value="@ListScope.Key(group)" selected="@(group.NodeId == r.Scope.NodeId)">@UpdateText.ScopeOption(group, r.ListedIn.GetValueOrDefault(group.NodeId))</option>
                 }
             </select>
-            <button type="submit" form="update-form">@UpdateText.ScopeChooseButton</button>
-        </p>
-    }
+            </span>
+        }
+        <span class="choice">
+        <label for="categories-choice">@UpdateText.CategoriesChooseLabel</label>
+        <select id="categories-choice" name="@UpdateModel.CategoriesField" form="update-form">
+            <option value="" selected="@(Model.Categories is null)">@UpdateText.CategoriesFromCodesOption</option>
+            @foreach (var choice in BeastieBot3.Shared.Wikitext.ListCategories.Choices) {
+                <option value="@choice.Key" selected="@(Model.Categories?.Key == choice.Key)">@choice.Label</option>
+            }
+        </select>
+        </span>
+        <button type="submit" form="update-form">@UpdateText.ScopeChooseButton</button>
+    </p>
     @if (r.Partial && r.Missing is null) {
         <p>@UpdateText.ScopePartial(r) <button type="submit" form="update-form" name="@UpdateModel.ListAnywayField" value="1">@UpdateText.ScopeListAnywayButton</button></p>
     } else if (r.Partial) {

@@ -14,7 +14,9 @@ public static partial class UpdateText {
     public static string ScopeSummary(ListScopeResult r) =>
         $"The wikitext includes {Count(r.Species)} of the {Count(r.SpeciesInScope)} {CategoryAdjective(r.Categories)}species that IUCN has in {GroupList.HeadingText(r.Scope)}.";
 
-    public static string ScopeCategories(ListScopeResult r, IReadOnlySet<string> categories) => r.CategoriesFromCodes
+    public static string ScopeCategories(ListScopeResult r, IReadOnlySet<string> categories) => r.CategoriesChosen
+        ? $"Only {CategoryList(categories, "and")} taxa are compared, as chosen in Categories below."
+        : r.CategoriesFromCodes
         ? $"Only {CategoryList(categories, "and")} taxa are compared, because every status code in the wikitext is {CategoryList(categories, "or")}."
         : $"Only {CategoryList(categories, "and")} taxa are compared: the wikitext has no status codes, and {Count(r.Species)} of its {Count(r.SpeciesListed)} species are {CategoryList(categories, "or")} in their latest assessments.";
 
@@ -27,6 +29,9 @@ public static partial class UpdateText {
 
     public const string ScopeChooseLabel = "Compare with";
     public const string ScopeChooseButton = "Compare";
+    public const string CategoriesChooseLabel = "Categories";
+    /// The category choice that leaves the categories to the codes in the wikitext.
+    public const string CategoriesFromCodesOption = "From the status codes in the wikitext";
 
     public static string ScopePartial(ListScopeResult r) =>
         $"Missing taxa are not listed: the wikitext includes only {Count(r.Species)} of the {Count(r.SpeciesInScope)} {CategoryAdjective(r.Categories)}species in {GroupList.HeadingText(r.Scope)}, so it may be a regional list or a list of part of the group.";
@@ -105,7 +110,7 @@ public static partial class UpdateText {
 
     // "EN"; "CR, EN and VU" or "CR, EN or VU", in the Red List's order.
     private static string CategoryList(IReadOnlySet<string> categories, string conjunction) {
-        string[] order = ["EX", "EW", "CR", "EN", "VU", "NT", "LC", "DD"];
+        string[] order = ["EX", "CR(PE)", "CR(PEW)", "EW", "CR", "EN", "VU", "NT", "LC", "DD"];
         var ordered = categories.OrderBy(c => Array.IndexOf(order, c)).ToList();
         return ordered.Count == 1 ? ordered[0] : $"{string.Join(", ", ordered.Take(ordered.Count - 1))} {conjunction} {ordered[^1]}";
     }

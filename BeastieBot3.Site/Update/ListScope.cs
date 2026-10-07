@@ -36,6 +36,10 @@ public sealed record ListScopeOptions(string? Scope = null, bool ListAnyway = fa
     /// nearly all its species are in now. Off for a text known to list a whole group whatever the
     /// categories, such as a genus article (`wikipedia report-species-lists`).
     public bool GuessCategories { get; init; } = true;
+
+    /// The categories the list is of, chosen by the reader or read from the page's title: these are
+    /// compared whatever codes the text writes. Null: from the codes the text writes (or the guess).
+    public ListCategoryChoice? Categories { get; init; }
 }
 
 /// A taxon the text lists that is outside the group, or whose latest category is outside the
@@ -84,6 +88,9 @@ public sealed record ListScopeResult(
 
     /// How many such species the scope has, named in the text or not.
     public int ExtraTotal { get; init; }
+
+    /// The categories (or all categories) were chosen (ListScopeOptions.Categories), not read from the codes.
+    public bool CategoriesChosen { get; init; }
 }
 
 /// Compares the taxa a text lists (StatusUpdateResult.Members) with the IUCN group they are in, and
@@ -162,7 +169,10 @@ public static partial class ListScope {
         // categories of taxa that have moved since.
         var codes = members.Select(m => Normalize(m.WrittenCode)).OfType<string>().ToList();
         IReadOnlySet<string>? categories = null;
-        if (codes.Count >= MinCodes) {
+        var chosen = options.Categories is not null;
+        if (options.Categories is { } choice) {
+            categories = choice.All ? null : choice.Codes;
+        } else if (codes.Count >= MinCodes) {
             var written = codes.ToHashSet();
             categories = written.Count == 1 ? written
                 : written.IsSubsetOf(Threatened) ? Threatened
@@ -181,15 +191,22 @@ public static partial class ListScope {
                 categories = Threatened;
             }
         }
-        bool InCategories(StatusTaxon t) => categories is null || (Current(t) is { } c && categories.Contains(c));
+        bool InCategories(StatusTaxon t) => categories is null || IsIn(CurrentCode(t), categories);
         int ScopeCount(Func<GroupCategoryCount, int> count, IReadOnlySet<string>? cats) =>
-            counts.Where(c => cats is null || (Normalize(c.Category) is { } n && cats.Contains(n))).Sum(count);
+            counts.Where(c => cats is null || IsIn(c.Category, cats)).Sum(count);
 
         var partial = false;
+        // Categories taken from the codes or guessed are dropped when the text lists too few of their
+        // taxa to be a list of them; chosen ones are kept.
         if (categories is not null) {
             var listedInCategories = species.Count(t => InCategories(t.First().Taxon));
             if (listedInCategories < ListShare * ScopeCount(c => c.Species, categories)) {
-                categories = null;
+                if (chosen) {
+                    // A list of threatened birds of one country: too little of the group's threatened birds.
+                    partial = true;
+                } else {
+                    categories = null;
+                }
             }
         }
         if (categories is null) {
@@ -210,7 +227,7 @@ public static partial class ListScope {
             var listedIds = listed.Select(t => t.Key).ToHashSet();
             var all = lookup.TaxaIn(scope, kinds)
                 .Where(t => t.Category is not null && !listedIds.Contains(t.TaxonId)
-                    && (categories is null || (Normalize(GroupList.StatusCode(t)) is { } c && categories.Contains(c))))
+                    && (categories is null || IsIn(GroupList.StatusCode(t), categories)))
                 .ToList();
             missingTotal = all.Count;
             missing = all.Take(MaxMissing).ToList();
@@ -237,6 +254,7 @@ public static partial class ListScope {
             infraListed, infraInScope, infraChecked, categories,
             codes.Count > 0, partial,
             missing, missingTotal, GroupListQuery.DefaultStyle(PathOf(scope.NodeId)), outside, otherCategory, duplicates) {
+            CategoriesChosen = chosen,
             ListedIn = path.ToDictionary(g => g.NodeId, g => listed.Count(t => t.First().Taxon.Kind == TaxonKinds.Species
                 && PathOf(t.First().Taxon.NodeId!.Value).Any(p => p.NodeId == g.NodeId))),
             MissingExtra = extras?
@@ -280,6 +298,12 @@ public static partial class ListScope {
 
     /// The category a code is in, for comparing lists: CR(PE) and CR(PEW) are CR, LR/cd and LR/nt
     /// are NT, LR/lc is LC. Null for no code.
+    // Whether a taxon's code is one of the categories: by the code itself ("CR(PE)" for a list of
+    // possibly extinct taxa), or by its category ("CR(PE)" is in CR).
+    private static bool IsIn(string? code, IReadOnlySet<string> categories) =>
+        code is not null && (categories.Contains(code.Replace(" ", string.Empty, StringComparison.Ordinal).ToUpperInvariant())
+            || (Normalize(code) is { } c && categories.Contains(c)));
+
     internal static string? Normalize(string? code) {
         if (code is null) {
             return null;

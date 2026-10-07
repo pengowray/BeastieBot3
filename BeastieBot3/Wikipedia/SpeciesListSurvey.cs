@@ -78,13 +78,17 @@ internal static class SpeciesListSurvey {
         StatusItemKind.StatusTemplate, StatusItemKind.TableCell, StatusItemKind.ListLine, StatusItemKind.SpeciesTableRow,
     ];
 
-    /// Checks one page. A page whose title does not start "List of" (a genus or family article) is
-    /// taken to list its whole group, so ListScope does not guess that it lists only threatened taxa.
+    /// Checks one page. The categories it is compared on are the ones its title names ("List of
+    /// threatened birds of Brazil": CR, EN and VU), as on the status update page. A page whose title
+    /// does not start "List of" (a genus or family article) is taken to list its whole group, so
+    /// ListScope does not guess that it lists only threatened taxa.
     public static SpeciesListPageResult Check(StoredPageText page, IStatusLookup statuses, IListScopeLookup groups, DateOnly today) {
         var result = new StatusUpdater(statuses, today).Update(page.Wikitext);
         var members = result.Members ?? [];
-        var scope = ListScope.Check(members, groups,
-            new ListScopeOptions { GuessCategories = WikipediaFetchSpeciesListsCommand.IsListTitle(page.Title) });
+        var scope = ListScope.Check(members, groups, new ListScopeOptions {
+            GuessCategories = WikipediaFetchSpeciesListsCommand.IsListTitle(page.Title),
+            Categories = ListCategories.FromTitle(page.Title),
+        });
 
         var written = new Dictionary<(int Line, long TaxonId), string?>();
         foreach (var member in members) {

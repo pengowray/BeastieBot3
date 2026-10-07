@@ -1437,3 +1437,21 @@ th.num {
     display: inline;
     margin: 0;
 }
+
+/* The status update page's comparison choices: the group and the categories, then Compare. */
+.update-scope-choice {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.5rem 1.25rem;
+}
+.update-scope-choice .choice {
+    display: inline-flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 0.4rem;
+    max-width: 100%;
+}
+.update-scope-choice select {
+    max-width: 100%;
+}
