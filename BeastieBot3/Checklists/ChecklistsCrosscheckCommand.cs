@@ -70,7 +70,7 @@ internal sealed class ChecklistsCrosscheckCommand : Command<ChecklistsCrosscheck
                 AnsiConsole.MarkupLineInterpolated($"[yellow]Skipped {key}:[/] not imported, or not a known source.");
                 continue;
             }
-            AnsiConsole.MarkupLineInterpolated($"[grey]Comparing with {ChecklistSources.Find(key)?.Title ?? key}...[/]");
+            AnsiConsole.MarkupLineInterpolated($"[grey]Comparing with {ChecklistSources.TitleOf(key)}...[/]");
             results.Add(ChecklistCrosscheck.Run(key, store, site, tdwg));
         }
         var directory = ReportPathResolver.ResolveDirectory(paths, settings.OutputDirectory, Path.GetDirectoryName(sitePath));
@@ -111,7 +111,7 @@ internal sealed class ChecklistsCrosscheckCommand : Command<ChecklistsCrosscheck
         var table = new Table().AddColumns("Source", "IUCN species", "Matched", "Compared", "Same countries", "IUCN lists more", "Source lists more");
         foreach (var r in results) {
             var t = Tally(r);
-            table.AddRow(Markup.Escape(ChecklistSources.Find(r.Source)?.Title ?? r.Source), N(r.IucnSpecies), N(r.Matched), N(r.Compared),
+            table.AddRow(Markup.Escape(ChecklistSources.TitleOf(r.Source)), N(r.IucnSpecies), N(r.Matched), N(r.Compared),
                 $"{N(t.Agree)} ({Pct(t.Agree, r.Compared)})", N(t.IucnOnly), N(t.SourceOnly));
         }
         AnsiConsole.Write(table);
@@ -131,15 +131,15 @@ internal sealed class ChecklistsCrosscheckCommand : Command<ChecklistsCrosscheck
         foreach (var r in results) {
             var t = Tally(r);
             var info = sources.FirstOrDefault(s => s.Source == r.Source);
-            sb.AppendLine($"| {ChecklistSources.Find(r.Source)?.Title ?? r.Source} | {info?.Version} | {info?.Licence} | {N(r.IucnSpecies)} | {N(r.Matched)} ({N(r.MatchedBySynonym)} by synonym) | {N(r.Compared)} | {N(t.Agree)} ({Pct(t.Agree, r.Compared)}) | {N(t.IucnOnly)} | {N(t.SourceOnly)} |");
+            sb.AppendLine($"| {ChecklistSources.TitleOf(r.Source)} | {info?.Version} | {info?.Licence} | {N(r.IucnSpecies)} | {N(r.Matched)} ({N(r.MatchedBySynonym)} by synonym) | {N(r.Compared)} | {N(t.Agree)} ({Pct(t.Agree, r.Compared)}) | {N(t.IucnOnly)} | {N(t.SourceOnly)} |");
         }
         sb.AppendLine();
         sb.AppendLine("Matched species with no native country on one side are not compared, and nor are IUCN species matched through a synonym to a checklist species that another IUCN species also matches (the checklist lumps them): "
-            + string.Join(", ", results.Select(r => $"{N(r.Lumped)} for {ChecklistSources.Find(r.Source)?.Title ?? r.Source}")) + ".");
+            + string.Join(", ", results.Select(r => $"{N(r.Lumped)} for {ChecklistSources.TitleOf(r.Source)}")) + ".");
         sb.AppendLine();
         foreach (var r in results) {
             var t = Tally(r);
-            var title = ChecklistSources.Find(r.Source)?.Title ?? r.Source;
+            var title = ChecklistSources.TitleOf(r.Source);
             sb.AppendLine($"## {title}");
             sb.AppendLine();
             sb.AppendLine($"- Endemic to one country in both: {N(t.EndemicBoth)}");

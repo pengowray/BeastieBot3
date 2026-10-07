@@ -16,8 +16,8 @@ using Microsoft.Data.Sqlite;
 
 namespace BeastieBot3.Checklists;
 
-/// A source's group in the IUCN data: the column and value its species are in.
-internal sealed record ChecklistGroup(string Column, string Value);
+/// A source's group in the IUCN data: the column and value its species are in; a null Value is every species.
+internal sealed record ChecklistGroup(string Column, string? Value);
 
 /// One IUCN species compared with a source. IucnOnly: countries IUCN records as native that the
 /// source does not list at all. SourceOnly: places the source lists as native that IUCN does not
@@ -37,7 +37,11 @@ internal static class ChecklistCrosscheck {
         ["wcvp"] = new("phylum", "TRACHEOPHYTA"),
         ["reptiledb"] = new("class_name", "REPTILIA"),
         ["amphibiaweb"] = new("class_name", "AMPHIBIA"),
+        [GbifChecklist.Source] = new("kingdom", null),
     };
+
+    /// GBIF: a country counts as one the species is in from this many records.
+    public const long GbifMinRecords = 5;
 
     private sealed record IucnTaxon(long TaxonId, string Name, string ClassName, List<string> Synonyms,
         HashSet<string> Native, HashSet<string> AnyRecord, string? Endemic);
@@ -62,7 +66,8 @@ internal static class ChecklistCrosscheck {
             }
             var key = SiteNameKey.Fold(row.ScientificName);
             (listed.TryGetValue(key, out var all) ? all : listed[key] = new HashSet<string>(StringComparer.Ordinal)).UnionWith(countries);
-            if (row.Origin is ChecklistOrigins.Native or ChecklistOrigins.Extinct) {
+            if (row.Origin is ChecklistOrigins.Native or ChecklistOrigins.Extinct
+                || (row.Origin == ChecklistOrigins.Recorded && row.Records >= GbifMinRecords)) {
                 var label = countries.Count == 1 ? countries.First() : row.Area;
                 (native.TryGetValue(key, out var n) ? n : native[key] = []).Add(new Place(label, countries));
             }
@@ -237,9 +242,12 @@ internal static class ChecklistCrosscheck {
         using (var command = site.CreateCommand()) {
             command.CommandText = $"""
                 SELECT taxon_id, scientific_name, class_name FROM taxon
-                WHERE in_release = 1 AND kind = 'species' AND latest_global_assessment_id IS NOT NULL AND {group.Column} = @value
+                WHERE in_release = 1 AND kind = 'species' AND latest_global_assessment_id IS NOT NULL
+                {(group.Value is null ? "" : $"AND {group.Column} = @value")}
                 """;
-            command.Parameters.AddWithValue("@value", group.Value);
+            if (group.Value is not null) {
+                command.Parameters.AddWithValue("@value", group.Value);
+            }
             using var reader = command.ExecuteReader();
             while (reader.Read()) {
                 taxa[reader.GetInt64(0)] = new IucnTaxon(reader.GetInt64(0), reader.GetString(1), reader.IsDBNull(2) ? "" : reader.GetString(2), [],

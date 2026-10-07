@@ -11,7 +11,7 @@ using Spectre.Console.Cli;
 namespace BeastieBot3.Checklists;
 
 [CommandInfo("checklists import", CommandKind.Mutates,
-    "Download a country checklist from another source (mdd: Mammal Diversity Database, wcvp: Kew's World Checklist of Vascular Plants, reptiledb: The Reptile Database, amphibiaweb: AmphibiaWeb) and import it into the checklists store, for checklists crosscheck.",
+    "Download a country checklist from another source (mdd: Mammal Diversity Database, wcvp: Kew's World Checklist of Vascular Plants, reptiledb: The Reptile Database, amphibiaweb: AmphibiaWeb; gbif: the counts checklists gbif-fetch downloaded, matched to IUCN species through GBIF's backbone) and import it into the checklists store, for checklists crosscheck.",
     Rerun = RerunEffect.Rebuilds,
     RerunNote = "Replaces the source's rows from the downloaded file. The file is downloaded only when it is not in the checklists folder yet, or with --download.",
     Examples = new[] {
@@ -37,6 +37,10 @@ internal sealed class ChecklistsImportCommand : AsyncCommand<ChecklistsImportCom
         [CommandOption("--store <PATH>")]
         [Description("Checklists store. Default: Datastore:checklists_sqlite, else checklists.sqlite in the datastore folder.")]
         public string? StorePath { get; init; }
+
+        [CommandOption("--site-db <FILE>")]
+        [Description("gbif only: the public site's database, whose species are matched to GBIF's. Default: Datastore:site_sqlite in paths.ini.")]
+        public string? SiteDatabase { get; init; }
     }
 
     public override async Task<int> ExecuteAsync(CommandContext context, Settings settings, CancellationToken cancellationToken) {
@@ -48,11 +52,13 @@ internal sealed class ChecklistsImportCommand : AsyncCommand<ChecklistsImportCom
             AnsiConsole.MarkupLine("[red]No datastore folder is set:[/] set datastore_dir under [[Datastore]] in paths.ini, or give --store.");
             return -1;
         }
-        var sources = settings.Source.Equals("all", StringComparison.OrdinalIgnoreCase)
+        var all = settings.Source.Equals("all", StringComparison.OrdinalIgnoreCase);
+        var gbif = all || settings.Source.Equals(GbifChecklist.Source, StringComparison.OrdinalIgnoreCase);
+        var sources = all
             ? ChecklistSources.All
             : ChecklistSources.Find(settings.Source) is { } one ? [one] : [];
-        if (sources.Count == 0) {
-            AnsiConsole.MarkupLineInterpolated($"[red]Unknown source[/] {settings.Source}: use mdd, wcvp, reptiledb, amphibiaweb or all.");
+        if (sources.Count == 0 && !gbif) {
+            AnsiConsole.MarkupLineInterpolated($"[red]Unknown source[/] {settings.Source}: use mdd, wcvp, reptiledb, amphibiaweb, gbif or all.");
             return -1;
         }
         if (settings.File is not null && sources.Count != 1) {
@@ -82,7 +88,44 @@ internal sealed class ChecklistsImportCommand : AsyncCommand<ChecklistsImportCom
                 failed = true;
             }
         }
+        if (gbif) {
+            failed |= !await ImportGbif(store, http, folder, ChecklistPaths.ExpandHome(settings.SiteDatabase ?? paths.GetSiteDatabasePath()), all, cancellationToken);
+        }
         return failed ? 1 : 0;
+    }
+
+    // GBIF: the downloaded counts of the species matched through the backbone. With "all", nothing is
+    // done until checklists gbif-fetch has downloaded counts.
+    private static async Task<bool> ImportGbif(ChecklistStore store, HttpClient http, string folder, string? sitePath, bool quietWhenEmpty,
+        CancellationToken cancellationToken) {
+        if (store.GbifFetched().Count == 0) {
+            if (!quietWhenEmpty) {
+                AnsiConsole.MarkupLine("[red]No GBIF counts downloaded yet.[/] Run checklists gbif-fetch first.");
+            }
+            return quietWhenEmpty;
+        }
+        if (sitePath is null || !System.IO.File.Exists(sitePath)) {
+            AnsiConsole.MarkupLineInterpolated($"[red]Site database not found:[/] {sitePath ?? "(not set)"}");
+            return false;
+        }
+        var backbone = Path.Combine(folder, GbifChecklist.BackboneFile);
+        try {
+            if (!System.IO.File.Exists(backbone)) {
+                AnsiConsole.MarkupLineInterpolated($"[grey]Downloading GBIF's backbone names (about 490 MB) from[/] {GbifChecklist.BackboneUrl}");
+                await Download(http, GbifChecklist.BackboneUrl, backbone, cancellationToken);
+            }
+            AnsiConsole.MarkupLine("[grey]Matching IUCN species to GBIF's backbone...[/]");
+            using var site = ChecklistPaths.OpenReadOnly(sitePath);
+            var rows = GbifChecklist.Rows(store, site, backbone, out var matched, out var iucnSpecies);
+            store.Replace(GbifChecklist.Source, $"occurrence counts of {store.GbifFetched().Values.Max():yyyy-MM-dd}",
+                "per dataset (CC0, CC BY, CC BY-NC)", "https://api.gbif.org/v1/occurrence/search", rows);
+            AnsiConsole.MarkupLineInterpolated(
+                $"[green]{GbifChecklist.Title}:[/] {ChecklistStore.Count(matched)} of {ChecklistStore.Count(iucnSpecies)} IUCN species matched to GBIF; {ChecklistStore.Count(rows.Count)} species and country rows.");
+            return true;
+        } catch (Exception e) when (e is HttpRequestException or IOException or InvalidDataException or TaskCanceledException) {
+            AnsiConsole.MarkupLineInterpolated($"[red]GBIF not imported:[/] {e.Message}");
+            return false;
+        }
     }
 
     private static async Task Download(HttpClient http, string url, string file, CancellationToken cancellationToken) {
@@ -123,7 +166,7 @@ internal sealed class ChecklistsStatusCommand : Command<ChecklistsStatusCommand.
         }
         var table = new Table().AddColumns("Source", "Version", "Licence", "Taxa", "Rows", "Imported");
         foreach (var s in store.Sources()) {
-            table.AddRow(Markup.Escape(ChecklistSources.Find(s.Source)?.Title ?? s.Source), Markup.Escape(s.Version ?? ""), Markup.Escape(s.Licence ?? ""),
+            table.AddRow(Markup.Escape(ChecklistSources.TitleOf(s.Source)), Markup.Escape(s.Version ?? ""), Markup.Escape(s.Licence ?? ""),
                 ChecklistStore.Count(s.Taxa), ChecklistStore.Count(s.Rows), s.ImportedAt?.ToString("yyyy-MM-dd HH:mm") ?? "");
         }
         AnsiConsole.Write(table);

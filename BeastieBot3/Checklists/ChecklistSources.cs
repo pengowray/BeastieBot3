@@ -39,6 +39,9 @@ internal static partial class ChecklistSources {
 
     public static ChecklistSource? Find(string key) => All.FirstOrDefault(s => string.Equals(s.Key, key, StringComparison.OrdinalIgnoreCase));
 
+    /// The title of a source, GBIF included.
+    public static string TitleOf(string key) => key == GbifChecklist.Source ? GbifChecklist.Title : Find(key)?.Title ?? key;
+
     // ---------------------------------------------------------------- MDD
 
     internal static ChecklistParse ParseMdd(string path) {
@@ -238,4 +241,6 @@ internal static class ChecklistOrigins {
     public const string Introduced = "introduced";
     public const string Extinct = "extinct";
     public const string Uncertain = "uncertain";
+    /// Occurrence records in the area, whatever their origin (GBIF).
+    public const string Recorded = "recorded";
 }

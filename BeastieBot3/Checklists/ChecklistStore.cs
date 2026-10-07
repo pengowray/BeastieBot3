@@ -15,8 +15,9 @@ using Microsoft.Data.Sqlite;
 namespace BeastieBot3.Checklists;
 
 /// One taxon's record for one area in a source. Origin: native, introduced, endemic, vagrant,
-/// extinct, uncertain, or null when the source does not say.
-internal sealed record ChecklistArea(string ScientificName, string Area, string Scheme, string? Origin);
+/// extinct, uncertain, recorded (GBIF: occurrences, whatever their origin), or null when the source
+/// does not say. Records: the number of occurrence records (GBIF only).
+internal sealed record ChecklistArea(string ScientificName, string Area, string Scheme, string? Origin, long? Records = null);
 
 internal sealed record ChecklistSourceInfo(string Source, string? Version, string? Licence, string? Url, DateTime? ImportedAt, long Rows, long Taxa);
 
@@ -84,6 +85,17 @@ internal sealed class ChecklistStore : IDisposable {
                 PRIMARY KEY (source, scientific_name, area)
             ) WITHOUT ROWID;
             CREATE INDEX IF NOT EXISTS checklist_area_name ON checklist_area(scientific_name);
+            CREATE TABLE IF NOT EXISTS gbif_species_country (
+                country     TEXT NOT NULL,
+                species_key INTEGER NOT NULL,
+                records     INTEGER NOT NULL,
+                PRIMARY KEY (country, species_key)
+            ) WITHOUT ROWID;
+            CREATE TABLE IF NOT EXISTS gbif_country_fetch (
+                country    TEXT PRIMARY KEY,
+                fetched_at TEXT NOT NULL,
+                species    INTEGER NOT NULL
+            ) WITHOUT ROWID;
             CREATE TABLE IF NOT EXISTS checklist_synonym (
                 source   TEXT NOT NULL,
                 name     TEXT NOT NULL,
@@ -92,6 +104,13 @@ internal sealed class ChecklistStore : IDisposable {
             ) WITHOUT ROWID;
             """;
         command.ExecuteNonQuery();
+        using var columns = _connection.CreateCommand();
+        columns.CommandText = "SELECT COUNT(*) FROM pragma_table_info('checklist_area') WHERE name = 'records'";
+        if (Convert.ToInt64(columns.ExecuteScalar(), CultureInfo.InvariantCulture) == 0) {
+            using var alter = _connection.CreateCommand();
+            alter.CommandText = "ALTER TABLE checklist_area ADD COLUMN records INTEGER";
+            alter.ExecuteNonQuery();
+        }
     }
 
     /// Replaces the source's rows. A name and area given twice keeps the first origin given.
@@ -106,17 +125,19 @@ internal sealed class ChecklistStore : IDisposable {
         }
         using (var insert = _connection.CreateCommand()) {
             insert.Transaction = tx;
-            insert.CommandText = "INSERT OR IGNORE INTO checklist_area (source, scientific_name, area, scheme, origin) VALUES (@source, @name, @area, @scheme, @origin)";
+            insert.CommandText = "INSERT OR IGNORE INTO checklist_area (source, scientific_name, area, scheme, origin, records) VALUES (@source, @name, @area, @scheme, @origin, @records)";
             insert.Parameters.AddWithValue("@source", source);
             var name = insert.Parameters.Add("@name", SqliteType.Text);
             var area = insert.Parameters.Add("@area", SqliteType.Text);
             var scheme = insert.Parameters.Add("@scheme", SqliteType.Text);
             var origin = insert.Parameters.Add("@origin", SqliteType.Text);
+            var records = insert.Parameters.Add("@records", SqliteType.Integer);
             foreach (var row in rows) {
                 name.Value = row.ScientificName;
                 area.Value = row.Area;
                 scheme.Value = row.Scheme;
                 origin.Value = (object?)row.Origin ?? DBNull.Value;
+                records.Value = (object?)row.Records ?? DBNull.Value;
                 insert.ExecuteNonQuery();
             }
         }
@@ -167,11 +188,12 @@ internal sealed class ChecklistStore : IDisposable {
     /// Every row of a source, by scientific name.
     public IEnumerable<ChecklistArea> Rows(string source) {
         using var command = _connection.CreateCommand();
-        command.CommandText = "SELECT scientific_name, area, scheme, origin FROM checklist_area WHERE source = @source ORDER BY scientific_name";
+        command.CommandText = "SELECT scientific_name, area, scheme, origin, records FROM checklist_area WHERE source = @source ORDER BY scientific_name";
         command.Parameters.AddWithValue("@source", source);
         using var reader = command.ExecuteReader();
         while (reader.Read()) {
-            yield return new ChecklistArea(reader.GetString(0), reader.GetString(1), reader.GetString(2), reader.IsDBNull(3) ? null : reader.GetString(3));
+            yield return new ChecklistArea(reader.GetString(0), reader.GetString(1), reader.GetString(2), reader.IsDBNull(3) ? null : reader.GetString(3),
+                reader.IsDBNull(4) ? null : reader.GetInt64(4));
         }
     }
 
@@ -190,6 +212,62 @@ internal sealed class ChecklistStore : IDisposable {
             list.Add(reader.GetString(1));
         }
         return map;
+    }
+
+    /// When each country's GBIF counts were downloaded.
+    public IReadOnlyDictionary<string, DateTime> GbifFetched() {
+        using var command = _connection.CreateCommand();
+        command.CommandText = "SELECT country, fetched_at FROM gbif_country_fetch";
+        using var reader = command.ExecuteReader();
+        var map = new Dictionary<string, DateTime>(StringComparer.Ordinal);
+        while (reader.Read()) {
+            if (StoredUtc.Parse(reader.GetString(1)) is { } at) {
+                map[reader.GetString(0)] = at;
+            }
+        }
+        return map;
+    }
+
+    /// Replaces one country's GBIF counts (species key, records).
+    public void SaveGbifCountry(string country, IReadOnlyList<(long SpeciesKey, long Records)> counts, DateTime fetchedAt) {
+        using var tx = _connection.BeginTransaction();
+        using (var delete = _connection.CreateCommand()) {
+            delete.Transaction = tx;
+            delete.CommandText = "DELETE FROM gbif_species_country WHERE country = @country";
+            delete.Parameters.AddWithValue("@country", country);
+            delete.ExecuteNonQuery();
+        }
+        using (var insert = _connection.CreateCommand()) {
+            insert.Transaction = tx;
+            insert.CommandText = "INSERT OR REPLACE INTO gbif_species_country (country, species_key, records) VALUES (@country, @key, @records)";
+            insert.Parameters.AddWithValue("@country", country);
+            var key = insert.Parameters.Add("@key", SqliteType.Integer);
+            var records = insert.Parameters.Add("@records", SqliteType.Integer);
+            foreach (var (k, r) in counts) {
+                key.Value = k;
+                records.Value = r;
+                insert.ExecuteNonQuery();
+            }
+        }
+        using (var done = _connection.CreateCommand()) {
+            done.Transaction = tx;
+            done.CommandText = "INSERT OR REPLACE INTO gbif_country_fetch (country, fetched_at, species) VALUES (@country, @at, @species)";
+            done.Parameters.AddWithValue("@country", country);
+            done.Parameters.AddWithValue("@at", fetchedAt.ToString("O"));
+            done.Parameters.AddWithValue("@species", counts.Count);
+            done.ExecuteNonQuery();
+        }
+        tx.Commit();
+    }
+
+    /// Every downloaded GBIF count of these species keys: key, country, records.
+    public IEnumerable<(long SpeciesKey, string Country, long Records)> GbifCounts() {
+        using var command = _connection.CreateCommand();
+        command.CommandText = "SELECT species_key, country, records FROM gbif_species_country";
+        using var reader = command.ExecuteReader();
+        while (reader.Read()) {
+            yield return (reader.GetInt64(0), reader.GetString(1), reader.GetInt64(2));
+        }
     }
 
     public void Dispose() => _connection.Dispose();
