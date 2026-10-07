@@ -1570,6 +1570,21 @@ colspan and rowspan; `StatusUpdater` decides the edits, and `StatusTaxonResolver
     categories are kept when the text lists less than half of their taxa, and the list is then
     partial. A taxon matches a category by its code ("CR(PE)" for the extinct choice) or by the
     code's category (CR(PE) is CR).
+  - Country or area (`area`, an area code) and Origin (`areamode`: native or reintroduced, the
+    default; endemic; native, reintroduced or introduced; any origin): with an area, the group's
+    taxa whose latest global assessment codes the area with a matching origin stand in for the group
+    in the counts, the partial test and the missing taxa (`IListScopeLookup.TaxaInArea`, a join of
+    the group's tree_pos range with `taxon_area`). Presence never leaves a taxon out: country lists
+    keep extirpated species. A page loaded from Wikipedia takes the area from its title
+    (`AreaNames.FromTitle` in `BeastieBot3.Shared`: the words after the last " of " or " in ",
+    matched with IUCN's names, the part before a comma, English Wikipedia's names for the rest, and
+    "Hawaii"; continents name no area) and endemic when the title says so. Of 466 downloaded bird
+    and mammal country lists, 360 mention introduced species and about 200 accidental or vagrant
+    ones, and endemic-only lists are separate pages (28 titles), so native is the default. Missing
+    taxa whose record needs a word (introduced, vagrant, possibly extinct...) are in a table "to
+    check before adding", and listed taxa the area's records leave out in another; both say what
+    the records say about that one area only. Extra species (Catalogue of Life) are not offered with
+    an area: their distributions are not read.
   - The text is a list of the group when it lists half the group's species (in the categories).
     Otherwise (a regional list) no missing taxa are listed unless the reader asks (`anyway`), and the
     section is shown only for 10 or more listed taxa; under 3 listed taxa there is no section.
