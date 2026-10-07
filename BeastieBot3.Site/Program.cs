@@ -23,6 +23,10 @@ builder.Services.Configure<SiteOptions>(builder.Configuration.GetSection(SiteOpt
 builder.Services.TryAddSingleton(TimeProvider.System);
 builder.Services.AddSingleton<SiteDatabase>();
 builder.Services.AddSingleton<SiteQueries>();
+// One client for the life of the site, so the pages it keeps (WikipediaPageSource) are shared.
+builder.Services.AddSingleton<BeastieBot3.Site.Update.IWikipediaPageSource>(services => new BeastieBot3.Site.Update.WikipediaPageSource(
+    new HttpClient(new SocketsHttpHandler { PooledConnectionLifetime = TimeSpan.FromMinutes(10) }),
+    services.GetRequiredService<Microsoft.Extensions.Options.IOptions<SiteOptions>>()));
 
 builder.Services.Configure<ForwardedHeadersOptions>(options => {
     // Trust X-Forwarded-For/Proto only from the reverse proxy on the same machine (Caddy).

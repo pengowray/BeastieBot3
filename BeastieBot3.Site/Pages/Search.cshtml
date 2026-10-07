@@ -3,7 +3,7 @@
 @{
     ViewData["HideHeaderSearch"] = true;
     ViewData["NoIndex"] = true;
-    var hasResults = Model.Query.Length > 0 && !Model.TooShort;
+    var hasResults = Model.Query.Length > 0 && !Model.TooShort && Model.NotEnglishWikipedia is null;
     ViewData["Title"] = hasResults ? SiteText.SearchHeading(Model.Query) : SiteText.SearchLabel;
 }
 @if (!hasResults) {
@@ -13,6 +13,9 @@
     <partial name="_SearchForm" model="@(new SearchFormModel(Model.Query, "main", HideLabel: true))" />
     @if (Model.TooShort) {
         <p class="message">@SiteText.TooShort</p>
+    }
+    @if (Model.NotEnglishWikipedia is { } language) {
+        <p class="message">@UpdateText.ErrorNotEnglishWikipedia(language)</p>
     }
 } else {
     <partial name="_SearchForm" model="@(new SearchFormModel(Model.Query, "main"))" />

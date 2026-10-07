@@ -25,6 +25,9 @@ Environment=Site__DatabasePath=/srv/beastie/data/site.sqlite
 # request. AllowedHosts is left at "*", because the health checks in server-tasks.sh call
 # http://127.0.0.1:5080/healthz directly.
 Environment=Site__BaseUrl=https://__DOMAIN__
+# Sent when the status update page loads a page from English Wikipedia. Wikimedia's User-Agent
+# policy asks for a way to contact the operator; the About page has it.
+Environment=Site__WikipediaUserAgent=BeastieBotSpeciesStatus/1.0 (https://__DOMAIN__/about)
 # Workstation garbage collection uses less memory than server GC on a small VM.
 Environment=DOTNET_gcServer=0
 # ASP.NET Core keeps its data protection keys under $HOME/.aspnet. HOME is the state directory,
@@ -64,10 +67,14 @@ AmbientCapabilities=
 UMask=0077
 # .NET reads network interface details over netlink.
 RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX AF_NETLINK
-# The site only answers Caddy on 127.0.0.1 and makes no outbound connections. Remove these two
-# lines if a later version of the site needs to call other servers.
+# The site answers Caddy on 127.0.0.1, and connects out only to English Wikipedia, when the status
+# update page loads a page (/update?page=...). The addresses are Wikimedia's public ranges, from
+# https://wikitech.wikimedia.org/wiki/IP_and_AS_allocations (October 2026); DNS goes through
+# systemd-resolved on 127.0.0.53, which "localhost" covers.
 IPAddressDeny=any
 IPAddressAllow=localhost
+IPAddressAllow=91.198.174.0/24 103.102.166.0/24 185.15.56.0/22 193.46.90.0/24 195.200.68.0/24 198.35.26.0/23 208.80.152.0/22
+IPAddressAllow=2001:df2:e500::/48 2620:0:860::/46 2a02:ec80::/29
 # Not set: MemoryDenyWriteExecute, because the .NET JIT compiler needs memory that is both
 # writable and executable.
 

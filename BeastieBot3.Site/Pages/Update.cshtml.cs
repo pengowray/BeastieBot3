@@ -1,5 +1,6 @@
 using System.Text;
 using BeastieBot3.Shared.SiteData;
+using BeastieBot3.Shared.Wikitext;
 using BeastieBot3.Site.Data;
 using BeastieBot3.Site.Display;
 using BeastieBot3.Site.Update;
@@ -30,11 +31,25 @@ public sealed class UpdateModel : PageModel {
 
     private readonly SiteDatabase _db;
     private readonly SiteQueries _queries;
+    private readonly IWikipediaPageSource _wikipedia;
 
-    public UpdateModel(SiteDatabase db, SiteQueries queries) {
+    public UpdateModel(SiteDatabase db, SiteQueries queries, IWikipediaPageSource wikipedia) {
         _db = db;
         _queries = queries;
+        _wikipedia = wikipedia;
     }
+
+    /// The query field that names a page to load from English Wikipedia (/update?page=Title, which the
+    /// search box sends for a Wikipedia URL or a wikilink), and the revision to load (oldid).
+    public const string PageField = "page";
+    public const string RevisionField = "oldid";
+    /// Sent with the form when the text was loaded from Wikipedia: TextKey of the loaded text, so the
+    /// "loaded from" line stays only while the text is the page's own.
+    public const string PageKeyField = "pagekey";
+    public const string PageTimeField = "pagetime";
+
+    /// The Wikipedia page the text was loaded from (its Text is empty after a POST), or null.
+    public WikipediaPageText? LoadedPage { get; private set; }
 
     public string? Version { get; private set; }
 
@@ -122,8 +137,32 @@ public sealed class UpdateModel : PageModel {
 
     public string? Error { get; private set; }
 
-    public void OnGet() {
+    public async Task<IActionResult> OnGetAsync() {
         Version = _db.Snapshot?.IucnRelease;
+        var page = Request.Query[PageField].FirstOrDefault()?.Trim();
+        if (string.IsNullOrEmpty(page)) {
+            return Page();
+        }
+        // The search box sends a title; a URL or a wikilink typed into the address bar works too.
+        var input = WikipediaPageInput.Parse(page) ?? new WikipediaPageInput(page, null, true, "en");
+        if (!input.English) {
+            return Failed(StatusCodes.Status400BadRequest, UpdateText.ErrorNotEnglishWikipedia(input.Language));
+        }
+        var revision = input.RevisionId
+            ?? (long.TryParse(Request.Query[RevisionField].FirstOrDefault(), out var oldid) && oldid > 0 ? oldid : null);
+        var loaded = await _wikipedia.GetAsync(input.Title, revision, HttpContext.RequestAborted);
+        if (loaded.Page is not { } wikiPage) {
+            return loaded.Error switch {
+                WikipediaPageError.NotFound => Failed(StatusCodes.Status404NotFound, UpdateText.ErrorPageNotFound(input.Title, revision)),
+                WikipediaPageError.TooLarge => Failed(StatusCodes.Status413PayloadTooLarge, UpdateText.ErrorPageTooLarge(input.Title)),
+                WikipediaPageError.NotConfigured => Failed(StatusCodes.Status503ServiceUnavailable, UpdateText.ErrorLoadingNotSetUp),
+                _ => Failed(StatusCodes.Status502BadGateway, UpdateText.ErrorPageNotLoaded(input.Title)),
+            };
+        }
+        LoadedPage = wikiPage;
+        Input = wikiPage.Text;
+        Run(wikiPage.Text, scope: null, listAnyway: false, extraSpecies: false, addMissing: false);
+        return Page();
     }
 
     public async Task<IActionResult> OnPostAsync() {
@@ -168,16 +207,27 @@ public sealed class UpdateModel : PageModel {
             Error = UpdateText.ErrorEmpty;
             return Page();
         }
+        if (form[PageField].LastOrDefault() is { Length: > 0 } pageTitle && form[PageKeyField].LastOrDefault() == TextKey(text)
+            && long.TryParse(form[RevisionField].LastOrDefault(), out var pageRevision)) {
+            LoadedPage = new WikipediaPageText(pageTitle, string.Empty, pageRevision,
+                DateTimeOffset.TryParse(form[PageTimeField].LastOrDefault(), System.Globalization.CultureInfo.InvariantCulture,
+                    System.Globalization.DateTimeStyles.AssumeUniversal, out var time) ? time : null);
+        }
+        Run(text, form[ScopeField].LastOrDefault(), On(ListAnywayField), On(ExtraSpeciesField), On(AddMissingField));
+        return Page();
+    }
+
+    // Updates the text with Options and compares it with its group (ListScope).
+    private void Run(string text, string? scope, bool listAnyway, bool extraSpecies, bool addMissing) {
         using var lookup = _queries.OpenStatusLookup();
         var updater = new StatusUpdater(lookup, DateOnly.FromDateTime(DateTime.UtcNow), options: Options);
         Result = updater.Update(text);
-        var scope = form[ScopeField].LastOrDefault();
         var scopeLookup = new SiteListScopeLookup(_queries, new SpeciesTableQueries(_db), lookup);
         Scope = ListScope.Check(Result.Members ?? [], scopeLookup,
-            new ListScopeOptions(string.IsNullOrWhiteSpace(scope) ? null : scope, On(ListAnywayField), On(ExtraSpeciesField),
-                On(ExtraSpeciesField) ? WrittenNames(text) : null));
-        ExtraSpecies = On(ExtraSpeciesField);
-        AddMissing = On(AddMissingField);
+            new ListScopeOptions(string.IsNullOrWhiteSpace(scope) ? null : scope, listAnyway, extraSpecies,
+                extraSpecies ? WrittenNames(text) : null));
+        ExtraSpecies = extraSpecies;
+        AddMissing = addMissing;
         if (AddMissing && Scope is { Partial: false } && (Scope.Missing?.Count ?? 0) + (Scope.MissingExtra?.Count ?? 0) > 0) {
             Placement = ListPlacement.Place(text, Result.Members ?? [], Scope,
                 new ListPlacementOptions(Options.AddIds, Options.AddYear, Options.CiteQ, Options.AddToListLines) {
@@ -192,7 +242,6 @@ public sealed class UpdateModel : PageModel {
                 };
             }
         }
-        return Page();
     }
 
     private PageResult Failed(int status, string message) {

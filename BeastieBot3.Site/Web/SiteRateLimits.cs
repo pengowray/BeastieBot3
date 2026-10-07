@@ -53,14 +53,14 @@ public static class SiteRateLimits {
             if (path.StartsWithSegments("/search")) {
                 return PerMinute("search|" + client, limits.SearchPerMinute);
             }
-            if (IsUpdatePost(context)) {
+            if (IsUpdateRun(context)) {
                 return PerMinute("update|" + client, limits.UpdatesPerMinute);
             }
             return PerMinute("page|" + client, limits.PagesPerMinute);
         });
         var searchesAtOnce = PartitionedRateLimiter.Create<HttpContext, string>(context => {
             var path = context.Request.Path;
-            if (path.StartsWithSegments("/api") || path.StartsWithSegments("/search") || IsUpdatePost(context)) {
+            if (path.StartsWithSegments("/api") || path.StartsWithSegments("/search") || IsUpdateRun(context)) {
                 return RateLimitPartition.GetConcurrencyLimiter("searches", _ => new ConcurrencyLimiterOptions {
                     PermitLimit = Math.Max(1, limits.ConcurrentSearches),
                     QueueLimit = Math.Max(0, limits.SearchQueueLength),
@@ -91,8 +91,11 @@ public static class SiteRateLimits {
             });
         });
 
-    private static bool IsUpdatePost(HttpContext context) =>
-        HttpMethods.IsPost(context.Request.Method) && SiteMiddleware.IsUpdatePath(context.Request.Path);
+    // A text sent to the status update page, or a page it loads from Wikipedia (GET with page=):
+    // both run the status updater, and a load also asks Wikipedia.
+    private static bool IsUpdateRun(HttpContext context) =>
+        SiteMiddleware.IsUpdatePath(context.Request.Path)
+        && (HttpMethods.IsPost(context.Request.Method) || context.Request.Query.ContainsKey(Pages.UpdateModel.PageField));
 
     private static bool IsUnlimited(PathString path) =>
         path.StartsWithSegments("/healthz") || path.StartsWithSegments("/error");

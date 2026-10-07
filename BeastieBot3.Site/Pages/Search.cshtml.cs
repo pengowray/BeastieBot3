@@ -1,3 +1,4 @@
+using BeastieBot3.Shared.Wikitext;
 using BeastieBot3.Site.Data;
 using BeastieBot3.Site.Web;
 using Microsoft.AspNetCore.Mvc;
@@ -30,6 +31,14 @@ public sealed class SearchModel : PageModel {
     /// and the site has the taxon but not the assessment.
     public long? MissingAssessmentId { get; private set; }
 
+    /// The language of the Wikipedia the search text links to, when it is not English.
+    public string? NotEnglishWikipedia { get; private set; }
+
+    /// The status update page with a Wikipedia page loaded.
+    public static string UpdateUrl(WikipediaPageInput page) =>
+        $"{UpdateModel.Path}?{UpdateModel.PageField}={Uri.EscapeDataString(page.Title)}"
+        + (page.RevisionId is { } r ? $"&{UpdateModel.RevisionField}={r}" : "") + "#result";
+
     /// True when the results are taxa found by an IUCN id in the text, not by a name.
     public bool FoundById { get; private set; }
 
@@ -41,6 +50,15 @@ public sealed class SearchModel : PageModel {
         var all = SiteEndpoints.FirstQueryValue(Request, "all");
         if (Query.Length == 0) {
             return Page();
+        }
+        // A Wikipedia URL or wikilink opens the status update page with that page loaded. Before the
+        // id check: a URL with oldid= has digits that would read as an IUCN id.
+        if (WikipediaPageInput.Parse(Query) is { } wikiPage) {
+            if (!wikiPage.English) {
+                NotEnglishWikipedia = wikiPage.Language;
+                return Page();
+            }
+            return Redirect(UpdateUrl(wikiPage));
         }
         // Before the length check: a taxon id can be a single digit.
         if (IdQuery.Parse(Query) is { } ids && FindById(ids, all == "1") is { } idResult) {

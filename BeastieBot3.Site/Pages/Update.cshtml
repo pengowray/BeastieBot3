@@ -25,6 +25,13 @@
     <p class="update-error" role="alert">@Model.Error</p>
 }
 
+@if (Model.LoadedPage is { } loaded) {
+    var wikiTitle = Uri.EscapeDataString(loaded.Title.Replace(' ', '_'));
+    <p class="update-loaded">@UpdateText.LoadedFromPrefix<a href="https://en.wikipedia.org/wiki/@wikiTitle">@loaded.Title</a>,
+        <a href="https://en.wikipedia.org/w/index.php?oldid=@loaded.RevisionId">@UpdateText.LoadedRevision(loaded.RevisionId, loaded.Timestamp)</a>.
+        <a href="https://en.wikipedia.org/w/index.php?title=@wikiTitle&amp;action=edit">@UpdateText.EditOnWikipedia</a></p>
+}
+
 @if (result is not null) {
     <section class="update-result wikitext" id="result" aria-labelledby="result-heading"
              data-copied="@SiteText.Copied" data-copy-label="@SiteText.Copy" data-copy-failed="@SiteText.CopyFailed" data-copy-failed-button="@SiteText.CopyFailedButton">
@@ -209,6 +216,14 @@
         <p class="help" id="update-refs-help">@UpdateText.OptionAddReferencesHelp</p>
         <p class="help" id="update-add-help">@UpdateText.AddOptionsHelp</p>
     </fieldset>
+    @if (Model.LoadedPage is { } loadedPage) {
+        <input type="hidden" name="@UpdateModel.PageField" value="@loadedPage.Title">
+        <input type="hidden" name="@UpdateModel.RevisionField" value="@loadedPage.RevisionId">
+        <input type="hidden" name="@UpdateModel.PageKeyField" value="@UpdateModel.TextKey(Model.Input)">
+        @if (loadedPage.Timestamp is { } time) {
+            <input type="hidden" name="@UpdateModel.PageTimeField" value="@time.ToString("O", System.Globalization.CultureInfo.InvariantCulture)">
+        }
+    }
     @if (result?.Findings.Any(f => f.Kind == StatusItemKind.TableColumnAdded) == true) {
         <input type="hidden" name="@UpdateModel.ColumnTablesShownField" value="@UpdateModel.TextKey(Model.Input)">
     }

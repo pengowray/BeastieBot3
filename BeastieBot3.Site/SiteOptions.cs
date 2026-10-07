@@ -21,6 +21,12 @@ public sealed class SiteOptions {
     /// is not set, the request's scheme and host are used, with the host in lower case.
     public string? BaseUrl { get; set; }
 
+    /// The User-Agent sent when the status update page loads a page from English Wikipedia, with a
+    /// way to contact the site's owner, as Wikimedia's User-Agent policy asks
+    /// ("BeastieBotSpeciesStatus/1.0 (https://species.example.org; someone@example.org)"). When it is
+    /// not set, the site does not load pages from Wikipedia, and says so.
+    public string? WikipediaUserAgent { get; set; }
+
     public RateLimitOptions RateLimits { get; set; } = new();
 }
 
@@ -30,7 +36,8 @@ public sealed class RateLimitOptions {
     public int SearchPerMinute { get; set; } = 30;
     public int SuggestPerMinute { get; set; } = 30;
 
-    /// Texts sent to the status update page (POST /update).
+    /// Texts sent to the status update page (POST /update), and pages it loads from Wikipedia
+    /// (GET /update?page=...), counted together.
     public int UpdatesPerMinute { get; set; } = 10;
 
     /// Search pages, suggestion requests and status updates handled at the same time, counting every client.
