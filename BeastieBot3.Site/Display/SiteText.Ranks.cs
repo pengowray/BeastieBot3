@@ -6,10 +6,13 @@ public static partial class SiteText {
     public const string HeadingRanks = "Classification in other sources";
 
     public static string RanksIntro(int differences) =>
-        "The taxon's ranks in each source. \"This site\" is IUCN's classification with Catalogue of Life groups between its ranks; \"English Wikipedia\" is the taxobox of the taxon's article; \"Wikispecies\" is the Taxonavigation section of the taxon's Wikispecies page. Groups between two main ranks are listed under the higher one."
+        "The taxon's classification in each source, one group to a row: a group that two or more sources have is on one row. \"This site\" is IUCN's classification with Catalogue of Life groups between its ranks; \"English Wikipedia\" is the taxobox of the taxon's article; \"Wikispecies\" is the Taxonavigation section of the taxon's Wikispecies page."
         + (differences == 0 ? " Every main rank has the same name as in IUCN's classification." : differences == 1
             ? " 1 main rank has another name than in IUCN's classification (marked ≠)."
             : $" {differences} main ranks have another name than in IUCN's classification (marked ≠).");
+
+    public static string RanksShowMinor(int rows) =>
+        $"Show the groups that are not in IUCN's or the Catalogue of Life's classification ({rows} {(rows == 1 ? "row" : "rows")})";
 
     public const string RanksIucn = "IUCN";
     public const string RanksThisSite = "This site";
@@ -19,15 +22,7 @@ public static partial class SiteText {
     public const string RanksWikispecies = "Wikispecies";
     public const string RanksNoRank = "no rank";
 
-    /// The line that opens the collapsed clades and groups with no rank of one cell.
-    public static string RanksFolded(int clades, int unranked) => (clades, unranked) switch {
-        (_, 0) => clades == 1 ? "1 clade" : $"{clades} clades",
-        (0, _) => unranked == 1 ? "1 group with no rank" : $"{unranked} groups with no rank",
-        _ => $"{clades} {(clades == 1 ? "clade" : "clades")} and {unranked} {(unranked == 1 ? "group" : "groups")} with no rank",
-    };
     public const string RanksDiffersTitle = "Another name than in IUCN's classification";
 
-    public static string RankRowLabel(string rank) => rank == ClassificationComparison.AboveKingdom
-        ? "Above kingdom"
-        : char.ToUpperInvariant(rank[0]) + rank[1..];
+    public static string RankRowLabel(string rank) => char.ToUpperInvariant(rank[0]) + rank[1..];
 }

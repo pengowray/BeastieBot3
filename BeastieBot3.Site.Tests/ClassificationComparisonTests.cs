@@ -6,19 +6,42 @@ public sealed class ClassificationComparisonTests {
     private static LadderStep S(string? rank, string name) => new(rank, name);
 
     [Fact]
-    public void LaddersLineUpOnTheMainRanksWithTheGroupsBetweenUnderThem() {
+    public void EachGroupIsARowAndTheSameGroupLinesUp() {
         var iucn = new LadderColumn("IUCN", null, [S("kingdom", "Animalia"), S("phylum", "Chordata"), S("class", "Mammalia"), S("order", "Carnivora"),
-            S("family", "Felidae"), S("genus", "Panthera"), S("species", "Panthera leo")]);
+            S("family", "Felidae"), S("genus", "Panthera"), S("species", "Panthera leo")], Backbone: true);
+        var col = new LadderColumn("CoL", null, [S("kingdom", "Animalia"), S("phylum", "Chordata"), S("class", "Mammalia"), S("order", "Carnivora"),
+            S("suborder", "Feliformia"), S("family", "Felidae"), S("subfamily", "Pantherinae"), S("genus", "Panthera"), S("species", "Panthera leo (Linnaeus, 1758)")],
+            Backbone: true);
         var wikidata = new LadderColumn("Wikidata", null, [S("domain", "Eukaryota"), S("kingdom", "Animalia"), S("phylum", "Chordata"),
             S("class", "Mammalia"), S("subclass", "Theria"), S(null, "Placentalia"), S("order", "Carnivora"), S("suborder", "Feliformia"),
             S("family", "Felidae"), S("subfamily", "Pantherinae"), S("genus", "Panthera"), S("species", "Panthera leo")]);
-        var rows = ClassificationComparison.Build([iucn, wikidata]);
-        Assert.Equal([ClassificationComparison.AboveKingdom, "kingdom", "phylum", "class", "order", "family", "genus", "species"], rows.Select(r => r.RankLabel));
-        var classRow = rows.Single(r => r.RankLabel == "class");
-        Assert.Equal(["Theria", "Placentalia"], classRow.Cells[1].Between.Select(s => s.Name));
-        Assert.Empty(classRow.Cells[0].Between);
-        Assert.Equal("Eukaryota", Assert.Single(rows[0].Cells[1].Between).Name);
+        var rows = ClassificationComparison.Build([iucn, col, wikidata]);
+        Assert.Equal(["domain", "kingdom", "phylum", "class", "subclass", "no rank", "order", "suborder", "family", "subfamily", "genus", "species"],
+            rows.Select(r => r.RankLabel));
+        // Feliformia: one row for both sources that have it.
+        var suborder = rows.Single(r => r.RankLabel == "suborder");
+        Assert.Equal(["CoL", "Wikidata"], suborder.Cells.Select((c, i) => c.Step is null ? null : new[] { "IUCN", "CoL", "Wikidata" }[i]).OfType<string>());
+        Assert.False(suborder.Minor);
+        // Groups that neither IUCN nor the Catalogue of Life has are hidden at first.
+        Assert.Equal(["domain", "subclass", "no rank"], rows.Where(r => r.Minor).Select(r => r.RankLabel));
         Assert.DoesNotContain(rows, r => r.Cells.Any(c => c.Differs));
+    }
+
+    [Fact]
+    public void AGroupWithAnotherRankInOneSourceShowsItsRank() {
+        var a = new LadderColumn("A", null, [S("kingdom", "Animalia"), S("superorder", "Laurasiatheria"), S("order", "Carnivora")]);
+        var b = new LadderColumn("B", null, [S("kingdom", "Animalia"), S("magnorder", "Laurasiatheria"), S("order", "Carnivora")]);
+        var c = new LadderColumn("C", null, [S("kingdom", "Animalia"), S("superorder", "Laurasiatheria"), S("order", "Carnivora")]);
+        var row = ClassificationComparison.Build([a, b, c]).Single(r => r.RankLabel == "superorder");
+        Assert.Equal([false, true, false], row.Cells.Select(cell => cell.OtherRank));
+    }
+
+    [Fact]
+    public void SourcesThatDisagreeOnTheOrderStillGiveEveryGroupOnce() {
+        var order = ClassificationComparison.MergeOrder([["a", "x", "y", "b"], ["a", "y", "x", "b"]]);
+        Assert.Equal(4, order.Distinct().Count());
+        Assert.Equal("a", order[0]);
+        Assert.Equal("b", order[^1]);
     }
 
     [Fact]
@@ -40,11 +63,4 @@ public sealed class ClassificationComparisonTests {
     [InlineData("Felis silvestris ssp. lybica", "felis silvestris ssp. lybica")]
     public void NamesCompareWithoutAuthorityOrCase(string name, string clean) => Assert.Equal(clean, ClassificationComparison.Clean(name));
 
-    [Theory]
-    [InlineData(18, 0, "18 clades")]
-    [InlineData(0, 4, "4 groups with no rank")]
-    [InlineData(1, 3, "1 clade and 3 groups with no rank")]
-    [InlineData(5, 1, "5 clades and 1 group with no rank")]
-    public void FoldedLineCountsCladesAndGroupsWithNoRank(int clades, int unranked, string text) =>
-        Assert.Equal(text, SiteText.RanksFolded(clades, unranked));
 }

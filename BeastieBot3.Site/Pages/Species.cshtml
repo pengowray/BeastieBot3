@@ -523,9 +523,13 @@
 
 @if (Model.RankComparison.Count > 0) {
     var differences = Model.RankComparison.Sum(r => r.Cells.Count(c => c.Differs));
+    var minorRows = Model.RankComparison.Count(r => r.Minor);
     <section class="rank-comparison" id="ranks" aria-labelledby="ranks-heading">
         <h2 id="ranks-heading">@SiteText.HeadingRanks</h2>
         <p>@SiteText.RanksIntro(differences)</p>
+        @if (minorRows > 0) {
+            <p class="ranks-toggle"><label><input type="checkbox" class="show-minor-ranks" autocomplete="off"> @SiteText.RanksShowMinor(minorRows)</label></p>
+        }
         <div class="table-scroll">
             <table class="ranks-table" aria-labelledby="ranks-heading">
                 <thead>
@@ -538,34 +542,18 @@
                 </thead>
                 <tbody>
                     @foreach (var row in Model.RankComparison) {
-                        <tr>
+                        <tr class="@(row.IsMain ? "main-rank" : row.Minor ? "minor-rank" : null)">
                             <th scope="row">@SiteText.RankRowLabel(row.RankLabel)</th>
                             @foreach (var cell in row.Cells) {
                                 <td class="@(cell.Differs ? "differs" : null)">
-                                    @if (cell.Main is { } main) {
-                                        <span class="rank-main">@if (main.Url is { } u) {<a href="@u">@Html.Raw(ScientificNameMarkup.ToHtml(main.Name))</a>} else {@Html.Raw(ScientificNameMarkup.ToHtml(main.Name))}</span>
+                                    @if (cell.Step is { } step) {
+                                        @if (cell.OtherRank) {
+                                            <span class="rank">@(step.Rank ?? SiteText.RanksNoRank)</span>
+                                        }
+                                        @if (step.Url is { } u) {<a href="@u">@Html.Raw(ScientificNameMarkup.ToHtml(step.Name))</a>} else {@Html.Raw(ScientificNameMarkup.ToHtml(step.Name))}
                                         @if (cell.Differs) {
                                             <abbr class="differs-marker" title="@SiteText.RanksDiffersTitle">≠</abbr>
                                         }
-                                    }
-                                    @{
-                                        // More than three clades and groups with no rank in a cell fold into one
-                                        // line (a <details>, opened with one click), in their order.
-                                        static bool Foldable(LadderStep s) => s.Rank is null or "clade";
-                                        var clades = cell.Between.Count(s => s.Rank == "clade");
-                                        var unranked = cell.Between.Count(s => s.Rank is null);
-                                        var fold = clades + unranked > 3;
-                                    }
-                                    @foreach (var step in cell.Between.Where(s => !fold || !Foldable(s))) {
-                                        <span class="rank-between"><span class="rank">@(step.Rank ?? SiteText.RanksNoRank)</span> @if (step.Url is { } u) {<a href="@u">@Html.Raw(ScientificNameMarkup.ToHtml(step.Name))</a>} else {@Html.Raw(ScientificNameMarkup.ToHtml(step.Name))}</span>
-                                    }
-                                    @if (fold) {
-                                        <details class="rank-between">
-                                            <summary>@SiteText.RanksFolded(clades, unranked)</summary>
-                                            @foreach (var step in cell.Between.Where(Foldable)) {
-                                                <span class="rank-between">@if (clades > 0 && unranked > 0) {<span class="rank">@(step.Rank ?? SiteText.RanksNoRank)</span> }@if (step.Url is { } u) {<a href="@u">@Html.Raw(ScientificNameMarkup.ToHtml(step.Name))</a>} else {@Html.Raw(ScientificNameMarkup.ToHtml(step.Name))}</span>
-                                            }
-                                        </details>
                                     }
                                 </td>
                             }

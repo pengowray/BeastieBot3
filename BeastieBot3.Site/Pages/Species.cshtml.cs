@@ -76,14 +76,14 @@ public sealed class SpeciesModel : PageModel {
         string?[] iucnRanks = [taxon.Kingdom, taxon.Phylum, taxon.ClassName, taxon.OrderName, taxon.Family, taxon.Genus];
         var iucn = iucnRanks.Select((name, i) => name is null ? null : new LadderStep(ClassificationComparison.MainRanks[i], SiteFormat.TitleCase(name)))
             .OfType<LadderStep>().Append(leaf).ToList();
-        var columns = new List<LadderColumn> { new(SiteText.RanksIucn, null, iucn) };
+        var columns = new List<LadderColumn> { new(SiteText.RanksIucn, null, iucn, Backbone: true) };
         if (Classification.Count > 0) {
             columns.Add(new LadderColumn(SiteText.RanksThisSite, null,
-                [.. Classification.Select(g => new LadderStep(g.Rank == "unranked" ? null : g.Rank, g.Name, Web.SiteUrls.Group(g))), leaf]));
+                [.. Classification.Select(g => new LadderStep(g.Rank == "unranked" ? null : g.Rank, g.Name, Web.SiteUrls.Group(g))), leaf], Backbone: true));
         }
         if (taxon.ColId is { } colId && _queries.GetLadder("col", colId) is { Count: > 0 } col) {
             columns.Add(new LadderColumn(SiteText.RanksCol, SiteFormat.CatalogueOfLifeUrl(colId),
-                [.. col.Select(s => new LadderStep(s.Rank == "unranked" ? null : s.Rank, s.Name, SiteFormat.CatalogueOfLifeUrl(s.Id)))]));
+                [.. col.Select(s => new LadderStep(s.Rank == "unranked" ? null : s.Rank, s.Name, SiteFormat.CatalogueOfLifeUrl(s.Id)))], Backbone: true));
         }
         if (taxon.WikidataQid is { } qid && _queries.GetLadder("wikidata", qid) is { Count: > 0 } wikidata) {
             columns.Add(new LadderColumn(SiteText.RanksWikidata, SiteFormat.WikidataUrl(qid),

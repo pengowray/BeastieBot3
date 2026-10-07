@@ -1456,20 +1456,30 @@ th.num {
     max-width: 100%;
 }
 
-/* The species page's comparison of ranks: one column per source, groups between main ranks under them. */
+/* The species page's comparison of ranks: one column per source, one row per group. Groups that are
+   not in IUCN's or the Catalogue of Life's classification are hidden until the box is ticked. */
 .ranks-table td {
     vertical-align: top;
 }
-.ranks-table .rank-main {
-    display: block;
+.ranks-table tr.main-rank > th,
+.ranks-table tr.main-rank > td {
+    font-weight: 600;
 }
-.ranks-table .rank-between {
-    display: block;
-    font-size: 0.9em;
-    padding-left: 0.75rem;
-}
-.ranks-table .rank-between .rank {
+.ranks-table tr:not(.main-rank) > th {
+    font-weight: normal;
     color: var(--muted);
+    font-size: 0.9em;
+}
+.ranks-table .rank {
+    color: var(--muted);
+    font-size: 0.9em;
+    margin-right: 0.25rem;
+}
+.rank-comparison .minor-rank {
+    display: none;
+}
+.rank-comparison:has(.show-minor-ranks:checked) .minor-rank {
+    display: table-row;
 }
 .ranks-table .differs-marker {
     font-weight: bold;
