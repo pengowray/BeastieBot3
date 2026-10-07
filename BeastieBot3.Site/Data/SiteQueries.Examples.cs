@@ -25,21 +25,21 @@ public sealed partial class SiteQueries {
             return $"@n{i}";
         }).ToList();
         command.CommandText = $"""
-            SELECT t.scientific_name, t.common_name_en, a.category, a.possibly_extinct, a.possibly_extinct_in_the_wild
+            SELECT t.taxon_id, t.scientific_name, t.common_name_en, a.category, a.possibly_extinct, a.possibly_extinct_in_the_wild
             FROM taxon t LEFT JOIN assessment a ON a.assessment_id = t.latest_global_assessment_id
             WHERE t.scientific_name IN ({string.Join(", ", parameters)}) AND t.kind = 'species' AND t.in_release = 1
             """;
         var taxa = new Dictionary<string, ExampleTaxon>(StringComparer.Ordinal);
         using var reader = command.ExecuteReader();
         while (reader.Read()) {
-            var name = reader.GetString(0);
-            var category = reader.IsDBNull(2) ? null : reader.GetString(2);
-            if (category == "CR" && !reader.IsDBNull(3) && reader.GetInt64(3) != 0) {
+            var name = reader.GetString(1);
+            var category = reader.IsDBNull(3) ? null : reader.GetString(3);
+            if (category == "CR" && !reader.IsDBNull(4) && reader.GetInt64(4) != 0) {
                 category = "CR(PE)";
-            } else if (category == "CR" && !reader.IsDBNull(4) && reader.GetInt64(4) != 0) {
+            } else if (category == "CR" && !reader.IsDBNull(5) && reader.GetInt64(5) != 0) {
                 category = "CR(PEW)";
             }
-            taxa.TryAdd(name, new ExampleTaxon(name, reader.IsDBNull(1) ? null : reader.GetString(1), category));
+            taxa.TryAdd(name, new ExampleTaxon(reader.GetInt64(0), name, reader.IsDBNull(2) ? null : reader.GetString(2), category));
         }
         return taxa;
     }

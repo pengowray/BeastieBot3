@@ -5,7 +5,7 @@ namespace BeastieBot3.Site.Tests;
 public sealed class HomeExamplesTests {
     // Every pool name as if the database had it, threatened unless listed in leastConcern.
     private static Dictionary<string, ExampleTaxon> Available(params string[] leastConcern) =>
-        HomeExamples.AllNames.Distinct().ToDictionary(n => n, n => new ExampleTaxon(n, "Name of " + n, leastConcern.Contains(n) ? "LC" : "EN"));
+        HomeExamples.AllNames.Distinct().Select((n, i) => (n, i)).ToDictionary(x => x.n, x => new ExampleTaxon(x.i, x.n, "Name of " + x.n, leastConcern.Contains(x.n) ? "LC" : "EN"));
 
     private static string Scientific(HomeExample e, IReadOnlyDictionary<string, ExampleTaxon> available) =>
         e.Italic ? e.Text : available.Values.Single(t => t.CommonName == e.Text).ScientificName;
@@ -52,12 +52,13 @@ public sealed class HomeExamplesTests {
     [Fact]
     public void NamesTheDatabaseDoesNotHaveAreLeftOut() {
         var available = new Dictionary<string, ExampleTaxon> {
-            ["Panthera leo"] = new("Panthera leo", "Lion", "VU"),
-            ["Lipotes vexillifer"] = new("Lipotes vexillifer", null, "CR(PE)"),
+            ["Panthera leo"] = new(15951, "Panthera leo", "Lion", "VU"),
+            ["Lipotes vexillifer"] = new(12119, "Lipotes vexillifer", null, "CR(PE)"),
         };
         var examples = HomeExamples.Pick(new Random(1), available);
         Assert.Equal(2, examples.Count);
-        Assert.Contains(new HomeExample("Lipotes vexillifer", true), examples);
+        Assert.Contains(new HomeExample("Lipotes vexillifer", true, "/species/12119"), examples);
+        Assert.Contains(new HomeExample("Lion", false, "/species/15951?q=Lion"), examples);
         Assert.Empty(HomeExamples.Pick(new Random(1), new Dictionary<string, ExampleTaxon>()));
     }
 }

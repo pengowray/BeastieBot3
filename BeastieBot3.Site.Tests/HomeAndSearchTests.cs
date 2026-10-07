@@ -17,10 +17,10 @@ public sealed class HomeAndSearchTests(SiteFactory factory) : IClassFixture<Site
         Assert.Contains("Unofficial site for looking up the IUCN Red List category of any species", text);
         Assert.Contains("<form class=\"search-form search-form-main\" action=\"/search\" method=\"get\"", html);
         Assert.Contains("Search for a taxon", text);
-        // The suggestions are random; the fixture has three of the megafauna (one comes first) and the baiji.
-        var examples = System.Text.RegularExpressions.Regex.Matches(html, "<a href=\"/search\\?q=([^\"]+)\">").Select(m => Uri.UnescapeDataString(m.Groups[1].Value)).ToList();
+        // The examples are random; the fixture has three of the megafauna (one comes first) and the baiji.
+        var examples = System.Text.RegularExpressions.Regex.Matches(html, "<a href=\"/species/(\\d+)[^\"]*\">(?:<i>)?([^<]+)").Select(m => (Id: long.Parse(m.Groups[1].Value), Name: m.Groups[2].Value)).ToList();
         Assert.InRange(examples.Count, 2, 5);
-        Assert.Contains(examples[0], new[] { "Polar bear", "Ursus maritimus", "Tiger", "Panthera tigris", "Lion", "Panthera leo" });
+        Assert.Contains(examples[0].Id, new[] { FixtureDb.PolarBear, FixtureDb.Tiger, FixtureDb.Lion });
         Assert.Contains("On each taxon page:", text);
         Assert.Contains($"IUCN Red List version 2026-1: {FixtureDb.GlobalTaxonCount} taxa with a global assessment, ", text);
         Assert.Contains("assessments in total", text);

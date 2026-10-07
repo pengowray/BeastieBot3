@@ -1,11 +1,12 @@
 namespace BeastieBot3.Site.Display;
 
 /// A taxon the home page can suggest, as the site database has it.
-public sealed record ExampleTaxon(string ScientificName, string? CommonName, string? Category);
+public sealed record ExampleTaxon(long TaxonId, string ScientificName, string? CommonName, string? Category);
 
-/// One suggestion on the home page: the text to show and search for, in italics when it is a
-/// scientific name.
-public sealed record HomeExample(string Text, bool Italic);
+/// One suggestion on the home page: the name to show, in italics when it is a scientific name, and
+/// the taxon page it links to. A common name is in the link's q, as when a search for it goes to
+/// the taxon page, so the page links to all the search results for it.
+public sealed record HomeExample(string Text, bool Italic, string Url);
 
 /// The search suggestions on the home page, picked again for every visit. The first is always a
 /// large, well-known animal and one is always a plant; a bat is included more often than the size of
@@ -99,7 +100,9 @@ public static class HomeExamples {
     };
 
     private static HomeExample Show(ExampleTaxon taxon, bool scientific) =>
-        scientific ? new HomeExample(taxon.ScientificName, true) : new HomeExample(taxon.CommonName!, false);
+        scientific
+            ? new HomeExample(taxon.ScientificName, true, $"/species/{taxon.TaxonId}")
+            : new HomeExample(taxon.CommonName!, false, $"/species/{taxon.TaxonId}?q={Uri.EscapeDataString(taxon.CommonName!)}");
 
     // Adds one taxon from the pool that is not picked yet, weighted by category. False when the pool
     // has none left.

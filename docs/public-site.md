@@ -1271,7 +1271,10 @@ title statements are not recorded (run wikidata iucn-assessment-items)".
   plant, a bat in half of the visits, and threatened species (CR, EN, VU) four times as likely to be
   picked as LC ones (NT twice). Names the site database does not have as a species in the release
   are left out (`SiteQueries.GetExampleTaxa`, read once per database file); each example shows the
-  common name, or the scientific name 30% of the time and always at least once.
+  common name, or the scientific name 30% of the time and always at least once. Each links straight
+  to the taxon page (with `?q=` for a common name, the address a search that finds only that taxon
+  goes to), because a search for many of these names lists other taxa too ("Tiger", "Dodo", and
+  *Balaenoptera musculus*, a synonym of the fin whale).
 - The page of a taxon that is not in the release (`in_release = 0`) says "No current assessment in
   IUCN Red List version X", and names each taxon in the release it is linked to in `taxon_link`:
   "IUCN Red List version X lists *name* under IUCN id N" (`same-name`), or "IUCN lists *old name*

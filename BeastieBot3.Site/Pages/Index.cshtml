@@ -16,7 +16,7 @@
         @SiteText.ExamplesLabel
         @for (var i = 0; i < Model.Examples.Count; i++) {
             var example = Model.Examples[i];
-            <a href="/search?q=@Uri.EscapeDataString(example.Text)">@if (example.Italic) {<i>@example.Text</i>} else {@example.Text}</a>@(i < Model.Examples.Count - 1 ? ", " : "")
+            <a href="@example.Url">@if (example.Italic) {<i>@example.Text</i>} else {@example.Text}</a>@(i < Model.Examples.Count - 1 ? ", " : "")
         }
     </p>
 }

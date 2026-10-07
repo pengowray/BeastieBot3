@@ -15,7 +15,7 @@ public sealed class IndexModel : PageModel {
 
     public SiteSnapshot? Snapshot { get; private set; }
 
-    /// The search suggestions, picked again for every visit.
+    /// The search examples, picked again for every visit.
     public IReadOnlyList<HomeExample> Examples { get; private set; } = [];
 
     public void OnGet() {
