@@ -36,7 +36,7 @@ public sealed partial class StatusUpdater {
         StatusFinding Fail(StatusNoteKind kind, string? detail = null) =>
             new(StatusItemKind.ListLine, line, StatusOutcome.NotUpdated, before, null, taxon, [new StatusNote(kind, detail)]);
         if (latest is null) {
-            return Fail(StatusNoteKind.NoGlobalAssessment);
+            return Fail(NoAssessmentKind);
         }
         if (!IucnCategories.HasStatusTemplateCode(latest)) {
             return Fail(StatusNoteKind.NoCode, latest.Category);
@@ -192,7 +192,7 @@ public sealed partial class StatusUpdater {
         }
         var latest = taxon.LatestGlobal;
         if (latest is null) {
-            return Fail(StatusNoteKind.NoGlobalAssessment, taxon: taxon);
+            return Fail(NoAssessmentKind, taxon: taxon);
         }
         if (row.Named("population") is { } population) {
             var value = s.Original(s.Core(population.Value));
@@ -278,7 +278,8 @@ public sealed partial class StatusUpdater {
     // ---------------------------------------------------------------- {{cite iucn}}
 
     // A citation is matched to its taxon by the T…A… id in article-number, id, url or doi. Only a
-    // citation of a global assessment is checked: one of a regional assessment is not reported.
+    // citation of a global assessment is checked (of the region's, when the text is compared with a
+    // region): one of another scope is not reported.
     private StatusFinding? CitationFinding(WikitextScanner s, WikiTemplate cite, List<Edit> edits) {
         var line = s.LineOf(cite.Span.Start);
         var before = s.Original(cite.Span);
@@ -297,7 +298,7 @@ public sealed partial class StatusUpdater {
         }
         var cited = long.Parse(ids.Groups["a"].Value, CultureInfo.InvariantCulture);
         var scope = _lookup.AssessmentScope(cited);
-        if (scope is not null && !string.Equals(scope.Trim(), "Global", StringComparison.OrdinalIgnoreCase)) {
+        if (scope is not null && !string.Equals(scope.Trim(), _lookup.Region ?? "Global", StringComparison.OrdinalIgnoreCase)) {
             return null;
         }
         var taxonId = long.Parse(ids.Groups["t"].Value, CultureInfo.InvariantCulture);
@@ -318,7 +319,7 @@ public sealed partial class StatusUpdater {
         }
         if (taxon.LatestGlobal is not { } latest) {
             return new StatusFinding(StatusItemKind.Citation, line, StatusOutcome.NotUpdated, before, null, taxon,
-                [new StatusNote(StatusNoteKind.NoGlobalAssessment)]);
+                [new StatusNote(NoAssessmentKind)]);
         }
         var parts = ReadCitationParts(latest.CitationJson);
         if (CitesLatest(s, cite, latest, parts)) {

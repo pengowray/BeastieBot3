@@ -12,7 +12,9 @@ public static partial class UpdateText {
     /// "The wikitext includes 39 of the 39 species that IUCN has in Family Felidae." With categories:
     /// "... 12 of the 15 EN species ...".
     /// With an area: "... of the 1,230 species in Class Aves that IUCN records as native to Brazil."
-    public static string ScopeSummary(ListScopeResult r, string? areaName = null) => areaName is null
+    public static string ScopeSummary(ListScopeResult r, string? areaName = null) => r.Region is { } region
+        ? $"The wikitext includes {Count(r.Species)} of the {Count(r.SpeciesInScope)} {CategoryAdjective(r.Categories)}species in {GroupList.HeadingText(r.Scope)} that IUCN has assessed for {region}."
+        : areaName is null
         ? $"The wikitext includes {Count(r.Species)} of the {Count(r.SpeciesInScope)} {CategoryAdjective(r.Categories)}species that IUCN has in {GroupList.HeadingText(r.Scope)}."
         : $"The wikitext includes {Count(r.Species)} of the {Count(r.SpeciesInScope)} {CategoryAdjective(r.Categories)}species in {GroupList.HeadingText(r.Scope)} that IUCN records {AreaPhrase(r.AreaMode, areaName)}.";
 

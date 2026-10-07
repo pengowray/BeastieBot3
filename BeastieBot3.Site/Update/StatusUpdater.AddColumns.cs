@@ -152,7 +152,7 @@ public sealed partial class StatusUpdater {
             }
             var taxon = match.Taxon;
             StatusNote? failure = taxon is null ? match.Failure
-                : taxon.LatestGlobal is not { } global ? new StatusNote(StatusNoteKind.NoGlobalAssessment)
+                : taxon.LatestGlobal is not { } global ? new StatusNote(NoAssessmentKind)
                 : !IucnCategories.HasStatusTemplateCode(global) ? new StatusNote(StatusNoteKind.NoCode, global.Category)
                 : null;
             if (failure is not null) {

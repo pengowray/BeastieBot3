@@ -34,7 +34,8 @@ public sealed partial class SiteQueries {
     private const string SummaryJoin = "LEFT JOIN assessment a ON a.assessment_id = t.latest_global_assessment_id";
 
     /// The status updater's reads over one connection, for one request. Dispose it.
-    public SiteStatusLookup OpenStatusLookup() => new(_db.OpenConnection());
+    /// region: compare with the latest assessments in this IUCN region ("Europe") instead of the global ones.
+    public SiteStatusLookup OpenStatusLookup(string? region = null) => new(_db.OpenConnection(), region);
 
     public TaxonRow? GetTaxon(long taxonId) {
         using var connection = _db.OpenConnection();
@@ -781,6 +782,11 @@ public sealed partial class SiteQueries {
     public IReadOnlyList<(ListTaxonRow Row, AreaRecord Record)> GetListTaxaInArea(GroupRow group, IReadOnlyCollection<string> kinds, string area) =>
         [.. ListTaxa(group, kinds, area).Select(t => (t.Row, t.Record!))];
 
+    /// The group's taxa with an assessment in the IUCN region, each with its latest one there (the
+    /// one IUCN flags latest, else the newest) in place of the global one.
+    public IReadOnlyList<ListTaxonRow> GetListTaxaInRegion(GroupRow group, IReadOnlyCollection<string> kinds, string region) =>
+        [.. ListTaxa(group, kinds, area: null, region).Select(t => t.Row)];
+
     /// The area's records for these taxa; taxa with none are left out.
     public IReadOnlyDictionary<long, AreaRecord> GetAreaRecords(string area, IReadOnlyCollection<long> taxonIds) {
         var records = new Dictionary<long, AreaRecord>();
@@ -800,6 +806,34 @@ public sealed partial class SiteQueries {
             records[reader.GetInt64(0)] = new AreaRecord((AreaOrigin)reader.GetInt32(1), (AreaPresence)reader.GetInt32(2), reader.GetInt64(3) != 0);
         }
         return records;
+    }
+
+    private sealed record RegionCache(SiteSnapshot Snapshot, IReadOnlyList<(string Region, int Taxa)> Regions);
+    private volatile RegionCache? _regionCache;
+
+    /// The IUCN regions with assessments ("Europe"), with how many taxa have one, most first; read
+    /// once per database file.
+    public IReadOnlyList<(string Region, int Taxa)> Regions() {
+        var snapshot = _db.Snapshot;
+        if (_regionCache is { } known && ReferenceEquals(known.Snapshot, snapshot)) {
+            return known.Regions;
+        }
+        using var connection = _db.OpenConnection();
+        using var command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT scope, COUNT(DISTINCT taxon_id) FROM assessment
+            WHERE scope <> 'Global' AND TRIM(scope) <> ''
+            GROUP BY scope ORDER BY 2 DESC, 1
+            """;
+        using var reader = command.ExecuteReader();
+        var regions = new List<(string, int)>();
+        while (reader.Read()) {
+            regions.Add((reader.GetString(0), reader.GetInt32(1)));
+        }
+        if (snapshot is not null) {
+            _regionCache = new RegionCache(snapshot, regions);
+        }
+        return regions;
     }
 
     private sealed record AreaCache(SiteSnapshot Snapshot, AreaNames Names);
@@ -831,7 +865,7 @@ public sealed partial class SiteQueries {
         return areas;
     }
 
-    private List<(ListTaxonRow Row, AreaRecord? Record)> ListTaxa(GroupRow group, IReadOnlyCollection<string> kinds, string? area) {
+    private List<(ListTaxonRow Row, AreaRecord? Record)> ListTaxa(GroupRow group, IReadOnlyCollection<string> kinds, string? area, string? region = null) {
         using var connection = _db.OpenConnection();
         using var command = connection.CreateCommand();
         var kindNames = new List<string>();
@@ -849,7 +883,10 @@ public sealed partial class SiteQueries {
                    t.subpopulation_name, COALESCE(t.common_name_en, p.common_name_en), t.list_article_title, t.list_parent_article_title,
                    t.parent_taxon_id, t.node_id, t.tree_pos, a.assessment_id, a.category, a.possibly_extinct, a.possibly_extinct_in_the_wild,
                    a.year_published, t.authority{(area is null ? "" : ", x.origin, x.presence, x.endemic")}
-            FROM taxon t LEFT JOIN assessment a ON a.assessment_id = t.latest_global_assessment_id
+            FROM taxon t {(region is null ? "LEFT JOIN assessment a ON a.assessment_id = t.latest_global_assessment_id" : """
+                JOIN assessment a ON a.assessment_id = (SELECT r.assessment_id FROM assessment r WHERE r.taxon_id = t.taxon_id AND r.scope = @region
+                    ORDER BY r.is_latest DESC, r.year_published DESC, r.assessment_id DESC LIMIT 1)
+                """)}
             LEFT JOIN taxon p ON p.taxon_id = t.parent_taxon_id AND t.kind = 'subpopulation'
             {(area is null ? "" : "JOIN taxon_area x ON x.taxon_id = t.taxon_id AND x.area = @area")}
             WHERE t.tree_pos BETWEEN @first AND @last AND t.kind IN ({string.Join(", ", kindNames)})
@@ -859,6 +896,9 @@ public sealed partial class SiteQueries {
         command.Parameters.AddWithValue("@last", group.LastPos);
         if (area is not null) {
             command.Parameters.AddWithValue("@area", area);
+        }
+        if (region is not null) {
+            command.Parameters.AddWithValue("@region", region);
         }
         using var reader = command.ExecuteReader();
         var rows = new List<(ListTaxonRow, AreaRecord?)>();

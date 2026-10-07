@@ -19,6 +19,13 @@ public interface IStatusLookup {
 
     /// The scope of an assessment ("Global", "Europe"), or null when the site has no such assessment.
     string? AssessmentScope(long assessmentId);
+
+    /// The IUCN region whose assessments stand in for the global ones ("Europe"): a taxon's
+    /// LatestGlobal is then its latest assessment in that region. Null: global assessments.
+    string? Region => null;
+
+    /// The taxon with its latest global assessment, whatever Region is: a taxobox shows the global status.
+    StatusTaxon? GetGlobalTaxon(long taxonId) => GetTaxon(taxonId);
 }
 
 public enum StatusNameKind { Scientific, Synonym, EnglishCommonName, ArticleTitle }
@@ -92,6 +99,8 @@ public enum StatusNoteKind {
     NotInRelease,
     /// The taxon has no global assessment.
     NoGlobalAssessment,
+    /// Comparing with a region's assessments (IStatusLookup.Region): the taxon has none there.
+    NoRegionalAssessment,
     /// The latest global assessment's category (Detail) has no code in this template or taxobox.
     NoCode,
     /// {{IUCN status}} with no taxon id, outside a status column of a table.

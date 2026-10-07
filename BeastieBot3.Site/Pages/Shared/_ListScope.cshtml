@@ -39,7 +39,7 @@
             }
         </select>
         </span>
-        @if (Model.Areas is { } areas) {
+        @if (Model.Areas is { } areas && r.Region is null) {
             var all = areas.All.ToList();
             <span class="choice">
             <label for="area-choice">@UpdateText.AreaChooseLabel</label>
@@ -220,6 +220,10 @@
                 </tbody>
             </table>
         </div>
+    }
+    @if (r.Region is { } region && r.NotInRegion.Count > 0) {
+        <h4>@UpdateText.NotInRegionHeading(r.NotInRegion.Count, region)</h4>
+        @await Html.PartialAsync("_ListScopeMembers", new ListScopeMembersView(r.NotInRegion, Model.Epbc))
     }
     @if (r.OtherCategory.Count > 0) {
         <h4>@UpdateText.OtherCategoryHeading(r.OtherCategory.Count, r.Categories!)</h4>

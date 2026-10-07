@@ -12,12 +12,23 @@ public sealed class SiteStatusLookup : IStatusLookup, IDisposable {
     private readonly Dictionary<(string, StatusNameKind), IReadOnlyCollection<long>> _names = [];
     private readonly Dictionary<long, string?> _scopes = [];
 
-    internal SiteStatusLookup(SqliteConnection connection) {
+    private readonly Dictionary<long, StatusTaxon?> _globalTaxa = [];
+
+    internal SiteStatusLookup(SqliteConnection connection, string? region = null) {
         _connection = connection;
+        Region = region;
     }
 
-    public StatusTaxon? GetTaxon(long taxonId) {
-        if (_taxa.TryGetValue(taxonId, out var known)) {
+    public string? Region { get; }
+
+    public StatusTaxon? GetTaxon(long taxonId) => Read(taxonId, Region, _taxa);
+
+    public StatusTaxon? GetGlobalTaxon(long taxonId) => Region is null ? GetTaxon(taxonId) : Read(taxonId, null, _globalTaxa);
+
+    // The taxon with its latest global assessment, or with its latest assessment in the region: the
+    // one IUCN flags latest, else the newest.
+    private StatusTaxon? Read(long taxonId, string? region, Dictionary<long, StatusTaxon?> cache) {
+        if (cache.TryGetValue(taxonId, out var known)) {
             return known;
         }
         using var command = _connection.CreateCommand();
@@ -28,10 +39,13 @@ public sealed class SiteStatusLookup : IStatusLookup, IDisposable {
                    a.assessment_date, a.population_trend, a.citation_json, a.population_size,
                    a.wikidata_item_qid, a.wikidata_item_properties, t.kind, t.node_id
             FROM taxon t
-            LEFT JOIN assessment a ON a.assessment_id = t.latest_global_assessment_id
+            LEFT JOIN assessment a ON a.assessment_id = CASE WHEN @region IS NULL THEN t.latest_global_assessment_id ELSE (
+                SELECT r.assessment_id FROM assessment r WHERE r.taxon_id = t.taxon_id AND r.scope = @region
+                ORDER BY r.is_latest DESC, r.year_published DESC, r.assessment_id DESC LIMIT 1) END
             WHERE t.taxon_id = @id
             """;
         command.Parameters.AddWithValue("@id", taxonId);
+        command.Parameters.AddWithValue("@region", (object?)region ?? DBNull.Value);
         using var reader = command.ExecuteReader();
         StatusTaxon? taxon = null;
         if (reader.Read()) {
@@ -56,7 +70,7 @@ public sealed class SiteStatusLookup : IStatusLookup, IDisposable {
             taxon = new StatusTaxon(reader.GetInt64(0), reader.GetString(1), inRelease,
                 reader.IsDBNull(3) ? null : reader.GetInt64(3), latest, reader.GetString(20), reader.IsDBNull(21) ? null : reader.GetInt32(21));
         }
-        _taxa[taxonId] = taxon;
+        cache[taxonId] = taxon;
         return taxon;
     }
 

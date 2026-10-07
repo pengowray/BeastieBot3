@@ -36,6 +36,9 @@
     <section class="update-result wikitext" id="result" aria-labelledby="result-heading"
              data-copied="@SiteText.Copied" data-copy-label="@SiteText.Copy" data-copy-failed="@SiteText.CopyFailed" data-copy-failed-button="@SiteText.CopyFailedButton">
         <h2 id="result-heading">@UpdateText.ResultHeading</h2>
+        @if (Model.Region is { } comparedRegion) {
+            <p class="note">@UpdateText.RegionResultNote(comparedRegion)</p>
+        }
         <p class="update-summary">@(result.NotChecked > 0
             ? UpdateText.SummaryCapped(StatusUpdater.DefaultMaxItems, result.Updated, result.Current, result.NotUpdated, result.NotChecked)
             : UpdateText.Summary(result.Updated, result.Current, result.NotUpdated, result.ListLinesWithoutStatus + result.TablesWithoutStatus > 0))</p>
@@ -77,7 +80,7 @@
                 }
             </ul>
         }
-        @if (EditSummary.For(result, Model.Version) is { } editSummary) {
+        @if (EditSummary.For(result, Model.Region is { } summaryRegion && Model.Version is { } summaryVersion ? UpdateText.EditSummaryRegionVersion(summaryVersion, summaryRegion) : Model.Version) is { } editSummary) {
             <div class="wikitext-box">
                 <div class="wikitext-box-head">
                     <label for="update-edit-summary">@UpdateText.EditSummaryLabel</label>
@@ -139,7 +142,7 @@
                                 @if (Model.ShowEpbc) {<td>@UpdateText.Epbc(finding.Taxon is { } t ? Model.Epbc.GetValueOrDefault(t.TaxonId) : null)</td>}
                                 <td>
                                     @foreach (var note in finding.Notes) {
-                                        <p class="update-note">@UpdateText.Note(note, finding.Kind)</p>
+                                        <p class="update-note">@UpdateText.Note(note, finding.Kind, Model.Region)</p>
                                     }
                                     @if (finding.Kind == StatusItemKind.TableColumnAdded && !finding.Notes.Any(n => n.Kind == StatusNoteKind.ColumnLayout)) {
                                         @* Belongs to the update form, so it is sent with the text. *@
@@ -193,6 +196,16 @@
 <form class="update-form" id="update-form" method="post" action="/update#result" enctype="multipart/form-data">
     <label for="update-input">@UpdateText.InputLabel</label>
     <textarea id="update-input" name="@UpdateModel.TextField" rows="16" spellcheck="false" autocapitalize="off" autocomplete="off" required>@("\n" + Model.Input)</textarea>
+    <p class="update-region">
+        <label for="update-region">@UpdateText.RegionLabel</label>
+        <select id="update-region" name="@UpdateModel.RegionField" aria-describedby="update-region-help">
+            <option value="" selected="@(Model.Region is null)">@UpdateText.RegionGlobalOption</option>
+            @foreach (var (region, taxa) in Model.Regions) {
+                <option value="@region" selected="@(Model.Region == region)">@UpdateText.RegionOption(region, taxa)</option>
+            }
+        </select>
+    </p>
+    <p class="help" id="update-region-help">@UpdateText.RegionHelp</p>
     <fieldset class="update-options">
         <legend>@UpdateText.OptionsLegend</legend>
         <label><input type="checkbox" name="@UpdateModel.PossiblyExtinctField" value="1" checked="@Model.Options.PossiblyExtinctCodes"> @UpdateText.OptionPossiblyExtinct</label>

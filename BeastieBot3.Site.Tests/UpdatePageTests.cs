@@ -46,6 +46,28 @@ public sealed class UpdatePageTests(SiteFactory factory) : IClassFixture<SiteFac
     }
 
     [Fact]
+    public async Task WithARegionChosenStatusesComeFromTheRegionsLatestAssessments() {
+        var text = "* ''Passer domesticus'' {{IUCN status|VU|103818789/155522130|1|year=2019}}\n* ''Ursus maritimus'' {{IUCN status|VU}}\n";
+        var form = Form(text);
+        form.Add(new StringContent("Europe"), UpdateModel.RegionField);
+        var html = await (await _client.PostAsync("/update", form)).Content.ReadAsStringAsync();
+        Assert.Contains("{{IUCN status|LC|103818789/166245544|1|year=2021}}", Output(html));
+        Assert.Contains("No assessment for Europe.", Html.Text(html));
+        Assert.Contains("Compared with the latest assessments for Europe.", Html.Text(html));
+        Assert.Contains("<option value=\"Europe\" selected=\"selected\">Europe (", html);
+        Assert.StartsWith("IUCN Red List 2026-1, Europe assessments: Passer domesticus VU\u2192LC", Html.Textarea(html, "update-edit-summary"));
+    }
+
+    [Fact]
+    public async Task AnUnknownRegionComparesWithGlobalAssessments() {
+        var form = Form("* ''Passer domesticus'' {{IUCN status|VU|103818789/155522130|1|year=2019}}\n");
+        form.Add(new StringContent("Atlantis"), UpdateModel.RegionField);
+        var html = await (await _client.PostAsync("/update", form)).Content.ReadAsStringAsync();
+        Assert.Contains("{{IUCN status|LC|103818789/155522130|1|year=2019}}", Output(html));
+        Assert.DoesNotContain("Compared with the latest assessments for", Html.Text(html));
+    }
+
+    [Fact]
     public async Task TheEpbcActStatusIsShownWhenAskedFor() {
         var text = "* ''Phascolarctos cinereus'' {{IUCN status|EN}}\n* ''Casuarius casuarius'' {{IUCN status|LC}}\n";
         var form = Form(text);

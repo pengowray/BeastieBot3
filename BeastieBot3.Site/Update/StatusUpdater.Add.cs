@@ -288,7 +288,7 @@ public sealed partial class StatusUpdater {
             return Fail(StatusNoteKind.StatusInText, statusText.Trim());
         }
         if (taxon.LatestGlobal is not { } latest) {
-            return Fail(StatusNoteKind.NoGlobalAssessment);
+            return Fail(NoAssessmentKind);
         }
         if (!IucnCategories.HasStatusTemplateCode(latest)) {
             return Fail(StatusNoteKind.NoCode, latest.Category);

@@ -141,6 +141,19 @@ public sealed class UpdateModel : PageModel {
     /// Which of the area's records count (AreaMode, by name).
     public const string AreaModeField = "areamode";
 
+    /// The IUCN region whose latest assessments the text is compared with instead of the global ones.
+    public const string RegionField = "region";
+
+    /// The region chosen ("Europe"), or null for global assessments.
+    public string? Region { get; private set; }
+
+    /// Every IUCN region with assessments, with how many taxa have one, for the choice.
+    public IReadOnlyList<(string Region, int Taxa)> Regions => _queries.Regions();
+
+    // A region the site has, or null.
+    private string? KnownRegion(string? value) =>
+        string.IsNullOrWhiteSpace(value) ? null : Regions.Select(r => r.Region).FirstOrDefault(r => r == value.Trim());
+
     /// The area chosen, or found in the title of a page loaded from Wikipedia.
     public AreaName? Area { get; private set; }
     public AreaMode AreaMode { get; private set; } = AreaMode.Native;
@@ -197,6 +210,7 @@ public sealed class UpdateModel : PageModel {
         Area = Areas.FromTitle(wikiPage.Title);
         AreaMode = AreaNames.ModeFromTitle(wikiPage.Title);
         ShowEpbc = IsAustralianTitle(wikiPage.Title);
+        Region = KnownRegion(Request.Query[RegionField].FirstOrDefault());
         Run(wikiPage.Text, scope: null, listAnyway: false, extraSpecies: false, addMissing: false);
         return Page();
     }
@@ -253,19 +267,20 @@ public sealed class UpdateModel : PageModel {
         Area = Areas.ByCode(form[AreaField].LastOrDefault());
         AreaMode = Enum.TryParse<AreaMode>(form[AreaModeField].LastOrDefault(), out var mode) && Enum.IsDefined(mode) ? mode : AreaMode.Native;
         ShowEpbc = On(EpbcField);
+        Region = KnownRegion(form[RegionField].LastOrDefault());
         Run(text, form[ScopeField].LastOrDefault(), On(ListAnywayField), On(ExtraSpeciesField), On(AddMissingField));
         return Page();
     }
 
     // Updates the text with Options and compares it with its group (ListScope).
     private void Run(string text, string? scope, bool listAnyway, bool extraSpecies, bool addMissing) {
-        using var lookup = _queries.OpenStatusLookup();
+        using var lookup = _queries.OpenStatusLookup(Region);
         var updater = new StatusUpdater(lookup, DateOnly.FromDateTime(DateTime.UtcNow), options: Options);
         Result = updater.Update(text);
         var scopeLookup = new SiteListScopeLookup(_queries, new SpeciesTableQueries(_db), lookup);
         Scope = ListScope.Check(Result.Members ?? [], scopeLookup,
             new ListScopeOptions(string.IsNullOrWhiteSpace(scope) ? null : scope, listAnyway, extraSpecies,
-                extraSpecies ? WrittenNames(text) : null) { Categories = Categories, Area = Area?.Code, AreaMode = AreaMode });
+                extraSpecies ? WrittenNames(text) : null) { Categories = Categories, Area = Area?.Code, AreaMode = AreaMode, Region = Region });
         ExtraSpecies = extraSpecies;
         AddMissing = addMissing;
         if (AddMissing && Scope is { Partial: false } && (Scope.Missing?.Count ?? 0) + (Scope.MissingExtra?.Count ?? 0) > 0) {

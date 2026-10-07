@@ -29,6 +29,10 @@ public interface IListScopeLookup {
 
     /// The area's records for these taxa; a taxon the area has no record for is left out.
     IReadOnlyDictionary<long, AreaRecord> AreaRecordsOf(string area, IReadOnlyCollection<long> taxonIds);
+
+    /// The group's taxa of these kinds that have an assessment in the IUCN region ("Europe"), each
+    /// with its latest assessment there in place of the global one.
+    IReadOnlyList<ListTaxonRow> TaxaInRegion(GroupRow group, IReadOnlyCollection<string> kinds, string region) => [];
 }
 
 /// How a taxon's latest global assessment codes one country or area.
@@ -68,6 +72,11 @@ public sealed record ListScopeOptions(string? Scope = null, bool ListAnyway = fa
     public string? Area { get; init; }
 
     public AreaMode AreaMode { get; init; } = AreaMode.Native;
+
+    /// The IUCN region the list is compared with ("Europe"): only the group's taxa with an assessment
+    /// there are compared, in their categories there. The members' taxa must come from a status
+    /// lookup with the same region. Set, it replaces Area.
+    public string? Region { get; init; }
 }
 
 /// A listed taxon that the chosen area's records leave out: Record is null when the latest global
@@ -130,6 +139,12 @@ public sealed record ListScopeResult(
 
     /// Listed taxa in the group that the area's records leave out.
     public IReadOnlyList<ListScopeAreaMember> NotInArea { get; init; } = [];
+
+    /// The IUCN region compared with (ListScopeOptions.Region).
+    public string? Region { get; init; }
+
+    /// Listed taxa in the group with no assessment in the region.
+    public IReadOnlyList<ListScopeMember> NotInRegion { get; init; } = [];
 
     /// The area's records of the missing taxa that need a word beside them (introduced, vagrant,
     /// extirpated ...), by taxon id.
@@ -204,24 +219,33 @@ public static partial class ListScope {
         bool InScope(StatusTaxon taxon) => PathOf(taxon.NodeId!.Value).Any(g => g.NodeId == scope.NodeId);
 
         // A list of one area: the group's taxa that the area's records include stand in for the group.
-        var area = options.Area;
+        // A list of one IUCN region: the group's taxa with an assessment there, in their categories there.
+        var region = options.Region;
+        var area = region is null ? options.Area : null;
         List<(ListTaxonRow Row, AreaRecord Record)>? inArea = null;
+        List<ListTaxonRow>? subset = null;
         IReadOnlyDictionary<long, AreaRecord> listedRecords = new Dictionary<long, AreaRecord>();
         if (area is not null) {
             inArea = lookup.TaxaInArea(scope, [TaxonKinds.Species, TaxonKinds.Subspecies, TaxonKinds.Variety], area)
                 .Where(t => t.Record.Includes(options.AreaMode)).ToList();
+            subset = [.. inArea.Select(t => t.Row)];
             listedRecords = lookup.AreaRecordsOf(area, [.. listed.Select(t => t.Key)]);
+        } else if (region is not null) {
+            subset = [.. lookup.TaxaInRegion(scope, [TaxonKinds.Species, TaxonKinds.Subspecies, TaxonKinds.Variety], region)];
         }
-        bool InArea(long taxonId) => area is null || (listedRecords.TryGetValue(taxonId, out var record) && record.Includes(options.AreaMode));
+        var listedById = listed.ToDictionary(t => t.Key, t => t.First().Taxon);
+        bool InArea(long taxonId) => area is not null
+            ? listedRecords.TryGetValue(taxonId, out var record) && record.Includes(options.AreaMode)
+            : region is null || listedById[taxonId].LatestGlobal is not null;
 
         var inScope = listed.Where(t => InScope(t.First().Taxon)).ToList();
         var species = inScope.Where(t => t.First().Taxon.Kind == TaxonKinds.Species && InArea(t.Key)).ToList();
         var infra = inScope.Where(t => t.First().Taxon.Kind != TaxonKinds.Species && InArea(t.Key)).ToList();
-        IReadOnlyList<GroupCategoryCount> counts = inArea is null ? lookup.CountsOf(scope.NodeId)
-            : [.. inArea.GroupBy(t => GroupList.StatusCode(t.Row)).Select(g => new GroupCategoryCount(g.Key,
-                g.Count(t => t.Row.Kind == TaxonKinds.Species), g.Count(t => t.Row.Kind != TaxonKinds.Species), 0))];
-        var scopeSpecies = inArea?.Count(t => t.Row.Kind == TaxonKinds.Species) ?? scope.SpeciesCount;
-        var scopeInfra = inArea?.Count(t => t.Row.Kind != TaxonKinds.Species) ?? scope.InfraCount;
+        IReadOnlyList<GroupCategoryCount> counts = subset is null ? lookup.CountsOf(scope.NodeId)
+            : [.. subset.GroupBy(GroupList.StatusCode).Select(g => new GroupCategoryCount(g.Key,
+                g.Count(t => t.Kind == TaxonKinds.Species), g.Count(t => t.Kind != TaxonKinds.Species), 0))];
+        var scopeSpecies = subset?.Count(t => t.Kind == TaxonKinds.Species) ?? scope.SpeciesCount;
+        var scopeInfra = subset?.Count(t => t.Kind != TaxonKinds.Species) ?? scope.InfraCount;
 
         // The categories the list is of: from the codes the text wrote, which still show the
         // categories of taxa that have moved since.
@@ -283,7 +307,7 @@ public static partial class ListScope {
         if (!partial || options.ListAnyway) {
             var kinds = infraChecked ? new[] { TaxonKinds.Species, TaxonKinds.Subspecies, TaxonKinds.Variety } : new[] { TaxonKinds.Species };
             var listedIds = listed.Select(t => t.Key).ToHashSet();
-            var all = (inArea is null ? lookup.TaxaIn(scope, kinds) : inArea.Select(t => t.Row).Where(r => kinds.Contains(r.Kind)))
+            var all = (subset is null ? lookup.TaxaIn(scope, kinds) : subset.Where(r => kinds.Contains(r.Kind)))
                 .Where(t => t.Category is not null && !listedIds.Contains(t.TaxonId)
                     && (categories is null || IsIn(GroupList.StatusCode(t), categories)))
                 .ToList();
@@ -306,6 +330,7 @@ public static partial class ListScope {
             .Select(d => new ListScopeDuplicate(d.Taxon, d.Names, d.Lines))
             .ToList();
 
+        var notInRegion = region is null ? [] : inScope.Where(t => !InArea(t.Key)).Select(ToMember).ToList();
         var notInArea = area is null ? []
             : inScope.Where(t => !InArea(t.Key)).Select(t => new ListScopeAreaMember(ToMember(t), listedRecords.GetValueOrDefault(t.Key))).ToList();
         var missingRecords = new Dictionary<long, AreaRecord>();
@@ -320,7 +345,7 @@ public static partial class ListScope {
 
         // Species IUCN does not have: only for a list of every category of the whole group (the
         // Catalogue of Life's distributions are not read).
-        var extras = options.Extra && categories is null && area is null && (!partial || options.ListAnyway) ? lookup.ExtraSpeciesIn(scope) : null;
+        var extras = options.Extra && categories is null && area is null && region is null && (!partial || options.ListAnyway) ? lookup.ExtraSpeciesIn(scope) : null;
         return new ListScopeResult(scope, path, species.Count(t => InCategories(t.First().Taxon)), species.Count, speciesInScope,
             infraListed, infraInScope, infraChecked, categories,
             codes.Count > 0, partial,
@@ -329,6 +354,8 @@ public static partial class ListScope {
             Area = area,
             AreaMode = options.AreaMode,
             NotInArea = notInArea,
+            Region = region,
+            NotInRegion = notInRegion,
             MissingAreaRecords = missingRecords,
             ListedIn = path.ToDictionary(g => g.NodeId, g => listed.Count(t => t.First().Taxon.Kind == TaxonKinds.Species
                 && PathOf(t.First().Taxon.NodeId!.Value).Any(p => p.NodeId == g.NodeId))),

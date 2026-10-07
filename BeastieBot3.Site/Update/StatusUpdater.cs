@@ -37,6 +37,9 @@ public sealed partial class StatusUpdater {
     private static readonly HashSet<string> TaxoboxNames = ["speciesbox", "taxobox", "automatic taxobox", "subspeciesbox", "infraspeciesbox"];
 
     private readonly IStatusLookup _lookup;
+
+    // The note for a taxon with no assessment to compare with: none global, or none in the region.
+    private StatusNoteKind NoAssessmentKind => _lookup.Region is null ? StatusNoteKind.NoGlobalAssessment : StatusNoteKind.NoRegionalAssessment;
     private readonly int _maxItems;
     private readonly DateOnly _today;
     private readonly StatusUpdateOptions _options;
@@ -226,7 +229,7 @@ public sealed partial class StatusUpdater {
         }
         var latest = taxon.LatestGlobal;
         if (latest is null) {
-            return Fail(StatusNoteKind.NoGlobalAssessment, taxon: taxon);
+            return Fail(NoAssessmentKind, taxon: taxon);
         }
         if (!IucnCategories.HasStatusTemplateCode(latest)) {
             return Fail(StatusNoteKind.NoCode, latest.Category, taxon: taxon);
@@ -437,7 +440,7 @@ public sealed partial class StatusUpdater {
         StatusFinding Fail(StatusNoteKind kind, string? detail = null) =>
             new(StatusItemKind.TableCell, line, StatusOutcome.NotUpdated, before, null, taxon, [new StatusNote(kind, detail)]);
         if (latest is null) {
-            return Fail(StatusNoteKind.NoGlobalAssessment);
+            return Fail(NoAssessmentKind);
         }
         if (!IucnCategories.HasStatusTemplateCode(latest)) {
             return Fail(StatusNoteKind.NoCode, latest.Category);
@@ -487,6 +490,10 @@ public sealed partial class StatusUpdater {
             statusText.Equals("NE", StringComparison.OrdinalIgnoreCase));
         if (taxon is null) {
             return new StatusFinding(StatusItemKind.Taxobox, line, StatusOutcome.NotUpdated, before, null, null, [failure!]);
+        }
+        // A taxobox shows the global status, also when the rest of the text is compared with a region.
+        if (_lookup.Region is not null && _lookup.GetGlobalTaxon(taxon.TaxonId) is { } globalTaxon) {
+            taxon = globalTaxon;
         }
         var latest = taxon.LatestGlobal;
         if (latest is null) {

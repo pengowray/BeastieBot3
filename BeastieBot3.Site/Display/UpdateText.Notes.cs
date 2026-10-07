@@ -29,13 +29,15 @@ public static partial class UpdateText {
         _ => "Taxobox",
     };
 
-    public static string Note(StatusNote note, StatusItemKind kind) {
+    /// region: the IUCN region the text is compared with, for NoRegionalAssessment.
+    public static string Note(StatusNote note, StatusItemKind kind, string? region = null) {
         var several = note.Detail?.Contains(", ", StringComparison.Ordinal) == true;
         return note.Kind switch {
             StatusNoteKind.UsedCurrentTaxon => $"Old taxon id {note.Id} replaced with the current taxon id.",
             StatusNoteKind.TaxonNotFound => $"No taxon on this site has taxon id {note.Id}.",
             StatusNoteKind.NotInRelease => $"Taxon id {note.Id} is not in this Red List version, and no taxon in this version has the same scientific name.",
             StatusNoteKind.NoGlobalAssessment => "No global assessment. This taxon has regional assessments only.",
+            StatusNoteKind.NoRegionalAssessment => $"No assessment for {region}.",
             StatusNoteKind.NoCode => $"The latest category, {note.Detail}, has no code in {{{{IUCN status}}}} or in taxoboxes.",
             StatusNoteKind.NoTaxonId => "Taxon not found: the template has no taxon id and is not in a status column of a table. Add the taxon id and assessment id, such as 4828/21289898.",
             StatusNoteKind.BadTaxonId => $"Could not read the ids \"{note.Detail}\". Expected taxon id/assessment id, such as 4828/21289898.",

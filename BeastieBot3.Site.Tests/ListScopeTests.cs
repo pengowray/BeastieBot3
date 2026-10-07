@@ -114,6 +114,28 @@ internal sealed class FakeScopeLookup : IListScopeLookup {
 
     public IReadOnlyDictionary<long, AreaRecord> AreaRecordsOf(string area, IReadOnlyCollection<long> taxonIds) =>
         taxonIds.Where(id => _areas.ContainsKey((area, id))).Distinct().ToDictionary(id => id, id => _areas[(area, id)]);
+
+    private readonly Dictionary<(string Region, long TaxonId), string> _regional = [];
+
+    /// Gives a taxon an assessment in the region, in the category, with assessment id id * 10 + 1.
+    public FakeScopeLookup Regional(string region, long id, string category) {
+        _regional[(region, id)] = category;
+        return this;
+    }
+
+    /// The taxon as a status lookup for the region gives it: its latest assessment there, or none.
+    public StatusTaxon RegionalTaxon(string region, long id) {
+        var taxon = Taxon(id);
+        return taxon with {
+            LatestGlobal = _regional.TryGetValue((region, id), out var category)
+                ? new AssessmentRow(id * 10 + 1, id, region, true, category, false, false, null, "3.1", 2021, null, null, null)
+                : null,
+        };
+    }
+
+    public IReadOnlyList<ListTaxonRow> TaxaInRegion(GroupRow group, IReadOnlyCollection<string> kinds, string region) =>
+        [.. TaxaIn(group, kinds).Where(r => _regional.ContainsKey((region, r.TaxonId)))
+            .Select(r => r with { Category = _regional[(region, r.TaxonId)], AssessmentId = r.TaxonId * 10 + 1, YearPublished = 2021 })];
 }
 
 public sealed class ListScopeTests {
@@ -148,6 +170,24 @@ public sealed class ListScopeTests {
         Assert.Contains("{{IUCN status|LC|201/2010|1|year=2020}}", ListScope.MissingLines(result));
         // Groups above, and below it the genus that holds most of the listed taxa.
         Assert.Equal(["Animalia", "Mammalia", "Theria", "Felidae", "Panthera"], result.Path.Select(g => g.Name));
+    }
+
+    [Fact]
+    public void WithARegionOnlyTheTaxaAssessedThereAreCompared() {
+        var lookup = Tree().Species(4, 100, 3).Species(5, 200, 2)
+            .Regional("Europe", 100, "LC").Regional("Europe", 101, "LC").Regional("Europe", 200, "EN");
+        List<ListMember> members = [.. new long[] { 100, 101, 102 }.Select((id, i) => {
+            var taxon = lookup.RegionalTaxon("Europe", id);
+            return new ListMember(taxon, i + 1, taxon.ScientificName, null);
+        })];
+        var result = ListScope.Check(members, lookup, new ListScopeOptions(Scope: "family/Felidae") { Region = "Europe", Area = "GB" })!;
+        Assert.Equal("Europe", result.Region);
+        Assert.Null(result.Area);
+        Assert.Equal((2, 3), (result.Species, result.SpeciesInScope));
+        Assert.Equal(102, Assert.Single(result.NotInRegion).Taxon.TaxonId);
+        var missing = Assert.Single(result.Missing!);
+        Assert.Equal((200L, "EN"), (missing.TaxonId, missing.Category));
+        Assert.Contains("{{IUCN status|EN|200/2001|1|year=2021}}", ListScope.MissingLines(result));
     }
 
     [Fact]
