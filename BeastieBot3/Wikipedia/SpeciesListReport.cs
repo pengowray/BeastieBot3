@@ -4,7 +4,8 @@ using CsvHelper;
 using Spectre.Console;
 
 // The files of `wikipedia report-species-lists`:
-//   <name>.md            totals, then the pages with something to update, most statuses to update first;
+//   <name>.md            totals, the pages with statuses to update, then the pages with taxa that have
+//                        no status or are missing from the group (the largest MaxTaxaPages);
 //   <name>-pages.csv     every page checked, with every count;
 //   <name>-statuses.csv  every status that can be updated: the page, line, taxon, code on the page and IUCN's code;
 //   <name>-missing.csv   every taxon of a page's group that the page does not list.
@@ -12,6 +13,9 @@ using Spectre.Console;
 namespace BeastieBot3.Wikipedia;
 
 internal sealed class SpeciesListReport {
+    /// The most pages in the Markdown table of taxa with no status or missing; every page is in the pages CSV.
+    private const int MaxTaxaPages = 1_000;
+
     private readonly IReadOnlyList<SpeciesListReportRow> _rows;
     private readonly SpeciesListPlan _plan;
     private readonly string? _release;
@@ -99,24 +103,20 @@ internal sealed class SpeciesListReport {
         sb.AppendLine($"Full data is in three CSV files: {pagesCsv} lists every page with every count; {statusesCsv} lists every status that can be updated (page, line number, taxon, status on the page, IUCN category); {missingCsv} lists every taxon missing from a page's group.");
         sb.AppendLine();
 
-        var work = _rows.Where(r => r.Result.HasWork)
+        var statusPages = _rows.Where(r => r.Result.Outdated > 0)
             .OrderByDescending(r => r.Result.CategoryChanged)
             .ThenByDescending(r => r.Result.Outdated)
-            .ThenByDescending(r => r.Result.TaxaWithoutStatus)
-            .ThenByDescending(r => r.Result.MissingFromGroup ?? 0)
             .ThenBy(r => r.Result.Title, StringComparer.Ordinal)
             .ToList();
-        sb.AppendLine($"## Pages to update ({work.Count:N0})");
+        sb.AppendLine($"## Pages with statuses to update ({statusPages.Count:N0})");
         sb.AppendLine();
         sb.AppendLine("Sorted by the number of statuses with a different category, then by the number of other statuses to update, most first. To get a page's updated wikitext, paste the page's wikitext into the update page on Beastie Bot Species Status.");
         sb.AppendLine();
-        sb.AppendLine("| Page | Different category | CR(PE) or CR(PEW) | Same category, new trend | Same category, older assessment | Up to date | Listed, no status | Missing from group | Not matched | Compared with IUCN group |");
-        sb.AppendLine("|---|---:|---:|---:|---:|---:|---:|---:|---:|---|");
-        foreach (var row in work) {
+        sb.AppendLine("| Page | Different category | CR(PE) or CR(PEW) | Same category, new trend | Same category, older assessment | Up to date | Not matched | Compared with IUCN group |");
+        sb.AppendLine("|---|---:|---:|---:|---:|---:|---:|---|");
+        foreach (var row in statusPages) {
             var r = row.Result;
-            var marker = row.Sources.Contains(SpeciesListPlanPage.GroupArticle) ? " (group article)" : "";
-            var missing = r.MissingFromGroup is { } m ? Num(m) : r.GroupName is null ? "" : "lists part of group";
-            sb.AppendLine($"| {Link(r.Title)}{marker} | {Num(r.CategoryChanged)} | {Num(r.PossiblyExtinctChanged)} | {Num(r.TrendChanged)} | {Num(r.NewerAssessment)} | {Num(r.UpToDate)} | {Num(r.TaxaWithoutStatus)} | {missing} | {Num(r.NotMatched)} | {Group(r)} |");
+            sb.AppendLine($"| {PageCell(row)} | {Num(r.CategoryChanged)} | {Num(r.PossiblyExtinctChanged)} | {Num(r.TrendChanged)} | {Num(r.NewerAssessment)} | {Num(r.UpToDate)} | {Num(r.NotMatched)} | {Group(r)} |");
         }
         sb.AppendLine();
         sb.AppendLine("- Different category: statuses whose code differs from the category of the latest IUCN assessment.");
@@ -124,6 +124,32 @@ internal sealed class SpeciesListReport {
         sb.AppendLine("- Same category, new trend: {{Species table/row}} rows with the latest category whose population trend (direction) is empty or differs from the latest assessment's.");
         sb.AppendLine("- Same category, older assessment: {{IUCN status}} templates with the latest category that cite an older assessment. Only the assessment ids or year change.");
         sb.AppendLine("- Not matched: statuses whose name is not an IUCN name, or matches more than one IUCN taxon.");
+        sb.AppendLine("- Empty cells are 0.");
+        sb.AppendLine();
+
+        var taxaPages = _rows.Where(r => r.Result.TaxaWithoutStatus > 0 || (r.Result.MissingFromGroup ?? 0) > 0 || r.Result.ListedTwice > 0 || r.Result.OutsideGroup > 0)
+            .OrderByDescending(r => r.Result.TaxaWithoutStatus + (r.Result.MissingFromGroup ?? 0))
+            .ThenBy(r => r.Result.Title, StringComparer.Ordinal)
+            .ToList();
+        var shown = taxaPages.Take(MaxTaxaPages).ToList();
+        sb.AppendLine($"## Pages with taxa that have no status or are missing ({taxaPages.Count:N0})");
+        sb.AppendLine();
+        sb.AppendLine(shown.Count < taxaPages.Count
+            ? $"The {shown.Count:N0} pages with the most taxa with no status or missing from the group, most first. The other {taxaPages.Count - shown.Count:N0} pages are in {pagesCsv}."
+            : "Sorted by the number of taxa with no status or missing from the group, most first.");
+        sb.AppendLine();
+        sb.AppendLine("| Page | Listed, no status | Missing from group | Listed twice | Outside the group | Compared with IUCN group |");
+        sb.AppendLine("|---|---:|---:|---:|---:|---|");
+        foreach (var row in shown) {
+            var r = row.Result;
+            var missing = r.MissingFromGroup is { } m ? Num(m) : r.GroupName is null ? "" : "lists part of group";
+            sb.AppendLine($"| {PageCell(row)} | {Num(r.TaxaWithoutStatus)} | {missing} | {Num(r.ListedTwice)} | {Num(r.OutsideGroup)} | {Group(r)} |");
+        }
+        sb.AppendLine();
+        sb.AppendLine("- Listed, no status: taxa on the page, found by their scientific name, with no IUCN status next to them.");
+        sb.AppendLine("- Missing from group: taxa in the IUCN group that the page does not list. \"lists part of group\" means the page lists less than half of the group, so missing taxa are not counted.");
+        sb.AppendLine("- Listed twice: taxa listed under two names, such as an old synonym and the current name.");
+        sb.AppendLine("- Outside the group: listed taxa outside the group that most of the page's taxa are in.");
         sb.AppendLine("- Empty cells are 0.");
         sb.AppendLine();
         if (_failures.Count > 0) {
@@ -148,6 +174,9 @@ internal sealed class SpeciesListReport {
         SpeciesListChangeKind.Trend => "same category, new trend",
         _ => "same category, older assessment",
     };
+
+    private static string PageCell(SpeciesListReportRow row) =>
+        Link(row.Result.Title) + (row.Sources.Contains(SpeciesListPlanPage.GroupArticle) ? " (group article)" : "");
 
     private static string Num(int n) => n == 0 ? "" : n.ToString("N0", CultureInfo.InvariantCulture);
 

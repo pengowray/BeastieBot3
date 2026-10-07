@@ -62,10 +62,6 @@ internal sealed record SpeciesListPageResult(
     IReadOnlyList<SpeciesListMissing> Missing) {
     /// Statuses that can be updated.
     public int Outdated => CategoryChanged + PossiblyExtinctChanged + TrendChanged + NewerAssessment;
-
-    /// Whether an editor has anything to do on the page.
-    public bool HasWork => Outdated > 0 || TaxaWithoutStatus > 0 || (MissingFromGroup ?? 0) > 0 || InOtherCategory > 0
-        || OutsideGroup > 0 || ListedTwice > 0 || OlderCitations > 0 || PopulationDiffers > 0;
 }
 
 internal static class SpeciesListSurvey {
