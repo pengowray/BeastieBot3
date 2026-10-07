@@ -908,11 +908,6 @@ details summary {
     margin: 0.4rem 0;
 }
 
-.data-note {
-    margin-top: 2.5rem;
-    font-size: 0.9rem;
-    color: var(--muted);
-}
 
 abbr[title] {
     text-decoration: underline dotted;
