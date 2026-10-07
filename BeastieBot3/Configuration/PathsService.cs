@@ -81,6 +81,24 @@ namespace BeastieBot3.Configuration;
             return string.IsNullOrWhiteSpace(datastore) ? null : Path.Combine(datastore, "iucn_doi_cache.sqlite");
         }
 
+        // Country checklists from sources other than IUCN (`checklists import`). Defaults to
+        // checklists.sqlite in the datastore folder.
+        public string? GetChecklistsPath() {
+            var configured = _reader.Get("Datastore:checklists_sqlite");
+            if (!string.IsNullOrWhiteSpace(configured)) return configured;
+            var datastore = GetDatastoreDir();
+            return string.IsNullOrWhiteSpace(datastore) ? null : Path.Combine(datastore, "checklists.sqlite");
+        }
+
+        // Downloaded checklist files (`checklists download`). Defaults to a checklists folder beside
+        // the datastore.
+        public string? GetChecklistsDownloadDir() {
+            var configured = _reader.Get("Datasets:checklists_dir");
+            if (!string.IsNullOrWhiteSpace(configured)) return configured;
+            var datastore = GetDatastoreDir();
+            return string.IsNullOrWhiteSpace(datastore) ? null : Path.Combine(datastore, "checklists");
+        }
+
         // The public site's database (built by `site build-db`). Defaults to site.sqlite in the
         // datastore folder.
         public string? GetSiteDatabasePath() {

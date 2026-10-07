@@ -136,9 +136,13 @@ public sealed class AreaNames {
             if (area.DisplayName != area.Name) {
                 Add(area.DisplayName, area);
             }
-            // "Tanzania, United Republic of", "Congo, The Democratic Republic of the": the part before the comma.
+        }
+        // "Tanzania, United Republic of": the part before the comma, unless an area has that name
+        // ("Congo" is the Republic of the Congo, not "Congo, The Democratic Republic of the").
+        var exact = new HashSet<string>(_byKey.Keys.Concat(ambiguous), StringComparer.Ordinal);
+        foreach (var area in list) {
             var comma = area.Name.IndexOf(',');
-            if (comma > 0) {
+            if (comma > 0 && !exact.Contains(Key(area.Name[..comma]))) {
                 Add(area.Name[..comma], area);
             }
         }
@@ -200,7 +204,7 @@ public sealed class AreaNames {
         title is not null && title.Contains("endemic", StringComparison.OrdinalIgnoreCase) ? AreaMode.Endemic : AreaMode.Native;
 
     /// Lower case, no accents or punctuation, "&" as "and", "Is." as "islands", "St." as "saint".
-    internal static string Key(string name) {
+    public static string Key(string name) {
         var decomposed = name.Normalize(NormalizationForm.FormD);
         var sb = new StringBuilder(decomposed.Length);
         foreach (var c in decomposed) {

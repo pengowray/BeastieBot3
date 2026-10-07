@@ -1,0 +1,611 @@
+level4,level3,iso2,name
+ABT-OO,ABT,CA,Alberta
+AFG-OO,AFG,AF,Afghanistan
+AGE-BA,AGE,AR,Buenos Aires
+AGE-CH,AGE,AR,Chaco
+AGE-CN,AGE,AR,Corrientes
+AGE-CO,AGE,AR,Córdoba
+AGE-DF,AGE,AR,Argentina Distrito Federal
+AGE-ER,AGE,AR,Entre Ríos
+AGE-FO,AGE,AR,Formosa
+AGE-LP,AGE,AR,La Pampa
+AGE-MI,AGE,AR,Misiones
+AGE-SF,AGE,AR,Santa Fé
+AGS-CB,AGS,AR,Chubut
+AGS-NE,AGS,AR,Neuquén
+AGS-RN,AGS,AR,Rio Negro
+AGS-SC,AGS,AR,Santa Cruz
+AGS-TF,AGS,AR,Tierra del Fuego (Argentina)
+AGW-CA,AGW,AR,Catamarca
+AGW-JU,AGW,AR,Jujuy
+AGW-LR,AGW,AR,La Rioja
+AGW-ME,AGW,AR,Mendoza
+AGW-SA,AGW,AR,Salta
+AGW-SE,AGW,AR,Santiago del Estero
+AGW-SJ,AGW,AR,San Juan
+AGW-SL,AGW,AR,San Luis
+AGW-TU,AGW,AR,Tucumán
+ALA-OO,ALA,US,Alabama
+ALB-OO,ALB,AL,Albania
+ALD-OO,ALD,SC,Aldabra
+ALG-OO,ALG,DZ,Algeria
+ALT-OO,ALT,RU,Altay
+ALU-OO,ALU,US,Aleutian Is.
+AMU-OO,AMU,RU,Amur
+AND-AN,AND,IN,Andaman Is.
+AND-CO,AND,MM,Coco Is.
+ANG-OO,ANG,AO,Angola
+ANT-OO,ANT,AQ,Antarctica
+ARI-OO,ARI,US,Arizona
+ARK-OO,ARK,US,Arkansas
+ARU-OO,ARU,AW,Aruba
+ASC-OO,ASC,SH,Ascension
+ASK-OO,ASK,US,Alaska
+ASP-OO,ASP,TF,Amsterdam-St.Paul Is.
+ASS-AS,ASS,IN,Assam
+ASS-MA,ASS,IN,Manipur
+ASS-ME,ASS,IN,Meghalaya
+ASS-MI,ASS,IN,Mizoram
+ASS-NA,ASS,IN,Nagaland
+ASS-TR,ASS,IN,Tripura
+ATP-OO,ATP,NZ,Antipodean Is.
+AUT-AU,AUT,AT,Austria
+AUT-LI,AUT,LI,Liechtenstein
+AZO-OO,AZO,PT,Azores
+BAH-OO,BAH,BS,Bahamas
+BAL-OO,BAL,ES,Baleares
+BAN-OO,BAN,BD,Bangladesh
+BEN-OO,BEN,BJ,Benin
+BER-OO,BER,BM,Bermuda
+BGM-BE,BGM,BE,Belgium
+BGM-LU,BGM,LU,Luxembourg
+BIS-OO,BIS,PG,Bismarck Archipelago
+BKN-OO,BKN,BF,Burkina
+BLR-OO,BLR,BY,Belarus
+BLT-ES,BLT,EE,Estonia
+BLT-KA,BLT,RU,Kaliningrad
+BLT-LA,BLT,LV,Latvia
+BLT-LI,BLT,LT,Lithuania
+BLZ-OO,BLZ,BZ,Belize
+BOL-OO,BOL,BO,Bolivia
+BOR-BR,BOR,BN,Brunei
+BOR-KA,BOR,ID,Kalimantan
+BOR-SB,BOR,MY,Sabah
+BOR-SR,BOR,MY,Sarawak
+BOT-OO,BOT,BW,Botswana
+BOU-OO,BOU,BV,Bouvet I.
+BRC-OO,BRC,CA,British Columbia
+BRY-OO,BRY,RU,Buryatiya
+BUL-OO,BUL,BG,Bulgaria
+BUR-OO,BUR,BI,Burundi
+BZC-DF,BZC,BR,Brazilia Distrito Federal
+BZC-GO,BZC,BR,Goiás
+BZC-MS,BZC,BR,Mato Grosso do Sul
+BZC-MT,BZC,BR,Mato Grosso
+BZE-AL,BZE,BR,Alagoas
+BZE-BA,BZE,BR,Bahia
+BZE-CE,BZE,BR,Ceará
+BZE-FN,BZE,BR,Fernando de Noronha
+BZE-MA,BZE,BR,Maranhão
+BZE-PB,BZE,BR,Paraíba
+BZE-PE,BZE,BR,Pernambuco
+BZE-PI,BZE,BR,Piauí
+BZE-RN,BZE,BR,Rio Grande do Norte
+BZE-SE,BZE,BR,Sergipe
+BZL-ES,BZL,BR,Espírito Santo
+BZL-MG,BZL,BR,Minas Gerais
+BZL-RJ,BZL,BR,Rio de Janeiro
+BZL-SP,BZL,BR,São Paulo
+BZL-TR,BZL,BR,Trindade
+BZN-AC,BZN,BR,Acre
+BZN-AM,BZN,BR,Amazonas
+BZN-AP,BZN,BR,Amapá
+BZN-PA,BZN,BR,Pará
+BZN-RM,BZN,BR,Roraima
+BZN-RO,BZN,BR,Rondônia
+BZN-TO,BZN,BR,Tocantins
+BZS-PR,BZS,BR,Paraná
+BZS-RS,BZS,BR,Rio Grande do Sul
+BZS-SC,BZS,BR,Santa Catarina
+CAB-OO,CAB,AO,Cabinda
+CAF-OO,CAF,CF,Central African Republic
+CAL-OO,CAL,US,California
+CAY-OO,CAY,KY,Cayman Is.
+CBD-OO,CBD,KH,Cambodia
+CGS-OO,CGS,IO,Chagos Archipelago
+CHA-OO,CHA,TD,Chad
+CHC-CQ,CHC,CN,Chongqing
+CHC-GZ,CHC,CN,Guizhou
+CHC-HU,CHC,CN,Hubei
+CHC-SC,CHC,CN,Sichuan
+CHC-YN,CHC,CN,Yunnan
+CHH-OO,CHH,CN,Hainan
+CHI-NM,CHI,CN,Nei Mongol
+CHI-NX,CHI,CN,Ningxia
+CHM-HJ,CHM,CN,Heilongjiang
+CHM-JL,CHM,CN,Jilin
+CHM-LN,CHM,CN,Liaoning
+CHN-BJ,CHN,CN,Beijing
+CHN-GS,CHN,CN,Gansu
+CHN-HB,CHN,CN,Hebei
+CHN-SA,CHN,CN,Shaanxi
+CHN-SD,CHN,CN,Shandong
+CHN-SX,CHN,CN,Shanxi
+CHN-TJ,CHN,CN,Tianjin
+CHQ-OO,CHQ,CN,Qinghai
+CHS-AH,CHS,CN,Anhui
+CHS-FJ,CHS,CN,Fujian
+CHS-GD,CHS,CN,Guangdong
+CHS-GX,CHS,CN,Guangxi
+CHS-HE,CHS,CN,Henan
+CHS-HK,CHS,CN,Hong Kong
+CHS-HN,CHS,CN,Hunan
+CHS-JS,CHS,CN,Jiangsu
+CHS-JX,CHS,CN,Jiangxi
+CHS-KI,CHS,TW,Kin-Men
+CHS-MA,CHS,MO,Macau
+CHS-MP,CHS,TW,Ma-tsu-pai-chúan
+CHS-SH,CHS,CN,Shanghai
+CHS-ZJ,CHS,CN,Zhejiang
+CHT-OO,CHT,CN,Tibet
+CHX-OO,CHX,CN,Xinjiang
+CKI-OO,CKI,CC,Cocos (Keeling) I.
+CLC-BI,CLC,CL,Biobío
+CLC-CO,CLC,CL,Coquimbo
+CLC-LA,CLC,CL,La Araucania
+CLC-MA,CLC,CL,Maule
+CLC-OH,CLC,CL,O'Higgins
+CLC-SA,CLC,CL,Santiago
+CLC-VA,CLC,CL,Valparaíso
+CLM-OO,CLM,CO,Colombia
+CLN-AN,CLN,CL,Antofagasta
+CLN-AT,CLN,CL,Atacama
+CLN-TA,CLN,CL,Tarapacá
+CLS-AI,CLS,CL,Aisén
+CLS-LL,CLS,CL,Los Lagos
+CLS-MG,CLS,CL,Magellanes
+CMN-OO,CMN,CM,Cameroon
+CNT-OO,CNT,US,Connecticut
+CNY-OO,CNY,ES,Canary Is.
+COL-OO,COL,US,Colorado
+COM-CO,COM,KM,Comoros
+COM-MA,COM,YT,Mayotte
+CON-OO,CON,CG,Congo
+COO-OO,COO,CK,Cook Is.
+COR-OO,COR,FR,Corse
+COS-OO,COS,CR,Costa Rica
+CPI-CL,CPI,PF,Clipperton I.
+CPI-CO,CPI,CR,Cocos I.
+CPI-MA,CPI,CO,Malpelo I.
+CPP-EC,CPP,ZA,Eastern Cape Province
+CPP-NC,CPP,ZA,Northern Cape Province
+CPP-WC,CPP,ZA,Western Cape Province
+CPV-OO,CPV,NA,Caprivi Strip
+CRL-MF,CRL,FM,Micronesia Federated States
+CRL-PA,CRL,PW,Palau
+CRZ-OO,CRZ,TF,Crozet Is.
+CTA-OO,CTA,RU,Chita
+CTM-OO,CTM,NZ,Chatham Is.
+CUB-OO,CUB,CU,Cuba
+CVI-OO,CVI,CV,Cape Verde
+CYP-OO,CYP,CY,Cyprus
+CZE-CZ,CZE,CZ,Czech Republic
+CZE-SL,CZE,SK,Slovakia
+CZE-SL,CZE,SK,Slovakia
+DEL-OO,DEL,US,Delaware
+DEN-OO,DEN,DK,Denmark
+DJI-OO,DJI,DJ,Djibouti
+DOM-OO,DOM,DO,Dominican Republic
+DSV-OO,DSV,CL,Desventurados Is.
+EAI-OO,EAI,GR,East Aegean Is.
+EAS-OO,EAS,CL,Easter Is.
+ECU-OO,ECU,EC,Ecuador
+EGY-OO,EGY,EG,Egypt
+EHM-AP,EHM,IN,Arunachal Pradesh
+EHM-BH,EHM,BT,Bhutan
+EHM-DJ,EHM,IN,Darjiling
+EHM-SI,EHM,IN,Sikkim
+ELS-OO,ELS,SV,El Salvador
+EQG-OO,EQG,GQ,Equatorial Guinea
+ERI-OO,ERI,ER,Eritrea
+ETH-OO,ETH,ET,Ethiopia
+FAL-OO,FAL,FK,Falkland Is.
+FIJ-OO,FIJ,FJ,Fiji
+FIN-OO,FIN,FI,Finland
+FLA-OO,FLA,US,Florida
+FOR-OO,FOR,FO,Føroyar
+FRA-CI,FRA,UK,Channel Is.
+FRA-FR,FRA,FR,France
+FRA-MO,FRA,MC,Monaco
+FRG-OO,FRG,GF,French Guiana
+GAB-OO,GAB,GA,Gabon
+GAL-OO,GAL,EC,Galápagos
+GAM-OO,GAM,GM,"Gambia, The"
+GEO-OO,GEO,US,Georgia
+GER-OO,GER,DE,Germany
+GGI-AN,GGI,GQ,Annobón
+GGI-BI,GGI,GQ,Bioko
+GGI-PR,GGI,ST,Príncipe
+GGI-ST,GGI,ST,São Tomé
+GHA-OO,GHA,GH,Ghana
+GIL-OO,GIL,KI,Gilbert Is.
+GNB-OO,GNB,GW,Guinea-Bissau
+GNL-OO,GNL,GL,Greenland
+GRB-OO,GRB,UK,Great Britain
+GRC-OO,GRC,GR,Greece
+GST-BA,GST,BH,Bahrain
+GST-QA,GST,QA,Qatar
+GST-UA,GST,AE,United Arab Emirates
+GUA-OO,GUA,GT,Guatemala
+GUI-OO,GUI,GN,Guinea
+GUY-OO,GUY,GY,Guyana
+HAI-HA,HAI,HT,Haiti
+HAI-NI,HAI,PR,Navassa I.
+HAW-HI,HAW,US,Hawaiian Is.
+HAW-JI,HAW,UM,Johnston I.
+HAW-MI,HAW,UM,Midway Is.
+HBI-OO,HBI,UM,Howland-Baker Is.
+HMD-OO,HMD,HM,Heard-McDonald Is.
+HON-OO,HON,HN,Honduras
+HUN-OO,HUN,HU,Hungary
+ICE-OO,ICE,IS,Iceland
+IDA-OO,IDA,US,Idaho
+ILL-OO,ILL,US,Illinois
+IND-AP,IND,IN,Andhra Pradesh
+IND-BI,IND,IN,Bihar
+IND-CH,IND,IN,Chandigarh
+IND-CT,IND,IN,Chattisgarh
+IND-DD,IND,IN,Dadra-Nagar-Haveli
+IND-DE,IND,IN,Delhi
+IND-DI,IND,IN,Diu
+IND-DM,IND,IN,Daman
+IND-GO,IND,IN,Goa
+IND-GU,IND,IN,Gujarat
+IND-HA,IND,IN,Haryana
+IND-JK,IND,IN,Jharkhand
+IND-KE,IND,IN,Kerala
+IND-KL,IND,IN,Karaikal
+IND-KT,IND,IN,Karnataka
+IND-MH,IND,IN,Mahé
+IND-MP,IND,IN,Madhya Pradesh
+IND-MR,IND,IN,Maharashtra
+IND-OR,IND,IN,Orissa
+IND-PO,IND,IN,Pondicherry
+IND-PU,IND,IN,Punjab
+IND-RA,IND,IN,Rajasthan
+IND-TN,IND,IN,Tamil Nadu
+IND-UP,IND,IN,Uttar Pradesh
+IND-WB,IND,IN,West Bengal
+IND-YA,IND,IN,Yanam
+INI-OO,INI,US,Indiana
+IOW-OO,IOW,US,Iowa
+IRE-IR,IRE,IE,Ireland
+IRE-NI,IRE,UK,Northern Ireland
+IRK-OO,IRK,RU,Irkutsk
+IRN-OO,IRN,IR,Iran
+IRQ-OO,IRQ,IQ,Iraq
+ITA-IT,ITA,IT,Italy
+ITA-SM,ITA,SM,San Marino
+ITA-VC,ITA,VA,Vatican City
+IVO-OO,IVO,CI,Ivory Coast
+JAM-OO,JAM,JM,Jamaica
+JAP-HK,JAP,JP,Hokkaido
+JAP-HN,JAP,JP,Honshu
+JAP-KY,JAP,JP,Kyushu
+JAP-SH,JAP,JP,Shikoku
+JAW-OO,JAW,ID,Jawa
+JNF-OO,JNF,CL,Juan Fernández Is.
+KAM-OO,KAM,RU,Kamchatka
+KAN-OO,KAN,US,Kansas
+KAZ-OO,KAZ,KZ,Kazakhstan
+KEG-OO,KEG,TF,Kerguelen
+KEN-OO,KEN,KE,Kenya
+KER-OO,KER,NZ,Kermadec Is.
+KGZ-OO,KGZ,KG,Kirgizistan
+KHA-OO,KHA,RU,Khabarovsk
+KOR-NK,KOR,KP,North Korea
+KOR-SK,KOR,KR,South Korea
+KRA-OO,KRA,RU,Krasnoyarsk
+KRI-OO,KRI,GR,Kriti
+KRY-OO,KRY,UA,Krym
+KTY-OO,KTY,US,Kentucky
+KUR-OO,KUR,RU,Kuril Is.
+KUW-OO,KUW,KW,Kuwait
+KZN-OO,KZN,JP,Kazan-retto
+LAB-OO,LAB,CA,Labrador
+LAO-OO,LAO,LA,Laos
+LBR-OO,LBR,LR,Liberia
+LBS-LB,LBS,LB,Lebanon
+LBS-SY,LBS,SY,Syria
+LBY-OO,LBY,LY,Libya
+LDV-OO,LDV,IN,Laccadive Is.
+LEE-AB,LEE,AG,Antigua-Barbuda
+LEE-AG,LEE,AI,Anguilla
+LEE-AV,LEE,VE,Aves I.
+LEE-BV,LEE,VG,British Virgin Is.
+LEE-GU,LEE,GP,Guadeloupe
+LEE-MO,LEE,MS,Montserrat
+LEE-NL,LEE,AN,Netherlands Leeward Is.
+LEE-SK,LEE,KN,St.Kitts-Nevis
+LEE-SM,LEE,GP,St.Martin-St.Barthélémy
+LEE-VI,LEE,VI,Virgin Is.
+LES-OO,LES,LS,Lesotho
+LIN-KI,LIN,KI,Kiribati Line Is.
+LIN-US,LIN,UM,U.S. Line Is.
+LOU-OO,LOU,US,Louisiana
+LSI-BA,LSI,ID,Bali
+LSI-ET,LSI,TP,East Timor
+LSI-LS,LSI,ID,Lesser Sunda Is.
+MAG-OO,MAG,RU,Magadan
+MAI-OO,MAI,US,Maine
+MAN-OO,MAN,CA,Manitoba
+MAQ-OO,MAQ,AU,Macquarie Is.
+MAS-OO,MAS,US,Massachusetts
+MAU-OO,MAU,MU,Mauritius
+MCI-OO,MCI,RE,Mozambique Channel Is.
+MCS-OO,MCS,JP,Marcus I.
+MDG-OO,MDG,MG,Madagascar
+MDR-OO,MDR,PT,Madeira
+MDV-OO,MDV,MV,Maldives
+MIC-OO,MIC,US,Michigan
+MIN-OO,MIN,US,Minnesota
+MLI-OO,MLI,ML,Mali
+MLW-OO,MLW,MW,Malawi
+MLY-PM,MLY,MY,Peninsular Malaysia
+MLY-SI,MLY,SG,Singapore
+MNT-OO,MNT,US,Montana
+MOL-OO,MOL,ID,Maluku
+MON-OO,MON,MN,Mongolia
+MOR-MO,MOR,MA,Morocco
+MOR-SP,MOR,ES,Spanish North African Territories
+MOZ-OO,MOZ,MZ,Mozambique
+MPE-OO,MPE,ZA,Marion-Prince Edward Is.
+MRN-GU,MRN,GU,Guam
+MRN-NM,MRN,MP,Northern Marianas
+MRQ-OO,MRQ,PF,Marquesas
+MRS-OO,MRS,MH,Marshall Is.
+MRY-OO,MRY,US,Maryland
+MSI-OO,MSI,US,Mississippi
+MSO-OO,MSO,US,Missouri
+MTN-OO,MTN,MR,Mauritania
+MXC-DF,MXC,MX,México Distrito Federal
+MXC-ME,MXC,MX,México State
+MXC-MO,MXC,MX,Morelos
+MXC-PU,MXC,MX,Puebla
+MXC-TL,MXC,MX,Tlaxcala
+MXE-AG,MXE,MX,Aguascalientes
+MXE-CO,MXE,MX,Coahuila
+MXE-CU,MXE,MX,Chihuahua
+MXE-DU,MXE,MX,Durango
+MXE-GU,MXE,MX,Guanajuato
+MXE-HI,MXE,MX,Hidalgo
+MXE-NL,MXE,MX,Nuevo León
+MXE-QU,MXE,MX,Querétaro
+MXE-SL,MXE,MX,San Luis Potosí
+MXE-TA,MXE,MX,Tamaulipas
+MXE-ZA,MXE,MX,Zacatecas
+MXG-VC,MXG,MX,Veracruz
+MXI-GU,MXI,MX,Guadalupe I.
+MXI-RA,MXI,MX,Rocas Alijos
+MXI-RG,MXI,MX,Revillagigedo Is.
+MXN-BC,MXN,MX,Baja California
+MXN-BS,MXN,MX,Baja California Sur
+MXN-SI,MXN,MX,Sinaloa
+MXN-SO,MXN,MX,Sonora
+MXS-CL,MXS,MX,Colima
+MXS-GR,MXS,MX,Guerrero
+MXS-JA,MXS,MX,Jalisco
+MXS-MI,MXS,MX,Michoacán
+MXS-NA,MXS,MX,Nayarit
+MXS-OA,MXS,MX,Oaxaca
+MXT-CA,MXT,MX,Campeche
+MXT-CI,MXT,MX,Chiapas
+MXT-QR,MXT,MX,Quintana Roo
+MXT-TB,MXT,MX,Tabasco
+MXT-YU,MXT,MX,Yucatán
+MYA-OO,MYA,MM,Myanmar
+NAM-OO,NAM,NA,Namibia
+NAT-OO,NAT,ZA,KwaZulu-Natal
+NBR-OO,NBR,CA,New Brunswick
+NCA-OO,NCA,US,North Carolina
+NCB-OO,NCB,IN,Nicobar Is.
+NCS-CH,NCS,RU,Chechnya
+NCS-DA,NCS,RU,Dagestan
+NCS-IN,NCS,RU,Ingushetiya
+NCS-KB,NCS,RU,Kabardino-Balkariya
+NCS-KC,NCS,RU,Karacheyevo-Cherkessiya
+NCS-KR,NCS,RU,Krasnodar
+NCS-SO,NCS,RU,Severo-Osetiya
+NCS-ST,NCS,RU,Stavropol
+NDA-OO,NDA,US,North Dakota
+NEB-OO,NEB,US,Nebraska
+NEP-OO,NEP,NP,Nepal
+NET-OO,NET,NL,Netherlands
+NEV-OO,NEV,US,Nevada
+NFK-LH,NFK,AU,Lord Howe I.
+NFK-NI,NFK,NF,Norfolk I.
+NFL-NE,NFL,CA,Newfoundland
+NFL-SP,NFL,PM,St.Pierre-Miquelon
+NGA-OO,NGA,NG,Nigeria
+NGR-OO,NGR,NE,Niger
+NIC-OO,NIC,NI,Nicaragua
+NLA-BO,NLA,AN,Bonaire
+NLA-CU,NLA,AN,Curaçao
+NNS-OO,NNS,JP,Nansei-shoto
+NOR-OO,NOR,NO,Norway
+NRU-OO,NRU,NR,Nauru
+NSC-OO,NSC,CA,Nova Scotia
+NSW-CT,NSW,AU,Australian Capital Territory
+NSW-NS,NSW,AU,New South Wales
+NTA-OO,NTA,AU,Northern Territory
+NUE-OO,NUE,NU,Niue
+NUN-OO,NUN,CA,Nunavut
+NWC-OO,NWC,NC,New Caledonia
+NWG-IJ,NWG,ID,Irian Jaya
+NWG-PN,NWG,PG,Papua New Guinea
+NWH-OO,NWH,US,New Hampshire
+NWJ-OO,NWJ,US,New Jersey
+NWM-OO,NWM,US,New Mexico
+NWT-OO,NWT,CA,Northwest Territories
+NWY-OO,NWY,US,New York
+NZN-OO,NZN,NZ,New Zealand North
+NZS-OO,NZS,NZ,New Zealand South
+OFS-OO,OFS,ZA,Free State
+OGA-OO,OGA,JP,Ogasawara-shoto
+OHI-OO,OHI,US,Ohio
+OKL-OO,OKL,US,Oklahoma
+OMA-OO,OMA,OM,Oman
+ONT-OO,ONT,CA,Ontario
+ORE-OO,ORE,US,Oregon
+PAK-OO,PAK,PK,Pakistan
+PAL-IS,PAL,IL,Israel
+PAL-JO,PAL,JO,Jordan
+PAN-OO,PAN,PA,Panama
+PAR-OO,PAR,PY,Paraguay
+PEI-OO,PEI,CA,Prince Edward I.
+PEN-OO,PEN,US,Pennsylvania
+PER-OO,PER,PE,Peru
+PHI-OO,PHI,PH,Philippines
+PHX-OO,PHX,KI,Phoenix Is.
+PIT-OO,PIT,PN,Pitcairn Is.
+POL-OO,POL,PL,Poland
+POR-OO,POR,PT,Portugal
+PRM-OO,PRM,RU,Primorye
+PUE-OO,PUE,PR,Puerto Rico
+QLD-CS,QLD,AU,Coral Sea Is. Territory
+QLD-QU,QLD,AU,Queensland
+QUE-OO,QUE,CA,Québec
+REU-OO,REU,RE,Réunion
+RHO-OO,RHO,US,Rhode I.
+ROD-OO,ROD,MU,Rodrigues
+ROM-OO,ROM,RO,Romania
+RUC-OO,RUC,RU,Central European Russia
+RUE-OO,RUE,RU,East European Russia
+RUN-OO,RUN,RU,North European Russia
+RUS-OO,RUS,RU,South European Russia
+RUW-OO,RUW,RU,Northwest European Russia
+RWA-OO,RWA,RW,Rwanda
+SAK-OO,SAK,RU,Sakhalin
+SAM-AS,SAM,AS,American Samoa
+SAM-WS,SAM,WS,Samoa
+SAR-OO,SAR,IT,Sardegna
+SAS-OO,SAS,CA,Saskatchewan
+SAU-OO,SAU,SA,Saudi Arabia
+SCA-OO,SCA,US,South Carolina
+SCI-OO,SCI,PF,Society Is.
+SCS-PI,SCS,PI,Paracel Is.
+SCS-SI,SCS,SP,Spratly Is.
+SCZ-OO,SCZ,SB,Santa Cruz Is.
+SDA-OO,SDA,US,South Dakota
+SEL-OO,SEL,PT,Selvagens
+SEN-OO,SEN,SN,Senegal
+SEY-OO,SEY,SC,Seychelles
+SGE-OO,SGE,GS,South Georgia
+SIC-MA,SIC,MT,Malta
+SIC-SI,SIC,IT,Sicilia
+SIE-OO,SIE,SL,Sierra Leone
+SIN-OO,SIN,EG,Sinai
+SOA-OO,SOA,AU,South Australia
+SOC-OO,SOC,YE,Socotra
+SOL-NO,SOL,PG,North Solomons
+SOL-SO,SOL,SB,South Solomons
+SOM-OO,SOM,SO,Somalia
+SPA-AN,SPA,AD,Andorra
+SPA-GI,SPA,GI,Gibraltar
+SPA-SP,SPA,ES,Spain
+SRL-OO,SRL,LK,Sri Lanka
+SSA-OO,SSA,GS,South Sandwich Is.
+STH-OO,STH,SH,St.Helena
+SUD-OO,SUD,SD,Sudan
+SUL-OO,SUL,ID,Sulawesi
+SUM-OO,SUM,ID,Sumatera
+SUR-OO,SUR,SR,Surinam
+SVA-OO,SVA,SJ,Svalbard
+SWC-CC,SWC,CO,Colombian Caribbean Is.
+SWC-HC,SWC,HN,Honduran Caribbean Is.
+SWC-NC,SWC,NI,Nicaraguan Caribbean Is.
+SWE-OO,SWE,SE,Sweden
+SWI-OO,SWI,CH,Switzerland
+SWZ-OO,SWZ,SZ,Swaziland
+TAI-OO,TAI,TW,Taiwan
+TAN-OO,TAN,TZ,Tanzania
+TAS-OO,TAS,AU,Tasmania
+TCI-OO,TCI,TC,Turks-Caicos Is.
+TCS-AB,TCS,GE,Abkhaziya
+TCS-AD,TCS,GE,Adzhariya
+TCS-AR,TCS,AM,Armenia
+TCS-AZ,TCS,AZ,Azerbaijan
+TCS-GR,TCS,GE,Gruziya
+TCS-NA,TCS,AZ,Nakhichevan
+TCS-NK,TCS,AM,Nagorno Karabakh
+TDC-OO,TDC,SH,Tristan da Cunha
+TEN-OO,TEN,US,Tennessee
+TEX-OO,TEX,US,Texas
+THA-OO,THA,TH,Thailand
+TKM-OO,TKM,TM,Turkmenistan
+TOG-OO,TOG,TG,Togo
+TOK-MA,TOK,CK,Manihiki Is.
+TOK-SW,TOK,AS,Swains I.
+TOK-TO,TOK,TK,Tokelau
+TON-OO,TON,TO,Tonga
+TRT-OO,TRT,TT,Trinidad-Tobago
+TUA-OO,TUA,PF,Tuamotu
+TUB-OO,TUB,PF,Tubuai Is.
+TUE-OO,TUE,TR,Turkey-in-Europe
+TUN-OO,TUN,TN,Tunisia
+TUR-OO,TUR,TR,Turkey
+TUV-OO,TUV,TV,Tuvalu
+TVA-OO,TVA,RU,Tuva
+TVL-GA,TVL,ZA,Gauteng
+TVL-MP,TVL,ZA,Mpumalanga
+TVL-NP,TVL,ZA,Northern Province
+TVL-NW,TVL,ZA,North West Province
+TZK-OO,TZK,TJ,Tadzhikistan
+UGA-OO,UGA,UG,Uganda
+UKR-MO,UKR,MD,Moldova
+UKR-UK,UKR,UA,Ukraine
+URU-OO,URU,UY,Uruguay
+UTA-OO,UTA,US,Utah
+UZB-OO,UZB,UZ,Uzbekistan
+VAN-OO,VAN,VU,Vanuatu
+VEN-OO,VEN,VE,Venezuela
+VER-OO,VER,US,Vermont
+VIC-OO,VIC,AU,Victoria
+VIE-OO,VIE,VN,Vietnam
+VNA-OO,VNA,VE,Venezuelan Antilles
+VRG-OO,VRG,US,Virginia
+WAK-OO,WAK,UM,Wake I.
+WAL-OO,WAL,WF,Wallis-Futuna Is.
+WAS-OO,WAS,US,Washington
+WAU-AC,WAU,AU,Ashmore-Cartier Is.
+WAU-WA,WAU,AU,Western Australia
+WDC-OO,WDC,US,District of Columbia
+WHM-HP,WHM,IN,Himachal Pradesh
+WHM-JK,WHM,IN,Jammu-Kashmir
+WHM-UT,WHM,IN,Uttaranchal
+WIN-BA,WIN,BB,Barbados
+WIN-DO,WIN,DM,Dominica
+WIN-GR,WIN,GD,Grenada
+WIN-MA,WIN,MQ,Martinique
+WIN-SL,WIN,LC,St.Lucia
+WIN-SV,WIN,VC,St.Vincent
+WIS-OO,WIS,US,Wisconsin
+WSA-OO,WSA,EH,Western Sahara
+WSB-OO,WSB,RU,West Siberia
+WVA-OO,WVA,US,West Virginia
+WYO-OO,WYO,US,Wyoming
+XMS-OO,XMS,CX,Christmas I.
+YAK-OO,YAK,RU,Yakutskiya
+YEM-NY,YEM,YE,North Yemen
+YEM-SY,YEM,YE,South Yemen
+YUG-BH,YUG,BA,Bosnia-Herzegovina
+YUG-CR,YUG,HR,Croatia
+YUG-KO,YUG,YU,Kosovo
+YUG-MA,YUG,MK,Macedonia
+YUG-MN,YUG,YU,Montenegro
+YUG-SE,YUG,YU,Serbia
+YUG-SL,YUG,SI,Slovenia
+YUK-OO,YUK,CA,Yukon
+ZAI-OO,ZAI,CD,Zaïre
+ZAM-OO,ZAM,ZM,Zambia
+ZIM-OO,ZIM,ZW,Zimbabwe

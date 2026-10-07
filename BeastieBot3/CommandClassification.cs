@@ -12,6 +12,7 @@ using BeastieBot3;
 [assembly: CommandBranch("wikipedia",    "Wikipedia caching and inspection commands")]
 [assembly: CommandBranch("common-names", "Common name disambiguation and reporting commands")]
 [assembly: CommandBranch("sprat",        "Australian SPRAT (EPBC threatened species) dataset commands")]
+[assembly: CommandBranch("checklists",   "Country checklists from other sources (mammals, plants, reptiles, amphibians), to check IUCN's countries against")]
 [assembly: CommandBranch("redlist",      "Unofficial IUCN Red List data-observation site generation")]
 [assembly: CommandBranch("site",         "Public species lookup site: build its database")]
 
