@@ -14,7 +14,7 @@
     <h3 id="scope-heading">@UpdateText.ScopeHeading(r.Scope)</h3>
     <p>@UpdateText.ScopeSummary(r)</p>
     @if (r.Categories is { } categories) {
-        <p>@UpdateText.ScopeCategories(r, categories)</p>
+        <p>@UpdateText.ScopeCategories(r, categories, Model.CategoriesFromTitle)</p>
     }
     @if (r.Infra > 0) {
         <p>@UpdateText.ScopeInfra(r)</p>

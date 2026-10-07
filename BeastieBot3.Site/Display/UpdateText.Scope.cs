@@ -14,8 +14,11 @@ public static partial class UpdateText {
     public static string ScopeSummary(ListScopeResult r) =>
         $"The wikitext includes {Count(r.Species)} of the {Count(r.SpeciesInScope)} {CategoryAdjective(r.Categories)}species that IUCN has in {GroupList.HeadingText(r.Scope)}.";
 
-    public static string ScopeCategories(ListScopeResult r, IReadOnlySet<string> categories) => r.CategoriesChosen
-        ? $"Only {CategoryList(categories, "and")} taxa are compared, as chosen in Categories below."
+    /// fromTitle: the categories were set from the title of the page loaded from Wikipedia.
+    public static string ScopeCategories(ListScopeResult r, IReadOnlySet<string> categories, bool fromTitle = false) => r.CategoriesChosen
+        ? fromTitle
+            ? $"Only {CategoryList(categories, "and")} taxa are compared, because of the page's title. Change this in \"{CategoriesChooseLabel}\"."
+            : $"Only {CategoryList(categories, "and")} taxa are compared, as chosen in \"{CategoriesChooseLabel}\"."
         : r.CategoriesFromCodes
         ? $"Only {CategoryList(categories, "and")} taxa are compared, because every status code in the wikitext is {CategoryList(categories, "or")}."
         : $"Only {CategoryList(categories, "and")} taxa are compared: the wikitext has no status codes, and {Count(r.Species)} of its {Count(r.SpeciesListed)} species are {CategoryList(categories, "or")} in their latest assessments.";
@@ -29,7 +32,7 @@ public static partial class UpdateText {
 
     public const string ScopeChooseLabel = "Compare with";
     public const string ScopeChooseButton = "Compare";
-    public const string CategoriesChooseLabel = "Categories";
+    public const string CategoriesChooseLabel = "Red List categories";
     /// The category choice that leaves the categories to the codes in the wikitext.
     public const string CategoriesFromCodesOption = "From the status codes in the wikitext";
 

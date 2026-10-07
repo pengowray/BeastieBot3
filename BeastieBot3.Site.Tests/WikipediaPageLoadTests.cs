@@ -96,7 +96,7 @@ public sealed class WikipediaPageLoadTests(FakeWikipediaSiteFactory factory) : I
     [Fact]
     public async Task AnotherWikipediaIsNamedOnTheSearchPage() {
         var html = await (await _client.GetAsync("/search?q=" + Uri.EscapeDataString("https://de.wikipedia.org/wiki/Eisb%C3%A4r"))).Content.ReadAsStringAsync();
-        Assert.Contains("the de Wikipedia", Html.Text(html));
+        Assert.Contains("the link is to de.wikipedia.org", Html.Text(html));
     }
 
     [Fact]

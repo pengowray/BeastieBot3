@@ -23,13 +23,13 @@ public static class ListCategories {
         All,
         Threatened,
         Extinct,
-        new("EW", "Extinct in the wild (EW)", new HashSet<string> { "EW" }),
-        new("CR", "Critically endangered (CR, including CR(PE) and CR(PEW))", new HashSet<string> { "CR" }),
+        new("EW", "Extinct in the Wild (EW)", new HashSet<string> { "EW" }),
+        new("CR", "Critically Endangered (CR, CR(PE), CR(PEW))", new HashSet<string> { "CR" }),
         new("EN", "Endangered (EN)", new HashSet<string> { "EN" }),
         new("VU", "Vulnerable (VU)", new HashSet<string> { "VU" }),
-        new("NT", "Near threatened (NT)", new HashSet<string> { "NT" }),
-        new("LC", "Least concern (LC)", new HashSet<string> { "LC" }),
-        new("DD", "Data deficient (DD)", new HashSet<string> { "DD" }),
+        new("NT", "Near Threatened (NT)", new HashSet<string> { "NT" }),
+        new("LC", "Least Concern (LC)", new HashSet<string> { "LC" }),
+        new("DD", "Data Deficient (DD)", new HashSet<string> { "DD" }),
     ];
 
     public static ListCategoryChoice? Find(string? key) =>

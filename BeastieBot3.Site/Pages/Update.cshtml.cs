@@ -148,6 +148,9 @@ public sealed class UpdateModel : PageModel {
 
     /// The categories chosen, or read from the title of a page loaded from Wikipedia; null: from the codes.
     public ListCategoryChoice? Categories { get; private set; }
+
+    /// Categories was set from the title of the page loaded from Wikipedia, and not changed since.
+    public bool CategoriesFromTitle => LoadedPage is { } page && Categories is { } c && ListCategories.FromTitle(page.Title)?.Key == c.Key;
     public const string ListAnywayField = "anyway";
     public const string ExtraSpeciesField = "extra";
     public const string AddMissingField = "addmissing";

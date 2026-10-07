@@ -13,20 +13,20 @@ public static partial class UpdateText {
             ? $"revision {revisionId.ToString(CultureInfo.InvariantCulture)} of {t.UtcDateTime.ToString("d MMMM yyyy, HH:mm", CultureInfo.InvariantCulture)} UTC"
             : $"revision {revisionId.ToString(CultureInfo.InvariantCulture)}";
 
-    public const string EditOnWikipedia = "Edit the page on Wikipedia";
+    public const string EditOnWikipedia = "Edit on Wikipedia";
 
     public static string ErrorNotEnglishWikipedia(string language) =>
-        $"Not English Wikipedia: this site checks only English Wikipedia pages, and the link is to the {language} Wikipedia.";
+        $"Not English Wikipedia: the link is to {language}.wikipedia.org. This site loads pages from en.wikipedia.org only.";
 
     public static string ErrorPageNotFound(string title, long? revisionId) => revisionId is { } r
-        ? $"Page not found: English Wikipedia has no revision {r.ToString(CultureInfo.InvariantCulture)}."
-        : $"Page not found: English Wikipedia has no page called \"{title}\".";
+        ? $"Revision not found: English Wikipedia has no revision {r.ToString(CultureInfo.InvariantCulture)}."
+        : $"Page not found: English Wikipedia has no page called \"{title}\". Check the spelling of the title.";
 
     public static string ErrorPageTooLarge(string title) =>
-        $"Page too large: the wikitext of \"{title}\" is over 2 MB, the most this page takes. Paste part of it instead.";
+        $"Page too large: the wikitext of \"{title}\" is over the 2 MB limit. Copy the wikitext from Wikipedia in parts and update each part separately.";
 
-    public const string ErrorLoadingNotSetUp = "Loading pages from Wikipedia is not set up on this site. Paste the page's wikitext instead.";
+    public const string ErrorLoadingNotSetUp = "Loading not available: this site is not set up to load pages from Wikipedia. Paste the page's wikitext instead.";
 
     public static string ErrorPageNotLoaded(string title) =>
-        $"Wikipedia did not answer: \"{title}\" could not be loaded. Try again in a moment, or paste the page's wikitext.";
+        $"Could not load page: Wikipedia did not answer or returned an error for \"{title}\". Try again in a moment, or paste the page's wikitext.";
 }
