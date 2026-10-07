@@ -743,6 +743,25 @@ between anonymous POSTs. Use a User-Agent such as
 `BeastieBot3-site-dev/0.1 (https://en.wikipedia.org/wiki/User:Beastie_Bot)`, never one with an
 email address.
 
+**Pages of extra species** (schema 22; `Pages/ExtraSpecies.cshtml`, queries in
+`Data/SiteQueries.ExtraPages.cs`, strings in `Display/SiteText.Extra.cs`). Each extra species has a
+page at `/col/{CoL ID}` and, when it has a Wikidata item, at `/wikidata/{QID}` (`SiteUrls.Extra`
+links the CoL address when there is one); `extra_id` is numbered at build time, so it is never in
+an address. The page gives the name and author, the English name, the groups above it on this
+site, that it is not on the Red List and which sources list it, the family it is shown under when
+IUCN has no genus of its name, the IUCN taxon with the same CoL ID (an IUCN subspecies that CoL
+treats as a species; 43 in 2026-1), its `extra_overlap` pairs in both directions, and links. A
+`/wikidata/` address of an IUCN taxon or assessment goes to search, a `/col/` address that only an
+IUCN taxon has goes to its page, and a property or an item the site uses goes to search, which
+names it. The pages are noindex. Search lists extra species after the IUCN taxa from
+`extra_name_fts` (an external-content FTS5 table over the scientific name, Wikidata's spelling and
+the English name, rebuilt by `site build-db` after the rows are in; about 86 MB for 2.4 million
+species): it reads at most 500 matches and ranks them in C# (a name equal to the text, then a name
+starting with it, then shorter names). It goes straight to the page when no IUCN taxon and no group
+matches exactly and exactly one extra species does. IUCN taxon pages list the extra species that
+may be the same ("Possible duplicates in the Catalogue of Life and Wikidata"), and the group page's
+duplicates panel links the extra species' pages. `/api/suggest` does not suggest extra species.
+
 ### Credits of an assessment
 
 The taxon page has a closed section "Credits as given by IUCN" under the `{{cite iucn}}` box
@@ -1336,9 +1355,14 @@ title statements are not recorded (run wikidata iucn-assessment-items)".
   the taxa whose item it is (`taxon.wikidata_qid`) and the assessments whose item it is
   (`assessment.wikidata_item_qid`), listed with "Matched Wikidata item". When one taxon in the
   release has the item, search redirects to that taxon even when an old IUCN id also has the item.
-  When no taxon or assessment has the item, the page says so and does not search the text as a
-  name. Not searched: the other items that state a taxon's IUCN id
-  (`taxon.wikidata_other_items`) and the items of extra species (`extra_species.wikidata_qid`).
+  When no taxon or assessment has the item, the item of an extra species goes to its page (below),
+  an item the site uses itself (a P141 value, the assessment item model's items, an organisation
+  cited as an author) is named with its English label and linked ("Q32059 is the Wikidata item
+  “IUCN Red List”."), and any other item gets a line saying no taxon or assessment has it; the text
+  is not searched as a name. A Wikidata property (`P31`, `wikidata.org/wiki/Property:P31`) is
+  named the same way when the site uses it, from the labels in `Display/WikidataTerms.cs` (checked
+  2026-10-08). Not searched: the other items that state a taxon's IUCN id
+  (`taxon.wikidata_other_items`).
 - The table under the regional assessments (`_RelatedTaxaTable.cshtml`) lists, on a species page,
   its subspecies, varieties and subpopulations with the category, criteria and year of each one's
   latest global assessment, or a line saying IUCN has assessed none (animals: "subspecies or

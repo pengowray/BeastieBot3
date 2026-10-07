@@ -31,8 +31,13 @@ public sealed class SearchModel : PageModel {
     /// and the site has the taxon but not the assessment.
     public long? MissingAssessmentId { get; private set; }
 
-    /// Set when the text was a Wikidata item ("Q33609") that no taxon or assessment on the site has.
+    /// Set when the text was a Wikidata item ("Q33609") that no taxon or assessment on the site has,
+    /// or a Wikidata property ("P31").
     public string? MissingWikidataItem { get; private set; }
+
+    /// The English label of that item or property, when the site uses it ("instance of" for P31).
+    public string? WikidataLabel { get; private set; }
+    public bool IsWikidataProperty { get; private set; }
 
     /// The language of the Wikipedia the search text links to, when it is not English.
     public string? NotEnglishWikipedia { get; private set; }
@@ -85,6 +90,13 @@ public sealed class SearchModel : PageModel {
                 return Redirect(Web.SiteUrls.Extra(extraSpecies));
             }
             MissingWikidataItem = "Q" + item.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            WikidataLabel = Display.WikidataTerms.Label(MissingWikidataItem);
+            return Page();
+        }
+        if (ids?.WikidataProperty is { } property) {
+            MissingWikidataItem = "P" + property.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            WikidataLabel = Display.WikidataTerms.Label(MissingWikidataItem);
+            IsWikidataProperty = true;
             return Page();
         }
         if (FtsQuery.IsTooShort(Query)) {

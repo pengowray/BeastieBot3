@@ -57,6 +57,10 @@ public static partial class SiteText {
     /// "Q900000001, the item of IUCN assessment 14871490 (Global, 2016)".
     public static string MatchAssessmentWikidataItem(string qid, long assessmentId, string? scope, int? year) =>
         $"{qid}, the item of IUCN assessment {MatchAssessmentId(assessmentId, scope, year)}";
+    /// "P31 is the Wikidata property “instance of”.", with the id linked to Wikidata.
+    public static string WikidataTermAfter(bool property, string label) =>
+        $" is the Wikidata {(property ? "property" : "item")} “{label}”.";
+    public static string WikidataPropertyNotUsed(string pid) => $"This site does not use Wikidata property {pid}.";
     public static string WikidataItemNotFound(string qid) =>
         $"This site has no taxon or assessment with Wikidata item {qid}.";
     public static string AssessmentIdNotFound(long assessmentId) =>

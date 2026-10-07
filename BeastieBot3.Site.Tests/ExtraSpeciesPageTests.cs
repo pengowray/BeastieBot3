@@ -70,6 +70,15 @@ public sealed class ExtraSpeciesPageTests(SiteFactory factory) : IClassFixture<S
     }
 
     [Theory]
+    [InlineData("/wikidata/P31", "/search?q=P31")]
+    [InlineData("/wikidata/Q32059", "/search?q=Q32059")]
+    public async Task AWikidataPropertyOrItemTheSiteUsesGoesToSearch(string path, string location) {
+        var response = await _client.GetAsync(path);
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+        Assert.Equal(location, response.Headers.Location?.OriginalString);
+    }
+
+    [Theory]
     [InlineData("Ursus arctos", "/col/COLAR")]
     [InlineData("Q1001", "/col/COLAM")]
     [InlineData("https://www.wikidata.org/wiki/Q1003", "/wikidata/Q1003")]

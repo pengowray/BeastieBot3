@@ -38,7 +38,12 @@ public sealed class ExtraSpeciesModel : PageModel {
         Source = source;
         RequestedId = id.Trim();
         if (source == WikidataSource) {
-            if (IdQuery.Parse(RequestedId) is not { WikidataItem: { } item }) {
+            var parsed = IdQuery.Parse(RequestedId);
+            // Search says what a property is.
+            if (parsed is { WikidataProperty: { } property }) {
+                return Redirect("/search?q=P" + property.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            }
+            if (parsed is not { WikidataItem: { } item }) {
                 return NotFoundPage();
             }
             RequestedId = "Q" + item.ToString(System.Globalization.CultureInfo.InvariantCulture);
@@ -47,6 +52,9 @@ public sealed class ExtraSpeciesModel : PageModel {
                 return Redirect("/search?q=" + RequestedId);
             }
             Species = _queries.GetExtraSpeciesByWikidataItem(item);
+            if (Species is null && Display.WikidataTerms.Label(RequestedId) is not null) {
+                return Redirect("/search?q=" + RequestedId);
+            }
         } else {
             Species = _queries.GetExtraSpeciesByColId(RequestedId);
             SameColIdTaxa = _queries.GetTaxaWithColId(RequestedId);

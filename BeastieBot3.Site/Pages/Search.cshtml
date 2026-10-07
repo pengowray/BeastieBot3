@@ -38,8 +38,10 @@
             }
         </ul>
     }
-    @if (Model.MissingWikidataItem is { } qid) {
-        <p class="message">@SiteText.WikidataItemNotFound(qid)</p>
+    @if (Model.MissingWikidataItem is { } qid && Model.WikidataLabel is { } wikidataLabel) {
+        <p class="message"><a href="@(Model.IsWikidataProperty ? SiteFormat.WikidataPropertyUrl(qid) : SiteFormat.WikidataUrl(qid))">@qid</a>@SiteText.WikidataTermAfter(Model.IsWikidataProperty, wikidataLabel)</p>
+    } else if (Model.MissingWikidataItem is { } missingQid) {
+        <p class="message">@(Model.IsWikidataProperty ? SiteText.WikidataPropertyNotUsed(missingQid) : SiteText.WikidataItemNotFound(missingQid))</p>
     } else if (Model.Items.Count == 0 && Model.Groups.Count == 0 && Model.ExtraItems.Count == 0) {
         <p class="message">@SiteText.NoResults(Model.Query)</p>
         @if (Model.Suggestions.Count > 0) {

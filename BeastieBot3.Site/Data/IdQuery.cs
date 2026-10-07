@@ -10,11 +10,12 @@ namespace BeastieBot3.Site.Data;
 ///   a DOI, with or without "doi:" or a doi.org address: 10.2305/IUCN.UK.2016-3.RLTS.T22823A14871490.en
 ///   a Red List page address: iucnredlist.org/species/22823/14871490, or /species/22823
 ///   a Wikidata item: Q33609, or its address (wikidata.org/wiki/Q33609, wikidata.org/entity/Q33609)
+///   a Wikidata property: P31, or its address (wikidata.org/wiki/Property:P31, wikidata.org/entity/P31)
 /// An IUCN DOI is read for the ids in it, so an errata version whose DOI names the assessment it
 /// corrects finds that assessment, whose history row links the errata version.
 /// WikidataItem is the item's number (33609 for Q33609), looked up as a taxon's item and as an
-/// assessment's item.
-public sealed record IdQuery(long? TaxonId, long? AssessmentId, long? Number, long? WikidataItem = null) {
+/// assessment's item. WikidataProperty is a property's number (31 for P31).
+public sealed record IdQuery(long? TaxonId, long? AssessmentId, long? Number, long? WikidataItem = null, long? WikidataProperty = null) {
     // Longer numbers than this are not ids and would overflow long.
     private const int MaxDigits = 15;
 
@@ -25,9 +26,13 @@ public sealed record IdQuery(long? TaxonId, long? AssessmentId, long? Number, lo
     private static readonly Regex Digits = new(@"^\d{1,15}$", RegexOptions.CultureInvariant);
     private static readonly Regex WikidataQid = new(@"^q(\d{1,15})$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
 
-    // "https://www.wikidata.org/wiki/Q33609", "m.wikidata.org/wiki/Q33609", "wikidata.org/entity/Q33609".
+    private static readonly Regex WikidataPid = new(@"^p(\d{1,15})$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+
+    // "https://www.wikidata.org/wiki/Q33609", "m.wikidata.org/wiki/Q33609", "wikidata.org/entity/Q33609",
+    // "wikidata.org/wiki/Property:P31", "wikidata.org/entity/P31".
     private static readonly Regex WikidataUrl = new(
-        @"wikidata\.org/(?:wiki|entity)/(?:Special:EntityPage/)?Q(\d{1,15})(?:[?#].*)?$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
+        @"wikidata\.org/(?:wiki|entity)/(?:Special:EntityPage/)?(?:(?<q>Q)|(?:Property:)?(?<p>P))(?<n>\d{1,15})(?:[?#].*)?$",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
 
     // An IUCN DOI anywhere in the text: "10.2305/IUCN.UK.2016-3.RLTS.T22823A14871490.en".
     private static readonly Regex Doi = new(
@@ -40,7 +45,7 @@ public sealed record IdQuery(long? TaxonId, long? AssessmentId, long? Number, lo
     /// The ids in the text, or null when the text is not one of the accepted forms.
     public static IdQuery? Parse(string? text) {
         var query = ParseForms(text);
-        return query is { TaxonId: null, AssessmentId: null, Number: null, WikidataItem: null } ? null : query;
+        return query is { TaxonId: null, AssessmentId: null, Number: null, WikidataItem: null, WikidataProperty: null } ? null : query;
     }
 
     private static IdQuery? ParseForms(string? text) {
@@ -71,8 +76,12 @@ public sealed record IdQuery(long? TaxonId, long? AssessmentId, long? Number, lo
         if (WikidataQid.Match(trimmed) is { Success: true } qid) {
             return new IdQuery(null, null, null, ToId(qid.Groups[1].Value));
         }
-        if (WikidataUrl.Match(trimmed) is { Success: true } itemUrl) {
-            return new IdQuery(null, null, null, ToId(itemUrl.Groups[1].Value));
+        if (WikidataPid.Match(trimmed) is { Success: true } pid) {
+            return new IdQuery(null, null, null, null, ToId(pid.Groups[1].Value));
+        }
+        if (WikidataUrl.Match(trimmed) is { Success: true } entityUrl) {
+            var n = ToId(entityUrl.Groups["n"].Value);
+            return entityUrl.Groups["q"].Success ? new IdQuery(null, null, null, n) : new IdQuery(null, null, null, null, n);
         }
         if (Digits.IsMatch(trimmed)) {
             return new IdQuery(null, null, ToId(trimmed));

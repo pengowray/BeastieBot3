@@ -317,11 +317,31 @@ public sealed class HomeAndSearchTests(SiteFactory factory) : IClassFixture<Site
 
     [Fact]
     public async Task AWikidataItemNotOnTheSiteSaysSo() {
-        var response = await _client.GetAsync("/search?q=Q13442814");
+        var response = await _client.GetAsync("/search?q=Q999999999");
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
         var text = Html.Text(await response.Content.ReadAsStringAsync());
-        Assert.Contains("This site has no taxon or assessment with Wikidata item Q13442814.", text);
+        Assert.Contains("This site has no taxon or assessment with Wikidata item Q999999999.", text);
         Assert.DoesNotContain("Check the spelling", text);
+    }
+
+    [Theory]
+    [InlineData("P31", "P31 is the Wikidata property “instance of”.", "https://www.wikidata.org/wiki/Property:P31")]
+    [InlineData("https://www.wikidata.org/wiki/Property:P141", "P141 is the Wikidata property “IUCN conservation status”.", "https://www.wikidata.org/wiki/Property:P141")]
+    [InlineData("Q32059", "Q32059 is the Wikidata item “IUCN Red List”.", "https://www.wikidata.org/wiki/Q32059")]
+    [InlineData("Q219127", "Q219127 is the Wikidata item “critically endangered”.", "https://www.wikidata.org/wiki/Q219127")]
+    [InlineData("Q13442814", "Q13442814 is the Wikidata item “scholarly article”.", "https://www.wikidata.org/wiki/Q13442814")]
+    public async Task AWikidataPropertyOrItemTheSiteUsesIsDescribed(string q, string sentence, string link) {
+        var response = await _client.GetAsync("/search?q=" + Uri.EscapeDataString(q));
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var html = await response.Content.ReadAsStringAsync();
+        Assert.Contains(sentence, Html.Text(html));
+        Assert.Contains($"href=\"{link}\"", html);
+    }
+
+    [Fact]
+    public async Task AWikidataPropertyTheSiteDoesNotUseSaysSo() {
+        var text = Html.Text(await _client.GetStringAsync("/search?q=P999999"));
+        Assert.Contains("This site does not use Wikidata property P999999.", text);
     }
 
     [Fact]

@@ -570,6 +570,18 @@ public sealed class SiteUrlsTests {
         Assert.Equal(expected, SiteUrls.Absolute(baseUrl, Request(scheme, host), "/species/1"));
 }
 
+public sealed class WikidataTermsTests {
+    [Fact]
+    public void EveryDatabasePropertyHasALabel() => Assert.Empty(BeastieBot3.Site.Display.WikidataTerms.MissingDatabaseProperties());
+
+    [Fact]
+    public void EveryStatusValueHasALabel() {
+        foreach (var value in BeastieBot3.Shared.Wikitext.WikidataStatusValues.AllowedValues) {
+            Assert.Equal(value.LabelEn, BeastieBot3.Site.Display.WikidataTerms.Label(value.Qid));
+        }
+    }
+}
+
 public sealed class IdQueryTests {
     [Theory]
     [InlineData("e.T22823A14871490", 22823L, 14871490L, null)]
@@ -599,6 +611,14 @@ public sealed class IdQueryTests {
         Assert.Equal(new IdQuery(null, null, null, item), IdQuery.Parse(text));
 
     [Theory]
+    [InlineData("P31", 31L)]
+    [InlineData("p141", 141L)]
+    [InlineData("https://www.wikidata.org/wiki/Property:P31", 31L)]
+    [InlineData("http://www.wikidata.org/entity/P31", 31L)]
+    public void ReadsAWikidataProperty(string text, long property) =>
+        Assert.Equal(new IdQuery(null, null, null, null, property), IdQuery.Parse(text));
+
+    [Theory]
     [InlineData("")]
     [InlineData("Ursus maritimus")]
     [InlineData("T22823 maritimus")]
@@ -608,7 +628,8 @@ public sealed class IdQueryTests {
     [InlineData("Q")]
     [InlineData("Q0")]
     [InlineData("Qabc")]
-    [InlineData("https://www.wikidata.org/wiki/Property:P141")]
+    [InlineData("P0")]
+    [InlineData("https://www.wikidata.org/wiki/Talk:Q33609")]
     public void IsNullForOtherText(string text) => Assert.Null(IdQuery.Parse(text));
 }
 

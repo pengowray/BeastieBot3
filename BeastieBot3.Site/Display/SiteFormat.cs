@@ -65,6 +65,9 @@ public static class SiteFormat {
     public static string WikidataUrl(string qid) =>
         "https://www.wikidata.org/wiki/" + EscapePathSegment(qid.Trim());
 
+    public static string WikidataPropertyUrl(string pid) =>
+        "https://www.wikidata.org/wiki/Property:" + EscapePathSegment(pid.Trim());
+
     public static string CatalogueOfLifeUrl(string colId) =>
         "https://www.catalogueoflife.org/data/taxon/" + EscapePathSegment(colId.Trim());
 
