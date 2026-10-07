@@ -69,7 +69,8 @@ internal static partial class ChecklistSources {
 
     // Species_Syn: one row per name of a species. Kept: the synonyms, and the original combination of
     // each valid species ("Rattus latidens" for Abditomys latidens), with the author and year; left
-    // out: nomina dubia, species inquirendae, hybrids, unavailable and composite names.
+    // out: nomina dubia, species inquirendae, hybrids, unavailable and composite names. An original
+    // combination's authority has no brackets (MDD_authority_parentheses is about the current name).
     internal static IEnumerable<ChecklistName> ParseMddSynonyms(TextReader text) {
         using var csv = new CsvReader(text, new CsvConfiguration(CultureInfo.InvariantCulture) { BadDataFound = null, MissingFieldFound = null });
         csv.Read();
@@ -86,9 +87,6 @@ internal static partial class ChecklistSources {
             var year = csv.GetField("MDD_year")?.Trim();
             string? authority = string.IsNullOrEmpty(author) || author == "NA" ? null
                 : string.IsNullOrEmpty(year) || year == "NA" ? author : $"{author}, {year}";
-            if (authority is not null && csv.GetField("MDD_authority_parentheses") == "1") {
-                authority = $"({authority})";
-            }
             names.Add(new ChecklistName(species, name, ChecklistNameTypes.Synonym, authority));
         }
         return names;

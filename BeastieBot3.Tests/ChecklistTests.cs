@@ -101,7 +101,7 @@ public class ChecklistTests {
             + "Abeomelomys sevia,Someone,1900,0,nomen_dubium,Mus dubius\n";
         var names = ChecklistSources.ParseMddSynonyms(new StringReader(synonyms)).ToList();
         Assert.Equal([new ChecklistName("Abditomys latidens", "Rattus latidens", ChecklistNameTypes.Synonym, "Sanborn, 1952"),
-            new ChecklistName("Abeomelomys sevia", "Pogonomelomys sevia", ChecklistNameTypes.Synonym, "(Tate, 1951)")], names);
+            new ChecklistName("Abeomelomys sevia", "Pogonomelomys sevia", ChecklistNameTypes.Synonym, "Tate, 1951")], names);
     }
 
     [Fact]
