@@ -238,6 +238,7 @@
                                     @if (choice.FromCol) {
                                         <abbr class="col-marker" title="@GroupText.ColMarkerTitle">@GroupText.ColMarker</abbr>
                                     }
+                                    <partial name="_OptionCount" model="@(new OptionCountModel("h:" + choice.Rank, choice.Headings))" />
                                 </label>
                             }
                         </div>
@@ -259,7 +260,7 @@
                         @foreach (var statusSection in StatusSection.All) {
                             @* data-live-sync: ticking CoL or Wikidata includes NE, so after a live update site.js
                                ticks the box as the server does. *@
-                            <label><input type="checkbox" name="cat" value="@statusSection.Key" checked="@(options.Sections.Contains(statusSection.Key))" data-live-sync="@(statusSection.Key == StatusSection.NotEvaluated ? "" : null)"> <partial name="_Badge" model="@BadgeModel.ForStatusCode(statusSection.Key, showLabel: true)" /></label>
+                            <label><input type="checkbox" name="cat" value="@statusSection.Key" checked="@(options.Sections.Contains(statusSection.Key))" data-live-sync="@(statusSection.Key == StatusSection.NotEvaluated ? "" : null)"> <span><partial name="_Badge" model="@BadgeModel.ForStatusCode(statusSection.Key, showLabel: true)" /> <partial name="_OptionCount" model="@(new OptionCountModel("cat:" + statusSection.Key, Model.SectionLines.GetValueOrDefault(statusSection.Key)))" /></span></label>
                         }
                     </div>
                 </fieldset>

@@ -1,0 +1,5 @@
+@model OptionCountModel
+@* The number after a list option, dimmed. A zero dims the whole label (site.css), and site.js
+   (syncOptions) copies the number and its class from the page a live update fetched, since the
+   form is not replaced. *@
+<span class="option-count@(Model.Count == 0 ? " option-count-empty" : "")" data-live-count="@Model.Key" hidden="@(Model.Count is null)">(@SiteFormat.Number(Model.Count ?? 0))</span>

@@ -120,26 +120,52 @@ public static class GroupList {
     }
 
     /// How many lines the list would have, from the counts of the group, without reading the taxa.
-    /// The taxa with no global assessment (NE) are the group's totals less the counted ones.
-    public static int CountLines(GroupRow group, IReadOnlyList<GroupCategoryCount> counts, GroupListOptions options) {
+    public static int CountLines(GroupRow group, IReadOnlyList<GroupCategoryCount> counts, GroupListOptions options) =>
+        CountLinesBySection(group, counts, options).Where(s => options.IncludedSections.Contains(s.Key)).Sum(s => s.Value);
+
+    /// How many lines each status section would have, by section key, for every section whether or
+    /// not the options include it. The taxa with no global assessment (NE) are the group's totals
+    /// less the counted ones; extraNotEvaluated adds the species from CoL and Wikidata to NE.
+    public static Dictionary<string, int> CountLinesBySection(GroupRow group, IReadOnlyList<GroupCategoryCount> counts,
+        GroupListOptions options, int extraNotEvaluated = 0) {
         var notEvaluated = new GroupCategoryCount(StatusSection.NotEvaluated,
             group.SpeciesCount - counts.Sum(c => c.Species),
             group.InfraCount - counts.Sum(c => c.Infra),
             group.SubpopulationCount - counts.Sum(c => c.Subpopulations));
-        var total = 0;
+        var bySection = StatusSection.All.ToDictionary(s => s.Key, _ => 0);
+        bySection[StatusSection.NotEvaluated] = extraNotEvaluated;
         foreach (var count in counts.Append(notEvaluated)) {
-            if (StatusSection.For(count.Category) is not { } section || !options.IncludedSections.Contains(section.Key)) {
+            if (StatusSection.For(count.Category) is not { } section) {
                 continue;
             }
-            total += count.Species;
+            var lines = count.Species;
             if (options.Infra != InfraMode.None) {
-                total += count.Infra;
+                lines += count.Infra;
             }
             if (options.Subpopulations) {
-                total += count.Subpopulations;
+                lines += count.Subpopulations;
             }
+            bySection[section.Key] += lines;
         }
-        return total;
+        return bySection;
+    }
+
+    /// How many headings each rank would add to the list, by rank, from the counts of the groups
+    /// inside the listed group: one for each group of the rank that has a line in an included
+    /// section, or with status sections, one in each included section the group has lines in.
+    /// extraNotEvaluated gives the species from CoL and Wikidata in each group, by node id. Ranks
+    /// left out because headings would go deeper than level 6 are counted as if they fit.
+    public static Dictionary<string, int> CountHeadings(IEnumerable<GroupRow> groups,
+        IReadOnlyDictionary<int, IReadOnlyList<GroupCategoryCount>> counts, IReadOnlyDictionary<int, int> extraNotEvaluated,
+        GroupListOptions options) {
+        var byRank = new Dictionary<string, int>(StringComparer.Ordinal);
+        foreach (var group in groups) {
+            var sections = CountLinesBySection(group, counts.GetValueOrDefault(group.NodeId) ?? [], options,
+                    extraNotEvaluated.GetValueOrDefault(group.NodeId))
+                .Count(s => s.Value > 0 && options.IncludedSections.Contains(s.Key));
+            byRank[group.Rank] = byRank.GetValueOrDefault(group.Rank) + (options.ByStatus ? sections : Math.Min(sections, 1));
+        }
+        return byRank;
     }
 
     /// The {{IUCN status}} code of the taxon's latest global assessment; NE when it has none.

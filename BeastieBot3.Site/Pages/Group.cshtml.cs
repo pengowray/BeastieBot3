@@ -13,7 +13,9 @@ namespace BeastieBot3.Site.Pages;
 public sealed record ChildGroup(GroupRow Group, int Threatened, int Extinct);
 
 /// One rank the reader can pick as a heading in the list.
-public sealed record HeadingChoice(string Rank, bool FromCol, bool Picked);
+/// Headings: how many headings the rank adds to the list with the other options as they are; null
+/// when the rank adds none of its own (genus in species tables, whose tables are one per genus).
+public sealed record HeadingChoice(string Rank, bool FromCol, bool Picked, int? Headings);
 
 /// A group page (/taxa/{rank}/{name}): the group's place in the classification, its names, its
 /// counts by category, the groups in it, and a Wikipedia list of its taxa with options. When the
@@ -54,6 +56,8 @@ public sealed class GroupModel : PageModel {
     public GroupListOptions Options { get; private set; } = new();
     public GroupListOptions DefaultOptions { get; private set; } = new();
     public IReadOnlyList<HeadingChoice> HeadingChoices { get; private set; } = [];
+    /// How many lines each status section would add to the list, by StatusSection key.
+    public IReadOnlyDictionary<string, int> SectionLines { get; private set; } = new Dictionary<string, int>();
     /// Lines the list has with these options (from the counts, before reading the taxa).
     public int LineCount { get; private set; }
     /// The most lines (rows for species tables) a list may have.
@@ -115,16 +119,21 @@ public sealed class GroupModel : PageModel {
             DefaultOptions = DefaultOptions with { Sections = StatusSection.AllKeys };
         }
         Options = GroupListQuery.Read(Request.Query, DefaultOptions, ranks.Select(r => r.Rank).ToList());
-        HeadingChoices = ranks
-            .OrderBy(r => GroupListQuery.RankIndex(r.Rank)).ThenBy(r => r.MinDepth)
-            .Select(r => new HeadingChoice(r.Rank, r.OnlyFromCol, Options.HeadingRanks.Contains(r.Rank)))
-            .ToList();
         // Species from CoL and Wikidata go in the bulleted list only; the species tables list IUCN's taxa.
         var extraCounts = !Table.IsTable && Options.Sources.HasOtherSources ? _queries.GetExtraSpeciesCounts(group.NodeId) : null;
-        LineCount = GroupList.CountLines(group, Counts, Table.IsTable ? SpeciesTable.ListOptions(Options) : Options)
-            + GroupListSources.ExtraLines(extraCounts, Options);
+        var countOptions = Table.IsTable ? SpeciesTable.ListOptions(Options) : Options;
+        LineCount = GroupList.CountLines(group, Counts, countOptions) + GroupListSources.ExtraLines(extraCounts, Options);
+        SectionLines = GroupList.CountLinesBySection(group, Counts, countOptions, extraCounts?.For(Options.Sources) ?? 0);
+        var groupsWithin = _queries.GetGroupsWithin(group);
+        var headings = GroupList.CountHeadings(groupsWithin, _queries.GetGroupCountsWithin(group),
+            extraCounts is null ? new Dictionary<int, int>() : _queries.GetExtraSpeciesCountsWithin(group, Options.Sources), countOptions);
+        HeadingChoices = ranks
+            .OrderBy(r => GroupListQuery.RankIndex(r.Rank)).ThenBy(r => r.MinDepth)
+            .Select(r => new HeadingChoice(r.Rank, r.OnlyFromCol, Options.HeadingRanks.Contains(r.Rank),
+                Table.IsTable && r.Rank == "genus" ? null : headings.GetValueOrDefault(r.Rank)))
+            .ToList();
         if (!TooLong && LineCount > 0 && Table.IsTable) {
-            BuildTables(group);
+            BuildTables(group, groupsWithin);
         } else if (!TooLong && LineCount > 0) {
             var kinds = new List<string> { TaxonKinds.Species };
             if (Options.Infra != InfraMode.None) {
@@ -140,7 +149,7 @@ public sealed class GroupModel : PageModel {
                 NoticeGroups = ListNoticeGroups.Build(Sources);
                 taxa = Sources.Rows;
             }
-            var groups = _queries.GetGroupsWithin(group).Append(group).ToDictionary(g => g.NodeId);
+            var groups = groupsWithin.Append(group).ToDictionary(g => g.NodeId);
             List = GroupList.Build(taxa, groups, Options);
             var references = Options.Line.HasReferences
                 ? ListReferences.Build(List, new ListReferenceQueries(_db).GetCitations(group), Sources, Options.Line.Template,
@@ -151,10 +160,10 @@ public sealed class GroupModel : PageModel {
         return Page();
     }
 
-    private void BuildTables(GroupRow group) {
+    private void BuildTables(GroupRow group, IReadOnlyList<GroupRow> groupsWithin) {
         var listOptions = SpeciesTable.ListOptions(Options);
         var taxa = _queries.GetListTaxa(group, [TaxonKinds.Species]);
-        var groups = _queries.GetGroupsWithin(group).Append(group).ToDictionary(g => g.NodeId);
+        var groups = groupsWithin.Append(group).ToDictionary(g => g.NodeId);
         List = GroupList.Build(taxa, groups, listOptions);
         Tables = SpeciesTable.Build(List, groups, new SpeciesTableQueries(_db).GetExtras(group), Table);
         Wikitext = SpeciesTable.ToWikitext(Tables, Table);

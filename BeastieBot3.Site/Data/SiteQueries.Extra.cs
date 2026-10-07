@@ -57,6 +57,32 @@ public sealed partial class SiteQueries {
         return counts with { Split = split };
     }
 
+    /// How many extra species a list with these sources has at most in each group inside a group,
+    /// by node id, counted as ExtraSpeciesCounts.For counts them.
+    public IReadOnlyDictionary<int, int> GetExtraSpeciesCountsWithin(GroupRow group, ListSourceOptions sources) {
+        using var connection = _db.OpenConnection();
+        using var command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT e.node_id, e.sources, e.under_family, e.iucn_likely, e.species_count
+            FROM higher_taxon h JOIN higher_taxon_extra_count e ON e.node_id = h.node_id
+            WHERE h.first_pos >= @first AND h.last_pos <= @last AND h.node_id > @id
+            """;
+        command.Parameters.AddWithValue("@first", group.FirstPos);
+        command.Parameters.AddWithValue("@last", group.LastPos);
+        command.Parameters.AddWithValue("@id", group.NodeId);
+        var splits = new Dictionary<int, List<ExtraSpeciesSplit>>();
+        using (var reader = command.ExecuteReader()) {
+            while (reader.Read()) {
+                var id = reader.GetInt32(0);
+                if (!splits.TryGetValue(id, out var list)) {
+                    splits[id] = list = [];
+                }
+                list.Add(new ExtraSpeciesSplit(reader.GetInt32(1), reader.GetInt64(2) != 0, reader.GetInt64(3) != 0, reader.GetInt32(4)));
+            }
+        }
+        return splits.ToDictionary(s => s.Key, s => new ExtraSpeciesCounts(0, 0, 0, 0) { Split = s.Value }.For(sources));
+    }
+
     private const string ExtraColumns = """
         e.extra_id, e.sources, e.scientific_name, e.wikidata_name, h.kingdom, e.col_id, e.wikidata_qid,
         e.common_name_en, e.enwiki_title, e.node_id, e.sort_pos, e.authority

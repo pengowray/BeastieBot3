@@ -297,7 +297,8 @@
     // Checkboxes marked data-live-sync are ones the server can tick itself (the group page ticks NE
     // when CoL or Wikidata is ticked). Each takes the state its copy has in the new page's form, but
     // only when the form still sends the query the new page was made for, so a change the visitor
-    // made meanwhile is never undone. Returns true when it ran.
+    // made meanwhile is never undone. The numbers after options (data-live-count: headings per rank,
+    // lines per category) take their copies' text and class. Returns true when it ran.
     function syncOptions(form, next, query) {
         var fresh = next.querySelector("form.options-form");
         if (!fresh || formQuery(form) !== query) {
@@ -308,6 +309,14 @@
             var copy = fresh.querySelector("input[name=\"" + escape(input.name) + "\"][value=\"" + escape(input.value) + "\"]");
             if (copy) {
                 input.checked = copy.checked;
+            }
+        });
+        form.querySelectorAll("[data-live-count]").forEach(function (count) {
+            var copy = fresh.querySelector("[data-live-count=\"" + escape(count.getAttribute("data-live-count")) + "\"]");
+            if (copy) {
+                count.textContent = copy.textContent;
+                count.className = copy.className;
+                count.hidden = copy.hidden;
             }
         });
         return true;

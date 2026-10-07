@@ -1050,6 +1050,16 @@ abbr[title] {
     color: var(--muted);
 }
 
+/* How many headings a rank adds, or lines a category adds (_OptionCount). An option that adds none is dimmed. */
+.option-count {
+    color: var(--muted);
+    font-size: 0.85em;
+}
+
+label:has(.option-count-empty) {
+    opacity: 0.55;
+}
+
 .col-marker,
 .rule-marker {
     font-size: 0.75rem;

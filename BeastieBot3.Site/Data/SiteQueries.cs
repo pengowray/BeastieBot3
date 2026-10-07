@@ -629,6 +629,30 @@ public sealed partial class SiteQueries {
         return result;
     }
 
+    /// The counts of every group inside a group, by node id.
+    public IReadOnlyDictionary<int, IReadOnlyList<GroupCategoryCount>> GetGroupCountsWithin(GroupRow group) {
+        using var connection = _db.OpenConnection();
+        using var command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT c.node_id, c.category, c.species_count, c.infra_count, c.subpopulation_count
+            FROM higher_taxon h JOIN higher_taxon_count c ON c.node_id = h.node_id
+            WHERE h.first_pos >= @first AND h.last_pos <= @last AND h.node_id > @id
+            """;
+        command.Parameters.AddWithValue("@first", group.FirstPos);
+        command.Parameters.AddWithValue("@last", group.LastPos);
+        command.Parameters.AddWithValue("@id", group.NodeId);
+        var result = new Dictionary<int, IReadOnlyList<GroupCategoryCount>>();
+        using var reader = command.ExecuteReader();
+        while (reader.Read()) {
+            var id = reader.GetInt32(0);
+            if (!result.TryGetValue(id, out var list)) {
+                result[id] = list = new List<GroupCategoryCount>();
+            }
+            ((List<GroupCategoryCount>)list).Add(new GroupCategoryCount(reader.GetString(1), reader.GetInt32(2), reader.GetInt32(3), reader.GetInt32(4)));
+        }
+        return result;
+    }
+
     /// The Catalogue of Life's English names of several groups, by node id.
     public IReadOnlyDictionary<int, IReadOnlyList<string>> GetGroupColNames(IReadOnlyCollection<int> nodeIds) {
         var result = new Dictionary<int, IReadOnlyList<string>>();

@@ -133,6 +133,69 @@ public sealed class GroupListTests {
     }
 
     [Fact]
+    public void Counts_lines_by_section_with_the_extra_species_in_NE() {
+        GroupCategoryCount[] counts = [new("CR(PE)", 2, 1, 0), new("CR", 1, 0, 0), new("EN", 10, 3, 1)];
+        var group = Felidae with { SpeciesCount = 16, InfraCount = 5, SubpopulationCount = 1 };
+        var options = new GroupListOptions { Infra = InfraMode.Separate };
+        var bySection = GroupList.CountLinesBySection(group, counts, options, extraNotEvaluated: 4);
+
+        Assert.Equal(4, bySection["CR"]);
+        Assert.Equal(13, bySection["EN"]);
+        Assert.Equal(0, bySection["LC"]);
+        // 3 species and 1 subspecies with no global assessment, and the 4 extra species.
+        Assert.Equal(8, bySection["NE"]);
+        Assert.Equal(GroupList.CountLines(group, counts, options), bySection.Where(s => s.Key != "NE").Sum(s => s.Value));
+    }
+
+    [Theory]
+    [InlineData(false, "", "none")]
+    [InlineData(true, "", "none")]
+    [InlineData(true, "CR EN", "none")]
+    [InlineData(false, "LC", "none")]
+    [InlineData(true, "VU EN", "separate")]
+    [InlineData(true, "", "separate")]
+    public void Counts_the_headings_each_rank_adds_as_the_list_has_them(bool byStatus, string sections, string infra) {
+        var unassessed = Taxon(7, "Panthera spelaea", 4, 4, "LC") with { Category = null };
+        // In tree order, as the page reads them.
+        var taxa = Taxa.Append(unassessed).OrderBy(t => t.TreePos).ToList();
+        var options = new GroupListOptions {
+            HeadingRanks = ["order", "family", "genus"], ByStatus = byStatus,
+            Sections = sections.Length == 0 ? new HashSet<string>() : sections.Split(' ').ToHashSet(),
+            Infra = infra == "separate" ? InfraMode.Separate : InfraMode.None,
+        };
+
+        // The stored counts of each group: its taxa and those of the groups under it.
+        var counts = new Dictionary<int, Dictionary<string, GroupCategoryCount>>();
+        var totals = new Dictionary<int, (int Species, int Infra)>();
+        foreach (var taxon in taxa) {
+            for (var at = Groups[taxon.NodeId]; ; at = Groups[at.ParentNodeId!.Value]) {
+                var species = taxon.Kind == "species" ? 1 : 0;
+                var (s, i) = totals.GetValueOrDefault(at.NodeId);
+                totals[at.NodeId] = (s + species, i + 1 - species);
+                if (taxon.Category is not null) {
+                    var code = GroupList.StatusCode(taxon);
+                    var byCode = counts.TryGetValue(at.NodeId, out var c) ? c : counts[at.NodeId] = [];
+                    var old = byCode.GetValueOrDefault(code) ?? new GroupCategoryCount(code, 0, 0, 0);
+                    byCode[code] = old with { Species = old.Species + species, Infra = old.Infra + 1 - species };
+                }
+                if (at.ParentNodeId is null) {
+                    break;
+                }
+            }
+        }
+        var within = Groups.Values.Where(g => g.NodeId != Mammalia.NodeId)
+            .Select(g => g with { SpeciesCount = totals.GetValueOrDefault(g.NodeId).Species, InfraCount = totals.GetValueOrDefault(g.NodeId).Infra })
+            .ToList();
+        var stored = counts.ToDictionary(c => c.Key, c => (IReadOnlyList<GroupCategoryCount>)c.Value.Values.ToList());
+
+        var headings = GroupList.CountHeadings(within, stored, new Dictionary<int, int>(), options);
+        var list = GroupList.Build(taxa, Groups, options);
+        foreach (var rank in new[] { "order", "family", "genus" }) {
+            Assert.Equal(list.Blocks.OfType<HeadingBlock>().Count(h => h.Group?.Rank == rank), headings.GetValueOrDefault(rank));
+        }
+    }
+
+    [Fact]
     public void A_taxon_with_no_global_assessment_is_listed_under_NE_with_no_template() {
         var unassessed = Taxon(7, "Panthera spelaea", 4, 4, "LC", "Cave lion") with { Category = null, AssessmentId = null, YearPublished = null };
         var taxa = Taxa.Append(unassessed).ToList();

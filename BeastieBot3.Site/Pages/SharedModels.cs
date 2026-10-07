@@ -37,6 +37,11 @@ public sealed record BadgeModel(CategoryDisplay Category, bool Large = false, bo
 /// Label: the button's accessible name, naming what the text explains.
 public sealed record InfoTipModel(string Id, string Label, string Text);
 
+/// The number after a list option (_OptionCount): how many headings a rank adds, or how many lines a
+/// Red List category adds. Key names the option for live updates ("h:genus", "cat:CR"). A null
+/// Count shows nothing.
+public sealed record OptionCountModel(string Key, int? Count);
+
 /// The possible-duplicates panel under a group's list (_ListNotices). GroupRank: the page's rank, or
 /// null for a Catalogue of Life group, for the state of an entry outside the group.
 public sealed record ListNoticesModel(BeastieBot3.Site.Lists.ListNoticeGroups Groups, string? GroupRank);
