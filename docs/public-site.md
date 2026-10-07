@@ -1266,6 +1266,12 @@ title statements are not recorded (run wikidata iucn-assessment-items)".
   output cache is emptied). A missing file or a wrong schema version makes `/healthz` answer 503 with
   a reason.
 - Species pages are output-cached for an hour, keyed on the query parameters the page reads.
+- The home page's search examples are picked again on every visit (`Display/HomeExamples.cs`, not
+  output-cached): up to 5 from lists of scientific names, a large well-known animal first, always a
+  plant, a bat in half of the visits, and threatened species (CR, EN, VU) four times as likely to be
+  picked as LC ones (NT twice). Names the site database does not have as a species in the release
+  are left out (`SiteQueries.GetExampleTaxa`, read once per database file); each example shows the
+  common name, or the scientific name 30% of the time and always at least once.
 - The page of a taxon that is not in the release (`in_release = 0`) says "No current assessment in
   IUCN Red List version X", and names each taxon in the release it is linked to in `taxon_link`:
   "IUCN Red List version X lists *name* under IUCN id N" (`same-name`), or "IUCN lists *old name*

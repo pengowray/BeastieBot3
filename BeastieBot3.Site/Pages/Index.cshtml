@@ -11,12 +11,15 @@
 
 <partial name="_SearchForm" model="@(new SearchFormModel(null, "main"))" />
 
-<p class="examples">
-    @SiteText.ExamplesLabel
-    <a href="/search?q=Polar+bear">Polar bear</a>,
-    <a href="/search?q=Panthera+tigris"><i>Panthera tigris</i></a>,
-    <a href="/search?q=Wollemia+nobilis"><i>Wollemia nobilis</i></a>
-</p>
+@if (Model.Examples.Count > 0) {
+    <p class="examples">
+        @SiteText.ExamplesLabel
+        @for (var i = 0; i < Model.Examples.Count; i++) {
+            var example = Model.Examples[i];
+            <a href="/search?q=@Uri.EscapeDataString(example.Text)">@if (example.Italic) {<i>@example.Text</i>} else {@example.Text}</a>@(i < Model.Examples.Count - 1 ? ", " : "")
+        }
+    </p>
+}
 
 <section class="home-what" aria-labelledby="what-heading">
     <h2 id="what-heading" class="small-heading">@SiteText.WhatHeading</h2>
