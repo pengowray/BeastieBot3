@@ -257,21 +257,22 @@ sub-group (`WikipediaListConfig.ChildLinkNotes`); `ChildLinkReport` turns them i
 named group's list for the same preset (or its all-status list). It applies to ordinary lists as
 well as parent pages.
 
-Parent groups in the shipped rules: `fish` (ray-finned fishes, sharks and rays), `invertebrates`
-(insects, gastropods, bivalves, crustaceans, corals, arachnids), and `plants` (dicots, monocots,
-conifers, cycads; parent pages for `threatened` and `lc` only). `SubGroupShippedRulesTests` checks the
-shipped rules: every parent page links all its sub-groups, and no list gets a sub-group warning.
+Parent groups in the shipped rules: `mammals` (bats, rodents, primates; no `ew` sub-group lists, so
+`mammals-ew` is an ordinary list), `fish` (ray-finned fishes, sharks and rays), `invertebrates`
+(insects, gastropods, bivalves, crustaceans, corals, arachnids, and the all-status lists of
+cephalopods, sea cucumbers and millipedes), and `plants` (dicots, monocots, and the all-status lists
+of conifers, cycads, ferns and mosses; parent pages for `threatened` and `lc` only).
+`SubGroupShippedRulesTests` checks the shipped rules: every parent page links all its sub-groups, and
+no list gets a sub-group warning.
 
-A sub-group must be defined by a single `value:` at the rank the parent's sub-groups share (class
-for all three parents). The summary table and the sub-group sections match each sub-group by that
-one value, so a sub-group with a `values: [...]` filter, or one defined only at a higher rank than
-the other sub-groups, gets no table row and no section.
-
-Mosses are not a sub-group of `plants`. The `bryopsida` group (named "Mosses") covers class
-Bryopsida only, so a "Mosses" section on the plants pages would count only 96 of the 112
-threatened mosses in 2026-1. Widening the group to the other moss classes (Sphagnopsida,
-Andreaeopsida, Takakiopsida, Polytrichopsida) would give it a `values: [...]` filter, and so no
-table row and no section. The plants pages list Bryopsida species in an ordinary class section.
+A sub-group must be defined by a single `value:` at one rank. The parent's child rank is the lowest
+rank its sub-groups filter on (class for all four parents). The summary table and the sub-group
+sections match each sub-group by its value at that rank. A sub-group with no filter at that rank but
+a single-value filter at a higher rank that the parent does not have, such as `mosses` (phylum
+Bryophyta) among the class sub-groups of `plants`, gets one table row and one section for all its
+values at the child rank (the seven moss classes), and the parent page lists none of those classes
+in a section of its own. A sub-group with only a `values: [...]` filter, or only the parent's own
+filters, gets no table row and no section.
 
 ## Legacy Rules File (rules-list.txt)
 

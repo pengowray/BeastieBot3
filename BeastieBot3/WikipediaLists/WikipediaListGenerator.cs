@@ -307,11 +307,28 @@ internal sealed class WikipediaListGenerator {
         // Determine the rank that distinguishes children (e.g. "class") and each child's value at it.
         var childRank = DeriveChildRank(definition.SubLists);
         var linkByValue = new Dictionary<string, ChildListLink>(StringComparer.Ordinal);
+        var keyByLink = new Dictionary<ChildListLink, string>();
         var orderedKeys = new List<string>();
+        // A sub-group defined at a higher rank than the child rank (mosses, phylum Bryophyta, beside
+        // sub-groups that are classes) has one row and one section for all its values at the child
+        // rank: memberToGroup maps each moss class to BRYOPHYTA, and the orphan sections leave out
+        // the taxa in the phylum.
+        var memberToGroup = new Dictionary<string, string>(StringComparer.Ordinal);
+        var higherRankChildren = new List<(Func<IucnSpeciesRecord, string?> Selector, string Rank, string Value)>();
         foreach (var link in definition.SubLists) {
             var val = ChildDiscriminatingValue(link, childRank);
+            if (val == null && childRank != null && HigherRankDiscriminator(link, childRank, definition.Filters) is { } higher) {
+                higherRankChildren.Add((BuildSelector(higher.Rank), higher.Rank, higher.Value));
+                if (_chartData != null) {
+                    foreach (var member in _chartData.BuildChildBreakdown(link.Filters, childRank).Keys) {
+                        memberToGroup.TryAdd(member, higher.Value);
+                    }
+                }
+                val = higher.Value;
+            }
             if (val != null && !linkByValue.ContainsKey(val)) {
                 linkByValue[val] = link;
+                keyByLink[link] = val;
                 orderedKeys.Add(val);
             }
         }
@@ -320,7 +337,8 @@ internal sealed class WikipediaListGenerator {
         // are seeded so zero-count children still appear; other classes/orders under the parent appear too.
         Dictionary<string, IReadOnlyList<StatusCount>>? breakdown = null;
         if (childRank != null && _chartData != null) {
-            breakdown = _chartData.BuildChildBreakdown(definition.Filters, childRank, orderedKeys, splitNotAssigned: true);
+            breakdown = _chartData.BuildChildBreakdown(definition.Filters, childRank, orderedKeys,
+                memberToGroup: memberToGroup.Count > 0 ? memberToGroup : null, splitNotAssigned: true);
         }
 
         if (includeTable && breakdown is { Count: > 0 }) {
@@ -334,7 +352,7 @@ internal sealed class WikipediaListGenerator {
 
         // One bare-bones block per phylogenetic child, scoped to THIS section's statuses.
         foreach (var link in definition.SubLists) {
-            var val = ChildDiscriminatingValue(link, childRank);
+            keyByLink.TryGetValue(link, out var val);
             IReadOnlyList<StatusCount>? row = null;
             if (val != null && breakdown != null) breakdown.TryGetValue(val, out row);
             var n = row != null ? SectionStatusTotal(row, section.StatusSet) : 0;
@@ -378,6 +396,8 @@ internal sealed class WikipediaListGenerator {
                     var v = TaxonFilterSql.NormalizeValue(childRank, selector(r));
                     return v == null || !childValueSet.Contains(v);
                 })
+                .Where(r => !higherRankChildren.Any(h =>
+                    TaxonFilterSql.NormalizeValue(h.Rank, h.Selector(r)) == h.Value))
                 .GroupBy(OrphanKey)
                 .OrderByDescending(g => g.Count())
                 .ThenBy(g => g.Key, StringComparer.Ordinal);
@@ -420,6 +440,33 @@ internal sealed class WikipediaListGenerator {
                 if (rank == null || !RankOrder.TryGetValue(rank, out var ord)) continue;
                 if (ord > bestOrder) { bestOrder = ord; best = rank; }
             }
+        }
+        return best;
+    }
+
+    /// <summary>
+    /// For a child with no single-value filter at the child rank: its single-value filter at the
+    /// lowest rank above the child rank (mosses: phylum BRYOPHYTA when the other children are classes),
+    /// normalized. Null when it has none, or when the parent has the same filter (a child filtered
+    /// only on the parent's kingdom would otherwise take every taxon on the page).
+    /// </summary>
+    internal static (string Rank, string Value)? HigherRankDiscriminator(
+        ChildListLink link, string childRank, IReadOnlyList<TaxonFilterDefinition>? parentFilters) {
+        if (!RankOrder.TryGetValue(childRank, out var childOrder)) return null;
+        (string Rank, string Value)? best = null;
+        var bestOrder = -1;
+        foreach (var f in link.Filters) {
+            if (!string.IsNullOrWhiteSpace(f.System) || string.IsNullOrWhiteSpace(f.Value)) continue;
+            var rank = f.Rank?.Trim().ToLowerInvariant();
+            if (rank == null || !RankOrder.TryGetValue(rank, out var ord) || ord >= childOrder || ord <= bestOrder) continue;
+            if (TaxonFilterSql.NormalizeValue(rank, f.Value) is not { } value) continue;
+            var parentHasIt = parentFilters?.Any(p =>
+                string.IsNullOrWhiteSpace(p.System)
+                && string.Equals(p.Rank?.Trim(), rank, StringComparison.OrdinalIgnoreCase)
+                && TaxonFilterSql.NormalizeValue(rank, p.Value) == value) ?? false;
+            if (parentHasIt) continue;
+            best = (rank, value);
+            bestOrder = ord;
         }
         return best;
     }

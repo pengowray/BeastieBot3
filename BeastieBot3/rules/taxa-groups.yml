@@ -90,10 +90,21 @@ groups:
         value: Animalia
       - rank: class
         value: Mammalia
+    # Pages over about 3,600 entries go over Wikipedia's template expansion limit.
+    size_budget:
+      max_entries: 3600
+    # Bats, rodents and primates have their own lists, linked from the mammals pages. The other
+    # orders are listed on the mammals pages, one section for each order. The sub-groups have no
+    # extinct in the wild list (none of them has an EW species), so mammals-ew is an ordinary list.
+    children: [bats, rodents, primates]
 
   bats:
     name: "Bats"
     adjective: "bat"
+    categories:
+      kingdom_list: "Lists of animals by conservation status"
+      list: "Lists of mammals"
+      conservation: "Mammal conservation"
     display:
       listing_style: CommonNameOnly
     filters:
@@ -107,6 +118,10 @@ groups:
   rodents:
     name: "Rodents"
     adjective: "rodent"
+    categories:
+      kingdom_list: "Lists of animals by conservation status"
+      list: "Lists of mammals"
+      conservation: "Mammal conservation"
     display:
       listing_style: CommonNameOnly
     filters:
@@ -120,6 +135,10 @@ groups:
   primates:
     name: "Primates"
     adjective: "primate"
+    categories:
+      kingdom_list: "Lists of animals by conservation status"
+      list: "Lists of mammals"
+      conservation: "Mammal conservation"
     display:
       listing_style: CommonNameOnly
     filters:
@@ -309,6 +328,42 @@ groups:
       - rank: class
         value: Arachnida
 
+  # Cephalopods, sea cucumbers and millipedes each have one all-status list: they have no species,
+  # or only a few, in some categories (no extinct cephalopods; no extinct or near threatened sea
+  # cucumbers), so a list for each category would give empty or very short pages.
+  cephalopods:
+    name: "Cephalopods"
+    adjective: "cephalopod"
+    display:
+      listing_style: ScientificNameFocus
+    filters:
+      - rank: kingdom
+        value: Animalia
+      - rank: class
+        value: Cephalopoda
+
+  sea-cucumbers:
+    name: "Sea cucumbers"
+    adjective: "sea cucumber"
+    display:
+      listing_style: ScientificNameFocus
+    filters:
+      - rank: kingdom
+        value: Animalia
+      - rank: class
+        value: Holothuroidea
+
+  millipedes:
+    name: "Millipedes"
+    adjective: "millipede"
+    display:
+      listing_style: ScientificNameFocus
+    filters:
+      - rank: kingdom
+        value: Animalia
+      - rank: class
+        value: Diplopoda
+
   # ==================== VIRTUAL PARENTS (nested lists) ====================
   # Parent groups aggregate several leaf groups: they render a per-child summary table + bare-bones
   # sections + links DOWN to the child lists, instead of a flat species body. See docs/wikipedia-list-formatting.md.
@@ -325,7 +380,9 @@ groups:
         value: Animalia
       - rank: phylum
         exclude: [Chordata]
-    children: [insects, gastropods, bivalves, crustaceans, corals, arachnids]
+    # Cephalopods, sea cucumbers and millipedes have only an all-status list each, which every
+    # invertebrates page links.
+    children: [insects, gastropods, bivalves, crustaceans, corals, arachnids, cephalopods, sea-cucumbers, millipedes]
 
   # Fish = the five fish classes (no single Linnaean class). Multi-class include, no exclude needed.
   fish:
@@ -359,16 +416,13 @@ groups:
     filters:
       - rank: kingdom
         value: Plantae
-    # Parent breakouts: the threatened/lc plant pages link DOWN to the dicot/monocot sub-lists. Conifers
-    # and cycads have one all-status page each, which those two pages link in place of a threatened/lc
-    # list. plants-nt/dd/extinct-combined stay ordinary lists: no sub-group has a list for those
-    # presets, and an all-status list alone does not make a page a parent.
-    # bryopsida is not a sub-group here. Its name is "Mosses" but it covers class Bryopsida only, so a
-    # "Mosses" section on these pages would give a wrong moss count: 96 of the 112 threatened mosses in
-    # 2026-1. Sphagnopsida, Andreaeopsida, Takakiopsida and Polytrichopsida are moss classes too. A
-    # sub-group must be a single class (the summary table and the sections match children by one class
-    # value), so Bryopsida stays an ordinary class section on the plants pages.
-    children: [magnoliopsida, liliopsida, conifers, cycads]
+    # Parent breakouts: the threatened/lc plant pages link DOWN to the dicot/monocot sub-lists. Conifers,
+    # cycads, ferns and mosses have one all-status page each, which those two pages link in place of a
+    # threatened/lc list. plants-nt/dd/extinct-combined stay ordinary lists: no sub-group has a list
+    # for those presets, and an all-status list alone does not make a page a parent.
+    # mosses is a phylum (Bryophyta) and the other sub-groups are classes. The plants pages give it one
+    # table row and one section for all seven moss classes.
+    children: [magnoliopsida, liliopsida, conifers, cycads, ferns, mosses]
 
   # Flowering plants split into the two big classes so the huge threatened list can break out by class.
   magnoliopsida:
@@ -430,7 +484,9 @@ groups:
         Asparagales: {}
         Poales: {}
 
-  bryopsida:
+  # All mosses: phylum Bryophyta, seven classes in IUCN (Bryopsida, Sphagnopsida, Polytrichopsida,
+  # Andreaeopsida, Tetraphidopsida, Oedipodiopsida, Takakiopsida).
+  mosses:
     name: "Mosses"
     adjective: "moss"
     display:
@@ -438,8 +494,20 @@ groups:
     filters:
       - rank: kingdom
         value: Plantae
+      - rank: phylum
+        value: BRYOPHYTA
+
+  # Ferns and horsetails: IUCN's class Polypodiopsida includes Equisetales.
+  ferns:
+    name: "Ferns"
+    adjective: "fern"
+    display:
+      listing_style: ScientificNameFocus
+    filters:
+      - rank: kingdom
+        value: Plantae
       - rank: class
-        value: BRYOPSIDA
+        value: POLYPODIOPSIDA
 
   conifers:
     name: "Conifers"

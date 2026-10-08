@@ -332,4 +332,25 @@ public class SubGroupLinkTests {
           - taxa_group: ferns
             category_split: separate
         """;
+
+    private static TaxonFilterDefinition RankFilter(string rank, string value) => new() { Rank = rank, Value = value };
+
+    private static ChildListLink Link(params TaxonFilterDefinition[] filters) =>
+        new("x-all-status", "X", "x", "List of x", filters.ToList(), GroupingKind.Phylogenetic);
+
+    // mosses (phylum Bryophyta) beside class sub-groups of plants: one row for the whole phylum.
+    [Fact]
+    public void HigherRankDiscriminator_PhylumSubGroupAmongClasses() {
+        var parent = new List<TaxonFilterDefinition> { RankFilter("kingdom", "Plantae") };
+        var mosses = Link(RankFilter("kingdom", "Plantae"), RankFilter("phylum", "Bryophyta"));
+        Assert.Equal(("phylum", "BRYOPHYTA"), WikipediaListGenerator.HigherRankDiscriminator(mosses, "class", parent));
+    }
+
+    // A sub-group filtered only on the parent's own kingdom would take every taxon on the page.
+    [Fact]
+    public void HigherRankDiscriminator_IgnoresTheParentsOwnFilters() {
+        var parent = new List<TaxonFilterDefinition> { RankFilter("kingdom", "Plantae") };
+        var kingdomOnly = Link(RankFilter("kingdom", "Plantae"));
+        Assert.Null(WikipediaListGenerator.HigherRankDiscriminator(kingdomOnly, "class", parent));
+    }
 }
