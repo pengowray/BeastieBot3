@@ -129,25 +129,25 @@ public sealed class SpeciesModel : PageModel {
 
     /// The reasons IUCN's Table 7 gives for the category changes of the assessments in the history
     /// table (this taxon's, and in a combined history the linked taxa's), by assessment id.
-    public IReadOnlyDictionary<long, CategoryChangeRow> ChangeReasons { get; private set; } = new Dictionary<long, CategoryChangeRow>();
+    private IReadOnlyDictionary<long, CategoryChangeRow> ChangeReasons { get; set; } = new Dictionary<long, CategoryChangeRow>();
 
     /// The assessments in the history table that IUCN's summary tables list as Possibly Extinct, by
     /// assessment id. The history table marks only those whose own record has no such tag
     /// (ListedOnlyInTables).
-    public IReadOnlyDictionary<long, IReadOnlyList<PossiblyExtinctListingRow>> PossiblyExtinctListings { get; private set; }
+    private IReadOnlyDictionary<long, IReadOnlyList<PossiblyExtinctListingRow>> PossiblyExtinctListings { get; set; }
         = new Dictionary<long, IReadOnlyList<PossiblyExtinctListingRow>>();
 
     /// The table listing of an assessment as Possibly Extinct (or in the Wild) when the assessment
     /// itself does not have that tag; null otherwise. A listing as PE of an assessment tagged PEW
     /// counts, so the difference shows.
-    public PossiblyExtinctListingRow? ListedOnlyInTables(AssessmentRow assessment) =>
+    private PossiblyExtinctListingRow? ListedOnlyInTables(AssessmentRow assessment) =>
         PossiblyExtinctListings.TryGetValue(assessment.AssessmentId, out var listings)
             ? listings.FirstOrDefault(l => l.Tag == "PE" ? !assessment.PossiblyExtinct : !assessment.PossiblyExtinctInTheWild)
             : null;
 
     /// The PDF of the 2008 Table 7, which lists genuine changes only, for the footnote of a 2008 change
     /// with no reason; null when the page has no reasons or the database has no such table.
-    public string? Table7Of2008 { get; private set; }
+    private string? Table7Of2008 { get; set; }
 
     /// The parts of a history table that come from IUCN's summary tables, for its rows in the order
     /// shown (own: the row is this page's taxon's).
@@ -159,7 +159,7 @@ public sealed class SpeciesModel : PageModel {
 
     /// Statuses in lists other than the IUCN Red List (other_status), grouped by country in the order
     /// of OtherStatusSystems.All.
-    public IReadOnlyList<OtherStatusRow> OtherStatuses { get; private set; } = [];
+    private IReadOnlyList<OtherStatusRow> OtherStatuses { get; set; } = [];
 
     /// The taxon's IUCN Green Status assessment; null when it has none.
     public GreenStatusRow? GreenStatus { get; private set; }
@@ -169,7 +169,7 @@ public sealed class SpeciesModel : PageModel {
 
     /// The date the site database's copy of a source of the other statuses was downloaded
     /// ("25 June 2026"); null when unknown.
-    public string? OtherStatusSourceDate(string source) {
+    private string? OtherStatusSourceDate(string source) {
         var snapshot = _db.Snapshot;
         switch (source) {
             case OtherStatusSources.Sprat: {
@@ -355,7 +355,7 @@ public sealed class SpeciesModel : PageModel {
         return $"/species/{Taxon?.TaxonId}{Options.ToQuery(assessmentId, targetDefault)}";
     }
 
-    public string DefaultRefNameFor(AssessmentRow assessment) =>
+    private string DefaultRefNameFor(AssessmentRow assessment) =>
         DefaultRefNames.For(assessment, LatestGlobal?.AssessmentId, GlobalHistory);
 
     /// The "Show wikitext" link of a combined history row under another IUCN id: that id's page with

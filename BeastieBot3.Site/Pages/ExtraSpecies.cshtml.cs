@@ -25,7 +25,7 @@ public sealed class ExtraSpeciesModel : PageModel {
     }
 
     public string Source { get; private set; } = ColSource;
-    public string RequestedId { get; private set; } = string.Empty;
+    private string RequestedId { get; set; } = string.Empty;
     public ExtraSpeciesRow? Species { get; private set; }
     /// The groups above the species, kingdom first, ending with its genus or (UnderFamily) its family.
     public IReadOnlyList<GroupRow> Path { get; private set; } = [];

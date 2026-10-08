@@ -192,7 +192,7 @@ public sealed class UpdateModel : PageModel {
     public RebuildResult? Rebuild { get; private set; }
     /// The text was rebuilt: a rebuild was asked for and not refused. A refused rebuild leaves adding
     /// the missing taxa and removing taxa as they are without one.
-    public bool Rebuilt => Rebuild is { Refusal: RebuildRefusal.None };
+    private bool Rebuilt => Rebuild is { Refusal: RebuildRefusal.None };
 
     // The rebuild's choices, named as on the group pages' list options where they mean the same:
     //   hmode   text | ranks    headings as in the wikitext, or for the ranks in h
