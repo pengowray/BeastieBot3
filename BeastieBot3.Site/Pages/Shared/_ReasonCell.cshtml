@@ -7,19 +7,19 @@
             @SiteText.ReasonLabel(cell.Code!)
             break;
         case ReasonCellKind.BeforeTables:
-            <span class="reason-none">@SiteText.ReasonBeforeTables</span>
+            <span class="no-value">@SiteText.ReasonBeforeTables</span>
             break;
         case ReasonCellKind.FirstAssessment:
-            <span class="reason-none">@SiteText.ReasonFirstAssessment</span>
+            <span class="no-value">@SiteText.ReasonFirstAssessment</span>
             break;
         case ReasonCellKind.NoChange:
-            <span class="reason-none reason-no-change">@SiteText.ReasonNoChange</span>
+            <span class="no-value reason-no-change">@SiteText.ReasonNoChange</span>
             break;
         case ReasonCellKind.NoneGiven:
-            <span class="reason-none">@SiteText.ReasonNoneGiven</span>
+            <span class="no-value">@SiteText.ReasonNoneGiven</span>
             break;
         default:
-            <span class="reason-none">@SiteText.ReasonNotFound</span>
+            <span class="no-value">@SiteText.ReasonNotFound</span>
             break;
     }
     if (cell.Footnote is { } number) {<partial name="_FootnoteRef" model="number" />}
