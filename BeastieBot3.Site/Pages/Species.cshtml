@@ -520,16 +520,35 @@
     @if (Model.OtherLanguages.Count > 0) {
         <h3>@SiteText.NamesOtherLanguages</h3>
         var hiddenLanguages = Math.Max(0, Model.OtherLanguages.Count - SpeciesModel.ShortListLength);
-        @* One list; the languages after the first few are hidden until the box is ticked. *@
+        @* One table, one tbody per language with the language in a header cell across its rows; the
+           languages after the first few are hidden until the box is ticked. *@
         <div class="more-list">
-            <dl class="language-names">
-                @for (var i = 0; i < Model.OtherLanguages.Count; i++) {
-                    var g = Model.OtherLanguages[i];
-                    var more = i >= SpeciesModel.ShortListLength ? "more-item" : null;
-                    <dt class="@more">@g.Language</dt>
-                    <dd class="@more" lang="@g.Lang">@string.Join(", ", g.Names)</dd>
-                }
-            </dl>
+            <div class="table-scroll">
+                <table class="names-table language-names">
+                    <thead>
+                        <tr>
+                            <th scope="col">@SiteText.ColLanguage</th>
+                            <th scope="col">@SiteText.ColName</th>
+                            <th scope="col">@SiteText.ColSource</th>
+                        </tr>
+                    </thead>
+                    @for (var i = 0; i < Model.OtherLanguages.Count; i++) {
+                        var g = Model.OtherLanguages[i];
+                        <tbody class="@(i >= SpeciesModel.ShortListLength ? "more-item" : null)">
+                            @for (var j = 0; j < g.Names.Count; j++) {
+                                var n = g.Names[j];
+                                <tr>
+                                    @if (j == 0) {
+                                        <th scope="rowgroup" rowspan="@g.Names.Count">@g.Language</th>
+                                    }
+                                    <td lang="@g.Lang">@n.Name</td>
+                                    <td>@string.Join(", ", n.Sources)</td>
+                                </tr>
+                            }
+                        </tbody>
+                    }
+                </table>
+            </div>
             @if (hiddenLanguages > 0) {
                 <p class="more-toggle"><label><input type="checkbox" class="show-more" autocomplete="off"> @SiteText.ShowMoreLanguages(hiddenLanguages)</label></p>
             }

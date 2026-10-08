@@ -1,56 +1,12 @@
 using System.Globalization;
 using System.Text.RegularExpressions;
+using BeastieBot3.Shared.SiteData;
 
 namespace BeastieBot3.Site.Display;
 
 /// English names of the ISO 639 language codes common names carry ("fr" -> "French"), and the
 /// code a name is grouped and tagged by.
 public static partial class LanguageNames {
-    // The languages IUCN and Wikidata give most names in, so the common cases do not depend on the
-    // server's ICU data.
-    private static readonly Dictionary<string, string> Known = new(StringComparer.OrdinalIgnoreCase) {
-        ["en"] = "English",
-        ["fr"] = "French",
-        ["es"] = "Spanish",
-        ["pt"] = "Portuguese",
-        ["de"] = "German",
-        ["it"] = "Italian",
-        ["nl"] = "Dutch",
-        ["sv"] = "Swedish",
-        ["da"] = "Danish",
-        ["no"] = "Norwegian",
-        ["nb"] = "Norwegian Bokmål",
-        ["fi"] = "Finnish",
-        ["is"] = "Icelandic",
-        ["pl"] = "Polish",
-        ["cs"] = "Czech",
-        ["ru"] = "Russian",
-        ["uk"] = "Ukrainian",
-        ["zh"] = "Chinese",
-        ["ja"] = "Japanese",
-        ["ko"] = "Korean",
-        ["ar"] = "Arabic",
-        ["tr"] = "Turkish",
-        ["id"] = "Indonesian",
-        ["ms"] = "Malay",
-        ["vi"] = "Vietnamese",
-        ["th"] = "Thai",
-        ["hi"] = "Hindi",
-        ["sw"] = "Swahili",
-        ["af"] = "Afrikaans",
-        ["la"] = "Latin",
-        // ISO 639-2 and 639-5 codes for groups of languages that IUCN uses. ICU has no names for
-        // them, so they would otherwise show as the bare code.
-        ["phi"] = "Philippine languages",
-        ["aus"] = "Australian languages",
-        ["map"] = "Austronesian languages",
-        ["sai"] = "South American Indian languages",
-        ["crp"] = "Creoles and pidgins",
-        ["cpf"] = "French-based creoles",
-        ["paa"] = "Papuan languages",
-        ["myn"] = "Mayan languages",
-    };
-
     // Codes that say nothing about the language: undetermined, uncoded, no linguistic content.
     // Names with them are listed with the names that have no code.
     private static readonly HashSet<string> NotGiven = new(StringComparer.OrdinalIgnoreCase) { "und", "mis", "zxx" };
@@ -82,13 +38,15 @@ public static partial class LanguageNames {
     }
 
     /// The English name of the language, SiteText.LanguageNotGiven when there is none, or the code
-    /// itself when no name is known.
+    /// itself when no name is known. Names come from LanguageNameTable (the ISO 639 codes, with
+    /// CLDR's English names), so they do not depend on the server's ICU data; ICU is asked only
+    /// about a code the table does not have.
     public static string Name(string? code) {
         var key = Key(code);
         if (key.Length == 0) {
             return SiteText.LanguageNotGiven;
         }
-        if (Known.TryGetValue(key, out var name)) {
+        if (LanguageNameTable.Name(key) is { } name) {
             return name;
         }
         try {

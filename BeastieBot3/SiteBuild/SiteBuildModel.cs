@@ -127,6 +127,9 @@ internal sealed class SiteTaxon {
     public List<(string Name, string Type, string? Authority, string Source)> ChecklistNames { get; } = new();
     /// The scientific name and the synonyms in the taxobox of the taxon's English Wikipedia article.
     public List<SiteSynonym> WikipediaSynonyms { get; } = new();
+    /// Common names in languages other than English from the Catalogue of Life, Wikidata and
+    /// Wikipedia (SiteOtherLanguageNames).
+    public List<SiteOtherName> OtherLanguageNames { get; } = new();
 }
 
 /// A synonym and its authority as its source gives it; Authority is null when the source gives none.
@@ -283,6 +286,17 @@ internal sealed class SiteBuildStats {
 
     public readonly Dictionary<string, int> NamesByType = new(StringComparer.Ordinal);
     public int CommonNamesEnglish;
+    /// Common names in languages other than English read from the Catalogue of Life, from Wikidata
+    /// (P1843, labels and aliases) and from Wikipedia sitelink titles, and what happened to them.
+    public readonly OtherNameCounts ColOtherNames = new();
+    public readonly OtherNameCounts WikidataOtherNames = new();
+    public readonly OtherNameCounts WikipediaOtherNames = new();
+    /// name rows written for common names in languages other than English (or none), by source.
+    public readonly Dictionary<string, int> OtherLanguageNameRows = new(StringComparer.Ordinal);
+    /// Those names after merging the sources' rows: one per taxon, language and name (case and
+    /// Unicode normalisation ignored, SiteNameKey.CaseFold), as the species page shows them.
+    public int OtherLanguageNamesMerged;
+    public readonly HashSet<string> OtherLanguages = new(StringComparer.Ordinal);
     /// Common names in any language that CommonNameQuality found to be junk (left out of the name
     /// table), and that it repaired (stored repaired). Counted per taxon by SiteNameSet.
     public int CommonNamesJunk;

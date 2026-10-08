@@ -141,6 +141,32 @@ public sealed class HomeAndSearchTests(SiteFactory factory) : IClassFixture<Site
     }
 
     [Fact]
+    public async Task EnglishCommonNameComesBeforeTheSameNameInAnotherLanguage() {
+        // "Panther" is an English name of the leopard and (in the fixture) a German name of the lion.
+        // The English name comes first, although Panthera leo sorts before Panthera pardus.
+        var html = await _client.GetStringAsync("/search?q=Panther&all=1");
+        var leopard = Html.IndexOf(html, $"/species/{FixtureDb.Leopard}\"");
+        var lion = Html.IndexOf(html, $"/species/{FixtureDb.Lion}\"");
+        Assert.True(leopard > 0 && lion > leopard, "the taxon with the English name comes first");
+        // The name shown is the one that ranked the taxon.
+        Assert.Contains("Matched common name: Panther (German)", Html.Text(html));
+    }
+
+    [Fact]
+    public async Task OneTaxonWithTheTextAsAnEnglishNameIsGoneTo_ThoughAnotherHasItInAnotherLanguage() {
+        var response = await _client.GetAsync("/search?q=Panther");
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+        Assert.Equal($"/species/{FixtureDb.Leopard}?q=Panther", response.Headers.Location?.OriginalString);
+        var name = await _client.GetAsync("/name/Panther");
+        Assert.Equal(HttpStatusCode.Redirect, name.StatusCode);
+        Assert.Equal($"/species/{FixtureDb.Leopard}", name.Headers.Location?.OriginalString);
+
+        // A name only in another language still goes to its one taxon.
+        var german = await _client.GetAsync("/search?q=K%C3%B6nigstiger");
+        Assert.Equal($"/species/{FixtureDb.Tiger}?q=K%C3%B6nigstiger", german.Headers.Location?.OriginalString);
+    }
+
+    [Fact]
     public async Task NameSharedByTwoTaxaListsBoth() {
         var response = await _client.GetAsync("/search?q=big+cat");
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);

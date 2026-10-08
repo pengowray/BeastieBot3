@@ -215,6 +215,20 @@ internal sealed class SiteDbBuild {
         });
         globalHistory = null!;
 
+        // Common names in other languages, after every synonym list is read: the rules compare the
+        // names with the synonyms.
+        Optional("Catalogue of Life database: common names in other languages", _inputs.ColDatabase, path => {
+            if (!SiteOtherLanguageNames.ReadCol(path, taxa, _stats.ColOtherNames, ct)) {
+                _stats.Warnings.Add("The Catalogue of Life database has no vernacularname table, so the site has no Catalogue of Life names in languages other than English.");
+                return "no vernacularname table";
+            }
+            return OtherNamesSummary(_stats.ColOtherNames);
+        });
+        Optional("Wikidata cache: common names in other languages and Wikipedia titles", _inputs.WikidataCache, path => {
+            SiteOtherLanguageNames.ReadWikidata(path, taxa, _stats.WikidataOtherNames, _stats.WikipediaOtherNames, ct);
+            return $"Wikidata: {OtherNamesSummary(_stats.WikidataOtherNames)}; Wikipedia titles: {OtherNamesSummary(_stats.WikipediaOtherNames)}";
+        });
+
         // 8. Parents, the tree of groups and list links, then taxa, names, meta.
         SetParents(taxonList, taxa, apiTaxa.SubpopulationParents);
         SiteTaxonTree tree = null!;
@@ -462,8 +476,9 @@ internal sealed class SiteDbBuild {
 
     // ------------------------------------------------------------ names
 
-    // Order: the scientific name, IUCN's common names (main first), the other English names, IUCN's
-    // synonyms, then CoL's. The order sets name_id, which the site uses to order names within a list.
+    // Order: the scientific name, IUCN's common names (main first), the other English names, the
+    // other sources' names in other languages (CoL, Wikidata, Wikipedia), IUCN's synonyms, then
+    // CoL's. The order sets name_id, which the site uses to order names within a list.
     private void WriteNames(SiteDbWriter writer, SiteTaxon taxon) {
         var names = new SiteNameSet();
         names.Add(taxon.ScientificName, SiteNameType.Scientific, null, SiteNameSource.Iucn, isPreferred: true);
@@ -473,6 +488,9 @@ internal sealed class SiteDbBuild {
         foreach (var (name, source, preferred) in taxon.EnglishNames
                      .OrderBy(n => SourceOrder(n.Source))) {
             names.Add(name, SiteNameType.Common, "en", source, preferred);
+        }
+        foreach (var name in taxon.OtherLanguageNames.OrderBy(n => OtherLanguageSourceOrder(n.Source))) {
+            names.Add(name.Name, SiteNameType.Common, name.Language, name.Source);
         }
         foreach (var synonym in taxon.IucnSynonyms) {
             names.Add(synonym.Name, SiteNameType.Synonym, null, SiteNameSource.Iucn, authority: synonym.Authority);
@@ -489,11 +507,20 @@ internal sealed class SiteDbBuild {
         foreach (var (name, type, authority, source) in taxon.ChecklistNames) {
             names.Add(name, type == "common" ? SiteNameType.Common : SiteNameType.Synonym, type == "common" ? "en" : null, source, authority: authority);
         }
+        var merged = new HashSet<(string?, string)>();
         foreach (var name in names.Names) {
             writer.AddName(taxon.TaxonId, name);
             _stats.Count(_stats.NamesByType, name.NameType);
             if (name.NameType == SiteNameType.Common && name.Language == "en") {
                 _stats.CommonNamesEnglish++;
+            } else if (name.NameType == SiteNameType.Common) {
+                _stats.Count(_stats.OtherLanguageNameRows, name.Source);
+                if (merged.Add((name.Language, SiteNameKey.CaseFold(name.Name)))) {
+                    _stats.OtherLanguageNamesMerged++;
+                }
+                if (name.Language is { } language) {
+                    _stats.OtherLanguages.Add(language);
+                }
             }
         }
         _stats.CommonNamesJunk += names.JunkCommonNames;
@@ -505,7 +532,19 @@ internal sealed class SiteDbBuild {
         taxon.ColSynonyms.Clear();
         taxon.WikidataSynonyms.Clear();
         taxon.WikipediaSynonyms.Clear();
+        taxon.OtherLanguageNames.Clear();
+        taxon.OtherLanguageNames.TrimExcess();
     }
+
+    private static int OtherLanguageSourceOrder(string source) => source switch {
+        SiteNameSource.Col => 0,
+        SiteNameSource.Wikidata => 1,
+        _ => 2,
+    };
+
+    private static string OtherNamesSummary(OtherNameCounts counts) =>
+        $"{counts.Kept:N0} of {counts.Read:N0} names kept ({counts.English:N0} English, {counts.LanguageLeftOut:N0} with no language or "
+        + $"one the site cannot name, {counts.Dropped.Values.Sum():N0} scientific names)";
 
     private static int SourceOrder(string source) => source switch {
         SiteNameSource.Iucn => 0,

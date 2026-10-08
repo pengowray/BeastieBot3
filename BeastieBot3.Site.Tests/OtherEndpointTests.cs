@@ -141,12 +141,15 @@ public sealed class OtherEndpointTests(SiteFactory factory) : IClassFixture<Site
         Assert.Contains("<td><a href=\"https://www.crossref.org/documentation/retrieve-metadata/\">CC0</a></td>", html);
         Assert.Contains("<td><a href=\"https://www.iucnredlist.org/terms/terms-of-use\">IUCN Red List Terms of Use</a></td>", html);
 
-        // Every source the taxon pages name beside an English common name says it supplies names.
-        foreach (var source in new[] { "IUCN Red List", "Wikidata", "English Wikipedia", "Catalogue of Life" }) {
-            Assert.Matches($">{Regex.Escape(source)}</a></th>\\s*<td>[^<]*common names", html);
+        // Every source the taxon pages name beside a common name says it supplies names.
+        foreach (var source in new[] { "IUCN Red List", "Wikidata", "Wikipedia", "Catalogue of Life" }) {
+            Assert.Matches($">{Regex.Escape(source)}</a></th>\\s*<td>[^<]*[Cc]ommon names", html);
         }
-        Assert.Contains("English common names, synonyms, classification, and links to Catalogue of Life pages", text);
-        Assert.Contains("English common names (from article titles and taxoboxes), classification (from taxoboxes), and links to Wikipedia articles", text);
+        Assert.Contains("Common names in English and other languages, synonyms, classification, and links to Catalogue of Life pages", text);
+        Assert.Contains("Wikidata items of taxa and of assessments, common names in English and other languages, classification,", text);
+        Assert.Contains("<th scope=\"row\"><a href=\"https://www.wikipedia.org\">Wikipedia</a></th>", html);
+        Assert.Contains("Common names in English and other languages (from article titles), classification and English common names "
+            + "(from taxoboxes), and links to English Wikipedia articles", text);
         Assert.Contains("English common names and synonyms of mammals", text);
         Assert.Contains("<td><a href=\"https://creativecommons.org/licenses/by-nc/4.0/\">CC BY-NC 4.0</a></td>", html);
         Assert.Contains("Mammal Diversity Database. Mammal Diversity Database (v2.5). Zenodo.", text);

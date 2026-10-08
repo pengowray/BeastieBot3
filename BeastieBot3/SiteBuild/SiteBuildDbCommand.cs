@@ -301,6 +301,29 @@ internal sealed class SiteBuildDbCommand : Command<SiteBuildDbCommand.Settings> 
         Row("Of those, names set in rules-list.txt", s.CommonNameEnFromRules);
         Row("English names not used: the scientific name again, or a working name", s.CommonNameEnUnusable);
 
+        Section("Common names in languages other than English");
+        foreach (var (source, counts) in new[] {
+                     ("Catalogue of Life", s.ColOtherNames), ("Wikidata", s.WikidataOtherNames), ("Wikipedia titles", s.WikipediaOtherNames),
+                 }) {
+            Row($"{source}: names read for the site's taxa", counts.Read);
+            Row($"{source}: English names (not read here)", counts.English);
+            Row($"{source}: names with no language, several, or a language code the site cannot name", counts.LanguageLeftOut);
+            Row($"{source}: the taxon's scientific name or a synonym", counts.Dropped.GetValueOrDefault(OtherNameDrop.ScientificName));
+            Row($"{source}: the taxon's genus", counts.Dropped.GetValueOrDefault(OtherNameDrop.Genus));
+            Row($"{source}: starting with the genus and a lower-case word", counts.Dropped.GetValueOrDefault(OtherNameDrop.Binomial));
+            Row($"{source}: the genus's initial and the species epithet", counts.Dropped.GetValueOrDefault(OtherNameDrop.AbbreviatedBinomial));
+            Row($"{source}: kept, before junk and repeats are left out", counts.Kept);
+            if (counts.LanguagesLeftOut.Count > 0) {
+                Text($"{source}: language codes left out (most names first)", string.Join(", ", counts.LanguagesLeftOut
+                    .OrderByDescending(p => p.Value).Take(12).Select(p => $"{p.Key} {p.Value:N0}")));
+            }
+        }
+        foreach (var (source, rows) in s.OtherLanguageNameRows.OrderByDescending(p => p.Value)) {
+            Row($"Name rows written from {source}", rows);
+        }
+        Row("Names after merging the sources' rows (per taxon, language and name)", s.OtherLanguageNamesMerged);
+        Row("Languages", s.OtherLanguages.Count);
+
         Section("Links");
         Row("Taxa with an English Wikipedia article", s.EnwikiTitles);
         Row("Taxa with a Wikidata item that states their IUCN taxon id (P627)", s.QidsFromP627);

@@ -147,13 +147,16 @@ public sealed record GreenStatusMetric(string? Category, int? Best, int? Min, in
 /// IsStrongExactMatch: an exact match on the taxon's scientific name, a synonym, its English name
 /// for display (common_name_en) or the title of its English Wikipedia article. An exact match on any
 /// other common name (a Catalogue of Life vernacular, say) is exact but not strong.
+/// IsExactInOtherLanguageOnly: every exact match is a common name in a language other than English
+/// (or with no language).
 public sealed record SearchHit(
     TaxonSummary Taxon,
     string MatchedName,
     string MatchedNameType,
     string? MatchedLanguage,
     bool IsExactMatch,
-    bool IsStrongExactMatch = false);
+    bool IsStrongExactMatch = false,
+    bool IsExactInOtherLanguageOnly = false);
 /// A taxon found by an IUCN id in the search text. AssessmentId is set when the id was an
 /// assessment's; then Scope and YearPublished are that assessment's, and IsDefault says whether it
 /// is the one the taxon's page shows first (its latest global assessment).

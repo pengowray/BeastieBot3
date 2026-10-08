@@ -468,8 +468,11 @@ public static class SiteDbSchema {
             taxon_id     INTEGER NOT NULL,
             name         TEXT NOT NULL,
             name_type    TEXT NOT NULL,                       -- 'scientific' | 'common' | 'synonym'
-            language     TEXT,                                -- ISO 639-1 code where one exists ('en', 'fr'), else IUCN's ISO 639-2 code; NULL when not given
-            source       TEXT NOT NULL,                       -- 'iucn' | 'col' | 'wikidata' | 'wikipedia' (an article title) | 'wikipedia-taxobox' (the English name in an article's taxobox)
+            language     TEXT,                                -- ISO 639-1 code where one exists ('en', 'fr'), else the ISO 639-3 code ('yue'); IUCN's names
+                                                              -- can also have IUCN's ISO 639-2 or 639-5 code ('phi'). NULL when not given (IUCN only)
+            source       TEXT NOT NULL,                       -- 'iucn' | 'col' | 'wikidata' | 'wikipedia' (an article title: English Wikipedia's for 'en',
+                                                              -- else the title of the Wikidata item's sitelink to the Wikipedia in that language) |
+                                                              -- 'wikipedia-taxobox' (the English name in an article's taxobox) | 'mdd' | 'amphibiaweb'
             is_preferred INTEGER NOT NULL DEFAULT 0,
             authority    TEXT                                 -- synonyms only: the author and year as the source gives them ('(Phipps, 1774)');
                                                               -- NULL when the source gives none. Not part of name_key or name_fts

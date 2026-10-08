@@ -111,9 +111,10 @@ public sealed partial class SiteQueries {
     /// 2. a name that starts with the text;
     /// 3. any other name whose words start with the words typed (name_fts).
     /// Within each group taxa in the release come before taxa that are not (no current assessment);
-    /// then a scientific name beats a common name, which beats a synonym, and in group 1 the taxon's
-    /// English name (taxon.common_name_en) beats its other common names; species come before
-    /// infraspecific taxa and subpopulations; then shorter names first.
+    /// then a scientific name beats an English common name, which beats a common name in another
+    /// language, which beats a synonym, and in group 1 the taxon's English name
+    /// (taxon.common_name_en) beats its other English names; species come before infraspecific taxa
+    /// and subpopulations; then shorter names first.
     /// With exactOnly, only group 1 is searched. TotalTaxa is counted only when countAll is set and
     /// the limit was reached; otherwise it is the number of hits returned.
     /// When cancellationToken is cancelled (the visitor closed the page), the running query is
@@ -167,18 +168,24 @@ public sealed partial class SiteQueries {
                                + CASE h.name_type
                                      WHEN 'scientific' THEN 0
                                      WHEN 'common' THEN
-                                         CASE WHEN h.name_id NOT IN (SELECT name_id FROM name_key WHERE key = @key) THEN 2
+                                         CASE WHEN COALESCE(h.language, '') NOT IN ('en', 'eng') AND COALESCE(h.language, '') NOT LIKE 'en-%' THEN 3
+                                              WHEN h.name_id NOT IN (SELECT name_id FROM name_key WHERE key = @key) THEN 2
                                               WHEN site_fold(t.common_name_en) = @key THEN 1
                                               ELSE 2 END
-                                     ELSE 3 END * 10000
+                                     ELSE 4 END * 10000
                                + CASE t.kind WHEN 'species' THEN 0 ELSE 1 END * 1000
                                + CASE WHEN LENGTH(h.name) > 999 THEN 999 ELSE LENGTH(h.name) END) AS score,
                            h.name, h.name_type, h.language,
-                           MAX(h.name_type <> 'common' AND h.name_id IN (SELECT name_id FROM name_key WHERE key = @key)) AS exact_not_common
+                           -- SUM, not MAX: with MIN the only min() or max() aggregate, SQLite takes the bare
+                           -- columns (h.name, h.name_type, h.language) from the row with the lowest score.
+                           SUM(h.name_type <> 'common' AND h.name_id IN (SELECT name_id FROM name_key WHERE key = @key)) > 0 AS exact_not_common,
+                           SUM(h.name_id IN (SELECT name_id FROM name_key WHERE key = @key)
+                               AND (h.name_type <> 'common' OR COALESCE(h.language, '') IN ('en', 'eng') OR COALESCE(h.language, '') LIKE 'en-%')) > 0
+                               AS exact_not_other_language
                     FROM hits h JOIN taxon t ON t.taxon_id = h.taxon_id
                     GROUP BY h.taxon_id
                 )
-                SELECT {SummaryColumns}, b.name, b.name_type, b.language, b.score, b.exact_not_common, t.enwiki_title
+                SELECT {SummaryColumns}, b.name, b.name_type, b.language, b.score, b.exact_not_common, t.enwiki_title, b.exact_not_other_language
                 FROM best b
                 JOIN taxon t ON t.taxon_id = b.taxon_id
                 {SummaryJoin}
@@ -200,7 +207,8 @@ public sealed partial class SiteQueries {
                     exact,
                     exact && (reader.GetInt64(next + 4) == 1
                         || IsKey(summary.CommonNameEn, key)
-                        || IsKey(Text(reader, next + 5), key))));
+                        || IsKey(Text(reader, next + 5), key)),
+                    exact && reader.GetInt64(next + 6) == 0));
             }
         }
 

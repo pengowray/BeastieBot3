@@ -325,6 +325,31 @@ public sealed class SpeciesPageTests(SiteFactory factory) : IClassFixture<SiteFa
     }
 
     [Fact]
+    public async Task OtherLanguagesListEachNameOnceWithAllItsSources() {
+        var html = await _client.GetStringAsync($"/species/{FixtureDb.Tiger}");
+        var text = Html.Text(html);
+        // Spellings that differ only in case are one name, shown as IUCN spells it when the
+        // spellings have as many sources each; sources in a fixed order.
+        Assert.Contains("French Tigre IUCN Red List, Catalogue of Life, Wikidata, Wikipedia", text);
+        // The name with most sources first.
+        Assert.Contains("German Tiger Catalogue of Life, Wikidata, Wikipedia Königstiger Wikidata", text);
+        Assert.Matches("<th scope=\"rowgroup\" rowspan=\"2\">German</th>\\s*<td lang=\"de\">Tiger</td>", html);
+        Assert.Contains("Japanese トラ Catalogue of Life, Wikidata, Wikipedia", text);
+        Assert.Contains("Chinese 老虎 Catalogue of Life, Wikidata 虎 Wikipedia", text);
+        // Languages by name; the 11th and later are hidden until the box is ticked.
+        var languages = new[] {
+            "Austronesian languages", "Chinese", "Dutch", "French", "German", "Italian", "Japanese", "Korean", "Polish", "Portuguese",
+            "Russian", "Spanish", "Swedish",
+        };
+        var at = languages.Select(l => Html.IndexOf(html, $">{l}</th>")).ToList();
+        Assert.All(at, i => Assert.True(i > 0));
+        Assert.Equal(at.OrderBy(i => i), at);
+        var hidden = Html.Between(html, $">{languages[9]}</th>", "</table>");
+        Assert.Equal(3, System.Text.RegularExpressions.Regex.Matches(hidden, "<tbody class=\"more-item\">").Count);
+        Assert.Contains("Show all languages (3 more)", text);
+    }
+
+    [Fact]
     public async Task NamesAndLinks() {
         var html = await Page();
         var text = Html.Text(html);
@@ -333,13 +358,12 @@ public sealed class SpeciesPageTests(SiteFactory factory) : IClassFixture<SiteFa
         Assert.Contains("White bear Catalogue of Life", text);
         Assert.Contains("Thalassic bear Wikipedia taxobox", text);
         Assert.Contains("Common names in other languages", text);
-        Assert.Contains("French Ours blanc, Ours polaire", text);
-        Assert.Contains("Spanish Oso polar", text);
-        Assert.Contains("<dd lang=\"fr\">Ours blanc, Ours polaire</dd>", html);
+        Assert.Contains("Language Name Source French Ours blanc Wikidata Ours polaire IUCN Red List Spanish Oso polar IUCN Red List", text);
+        Assert.Matches("<th scope=\"rowgroup\" rowspan=\"2\">French</th>\\s*<td lang=\"fr\">Ours blanc</td>", html);
         // "eng" is English; "und" is listed last, as no language, with no lang attribute.
         Assert.Contains("Ice bear IUCN Red List", text);
         Assert.DoesNotContain("Invariant", text);
-        Assert.Matches("<dt>Language not given</dt>\\s*<dd>Nanuq</dd>\\s*</dl>", html);
+        Assert.Matches("<th scope=\"rowgroup\" rowspan=\"1\">Language not given</th>\\s*<td>Nanuq</td>\\s*<td>IUCN Red List</td>\\s*</tr>\\s*</tbody>\\s*</table>", html);
         Assert.Contains("<th scope=\"row\"><i>Thalarctos maritimus</i> <span class=\"authority\">(Phipps, 1774)</span></th>", html);
         Assert.Contains("<td>IUCN Red List, Catalogue of Life (authority: <span class=\"authority\">Phipps, 1774</span>)</td>", html);
         Assert.Contains("<th scope=\"row\"><i>Ursus marinus</i> <span class=\"authority\">Pallas, 1776</span></th>", html);

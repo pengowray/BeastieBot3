@@ -92,6 +92,7 @@ public static partial class SiteText {
     public const string NamesOtherLanguages = "Common names in other languages";
     public const string NamesSynonyms = "Synonyms";
     public const string ColName = "Name";
+    public const string ColLanguage = "Language";
     public const string ColSource = "Source";
     public const string ColSynonym = "Synonym";
     /// Around the authority a source gives for a synonym, when that differs from the one shown:
@@ -188,7 +189,7 @@ public static partial class SiteText {
     public const string LicenceCc0 = "https://creativecommons.org/publicdomain/zero/1.0/";
     public const string IucnRedListUrl = "https://www.iucnredlist.org";
     public const string WikidataUrl = "https://www.wikidata.org";
-    public const string EnglishWikipediaUrl = "https://en.wikipedia.org";
+    public const string WikipediaUrl = "https://www.wikipedia.org";
     public const string WikispeciesUrl = "https://species.wikimedia.org";
     public const string CatalogueOfLifeUrl = "https://www.catalogueoflife.org";
     public const string SpratUrl = "https://www.environment.gov.au/cgi-bin/sprat/public/sprat.pl";

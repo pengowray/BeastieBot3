@@ -10,9 +10,11 @@ using BeastieBot3.Shared.SiteData;
 //     gives a synonym. A synonym that folds to one of the taxon's scientific names is dropped. A
 //     synonym's authority is kept from the first copy that has one.
 //   - common names: they also have the same language and the same source. The source stays in the
-//     key because the species page lists, for each English name, every source that gives it
-//     ("Polar bear": IUCN Red List, Wikidata, Catalogue of Life), and it can only do that from one
-//     row per source.
+//     key because the species page lists, for each name, every source that gives it ("Polar bear":
+//     IUCN Red List, Wikidata, Catalogue of Life), and it can only do that from one row per source.
+//     In languages other than English, two common names are the same only when they differ in case
+//     or Unicode normalisation alone (SiteNameKey.CaseFold): accents and other marks are part of the
+//     name ("Ñandú" is not "Nandu", and Fold would make the Japanese "ガエル" and "カエル" one).
 // The first spelling added is kept; a later copy can only turn is_preferred on.
 // Common names in every language go through CommonNameQuality first: junk (wiki markup, author
 // citations, OCR errors, names cut off at a bracket) is left out, and a name with a fixable extra
@@ -67,7 +69,7 @@ internal sealed class SiteNameSet {
             return false;
         }
         var cleanedAuthority = nameType == SiteNameType.Synonym ? SiteBuildRules.NullIfBlank(SiteBuildRules.CleanName(authority)) : null;
-        var lookup = LookupKey(key, nameType, language, source);
+        var lookup = LookupKey(cleaned, key, nameType, language, source);
         if (_index.TryGetValue(lookup, out var at)) {
             if (isPreferred && !_names[at].IsPreferred) {
                 _names[at] = _names[at] with { IsPreferred = true };
@@ -92,18 +94,19 @@ internal sealed class SiteNameSet {
         return true;
     }
 
-    private static (string Key, string Type, string? Language, string? Source) LookupKey(string key, string nameType, string? language,
-        string source) => nameType switch {
-        SiteNameType.Common => (key, nameType, language, source),
-        SiteNameType.Synonym => (key, nameType, null, source),
-        _ => (key, nameType, null, null),
+    private static (string Key, string Type, string? Language, string? Source) LookupKey(string name, string folded, string nameType,
+        string? language, string source) => nameType switch {
+        SiteNameType.Common when language == "en" => (folded, nameType, language, source),
+        SiteNameType.Common => (SiteNameKey.CaseFold(name), nameType, language, source),
+        SiteNameType.Synonym => (folded, nameType, null, source),
+        _ => (folded, nameType, null, null),
     };
 
     private void RebuildIndex() {
         _index.Clear();
         for (var i = 0; i < _names.Count; i++) {
             var n = _names[i];
-            _index[LookupKey(SiteNameKey.Fold(n.Name), n.NameType, n.Language, n.Source)] = i;
+            _index[LookupKey(n.Name, SiteNameKey.Fold(n.Name), n.NameType, n.Language, n.Source)] = i;
         }
     }
 }
