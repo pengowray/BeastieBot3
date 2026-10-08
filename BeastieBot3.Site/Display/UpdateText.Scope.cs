@@ -101,58 +101,94 @@ public static partial class UpdateText {
         _ => "No species of its genus is listed, and no heading names its order, family or other group.",
     };
 
-    // Rebuilding the list (ListRebuild). Provisional wording.
-    public const string RebuildHeading = "Rebuild the list";
-    public const string RebuildButton = "Rebuild the list";
-    public const string RebuildOption = "Rebuild the list in the updated wikitext";
-    public const string RebuildHelp = "Puts every taxon of the comparison under the heading of its group, adds the missing taxa and removes the taxa now in another category. Headings, text, images and the wording of existing lines are kept.";
-    public static string RebuildRefused(RebuildRefusal refusal, int lines) => refusal switch {
-        RebuildRefusal.NotLineList => "The list was not rebuilt: this wikitext lists its taxa in tables, not on list lines.",
-        RebuildRefusal.Partial => "The list was not rebuilt: the wikitext may be a list of part of the group. Compare with the whole group first.",
-        RebuildRefusal.TooLong => $"The list was not rebuilt: it would have {Count(lines)} lines, more than the {Count(GroupList.MaxLines)} one Wikipedia page can hold.",
+    // Rebuilding the list (ListRebuild).
+    public const string RebuildHeading = "Rebuild the whole list";
+    public const string RebuildButton = "Rebuild the whole list";
+    public const string RebuildOption = "Rebuild the whole list";
+    /// categories: the categories the list is of, or null for all of them.
+    public static string RebuildHelp(IReadOnlySet<string>? categories) =>
+        (categories is null
+            ? "Rebuilding adds the missing taxa and puts each taxon under the heading of its group, for example its family."
+            : $"Rebuilding adds the missing taxa, removes the taxa now in a category other than {CategoryList(categories, "or")}, and puts each taxon under the heading of its group, for example its family.")
+        + " Headings, the text under them and the wording of lines already in the list stay as written. A heading left with no taxa is removed."
+        + " The introduction and sections such as See also and References are not changed.";
+    public const string RebuildAddsMissing = "The rebuild adds the missing taxa.";
+    public static string RebuildRefused(RebuildRefusal refusal, int taxa, GroupRow group) => refusal switch {
+        RebuildRefusal.NotLineList => "List not rebuilt: most of its taxa are not on * or # lines. Only lists of * or # lines can be rebuilt, not tables.",
+        RebuildRefusal.Partial => $"List not rebuilt: the wikitext may be a list of part of {GroupList.HeadingText(group)}. To rebuild it anyway, first select \"{ScopeListAnywayButton}\".",
+        RebuildRefusal.TooLong => $"List not rebuilt: it would have {Count(taxa)} taxa. Lists have at most {Count(GroupList.MaxLines)} taxa, about the number of {{{{IUCN status}}}} templates one Wikipedia page can hold.",
         _ => string.Empty,
     };
-    public static string RebuildSummary(RebuildResult r) {
+    /// One line for each count that is not 0. categories: the categories the list is of, or null.
+    public static IEnumerable<string> RebuildSummary(RebuildResult r, IReadOnlySet<string>? categories) {
+        yield return $"The rebuilt list has {Taxa(r.Taxa.Count)}.";
         var added = r.Taxa.Count(t => t.Change == RebuildChange.Added);
+        if (added > 0) {
+            yield return $"Added {Count(added)} missing {(added == 1 ? "taxon" : "taxa")}.";
+        }
         var moved = r.Taxa.Count(t => t.Change == RebuildChange.Moved);
-        return $"The rebuilt list has {Count(r.Taxa.Count)} taxa: {Count(added)} added, {Count(moved)} moved to another heading, {Count(r.Removed.Count)} removed."
-            + (r.DuplicateLines.Count > 0 ? $" {Count(r.DuplicateLines.Count)} lines of taxa listed twice were removed." : string.Empty)
-            + (r.OtherLines > 0 ? $" {Count(r.OtherLines)} lines that name no taxon of the list were kept where they were." : string.Empty);
+        if (moved > 0) {
+            yield return $"Moved {Taxa(moved)} to another heading.";
+        }
+        if (r.Removed.Count > 0 && categories is not null) {
+            yield return $"Removed {Taxa(r.Removed.Count)} now in a category other than {CategoryList(categories, "or")}.";
+        }
+        if (r.DuplicateLines.Count > 0) {
+            yield return r.DuplicateLines.Count == 1
+                ? "Removed 1 line that listed a taxon a second time under the same name."
+                : $"Removed {Count(r.DuplicateLines.Count)} lines that listed a taxon a second time under the same name.";
+        }
+        if (r.OtherLines > 0) {
+            yield return r.OtherLines == 1
+                ? "Kept 1 line where it was, because it names no taxon in the comparison."
+                : $"Kept {Count(r.OtherLines)} lines where they were, because they name no taxon in the comparison.";
+        }
     }
-    public static string RebuildDropped(IReadOnlyList<string> headings) =>
-        (headings.Count == 1 ? "Removed 1 heading with no taxa left under it: " : $"Removed {Count(headings.Count)} headings with no taxa left under them: ") + string.Join(", ", headings) + ".";
-    public static string RebuildDroppedText(string heading) => $"Text that was under {heading}:";
+    /// byRanks: the headings are for chosen ranks, so a heading goes when it is not for a group of them.
+    public static string RebuildDropped(IReadOnlyList<string> headings, bool byRanks) {
+        var n = headings.Count;
+        var what = byRanks
+            ? n == 1 ? "Removed 1 heading that is not for a group of the chosen ranks: " : $"Removed {Count(n)} headings that are not for a group of the chosen ranks: "
+            : n == 1 ? "Removed 1 heading that has no taxa left: " : $"Removed {Count(n)} headings that have no taxa left: ";
+        return what + string.Join(", ", headings) + ".";
+    }
+    public static string RebuildDroppedText(string heading) => $"Text that was under the heading {heading}";
     public const string ColumnRebuildChange = "Change";
-    public const string RebuildOptionsLegend = "How to rebuild";
-    public const string RebuildHeadingsLabel = "Headings:";
+    public const string ColumnRebuildHeading = "Heading in rebuilt list";
+    public static string RebuildChangeText(RebuiltTaxon t) => t.Change switch {
+        RebuildChange.Added => "Added",
+        RebuildChange.Moved => t.OldHeading is { } old ? $"Moved from heading {old}" : "Moved",
+        _ => "",
+    };
+    public const string RebuildOptionsLegend = "Rebuild options";
+    public const string RebuildHeadingsLabel = "Headings";
     public const string RebuildHeadingsAsText = "As in the wikitext";
-    public const string RebuildHeadingsByRank = "One for each group of these ranks:";
+    public const string RebuildHeadingsByRank = "One per group of these ranks:";
+    public const string RebuildHeadingsHelp = "A group the wikitext already has a heading for keeps that heading and the text under it. The wikitext's other headings over lists of taxa are removed.";
     public const string RebuildOrderLabel = "Order of headings";
     public const string RebuildOrderText = "As in the wikitext";
-    public const string RebuildOrderIucn = "IUCN order (alphabetical)";
-    public const string RebuildWordingLabel = "Lines already in the list";
+    public const string RebuildOrderIucn = "Alphabetical within each group";
+    public const string RebuildOrderHelp = "Headings for chosen ranks are always alphabetical within each group.";
+    public const string RebuildWordingLabel = "Existing lines";
     public const string RebuildWordingKeep = "Keep their wording";
-    public const string RebuildWordingNew = "Write them anew";
-    public const string RebuildStyleLabel = "Style of new lines";
-    public const string RebuildStyleText = "As the lines in the wikitext";
+    public const string RebuildWordingNew = "Write every line again";
+    public const string RebuildWordingHelp = "Lines indented under a list line, such as ** lines, are kept as written.";
+    public const string RebuildStyleLabel = "Line style";
+    public const string RebuildStyleText = "As in the wikitext";
     public const string RebuildStyleSci = "Scientific name first";
     public const string RebuildStyleCommon = "Common name first";
     public const string RebuildStyleCommonOnly = "Common name only";
+    public const string RebuildStyleHelp = "Used for added lines, and for every line when lines are written again.";
     public const string RebuildSortLabel = "Order of lines";
     public const string RebuildSortText = "As in the wikitext";
     public const string RebuildSortSci = "By scientific name";
     public const string RebuildSortCommon = "By common name";
     public const string RebuildInfraLabel = "Subspecies and varieties";
     public const string RebuildInfraText = "As in the comparison";
-    public const string RebuildInfraNone = "Leave out";
-    public const string RebuildInfraSeparate = "After the species";
-    public const string RebuildInfraUnder = "Under their species";
-    public const string RebuildApply = "Rebuild";
-    public static string RebuildChangeText(RebuiltTaxon t) => t.Change switch {
-        RebuildChange.Added => "Added",
-        RebuildChange.Moved => t.OldHeading is { } old ? $"Moved from {old}" : "Moved",
-        _ => "",
-    };
+    public const string RebuildInfraNone = "Left out";
+    public const string RebuildInfraSeparate = "After the species of each heading";
+    public const string RebuildInfraUnder = "Indented under their species";
+    public const string RebuildApply = "Rebuild with these options";
 
     // Taking out the taxa now in another category (ListPlacement.Removal.cs).
     public const string RemoveButton = "Remove these taxa";
