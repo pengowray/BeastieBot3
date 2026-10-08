@@ -376,6 +376,7 @@ internal sealed class SiteBuildStats {
     public int JapanRows;
     public int JapanMatched;
     public int JapanSiteRows;
+    public int JapanNames;
     public string? JapanFetched;
     public int RedListStatuses;
     public int RedListMatched;

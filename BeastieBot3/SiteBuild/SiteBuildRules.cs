@@ -33,6 +33,8 @@ internal static class SiteNameSource {
     public const string Mdd = "mdd";
     /// AmphibiaWeb (`checklists import --source amphibiaweb`).
     public const string AmphibiaWeb = "amphibiaweb";
+    /// The Japanese name in the Red List of Japan's Ministry of the Environment (`statuses japan-import`).
+    public const string JapanMoe = "japan-moe";
 }
 
 internal static class SiteBuildRules {

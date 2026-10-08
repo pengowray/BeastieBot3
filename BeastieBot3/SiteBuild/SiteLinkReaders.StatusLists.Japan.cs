@@ -17,7 +17,7 @@ internal static partial class SiteLinkReaders {
         var rows = new List<JapanRow>();
         using (var command = connection.CreateCommand()) {
             command.CommandText = """
-                SELECT row_id, scientific_name, kingdom, category, category_ja, population, list_version, list_year, source_url
+                SELECT row_id, scientific_name, kingdom, category, category_ja, population, list_version, list_year, source_url, japanese_name
                 FROM japan_listing
                 ORDER BY CASE WHEN population IS NULL THEN 0 ELSE 1 END, row_id
                 """;
@@ -25,7 +25,7 @@ internal static partial class SiteLinkReaders {
             while (reader.Read()) {
                 cancellationToken.ThrowIfCancellationRequested();
                 rows.Add(new JapanRow(reader.GetInt64(0), reader.GetString(1), Text(reader, 2), reader.GetString(3), Text(reader, 4),
-                    Text(reader, 5), Text(reader, 6), reader.IsDBNull(7) ? null : reader.GetInt32(7), Text(reader, 8)));
+                    Text(reader, 5), Text(reader, 6), reader.IsDBNull(7) ? null : reader.GetInt32(7), Text(reader, 8), Text(reader, 9)));
             }
         }
         stats.JapanRows = rows.Count;
@@ -36,6 +36,11 @@ internal static partial class SiteLinkReaders {
         var matches = StatusListMatcher.OnePerTaxon(whole, index, r => StatusListNameIndex.Kingdom(r.Kingdom), r => r.Name);
         foreach (var (taxon, row, _) in matches) {
             Add(taxon, row);
+            // The list's Japanese name of the whole taxon is one more source of Japanese names.
+            if (row.JapaneseName is { } japanese) {
+                taxon.OtherLanguageNames.Add(new SiteOtherName(japanese, "ja", SiteNameSource.JapanMoe));
+                stats.JapanNames++;
+            }
         }
         foreach (var population in rows.Where(r => r.Population is not null)) {
             var kingdom = StatusListNameIndex.Kingdom(population.Kingdom);
@@ -71,5 +76,5 @@ internal static partial class SiteLinkReaders {
     };
 
     private sealed record JapanRow(long RowId, string Name, string? Kingdom, string Category, string? CategoryJa, string? Population,
-        string? Version, int? Year, string? SourceUrl);
+        string? Version, int? Year, string? SourceUrl, string? JapaneseName);
 }

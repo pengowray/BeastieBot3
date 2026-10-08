@@ -114,6 +114,7 @@ public sealed record TaxonNames(
         "col" => 2,
         "wikipedia" => 3,
         "wikipedia-taxobox" => 4,
-        _ => 5,
+        "japan-moe" => 5,
+        _ => 6,
     };
 }
