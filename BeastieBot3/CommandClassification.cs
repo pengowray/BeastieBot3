@@ -14,7 +14,7 @@ using BeastieBot3;
 [assembly: CommandBranch("sprat",        "Australian SPRAT (EPBC threatened species) dataset commands")]
 [assembly: CommandBranch("wikispecies",  "Wikispecies downloads, for the species site's comparison of ranks")]
 [assembly: CommandBranch("checklists",   "Country checklists from other sources (mammals, plants, reptiles, amphibians), to check IUCN's countries against")]
-[assembly: CommandBranch("statuses",     "Conservation statuses from systems other than the IUCN Red List (NatureServe, US Endangered Species Act, CITES Appendices), for the species site")]
+[assembly: CommandBranch("statuses",     "Conservation statuses from systems other than the IUCN Red List (NatureServe, US Endangered Species Act, CITES Appendices, national red lists), for the species site")]
 [assembly: CommandBranch("redlist",      "Unofficial IUCN Red List data-observation site generation")]
 [assembly: CommandBranch("site",         "Public species lookup site: build its database")]
 

@@ -8,10 +8,11 @@ The status lists store holds conservation statuses from systems other than the I
 - SALVE (salve.icmbio.gov.br), ICMBio's system for the national assessments of the extinction risk of Brazil's fauna: the current assessment of each species and subspecies (`statuses salve-import`).
 - JNCC's Conservation Designations for UK Taxa (Joint Nature Conservation Committee, Open Government Licence v3.0): one row per taxon and designation, for the GB and England red lists, Birds of Conservation Concern, Nationally Rare and Scarce, the UK and country priority species lists, the Wildlife and Countryside Act and other UK legislation, and the international conventions and EU directives as they apply to UK taxa (`statuses jncc-import`).
 - The Checklist of CITES Species (checklist.cites.org, compiled by UNEP-WCMC for the CITES Secretariat): the current CITES Appendix listings of every taxon in the Appendices, with the listings each taxon inherits from a higher taxon (`statuses cites-import`).
+- National and subnational red lists published on GBIF as Darwin Core checklists: 29 lists of 16 countries, chosen in `rules/status-lists/national-red-lists.yml` (`statuses red-lists-import`).
 
 Code: `BeastieBot3/StatusLists/`. The schema is `StatusListStore.Ddl`, with a comment on every column.
 
-The five imports (`statuses ecos-import`, `nztcs-import`, `salve-import`, `jncc-import` and `cites-import`) share one run, `StatusListImport.RunAsync`. It imports the file given with `--file`, or downloads the source into the status lists folder (written as a `.part` file and renamed when complete), as `<stem>-<yyyy-MM-dd>.<extension>` or, when the spec has `FindFileName`, under the name the source gives its file. It then reads the file, stops without changing the store when the file has no rows, replaces the source's rows and its `status_source` row in one transaction, and prints a table of counts. Each command passes a `StatusListImportSpec` with its download, reader, store method and messages, and `StatusListDownload` creates the HTTP client and writes the downloaded files. A spec's `SourceForFile` changes the `status_source` row for the file imported (JNCC uses it for the file's URL and the year in its attribution). The store's methods for each source are in `StatusListStore.NatureServe.cs`, `StatusListStore.Ecos.cs`, `StatusListStore.Nztcs.cs`, `StatusListStore.Salve.cs` and `StatusListStore.Jncc.cs`.
+The five imports (`statuses ecos-import`, `nztcs-import`, `salve-import`, `jncc-import` and `cites-import`) share one run, `StatusListImport.RunAsync`. It imports the file given with `--file`, or downloads the source into the status lists folder (written as a `.part` file and renamed when complete), as `<stem>-<yyyy-MM-dd>.<extension>` or, when the spec has `FindFileName`, under the name the source gives its file. It then reads the file, stops without changing the store when the file has no rows, replaces the source's rows and its `status_source` row in one transaction, and prints a table of counts. Each command passes a `StatusListImportSpec` with its download, reader, store method and messages, and `StatusListDownload` creates the HTTP client and writes the downloaded files. A spec's `SourceForFile` changes the `status_source` row for the file imported (JNCC uses it for the file's URL and the year in its attribution). The store's methods for each source are in `StatusListStore.NatureServe.cs`, `StatusListStore.Ecos.cs`, `StatusListStore.Nztcs.cs`, `StatusListStore.Salve.cs`, `StatusListStore.Jncc.cs`, `StatusListStore.Cites.cs` and `StatusListStore.RedLists.cs`. `statuses red-lists-import` imports many datasets in one run, so it has its own run (see its section).
 
 ## Files
 
@@ -19,12 +20,14 @@ The five imports (`statuses ecos-import`, `nztcs-import`, `salve-import`, `jncc-
 | --- | --- |
 | Store | `Datastore:status_lists_sqlite` in paths.ini, else `status_lists.sqlite` in the datastore folder (`PathsService.GetStatusListsPath`, `ResolveStatusListsPath`) |
 | Downloaded files | `Datasets:status_lists_dir`, else a `status-lists` folder in the datastore folder (`GetStatusListsDownloadDir`) |
+| Red list archives | the `red-lists` folder in the downloaded files folder, as `<key>-<yyyy-MM-dd>.zip` |
+| List of red lists | `rules/status-lists/national-red-lists.yml` (`RedListManifest`, read from `RulesPaths.Resolve(paths).SourceRulesDir`) |
 
 ## Tables
 
 | Table | One row per |
 | --- | --- |
-| `status_source` | source (`natureserve`, `ecos`, `nztcs`, `salve`, `jncc`, `cites`): title, URL, licence, citation with the access date, version, when it was last fetched, row count. The site's credits can be built from it. |
+| `status_source` | source (`natureserve`, `ecos`, `nztcs`, `salve`, `jncc`, `cites`, and `redlist:<key>` for each red list): title, URL, licence, citation with the access date, version, when it was last fetched, row count. The site's credits can be built from it. |
 | `status_sync_state` | key of the NatureServe download's progress (`natureserve_pass_*`, `natureserve_completed*`) |
 | `natureserve_species` | NatureServe record (`element_global_id`): a species, subspecies, variety or population |
 | `natureserve_synonym` | synonym NatureServe lists for a record |
@@ -40,6 +43,9 @@ The five imports (`statuses ecos-import`, `nztcs-import`, `salve-import`, `jncc-
 | `cites_listing` | current CITES listing of a taxon (`taxon_concept_id`, `listing_change_id`): its own, or inherited from a higher taxon |
 | `cites_note` | long note of the CITES listings (a full note, the text of an annotation such as #4), stored once and referred to by id |
 | `cites_synonym` | synonym the Checklist gives for a taxon, with and without its author |
+| `red_list_dataset` | national or subnational red list from GBIF (`dataset_key`, the key in `national-red-lists.yml`) |
+| `red_list_taxon` | status of a taxon in one of those lists (`dataset_key`, `taxon_id`, `seq`) |
+| `red_list_synonym` | synonym a list gives for one of its taxa with a status (`dataset_key`, `taxon_id`) |
 
 ## NatureServe Explorer: `statuses natureserve-fetch`
 
@@ -478,6 +484,150 @@ A full download took 44 requests and 14 minutes on 2026-10-08, and no request ha
 
 The command uses the endpoint that the Checklist's web app uses, not a published API, so UNEP-WCMC can change its parameters or its answers without notice. The download fails, and the store is not changed, when a page is not JSON, when `total_cnt` changes during the download, or when the rows do not have `total_cnt` different taxon ids. A renamed field would show only as missing values, so compare the counts that the command prints after a run with the counts above.
 
+## National and subnational red lists: `statuses red-lists-import`
+
+Many national and subnational red lists are published on GBIF as Darwin Core Archive (DwC-A) checklists, with the category of each taxon in the `threatStatus` field of the Distribution extension. `statuses red-lists-import` imports the ones listed in `rules/status-lists/national-red-lists.yml`: 29 lists of 16 countries in October 2026, 60,168 statuses of 60,160 taxa, and 6,472 synonyms.
+
+### How the lists were chosen
+
+On 2026-10-08, GBIF's species search faceted by dataset (`/v1/species/search?facet=datasetKey&threat=...`) found 214 checklist datasets with at least one threat status that GBIF could read as an IUCN category. A dataset search for "red list" in English and other languages ("rote Liste", "lista roja", "liste rouge", "rødliste", "Red Data Book" and others) found the lists whose categories GBIF cannot read (Germany's, Ukraine's). Each candidate's registry entry was checked, and its archive downloaded and read. A list is in the file when:
+
+- it is an official or authoritative national or subnational red list, or a legal list of threatened species;
+- it gives a category per taxon in `threatStatus`;
+- its licence is CC0, CC BY or CC BY-NC (the site is free and non-commercial);
+- its categories are the list's own, not copies of IUCN global categories;
+- the publisher has not replaced it with a later full edition. A partial update is listed beside the list it updates (Luxembourg's bryophytes: the 2003 list and its 2008 update of 40 taxa; for a taxon in both, the 2008 status replaces the 2003 one).
+
+The Danish statuses come from the national checklist behind arter.dk, the Danish agency's species portal, which is not a red list dataset as such. Its categories are the Danish Red List's: of the 1,654 names that it shares with Hortus botanicus Leiden's export of the Danish red list of vascular plants (assessed 2018), 1,644 have the same status, and the other 10 are NE or NA on one side.
+
+### The file
+
+`rules/status-lists/national-red-lists.yml` has one entry per list. Its header explains each field: the store key (`<country>-<list>[-<year>]`), the GBIF dataset key, the country (ISO 3166-1 alpha-2) and, for a subnational list, the region with its ISO 3166-2 code, the list's name as its publisher gives it (with an English name when it is in another language), the year of the edition, the publisher, the licence, the citation of the original list (as the archive's metadata cites it, else the GBIF dataset), a kingdom for archives that give none, an archive URL that replaces the registry's endpoint, English labels for statuses that are not IUCN categories (`categories`), and notes. `RedListManifest` reads it and refuses an entry with no key, GBIF key, country, name, publisher, licence or citation, a licence other than CC0 1.0, CC BY 4.0 and CC BY-NC 4.0, or a key used twice.
+
+### The run
+
+For each list, one request at a time and at least a second apart:
+
+1. The GBIF registry (`https://api.gbif.org/v1/dataset/<key>`) gives the title, licence, pubDate, DOI, GBIF's citation and the DWC_ARCHIVE endpoint. A dataset whose registry licence is not one of the three is not imported; a licence that differs from the file's is stored and named in a warning.
+2. When the registry's pubDate and the archive URL are those of the last import and the archive is still in the folder, nothing is downloaded (`RedListPlan.NeedsDownload`). GBIF updates the pubDate when it crawls a new version, so a dataset that the publisher rebuilds every night with the same content (Denmark's) is not downloaded every night.
+3. Otherwise the archive is downloaded to `<key>-<yyyy-MM-dd>.zip.part` and renamed when complete. A file that does not start as a zip (an error page) is deleted and refused. When its SHA-256 is that of the archive last imported, the new copy is deleted and the old one kept.
+4. The archive is read and the list's rows replaced in one transaction, unless it is the archive last imported and was read by the same `RedListArchiveReader.Version` (`RedListPlan.NeedsImport`). Increase the version when what the reader stores changes: the next run reads every kept archive again without downloading it.
+
+`--force` downloads and imports every list again; `--dataset <key>` imports one list; `--limit N` imports the first N lists of the file; `--status` prints the lists, their last import and their counts, and sends no requests. A run over the whole file (no `--dataset`, no `--limit`) deletes the stored lists that the file no longer lists. A list that fails (no answer, not a zip, no Distribution extension, no rows with a status) is reported and the others carry on; the run then exits with 1, and the failed list's stored rows are kept.
+
+A full run with nothing changed takes 29 registry requests and about 45 seconds. The first run downloaded 6.1 MB of archives.
+
+The Ecuador ministry's IPT (patrimonio.ambiente.gob.ec) does not answer, so the four Ecuador lists come from ChecklistBank's copies (`https://api.checklistbank.org/dataset/<id>/archive.zip`, datasets 264127, 54652, 53732 and 54007, imported by ChecklistBank on 2026-09-21). ChecklistBank has no archive for the Colombian list (dataset 288059 answers 404), so it comes from the Colombian IPT, as the registry gives it.
+
+### The archive format
+
+A DwC-A is a zip with `meta.xml`, which names the core file (rowType Taxon) and each extension file, and for each file its field separator, quote character, header lines, encoding, the column of the row id (`id` in the core, `coreid` in an extension) and the term of each column. `DwcArchive` reads `meta.xml` and nothing is assumed about column order: terms are matched by their local name (`threatStatus` is `http://iucn.org/terms/threatStatus` in some archives), and a field with a default and no index gives every row that value. The files are read with CsvHelper's parser. Every archive here is tab-separated with `fieldsEnclosedBy=''`, which means no quoting at all, so an empty enclosure is read in CsvHelper's NoEscape mode: a quote at the start of a value does not open a quoted field that swallows the next lines. Some archives have a header line and some (Denmark's) do not.
+
+### What is stored
+
+`red_list_dataset`: one row per list, with the file's fields, the registry's title, licence, pubDate, DOI and citation, the archive's URL, file name, size and SHA-256, the reader version, when the list was last checked and last imported, and its counts. Each list also has a `status_source` row with source `redlist:<key>` (title, GBIF dataset page, licence, citation, pubDate as the version, fetch time, row count), so the site's credits can be built from `status_source` as for the other sources. The existing readers of `status_source` ask for their own sources by name, so these rows do not reach them.
+
+`red_list_taxon`: one row per Distribution row with a status, joined to its core taxon (`taxon_id` is the core row's id, `seq` numbers a taxon's statuses). Stored as given: the scientific name, authorship, rank, taxonomic status, accepted name, kingdom to genus, `threatStatus` (trimmed, otherwise verbatim), countryCode, locality, locationID, establishmentMeans, occurrenceStatus, eventDate (or temporal) and source. Derived:
+
+- `iucn_code`: the IUCN category when the status is one (`RedListCategories.ToIucnCode`): the codes EX, EW, RE, CR, EN, VU, NT, LC, DD and NA in any case ("En"), the names ("Least Concern"), a name with its code ("Least Concern (LC)"), the categories before 2001 (LR/nt and LR/cd are NT, LR/lc is LC), and a code with a mark of its list: CR(PE), CR(PEW), CR-PE and CR* are CR, VU° and VUº (a category lowered for immigration from outside the country) are VU, NAa and NAb are NA. Every other status has none (NULL): Germany's categories, Ukraine's, Luxembourg's R, the Netherlands' REW.
+- `status_label`: the English label the file's `categories` give the status, matched without regard to case or to the kind of space. Every status in the German and Ukrainian lists has one, and so do CR*, NAa, NAb (France), VU° and the like (Norway), CR-PE (Ecuador's birds) and R (Luxembourg's dragonflies).
+- `canonical_name`: the archive's `canonicalName` when it gives one (none of these does), else the scientific name less the authorship column when the name ends with it, then `BareScientificName.Strip`. A nothospecies keeps the hybrid sign ("Mentha × gracilis", "Salix x rubens" is "Salix × rubens"). It is NULL when the name could be mistaken for another taxon's: a hybrid formula ("Populus alba × tremula"), a row of rank unranked, hybrid, section or another rank above species other than genus (Sweden's "Phocoena phocoena (Baltic population)", Denmark's "Rubus sect. Rubus"), or a species or infraspecific name that strips to one word ("Ramaria aff. strasseri", "Oenothera biennis-Gruppe"). 83 of the 60,168 rows have none.
+- `accepted_taxon_id`: the accepted taxon's id, when acceptedNameUsageID names another taxon. Uruguay's 42 and Venezuela's 102 rows with one are synonyms with their own status; their accepted taxon is usually not in the archive (`accepted_name` gives its name).
+- `url`: the taxon's page at the publisher, when the core's `references` or `bibliographicCitation`, or the row's `source`, is a URL and nothing else: Denmark's arter.dk pages (all 12,222 rows) and Cuba's assessment pages at caribea.planta.ngo (all 4,117).
+
+Left out of `red_list_taxon`: Distribution rows with no status (empty, or the text "NULL"), rows whose status is NE (Denmark's checklist gives NE to 42,822 taxa, genera and families included; Flanders 143, Ecuador's birds 315), and rows whose taxon is not in the core.
+
+`red_list_synonym`: the core taxa whose acceptedNameUsageID names a taxon with a status, for name matching (`accepted_taxon_id` is that taxon's `taxon_id`). Misapplied names are left out (Sweden's 342): they are names used for another taxon. Sweden gives 6,367 synonyms, Venezuela 103, Switzerland's beetles 1, Uruguay 1.
+
+Not stored: occurrenceRemarks (Cuba's are narrative: endemism and protected areas; Flanders' are the Dutch names of the categories), taxonRemarks, the Description, Reference, VernacularName and other extensions.
+
+### For the site: matching and showing
+
+- Match a status row by `canonical_name` within its `kingdom`, then by `red_list_synonym.canonical_name` to its `accepted_taxon_id`. For a row with an `accepted_taxon_id`, prefer the accepted taxon's own row when the list has one, and try `accepted_name` too. A row with no canonical name cannot be matched safely.
+- The country is `red_list_dataset.country_code`; a row's own `country_code` is as given ("Ecuador", "fr", "nl"). Flanders is the one subnational list (`region` Flanders, `region_code` BE-VLG). Ecuador's birds have two statuses for 8 taxa: `locality` "Ecuador continental" and "Ecuador insular | Islas Galápagos".
+- `iucn_code` says which statuses are IUCN categories; show `threat_status` as written, with `status_label` when it has one. RE and NA are regional categories; Germany's and Ukraine's are their own systems, and the German list's metadata says they cannot be compared directly with IUCN's.
+- Two lists can cover one taxon in one country: Luxembourg's bryophytes (show the 2008 status), France's species and subspecies lists (different taxa), Switzerland's plants, butterflies and beetles (different taxa).
+- Citation: `red_list_dataset.citation` is the original list; `gbif_citation` cites the GBIF dataset with its DOI. Both are in English or the publisher's language as given.
+- The archives give taxon pages only for Denmark and Cuba (`url`). Sweden's taxon ids are Dyntaxa ids (`urn:lsid:dyntaxa.se:Taxon:N`), whose page is `https://artfakta.se/taxa/N`.
+
+### The lists
+
+Imported on 2026-10-08 into a test store. Statuses as the archives write them, with the number of rows; `*`, `0` to `3`, `D`, `G`, `nb`, `R` and `V` are Germany's categories.
+
+| Key | Country | Year | Licence | Statuses | Synonyms | Statuses as written |
+| --- | --- | --- | --- | ---: | ---: | --- |
+| `se-redlist-2025` | SE | 2025 | CC0 1.0 | 6,156 | 6,367 | NT 1,966, VU 1,667, DD 1,079, EN 920, CR 323, RE 201 |
+| `dk-redlist` | DK | | CC BY 4.0 | 12,222 | 0 | LC 6,565, DD 1,590, NA 1,139, VU 848, EN 675, NT 628, RE 394, CR 383 |
+| `co-mads-2024` | CO | 2024 | CC0 1.0 | 2,104 | 0 | VU 838, EN 800, CR 466 |
+| `be-vlg-validated` | BE-VLG | | CC0 1.0 | 2,889 | 0 | LC 1,320, NT 460, VU 338, CR 271, EN 234, RE 209, DD 57 |
+| `ec-amphibians` | EC | 2019 | CC BY 4.0 | 635 | 0 | LC 168, EN 147, VU 129, CR 85, NT 78, DD 26, En 2 |
+| `ec-freshwater-fish` | EC | 2019 | CC BY 4.0 | 163 | 0 | DD 66, LC 62, VU 15, NT 13, EN 6, CR 1 |
+| `ec-birds` | EC | 2018 | CC BY 4.0 | 1,508 (1,500 taxa) | 0 | LC 1,142, NT 162, VU 107, EN 63, CR 15, DD 12, CR-PE 4, RE 3 |
+| `ec-palms` | EC | 2018 | CC BY 4.0 | 21 | 0 | EN 8, VU 6, LC 3, CR 2, DD 2 |
+| `lu-plants-2025` | LU | 2025 | CC0 1.0 | 1,423 | 0 | LC 540, NA 167, EN 162, VU 152, NT 116, RE 109, CR 98, DD 79 |
+| `lu-birds-2019` | LU | 2019 | CC0 1.0 | 64 | 0 | NT 24, EX 13, VU 11, EN 8, CR 7, DD 1 |
+| `lu-odonata-2006` | LU | 2006 | CC0 1.0 | 60 | 0 | LC 35, RE 12, R 6, EN 2, NT 2, VU 2, CR 1 |
+| `lu-orthoptera-2003` | LU | 2003 | CC0 1.0 | 46 | 0 | LC 23, R 8, RE 4, NT 3, VU 3, CR 2, DD 2, EN 1 |
+| `lu-bryophytes-2003` | LU | 2003 | CC0 1.0 | 587 | 0 | LC 316, VU 77, NT 63, CR 61, EN 52, DD 10, EX 8 |
+| `lu-bryophytes-2008` | LU | 2008 | CC0 1.0 | 40 | 0 | CR 13, EN 12, VU 9, DD 3, NT 3 |
+| `cu-plants-2023` | CU | 2023 | CC BY 4.0 | 4,117 | 0 | LC 1,614, CR 768, DD 696, EN 471, VU 396, NT 145, EX 23, RE 4 |
+| `uy-fauna` | UY | | CC BY 4.0 | 574 | 1 | LC 363, NA 86, VU 37, NT 35, DD 22, EN 22, CR 6, RE 2, EX 1 |
+| `is-plants-2018` | IS | 2018 | CC BY 4.0 | 840 | 0 | Not Applicable 414, Least Concern 359, Vulnerable 31, Data Deficient 10, Near Threatened 10, Critically Endangered 8, Endangered 7, Regionally Extinct 1 |
+| `fr-plants-2018` | FR | 2018 | CC BY 4.0 | 6,070 | 0 | LC 3,843, NAa 1,083, DD 373, NT 321, VU 238, EN 132, CR 42, RE 22, CR\* 9, NAb 5, EX 2 |
+| `fr-plants-2018-subspecies` | FR | 2018 | CC BY 4.0 | 960 | 0 | LC 671, DD 103, NAa 75, NT 59, VU 23, EN 19, CR 8, CR\* 1, RE 1 |
+| `no-plants-2021` | NO | 2021 | CC BY 4.0 | 3,839 | 0 | NA 2,130, LC 1,145, NT 200, VU 147, EN 136, CR 54, RE 13, VU° 6, DD 4, EN° 2, LC° 1, NT° 1 |
+| `nl-plants-2012` | NL | 2012 | CC BY 4.0 | 1,432 | 0 | LC 739, NT 253, VU 244, EN 89, CR 51, RE 37, REW 15, DD 4 |
+| `nl-bryophytes-2012` | NL | 2012 | CC BY 4.0 | 246 | 0 | NT 102, EN 52, VU 43, CR 27, RE 22 |
+| `ch-plants-2016` | CH | 2016 | CC BY 4.0 | 2,915 | 0 | LC 1,643, NT 437, VU 368, EN 200, CR 113, DD 99, RE 35, CR(PE) 19, EX 1 |
+| `de-plants-2018` | DE | 2018 | CC BY 4.0 | 5,255 | 0 | `*` 2,153, `3` 567, `D` 513, `nb` 477, `2` 438, `R` 379, `V` 374, `1` 241, `0` 85, `G` 28 |
+| `ch-butterflies-2014` | CH | 2014 | CC BY 4.0 | 224 | 0 | LC 102, NT 44, VU 38, EN 27, CR 10, RE 3 |
+| `ch-beetles-2016` | CH | 2016 | CC BY 4.0 | 287 | 1 | LC 88, NT 46, EN 44, VU 42, DD 34, CR 31, RE 2 |
+| `ve-fauna-2015` | VE | 2015 | CC BY 4.0 | 3,947 | 103 | LC 2,991, DD 391, NT 257, VU 150, EN 124, CR 31, EX 2, RE 1 |
+| `ua-redbook-plants-2021` | UA | 2021 | CC0 1.0 | 857 | 0 | вразливий 313, рідкісний 231, зникаючий 205, неоцінений 65, недостатньо відомий 26, зниклий в природі 13, зниклий 4 |
+| `ua-redbook-animals-2021` | UA | 2021 | CC0 1.0 | 687 | 0 | вразливий 279, рідкісний 201, зникаючий 160, недостатньо відомий 28, неоцінений 11, зниклий 7, зниклий в природі 1 |
+
+Notes on the lists (more in the file):
+
+- Sweden lists only red-listed taxa (RE to DD); taxa assessed LC or NA are not in the dataset. Colombia's legal list has only CR, EN and VU, and the Dutch bryophyte list only RE to NT.
+- Flanders' validated list holds the red lists of 16 groups, each from its own year (1996 to 2017); each row's `source` names the group's list and `event_date` its year. Uruguay's dataset holds two national lists: birds (2012, 454 rows) and amphibians and reptiles (2015, 120 rows).
+- Hortus botanicus Leiden republished the French, Norwegian, Dutch, Swiss and German plant lists on GBIF in 2026 (CC BY 4.0); the file cites the original lists. Their archives give no kingdom (the file gives Plantae). The full Norwegian Red List 2021 is not on GBIF.
+- Luxembourg's "R" (dragonflies 6, grasshoppers 8) is not an IUCN category; the dragonfly archive's remarks call those species extremely rare, and the grasshopper archive does not explain it. The Netherlands' "REW" (15 species) is not explained in its archive.
+- Ukraine's lists are the legal lists of the Red Data Book of Ukraine (2021 orders of the Ministry of Environmental Protection and Natural Resources), with the categories of the Law "On the Red Book of Ukraine". One is written with a no-break space ("зниклий в<U+00A0>природі").
+- Venezuela's Libro Rojo de la Fauna Venezolana (2015) is published by Provita, a non-governmental organisation; it is the national red list of animals.
+
+### Lists left out
+
+| Dataset | Reason |
+| --- | --- |
+| The Swedish Red List 2020 | Replaced by the 2025 list. |
+| Norwegian Red List 2015 (all groups) | Replaced by the 2021 list, which is on GBIF only for vascular plants (Leiden's export). |
+| Red List Vascular Plants (Denmark), Leiden's export | The same red list as the Danish national checklist, which is current and covers every group (1,644 of 1,654 shared names have the same status). |
+| Checklist of Danish Fungi (svampe.databasen.org) | CC BY-NC, and its statuses are the Danish Red List's, which the national checklist already has for fungi. |
+| Dyntaxa, Svensk taxonomisk databas | Its statuses are the Swedish Red List's; the archive URL needs a subscription key. |
+| Non-validated red list of Flanders | Not validated by the Flemish government (INBO publishes the validated lists separately). |
+| Red list of dragonflies in Flanders | Its 66 species are in the validated lists. |
+| Red list of Lycopodiaceae of Luxembourg 2019 | The 2025 vascular plant list covers the family and replaces it (Lycopodium annotinum is R in 2019, CR in 2025). |
+| Checklist of Amphibia species of Luxembourg 2003 | 14 species from a distribution atlas, not a red list; uses "V" with no explanation. |
+| National checklists and red lists for European butterflies (INBO) | A 2019 compilation of 40 countries' lists, with each country's categories translated into IUCN categories and rows for Europe and the EU; not the lists themselves. |
+| Lista roja de los árboles endémicos de Venezuela | IUCN global assessments (nameAccordingTo cites the IUCN Red List 2022). |
+| The National Checklist of Taiwan (TaiCOL) and the Taiwan Wildlife Conservation List | Taiwan's own red lists mixed with IUCN global categories ("CD", IUCN's LR/cd, on giant clams), with nothing to tell them apart; the conservation list's statuses are TaiCOL's. |
+| Lista de referencia de especies de aves de Colombia 2022 | IUCN global categories (Tinamus tao, T. osgoodi, Crypturellus kerriae VU). |
+| Especies de Fauna Reportadas en los Libros Rojos de Colombia 2010; the Valle del Cauca lists; local Colombian inventories | Replaced by Resolution 0126 of 2024, or copies of national or IUCN categories for one area; most are CC BY-NC project lists. |
+| Checklist of the mammals of Central Asia | IUCN global categories (Marmota menzbieri VU in all four countries). |
+| Checklist of the vascular plants of the Democratic Republic of the Congo | IUCN global categories, including those before 2001 ("Lower Risk/near threatened"). |
+| NZCS Endangered Fauna Suriname | IUCN global categories ("iucnStatus=vulnerable"). |
+| CONABIO's Mexican lists (Lista de la herpetofauna con distribución en México) | IUCN global categories. |
+| Checklist and distribution of the species of Seychelles for conservationists | No source for its categories. |
+| Endangered Species from the Coastal Region of Kenya; IUCN Red list of some Plants and Animals along the Nigerian Coast | IUCN global categories. |
+| The IUCN Red List of Threatened Species, Catalogue of Life, GBIF Backbone, WCVP | Global, not national. |
+| Red lists of flora and fauna of Ukraine's regions (26 datasets of oblasts and cities) | No Distribution extension in the three checked (Cherkasy, Kyiv city, Lviv): lists of names with no category. |
+| Endangered species list of Fungi in Japan 2020; Togo Plant Red List; Red List of Polish Fungi 2006; Red List of Fungi, Russia; Red List of Altai Mountain Country | No `threatStatus` (Togo puts its categories in taxonomicStatus). |
+| Lista Vermelha da Flora Vascular de Portugal Continental; Rote Liste der Heuschrecken der Schweiz; The Red Data Book of Rare and Threatened Plants of Greece | Plazi treatment archives with no `threatStatus`. |
+| Catálogo de Plantas das Unidades de Conservação do Brasil | No `threatStatus`. |
+| Red Data Book of the Komi Republic | The archive URL does not return a zip. |
+| South African national checklists (SANBI) | The IPT answers 403, and the plant checklist has 35 statuses. |
+| Doñana Biosphere Reserve; Askania Nova | Protected areas, not national or regional lists. |
+
 ## Web UI
 
-The Data sources page has a card for the store, with the number of NatureServe records and ECOS listings. The "Update the public species site" workflow has a step for each command before the site build, each with a light: NatureServe is blue while a download is under way, and either step is amber when its last download is more than 30 days old. The site build's light counts the store as one of its inputs.
+The Data sources page has a card for the store, with the number of NatureServe records and ECOS listings. The "Update the public species site" workflow has a step for each command before the site build (except `statuses red-lists-import`, which has none yet), each with a light: NatureServe is blue while a download is under way, and either step is amber when its last download is more than 30 days old. The site build's light counts the store as one of its inputs.

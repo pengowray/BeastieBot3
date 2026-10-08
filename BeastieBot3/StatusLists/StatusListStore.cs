@@ -6,7 +6,7 @@ using Microsoft.Data.Sqlite;
 // for the public species site. This file has the schema, the source rows and the sync state; the
 // methods that read and write each source's tables are in StatusListStore.NatureServe.cs,
 // StatusListStore.Ecos.cs, StatusListStore.Nztcs.cs, StatusListStore.Salve.cs,
-// StatusListStore.Jncc.cs and StatusListStore.Cites.cs.
+// StatusListStore.Jncc.cs, StatusListStore.Cites.cs and StatusListStore.RedLists.cs.
 //   status_source         one row per source: title, licence, citation, when it was last fetched;
 //   status_sync_state     key/value progress of `statuses natureserve-fetch` (the pass under way);
 //   natureserve_species   one row per NatureServe Explorer species, subspecies, variety or
@@ -29,7 +29,12 @@ using Microsoft.Data.Sqlite;
 //   cites_listing         one row per current CITES listing of a taxon, its own or inherited from a
 //                         higher taxon;
 //   cites_note            each long note of the CITES listings once (full notes, annotation texts);
-//   cites_synonym         the synonyms the Checklist gives for each taxon.
+//   cites_synonym         the synonyms the Checklist gives for each taxon;
+//   red_list_dataset      one row per national or subnational red list imported from GBIF
+//                         (rules/status-lists/national-red-lists.yml), with its own status_source row
+//                         'redlist:<key>';
+//   red_list_taxon        one row per status of a taxon in one of those lists;
+//   red_list_synonym      the synonyms a list gives for its taxa with a status.
 //
 // Nothing narrative is stored: no NatureServe taxonomic comments, ranking reasons or other text, and
 // none of JNCC's comments or descriptions.
@@ -43,6 +48,9 @@ internal static class StatusSources {
     public const string Salve = "salve";
     public const string Jncc = "jncc";
     public const string Cites = "cites";
+
+    /// A red list's status_source row is 'redlist:<key>', key from national-red-lists.yml.
+    public const string RedListPrefix = "redlist:";
 }
 
 internal sealed record StatusSourceInfo(
@@ -85,7 +93,7 @@ internal sealed partial class StatusListStore : SqliteStore {
 
     internal const string Ddl = """
         CREATE TABLE IF NOT EXISTS status_source (
-            source      TEXT PRIMARY KEY,   -- 'natureserve' | 'ecos' | 'nztcs' | 'salve' | 'jncc' | 'cites'
+            source      TEXT PRIMARY KEY,   -- 'natureserve' | 'ecos' | 'nztcs' | 'salve' | 'jncc' | 'cites' | 'redlist:<key>' (one per red list)
             title       TEXT NOT NULL,
             url         TEXT NOT NULL,      -- the source's site; for JNCC, the URL of the file imported
             licence     TEXT NOT NULL,
@@ -325,6 +333,79 @@ internal sealed partial class StatusListStore : SqliteStore {
             PRIMARY KEY (taxon_concept_id, name_with_author)
         ) WITHOUT ROWID;
         CREATE INDEX IF NOT EXISTS cites_synonym_name ON cites_synonym(name);
+        CREATE TABLE IF NOT EXISTS red_list_dataset (
+            dataset_key      TEXT PRIMARY KEY,    -- the dataset's key in rules/status-lists/national-red-lists.yml: 'se-redlist-2025'
+            gbif_dataset_key TEXT NOT NULL,       -- GBIF dataset key; its page is https://www.gbif.org/dataset/<key>
+            title            TEXT NOT NULL,       -- the dataset's title in the GBIF registry
+            list_name        TEXT NOT NULL,       -- the list's name as its publisher gives it, in the publisher's language
+            list_name_en     TEXT,                -- an English name, when list_name is not in English
+            list_year        INTEGER,             -- the edition's year as the publisher gives it; NULL when the dataset holds lists of several years
+            publisher        TEXT NOT NULL,       -- who published the list (not who put it on GBIF, when they differ)
+            country_code     TEXT NOT NULL,       -- ISO 3166-1 alpha-2 code of the country the list covers
+            region           TEXT,                -- the part of the country a subnational list covers ('Flanders'); NULL for a national list
+            region_code      TEXT,                -- ISO 3166-2 code of the region ('BE-VLG')
+            licence          TEXT NOT NULL,       -- from the GBIF registry: 'CC0 1.0', 'CC BY 4.0' or 'CC BY-NC 4.0'
+            citation         TEXT NOT NULL,       -- the original list, from national-red-lists.yml
+            gbif_citation    TEXT,                -- GBIF's citation of the dataset, with its DOI and the access date
+            doi              TEXT,                -- the dataset's DOI in the GBIF registry
+            pub_date         TEXT,                -- the dataset's pubDate in the GBIF registry (yyyy-MM-dd) when it was last checked
+            archive_url      TEXT NOT NULL,       -- where the archive was downloaded from
+            archive_file     TEXT NOT NULL,       -- the archive's file name in the red-lists folder of the status lists folder
+            archive_sha256   TEXT NOT NULL,       -- SHA-256 of the archive imported, in lower-case hex
+            archive_size     INTEGER NOT NULL,    -- bytes
+            notes            TEXT,                -- from national-red-lists.yml
+            fetched_at       TEXT NOT NULL,       -- UTC "O": when the import last checked the dataset (downloaded it, or found it unchanged)
+            imported_at      TEXT NOT NULL,       -- UTC "O": when its rows were last replaced
+            row_count        INTEGER NOT NULL,    -- rows in red_list_taxon
+            taxon_count      INTEGER NOT NULL,    -- distinct taxa in red_list_taxon
+            synonym_count    INTEGER NOT NULL,    -- rows in red_list_synonym
+            reader_version   INTEGER NOT NULL     -- RedListArchiveReader.Version that read the rows; a newer one reads the archive again
+        ) WITHOUT ROWID;
+        CREATE TABLE IF NOT EXISTS red_list_taxon (
+            dataset_key         TEXT NOT NULL REFERENCES red_list_dataset(dataset_key) ON DELETE CASCADE,
+            taxon_id            TEXT NOT NULL,    -- the archive's id of the core taxon (its taxonID)
+            seq                 INTEGER NOT NULL, -- 0, 1, ...: a taxon can have several statuses (Ecuador's birds: mainland and Galápagos)
+            scientific_name     TEXT NOT NULL,    -- as given, with the authority when the archive includes it
+            canonical_name      TEXT,             -- the name without its authority: the archive's canonicalName, else computed by
+                                                  -- RedListArchiveReader.CanonicalName; NULL for hybrids, populations and group ranks
+            authorship          TEXT,             -- scientificNameAuthorship as given
+            taxon_rank          TEXT,             -- as given: 'species', 'Especie', 'Art', 'SPECIES'
+            taxonomic_status    TEXT,             -- as given: 'accepted', 'Aceptado', 'Sinónimo'
+            accepted_taxon_id   TEXT,             -- the taxon_id of the accepted taxon when this taxon is a synonym with its own status
+            accepted_name       TEXT,             -- acceptedNameUsage as given
+            kingdom             TEXT,             -- as given, else the dataset's kingdom in national-red-lists.yml
+            phylum              TEXT,             -- as given
+            taxclass            TEXT,             -- class as given
+            taxorder            TEXT,             -- order as given
+            family              TEXT,             -- as given
+            genus               TEXT,             -- as given
+            threat_status       TEXT NOT NULL,    -- threatStatus as given (trimmed): 'VU', 'Least Concern', 'CR(PE)', '3', 'вразливий'
+            iucn_code           TEXT,             -- EX, EW, RE, CR, EN, VU, NT, LC, DD or NA when threat_status is an IUCN category
+                                                  -- (RedListCategories.ToIucnCode); NULL for every other status
+            status_label        TEXT,             -- the English label of threat_status from the dataset's categories, if it has one
+            country_code        TEXT,             -- the status row's countryCode as given ('EC', 'Ecuador', 'fr')
+            locality            TEXT,             -- as given: 'Flanders', 'Ecuador insular | Islas Galápagos'
+            location_id         TEXT,             -- as given: 'ISO_3166:BE-VLG'
+            establishment_means TEXT,             -- as given: 'native', 'introduced'
+            occurrence_status   TEXT,             -- as given: 'present', 'absent'
+            event_date          TEXT,             -- eventDate (or temporal) as given: the year or years the assessment is of ('2013', '2005-2022')
+            source              TEXT,             -- the status row's source as given: the group's list ('Lock et al. (2013)') or a URL
+            url                 TEXT,             -- the taxon's page at the publisher, when the archive gives one as a URL
+            PRIMARY KEY (dataset_key, taxon_id, seq)
+        ) WITHOUT ROWID;
+        CREATE INDEX IF NOT EXISTS red_list_taxon_canonical ON red_list_taxon(canonical_name);
+        CREATE INDEX IF NOT EXISTS red_list_taxon_name ON red_list_taxon(scientific_name);
+        CREATE TABLE IF NOT EXISTS red_list_synonym (
+            dataset_key       TEXT NOT NULL REFERENCES red_list_dataset(dataset_key) ON DELETE CASCADE,
+            taxon_id          TEXT NOT NULL,      -- the synonym's own id in the archive
+            scientific_name   TEXT NOT NULL,      -- as given
+            canonical_name    TEXT,               -- as in red_list_taxon
+            authorship        TEXT,               -- as given
+            taxonomic_status  TEXT,               -- as given: 'synonym', 'homotypicSynonym', 'heterotypicSynonym', 'proParteSynonym'
+            accepted_taxon_id TEXT NOT NULL,      -- red_list_taxon.taxon_id of the accepted taxon, which has a status
+            PRIMARY KEY (dataset_key, taxon_id)
+        ) WITHOUT ROWID;
+        CREATE INDEX IF NOT EXISTS red_list_synonym_canonical ON red_list_synonym(canonical_name);
         """;
 
     protected override void EnsureSchema() {
