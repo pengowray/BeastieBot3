@@ -72,7 +72,25 @@ public sealed record OtherStatusSourceInfo(
             new(SiteText.OtherStatusSalveName + SiteText.OtherStatusSalveRest(date)),
         ]);
 
-    public static readonly IReadOnlyList<OtherStatusSourceInfo> All = [Sprat, Ecos, NatureServe, Nztcs, Salve];
+    /// JNCC's Conservation Designations for UK Taxa. The dates and the attribution are those of the
+    /// rows' lists (other_status_list), which all come from one workbook.
+    public static readonly OtherStatusSourceInfo Jncc = new(OtherStatusSources.Jncc, SiteText.OtherStatusJnccRecordLink,
+        OtherStatusDateHeading.InEffectFrom, DateHeadingRule.AllDatedRows,
+        (_, rows) => {
+            var list = rows.FirstOrDefault(r => r.Source == OtherStatusSources.Jncc)?.List;
+            return [
+                new(SiteText.OtherStatusJnccSubject),
+                new(SiteText.OtherStatusJnccLink, list?.Url),
+                new(SiteText.OtherStatusJnccDates(DateText(list?.Version), DateText(list?.Fetched)) + SiteText.OtherStatusJnccAttribution(list?.Citation)),
+                new(SiteText.OtherStatusJnccLicence, list?.LicenceUrl),
+                new("."),
+            ];
+        });
+
+    // "2026-06-09" as "9 June 2026"; null when not a date.
+    private static string? DateText(string? isoDate) => isoDate is null ? null : SiteFormat.Date(isoDate);
+
+    public static readonly IReadOnlyList<OtherStatusSourceInfo> All = [Sprat, Ecos, NatureServe, Nztcs, Salve, Jncc];
 
     /// The source with this key, or null for a source the site does not know.
     public static OtherStatusSourceInfo? Find(string source) => All.FirstOrDefault(s => s.Key == source);

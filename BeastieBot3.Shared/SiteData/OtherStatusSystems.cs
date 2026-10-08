@@ -25,6 +25,9 @@ public static class OtherStatusSystems {
     public const string Nztcs = "nz-nztcs";
     /// The United States Endangered Species Act.
     public const string Esa = "us-esa";
+    /// JNCC's Conservation Designations for UK Taxa: the UK, Great Britain and UK country red lists, laws
+    /// and priority lists, one list per other_status_list row (list_key).
+    public const string Jncc = "gb-jncc";
     /// NatureServe's global conservation status rank (G rank, with a T rank for an infraspecific taxon).
     public const string NatureServeGlobal = "natureserve-global";
     /// NatureServe's national rank (N rank) in the country in other_status.country (US, CA).
@@ -51,6 +54,7 @@ public static class OtherStatusSystems {
         new(Cosewic, "CA"),
         new(Sara, "CA"),
         new(Nztcs, "NZ"),
+        new(Jncc, "GB"),
         new(Esa, "US"),
         new(NatureServeNational, null),
         new(NatureServeSubnational, null),
@@ -215,6 +219,8 @@ public static class OtherStatusSources {
     public const string Nztcs = "nztcs";
     /// SALVE, ICMBio's assessments of Brazil's fauna; source_id is SALVE's sheet id (id_ficha).
     public const string Salve = "salve";
+    /// JNCC's Conservation Designations for UK Taxa; source_id is the taxon version key (UK Species Inventory).
+    public const string Jncc = "jncc";
 
     /// A taxon's SPRAT profile.
     public static string SpratUrl(long spratTaxonId) =>

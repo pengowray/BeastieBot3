@@ -32,6 +32,7 @@ public static partial class SiteText {
         "AU" => "Australia",
         "BR" => "Brazil",
         "CA" => "Canada",
+        "GB" => "United Kingdom",
         "NZ" => "New Zealand",
         "US" => "United States",
         OtherStatusSystems.NatureServeGroup => "Global",
@@ -197,6 +198,19 @@ public static partial class SiteText {
     public static string OtherStatusSalveRest(string? date) =>
         (date is null ? "." : $", downloaded on {date}.")
         + " Brazil's official list of threatened species (Portaria MMA 148/2022) can differ.";
+
+    /// The text of a JNCC row's link to JNCC's page of the designations.
+    public const string OtherStatusJnccRecordLink = "JNCC";
+
+    /// The note under the tables when they have JNCC rows, in parts around the links to JNCC's page and
+    /// the licence. fileDate: the date of JNCC's workbook ("9 June 2026"); downloaded: when this site
+    /// downloaded it; attribution: the line JNCC asks for.
+    public const string OtherStatusJnccSubject = "United Kingdom statuses are from ";
+    public const string OtherStatusJnccLink = "JNCC's Conservation Designations for UK Taxa";
+    public static string OtherStatusJnccDates(string? fileDate, string? downloaded) =>
+        (fileDate is null ? "" : $" (the file of {fileDate})") + (downloaded is null ? "." : $", downloaded on {downloaded}.");
+    public static string OtherStatusJnccAttribution(string? attribution) => attribution is null ? " " : $" {attribution}, used under the ";
+    public const string OtherStatusJnccLicence = "Open Government Licence v3.0";
 
     public const string OtherStatusNatureServeCanadaCopy =
         "NatureServe's copy of the Canadian statuses may differ from Canada's Species at Risk Public Registry.";

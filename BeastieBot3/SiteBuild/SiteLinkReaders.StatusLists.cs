@@ -19,10 +19,15 @@ internal static partial class SiteLinkReaders {
     /// stats.SalveFetched to SALVE's (yyyy-MM-dd; null when the store's status_source table has no
     /// row for the source). A store without a source's tables gives no rows of that source.
     public static (string? NatureServeFetched, string? EcosFetched, string? NztcsFetched) ReadStatusLists(string path,
-        IReadOnlyDictionary<long, SiteTaxon> taxa, SiteBuildStats stats, CancellationToken cancellationToken) {
+        IReadOnlyDictionary<long, SiteTaxon> taxa, SiteBuildStats stats, List<OtherStatusList> lists, CancellationToken cancellationToken) {
         using var connection = OpenReadOnly(path);
         var index = new StatusListNameIndex(taxa.Values);
         string? natureServe = null, ecos = null, nztcs = null;
+        if (DelimitedTableImporter.GetTableColumns(connection, "jncc_designation") is not null) {
+            lists.AddRange(ReadJncc(connection, index, stats, cancellationToken));
+        } else {
+            stats.Warnings.Add($"The status lists store {path} has no JNCC designations: run statuses jncc-import.");
+        }
         if (DelimitedTableImporter.GetTableColumns(connection, "natureserve_species") is not null) {
             ReadNatureServe(connection, index, stats, cancellationToken);
             natureServe = SourceFetched(connection, OtherStatusSources.NatureServe);
