@@ -19,6 +19,10 @@ namespace BeastieBot3.StatusLists;
     })]
 internal sealed class EcosImportCommand : AsyncCommand<EcosImportCommand.Settings> {
     public sealed class Settings : StatusListImportSettings {
+        [CommandOption("--store <PATH>")]
+        [Description(StoreDescription)]
+        public override string? StorePath { get; init; }
+
         [CommandOption("--file <PATH>")]
         [Description("Import this ECOS CSV file instead of downloading the list. The file needs the ECOS Listed Species ID column, which the default ECOS export leaves out.")]
         public override string? File { get; init; }

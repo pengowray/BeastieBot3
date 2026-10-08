@@ -21,6 +21,10 @@ namespace BeastieBot3.StatusLists;
     })]
 internal sealed class SalveImportCommand : AsyncCommand<SalveImportCommand.Settings> {
     public sealed class Settings : StatusListImportSettings {
+        [CommandOption("--store <PATH>")]
+        [Description(StoreDescription)]
+        public override string? StorePath { get; init; }
+
         [CommandOption("--file <PATH>")]
         [Description("Import this file, kept by an earlier run, instead of downloading.")]
         public override string? File { get; init; }

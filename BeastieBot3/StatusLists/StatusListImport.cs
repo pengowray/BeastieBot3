@@ -15,12 +15,14 @@ using Spectre.Console.Cli;
 
 namespace BeastieBot3.StatusLists;
 
-/// The options of every status list import. Each command declares --file itself, so that each can
-/// describe the file it reads.
+/// The options of every status list import. Each command declares both options itself, --store
+/// first, so that the Run command page lists them in that order (CommandReflector reads a settings
+/// class before its base class) and each can describe the file it reads.
 public abstract class StatusListImportSettings : CommonSettings {
-    [CommandOption("--store <PATH>")]
-    [Description("Status lists store. Default: Datastore:status_lists_sqlite, else status_lists.sqlite in the datastore folder.")]
-    public string? StorePath { get; init; }
+    public const string StoreDescription =
+        "Status lists store. Default: Datastore:status_lists_sqlite, else status_lists.sqlite in the datastore folder.";
+
+    public abstract string? StorePath { get; init; }
 
     public abstract string? File { get; init; }
 }
