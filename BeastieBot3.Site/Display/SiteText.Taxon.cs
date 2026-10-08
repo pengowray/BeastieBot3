@@ -43,12 +43,13 @@ public static partial class SiteText {
         return char.ToUpperInvariant(text[0]) + text[1..];
     }
 
-    /// The heading of a species page's table of its subspecies, varieties and subpopulations: the
-    /// kinds it has, or when it has none, the kinds its kingdom can have (animals have no varieties).
+    /// The heading of a species page's table of the subspecies, varieties and subpopulations IUCN
+    /// assesses: the kinds it has, or when it has none, the kinds its kingdom can have (animals have no
+    /// varieties), marked as IUCN's ("Subspecies and subpopulations (IUCN)").
     public static string HeadingInfraTaxa(string? kingdom, bool subspecies, bool varieties, bool subpopulations) =>
-        subspecies || varieties || subpopulations
+        (subspecies || varieties || subpopulations
             ? HeadingChildren(subspecies, varieties, subpopulations)
-            : HeadingChildren(true, !IsAnimal(kingdom), true);
+            : HeadingChildren(true, !IsAnimal(kingdom), true)) + " (IUCN)";
 
     public static string NoInfraTaxa(string? kingdom) => IsAnimal(kingdom)
         ? "IUCN has not assessed any subspecies or subpopulations of this species."

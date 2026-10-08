@@ -1556,10 +1556,11 @@ th.num {
 .ranks-table a:focus-visible {
     text-decoration: underline;
 }
-.comparative-classification .minor-rank {
+/* The rows above order are hidden until the box is ticked. */
+.comparative-classification .above-rank {
     display: none;
 }
-.comparative-classification:has(.show-minor-ranks:checked) .minor-rank {
+.comparative-classification:has(.show-above-ranks:checked) .above-rank {
     display: table-row;
 }
 .ranks-table .differs-marker {

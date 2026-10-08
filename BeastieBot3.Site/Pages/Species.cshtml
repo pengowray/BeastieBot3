@@ -461,12 +461,6 @@
     </section>
 }
 
-@if (Model.GreenStatus is { } greenStatus) {
-    <partial name="_GreenStatus" model="greenStatus" />
-}
-
-@if (Model.OtherStatusSection is { } otherStatuses) {<partial name="_OtherStatuses" model="otherStatuses" />}
-
 <section class="related" id="related" aria-labelledby="related-heading">
 @if (Model.IsSpecies) {
     var kinds = Model.RelatedTaxa.Select(r => r.Taxon.Kind).ToHashSet();
@@ -490,6 +484,12 @@
     }
 }
 </section>
+
+@if (Model.GreenStatus is { } greenStatus) {
+    <partial name="_GreenStatus" model="greenStatus" />
+}
+
+@if (Model.OtherStatusSection is { } otherStatuses) {<partial name="_OtherStatuses" model="otherStatuses" />}
 
 <section class="names" aria-labelledby="names-heading">
     <h2 id="names-heading">@SiteText.HeadingNames</h2>
@@ -569,12 +569,13 @@
 
 @if (Model.ComparativeClassification.Count > 0) {
     var differences = Model.ComparativeClassification.Sum(r => r.Cells.Count(c => c.Differs));
-    var minorRows = Model.ComparativeClassification.Count(r => r.Minor);
+    var aboveRows = Model.ComparativeClassification.Where(r => r.AboveCut).ToList();
+    var firstShown = Model.ComparativeClassification.FirstOrDefault(r => !r.AboveCut)?.RankLabel ?? "";
     <section class="comparative-classification" id="comparative-classification" aria-labelledby="comparative-classification-heading">
         <h2 id="comparative-classification-heading">@SiteText.HeadingComparativeClassification</h2>
         <p>@SiteText.RanksIntro(differences)</p>
-        @if (minorRows > 0) {
-            <p class="ranks-toggle"><label title="@SiteText.RanksShowMinorHelp"><input type="checkbox" class="show-minor-ranks" autocomplete="off"> @SiteText.RanksShowMinor(minorRows)</label></p>
+        @if (aboveRows.Count > 0) {
+            <p class="ranks-toggle"><label><input type="checkbox" class="show-above-ranks" autocomplete="off"> @SiteText.RanksShowAbove(aboveRows.Count, firstShown, aboveRows.Sum(r => r.Cells.Count(c => c.Differs)))</label></p>
         }
         <div class="table-scroll">
             <table class="ranks-table" aria-labelledby="comparative-classification-heading">
@@ -588,7 +589,8 @@
                 </thead>
                 <tbody>
                     @foreach (var row in Model.ComparativeClassification) {
-                        <tr class="@(row.IsMain ? "main-rank" : row.Minor ? "minor-rank" : null)">
+                        var rowClass = row.AboveCut ? (row.IsMain ? "main-rank above-rank" : "above-rank") : row.IsMain ? "main-rank" : null;
+                        <tr class="@rowClass">
                             <th scope="row">@SiteText.RankRowLabel(row.RankLabel)</th>
                             @foreach (var cell in row.Cells) {
                                 <td class="@(cell.Differs ? "differs" : null)">

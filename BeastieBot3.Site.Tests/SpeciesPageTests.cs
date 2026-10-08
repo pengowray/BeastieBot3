@@ -418,20 +418,20 @@ public sealed class SpeciesPageTests(SiteFactory factory) : IClassFixture<SiteFa
         Assert.Contains($"<a href=\"/species/{FixtureDb.Tiger}\"><i>Panthera tigris</i></a>", Section(html, "related"));
 
         var tiger = await _client.GetStringAsync($"/species/{FixtureDb.Tiger}");
-        Assert.Contains("<h2 id=\"related-heading\">Subspecies</h2>", tiger);
+        Assert.Contains("<h2 id=\"related-heading\">Subspecies (IUCN)</h2>", tiger);
         Assert.Contains($"<a href=\"/species/{FixtureDb.SumatranTiger}\">", Section(tiger, "related"));
 
         var lion = await _client.GetStringAsync($"/species/{FixtureDb.Lion}");
-        Assert.Contains("<h2 id=\"related-heading\">Subpopulations</h2>", lion);
+        Assert.Contains("<h2 id=\"related-heading\">Subpopulations (IUCN)</h2>", lion);
     }
 
     [Fact]
     public async Task SpeciesWithNoSubspeciesSaysSo() {
         var bear = Html.Text(await _client.GetStringAsync($"/species/{FixtureDb.PolarBear}"));
-        Assert.Contains("Subspecies and subpopulations IUCN has not assessed any subspecies or subpopulations of this species.", bear);
+        Assert.Contains("Subspecies and subpopulations (IUCN) IUCN has not assessed any subspecies or subpopulations of this species.", bear);
 
         var brome = Html.Text(await _client.GetStringAsync($"/species/{FixtureDb.Bromus}"));
-        Assert.Contains("Subspecies, varieties and subpopulations IUCN has not assessed any subspecies, varieties or subpopulations of this species.", brome);
+        Assert.Contains("Subspecies, varieties and subpopulations (IUCN) IUCN has not assessed any subspecies, varieties or subpopulations of this species.", brome);
     }
 
     [Fact]

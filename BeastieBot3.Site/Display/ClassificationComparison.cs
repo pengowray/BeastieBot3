@@ -12,9 +12,10 @@ public sealed record LadderColumn(string Title, string? Url, IReadOnlyList<Ladde
 
 /// A row of the comparison: one group, in every column that has it. RankLabel: the main rank
 /// (kingdom to species), else the rank a backbone column gives, else the rank most of its cells
-/// give ("no rank" for none). Minor: a row
-/// hidden until the reader asks for all rows: a group no backbone column has.
-public sealed record ComparisonRow(string RankLabel, bool IsMain, bool Minor, IReadOnlyList<ComparisonCell> Cells);
+/// give ("no rank" for none). AboveCut: a row above the order row (above family or genus when no
+/// column has an order), hidden until the reader asks for it: the lower ranks are the ones that
+/// differ between sources.
+public sealed record ComparisonRow(string RankLabel, bool IsMain, bool AboveCut, IReadOnlyList<ComparisonCell> Cells);
 
 /// Step: the column's group in this row, or null. Differs: a main rank whose name is not the first
 /// column's. OtherRank: the step's rank is not the row's, so the cell shows it.
@@ -28,6 +29,9 @@ public static class ClassificationComparison {
     public static readonly string[] MainRanks = ["kingdom", "phylum", "class", "order", "family", "genus", "species"];
 
     public const string NoRank = "no rank";
+
+    /// The rows above the first of these main ranks that the columns have are hidden at first.
+    public static readonly string[] CutRanks = ["order", "family", "genus"];
 
     private static string? MainRankOf(string? rank) => rank?.Trim().ToLowerInvariant() switch {
         "division" => "phylum",
@@ -49,17 +53,18 @@ public static class ClassificationComparison {
         }).ToList();
 
         var order = MergeOrder(keyed.Select(c => c.Select(s => s.Key).ToList()).ToList());
+        var cut = CutRanks.Select(r => order.IndexOf("m:" + r)).FirstOrDefault(i => i >= 0, 0);
         var rows = new List<ComparisonRow>();
-        foreach (var key in order) {
+        for (var index = 0; index < order.Count; index++) {
+            var key = order[index];
             var steps = keyed.Select(c => c.FirstOrDefault(s => s.Key == key).Step).ToList();
             var isMain = key.StartsWith("m:", StringComparison.Ordinal);
             // The rank a backbone column gives, else the rank most columns give.
             var label = isMain ? key[2..]
                 : steps.Where((s, i) => s is not null && columns[i].Backbone).Select(s => Rank(s!.Rank)).FirstOrDefault()
                     ?? steps.OfType<LadderStep>().GroupBy(s => Rank(s.Rank)).OrderByDescending(g => g.Count()).First().Key;
-            var minor = !isMain && !steps.Where((s, i) => s is not null && columns[i].Backbone).Any();
             var first = isMain ? steps.FirstOrDefault(s => s is not null)?.Name : null;
-            rows.Add(new ComparisonRow(label, isMain, minor, [.. steps.Select(s => new ComparisonCell(s,
+            rows.Add(new ComparisonRow(label, isMain, index < cut, [.. steps.Select(s => new ComparisonCell(s,
                 isMain && s is not null && first is not null && !string.Equals(Clean(s.Name), Clean(first), StringComparison.OrdinalIgnoreCase),
                 s is not null && !isMain && Rank(s.Rank) != label))]));
         }

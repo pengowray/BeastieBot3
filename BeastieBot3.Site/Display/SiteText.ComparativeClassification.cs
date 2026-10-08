@@ -10,9 +10,11 @@ public static partial class SiteText {
             ? "1 main rank has another name than in IUCN's classification (marked ≠)."
             : $"{differences} main ranks have another name than in IUCN's classification (marked ≠).");
 
-    public static string RanksShowMinor(int rows) => $"Show all ranks ({rows} more)";
-    public const string RanksShowMinorHelp =
-        "Also shows the groups that are not in IUCN's or the Catalogue of Life's classification: clades and other groups that only Wikidata, the English Wikipedia taxobox or Wikispecies has.";
+    /// The box that shows the rows above order ("Show 6 ranks above order, 1 marked ≠"). rank: the
+    /// first row shown (order, else family or genus).
+    public static string RanksShowAbove(int rows, string rank, int differences) =>
+        (rows == 1 ? $"Show 1 rank above {rank}" : $"Show {rows} ranks above {rank}")
+        + (differences == 0 ? "" : $", {differences} marked ≠");
 
     public const string RanksIucn = "IUCN";
     public const string RanksCol = "Catalogue of Life";
