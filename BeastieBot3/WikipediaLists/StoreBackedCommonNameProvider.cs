@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using BeastieBot3;
 using BeastieBot3.CommonNames;
 using BeastieBot3.Taxonomy;
@@ -37,6 +38,8 @@ internal sealed class StoreBackedCommonNameProvider : IDisposable {
     private readonly Dictionary<long, string?> _commonNameCache = new();
     private readonly Dictionary<long, string?> _wikiArticleCache = new();
     private readonly Dictionary<string, string?> _articleByScientificCache = new(StringComparer.OrdinalIgnoreCase);
+    // The words of the store's English names, read on the first redirect title that needs them.
+    private NameWordSets? _nameWords;
 
     /// <summary>
     /// Creates a provider that owns and will dispose the store and the Wikipedia cache, which it
@@ -261,23 +264,68 @@ internal sealed class StoreBackedCommonNameProvider : IDisposable {
         // A downloaded redirect target gives no name when it has no taxobox (genus Thera redirects to
         // "Santorini", genus Athene to "Athena"), or when its taxobox is another taxon and that taxon
         // is a species of this genus (genus Ashbyia redirects to "Gibberbird", the article of its one
-        // species, Ashbyia lovensis) or the target's title is that taxon's scientific name (genus
-        // Thrasya redirects to "Paspalum", order Psilotales to "Psilotaceae"). Other targets keep the
-        // name as before: Araneae -> "Spider" (taxobox Araneae), Cetartiodactyla -> "Even-toed
-        // ungulate" (taxobox Artiodactyla), a monotypic family -> its species' article (Pedionomidae
-        // -> "Plains-wanderer"), and a target that is not downloaded.
-        if (_wikiCache.ResolveDownloadedArticle(normalized) is { } article) {
+        // species, Ashbyia lovensis). A title that is a scientific name gives none either
+        // (IsScientificTitle). Other targets keep the name as before: Araneae -> "Spider" (taxobox
+        // Araneae), Cetartiodactyla -> "Even-toed ungulate" (taxobox Artiodactyla), a monotypic
+        // family -> its species' article (Pedionomidae -> "Plains-wanderer"), and a target that is
+        // not downloaded.
+        var article = _wikiCache.ResolveDownloadedArticle(normalized);
+        if (article is not null) {
             if (article.TaxoboxName is not { } taxobox) {
                 return null;
             }
-            if (!article.TaxoboxIs(scientificName)
-                && (taxobox.StartsWith(scientificName.Trim() + " ", StringComparison.OrdinalIgnoreCase) || article.TaxoboxIs(article.Title))) {
+            if (!article.TaxoboxIs(scientificName) && taxobox.StartsWith(scientificName.Trim() + " ", StringComparison.OrdinalIgnoreCase)) {
                 return null;
             }
+        }
+        if (IsScientificTitle(scientificName, summary.RedirectTarget, article, () => _nameWords ??= _store.LoadNameWordSets())) {
+            return null;
         }
 
         return summary.RedirectTarget;
     }
+
+    // One-word names with these endings are scientific names: family, subfamily, superfamily,
+    // order (-iformes), and the botanical family and subfamily.
+    private static readonly string[] RankEndings = ["idae", "inae", "oidea", "oideae", "aceae", "iformes"];
+
+    // A group whose name has one of these endings ranks above genus: the above, tribes (-ini, -eae)
+    // and botanical orders (-ales).
+    private static readonly string[] AboveGenusEndings = ["idae", "inae", "ini", "oidea", "eae", "ales", "iformes"];
+
+    /// <summary>
+    /// Whether a redirect target's title, without its bracketed word, is a scientific name rather
+    /// than the group's English name:
+    /// <list type="bullet">
+    /// <item>the group's own name ("Contia (snake)" for genus Contia);</item>
+    /// <item>one word with the ending of a family, subfamily, superfamily or order
+    /// ("Pseudomyrmecinae" for tribe Pseudomyrmecini, "Stylephoridae" for order Stylephoriformes);</item>
+    /// <item>the taxon in the article's taxobox, or the genus of the species in it: "Paspalum" for
+    /// genus Thrasya, "Drepana (moth)" for genus Watsonalla, "Komarekiona" for family
+    /// Komarekionidae, whose article's taxobox is Komarekiona eatoni. For a group above genus such
+    /// a title is still an English name when English common names use it as a word
+    /// (<see cref="NameWordSets.IsEnglishRatherThanScientific"/>): tribe Gorillini, "Gorilla";
+    /// subfamily Polyborinae, "Caracara (subfamily)". For a genus it never is: "Paspalum" is used
+    /// as a word in English names, but genus Thrasya is not Paspalum.</item>
+    /// </list>
+    /// </summary>
+    internal static bool IsScientificTitle(string groupName, string redirectTarget, WikiGroupArticle? article, Func<NameWordSets> nameWords) {
+        var group = groupName.Trim();
+        var title = CommonNameNormalizer.RemoveDisambiguationSuffix(redirectTarget).Trim();
+        if (title.Equals(group, StringComparison.OrdinalIgnoreCase)) {
+            return true;
+        }
+        if (!title.Contains(' ') && HasEnding(title, RankEndings)) {
+            return true;
+        }
+        if (article is null || !(article.TaxoboxIs(title) || article.TaxoboxIsSpeciesOf(title))) {
+            return false;
+        }
+        return !(HasEnding(group, AboveGenusEndings) && nameWords().IsEnglishRatherThanScientific(title.ToLowerInvariant()));
+    }
+
+    private static bool HasEnding(string name, string[] endings) =>
+        endings.Any(e => name.EndsWith(e, StringComparison.OrdinalIgnoreCase));
 
     private long? FindTaxonId(IucnSpeciesRecord record) {
         if (_storeTaxonIdCache.TryGetValue(record.TaxonId, out var cached)) {

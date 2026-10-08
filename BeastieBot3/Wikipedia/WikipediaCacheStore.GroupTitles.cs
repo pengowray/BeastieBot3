@@ -201,9 +201,19 @@ internal sealed record WikiGroupArticle(long PageRowId, string Title, string Nor
     string? TaxoboxName, bool Redirected) {
     /// Whether the taxobox's scientific name is <paramref name="name"/> (case, italics and a dagger ignored).
     public bool TaxoboxIs(string name) =>
-        TaxoboxName is { } taxobox && string.Equals(CleanTaxoboxName(taxobox), name.Trim(), StringComparison.OrdinalIgnoreCase);
+        TaxoboxName is { } taxobox && string.Equals(CleanTaxoboxName(taxobox), CleanTaxoboxName(name), StringComparison.OrdinalIgnoreCase);
 
-    // "†Pteropodidae", "''Pteropus''" -> the bare name.
-    private static string CleanTaxoboxName(string name) =>
-        string.Join(' ', name.Replace("''", string.Empty).Trim().TrimStart('†', '?').Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
+    /// Whether the taxobox is a species of genus <paramref name="genus"/> ("Komarekiona eatoni" for "Komarekiona").
+    public bool TaxoboxIsSpeciesOf(string genus) =>
+        TaxoboxName is { } taxobox && CleanTaxoboxName(taxobox).StartsWith(genus.Trim() + " ", StringComparison.OrdinalIgnoreCase);
+
+    // "†Pteropodidae", "''Pteropus''", "Hylocitrea<ref name=...>", "Ficus (plant)" -> the bare name.
+    private static string CleanTaxoboxName(string name) {
+        var end = name.IndexOfAny(['<', '{']);
+        var text = (end >= 0 ? name[..end] : name).Replace("'", string.Empty).Trim().TrimStart('†', '?');
+        if (text.EndsWith(')') && text.LastIndexOf(" (", StringComparison.Ordinal) is > 0 and var bracket) {
+            text = text[..bracket];
+        }
+        return string.Join(' ', text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries));
+    }
 }

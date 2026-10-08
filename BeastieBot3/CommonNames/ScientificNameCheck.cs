@@ -90,6 +90,15 @@ internal sealed class NameWordSets {
     public bool IsEnglishRatherThanEpithet(string word) =>
         IsEnglish(word, IsEpithet(word) ? MinCommonNamesForEnglishEpithet : MinCommonNamesForEnglishWord);
 
+    /// <summary>
+    /// <see cref="IsEnglish(string)"/> with the higher bar for a word that is a genus or an epithet in
+    /// the store (<see cref="MinCommonNamesForEnglishEpithet"/>), for a Wikipedia title that is a
+    /// genus name: "gorilla" (20 names) and "caracara" (25) are English, "drepana" (none) and "rana"
+    /// (8) are not.
+    /// </summary>
+    public bool IsEnglishRatherThanScientific(string word) =>
+        IsEnglish(word, IsGenus(word) || IsEpithet(word) ? MinCommonNamesForEnglishEpithet : MinCommonNamesForEnglishWord);
+
     private bool IsEnglish(string word, int minNames) =>
         _namesUsingWord.GetValueOrDefault(word) >= minNames
         || (word.Contains('-') && word.Split('-').All(part => _namesUsingWord.GetValueOrDefault(part) >= minNames));
