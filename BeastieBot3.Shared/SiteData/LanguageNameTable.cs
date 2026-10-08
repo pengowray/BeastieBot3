@@ -7,14 +7,17 @@ namespace BeastieBot3.Shared.SiteData;
 /// (LanguageNameTable.Data.cs). site build-db keeps a common name from the Catalogue of Life,
 /// Wikidata or Wikipedia only when this table has its language, and the site shows these names.
 public static partial class LanguageNameTable {
-    private static readonly Lazy<Dictionary<string, string>> Names = new(Load);
+    private static readonly Lazy<Dictionary<string, string>> Table = new(Load);
 
     /// The English name of the code (lower case, as stored), or null when the table has none.
-    public static string? Name(string code) => Names.Value.GetValueOrDefault(code);
+    public static string? Name(string code) => Table.Value.GetValueOrDefault(code);
 
-    public static bool Contains(string code) => Names.Value.ContainsKey(code);
+    public static bool Contains(string code) => Table.Value.ContainsKey(code);
 
-    public static int Count => Names.Value.Count;
+    public static int Count => Table.Value.Count;
+
+    /// Every code with its name.
+    public static IEnumerable<(string Code, string Name)> All => Table.Value.Select(p => (p.Key, p.Value));
 
     private static Dictionary<string, string> Load() {
         var names = new Dictionary<string, string>(StringComparer.Ordinal);

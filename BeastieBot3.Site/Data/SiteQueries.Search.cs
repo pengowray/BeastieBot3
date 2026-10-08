@@ -111,9 +111,10 @@ public sealed partial class SiteQueries {
     /// 2. a name that starts with the text;
     /// 3. any other name whose words start with the words typed (name_fts).
     /// Within each group taxa in the release come before taxa that are not (no current assessment);
-    /// then a scientific name beats a common name, which beats a synonym, and in group 1 the taxon's
-    /// English name (taxon.common_name_en) beats its other common names; species come before
-    /// infraspecific taxa and subpopulations; then shorter names first.
+    /// then a scientific name beats an English common name, which beats a common name in another
+    /// language, which beats a synonym, and in group 1 the taxon's English name
+    /// (taxon.common_name_en) beats its other English names; species come before infraspecific taxa
+    /// and subpopulations; then shorter names first.
     /// With exactOnly, only group 1 is searched. TotalTaxa is counted only when countAll is set and
     /// the limit was reached; otherwise it is the number of hits returned.
     /// When cancellationToken is cancelled (the visitor closed the page), the running query is
@@ -167,10 +168,11 @@ public sealed partial class SiteQueries {
                                + CASE h.name_type
                                      WHEN 'scientific' THEN 0
                                      WHEN 'common' THEN
-                                         CASE WHEN h.name_id NOT IN (SELECT name_id FROM name_key WHERE key = @key) THEN 2
+                                         CASE WHEN COALESCE(h.language, '') NOT IN ('en', 'eng') AND COALESCE(h.language, '') NOT LIKE 'en-%' THEN 3
+                                              WHEN h.name_id NOT IN (SELECT name_id FROM name_key WHERE key = @key) THEN 2
                                               WHEN site_fold(t.common_name_en) = @key THEN 1
                                               ELSE 2 END
-                                     ELSE 3 END * 10000
+                                     ELSE 4 END * 10000
                                + CASE t.kind WHEN 'species' THEN 0 ELSE 1 END * 1000
                                + CASE WHEN LENGTH(h.name) > 999 THEN 999 ELSE LENGTH(h.name) END) AS score,
                            h.name, h.name_type, h.language,

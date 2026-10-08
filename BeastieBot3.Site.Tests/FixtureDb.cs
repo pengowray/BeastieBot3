@@ -384,6 +384,31 @@ public static class FixtureDb {
         w.Name(Tiger, "Felis tigris", "synonym", null, "iucn");
         // IUCN's collective code for Austronesian languages.
         w.Name(Tiger, "Harimau", "common", "map", "iucn");
+        // Names in other languages from several sources: French "Tigre" from all four in two
+        // spellings (two sources each, so IUCN's is shown), German "Tiger" from three sources and
+        // "Königstiger" from one, and 13 languages in all, so the last three are hidden at first.
+        w.Name(Tiger, "Tigre", "common", "fr", "iucn");
+        w.Name(Tiger, "tigre", "common", "fr", "col");
+        w.Name(Tiger, "tigre", "common", "fr", "wikidata");
+        w.Name(Tiger, "Tigre", "common", "fr", "wikipedia");
+        w.Name(Tiger, "Königstiger", "common", "de", "wikidata");
+        w.Name(Tiger, "Tiger", "common", "de", "col");
+        w.Name(Tiger, "Tiger", "common", "de", "wikidata");
+        w.Name(Tiger, "Tiger", "common", "de", "wikipedia");
+        w.Name(Tiger, "トラ", "common", "ja", "col");
+        w.Name(Tiger, "トラ", "common", "ja", "wikidata");
+        w.Name(Tiger, "トラ", "common", "ja", "wikipedia");
+        w.Name(Tiger, "老虎", "common", "zh", "col");
+        w.Name(Tiger, "老虎", "common", "zh", "wikidata");
+        w.Name(Tiger, "虎", "common", "zh", "wikipedia");
+        w.Name(Tiger, "Tijger", "common", "nl", "wikidata");
+        w.Name(Tiger, "Tigre", "common", "it", "col");
+        w.Name(Tiger, "호랑이", "common", "ko", "wikipedia");
+        w.Name(Tiger, "Tygrys", "common", "pl", "wikipedia");
+        w.Name(Tiger, "Tigre", "common", "pt", "col");
+        w.Name(Tiger, "Тигр", "common", "ru", "col");
+        w.Name(Tiger, "Tigre", "common", "es", "iucn");
+        w.Name(Tiger, "Tiger", "common", "sv", "wikipedia");
 
         w.Taxon(SumatranTiger, "Panthera tigris ssp. sumatrae", "subspecies", "ANIMALIA", "CHORDATA", "MAMMALIA", "CARNIVORA", "FELIDAE", "Panthera",
             authority: "Pocock, 1929", commonEn: "Sumatran tiger", enwiki: "Sumatran tiger", parent: Tiger, latest: SumatranTigerLatest,
@@ -405,6 +430,9 @@ public static class FixtureDb {
         w.Name(Lion, "Panthera leo", "scientific", null, "iucn");
         w.Name(Lion, "Lion", "common", "en", "iucn", preferred: true);
         w.Name(Lion, "Big cat", "common", "en", "wikidata");
+        // Made up for the ranking of search hits: a name in another language that is another
+        // taxon's English name (the leopard's "Panther").
+        w.Name(Lion, "Panther", "common", "de", "col");
 
         w.Taxon(WestAfricanLion, "Panthera leo West Africa subpopulation", "subpopulation", "ANIMALIA", "CHORDATA", "MAMMALIA", "CARNIVORA", "FELIDAE", "Panthera",
             subpopulation: "West Africa subpopulation", commonEn: "West African lion", parent: Lion, latest: WestAfricanLionLatest);
@@ -533,6 +561,7 @@ public static class FixtureDb {
                 doi: "10.2305/IUCN.UK.2024-1.RLTS.T15954A50659089.en", doiSource: DoiSource.Gbif, text: null));
         w.Name(Leopard, "Panthera pardus", "scientific", null, "iucn");
         w.Name(Leopard, "Leopard", "common", "en", "iucn", preferred: true);
+        w.Name(Leopard, "Panther", "common", "en", "wikidata");
 
         w.Taxon(AmurLeopard, "Panthera pardus ssp. orientalis", "subspecies", "ANIMALIA", "CHORDATA", "MAMMALIA", "CARNIVORA", "FELIDAE", "Panthera",
             authority: "(Schlegel, 1857)", parent: Leopard, infraRank: "ssp.", infraName: "orientalis", inRelease: false);

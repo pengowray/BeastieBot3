@@ -218,7 +218,10 @@ internal sealed class SiteDbBuild {
         // Common names in other languages, after every synonym list is read: the rules compare the
         // names with the synonyms.
         Optional("Catalogue of Life database: common names in other languages", _inputs.ColDatabase, path => {
-            SiteOtherLanguageNames.ReadCol(path, taxa, _stats.ColOtherNames, ct);
+            if (!SiteOtherLanguageNames.ReadCol(path, taxa, _stats.ColOtherNames, ct)) {
+                _stats.Warnings.Add("The Catalogue of Life database has no vernacularname table, so the site has no Catalogue of Life names in languages other than English.");
+                return "no vernacularname table";
+            }
             return OtherNamesSummary(_stats.ColOtherNames);
         });
         Optional("Wikidata cache: common names in other languages and Wikipedia titles", _inputs.WikidataCache, path => {

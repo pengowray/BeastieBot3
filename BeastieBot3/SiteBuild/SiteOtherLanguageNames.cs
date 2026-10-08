@@ -35,8 +35,9 @@ internal sealed class OtherNameCounts {
 }
 
 internal static class SiteOtherLanguageNames {
-    /// The Catalogue of Life's vernacular names of each taxon's CoL id, in languages other than English.
-    public static void ReadCol(string path, IReadOnlyDictionary<long, SiteTaxon> taxa, OtherNameCounts counts,
+    /// The Catalogue of Life's vernacular names of each taxon's CoL id, in languages other than
+    /// English. False when the database has no vernacularname table.
+    public static bool ReadCol(string path, IReadOnlyDictionary<long, SiteTaxon> taxa, OtherNameCounts counts,
         CancellationToken cancellationToken) {
         var byColId = new Dictionary<string, List<SiteTaxon>>(StringComparer.Ordinal);
         foreach (var taxon in taxa.Values) {
@@ -49,6 +50,12 @@ internal static class SiteOtherLanguageNames {
         }
         var keys = new Dictionary<long, TaxonScientificKeys>();
         using var connection = SiteLinkReaders.OpenReadOnly(path);
+        using (var exists = connection.CreateCommand()) {
+            exists.CommandText = "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = 'vernacularname'";
+            if (Convert.ToInt64(exists.ExecuteScalar(), CultureInfo.InvariantCulture) == 0) {
+                return false;
+            }
+        }
         using var command = connection.CreateCommand();
         command.CommandText = "SELECT taxonID, name, language FROM vernacularname WHERE name IS NOT NULL AND name <> ''";
         command.CommandTimeout = 0;
@@ -67,6 +74,7 @@ internal static class SiteOtherLanguageNames {
                 Consider(taxon, name, code, SiteNameSource.Col, taxonKeys, counts, null);
             }
         }
+        return true;
     }
 
     /// The names on each taxon's Wikidata item: P1843 statements, labels and aliases (source

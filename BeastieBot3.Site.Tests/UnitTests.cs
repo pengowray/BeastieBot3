@@ -131,6 +131,41 @@ public sealed class DisplayTests {
     public void LanguageNamesForCodes(string? code, string expected) => Assert.Equal(expected, LanguageNames.Name(code));
 
     [Fact]
+    public void LanguageNamesComeFromTheSharedTable() {
+        // Names the page showed before the table, and names of languages the new sources bring.
+        Assert.Equal("Norwegian Bokmål", LanguageNames.Name("nb"));
+        Assert.Equal("Cebuano", LanguageNames.Name("ceb"));
+        Assert.Equal("Cantonese", LanguageNames.Name("yue"));
+        Assert.Equal("Serbo-Croatian", LanguageNames.Name("hbs"));
+        Assert.Equal("Twi", LanguageNames.Name("tw"));
+        Assert.Equal("Akan", LanguageNames.Name("ak"));
+    }
+
+    [Fact]
+    public void OtherLanguageNamesMergeCaseButNotAccents() {
+        NameRow Row(long id, string name, string source) => new(id, name, NameTypes.Common, "es", source, false);
+        var names = TaxonNames.OtherLanguageNames([
+            Row(1, "Ñandú", "iucn"),
+            Row(2, "ñandú", "wikidata"),
+            Row(3, "Nandu", "col"),
+            // Two spellings with two sources each: IUCN's is shown.
+            Row(4, "Choique", "iucn"),
+            Row(5, "choique", "col"),
+            Row(6, "choique", "wikidata"),
+            Row(7, "Choique", "wikipedia"),
+            // Two spellings, one with two sources: that one is shown though IUCN has the other.
+            Row(8, "SURI", "iucn"),
+            Row(9, "Suri", "col"),
+            Row(10, "Suri", "wikipedia"),
+        ]);
+        Assert.Equal(["Choique", "Suri", "Ñandú", "Nandu"], names.Select(n => n.Name));
+        Assert.Equal(["IUCN Red List", "Catalogue of Life", "Wikidata", "Wikipedia"], names[0].Sources);
+        Assert.Equal(["IUCN Red List", "Catalogue of Life", "Wikipedia"], names[1].Sources);
+        Assert.Equal(["IUCN Red List", "Wikidata"], names[2].Sources);
+        Assert.Equal(["Catalogue of Life"], names[3].Sources);
+    }
+
+    [Fact]
     public void LanguageNamesNeverShowTheInvariantCulture() {
         foreach (var code in new[] { "und", "mul", "qaa", "xx", "zz-zz" }) {
             Assert.DoesNotContain("Invariant", LanguageNames.Name(code));

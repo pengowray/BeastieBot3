@@ -924,21 +924,6 @@ tr.shown {
     font-weight: 600;
 }
 
-.language-names {
-    display: grid;
-    grid-template-columns: max-content 1fr;
-    gap: 0.25rem 1rem;
-    margin: 0;
-}
-
-.language-names dt {
-    color: var(--muted);
-}
-
-.language-names dd {
-    margin: 0;
-}
-
 details summary {
     cursor: pointer;
     margin: 0.4rem 0;

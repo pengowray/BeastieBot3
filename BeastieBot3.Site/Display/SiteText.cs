@@ -92,6 +92,7 @@ public static partial class SiteText {
     public const string NamesOtherLanguages = "Common names in other languages";
     public const string NamesSynonyms = "Synonyms";
     public const string ColName = "Name";
+    public const string ColLanguage = "Language";
     public const string ColSource = "Source";
     public const string ColSynonym = "Synonym";
     /// Around the authority a source gives for a synonym, when that differs from the one shown:

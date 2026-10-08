@@ -141,6 +141,16 @@ public sealed class HomeAndSearchTests(SiteFactory factory) : IClassFixture<Site
     }
 
     [Fact]
+    public async Task EnglishCommonNameComesBeforeTheSameNameInAnotherLanguage() {
+        // "Panther" is an English name of the leopard and (in the fixture) a German name of the lion.
+        // The English name comes first, although Panthera leo sorts before Panthera pardus.
+        var html = await _client.GetStringAsync("/search?q=Panther&all=1");
+        var leopard = Html.IndexOf(html, $"/species/{FixtureDb.Leopard}\"");
+        var lion = Html.IndexOf(html, $"/species/{FixtureDb.Lion}\"");
+        Assert.True(leopard > 0 && lion > leopard, "the taxon with the English name comes first");
+    }
+
+    [Fact]
     public async Task NameSharedByTwoTaxaListsBoth() {
         var response = await _client.GetAsync("/search?q=big+cat");
         Assert.Equal(HttpStatusCode.OK, response.StatusCode);
