@@ -5,7 +5,8 @@ using Microsoft.Data.Sqlite;
 // Conservation statuses from systems other than the IUCN Red List (Datastore:status_lists_sqlite),
 // for the public species site. This file has the schema, the source rows and the sync state; the
 // methods that read and write each source's tables are in StatusListStore.NatureServe.cs,
-// StatusListStore.Ecos.cs, StatusListStore.Nztcs.cs and StatusListStore.Salve.cs.
+// StatusListStore.Ecos.cs, StatusListStore.Nztcs.cs, StatusListStore.Salve.cs and
+// StatusListStore.Jncc.cs.
 //   status_source         one row per source: title, licence, citation, when it was last fetched;
 //   status_sync_state     key/value progress of `statuses natureserve-fetch` (the pass under way);
 //   natureserve_species   one row per NatureServe Explorer species, subspecies, variety or
@@ -19,9 +20,13 @@ using Microsoft.Data.Sqlite;
 //   ecos_name             every name the ECOS scientific name gives, brackets read (EcosScientificName);
 //   nztcs_assessment      one row per current New Zealand Threat Classification System assessment;
 //   salve_assessment      one row per current SALVE assessment of a species or subspecies of Brazil's
-//                         fauna.
+//                         fauna;
+//   jncc_designation      one row per taxon and designation in JNCC's Conservation Designations for
+//                         UK Taxa: UK, GB and UK country red lists, legislation and priority lists,
+//                         and the international conventions and EU directives as they apply to UK taxa.
 //
-// Nothing narrative is stored: no NatureServe taxonomic comments, ranking reasons or other text.
+// Nothing narrative is stored: no NatureServe taxonomic comments, ranking reasons or other text, and
+// none of JNCC's comments or descriptions.
 
 namespace BeastieBot3.StatusLists;
 
@@ -30,6 +35,7 @@ internal static class StatusSources {
     public const string Ecos = "ecos";
     public const string Nztcs = "nztcs";
     public const string Salve = "salve";
+    public const string Jncc = "jncc";
 }
 
 internal sealed record StatusSourceInfo(
@@ -72,12 +78,14 @@ internal sealed partial class StatusListStore : SqliteStore {
 
     internal const string Ddl = """
         CREATE TABLE IF NOT EXISTS status_source (
-            source      TEXT PRIMARY KEY,   -- 'natureserve' | 'ecos' | 'nztcs' | 'salve'
+            source      TEXT PRIMARY KEY,   -- 'natureserve' | 'ecos' | 'nztcs' | 'salve' | 'jncc'
             title       TEXT NOT NULL,
-            url         TEXT NOT NULL,
+            url         TEXT NOT NULL,      -- the source's site; for JNCC, the URL of the file imported
             licence     TEXT NOT NULL,
-            citation    TEXT,               -- the source's citation form, with the access date filled in
-            version     TEXT,
+            citation    TEXT,               -- the source's citation form, with the access date filled in; for JNCC,
+                                            -- its attribution statement with the year of the release
+            version     TEXT,               -- the file imported (JNCC's name has the release date: taxon-designations-20260609.xlsx);
+                                            -- for NatureServe, the date the download finished
             fetched_at  TEXT NOT NULL,      -- UTC "O": when the last full download or refresh finished
             row_count   INTEGER NOT NULL
         ) WITHOUT ROWID;
@@ -210,6 +218,51 @@ internal sealed partial class StatusListStore : SqliteStore {
             imported_at     TEXT NOT NULL         -- UTC "O"
         ) WITHOUT ROWID;
         CREATE INDEX IF NOT EXISTS salve_assessment_name ON salve_assessment(scientific_name);
+        CREATE TABLE IF NOT EXISTS jncc_designation (
+            row_number        INTEGER PRIMARY KEY,  -- the row's number in the workbook's Master List sheet (the file has no row id; one taxon
+                                                    -- can have the same designation twice, from two sources or two published names)
+            taxon_version_key TEXT NOT NULL,        -- UK Species Inventory (NHM) recommended taxon version key: NBNSYS0000000131, NHMSYS0021054473
+            scientific_name   TEXT NOT NULL,        -- the UKSI recommended name, as JNCC gives it: "Lithobius (Monotarsobius) crassipes",
+                                                    -- "Alosa fallax subsp. fallax", "Anser fabalis/serrirostris"
+            authority         TEXT,                 -- of the recommended name: "Koehler, 1886"
+            qualifier         TEXT,                 -- of the recommended name: "s.l.", "agg.", "sensu stricto"
+            rank              TEXT,                 -- read from the form of the name and the kingdom (JNCC gives no rank): species, subspecies,
+                                                    -- variety, form, aggregate, section, hybrid, above species; NULL for other forms
+            designated_name   TEXT,                 -- the name as the source published it ("Designated name")
+            common_name       TEXT,                 -- as JNCC gives it, from the source or UKSI
+            category          TEXT,                 -- JNCC's group: Bird, Mammal, Fish, Reptile, Amphibian, Invertebrate, Vascular plant,
+                                                    -- Non-vascular plant, Fungi, Algae, Slime mould
+            taxon_group       TEXT,                 -- UKSI's informal group: "insect - beetle (Coleoptera)", "lichen", "flowering plant"
+            kingdom           TEXT,                 -- in IUCN's spelling, read from category and taxon_group (JnccClassification.KingdomOf):
+                                                    -- ANIMALIA, PLANTAE, FUNGI (lichens too), CHROMISTA; NULL for algae and slime moulds
+            reporting_category TEXT NOT NULL,       -- the list as JNCC names it: "Wildlife and Countryside Act 1981",
+                                                    -- "Red listing based on 2001 IUCN guidelines", "Biodiversity Lists - England"
+            sort_code         TEXT,                 -- JNCC's sort order of the reporting category: A Bern Convention, Fc red lists (2001
+                                                    -- guidelines), Ga rare and scarce species, Hb England, I Wildlife and Countryside Act
+            designation       TEXT NOT NULL,        -- the designation as JNCC writes it: "Schedule 5 Section 9.4b", "Vulnerable",
+                                                    -- "Bird Population Status - red", "England NERC S.41"
+            designation_code  TEXT NOT NULL,        -- JNCC's code ("Designation abbreviation"): WACA-Sch5_sect9.4b, RedList_GB_post2001-VU,
+                                                    -- Bird-Red, England_NERC_S.41
+            status_code       TEXT,                 -- the category in a red list's code: EX, EW, RE, CR, CR(PE), EN, VU, NT, LC, DD, NE, NA,
+                                                    -- LR(cd); pre-1994 R, Insu, Inde; WL (Waiting List); Red or Amber for Birds of
+                                                    -- Conservation Concern and the spider list; NULL for other designations
+            population        TEXT,                 -- breeding, non-breeding: the population the bird red list assessed
+            iucn_version      TEXT,                 -- the IUCN criteria a red list used: 2001, 1994, pre 1994
+            scope             TEXT,                 -- uk (the UK or Great Britain), country (part of the UK), international (a convention, an
+                                                    -- EU directive or regulation, IUCN's global or European red list); NULL for a code that
+                                                    -- JnccClassification does not know
+            area              TEXT,                 -- where it applies: United Kingdom, Great Britain, England, Scotland, Wales, Northern
+                                                    -- Ireland, England and Wales; World, Europe, European Union, Africa-Eurasia,
+                                                    -- North-East Atlantic, North-East Atlantic and Baltic
+            source            TEXT,                 -- the document listing it: "Birds of Conservation Concern 5: the red list for birds ...",
+                                                    -- "A new vascular plant Red List for Great Britain, 2025"
+            source_url        TEXT,
+            designated_on     TEXT,                 -- yyyy-MM-dd as JNCC gives it; often 1 January of the year of the source
+            imported_at       TEXT NOT NULL         -- UTC "O"
+        );
+        CREATE INDEX IF NOT EXISTS jncc_designation_key ON jncc_designation(taxon_version_key);
+        CREATE INDEX IF NOT EXISTS jncc_designation_name ON jncc_designation(scientific_name);
+        CREATE INDEX IF NOT EXISTS jncc_designation_code ON jncc_designation(designation_code);
         """;
 
     protected override void EnsureSchema() {

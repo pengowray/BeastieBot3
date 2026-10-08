@@ -4,9 +4,11 @@ using System.Text.Json;
 using Spectre.Console;
 using Spectre.Console.Cli;
 
-// The run shared by `statuses ecos-import`, `statuses nztcs-import` and `statuses salve-import`:
+// The run shared by `statuses ecos-import`, `statuses nztcs-import`, `statuses salve-import` and
+// `statuses jncc-import`:
 //   1. take the file given with --file, or download the source into the status lists folder as
-//      <stem>-<yyyy-MM-dd>.<extension> (StatusListDownload writes it through a .part file);
+//      <stem>-<yyyy-MM-dd>.<extension>, or under the name the source gives its file (JNCC's name
+//      holds the date of its release); StatusListDownload writes it through a .part file;
 //   2. read the file into rows; a file with no rows leaves the store as it was;
 //   3. replace the source's rows and its status_source row in the status lists store;
 //   4. print a table of counts, the command's summary lines and the file's path.
@@ -36,9 +38,18 @@ internal sealed class StatusListImportSpec<TRow> {
     public required string Licence { get; init; }
     public required Func<DateTime, string> Citation { get; init; }
 
-    /// The downloaded file is named <FileStem>-<yyyy-MM-dd>.<FileExtension>.
+    /// The downloaded file is named <FileStem>-<yyyy-MM-dd>.<FileExtension>, unless FindFileName is set.
     public required string FileStem { get; init; }
     public required string FileExtension { get; init; }
+
+    /// For a source that names its own files: finds the name of the file to download (it may ask the
+    /// source), before Download runs. Null: the name above.
+    public Func<CancellationToken, Task<string>>? FindFileName { get; init; }
+
+    /// For a source whose status_source row depends on the file imported (JNCC: the file's own URL,
+    /// and the year of its release in the attribution): the row for the file, given the row built
+    /// from SiteUrl and Citation. Null: that row.
+    public Func<string, StatusSourceInfo, StatusSourceInfo>? SourceForFile { get; init; }
 
     /// Words in the messages: "No folder for the <DownloadNoun>: ..." and "No <RowsNoun> in <file>."
     public required string DownloadNoun { get; init; }
@@ -87,8 +98,11 @@ internal static class StatusListImport {
                 return -1;
             }
             Directory.CreateDirectory(folder);
-            file = Path.Combine(folder, $"{spec.FileStem}-{now:yyyy-MM-dd}.{spec.FileExtension}");
             try {
+                var name = spec.FindFileName is { } find
+                    ? await find(cancellationToken).ConfigureAwait(false)
+                    : $"{spec.FileStem}-{now:yyyy-MM-dd}.{spec.FileExtension}";
+                file = Path.Combine(folder, name);
                 await spec.Download(file, cancellationToken).ConfigureAwait(false);
             } catch (Exception ex) when (ex is HttpRequestException or IOException or JsonException
                                              or TaskCanceledException && !cancellationToken.IsCancellationRequested) {
@@ -111,8 +125,9 @@ internal static class StatusListImport {
 
         AnsiConsole.MarkupLine($"[grey]Status lists store:[/] {Markup.Escape(storePath)}");
         using var store = StatusListStore.Open(storePath);
-        spec.Replace(store, rows, now, new StatusSourceInfo(spec.Source, spec.Title, spec.SiteUrl, spec.Licence, spec.Citation(now),
-            Path.GetFileName(file), now, rows.Count));
+        var source = new StatusSourceInfo(spec.Source, spec.Title, spec.SiteUrl, spec.Licence, spec.Citation(now),
+            Path.GetFileName(file), now, rows.Count);
+        spec.Replace(store, rows, now, spec.SourceForFile?.Invoke(file, source) ?? source);
 
         var table = new Table().Border(TableBorder.Rounded).AddColumn(spec.GroupColumn).AddColumn(new TableColumn(spec.CountColumn).RightAligned());
         foreach (var group in rows.GroupBy(spec.GroupOf).OrderByDescending(g => g.Count())) {
