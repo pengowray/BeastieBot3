@@ -136,7 +136,7 @@ internal sealed class StatusListStore : SqliteStore {
             elcode                TEXT,
             scientific_name       TEXT NOT NULL,     -- as NatureServe writes it: "Atriplex cordulata var. cordulata", "Ambystoma californiense pop. 1"
             primary_common_name   TEXT,
-            primary_common_name_language TEXT,       -- EN, FR, ES ...
+            primary_common_name_language TEXT,       -- EN, HAW, ES, OTHER
             g_rank                TEXT,              -- global rank as published: G3G4, G2T1, G3TNRQ
             rounded_g_rank        TEXT,              -- G1..G5, GH, GX, GNR, GNA, GU, or a rounded T rank (T1 ...)
             classification_status TEXT,              -- Standard, Provisional, Nonstandard
