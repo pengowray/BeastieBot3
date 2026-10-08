@@ -1825,9 +1825,13 @@ colspan and rowspan; `StatusUpdater` decides the edits, and `StatusTaxonResolver
   line, and the taxa now in another category are left out as with `rmall` (the same checkboxes and
   `KeptReason` rules; a rebuild starts with all of them ticked). The sections come from
   `ListSections`. With headings as in the wikitext (the default), a listed taxon stays in its section
-  while the section's group holds it; a missing taxon, or one IUCN has moved, goes where
-  `ListPlacement` would put it (deepest section, an "Other ..." section, the section's own lines of
-  several groups, or a new section placed as in placement). A taxon's line is the first line that
+  while the section's group holds it; a missing species goes into the section of the line of its
+  genus that sorts just before it (so into the right "===C===" of a list in sections by letter); a
+  taxon with no line of its genus, or one IUCN has moved, goes where `ListPlacement` would put it
+  (deepest section, an "Other ..." section, the section's own lines of several groups, or a new
+  section placed as in placement). A new heading's `{{gray}}` line and bracketed English name come
+  only from the rules files' plural names (`GroupList.HasSentenceName`); a name from a Wikipedia
+  title is singular ("Hummingbird"). A taxon's line is the first line that
   writes its own name (a synonym line comes second); another line writing the same name is a
   duplicate and goes (`DuplicateLines`) unless it defines a used reference; a line writing another
   name stays where it is. A line under another taxon's line (a subspecies under its species) goes

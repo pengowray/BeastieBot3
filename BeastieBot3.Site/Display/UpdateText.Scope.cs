@@ -144,14 +144,11 @@ public static partial class UpdateText {
                 : $"Kept {Count(r.OtherLines)} lines where they were, because they name no taxon in the comparison.";
         }
     }
-    /// byRanks: the headings are for chosen ranks, so a heading goes when it is not for a group of them.
-    public static string RebuildDropped(IReadOnlyList<string> headings, bool byRanks) {
-        var n = headings.Count;
-        var what = byRanks
-            ? n == 1 ? "Removed 1 heading that is not for a group of the chosen ranks: " : $"Removed {Count(n)} headings that are not for a group of the chosen ranks: "
-            : n == 1 ? "Removed 1 heading that has no taxa left: " : $"Removed {Count(n)} headings that have no taxa left: ";
-        return what + string.Join(", ", headings) + ".";
-    }
+    /// The headings of the wikitext left out of the rebuilt list: their taxa are under other headings,
+    /// or were removed.
+    public static string RebuildDropped(IReadOnlyList<string> headings) =>
+        (headings.Count == 1 ? "Removed 1 heading that has no taxa under it in the rebuilt list: "
+            : $"Removed {Count(headings.Count)} headings that have no taxa under them in the rebuilt list: ") + string.Join(", ", headings) + ".";
     public static string RebuildDroppedText(string heading) => $"Text that was under the heading {heading}";
     public const string ColumnRebuildChange = "Change";
     public const string ColumnRebuildHeading = "Heading in rebuilt list";
