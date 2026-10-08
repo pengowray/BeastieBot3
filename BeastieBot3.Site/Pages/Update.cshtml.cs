@@ -345,18 +345,19 @@ public sealed class UpdateModel : PageModel {
                 _ => null,
             },
         };
+        var removeForRebuild = rebuild && !On(RemoveAllField) && form[RemoveShownField].LastOrDefault() != TextKey(text);
         Run(text, form[ScopeField].LastOrDefault(), On(ListAnywayField), On(ExtraSpeciesField), On(AddMissingField), removing,
-            removeAsked: On(RemoveAllField) || form[RemoveShownField].LastOrDefault() == TextKey(text)
-                || (rebuild && form[RemoveShownField].LastOrDefault() != TextKey(text)),
-            rebuild: rebuild);
+            removeAsked: On(RemoveAllField) || form[RemoveShownField].LastOrDefault() == TextKey(text) || removeForRebuild,
+            rebuild: rebuild, removeForRebuild: removeForRebuild);
         return Page();
     }
 
     // Updates the text with Options and compares it with its group (ListScope). removing: the taxa
     // now in another category to take out, null for all of them; removeAsked: the reader has asked to
-    // take some out (the button, or the checkboxes shown for this text).
+    // take some out (the button, or the checkboxes shown for this text); removeForRebuild: only the
+    // rebuild asked, so a refused rebuild takes none out.
     private void Run(string text, string? scope, bool listAnyway, bool extraSpecies, bool addMissing,
-        IReadOnlySet<long>? removing = null, bool removeAsked = false, bool rebuild = false) {
+        IReadOnlySet<long>? removing = null, bool removeAsked = false, bool rebuild = false, bool removeForRebuild = false) {
         using var lookup = _queries.OpenStatusLookup(Region);
         var updater = new StatusUpdater(lookup, DateOnly.FromDateTime(DateTime.UtcNow), options: Options);
         Result = updater.Update(text);
@@ -383,6 +384,9 @@ public sealed class UpdateModel : PageModel {
                 HeadingRanks = HeadingsByRank ? [.. ranks.Where(_pickedRanks.Contains)] : null,
             };
             Rebuild = ListRebuild.Rebuild(text, updater, Result.Members ?? [], Scope, placementOptions, scopeLookup, options);
+            if (Rebuild.Refusal != RebuildRefusal.None && removeForRebuild) {
+                Removing = null;
+            }
             if (Rebuild.Refusal == RebuildRefusal.None) {
                 Result = Result with {
                     Text = Rebuild.Text,

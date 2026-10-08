@@ -98,7 +98,7 @@ public static partial class UpdateText {
         UnplacedReason.SpeciesNotOnLine => "The species it belongs to is not on a list line.",
         UnplacedReason.RowLayout => "The {{Species table/row}} rows of its genus are missing a name, binomial or iucn-status parameter.",
         UnplacedReason.RemovedLine => "It would have gone next to a line that was removed from the updated wikitext.",
-        _ => "No species of its genus is listed, and no heading names its order, family or other group.",
+        _ => "No species of its genus is listed, and no heading for its order or family could be found or added.",
     };
 
     // Rebuilding the list (ListRebuild).
@@ -149,8 +149,8 @@ public static partial class UpdateText {
         if (r.OtherLines > 0) {
             var outside = GroupList.HeadingText(group);
             yield return r.OtherLines == 1
-                ? $"Kept 1 list line for a taxon that is not compared, such as a species IUCN has not assessed or a taxon outside {outside}."
-                : $"Kept {Count(r.OtherLines)} list lines for taxa that are not compared, such as species IUCN has not assessed and taxa outside {outside}.";
+                ? $"Kept 1 list line for a taxon that is not compared, such as a species IUCN has not assessed, a taxon outside {outside}, or a name the site does not recognise."
+                : $"Kept {Count(r.OtherLines)} list lines for taxa that are not compared, such as species IUCN has not assessed, taxa outside {outside}, and names the site does not recognise.";
         }
     }
     public static string RebuildDroppedText(string heading) => $"Text that was under the removed heading {heading}";
@@ -165,7 +165,8 @@ public static partial class UpdateText {
     public const string RebuildHeadingsLabel = "Headings";
     public const string RebuildHeadingsAsText = "As in the wikitext";
     public const string RebuildHeadingsByRank = "A heading for each group at the ticked ranks:";
-    public const string RebuildHeadingsHelp = "With ticked ranks: headings already in the wikitext for groups at these ranks are kept, with their text. Other headings above lists of taxa are removed, and their text is shown for you to copy back.";
+    /// Shown only while headings are by rank (site.css).
+    public const string RebuildHeadingsHelp = "Headings already in the wikitext for groups at the ticked ranks are kept, with their text. Other headings above lists of taxa are removed, and their text is shown for you to copy back.";
     /// Hidden while headings are by rank, which are always alphabetical (site.css).
     public const string RebuildOrderLabel = "Sort headings";
     public const string RebuildOrderText = "As in the wikitext";
