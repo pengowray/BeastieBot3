@@ -704,6 +704,15 @@ public sealed class SearchGroupRuleTests {
         Assert.Equal(expected, SiteText.NatureServeRankMeaning(row, kind));
     }
 
+    // An IUCN species that NatureServe has as a subspecies or a variety under another name.
+    [Theory]
+    [InlineData("Achatinella apexfulva cestus", "Presumed Extinct (subspecies rank TX)")]
+    [InlineData("Silene polypetala var. alba", "Presumed Extinct (variety rank TX)")]
+    public void NatureServeRankMeaning_TakesTheKindFromNatureServesName(string listedName, string expected) {
+        var row = new OtherStatusRow("natureserve-global", "GXTX", "TX", listedName, null, "natureserve", "1", null, null);
+        Assert.Equal(expected, SiteText.NatureServeRankMeaning(row, "species"));
+    }
+
     [Theory]
     [InlineData("G3G4", null)]
     [InlineData("G2?", "The question mark means the rank is uncertain.")]

@@ -947,6 +947,12 @@ abbr[title] {
     color: var(--muted);
 }
 
+/* The list and status columns have the same width in every group's table, so they line up. */
+.other-statuses th:nth-child(1),
+.other-statuses td:nth-child(2) {
+    width: 13rem;
+}
+
 /* A taxon not in the release: the taxon in the release with the same name. */
 .current-taxon {
     margin: 0.5rem 0 0;

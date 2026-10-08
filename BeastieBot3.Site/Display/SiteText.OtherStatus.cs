@@ -50,7 +50,9 @@ public static partial class SiteText {
 
     /// The second line of a NatureServe rank's status cell: what its rounded rank means, and which
     /// part of the rank that is when the rank is a range or has a T rank ("Vulnerable (rounded rank
-    /// G3)" for G3G4, "Imperiled (subspecies rank T2)" for G5T2). Null for a row that is not a rank.
+    /// G3)" for G3G4, "Imperiled (subspecies rank T2)" for G5T2). A T rank is a variety's when
+    /// NatureServe's name has "var.", or, when NatureServe uses the page's name, when the page's taxon
+    /// is a variety. Null for a row that is not a rank.
     public static string? NatureServeRankMeaning(OtherStatusRow row, string kind) {
         if (row.System != OtherStatusSystems.NatureServeGlobal || OtherStatusSystems.NatureServeRankMeaning(row.StatusCode) is not { } meaning) {
             return null;
@@ -60,7 +62,9 @@ public static partial class SiteText {
             return meaning;
         }
         if (rounded[0] == 'T') {
-            var rank = kind == TaxonKinds.Variety ? "variety rank" : "subspecies rank";
+            // The kind of NatureServe's taxon: its name, when the listing names another taxon, else the page's.
+            var variety = row.ListedName is { } listed ? listed.Contains(" var. ", StringComparison.Ordinal) : kind == TaxonKinds.Variety;
+            var rank = variety ? "variety rank" : "subspecies rank";
             return row.Status.Trim().EndsWith(rounded, StringComparison.OrdinalIgnoreCase)
                 ? $"{meaning} ({rank} {rounded})"
                 : $"{meaning} (rounded {rank} {rounded})";
