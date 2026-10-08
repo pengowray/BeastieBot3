@@ -1138,6 +1138,16 @@ public static class FlowCatalogue {
                     Note = "Each run asks GBIF's registry about every list and downloads an archive only when the list was published again; a run with nothing new takes under a minute. To add a list, add it to the YAML file.",
                 },
                 new FlowStep {
+                    Id = "site-france",
+                    Title = "Download France's statuses (BDC Statuts)",
+                    Description = "`statuses france-import` downloads PatriNat's BDC Statuts and TAXREF (Licence Ouverte 2.0, as data.gouv.fr lists them) and stores France's national and regional red lists and protected species lists, with TAXREF's names and IUCN taxon ids, in the status lists store.",
+                    Commands = new[] { "statuses france-import" },
+                    OutputSourceIds = new[] { "status-lists" },
+                    Probe = PublicSiteProbes.France,
+                    Group = "2 · Build the site database",
+                    Note = "MNHN's own sites have been down since July 2025, so the files come from PatriNat's temporary download page; when they move, give the new addresses with --bdc-url and --taxref-url. The two zip files are about 90 MB.",
+                },
+                new FlowStep {
                     Id = "site-japan",
                     Title = "Download Japan's Red List",
                     Description = "`statuses japan-import` downloads the Red List of Japan's Ministry of the Environment (Public Data License 1.0): the 5th Red List's CSV files for the groups it covers so far and the Red List 2020 PDF for the others, and stores about 5,800 taxa and threatened local populations in the status lists store.",
