@@ -176,11 +176,16 @@ public sealed partial class SiteQueries {
                                + CASE t.kind WHEN 'species' THEN 0 ELSE 1 END * 1000
                                + CASE WHEN LENGTH(h.name) > 999 THEN 999 ELSE LENGTH(h.name) END) AS score,
                            h.name, h.name_type, h.language,
-                           MAX(h.name_type <> 'common' AND h.name_id IN (SELECT name_id FROM name_key WHERE key = @key)) AS exact_not_common
+                           -- SUM, not MAX: with MIN the only min() or max() aggregate, SQLite takes the bare
+                           -- columns (h.name, h.name_type, h.language) from the row with the lowest score.
+                           SUM(h.name_type <> 'common' AND h.name_id IN (SELECT name_id FROM name_key WHERE key = @key)) > 0 AS exact_not_common,
+                           SUM(h.name_id IN (SELECT name_id FROM name_key WHERE key = @key)
+                               AND (h.name_type <> 'common' OR COALESCE(h.language, '') IN ('en', 'eng') OR COALESCE(h.language, '') LIKE 'en-%')) > 0
+                               AS exact_not_other_language
                     FROM hits h JOIN taxon t ON t.taxon_id = h.taxon_id
                     GROUP BY h.taxon_id
                 )
-                SELECT {SummaryColumns}, b.name, b.name_type, b.language, b.score, b.exact_not_common, t.enwiki_title
+                SELECT {SummaryColumns}, b.name, b.name_type, b.language, b.score, b.exact_not_common, t.enwiki_title, b.exact_not_other_language
                 FROM best b
                 JOIN taxon t ON t.taxon_id = b.taxon_id
                 {SummaryJoin}
@@ -202,7 +207,8 @@ public sealed partial class SiteQueries {
                     exact,
                     exact && (reader.GetInt64(next + 4) == 1
                         || IsKey(summary.CommonNameEn, key)
-                        || IsKey(Text(reader, next + 5), key))));
+                        || IsKey(Text(reader, next + 5), key)),
+                    exact && reader.GetInt64(next + 6) == 0));
             }
         }
 

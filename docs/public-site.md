@@ -1574,7 +1574,12 @@ title statements are not recorded (run wikidata iucn-assessment-items)".
   before *Euphorbia drupifera* (a common name "dodo"), and "Axolotl" lists *Ambystoma mexicanum*
   before *Ambystoma bombypellum*. Search and `/name/{name}` go straight to a taxon page when the text names one taxon exactly: the
   only exact match among the taxa in the release or, when no taxon in the release matches exactly,
-  the only exact match among all taxa (`SearchModel.SingleExactMatch`). The search box lists each
+  the only exact match among all taxa (`SearchModel.SingleExactMatch`). Taxa whose only exact
+  matches are common names in other languages (`SearchHit.IsExactInOtherLanguageOnly`) count only
+  when no other taxon matches exactly, so an English name, scientific name or synonym of one taxon
+  still goes to it when the same words are another taxon's name in another language. The matched
+  name shown for a hit is the one with the best score: the query takes it as a bare column beside a
+  single MIN(), so the other per-taxon flags are SUMs, not MAXes. The search box lists each
   suggested name once, ignoring letter case, because two suggestions with the same name open the
   same search result. When an old id and a taxon in the release have the same scientific name,
   `/api/suggest` returns both, and `site.js` keeps only the first, which is the taxon in the

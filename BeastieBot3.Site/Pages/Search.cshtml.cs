@@ -192,14 +192,22 @@ public sealed class SearchModel : PageModel {
     /// The one taxon the text names exactly: the only exact match in the release, or, when no taxon
     /// in the release matches exactly, the only exact match. Null when there is none or several. A
     /// taxon not in the release with the same name as one in the release is linked from that
-    /// taxon's page.
+    /// taxon's page. Taxa that have the text only as a common name in a language other than English
+    /// are counted only when no other taxon matches exactly, so an English name, a scientific name or
+    /// a synonym of one taxon still goes to it when the same words are another taxon's name in
+    /// another language.
     public static SearchHit? SingleExactMatch(IReadOnlyList<SearchHit> hits) {
         var exact = hits.Where(h => h.IsExactMatch).ToList();
-        var inRelease = exact.Where(h => h.Taxon.InRelease).ToList();
-        return inRelease.Count switch {
-            1 => inRelease[0],
-            0 when exact.Count == 1 => exact[0],
-            _ => null,
-        };
+        var notOtherLanguage = exact.Where(h => !h.IsExactInOtherLanguageOnly).ToList();
+        return Single(notOtherLanguage.Count > 0 ? notOtherLanguage : exact);
+
+        static SearchHit? Single(List<SearchHit> exact) {
+            var inRelease = exact.Where(h => h.Taxon.InRelease).ToList();
+            return inRelease.Count switch {
+                1 => inRelease[0],
+                0 when exact.Count == 1 => exact[0],
+                _ => null,
+            };
+        }
     }
 }
