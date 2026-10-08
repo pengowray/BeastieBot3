@@ -419,8 +419,10 @@ take their order from `iucn-not-assigned.yml`, and 43 have a rank still "NOT ASS
   above species today), then the title of the article the scientific name redirects to
   (Araneae to Spider). Only 1,182 groups have one, nearly all of them families and orders, and
   the forms differ: "cetaceans", "mammal", "Orchid". A heading's "Members of ..." line uses it.
-- The Catalogue of Life's English vernacular names are stored apart, in `higher_taxon_name`, as
-  CoL writes them (names that differ only in case are listed once). They are not checked, and some
+- The Catalogue of Life's English vernacular names are stored apart, in `higher_taxon_name`, with
+  the caps rules applied as for a group name (`CommonNameNormalizer.ApplyGroupCapitalization`: the
+  first word is lower-cased too, so "Typical Big Cats" is "typical big cats" and "Old World
+  Monkeys" is "Old World monkeys"), each name listed once. They are not checked, and some
   name only part of the group ("cattle", "goats" for Bovidae), so the site lists them under their
   source and never uses one as the group's name. 10,651 groups have some.
 - Names from English Wikipedia (`SiteGroupWikipediaNames`, `higher_taxon_name` rows with source

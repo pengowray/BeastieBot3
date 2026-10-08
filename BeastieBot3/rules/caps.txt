@@ -2154,6 +2154,8 @@ woods // Guerreran pine woods snake, Hempstead's pine woods snake
 woolly // Kachin woolly bat, Krau woolly bat, Titania's woolly bat
 wooly // Lesser wooly horseshoe bat
 world // Old world twister
+New World // New World barbets, New World vultures (region name)
+Old World // Old World monkeys, Old World swallowtail (region name)
 worm // Scaleless worm goby, Panamanian worm blenny, Mexican worm blenny
 worm-goby // Mangrove worm-goby, Many-spined worm-goby, Dark-tailed worm-goby
 worm-lizard // Eared worm-lizard, Hermite Island worm-lizard

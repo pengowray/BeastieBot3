@@ -916,7 +916,7 @@ public sealed partial class SiteQueries {
         return result;
     }
 
-    /// The Catalogue of Life's English names of a group, as CoL writes them.
+    /// The Catalogue of Life's English names of a group, with the caps rules applied at build time.
     public IReadOnlyList<string> GetGroupColNames(int nodeId) => GetGroupNames(nodeId, "col");
 
     /// The group's names from English Wikipedia: the title of its article and the titles of the

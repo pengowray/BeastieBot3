@@ -419,6 +419,9 @@ public sealed class HomeAndSearchTests(SiteFactory factory) : IClassFixture<Site
         var html = await factory.CreateClient().GetStringAsync($"/species/{taxonId}");
         Assert.Contains("Status in the Wikipedia taxobox", html);
         Assert.Contains(text, html);
+        // The full stop follows the badge with no space before it.
+        Assert.Contains("</span></span>.", html);
+        Assert.DoesNotContain("</span></span>\n.", html);
         Assert.Contains("From the copy of the article downloaded on 29 November 2025.", html);
         // Under the taxobox status parameters box, not in the links section.
         Assert.True(html.IndexOf("status parameters", StringComparison.Ordinal) < html.IndexOf("Status in the Wikipedia taxobox", StringComparison.Ordinal));

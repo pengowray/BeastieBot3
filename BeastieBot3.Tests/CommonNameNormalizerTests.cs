@@ -26,6 +26,25 @@ public class CommonNameNormalizerTests {
         Assert.Equal(expected, CommonNameNormalizer.ApplyCapitalization(input, NoRules));
     }
 
+    [Theory]
+    // Group names from the Catalogue of Life: the first word is lower-cased too, unless a rule or
+    // its own capitals keep it.
+    [InlineData("Typical Big Cats", "typical big cats")]
+    [InlineData("Felids", "felids")]
+    [InlineData("cats", "cats")]
+    [InlineData("Old World Monkeys", "Old World monkeys")]
+    [InlineData("Dark-backed New World Barbets", "dark-backed New World barbets")]
+    [InlineData("Typical Australasian Treecreepers", "typical Australasian treecreepers")]
+    [InlineData("McGregor Frogs", "McGregor frogs")]
+    public void ApplyGroupCapitalization(string input, string expected) {
+        var rules = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) {
+            ["australasian"] = "Australasian",
+            ["old world"] = "Old World",
+            ["new world"] = "New World",
+        };
+        Assert.Equal(expected, CommonNameNormalizer.ApplyGroupCapitalization(input, rules));
+    }
+
     [Fact]
     public void SingleWordRule_CapitalizesGeographicAdjective() {
         var rules = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["african"] = "African" };

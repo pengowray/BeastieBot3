@@ -14,10 +14,13 @@ using System.Text.RegularExpressions;
 //     ("AtrcanTidenr Bat AfrcanTrdent nosed Bat");
 //   - names cut off at a bracket ("Pholidoscelis polops (Cope", "and grant)");
 //   - glosses: "Da Xiong Mao (meaning large bear cat)", "meaning large bear cat";
-//   - IUCN placeholder names in Wikidata: "Species code: Rc".
-// Assess is pure. The two OCR rules for the scanned Catalogue of Life names only apply to names
-// labelled English: a lone digit between words ("Libélula de 4 manchas" is a real Spanish name)
-// and capitals inside words (romanised Russian in IUCN's data has "MalyiI").
+//   - IUCN placeholder names in Wikidata: "Species code: Rc";
+//   - codes in Catalogue of Life names labelled English: four-letter bird banding codes ("TIGR"
+//     for the lowland tiny greenbul) and six-letter USDA plant symbols ("FICVER"), 1,570 names.
+// Assess is pure. The two OCR rules for the scanned Catalogue of Life names and the code rule only
+// apply to names labelled English: a lone digit between words ("Libélula de 4 manchas" is a real
+// Spanish name), capitals inside words (romanised Russian in IUCN's data has "MalyiI") and one word
+// in capitals (IUCN gives "PUHI" in Tahitian and "SMÖRFISK" in Swedish).
 // Names that look odd but are real are kept: "Cassin's 17-year Cicada", "Tortuga B2", "Type 3
 // Evening Grosbeak", "European pilchard (=sardine)", "Taw Nwar (aka) Sai", "Манул [manul]".
 
@@ -88,6 +91,9 @@ internal enum CommonNameFlaw {
     GlossOnly,
     /// <summary>IUCN's placeholder for a species without a name ("Species code: Rc").</summary>
     SpeciesCode,
+    /// <summary>One word of up to <see cref="CommonNameQuality.MaxCodeLength"/> capital letters, in a
+    /// name labelled English: a bird banding code ("TIGR") or a USDA plant symbol ("FICVER").</summary>
+    LetterCode,
 }
 
 /// <summary>The verdict on one name, the name to use (repaired, or as given when Good), and the flaw.</summary>
@@ -97,6 +103,9 @@ internal readonly record struct CommonNameAssessment(CommonNameVerdict Verdict, 
 }
 
 internal static class CommonNameQuality {
+    /// <summary>The longest name labelled English that is junk when it is all capital letters.</summary>
+    internal const int MaxCodeLength = 6;
+
     private const RegexOptions Options = RegexOptions.Compiled | RegexOptions.CultureInvariant;
 
     private static readonly Regex HtmlComment = new(@"<!--.*?(?:-->|$)", Options | RegexOptions.Singleline);
@@ -138,6 +147,9 @@ internal static class CommonNameQuality {
             return new CommonNameAssessment(CommonNameVerdict.Junk, name ?? string.Empty, CommonNameFlaw.Empty);
         }
         var english = string.Equals(language, "en", StringComparison.OrdinalIgnoreCase);
+        if (english && IsLetterCode(name.Trim())) {
+            return Junk(name, CommonNameFlaw.LetterCode);
+        }
         if (!NeedsCheck(name, english)) {
             return new CommonNameAssessment(CommonNameVerdict.Good, name, CommonNameFlaw.None);
         }
@@ -319,6 +331,20 @@ internal static class CommonNameQuality {
             previousLower = char.IsLower(c);
         }
         return name.Contains("meaning", StringComparison.OrdinalIgnoreCase);
+    }
+
+    // "TIGR", "FICVER": one word of ASCII capital letters. Longer words and names with a space
+    // ("STEPPE LEMMING") are names written in capitals.
+    private static bool IsLetterCode(string text) {
+        if (text.Length == 0 || text.Length > MaxCodeLength) {
+            return false;
+        }
+        foreach (var c in text) {
+            if (c is < 'A' or > 'Z') {
+                return false;
+            }
+        }
+        return true;
     }
 
     private static bool HasLetter(string text) {

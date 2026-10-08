@@ -362,7 +362,12 @@ internal sealed class SiteDbBuild {
             : null;
         using var titles = wikiCache is null ? null : WikipediaLists.EnwikiTitleCheck.OpenReadOnly(wikiCache);
         var headings = new WikipediaLists.HeadingFormatter(legacy, taxonRules, provider);
-        SiteGroupNames.Resolve(tree.Nodes, headings, titles, _inputs.ColDatabase, _stats, ct);
+        IReadOnlyDictionary<string, string> capsRules = new Dictionary<string, string>();
+        if (_inputs.CommonNames is { } storePath && File.Exists(storePath)) {
+            using var store = CommonNames.CommonNameStore.OpenReadOnly(storePath);
+            capsRules = store.GetAllCapsRules();
+        }
+        SiteGroupNames.Resolve(tree.Nodes, headings, titles, _inputs.ColDatabase, capsRules, _stats, ct);
         if (wikiCache is not null && Wikipedia.WikipediaCacheStore.OpenReadOnly(wikiCache) is { } cache) {
             using (cache) {
                 var scientificNames = new HashSet<string>(StringComparer.Ordinal);

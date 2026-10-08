@@ -189,6 +189,31 @@ public class CommonNameQualityTests {
         }
     }
 
+    [Theory]
+    // Catalogue of Life names labelled English: bird banding codes and USDA plant symbols.
+    [InlineData("TIGR", "en", true)]
+    [InlineData("GSP", "en", true)]
+    [InlineData("FICVER", "en", true)]
+    [InlineData("M", "en", true)]
+    // Names written in capitals, a code with a digit, and names in other languages are kept.
+    [InlineData("STEPPE LEMMING", "en", false)]
+    [InlineData("L172", "en", false)]
+    [InlineData("PAYANGITAN", "en", false)]
+    [InlineData("Smew", "en", false)]
+    [InlineData("PUHI", "ty", false)]
+    [InlineData("SMÖRFISK", "sv", false)]
+    [InlineData("TIGR", null, false)]
+    public void LetterCodes_LabelledEnglish_AreJunk(string name, string? language, bool junk) {
+        var result = CommonNameQuality.Assess(name, language);
+
+        if (junk) {
+            Assert.Equal(CommonNameVerdict.Junk, result.Verdict);
+            Assert.Equal(CommonNameFlaw.LetterCode, result.Flaw);
+        } else {
+            Assert.NotEqual(CommonNameFlaw.LetterCode, result.Flaw);
+        }
+    }
+
     [Fact]
     public void GoodName_IsReturnedUnchanged() {
         var result = CommonNameQuality.Assess(" Polar bear ", "en");

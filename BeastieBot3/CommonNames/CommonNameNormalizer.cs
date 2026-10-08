@@ -103,7 +103,20 @@ internal static class CommonNameNormalizer {
     /// their capitalization even without an explicit rule. Also straightens apostrophes/quotes and
     /// collapses stray double-spaces.
     /// </summary>
-    public static string ApplyCapitalization(string name, IReadOnlyDictionary<string, string> capsRules) {
+    public static string ApplyCapitalization(string name, IReadOnlyDictionary<string, string> capsRules) =>
+        Capitalize(name, capsRules, sentenceCase: true);
+
+    /// <summary>
+    /// The caps rules applied to the English name of a group of taxa ("Typical Big Cats" becomes
+    /// "typical big cats", "Old World Monkeys" becomes "Old World monkeys"): like
+    /// <see cref="ApplyCapitalization"/>, except that the first word is lower-cased too unless a
+    /// rule or its own capitals keep it capitalized, as group names are written in a sentence
+    /// ("Members of Felidae are called cats").
+    /// </summary>
+    public static string ApplyGroupCapitalization(string name, IReadOnlyDictionary<string, string> capsRules) =>
+        Capitalize(name, capsRules, sentenceCase: false);
+
+    private static string Capitalize(string name, IReadOnlyDictionary<string, string> capsRules, bool sentenceCase) {
         if (string.IsNullOrWhiteSpace(name)) {
             return name;
         }
@@ -138,7 +151,7 @@ internal static class CommonNameNormalizer {
             var word = match.Value;
             string capitalizedWord;
 
-            if (i == 0) {
+            if (i == 0 && sentenceCase) {
                 // First word: a single-word rule may override, else preserve its own caps signal,
                 // else title-case it. The trailing EnsureFirstLetterUpper guarantees the leading cap.
                 capitalizedWord = LookupSingleWord(capsRules, word)
@@ -165,7 +178,7 @@ internal static class CommonNameNormalizer {
         }
 
         // Common names are sentence-case: guarantee the first visible letter is capitalized.
-        return EnsureFirstLetterUpper(result.ToString());
+        return sentenceCase ? EnsureFirstLetterUpper(result.ToString()) : result.ToString();
     }
 
     private static string? LookupSingleWord(IReadOnlyDictionary<string, string> capsRules, string word) {
