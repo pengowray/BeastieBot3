@@ -61,6 +61,14 @@ lists:
   - taxa_group: mammals
     presets: [threatened, cr, en, vu, nt, dd, lc, ew, ex]
 
+  # Sub-groups of mammals. No ew: none of them has an extinct in the wild species.
+  - taxa_group: bats
+    presets: [threatened, cr, en, vu, nt, dd, lc, ex]
+  - taxa_group: rodents
+    presets: [threatened, cr, en, vu, nt, dd, lc, ex]
+  - taxa_group: primates
+    presets: [threatened, cr, en, vu, nt, dd, lc, ex]
+
   # ==================== AMPHIBIANS ====================
   - taxa_group: amphibians
     presets: [threatened, cr, en, vu, nt, dd, lc, ex]
@@ -111,6 +119,14 @@ lists:
   - taxa_group: arachnids
     presets: [threatened, cr, en, vu, nt, dd, lc, ex]
 
+  # ==================== CEPHALOPODS / SEA CUCUMBERS / MILLIPEDES (one page each) ====================
+  - taxa_group: cephalopods
+    category_split: all-status
+  - taxa_group: sea-cucumbers
+    category_split: all-status
+  - taxa_group: millipedes
+    category_split: all-status
+
   # ==================== INVERTEBRATES (parent — nests insects, gastropods, ...) ====================
   # Keep these presets a subset of every child's presets, so each {child}-{preset} link resolves.
   # A child with no list for a preset but an all-status list is linked to its all-status list; a
@@ -125,16 +141,16 @@ lists:
   # ==================== PLANTS (parent: merged top-level + per-class breakouts) ====================
   # merged -> extinct-combined, threatened, nt, dd, lc (CR/EN/VU never split; EX/EW/PE/PEW on one page).
   # plants-threatened / plants-lc become parent pages that break out the dicot/monocot sub-lists, and
-  # link the conifer and cycad all-status pages below. nt/dd/extinct-combined stay ordinary lists.
-  # bryopsida is not a sub-group of plants (it covers class Bryopsida only, not all mosses; see
-  # taxa-groups.yml), so the plants pages list Bryopsida species in their own class section.
+  # link the conifer, cycad, fern and moss all-status pages. nt/dd/extinct-combined stay ordinary lists.
   - taxa_group: plants
     category_split: merged
   - taxa_group: magnoliopsida
     presets: [threatened, lc]
   - taxa_group: liliopsida
     presets: [threatened, lc]
-  - taxa_group: bryopsida
+  - taxa_group: mosses
+    category_split: all-status
+  - taxa_group: ferns
     category_split: all-status
 
   # ==================== CONIFERS / CYCADS (complete-by-status pages) ====================

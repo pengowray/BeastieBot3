@@ -22,8 +22,8 @@ public class SubGroupShippedRulesTests {
     }
 
     [Theory]
-    [InlineData("plants-threatened", new[] { "magnoliopsida-threatened", "liliopsida-threatened", "conifers-all-status", "cycads-all-status" })]
-    [InlineData("plants-lc", new[] { "magnoliopsida-lc", "liliopsida-lc", "conifers-all-status", "cycads-all-status" })]
+    [InlineData("plants-threatened", new[] { "magnoliopsida-threatened", "liliopsida-threatened", "conifers-all-status", "cycads-all-status", "ferns-all-status", "mosses-all-status" })]
+    [InlineData("plants-lc", new[] { "magnoliopsida-lc", "liliopsida-lc", "conifers-all-status", "cycads-all-status", "ferns-all-status", "mosses-all-status" })]
     public void PlantsParentPagesLinkTheirSubGroupLists(string listId, string[] expected) {
         Assert.Equal(expected, SubListIds(listId));
     }
@@ -38,34 +38,52 @@ public class SubGroupShippedRulesTests {
         Assert.Empty(SubListIds(listId));
     }
 
-    // bryopsida is named "Mosses" but covers class Bryopsida only. As a sub-group of plants it put a
-    // wrong moss count on the plants pages (96 threatened, of 112 threatened mosses in 2026-1).
+    // mosses covers all of phylum Bryophyta (seven classes in IUCN), not class Bryopsida only, and is a
+    // sub-group of plants. The plants pages give it one table row and one section.
     [Fact]
-    public void BryopsidaIsNotASubGroupOfPlants() {
-        Assert.DoesNotContain(Config.Value.ChildLinkNotes, n =>
-            string.Equals(n.ParentGroup, "plants", StringComparison.OrdinalIgnoreCase)
-            && string.Equals(n.ChildGroup, "bryopsida", StringComparison.OrdinalIgnoreCase));
+    public void MossesAreTheWholePhylum() {
+        var config = Config.Value;
+        var mosses = config.Lists.Single(l => l.Id == "mosses-all-status");
+        Assert.Contains(mosses.Filters, f =>
+            string.Equals(f.Rank, "phylum", StringComparison.OrdinalIgnoreCase)
+            && string.Equals(f.Value, "BRYOPHYTA", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(mosses.Filters, f => string.Equals(f.Rank, "class", StringComparison.OrdinalIgnoreCase));
+        Assert.DoesNotContain(config.Lists, l => string.Equals(l.TaxaGroup, "bryopsida", StringComparison.OrdinalIgnoreCase));
     }
 
-    // Every fish and invertebrates list is a parent page that links each sub-group's list for its own
-    // preset (no all-status stand-ins, nothing left unlinked).
+    // Every fish, invertebrates and mammals list (mammals-ew aside) is a parent page that links each
+    // sub-group's list for its own preset, or the all-status list of a sub-group that has only that.
     [Theory]
-    [InlineData("fish", 2)]
-    [InlineData("invertebrates", 6)]
-    public void FishAndInvertebratesListsLinkEverySubGroup(string group, int subGroupCount) {
+    [InlineData("fish", new[] { "ray-finned-fishes", "sharks-rays" }, new string[0])]
+    [InlineData("invertebrates",
+        new[] { "insects", "gastropods", "bivalves", "crustaceans", "corals", "arachnids" },
+        new[] { "cephalopods", "sea-cucumbers", "millipedes" })]
+    [InlineData("mammals", new[] { "bats", "rodents", "primates" }, new string[0])]
+    public void ParentListsLinkEverySubGroup(string group, string[] presetChildren, string[] allStatusChildren) {
         var config = Config.Value;
         var lists = config.Lists
-            .Where(l => string.Equals(l.TaxaGroup, group, StringComparison.OrdinalIgnoreCase))
+            .Where(l => string.Equals(l.TaxaGroup, group, StringComparison.OrdinalIgnoreCase) && l.Id != "mammals-ew")
             .ToList();
         Assert.NotEmpty(lists);
         foreach (var list in lists) {
             var notes = config.ChildLinkNotes
                 .Where(n => n.ParentListId == list.Id && n.Kind == GroupingKind.Phylogenetic)
                 .ToList();
-            Assert.Equal(subGroupCount, notes.Count);
-            Assert.All(notes, n => Assert.Equal(ChildLinkOutcome.Linked, n.Outcome));
-            Assert.Equal(notes.Select(n => $"{n.ChildGroup}-{list.Preset}"), list.SubLists.Select(s => s.Id));
+            Assert.Equal(presetChildren.Length + allStatusChildren.Length, notes.Count);
+            Assert.All(notes, n => Assert.Equal(
+                allStatusChildren.Contains(n.ChildGroup) ? ChildLinkOutcome.LinkedAllStatus : ChildLinkOutcome.Linked,
+                n.Outcome));
+            var expected = presetChildren.Select(c => $"{c}-{list.Preset}")
+                .Concat(allStatusChildren.Select(c => $"{c}-all-status"));
+            Assert.Equal(expected, list.SubLists.Select(s => s.Id));
         }
+    }
+
+    // None of bats, rodents and primates has an extinct in the wild species, so they have no ew list
+    // and mammals-ew is an ordinary list.
+    [Fact]
+    public void MammalsExtinctInTheWildIsAnOrdinaryList() {
+        Assert.Empty(SubListIds("mammals-ew"));
     }
 
     private static IEnumerable<string> SubListIds(string listId) =>
