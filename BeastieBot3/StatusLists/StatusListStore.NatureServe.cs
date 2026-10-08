@@ -2,7 +2,9 @@ using System.Globalization;
 using Microsoft.Data.Sqlite;
 
 // The status lists store's NatureServe tables (`statuses natureserve-fetch`): natureserve_species,
-// natureserve_synonym and natureserve_partition.
+// natureserve_synonym, natureserve_nation, natureserve_subnation and natureserve_partition. A
+// record's synonyms and national and subnational ranks are replaced whenever the record is stored,
+// and deleted with it (ON DELETE CASCADE).
 
 namespace BeastieBot3.StatusLists;
 
@@ -12,6 +14,12 @@ internal sealed record NatureServePartition(string Prefix, long? Expected, int N
 
 internal sealed partial class StatusListStore {
     public long CountNatureServe() => Scalar("SELECT COUNT(*) FROM natureserve_species");
+
+    /// The number of records with at least one national rank, and with at least one state or
+    /// province rank.
+    public (long WithNationalRanks, long WithSubnationalRanks) CountNatureServeWithRanks() => (
+        Scalar("SELECT COUNT(DISTINCT element_global_id) FROM natureserve_nation"),
+        Scalar("SELECT COUNT(DISTINCT element_global_id) FROM natureserve_subnation"));
 
     public long CountNatureServeFetchedSince(DateTime sinceUtc) =>
         Scalar("SELECT COUNT(*) FROM natureserve_species WHERE fetched_at >= @since", ("@since", Stamp(sinceUtc)));
@@ -148,7 +156,30 @@ internal sealed partial class StatusListStore {
         var synonymId = insertSynonym.Parameters.Add("@id", SqliteType.Integer);
         var synonymName = insertSynonym.Parameters.Add("@name", SqliteType.Text);
 
+        using var deleteRanks = _connection.CreateCommand();
+        deleteRanks.Transaction = tx;
+        deleteRanks.CommandText = """
+            DELETE FROM natureserve_subnation WHERE element_global_id = @id;
+            DELETE FROM natureserve_nation WHERE element_global_id = @id;
+            """;
+        var deleteRanksId = deleteRanks.Parameters.Add("@id", SqliteType.Integer);
+        using var insertNation = _connection.CreateCommand();
+        insertNation.Transaction = tx;
+        insertNation.CommandText = """
+            INSERT INTO natureserve_nation(element_global_id, nation_code, rounded_n_rank, native, exotic)
+            VALUES (@id, @nation, @rank, @native, @exotic) ON CONFLICT DO NOTHING
+            """;
+        var nationParameters = new[] { "@id", "@nation", "@rank", "@native", "@exotic" }.ToDictionary(name => name, name => AddParameter(insertNation, name));
+        using var insertSubnation = _connection.CreateCommand();
+        insertSubnation.Transaction = tx;
+        insertSubnation.CommandText = """
+            INSERT INTO natureserve_subnation(element_global_id, nation_code, subnation_code, rounded_s_rank, native, exotic)
+            VALUES (@id, @nation, @subnation, @rank, @native, @exotic) ON CONFLICT DO NOTHING
+            """;
+        var subnationParameters = new[] { "@id", "@nation", "@subnation", "@rank", "@native", "@exotic" }.ToDictionary(name => name, name => AddParameter(insertSubnation, name));
+
         static object Value(string? s) => s is null ? DBNull.Value : s;
+        static object Flag(bool? b) => b is { } flag ? (flag ? 1 : 0) : DBNull.Value;
         foreach (var row in rows) {
             p["@id"].Value = row.ElementGlobalId;
             p["@unique"].Value = row.UniqueId;
@@ -183,6 +214,26 @@ internal sealed partial class StatusListStore {
             foreach (var synonym in row.Synonyms) {
                 synonymName.Value = synonym;
                 insertSynonym.ExecuteNonQuery();
+            }
+
+            deleteRanksId.Value = row.ElementGlobalId;
+            deleteRanks.ExecuteNonQuery();
+            nationParameters["@id"].Value = row.ElementGlobalId;
+            subnationParameters["@id"].Value = row.ElementGlobalId;
+            foreach (var nation in row.Nations) {
+                nationParameters["@nation"].Value = nation.NationCode;
+                nationParameters["@rank"].Value = Value(nation.RoundedNRank);
+                nationParameters["@native"].Value = Flag(nation.Native);
+                nationParameters["@exotic"].Value = Flag(nation.Exotic);
+                insertNation.ExecuteNonQuery();
+                subnationParameters["@nation"].Value = nation.NationCode;
+                foreach (var subnation in nation.Subnations) {
+                    subnationParameters["@subnation"].Value = subnation.SubnationCode;
+                    subnationParameters["@rank"].Value = Value(subnation.RoundedSRank);
+                    subnationParameters["@native"].Value = Flag(subnation.Native);
+                    subnationParameters["@exotic"].Value = Flag(subnation.Exotic);
+                    insertSubnation.ExecuteNonQuery();
+                }
             }
         }
     }

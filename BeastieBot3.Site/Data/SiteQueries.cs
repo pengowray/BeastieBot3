@@ -164,25 +164,34 @@ public sealed partial class SiteQueries {
     }
 
     /// The taxon's statuses in lists other than the IUCN Red List, in the order of
-    /// OtherStatusSystems.All; within a list, the listing of the whole taxon first, then those of
-    /// populations by name.
+    /// OtherStatusSystems.All, then of the lists of a system (other_status_list.sort_order); within a
+    /// list, the listing of the whole taxon first, then those of populations by name.
     public IReadOnlyList<OtherStatusRow> GetOtherStatuses(long taxonId) {
         using var connection = _db.OpenConnection();
         using var command = connection.CreateCommand();
         command.CommandText = """
-            SELECT system, status, status_code, listed_name, population, source, source_id, url, listed_on, report
-            FROM other_status
-            WHERE taxon_id = @id
+            SELECT s.system, s.status, s.status_code, s.listed_name, s.population, s.source, s.source_id, s.url, s.listed_on, s.report,
+                   s.country, s.qualifier, s.listed_under,
+                   l.list_key, l.system, l.country, l.region, l.name, l.title, l.sort_order, l.publisher, l.licence, l.licence_url,
+                   l.citation, l.url, l.version, l.fetched
+            FROM other_status s
+            LEFT JOIN other_status_list l ON l.list_key = s.list_key
+            WHERE s.taxon_id = @id
             """;
         command.Parameters.AddWithValue("@id", taxonId);
         using var reader = command.ExecuteReader();
         var rows = new List<OtherStatusRow>();
         while (reader.Read()) {
+            var list = reader.IsDBNull(13) ? null : new OtherStatusListRow(reader.GetString(13), reader.GetString(14), Text(reader, 15),
+                Text(reader, 16), reader.GetString(17), Text(reader, 18), reader.GetInt32(19), Text(reader, 20), Text(reader, 21),
+                Text(reader, 22), Text(reader, 23), Text(reader, 24), Text(reader, 25), Text(reader, 26));
             rows.Add(new OtherStatusRow(reader.GetString(0), reader.GetString(1), Text(reader, 2), Text(reader, 3), Text(reader, 4),
-                reader.GetString(5), reader.GetString(6), Text(reader, 7), Text(reader, 8), Text(reader, 9)));
+                reader.GetString(5), reader.GetString(6), Text(reader, 7), Text(reader, 8), Text(reader, 9), Text(reader, 10),
+                Text(reader, 11), list, Text(reader, 12)));
         }
         return rows
             .OrderBy(r => BeastieBot3.Shared.SiteData.OtherStatusSystems.Order(r.System))
+            .ThenBy(r => r.List?.SortOrder ?? 0)
             .ThenBy(r => r.Population is null ? 0 : 1)
             .ThenBy(r => r.ListedOn, StringComparer.Ordinal)
             .ThenBy(r => r.Population, StringComparer.OrdinalIgnoreCase)

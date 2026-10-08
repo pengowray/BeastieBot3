@@ -18,10 +18,8 @@ internal sealed class NatureServeClient : IDisposable {
     public const string UserAgent = "BeastieBot3/1.0 (+https://github.com/pengowray/BeastieBot3)";
     public static readonly TimeSpan DelayBetweenRequests = TimeSpan.FromMilliseconds(500);
 
-    // Waits before each new try of a failed request.
-    private static readonly TimeSpan[] RetryWaits = {
-        TimeSpan.FromSeconds(5), TimeSpan.FromSeconds(15), TimeSpan.FromSeconds(30), TimeSpan.FromMinutes(1), TimeSpan.FromMinutes(2),
-    };
+    // Waits before each new try of a failed request (the ones every status list download uses).
+    private static readonly TimeSpan[] RetryWaits = StatusListDownload.RetryWaits;
 
     private readonly HttpClient _http;
     private readonly Action<string>? _onRetry;
@@ -83,8 +81,7 @@ internal sealed class NatureServeClient : IDisposable {
         }
     }
 
-    private static bool IsTransient(HttpStatusCode status) =>
-        status is HttpStatusCode.TooManyRequests or HttpStatusCode.RequestTimeout || (int)status >= 500;
+    private static bool IsTransient(HttpStatusCode status) => StatusListDownload.IsTransient(status);
 
     public void Dispose() => _http.Dispose();
 }

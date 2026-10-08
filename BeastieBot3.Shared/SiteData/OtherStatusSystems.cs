@@ -25,12 +25,26 @@ public static class OtherStatusSystems {
     public const string Nztcs = "nz-nztcs";
     /// The United States Endangered Species Act.
     public const string Esa = "us-esa";
+    /// The appendices of CITES, the Convention on International Trade in Endangered Species of Wild Fauna
+    /// and Flora, from the Checklist of CITES Species.
+    public const string Cites = "cites";
+    /// JNCC's Conservation Designations for UK Taxa: the UK, Great Britain and UK country red lists, laws
+    /// and priority lists, one list per other_status_list row (list_key).
+    public const string Jncc = "gb-jncc";
     /// NatureServe's global conservation status rank (G rank, with a T rank for an infraspecific taxon).
     public const string NatureServeGlobal = "natureserve-global";
+    /// NatureServe's national rank (N rank) in the country in other_status.country (US, CA).
+    public const string NatureServeNational = "natureserve-national";
+    /// NatureServe's rank (S rank) in a state, province or territory (other_status.population, by name)
+    /// of the country in other_status.country.
+    public const string NatureServeSubnational = "natureserve-subnational";
 
     public const string NatureServeGroup = "natureserve";
+    /// The group of international treaties (CITES).
+    public const string InternationalGroup = "international";
 
     public static readonly IReadOnlyList<OtherStatusSystem> All = [
+        new(Cites, InternationalGroup),
         new(Epbc, "AU"),
         new(AustralianCapitalTerritory, "AU"),
         new(NewSouthWales, "AU"),
@@ -44,7 +58,10 @@ public static class OtherStatusSystems {
         new(Cosewic, "CA"),
         new(Sara, "CA"),
         new(Nztcs, "NZ"),
+        new(Jncc, "GB"),
         new(Esa, "US"),
+        new(NatureServeNational, null),
+        new(NatureServeSubnational, null),
         new(NatureServeGlobal, NatureServeGroup),
     ];
 
@@ -96,6 +113,63 @@ public static class OtherStatusSystems {
         };
     }
 
+    /// The parts of a rounded NatureServe national or subnational rank as NatureServe gives it: "S4B,S5N"
+    /// is S4 when breeding and S5 when not breeding; "SNA" is not applicable. Empty for a blank rank or
+    /// one that cannot be read.
+    public static IReadOnlyList<NatureServeRankPart> NatureServeRankParts(string? roundedRank) {
+        var parts = new List<NatureServeRankPart>();
+        if (string.IsNullOrWhiteSpace(roundedRank)) {
+            return parts;
+        }
+        foreach (var raw in roundedRank.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)) {
+            var token = raw.ToUpperInvariant();
+            if (token.Length < 2 || token[0] is not ('N' or 'S')) {
+                return [];
+            }
+            var rest = token[1..];
+            string code;
+            if (rest.StartsWith("NR", StringComparison.Ordinal) || rest.StartsWith("NA", StringComparison.Ordinal)) {
+                code = rest[..2];
+            } else if (rest[0] is >= '1' and <= '5' or 'H' or 'X' or 'U' or 'Z') {
+                code = rest[..1];
+            } else {
+                return [];
+            }
+            var season = rest[code.Length..] switch {
+                "" => NatureServeSeason.Any,
+                "B" => NatureServeSeason.Breeding,
+                "N" => NatureServeSeason.Nonbreeding,
+                "M" => NatureServeSeason.Migrant,
+                _ => (NatureServeSeason?)null,
+            };
+            if (season is null) {
+                return [];
+            }
+            parts.Add(new NatureServeRankPart(token[0] + code, code, season.Value));
+        }
+        return parts;
+    }
+
+    /// What a national or subnational rank's code means, in NatureServe's words ("3" Vulnerable, "X"
+    /// Presumed Extirpated); null for NR, which is no rank.
+    public static string? NatureServeLocalRankMeaning(string code) => code switch {
+        "1" => "Critically Imperiled",
+        "2" => "Imperiled",
+        "3" => "Vulnerable",
+        "4" => "Apparently Secure",
+        "5" => "Secure",
+        "H" => "Possibly Extirpated",
+        "X" => "Presumed Extirpated",
+        "U" => "Unrankable",
+        "Z" => "Zero Occurrences",
+        "NA" => "Not Applicable",
+        _ => null,
+    };
+
+    /// Whether a rounded national or subnational rank has a part with a rank (1 to 5, H, X or U).
+    public static bool IsRankedLocally(string? roundedRank) =>
+        NatureServeRankParts(roundedRank).Any(p => p.Code is not ("NR" or "NA" or "Z"));
+
     /// A SALVE category in English; CR with SALVE's possibly extinct flag is "Critically Endangered
     /// (Possibly Extinct)". Null for an unknown code.
     public static string? SalveLabel(string? code, bool possiblyExtinct) => code?.Trim().ToUpperInvariant() switch {
@@ -126,7 +200,16 @@ public static class OtherStatusSystems {
     };
 }
 
-public sealed record OtherStatusSystem(string Key, string Group);
+/// One part of a rounded NatureServe national or subnational rank. Rank: the part without its season
+/// letter ("S4"); Code: the rank's code ("4", "H", "NA", "NR").
+public sealed record NatureServeRankPart(string Rank, string Code, NatureServeSeason Season);
+
+/// The season a part of a NatureServe rank applies to: B breeding, N nonbreeding, M migrant, or all year.
+public enum NatureServeSeason { Any, Breeding, Nonbreeding, Migrant }
+
+/// Group: the ISO code of the system's country, a special group (NatureServeGroup, InternationalGroup),
+/// or null for a system that spans countries, whose rows or lists give the country.
+public sealed record OtherStatusSystem(string Key, string? Group);
 
 /// The sources of other_status rows (other_status.source).
 public static class OtherStatusSources {
@@ -140,6 +223,11 @@ public static class OtherStatusSources {
     public const string Nztcs = "nztcs";
     /// SALVE, ICMBio's assessments of Brazil's fauna; source_id is SALVE's sheet id (id_ficha).
     public const string Salve = "salve";
+    /// JNCC's Conservation Designations for UK Taxa; source_id is the taxon version key (UK Species Inventory).
+    public const string Jncc = "jncc";
+    /// The Checklist of CITES Species (UNEP-WCMC); source_id is the Species+ taxon concept id of the
+    /// taxon whose listing it is (the higher taxon's, for a listing that covers the taxon as part of it).
+    public const string Cites = "cites";
 
     /// A taxon's SPRAT profile.
     public static string SpratUrl(long spratTaxonId) =>

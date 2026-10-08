@@ -5,8 +5,9 @@ using BeastieBot3.Configuration;
 using Spectre.Console;
 using Spectre.Console.Cli;
 
-// `statuses natureserve-fetch`: downloads the global, US and Canadian ranks and the ESA, COSEWIC and
-// SARA codes of every NatureServe Explorer species record into the status lists store.
+// `statuses natureserve-fetch`: downloads the global rank, the US and Canadian national and
+// subnational (state and province) ranks, and the ESA, COSEWIC and SARA codes of every NatureServe
+// Explorer species record into the status lists store.
 //
 // Resumable: each page is stored together with its prefix's progress in one transaction, and the
 // next run carries on with the first prefix not done. See NatureServeSearch for why the download
@@ -15,7 +16,7 @@ using Spectre.Console.Cli;
 namespace BeastieBot3.StatusLists;
 
 [CommandInfo("statuses natureserve-fetch", CommandKind.Mutates,
-    "Download the NatureServe global rank (G rank), the US and Canadian national ranks, and the US Endangered Species Act, COSEWIC and SARA statuses of every species, subspecies, variety and population on NatureServe Explorer (about 113,500 records, CC BY 4.0) into the status lists store. A full download (about 1,200 requests) takes about 15 minutes, and a stopped run carries on where it left off.",
+    "Download the NatureServe global rank (G rank), the national and state or province ranks in the US and Canada, and the US Endangered Species Act, COSEWIC and SARA statuses of every species, subspecies, variety and population on NatureServe Explorer (about 113,500 records, CC BY 4.0) into the status lists store. A full download (about 1,200 requests) takes about 15 minutes, and a stopped run carries on where it left off.",
     Rerun = RerunEffect.IdempotentAdd,
     RerunNote = "A run carries on from the last page stored. After a download finishes, a run does nothing unless --restart starts a new full download or --refresh-days asks for the records changed since the last download. A full download that finishes with every record deletes the stored records it did not see; a refresh deletes the records NatureServe has unpublished.",
     ReportOnlyWith = new[] { "--status" },
@@ -79,6 +80,7 @@ internal sealed class NatureServeFetchCommand : AsyncCommand<NatureServeFetchCom
                 [NatureServePassKeys.Started] = StatusListStore.Stamp(now),
                 [NatureServePassKeys.Kind] = refresh ? NatureServePassKeys.Refresh : NatureServePassKeys.Full,
                 [NatureServePassKeys.ModifiedSince] = modifiedSince is { } s ? StatusListStore.Stamp(s) : null,
+                [NatureServePassKeys.PassFieldsVersion] = NatureServePlan.FieldsVersion.ToString(CultureInfo.InvariantCulture),
             }, NatureServePassKeys.PassKeys, firstPrefix: "");
             AnsiConsole.MarkupLine(refresh
                 ? $"[grey]Starting a refresh: records NatureServe changed since {modifiedSince:yyyy-MM-dd HH:mm} UTC.[/]"
@@ -168,6 +170,8 @@ internal sealed class NatureServeFetchCommand : AsyncCommand<NatureServeFetchCom
         };
         if (!state.PassIsRefresh) {
             completion[NatureServePassKeys.FullCompleted] = StatusListStore.Stamp(finished);
+            // A pass started before the version was recorded clears the key: its first pages lack fields.
+            completion[NatureServePassKeys.FullCompletedFieldsVersion] = state.PassFieldsVersion?.ToString(CultureInfo.InvariantCulture);
         }
         var deleted = store.CompleteNatureServePass(unpublished, deleteNotSeenSince, completion, NatureServePassKeys.PassKeys,
             rows => new StatusSourceInfo(StatusSources.NatureServe, "NatureServe Explorer", "https://explorer.natureserve.org/", "CC BY 4.0",
@@ -200,7 +204,15 @@ internal sealed class NatureServeFetchCommand : AsyncCommand<NatureServeFetchCom
 
     private static void PrintStatus(StatusListStore store, NatureServePassState state) {
         var table = new Table().Border(TableBorder.Rounded).AddColumn("").AddColumn("");
-        table.AddRow("NatureServe records stored", store.CountNatureServe().ToString("N0", CultureInfo.InvariantCulture));
+        var records = store.CountNatureServe();
+        var (withNational, withSubnational) = store.CountNatureServeWithRanks();
+        table.AddRow("NatureServe records stored", records.ToString("N0", CultureInfo.InvariantCulture));
+        table.AddRow("Records with national ranks (US, Canada)", withNational.ToString("N0", CultureInfo.InvariantCulture));
+        table.AddRow("Records with state or province ranks", withSubnational.ToString("N0", CultureInfo.InvariantCulture));
+        if (NatureServePlan.NeedsFullDownloadForFields(state, records)) {
+            table.AddRow("[yellow]National, state and province ranks[/]",
+                "[yellow]Missing for records downloaded by an earlier version of this command. To add the ranks, run statuses natureserve-fetch --restart once. It downloads every record again (about 15 minutes).[/]");
+        }
         if (state.CompletedUtc is { } completed) {
             var kind = state.CompletedKind == NatureServePassKeys.Refresh ? "Refresh" : "Full download";
             var counts = state.CompletedSeen is { } seen

@@ -30,6 +30,8 @@ internal sealed class SiteDbBuild {
     private readonly SiteBuildInputs _inputs;
     private readonly IAnsiConsole _console;
     private readonly SiteBuildStats _stats = new();
+    // The lists of the status systems that have several (other_status_list), from the status list readers.
+    private readonly List<OtherStatusList> _otherStatusLists = new();
 
     public SiteDbBuild(SiteBuildInputs inputs, IAnsiConsole console) {
         _inputs = inputs;
@@ -192,7 +194,7 @@ internal sealed class SiteDbBuild {
         });
 
         Optional("status lists store", _inputs.StatusListsDatabase, path => {
-            (_stats.NatureServeFetched, _stats.EcosFetched, _stats.NztcsFetched) = SiteLinkReaders.ReadStatusLists(path, taxa, _stats, ct);
+            (_stats.NatureServeFetched, _stats.EcosFetched, _stats.NztcsFetched) = SiteLinkReaders.ReadStatusLists(path, taxa, _stats, _otherStatusLists, ct);
             var natureServeMatched = _stats.NatureServeByName + _stats.NatureServeBySynonym + _stats.NatureServeByIucnSynonym;
             return $"{natureServeMatched:N0} taxa matched to NatureServe records ({_stats.NatureServeRanks:N0} global ranks, "
                 + $"{_stats.CosewicStatuses:N0} COSEWIC, {_stats.SaraStatuses:N0} SARA), "
@@ -273,6 +275,9 @@ internal sealed class SiteDbBuild {
                 writer.AddTaxonLink(link);
             }
             writer.AddGreenStatuses(greenStatuses);
+            foreach (var list in _otherStatusLists) {
+                writer.AddOtherStatusList(list);
+            }
             if (extras is not null) {
                 ExtraSpecies.ExtraSpeciesWriter.Write(writer, extras);
             }
@@ -534,6 +539,8 @@ internal sealed class SiteDbBuild {
         writer.SetMeta(SiteDbSchema.MetaKeys.EcosFetched, _stats.EcosFetched);
         writer.SetMeta(SiteDbSchema.MetaKeys.NztcsFetched, _stats.NztcsFetched);
         writer.SetMeta(SiteDbSchema.MetaKeys.SalveFetched, _stats.SalveFetched);
+        writer.SetMeta(SiteDbSchema.MetaKeys.CitesFetched, _stats.CitesFetched);
+        writer.SetMeta(SiteDbSchema.MetaKeys.CitesCitation, _stats.CitesCitation);
         writer.SetMeta(SiteDbSchema.MetaKeys.GreenStatusFetched, _stats.GreenStatusFetched);
         if (_stats.SummaryTables is { } summaryTables) {
             // Tables lists each table's files in release order.

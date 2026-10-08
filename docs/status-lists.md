@@ -2,15 +2,17 @@
 
 The status lists store holds conservation statuses from systems other than the IUCN Red List, for the public species site (`site build-db` reads it into `other_status`; see `docs/public-site.md`):
 
-- NatureServe Explorer: the NatureServe global rank (G rank), the national ranks in the United States and Canada, and the US Endangered Species Act, COSEWIC and SARA statuses that NatureServe records (`statuses natureserve-fetch`).
+- NatureServe Explorer: the NatureServe global rank (G rank), the national and subnational (state, province and territory) ranks in the United States and Canada, and the US Endangered Species Act, COSEWIC and SARA statuses that NatureServe records (`statuses natureserve-fetch`).
 - ECOS, the US Fish and Wildlife Service's Environmental Conservation Online System: the list of species, subspecies and populations listed under the US Endangered Species Act (`statuses ecos-import`).
 - The New Zealand Threat Classification System database (nztcs.org.nz, Department of Conservation, CC BY 4.0): the current assessments (`statuses nztcs-import`).
 - SALVE (salve.icmbio.gov.br), ICMBio's system for the national assessments of the extinction risk of Brazil's fauna: the current assessment of each species and subspecies (`statuses salve-import`).
+- JNCC's Conservation Designations for UK Taxa (Joint Nature Conservation Committee, Open Government Licence v3.0): one row per taxon and designation, for the GB and England red lists, Birds of Conservation Concern, Nationally Rare and Scarce, the UK and country priority species lists, the Wildlife and Countryside Act and other UK legislation, and the international conventions and EU directives as they apply to UK taxa (`statuses jncc-import`).
+- The Checklist of CITES Species (checklist.cites.org, compiled by UNEP-WCMC for the CITES Secretariat): the current CITES Appendix listings of every taxon in the Appendices, with the listings each taxon inherits from a higher taxon (`statuses cites-import`).
 - National and subnational red lists published on GBIF as Darwin Core checklists: 29 lists of 16 countries, chosen in `rules/status-lists/national-red-lists.yml` (`statuses red-lists-import`).
 
 Code: `BeastieBot3/StatusLists/`. The schema is `StatusListStore.Ddl`, with a comment on every column.
 
-The three imports (`statuses ecos-import`, `nztcs-import` and `salve-import`) share one run, `StatusListImport.RunAsync`. It imports the file given with `--file`, or downloads the source into the status lists folder (written as a `.part` file and renamed when complete). It then reads the file, stops without changing the store when the file has no rows, replaces the source's rows and its `status_source` row in one transaction, and prints a table of counts. Each command passes a `StatusListImportSpec` with its download, reader, store method and messages, and `StatusListDownload` creates the HTTP client and writes the downloaded files. The store's methods for each source are in `StatusListStore.NatureServe.cs`, `StatusListStore.Ecos.cs`, `StatusListStore.Nztcs.cs`, `StatusListStore.Salve.cs` and `StatusListStore.RedLists.cs`. `statuses red-lists-import` imports many datasets in one run, so it has its own run (see its section).
+The five imports (`statuses ecos-import`, `nztcs-import`, `salve-import`, `jncc-import` and `cites-import`) share one run, `StatusListImport.RunAsync`. It imports the file given with `--file`, or downloads the source into the status lists folder (written as a `.part` file and renamed when complete), as `<stem>-<yyyy-MM-dd>.<extension>` or, when the spec has `FindFileName`, under the name the source gives its file. It then reads the file, stops without changing the store when the file has no rows, replaces the source's rows and its `status_source` row in one transaction, and prints a table of counts. Each command passes a `StatusListImportSpec` with its download, reader, store method and messages, and `StatusListDownload` creates the HTTP client and writes the downloaded files. A spec's `SourceForFile` changes the `status_source` row for the file imported (JNCC uses it for the file's URL and the year in its attribution). The store's methods for each source are in `StatusListStore.NatureServe.cs`, `StatusListStore.Ecos.cs`, `StatusListStore.Nztcs.cs`, `StatusListStore.Salve.cs`, `StatusListStore.Jncc.cs`, `StatusListStore.Cites.cs` and `StatusListStore.RedLists.cs`. `statuses red-lists-import` imports many datasets in one run, so it has its own run (see its section).
 
 ## Files
 
@@ -25,15 +27,22 @@ The three imports (`statuses ecos-import`, `nztcs-import` and `salve-import`) sh
 
 | Table | One row per |
 | --- | --- |
-| `status_source` | source (`natureserve`, `ecos`, `nztcs`, `salve`, and `redlist:<key>` for each red list): title, URL, licence, citation with the access date, version, when it was last fetched, row count. The site's credits can be built from it. |
+| `status_source` | source (`natureserve`, `ecos`, `nztcs`, `salve`, `jncc`, `cites`, and `redlist:<key>` for each red list): title, URL, licence, citation with the access date, version, when it was last fetched, row count. The site's credits can be built from it. |
 | `status_sync_state` | key of the NatureServe download's progress (`natureserve_pass_*`, `natureserve_completed*`) |
 | `natureserve_species` | NatureServe record (`element_global_id`): a species, subspecies, variety or population |
 | `natureserve_synonym` | synonym NatureServe lists for a record |
+| `natureserve_nation` | national rank of a record (`element_global_id`, `nation_code`: US or CA) |
+| `natureserve_subnation` | subnational rank of a record in a US state or a Canadian province or territory (`element_global_id`, `nation_code`, `subnation_code`) |
 | `natureserve_partition` | name prefix of the NatureServe download under way, with the next page to ask for. Empty between downloads. |
 | `ecos_listing` | ESA listing (`entity_id`, the ECOS Listed Species ID) |
 | `ecos_name` | name an ECOS listing's scientific name gives, the main name included |
 | `nztcs_assessment` | current NZTCS assessment (`assessment_id`), with the scientific name `NztcsApi.ChooseName` gives |
 | `salve_assessment` | current SALVE assessment of a species or subspecies (`ficha_id`, SALVE's sheet id) |
+| `jncc_designation` | row of the Master List sheet of JNCC's Conservation Designations for UK Taxa: one taxon and one of its designations (`row_number`, the row's number in the sheet) |
+| `cites_taxon` | taxon of the Checklist of CITES Species (`taxon_concept_id`, Species+'s id): a species, subspecies, variety or higher taxon, with Species+'s summary of its listing (`current_listing`) |
+| `cites_listing` | current CITES listing of a taxon (`taxon_concept_id`, `listing_change_id`): its own, or inherited from a higher taxon |
+| `cites_note` | long note of the CITES listings (a full note, the text of an annotation such as #4), stored once and referred to by id |
+| `cites_synonym` | synonym the Checklist gives for a taxon, with and without its author |
 | `red_list_dataset` | national or subnational red list from GBIF (`dataset_key`, the key in `national-red-lists.yml`) |
 | `red_list_taxon` | status of a taxon in one of those lists (`dataset_key`, `taxon_id`, `seq`) |
 | `red_list_synonym` | synonym a list gives for one of its taxa with a status (`dataset_key`, `taxon_id`) |
@@ -65,7 +74,7 @@ The first full download (2026-10-08) asked about 101 prefixes (29 had no records
 | After a finished download | Nothing, unless `--refresh-days N` and the last download finished more than N days ago. |
 | `--refresh-days N` | A refresh: only the records modified since the last download started, less an hour (the search's `modifiedSince`), then the records NatureServe unpublished since then (`POST /api/data/unpublishedTaxa`), which it deletes. |
 | `--limit N` | Stops after N page requests. |
-| `--status` | Prints the progress and sends no requests. |
+| `--status` | Prints the progress and the number of records with national and with state or province ranks, and sends no requests. |
 
 When a full download finishes, it deletes the stored records it did not see, but only when it stored at least as many records as NatureServe gave as its total. When it stored fewer, it keeps the old records and says so, because a record that paging missed is not a deleted record.
 
@@ -73,9 +82,9 @@ NatureServe last modified 113,413 of the 113,530 records on 2026-10-02 or 2026-1
 
 ### What is stored
 
-Per record: `element_global_id`, `unique_id`, `elcode`, `scientific_name`, the primary common name and its language, `g_rank` (as published, for example G3G4, G2T1, G3TNRQ) and `rounded_g_rank`, `classification_status`, kingdom to genus, `informal_taxonomy`, `infraspecies`, `usesa_code`, `cosewic_code`, `sara_code` (the English part of NatureServe's bilingual SARA status, "Endangered" from "Endangered/En voie de disparition") and `sara_code_raw`, `us_n_rank` and `ca_n_rank` (the rounded national ranks of the US and Canada), `nsx_url`, `last_modified`, `fetched_at`, and the synonyms.
+Per record: `element_global_id`, `unique_id`, `elcode`, `scientific_name`, the primary common name and its language, `g_rank` (as published, for example G3G4, G2T1, G3TNRQ) and `rounded_g_rank`, `classification_status`, kingdom to genus, `informal_taxonomy`, `infraspecies`, `usesa_code`, `cosewic_code`, `sara_code` (the English part of NatureServe's bilingual SARA status, "Endangered" from "Endangered/En voie de disparition") and `sara_code_raw`, `us_n_rank` and `ca_n_rank` (the rounded national ranks of the US and Canada), `nsx_url`, `last_modified`, `fetched_at`, the synonyms, and the national and subnational ranks (see "National and subnational ranks" below).
 
-Not stored: taxonomic comments and every other narrative text, other common names, subnational (state and province) ranks, and distribution.
+Not stored: taxonomic comments and every other narrative text, other common names, and distribution. The national and subnational ranks as published (`nrank`, `srank`, not rounded), the year each was last reviewed, and the names of the nations and subnations are not stored either: the species search does not give them. They are only in each record's own API page (`GET https://explorer.natureserve.org/api/data/taxon/<unique_id>`), which would take one request per record.
 
 Values in the first full download (2026-10-08, 113,530 records: 66,070 animals, 32,888 plants, 14,572 fungi):
 
@@ -102,6 +111,48 @@ Scientific names, as NatureServe writes them:
 - other forms: "Ambystoma pop. 3", "Salmo salar (landlocked)", "Argynnis zerene myrtleae sensu lato", "Physalis x elliottii nothovar. elliottii", "Cortinarius grosmorneënsis".
 
 238 scientific names belong to two or more records, nearly all a Standard record and a Provisional (224) or Nonstandard (12) record with the same name, such as Abies lasiocarpa (144815 Standard, 137855 Provisional). Matching to IUCN names should prefer the Standard record. One name is used in two kingdoms: Pilophorus clavatus, a fungus (121859) and an animal (907882).
+
+### National and subnational ranks
+
+Each search result has `nations[]`, one object per nation with `nationCode`, `roundedNRank`, `native`, `exotic` and `subnations[]`, and each subnation object has `subnationCode`, `roundedSRank`, `native` and `exotic`. The search gives no other fields for nations and subnations (checked 2026-10-08 with Ambystoma californiense, Haliaeetus leucocephalus, Danaus plexippus and Puma concolor). The command stores these values unchanged, with `native` and `exotic` as 1 or 0, in two tables:
+
+| Table | Columns |
+| --- | --- |
+| `natureserve_nation` | `element_global_id`, `nation_code`, `rounded_n_rank`, `native`, `exotic` |
+| `natureserve_subnation` | `element_global_id`, `nation_code`, `subnation_code`, `rounded_s_rank`, `native`, `exotic` |
+
+- `native` and `exotic` are NULL when the search leaves the field out. Both are 1 for a taxon that is native in one part of the nation or subnation and exotic (introduced) in another.
+- A rank can be several ranks joined by a comma, one each for the breeding (B), nonbreeding (N) and migrant (M) populations: `N5B,N5N`; `N3B,NUM`; `S4B,S5N,S4M`; `S2N,SXB`. `NNRB` means that the breeding population is not ranked, and `NNRN` that the nonbreeding population is not ranked.
+- Other rank codes: NNR and SNR not ranked, NU and SU unrankable, NNA and SNA not applicable (usually an exotic taxon), NH and SH possibly extirpated, NX and SX presumed extirpated.
+- Only the nation codes US and CA appeared in `nations[]` in the test run below and the four species above, in either order. The subnation codes are NatureServe's own, and the tables key them with the nation code (CA under US is California). Under US: the 50 states, DC and NN (the Navajo Nation). Under CA: AB, BC, MB, NB, NS, NT, NU, ON, PE, QC, SK and YT, with Newfoundland and Labrador as two codes, NF (the island of Newfoundland) and LB (Labrador). The search gives no names, so the public site has to map the codes to names.
+- When a record is stored, its rows in both tables are deleted and written again, in the transaction that stores the record. They are deleted with the record (ON DELETE CASCADE). A record whose `nations[]` is empty has no rows.
+- A nation object or subnation object without a code is left out. When one record has two nations with the same code, or one nation has two subnations with the same code, only the first in the array is stored.
+
+Counts from a test run of 20 pages of 100 records on 2026-10-08 (1,611 records: the first 100 records of the whole search, the first 100 of the names starting A, every name starting Aa, Ab or Ac, and 100 starting Ad; a record read twice counts once):
+
+| What is counted | Count |
+| --- | --- |
+| Records with at least one `natureserve_nation` row (NNR included) | 1,591; the other 20 records have an empty `nations[]` |
+| Records with at least one `natureserve_subnation` row | 1,432 |
+| `natureserve_nation` rows by `nation_code` | US 1,187; CA 911; total 2,098 |
+| `natureserve_nation` rows by `rounded_n_rank` | NNR 983; NU 233; N5 229; N4 189; NNA 164; N3 100; N1 76; N2 73; NX 21; NH 18; rows with breeding, nonbreeding or migrant ranks 12 (`N5B,N5N` 5; `N3N` 2; `N2B,NUN,NUM` 1 ...) |
+| `natureserve_subnation` rows by `rounded_s_rank` (8,141 rows, 54 values) | SNR 3,402; SU 1,145; SNA 868; S4 731; S5 623; S3 504; S1 351; S2 283; SH 63; SX 36; rows with breeding, nonbreeding or migrant ranks 135 (`S4B` 15; `SNRB` 11; `S5B` 11; `S3B,S4N` 10 ...) |
+| `natureserve_nation` rows by `native`, `exotic` | native only 1,926; exotic only 154; both 18; no row had neither |
+| `natureserve_subnation` rows by `native`, `exotic` | native only 7,342; exotic only 793; both 6; no row had neither |
+
+The `natureserve_species` columns `us_n_rank` and `ca_n_rank` are filled as before. They come from the first US object and the first CA object in `nations[]`, so they match the record's US and CA rows in `natureserve_nation` (they did for every record in the test run).
+
+#### A full download is needed once
+
+A store whose records were downloaded by an earlier version of the command has no rows in `natureserve_nation` or `natureserve_subnation`. A refresh (`--refresh-days`) adds rows only for the records that NatureServe changed. To add rows for every record, run `statuses natureserve-fetch --restart` once (about 15 minutes). The old records are kept until the new download finishes. A run without `--restart` does not start a full download.
+
+The status table, which `--status` prints (a run also prints it when a download finishes, when it stops at `--limit`, and when there is nothing to do), then has the row "National, state and province ranks", which says to run the command once with `--restart`. The table shows that row while `NatureServePlan.NeedsFullDownloadForFields` is true:
+
+- Each pass (one full download or one refresh, which can take several runs) writes the number `NatureServePlan.FieldsVersion` (2 since the ranks were added) to the `status_sync_state` key `natureserve_pass_fields_version` when it starts.
+- When a full download finishes, the command copies that number to the key `natureserve_full_completed_fields_version`.
+- `NeedsFullDownloadForFields` is true when the store has records, `natureserve_full_completed_fields_version` is missing or less than `FieldsVersion`, and no full download that started with the current `FieldsVersion` is under way.
+
+When a later change makes the command store another field, increase `FieldsVersion`.
 
 ## ECOS: `statuses ecos-import`
 
@@ -174,6 +225,264 @@ and links each assessment's DOI. Precise localities can be restricted under that
 holds no places, states or biomes. SALVE's numbers do not always match the official list of
 threatened species (Portaria MMA 148/2022), as SALVE's own home page says. SALVE covers animals
 only: no bulk source for the national assessments of Brazil's plants (CNCFlora) was found.
+
+## JNCC: `statuses jncc-import`
+
+Source: Conservation Designations for UK Taxa, published by the Joint Nature Conservation Committee
+at https://jncc.gov.uk/resources/478f7160-967b-4366-acdf-8941fd33850b. It is an Excel workbook
+(8.1 MB) whose "Master List" sheet has one row per taxon and designation. JNCC collates the lists
+from their sources and matches every name to the recommended name in the UK Species Inventory
+(UKSI), kept by the Natural History Museum.
+
+Licence: Open Government Licence v3.0. The resource page asks for this attribution statement, with
+the year of the release:
+
+> Contains JNCC/NE/NRW/NatureScot/NIEA data © copyright and database right 2026
+
+`status_source.citation` holds that statement with the year of the date in the file's name,
+`status_source.url` the URL of the file and `status_source.version` the file's name.
+
+### How the file is found
+
+The workbook's name has the date of its release (`taxon-designations-20260609.xlsx` on
+2026-10-08) and changes with every release. The command reads the resource page and takes the link
+to `taxon-designations-<yyyyMMdd>.xlsx` with the newest date (`JnccDesignations.FindSpreadsheetLink`;
+if no name has a date, the first `.xlsx` in the resource's folder on data.jncc.gov.uk). It keeps the
+file in the status lists folder under JNCC's name. When the folder already has a file of that name,
+the command reads that file again and does not download it. No JNCC API for the resource was found.
+JNCC publishes no CSV of the workbook. The page's other downloads are a zip file of the same
+workbook with two PDFs of guidance, the two PDFs, and a link to the "GB Red List Dataset", a
+separate workbook of the red lists only (`gb-red-list-data-20260609.xlsx`). `--file` imports a workbook already downloaded; the year in the
+attribution then comes from the date in its name, else from the year the command runs.
+
+The workbook is read with ExcelDataReader (MIT licence). Its default settings need the Windows-1252
+code page, so the reader registers .NET's `CodePagesEncodingProvider` first.
+
+### Columns of the Master List
+
+The 2026-06-09 file has 27,152 rows of 15,211 taxa (distinct taxon version keys); the workbook's
+own pivot table also counts 27,152 rows, in 20 columns, with a line of text above the column headings. `JnccDesignations.Read` finds
+the heading row by the heading "Recommended taxon version" and reads the columns by their headings.
+
+| JNCC column | Stored as |
+| --- | --- |
+| Category | `category`: Bird, Mammal, Fish, Reptile, Amphibian, Invertebrate, Vascular plant, Non-vascular plant, Fungi, Algae, Slime mould |
+| Taxon group | `taxon_group`: UKSI's informal group, such as "insect - beetle (Coleoptera)", "lichen" |
+| Recommended taxon name, authority, qualifier | `scientific_name`, `authority`, `qualifier` ("s.l.", "agg.", "sensu stricto"; 239 rows) |
+| Recommended taxon version | `taxon_version_key`: the UKSI key (NBNSYS..., NHMSYS..., BMSSYS...) |
+| Designated name | `designated_name`: the name the source published; it differs from the recommended name in 5,232 rows |
+| Common name | `common_name`; empty in 16,037 rows |
+| Source, URL source | `source` (the document), `source_url` |
+| Date designated | `designated_on` (yyyy-MM-dd); often 1 January of the year of the source |
+| Reporting category | `reporting_category`: the list, such as "Wildlife and Countryside Act 1981" |
+| Designation | `designation`: the schedule, annex or category, such as "Schedule 5 Section 9.4b", "Vulnerable" |
+| Designation abbreviation | `designation_code`, such as WACA-Sch5_sect9.4b, RedList_GB_post2001-VU |
+| IUCN version | `iucn_version`: 2001, 1994 or "pre 1994" |
+| Reporting category sort order | `sort_code`: A, C, C1 ... M |
+| Source description, designation description | not stored: a description of each list, up to 2,315 characters |
+| Criteria description | not stored: IUCN criteria codes on some red list rows ("B2ab(ii,iv)"), sentences on others, and the Scottish Biodiversity List's category and criteria ("Category: Watching brief only; Criterion: S4 - <6 Scottish 10km sqs") |
+| Comments | not stored: notes of up to 5,126 characters |
+
+Read from the other columns (`JnccClassification`):
+
+- `scope` and `area`, from the designation code: `uk` (the whole UK or Great Britain), `country`
+  (part of the UK) or `international` (a convention, an EU directive or regulation, or IUCN's global
+  or European red list). A code that no rule knows gets no scope, and the import names it. Two
+  corrections apply to Great Britain designations: the 20 Extinct and Extinct in the Wild rows of
+  the Vascular Plant Red List for England have the codes RedList_GB_post2001-EX and -EW, and are
+  stored as England; and 200 Wildlife and Countryside Act rows whose comment says that the
+  designation no longer applies in Scotland ("Designation does not apply in Scotland since 2007")
+  are stored as England and Wales, and 5 whose comment starts "England only" as England. The
+  Conservation of Habitats and Species Regulations 2010 extend to England and Wales only (regulation
+  2), so their rows are stored as England and Wales.
+- `status_code`, from a red list's code: the category after the hyphen (RedList_GB_post2001-CR(PE):
+  CR(PE)), WL for the Waiting List of the Vascular Plant Red List for England (taxa it did not
+  assess, waiting for taxonomic or mapping work), and Red or Amber for Birds of
+  Conservation Concern and the spider list. Other designations have none.
+- `population`: breeding or non-breeding, for the bird red list (its codes end _Breeding or
+  _NonBreeding).
+- `kingdom`, in IUCN's spelling: ANIMALIA for the six animal categories, PLANTAE for vascular
+  plants, mosses, liverworts, hornworts and stoneworts, FUNGI for fungi and lichens, CHROMISTA for
+  the group "chromist", and none for algae (red, green and brown) and slime moulds.
+- `rank`, from the form of the name: species 26,169 rows, subspecies 686, variety 121, form 62,
+  aggregate 50 (names with "agg." or a slash, "Anser fabalis/serrirostris"), above species 46 (one
+  word: Cetacea, Sphagnum, Orchidaceae), hybrid 5, section 3, none 10 ("Mycetoporus 'species A'",
+  "Cantharis nigra (=thoracica)", "Mine site community"). A subgenus in brackets after the genus
+  ("Lithobius (Monotarsobius) crassipes", 202 names) and a trailing "s. lat." or "s.l." are
+  left out when the rank is read; `scientific_name` keeps them.
+
+### Designations in the 2026-06-09 file
+
+| `sort_code` | Reporting category | Rows | Taxa (taxon version keys) | Scope: area |
+| --- | --- | ---: | ---: | --- |
+| A | Bern Convention: Appendix 1, 2, 3 (Bern-A1 16, A2 290, A3 73) | 379 | 371 | international: Europe |
+| C | Birds Directive: Annex 1 (111), 2.1 (22), 2.2 (51) | 184 | 180 | international: European Union |
+| C1 | Convention on Migratory Species: Appendix 1 (20), Appendix 2 (215), AEWA Annex II (152), ASCOBANS (11), EUROBATS Annex I (32) | 430 | 286 | international: World; AEWA Africa-Eurasia; ASCOBANS North-East Atlantic and Baltic; EUROBATS Europe |
+| C2 | OSPAR | 34 | 34 | international: North-East Atlantic |
+| D | Habitats Directive: Annex 2 priority species (5), Annex 2 non-priority species (47), Annex 4 (83), Annex 5 (37) | 172 | 139 | international: European Union |
+| E | EC Cites: Annex A (82), B (42), C (5), D (8) | 137 | 137 | international: European Union |
+| F | Global Red list status: IUCN global categories, 2001 and 1994 criteria (293), and IUCN's European red list (6) | 299 | 294 | international: World; Europe |
+| Fa | Red Listing based on pre 1994 IUCN guidelines: Rare 352, Insufficiently known 271, Endangered 214, Vulnerable 178, Indeterminate 90, Extinct 71 | 1,176 | 1,163 | uk: Great Britain |
+| Fb | Red Listing based on 1994 IUCN guidelines: DD 114, NT 73, VU 24, EN 4, EX 2, CR 1 | 218 | 218 | uk: Great Britain |
+| Fc | Red listing based on 2001 IUCN guidelines: GB red lists 10,666 (the bird red list 357 of them); the Vascular Plant Red List for England 1,935 (1,839 coded RedList_ENG, 20 coded RedList_GB, 76 Waiting List) | 12,601 | 10,957 | uk: Great Britain; country: England |
+| Fd | Birds of Conservation Concern 5: Red (70), Amber (103) | 173 | 173 | uk: United Kingdom |
+| Fe | Spider Amber List | 43 | 43 | uk: Great Britain |
+| Ga | Rare and scarce species: Nationally Rare (1,639) and Nationally Scarce (1,360), red-listed taxa included | 2,999 | 2,986 | uk: Great Britain |
+| Gb | Rare and scarce species (not based on IUCN criteria): Nationally Notable 542, Notable A 200, Notable B 419, Nationally Rare 201 and Scarce 334 (red-listed taxa excluded), rare marine 62, scarce marine 53 | 1,811 | 1,805 | uk: Great Britain |
+| Ha | UK Biodiversity Action Plan priority species (BAP-2007) | 1,150 | 1,150 | uk: United Kingdom |
+| Hb | England: NERC Act section 41 | 943 | 943 | country: England |
+| Hc | Scottish Biodiversity List | 2,103 | 2,085 | country: Scotland |
+| Hd | Wales: Environment (Wales) Act section 7 | 569 | 568 | country: Wales |
+| He | Northern Ireland Priority Species | 483 | 482 | country: Northern Ireland |
+| I | Wildlife and Countryside Act 1981: Schedule 1 Part 1 (94) and Part 2 (3), Schedule 5 by section (670), Schedule 8 (183) | 950 | 438 | uk: Great Britain (745 rows); country: England and Wales (200 rows), England (5 rows) |
+| J | Wildlife (Northern Ireland) Order 1985: Schedules 1, 5 and 8 | 133 | 133 | country: Northern Ireland |
+| K | Conservation of Habitats and Species Regulations 2010: Schedules 2, 4 and 5 | 97 | 97 | country: England and Wales |
+| L | Conservation (Natural Habitats, etc.) Regulations (Northern Ireland) 1995: Schedules 2, 3 and 4 | 67 | 67 | country: Northern Ireland |
+| M | Protection of Badgers Act 1992 | 1 | 1 | uk: Great Britain |
+
+In all: 18,982 rows for the UK or Great Britain, 6,535 for part of the UK and 1,635 international.
+
+Values of the main designations:
+
+- GB red lists (2001 criteria, codes RedList_GB_post2001-*, area Great Britain; `designation` and
+  `status_code`): Least concern (LC) 6,543, Vulnerable (VU) 755, Data Deficient (DD) 748, Near
+  Threatened (NT) 697, Not Evaluated (NE) 468, Endangered (EN) 369, Not Applicable (NA) 307,
+  Critically Endangered (CR) 216, Regionally Extinct (RE) 111, Critically Endangered (possibly
+  extinct) (CR(PE)) 54, Extinct (EX) 38, Extinct in the Wild (EW) 3. The bird red list (codes
+  Bird_RedList_GB_post2001-*, 357 rows) assesses the breeding (258) and non-breeding (99)
+  populations of a species separately (`population`), with the same categories. The Great Britain
+  red lists of the 2001 criteria come from 44 documents (`source`), dated from 2004 to 2025.
+- Birds of Conservation Concern: "Bird Population Status - red" and "- amber"; green-listed birds
+  are not in the workbook.
+- Wildlife and Countryside Act and the other legislation: the schedule and section is the
+  designation; there is no status apart from being listed.
+- NERC section 41, section 7, the Scottish Biodiversity List, Northern Ireland Priority Species and
+  the UK BAP list: the designation is the name of the list.
+
+One taxon can have the same designation more than once: 80 pairs of taxon version key and
+designation code appear two or three times, from two published names under one recommended name
+("Anas crecca" and "Anas crecca crecca") or from two source documents. In the GB red lists of the
+2001 criteria, 23 taxa have two different categories for the same population (or for the whole
+taxon), mostly from two published names in one source document.
+
+## CITES Checklist: `statuses cites-import`
+
+The Checklist of CITES Species (https://checklist.cites.org/) lists every taxon in the CITES Appendices with its current listing. UNEP-WCMC compiles it for the CITES Secretariat from the Species+ database (https://speciesplus.net/), so the two sites have the same listings and the same taxon concept ids.
+
+### Terms and citation
+
+The Checklist's terms of use (the "Terms of Use" link on checklist.cites.org) and the Species+ terms of use (https://speciesplus.net/terms-of-use) cover the data and the "Species+/CITES Checklist API", and say the same things. The owner of this project accepted the Species+ terms for the public species site in October 2026. The terms:
+
+- allow publishing the data online when it cannot be downloaded, with the citation clearly visible, the date of download visible, and a clear link to the source (checklist.cites.org in the Checklist's terms, www.speciesplus.net in the Species+ terms);
+- ask that the most recent version is used;
+- forbid commercial use, sub-licensing and redistribution (web downloads, web services), and any application that replicates or tries to replace the essential user experience of the Checklist or Species+;
+- strongly recommend that the CITES Secretariat (info@cites.org) or UNEP (species@unep-wcmc.org) review the published material before publication, and the Species+ terms ask for two electronic copies of published material, sent to species@unep-wcmc.org.
+
+The command stores the Checklist's citation form, with the date of the download, in the `citation` column of the `cites` row of `status_source`. It uses the Checklist's form because the data comes from the endpoint that checklist.cites.org reads:
+
+> UNEP-WCMC (Comps.) 2026. The Checklist of CITES Species Website. CITES Secretariat, Geneva, Switzerland. Compiled by UNEP-WCMC, Cambridge, UK. Available at: http://checklist.cites.org. [Accessed 08/10/2026].
+
+The Species+ form is "UNEP (2026). The Species+ Website. Nairobi, Kenya. Compiled by UNEP-WCMC, Cambridge, UK. Available at: www.speciesplus.net. [Accessed dd/mm/yyyy]." Each taxon's `cites_taxon.url` is its page on Species+ (`https://speciesplus.net/species#/taxon_concepts/<id>/legal`), which shows the same listings with their notes.
+
+### The endpoint
+
+The Checklist's web app (https://checklist.cites.org/js/app.js) reads the Species+ checklist API at `https://www.speciesplus.net/checklist/`, which answers without a token. This API is not documented and could change without notice; the token-based Species+ API (https://api.speciesplus.net) is the documented one. The command asks for:
+
+```
+GET https://www.speciesplus.net/checklist/taxon_concepts?output_layout=alphabetical&level_of_listing=0
+    &show_synonyms=1&show_author=1&show_english=0&show_spanish=0&show_french=0&locale=en&page=1&per_page=1000
+```
+
+| Parameter | What it does |
+| --- | --- |
+| `page`, `per_page` | Pages are numbered from 1. Pages of 1,000 rows worked; larger pages were not tried. A page of plants takes the server about 20 seconds, because every orchid row repeats the full note of the Orchidaceae listing and the text of annotation #4. |
+| `output_layout` | `alphabetical`. The Checklist's About page says that `taxonomic` changes only the order of the taxa on the web page. |
+| `level_of_listing` | `0`: every taxon. `1` gives only the taxa at the level at which they are listed (Felidae, not its species). |
+| `show_synonyms`, `show_author` | With both set to 1, each row has `synonyms_with_authors` and `author_year`. With `show_author=0`, each row has `synonyms` (the names without authors) and no `author_year`. |
+| `show_english`, `show_spanish`, `show_french` | `0`: no common names. |
+| `locale` | `en`: the language of the notes and country names. |
+| `scientific_name`, `country_ids[]`, `cites_region_ids[]`, `cites_appendices[]` | Filters of the web page; not used. |
+
+A page is `[{"result_cnt", "total_cnt", "animalia": [...], "plantae": [...]}]`: `result_cnt` is the number of rows on the page and `total_cnt` the number of taxa in the whole list. The rows come animals first, then plants, each in name order. The command asks for one page at a time, 1 second apart, until it has `total_cnt` rows. The download fails, and the store is not changed, when `total_cnt` changes between pages or when the rows do not have `total_cnt` different taxon ids; the partly written file stays as `.part` and is never imported.
+
+The rows are kept as one gzip-compressed JSON array, `cites-<date>.json.gz`, in the status lists folder (5.3 MB on 2026-10-08; as plain JSON it is about 140 MB, most of it notes repeated on every row). `--file` imports a kept file. It also imports the Checklist's own full JSON download (below), whose rows call the listings `current_listing_changes` instead of `current_additions`; the import of the 2026-10-08 full download gave the same taxa, listings and synonyms, without the inherited notes. `--limit N` downloads only the first N pages, into `cites-firstNpages-<date>.json.gz`. It still replaces every CITES row in the status lists store, so give `--store` the path of a test store.
+
+Other endpoints that the web app uses, and that the command does not use:
+
+- `checklist/geo_entities?geo_entity_types_set=2` (countries; `1` for regions): the id, name and ISO code of each place that the `countries_ids` of a row name.
+- `checklist/timelines?taxon_concept_ids[]=...`: the history of listings of the taxa shown on the web page.
+- `checklist/downloads/download_index?format=json` (also `csv` and `pdf`): the whole Index of CITES Species in one answer. On 2026-10-08 the JSON was 153 MB and took the server about 2 minutes. Its rows have the same listings as the paged endpoint, with the ISO codes of each taxon's countries, but without the inherited notes (`inherited_short_note`, `inherited_full_note`). `checklist/downloads/download_history` is the history of every listing.
+
+This API has CITES only. The EU Wildlife Trade Regulation annexes are in Species+ and its token-based API, not in these answers.
+
+### What a row says
+
+- `current_listing` is Species+'s summary of the taxon and its descendants. On Antigone canadensis, `I/II` means that some of its subspecies are in Appendix I, while the species itself is listed in Appendix II. `NC` in a combination means that part of the taxon is in no appendix: the genus Agapornis is `II/NC` because Agapornis roseicollis is excluded from the listing of the order Psittaciformes. `NC` alone means that the taxon is in no appendix (Agapornis roseicollis).
+- `current_additions` are the listings that apply to the taxon itself, one per row of `cites_listing`: those made for the taxon and those it inherits from a higher taxon. A taxon has one listing per appendix, and one per Party for Appendix III (Crax rubra is listed in Appendix III by Colombia, Honduras and Guatemala).
+- A taxon with listings in more than one appendix is split listed by population, and only the notes say which populations are in which appendix. Loxodonta africana has an Appendix I listing inherited from the genus Loxodonta, with the genus's note "Except the populations of *Loxodonta africana* of Botswana, Namibia, South Africa and Zimbabwe ...", and an Appendix II listing of its own, with the note "Populations of Botswana, Namibia, South Africa and Zimbabwe are included in Appendix II subject to annotation A11 (see full note); all other populations are included in Appendix I". Each listing has its own `countries_ids` field, but it was empty in every row, so the store does not keep it.
+- An inherited listing has an `auto_note` such as "FAMILY listing Trochilidae spp.". The command stores the rank and the name of the higher taxon (`inherited_rank`, `inherited_name`), and its id (`inherited_from_id`) when the download has exactly one taxon of that name and rank; on 2026-10-08 all 41,744 inherited listings had one. `inherited_short_note` is the higher taxon's note that applies to the taxon ("Excludes fossils." for the corals of the order Scleractinia). The inherited listing can also have a note of its own (`short_note` "Included in SCLERACTINIA spp."). Its `listing_change_id`, Species+'s id of the listing, is often the id of the higher taxon's listing.
+- The notes are HTML as Species+ gives them: `short_note`, `full_note`, `hash_full_note` (the text of an annotation such as #4; not a hash value), `inherited_short_note`, `inherited_full_note` and `nomenclature_note`. They have `<i>` for names, `<p>` for line breaks, `\r\n`, no-break spaces and entities such as `&amp;`, and two full notes have an `<img>` tag. The site has to make them safe before showing them. Full notes and annotation texts are stored once each in `cites_note`.
+- `cites_accepted` is 0 for 2,097 taxa (2,018 of them species): names that Species+ marks as not CITES accepted, which the Checklist shows in plain type instead of bold. Some of these taxa have listings made for them (Agrias amydon boliviensis is in Appendix III, listed by Bolivia), so the store keeps them.
+
+Not stored: common names (not asked for), the countries of each taxon (the row's `countries_ids`), the `countries_ids` of each listing (always empty), `change_type_name` (always ADDITION) and `is_current` (always true) of the listings, `recently_changed`, and the history of listings.
+
+### Names
+
+`full_name` is one of these:
+
+- a species binomial;
+- a subspecies trinomial without a rank word ("Achillides chikae chikae");
+- a variety with "var." ("Euphorbia decaryi var. robinsonii");
+- a genus, subfamily, family or order name (the Checklist adds "spp." on its web page; the store does not);
+- an informal name in quotes, for 15 New Zealand geckos ("Woodworthia "Pygmy"", "Dactylocnemis "Matapia"").
+
+No name is a hybrid. One name ended in a no-break space, which the command trims.
+
+The endpoint gives synonyms with their authors ("Ornismya abeillei Lesson & DeLattre, 1839"). `CitesChecklist.SplitSynonym` splits each into the name (`cites_synonym.name`) and the author (`author`):
+
+- The name is the first word (the genus), then a subgenus in brackets if one follows the genus (sometimes in lower case: "Phyllomedusa (agalychnis) callidryas"), then every lower-case epithet ("d'albertisii"), rank word ("var.") and qualifier ("aff.", "cf.") that follows.
+- The author is the rest, from the first word that is none of those. A lower-case particle such as "de", "van" or "la" starts the author when the words after it lead to a capitalised word ("Trochilus tzacatl de la Llave, 1833"), and so do "sensu", "auct." and "hort.".
+
+The endpoint gives the same synonyms without authors when it is asked with `show_author=0`. On two pages of 1,000 taxa, all 2,272 synonyms split into the same names. In the whole download, the name of 3 synonyms of species is only the genus, because the words after the genus have another form: "Dactylocnemis "Mokohinau" Nielsen, Bauer, ...", "Paphiopedilum 'victoria' De Vogel" and "Varanus (subgen. inc. sed.) spinulosus Böhme & Ziegler, 2007".
+
+### Counts (2026-10-08)
+
+Taxa: 43,310 (7,885 animals, 35,425 plants): 41,075 species, 70 subspecies, 8 varieties, 2,034 genera, 112 families, 1 subfamily and 10 orders. 22 scientific names belong to two taxa each, all of them plants in Appendix II, most with two different authors (Cyathea parva (Maxon 1944) R.Tryon 1976 and Cyathea parva Copel. 1942), so a match by name has to allow for a name that gives two taxa.
+
+`current_listing` of the 41,153 species, subspecies and varieties:
+
+| `current_listing` | Taxa |
+| --- | --- |
+| II | 39,330 |
+| I | 1,130 |
+| III | 532 |
+| NC | 44 |
+| I/II | 36 |
+| I/NC | 24 |
+| II/NC | 22 |
+| (none) | 17 |
+| III/NC | 14 |
+| I/II/NC | 2 |
+| I/III | 1 |
+| I/II/III/NC | 1 |
+
+The appendices of the listings in `cites_listing` (inherited ones included) of the same 41,153 taxa: Appendix II only 39,360, Appendix I only 1,148, Appendix III only 533, Appendices I and II 21. 91 of them have no row in `cites_listing`: the 44 with `NC`, the 17 with no `current_listing` (species of Dicksonia, a genus listed only for its populations in the Americas), and 30 species whose `current_listing` comes from their listed subspecies or varieties (Agrias amydon is `III/NC` because Agrias amydon boliviensis is in Appendix III). Of all 43,310 taxa, 54 have no `current_listing` and no row in `cites_listing`: those 17 species and 37 genera, most of them orchid and cactus genera such as Odontoglossum and Neobuxbaumia. 257 taxa have a `current_listing` with two or more parts but listings in only one appendix (Aonyx capensis is `I/II`, its listing is Appendix II, and its subspecies Aonyx capensis microdon is in Appendix I).
+
+Listings: 43,246 (Appendix I 1,257, Appendix II 41,421, Appendix III 568). 41,744 are inherited: from a family (33,328), a genus (4,774), an order (3,624), a subfamily (11) or a species (7, varieties of Euphorbia).
+
+Split listings, with listings in Appendices I and II: 22 taxa. Balaenoptera acutorostrata, Caiman latirostris, Canis lupus, Caracal caracal, Ceratotherium simum simum, Crocodylus acutus, C. moreletii, C. niloticus, C. porosus, Falco newtoni, Herpailurus yagouaroundi, Loxodonta africana, Melanosuchus niger, the genus Moschus, Moschus chrysogaster, M. fuscus, Panthera leo, Prionailurus bengalensis bengalensis, P. rubiginosus, Puma concolor, Ursus arctos and Vicugna vicugna.
+
+Appendix III: 568 listings of 557 taxa by 31 Parties (South Africa 148, Australia 144, India 33, Ukraine 32, New Zealand 32, Cuba 26, Brazil 19, Colombia 16, Honduras 16, Pakistan 12, United States 10, European Union 9, and 19 others with fewer). 10 taxa are listed by two or more Parties.
+
+Annotations: #4 on 34,023 listings, #15 on 291, #17 on 172, #5 on 125, #2 on 95, #14 on 32, #6 on 19, #9 on 13, #18 on 7, #1 on 5, #3 on 2, and #7, #8, #10, #11, #12, #13, #16 and #19 on one listing each. `cites_note` has 141 notes (33 KB).
+
+Synonyms: 42,423 rows in `cites_synonym`, for 16,910 taxa. They have 41,294 different names (`name`, without the author); 536 of these names are synonyms of two or more taxa, so a match by synonym has to allow for a name that gives several taxa. 1,281 synonyms have no author.
+
+A full download took 44 requests and 14 minutes on 2026-10-08, and no request had to be sent again. Importing the kept file takes about 7 seconds, and the CITES tables take about 25 MB of the status lists store.
+
+### The endpoint may change
+
+The command uses the endpoint that the Checklist's web app uses, not a published API, so UNEP-WCMC can change its parameters or its answers without notice. The download fails, and the store is not changed, when a page is not JSON, when `total_cnt` changes during the download, or when the rows do not have `total_cnt` different taxon ids. A renamed field would show only as missing values, so compare the counts that the command prints after a run with the counts above.
 
 ## National and subnational red lists: `statuses red-lists-import`
 
@@ -321,4 +630,4 @@ Notes on the lists (more in the file):
 
 ## Web UI
 
-The Data sources page has a card for the store, with the number of NatureServe records and ECOS listings. `statuses red-lists-import` has no workflow step yet. The "Update the public species site" workflow has a step for each command before the site build, each with a light: NatureServe is blue while a download is under way, and either step is amber when its last download is more than 30 days old. The site build's light counts the store as one of its inputs.
+The Data sources page has a card for the store, with the number of NatureServe records and ECOS listings. The "Update the public species site" workflow has a step for each command before the site build (except `statuses red-lists-import`, which has none yet), each with a light: NatureServe is blue while a download is under way, and either step is amber when its last download is more than 30 days old. The site build's light counts the store as one of its inputs.

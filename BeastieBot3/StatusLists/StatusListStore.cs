@@ -5,13 +5,15 @@ using Microsoft.Data.Sqlite;
 // Conservation statuses from systems other than the IUCN Red List (Datastore:status_lists_sqlite),
 // for the public species site. This file has the schema, the source rows and the sync state; the
 // methods that read and write each source's tables are in StatusListStore.NatureServe.cs,
-// StatusListStore.Ecos.cs, StatusListStore.Nztcs.cs, StatusListStore.Salve.cs and
-// StatusListStore.RedLists.cs.
+// StatusListStore.Ecos.cs, StatusListStore.Nztcs.cs, StatusListStore.Salve.cs,
+// StatusListStore.Jncc.cs, StatusListStore.Cites.cs and StatusListStore.RedLists.cs.
 //   status_source         one row per source: title, licence, citation, when it was last fetched;
 //   status_sync_state     key/value progress of `statuses natureserve-fetch` (the pass under way);
 //   natureserve_species   one row per NatureServe Explorer species, subspecies, variety or
 //                         population: G rank, US and Canadian N ranks, US ESA, COSEWIC and SARA codes;
 //   natureserve_synonym   the synonyms NatureServe lists for each of them;
+//   natureserve_nation    each record's rounded national ranks (United States, Canada);
+//   natureserve_subnation each record's rounded state, province and territory ranks;
 //   natureserve_partition the name prefixes of the pass under way and how far each has got;
 //   ecos_listing          one row per US Endangered Species Act listing in ECOS (a species,
 //                         subspecies or population);
@@ -19,13 +21,23 @@ using Microsoft.Data.Sqlite;
 //   nztcs_assessment      one row per current New Zealand Threat Classification System assessment;
 //   salve_assessment      one row per current SALVE assessment of a species or subspecies of Brazil's
 //                         fauna;
+//   jncc_designation      one row per taxon and designation in JNCC's Conservation Designations for
+//                         UK Taxa: UK, GB and UK country red lists, legislation and priority lists,
+//                         and the international conventions and EU directives as they apply to UK taxa;
+//   cites_taxon           one row per taxon of the Checklist of CITES Species (a species, subspecies,
+//                         variety or higher taxon), with Species+'s summary of its listing;
+//   cites_listing         one row per current CITES listing of a taxon, its own or inherited from a
+//                         higher taxon;
+//   cites_note            each long note of the CITES listings once (full notes, annotation texts);
+//   cites_synonym         the synonyms the Checklist gives for each taxon;
 //   red_list_dataset      one row per national or subnational red list imported from GBIF
 //                         (rules/status-lists/national-red-lists.yml), with its own status_source row
 //                         'redlist:<key>';
 //   red_list_taxon        one row per status of a taxon in one of those lists;
 //   red_list_synonym      the synonyms a list gives for its taxa with a status.
 //
-// Nothing narrative is stored: no NatureServe taxonomic comments, ranking reasons or other text.
+// Nothing narrative is stored: no NatureServe taxonomic comments, ranking reasons or other text, and
+// none of JNCC's comments or descriptions.
 
 namespace BeastieBot3.StatusLists;
 
@@ -34,6 +46,8 @@ internal static class StatusSources {
     public const string Ecos = "ecos";
     public const string Nztcs = "nztcs";
     public const string Salve = "salve";
+    public const string Jncc = "jncc";
+    public const string Cites = "cites";
 
     /// A red list's status_source row is 'redlist:<key>', key from national-red-lists.yml.
     public const string RedListPrefix = "redlist:";
@@ -79,12 +93,14 @@ internal sealed partial class StatusListStore : SqliteStore {
 
     internal const string Ddl = """
         CREATE TABLE IF NOT EXISTS status_source (
-            source      TEXT PRIMARY KEY,   -- 'natureserve' | 'ecos' | 'nztcs' | 'salve' | 'redlist:<key>' (one per red list)
+            source      TEXT PRIMARY KEY,   -- 'natureserve' | 'ecos' | 'nztcs' | 'salve' | 'jncc' | 'cites' | 'redlist:<key>' (one per red list)
             title       TEXT NOT NULL,
-            url         TEXT NOT NULL,
+            url         TEXT NOT NULL,      -- the source's site; for JNCC, the URL of the file imported
             licence     TEXT NOT NULL,
-            citation    TEXT,               -- the source's citation form, with the access date filled in
-            version     TEXT,
+            citation    TEXT,               -- the source's citation form, with the access date filled in; for JNCC,
+                                            -- its attribution statement with the year of the release
+            version     TEXT,               -- the file imported (JNCC's name has the release date: taxon-designations-20260609.xlsx);
+                                            -- for NatureServe, the date the download finished
             fetched_at  TEXT NOT NULL,      -- UTC "O": when the last full download or refresh finished
             row_count   INTEGER NOT NULL
         ) WITHOUT ROWID;
@@ -128,6 +144,27 @@ internal sealed partial class StatusListStore : SqliteStore {
             PRIMARY KEY (element_global_id, name)
         ) WITHOUT ROWID;
         CREATE INDEX IF NOT EXISTS natureserve_synonym_name ON natureserve_synonym(name);
+        CREATE TABLE IF NOT EXISTS natureserve_nation (
+            element_global_id INTEGER NOT NULL REFERENCES natureserve_species(element_global_id) ON DELETE CASCADE,
+            nation_code       TEXT NOT NULL,     -- US, CA
+            rounded_n_rank    TEXT,              -- rounded national rank as given, with breeding (B), nonbreeding (N) and migrant (M) parts
+                                                 -- joined by ",": N2, NNR, N5B,N5N, N3B,NUM, NNRB. The search gives no unrounded rank
+            native            INTEGER,           -- 1 or 0 as NatureServe gives it; NULL when not given
+            exotic            INTEGER,           -- 1 or 0 as NatureServe gives it; NULL when not given. native and exotic are both 1
+                                                 -- for a taxon native in part of the nation and introduced in another
+            PRIMARY KEY (element_global_id, nation_code)
+        ) WITHOUT ROWID;
+        CREATE TABLE IF NOT EXISTS natureserve_subnation (
+            element_global_id INTEGER NOT NULL REFERENCES natureserve_species(element_global_id) ON DELETE CASCADE,
+            nation_code       TEXT NOT NULL,     -- the nation of the state or province: US, CA
+            subnation_code    TEXT NOT NULL,     -- NatureServe's code of a US state or a Canadian province or territory: TX, ON, DC, NF (island
+                                                 -- of Newfoundland), LB (Labrador), NN (Navajo Nation, under US). The search gives no names
+            rounded_s_rank    TEXT,              -- rounded subnational rank as given: S1, SNR, S3B,S3N, S2,S4N. The search gives no unrounded rank
+            native            INTEGER,           -- 1 or 0 as NatureServe gives it; NULL when not given
+            exotic            INTEGER,           -- 1 or 0 as NatureServe gives it; NULL when not given. native and exotic can both be 1
+            PRIMARY KEY (element_global_id, nation_code, subnation_code)
+        ) WITHOUT ROWID;
+        CREATE INDEX IF NOT EXISTS natureserve_subnation_place ON natureserve_subnation(nation_code, subnation_code);
         CREATE TABLE IF NOT EXISTS natureserve_partition (
             prefix    TEXT PRIMARY KEY,           -- scientific name prefix ('' = every record)
             expected  INTEGER,                    -- records NatureServe gave for the prefix
@@ -196,6 +233,106 @@ internal sealed partial class StatusListStore : SqliteStore {
             imported_at     TEXT NOT NULL         -- UTC "O"
         ) WITHOUT ROWID;
         CREATE INDEX IF NOT EXISTS salve_assessment_name ON salve_assessment(scientific_name);
+        CREATE TABLE IF NOT EXISTS jncc_designation (
+            row_number        INTEGER PRIMARY KEY,  -- the row's number in the workbook's Master List sheet (the file has no row id; one taxon
+                                                    -- can have the same designation twice, from two sources or two published names)
+            taxon_version_key TEXT NOT NULL,        -- UK Species Inventory (NHM) recommended taxon version key: NBNSYS0000000131, NHMSYS0021054473
+            scientific_name   TEXT NOT NULL,        -- the UKSI recommended name, as JNCC gives it: "Lithobius (Monotarsobius) crassipes",
+                                                    -- "Alosa fallax subsp. fallax", "Anser fabalis/serrirostris"
+            authority         TEXT,                 -- of the recommended name: "Koehler, 1886"
+            qualifier         TEXT,                 -- of the recommended name: "s.l.", "agg.", "sensu stricto"
+            rank              TEXT,                 -- read from the form of the name and the kingdom (JNCC gives no rank): species, subspecies,
+                                                    -- variety, form, aggregate, section, hybrid, above species; NULL for other forms
+            designated_name   TEXT,                 -- the name as the source published it ("Designated name")
+            common_name       TEXT,                 -- as JNCC gives it, from the source or UKSI
+            category          TEXT,                 -- JNCC's group: Bird, Mammal, Fish, Reptile, Amphibian, Invertebrate, Vascular plant,
+                                                    -- Non-vascular plant, Fungi, Algae, Slime mould
+            taxon_group       TEXT,                 -- UKSI's informal group: "insect - beetle (Coleoptera)", "lichen", "flowering plant"
+            kingdom           TEXT,                 -- in IUCN's spelling, read from category and taxon_group (JnccClassification.KingdomOf):
+                                                    -- ANIMALIA, PLANTAE, FUNGI (lichens too), CHROMISTA; NULL for algae and slime moulds
+            reporting_category TEXT NOT NULL,       -- the list as JNCC names it: "Wildlife and Countryside Act 1981",
+                                                    -- "Red listing based on 2001 IUCN guidelines", "Biodiversity Lists - England"
+            sort_code         TEXT,                 -- JNCC's sort order of the reporting category: A Bern Convention, Fc red lists (2001
+                                                    -- guidelines), Ga rare and scarce species, Hb England, I Wildlife and Countryside Act
+            designation       TEXT NOT NULL,        -- the designation as JNCC writes it: "Schedule 5 Section 9.4b", "Vulnerable",
+                                                    -- "Bird Population Status - red", "England NERC S.41"
+            designation_code  TEXT NOT NULL,        -- JNCC's code ("Designation abbreviation"): WACA-Sch5_sect9.4b, RedList_GB_post2001-VU,
+                                                    -- Bird-Red, England_NERC_S.41
+            status_code       TEXT,                 -- the category in a red list's code: EX, EW, RE, CR, CR(PE), EN, VU, NT, LC, DD, NE, NA,
+                                                    -- LR(cd); pre-1994 R, Insu, Inde; WL (Waiting List); Red or Amber for Birds of
+                                                    -- Conservation Concern and the spider list; NULL for other designations
+            population        TEXT,                 -- breeding, non-breeding: the population the bird red list assessed
+            iucn_version      TEXT,                 -- the IUCN criteria a red list used: 2001, 1994, pre 1994
+            scope             TEXT,                 -- uk (the UK or Great Britain), country (part of the UK), international (a convention, an
+                                                    -- EU directive or regulation, IUCN's global or European red list); NULL for a code that
+                                                    -- JnccClassification does not know
+            area              TEXT,                 -- where it applies: United Kingdom, Great Britain, England, Scotland, Wales, Northern
+                                                    -- Ireland, England and Wales; World, Europe, European Union, Africa-Eurasia,
+                                                    -- North-East Atlantic, North-East Atlantic and Baltic
+            source            TEXT,                 -- the document listing it: "Birds of Conservation Concern 5: the red list for birds ...",
+                                                    -- "A new vascular plant Red List for Great Britain, 2025"
+            source_url        TEXT,
+            designated_on     TEXT,                 -- yyyy-MM-dd as JNCC gives it; often 1 January of the year of the source
+            imported_at       TEXT NOT NULL         -- UTC "O"
+        );
+        CREATE INDEX IF NOT EXISTS jncc_designation_key ON jncc_designation(taxon_version_key);
+        CREATE INDEX IF NOT EXISTS jncc_designation_name ON jncc_designation(scientific_name);
+        CREATE INDEX IF NOT EXISTS jncc_designation_code ON jncc_designation(designation_code);
+        CREATE TABLE IF NOT EXISTS cites_taxon (
+            taxon_concept_id INTEGER PRIMARY KEY,  -- Species+ taxon concept id, shared by the Checklist and Species+
+            full_name        TEXT NOT NULL,        -- as the Checklist writes it: "Loxodonta africana", "Achillides chikae chikae" (a subspecies
+                                                   -- has no rank word), "Euphorbia decaryi var. robinsonii", "Woodworthia "Pygmy"" (informal)
+            author_year      TEXT,                 -- "(Blumenbach, 1797)"
+            taxon_rank       TEXT NOT NULL,        -- SPECIES, SUBSPECIES, VARIETY, GENUS, SUBFAMILY, FAMILY, ORDER
+            cites_accepted   INTEGER NOT NULL,     -- 1 when Species+ marks the name CITES accepted (the Checklist shows it in bold), else 0
+            kingdom          TEXT,                 -- Animalia, Plantae
+            phylum           TEXT,
+            taxclass         TEXT,
+            taxorder         TEXT,
+            family           TEXT,
+            genus            TEXT,
+            current_listing  TEXT,                 -- Species+'s summary of the appendices of the taxon and its descendants: I, II, III, I/II,
+                                                   -- II/NC ... ("NC": some descendants or populations are in no appendix; "NC" alone: the
+                                                   -- taxon is not listed, such as a species excluded from its family's listing); NULL when empty
+            url              TEXT NOT NULL,        -- the taxon's page on Species+, with its listings
+            imported_at      TEXT NOT NULL         -- UTC "O"
+        );
+        CREATE INDEX IF NOT EXISTS cites_taxon_name ON cites_taxon(full_name);
+        CREATE TABLE IF NOT EXISTS cites_note (
+            note_id INTEGER PRIMARY KEY,
+            html    TEXT NOT NULL UNIQUE            -- a note as Species+ gives it: HTML with <i>, <p>, entities and \r\n
+        );
+        CREATE TABLE IF NOT EXISTS cites_listing (
+            taxon_concept_id       INTEGER NOT NULL REFERENCES cites_taxon(taxon_concept_id) ON DELETE CASCADE,
+            listing_change_id      INTEGER NOT NULL,  -- Species+ id of the listing; an inherited listing often has the higher taxon's id
+            appendix               TEXT NOT NULL,     -- I, II or III
+            party_iso_code         TEXT,              -- Appendix III: the Party that listed the taxon, ISO 3166 alpha-2 (EU for the European Union)
+            party_name             TEXT,              -- "Mauritius", "Bolivia (Plurinational State of)"
+            effective_on           TEXT,              -- yyyy-MM-dd, when the listing took effect
+            short_note             TEXT,              -- HTML: which populations or parts the listing covers, quotas and exclusions
+                                                      -- ("Populations of AR and BR."); with inherited_short_note, the only place that says
+                                                      -- which populations a split listing covers
+            full_note_id           INTEGER REFERENCES cites_note(note_id),  -- the full text of the note
+            annotation_symbol      TEXT,              -- the annotation that says which parts and derivatives are covered: #1 to #19
+            annotation_note_id     INTEGER REFERENCES cites_note(note_id),  -- the text of that annotation
+            inherited_rank         TEXT,              -- for a listing inherited from a higher taxon: its rank (FAMILY, GENUS, ORDER, SUBFAMILY, SPECIES)
+            inherited_name         TEXT,              -- and its name ("Trochilidae"); NOT NULL marks an inherited listing
+            inherited_from_id      INTEGER,           -- and its taxon_concept_id, when the download has one taxon of that name and rank
+            inherited_short_note   TEXT,              -- HTML: the higher taxon's note that applies to this taxon ("Excludes fossils.")
+            inherited_full_note_id INTEGER REFERENCES cites_note(note_id),
+            nomenclature_note      TEXT,              -- HTML: a note on the name the taxon was listed under
+            PRIMARY KEY (taxon_concept_id, listing_change_id)
+        ) WITHOUT ROWID;
+        CREATE INDEX IF NOT EXISTS cites_listing_inherited ON cites_listing(inherited_from_id);
+        CREATE TABLE IF NOT EXISTS cites_synonym (
+            taxon_concept_id INTEGER NOT NULL REFERENCES cites_taxon(taxon_concept_id) ON DELETE CASCADE,
+            name_with_author TEXT NOT NULL,         -- as the Checklist gives it: "Ornismya abeillei Lesson & DeLattre, 1839"
+            name             TEXT NOT NULL,         -- without the author (CitesChecklist.SplitSynonym): "Ornismya abeillei"; a subgenus in
+                                                    -- brackets is kept: "Phyllomedusa (agalychnis) callidryas"
+            author           TEXT,                  -- "Lesson & DeLattre, 1839"
+            PRIMARY KEY (taxon_concept_id, name_with_author)
+        ) WITHOUT ROWID;
+        CREATE INDEX IF NOT EXISTS cites_synonym_name ON cites_synonym(name);
         CREATE TABLE IF NOT EXISTS red_list_dataset (
             dataset_key      TEXT PRIMARY KEY,    -- the dataset's key in rules/status-lists/national-red-lists.yml: 'se-redlist-2025'
             gbif_dataset_key TEXT NOT NULL,       -- GBIF dataset key; its page is https://www.gbif.org/dataset/<key>

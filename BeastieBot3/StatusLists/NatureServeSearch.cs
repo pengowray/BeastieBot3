@@ -12,6 +12,13 @@ using System.Text.Json.Nodes;
 // on scientificName is a prefix of the whole name, case does not matter, and the counts of "A".."Z"
 // add up to the total. Within one query the order is fixed (informal group, then name), so pages do
 // not overlap.
+//
+// Each result's nations[] has the national ranks (nationCode, roundedNRank, native, exotic) and,
+// under each nation, subnations[] has the state and province ranks (subnationCode, roundedSRank,
+// native, exotic). Only the United States and Canada appear (checked 2026-10-08), in no fixed
+// order. Both ranks are the rounded ones: the rank as published (nrank, srank), its review year
+// and the names of the nations and subnations are only in the record's own page of the API
+// (GET /api/data/taxon/<uniqueId>), one request per record, which the command does not ask for.
 
 namespace BeastieBot3.StatusLists;
 
@@ -42,7 +49,28 @@ internal sealed record NatureServeSpecies(
     string? CaNRank,
     string NsxUrl,
     string? LastModified,
-    IReadOnlyList<string> Synonyms);
+    IReadOnlyList<string> Synonyms,
+    IReadOnlyList<NatureServeNation> Nations);
+
+/// A record's rank in one nation (nationCode US or CA), with its ranks in that nation's states and
+/// provinces. RoundedNRank is as given, breeding, nonbreeding and migrant parts included
+/// ("N5B,N5N", "N3B,NUM", "NNRB"). Native and Exotic are null when the result does not give them;
+/// both can be true (native in part of the nation and introduced in another).
+internal sealed record NatureServeNation(
+    string NationCode,
+    string? RoundedNRank,
+    bool? Native,
+    bool? Exotic,
+    IReadOnlyList<NatureServeSubnation> Subnations);
+
+/// A record's rank in one state or province, by NatureServe's subnation code (TX, ON; also NF for
+/// the island of Newfoundland, LB for Labrador and NN for the Navajo Nation). RoundedSRank is as
+/// given ("S3B,S3N", "S2,S4N").
+internal sealed record NatureServeSubnation(
+    string SubnationCode,
+    string? RoundedSRank,
+    bool? Native,
+    bool? Exotic);
 
 internal sealed record NatureServePage(long TotalResults, int ResultCount, IReadOnlyList<NatureServeSpecies> Species);
 
@@ -140,6 +168,7 @@ internal static class NatureServeSearch {
         string? GlobalText(string property) => global.ValueKind == JsonValueKind.Object ? Text(global, property) : null;
 
         var saraRaw = GlobalText("saraCode");
+        var nations = Nations(result);
         var url = Text(result, "nsxUrl") is { } relative
             ? (relative.StartsWith("http", StringComparison.OrdinalIgnoreCase) ? relative : SiteUrl + relative)
             : $"{SiteUrl}/Taxon/ELEMENT_GLOBAL.2.{id}";
@@ -165,11 +194,12 @@ internal static class NatureServeSearch {
             CosewicCode: GlobalText("cosewicCode"),
             SaraCode: EnglishPart(saraRaw),
             SaraCodeRaw: saraRaw,
-            UsNRank: NationRank(result, "US"),
-            CaNRank: NationRank(result, "CA"),
+            UsNRank: NationRank(nations, "US"),
+            CaNRank: NationRank(nations, "CA"),
             NsxUrl: url,
             LastModified: Text(result, "lastModified"),
-            Synonyms: Strings(global, "synonyms"));
+            Synonyms: Strings(global, "synonyms"),
+            Nations: nations);
     }
 
     /// The English part of a bilingual SARA status ("Endangered/En voie de disparition" gives
@@ -183,17 +213,40 @@ internal static class NatureServeSearch {
         return english.Length == 0 ? null : english;
     }
 
-    private static string? NationRank(JsonElement result, string nationCode) {
-        if (!result.TryGetProperty("nations", out var nations) || nations.ValueKind != JsonValueKind.Array) {
-            return null;
+    /// The result's nations and the subnations under each. A nation or subnation without a code is
+    /// left out, and of two with the same code only the first is kept.
+    internal static IReadOnlyList<NatureServeNation> Nations(JsonElement result) {
+        if (!result.TryGetProperty("nations", out var array) || array.ValueKind != JsonValueKind.Array) {
+            return Array.Empty<NatureServeNation>();
         }
-        foreach (var nation in nations.EnumerateArray()) {
-            if (string.Equals(Text(nation, "nationCode"), nationCode, StringComparison.OrdinalIgnoreCase)) {
-                return Text(nation, "roundedNRank");
+        var nations = new List<NatureServeNation>();
+        foreach (var nation in array.EnumerateArray()) {
+            if (nation.ValueKind != JsonValueKind.Object || Text(nation, "nationCode") is not { } code
+                || nations.Any(n => n.NationCode.Equals(code, StringComparison.OrdinalIgnoreCase))) {
+                continue;
             }
+            var subnations = new List<NatureServeSubnation>();
+            if (nation.TryGetProperty("subnations", out var subArray) && subArray.ValueKind == JsonValueKind.Array) {
+                foreach (var subnation in subArray.EnumerateArray()) {
+                    if (subnation.ValueKind != JsonValueKind.Object || Text(subnation, "subnationCode") is not { } subCode
+                        || subnations.Any(s => s.SubnationCode.Equals(subCode, StringComparison.OrdinalIgnoreCase))) {
+                        continue;
+                    }
+                    subnations.Add(new NatureServeSubnation(subCode, Text(subnation, "roundedSRank"), Flag(subnation, "native"), Flag(subnation, "exotic")));
+                }
+            }
+            nations.Add(new NatureServeNation(code, Text(nation, "roundedNRank"), Flag(nation, "native"), Flag(nation, "exotic"), subnations));
         }
-        return null;
+        return nations;
     }
+
+    private static string? NationRank(IReadOnlyList<NatureServeNation> nations, string nationCode) =>
+        nations.FirstOrDefault(n => n.NationCode.Equals(nationCode, StringComparison.OrdinalIgnoreCase))?.RoundedNRank;
+
+    private static bool? Flag(JsonElement element, string property) =>
+        element.TryGetProperty(property, out var value)
+            ? value.ValueKind switch { JsonValueKind.True => true, JsonValueKind.False => false, _ => null }
+            : null;
 
     private static IReadOnlyList<string> Strings(JsonElement element, string property) {
         if (element.ValueKind != JsonValueKind.Object || !element.TryGetProperty(property, out var array) || array.ValueKind != JsonValueKind.Array) {

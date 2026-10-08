@@ -243,6 +243,49 @@ Rules the site depends on (pinned by `SiteDbBuildTests` and the site tests):
   gives what the rounded rank means and which part of the rank that is
   (`SiteText.NatureServeRankMeaning`): "Vulnerable (rounded rank G3)" for G3G4, "Imperiled
   (subspecies rank T2)" for G5T2.
+- `natureserve-national` and `natureserve-subnational` rows (schema 26): for each matched NatureServe
+  record, its national ranks (`natureserve_nation`) and its state, province and territory ranks
+  (`natureserve_subnation`), with the nation in `other_status.country` and, for a subnational rank,
+  the place's name in `population` (`NatureServePlaces`; the search gives only codes: NF is the
+  island of Newfoundland, LB Labrador, NN the Navajo Nation). `status` and `status_code` are the
+  rounded rank as NatureServe gives it, with breeding (B), non-breeding (N) and migrant (M) parts
+  ("N5B,N5N"). A rank is kept when one of its parts is a rank (1 to 5, H, X or U,
+  `OtherStatusSystems.IsRankedLocally`), or when it is NA and NatureServe says the taxon is exotic
+  there and not native (`qualifier` 'exotic'); NR and other NA ranks are left out, as GNR and GNA
+  are. The national rank is a row of the country's table; the state ranks are a collapsed table
+  under it (`OtherStatusTable.PlaceRanks`), opened by a line with the number of places and how many
+  rank the taxon S1, S2, SH or SX. In the test build of 9 October 2026: 14,578 national ranks of
+  11,819 taxa, 98,561 state, province and territory ranks of 12,390 taxa.
+- `cites` rows (schema 26), under the "International" heading, which comes before the countries:
+  each species, subspecies and variety of the Checklist of CITES Species goes to the taxon with its
+  name in its kingdom, else to the taxon of one of its Checklist synonyms, else of an IUCN synonym;
+  CITES-accepted names first. Each of its current listings is a row: `status` "Appendix II", or
+  "Appendix III (Nepal)" with the Party; `status_code` the appendix; `population` the populations
+  the listing's own note names, as plain text ("Populations of Botswana, Namibia, South Africa and
+  Zimbabwe are included in Appendix II ..."); `listed_on` the date it took effect; `url` the
+  taxon's Species+ page. A listing inherited from a genus, family or order has the higher taxon in
+  `listed_under` ("family Trochilidae", shown under the appendix) and the higher taxon's note that
+  applies to the taxon, unless the note is about the higher taxon's other members ("Except the
+  species included in Appendix I"). A site species the Checklist does not name takes the listing of
+  its IUCN genus, else family, else order, when the Checklist has that taxon with a listing of its
+  own and no note. The note under the tables gives the citation the Checklist asks for, with the
+  download date (meta `cites_fetched`). In the test build of 9 October 2026: 11,070 site taxa matched
+  to Checklist taxa and 358 covered through a higher taxon; 11,460 rows.
+- `gb-jncc` rows (schema 26), under "United Kingdom": JNCC's designations for the UK, Great Britain
+  or one of its countries (`jncc_designation.scope` 'uk' or 'country'); international ones are left
+  out because JNCC lists them for UK taxa only. A JNCC taxon goes to the taxon with its UKSI
+  recommended name in its kingdom (a subgenus in brackets taken out), else of one of its names as
+  designated, else of an IUCN synonym. `JnccLists.Classify` gives each designation code its list
+  (an `other_status_list` row: Great Britain and England red lists, Birds of Conservation Concern 5,
+  rare and scarce species, the wildlife laws, the priority species lists) and the status to show;
+  `population` is the area it applies to. A red list keeps one category per season, the newest by
+  `designated_on`; another list joins its statuses ("Schedule 5, section 9.4b; Schedule 5, section
+  9.5a"). `report` is the source publication of red list and rarity rows. In the test build of 9
+  October 2026: 3,370 taxa, 7,266 rows.
+- `other_status_list` (schema 26) holds the lists of a system with several (JNCC's, and the national
+  red lists from GBIF): its name (the row label), country, region, order among the country's lists,
+  publisher, licence, citation, version and download date. The note under the tables is built from
+  the lists of the page's rows.
 - `br-salve` rows: each current SALVE assessment goes to the animal taxon with its name, else the
   one animal taxon whose IUCN synonyms include it; one per taxon. `status` is the category in
   English (`OtherStatusSystems.SalveLabel`; CR with SALVE's flag is "Critically Endangered (Possibly
