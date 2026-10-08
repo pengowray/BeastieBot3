@@ -274,10 +274,12 @@ public sealed class OtherStatusSectionTests {
 
     [Fact]
     public void EverySourceTheSiteDatabaseHasIsDescribed() {
-        Assert.Equal(
-            [BeastieBot3.Shared.SiteData.OtherStatusSources.Sprat, BeastieBot3.Shared.SiteData.OtherStatusSources.Ecos,
-                BeastieBot3.Shared.SiteData.OtherStatusSources.NatureServe, BeastieBot3.Shared.SiteData.OtherStatusSources.Nztcs,
-                BeastieBot3.Shared.SiteData.OtherStatusSources.Salve],
-            OtherStatusSourceInfo.All.Select(s => s.Key));
+        var sources = typeof(BeastieBot3.Shared.SiteData.OtherStatusSources)
+            .GetFields(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static)
+            .Where(f => f.IsLiteral && f.FieldType == typeof(string))
+            .Select(f => (string)f.GetRawConstantValue()!)
+            .ToList();
+        Assert.NotEmpty(sources);
+        Assert.Equal(sources.Order(), OtherStatusSourceInfo.All.Select(s => s.Key).Order());
     }
 }

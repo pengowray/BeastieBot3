@@ -4,8 +4,8 @@ using System.Text.Json;
 using Spectre.Console;
 using Spectre.Console.Cli;
 
-// The run shared by `statuses ecos-import`, `statuses nztcs-import`, `statuses salve-import` and
-// `statuses jncc-import`:
+// The run shared by `statuses ecos-import`, `statuses nztcs-import`, `statuses salve-import`,
+// `statuses jncc-import` and `statuses cites-import`:
 //   1. take the file given with --file, or download the source into the status lists folder as
 //      <stem>-<yyyy-MM-dd>.<extension>, or under the name the source gives its file (JNCC's name
 //      holds the date of its release); StatusListDownload writes it through a .part file;
