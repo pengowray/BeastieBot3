@@ -6,7 +6,7 @@ using Microsoft.Data.Sqlite;
 // for the public species site. This file has the schema, the source rows and the sync state; the
 // methods that read and write each source's tables are in StatusListStore.NatureServe.cs,
 // StatusListStore.Ecos.cs, StatusListStore.Nztcs.cs, StatusListStore.Salve.cs,
-// StatusListStore.Jncc.cs and StatusListStore.Cites.cs.
+// StatusListStore.Jncc.cs, StatusListStore.Cites.cs and StatusListStore.France.cs.
 //   status_source         one row per source: title, licence, citation, when it was last fetched;
 //   status_sync_state     key/value progress of `statuses natureserve-fetch` (the pass under way);
 //   natureserve_species   one row per NatureServe Explorer species, subspecies, variety or
@@ -29,10 +29,21 @@ using Microsoft.Data.Sqlite;
 //   cites_listing         one row per current CITES listing of a taxon, its own or inherited from a
 //                         higher taxon;
 //   cites_note            each long note of the CITES listings once (full notes, annotation texts);
-//   cites_synonym         the synonyms the Checklist gives for each taxon.
+//   cites_synonym         the synonyms the Checklist gives for each taxon;
+//   france_status         one row per taxon, status and place of PatriNat's BDC Statuts, for the French
+//                         national and regional red lists and protection lists;
+//   france_status_type    the BDC's status types (LRN national red list, PN national protection ...);
+//   france_territory      the places of the stored statuses (metropolitan France, an overseas
+//                         territory, a region, a département);
+//   france_document       the documents that give the stored statuses (a red list, a decree), with
+//                         their citations;
+//   france_taxref_name    every TAXREF name of the accepted names of the stored statuses, synonyms
+//                         included;
+//   france_taxref_link    those names' ids in the IUCN Red List, BirdLife, the Catalogue of Life and
+//                         GBIF, from TAXREF.
 //
-// Nothing narrative is stored: no NatureServe taxonomic comments, ranking reasons or other text, and
-// none of JNCC's comments or descriptions.
+// Nothing narrative is stored: no NatureServe taxonomic comments, ranking reasons or other text, none
+// of JNCC's comments or descriptions, and none of the BDC's remarks except the red lists' codes.
 
 namespace BeastieBot3.StatusLists;
 
@@ -43,6 +54,8 @@ internal static class StatusSources {
     public const string Salve = "salve";
     public const string Jncc = "jncc";
     public const string Cites = "cites";
+    public const string France = "france";
+    public const string Taxref = "taxref";
 }
 
 internal sealed record StatusSourceInfo(
@@ -85,12 +98,14 @@ internal sealed partial class StatusListStore : SqliteStore {
 
     internal const string Ddl = """
         CREATE TABLE IF NOT EXISTS status_source (
-            source      TEXT PRIMARY KEY,   -- 'natureserve' | 'ecos' | 'nztcs' | 'salve' | 'jncc' | 'cites'
+            source      TEXT PRIMARY KEY,   -- 'natureserve' | 'ecos' | 'nztcs' | 'salve' | 'jncc' | 'cites' | 'france' | 'taxref'
             title       TEXT NOT NULL,
-            url         TEXT NOT NULL,      -- the source's site; for JNCC, the URL of the file imported
+            url         TEXT NOT NULL,      -- the source's site; for JNCC, the URL of the file imported; for the BDC (france)
+                                            -- and TAXREF, the dataset's page on data.gouv.fr
             licence     TEXT NOT NULL,
             citation    TEXT,               -- the source's citation form, with the access date filled in; for JNCC,
-                                            -- its attribution statement with the year of the release
+                                            -- its attribution statement with the year of the release; for the BDC and
+                                            -- TAXREF, their forms with the version and date of the files imported
             version     TEXT,               -- the file imported (JNCC's name has the release date: taxon-designations-20260609.xlsx);
                                             -- for NatureServe, the date the download finished
             fetched_at  TEXT NOT NULL,      -- UTC "O": when the last full download or refresh finished
@@ -325,6 +340,93 @@ internal sealed partial class StatusListStore : SqliteStore {
             PRIMARY KEY (taxon_concept_id, name_with_author)
         ) WITHOUT ROWID;
         CREATE INDEX IF NOT EXISTS cites_synonym_name ON cites_synonym(name);
+        CREATE TABLE IF NOT EXISTS france_status_type (
+            type_code  TEXT PRIMARY KEY,   -- CD_TYPE_STATUT: LRN, LRR, PN, POM, PR, PD, and the types not stored (LRM, ZDET, BERN ...)
+            label      TEXT NOT NULL,      -- LB_TYPE_STATUT, in French: "Liste rouge nationale", "Protection nationale"
+            type_group TEXT,               -- REGROUPEMENT_TYPE: "Liste rouge", "Protection", "Conventions internationales" ...
+            stored     INTEGER NOT NULL    -- 1 when france_status has the rows of this type (FranceBdc.StoredTypes), else 0
+        ) WITHOUT ROWID;
+        CREATE TABLE IF NOT EXISTS france_territory (
+            territory_code TEXT PRIMARY KEY,  -- CD_SIG: TERFXFR (metropolitan France), TER971 (Guadeloupe), INSEER84 (a region),
+                                              -- INSEED01 (a département)
+            name           TEXT NOT NULL,     -- LB_ADM_TR, in French: "France métropolitaine", "TAAF : Îles éparses"
+            name_en        TEXT,              -- FranceTerritories.EnglishName: "Metropolitan France", "French Guiana"; NULL for a
+                                              -- département of metropolitan France
+            admin_level    TEXT,              -- NIVEAU_ADMIN: Territoire, État, Région, Ancienne région (a region before 2016),
+                                              -- Département, Collectivité d'outre-mer, Subdivision administrative
+            iso3166_1      TEXT,              -- CD_ISO3166_1 as given: FXX, GLP, GUF, FRA; often NULL
+            iso3166_2      TEXT               -- CD_ISO3166_2 as given: FR-GP, FR-ARA; often NULL
+        ) WITHOUT ROWID;
+        CREATE TABLE IF NOT EXISTS france_document (
+            cd_doc        INTEGER PRIMARY KEY,  -- PatriNat's DOCS-Web id of the document (CD_DOC)
+            year          INTEGER,              -- the first year in the citation (FranceBdc.DocumentYear): the year of a red list, of a decree
+            title         TEXT,                 -- the longest italic part of the citation: "La Liste rouge des espèces menacées en France -
+                                                -- Chapitre Oiseaux de France métropolitaine"; NULL when it has none (decrees)
+            citation      TEXT,                 -- FULL_CITATION as plain text (tags removed, entities decoded)
+            citation_html TEXT,                 -- FULL_CITATION as the BDC gives it: HTML with <em> and &amp;
+            url           TEXT,                 -- DOC_URL: the document on inpn.mnhn.fr (down since July 2025); NULL when not given
+            bird_population TEXT                -- breeding, wintering or visiting when the title names one population of birds
+                                                -- (FranceBdc.TitlePopulation: "oiseaux nicheurs"); NULL when it names none or several
+        );
+        CREATE TABLE IF NOT EXISTS france_status (
+            row_number     INTEGER PRIMARY KEY,  -- the row's number in the BDC's CSV, counting every row from 1 (the file has no row id,
+                                                 -- and one list can give one name two rows)
+            cd_nom         INTEGER NOT NULL,     -- TAXREF id of the name the document used
+            cd_ref         INTEGER NOT NULL,     -- TAXREF id of the accepted name of cd_nom, in the TAXREF version of the BDC
+            type_code      TEXT NOT NULL REFERENCES france_status_type(type_code),  -- LRN, LRR, PN, POM, PR, PD
+            code           TEXT NOT NULL,        -- CODE_STATUT. Red lists: EX, EW, RE, CR, CR* (CR, possibly extinct or regionally
+                                                 -- extinct), EN, VU, NT, LC, DD, NA, NE, and RE? in regional lists. Protection lists: the
+                                                 -- list and article as PatriNat codes them (NV1, NO3, GO4)
+            label          TEXT,                 -- LABEL_STATUT, in French: "En danger critique", "Liste des oiseaux protégés ... : Article 3"
+            remark         TEXT,                 -- red lists only: RQ_STATUT as given ("pr. D2", "VU D1 (-1) - Nicheur", "b - Visiteur"),
+                                                 -- read by FranceRedListRemark; NULL when empty or a sentence, and for other types
+            criteria       TEXT,                 -- from remark: the IUCN criteria as written ("B2ab(iii)", "D1"); "pr. D2" for an NT taxon
+                                                 -- that came close to meeting D2; NULL when the remark has none or another form
+            adjusted_from  TEXT,                 -- from remark: the category before the regional adjustment ("VU" in "VU D1 (-1)")
+            adjustment     INTEGER,              -- from remark: that adjustment, in categories: -1, -2, +1
+            na_reason      TEXT,                 -- from remark, for NA: a (introduced in recent times), b (occasional or marginal), c or d
+                                                 -- (birds that winter or pass through regularly); see docs/status-lists.md
+            population_fr  TEXT,                 -- from remark: the population or presence the row assesses, as written: Nicheur,
+                                                 -- Hivernant, Visiteur, Visiteur régulier, Reproducteur certain ...
+            population     TEXT,                 -- population_fr as breeding, wintering or visiting; for a bird with no population_fr, the
+                                                 -- bird_population of its document; NULL for a row about the whole taxon
+            is_current     INTEGER,              -- red lists: 1 for the row in force for its type, accepted name (cd_ref), place and
+                                                 -- population (FranceBdc.MarkCurrent); 0 for a row of an older list, or a row of another
+                                                 -- name when the same list has a row of the accepted name; NULL for other types
+            territory_code TEXT NOT NULL REFERENCES france_territory(territory_code),
+            name           TEXT NOT NULL,        -- LB_NOM: the name of cd_nom, without author
+            author         TEXT,                 -- LB_AUTEUR
+            kingdom        TEXT,                 -- REGNE: Animalia, Plantae, Fungi, Chromista ...
+            phylum         TEXT,
+            taxclass       TEXT,
+            taxorder       TEXT,
+            family         TEXT,
+            cd_doc         INTEGER REFERENCES france_document(cd_doc),
+            imported_at    TEXT NOT NULL         -- UTC "O"
+        );
+        CREATE INDEX IF NOT EXISTS france_status_ref ON france_status(cd_ref);
+        CREATE INDEX IF NOT EXISTS france_status_nom ON france_status(cd_nom);
+        CREATE INDEX IF NOT EXISTS france_status_place ON france_status(type_code, territory_code);
+        CREATE TABLE IF NOT EXISTS france_taxref_name (
+            cd_nom INTEGER PRIMARY KEY,  -- TAXREF name id
+            cd_ref INTEGER NOT NULL,     -- TAXREF id of its accepted name (cd_nom itself for an accepted name); only accepted names of
+                                         -- france_status rows
+            rank   TEXT,                 -- RANG: ES species, SSES subspecies, VAR variety, FO form, GN genus ...
+            name   TEXT NOT NULL,        -- LB_NOM, without author
+            author TEXT                  -- LB_AUTEUR
+        );
+        CREATE INDEX IF NOT EXISTS france_taxref_name_ref ON france_taxref_name(cd_ref);
+        CREATE INDEX IF NOT EXISTS france_taxref_name_name ON france_taxref_name(name);
+        CREATE TABLE IF NOT EXISTS france_taxref_link (
+            cd_nom      INTEGER NOT NULL,  -- the TAXREF name that TAXREF_LIENS gives the link on
+            cd_ref      INTEGER NOT NULL,  -- the id of its accepted name
+            source      TEXT NOT NULL,     -- CT_NAME: "IUCN Red List" (an IUCN taxon id), "IUCN Red List > BirdLife" (BirdLife's id,
+                                           -- which is the IUCN taxon id of a bird), "Catalogue of Life" (a CoL id), "GBIF" (a GBIF key)
+            external_id TEXT NOT NULL,     -- CT_SP_ID: 22688522, 4QHKG
+            PRIMARY KEY (cd_nom, source, external_id)
+        ) WITHOUT ROWID;
+        CREATE INDEX IF NOT EXISTS france_taxref_link_ref ON france_taxref_link(cd_ref);
+        CREATE INDEX IF NOT EXISTS france_taxref_link_id ON france_taxref_link(source, external_id);
         """;
 
     protected override void EnsureSchema() {
