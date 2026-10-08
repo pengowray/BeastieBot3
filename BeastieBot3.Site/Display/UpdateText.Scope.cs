@@ -55,7 +55,74 @@ public static partial class UpdateText {
     // Putting the missing species into the wikitext (ListPlacement).
     public const string AddMissingOption = "Add the missing species to the updated wikitext";
     public const string AddMissingButton = "Add the missing species";
-    public const string AddMissingHelp = "Each species goes next to a species of the same genus, in the same form: a list line, a {{Species table/row}} or a table row. A genus with no {{Species table}} gets a new one next to the other genera of its family. A missing subspecies or variety goes on a line under its species. Not added: taxa of a genus that the wikitext has no taxon of, and taxa missing from tables with rowspan or colspan.";
+    /// How the missing taxa go in, for the forms this text lists its taxa in.
+    public static string AddMissingHelp(ListForms forms) {
+        var parts = new List<string>();
+        if (forms.ListLines) {
+            parts.Add(AddMissingLines);
+            parts.Add(forms.Headings ? AddMissingHeadings : AddMissingNoHeadings);
+        }
+        if (forms.SpeciesTables) {
+            parts.Add(AddMissingSpeciesTables);
+        }
+        if (forms.TableRows) {
+            parts.Add(AddMissingTableRows);
+        }
+        if (forms.InfraOnLines) {
+            parts.Add(AddMissingInfra);
+        }
+        if (forms.ListLines || forms.SpeciesTables || forms.TableRows) {
+            parts.Add(AddMissingOrder);
+        }
+        return string.Join(" ", parts);
+    }
+
+    public const string AddMissingLines = "Each missing species goes on a new list line next to a species of its genus, in the same format as that species' line.";
+    public const string AddMissingHeadings = "A missing species with no other species of its genus listed goes on a new line under the heading of its order, family or other group. If the wikitext has no heading for that order or family, one is added beside the other order or family headings, in the same format.";
+    public const string AddMissingNoHeadings = "In a list without headings, a missing species with no other species of its genus listed goes among the list lines in alphabetical order. If the list is not in alphabetical order, that species goes after the last line.";
+    public const string AddMissingSpeciesTables = "A missing species gets a new {{Species table/row}} in the {{Species table}} of its genus. A genus without a {{Species table}} gets a new one next to the tables of the other genera in its family.";
+    public const string AddMissingTableRows = "In ordinary wikitables, a missing species gets a new row next to a species of its genus, except in tables that use rowspan or colspan.";
+    public const string AddMissingInfra = "A missing subspecies or variety goes on a new line under its species.";
+    public const string AddMissingOrder = "New lines and rows go in alphabetical order among their neighbours, by scientific name or by common name, whichever the list is sorted by.";
+
+    /// The headings put in for missing taxa.
+    public static string NewHeadings(IReadOnlyList<string> headings) =>
+        headings.Count == 1 ? $"Added 1 heading: {headings[0]}." : $"Added {Count(headings.Count)} headings: {string.Join(", ", headings)}.";
+
+    public const string ColumnHeading = "Under heading";
+    public static string NewHeadingValue(string heading) => $"{heading} (new heading)";
+
+    public const string ColumnWhyNotAdded = "Why not added";
+    public static string UnplacedReasonText(UnplacedReason reason) => reason switch {
+        UnplacedReason.TableLayout => "The species of its genus are in a wikitable that uses rowspan or colspan.",
+        UnplacedReason.SpeciesNotOnLine => "Its species is not on a list line.",
+        UnplacedReason.RowLayout => "The {{Species table/row}} rows of its genus are missing a name, binomial or iucn-status parameter.",
+        UnplacedReason.RemovedLine => "It would have gone next to a line that was removed from the updated wikitext.",
+        _ => "No species of its genus is listed, and no heading names its order, family or other group.",
+    };
+
+    // Taking out the taxa now in another category (ListPlacement.Removal.cs).
+    public const string RemoveButton = "Remove these taxa";
+    public const string RemoveHelp = "Removes the list lines and {{Species table/row}} rows of these taxa, and any heading left with no taxa under it. After removal, untick a taxon in the table to keep it.";
+    public static string RemoveResult(int removed, int total) => (removed, total) switch {
+        (0, 1) => "Removed none of the taxa from the updated wikitext.",
+        (0, _) => $"Removed none of the {Count(total)} taxa from the updated wikitext.",
+        (1, 1) => "Removed the taxon from the updated wikitext.",
+        _ when removed == total => $"Removed all {Count(total)} taxa from the updated wikitext.",
+        _ => $"Removed {Count(removed)} of the {Count(total)} taxa from the updated wikitext.",
+    };
+    public const string RemoveInstruction = "To keep a taxon, untick it, then click Update statuses.";
+    public const string ColumnRemove = "Remove";
+    public static string RemoveCheckboxAccessible(string name) => $"Remove {name}";
+    public static string KeptReasonText(KeptReason reason) => reason switch {
+        KeptReason.SharesLine => "Kept: its list line names another taxon that stays, or has lines indented under it that stay.",
+        KeptReason.DefinesReference => "Kept: its line defines a named reference (<ref name=\"...\">) that other lines use.",
+        _ => "Kept: named only in a wikitable, a taxobox or prose.",
+    };
+    public static string RemovedHeadings(IReadOnlyList<string> headings) => headings.Count == 1
+        ? $"Removed 1 heading with no taxa left under it: {headings[0]}."
+        : $"Removed {Count(headings.Count)} headings with no taxa left under them: {string.Join(", ", headings)}.";
+
     public const string AddMissingPartial = "Missing species were not added, because this may be a regional list or a list of part of the group.";
 
     public static string AddMissingResult(int added, int missing) => (added, missing) switch {

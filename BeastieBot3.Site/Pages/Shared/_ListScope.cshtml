@@ -7,8 +7,9 @@
     var r = Model.Scope;
     var placement = Model.Placement;
     // The missing taxa to copy: all of them, or the ones not put into the wikitext.
-    var toCopy = (placement?.Unplaced ?? r.Missing)?.Where(t => t.TaxonId > 0).ToList();
-    var extraToCopy = placement is null ? r.MissingExtra : placement.Unplaced.Where(t => t.TaxonId < 0).ToList();
+    var placing = placement is not null && Model.AddMissing;
+    var toCopy = (placing ? placement!.Unplaced : r.Missing)?.Where(t => t.TaxonId > 0).ToList();
+    var extraToCopy = placing ? placement!.Unplaced.Where(t => t.TaxonId < 0).ToList() : r.MissingExtra;
 }
 <section class="update-scope" aria-labelledby="scope-heading">
     <h3 id="scope-heading">@UpdateText.ScopeHeading(r.Scope)</h3>
@@ -136,25 +137,48 @@
                 <button type="submit" form="update-form" name="@UpdateModel.AddMissingField" value="1" aria-describedby="scope-add-help">@UpdateText.AddMissingButton</button>
             }
         </p>
-        <p class="help" id="scope-add-help">@UpdateText.AddMissingHelp</p>
+        @if (UpdateText.AddMissingHelp(Model.Forms) is { Length: > 0 } addHelp) {
+            <p class="help" id="scope-add-help">@addHelp</p>
+        }
     }
-    @if (placement is not null) {
+    @if (placement is not null && Model.AddMissing) {
         @if (r.Missing is { Count: > 0 }) {
             <p>@UpdateText.AddMissingResult(placement.Placed.Count(p => p.Taxon.TaxonId > 0), r.MissingTotal)</p>
         }
         @if (r.MissingExtra is { Count: > 0 } extraMissing) {
             <p>@UpdateText.AddExtraResult(placement.Placed.Count(p => p.Taxon.TaxonId < 0), extraMissing.Count)</p>
         }
+        var newHeadings = placement.Placed.Where(p => p.NewHeading && p.Heading is not null).Select(p => p.Heading!).Distinct().ToList();
+        @if (newHeadings.Count > 0) {
+            <p>@UpdateText.NewHeadings(newHeadings)</p>
+        }
         @if (placement.Placed.Count > 0) {
+            var headings = placement.Placed.Any(p => p.Heading is not null);
             <div class="table-scroll">
                 <table class="update-report">
-                    <thead><tr><th scope="col">@UpdateText.ColumnTaxon</th><th scope="col">@UpdateText.ColumnPlacedNextTo</th><th scope="col">@UpdateText.ColumnLine</th></tr></thead>
+                    <thead><tr><th scope="col">@UpdateText.ColumnTaxon</th>@if (headings) {<th scope="col">@UpdateText.ColumnHeading</th>}<th scope="col">@UpdateText.ColumnPlacedNextTo</th><th scope="col">@UpdateText.ColumnLine</th></tr></thead>
                     <tbody>
                         @foreach (var p in placement.Placed) {
                             <tr>
                                 <td>@if (p.Taxon.TaxonId > 0) {<a href="/species/@p.Taxon.TaxonId">@Html.Raw(ScientificNameMarkup.ToHtml(p.Taxon.ScientificName))</a>} else {@Html.Raw(ScientificNameMarkup.ToHtml(p.Taxon.ScientificName))}</td>
+                                @if (headings) {<td>@(p.Heading is { } h ? p.NewHeading ? UpdateText.NewHeadingValue(h) : h : "")</td>}
                                 <td>@UpdateText.PlacedNextTo(p.Before) @if (p.NeighbourTaxon is { } n) {<a href="/species/@n.TaxonId">@Html.Raw(ScientificNameMarkup.ToHtml(p.NeighbourName))</a>} else {@Html.Raw(ScientificNameMarkup.ToHtml(p.NeighbourName))}</td>
                                 <td>@p.NeighbourLine.ToString("N0", System.Globalization.CultureInfo.InvariantCulture)</td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+        @if (placement.Unplaced.Count > 0) {
+            <div class="table-scroll">
+                <table class="update-report">
+                    <thead><tr><th scope="col">@UpdateText.ColumnTaxon</th><th scope="col">@UpdateText.ColumnWhyNotAdded</th></tr></thead>
+                    <tbody>
+                        @foreach (var t in placement.Unplaced) {
+                            <tr>
+                                <td>@if (t.TaxonId > 0) {<a href="/species/@t.TaxonId">@Html.Raw(ScientificNameMarkup.ToHtml(t.ScientificName))</a>} else {@Html.Raw(ScientificNameMarkup.ToHtml(t.ScientificName))}</td>
+                                <td>@UpdateText.UnplacedReasonText(placement.UnplacedReasons.GetValueOrDefault(t.TaxonId))</td>
                             </tr>
                         }
                     </tbody>
@@ -165,7 +189,7 @@
     @if (toCopy is { Count: > 0 } copy) {
         <div class="wikitext-box">
             <div class="wikitext-box-head">
-                <label for="scope-missing">@(placement is null ? UpdateText.MissingLinesLabel : UpdateText.UnplacedLinesLabel(copy.Count))</label>
+                <label for="scope-missing">@(placing ? UpdateText.UnplacedLinesLabel(copy.Count) : UpdateText.MissingLinesLabel)</label>
                 <button type="button" class="copy-button" data-copy="scope-missing" aria-label="@UpdateText.CopyMissingAccessible" hidden>@SiteText.Copy</button>
                 <p class="copy-status" role="status" aria-live="polite"></p>
             </div>
@@ -227,7 +251,26 @@
     }
     @if (r.OtherCategory.Count > 0) {
         <h4>@UpdateText.OtherCategoryHeading(r.OtherCategory.Count, r.Categories!)</h4>
-        @await Html.PartialAsync("_ListScopeMembers", new ListScopeMembersView(r.OtherCategory, Model.Epbc))
+        @if (Model.Removing is null) {
+            @* Off: a button that sends the text again with every taxon ticked. On: a checkbox on
+               each row, sent with the key of the text, so that unticking all of them means none. *@
+            <p class="update-scope-add">
+                <button type="submit" form="update-form" name="@UpdateModel.RemoveAllField" value="1" aria-describedby="scope-remove-help">@UpdateText.RemoveButton</button>
+            </p>
+            <p class="help" id="scope-remove-help">@UpdateText.RemoveHelp</p>
+            @await Html.PartialAsync("_ListScopeMembers", new ListScopeMembersView(r.OtherCategory, Model.Epbc))
+        } else {
+            <input type="hidden" name="@UpdateModel.RemoveShownField" value="@Model.TextKey" form="update-form">
+            <p>@UpdateText.RemoveResult(placement?.Removed.Count ?? 0, r.OtherCategory.Count)</p>
+            @if (placement?.RemovedHeadings is { Count: > 0 } removedHeadings) {
+                <p>@UpdateText.RemovedHeadings(removedHeadings)</p>
+            }
+            @await Html.PartialAsync("_ListScopeMembers", new ListScopeMembersView(r.OtherCategory, Model.Epbc) {
+                Removing = Model.Removing,
+                Kept = placement?.Kept.ToDictionary(k => k.Member.Taxon.TaxonId, k => k.Reason) ?? [],
+            })
+            <p class="update-scope-add"><span class="help">@UpdateText.RemoveInstruction</span> <button type="submit" form="update-form">@UpdateText.Submit</button></p>
+        }
     }
     @if (r.Outside.Count > 0) {
         <h4>@UpdateText.OutsideHeading(r.Outside.Count, r.Scope)</h4>
