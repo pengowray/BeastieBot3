@@ -10,7 +10,7 @@ namespace BeastieBot3.Shared.SiteData;
 // each taxon's latest global assessment (taxon_area) are here only to compare a list with the one
 // area a reader chooses on the status update page; no page lists a taxon's areas.
 public static class SiteDbSchema {
-    public const int Version = 23;
+    public const int Version = 24;
 
     public const string Ddl = """
         CREATE TABLE meta (
@@ -188,6 +188,46 @@ public static class SiteDbSchema {
                                                               -- 'Birds 2021 (Robertson et al. 2021)'
         );
         CREATE INDEX other_status_taxon ON other_status(taxon_id);
+
+        -- The taxon's IUCN Green Status of Species assessment, from the API cache's green_status table
+        -- (`iucn api green-status`); the latest one when the cache has two. IUCN's justification text
+        -- is left out. Scores are whole percentages as IUCN gives them (they can be negative); NULL
+        -- when not given.
+        CREATE TABLE green_status (
+            taxon_id               INTEGER PRIMARY KEY,
+            red_list_assessment_id INTEGER,            -- the Red List assessment of the page that shows it
+            url                    TEXT NOT NULL,      -- that page
+            assessment_date        TEXT NOT NULL,      -- yyyy-mm-dd
+            published_year         INTEGER,            -- the year of the Red List release it first appeared in, when the API cache saw that;
+                                                       -- NULL when it was already in the first download
+            red_list_year          INTEGER,            -- the year the Red List assessment of the same page was published, when the site has it
+            recovery_category      TEXT,               -- species recovery category: 'Largely Depleted'
+            recovery_best          INTEGER,            -- Species Recovery Score
+            recovery_min           INTEGER,
+            recovery_max           INTEGER,
+            legacy_category        TEXT,               -- Conservation Legacy
+            legacy_best            INTEGER,
+            legacy_min             INTEGER,
+            legacy_max             INTEGER,
+            dependence_category    TEXT,               -- Conservation Dependence
+            dependence_best        INTEGER,
+            dependence_min         INTEGER,
+            dependence_max         INTEGER,
+            gain_category          TEXT,               -- Conservation Gain
+            gain_best              INTEGER,
+            gain_min               INTEGER,
+            gain_max               INTEGER,
+            potential_category     TEXT,               -- Recovery Potential
+            potential_best         INTEGER,
+            potential_min          INTEGER,
+            potential_max          INTEGER,
+            assessors              TEXT,               -- as IUCN writes them: 'Salcedo, J., Garrote, G. & Breitenmoser, U.'
+            reviewers              TEXT,
+            contributors           TEXT,
+            facilitators           TEXT,
+            compilers              TEXT,
+            citation_json          TEXT NOT NULL       -- IucnCitationParts: the assessors as authors, Year = the year assessed
+        ) WITHOUT ROWID;
 
         -- The countries and parts of countries (areas) that the latest global assessments code, for
         -- the status update page's comparison of a list with one area. Hash-coded regions ("Europe")
@@ -456,6 +496,9 @@ public static class SiteDbSchema {
         public const string NztcsFetched = "nztcs_fetched";
         /// When `statuses salve-import` last downloaded SALVE's assessments ('yyyy-MM-dd').
         public const string SalveFetched = "salve_fetched";
+        /// When `iucn api green-status` last downloaded the Green Status assessments ('yyyy-MM-dd'), for
+        /// the access date of their citations.
+        public const string GreenStatusFetched = "green_status_fetched";
         /// The newest checked_at date ('yyyy-MM-dd') of any row of `iucn resolve-dois`'s doi_check
         /// table, whether the DOI was found in Crossref's list, found at doi.org or not found, when the
         /// build read that cache.

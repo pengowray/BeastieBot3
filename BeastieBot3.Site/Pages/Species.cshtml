@@ -220,6 +220,12 @@
                         }
                     </div>
                 }
+                @if (box.Id == "wikitext-green") {
+                    <div class="citation-notes">
+                        <p class="note">@(Model.Options.GreenStatusYear == GreenStatusYearRule.Published ? SiteText.GreenStatusCiteNoteYearPublished : SiteText.GreenStatusCiteNoteYearAssessed)</p>
+                        <p class="note">@SiteText.GreenStatusCiteNoteNumber</p>
+                    </div>
+                }
             </div>
         }
         @if (Model.Credits is { } creditsWithoutCitation && !Model.Boxes.Any(b => b.Id == "wikitext-cite")) {
@@ -266,6 +272,17 @@
                         <p class="help" id="refname-help">@SiteText.RefNameHelp</p>
                     </div>
                     <partial name="_StatusRefTemplate" model="Model" />
+                    @if (Model.GreenStatus is not null) {
+                        <fieldset class="option-group">
+                            <legend>@SiteText.GreenStatusYearLegend</legend>
+                            <label><input type="radio" name="@WikitextOptions.GreenStatusYearKey" value="assessed" checked="@(Model.Options.GreenStatusYear == GreenStatusYearRule.Assessed)" aria-describedby="gsyear-help"> @SiteText.GreenStatusYearAssessed</label>
+                            <label><input type="radio" name="@WikitextOptions.GreenStatusYearKey" value="@WikitextOptions.GreenStatusYearPublished" checked="@(Model.Options.GreenStatusYear == GreenStatusYearRule.Published)" aria-describedby="gsyear-help"> @SiteText.GreenStatusYearPublished</label>
+                            <p class="help" id="gsyear-help">@SiteText.GreenStatusYearHelp</p>
+                        </fieldset>
+                    } else if (Model.Options.GreenStatusYear == GreenStatusYearRule.Published) {
+                        @* Kept for the next page shown, which may have a Green Status. *@
+                        <input type="hidden" name="@WikitextOptions.GreenStatusYearKey" value="@WikitextOptions.GreenStatusYearPublished">
+                    }
                     <div class="option-group">
                         <label><input type="checkbox" name="amp" value="1" checked="@Model.Options.Amp" aria-describedby="amp-help"> @Html.Raw(SiteText.AmpHtml)</label>
                         <p class="help" id="amp-help">@SiteText.AmpHelp</p>
@@ -434,6 +451,10 @@
             </table>
         </div>
     </section>
+}
+
+@if (Model.GreenStatus is { } greenStatus) {
+    <partial name="_GreenStatus" model="greenStatus" />
 }
 
 @if (Model.OtherStatusSection is { } otherStatuses) {<partial name="_OtherStatuses" model="otherStatuses" />}

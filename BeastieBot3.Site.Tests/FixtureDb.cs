@@ -341,6 +341,20 @@ public static class FixtureDb {
             (CreditTypes.Assessor, ["Scott Schliebe"], false, 2),
             (CreditTypes.Evaluator, ["Derocher, A. & Lunn, N."], true, 0));
         w.Name(Tiger, "Panthera tigris", "scientific", null, "iucn");
+        // A Green Status assessment, assessed in 2021 and shown on the page of the 2022 Red List
+        // assessment; published year not known.
+        w.Run("""
+            INSERT INTO green_status (taxon_id, red_list_assessment_id, url, assessment_date, published_year, red_list_year,
+                recovery_category, recovery_best, recovery_min, recovery_max, legacy_category, legacy_best, legacy_min, legacy_max,
+                dependence_category, dependence_best, dependence_min, dependence_max, gain_category, gain_best, gain_min, gain_max,
+                potential_category, potential_best, potential_min, potential_max, assessors, reviewers, contributors, facilitators, compilers,
+                citation_json)
+            VALUES (@a, @b, @c, '2021-06-30', NULL, 2022, 'Largely Depleted', 19, 12, 29, 'Medium', 17, -42, 58,
+                'High', 30, 30, 30, 'Low', 5, 0, 10, 'High', 60, 40, 80, 'Goodrich, J. & Smith, A.', 'Carroll, J.', NULL, 'Cygan, M.G.W.', NULL, @d)
+            """, Tiger, TigerLatest, $"https://www.iucnredlist.org/species/{Tiger}/{TigerLatest}",
+            new IucnCitationParts { TaxonId = Tiger, AssessmentId = TigerLatest, Year = 2021, ScientificName = "Panthera tigris",
+                Authors = [Person("Goodrich", "J."), Person("Smith", "A.")] }.ToJson());
+        w.Meta(SiteDbSchema.MetaKeys.GreenStatusFetched, "2026-10-08");
         w.Name(Tiger, "Tiger", "common", "en", "iucn", preferred: true);
         w.Name(Tiger, "Big cat", "common", "en", "wikidata");
         w.Name(Tiger, "Felis tigris", "synonym", null, "iucn");
@@ -922,7 +936,7 @@ public static class FixtureDb {
             Run("INSERT OR IGNORE INTO name_key(key, taxon_id, name_id) VALUES (@a, @b, @c)", SiteNameKey.Fold(name), taxonId, nameId);
         }
 
-        private void Run(string sql, params object?[] values) {
+        internal void Run(string sql, params object?[] values) {
             using var command = connection.CreateCommand();
             command.Transaction = tx;
             command.CommandText = sql;

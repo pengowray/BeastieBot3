@@ -350,6 +350,10 @@ internal sealed class SiteBuildStats {
     public int NztcsAssessments;
     public int NztcsMatched;
     public string? NztcsFetched;
+    /// Taxa with a Green Status assessment in the API cache, and those written (taxa on the site).
+    public int GreenStatusRecords;
+    public int GreenStatusTaxa;
+    public string? GreenStatusFetched;
     /// Current SALVE assessments, and those matched to a taxon.
     public int SalveAssessments;
     public int SalveMatched;

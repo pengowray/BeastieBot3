@@ -114,6 +114,18 @@ public sealed record EpbcListingRow(long SpratTaxonId, string ListedName, string
 public sealed record OtherStatusRow(string System, string Status, string? StatusCode, string? ListedName, string? Population,
     string Source, string SourceId, string? Url, string? ListedOn, string? Report = null);
 
+/// A taxon's IUCN Green Status of Species assessment (green_status). Scores are whole percentages.
+/// PublishedYear: the year of the Red List release it first appeared in, when known. RedListYear: the
+/// year the Red List assessment on the same page was published.
+public sealed record GreenStatusRow(long? RedListAssessmentId, string Url, string AssessmentDate, int? PublishedYear, int? RedListYear,
+    GreenStatusMetric Recovery, GreenStatusMetric Legacy, GreenStatusMetric Dependence, GreenStatusMetric Gain, GreenStatusMetric Potential,
+    string? Assessors, string? Reviewers, string? Contributors, string? Facilitators, string? Compilers, string CitationJson) {
+    public int AssessedYear => int.Parse(AssessmentDate.AsSpan(0, 4), System.Globalization.CultureInfo.InvariantCulture);
+}
+
+/// A category with a score and its range: the Species Recovery Score, or a Conservation Impact Metric.
+public sealed record GreenStatusMetric(string? Category, int? Best, int? Min, int? Max);
+
 /// One search result: the taxon and the name that matched best.
 /// IsStrongExactMatch: an exact match on the taxon's scientific name, a synonym, its English name
 /// for display (common_name_en) or the title of its English Wikipedia article. An exact match on any

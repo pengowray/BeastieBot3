@@ -1,0 +1,55 @@
+@model BeastieBot3.Site.Data.GreenStatusRow
+@using BeastieBot3.Site.Display
+@* The taxon's IUCN Green Status of Species assessment. IUCN's justification text is not on the site. *@
+<section class="green-status" id="green-status" aria-labelledby="green-status-heading">
+    <h2 id="green-status-heading">@SiteText.HeadingGreenStatus</h2>
+    <p>@SiteText.GreenStatusIntro</p>
+    <dl class="green-status-summary">
+        @if (Model.Recovery.Category is { } category) {
+            <dt>@SiteText.GreenStatusRecoveryCategory</dt>
+            <dd><strong>@category</strong></dd>
+        }
+        @if (SiteText.GreenStatusScore(Model.Recovery) is { } score) {
+            <dt>@SiteText.GreenStatusRecoveryScore</dt>
+            <dd>@score</dd>
+        }
+        <dt>@SiteText.GreenStatusAssessed</dt>
+        <dd>@SiteFormat.Date(Model.AssessmentDate)</dd>
+    </dl>
+    <h3>@SiteText.GreenStatusMetricsHeading</h3>
+    <div class="table-scroll">
+        <table>
+            <thead>
+                <tr>
+                    <th scope="col">@SiteText.GreenStatusColMetric</th>
+                    <th scope="col">@SiteText.GreenStatusColCategory</th>
+                    <th scope="col">@SiteText.GreenStatusColScore</th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var (name, help, metric) in new[] {
+                    (SiteText.GreenStatusLegacy, SiteText.GreenStatusLegacyHelp, Model.Legacy),
+                    (SiteText.GreenStatusDependence, SiteText.GreenStatusDependenceHelp, Model.Dependence),
+                    (SiteText.GreenStatusGain, SiteText.GreenStatusGainHelp, Model.Gain),
+                    (SiteText.GreenStatusPotential, SiteText.GreenStatusPotentialHelp, Model.Potential) }) {
+                    <tr>
+                        <th scope="row">@name<span class="metric-help">@help</span></th>
+                        <td>@metric.Category</td>
+                        <td>@SiteText.GreenStatusScore(metric)</td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    </div>
+    <dl class="green-status-people">
+        @foreach (var (role, names) in new[] {
+            ("assessors", Model.Assessors), ("reviewers", Model.Reviewers), ("facilitators", Model.Facilitators),
+            ("contributors", Model.Contributors), ("compilers", Model.Compilers) }) {
+            if (names is not null) {
+                <dt>@SiteText.GreenStatusPeople(role, names)</dt>
+                <dd>@names</dd>
+            }
+        }
+    </dl>
+    <p><a href="@Model.Url">@SiteText.GreenStatusLink</a></p>
+</section>

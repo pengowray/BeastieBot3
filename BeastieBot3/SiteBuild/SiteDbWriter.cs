@@ -160,6 +160,30 @@ internal sealed class SiteDbWriter : IDisposable {
         }
     }
 
+    public void AddGreenStatuses(IReadOnlyList<SiteGreenStatus> rows) {
+        using var command = Prepare("""
+            INSERT INTO green_status (taxon_id, red_list_assessment_id, url, assessment_date, published_year, red_list_year,
+                recovery_category, recovery_best, recovery_min, recovery_max, legacy_category, legacy_best, legacy_min, legacy_max,
+                dependence_category, dependence_best, dependence_min, dependence_max, gain_category, gain_best, gain_min, gain_max,
+                potential_category, potential_best, potential_min, potential_max, assessors, reviewers, contributors, facilitators, compilers,
+                citation_json)
+            VALUES (@a, @b, @c, @d, @e, @f, @g, @h, @i, @j, @k, @l, @m, @n, @o, @p, @q, @r, @s, @t, @u, @v, @w, @x, @y, @z,
+                @aa, @ab, @ac, @ad, @ae, @af)
+            """,
+            "@a", "@b", "@c", "@d", "@e", "@f", "@g", "@h", "@i", "@j", "@k", "@l", "@m", "@n", "@o", "@p", "@q", "@r", "@s", "@t", "@u", "@v",
+            "@w", "@x", "@y", "@z", "@aa", "@ab", "@ac", "@ad", "@ae", "@af");
+        foreach (var g in rows) {
+            Bind(command, g.TaxonId, g.RedListAssessmentId, g.Url, g.AssessmentDate, g.PublishedYear, g.RedListYear,
+                g.Recovery.Category, g.Recovery.Best, g.Recovery.Min, g.Recovery.Max,
+                g.Legacy.Category, g.Legacy.Best, g.Legacy.Min, g.Legacy.Max,
+                g.Dependence.Category, g.Dependence.Best, g.Dependence.Min, g.Dependence.Max,
+                g.Gain.Category, g.Gain.Best, g.Gain.Min, g.Gain.Max,
+                g.Potential.Category, g.Potential.Best, g.Potential.Min, g.Potential.Max,
+                g.Assessors, g.Reviewers, g.Contributors, g.Facilitators, g.Compilers, g.CitationJson);
+            command.ExecuteNonQuery();
+        }
+    }
+
     public void AddTaxonLink(SiteTaxonLink link) {
         Bind(_taxonLink, link.TaxonId, link.CurrentTaxonId, link.Kind);
         _taxonLink.ExecuteNonQuery();

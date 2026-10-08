@@ -85,6 +85,44 @@ public static partial class CiteIucnRenderer {
             : $"<ref name=\"{refName}\">{template}</ref>";
     }
 
+    /// {{cite iucn}} for a Green Status assessment, on one line: the authors, |year=, |type=Green Status
+    /// assessment, |title=, |volume= and |url= (the Red List page that shows it), as Template talk:Cite
+    /// IUCN found works (August 2026). There is no |article-number= or |doi=: the number IUCN's own
+    /// citation prints ("e.T12520A1252020261") ends with the current Red List version, so it changes
+    /// every release, and Module:Cite IUCN builds a link from it that does not exist. parts.Year is
+    /// the year to cite (GreenStatusYear); its TaxonId and AssessmentId are not used.
+    public static string RenderGreenStatus(IucnCitationParts parts, string url, CiteIucnOptions? options = null) {
+        options ??= new CiteIucnOptions();
+        var p = new List<(string Name, string Value)>();
+        var authorCount = AddAuthors(p, parts, options.AuthorStyle, options.FullGivenNames, out var etAlInNames);
+        if (authorCount > 0 && (parts.AuthorsEtAl || etAlInNames)) {
+            p.Add(("display-authors", "etal"));
+        }
+        if (authorCount > 1 && options.NameListStyleAmp) {
+            p.Add(("name-list-style", "amp"));
+        }
+        var year = parts.Year.ToString(CultureInfo.InvariantCulture);
+        p.Add(("year", year));
+        p.Add(("type", "Green Status assessment"));
+        p.Add(("title", ScientificNameMarkup.ToWikitext(WikitextValue.Clean(parts.ScientificName), WikitextValue.Clean(parts.SubpopulationName))));
+        p.Add(("volume", year));
+        p.Add(("url", WikitextValue.Clean(url)));
+        if (options.AccessDate is { } accessed) {
+            p.Add(("access-date", accessed.ToString("d MMMM yyyy", CultureInfo.InvariantCulture)));
+        }
+        var sb = new StringBuilder("{{cite iucn");
+        foreach (var (name, value) in p) {
+            sb.Append(" |").Append(name).Append('=').Append(value);
+        }
+        sb.Append("}}");
+        var template = sb.ToString();
+        if (!options.WrapInRef) {
+            return template;
+        }
+        var refName = SanitizeRefName(options.RefName);
+        return refName.Length == 0 ? $"<ref>{template}</ref>" : $"<ref name=\"{refName}\">{template}</ref>";
+    }
+
     // Writes the author parameters and returns how many authors were written. An "et al." written
     // inside a name (IUCN's "Jaffré, T. <i>et al.</i>") is removed from the name and reported, since
     // CS1 flags a name containing it.

@@ -942,6 +942,14 @@ abbr[title] {
     margin-top: 0.25rem;
 }
 
+/* IUCN Green Status: what each Conservation Impact Metric measures, under its name. */
+.green-status .metric-help {
+    display: block;
+    font-weight: normal;
+    font-size: 0.85rem;
+    color: var(--muted);
+}
+
 /* Other conservation statuses: a cell whose source gives no value. */
 .other-statuses .no-value {
     color: var(--muted);

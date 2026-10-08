@@ -332,6 +332,8 @@ internal sealed class SiteBuildDbCommand : Command<SiteBuildDbCommand.Settings> 
         Row("NZTCS assessments matched to a taxon", s.NztcsMatched);
         Row("SALVE assessments (Brazil's fauna) with a known category", s.SalveAssessments);
         Row("SALVE assessments matched to a taxon", s.SalveMatched);
+        Row("Taxa with an IUCN Green Status assessment in the API cache", s.GreenStatusRecords);
+        Row("Of those, taxa on the site", s.GreenStatusTaxa);
 
         Section("Groups (higher taxa)");
         Row("Groups", s.TreeNodes);

@@ -140,6 +140,31 @@ public sealed partial class SiteQueries {
         return rows;
     }
 
+    /// The taxon's IUCN Green Status assessment; null when it has none.
+    public GreenStatusRow? GetGreenStatus(long taxonId) {
+        using var connection = _db.OpenConnection();
+        using var command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT red_list_assessment_id, url, assessment_date, published_year, red_list_year,
+                recovery_category, recovery_best, recovery_min, recovery_max, legacy_category, legacy_best, legacy_min, legacy_max,
+                dependence_category, dependence_best, dependence_min, dependence_max, gain_category, gain_best, gain_min, gain_max,
+                potential_category, potential_best, potential_min, potential_max, assessors, reviewers, contributors, facilitators, compilers,
+                citation_json
+            FROM green_status
+            WHERE taxon_id = @id
+            """;
+        command.Parameters.AddWithValue("@id", taxonId);
+        using var reader = command.ExecuteReader();
+        if (!reader.Read()) {
+            return null;
+        }
+        int? Int(int i) => reader.IsDBNull(i) ? null : reader.GetInt32(i);
+        GreenStatusMetric Metric(int i) => new(Text(reader, i), Int(i + 1), Int(i + 2), Int(i + 3));
+        return new GreenStatusRow(reader.IsDBNull(0) ? null : reader.GetInt64(0), reader.GetString(1), reader.GetString(2), Int(3), Int(4),
+            Metric(5), Metric(9), Metric(13), Metric(17), Metric(21),
+            Text(reader, 25), Text(reader, 26), Text(reader, 27), Text(reader, 28), Text(reader, 29), reader.GetString(30));
+    }
+
     /// The taxon's statuses in lists other than the IUCN Red List, in the order of
     /// OtherStatusSystems.All; within a list, the listing of the whole taxon first, then those of
     /// populations by name.

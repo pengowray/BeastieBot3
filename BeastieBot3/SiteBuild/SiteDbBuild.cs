@@ -236,6 +236,12 @@ internal sealed class SiteDbBuild {
             });
         }
 
+        var greenStatuses = new List<SiteGreenStatus>();
+        Phase("Reading IUCN Green Status assessments", () => {
+            greenStatuses = SiteGreenStatusReader.Read(_inputs.ApiCache, taxa, _stats, ct);
+            return $"{_stats.GreenStatusTaxa:N0} of {_stats.GreenStatusRecords:N0} taxa with a Green Status assessment are on the site";
+        });
+
         Phase("Writing taxa and names", () => {
             writer.AddHigherTaxa(tree.Nodes);
             foreach (var taxon in taxonList) {
@@ -252,6 +258,7 @@ internal sealed class SiteDbBuild {
             foreach (var link in taxonLinks) {
                 writer.AddTaxonLink(link);
             }
+            writer.AddGreenStatuses(greenStatuses);
             if (extras is not null) {
                 ExtraSpecies.ExtraSpeciesWriter.Write(writer, extras);
             }
@@ -508,6 +515,7 @@ internal sealed class SiteDbBuild {
         writer.SetMeta(SiteDbSchema.MetaKeys.EcosFetched, _stats.EcosFetched);
         writer.SetMeta(SiteDbSchema.MetaKeys.NztcsFetched, _stats.NztcsFetched);
         writer.SetMeta(SiteDbSchema.MetaKeys.SalveFetched, _stats.SalveFetched);
+        writer.SetMeta(SiteDbSchema.MetaKeys.GreenStatusFetched, _stats.GreenStatusFetched);
         writer.SetMeta(SiteDbSchema.MetaKeys.IucnDoiCheckedTo, _stats.DoiCheckedTo?.ToString("yyyy-MM-dd", CultureInfo.InvariantCulture));
         writer.SetMeta(SiteDbSchema.MetaKeys.WikidataItemModel, _inputs.WikidataItemModel.ToJson());
         _stats.WikidataItemModelSource = _inputs.WikidataItemModelSource;

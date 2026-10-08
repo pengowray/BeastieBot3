@@ -134,6 +134,9 @@ public sealed class SpeciesModel : PageModel {
     /// of OtherStatusSystems.All.
     public IReadOnlyList<OtherStatusRow> OtherStatuses { get; private set; } = [];
 
+    /// The taxon's IUCN Green Status assessment; null when it has none.
+    public GreenStatusRow? GreenStatus { get; private set; }
+
     /// The "Other conservation statuses" section built from OtherStatuses; null when there are none.
     public OtherStatusSection? OtherStatusSection { get; private set; }
 
@@ -251,7 +254,8 @@ public sealed class SpeciesModel : PageModel {
 
     public IActionResult OnGet(long taxonId, long? assessment, string? authors, string? access, string? opts,
         [FromQuery(Name = "ref")] string? wrapRef, string? refname, string? amp, string? fullnames, string? q,
-        [FromQuery(Name = IucnReference.QueryKey)] string? cite = null) {
+        [FromQuery(Name = IucnReference.QueryKey)] string? cite = null,
+        [FromQuery(Name = WikitextOptions.GreenStatusYearKey)] string? gsyear = null) {
         RequestedTaxonId = taxonId;
         var snapshot = _db.Snapshot;
         Version = snapshot?.IucnRelease;
@@ -272,6 +276,7 @@ public sealed class SpeciesModel : PageModel {
         LinkedTaxa = _queries.GetLinkedTaxa(Taxon.TaxonId);
         EpbcListings = _queries.GetEpbcListings(Taxon.TaxonId);
         OtherStatuses = _queries.GetOtherStatuses(Taxon.TaxonId);
+        GreenStatus = _queries.GetGreenStatus(Taxon.TaxonId);
         OtherStatusSection = OtherStatuses.Count == 0 ? null : Display.OtherStatusSection.Build(OtherStatuses, Taxon.Kind, OtherStatusSourceDate);
         ExtraPairs = _queries.GetExtraOverlapsOfTaxon(Taxon.TaxonId);
         LoadAssessments(assessment);
@@ -286,6 +291,7 @@ public sealed class SpeciesModel : PageModel {
         Options = WikitextOptions.FromQuery(authors, access, opts, wrapRef, refname, amp,
             Selected is null ? DefaultRefNames.LatestGlobal : DefaultRefNameFor(Selected), fullnames) with {
             Template = IucnReference.FromQuery(cite),
+            GreenStatusYear = WikitextOptions.ReadGreenStatusYear(gsyear),
         };
         Taxobox = TaxoboxTemplate.For(Taxon.Kind, Taxon.Kingdom);
         BuildWikitext();
@@ -417,6 +423,13 @@ public sealed class SpeciesModel : PageModel {
                 Selected.CriteriaVersion, statusRef);
             boxes.Add(new WikitextBox("wikitext-speciesbox", Taxobox.Label, Taxobox.Name, lines, Rows: 5));
         }
+        if (GreenStatus is { } green && IucnCitationParts.FromJson(green.CitationJson) is { } greenParts) {
+            var greenDownloaded = SiteFormat.TryParseDate(_db.Snapshot?.Get(SiteDbSchema.MetaKeys.GreenStatusFetched), out var g) ? g : (DateOnly?)null;
+            var year = BeastieBot3.Shared.Wikitext.GreenStatusYear.For(Options.GreenStatusYear, green.AssessedYear, green.PublishedYear, green.RedListYear);
+            var greenOptions = Options.ToCiteIucnOptions(today, greenDownloaded) with { RefName = GreenStatusRefName };
+            boxes.Add(new WikitextBox("wikitext-green", SiteText.GreenStatusCiteLabel, "{{cite iucn}}",
+                CiteIucnRenderer.RenderGreenStatus(greenParts with { Year = year }, green.Url, greenOptions), Rows: 4));
+        }
         Boxes = boxes;
 
         Wikidata = WikidataCite.Build(Selected, Parts, Taxon?.WikidataQid, ReadItemModel(), Options.ToCiteQOptions(today, downloaded),
@@ -427,6 +440,9 @@ public sealed class SpeciesModel : PageModel {
                 (what, e) => _logger.LogWarning(e, "{Method} failed for taxon {TaxonId}", what, Taxon.TaxonId));
         }
     }
+
+    /// The ref name of the Green Status citation, beside the Red List assessment's "iucn".
+    public const string GreenStatusRefName = "iucn-green";
 
     // The assessment item model `site build-db` stored; the defaults when it stored none. Null when
     // the stored model cannot be read, so the page offers no QuickStatements commands rather than

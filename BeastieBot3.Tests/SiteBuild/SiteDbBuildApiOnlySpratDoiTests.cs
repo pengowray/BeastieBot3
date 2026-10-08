@@ -170,6 +170,29 @@ public sealed class SiteDbBuildApiOnlySpratDoiTests : IDisposable {
         Assert.Equal("2026-10-07", Scalar(db, "SELECT value FROM meta WHERE key = 'ecos_fetched'"));
     }
 
+    // green_status: one row per taxon on the site (its newest assessment), the scores as numbers, the
+    // assessors as citation authors with the year assessed, the published year only for a row first
+    // seen after the first download, and no justification text.
+    [Fact]
+    public void Build_StoresGreenStatus() {
+        using var db = OpenReadOnly(Build());
+        var koala = Assert.Single(Rows(db, $"""
+            SELECT assessment_date, published_year, red_list_year, recovery_category, recovery_best, recovery_min, recovery_max,
+                legacy_min, assessors, reviewers, contributors, url
+            FROM green_status WHERE taxon_id = {Koala}
+            """));
+        Assert.Equal(new object?[] { "2023-10-31", null, 2016L, "Largely Depleted", 22L, 17L, 31L, -42L,
+            "Salcedo, J., Garrote, G. & Breitenmoser, U.", "Carroll, J.", null, $"https://www.iucnredlist.org/species/{Koala}/{KoalaLatest}" }, koala);
+        Assert.Equal(2026L, Convert.ToInt64(Scalar(db, $"SELECT published_year FROM green_status WHERE taxon_id = {Leopard}")));
+        Assert.Equal("2", Scalar(db, "SELECT COUNT(*) FROM green_status"));
+        Assert.Equal("0", Scalar(db, "SELECT COUNT(*) FROM green_status WHERE citation_json LIKE '%Narrative%'"));
+
+        var parts = IucnCitationParts.FromJson(Scalar(db, $"SELECT citation_json FROM green_status WHERE taxon_id = {Koala}"))!;
+        Assert.Equal(2023, parts.Year);
+        Assert.Equal(new[] { "Salcedo", "Garrote", "Breitenmoser" }, parts.Authors.Select(a => a.Last));
+        Assert.Equal("2026-10-08", Scalar(db, "SELECT value FROM meta WHERE key = 'green_status_fetched'"));
+    }
+
     // A listed name that differs from SPRAT's scientific name is stored; a voucher in brackets is
     // not a population; a sense in brackets is the whole taxon.
     [Fact]
@@ -396,6 +419,36 @@ public sealed class SiteDbBuildApiOnlySpratDoiTests : IDisposable {
                 new CachedAssessment(KoalaLatest, Koala, downloaded, Payload(KoalaLatest, Koala, "Phascolarctos cinereus", "2016", "Woinarski, J. 2016. Phascolarctos cinereus. The IUCN Red List of Threatened Species 2016: e.T16892A166496779. Accessed on 18 August 2026.", "Woinarski, J.")),
                 new CachedAssessment(LeopardLatest, Leopard, downloaded, Payload(LeopardLatest, Leopard, "Panthera pardus", "2024", "Stein, A.B. 2024. Panthera pardus. The IUCN Red List of Threatened Species 2024: e.T15954A50659089. https://dx.doi.org/10.2305/IUCN.UK.2024-1.RLTS.T15954A50659089.en. Accessed on 18 August 2026.", "Stein, A.B.")),
             });
+        // Green Status: the koala twice (the newer is used), the leopard seen in a later release, and a
+        // taxon the site does not have.
+        using var c = OpenWritable(path);
+        Execute(c, """
+            CREATE TABLE IF NOT EXISTS green_status (sis_id INTEGER NOT NULL, assessment_date TEXT NOT NULL, red_list_assessment_id INTEGER,
+                json TEXT NOT NULL, first_seen_at TEXT NOT NULL, first_seen_version TEXT, baseline INTEGER NOT NULL, last_seen_at TEXT NOT NULL,
+                PRIMARY KEY (sis_id, assessment_date)) WITHOUT ROWID;
+            """);
+        void Green(long sisId, string date, long rlId, string category, string assessors, string version, int baseline) {
+            using var insert = c.CreateCommand();
+            insert.CommandText = "INSERT INTO green_status VALUES (@sis, @date, @rl, @json, 'x', @version, @baseline, '2026-10-08T03:00:00.0000000Z')";
+            insert.Parameters.AddWithValue("@sis", sisId);
+            insert.Parameters.AddWithValue("@date", date);
+            insert.Parameters.AddWithValue("@rl", rlId);
+            insert.Parameters.AddWithValue("@json", $$"""
+                {"assessment_date":"{{date}}","species_recovery_category":"{{category}}","species_recovery_score_best":"22%",
+                 "species_recovery_score_minimum":"17%","species_recovery_score_maximum":"30.5%","conservation_legacy_category":"Medium",
+                 "conservation_legacy_best":"17%","conservation_legacy_minimum":"-42%","conservation_legacy_maximum":"58%",
+                 "assessor_names":"{{assessors}}","reviewer_names":"Carroll, J.","contributors":null,"facilitators":null,"compilers":null,
+                 "justification":"Narrative text that must not reach the site.",
+                 "url":"https://www.iucnredlist.org/species/{{sisId}}/{{rlId}}"}
+                """);
+            insert.Parameters.AddWithValue("@version", version);
+            insert.Parameters.AddWithValue("@baseline", baseline);
+            insert.ExecuteNonQuery();
+        }
+        Green(Koala, "2021-05-01", KoalaLatest, "Moderately Depleted", "Old, A.", "2026-1", 1);
+        Green(Koala, "2023-10-31", KoalaLatest, "Largely Depleted", "Salcedo, J., Garrote, G. & Breitenmoser, U.", "2026-1", 1);
+        Green(Leopard, "2026-03-01", LeopardLatest, "Critically Depleted", "Stein, A.B.", "2026-2", 0);
+        Green(99999999, "2024-01-01", 1, "Indeterminate", "Nobody, N.", "2026-1", 1);
     }
 
     // Only the columns `site build-db` reads.
