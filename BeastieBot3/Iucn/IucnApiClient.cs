@@ -13,8 +13,9 @@ using Spectre.Console;
 // retries 5xx/timeouts with exponential backoff (2s→60s default), and handles 429 Too Many
 // Requests by waiting (Retry-After, or IUCN_API_RATELIMIT_SECONDS when the header is missing)
 // and then sending requests further apart for the rest of the run (IucnApiPace).
-// Endpoints: /api/v4/taxa/sis/{sisId}, /api/v4/assessment/{assessmentId}.
-// Used by the `iucn api cache-*` and `discover-by-family` commands.
+// Endpoints: /api/v4/taxa/sis/{sisId}, /api/v4/assessment/{assessmentId}, /api/v4/taxa/family,
+// /api/v4/green_status/all and /api/v4/information/red_list_version.
+// Used by the `iucn api cache-*`, `discover-by-family` and `green-status` commands.
 
 namespace BeastieBot3.Iucn;
 
@@ -86,7 +87,16 @@ internal sealed class IucnApiClient : IDisposable {
     // release version (e.g. { "red_list_version": "2025-2" }). Used by the web UI
     // freshness check; if IUCN changes this path the caller degrades gracefully.
     public Task<IucnApiResponse> GetRedListVersionAsync(CancellationToken cancellationToken) =>
-        SendAsync("/api/v4/information/red_list_version", cancellationToken);
+        SendAsync(RedListVersionPath, cancellationToken);
+
+    // Every published IUCN Green Status of Species assessment in one answer
+    // ({"assessments":[...]}, about 780 KB for 182 records in October 2026). Used by
+    // `iucn api green-status`.
+    public Task<IucnApiResponse> GetGreenStatusAllAsync(CancellationToken cancellationToken) =>
+        SendAsync(GreenStatusAllPath, cancellationToken);
+
+    public const string GreenStatusAllPath = "/api/v4/green_status/all";
+    public const string RedListVersionPath = "/api/v4/information/red_list_version";
 
     public Task<IucnApiResponse> GetTaxaFamilyListAsync(CancellationToken cancellationToken) =>
         SendAsync("/api/v4/taxa/family/", cancellationToken);
