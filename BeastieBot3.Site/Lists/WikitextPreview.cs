@@ -208,5 +208,7 @@ public static class WikitextPreview {
 
     private static bool At(string text, int i, string token) => string.CompareOrdinal(text, i, token, 0, token.Length) == 0;
 
+    // Not SiteHtml.Encode: that escapes private-use characters, so the reference placeholders
+    // (PreviewRefs.Open and Close) would not reach PreviewRefs.Finish.
     private static string Encode(string text) => WebUtility.HtmlEncode(text);
 }

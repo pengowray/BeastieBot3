@@ -1,4 +1,3 @@
-using System.Net;
 using BeastieBot3.Site.Data;
 using BeastieBot3.Site.Display;
 
@@ -65,5 +64,5 @@ public static class GroupListSources {
     }
 
     private static string Link(string href, string text) =>
-        $"<a href=\"{WebUtility.HtmlEncode(href)}\">{WebUtility.HtmlEncode(text)}</a>";
+        $"<a href=\"{SiteHtml.Encode(href)}\">{SiteHtml.Encode(text)}</a>";
 }
