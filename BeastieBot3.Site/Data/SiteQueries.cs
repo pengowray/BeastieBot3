@@ -199,6 +199,32 @@ public sealed partial class SiteQueries {
             .ToList();
     }
 
+    /// The lists of a status system with several (other_status_list), by country and name; empty for a
+    /// database without the table.
+    public IReadOnlyList<OtherStatusListRow> GetOtherStatusLists(string system) {
+        using var connection = _db.OpenConnection();
+        using var command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT list_key, system, country, region, name, title, sort_order, publisher, licence, licence_url, citation, url, version, fetched
+            FROM other_status_list
+            WHERE system = @system
+            ORDER BY country, name
+            """;
+        command.Parameters.AddWithValue("@system", system);
+        var lists = new List<OtherStatusListRow>();
+        try {
+            using var reader = command.ExecuteReader();
+            while (reader.Read()) {
+                lists.Add(new OtherStatusListRow(reader.GetString(0), reader.GetString(1), Text(reader, 2), Text(reader, 3), reader.GetString(4),
+                    Text(reader, 5), reader.GetInt32(6), Text(reader, 7), Text(reader, 8), Text(reader, 9), Text(reader, 10), Text(reader, 11),
+                    Text(reader, 12), Text(reader, 13)));
+            }
+        } catch (Microsoft.Data.Sqlite.SqliteException) {
+            return [];
+        }
+        return lists;
+    }
+
     /// The reasons IUCN's Table 7 gives for the category changes of these taxa's assessments, by
     /// assessment id.
     public IReadOnlyDictionary<long, CategoryChangeRow> GetCategoryChanges(IReadOnlyCollection<long> taxonIds) {

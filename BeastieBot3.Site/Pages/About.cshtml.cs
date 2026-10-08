@@ -9,12 +9,17 @@ namespace BeastieBot3.Site.Pages;
 
 public sealed class AboutModel : PageModel {
     private readonly SiteDatabase _db;
+    private readonly SiteQueries _queries;
     private readonly SiteOptions _options;
 
-    public AboutModel(SiteDatabase db, IOptions<SiteOptions> options) {
+    public AboutModel(SiteDatabase db, SiteQueries queries, IOptions<SiteOptions> options) {
         _db = db;
+        _queries = queries;
         _options = options.Value;
     }
+
+    /// The national and subnational red lists from GBIF that the site database has, by country.
+    public IReadOnlyList<OtherStatusListRow> RedLists { get; private set; } = [];
 
     public string Version { get; private set; } = "?";
     public string? ReleaseYear { get; private set; }
@@ -78,6 +83,7 @@ public sealed class AboutModel : PageModel {
             return;
         }
         Version = snapshot.IucnRelease ?? "?";
+        RedLists = _queries.GetOtherStatusLists(BeastieBot3.Shared.SiteData.OtherStatusSystems.NationalRedList);
         ReleaseYear = Version.Length >= 4 && Version[..4].All(char.IsAsciiDigit) ? Version[..4] : null;
         if (SiteFormat.TryParseDate(snapshot.Get(SiteDbSchema.MetaKeys.IucnApiDownloadedFrom), out var from)
             && SiteFormat.TryParseDate(snapshot.Get(SiteDbSchema.MetaKeys.IucnApiDownloadedTo), out var to)) {

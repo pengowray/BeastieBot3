@@ -354,6 +354,9 @@ internal sealed class SiteBuildStats {
     public int NatureServeRanks;
     public int NatureServeNationalRanks;
     public int JnccDesignations;
+    public int RedListStatuses;
+    public int RedListMatched;
+    public int RedListRows;
     public int CitesTaxa;
     public int CitesMatched;
     public int CitesByHigherTaxon;

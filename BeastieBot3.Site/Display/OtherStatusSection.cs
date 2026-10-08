@@ -136,8 +136,9 @@ public sealed record OtherStatusSection(IReadOnlyList<OtherStatusTable> Tables, 
             ListedNameHtml: row.ListedName is { } listedName ? ListedNameHtml(listedName) : null,
             row.Report,
             Date: row.ListedOn is { } listedOn ? new OtherStatusCell(SiteFormat.Date(listedOn)) : new OtherStatusCell(SiteText.OtherStatusNoDate, NoValue: true),
-            SourceLinkText: OtherStatusSourceInfo.Find(row.Source)?.LinkText ?? row.Source,
-            row.Url);
+            SourceLinkText: row.System == OtherStatusSystems.NationalRedList ? SiteText.RedListRecordLink(row.Url ?? row.List?.Url)
+                : OtherStatusSourceInfo.Find(row.Source)?.LinkText ?? row.Source,
+            row.System == OtherStatusSystems.NationalRedList ? row.Url ?? row.List?.Url : row.Url);
     }
 
     /// The population or area a status applies to; "not given" when the source does not say (the

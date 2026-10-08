@@ -167,6 +167,14 @@
                         <td>@Model.CitesDate</td>
                     </tr>
                 }
+                @if (Model.RedLists.Count > 0) {
+                    <tr>
+                        <th scope="row">National and regional red lists published on <a href="https://www.gbif.org/">GBIF</a> (@Model.RedLists.Count lists from @Model.RedLists.Select(l => l.Country).Distinct().Count() countries, listed below)</th>
+                        <td>The statuses of species in those countries' red lists</td>
+                        <td>@string.Join(" or ", Model.RedLists.Select(l => l.Licence).OfType<string>().Distinct().Order()), as each dataset gives</td>
+                        <td>@(Model.RedLists.Select(l => l.Fetched).OfType<string>().Max() is { } fetched ? SiteFormat.Date(fetched) : "")</td>
+                    </tr>
+                }
                 @if (Model.EcosDate is not null) {
                     <tr>
                         <th scope="row"><a href="@SiteText.EcosUrl">Environmental Conservation Online System (ECOS)</a>, U.S. Fish and Wildlife Service</th>
@@ -204,6 +212,9 @@
         }
         @if (Model.CitesDate is not null) {
             <li><strong>CITES:</strong> @Html.Raw(AboutModel.CitationHtml($"UNEP-WCMC (Comps.) {Model.CitesYear}. The Checklist of CITES Species Website. CITES Secretariat, Geneva, Switzerland. Compiled by UNEP-WCMC, Cambridge, UK. Available at: http://checklist.cites.org. [Accessed {Model.CitesAccessed}].", "http://checklist.cites.org"))</li>
+        }
+        @foreach (var list in Model.RedLists) {
+            <li><strong>@SiteText.OtherStatusGroup(list.Country ?? ""):</strong> @Html.Raw(AboutModel.CitationHtml(list.Citation ?? list.Name, list.Url ?? "https://www.gbif.org/")) (@list.Licence)</li>
         }
         @if (Model.EcosDate is not null) {
             <li><strong>ECOS:</strong> @Html.Raw(AboutModel.CitationHtml($"U.S. Fish and Wildlife Service. Environmental Conservation Online System (ECOS), listed species. Accessed {Model.EcosDate}.", SiteText.EcosUrl))</li>

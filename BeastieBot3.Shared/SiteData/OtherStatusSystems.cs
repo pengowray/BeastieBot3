@@ -28,6 +28,9 @@ public static class OtherStatusSystems {
     /// The appendices of CITES, the Convention on International Trade in Endangered Species of Wild Fauna
     /// and Flora, from the Checklist of CITES Species.
     public const string Cites = "cites";
+    /// National and subnational red lists published on GBIF (`statuses red-lists-import`), one list per
+    /// other_status_list row, whose country gives the group.
+    public const string NationalRedList = "national-red-list";
     /// JNCC's Conservation Designations for UK Taxa: the UK, Great Britain and UK country red lists, laws
     /// and priority lists, one list per other_status_list row (list_key).
     public const string Jncc = "gb-jncc";
@@ -60,6 +63,7 @@ public static class OtherStatusSystems {
         new(Nztcs, "NZ"),
         new(Jncc, "GB"),
         new(Esa, "US"),
+        new(NationalRedList, null),
         new(NatureServeNational, null),
         new(NatureServeSubnational, null),
         new(NatureServeGlobal, NatureServeGroup),
@@ -225,6 +229,8 @@ public static class OtherStatusSources {
     public const string Salve = "salve";
     /// JNCC's Conservation Designations for UK Taxa; source_id is the taxon version key (UK Species Inventory).
     public const string Jncc = "jncc";
+    /// National and subnational red lists from GBIF; source_id is "<dataset key>:<the archive's taxon id>".
+    public const string RedLists = "red-lists";
     /// The Checklist of CITES Species (UNEP-WCMC); source_id is the Species+ taxon concept id of the
     /// taxon whose listing it is (the higher taxon's, for a listing that covers the taxon as part of it).
     public const string Cites = "cites";

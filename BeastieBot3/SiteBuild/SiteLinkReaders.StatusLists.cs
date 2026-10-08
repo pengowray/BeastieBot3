@@ -28,6 +28,11 @@ internal static partial class SiteLinkReaders {
         } else {
             stats.Warnings.Add($"The status lists store {path} has no CITES listings: run statuses cites-import.");
         }
+        if (DelimitedTableImporter.GetTableColumns(connection, "red_list_taxon") is not null) {
+            lists.AddRange(ReadRedLists(connection, index, stats, cancellationToken));
+        } else {
+            stats.Warnings.Add($"The status lists store {path} has no national red lists: run statuses red-lists-import.");
+        }
         if (DelimitedTableImporter.GetTableColumns(connection, "jncc_designation") is not null) {
             lists.AddRange(ReadJncc(connection, index, stats, cancellationToken));
         } else {

@@ -30,8 +30,25 @@ public static partial class SiteText {
     /// The heading over the rows of one group: a country, or NatureServe's global ranks.
     public static string OtherStatusGroup(string group) => group switch {
         "AU" => "Australia",
+        "BE" => "Belgium",
         "BR" => "Brazil",
         "CA" => "Canada",
+        "CH" => "Switzerland",
+        "CO" => "Colombia",
+        "CU" => "Cuba",
+        "DE" => "Germany",
+        "DK" => "Denmark",
+        "EC" => "Ecuador",
+        "FR" => "France",
+        "IS" => "Iceland",
+        "JP" => "Japan",
+        "LU" => "Luxembourg",
+        "NL" => "Netherlands",
+        "NO" => "Norway",
+        "SE" => "Sweden",
+        "UA" => "Ukraine",
+        "UY" => "Uruguay",
+        "VE" => "Venezuela",
         "GB" => "United Kingdom",
         OtherStatusSystems.InternationalGroup => "International treaties",
         "NZ" => "New Zealand",
@@ -126,6 +143,7 @@ public static partial class SiteText {
                 row.ListedUnder is { } under ? $"Covered by the listing of {under}" : null,
             }.OfType<string>()) is { Length: > 0 } line ? line : null,
         OtherStatusSystems.Jncc => row.Qualifier,
+        OtherStatusSystems.NationalRedList => row.Qualifier is { } own ? $"In the list: {own}" : null,
         _ => NatureServeRankMeaning(row, kind),
     };
 
@@ -242,6 +260,22 @@ public static partial class SiteText {
         accessed is { } date
             ? $", downloaded on {SiteFormat.Date(date)}. Preferred citation: UNEP-WCMC (Comps.) {date.Year}. The Checklist of CITES Species Website. CITES Secretariat, Geneva, Switzerland. Compiled by UNEP-WCMC, Cambridge, UK. Available at: http://checklist.cites.org. [Accessed {date.ToString("dd/MM/yyyy", System.Globalization.CultureInfo.InvariantCulture)}]."
             : ".";
+
+    /// The text of a national red list row's link: the taxon's page at the publisher, named by its
+    /// site, else the list's dataset on GBIF.
+    public static string RedListRecordLink(string? url) => url switch {
+        null => "GBIF dataset",
+        _ when url.Contains("artfakta.se", StringComparison.Ordinal) => "Artfakta",
+        _ when url.Contains("arter.dk", StringComparison.Ordinal) => "Arter",
+        _ when url.Contains("gbif.org", StringComparison.Ordinal) => "GBIF dataset",
+        _ => "Publisher's page",
+    };
+
+    /// One list's part of the note under the tables, around the links to the list's GBIF dataset and
+    /// its licence: "[The Swedish Red List 2025]: SLU Artdatabanken, from GBIF ([CC0 1.0]), downloaded on
+    /// 8 October 2026."
+    public static string RedListNotePublisher(string? publisher) => publisher is null ? ": from GBIF (" : $": {publisher}, from GBIF (";
+    public static string RedListNoteRest(string? downloaded) => downloaded is null ? "). " : $"), downloaded on {downloaded}. ";
 
     /// The text of a JNCC row's link to JNCC's page of the designations.
     public const string OtherStatusJnccRecordLink = "JNCC";

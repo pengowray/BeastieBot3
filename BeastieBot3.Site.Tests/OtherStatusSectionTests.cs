@@ -64,6 +64,24 @@ public sealed class OtherStatusSectionTests {
         Assert.Null(section.Tables[0].PlaceRanks);
     }
 
+    [Fact]
+    public void ANationalRedListRowIsInItsListsCountryWithTheListsOwnTermUnderTheStatus() {
+        var list = new OtherStatusListRow("redlist:de-plants-2018", "national-red-list", "DE", null,
+            "Red List of the ferns and flowering plants of Germany (2018)", null, 0, "Bundesamt für Naturschutz", "CC BY 4.0",
+            "https://creativecommons.org/licenses/by/4.0/", null, "https://www.gbif.org/dataset/x", "2018", "2026-10-08");
+        var section = Build(TaxonKinds.Species,
+            new OtherStatusRow("national-red-list", "Threatened (Gefährdet)", null, null, null, "red-lists", "de:1", null, null,
+                Qualifier: "3", List: list));
+        var table = Assert.Single(section.Tables);
+        Assert.Equal("Germany", table.Heading);
+        var row = Assert.Single(table.Rows);
+        Assert.Equal("Red List of the ferns and flowering plants of Germany (2018)", row.ListLabel);
+        Assert.Equal("In the list: 3", row.RankMeaning);
+        Assert.Equal(("GBIF dataset", "https://www.gbif.org/dataset/x"), (row.SourceLinkText, row.SourceUrl));
+        Assert.StartsWith("Red List of the ferns and flowering plants of Germany (2018): Bundesamt für Naturschutz, from GBIF (CC BY 4.0), downloaded on 8 October 2026.",
+            Text(Assert.Single(section.Notes)));
+    }
+
     [Theory]
     [InlineData("S3", "S3", "3", "Any")]
     [InlineData("N5B,N5N", "N5", "5", "Breeding")]

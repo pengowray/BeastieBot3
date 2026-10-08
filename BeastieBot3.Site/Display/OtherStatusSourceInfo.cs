@@ -87,6 +87,20 @@ public sealed record OtherStatusSourceInfo(
             ];
         });
 
+    /// National and subnational red lists from GBIF: one part per list on the page, with its publisher,
+    /// licence and download date.
+    public static readonly OtherStatusSourceInfo RedLists = new(OtherStatusSources.RedLists, SiteText.RedListRecordLink(null),
+        OtherStatusDateHeading.InEffectFrom, DateHeadingRule.AllDatedRows,
+        (_, rows) => rows.Where(r => r.Source == OtherStatusSources.RedLists).Select(r => r.List).OfType<OtherStatusListRow>()
+            .DistinctBy(l => l.ListKey)
+            .SelectMany(l => new NoteSegment[] {
+                new(l.Name, l.Url),
+                new(SiteText.RedListNotePublisher(l.Publisher)),
+                new(l.Licence ?? "", l.LicenceUrl),
+                new(SiteText.RedListNoteRest(DateText(l.Fetched))),
+            })
+            .ToList());
+
     // "2026-06-09" as "9 June 2026"; null when not a date.
     private static string? DateText(string? isoDate) => isoDate is null ? null : SiteFormat.Date(isoDate);
 
@@ -101,7 +115,7 @@ public sealed record OtherStatusSourceInfo(
                 System.Globalization.DateTimeStyles.None, out var accessed) ? accessed : null)),
         ]);
 
-    public static readonly IReadOnlyList<OtherStatusSourceInfo> All = [Sprat, Ecos, NatureServe, Nztcs, Salve, Jncc, Cites];
+    public static readonly IReadOnlyList<OtherStatusSourceInfo> All = [Sprat, Ecos, NatureServe, Nztcs, Salve, Jncc, Cites, RedLists];
 
     /// The source with this key, or null for a source the site does not know.
     public static OtherStatusSourceInfo? Find(string source) => All.FirstOrDefault(s => s.Key == source);
