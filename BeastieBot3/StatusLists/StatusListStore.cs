@@ -227,7 +227,8 @@ internal sealed partial class StatusListStore : SqliteStore {
             party_name             TEXT,              -- "Mauritius", "Bolivia (Plurinational State of)"
             effective_on           TEXT,              -- yyyy-MM-dd, when the listing took effect
             short_note             TEXT,              -- HTML: which populations or parts the listing covers, quotas and exclusions
-                                                      -- ("Populations of AR and BR."); the only place the scope of a split listing is given
+                                                      -- ("Populations of AR and BR."); with inherited_short_note, the only place that says
+                                                      -- which populations a split listing covers
             full_note_id           INTEGER REFERENCES cites_note(note_id),  -- the full text of the note
             annotation_symbol      TEXT,              -- the annotation that says which parts and derivatives are covered: #1 to #19
             annotation_note_id     INTEGER REFERENCES cites_note(note_id),  -- the text of that annotation
