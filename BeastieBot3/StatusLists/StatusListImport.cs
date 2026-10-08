@@ -5,10 +5,11 @@ using Spectre.Console;
 using Spectre.Console.Cli;
 
 // The run shared by `statuses ecos-import`, `statuses nztcs-import`, `statuses salve-import`,
-// `statuses jncc-import`, `statuses cites-import` and `statuses japan-import`:
+// `statuses jncc-import`, `statuses cites-import`, `statuses japan-import` and `statuses france-import`:
 //   1. take the file given with --file, or download the source into the status lists folder as
 //      <stem>-<yyyy-MM-dd>.<extension>, or under the name the source gives its file (JNCC's name
-//      holds the date of its release); StatusListDownload writes it through a .part file. A source
+//      holds the date of its release; the BDC's kept name has the file's date on PatriNat's
+//      server); StatusListDownload writes it through a .part file. A source
 //      of several files (Japan's Red List: eight CSV files and a PDF) is kept as a folder,
 //      <stem>-<yyyy-MM-dd>, and its command names a kept folder with --dir;
 //   2. read the file into rows; a file with no rows leaves the store as it was;
@@ -83,6 +84,12 @@ internal sealed class StatusListImportSpec<TRow> {
 }
 
 internal static class StatusListImport {
+    /// The full path of a file given on the command line, with "~/" read as the home folder.
+    public static string FullPath(string given) =>
+        Path.GetFullPath(given.StartsWith("~/", StringComparison.Ordinal)
+            ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), given[2..])
+            : given);
+
     public static async Task<int> RunAsync<TRow>(StatusListImportSettings settings, StatusListImportSpec<TRow> spec,
         CancellationToken cancellationToken) {
         var paths = settings.CreatePaths();
@@ -91,9 +98,7 @@ internal static class StatusListImport {
 
         string file;
         if (settings.File is { } given) {
-            file = Path.GetFullPath(given.StartsWith("~/", StringComparison.Ordinal)
-                ? Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), given[2..])
-                : given);
+            file = FullPath(given);
             if (spec.ImportsFolder ? !Directory.Exists(file) : !File.Exists(file)) {
                 AnsiConsole.MarkupLineInterpolated($"[red]{(spec.ImportsFolder ? "Folder" : "File")} not found:[/] {file}");
                 return -1;
