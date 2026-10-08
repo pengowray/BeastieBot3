@@ -1,5 +1,6 @@
 using BeastieBot3.Site.Lists;
 using Microsoft.Data.Sqlite;
+using static BeastieBot3.Site.Data.ReaderValues;
 
 // The queries for species from the Catalogue of Life and Wikidata that IUCN does not have
 // (extra_species and the tables beside it in SiteDbSchema), for the group pages' lists.

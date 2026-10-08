@@ -3,6 +3,7 @@ using BeastieBot3.Shared.SiteData;
 using BeastieBot3.Shared.Wikitext;
 using BeastieBot3.Site.Update;
 using Microsoft.Data.Sqlite;
+using static BeastieBot3.Site.Data.ReaderValues;
 
 namespace BeastieBot3.Site.Data;
 
@@ -1085,9 +1086,6 @@ public sealed partial class SiteQueries {
         !reader.IsDBNull(start + 6) && reader.GetInt64(start + 6) != 0,
         !reader.IsDBNull(start + 7) && reader.GetInt64(start + 7) != 0,
         reader.GetInt64(start + 8) != 0);
-
-    private static string? Text(SqliteDataReader reader, int i) =>
-        reader.IsDBNull(i) ? null : reader.GetString(i);
 
     private static long? Long(SqliteDataReader reader, int i) =>
         reader.IsDBNull(i) ? null : reader.GetInt64(i);

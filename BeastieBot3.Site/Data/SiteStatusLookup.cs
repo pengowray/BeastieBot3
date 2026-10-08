@@ -1,6 +1,7 @@
 using BeastieBot3.Shared.SiteData;
 using BeastieBot3.Site.Update;
 using Microsoft.Data.Sqlite;
+using static BeastieBot3.Site.Data.ReaderValues;
 
 namespace BeastieBot3.Site.Data;
 
@@ -122,6 +123,4 @@ public sealed class SiteStatusLookup : IStatusLookup, IDisposable {
     }
 
     public void Dispose() => _connection.Dispose();
-
-    private static string? Text(SqliteDataReader reader, int i) => reader.IsDBNull(i) ? null : reader.GetString(i);
 }
