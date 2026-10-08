@@ -1324,8 +1324,9 @@ title statements are not recorded (run wikidata iucn-assessment-items)".
 
 - UI strings are in `BeastieBot3.Site/Display/SiteText.cs` (with `SiteText.Taxon.cs` and `SiteText.Wikidata.cs`), the About page text in
   `Pages/About.cshtml`, and category labels and badge colours (from en-wiki Module:IUCN status) in
-  `Display/IucnCategories.cs`. All SQL is in `Data/SiteQueries.cs`; user input reaches FTS5 only
-  through `Data/FtsQuery.cs`.
+  `Display/IucnCategories.cs`. All SQL is in `Data/`, most of it in `SiteQueries` (`SiteQueries.cs`
+  and the partial files `SiteQueries.*.cs`: `Search`, `Groups`, `ListTaxa` and others); user input
+  reaches FTS5 only through `Data/FtsQuery.cs`.
 - Settings (`appsettings.json`, or environment variables such as `Site__DatabasePath`):
   - `Site:DatabasePath`.
   - `Site:BaseUrl`: the address used in canonical links, such as `https://species.example.org`.
