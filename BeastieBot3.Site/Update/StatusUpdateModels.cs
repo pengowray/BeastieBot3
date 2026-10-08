@@ -234,6 +234,9 @@ public sealed record StatusUpdateResult(string Text, IReadOnlyList<StatusFinding
     /// How many missing taxa ListPlacement put into Text.
     public int MissingAdded { get; init; }
 
+    /// How many taxa now in another category ListPlacement took out of Text.
+    public int TaxaRemoved { get; init; }
+
     /// The text has species table rows and no {{IUCN statuses}}, and StatusUpdateOptions.AddStatusSummary is off.
     public bool SummaryMissing { get; init; }
 

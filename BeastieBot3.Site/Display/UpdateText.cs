@@ -18,6 +18,8 @@ public static partial class UpdateText {
         + " All other text is returned exactly as pasted.";
 
     public const string IntroItemsLabel = "Updated items:";
+    /// The summary of the introduction, closed once a result is shown.
+    public const string IntroSummary = "What this page updates";
 
     public const string IntroTemplatesTitle = "{{IUCN status}} templates with a taxon id";
     public const string IntroTemplates = ", such as {{IUCN status|EN|4828/21289898|1|year=2015}}: the code, the ids and the year. EX and EW have no year, so the year is removed. An old taxon id is changed to the current id.";

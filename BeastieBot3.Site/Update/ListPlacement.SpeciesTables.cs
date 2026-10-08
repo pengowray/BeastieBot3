@@ -97,23 +97,34 @@ public static partial class ListPlacement {
             if (found is not { Table: var table } || table.Rows.Count == 0) {
                 return null;
             }
-            var keys = KeysOf(table);
+            // The rows that stay; with none left, the new row goes before the first one taken out.
+            var allKeys = KeysOf(table);
+            var stay = Enumerable.Range(0, table.Rows.Count).Where(i => !_removedRows.Contains(table.Rows[i])).ToList();
+            if (stay.Count == 0) {
+                var first = table.Rows[0];
+                return NewRow(first, taxon) is { } only
+                    ? new PlacedTaxon(taxon, only, first.Span.Start, allKeys[0].Common ?? allKeys[0].Scientific ?? string.Empty, null,
+                        _scanner.LineOf(first.Span.Start), true)
+                    : null;
+            }
+            var keys = stay.Select(i => allKeys[i]).ToList();
             var (order, index) = Order([.. keys.Select(k => k.Scientific)], taxon.ScientificName, [.. keys.Select(k => k.Common)], taxon.CommonNameEn);
-            var before = order != ListOrder.None && index < table.Rows.Count;
-            var neighbourIndex = before ? index : table.Rows.Count - 1;
-            if (order != ListOrder.None && index < table.Rows.Count && index > 0) {
+            var before = order != ListOrder.None && index < stay.Count;
+            var neighbourIndex = before ? index : stay.Count - 1;
+            if (order != ListOrder.None && index < stay.Count && index > 0) {
                 // After the row before it reads better in a report than before the next one.
                 before = false;
                 neighbourIndex = index - 1;
             }
-            var neighbour = table.Rows[neighbourIndex];
+            var rowIndex = stay[neighbourIndex];
+            var neighbour = table.Rows[rowIndex];
             var text = NewRow(neighbour, taxon);
             if (text is null) {
                 return null;
             }
             var position = before ? neighbour.Span.Start : neighbour.Span.End;
             var neighbourKeys = keys[neighbourIndex];
-            var member = Listed(ListMemberSource.SpeciesTableRow).FirstOrDefault(m => RowOf(m) is { } r && r.Table == table && r.Row == neighbourIndex);
+            var member = Listed(ListMemberSource.SpeciesTableRow).FirstOrDefault(m => RowOf(m) is { } r && r.Table == table && r.Row == rowIndex);
             return new PlacedTaxon(taxon, text, position, neighbourKeys.Common ?? neighbourKeys.Scientific ?? string.Empty, member?.Taxon,
                 _scanner.LineOf(neighbour.Span.Start), before);
         }

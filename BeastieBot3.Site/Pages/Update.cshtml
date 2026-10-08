@@ -8,7 +8,9 @@
 @* A textarea drops one newline straight after its start tag, so one is written there to keep a
    text that starts with a newline. *@
 <h1>@UpdateText.Heading</h1>
-<div class="update-intro prose">
+@* The introduction is open until there is a result to read; then it is one click away. *@
+<details class="update-intro prose" open="@(result is null)">
+    <summary>@UpdateText.IntroSummary</summary>
     <p>@UpdateText.Intro(Model.Version)</p>
     <p>@UpdateText.IntroItemsLabel</p>
     <ul>
@@ -19,7 +21,7 @@
         <li><strong>@UpdateText.IntroSpeciesTablesTitle</strong>@UpdateText.IntroSpeciesTables</li>
     </ul>
     <p class="help">@UpdateText.IntroLimits(StatusUpdater.DefaultMaxItems)</p>
-</div>
+</details>
 
 @if (Model.Error is not null) {
     <p class="update-error" role="alert">@Model.Error</p>
@@ -42,7 +44,7 @@
         <p class="update-summary">@(result.NotChecked > 0
             ? UpdateText.SummaryCapped(StatusUpdater.DefaultMaxItems, result.Updated, result.Current, result.NotUpdated, result.NotChecked)
             : UpdateText.Summary(result.Updated, result.Current, result.NotUpdated, result.ListLinesWithoutStatus + result.TablesWithoutStatus > 0))</p>
-        @if (result.Updated == 0 && result.MissingAdded == 0 && result.Findings.Count > 0) {
+        @if (result.Updated == 0 && result.MissingAdded == 0 && result.TaxaRemoved == 0 && result.Findings.Count > 0) {
             <p class="note">@UpdateText.NoChanges</p>
         }
         @{
@@ -191,7 +193,11 @@
         }
 
         @if (Model.Scope is { } scope) {
-            @await Html.PartialAsync("_ListScope", new ListScopeView(scope, Model.Placement, Model.AddMissing, Model.ExtraSpecies, Model.Categories, Model.ShowEpbc ? Model.Epbc : null, Model.CategoriesFromTitle, Model.Areas))
+            @await Html.PartialAsync("_ListScope", new ListScopeView(scope, Model.Placement, Model.AddMissing, Model.ExtraSpecies, Model.Categories, Model.ShowEpbc ? Model.Epbc : null, Model.CategoriesFromTitle, Model.Areas) {
+                Removing = Model.Removing,
+                Forms = Model.Forms,
+                TextKey = UpdateModel.TextKey(Model.Input),
+            })
         }
     </section>
 }

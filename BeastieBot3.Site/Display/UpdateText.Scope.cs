@@ -55,7 +55,66 @@ public static partial class UpdateText {
     // Putting the missing species into the wikitext (ListPlacement).
     public const string AddMissingOption = "Add the missing species to the updated wikitext";
     public const string AddMissingButton = "Add the missing species";
-    public const string AddMissingHelp = "Each species goes next to a species of the same genus, in the same form: a list line, a {{Species table/row}} or a table row. A genus with no {{Species table}} gets a new one next to the other genera of its family. A missing subspecies or variety goes on a line under its species. Not added: taxa of a genus that the wikitext has no taxon of, and taxa missing from tables with rowspan or colspan.";
+    /// How the missing taxa go in, for the forms this text lists its taxa in.
+    public static string AddMissingHelp(ListForms forms) {
+        var parts = new List<string>();
+        if (forms.ListLines) {
+            parts.Add(AddMissingLines);
+            parts.Add(forms.Headings ? AddMissingHeadings : AddMissingNoHeadings);
+        }
+        if (forms.SpeciesTables) {
+            parts.Add(AddMissingSpeciesTables);
+        }
+        if (forms.TableRows) {
+            parts.Add(AddMissingTableRows);
+        }
+        if (forms.InfraOnLines) {
+            parts.Add(AddMissingInfra);
+        }
+        return string.Join(" ", parts);
+    }
+
+    public const string AddMissingLines = "A missing species goes on a new list line next to a species of its genus, in the same form as that line.";
+    public const string AddMissingHeadings = "If no species of its genus is listed, it goes among the lines under the heading of its order, family or other group. An order or family with no heading gets a new heading beside the others of its rank.";
+    public const string AddMissingNoHeadings = "If no species of its genus is listed, it goes among the list lines in alphabetical order, or after the last line when the list is not in alphabetical order.";
+    public const string AddMissingSpeciesTables = "In a {{Species table}}, it gets a new {{Species table/row}} in the table of its genus. A genus with no table gets a new {{Species table}} next to the tables of other genera of its family.";
+    public const string AddMissingTableRows = "In a wikitable, it gets a new row next to a species of its genus. Tables with rowspan or colspan get no new rows.";
+    public const string AddMissingInfra = "A missing subspecies or variety goes on a line under its species.";
+
+    /// The headings put in for missing taxa.
+    public static string NewHeadings(IReadOnlyList<string> headings) =>
+        headings.Count == 1 ? $"Added 1 heading: {headings[0]}." : $"Added {Count(headings.Count)} headings: {string.Join(", ", headings)}.";
+
+    public const string ColumnHeading = "Heading";
+    public static string NewHeadingValue(string heading) => $"{heading} (new)";
+
+    public const string ColumnWhyNotAdded = "Why not added";
+    public static string UnplacedReasonText(UnplacedReason reason) => reason switch {
+        UnplacedReason.TableLayout => "The species of its genus are in a table with rowspan or colspan.",
+        UnplacedReason.SpeciesNotOnLine => "Its species is not on a list line.",
+        UnplacedReason.RowLayout => "The {{Species table/row}} rows of its genus have no name, binomial or iucn-status parameter.",
+        UnplacedReason.RemovedLine => "Its place was on a line removed from the wikitext.",
+        _ => "The wikitext has no species of its genus and no heading of its group.",
+    };
+
+    // Taking out the taxa now in another category (ListPlacement.Removal.cs).
+    public const string RemoveButton = "Remove them from the wikitext";
+    public const string RemoveHelp = "Removes their list lines, with any lines under them, and their {{Species table/row}} rows. A heading left with no taxa is removed too. Each taxon then has a checkbox to keep it.";
+    public static string RemoveResult(int removed, int total) => (removed, total) switch {
+        (0, _) => "None of these taxa were removed from the updated wikitext.",
+        _ when removed == total => total == 1 ? "Removed this taxon from the updated wikitext." : $"Removed all {Count(total)} taxa from the updated wikitext.",
+        _ => $"Removed {Count(removed)} of the {Count(total)} taxa from the updated wikitext.",
+    };
+    public const string RemoveInstruction = "Untick a taxon to keep it in the wikitext, then select Update statuses.";
+    public const string ColumnRemove = "Remove";
+    public static string RemoveCheckboxAccessible(string name) => $"Remove {name}";
+    public static string KeptReasonText(KeptReason reason) => reason switch {
+        KeptReason.SharesLine => "Kept: its line names a taxon that stays, or has lines under it that do.",
+        KeptReason.DefinesReference => "Kept: its line defines a reference that other lines use.",
+        _ => "Kept: it is named in a table, a taxobox or running text, not on a list line or in a {{Species table/row}}.",
+    };
+    public static string RemovedHeadings(IReadOnlyList<string> headings) =>
+        (headings.Count == 1 ? "Removed 1 heading with no taxa left: " : $"Removed {Count(headings.Count)} headings with no taxa left: ") + string.Join(", ", headings) + ".";
     public const string AddMissingPartial = "Missing species were not added, because this may be a regional list or a list of part of the group.";
 
     public static string AddMissingResult(int added, int missing) => (added, missing) switch {

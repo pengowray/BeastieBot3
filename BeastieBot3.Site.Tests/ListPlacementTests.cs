@@ -130,13 +130,18 @@ public sealed class ListPlacementTests {
     }
 
     [Fact]
-    public void ASpeciesOfAGenusTheListDoesNotHaveIsNotPlaced() {
+    public void ASpeciesOfAGenusTheListDoesNotHaveGoesInTheListsOrder() {
         var (text, placement) = Run("* ''Panthera spbaa''\n* ''Panthera spbab''\n* ''Panthera spbac''\n* ''Panthera spbad''\n* ''Felis spcaa''\n| table\n");
         Assert.Contains("[[Felis spcab]]", text);
-        var (_, none) = Run("* ''Panthera spbaa''\n* ''Panthera spbab''\n* ''Panthera spbac''\n* ''Panthera spbad''\n", scopeKey: "family/Felidae");
-        Assert.Empty(none.Placed);
-        Assert.Equal([200L, 201L], none.Unplaced.Select(t => t.TaxonId));
         Assert.Single(placement.Placed);
+        // A list of Panthera compared with family Felidae: Felis sorts first.
+        var (sorted, felis) = Run("* ''Panthera spbaa''\n* ''Panthera spbab''\n* ''Panthera spbac''\n* ''Panthera spbad''\n", scopeKey: "family/Felidae");
+        Assert.StartsWith("* ''[[Felis spcaa]]''\n* ''[[Felis spcab]]''\n* ''Panthera spbaa''\n", sorted);
+        Assert.Equal([200L, 201L], felis.Placed.Select(p => p.Taxon.TaxonId));
+        Assert.All(felis.Placed, p => Assert.Null(p.Heading));
+        // In no order: after the last line.
+        var (after, _) = Run("* ''Panthera spbad''\n* ''Panthera spbaa''\n* ''Panthera spbab''\n* ''Panthera spbac''\n", scopeKey: "family/Felidae");
+        Assert.EndsWith("* ''Panthera spbac''\n* ''[[Felis spcaa]]''\n* ''[[Felis spcab]]''\n", after);
     }
 
     [Fact]

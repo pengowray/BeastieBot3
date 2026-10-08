@@ -179,6 +179,19 @@ public sealed class UpdateModel : PageModel {
     public const string ListAnywayField = "anyway";
     public const string ExtraSpeciesField = "extra";
     public const string AddMissingField = "addmissing";
+    /// The taxa now in another category to take out (taxon ids, one checkbox each), and TextKey of
+    /// the text the checkboxes were shown for: with it, a form with none ticked means none.
+    public const string RemoveField = "rm";
+    public const string RemoveShownField = "rmshown";
+    /// The button that takes out every taxon now in another category.
+    public const string RemoveAllField = "rmall";
+
+    /// The taxa now in another category the reader chose to take out; null when the reader has not
+    /// asked to take any out.
+    public IReadOnlySet<long>? Removing { get; private set; }
+
+    /// What the text lists its taxa in, for the help text of the missing species.
+    public ListForms Forms { get; private set; } = new(false, false, false, false);
 
     public string? Error { get; private set; }
 
@@ -270,12 +283,20 @@ public sealed class UpdateModel : PageModel {
         AreaMode = Enum.TryParse<AreaMode>(form[AreaModeField].LastOrDefault(), out var mode) && Enum.IsDefined(mode) ? mode : AreaMode.Native;
         ShowEpbc = On(EpbcField);
         Region = KnownRegion(form[RegionField].LastOrDefault());
-        Run(text, form[ScopeField].LastOrDefault(), On(ListAnywayField), On(ExtraSpeciesField), On(AddMissingField));
+        IReadOnlySet<long>? removing = On(RemoveAllField) ? null
+            : form[RemoveShownField].LastOrDefault() == TextKey(text)
+            ? form[RemoveField].Select(v => long.TryParse(v, out var id) ? id : 0).Where(id => id > 0).ToHashSet()
+            : new HashSet<long>();
+        Run(text, form[ScopeField].LastOrDefault(), On(ListAnywayField), On(ExtraSpeciesField), On(AddMissingField), removing,
+            removeAsked: On(RemoveAllField) || form[RemoveShownField].LastOrDefault() == TextKey(text));
         return Page();
     }
 
-    // Updates the text with Options and compares it with its group (ListScope).
-    private void Run(string text, string? scope, bool listAnyway, bool extraSpecies, bool addMissing) {
+    // Updates the text with Options and compares it with its group (ListScope). removing: the taxa
+    // now in another category to take out, null for all of them; removeAsked: the reader has asked to
+    // take some out (the button, or the checkboxes shown for this text).
+    private void Run(string text, string? scope, bool listAnyway, bool extraSpecies, bool addMissing,
+        IReadOnlySet<long>? removing = null, bool removeAsked = false) {
         using var lookup = _queries.OpenStatusLookup(Region);
         var updater = new StatusUpdater(lookup, DateOnly.FromDateTime(DateTime.UtcNow), options: Options);
         Result = updater.Update(text);
@@ -285,17 +306,25 @@ public sealed class UpdateModel : PageModel {
                 extraSpecies ? WrittenNames(text) : null) { Categories = Categories, Area = Area?.Code, AreaMode = AreaMode, Region = Region });
         ExtraSpecies = extraSpecies;
         AddMissing = addMissing;
-        if (AddMissing && Scope is { Partial: false } && (Scope.Missing?.Count ?? 0) + (Scope.MissingExtra?.Count ?? 0) > 0) {
+        Forms = ListForms.Of(text, Result.Members ?? []);
+        if (removeAsked && Scope is not null) {
+            Removing = removing ?? Scope.OtherCategory.Select(m => m.Taxon.TaxonId).ToHashSet();
+        }
+        var placing = AddMissing && Scope is { Partial: false } && (Scope.Missing?.Count ?? 0) + (Scope.MissingExtra?.Count ?? 0) > 0;
+        if (Scope is not null && (placing || Removing is { Count: > 0 })) {
             Placement = ListPlacement.Place(text, Result.Members ?? [], Scope,
                 new ListPlacementOptions(Options.AddIds, Options.AddYear, Options.CiteQ, Options.AddToListLines) {
                     TablesWithNewColumn = Result.Findings
                         .Where(f => f.Kind == StatusItemKind.TableColumnAdded && f.Outcome == StatusOutcome.Updated)
                         .ToDictionary(f => f.Line, f => (int)(f.Notes.First(n => n.Kind == StatusNoteKind.ColumnAdded).Id ?? 0)),
+                    AddMissing = placing,
+                    Remove = Removing ?? new HashSet<long>(),
                 }, scopeLookup);
-            if (Placement.Placed.Count > 0) {
+            if (Placement.Placed.Count > 0 || Placement.Removals.Count > 0) {
                 Result = Result with {
-                    Text = updater.TextWith(ListPlacement.Insertions(text, Placement)),
+                    Text = updater.TextWith(ListPlacement.Insertions(text, Placement), Placement.Removals),
                     MissingAdded = Placement.Placed.Count,
+                    TaxaRemoved = Placement.Removed.Count,
                 };
             }
         }

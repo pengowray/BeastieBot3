@@ -179,11 +179,17 @@ public sealed partial class StatusUpdater {
     private string _lastText = string.Empty;
     private List<Edit> _lastEdits = [];
 
-    /// The last Update's text with its edits and these insertions (positions in the text as it was
-    /// pasted). Apply orders edits by position and is stable, so an insertion at the same position
-    /// as an edit (a status added at the end of a line) comes after it.
-    public string TextWith(IEnumerable<(int Position, string Text)> insertions) =>
-        Apply(_lastText, [.. _lastEdits, .. insertions.Select(i => new Edit(i.Position, i.Position, i.Text))]);
+    /// The last Update's text with its edits, these insertions and these removals (positions in the
+    /// text as it was pasted). Apply orders edits by position and is stable, so an insertion at the
+    /// same position as an edit (a status added at the end of a line) comes after it, and an
+    /// insertion at the start of a removal comes before it. The edits inside a removal's Owned span
+    /// are dropped.
+    public string TextWith(IEnumerable<(int Position, string Text)> insertions, IReadOnlyList<TextRemoval>? removals = null) {
+        removals ??= [];
+        var kept = _lastEdits.Where(e => !removals.Any(r => e.Start >= r.Owned.Start && e.End <= r.Owned.End));
+        var cuts = ListPlacement.Merge(removals.Select(r => r.Span), _lastText).Select(s => new Edit(s.Start, s.End, string.Empty));
+        return Apply(_lastText, [.. kept, .. insertions.Select(i => new Edit(i.Position, i.Position, i.Text)), .. cuts]);
+    }
 
     // ---------------------------------------------------------------- {{IUCN status}} with ids
 

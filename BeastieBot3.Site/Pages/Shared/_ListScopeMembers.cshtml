@@ -1,21 +1,27 @@
 @model BeastieBot3.Site.Update.ListScopeMembersView
 @* The status in the wikitext is shown only when some rows have one; the EPBC Act listing when
-   the reader asked for it. *@
+   the reader asked for it; a checkbox to take each taxon out, and why a ticked one stayed, when the
+   reader has asked to take them out. The checkboxes belong to the update form. *@
 @{
     var written = Model.Members.Any(m => m.WrittenCode is not null);
     var epbc = Model.Epbc;
+    var removing = Model.Removing;
 }
 <div class="table-scroll">
     <table class="update-report">
-        <thead><tr><th scope="col">@UpdateText.ColumnTaxon</th>@if (written) {<th scope="col">@UpdateText.ColumnStatusInWikitext</th>}<th scope="col">@UpdateText.ColumnLatestStatus</th>@if (epbc is not null) {<th scope="col">@UpdateText.ColumnEpbc</th>}<th scope="col">@UpdateText.ColumnLines</th></tr></thead>
+        <thead><tr>@if (removing is not null) {<th scope="col">@UpdateText.ColumnRemove</th>}<th scope="col">@UpdateText.ColumnTaxon</th>@if (written) {<th scope="col">@UpdateText.ColumnStatusInWikitext</th>}<th scope="col">@UpdateText.ColumnLatestStatus</th>@if (epbc is not null) {<th scope="col">@UpdateText.ColumnEpbc</th>}<th scope="col">@UpdateText.ColumnLines</th>@if (Model.Kept.Count > 0) {<th scope="col">@UpdateText.ColumnNotes</th>}</tr></thead>
         <tbody>
             @foreach (var m in Model.Members) {
                 <tr>
+                    @if (removing is not null) {
+                        <td><input type="checkbox" form="update-form" name="@UpdateModel.RemoveField" value="@m.Taxon.TaxonId" checked="@removing.Contains(m.Taxon.TaxonId)" aria-label="@UpdateText.RemoveCheckboxAccessible(m.Taxon.ScientificName)"></td>
+                    }
                     <td><a href="/species/@m.Taxon.TaxonId">@Html.Raw(ScientificNameMarkup.ToHtml(m.Taxon.ScientificName))</a></td>
                     @if (written) {<td>@m.WrittenCode</td>}
                     <td>@m.CurrentCode</td>
                     @if (epbc is not null) {<td>@UpdateText.Epbc(epbc.GetValueOrDefault(m.Taxon.TaxonId))</td>}
                     <td>@UpdateText.LineNumbers(m.Lines)</td>
+                    @if (Model.Kept.Count > 0) {<td>@if (Model.Kept.TryGetValue(m.Taxon.TaxonId, out var reason)) {@UpdateText.KeptReasonText(reason)}</td>}
                 </tr>
             }
         </tbody>
