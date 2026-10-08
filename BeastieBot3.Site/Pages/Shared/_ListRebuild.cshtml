@@ -22,7 +22,7 @@
             <p>@UpdateText.NewHeadings(rebuild.NewHeadings)</p>
         }
         @if (rebuild.Dropped.Count > 0) {
-            <p>@UpdateText.RebuildDropped(rebuild.Dropped.Select(d => d.Heading).ToList(), Model.HeadingsByRank)</p>
+            <p>@UpdateText.RebuildDropped(rebuild.Dropped.Select(d => d.Heading).ToList())</p>
             @foreach (var d in rebuild.Dropped.Where(d => d.Text.Length > 0)) {
                 <div class="wikitext-box">
                     <p class="help">@UpdateText.RebuildDroppedText(d.Heading)</p>
