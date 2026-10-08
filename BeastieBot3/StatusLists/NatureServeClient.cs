@@ -1,5 +1,4 @@
 using System.Net;
-using System.Net.Http.Headers;
 using System.Text;
 
 // Sends NatureServe Explorer requests one at a time, at least DelayBetweenRequests apart, and tries
@@ -29,9 +28,7 @@ internal sealed class NatureServeClient : IDisposable {
     private DateTime _lastRequestUtc = DateTime.MinValue;
 
     public NatureServeClient(Action<string>? onRetry = null) {
-        _http = new HttpClient { Timeout = TimeSpan.FromMinutes(2) };
-        _http.DefaultRequestHeaders.UserAgent.ParseAdd(UserAgent);
-        _http.DefaultRequestHeaders.Accept.Add(new MediaTypeWithQualityHeaderValue("application/json"));
+        _http = StatusListDownload.CreateClient(TimeSpan.FromMinutes(2), acceptJson: true);
         _onRetry = onRetry;
     }
 
