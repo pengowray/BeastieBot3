@@ -221,11 +221,11 @@ Enable via `display.group_subspecies: true` in YAML.
 A taxa group with `children:` in `taxa-groups.yml` (its sub-groups, as the Taxa grouping page calls
 them) makes its lists parent pages. A parent page has:
 
-- a summary table with one row per class (the rank the sub-groups are defined at), the EX to DD
-  counts, Total, and CR total;
+- a summary table with one row per sub-group and one per remaining class (or order, the rank the
+  sub-groups are defined at), the EX to DD counts, Total, and CR total;
 - one section per linked sub-group: its heading, `{{main|...}}` to the sub-group's list, and the
   number of species in the page's categories;
-- one section per remaining class, listing that class's species on the parent page itself.
+- one section per remaining class (or order), listing its species on the parent page itself.
 
 For each of its presets, a parent page links each sub-group to:
 
