@@ -1138,6 +1138,16 @@ public static class FlowCatalogue {
                     Note = "Each run asks GBIF's registry about every list and downloads an archive only when the list was published again; a run with nothing new takes under a minute. To add a list, add it to the YAML file.",
                 },
                 new FlowStep {
+                    Id = "site-japan",
+                    Title = "Download Japan's Red List",
+                    Description = "`statuses japan-import` downloads the Red List of Japan's Ministry of the Environment (Public Data License 1.0): the 5th Red List's CSV files for the groups it covers so far and the Red List 2020 PDF for the others, and stores about 5,800 taxa and threatened local populations in the status lists store.",
+                    Commands = new[] { "statuses japan-import" },
+                    OutputSourceIds = new[] { "status-lists" },
+                    Probe = PublicSiteProbes.Japan,
+                    Group = "2 · Build the site database",
+                    Note = "Nine files, one request each. The Ministry is publishing the 5th Red List group by group; when a new group comes out, add its CSV file to JapanRedList.cs so it replaces that group's rows from the 2020 PDF.",
+                },
+                new FlowStep {
                     Id = "site-green-status",
                     Title = "Download the IUCN Green Status assessments",
                     Description = "`iucn api green-status` downloads all published IUCN Green Status of Species assessments from the IUCN Red List API and stores them in the IUCN API cache. `site build-db` reads the Green Status assessments from the IUCN API cache.",

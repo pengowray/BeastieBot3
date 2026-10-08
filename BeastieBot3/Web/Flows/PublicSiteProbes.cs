@@ -28,6 +28,7 @@ public static class PublicSiteProbes {
     public const string Jncc = "site-jncc";
     public const string Cites = "site-cites";
     public const string RedLists = "site-red-lists";
+    public const string Japan = "site-japan";
     public const string GreenStatus = "site-green-status";
     public const string SummaryTables = "site-summary-tables";
 
@@ -42,7 +43,7 @@ public static class PublicSiteProbes {
     /// The age after which the workflow asks for the IUCN Green Status assessments again.
     public const int GreenStatusRefreshDays = 30;
 
-    public static bool IsProbe(string probe) => probe is Gbif or Dois or Build or WikidataSweep or GroupTitles or NatureServe or Ecos or Nztcs or Salve or Jncc or Cites or RedLists or GreenStatus or SummaryTables;
+    public static bool IsProbe(string probe) => probe is Gbif or Dois or Build or WikidataSweep or GroupTitles or NatureServe or Ecos or Nztcs or Salve or Jncc or Cites or RedLists or Japan or GreenStatus or SummaryTables;
 
     public static FlowProbeResult? Evaluate(string probe, PublicSiteState s) => probe switch {
         Gbif => GbifStep(s),
@@ -57,6 +58,7 @@ public static class PublicSiteProbes {
         Jncc => ImportStep(s, s.Jncc, "designations"),
         Cites => ImportStep(s, s.Cites, "taxa"),
         RedLists => ImportStep(s, s.RedLists, "lists"),
+        Japan => ImportStep(s, s.Japan, "taxa and local populations"),
         GreenStatus => GreenStatusStep(s),
         SummaryTables => SummaryTablesStep(s),
         _ => null,

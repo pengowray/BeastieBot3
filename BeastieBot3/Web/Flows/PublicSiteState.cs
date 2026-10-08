@@ -91,6 +91,7 @@ public sealed record PublicSiteState {
     public StatusListSourceState? Salve { get; init; }
     public StatusListSourceState? Jncc { get; init; }
     public StatusListSourceState? Cites { get; init; }
+    public StatusListSourceState? Japan { get; init; }
     /// The national red lists from GBIF (`statuses red-lists-import`): when the import last checked them
     /// (the newest red_list_dataset.fetched_at) and how many lists the store holds.
     public StatusListSourceState? RedLists { get; init; }
@@ -299,13 +300,14 @@ public static class PublicSiteStateReader {
         try {
             using var conn = OpenReadOnly(path!);
             using (var cmd = conn.CreateCommand()) {
-                cmd.CommandText = "SELECT source, fetched_at, row_count FROM status_source WHERE source IN (@natureserve, @ecos, @nztcs, @salve, @jncc, @cites)";
+                cmd.CommandText = "SELECT source, fetched_at, row_count FROM status_source WHERE source IN (@natureserve, @ecos, @nztcs, @salve, @jncc, @cites, @japan)";
                 cmd.Parameters.AddWithValue("@natureserve", StatusLists.StatusSources.NatureServe);
                 cmd.Parameters.AddWithValue("@ecos", StatusLists.StatusSources.Ecos);
                 cmd.Parameters.AddWithValue("@nztcs", StatusLists.StatusSources.Nztcs);
                 cmd.Parameters.AddWithValue("@salve", StatusLists.StatusSources.Salve);
                 cmd.Parameters.AddWithValue("@jncc", StatusLists.StatusSources.Jncc);
                 cmd.Parameters.AddWithValue("@cites", StatusLists.StatusSources.Cites);
+                cmd.Parameters.AddWithValue("@japan", StatusLists.StatusSources.Japan);
                 cmd.CommandTimeout = 5;
                 using var reader = cmd.ExecuteReader();
                 while (reader.Read()) {
@@ -317,6 +319,7 @@ public static class PublicSiteStateReader {
                         StatusLists.StatusSources.Salve => state with { Salve = source },
                         StatusLists.StatusSources.Jncc => state with { Jncc = source },
                         StatusLists.StatusSources.Cites => state with { Cites = source },
+                        StatusLists.StatusSources.Japan => state with { Japan = source },
                         _ => state with { Nztcs = source },
                     };
                 }
