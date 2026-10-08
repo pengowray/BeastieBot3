@@ -237,6 +237,11 @@ public sealed record StatusUpdateResult(string Text, IReadOnlyList<StatusFinding
     /// How many taxa now in another category ListPlacement took out of Text.
     public int TaxaRemoved { get; init; }
 
+    /// The taxa added (MissingAdded) and taken out (TaxaRemoved) are all species, so the edit summary
+    /// says "species", not "taxa".
+    public bool AddedSpeciesOnly { get; init; } = true;
+    public bool RemovedSpeciesOnly { get; init; } = true;
+
     /// The text has species table rows and no {{IUCN statuses}}, and StatusUpdateOptions.AddStatusSummary is off.
     public bool SummaryMissing { get; init; }
 

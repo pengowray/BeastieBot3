@@ -1560,7 +1560,8 @@ button opens its help text and Escape closes it). It is not part of `dotnet test
 ### Status update page (`/update`)
 
 A Wikipedia URL (desktop, mobile, or `index.php` with `title=` and `oldid=`) or a wikilink typed
-into the search box (`WikipediaPageInput` in `BeastieBot3.Shared`) redirects to
+into the search box (`WikipediaPageInput` in `BeastieBot3.Shared`; either may be wrapped in
+quotation marks, guillemets, backticks or angle brackets, as pasted from a message) redirects to
 `/update?page=Title`, which loads the wikitext from English Wikipedia's action API
 (`Update/WikipediaPageSource.cs`: redirects followed, answers kept for 5 minutes, at most 2 MB)
 and runs the update as a POST would, with the categories its title names and, for a title that
@@ -1791,7 +1792,7 @@ colspan and rowspan; `StatusUpdater` decides the edits, and `StatusTaxonResolver
   pair in ten may be out of order; a list in neither order gets it after the genus's last taxon.
   Missing taxa with no place stay in the copy box, as do all of them for a list that may be
   regional. The insertions are applied with the updater's edits on the pasted text
-  (`StatusUpdater.TextWith`), and the edit summary says "2 species added". In October 2026 it put the
+  (`StatusUpdater.TextWith`), and the edit summary says "2 species added" ("2 taxa added" when a subspecies or variety is among them; the button and option say "taxa" in the same case). In October 2026 it put the
   missing species of List of Acer species, List of Carex species, Bulinus and Citharexylum in
   alphabetical place, 78 of the 92 missing EN species into List of endangered amphibians, the red
   wolf between the golden jackal and the wolf in List of canids, and all 8 missing species into List
@@ -1816,7 +1817,7 @@ colspan and rowspan; `StatusUpdater` decides the edits, and `StatusTaxonResolver
   goes in it: a missing taxon whose neighbours are all taken out goes where the first of them was.
   A text put in inside a removed span would be lost, so that taxon stays in the copy box
   (`UnplacedReason.RemovedLine`). The updater's own edits inside a removed line are dropped
-  (`TextRemoval.Owned`), and the edit summary adds "16 species removed".
+  (`TextRemoval.Owned`), and the edit summary adds "16 species in other categories removed" ("taxa" when a subspecies or variety is among them).
 - The list rebuilt (`Update/ListRebuild.cs`; field `rebuild`, a button under the comparison, then a
   ticked checkbox; only for a text whose taxa are mostly on list lines, refused for a list that may be
   partial unless `anyway` is on, and above `GroupList.MaxLines` taxa). Every taxon the comparison

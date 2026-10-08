@@ -21,6 +21,13 @@ public sealed class WikipediaPageInputTests {
     [InlineData("[[List of parrots]]", "List of parrots", null)]
     [InlineData("[[List of parrots|parrots]]", "List of parrots", null)]
     [InlineData(" [[:List of parrots#Cockatoos]] ", "List of parrots", null)]
+    [InlineData("\"[[List of critically endangered amphibians]]\"", "List of critically endangered amphibians", null)]
+    [InlineData("\u201C[[List of parrots]]\u201D", "List of parrots", null)]
+    [InlineData("'[[List of parrots]]'", "List of parrots", null)]
+    [InlineData("<https://en.wikipedia.org/wiki/List_of_parrots>", "List of parrots", null)]
+    [InlineData("\"https://en.wikipedia.org/wiki/List_of_parrots\"", "List of parrots", null)]
+    [InlineData("\" <https://en.wikipedia.org/wiki/List_of_parrots> \"", "List of parrots", null)]
+    [InlineData("`[[List of parrots]]`", "List of parrots", null)]
     public void ReadsTheTitle(string text, string title, long? revision) {
         var page = WikipediaPageInput.Parse(text)!;
         Assert.Equal(title, page.Title);
@@ -34,6 +41,8 @@ public sealed class WikipediaPageInputTests {
     [InlineData("T22823A14871490")]
     [InlineData("https://www.iucnredlist.org/species/22823/14871490")]
     [InlineData("[[List of parrots]] and more")]
+    [InlineData("\"[[List of parrots]]")]
+    [InlineData("\"List of parrots\"")]
     [InlineData("https://en.wikipedia.org/")]
     public void PlainTextAndOtherSitesAreNotWikipediaPages(string text) => Assert.Null(WikipediaPageInput.Parse(text));
 

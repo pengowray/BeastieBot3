@@ -10,9 +10,11 @@ public static partial class UpdateText {
     /// "IUCN Red List 2026-1: Panthera tigris VU→EN, Ursus maritimus EN→VU; 3 other IUCN statuses updated
     /// (ids, years, references or trends); 2 IUCN citations updated (assisted by Beastie Bot Species Status)".
     /// With more changes than fit in EditSummary.MaxListLength: "42 IUCN statuses changed (12 to EN,
-    /// 20 to VU, 10 to LC)". Null when nothing changed.
+    /// 20 to VU, 10 to LC)". Null when nothing changed. addedSpeciesOnly, removedSpeciesOnly: the taxa
+    /// added or taken out are all species ("2 species added"), else "2 taxa added".
     public static string? EditSummary(string? version, IReadOnlyList<Update.EditSummary.CategoryChange> changes, int otherItems, int citations,
-        int added = 0, int columns = 0, int columnStatuses = 0, int missingAdded = 0, string? summary = null, int removed = 0) {
+        int added = 0, int columns = 0, int columnStatuses = 0, int missingAdded = 0, string? summary = null, int removed = 0,
+        bool addedSpeciesOnly = true, bool removedSpeciesOnly = true) {
         if (changes.Count == 0 && otherItems == 0 && citations == 0 && added == 0 && columns == 0 && missingAdded == 0 && summary is null
             && removed == 0) {
             return null;
@@ -44,10 +46,11 @@ public static partial class UpdateText {
         }
         if (missingAdded > 0) {
             // After "IUCN Red List 2026-1:", so "2 species added" says where they are from.
-            parts.Add($"{Count(missingAdded)} species added");
+            parts.Add($"{Count(missingAdded)} {(addedSpeciesOnly ? "species" : missingAdded == 1 ? "taxon" : "taxa")} added");
         }
         if (removed > 0) {
-            parts.Add(removed == 1 ? "1 species removed (now in another category)" : $"{Count(removed)} species removed (now in other categories)");
+            var noun = removedSpeciesOnly ? "species" : removed == 1 ? "taxon" : "taxa";
+            parts.Add(removed == 1 ? $"1 {noun} in another category removed" : $"{Count(removed)} {noun} in other categories removed");
         }
         if (citations > 0) {
             parts.Add(citations == 1 ? "1 IUCN citation updated" : $"{Count(citations)} IUCN citations updated");

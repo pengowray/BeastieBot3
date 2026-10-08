@@ -12,7 +12,7 @@
         <label><input type="checkbox" name="@UpdateModel.RebuildField" value="1" form="update-form" checked> @UpdateText.RebuildOption</label>
     </p>
     @if (rebuild.Refusal != RebuildRefusal.None) {
-        <p>@UpdateText.RebuildRefused(rebuild.Refusal, rebuild.LineCount, Model.Scope.Scope)</p>
+        <p>@UpdateText.RebuildRefused(rebuild.Refusal, rebuild.LineCount, Model.Scope.Scope, Model.MissingSpeciesOnly)</p>
         @await Html.PartialAsync("_ListRebuildOptions", Model)
     } else {
         @foreach (var line in UpdateText.RebuildSummary(rebuild, Model.Scope.Categories, Model.Scope.Scope)) {

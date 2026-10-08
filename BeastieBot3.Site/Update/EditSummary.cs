@@ -55,7 +55,7 @@ public static partial class EditSummary {
             }
         }
         return UpdateText.EditSummary(version, changes, otherItems, citations, added, columns, columnStatuses, result.MissingAdded, summary,
-            result.TaxaRemoved);
+            result.TaxaRemoved, result.AddedSpeciesOnly, result.RemovedSpeciesOnly);
     }
 
     /// The status code in an item's text: {{IUCN status|EN|...}}, "| status = EN",

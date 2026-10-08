@@ -392,6 +392,8 @@ public sealed class UpdateModel : PageModel {
                     Text = Rebuild.Text,
                     MissingAdded = Rebuild.Taxa.Count(t => t.Change == RebuildChange.Added),
                     TaxaRemoved = Rebuild.Removed.Count,
+                    AddedSpeciesOnly = Rebuild.Taxa.Where(t => t.Change == RebuildChange.Added).All(t => t.Taxon.Kind == TaxonKinds.Species),
+                    RemovedSpeciesOnly = Rebuild.Removed.All(t => t.Member.Taxon.Kind == TaxonKinds.Species),
                 };
             }
         }
@@ -410,6 +412,8 @@ public sealed class UpdateModel : PageModel {
                     Text = updater.TextWith(ListPlacement.Insertions(text, Placement), Placement.Removals),
                     MissingAdded = Placement.Placed.Count,
                     TaxaRemoved = Placement.Removed.Count,
+                    AddedSpeciesOnly = Placement.Placed.All(p => p.Taxon.Kind == TaxonKinds.Species),
+                    RemovedSpeciesOnly = Placement.Removed.All(t => t.Member.Taxon.Kind == TaxonKinds.Species),
                 };
             }
         }

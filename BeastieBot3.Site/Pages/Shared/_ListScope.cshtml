@@ -7,6 +7,7 @@
     var r = Model.Scope;
     var placement = Model.Placement;
     var rebuilt = Model.Rebuild is { Refusal: RebuildRefusal.None };
+    var missingSpeciesOnly = Model.MissingSpeciesOnly;
     // The missing taxa to copy: all of them, or the ones not put into the wikitext.
     var placing = placement is not null && Model.AddMissing;
     var toCopy = (placing ? placement!.Unplaced : r.Missing)?.Where(t => t.TaxonId > 0).ToList();
@@ -139,9 +140,9 @@
            the option stays on when the form is sent again, and can be turned off. *@
         <p class="update-scope-add">
             @if (Model.AddMissing) {
-                <label><input type="checkbox" name="@UpdateModel.AddMissingField" value="1" form="update-form" checked aria-describedby="scope-add-help"> @UpdateText.AddMissingOption</label>
+                <label><input type="checkbox" name="@UpdateModel.AddMissingField" value="1" form="update-form" checked aria-describedby="scope-add-help"> @UpdateText.AddMissingOption(missingSpeciesOnly)</label>
             } else {
-                <button type="submit" form="update-form" name="@UpdateModel.AddMissingField" value="1" aria-describedby="scope-add-help">@UpdateText.AddMissingButton</button>
+                <button type="submit" form="update-form" name="@UpdateModel.AddMissingField" value="1" aria-describedby="scope-add-help">@UpdateText.AddMissingButton(missingSpeciesOnly)</button>
             }
         </p>
         @if (UpdateText.AddMissingHelp(Model.Forms) is { Length: > 0 } addHelp) {

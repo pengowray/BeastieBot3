@@ -53,8 +53,9 @@ public static partial class UpdateText {
     public const string MissingLinesHelp = "One line for each missing taxon, with {{IUCN status}} filled in. Paste each line into the right section of the list.";
 
     // Putting the missing species into the wikitext (ListPlacement).
-    public const string AddMissingOption = "Add the missing species to the updated wikitext";
-    public const string AddMissingButton = "Add the missing species";
+    /// speciesOnly: the missing taxa are all species, so the option says "species", not "taxa".
+    public static string AddMissingOption(bool speciesOnly) => $"Add the missing {(speciesOnly ? "species" : "taxa")} to the updated wikitext";
+    public static string AddMissingButton(bool speciesOnly) => $"Add the missing {(speciesOnly ? "species" : "taxa")}";
     /// How the missing taxa go in, for the forms this text lists its taxa in.
     public static string AddMissingHelp(ListForms forms) {
         var parts = new List<string>();
@@ -121,8 +122,9 @@ public static partial class UpdateText {
     public static string RebuildAddsMissing(bool infraLeftOut) => infraLeftOut
         ? "Every species in this table is in the rebuilt list, in the updated wikitext. Subspecies and varieties are left out, as chosen in \"" + RebuildOptionsLegend + "\"."
         : "Every taxon in this table is in the rebuilt list, in the updated wikitext.";
-    public static string RebuildRefused(RebuildRefusal refusal, int taxa, GroupRow group) => refusal switch {
-        RebuildRefusal.NotLineList => $"List not rebuilt: fewer than half of the Red List taxa in the wikitext are on list lines; the rest are in tables. Only lists made of list lines can be rebuilt. To add the missing taxa without rebuilding, use \"{AddMissingButton}\".",
+    /// speciesOnly: the missing taxa are all species (for the name of the AddMissingButton).
+    public static string RebuildRefused(RebuildRefusal refusal, int taxa, GroupRow group, bool speciesOnly) => refusal switch {
+        RebuildRefusal.NotLineList => $"List not rebuilt: fewer than half of the Red List taxa in the wikitext are on list lines; the rest are in tables. Only lists made of list lines can be rebuilt. To add the missing taxa without rebuilding, use \"{AddMissingButton(speciesOnly)}\".",
         RebuildRefusal.Partial => $"List not rebuilt: the wikitext may be a regional list or a list of part of {GroupList.HeadingText(group)}, and a rebuild would add every missing taxon in the whole group. To rebuild it anyway, click \"{ScopeListAnywayButton}\".",
         RebuildRefusal.TooLong => $"List not rebuilt: it would have {Count(taxa)} taxa. Lists have at most {Count(GroupList.MaxLines)} taxa, about the number of {{{{IUCN status}}}} templates one Wikipedia page can hold.",
         _ => string.Empty,
@@ -216,7 +218,7 @@ public static partial class UpdateText {
         ? $"Removed 1 heading that has no taxa under it in the updated wikitext: {headings[0]}."
         : $"Removed {Count(headings.Count)} headings that have no taxa under them in the updated wikitext: {string.Join(", ", headings)}.";
 
-    public const string AddMissingPartial = "Missing species were not added, because this may be a regional list or a list of part of the group.";
+    public const string AddMissingPartial = "Missing taxa were not added, because this may be a regional list or a list of part of the group.";
 
     public static string AddMissingResult(int added, int missing) => (added, missing) switch {
         (1, 1) => "Added the missing taxon to the updated wikitext.",

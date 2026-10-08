@@ -83,6 +83,8 @@ public sealed record ListScopeView(ListScopeResult Scope, ListPlacementResult? P
     public IReadOnlyList<(string Rank, bool Picked)> HeadingRankChoices { get; init; } = [];
     public ListForms Forms { get; init; } = new(false, false, false, false);
     public string TextKey { get; init; } = string.Empty;
+    /// The missing taxa are all species, so "Add the missing species" says "species", not "taxa".
+    public bool MissingSpeciesOnly => Scope.Missing?.All(t => t.Kind == TaxonKinds.Species) ?? true;
 
     /// The name of the area compared with, for a sentence ("the United States"), or null.
     public string? AreaName => Scope.Area is { } code ? Areas?.ByCode(code)?.SentenceName ?? code : null;

@@ -6,12 +6,14 @@ namespace BeastieBot3.Shared.Wikitext;
 /// the mobile site, "/w/index.php?title=...&oldid=...") or a wikilink ("[[List of parrots]]",
 /// "[[List of parrots|parrots]]", "[[List of parrots#Cockatoos]]"). Title: the page title with
 /// spaces, percent-decoding undone and no section. RevisionId: the oldid of a URL that names one.
-/// English: whether the page is on English Wikipedia (a wikilink is taken to be).
+/// English: whether the page is on English Wikipedia (a wikilink is taken to be). The URL or
+/// wikilink may be wrapped in quotation marks or angle brackets ("\"[[List of parrots]]\"",
+/// "<https://en.wikipedia.org/wiki/List_of_parrots>").
 public sealed partial record WikipediaPageInput(string Title, long? RevisionId, bool English, string Language) {
     /// The page the text names, or null when the text is not a Wikipedia URL or a wikilink (plain
     /// text such as "Momotidae", which is searched as a name).
     public static WikipediaPageInput? Parse(string? text) {
-        var t = text?.Trim() ?? string.Empty;
+        var t = Unwrap(text?.Trim() ?? string.Empty);
         if (t.Length == 0) {
             return null;
         }
@@ -45,6 +47,20 @@ public sealed partial record WikipediaPageInput(string Title, long? RevisionId, 
         }
         long? revision = query.TryGetValue("oldid", out var oldid) && long.TryParse(oldid, out var r) && r > 0 ? r : null;
         return new WikipediaPageInput(pageTitle, revision, language == "en", language);
+    }
+
+    // The opening and closing marks a URL or wikilink may be wrapped in, as pasted from a message
+    // or a document: straight and curly quotation marks, guillemets, backticks, angle brackets.
+    private static readonly (char Open, char Close)[] Wrappers = [
+        ('"', '"'), ('\'', '\''), ('\u201C', '\u201D'), ('\u2018', '\u2019'), ('\u201E', '\u201C'), ('\u00AB', '\u00BB'), ('`', '`'), ('<', '>'),
+    ];
+
+    // The text without the pairs of marks around it, outermost first ("\"<...>\"").
+    private static string Unwrap(string text) {
+        while (text.Length >= 2 && Array.Exists(Wrappers, w => text[0] == w.Open && text[^1] == w.Close)) {
+            text = text[1..^1].Trim();
+        }
+        return text;
     }
 
     private static string Clean(string title) {
