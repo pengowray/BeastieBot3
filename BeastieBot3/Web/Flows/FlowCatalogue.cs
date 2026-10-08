@@ -1128,6 +1128,16 @@ public static class FlowCatalogue {
                     Note = "The download is 44 requests of 1,000 taxa, one second apart, and took 14 minutes in October 2026. The listings change after each meeting of the CITES Conference of the Parties.",
                 },
                 new FlowStep {
+                    Id = "site-red-lists",
+                    Title = "Download the national red lists from GBIF",
+                    Description = "`statuses red-lists-import` downloads the national and regional red lists listed in rules/status-lists/national-red-lists.yml (29 lists from 16 countries in October 2026, CC0, CC BY or CC BY-NC) from GBIF as Darwin Core archives and stores their statuses in the status lists store.",
+                    Commands = new[] { "statuses red-lists-import", "statuses red-lists-import --status" },
+                    OutputSourceIds = new[] { "status-lists" },
+                    Probe = PublicSiteProbes.RedLists,
+                    Group = "2 · Build the site database",
+                    Note = "Each run asks GBIF's registry about every list and downloads an archive only when the list was published again; a run with nothing new takes under a minute. To add a list, add it to the YAML file.",
+                },
+                new FlowStep {
                     Id = "site-green-status",
                     Title = "Download the IUCN Green Status assessments",
                     Description = "`iucn api green-status` downloads all published IUCN Green Status of Species assessments from the IUCN Red List API and stores them in the IUCN API cache. `site build-db` reads the Green Status assessments from the IUCN API cache.",

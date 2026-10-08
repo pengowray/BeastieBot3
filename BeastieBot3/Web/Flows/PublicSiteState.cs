@@ -91,6 +91,9 @@ public sealed record PublicSiteState {
     public StatusListSourceState? Salve { get; init; }
     public StatusListSourceState? Jncc { get; init; }
     public StatusListSourceState? Cites { get; init; }
+    /// The national red lists from GBIF (`statuses red-lists-import`): when the import last checked them
+    /// (the newest red_list_dataset.fetched_at) and how many lists the store holds.
+    public StatusListSourceState? RedLists { get; init; }
     /// When the NatureServe download under way started; null when none is under way.
     public DateTime? NatureServePassStartedUtc { get; init; }
     /// How many records the download under way has stored, and how many NatureServe said it has.
@@ -283,6 +286,13 @@ public static class PublicSiteStateReader {
     // Two source rows, two keys of the sync table and, while a NatureServe download is under way, a
     // count over the indexed fetched_at column. Read without StatusListStore.Open, which would run
     // its schema work on every poll.
+    private static bool TableExists(SqliteConnection conn, string table) {
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = @name";
+        cmd.Parameters.AddWithValue("@name", table);
+        return cmd.ExecuteScalar() is not null;
+    }
+
     private static PublicSiteState ReadStatusLists(PublicSiteState state, string? path) {
         state = state with { StatusListsPath = path };
         if (!Exists(path)) return state;
@@ -309,6 +319,15 @@ public static class PublicSiteStateReader {
                         StatusLists.StatusSources.Cites => state with { Cites = source },
                         _ => state with { Nztcs = source },
                     };
+                }
+            }
+            if (TableExists(conn, "red_list_dataset")) {
+                using var cmd = conn.CreateCommand();
+                cmd.CommandText = "SELECT MAX(fetched_at), COUNT(*) FROM red_list_dataset";
+                cmd.CommandTimeout = 5;
+                using var reader = cmd.ExecuteReader();
+                if (reader.Read() && !reader.IsDBNull(0) && StoredUtc.Parse(reader.GetString(0)) is { } checkedAt) {
+                    state = state with { RedLists = new StatusListSourceState(checkedAt, reader.GetInt64(1)) };
                 }
             }
             using (var cmd = conn.CreateCommand()) {
