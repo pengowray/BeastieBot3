@@ -1760,7 +1760,27 @@ colspan and rowspan; `StatusUpdater` decides the edits, and `StatusTaxonResolver
     words) with a row for each missing species, among the family's tables in order of genus name;
   - a species with a species of its genus in a row of a simple wikitable (the same layout rule as
     `addcols`): a new row copying the neighbour row's cells, with the scientific name, common name
-    and status cells filled in and the others empty.
+    and status cells filled in and the others empty;
+  - in a text whose taxa are mostly on list lines, any other species (`ListPlacement.Sections.cs`):
+    each heading's section gets a group, the group its heading names (a link target or label, the
+    text, a capitalised word: "==[[Galliformes]]==", "Order Galliformes") when that group holds at
+    least half its taxa, else the deepest group holding nearly all of them; sections beside each
+    other whose groups are of different ranks are raised to the rank most of them have (a family
+    heading with one species is the family's, "== Landfowl ==" among order headings is the order's).
+    A section titled "Other ...", "Miscellaneous ..." or "Unplaced ..." is of its parent's group.
+    The species goes among the list lines of the section of the deepest group that holds it (looking
+    inside sections of no group of their own, such as "===[[Lemuroidea|Lemurs]]===" with lines of
+    several families). When that section has sections below it for groups of one rank and none for
+    the species' group of that rank, the species goes in an "Other ..." section under it, or among
+    its own lines when they are of several groups of that rank, else in a new section for its group:
+    a heading at the level of the section beside it, with the group's scientific name (linked when
+    that heading has a link, after its rank word when it has one), its `{{gray}}` line with the
+    group's English name, and the lines in its `{{columns-list}}`. New sections go in alphabetical
+    order when the sections keep it, else after the last section of the group's nearest relatives
+    (most of its path shared), which for birds (no CoL groups between order and family) is the last
+    section. A text with no headings is one section: the species goes in alphabetical place, or after
+    the last line. A line copies its neighbour's link form: "*[[Anas bernieri|Bernier's teal]]"
+    gives "*[[Arizelopsar femoralis|Abbott's starling]]".
   Among its neighbours a taxon goes in alphabetical order by the scientific names as written (a
   synonym sorts where the list put it; lines of species IUCN does not have count), or by common
   names when the list keeps that order instead (List of canids sorts its rows by common name); one
@@ -1771,7 +1791,28 @@ colspan and rowspan; `StatusUpdater` decides the edits, and `StatusTaxonResolver
   missing species of List of Acer species, List of Carex species, Bulinus and Citharexylum in
   alphabetical place, 78 of the 92 missing EN species into List of endangered amphibians, the red
   wolf between the golden jackal and the wolf in List of canids, and all 8 missing species into List
-  of vespertilionines. List of cetaceans gets none: its tables use rowspan.
+  of vespertilionines. List of cetaceans gets none: its tables use rowspan. With headings (October
+  2026): List of endangered birds 33 of 33 (10 by genus alone), with new headings for Acanthizidae,
+  Campephagidae and Hylocitreidae; List of vulnerable mammals 171 of 171 (107), with one new heading
+  (Galagidae, after Lorisoidea) and a sheath-tailed bat in "Other microbat species"; List of
+  critically endangered amphibians 6 of 6 (4). The report gives each placed taxon's heading
+  ("(new)" for a new one) and each taxon left out its reason (`UnplacedReason`).
+- Taxa now in another category taken out (`Update/ListPlacement.Removal.cs`; a button under their
+  table, field `rmall`, ticks all of them; then each row has a checkbox, field `rm` with the taxon id,
+  sent with `rmshown`, the text's key, so that a form with none ticked means none and a new text
+  drops the choice). A taxon is taken out only when every place the text names it can be: its list
+  lines with the ":" notes under them, and its `{{Species table/row}}` rows. It stays (`KeptReason`)
+  when it is in a wikitable or running text, when its line names another taxon or has list lines
+  under it that are not taken out (List of near threatened reptiles lists *Caretta caretta*, VU,
+  with its NT subpopulations under it), or when its line defines a named reference other lines use.
+  The first line of a `{{columns-list|...|*line` loses only its list part, and the last line of
+  `...]]}}` takes the line break before it, so the `}}` stays. A section left with no taxa and
+  nothing but templates, comments and blank lines goes too (heading, `{{gray}}`, empty
+  `{{columns-list}}`), and so does a `{{Species table}}` with no rows left, unless a missing taxon
+  goes in it: a missing taxon whose neighbours are all taken out goes where the first of them was.
+  A text put in inside a removed span would be lost, so that taxon stays in the copy box
+  (`UnplacedReason.RemovedLine`). The updater's own edits inside a removed line are dropped
+  (`TextRemoval.Owned`), and the edit summary adds "16 species removed".
 - Catalogue of Life species (form field `extra`, off by default; shown for a list of every
   category): the species of the Catalogue of Life in the group that are not in the IUCN Red List
   (`extra_species` with a CoL id, less likely IUCN duplicates; the species only on Wikidata are left
