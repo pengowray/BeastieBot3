@@ -185,9 +185,9 @@
                 }
                 @if (Model.RedLists.Count > 0) {
                     <tr>
-                        <th scope="row">National and regional red lists published on <a href="https://www.gbif.org/">GBIF</a> (@Model.RedLists.Count lists from @Model.RedLists.Select(l => l.Country).Distinct().Count() countries, listed below)</th>
-                        <td>The statuses of species in those countries' red lists</td>
-                        <td>@string.Join(" or ", Model.RedLists.Select(l => l.Licence).OfType<string>().Distinct().Order()), as each dataset gives</td>
+                        <th scope="row">Red lists published on <a href="https://www.gbif.org/">GBIF</a> (@Model.RedLists.Count lists from @Model.RedLists.Select(l => l.Country).Distinct().Count() countries, listed below)</th>
+                        <td>Statuses in those red lists, shown under "Other conservation statuses"</td>
+                        <td>@string.Join(" or ", Model.RedLists.Select(l => l.Licence).OfType<string>().Distinct().Order()), depending on the dataset</td>
                         <td>@(Model.RedLists.Select(l => l.Fetched).OfType<string>().Max() is { } fetched ? SiteFormat.Date(fetched) : "")</td>
                     </tr>
                 }

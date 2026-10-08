@@ -76,9 +76,9 @@ public sealed class OtherStatusSectionTests {
         Assert.Equal("Germany", table.Heading);
         var row = Assert.Single(table.Rows);
         Assert.Equal("Red List of the ferns and flowering plants of Germany (2018)", row.ListLabel);
-        Assert.Equal("In the list: 3", row.RankMeaning);
+        Assert.Equal("Category in the list: 3", row.RankMeaning);
         Assert.Equal(("GBIF dataset", "https://www.gbif.org/dataset/x"), (row.SourceLinkText, row.SourceUrl));
-        Assert.StartsWith("Red List of the ferns and flowering plants of Germany (2018): Bundesamt für Naturschutz, from GBIF (CC BY 4.0), downloaded on 8 October 2026.",
+        Assert.StartsWith("Red List of the ferns and flowering plants of Germany (2018), Bundesamt für Naturschutz. Dataset on GBIF (CC BY 4.0), downloaded on 8 October 2026.",
             Text(Assert.Single(section.Notes)));
     }
 

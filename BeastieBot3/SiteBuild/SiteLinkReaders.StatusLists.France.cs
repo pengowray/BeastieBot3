@@ -18,7 +18,7 @@ internal static partial class SiteLinkReaders {
         using (var command = connection.CreateCommand()) {
             command.CommandText = """
                 SELECT s.row_number, s.cd_nom, s.cd_ref, s.type_code, s.code, s.label, s.criteria, s.population,
-                       COALESCE(t.name_en, t.name), s.name, s.kingdom, d.title, d.year
+                       COALESCE(t.name_en, t.name), s.name, s.kingdom, d.title, d.year, d.citation
                 FROM france_status s
                 JOIN france_territory t ON t.territory_code = s.territory_code
                 LEFT JOIN france_document d ON d.cd_doc = s.cd_doc
@@ -34,7 +34,7 @@ internal static partial class SiteLinkReaders {
                 }
                 group.Rows.Add(new FranceRow(reader.GetInt64(0), reader.GetInt64(1), reader.GetString(3), reader.GetString(4), Text(reader, 5),
                     Text(reader, 6), Text(reader, 7), reader.GetString(8), reader.GetString(9), Text(reader, 10), Text(reader, 11),
-                    reader.IsDBNull(12) ? null : reader.GetInt32(12)));
+                    reader.IsDBNull(12) ? null : reader.GetInt32(12), Text(reader, 13)));
             }
         }
         using (var command = connection.CreateCommand()) {
@@ -93,10 +93,11 @@ internal static partial class SiteLinkReaders {
             var second = redList
                 ? row.Criteria is { } criteria ? "Criteria: " + criteria : null
                 : FranceArticle(row.Label);
-            // The red list's chapter, or the decree's list ("Liste des oiseaux protégés sur l'ensemble du territoire ...").
+            // The red list's chapter, or the order with its date ("Arrêté interministériel du 23 avril 2007 fixant la liste des
+            // insectes protégés ..."), else the list's title in the status label.
             var report = redList
                 ? row.DocumentTitle is { } title ? (row.DocumentYear is { } year ? $"{title} ({year})" : title) : null
-                : row.Label is { } label && label.LastIndexOf(':') is > 0 and var colon ? label[..colon].Trim() : row.Label;
+                : row.DocumentCitation ?? (row.Label is { } label && label.LastIndexOf(':') is > 0 and var colon ? label[..colon].Trim() : row.Label);
             taxon.OtherStatuses.Add(new OtherStatus(redList ? OtherStatusSystems.FranceRedList : OtherStatusSystems.FranceProtection, status,
                 redList ? row.Code : null, SiteBuildRules.OtherListedName(row.Name, taxon.ScientificName), place, OtherStatusSources.France,
                 row.RowNumber.ToString(CultureInfo.InvariantCulture), null, null, report,
@@ -131,5 +132,5 @@ internal static partial class SiteLinkReaders {
     private sealed record FranceTaxon(long CdRef, List<FranceRow> Rows, List<string> Names, List<(long Id, bool OnAccepted)> IucnIds);
 
     private sealed record FranceRow(long RowNumber, long CdNom, string Type, string Code, string? Label, string? Criteria, string? Population,
-        string Place, string Name, string? Kingdom, string? DocumentTitle, int? DocumentYear);
+        string Place, string Name, string? Kingdom, string? DocumentTitle, int? DocumentYear, string? DocumentCitation);
 }

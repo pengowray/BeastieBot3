@@ -47,7 +47,8 @@ internal static partial class SiteLinkReaders {
 
         void Add(SiteTaxon taxon, JapanRow row) {
             taxon.OtherStatuses.Add(new OtherStatus(OtherStatusSystems.JapanMoe, JapanCategory(row.Category), row.Category,
-                SiteBuildRules.OtherListedName(row.Name, taxon.ScientificName), row.Population, OtherStatusSources.Japan,
+                SiteBuildRules.OtherListedName(row.Name, taxon.ScientificName), row.Population is { } place ? "Local population: " + place : null,
+                OtherStatusSources.Japan,
                 row.RowId.ToString(CultureInfo.InvariantCulture), row.SourceUrl, null,
                 Report: row.Version is { } version ? (version.Contains(row.Year?.ToString(CultureInfo.InvariantCulture) ?? "~", StringComparison.Ordinal) || row.Year is null ? version : $"{version} ({row.Year})") : null,
                 Qualifier: row.CategoryJa));

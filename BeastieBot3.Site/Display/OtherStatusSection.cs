@@ -137,6 +137,7 @@ public sealed record OtherStatusSection(IReadOnlyList<OtherStatusTable> Tables, 
             row.Report,
             Date: row.ListedOn is { } listedOn ? new OtherStatusCell(SiteFormat.Date(listedOn)) : new OtherStatusCell(SiteText.OtherStatusNoDate, NoValue: true),
             SourceLinkText: row.System == OtherStatusSystems.NationalRedList ? SiteText.RedListRecordLink(row.Url ?? row.List?.Url)
+                : row.System == OtherStatusSystems.JapanMoe ? SiteText.JapanRecordLink(row.Url)
                 : OtherStatusSourceInfo.Find(row.Source)?.LinkText ?? row.Source,
             row.System == OtherStatusSystems.NationalRedList ? row.Url ?? row.List?.Url : row.Url);
     }
