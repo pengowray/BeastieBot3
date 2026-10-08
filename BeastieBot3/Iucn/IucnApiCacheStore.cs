@@ -7,14 +7,15 @@ using BeastieBot3.Infrastructure;
 
 // SQLite store for IUCN API v4 responses (Datastore:IUCN_api_cache_sqlite).
 // Schema: taxa (root_sis_id PK, json), taxa_lookup, assessments (assessment_id PK, sis_id, json),
-// taxa_assessment_backlog, failed_requests, plus the HTTP request log via ApiImportMetadataStore.
+// taxa_assessment_backlog, failed_requests, green_status (IucnApiCacheStore.GreenStatus.cs), plus
+// the HTTP request log via ApiImportMetadataStore.
 // Separate from CSV-imported database; provides synonyms, population trends, HTML
 // narratives not in CSV exports. Consumed by IucnSynonymService, CommonNameAggregateCommand.
 // Created incrementally by IucnApiCacheTaxa/AssessmentsCommands.
 
 namespace BeastieBot3.Iucn;
 
-internal sealed class IucnApiCacheStore : HttpCacheSqliteStore {
+internal sealed partial class IucnApiCacheStore : HttpCacheSqliteStore {
     // Retry delay for a permanent failure (a 404): far enough out that GetFailedEntityIds and the
     // ShouldDownload checks never re-queue it. --force still re-requests.
     public static readonly TimeSpan PermanentRetryDelay = TimeSpan.FromDays(3650);
@@ -132,6 +133,7 @@ CREATE TABLE IF NOT EXISTS refresh_sessions (
 ";
         command.ExecuteNonQuery();
 
+        EnsureGreenStatusSchema();
         MigrateHasLatestFlag();
         MigrateTaxaLookupCompositeKey();
     }

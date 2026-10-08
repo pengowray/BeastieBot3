@@ -95,10 +95,19 @@ public sealed record PublicSiteState {
     public long NatureServePassStored { get; init; }
     public long? NatureServePassTotal { get; init; }
 
+    // --- The IUCN Green Status assessments (`iucn api green-status`, the green_status table of the IUCN API cache) ---
+    public string? ApiCachePath { get; init; }
+    /// How many Green Status assessments the cache holds, and when the last download finished.
+    /// Null when none are stored (or the cache cannot be read).
+    public GreenStatusState? GreenStatus { get; init; }
+
     /// When each input of `site build-db` last changed, in the order the build reads them.
     /// Inputs that do not exist are left out, as the build leaves them out.
     public IReadOnlyList<SiteInputChange> Inputs { get; init; } = Array.Empty<SiteInputChange>();
 }
+
+/// <summary>How many Green Status assessments the IUCN API cache holds, and the time of the last download.</summary>
+public sealed record GreenStatusState(long Rows, DateTime LastDownloadUtc);
 
 /// <summary>When a status list source last finished downloading, and how many rows the store holds.</summary>
 public sealed record StatusListSourceState(DateTime FetchedAtUtc, long Rows);
@@ -212,6 +221,8 @@ public static class PublicSiteStateReader {
             IucnFileChangedAtUtc = SqliteChangedAt(p.IucnDatabase),
             SitePath = p.SiteDatabase,
             SiteExists = Exists(p.SiteDatabase),
+            ApiCachePath = p.ApiCache,
+            GreenStatus = ReadGreenStatus(p.ApiCache),
             Inputs = inputs,
         };
         state = ReadSweep(state, p.WikidataCache);
@@ -342,23 +353,55 @@ public static class PublicSiteStateReader {
 
     // The newest download, not the file's time: the cache is also written by refresh sessions and
     // failed-request records, which change nothing the site reads. Both columns are indexed.
+    // Green Status assessments count from when one was first stored (first_seen_at), not from
+    // last_seen_at, which every `iucn api green-status` run moves forward even when nothing
+    // changed. A Green Status deleted or changed in place does not move this time.
     private static DateTime? ReadNewestDownload(string? path) {
         if (!Exists(path)) return null;
         try {
             using var conn = OpenReadOnly(path!);
-            using var cmd = conn.CreateCommand();
-            cmd.CommandText = "SELECT (SELECT MAX(downloaded_at) FROM taxa), (SELECT MAX(downloaded_at) FROM assessments)";
-            cmd.CommandTimeout = 5;
-            using var reader = cmd.ExecuteReader();
-            if (!reader.Read()) return null;
             DateTime? newest = null;
-            for (var i = 0; i < 2; i++) {
-                if (!reader.IsDBNull(i) && StoredUtc.Parse(reader.GetString(i)) is { } at && (newest is null || at > newest)) {
-                    newest = at;
+            void Take(string? text) {
+                if (StoredUtc.Parse(text) is { } at && (newest is null || at > newest)) newest = at;
+            }
+            using (var cmd = conn.CreateCommand()) {
+                cmd.CommandText = "SELECT (SELECT MAX(downloaded_at) FROM taxa), (SELECT MAX(downloaded_at) FROM assessments)";
+                cmd.CommandTimeout = 5;
+                using var reader = cmd.ExecuteReader();
+                if (!reader.Read()) return null;
+                for (var i = 0; i < 2; i++) {
+                    if (!reader.IsDBNull(i)) Take(reader.GetString(i));
                 }
+            }
+            try {
+                using var cmd = conn.CreateCommand();
+                cmd.CommandText = "SELECT MAX(first_seen_at) FROM green_status";
+                cmd.CommandTimeout = 5;
+                Take(cmd.ExecuteScalar() as string);
+            } catch (SqliteException) {
+                // No green_status table: a cache written before `iucn api green-status` existed.
             }
             return newest;
         } catch (Exception) {
+            return null;
+        }
+    }
+
+    // ---- the IUCN Green Status assessments in the IUCN API cache ----
+
+    // A count and a MAX over a table of a few hundred rows.
+    private static GreenStatusState? ReadGreenStatus(string? path) {
+        if (!Exists(path)) return null;
+        try {
+            using var conn = OpenReadOnly(path!);
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = "SELECT COUNT(*), MAX(last_seen_at) FROM green_status";
+            cmd.CommandTimeout = 5;
+            using var reader = cmd.ExecuteReader();
+            if (!reader.Read() || reader.GetInt64(0) == 0 || reader.IsDBNull(1)) return null;
+            return StoredUtc.Parse(reader.GetString(1)) is { } last ? new GreenStatusState(reader.GetInt64(0), last) : null;
+        } catch (Exception) {
+            // No green_status table yet: `iucn api green-status` has never run on this cache.
             return null;
         }
     }
