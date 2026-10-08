@@ -286,8 +286,8 @@ internal sealed class StoreBackedCommonNameProvider : IDisposable {
     }
 
     // One-word names with these endings are scientific names: family, subfamily, superfamily,
-    // order (-iformes), and the botanical family and subfamily.
-    private static readonly string[] RankEndings = ["idae", "inae", "oidea", "oideae", "aceae", "iformes"];
+    // orders (-iformes, -ida, botanical -ales), and the botanical family and subfamily.
+    private static readonly string[] RankEndings = ["idae", "inae", "oidea", "oideae", "aceae", "iformes", "ida", "ales"];
 
     // A group whose name has one of these endings ranks above genus: the above, tribes (-ini, -eae)
     // and botanical orders (-ales).
@@ -299,7 +299,8 @@ internal sealed class StoreBackedCommonNameProvider : IDisposable {
     /// <list type="bullet">
     /// <item>the group's own name ("Contia (snake)" for genus Contia);</item>
     /// <item>one word with the ending of a family, subfamily, superfamily or order
-    /// ("Pseudomyrmecinae" for tribe Pseudomyrmecini, "Stylephoridae" for order Stylephoriformes);</item>
+    /// ("Pseudomyrmecinae" for tribe Pseudomyrmecini, "Stylephoridae" for order Stylephoriformes,
+    /// "Sepiida" for superfamily Sepioidea, "Amylocorticiales" for family Amylocorticiaceae);</item>
     /// <item>the taxon in the article's taxobox, or the genus of the species in it: "Paspalum" for
     /// genus Thrasya, "Drepana (moth)" for genus Watsonalla, "Komarekiona" for family
     /// Komarekionidae, whose article's taxobox is Komarekiona eatoni. For a group above genus such

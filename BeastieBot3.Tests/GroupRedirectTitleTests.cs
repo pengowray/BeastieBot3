@@ -47,6 +47,12 @@ public class GroupRedirectTitleTests {
     public void EnglishNames(string group, string redirectTarget, string taxobox) =>
         Assert.False(StoreBackedCommonNameProvider.IsScientificTitle(group, redirectTarget, Article(redirectTarget, taxobox), () => Words));
 
+    [Theory]
+    [InlineData("Sepioidea", "Sepiida")]
+    [InlineData("Amylocorticiaceae", "Amylocorticiales")]
+    public void AnOrderNameIsScientificEvenWhenTheTargetIsNotDownloaded(string group, string redirectTarget) =>
+        Assert.True(StoreBackedCommonNameProvider.IsScientificTitle(group, redirectTarget, null, () => Words));
+
     [Fact]
     public void ATargetThatIsNotDownloadedIsKept() =>
         Assert.False(StoreBackedCommonNameProvider.IsScientificTitle("Cetartiodactyla", "Even-toed ungulate", null, () => Words));
