@@ -1,6 +1,7 @@
 using System.Globalization;
 using System.Text;
 using System.Text.RegularExpressions;
+using BeastieBot3.Shared.Wikitext;
 
 namespace BeastieBot3.Site.Update;
 
@@ -55,19 +56,11 @@ public static partial class IucnStatusesSummary {
     /// The count parameter for a status code; `missing` for a blank code; null for a code with no
     /// count parameter.
     public static string? KeyFor(string? code, string? missing) {
-        var text = code is null ? string.Empty : CodeEnd().Replace(code, string.Empty);
-        text = text.Replace(" ", string.Empty, StringComparison.Ordinal).Trim().ToUpperInvariant();
-        return text switch {
-            "" => missing,
-            "EX" => "ex",
-            "EW" => "ew",
-            "CR" or "CR(PE)" or "CR(PEW)" or "PE" or "PEW" => "cr",
-            "EN" => "en",
-            "VU" => "vu",
-            "NT" or "LR/NT" or "LR/CD" or "CD" => "nt",
-            "LC" or "LR/LC" => "lc",
-            "DD" => "dd",
-            "NE" => "ne",
+        // The box has no count for CR(PE) or the 1994 codes: they count in their category.
+        var category = IucnStatusTemplate.CategoryOf(code is null ? null : CodeEnd().Replace(code, string.Empty));
+        return category switch {
+            null => missing,
+            "EX" or "EW" or "CR" or "EN" or "VU" or "NT" or "LC" or "DD" or "NE" => category.ToLowerInvariant(),
             _ => null,
         };
     }

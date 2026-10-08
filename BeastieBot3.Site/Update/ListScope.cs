@@ -414,25 +414,13 @@ public static partial class ListScope {
 
     private static string? Current(StatusTaxon taxon) => Normalize(CurrentCode(taxon));
 
-    /// The category a code is in, for comparing lists: CR(PE) and CR(PEW) are CR, LR/cd and LR/nt
-    /// are NT, LR/lc is LC. Null for no code.
     // Whether a taxon's code is one of the categories: by the code itself ("CR(PE)" for a list of
     // possibly extinct taxa), or by its category ("CR(PE)" is in CR).
     private static bool IsIn(string? code, IReadOnlySet<string> categories) =>
         code is not null && (categories.Contains(code.Replace(" ", string.Empty, StringComparison.Ordinal).ToUpperInvariant())
             || (Normalize(code) is { } c && categories.Contains(c)));
 
-    internal static string? Normalize(string? code) {
-        if (code is null) {
-            return null;
-        }
-        var compact = code.Replace(" ", string.Empty, StringComparison.Ordinal).ToUpperInvariant();
-        return compact switch {
-            "" => null,
-            "CR(PE)" or "CR(PEW)" or "PE" or "PEW" => "CR",
-            "LR/CD" or "LR/NT" => "NT",
-            "LR/LC" => "LC",
-            _ => compact,
-        };
-    }
+    /// The category a code is in, for comparing lists (IucnStatusTemplate.CategoryOf): CR(PE) and
+    /// CR(PEW) are CR, LR/cd and LR/nt are NT, LR/lc is LC. Null for no code.
+    internal static string? Normalize(string? code) => IucnStatusTemplate.CategoryOf(code);
 }

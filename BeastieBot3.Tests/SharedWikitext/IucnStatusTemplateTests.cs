@@ -140,4 +140,19 @@ public class IucnStatusTemplateTests {
             _ => normalized
         };
     }
+
+    [Theory]
+    [InlineData("CR(PE)", "CR")]
+    [InlineData("CR (PEW)", "CR")]
+    [InlineData("pe", "CR")]
+    [InlineData("LR/cd", "NT")]
+    [InlineData("LR/nt", "NT")]
+    [InlineData("CD", "NT")]
+    [InlineData("LR/lc", "LC")]
+    [InlineData(" en ", "EN")]
+    [InlineData("RE", "RE")]
+    [InlineData("", null)]
+    [InlineData(null, null)]
+    public void CategoryOf_CountsPossiblyExtinctAsCrAndThe1994CodesInTheirCategory(string? code, string? category) =>
+        Assert.Equal(category, IucnStatusTemplate.CategoryOf(code));
 }

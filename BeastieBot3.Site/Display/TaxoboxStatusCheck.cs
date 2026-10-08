@@ -40,6 +40,8 @@ public sealed record TaxoboxStatusCheck(
         }
         var wikipedia = Describe(status);
         var rowSystem = row.StatusSystem ?? "";
+        // The codes are compared as they are, not by category: a taxobox has its own codes PE and
+        // PEW, so CR in the taxobox of a possibly extinct taxon is a code to update.
         if (!string.Equals(status.Trim(), code, StringComparison.OrdinalIgnoreCase)) {
             return new(TaxoboxStatusOutcome.OtherCategory, wikipedia, rowSystem, system, null, null, downloaded);
         }

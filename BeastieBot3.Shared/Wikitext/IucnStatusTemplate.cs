@@ -58,6 +58,22 @@ public static class IucnStatusTemplate {
         };
     }
 
+    /// The Red List category a status code counts as, for comparing and counting: CR(PE) and
+    /// CR(PEW) (and the taxobox codes PE and PEW) are CR, LR/cd and LR/nt (and a bare CD) are NT, and
+    /// LR/lc is LC. Upper case with spaces removed; any other code comes back as it is; null for a
+    /// blank code. Where the possibly extinct tag or the 1994 code matters, compare the codes
+    /// themselves.
+    public static string? CategoryOf(string? code) {
+        var compact = code?.Replace(" ", string.Empty, StringComparison.Ordinal).Trim().ToUpperInvariant();
+        return compact switch {
+            null or "" => null,
+            "CR(PE)" or "CR(PEW)" or "PE" or "PEW" => "CR",
+            "LR/CD" or "LR/NT" or "CD" => "NT",
+            "LR/LC" => "LC",
+            _ => compact,
+        };
+    }
+
     /// {{IUCN status|CODE|taxonId/assessmentId|1|year=YYYY}}; no year for EX and EW. With
     /// yearAsBareLabel the year goes in |label= instead of |year=.
     public static string Render(string category, bool possiblyExtinct, bool possiblyExtinctInTheWild,

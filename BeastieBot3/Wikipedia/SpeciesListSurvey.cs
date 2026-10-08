@@ -196,15 +196,7 @@ internal static class SpeciesListSurvey {
     private static bool SameCategory(string written, string iucn) =>
         string.Equals(Category(written), Category(iucn), StringComparison.Ordinal);
 
-    private static string Category(string code) {
-        var c = code.Trim().ToUpperInvariant();
-        return c switch {
-            "CR(PE)" or "CR(PEW)" => "CR",
-            "LR/LC" => "LC",
-            "LR/NT" or "LR/CD" => "NT",
-            _ => c,
-        };
-    }
+    private static string Category(string code) => Shared.Wikitext.IucnStatusTemplate.CategoryOf(code) ?? string.Empty;
 
     private static string OneLine(string text) {
         var flat = text.ReplaceLineEndings(" ");

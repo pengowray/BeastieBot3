@@ -106,7 +106,11 @@ public sealed class HistoryTableNotes {
         return notes;
     }
 
-    // A category as Table 7 counts it: LR/nt as NT, LR/lc as LC.
+    // A category as Table 7 counts it: LR/nt as NT, LR/lc as LC. Unlike IucnStatusTemplate.CategoryOf,
+    // LR/cd stays its own category, because Table 7 lists LR/cd to NT as a change (18 rows, all
+    // non-genuine) and never lists LR/nt to NT or LR/lc to LC. A row's category has no possibly
+    // extinct tag (the tags are flags on the row), so CR(PE) is CR here too; Table 7 does list CR to
+    // CR(PE) as a change, and such a row shows its reason.
     private static string Family(string category) => category.Trim() switch {
         "LR/nt" => "NT",
         "LR/lc" => "LC",

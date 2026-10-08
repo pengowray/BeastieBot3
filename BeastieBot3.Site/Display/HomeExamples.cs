@@ -1,3 +1,5 @@
+using BeastieBot3.Shared.Wikitext;
+
 namespace BeastieBot3.Site.Display;
 
 /// A taxon the home page can suggest, as the site database has it.
@@ -92,10 +94,10 @@ public static class HomeExamples {
     }
 
     /// How much more likely a taxon is to be picked than a Least Concern one: threatened most, Near
-    /// Threatened in between.
-    public static int Weight(string? category) => category switch {
-        "CR" or "CR(PE)" or "CR(PEW)" or "EN" or "VU" => 4,
-        "NT" or "LR/nt" or "LR/cd" => 2,
+    /// Threatened in between. CR(PE) counts as CR and LR/nt and LR/cd as NT (IucnStatusTemplate.CategoryOf).
+    public static int Weight(string? category) => IucnStatusTemplate.CategoryOf(category) switch {
+        "CR" or "EN" or "VU" => 4,
+        "NT" => 2,
         _ => 1,
     };
 
