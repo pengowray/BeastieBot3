@@ -134,6 +134,9 @@ public sealed class SpeciesModel : PageModel {
     /// of OtherStatusSystems.All.
     public IReadOnlyList<OtherStatusRow> OtherStatuses { get; private set; } = [];
 
+    /// The "Other conservation statuses" section built from OtherStatuses; null when there are none.
+    public OtherStatusSection? OtherStatusSection { get; private set; }
+
     /// The date the site database's copy of a source of the other statuses was downloaded
     /// ("25 June 2026"); null when unknown.
     public string? OtherStatusSourceDate(string source) {
@@ -269,6 +272,7 @@ public sealed class SpeciesModel : PageModel {
         LinkedTaxa = _queries.GetLinkedTaxa(Taxon.TaxonId);
         EpbcListings = _queries.GetEpbcListings(Taxon.TaxonId);
         OtherStatuses = _queries.GetOtherStatuses(Taxon.TaxonId);
+        OtherStatusSection = OtherStatuses.Count == 0 ? null : Display.OtherStatusSection.Build(OtherStatuses, Taxon.Kind, OtherStatusSourceDate);
         ExtraPairs = _queries.GetExtraOverlapsOfTaxon(Taxon.TaxonId);
         LoadAssessments(assessment);
         var externalIds = _queries.GetExternalIds(Taxon.TaxonId);
@@ -511,14 +515,4 @@ public sealed class SpeciesModel : PageModel {
     // "Panthera pardus orientalis".
     private static string ScientificNameMarkupWords(string name) =>
         string.Join(' ', name.Split(' ', StringSplitOptions.RemoveEmptyEntries).Where(w => w is not ("ssp." or "subsp." or "var.")));
-
-    /// A name the EPBC Act lists a taxon under, as HTML: wholly italic when it is a plain binomial or
-    /// trinomial ("Casuarius casuarius johnsonii", which SPRAT writes without a rank marker), else
-    /// marked up as IUCN names are.
-    public static string ListedNameHtml(string name) {
-        var words = name.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-        var plain = words.Length is 2 or 3 && words.Skip(1).All(w => w.All(c => char.IsLower(c) || c == '-'));
-        return plain ? "<i>" + SiteHtml.Encode(string.Join(' ', words)) + "</i>" : ScientificNameMarkup.ToHtml(name);
-    }
-
 }

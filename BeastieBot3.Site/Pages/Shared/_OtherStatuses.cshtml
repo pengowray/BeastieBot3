@@ -1,0 +1,42 @@
+@model OtherStatusSection
+@* The species page's "Other conservation statuses": one table per group, then one note per source.
+   OtherStatusSection.Build decides the columns, the text of every cell and the parts of the notes;
+   this only shows them. Each cell and note is written on one line so no space gets into its text. *@
+<section class="other-statuses" id="other-statuses" aria-labelledby="other-statuses-heading">
+    <h2 id="other-statuses-heading">@SiteText.HeadingOtherStatuses</h2>
+    <p>@SiteText.OtherStatusesIntro</p>
+    @foreach (var table in Model.Tables) {
+        <h3>@table.Heading</h3>
+        <div class="table-scroll">
+            <table>
+                <thead>
+                    <tr>
+                        <th scope="col">@SiteText.ColOtherList</th>
+                        <th scope="col">@SiteText.ColOtherStatus</th>
+                        @if (table.ShowAppliesTo) {<th scope="col">@SiteText.ColOtherAppliesTo</th>}
+                        @if (table.ShowListedName) {<th scope="col" title="@SiteText.ColOtherListedNameTitle">@SiteText.ColOtherListedName</th>}
+                        @if (table.ShowReport) {<th scope="col">@SiteText.ColOtherReport</th>}
+                        @if (table.DateHeading is { } dateHeading) {<th scope="col" title="@dateHeading.Title">@dateHeading.Text</th>}
+                        <th scope="col">@SiteText.ColOtherSource</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    @foreach (var row in table.Rows) {
+                        <tr>
+                            <th scope="row">@if (row.ListTitle is null) {@row.ListLabel} else if (row.ListIsAbbreviation) {<abbr title="@row.ListTitle">@row.ListLabel</abbr>} else {<span title="@row.ListTitle">@row.ListLabel</span>}</th>
+                            <td>@if (row.StatusTitle is not null) {<abbr title="@row.StatusTitle">@row.Status</abbr>} else {@row.Status}@if (row.RankMeaning is not null) {<br><span class="rank-meaning">@row.RankMeaning</span>}</td>
+                            @if (table.ShowAppliesTo) {<td>@if (row.AppliesTo.NoValue) {<span class="no-value">@row.AppliesTo.Text</span>} else {@row.AppliesTo.Text}</td>}
+                            @if (table.ShowListedName) {<td>@if (row.ListedNameHtml is { } listedNameHtml) {<span class="sci-name">@Html.Raw(listedNameHtml)</span>}</td>}
+                            @if (table.ShowReport) {<td>@row.Report</td>}
+                            @if (table.DateHeading is not null) {<td>@if (row.Date.NoValue) {<span class="no-value">@row.Date.Text</span>} else {@row.Date.Text}</td>}
+                            <td>@if (row.SourceUrl is { } sourceUrl) {<a href="@sourceUrl">@row.SourceLinkText</a>} else {@row.SourceLinkText}</td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+    @foreach (var note in Model.Notes) {
+        <p class="help">@foreach (var segment in note) {if (segment.Href is { } href) {<a href="@href">@segment.Text</a>} else {@segment.Text}}</p>
+    }
+</section>

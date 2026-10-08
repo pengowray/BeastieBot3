@@ -106,20 +106,15 @@ public static partial class SiteText {
         _ => "whole species",
     };
 
-    /// True when the source says nothing about which populations a status applies to: the COSEWIC
-    /// and SARA statuses that NatureServe records (COSEWIC can assess populations separately).
-    public static bool OtherStatusAppliesToUnknown(OtherStatusRow row) =>
-        row.Population is null && row.System is OtherStatusSystems.Cosewic or OtherStatusSystems.Sara;
+    /// The text of a row's link to the record its status comes from (OtherStatusSourceInfo.LinkText;
+    /// a SPRAT row's is LinkSprat). NatureServeExplorer is also the text of the link in NatureServe's note.
+    public const string OtherStatusEcosRecordLink = "ECOS profile";
+    public const string NatureServeExplorer = "NatureServe Explorer";
+    public const string OtherStatusNztcsRecordLink = "NZTCS assessment";
+    public const string OtherStatusSalveRecordLink = "SALVE assessment";
 
-    /// The link to the record a status comes from.
-    public static string OtherStatusSourceLink(string source) => source switch {
-        OtherStatusSources.Sprat => LinkSprat,
-        OtherStatusSources.Ecos => "ECOS profile",
-        OtherStatusSources.NatureServe => "NatureServe Explorer",
-        OtherStatusSources.Nztcs => "NZTCS assessment",
-        OtherStatusSources.Salve => "SALVE assessment",
-        _ => source,
-    };
+    /// The text of a link to LicenceCcBy.
+    public const string LicenceCcByName = "CC BY 4.0";
 
     /// Under the tables when they have rows from SPRAT. reportDate: "25 June 2026", or null when unknown.
     public static string OtherStatusSpratNote(string? reportDate) =>
@@ -142,14 +137,21 @@ public static partial class SiteText {
         _ => "NatureServe global ranks are from ",
     };
     public static string OtherStatusNatureServeDate(string? date) => date is null ? "." : $", downloaded on {date}.";
+    /// Between the links to NatureServe Explorer and the licence.
+    public const string OtherStatusNatureServeCopyright = " (© NatureServe, ";
     /// The note under the tables when they have NZTCS rows, in two parts around the links to the
     /// NZTCS database and the licence.
     public const string OtherStatusNztcsSubject = "New Zealand statuses are from the ";
     public const string OtherStatusNztcsLink = "New Zealand Threat Classification System database";
+    /// Between the links to the NZTCS database and the licence.
+    public const string OtherStatusNztcsPublisher = " (Department of Conservation, ";
     public static string OtherStatusNztcsDate(string? date) => date is null ? "." : $", downloaded on {date}.";
 
     /// The note under the tables when they have SALVE rows, in two parts around the link to SALVE.
     public const string OtherStatusSalveSubject = "Brazilian statuses are ICMBio's national assessments of Brazil's fauna, from ";
+    public const string OtherStatusSalveLink = "SALVE";
+    /// After the link to SALVE: SALVE's full name.
+    public const string OtherStatusSalveName = " (Sistema de Avaliação do Risco de Extinção da Biodiversidade)";
     public static string OtherStatusSalveRest(string? date) =>
         (date is null ? "." : $", downloaded on {date}.")
         + " Brazil's official list of threatened species (Portaria MMA 148/2022) can differ.";
