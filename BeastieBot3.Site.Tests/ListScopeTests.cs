@@ -13,7 +13,7 @@ internal sealed class FakeScopeLookup : IListScopeLookup {
 
     public FakeScopeLookup Group(int id, int? parent, string rank, string name, string source = GroupSources.Iucn, string? common = null, int firstPos = 0) {
         var depth = parent is { } p ? _groups[p].Depth + 1 : 0;
-        _groups[id] = new GroupRow(id, parent, depth, rank, name, source, true, "ANIMALIA", null, common, null, null, firstPos, 0, 0, 0, 0);
+        _groups[id] = new GroupRow(id, parent, depth, rank, name, source, true, "ANIMALIA", null, common, common is null ? null : "rules", null, firstPos, 0, 0, 0, 0);
         return this;
     }
 
