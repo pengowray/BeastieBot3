@@ -1,5 +1,6 @@
 using System.Globalization;
 using System.Text.RegularExpressions;
+using BeastieBot3.Site.Display;
 
 namespace BeastieBot3.Site.Update;
 
@@ -102,10 +103,8 @@ public static partial class PopulationValues {
     }
 
     private static string Format(Range r) => r.Low == r.High
-        ? N(r.Low)
-        : $"{N(r.Low)}–{N(r.High)}";
-
-    private static string N(long n) => n.ToString("N0", CultureInfo.InvariantCulture);
+        ? SiteFormat.Number(r.Low)
+        : $"{SiteFormat.Number(r.Low)}–{SiteFormat.Number(r.High)}";
 
     [GeneratedRegex(@"^(?<low>\d+)(?:-(?<high>\d+))?$")]
     private static partial Regex NumberRange();

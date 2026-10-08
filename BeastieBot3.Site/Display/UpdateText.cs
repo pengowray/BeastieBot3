@@ -1,4 +1,3 @@
-using System.Globalization;
 using BeastieBot3.Site.Update;
 
 namespace BeastieBot3.Site.Display;
@@ -149,7 +148,7 @@ public static partial class UpdateText {
 
     public static string PopulationIucnValue(string value, int? year) => year is { } y ? $"{value} ({y})" : value;
 
-    private static string Count(int n) => n.ToString("N0", CultureInfo.InvariantCulture);
+    private static string Count(int n) => SiteFormat.Number(n);
 
     private static string Items(int n) => n == 1 ? "1 item" : $"{Count(n)} items";
 }

@@ -1,4 +1,3 @@
-using System.Globalization;
 using BeastieBot3.Site.Data;
 
 namespace BeastieBot3.Site.Display;
@@ -20,7 +19,7 @@ public static partial class UpdateText {
         if (listed == 0) {
             return "None of the taxa missing from the page is listed under the EPBC Act.";
         }
-        var of = missing == 1 ? "the 1 taxon missing from the page" : $"the {missing.ToString("N0", CultureInfo.InvariantCulture)} taxa missing from the page";
-        return $"{listed.ToString("N0", CultureInfo.InvariantCulture)} of {of} {(listed == 1 ? "is" : "are")} listed under the EPBC Act:";
+        var of = missing == 1 ? "the 1 taxon missing from the page" : $"the {SiteFormat.Number(missing)} taxa missing from the page";
+        return $"{SiteFormat.Number(listed)} of {of} {(listed == 1 ? "is" : "are")} listed under the EPBC Act:";
     }
 }
